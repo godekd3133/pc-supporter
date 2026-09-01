@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: pcsupporter
+      POSTGRES_USER: pcsupporter
+      POSTGRES_PASSWORD: pcsupporter
+    ports:
+      - "5432:5432"
+    volumes:
+      - pc-supporter-postgres:/var/lib/postgresql/data
+
+volumes:
+  pc-supporter-postgres:

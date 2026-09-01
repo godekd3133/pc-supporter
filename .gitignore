@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+.playwright-mcp/
+artifacts/
+.DS_Store
+
+# Live catalog snapshots and mutable runtime state stay local. The deterministic
+# seed catalog lives in server/seed-catalog.ts and is created on first run.
+data/*.json
+data/*.lock
+data/*.lease
+data/*.tmp
+*.log
