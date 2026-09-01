@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { FiActivity, FiArrowLeft, FiBox, FiCheck, FiDatabase, FiExternalLink, FiInfo, FiLoader, FiPlus, FiRefreshCw, FiSearch } from "react-icons/fi";
-import type { BuildSelection, DataFreshness, DataQuality, ListingPolicy, Part, PartCategory, PriceAvailabilityFilter } from "../shared/types";
+import type { BuildSelection, CompatiblePartCandidate, DataFreshness, DataQuality, GamingRefreshRate, GamingResolution, ListingPolicy, Part, PartCategory, PriceAvailabilityFilter, RecommendationProfile } from "../shared/types";
 import { CATEGORY_LABELS, DATA_FRESHNESS_LABELS, isKnownPrice, LISTING_POLICY_LABELS, PART_CATEGORIES, PRICE_AVAILABILITY_LABELS } from "../shared/types";
 import { classifyDataFreshness } from "../shared/data-freshness";
 import { safeExternalUrl } from "../shared/safe-source-url";
 import { ApiError, api } from "./api";
 
-type CatalogSort = "price_asc" | "price_desc" | "name" | "updated";
-type CatalogResponse = { items: Part[]; total: number; offset: number; limit: number; priceExcludedCount?: number; freshnessExcludedCount?: number };
+type CatalogSort = "price_asc" | "price_desc" | "name" | "updated" | "similarity" | "value";
+type CatalogPart = Part & Partial<Pick<CompatiblePartCandidate, "candidateRisk" | "candidateReasons" | "remainingBlockers" | "remainingWarnings" | "remainingUnknown" | "similarityScore" | "similarityLabel" | "performanceSummary" | "valueScore" | "valueLabel" | "recommendationTrust" | "decision" | "physicalEvidence">>;
+type CatalogResponse = { items: CatalogPart[]; total: number; offset: number; limit: number; priceExcludedCount?: number; freshnessExcludedCount?: number; riskExcludedCount?: number };
 const PAGE_SIZE = 24;
 const QUALITY_LABELS: Record<DataQuality, string> = { live: "다나와 최신", seed: "프로젝트 데이터", manual: "수동 검수", incomplete: "일부 스펙 부족" };
 
@@ -30,6 +31,19 @@ function freshnessLabel(part: Part) {
 
 function priceLabel(priceWon: number | undefined) {
   return isKnownPrice(priceWon) ? `${priceWon.toLocaleString("ko-KR")}원` : "가격 확인 필요";
+}
+
+function candidateRiskLabel(risk: CatalogPart["candidateRisk"]) {
+  return risk === "safe" ? "호환 확인" : risk === "review" ? "확인 필요" : risk === "unsafe" ? "차단 위험" : "카탈로그 기준";
+}
+
+function candidateDetailSummary(part: CatalogPart) {
+  return [
+    part.decision?.summary,
+    part.similarityScore !== undefined ? `${part.similarityLabel ?? "유사도"} ${part.similarityScore}점` : undefined,
+    part.performanceSummary,
+    part.valueScore !== undefined && part.valueLabel ? `${part.valueLabel} ${part.valueScore}점` : undefined
+  ].filter((value): value is string => Boolean(value)).join(" · ");
 }
 
 function compactSummary(part: Part) {
@@ -113,25 +127,26 @@ function specRowsFor(part: Part) {
   return rows.filter(([, value], index, all) => all.findIndex(([, candidate]) => candidate === value) === index).slice(0, 18);
 }
 
-function CatalogPartCard({ part, selected, onSelect, onAdd }: { part: Part; selected: boolean; onSelect: () => void; onAdd: () => void }) {
+function CatalogPartCard({ part, selected, onSelect, onAdd }: { part: CatalogPart; selected: boolean; onSelect: () => void; onAdd: () => void }) {
   const imageUrl = safeExternalUrl(part.imageUrl);
   const sourceUrl = safeExternalUrl(part.danawaUrl);
   return <article className={selected ? "catalog-part-card selected" : "catalog-part-card"}>
     <button className="catalog-part-card-main" type="button" data-testid={`catalog-part-${part.id}`} onClick={onSelect}>
       <span className="catalog-part-card-image">{imageUrl ? <img src={imageUrl} alt="" loading="lazy" /> : <FiBox />}</span>
-      <span className="catalog-part-card-copy"><strong>{part.name}</strong><small>{part.brand ?? part.model ?? sourceLabel(part.source)}</small><span>{compactSummary(part)}</span><em>{QUALITY_LABELS[part.dataQuality]} · {freshnessLabel(part)}</em></span>
+      <span className="catalog-part-card-copy"><strong>{part.name}</strong><small>{part.brand ?? part.model ?? sourceLabel(part.source)}</small><span>{compactSummary(part)}</span><em>{QUALITY_LABELS[part.dataQuality]} · {freshnessLabel(part)}</em>{part.candidateRisk && <em className={`catalog-candidate-risk ${part.candidateRisk}`}>{candidateRiskLabel(part.candidateRisk)}{part.similarityScore !== undefined ? ` · 유사도 ${part.similarityScore}점` : ""}</em>}</span>
       <span className="catalog-part-card-price">{priceLabel(part.priceWon)}</span>
     </button>
     <div className="catalog-part-card-actions">{sourceUrl && <a href={sourceUrl} target="_blank" rel="noreferrer" aria-label={`${part.name} 원문 보기`}>원문 <FiExternalLink /></a>}<button className="button button-small catalog-part-add" type="button" onClick={onAdd} disabled={selected}>{selected ? <><FiCheck /> 현재 선택</> : <><FiPlus /> 견적에 추가</>}</button></div>
   </article>;
 }
 
-function CatalogPartDetail({ part, onAdd, selected, onOpenBuild }: { part: Part; onAdd: () => void; selected: boolean; onOpenBuild: () => void }) {
+function CatalogPartDetail({ part, onAdd, selected, onOpenBuild }: { part: CatalogPart; onAdd: () => void; selected: boolean; onOpenBuild: () => void }) {
   const sourceUrl = safeExternalUrl(part.danawaUrl);
   const imageUrl = safeExternalUrl(part.imageUrl);
   return <section className="catalog-detail" aria-label="선택한 부품 상세" data-testid="catalog-part-detail">
     <div className="catalog-detail-heading"><div><p className="eyebrow">PART DETAIL</p><h2>{part.name}</h2><p>{CATEGORY_LABELS[part.category]} · {part.brand ?? part.model ?? sourceLabel(part.source)}</p></div>{imageUrl ? <img src={imageUrl} alt="" loading="lazy" /> : <FiBox />}</div>
     <div className="catalog-detail-badges"><span>{QUALITY_LABELS[part.dataQuality]}</span><span>{freshnessLabel(part)}</span><span>{sourceLabel(part.source)}</span>{part.listingType && part.listingType !== "retail" && <span>{part.listingType === "bulk" ? "벌크" : part.listingType === "parallel_import" ? "병행수입" : "유통 조건 확인"}</span>}</div>
+    {part.candidateRisk && <div className={`catalog-candidate-summary ${part.candidateRisk}`}><strong>{candidateRiskLabel(part.candidateRisk)}</strong><span>{candidateDetailSummary(part) || "현재 견적 기준 후보 평가 결과입니다."}</span>{part.remainingBlockers !== undefined && <small>남은 위험 · 차단 {part.remainingBlockers} · 주의 {part.remainingWarnings ?? 0} · 확인 필요 {part.remainingUnknown ?? 0}</small>}{part.recommendationTrust && <small>추천 근거 · {part.recommendationTrust.level === "high" ? "높음" : part.recommendationTrust.level === "medium" ? "보통" : "낮음"} {part.recommendationTrust.score}점</small>}</div>}
     <div className="catalog-detail-price"><span>현재 가격</span><strong>{priceLabel(part.priceWon)}</strong></div>
     <dl className="catalog-detail-specs">{specRowsFor(part).map(([label, value]) => <div key={`${label}-${value}`}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
     {part.missingFields.length > 0 && <p className="catalog-detail-missing"><FiInfo /> 확인되지 않은 스펙 {part.missingFields.slice(0, 5).join(", ")}{part.missingFields.length > 5 ? ` 외 ${part.missingFields.length - 5}개` : ""}</p>}
@@ -141,8 +156,9 @@ function CatalogPartDetail({ part, onAdd, selected, onOpenBuild }: { part: Part;
   </section>;
 }
 
-export function CatalogView({ build, onAddPart, onOpenBuild, onBack }: { build: BuildSelection; onAddPart: (part: Part) => void; onOpenBuild: () => void; onBack: () => void }) {
+export function CatalogView({ build, profile, gamingResolution, gamingRefreshRate, onAddPart, onOpenBuild, onBack }: { build: BuildSelection; profile: RecommendationProfile; gamingResolution?: GamingResolution; gamingRefreshRate?: GamingRefreshRate; onAddPart: (part: Part) => void; onOpenBuild: () => void; onBack: () => void }) {
   const [category, setCategory] = useState<PartCategory>("cpu");
+  const [mode, setMode] = useState<"catalog" | "compatible">("catalog");
   const [query, setQuery] = useState("");
   const [quality, setQuality] = useState<DataQuality | "all">("all");
   const [freshness, setFreshness] = useState<DataFreshness | "all">("all");
@@ -150,7 +166,7 @@ export function CatalogView({ build, onAddPart, onOpenBuild, onBack }: { build: 
   const [listingPolicy, setListingPolicy] = useState<ListingPolicy>("all");
   const [sort, setSort] = useState<CatalogSort>("price_asc");
   const [page, setPage] = useState(0);
-  const [items, setItems] = useState<Part[]>([]);
+  const [items, setItems] = useState<CatalogPart[]>([]);
   const [total, setTotal] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -163,21 +179,26 @@ export function CatalogView({ build, onAddPart, onOpenBuild, onBack }: { build: 
   useEffect(() => {
     setPage(0);
     setSelectedId(null);
-  }, [category, quality, freshness, priceStatus, listingPolicy, sort, query]);
+  }, [category, mode, quality, freshness, priceStatus, listingPolicy, sort, query]);
 
   useEffect(() => {
     let cancelled = false;
     const timer = window.setTimeout(() => {
       setLoading(true);
       setError(null);
-      const params = new URLSearchParams({ category, q: query.trim(), quality, freshness, priceStatus, listingPolicy, sort, offset: String(page * PAGE_SIZE), limit: String(PAGE_SIZE) });
-      void api<CatalogResponse>(`/api/parts?${params.toString()}`, { retry: 2 })
+      const request = mode === "compatible"
+        ? api<CatalogResponse>("/api/parts/compatible", { method: "POST", body: JSON.stringify({ category, build, profile, gamingResolution, gamingRefreshRate, q: query.trim(), quality, freshness, priceStatus, listingPolicy, sort, mode: "safe", riskFilter: "all", performanceFilter: "all", physicalEvidenceFilter: "all", recommendationTrustFilter: "all", offset: page * PAGE_SIZE, limit: PAGE_SIZE }), retry: 2 })
+        : (() => {
+          const params = new URLSearchParams({ category, q: query.trim(), quality, freshness, priceStatus, listingPolicy, sort: sort === "similarity" || sort === "value" ? "price_asc" : sort, offset: String(page * PAGE_SIZE), limit: String(PAGE_SIZE) });
+          return api<CatalogResponse>(`/api/parts?${params.toString()}`, { retry: 2 });
+        })();
+      void request
         .then((payload) => { if (!cancelled) { setItems(payload.items); setTotal(payload.total); setSelectedId((current) => payload.items.some((item) => item.id === current) ? current : payload.items[0]?.id ?? null); } })
         .catch((reason: unknown) => { if (!cancelled) setError(reason instanceof ApiError ? reason.message : reason instanceof Error ? reason.message : "부품 카탈로그를 불러오지 못했습니다."); })
         .finally(() => { if (!cancelled) setLoading(false); });
     }, 220);
     return () => { cancelled = true; window.clearTimeout(timer); };
-  }, [category, freshness, listingPolicy, page, priceStatus, quality, query, retryNonce, sort]);
+  }, [build, category, freshness, gamingRefreshRate, gamingResolution, listingPolicy, mode, page, priceStatus, profile, quality, query, retryNonce, sort]);
 
   function goToPage(nextPage: number) {
     setPage(Math.max(0, Math.min(pageCount - 1, nextPage)));
@@ -186,8 +207,8 @@ export function CatalogView({ build, onAddPart, onOpenBuild, onBack }: { build: 
 
   return <div className="catalog-page">
     <div className="workspace-heading"><div><button className="back-link" type="button" onClick={onBack}><FiArrowLeft /> 홈으로</button><p className="eyebrow">PART CATALOG</p><h1>부품 카탈로그 탐색</h1><p>전체 부품 목록에서 핵심 스펙·가격·데이터 상태를 확인하고 현재 견적에 추가합니다.</p></div><button className="button button-secondary" type="button" onClick={onOpenBuild}><FiActivity /> 현재 견적 보기</button></div>
-    <section className="catalog-toolbar" aria-label="부품 카탈로그 필터"><form className="catalog-search" onSubmit={(event) => { event.preventDefault(); setPage(0); }}><FiSearch /><input aria-label="부품 카탈로그 검색" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="모델명·제조사·소켓·메모리 세대 검색" /><button className="button button-primary button-small" type="submit">검색</button></form><div className="catalog-filters"><label><span>범주</span><select aria-label="카탈로그 부품 범주" value={category} onChange={(event) => setCategory(event.target.value as PartCategory)}>{PART_CATEGORIES.map((item) => <option value={item} key={item}>{CATEGORY_LABELS[item]}</option>)}</select></label><label><span>데이터</span><select aria-label="카탈로그 데이터 품질" value={quality} onChange={(event) => setQuality(event.target.value as DataQuality | "all") }><option value="all">전체 데이터</option>{Object.entries(QUALITY_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label><label><span>갱신 상태</span><select aria-label="카탈로그 갱신 상태" value={freshness} onChange={(event) => setFreshness(event.target.value as DataFreshness | "all")}><option value="all">전체 상태</option><option value="fresh">{DATA_FRESHNESS_LABELS.fresh}</option><option value="aging">{DATA_FRESHNESS_LABELS.aging}</option><option value="stale">{DATA_FRESHNESS_LABELS.stale}</option><option value="unknown">{DATA_FRESHNESS_LABELS.unknown}</option></select></label><label><span>가격</span><select aria-label="카탈로그 가격 상태" value={priceStatus} onChange={(event) => setPriceStatus(event.target.value as PriceAvailabilityFilter)}><option value="all">{PRICE_AVAILABILITY_LABELS.all}</option><option value="known">{PRICE_AVAILABILITY_LABELS.known}</option><option value="unknown">{PRICE_AVAILABILITY_LABELS.unknown}</option></select></label><label><span>구매 조건</span><select aria-label="카탈로그 구매 조건" value={listingPolicy} onChange={(event) => setListingPolicy(event.target.value as ListingPolicy)}>{Object.entries(LISTING_POLICY_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label><label><span>정렬</span><select aria-label="카탈로그 정렬" value={sort} onChange={(event) => setSort(event.target.value as CatalogSort)}><option value="price_asc">가격 낮은 순</option><option value="price_desc">가격 높은 순</option><option value="name">이름 순</option><option value="updated">최근 갱신</option></select></label></div></section>
-    <div className="catalog-layout"><section className="catalog-results" aria-label="부품 카탈로그 결과"><div className="catalog-results-heading"><div><p className="eyebrow">CATALOG RESULTS</p><h2>{CATEGORY_LABELS[category]} 목록</h2></div><span>{loading ? "불러오는 중" : `${total.toLocaleString("ko-KR")}개 결과 · ${page + 1}/${pageCount}페이지`}</span></div>{error ? <div className="catalog-state error" role="alert"><FiInfo /><div><strong>부품 목록을 불러오지 못했습니다.</strong><p>{error}</p></div><button className="button button-small button-light" type="button" onClick={() => setRetryNonce((current) => current + 1)}><FiRefreshCw /> 다시 시도</button></div> : loading ? <div className="catalog-state" role="status"><FiLoader className="spin" /> 부품 목록을 불러오는 중...</div> : items.length === 0 ? <div className="catalog-state"><FiSearch /> 조건에 맞는 부품이 없습니다.</div> : <div className="catalog-part-list">{items.map((part) => <CatalogPartCard key={part.id} part={part} selected={selectedIds.has(part.id)} onSelect={() => setSelectedId(part.id)} onAdd={() => onAddPart(part)} />)}</div>}{total > 0 && <div className="catalog-pagination"><button className="button button-light button-small" type="button" onClick={() => goToPage(page - 1)} disabled={page === 0 || loading}>이전</button><span>{page + 1} / {pageCount}</span><button className="button button-light button-small" type="button" onClick={() => goToPage(page + 1)} disabled={page >= pageCount - 1 || loading}>다음</button></div>}</section><aside>{selectedPart ? <CatalogPartDetail part={selectedPart} selected={selectedIds.has(selectedPart.id)} onAdd={() => onAddPart(selectedPart)} onOpenBuild={onOpenBuild} /> : <section className="catalog-detail-empty"><FiBox /><h2>부품을 선택하세요</h2><p>목록에서 부품을 누르면 상세 스펙·가격·데이터 상태와 현재 견적 추가 버튼을 확인할 수 있습니다.</p></section>}</aside></div>
-    <p className="catalog-page-note"><FiDatabase /> 전체 카탈로그는 서버의 현재 데이터 기준으로 페이지 단위 조회합니다. 가격·스펙·원문·갱신 상태가 확인되지 않은 항목은 별도 상태로 표시하며, 카탈로그 탐색만으로 호환성을 확정하지 않습니다.</p>
+    <section className="catalog-toolbar" aria-label="부품 카탈로그 필터"><div className="catalog-mode-toggle" role="group" aria-label="카탈로그 탐색 모드"><button className={mode === "catalog" ? "selected" : ""} type="button" aria-pressed={mode === "catalog"} onClick={() => { setMode("catalog"); setSort("price_asc"); setPage(0); }}>전체 카탈로그</button><button className={mode === "compatible" ? "selected" : ""} type="button" aria-pressed={mode === "compatible"} onClick={() => { setMode("compatible"); setSort("similarity"); setPage(0); }}>현재 견적 호환 후보</button><small>{mode === "compatible" ? "현재 견적에 새 차단을 만들지 않는 후보만 표시합니다." : "호환성에 관계없이 카탈로그 전체를 탐색합니다."}</small></div><form className="catalog-search" onSubmit={(event) => { event.preventDefault(); setPage(0); }}><FiSearch /><input aria-label="부품 카탈로그 검색" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="모델명·제조사·소켓·메모리 세대 검색" /><button className="button button-primary button-small" type="submit">검색</button></form><div className="catalog-filters"><label><span>범주</span><select aria-label="카탈로그 부품 범주" value={category} onChange={(event) => setCategory(event.target.value as PartCategory)}>{PART_CATEGORIES.map((item) => <option value={item} key={item}>{CATEGORY_LABELS[item]}</option>)}</select></label><label><span>데이터</span><select aria-label="카탈로그 데이터 품질" value={quality} onChange={(event) => setQuality(event.target.value as DataQuality | "all") }><option value="all">전체 데이터</option>{Object.entries(QUALITY_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label><label><span>갱신 상태</span><select aria-label="카탈로그 갱신 상태" value={freshness} onChange={(event) => setFreshness(event.target.value as DataFreshness | "all")}><option value="all">전체 상태</option><option value="fresh">{DATA_FRESHNESS_LABELS.fresh}</option><option value="aging">{DATA_FRESHNESS_LABELS.aging}</option><option value="stale">{DATA_FRESHNESS_LABELS.stale}</option><option value="unknown">{DATA_FRESHNESS_LABELS.unknown}</option></select></label><label><span>가격</span><select aria-label="카탈로그 가격 상태" value={priceStatus} onChange={(event) => setPriceStatus(event.target.value as PriceAvailabilityFilter)}><option value="all">{PRICE_AVAILABILITY_LABELS.all}</option><option value="known">{PRICE_AVAILABILITY_LABELS.known}</option><option value="unknown">{PRICE_AVAILABILITY_LABELS.unknown}</option></select></label><label><span>구매 조건</span><select aria-label="카탈로그 구매 조건" value={listingPolicy} onChange={(event) => setListingPolicy(event.target.value as ListingPolicy)}>{Object.entries(LISTING_POLICY_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label><label><span>정렬</span><select aria-label="카탈로그 정렬" value={sort} onChange={(event) => setSort(event.target.value as CatalogSort)}><option value="price_asc">가격 낮은 순</option><option value="price_desc">가격 높은 순</option><option value="name">이름 순</option><option value="updated">최근 갱신</option>{mode === "compatible" && <><option value="similarity">유사도 높은 순</option><option value="value">가성비 높은 순</option></>}</select></label></div></section>
+    <div className="catalog-layout"><section className="catalog-results" aria-label="부품 카탈로그 결과"><div className="catalog-results-heading"><div><p className="eyebrow">{mode === "compatible" ? "COMPATIBLE CANDIDATES" : "CATALOG RESULTS"}</p><h2>{CATEGORY_LABELS[category]} {mode === "compatible" ? "호환 후보" : "목록"}</h2></div><span>{loading ? "불러오는 중" : `${total.toLocaleString("ko-KR")}개 결과 · ${page + 1}/${pageCount}페이지`}</span></div>{error ? <div className="catalog-state error" role="alert"><FiInfo /><div><strong>부품 목록을 불러오지 못했습니다.</strong><p>{error}</p></div><button className="button button-small button-light" type="button" onClick={() => setRetryNonce((current) => current + 1)}><FiRefreshCw /> 다시 시도</button></div> : loading ? <div className="catalog-state" role="status"><FiLoader className="spin" /> {mode === "compatible" ? "현재 견적 호환 후보를 계산하는 중..." : "부품 목록을 불러오는 중..."}</div> : items.length === 0 ? <div className="catalog-state"><FiSearch /> {mode === "compatible" ? "현재 견적 기준의 안전 후보가 없습니다." : "조건에 맞는 부품이 없습니다."}</div> : <div className="catalog-part-list">{items.map((part) => <CatalogPartCard key={part.id} part={part} selected={selectedIds.has(part.id)} onSelect={() => setSelectedId(part.id)} onAdd={() => onAddPart(part)} />)}</div>}{total > 0 && <div className="catalog-pagination"><button className="button button-light button-small" type="button" onClick={() => goToPage(page - 1)} disabled={page === 0 || loading}>이전</button><span>{page + 1} / {pageCount}</span><button className="button button-light button-small" type="button" onClick={() => goToPage(page + 1)} disabled={page >= pageCount - 1 || loading}>다음</button></div>}</section><aside>{selectedPart ? <CatalogPartDetail part={selectedPart} selected={selectedIds.has(selectedPart.id)} onAdd={() => onAddPart(selectedPart)} onOpenBuild={onOpenBuild} /> : <section className="catalog-detail-empty"><FiBox /><h2>부품을 선택하세요</h2><p>목록에서 부품을 누르면 상세 스펙·가격·데이터 상태와 현재 견적 추가 버튼을 확인할 수 있습니다.</p></section>}</aside></div>
+    <p className="catalog-page-note"><FiDatabase /> {mode === "compatible" ? "현재 견적 호환 후보는 기존 카탈로그와 전체 호환성 엔진의 안전 후보 평가를 기준으로 합니다." : "전체 카탈로그는 서버의 현재 데이터 기준으로 페이지 단위 조회합니다."} 가격·스펙·원문·갱신 상태가 확인되지 않은 항목은 별도 상태로 표시하며, 카탈로그 탐색만으로 호환성을 확정하지 않습니다.</p>
   </div>;
 }

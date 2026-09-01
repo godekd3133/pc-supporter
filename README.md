@@ -727,6 +727,7 @@ DELETE /api/admin/gpu-physical-overrides/:partId
 - `src/BuildGeneratorView.tsx`: 자동 구성 단일 초안·우선순위 3안·예산 구간 3안 비교 화면, 비교 복사·CSV/JSON 저장과 lazy-loaded route chunk
 - `src/PurchaseReadinessPanel.tsx`: 구매 준비도와 최종 구매 판단을 결과 화면 진입 시 계산하는 lazy 패널
 - `src/PurchaseDecisionGatePanel.tsx`: 엔진·가격·데이터 게이트와 구매 전 체크리스트 진행률을 합친 최종 구매 판단 lazy 패널
+- `src/CatalogView.tsx`: 전체 부품 카탈로그의 카테고리·검색·품질·갱신·가격·유통 조건 필터, 페이지네이션, 핵심 스펙 상세, 원문, 현재 견적 추가 lazy 화면
 - `src/SharedBudgetLadderView.tsx`: 예산 비교 공유 snapshot의 생성 조건·카탈로그 신선도·현재 기준 재생성 비교·최신 결과 새 snapshot 저장·v1/v2/v3 lineage 이력·최대 3개 버전 비교표·셀 diff 필터·합계/분석 추이 그래프·범주별 부분 병합·비파괴 미리 검사 gate·편집기/즉시 검사 연결·읽기 전용 표·diff·재 export lazy 화면
 - `src/HomeBudgetLadderSharePanel.tsx`: 홈의 최근 예산 비교 공유 snapshot 5개/전체 이력·이름/버전 검색·서버 상태 자동/수동 확인·열기·링크 복사·로컬 이력 제거 lazy 패널
 - `src/HomeBudgetLadderRevokeDialog.tsx`: 서버 공유 snapshot 폐기 전 대상·영향을 확인하는 접근성 alertdialog와 Esc/안전 포커스 처리
@@ -801,3 +802,5 @@ npm run build
 실제 조립 검증 패널은 현재 회차의 상태·진행률·실패 수·재확인 신호를 결과 화면으로 전달합니다. 최종 구매 게이트는 미기록 실측을 구매 전 차단 사유로 사용하지 않지만, 실측 진행 중·실패·재확인 신호가 기록되면 해당 사실을 우선 안내하고 `실측 기록으로 이동` 바로가기를 제공합니다.
 
 390px 반응형 점검은 홈·견적 편집기·자동 구성·주변 부품·가격 추적·저장 견적·데이터 센터·예산 공유의 주요 8개 route를 순회하며 body/document scroll width와 화면 밖 요소를 확인합니다. 편집기의 액션 버튼·업그레이드/주변 추천 grid·데이터 신뢰도 헤더·GPU 목표 문구는 모바일에서 세로 배치와 `minmax(0, 1fr)`·줄바꿈 규칙을 적용합니다.
+
+`부품 카탈로그` 화면은 편집기 안에서만 가능했던 부품 탐색을 독립 route로 제공합니다. CPU·쿨러·메인보드·RAM·GPU·SSD·HDD·케이스·PSU 범주별로 이름·제조사·소켓·메모리 세대 검색, 데이터 품질·갱신 상태·가격 상태·유통 조건 필터, 가격·이름·최근 갱신 정렬과 페이지 이동을 사용할 수 있습니다. 선택한 부품은 핵심 스펙·가격·원문 스펙·데이터 상태·안전한 원문 링크를 확인한 뒤 현재 견적에 추가할 수 있으며, 카탈로그 탐색만으로 호환을 확정하지 않고 견적 검사에서 전체 규칙 엔진을 다시 실행합니다.

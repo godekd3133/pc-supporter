@@ -377,6 +377,14 @@ p { color: var(--muted); line-height: 1.7; }
 
 .catalog-toolbar { margin-bottom: 16px; padding: 14px; border: 1px solid #dce7ea; border-radius: 13px; background: #fbfdfd; box-shadow: var(--small-shadow); }
 
+.catalog-mode-toggle { display: flex; align-items: center; flex-wrap: wrap; gap: 5px 7px; margin-bottom: 9px; }
+
+.catalog-mode-toggle button { min-height: 29px; padding: 0 9px; border: 1px solid #dce7e9; border-radius: 6px; color: #7b9095; background: #fff; font-size: 8px; font-weight: 700; }
+
+.catalog-mode-toggle button:hover, .catalog-mode-toggle button.selected { border-color: #9ecfc4; color: #3f8173; background: #eefaf6; }
+
+.catalog-mode-toggle small { margin-left: 3px; color: #93a4a8; font-size: 8px; }
+
 .catalog-search { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 0 10px; border: 1px solid #d9e5e7; border-radius: 8px; color: #83959b; background: #fff; }
 
 .catalog-search > svg { flex: 0 0 auto; }
@@ -433,6 +441,12 @@ p { color: var(--muted); line-height: 1.7; }
 
 .catalog-part-card-copy em { color: #5b9887; font-size: 7px; font-style: normal; }
 
+.catalog-part-card-copy em.catalog-candidate-risk { color: #4f8b7e; }
+
+.catalog-part-card-copy em.catalog-candidate-risk.review { color: #9a793c; }
+
+.catalog-part-card-copy em.catalog-candidate-risk.unsafe { color: #a06060; }
+
 .catalog-part-card-price { max-width: 100px; color: #587c83; font-family: "DM Mono", monospace; font-size: 9px; font-weight: 700; text-align: right; white-space: normal; overflow-wrap: anywhere; }
 
 .catalog-part-card-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin: 8px 0 0 53px; padding-top: 7px; border-top: 1px solid #edf2f3; }
@@ -470,6 +484,22 @@ p { color: var(--muted); line-height: 1.7; }
 .catalog-detail-badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 12px; }
 
 .catalog-detail-badges span { padding: 4px 6px; border-radius: 5px; color: #6d878b; background: #f0f6f5; font-size: 7px; }
+
+.catalog-candidate-summary { display: grid; gap: 4px; margin-top: 11px; padding: 9px 10px; border: 1px solid #cfeae2; border-radius: 8px; color: #67847f; background: #f4fbf8; }
+
+.catalog-candidate-summary strong { color: #3f8173; font-size: 9px; }
+
+.catalog-candidate-summary span { color: #718d87; font-size: 8px; line-height: 1.45; }
+
+.catalog-candidate-summary small { color: #8ca39d; font-family: "DM Mono", monospace; font-size: 7px; }
+
+.catalog-candidate-summary.review { border-color: #eedfbd; color: #927746; background: #fffaf0; }
+
+.catalog-candidate-summary.review strong { color: #987a3e; }
+
+.catalog-candidate-summary.unsafe { border-color: #f0d6d6; color: #a06a6a; background: #fffafa; }
+
+.catalog-candidate-summary.unsafe strong { color: #a06060; }
 
 .catalog-detail-price { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-top: 12px; padding: 10px; border: 1px solid #dcebe7; border-radius: 8px; background: #f8fdfb; }
 

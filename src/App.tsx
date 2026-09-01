@@ -2512,7 +2512,7 @@ function App() {
       onBack={() => navigate("/", "home")}
     />
   ) : view === "catalog" ? (
-    <Suspense fallback={<div className="shared-build-state"><FiLoader className="spin" /><span>부품 카탈로그를 불러오는 중...</span></div>}><LazyCatalogView build={build} onAddPart={addCatalogPart} onOpenBuild={() => navigate("/build", "editor")} onBack={() => navigate("/", "home")} /></Suspense>
+    <Suspense fallback={<div className="shared-build-state"><FiLoader className="spin" /><span>부품 카탈로그를 불러오는 중...</span></div>}><LazyCatalogView build={build} profile={recommendationPreferences.profile} gamingResolution={recommendationPreferences.gamingResolution} gamingRefreshRate={recommendationPreferences.gamingRefreshRate} onAddPart={addCatalogPart} onOpenBuild={() => navigate("/build", "editor")} onBack={() => navigate("/", "home")} /></Suspense>
   ) : view === "accessories" ? (
     <AccessoryView meta={meta} selectedAccessories={accessorySelections(build)} onAddAccessory={(item) => void addAccessory(item)} onOpenBuild={() => navigate("/build", "editor")} onBack={() => navigate("/", "home")} />
   ) : view === "pricewatchlist" ? (
