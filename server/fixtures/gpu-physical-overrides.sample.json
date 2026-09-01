@@ -1,0 +1,20 @@
+{
+  "gpu-rtx-4060": {
+    "partId": "gpu-rtx-4060",
+    "gpuSlotOccupancy": 2,
+    "gpuCableBendClearanceMm": 35,
+    "manufacturerModel": "PC-SUPPORTER-GPU-4060-SAMPLE",
+    "sourceNote": "공개 테스트 fixture이며 실제 제조사 물리 근거를 의미하지 않습니다.",
+    "sourceUrl": "https://example.com/pc-supporter/gpu-rtx-4060",
+    "updatedAt": "2026-09-02T00:00:00.000Z"
+  },
+  "gpu-rtx-5090": {
+    "partId": "gpu-rtx-5090",
+    "gpuSlotOccupancy": 3.5,
+    "gpuCableBendClearanceMm": 40,
+    "manufacturerModel": "PC-SUPPORTER-GPU-5090-SAMPLE",
+    "sourceNote": "공개 테스트 fixture이며 실제 제조사 물리 근거를 의미하지 않습니다.",
+    "sourceUrl": "https://example.com/pc-supporter/gpu-rtx-5090",
+    "updatedAt": "2026-09-02T00:00:00.000Z"
+  }
+}

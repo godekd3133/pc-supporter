@@ -116,7 +116,7 @@ Vite가 브라우저 번들을 만들고 React 화면이 API 계약을 소비합
 - `package.json`, lockfile, TypeScript/Vite 설정
 - DB schema와 Docker Compose 개발 보조 설정
 - `.env.example`의 빈 설정 이름과 기본값
-- seed catalog, API/구조 설명, 디자인 QA 기준, CI/PR 규칙
+- seed catalog와 `server/fixtures/`의 synthetic fixture, API/구조 설명, 디자인 QA 기준, CI/PR 규칙
 
 ### 추적하지 않는 것
 
