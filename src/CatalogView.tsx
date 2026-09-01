@@ -40,7 +40,7 @@ function candidateRiskLabel(risk: CatalogPart["candidateRisk"]) {
 function candidateDetailSummary(part: CatalogPart) {
   return [
     part.decision?.summary,
-    part.similarityScore !== undefined ? `${part.similarityLabel ?? "유사도"} ${part.similarityScore}점` : undefined,
+    part.similarityScore !== undefined ? `성능 유사도 · ${part.similarityLabel ?? "비교"} ${part.similarityScore}점` : undefined,
     part.performanceSummary,
     part.valueScore !== undefined && part.valueLabel ? `${part.valueLabel} ${part.valueScore}점` : undefined
   ].filter((value): value is string => Boolean(value)).join(" · ");
