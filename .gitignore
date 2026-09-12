@@ -24,3 +24,4 @@ android/app/src/main/assets/public/
 ios/App/Pods/
 ios/App/DerivedData/
 ios/App/build/
+ios/App/CapApp-SPM/build/
