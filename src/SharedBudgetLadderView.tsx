@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FiActivity, FiArrowLeft, FiCopy, FiDownload, FiInfo, FiLoader, FiRefreshCw, FiShare2, FiTrash2, FiXCircle } from "react-icons/fi";
 import { BUDGET_LADDER_BANDS, type BudgetLadderExportItem, type BudgetLadderExportPayload, type BudgetLadderOutcome } from "../shared/budget-ladder";
 import { budgetLadderBaseRequestFor, budgetLadderCsvForPayload, budgetLadderExportPayloadFor, budgetLadderScenariosFor, budgetLadderTextForPayload } from "../shared/budget-ladder";
@@ -233,9 +233,8 @@ function SharedBudgetLadderVersionTrendCharts({ snapshots }: { snapshots: Budget
   return <section className="shared-budget-ladder-version-trends" aria-label="버전별 예산 비교 추이"><div className="shared-budget-ladder-version-trends-heading"><div><p className="eyebrow">VERSION TRENDS</p><h3>버전별 변화 추이</h3><p>선택한 snapshot 사이의 예산 구간별 합계와 카탈로그 분석 지수를 실제 확인값만 연결해 보여줍니다.</p></div><span>{snapshots.length}개 버전</span></div><div className="shared-budget-ladder-version-trends-grid"><SharedBudgetLadderVersionTrendGraph snapshots={snapshots} metric="total" title="예상 합계 추이" description="단위: 천원 · 저장 당시 합계" /><SharedBudgetLadderVersionTrendGraph snapshots={snapshots} metric="analysis" title="카탈로그 분석 지수 추이" description="단위: 점 · 실제 FPS 아님" /></div><p className="shared-budget-ladder-version-trends-note"><FiInfo /> 분석 점수나 가격이 없는 버전은 점을 연결하지 않고 공백으로 남깁니다. 그래프는 가격·스펙 기반 참고값이며 성능 보증이 아닙니다.</p></section>;
 }
 
-function SharedBudgetLadderVersionComparison({ lineage, currentSnapshot, onApplyVersion, onApplyMergedSelection, onPreviewMergedSelection }: { lineage: BudgetLadderShareLineageResponse; currentSnapshot: BudgetLadderShareSnapshot; onApplyVersion: (snapshot: BudgetLadderShareSnapshot) => Promise<void>; onApplyMergedSelection: (selection: BuildSelection, request: BuildGenerationRequest, checkNow: boolean) => Promise<void>; onPreviewMergedSelection: (selection: BuildSelection, request: BuildGenerationRequest) => Promise<CompatibilityResult> }) {
+function SharedBudgetLadderVersionComparison({ lineage, currentSnapshot, onApplyVersion, onApplyMergedSelection, onPreviewMergedSelection }: { lineage: BudgetLadderShareLineageResponse; currentSnapshot: BudgetLadderShareSnapshot; onApplyVersion: (snapshot: BudgetLadderShareSnapshot) => Promise<void>; onApplyMergedSelection: (selection: BuildSelection, request: BuildGenerationRequest, checkNow: boolean) => Promise<void>; onPreviewMergedSelection: (selection: BuildSelection, request: BuildGenerationRequest, signal: AbortSignal) => Promise<CompatibilityResult> }) {
   const availableEntries = lineage.entries.filter((entry) => !entry.expired).sort((left, right) => left.versionNumber - right.versionNumber || left.createdAt.localeCompare(right.createdAt));
-  if (availableEntries.length < 2) return null;
   const defaultIds = availableEntries.slice(-3).map((entry) => entry.id);
   if (!defaultIds.includes(currentSnapshot.id)) defaultIds.splice(0, 1, currentSnapshot.id);
   const [selectedIds, setSelectedIds] = useState(defaultIds);
@@ -244,14 +243,41 @@ function SharedBudgetLadderVersionComparison({ lineage, currentSnapshot, onApply
   const [error, setError] = useState<string | null>(null);
   const [showDifferencesOnly, setShowDifferencesOnly] = useState(false);
   const [applyingVersionId, setApplyingVersionId] = useState<string | null>(null);
+  const applyRequestVersionRef = useRef(0);
+  const mountedRef = useRef(false);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      applyRequestVersionRef.current += 1;
+    };
+  }, []);
+  const availableEntryKey = availableEntries.map((entry) => `${entry.id}:${entry.updatedAt}`).join("|");
+
+  useEffect(() => {
+    const nextIds = availableEntries.length >= 2 ? defaultIds : [];
+    applyRequestVersionRef.current += 1;
+    setSelectedIds((current) => current.length === nextIds.length && current.every((id, index) => id === nextIds[index]) ? current : nextIds);
+    setSnapshots({ [currentSnapshot.id]: currentSnapshot });
+    setShowDifferencesOnly(false);
+    setApplyingVersionId(null);
+    setError(null);
+  }, [availableEntryKey, currentSnapshot]);
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
+    if (availableEntries.length < 2) {
+      setLoading(false);
+      return () => { cancelled = true; };
+    }
     setLoading(true);
     setError(null);
-    void Promise.all(selectedIds.map(async (id) => {
+    const selectedIdsForRequest = Array.from(new Set([currentSnapshot.id, ...selectedIds.filter((id) => availableEntries.some((entry) => entry.id === id))]));
+    void Promise.all(selectedIdsForRequest.map(async (id) => {
       if (id === currentSnapshot.id) return currentSnapshot;
-      return api<BudgetLadderShareSnapshot>(`/api/budget-ladders/${encodeURIComponent(id)}`);
+      return api<BudgetLadderShareSnapshot>(`/api/budget-ladders/${encodeURIComponent(id)}`, { signal: controller.signal });
     }))
       .then((values) => {
         if (cancelled) return;
@@ -259,8 +285,8 @@ function SharedBudgetLadderVersionComparison({ lineage, currentSnapshot, onApply
       })
       .catch((reason: unknown) => { if (!cancelled) setError(reason instanceof Error ? reason.message : "선택한 예산 비교 버전을 불러오지 못했습니다."); })
       .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [currentSnapshot, selectedIds.join(",")]);
+    return () => { cancelled = true; controller.abort(); };
+  }, [availableEntryKey, currentSnapshot, selectedIds.join(",")]);
 
   const selectedSnapshots = selectedIds.map((id) => snapshots[id]).filter((value): value is BudgetLadderShareSnapshot => Boolean(value));
   const selectedEntryFor = (id: string) => availableEntries.find((entry) => entry.id === id);
@@ -269,13 +295,16 @@ function SharedBudgetLadderVersionComparison({ lineage, currentSnapshot, onApply
   const changedRows = budgetLadderVersionChangedRowsFor(rows);
   const visibleRows = showDifferencesOnly ? changedRows : rows;
   async function applyVersion(snapshot: BudgetLadderShareSnapshot) {
+    const requestVersion = ++applyRequestVersionRef.current;
+    const isCurrent = () => mountedRef.current && applyRequestVersionRef.current === requestVersion;
     setApplyingVersionId(snapshot.id);
     try {
       await onApplyVersion(snapshot);
     } finally {
-      setApplyingVersionId(null);
+      if (isCurrent()) setApplyingVersionId(null);
     }
   }
+  if (availableEntries.length < 2) return null;
   return <section className="shared-budget-ladder-version-comparison" aria-label="예산 비교 버전 상세 비교">
     <div className="shared-budget-ladder-version-comparison-heading"><div><p className="eyebrow">VERSION COMPARISON</p><h3>예산 비교 버전 한눈에 보기</h3><p>같은 lineage에서 최대 3개 snapshot을 선택해 당시 조건·금액·위험·부품 구성을 나란히 비교합니다.</p></div><span>{availableEntries.length}개 버전 중 {selectedIds.length}개 선택</span></div>
     <div className="shared-budget-ladder-version-controls" role="group" aria-label="비교할 예산 snapshot 선택">{selectedIds.map((id, index) => <label key={`version-select-${index}`}><span>비교 열 {index + 1}</span><select aria-label={`비교 버전 ${index + 1}`} value={id} onChange={(event) => { setShowDifferencesOnly(false); setVersion(index, event.target.value); }}>{availableEntries.map((entry) => <option value={entry.id} disabled={selectedIds.includes(entry.id) && entry.id !== id} key={entry.id}>v{entry.versionNumber} · {entry.id === lineage.currentId ? "현재 링크" : entry.name}</option>)}</select></label>)}</div>
@@ -290,20 +319,40 @@ function SharedBudgetLadderVersionComparison({ lineage, currentSnapshot, onApply
   </section>;
 }
 
-function SharedBudgetLadderPartialMergePanel({ snapshots, onApplyMergedSelection, onPreviewMergedSelection }: { snapshots: BudgetLadderShareSnapshot[]; onApplyMergedSelection: (selection: BuildSelection, request: BuildGenerationRequest, checkNow: boolean) => Promise<void>; onPreviewMergedSelection: (selection: BuildSelection, request: BuildGenerationRequest) => Promise<CompatibilityResult> }) {
+function SharedBudgetLadderPartialMergePanel({ snapshots, onApplyMergedSelection, onPreviewMergedSelection }: { snapshots: BudgetLadderShareSnapshot[]; onApplyMergedSelection: (selection: BuildSelection, request: BuildGenerationRequest, checkNow: boolean) => Promise<void>; onPreviewMergedSelection: (selection: BuildSelection, request: BuildGenerationRequest, signal: AbortSignal) => Promise<CompatibilityResult> }) {
   const sourceSnapshots = snapshots.filter((snapshot) => Boolean(targetSelectionFor(snapshot)));
   const fallbackSourceId = sourceSnapshots.at(-1)?.id ?? "";
   const [sourceIds, setSourceIds] = useState<Record<PartCategory, string>>(() => Object.fromEntries(PART_CATEGORIES.map((category) => [category, fallbackSourceId])) as Record<PartCategory, string>);
   const [applying, setApplying] = useState(false);
   const [previewState, setPreviewState] = useState<BudgetLadderMergePreviewState>({ status: "idle" });
+  const previewRequestVersionRef = useRef(0);
+  const previewAbortControllerRef = useRef<AbortController | null>(null);
+  const applyRequestVersionRef = useRef(0);
+  const mountedRef = useRef(false);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      previewAbortControllerRef.current?.abort();
+      previewAbortControllerRef.current = null;
+      previewRequestVersionRef.current += 1;
+      applyRequestVersionRef.current += 1;
+    };
+  }, []);
 
   useEffect(() => {
     if (!fallbackSourceId) return;
+    previewRequestVersionRef.current += 1;
+    previewAbortControllerRef.current?.abort();
+    previewAbortControllerRef.current = null;
+    applyRequestVersionRef.current += 1;
     setSourceIds((current) => Object.fromEntries(PART_CATEGORIES.map((category) => {
       const source = sourceSnapshots.find((snapshot) => snapshot.id === current[category]);
       return [category, source ? current[category] : fallbackSourceId];
     })) as Record<PartCategory, string>);
     setPreviewState({ status: "idle" });
+    setApplying(false);
   }, [sourceSnapshots.map((snapshot) => snapshot.id).join(","), fallbackSourceId]);
 
   if (sourceSnapshots.length === 0) return <section className="shared-budget-ladder-merge" aria-label="예산 비교 부분 병합"><div className="shared-budget-ladder-merge-heading"><div><p className="eyebrow">PARTIAL MERGE</p><h3>범주별 부분 병합</h3><p>구형 snapshot에는 실제 부품 ID가 없어 부분 병합을 제공하지 않습니다.</p></div></div><p className="shared-budget-ladder-merge-unavailable"><FiInfo /> 새 snapshot으로 저장한 버전부터 부분 병합을 사용할 수 있습니다.</p></section>;
@@ -329,11 +378,13 @@ function SharedBudgetLadderPartialMergePanel({ snapshots, onApplyMergedSelection
       setPreviewState({ status: "error", error: "부분 병합 조합을 먼저 미리 검사해 주세요." });
       return;
     }
+    const requestVersion = ++applyRequestVersionRef.current;
+    const isCurrent = () => mountedRef.current && applyRequestVersionRef.current === requestVersion;
     setApplying(true);
     try {
       await onApplyMergedSelection(merged, request, checkNow);
     } finally {
-      setApplying(false);
+      if (isCurrent()) setApplying(false);
     }
   }
 
@@ -341,12 +392,21 @@ function SharedBudgetLadderPartialMergePanel({ snapshots, onApplyMergedSelection
     const merged = mergedSelectionFor();
     const request = sourceSnapshots.at(-1)?.request;
     if (!merged || !request) return;
+    const requestVersion = ++previewRequestVersionRef.current;
+    const isCurrent = () => mountedRef.current && previewRequestVersionRef.current === requestVersion;
+    previewAbortControllerRef.current?.abort();
+    const controller = new AbortController();
+    previewAbortControllerRef.current = controller;
     setPreviewState({ status: "loading" });
     try {
-      const result = await onPreviewMergedSelection(merged, request);
+      const result = await onPreviewMergedSelection(merged, request, controller.signal);
+      if (!isCurrent() || controller.signal.aborted) return;
       setPreviewState({ status: "ready", result });
     } catch (reason: unknown) {
+      if (!isCurrent() || controller.signal.aborted) return;
       setPreviewState({ status: "error", error: reason instanceof Error ? reason.message : "부분 병합 조합을 미리 검사하지 못했습니다." });
+    } finally {
+      if (previewAbortControllerRef.current === controller) previewAbortControllerRef.current = null;
     }
   }
 
@@ -356,10 +416,10 @@ function SharedBudgetLadderPartialMergePanel({ snapshots, onApplyMergedSelection
   };
   const previewResult = previewState.result;
   const previewStatusText = previewResult?.status === "compatible" ? "호환 가능" : previewResult?.status === "needs_review" ? "확인 필요" : previewResult ? "검토 필요" : "";
-  return <section className="shared-budget-ladder-merge" aria-label="예산 비교 부분 병합"><div className="shared-budget-ladder-merge-heading"><div><p className="eyebrow">PARTIAL MERGE</p><h3>범주별 부분 병합</h3><p>예: CPU는 v1, GPU는 v3에서 가져와 현재 카탈로그 기준으로 견적을 시작합니다.</p></div><span>{sourceSnapshots.length}개 버전 사용 가능</span></div><div className="shared-budget-ladder-merge-controls">{PART_CATEGORIES.map((category) => <label key={category}><span>{CATEGORY_LABELS[category]} 적용 버전</span><select aria-label={`${CATEGORY_LABELS[category]} 적용 버전`} value={sourceIds[category]} onChange={(event) => { setPreviewState({ status: "idle" }); setSourceIds((current) => ({ ...current, [category]: event.target.value })); }}>{sourceSnapshots.map((snapshot) => <option value={snapshot.id} key={`${category}-${snapshot.id}`}>v{snapshot.versionNumber ?? 1} · {sharedBudgetLadderLineText(snapshot.payload.items.find((item) => item.id === "target") ?? snapshot.payload.items[0], category)}</option>)}</select><small>{sourceLabelFor(category)}</small></label>)}</div><p className="shared-budget-ladder-merge-note"><FiInfo /> 메인보드·SSD·메모리 조합이 서로 다른 버전에서 섞일 수 있어 적용 후 전체 호환성 재검사를 권장합니다. M.2 수동 배치는 초기화하고 자동 배치로 다시 확인합니다.</p><button className="button button-secondary shared-budget-ladder-merge-preview-button" type="button" onClick={() => void previewMerged()} disabled={applying || previewState.status === "loading"}><FiRefreshCw /> {previewState.status === "loading" ? "부분 병합 조합 검사 중..." : "부분 병합 조합 미리 검사"}</button>{previewState.status === "error" && <p className="shared-budget-ladder-merge-preview-error" role="alert"><FiXCircle /> {previewState.error}</p>}{previewResult && <div className={`shared-budget-ladder-merge-preview ${previewResult.status}`} aria-label="부분 병합 조합 미리 검사 결과"><div><strong>미리 검사 완료 · {previewStatusText}</strong><span>{previewResult.priceComplete ? `${previewResult.totalPriceWon.toLocaleString("ko-KR")}원` : "가격 확인 필요"}</span></div><p>차단 {previewResult.blockerCount}개 · 주의 {previewResult.warningCount}개 · 확인 필요 {previewResult.unknownCount}개 · 현재 견적은 아직 바뀌지 않았습니다.</p>{previewResult.findings.filter((finding) => finding.severity !== "info").slice(0, 3).map((finding) => <small key={finding.id}><b>{finding.severity === "blocker" ? "차단" : finding.severity === "warning" ? "주의" : "확인"}</b> {finding.title}</small>)}</div>}<div className="shared-budget-ladder-merge-actions"><button className="button button-light" type="button" onClick={() => void applyMerged(false)} disabled={applying || previewState.status !== "ready"}><FiActivity /> 부분 병합 후 편집기</button><button className="button button-primary" type="button" onClick={() => void applyMerged(true)} disabled={applying || previewState.status !== "ready"}><FiRefreshCw /> 부분 병합 후 바로 검사</button></div></section>;
+  return <section className="shared-budget-ladder-merge" aria-label="예산 비교 부분 병합"><div className="shared-budget-ladder-merge-heading"><div><p className="eyebrow">PARTIAL MERGE</p><h3>범주별 부분 병합</h3><p>예: CPU는 v1, GPU는 v3에서 가져와 현재 카탈로그 기준으로 견적을 시작합니다.</p></div><span>{sourceSnapshots.length}개 버전 사용 가능</span></div><div className="shared-budget-ladder-merge-controls">{PART_CATEGORIES.map((category) => <label key={category}><span>{CATEGORY_LABELS[category]} 적용 버전</span><select aria-label={`${CATEGORY_LABELS[category]} 적용 버전`} value={sourceIds[category]} onChange={(event) => { previewRequestVersionRef.current += 1; applyRequestVersionRef.current += 1; setApplying(false); setPreviewState({ status: "idle" }); setSourceIds((current) => ({ ...current, [category]: event.target.value })); }}>{sourceSnapshots.map((snapshot) => <option value={snapshot.id} key={`${category}-${snapshot.id}`}>v{snapshot.versionNumber ?? 1} · {sharedBudgetLadderLineText(snapshot.payload.items.find((item) => item.id === "target") ?? snapshot.payload.items[0], category)}</option>)}</select><small>{sourceLabelFor(category)}</small></label>)}</div><p className="shared-budget-ladder-merge-note"><FiInfo /> 메인보드·SSD·메모리 조합이 서로 다른 버전에서 섞일 수 있어 적용 후 전체 호환성 재검사를 권장합니다. M.2 수동 배치는 초기화하고 자동 배치로 다시 확인합니다.</p><button className="button button-secondary shared-budget-ladder-merge-preview-button" type="button" onClick={() => void previewMerged()} disabled={applying || previewState.status === "loading"}><FiRefreshCw /> {previewState.status === "loading" ? "부분 병합 조합 검사 중..." : "부분 병합 조합 미리 검사"}</button>{previewState.status === "error" && <p className="shared-budget-ladder-merge-preview-error" role="alert"><FiXCircle /> {previewState.error}</p>}{previewResult && <div className={`shared-budget-ladder-merge-preview ${previewResult.status}`} aria-label="부분 병합 조합 미리 검사 결과"><div><strong>미리 검사 완료 · {previewStatusText}</strong><span>{previewResult.priceComplete ? `${previewResult.totalPriceWon.toLocaleString("ko-KR")}원` : "가격 확인 필요"}</span></div><p>차단 {previewResult.blockerCount}개 · 주의 {previewResult.warningCount}개 · 확인 필요 {previewResult.unknownCount}개 · 현재 견적은 아직 바뀌지 않았습니다.</p>{previewResult.findings.filter((finding) => finding.severity !== "info").slice(0, 3).map((finding) => <small key={finding.id}><b>{finding.severity === "blocker" ? "차단" : finding.severity === "warning" ? "주의" : "확인"}</b> {finding.title}</small>)}</div>}<div className="shared-budget-ladder-merge-actions"><button className="button button-light" type="button" onClick={() => void applyMerged(false)} disabled={applying || previewState.status !== "ready"}><FiActivity /> 부분 병합 후 편집기</button><button className="button button-primary" type="button" onClick={() => void applyMerged(true)} disabled={applying || previewState.status !== "ready"}><FiRefreshCw /> 부분 병합 후 바로 검사</button></div></section>;
 }
 
-export function SharedBudgetLadderView({ onBack, onToast, onApplyDraft, onApplyMergedSelection, onPreviewMergedSelection, onBudgetLadderShareSaved, onBudgetLadderShareRevoked }: { onBack: () => void; onToast: (message: string) => void; onApplyDraft: (draft: BuildGenerationResult, checkNow: boolean) => Promise<void>; onApplyMergedSelection: (selection: BuildSelection, request: BuildGenerationRequest, checkNow: boolean) => Promise<void>; onPreviewMergedSelection: (selection: BuildSelection, request: BuildGenerationRequest) => Promise<CompatibilityResult>; onBudgetLadderShareSaved: (share: BudgetLadderLocalShareEntry) => void; onBudgetLadderShareRevoked: (id: string) => void }) {
+export function SharedBudgetLadderView({ onBack, onToast, onApplyDraft, onApplyMergedSelection, onPreviewMergedSelection, onBudgetLadderShareSaved, onBudgetLadderShareRevoked }: { onBack: () => void; onToast: (message: string) => void; onApplyDraft: (draft: BuildGenerationResult, checkNow: boolean) => Promise<void>; onApplyMergedSelection: (selection: BuildSelection, request: BuildGenerationRequest, checkNow: boolean) => Promise<void>; onPreviewMergedSelection: (selection: BuildSelection, request: BuildGenerationRequest, signal: AbortSignal) => Promise<CompatibilityResult>; onBudgetLadderShareSaved: (share: BudgetLadderLocalShareEntry) => void; onBudgetLadderShareRevoked: (id: string) => void }) {
   const shareId = window.location.pathname.split("/").filter(Boolean).at(-1) ?? "";
   const [snapshot, setSnapshot] = useState<BudgetLadderShareSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
@@ -369,15 +429,42 @@ export function SharedBudgetLadderView({ onBack, onToast, onApplyDraft, onApplyM
   const [savedRefreshSnapshot, setSavedRefreshSnapshot] = useState<BudgetLadderShareLink | null>(null);
   const [savingRefreshSnapshot, setSavingRefreshSnapshot] = useState(false);
   const [lineage, setLineage] = useState<BudgetLadderShareLineageResponse | null>(null);
+  const refreshRequestVersionRef = useRef(0);
+  const refreshAbortControllerRef = useRef<AbortController | null>(null);
+  const versionApplyAbortControllerRef = useRef<AbortController | null>(null);
+  const snapshotSaveAbortControllerRef = useRef<AbortController | null>(null);
+  const mutationRequestVersionRef = useRef(0);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      refreshAbortControllerRef.current?.abort();
+      refreshAbortControllerRef.current = null;
+      versionApplyAbortControllerRef.current?.abort();
+      versionApplyAbortControllerRef.current = null;
+      snapshotSaveAbortControllerRef.current?.abort();
+      snapshotSaveAbortControllerRef.current = null;
+      refreshRequestVersionRef.current += 1;
+      mutationRequestVersionRef.current += 1;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
+    refreshRequestVersionRef.current += 1;
     setLoading(true);
-    void api<BudgetLadderShareSnapshot>(`/api/budget-ladders/${encodeURIComponent(shareId)}`)
-      .then((value) => { if (!cancelled) { setSnapshot(value); setLineage(null); setRefreshState({ status: "idle" }); setSavedRefreshSnapshot(null); setError(null); void api<BudgetLadderShareLineageResponse>(`/api/budget-ladders/${encodeURIComponent(shareId)}/lineage`).then((entries) => { if (!cancelled) setLineage(entries); }).catch(() => undefined); } })
+    setRefreshState({ status: "idle" });
+    setSavedRefreshSnapshot(null);
+    setSavingRefreshSnapshot(false);
+    setApplyingDraft(false);
+    void api<BudgetLadderShareSnapshot>(`/api/budget-ladders/${encodeURIComponent(shareId)}`, { signal: controller.signal })
+      .then((value) => { if (!cancelled) { setSnapshot(value); setLineage(null); setRefreshState({ status: "idle" }); setSavedRefreshSnapshot(null); setError(null); void api<BudgetLadderShareLineageResponse>(`/api/budget-ladders/${encodeURIComponent(shareId)}/lineage`, { signal: controller.signal }).then((entries) => { if (!cancelled) setLineage(entries); }).catch(() => undefined); } })
       .catch((reason: unknown) => { if (!cancelled) setError(reason instanceof Error ? reason.message : "공유 예산 구간 비교를 불러오지 못했습니다."); })
       .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+    return () => { cancelled = true; controller.abort(); refreshAbortControllerRef.current?.abort(); refreshAbortControllerRef.current = null; versionApplyAbortControllerRef.current?.abort(); versionApplyAbortControllerRef.current = null; snapshotSaveAbortControllerRef.current?.abort(); snapshotSaveAbortControllerRef.current = null; refreshRequestVersionRef.current += 1; mutationRequestVersionRef.current += 1; };
   }, [shareId]);
 
   async function refreshAgainstCurrentCatalog() {
@@ -385,32 +472,42 @@ export function SharedBudgetLadderView({ onBack, onToast, onApplyDraft, onApplyM
       setRefreshState({ status: "error", error: "이 공유 snapshot에는 재생성에 필요한 원래 조건이 없습니다." });
       return;
     }
+    refreshAbortControllerRef.current?.abort();
+    const controller = new AbortController();
+    refreshAbortControllerRef.current = controller;
+    const requestVersion = ++refreshRequestVersionRef.current;
     setRefreshState({ status: "loading" });
     setSavedRefreshSnapshot(null);
     try {
       const scenarios = budgetLadderScenariosFor(snapshot.request);
       const outcomes = await Promise.all(scenarios.map(async (scenario): Promise<BudgetLadderOutcome> => {
         try {
-          const draft = await api<BuildGenerationResult>("/api/builds/recommend", { method: "POST", body: JSON.stringify(scenario.request), retry: 1 });
+          const draft = await api<BuildGenerationResult>("/api/builds/recommend", { method: "POST", body: JSON.stringify(scenario.request), retry: 1, retryOnRateLimit: true, signal: controller.signal });
           return { ...scenario, draft };
         } catch (reason: unknown) {
+          if (controller.signal.aborted || !mountedRef.current || refreshRequestVersionRef.current !== requestVersion) throw reason;
           const diagnostics = refreshDiagnosticsFromError(reason);
           return { ...scenario, error: refreshErrorText(reason), ...(diagnostics ? { diagnostics } : {}) };
         }
       }));
-      const meta = await api<{ catalogUpdatedAt: string }>("/api/meta", { retry: 1 });
+      if (!mountedRef.current || refreshRequestVersionRef.current !== requestVersion || controller.signal.aborted) return;
+      const meta = await api<{ catalogUpdatedAt: string }>("/api/meta", { retry: 1, signal: controller.signal });
+      if (!mountedRef.current || refreshRequestVersionRef.current !== requestVersion || controller.signal.aborted) return;
       setRefreshState({ status: "ready", payload: budgetLadderExportPayloadFor(outcomes), outcomes, catalogSnapshotAt: meta.catalogUpdatedAt });
     } catch (reason: unknown) {
-      setRefreshState({ status: "error", error: refreshErrorText(reason) });
+      if (mountedRef.current && refreshRequestVersionRef.current === requestVersion) setRefreshState({ status: "error", error: refreshErrorText(reason) });
+    } finally {
+      if (refreshAbortControllerRef.current === controller) refreshAbortControllerRef.current = null;
     }
   }
 
   async function applyRefreshedDraft(draft: BuildGenerationResult, checkNow: boolean) {
+    const requestVersion = ++mutationRequestVersionRef.current;
     setApplyingDraft(true);
     try {
       await onApplyDraft(draft, checkNow);
     } finally {
-      setApplyingDraft(false);
+      if (mountedRef.current && mutationRequestVersionRef.current === requestVersion) setApplyingDraft(false);
     }
   }
 
@@ -424,17 +521,28 @@ export function SharedBudgetLadderView({ onBack, onToast, onApplyDraft, onApplyM
       onToast("이 버전의 목표 예산 조건을 복원하지 못했습니다.");
       return;
     }
+    versionApplyAbortControllerRef.current?.abort();
+    const controller = new AbortController();
+    versionApplyAbortControllerRef.current = controller;
+    const requestVersion = ++mutationRequestVersionRef.current;
     try {
-      const draft = await api<BuildGenerationResult>("/api/builds/recommend", { method: "POST", body: JSON.stringify(targetScenario.request), retry: 1 });
+      const draft = await api<BuildGenerationResult>("/api/builds/recommend", { method: "POST", body: JSON.stringify(targetScenario.request), retry: 1, retryOnRateLimit: true, signal: controller.signal });
+      if (!mountedRef.current || mutationRequestVersionRef.current !== requestVersion || controller.signal.aborted) return;
       await onApplyDraft(draft, false);
     } catch (reason: unknown) {
-      onToast(reason instanceof Error ? reason.message : "선택한 버전 조건으로 현재 견적을 시작하지 못했습니다.");
+      if (mountedRef.current && mutationRequestVersionRef.current === requestVersion && !controller.signal.aborted) onToast(reason instanceof Error ? reason.message : "선택한 버전 조건으로 현재 견적을 시작하지 못했습니다.");
+    } finally {
+      if (versionApplyAbortControllerRef.current === controller) versionApplyAbortControllerRef.current = null;
     }
   }
 
   async function saveCurrentRefreshSnapshot() {
     const outcomes = refreshState.outcomes;
     if (!snapshot || !outcomes || outcomes.length === 0) return;
+    snapshotSaveAbortControllerRef.current?.abort();
+    const controller = new AbortController();
+    snapshotSaveAbortControllerRef.current = controller;
+    const requestVersion = ++mutationRequestVersionRef.current;
     setSavingRefreshSnapshot(true);
     try {
       const request = budgetLadderBaseRequestFor(outcomes);
@@ -447,33 +555,46 @@ export function SharedBudgetLadderView({ onBack, onToast, onApplyDraft, onApplyM
           parentId: shareId,
           expiresInDays: 30
         }),
-        retry: 0
+        retry: 0,
+        signal: controller.signal
       });
+      if (!mountedRef.current || mutationRequestVersionRef.current !== requestVersion || controller.signal.aborted) return;
       const url = `${window.location.origin}/budget-ladder/${saved.id}`;
       setSavedRefreshSnapshot({ id: saved.id, url, ownerToken: saved.ownerToken, ...(saved.expiresAt ? { expiresAt: saved.expiresAt } : {}), ...(saved.parentId ? { parentId: saved.parentId } : {}), ...(saved.versionNumber !== undefined ? { versionNumber: saved.versionNumber } : {}) });
       onBudgetLadderShareSaved({ id: saved.id, url, name: saved.name, createdAt: saved.createdAt, ...(saved.versionNumber !== undefined ? { versionNumber: saved.versionNumber } : {}), ...(saved.expiresAt ? { expiresAt: saved.expiresAt } : {}), ownerToken: saved.ownerToken });
       try {
         await navigator.clipboard.writeText(url);
+        if (!mountedRef.current || mutationRequestVersionRef.current !== requestVersion || controller.signal.aborted) return;
         onToast("현재 재생성 결과를 새 snapshot으로 저장하고 링크를 복사했습니다.");
       } catch {
+        if (!mountedRef.current || mutationRequestVersionRef.current !== requestVersion || controller.signal.aborted) return;
         onToast(`현재 재생성 결과를 새 snapshot으로 저장했습니다: ${url}`);
       }
     } catch (reason: unknown) {
-      onToast(reason instanceof Error ? reason.message : "현재 재생성 결과를 snapshot으로 저장하지 못했습니다.");
+      if (mountedRef.current && mutationRequestVersionRef.current === requestVersion && !controller.signal.aborted) onToast(reason instanceof Error ? reason.message : "현재 재생성 결과를 snapshot으로 저장하지 못했습니다.");
     } finally {
-      setSavingRefreshSnapshot(false);
+      if (mountedRef.current && mutationRequestVersionRef.current === requestVersion) setSavingRefreshSnapshot(false);
+      if (snapshotSaveAbortControllerRef.current === controller) snapshotSaveAbortControllerRef.current = null;
     }
   }
 
   async function revokeSavedRefreshSnapshot() {
     if (!savedRefreshSnapshot || !window.confirm("현재 재생성 결과의 새 공유 snapshot을 취소할까요? 이미 전달된 링크도 더 이상 열리지 않습니다.")) return;
+    snapshotSaveAbortControllerRef.current?.abort();
+    const controller = new AbortController();
+    snapshotSaveAbortControllerRef.current = controller;
+    const requestVersion = ++mutationRequestVersionRef.current;
+    const snapshotId = savedRefreshSnapshot.id;
     try {
-      await api(`/api/budget-ladders/${encodeURIComponent(savedRefreshSnapshot.id)}`, { method: "DELETE", headers: { "X-Share-Owner-Token": savedRefreshSnapshot.ownerToken }, retry: 0 });
+      await api(`/api/budget-ladders/${encodeURIComponent(savedRefreshSnapshot.id)}`, { method: "DELETE", headers: { "X-Share-Owner-Token": savedRefreshSnapshot.ownerToken }, retry: 0, signal: controller.signal });
+      if (!mountedRef.current || mutationRequestVersionRef.current !== requestVersion || controller.signal.aborted) return;
       setSavedRefreshSnapshot(null);
-      onBudgetLadderShareRevoked(savedRefreshSnapshot.id);
-      onToast("현재 재생성 결과의 공유 snapshot을 취소했습니다.");
+      onBudgetLadderShareRevoked(snapshotId);
+      if (mountedRef.current) onToast("현재 재생성 결과의 공유 snapshot을 취소했습니다.");
     } catch (reason: unknown) {
-      onToast(reason instanceof Error ? reason.message : "현재 재생성 결과의 공유 snapshot을 취소하지 못했습니다.");
+      if (mountedRef.current && mutationRequestVersionRef.current === requestVersion && !controller.signal.aborted) onToast(reason instanceof Error ? reason.message : "현재 재생성 결과의 공유 snapshot을 취소하지 못했습니다.");
+    } finally {
+      if (snapshotSaveAbortControllerRef.current === controller) snapshotSaveAbortControllerRef.current = null;
     }
   }
 
@@ -481,9 +602,9 @@ export function SharedBudgetLadderView({ onBack, onToast, onApplyDraft, onApplyM
     if (!snapshot) return;
     try {
       await navigator.clipboard.writeText(budgetLadderTextForPayload(snapshot.payload));
-      onToast("공유 예산 구간 비교표를 클립보드에 복사했습니다.");
+      if (mountedRef.current) onToast("공유 예산 구간 비교표를 클립보드에 복사했습니다.");
     } catch {
-      onToast("공유 예산 구간 비교표 복사에 실패했습니다. 브라우저 클립보드 권한을 확인해 주세요.");
+      if (mountedRef.current) onToast("공유 예산 구간 비교표 복사에 실패했습니다. 브라우저 클립보드 권한을 확인해 주세요.");
     }
   }
 

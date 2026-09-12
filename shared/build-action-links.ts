@@ -1,7 +1,10 @@
+import { CHECKLIST_MAX_CHECKED_IDS } from "./checklist-storage-limits";
+
 export function checklistItemIdsForAction(actionId: string) {
   if (actionId.startsWith("finding:") || actionId.startsWith("accessory:") || actionId.startsWith("data-") || actionId.startsWith("connectivity:") || actionId === "price:total" || actionId === "repair:best-plan") return [actionId];
   if (actionId === "physical:gpu-case") return ["manual:gpu-physical-evidence", "manual:physical-clearance"];
   if (actionId === "physical:psu-cable") return ["manual:pcie-cable-topology", "manual:power-cabling"];
+  if (actionId === "physical:resource-budget") return ["manual:power-thermal-budget"];
   if (actionId === "assembly:final-check") return ["manual:post-build-test", "manual:manufacturer-support"];
   return [];
 }
@@ -24,5 +27,5 @@ export function actionChecklistProgressFor(actions: ReadonlyArray<{ id: string }
 export function checkedChecklistIdsAfterAction(currentChecklistIds: ReadonlyArray<string>, actionId: string, availableChecklistIds: ReadonlySet<string>, checked: boolean) {
   const next = new Set(currentChecklistIds);
   actionChecklistIdsFor(actionId, availableChecklistIds).forEach((id) => checked ? next.add(id) : next.delete(id));
-  return Array.from(next).slice(0, 100);
+  return Array.from(next).slice(0, CHECKLIST_MAX_CHECKED_IDS);
 }

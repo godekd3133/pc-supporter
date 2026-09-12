@@ -1,10 +1,12 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import type { SavedBuild } from "../shared/types";
 import type { SavedBuildMonitorSubscription } from "../shared/saved-build-monitor-subscription";
+import type { SavedBuildMetadataHistoryEntry } from "../shared/saved-build-decision-note";
 
 export type SavedBuildRecord = SavedBuild & {
   ownerTokenHash?: string;
   monitorState?: SavedBuildMonitorSubscription;
+  metadataHistory?: SavedBuildMetadataHistoryEntry[];
 };
 
 export function createShareOwnerCredential() {
@@ -28,6 +30,6 @@ export function shareOwnerOrEnabledAdminCanManage(record: { ownerTokenHash?: str
 }
 
 export function publicSavedBuild(record: SavedBuildRecord): SavedBuild {
-  const { ownerTokenHash: _ownerTokenHash, monitorState: _monitorState, ...build } = record;
+  const { ownerTokenHash: _ownerTokenHash, monitorState: _monitorState, metadataHistory: _metadataHistory, ...build } = record;
   return build;
 }

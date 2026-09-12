@@ -14,6 +14,8 @@ export interface SavedBuildMonitorAlert {
   kind: SavedBuildMonitorAlertKind;
   title: string;
   message: string;
+  findingRuleIds?: string[];
+  findingTitles?: string[];
   createdAt: string;
   checkedAt?: string;
   readAt?: string;
@@ -22,6 +24,13 @@ export interface SavedBuildMonitorAlert {
 
 function boundedText(value: unknown, max: number): value is string {
   return typeof value === "string" && value.length > 0 && value.length <= max;
+}
+
+function boundedTextArray(value: unknown, maxItems: number, maxText: number) {
+  if (!Array.isArray(value)) return undefined;
+  if (value.length > maxItems) return undefined;
+  const items = value.filter((item): item is string => boundedText(item, maxText)).slice(0, maxItems);
+  return items.length === value.length ? items : undefined;
 }
 
 export function savedBuildMonitorAlertFromUnknown(value: unknown): SavedBuildMonitorAlert | undefined {
@@ -33,17 +42,26 @@ export function savedBuildMonitorAlertFromUnknown(value: unknown): SavedBuildMon
     || !SAVED_BUILD_MONITOR_ALERT_KINDS.includes(candidate.kind as SavedBuildMonitorAlertKind)
     || !boundedText(candidate.title, 160)
     || !boundedText(candidate.message, 300)
+    || (candidate.findingRuleIds !== undefined && !boundedTextArray(candidate.findingRuleIds, 4, 120))
+    || (candidate.findingTitles !== undefined && !boundedTextArray(candidate.findingTitles, 4, 160))
     || !boundedText(candidate.createdAt, 120)
     || (candidate.checkedAt !== undefined && !boundedText(candidate.checkedAt, 120))
     || (candidate.readAt !== undefined && !boundedText(candidate.readAt, 120))
     || (candidate.dismissedAt !== undefined && !boundedText(candidate.dismissedAt, 120))) return undefined;
-  return candidate as SavedBuildMonitorAlert;
+  const findingRuleIds = boundedTextArray(candidate.findingRuleIds, 4, 120);
+  const findingTitles = boundedTextArray(candidate.findingTitles, 4, 160);
+  return {
+    ...candidate,
+    ...(findingRuleIds && findingRuleIds.length > 0 ? { findingRuleIds } : {}),
+    ...(findingTitles && findingTitles.length > 0 ? { findingTitles } : {})
+  } as SavedBuildMonitorAlert;
 }
 
 export function savedBuildMonitorAlertsFromUnknown(value: unknown, limit = SAVED_BUILD_MONITOR_ALERT_LIMIT) {
   if (!Array.isArray(value)) return [];
   const requestedLimit = Number.isFinite(limit) ? Math.floor(limit) : SAVED_BUILD_MONITOR_ALERT_LIMIT;
   const boundedLimit = Math.max(1, Math.min(SAVED_BUILD_MONITOR_ALERT_LIMIT, requestedLimit));
+  if (value.length > boundedLimit) return [];
   return value.map(savedBuildMonitorAlertFromUnknown).filter((alert): alert is SavedBuildMonitorAlert => alert !== undefined).slice(0, boundedLimit);
 }
 
@@ -56,8 +74,23 @@ function hashText(value: string) {
   return (hash >>> 0).toString(36);
 }
 
+function findingContextFor(item: Extract<SavedBuildMonitorItem, { status: "ready" }>) {
+  const severityRank = { blocker: 0, warning: 1, unknown: 2, info: 3 } as const;
+  const findings = (item.snapshot.findings ?? [])
+    .filter((finding) => finding.severity !== "info")
+    .slice()
+    .sort((left, right) => severityRank[left.severity] - severityRank[right.severity] || left.title.localeCompare(right.title))
+    .slice(0, 4);
+  if (findings.length === 0) return undefined;
+  return {
+    findingRuleIds: findings.map((finding) => finding.ruleId),
+    findingTitles: findings.map((finding) => finding.title)
+  };
+}
+
 function readyItemSignal(item: Extract<SavedBuildMonitorItem, { status: "ready" }>, level: SavedBuildMonitorAlertKind) {
   const transition = item.transition;
+  const findingContext = findingContextFor(item);
   return {
     level,
     status: item.snapshot.status,
@@ -72,7 +105,12 @@ function readyItemSignal(item: Extract<SavedBuildMonitorItem, { status: "ready" 
     } : undefined,
     totalPriceWon: item.snapshot.totalPriceWon,
     priceComplete: item.snapshot.priceComplete,
+    analysisScore: item.snapshot.analysisScore,
+    analysisScoreLabel: item.snapshot.analysisScoreLabel,
+    analysisConfidence: item.snapshot.analysisConfidence,
+    resourceBudget: item.snapshot.resourceBudget,
     engineVersion: item.snapshot.engineVersion,
+    findingRuleIds: findingContext?.findingRuleIds,
     transition: transition ? {
       direction: transition.direction,
       statusChanged: transition.statusChanged,
@@ -85,6 +123,13 @@ function readyItemSignal(item: Extract<SavedBuildMonitorItem, { status: "ready" 
       accessoryRiskChanged: transition.accessoryRiskChanged,
       priceDeltaWon: transition.priceDeltaWon,
       priceCompletenessChanged: transition.priceCompletenessChanged,
+      analysisScoreDelta: transition.analysisScoreDelta,
+      analysisChanged: transition.analysisChanged,
+      resourceBudgetChanged: transition.resourceBudgetChanged,
+      resourceRiskIncreased: transition.resourceRiskIncreased,
+      resourceRiskDecreased: transition.resourceRiskDecreased,
+      powerHeadroomDeltaW: transition.powerHeadroomDeltaW,
+      coolerHeadroomDeltaW: transition.coolerHeadroomDeltaW,
       engineChanged: transition.engineChanged,
       catalogChanged: transition.catalogChanged,
       resolvedFindingCount: transition.resolvedFindingCount,
@@ -113,6 +158,7 @@ export function savedBuildMonitorAlertFor(build: { id: string; name: string }, i
   if (assessment.level === "stable") return undefined;
   const kind = assessment.level;
   const signature = JSON.stringify({ buildId: build.id, signal: readyItemSignal(item, kind) });
+  const findingContext = findingContextFor(item);
   return {
     id: `build-monitor:${build.id}:${kind}:${hashText(signature)}`,
     buildId: build.id,
@@ -120,6 +166,7 @@ export function savedBuildMonitorAlertFor(build: { id: string; name: string }, i
     kind,
     title: assessment.label,
     message: assessment.summary,
+    ...(findingContext ?? {}),
     createdAt,
     checkedAt: item.snapshot.checkedAt
   };
@@ -138,6 +185,8 @@ export function mergeSavedBuildMonitorAlerts(existing: SavedBuildMonitorAlert[],
     byId.set(alert.id, {
       ...current,
       buildName: alert.buildName,
+      ...(alert.findingRuleIds ? { findingRuleIds: alert.findingRuleIds } : {}),
+      ...(alert.findingTitles ? { findingTitles: alert.findingTitles } : {}),
       ...(current.readAt || alert.readAt ? { readAt: current.readAt ?? alert.readAt } : {}),
       ...(current.dismissedAt || alert.dismissedAt ? { dismissedAt: current.dismissedAt ?? alert.dismissedAt } : {})
     });

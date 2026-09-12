@@ -33,6 +33,12 @@ describe("build transfer JSON", () => {
     expect(parsed.envelope?.selection).toEqual(selection);
   });
 
+  it("round-trips the verification-first recommendation priority", () => {
+    const parsed = parseBuildTransfer({ selection, recommendationPreferences: { profile: "general", priority: "reliability" } });
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.envelope?.recommendationPreferences.priority).toBe("reliability");
+  });
+
   it("rejects unsupported versions, malformed quantities, and invalid preferences atomically", () => {
     const parsed = parseBuildTransfer({
       schemaVersion: 99,
@@ -80,5 +86,41 @@ describe("build transfer JSON", () => {
 
     expect(parsed.envelope).toBeUndefined();
     expect(parsed.errors).toContain("recommendationPreferences.gamingRefreshRate가 올바르지 않습니다.");
+  });
+
+  it("rejects oversized selection lists and identifiers before local import expansion", () => {
+    const parsed = parseBuildTransfer({
+      selection: {
+        cpu: { partId: "c".repeat(161), quantity: 1 },
+        memory: Array.from({ length: 101 }, (_, index) => ({ partId: `memory-${index}`, quantity: 1 })),
+        accessories: Array.from({ length: 101 }, (_, index) => ({ accessoryId: `accessory-${index}`, quantity: 1 })),
+        useIntegratedGraphics: true
+      }
+    });
+
+    expect(parsed.envelope).toBeUndefined();
+    expect(parsed.errors).toEqual(expect.arrayContaining([
+      "selection.cpu.partId는 160자 이하의 ID여야 합니다.",
+      "selection.memory은 한 번에 최대 100개까지 선택할 수 있습니다.",
+      "selection.accessories는 한 번에 최대 100개까지 선택할 수 있습니다."
+    ]));
+  });
+
+  it("rejects oversized M.2 maps and target identifiers before normalization", () => {
+    const parsed = parseBuildTransfer({
+      selection: {
+        m2SlotSelection: Object.fromEntries(Array.from({ length: 9 }, (_, index) => [`invalid-${index}`, `ssd-${index}`])),
+        accessories: [{ accessoryId: "fan-1", quantity: 1, targetPartId: "x".repeat(161) }],
+        rgbControllerAccessoryId: "h".repeat(161),
+        useIntegratedGraphics: true
+      }
+    });
+
+    expect(parsed.envelope).toBeUndefined();
+    expect(parsed.errors).toEqual(expect.arrayContaining([
+      "selection.m2SlotSelection은 최대 8개 슬롯까지 지정할 수 있습니다.",
+      "selection.accessories[0].targetPartId는 160자 이하 SSD ID여야 합니다.",
+      "selection.rgbControllerAccessoryId는 160자 이하 팬 허브 ID여야 합니다."
+    ]));
   });
 });

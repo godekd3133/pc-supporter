@@ -115,6 +115,7 @@ export type AssemblyVerificationLog = {
   measurementSampleCount?: number;
   measurementImportedAt?: string;
   measurementSeries?: AssemblyVerificationTelemetryPoint[];
+  measurementSeriesPointCount?: number;
   measurementQuality?: AssemblyVerificationMeasurementQuality;
   runId?: string;
   runLabel?: string;
@@ -515,7 +516,7 @@ export function assemblyVerificationSavedSnapshotFor(log: AssemblyVerificationLo
     ...(log.measurementSourceLabel ? { measurementSourceLabel: log.measurementSourceLabel } : {}),
     ...(log.measurementSampleCount !== undefined ? { measurementSampleCount: log.measurementSampleCount } : {}),
     ...(log.measurementImportedAt ? { measurementImportedAt: log.measurementImportedAt } : {}),
-    ...(log.measurementSeries && log.measurementSeries.length > 0 ? { measurementSeriesPointCount: log.measurementSeries.length } : {}),
+    ...(log.measurementSeries && log.measurementSeries.length > 0 ? { measurementSeriesPointCount: log.measurementSeries.length } : log.measurementSeriesPointCount !== undefined ? { measurementSeriesPointCount: log.measurementSeriesPointCount } : {}),
     ...(log.measurementQuality ? { measurementQuality: log.measurementQuality } : {}),
     updatedAt: log.updatedAt,
     ...(log.runId ? { runId: log.runId } : {}),
@@ -526,6 +527,102 @@ export function assemblyVerificationSavedSnapshotFor(log: AssemblyVerificationLo
 
 export function assemblyVerificationSavedHistoryFor(history: AssemblyVerificationHistory) {
   return history.runs.slice(-ASSEMBLY_VERIFICATION_HISTORY_LIMIT).map(assemblyVerificationSavedSnapshotFor);
+}
+
+function assemblyVerificationLogFromSavedSnapshot(snapshot: AssemblyVerificationSavedSnapshot, buildFingerprint: string, index: number): AssemblyVerificationLog {
+  const runId = snapshot.runId ?? `server-snapshot-${index + 1}-${snapshot.updatedAt}`;
+  return {
+    type: "pc-supporter-assembly-verification",
+    schemaVersion: 1,
+    buildFingerprint,
+    updatedAt: snapshot.updatedAt,
+    checks: Object.fromEntries(ASSEMBLY_VERIFICATION_CHECKS.map((check) => [check.id, { status: snapshot.checks[check.id] }])) as Record<AssemblyVerificationCheckId, AssemblyVerificationEntry>,
+    ...(snapshot.testDurationMinutes !== undefined ? { testDurationMinutes: snapshot.testDurationMinutes } : {}),
+    ...(snapshot.ambientTempC !== undefined ? { ambientTempC: snapshot.ambientTempC } : {}),
+    ...(snapshot.cpuMaxTempC !== undefined ? { cpuMaxTempC: snapshot.cpuMaxTempC } : {}),
+    ...(snapshot.gpuMaxTempC !== undefined ? { gpuMaxTempC: snapshot.gpuMaxTempC } : {}),
+    ...(snapshot.cpuFanRpm !== undefined ? { cpuFanRpm: snapshot.cpuFanRpm } : {}),
+    ...(snapshot.gpuFanRpm !== undefined ? { gpuFanRpm: snapshot.gpuFanRpm } : {}),
+    noiseLevel: snapshot.noiseLevel,
+    loadTool: snapshot.loadTool,
+    loadScenario: snapshot.loadScenario,
+    ...(snapshot.measurementSource !== undefined ? { measurementSource: snapshot.measurementSource } : {}),
+    ...(snapshot.measurementSourceLabel !== undefined ? { measurementSourceLabel: snapshot.measurementSourceLabel } : {}),
+    ...(snapshot.measurementSampleCount !== undefined ? { measurementSampleCount: snapshot.measurementSampleCount } : {}),
+    ...(snapshot.measurementImportedAt !== undefined ? { measurementImportedAt: snapshot.measurementImportedAt } : {}),
+    ...(snapshot.measurementSeriesPointCount !== undefined ? { measurementSeriesPointCount: snapshot.measurementSeriesPointCount } : {}),
+    ...(snapshot.measurementQuality !== undefined ? { measurementQuality: snapshot.measurementQuality } : {}),
+    runId,
+    runLabel: snapshot.runLabel ?? `서버 복원 회차 ${index + 1}`,
+    createdAt: snapshot.createdAt ?? snapshot.updatedAt
+  };
+}
+
+export function assemblyVerificationHistoryFromSavedSnapshots(snapshots: ReadonlyArray<AssemblyVerificationSavedSnapshot>, buildFingerprint: string): AssemblyVerificationHistory | undefined {
+  if (snapshots.length === 0 || !buildFingerprint.trim()) return undefined;
+  const source = snapshots.slice(-ASSEMBLY_VERIFICATION_HISTORY_LIMIT);
+  const runs = source.map((snapshot, index) => assemblyVerificationLogFromSavedSnapshot(snapshot, buildFingerprint, index));
+  const latest = runs.at(-1);
+  if (!latest?.runId) return undefined;
+  return { type: "pc-supporter-assembly-verification-history", schemaVersion: 1, buildFingerprint, updatedAt: latest.updatedAt, activeRunId: latest.runId, runs };
+}
+
+function timestampValue(value: string | undefined) {
+  const timestamp = value ? Date.parse(value) : NaN;
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+export function assemblyVerificationHistoryHasEvidenceFor(history: AssemblyVerificationHistory) {
+  return history.runs.some((run) => {
+    const progress = assemblyVerificationProgressFor(run);
+    return progress.checked > 0 || Boolean(run.note?.trim()) || run.cpuMaxTempC !== undefined || run.gpuMaxTempC !== undefined || (run.measurementSeries?.length ?? 0) > 0 || run.measurementSeriesPointCount !== undefined;
+  });
+}
+
+function assemblyVerificationRunIsPristinePlaceholderFor(run: AssemblyVerificationLog) {
+  return (run.runLabel ?? "조립 검증 1회차") === "조립 검증 1회차"
+    && Object.values(run.checks).every((entry) => entry.status === "unchecked" && !entry.note?.trim())
+    && run.noiseLevel === "not_recorded"
+    && run.loadTool === "not_recorded"
+    && run.loadScenario === "not_recorded"
+    && run.testDurationMinutes === undefined
+    && run.ambientTempC === undefined
+    && run.cpuMaxTempC === undefined
+    && run.gpuMaxTempC === undefined
+    && run.cpuFanRpm === undefined
+    && run.gpuFanRpm === undefined
+    && !run.note?.trim()
+    && run.measurementSource === undefined
+    && run.measurementSourceLabel === undefined
+    && run.measurementSampleCount === undefined
+    && run.measurementImportedAt === undefined
+    && (run.measurementSeries?.length ?? 0) === 0
+    && run.measurementSeriesPointCount === undefined
+    && run.measurementQuality === undefined;
+}
+
+export function assemblyVerificationHistoryMergeFor(local: AssemblyVerificationHistory, saved: AssemblyVerificationHistory): AssemblyVerificationHistory {
+  const localHasEvidence = assemblyVerificationHistoryHasEvidenceFor(local);
+  const localByRunId = new Map(local.runs.map((run) => [run.runId, run]));
+  const savedRunIds = new Set(saved.runs.map((run) => run.runId));
+  const mergedRuns = saved.runs.map((savedRun) => {
+    const localRun = localByRunId.get(savedRun.runId);
+    return localRun && localHasEvidence && timestampValue(localRun.updatedAt) >= timestampValue(savedRun.updatedAt) ? localRun : savedRun;
+  });
+  mergedRuns.push(...local.runs.filter((run) => !savedRunIds.has(run.runId) && (localHasEvidence || !assemblyVerificationRunIsPristinePlaceholderFor(run))));
+  mergedRuns.sort((left, right) => timestampValue(left.createdAt ?? left.updatedAt) - timestampValue(right.createdAt ?? right.updatedAt) || timestampValue(left.updatedAt) - timestampValue(right.updatedAt));
+  const runs = mergedRuns.slice(-ASSEMBLY_VERIFICATION_HISTORY_LIMIT);
+  const localIsNewer = localHasEvidence && timestampValue(local.updatedAt) >= timestampValue(saved.updatedAt);
+  const preferredActiveRunId = localIsNewer ? local.activeRunId : saved.activeRunId;
+  const activeRunId = runs.some((run) => run.runId === preferredActiveRunId) ? preferredActiveRunId : runs.at(-1)!.runId!;
+  return {
+    type: "pc-supporter-assembly-verification-history",
+    schemaVersion: 1,
+    buildFingerprint: local.buildFingerprint,
+    updatedAt: timestampValue(local.updatedAt) >= timestampValue(saved.updatedAt) ? local.updatedAt : saved.updatedAt,
+    activeRunId,
+    runs
+  };
 }
 
 export function assemblyVerificationTrendFor(history: AssemblyVerificationHistory): AssemblyVerificationTrendPoint[] {
@@ -744,6 +841,7 @@ export function withAssemblyVerificationMeasurements(log: AssemblyVerificationLo
     ...(measurementSource === "csv" && measurementSampleCount !== undefined ? { measurementSampleCount } : { measurementSampleCount: undefined }),
     ...(measurementSource === "csv" && measurementImportedAt ? { measurementImportedAt } : { measurementImportedAt: undefined }),
     ...(measurementSource === "csv" && measurementSeries ? { measurementSeries } : { measurementSeries: undefined }),
+    ...(measurementSource === "csv" && measurementSeries ? { measurementSeriesPointCount: measurementSeries.length } : { measurementSeriesPointCount: undefined }),
     ...(measurementSource === "csv" && measurementQuality ? { measurementQuality } : { measurementQuality: undefined })
   };
   if (note) nextLog.note = note;
@@ -878,6 +976,8 @@ export function parseAssemblyVerificationJson(input: string, expectedBuildFinger
   const measurementImportedAt = parsed.measurementImportedAt;
   if (measurementImportedAt !== undefined && (typeof measurementImportedAt !== "string" || measurementImportedAt.length === 0 || measurementImportedAt.length > 120)) errors.push("측정값 가져오기 시각이 올바르지 않습니다.");
   const measurementSeries = telemetrySeriesFromUnknown(parsed.measurementSeries, errors);
+  const measurementSeriesPointCount = optionalRange(parsed.measurementSeriesPointCount, "측정 시계열 포인트 수", 1, ASSEMBLY_VERIFICATION_TELEMETRY_POINT_LIMIT, errors, true);
+  if (measurementSeries && measurementSeriesPointCount !== undefined && measurementSeries.length !== measurementSeriesPointCount) errors.push("측정 시계열 포인트 수가 실제 시계열과 일치하지 않습니다.");
   const measurementQuality = measurementQualityFromUnknown(parsed.measurementQuality, errors);
   const note = parsed.note;
   if (note !== undefined && (typeof note !== "string" || note.length > 1_000)) errors.push("조립 검증 메모는 문자열 1,000자 이하이어야 합니다.");
@@ -906,6 +1006,7 @@ export function parseAssemblyVerificationJson(input: string, expectedBuildFinger
       ...(measurementSampleCount !== undefined ? { measurementSampleCount } : {}),
       ...(typeof measurementImportedAt === "string" ? { measurementImportedAt: measurementImportedAt.trim() } : {}),
       ...(measurementSeries ? { measurementSeries } : {}),
+      ...(measurementSeries ? { measurementSeriesPointCount: measurementSeries.length } : measurementSeriesPointCount !== undefined ? { measurementSeriesPointCount } : {}),
       ...(measurementQuality ? { measurementQuality } : {}),
       ...(typeof note === "string" && note.trim() ? { note: note.trim() } : {}),
       runId,

@@ -55,6 +55,7 @@ export function budgetLadderLocalSharesFromJson(raw: string | null | undefined) 
   try {
     const parsed: unknown = raw ? JSON.parse(raw) : [];
     if (!Array.isArray(parsed)) return [] as BudgetLadderLocalShareEntry[];
+    if (parsed.length > MAX_LOCAL_SHARES) return [] as BudgetLadderLocalShareEntry[];
     const entries = parsed.map(normalizeEntry).filter((entry): entry is BudgetLadderLocalShareEntry => entry !== undefined);
     return uniqueEntries(entries).slice(0, MAX_LOCAL_SHARES);
   } catch {

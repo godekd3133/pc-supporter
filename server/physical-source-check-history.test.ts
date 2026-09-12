@@ -36,13 +36,21 @@ describe("physical source check history", () => {
     expect(parsed).toEqual([valid]);
   });
 
-  it("keeps the newest entries when the history file exceeds the retention limit", () => {
+  it("rejects an oversized raw history before normalizing every entry", () => {
     const entries = Array.from({ length: 1_020 }, (_, index) => ({ id: `history-${index}`, partId: "gpu-1", recordedAt: `2026-09-01T00:${String(index % 60).padStart(2, "0")}:00.000Z`, sourceCheck, transition: "unchanged" as const }));
 
     const parsed = physicalSourceCheckHistoryEntriesFromUnknown(entries);
 
+    expect(parsed).toEqual([]);
+  });
+
+  it("keeps the newest entries at the retention limit", () => {
+    const entries = Array.from({ length: 1_000 }, (_, index) => ({ id: `history-${index}`, partId: "gpu-1", recordedAt: `2026-09-01T00:${String(index % 60).padStart(2, "0")}:00.000Z`, sourceCheck, transition: "unchanged" as const }));
+
+    const parsed = physicalSourceCheckHistoryEntriesFromUnknown(entries);
+
     expect(parsed).toHaveLength(1_000);
-    expect(parsed[0].id).toBe("history-20");
-    expect(parsed.at(-1)?.id).toBe("history-1019");
+    expect(parsed[0].id).toBe("history-0");
+    expect(parsed.at(-1)?.id).toBe("history-999");
   });
 });

@@ -21,6 +21,28 @@ export function HomeBudgetLadderSharePanel({ entries, onCopy, onRemove, onToast 
   const [serverHealthById, setServerHealthById] = useState<Record<string, { status: BudgetLadderShareHealthStatus; checkedAt?: string; catalogChangedSinceShare?: boolean }>>({});
   const [refreshNonce, setRefreshNonce] = useState(0);
   const refreshSequenceRef = useRef(0);
+  const mountedRef = useRef(false);
+  const mutationRequestVersionRef = useRef(0);
+  const mutationContextKey = JSON.stringify(entries);
+  const mutationContextKeyRef = useRef(mutationContextKey);
+  const committedMutationContextKeyRef = useRef(mutationContextKey);
+  mutationContextKeyRef.current = mutationContextKey;
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      mutationRequestVersionRef.current += 1;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (committedMutationContextKeyRef.current === mutationContextKey) return;
+    committedMutationContextKeyRef.current = mutationContextKey;
+    mutationRequestVersionRef.current += 1;
+    setPendingRevoke(null);
+    setRevokingId(null);
+  }, [mutationContextKey]);
 
   useEffect(() => {
     const sequence = ++refreshSequenceRef.current;
@@ -51,16 +73,20 @@ export function HomeBudgetLadderSharePanel({ entries, onCopy, onRemove, onToast 
   async function confirmRevoke() {
     const entry = pendingRevoke;
     if (!entry?.ownerToken || revokingId) return;
+    const requestVersion = ++mutationRequestVersionRef.current;
+    const requestContextKey = mutationContextKey;
+    const isCurrent = () => mountedRef.current && mutationRequestVersionRef.current === requestVersion && mutationContextKeyRef.current === requestContextKey;
     setRevokingId(entry.id);
     try {
       await api(`/api/budget-ladders/${encodeURIComponent(entry.id)}`, { method: "DELETE", headers: { "X-Share-Owner-Token": entry.ownerToken }, retry: 0 });
+      if (!isCurrent()) return;
       onRemove(entry.id);
       setPendingRevoke(null);
       onToast("공유 snapshot을 서버에서 취소했습니다. 이 브라우저 이력에서도 제거했습니다.");
     } catch (error: unknown) {
-      onToast(error instanceof Error ? error.message : "공유 snapshot을 서버에서 취소하지 못했습니다.");
+      if (isCurrent()) onToast(error instanceof Error ? error.message : "공유 snapshot을 서버에서 취소하지 못했습니다.");
     } finally {
-      setRevokingId(null);
+      if (isCurrent()) setRevokingId(null);
     }
   }
 

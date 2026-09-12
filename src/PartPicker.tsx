@@ -1,15 +1,26 @@
-import { useEffect, useRef, useState, type ComponentType } from "react";
-import { FiActivity, FiCheck, FiChevronDown, FiClock, FiCopy, FiDatabase, FiDownload, FiExternalLink, FiInfo, FiLayers, FiLoader, FiSearch, FiShare2, FiTrash2, FiXCircle } from "react-icons/fi";
-import type { AlternativeRiskCounts, BuildSelection, CatalogBenchmarkCoverage, CompatiblePartCandidate, DataFreshness, DataQuality, GamingRefreshRate, GamingResolution, Part, PartCategory, PartSelection, PhysicalEvidenceSource, PriceAvailabilityFilter, RecommendationProfile, RecommendationTrustFilter, SimilarityEvidence, ListingPolicy } from "../shared/types";
-import { BENCHMARK_SOURCE_KIND_LABELS, CATEGORY_LABELS, DATA_FRESHNESS_LABELS, isKnownPrice, LISTING_POLICY_LABELS, LISTING_TYPE_LABELS, PRICE_AVAILABILITY_LABELS } from "../shared/types";
-import { alternativeComparisonCsvFor, alternativeComparisonJsonFor, alternativeComparisonTextFor } from "../shared/alternative-comparison-export";
+import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
+import { FiActivity, FiCheck, FiChevronDown, FiClock, FiCopy, FiDatabase, FiDownload, FiExternalLink, FiInfo, FiLayers, FiLoader, FiRefreshCw, FiSearch, FiShare2, FiTrash2, FiXCircle } from "react-icons/fi";
+import type { AlternativeRiskCounts, BrandCountOption, BuildSelection, CatalogBenchmarkCoverage, CompatiblePartCandidate, DataFreshness, DataQuality, GamingRefreshRate, GamingResolution, Part, PartCategory, PartSelection, PhysicalEvidenceSource, PriceAvailabilityFilter, RecommendationProfile, RecommendationTrustCounts, RecommendationTrustFilter, SimilarityEvidence, ListingPolicy } from "../shared/types";
+import { BENCHMARK_SOURCE_KIND_LABELS, CATEGORY_LABELS, DATA_FRESHNESS_LABELS, DATA_QUALITY_LABELS, isKnownPrice, LISTING_POLICY_LABELS, LISTING_TYPE_LABELS, PRICE_AVAILABILITY_LABELS } from "../shared/types";
+import { alternativeComparisonBenchmarkEvidenceFor, alternativeComparisonCsvFor, alternativeComparisonJsonFor, alternativeComparisonSimilarityEvidenceFor, alternativeComparisonTextFor } from "../shared/alternative-comparison-export";
+import { benchmarkEvidenceForPart } from "../shared/benchmark-evidence";
 import type { AlternativeComparisonCandidate } from "../shared/alternative-comparison-export";
 import { compatibilityFilterPresetFor } from "../shared/compatibility-filter-preset";
 import { CANDIDATE_COMPARISON_CRITERIA, candidateComparisonDecisionFor, type CandidateComparisonCriterion } from "../shared/candidate-comparison";
 import { physicalEvidenceFilterLabel, type PhysicalEvidenceFilter } from "../shared/physical-evidence-filter";
 import { api } from "./api";
+import { shouldAutoFallbackToReviewCandidates, shouldOfferReviewCandidates } from "./part-picker-mode";
+import { ComparisonBenchmarkCell } from "./ComparisonBenchmarkCell";
 import { safeExternalUrl, safeHttpsUrl } from "./safe-source-url";
+import { useModalAccessibility } from "./use-modal-accessibility";
+import { RetryAfterButton } from "./RetryAfterButton";
 import { valueScoreText } from "../shared/value-score";
+import { catalogMissingFieldLabelFor } from "../shared/catalog-spec-coverage";
+import { CatalogSpecProvenance } from "./CatalogSpecProvenance";
+import { CATALOG_PICKER_CACHE_STORAGE_KEY, catalogPickerCacheSnapshotFromJson, catalogPickerCacheToJson, catalogPickerCachedFallbackFor, mergeCatalogPickerCache } from "../shared/catalog-picker-cache";
+import { classifyDataFreshness } from "../shared/data-freshness";
+import { CATALOG_CACHE_CHANGED_EVENT } from "../shared/catalog-cache-status";
+import { CATALOG_PRICE_EVIDENCE_LABELS, catalogPriceEvidenceDescriptionFor, catalogPriceEvidenceFor, catalogPriceEvidenceLabelFor } from "../shared/catalog-price-evidence";
 
 export type PickerPerformanceFilter = "all" | "similar" | "verified" | "benchmark";
 export type PickerTrustFilter = RecommendationTrustFilter;
@@ -56,6 +67,9 @@ type PickerSpecFilter = {
   minMemorySlots: string;
   minM2Slots: string;
   minSataPorts: string;
+  pcieSlotWidth: string;
+  minPcieSlotCount: string;
+  pcieSlotInfo: "all" | "complete" | "missing";
   minHddBays: string;
   minMaxGpuLengthMm: string;
   minMaxCoolerHeightMm: string;
@@ -66,10 +80,12 @@ type PickerSpecFilter = {
   storageInterface: "all" | "NVMe" | "SATA";
 };
 
-const EMPTY_PICKER_SPEC_FILTER: PickerSpecFilter = { socket: "", memoryType: "", formFactor: "", minVramGb: "", minCapacityGb: "", minWattageW: "", minMemorySpeedMhz: "", minMemorySlots: "", minM2Slots: "", minSataPorts: "", minHddBays: "", minMaxGpuLengthMm: "", minMaxCoolerHeightMm: "", minMaxPsuLengthMm: "", minCoolingW: "", maxLengthMm: "", maxPsuDepthMm: "", storageInterface: "all" };
+const EMPTY_PICKER_SPEC_FILTER: PickerSpecFilter = { socket: "", memoryType: "", formFactor: "", minVramGb: "", minCapacityGb: "", minWattageW: "", minMemorySpeedMhz: "", minMemorySlots: "", minM2Slots: "", minSataPorts: "", pcieSlotWidth: "", minPcieSlotCount: "", pcieSlotInfo: "all", minHddBays: "", minMaxGpuLengthMm: "", minMaxCoolerHeightMm: "", minMaxPsuLengthMm: "", minCoolingW: "", maxLengthMm: "", maxPsuDepthMm: "", storageInterface: "all" };
 
 function pickerSpecFilterHasValue(filter: PickerSpecFilter) {
-  return Object.entries(filter).some(([key, value]) => key === "storageInterface" ? value !== "all" : value.trim().length > 0);
+  return Object.entries(filter).some(([key, value]) =>
+    key === "storageInterface" || key === "pcieSlotInfo" ? value !== "all" : value.trim().length > 0
+  );
 }
 
 type PickerSpecFilterDiagnostic = {
@@ -93,10 +109,13 @@ type PickerPartsResponse = {
   physicalEvidenceExcludedCount?: number;
   recommendationTrustFilter?: PickerTrustFilter;
   trustExcludedCount?: number;
+  recommendationTrustCounts?: RecommendationTrustCounts;
   priceStatus?: PickerPriceStatusFilter;
   priceExcludedCount?: number;
   freshness?: PickerFreshnessFilter;
   freshnessExcludedCount?: number;
+  incompleteExcludedCount?: number;
+  incompleteMissingFields?: Array<{ field: string; count: number }>;
   specExcludedCount?: number;
   specFilterDiagnostics?: PickerSpecFilterDiagnostic[];
 };
@@ -107,10 +126,25 @@ const MEMORY_CAPACITY_FILTER_OPTIONS: PickerSelectOption[] = [["", "전체"], ["
 const STORAGE_CAPACITY_FILTER_OPTIONS: PickerSelectOption[] = [["", "전체"], ["500", "500GB 이상"], ["1000", "1TB 이상"], ["2000", "2TB 이상"], ["4000", "4TB 이상"], ["8000", "8TB 이상"]];
 const MEMORY_SPEED_FILTER_OPTIONS: PickerSelectOption[] = [["", "전체"], ["4800", "4800MHz 이상"], ["5600", "5600MHz 이상"], ["6000", "6000MHz 이상"], ["6400", "6400MHz 이상"], ["7200", "7200MHz 이상"], ["8000", "8000MHz 이상"]];
 const PSU_WATTAGE_FILTER_OPTIONS: PickerSelectOption[] = [["", "전체"], ["500", "500W 이상"], ["650", "650W 이상"], ["750", "750W 이상"], ["850", "850W 이상"], ["1000", "1000W 이상"], ["1200", "1200W 이상"]];
+const PCIE_SLOT_WIDTH_FILTER_OPTIONS: PickerSelectOption[] = [["", "전체 슬롯 폭"], ["16", "x16 이상 사용 가능"], ["8", "x8 이상 사용 가능"], ["4", "x4 이상 사용 가능"], ["1", "x1 이상 사용 가능"]];
+const PCIE_SLOT_INFO_FILTER_OPTIONS: PickerSelectOption[] = [["all", "전체 정보 상태"], ["complete", "정보 확인됨"], ["missing", "정보 부족"]];
 const STORAGE_INTERFACE_FILTER_OPTIONS: PickerSelectOption[] = [["all", "전체"], ["NVMe", "NVMe"], ["SATA", "SATA"]];
 
+function PickerIncompleteDataNotice({ category, count, fields }: { category: PartCategory; count: number; fields: Array<{ field: string; count: number }> }) {
+  if (count <= 0) return null;
+  return <div className="picker-incomplete-data-notice" data-testid="picker-incomplete-data-notice" role="status"><FiInfo /><div><strong>데이터 부족 후보 {count.toLocaleString("ko-KR")}개를 안전 후보에서 제외했습니다.</strong><small>필수 스펙이 부족한 부품은 호환 가능하다고 가정하지 않습니다. 누락 필드를 보강한 뒤 다시 평가하세요.</small><div className="picker-incomplete-field-links">{fields.slice(0, 3).map((field) => <a href={`/catalog?category=${encodeURIComponent(category)}&quality=incomplete&missingField=${encodeURIComponent(field.field)}`} data-testid="picker-open-missing-field" key={field.field}>{catalogMissingFieldLabelFor(field.field)} {field.count}개</a>)}</div></div></div>;
+}
+
+function PickerRecommendationTrustOverview({ counts, displayedCount }: { counts: RecommendationTrustCounts; displayedCount: number }) {
+  const total = counts.high + counts.medium + counts.low;
+  if (total <= 0) return null;
+  const percentageFor = (count: number) => Math.max(0, Math.min(100, (count / total) * 100)) + "%";
+  const distributionLabel = "추천 근거 높음 " + counts.high + "개, 보통 " + counts.medium + "개, 낮음 " + counts.low + "개";
+  return <section className="picker-trust-overview" aria-label="추천 근거 분포" data-testid="picker-trust-overview"><div className="picker-trust-overview-heading"><div><strong>추천 근거 분포</strong><small>현재 정밀 평가 후보 전체 {total.toLocaleString("ko-KR")}개 기준 · 현재 표시 {displayedCount.toLocaleString("ko-KR")}개</small></div><span>{(counts.high + counts.medium).toLocaleString("ko-KR")}개 보통 이상</span></div><div className="picker-trust-overview-bar" role="img" aria-label={distributionLabel}><span className="high" style={{ width: percentageFor(counts.high) }} /><span className="medium" style={{ width: percentageFor(counts.medium) }} /><span className="low" style={{ width: percentageFor(counts.low) }} /></div><div className="picker-trust-overview-legend"><span className="high"><i />높음 <b>{counts.high.toLocaleString("ko-KR")}</b></span><span className="medium"><i />보통 <b>{counts.medium.toLocaleString("ko-KR")}</b></span><span className="low"><i />낮음 <b>{counts.low.toLocaleString("ko-KR")}</b></span></div><p><FiInfo /> 이 분포는 후보의 데이터·호환·성능 비교 근거 완성도입니다. 실제 성능이나 구매 성공을 보장하지 않으며, 낮음 후보도 필요하면 상세 근거를 확인한 뒤 별도로 검토할 수 있습니다.</p></section>;
+}
+
 type ShareResult = { id: string; url: string; ownerToken: string; expiresAt?: string };
-type ShareHandler = (candidates: AlternativeComparisonCandidate[], context?: { category?: string; currentPartName?: string }) => Promise<ShareResult | undefined>;
+type ShareHandler = (candidates: AlternativeComparisonCandidate[], context?: { name?: string; category?: string; currentPartName?: string; currentPartSummary?: string; currentPartPrice?: string }) => Promise<ShareResult | undefined>;
 type RevokeHandler = (share: ShareResult) => Promise<boolean>;
 type PartVisualRenderer = ComponentType<{ part: Part }>;
 type PartEvidenceRenderer = ComponentType<{ part: Part }>;
@@ -125,6 +159,7 @@ export type PartPickerProps = {
   gamingResolution?: GamingResolution;
   gamingRefreshRate?: GamingRefreshRate;
   benchmarkCoverage?: CatalogBenchmarkCoverage;
+  brandOptions?: BrandCountOption[];
   findingRuleId?: string;
   findingTitle?: string;
   initialCandidateMode?: PickerCandidateMode;
@@ -159,6 +194,9 @@ function pickerSpecFilterPayloadFor(category: PartCategory, filter: PickerSpecFi
   if (category === "motherboard" && filter.minMemorySlots.trim()) payload.minMemorySlots = filter.minMemorySlots.trim();
   if (category === "motherboard" && filter.minM2Slots.trim()) payload.minM2Slots = filter.minM2Slots.trim();
   if (category === "motherboard" && filter.minSataPorts.trim()) payload.minSataPorts = filter.minSataPorts.trim();
+  if (category === "motherboard" && filter.pcieSlotWidth.trim()) payload.pcieSlotWidth = filter.pcieSlotWidth.trim();
+  if (category === "motherboard" && filter.minPcieSlotCount.trim()) payload.minPcieSlotCount = filter.minPcieSlotCount.trim();
+  if (category === "motherboard" && filter.pcieSlotInfo !== "all") payload.pcieSlotInfo = filter.pcieSlotInfo;
   if (category === "case" && filter.minMaxGpuLengthMm.trim()) payload.minMaxGpuLengthMm = filter.minMaxGpuLengthMm.trim();
   if (category === "case" && filter.minMaxCoolerHeightMm.trim()) payload.minMaxCoolerHeightMm = filter.minMaxCoolerHeightMm.trim();
   if (category === "case" && filter.minHddBays.trim()) payload.minHddBays = filter.minHddBays.trim();
@@ -182,6 +220,12 @@ function pickerSpecFilterSummaryFor(category: PartCategory, filter: PickerSpecFi
   if (category === "motherboard" && filter.minMemorySlots.trim()) values.push(`RAM 슬롯 ${filter.minMemorySlots.trim()}개 이상`);
   if (category === "motherboard" && filter.minM2Slots.trim()) values.push(`M.2 슬롯 ${filter.minM2Slots.trim()}개 이상`);
   if (category === "motherboard" && filter.minSataPorts.trim()) values.push(`SATA 포트 ${filter.minSataPorts.trim()}개 이상`);
+  if (category === "motherboard" && (filter.pcieSlotWidth.trim() || filter.minPcieSlotCount.trim())) {
+    const width = filter.pcieSlotWidth.trim() ? `x${filter.pcieSlotWidth.trim()} 이상` : "전체 폭";
+    const count = filter.minPcieSlotCount.trim() || "1";
+    values.push(`PCIe ${width} 슬롯 ${count}개 이상`);
+  }
+  if (category === "motherboard" && filter.pcieSlotInfo !== "all") values.push(filter.pcieSlotInfo === "complete" ? "PCIe 슬롯 정보 확인됨" : "PCIe 슬롯 정보 부족");
   if (category === "case" && filter.minMaxGpuLengthMm.trim()) values.push(`GPU 허용 ${filter.minMaxGpuLengthMm.trim()}mm 이상`);
   if (category === "case" && filter.minMaxCoolerHeightMm.trim()) values.push(`쿨러 허용 ${filter.minMaxCoolerHeightMm.trim()}mm 이상`);
   if (category === "case" && filter.minHddBays.trim()) values.push(`HDD 베이 ${filter.minHddBays.trim()}개 이상`);
@@ -224,7 +268,31 @@ function PickerSpecNumberInput({ ariaLabel, value, placeholder, onChange }: { ar
 }
 
 function PickerFetchErrorNotice({ subject, message, onRetry, retrying }: { subject: string; message: string; onRetry: () => void; retrying: boolean }) {
-  return <div className="fetch-error" role="alert"><div className="fetch-error-copy"><FiXCircle /><div><strong>{subject}을 불러오지 못했습니다.</strong><p>{message}</p><small>입력한 검색 조건과 선택 상태는 유지됩니다.</small></div></div><button className="button button-small button-light" type="button" onClick={onRetry} disabled={retrying}>{retrying ? <><FiLoader className="spin" /> 불러오는 중...</> : <><FiSearch /> 다시 불러오기</>}</button></div>;
+  return <div className="fetch-error" role="alert"><div className="fetch-error-copy"><FiXCircle /><div><strong>{subject}을 불러오지 못했습니다.</strong><p>{message}</p><small>입력한 검색 조건과 선택 상태는 유지됩니다.</small></div></div><RetryAfterButton className="button button-small button-light" message={message} onRetry={onRetry} retrying={retrying} idleContent={<><FiSearch /> 다시 불러오기</>} retryingContent={<><FiLoader className="spin" /> 불러오는 중...</>} testId="picker-retry-button" /></div>;
+}
+
+function PickerCachedCatalogNotice({ visibleCount, total, latestUpdatedAt, cachedAt }: { visibleCount: number; total: number; latestUpdatedAt?: string; cachedAt?: string }) {
+  const updatedAt = latestUpdatedAt ? new Date(latestUpdatedAt) : undefined;
+  const updatedLabel = updatedAt && !Number.isNaN(updatedAt.getTime()) ? updatedAt.toLocaleDateString("ko-KR") : "갱신 시점 확인 필요";
+  const cachedAtDate = cachedAt ? new Date(cachedAt) : undefined;
+  const cachedLabel = cachedAtDate && !Number.isNaN(cachedAtDate.getTime()) ? cachedAtDate.toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" }) : "기록 시각 확인 필요";
+  const cacheFreshness = cachedAt ? classifyDataFreshness(cachedAt) : "unknown";
+  const cacheFreshnessLabel = cacheFreshness === "fresh" ? "최근 캐시" : cacheFreshness === "aging" ? "갱신 권장" : cacheFreshness === "stale" ? "오래된 캐시" : "시각 미확인";
+  return <div className={"picker-cached-fallback " + cacheFreshness} data-testid="picker-cached-fallback" role="status"><span className="picker-cached-fallback-icon"><FiDatabase /></span><div><strong>브라우저에 저장된 카탈로그를 임시 표시합니다.</strong><p>서버 목록 요청이 실패해 마지막으로 확인된 {visibleCount.toLocaleString("ko-KR")} / {total.toLocaleString("ko-KR")}개 후보를 보여줍니다.</p><small>캐시 저장 {cachedLabel} · 원본 부품 갱신 {updatedLabel} · 탐색용 목록이며 호환 안전성·유사도·실시간 가격은 서버 재연결 후 다시 확인합니다.</small></div><span className={"picker-cached-fallback-badge " + cacheFreshness}>탐색 전용 · {cacheFreshnessLabel}</span></div>;
+}
+
+function PickerCachedCatalogList({ items, selected, expandedPickerId, comparePickerIds, onSelect, onToggleCompare, onToggleExpanded, partSummary, formatWon, PartVisual, PartEvidence }: { items: PickerPart[]; selected: PartSelection[]; expandedPickerId: string | null; comparePickerIds: string[]; onSelect: (part: Part) => void; onToggleCompare: (part: PickerPart) => void; onToggleExpanded: (partId: string) => void; partSummary: (part: Part | undefined) => string; formatWon: PartPickerProps["formatWon"]; PartVisual: PartPickerProps["PartVisual"]; PartEvidence: PartPickerProps["PartEvidence"] }) {
+  return <div className="picker-list picker-list-cached" data-testid="picker-cached-catalog-list">{items.map((part) => {
+    const alreadySelected = selected.some((selection) => selection.partId === part.id);
+    const expanded = expandedPickerId === part.id;
+    const compared = comparePickerIds.includes(part.id);
+    const priceEvidence = catalogPriceEvidenceFor(part);
+    return <article className={expanded ? "picker-item-card expanded" : "picker-item-card"} key={part.id}><button className={alreadySelected ? "picker-item already" : "picker-item"} type="button" onClick={() => onSelect(part)}><span className="picker-item-icon"><PartVisual part={part} /></span><span className="picker-item-main"><strong>{part.name}</strong><small>{partSummary(part)}</small><span className="data-badges"><em className={`price-status-badge ${priceEvidence}`} title={catalogPriceEvidenceDescriptionFor(part)}>{catalogPriceEvidenceLabelFor(part)}</em><em className={`quality-badge ${part.dataQuality}`}>{DATA_QUALITY_LABELS[part.dataQuality]}</em>{part.listingType && part.listingType !== "retail" && <em className="listing-badge">{LISTING_TYPE_LABELS[part.listingType]}</em>}{part.missingFields.length > 0 && <em className="missing-badge">누락 {part.missingFields.length}</em>}</span></span><span className="picker-item-side"><strong>{formatWon(part.priceWon)}</strong>{alreadySelected ? <span><FiCheck /> 선택됨</span> : <span>선택 <FiExternalLink /></span>}</span></button><div className="picker-item-actions"><button className={compared ? "text-button picker-compare-toggle selected" : "text-button picker-compare-toggle"} type="button" aria-pressed={compared} onClick={() => onToggleCompare(part)}>{compared ? "비교 중" : "비교"}</button><button className="text-button picker-item-detail-toggle" type="button" aria-expanded={expanded} onClick={() => onToggleExpanded(part.id)}>{expanded ? "상세·근거 닫기" : "상세·근거"} <FiChevronDown /></button></div>{expanded && <PickerPartDetail part={part} PartEvidence={PartEvidence} similarityEvidenceText={() => "브라우저 캐시 기본 정보"} />}</article>;
+  })}</div>;
+}
+
+function PickerEmptyState({ message, canRelaxFilters, canShowReviewCandidates, reviewCandidateCount, onRelaxFilters, onShowReviewCandidates }: { message: string; canRelaxFilters: boolean; canShowReviewCandidates: boolean; reviewCandidateCount: number; onRelaxFilters: () => void; onShowReviewCandidates: () => void }) {
+  return <div className="picker-state picker-empty-state" data-testid="picker-empty-state"><FiSearch /><div><strong>조건에 맞는 후보가 없습니다.</strong><span>{message}</span>{(canShowReviewCandidates || canRelaxFilters) && <div className="picker-empty-state-actions">{canShowReviewCandidates && <button className="button button-small button-light" type="button" data-testid="picker-empty-review-candidates" onClick={onShowReviewCandidates}>확인 필요 후보도 보기 · {reviewCandidateCount.toLocaleString("ko-KR")}개</button>}{canRelaxFilters && <button className="button button-small button-secondary" type="button" data-testid="picker-empty-relax-filters" onClick={onRelaxFilters}><FiRefreshCw /> 후보 필터 완화</button>}</div>}</div></div>;
 }
 
 function pickerCandidatePrice(part: PickerPart, formatWon: PartPickerProps["formatWon"]) {
@@ -258,7 +326,9 @@ function pickerRecommendationTrustDetail(trust: NonNullable<PickerPart["recommen
   const comparison = trust.totalDimensions > 0 ? `비교 ${trust.comparedDimensions}/${trust.totalDimensions}` : "성능 비교 없음";
   const fullBuild = trust.fullBuildStatus === "clean" ? "전체 견적 정리됨" : `전체 견적 잔여 차단 ${trust.remainingBlockerCount}개·주의 ${trust.remainingWarningCount}개·확인 필요 ${trust.remainingUnknownCount}개`;
   const benchmark = trust.benchmarkBacked ? `벤치마크 ${trust.benchmarkSourceKind ? BENCHMARK_SOURCE_KIND_LABELS[trust.benchmarkSourceKind] : "출처 유형 미분류"}` : undefined;
-  return `${compatibility} · ${comparison} · ${pickerFreshnessLabels[trust.freshness]} · ${trust.priceKnown ? "가격 확인" : "가격 미확인"}${benchmark ? ` · ${benchmark}` : ""} · ${fullBuild}`;
+  const benchmarkFreshness = benchmark && trust.benchmarkFreshness ? ` · 자료 ${pickerFreshnessLabels[trust.benchmarkFreshness]}` : "";
+  const price = trust.priceEvidence ? CATALOG_PRICE_EVIDENCE_LABELS[trust.priceEvidence] : trust.priceKnown ? "가격 기록 있음" : "가격 미기록";
+  return `${compatibility} · ${comparison} · ${pickerFreshnessLabels[trust.freshness]} · ${price}${benchmark ? ` · ${benchmark}${benchmarkFreshness}` : ""} · ${fullBuild}`;
 }
 
 function pickerPhysicalEvidenceLabel(status: NonNullable<PickerPart["physicalEvidence"]>["status"]) {
@@ -307,10 +377,15 @@ function pickerComparisonCandidatesFor(parts: PickerPart[], partSummary: PartPic
   return parts.map((part) => {
     const physicalEvidenceSources = pickerPhysicalEvidenceSources(part.physicalEvidence?.sources);
     const dataFreshness = part.dataFreshness ?? part.recommendationTrust?.freshness;
+    const benchmarkEvidence = alternativeComparisonBenchmarkEvidenceFor(benchmarkEvidenceForPart(part));
     return {
       name: part.name,
+      category: part.category,
+      partId: part.id,
       summary: partSummary(part),
       price: pickerCandidatePrice(part, formatWon),
+      ...(isKnownPrice(part.priceWon) ? { priceWon: part.priceWon } : {}),
+      priceEvidence: catalogPriceEvidenceFor(part),
       purchaseCondition: pickerPurchaseConditionFor(part),
       ...(part.recommendedQuantity !== undefined ? { recommendedQuantity: part.recommendedQuantity } : {}),
       similarity: part.similarityScore !== undefined && part.similarityLabel ? `${part.similarityLabel} ${part.similarityScore}점` : "계산 불가",
@@ -318,10 +393,12 @@ function pickerComparisonCandidatesFor(parts: PickerPart[], partSummary: PartPic
       ...(part.recommendationTrust ? { recommendationTrust: pickerRecommendationTrustText(part.recommendationTrust) } : {}),
       performance: part.performanceSummary ?? "비교 근거 확인",
       compatibility: pickerCandidateRisk(part),
+      ...(benchmarkEvidence ? { benchmarkEvidence } : {}),
+      ...(alternativeComparisonSimilarityEvidenceFor(part.similarityEvidence) ? { similarityEvidence: alternativeComparisonSimilarityEvidenceFor(part.similarityEvidence) } : {}),
       ...(part.decision ? { decisionSummary: `${part.decision.label} · ${part.decision.summary}` } : {}),
       ...(part.physicalEvidence && part.physicalEvidence.status !== "not_applicable" ? { physicalEvidence: pickerPhysicalEvidenceText(part.physicalEvidence) } : {}),
       ...(physicalEvidenceSources.length > 0 ? { physicalEvidenceSources } : {}),
-      dataQuality: part.dataQuality === "live" ? "다나와 최신" : part.dataQuality === "manual" ? "수동 검수" : part.dataQuality === "incomplete" ? "일부 스펙 부족" : "프로젝트 데이터",
+      dataQuality: DATA_QUALITY_LABELS[part.dataQuality],
       ...(dataFreshness ? { dataFreshness } : {}),
       ...(part.updatedAt ? { updatedAt: new Date(part.updatedAt).toLocaleDateString("ko-KR") } : {}),
       ...(safeExternalUrl(part.danawaUrl) ? { sourceUrl: safeExternalUrl(part.danawaUrl)! } : {})
@@ -339,36 +416,59 @@ function pickerFreshnessLabelFor(part: PickerPart) {
 }
 
 function pickerPriceStatusFor(part: PickerPart) {
-  return isKnownPrice(part.priceWon) ? "known" : "unknown";
+  return catalogPriceEvidenceFor(part);
 }
 
 function pickerPriceStatusLabelFor(part: PickerPart) {
-  return pickerPriceStatusFor(part) === "known" ? "가격 확인" : "가격 확인 필요";
+  return catalogPriceEvidenceLabelFor(part);
 }
 
 function pickerPurchaseConditionFor(part: PickerPart) {
   return `${pickerPriceStatusLabelFor(part)} · ${part.listingType ? LISTING_TYPE_LABELS[part.listingType] : LISTING_TYPE_LABELS.retail}`;
 }
 
+function PickerSimilarityEvidence({ part, similarityEvidenceText }: { part: PickerPart; similarityEvidenceText: PartPickerProps["similarityEvidenceText"] }) {
+  const evidence = part.similarityEvidence;
+  if (part.similarityScore === undefined || !part.similarityLabel || !evidence) return null;
+  const dimensions = evidence.dimensions ?? [];
+  return <div className="picker-item-similarity-detail" aria-label={`${part.name} 성능 비교 근거`} data-testid="picker-similarity-evidence"><div><strong>성능 비교 근거</strong><span>{part.similarityLabel} {part.similarityScore}점 · {similarityEvidenceText(evidence)} · {evidence.comparedDimensions}/{evidence.totalDimensions}개 지표</span></div>{part.performanceSummary && <p>{part.performanceSummary}</p>}{dimensions.length > 0 && <div className="picker-similarity-evidence-table-wrap"><table><caption>현재 선택 부품과 후보의 지표별 비교</caption><thead><tr><th scope="col">지표</th><th scope="col">현재</th><th scope="col">후보</th><th scope="col">점수</th></tr></thead><tbody>{dimensions.map((dimension) => <tr key={dimension.key}><th scope="row">{dimension.label}</th><td>{dimension.currentValue}{dimension.source === "model_reference" && <small className="similarity-dimension-source">모델 참조</small>}</td><td>{dimension.candidateValue}</td><td>{dimension.score}점</td></tr>)}</tbody></table></div>}{evidence.notes?.map((note) => <small key={note}><FiInfo /> {note}</small>)}<small className="picker-similarity-disclaimer"><FiInfo /> 상대 비교 근거이며 실제 FPS·작업 시간·게임 성능을 보장하지 않습니다.</small></div>;
+}
+
 function PickerPartDetail({ part, PartEvidence, similarityEvidenceText }: { part: PickerPart; PartEvidence: PartEvidenceRenderer; similarityEvidenceText: PartPickerProps["similarityEvidenceText"] }) {
   return <div className="picker-item-detail" aria-label={`${part.name} 후보 상세`}>
     {part.candidateRisk === "unsafe" && <p className="picker-unsafe-note"><FiXCircle /> 전체 정밀 탐색에서 차단 오류가 확인된 후보입니다. 현재 견적에는 자동 적용하지 않습니다{part.candidateReasons && part.candidateReasons.length > 0 ? ` · ${part.candidateReasons.join(" · ")}` : ""}.</p>}
     {part.decision && <div className={`picker-decision-summary ${part.decision.status}`} aria-label={`${part.name} 적용 판단`}><div><strong>{part.decision.label}</strong><span>{part.decision.summary}</span></div>{part.decision.reasons.length > 0 && <ul>{part.decision.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>}</div>}
+    <p className={`picker-price-evidence-detail ${catalogPriceEvidenceFor(part)}`} data-testid="picker-price-evidence" title={catalogPriceEvidenceDescriptionFor(part)}><FiInfo /> 가격 근거 · <strong>{catalogPriceEvidenceLabelFor(part)}</strong> · {catalogPriceEvidenceDescriptionFor(part)}</p>
     {pickerFreshnessFor(part) && <p className={`picker-freshness-detail ${pickerFreshnessFor(part)}`}><FiClock /> 데이터 갱신 상태 · {pickerFreshnessLabelFor(part)}{part.updatedAt ? ` · ${new Date(part.updatedAt).toLocaleDateString("ko-KR")}` : ""}</p>}
+    <CatalogSpecProvenance part={part} compact />
     {part.recommendationTrust && <div className={`recommendation-trust ${part.recommendationTrust.level}`} aria-label={`${part.name} 추천 근거 신뢰도`}><div className="recommendation-trust-heading"><strong>추천 근거 신뢰도</strong><span>{pickerRecommendationTrustText(part.recommendationTrust)}</span></div><p>{pickerRecommendationTrustDetail(part.recommendationTrust)}</p><ul>{part.recommendationTrust.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul><small>성능 보장이 아니라 현재 카탈로그 근거의 완성도 지수입니다.</small></div>}
-    {part.similarityScore !== undefined && part.similarityLabel && part.similarityEvidence && <div className="picker-item-similarity-detail" aria-label={`${part.name} 성능 비교 근거`}><div><strong>성능 비교 근거</strong><span>{part.similarityLabel} {part.similarityScore}점 · {similarityEvidenceText(part.similarityEvidence)}</span></div>{part.performanceSummary && <p>{part.performanceSummary}</p>}{part.similarityEvidence.notes?.map((note) => <small key={note}><FiInfo /> {note}</small>)}</div>}
+    <PickerSimilarityEvidence part={part} similarityEvidenceText={similarityEvidenceText} />
     <PickerPhysicalEvidence part={part} />
     <PartEvidence part={part} />
   </div>;
 }
 
-function PickerComparison({ parts, category, affectedPartIds, onSelect, onPreview, onCompareScenarios, onCopy, onDownload, onJsonDownload, onShare, onRevoke, partSummary, formatWon, similarityEvidenceText }: { parts: PickerPart[]; category: PartCategory; affectedPartIds?: string[]; onSelect: (part: Part) => void; onPreview?: (category: PartCategory, part: Part, quantity?: number, affectedPartIds?: string[]) => void; onCompareScenarios?: (category: PartCategory, parts: PickerPart[], affectedPartIds?: string[]) => void; onCopy: () => void; onDownload: () => void; onJsonDownload: () => void; onShare: ShareHandler; onRevoke: RevokeHandler; partSummary: PartPickerProps["partSummary"]; formatWon: PartPickerProps["formatWon"]; similarityEvidenceText: PartPickerProps["similarityEvidenceText"] }) {
+function PickerComparison({ parts, currentSelections, category, affectedPartIds, onSelect, onPreview, onCompareScenarios, onCopy, onDownload, onJsonDownload, onShare, onRevoke, partSummary, formatWon, similarityEvidenceText }: { parts: PickerPart[]; currentSelections: Array<{ part: Part; quantity: number }>; category: PartCategory; affectedPartIds?: string[]; onSelect: (part: Part) => void; onPreview?: (category: PartCategory, part: Part, quantity?: number, affectedPartIds?: string[]) => void; onCompareScenarios?: (category: PartCategory, parts: PickerPart[], affectedPartIds?: string[]) => void; onCopy: () => void; onDownload: () => void; onJsonDownload: () => void; onShare: ShareHandler; onRevoke: RevokeHandler; partSummary: PartPickerProps["partSummary"]; formatWon: PartPickerProps["formatWon"]; similarityEvidenceText: PartPickerProps["similarityEvidenceText"] }) {
   const [sharedComparison, setSharedComparison] = useState<ShareResult | null>(null);
+  const [sharingComparison, setSharingComparison] = useState(false);
+  const shareRequestRef = useRef(0);
+  const shareInFlightRef = useRef(false);
+  const comparisonContextKey = `${category}:${parts.map((part) => part.id).join(",")}:${affectedPartIds?.join(",") ?? ""}`;
+  useEffect(() => {
+    shareRequestRef.current += 1;
+    shareInFlightRef.current = false;
+    setSharingComparison(false);
+  }, [comparisonContextKey]);
+  useEffect(() => () => {
+    shareRequestRef.current += 1;
+    shareInFlightRef.current = false;
+  }, []);
   const [comparisonCriterion, setComparisonCriterion] = useState<CandidateComparisonCriterion>("balanced");
   const comparisonDecision = candidateComparisonDecisionFor(parts.map((part) => ({
     id: part.id,
     name: part.name,
     priceWon: part.priceWon,
+    priceEvidence: catalogPriceEvidenceFor(part),
     similarityScore: part.similarityScore,
     recommendationTrustScore: part.recommendationTrust?.score,
     recommendationTrustLevel: part.recommendationTrust?.level,
@@ -381,30 +481,51 @@ function PickerComparison({ parts, category, affectedPartIds, onSelect, onPrevie
     remainingUnknown: part.remainingUnknown
   })), comparisonCriterion);
   const comparisonTopPart = comparisonDecision.top ? parts.find((part) => part.id === comparisonDecision.top?.id) : undefined;
+  const benchmarkEvidence = parts.map((part) => benchmarkEvidenceForPart(part));
+  const hasBenchmarkEvidence = benchmarkEvidence.some((evidence) => Boolean(evidence));
   const exportCandidates = pickerComparisonCandidatesFor(parts, partSummary, formatWon, similarityEvidenceText);
+  const currentSelectionNames = currentSelections.length > 0 ? currentSelections.map(({ part, quantity }) => `${part.name}${quantity > 1 ? ` ×${quantity}` : ""}`).join(" · ") : "현재 부품 선택 없음";
+  const currentSelectionSummary = currentSelections.length > 0 ? currentSelections.map(({ part }) => partSummary(part)).join(" / ") : "현재 선택 부품이 없어 후보 기준만 비교합니다.";
+  const currentSelectionPriceKnown = currentSelections.length > 0 && currentSelections.every(({ part }) => isKnownPrice(part.priceWon));
+  const currentSelectionPrice = currentSelectionPriceKnown ? currentSelections.reduce((total, { part, quantity }) => total + (part.priceWon ?? 0) * quantity, 0) : undefined;
+  const currentSelectionPriceText = currentSelectionPrice !== undefined ? formatWon(currentSelectionPrice) : currentSelections.length > 0 ? "가격 확인 필요" : undefined;
   async function shareComparison() {
-    const share = await onShare(exportCandidates);
-    if (share) setSharedComparison(share);
+    if (shareInFlightRef.current) return;
+    const requestVersion = ++shareRequestRef.current;
+    const isCurrent = () => shareRequestRef.current === requestVersion;
+    shareInFlightRef.current = true;
+    setSharingComparison(true);
+    try {
+      const share = await onShare(exportCandidates, { name: `${CATEGORY_LABELS[category]} 후보 비교`, category: CATEGORY_LABELS[category], ...(currentSelections.length > 0 ? { currentPartName: currentSelectionNames, currentPartSummary: currentSelectionSummary, ...(currentSelectionPriceText ? { currentPartPrice: currentSelectionPriceText } : {}) } : {}) });
+      if (isCurrent() && share) setSharedComparison(share);
+    } finally {
+      if (isCurrent()) {
+        shareInFlightRef.current = false;
+        setSharingComparison(false);
+      }
+    }
   }
   async function revokeComparison() {
     if (sharedComparison && await onRevoke(sharedComparison)) setSharedComparison(null);
   }
   if (parts.length < 2) return null;
   return <section className="picker-comparison" aria-label="후보 비교">
-    <div className="picker-comparison-heading"><div><strong>선택 후보 비교</strong><span>{parts.length} / 3개</span></div><div className="picker-comparison-actions">{onCompareScenarios && <button className="text-button" type="button" onClick={() => onCompareScenarios(category, parts, affectedPartIds)}><FiActivity /> 전체 가상 비교</button>}<button className="text-button" type="button" onClick={onCopy}><FiCopy /> 비교 복사</button><button className="text-button" type="button" onClick={onDownload}><FiDownload /> CSV 저장</button><button className="text-button" type="button" onClick={onJsonDownload}><FiDownload /> JSON 저장</button><button className="text-button" type="button" onClick={() => void shareComparison()}><FiShare2 /> 공유 링크</button><FiLayers /></div></div>
+    <div className="picker-comparison-heading"><div><strong>선택 후보 비교</strong><span>{parts.length} / 3개</span></div><div className="picker-comparison-actions">{onCompareScenarios && <button className="text-button" type="button" onClick={() => onCompareScenarios(category, parts, affectedPartIds)}><FiActivity /> 전체 가상 비교</button>}<button className="text-button" type="button" onClick={onCopy}><FiCopy /> 비교 복사</button><button className="text-button" type="button" onClick={onDownload}><FiDownload /> CSV 저장</button><button className="text-button" type="button" onClick={onJsonDownload}><FiDownload /> JSON 저장</button><button className="text-button" type="button" onClick={() => void shareComparison()} disabled={sharingComparison}>{sharingComparison ? <><FiRefreshCw className="spin" /> 공유 중...</> : <><FiShare2 /> 공유 링크</>}</button><FiLayers /></div></div>
+    <div className="picker-comparison-baseline" data-testid="picker-comparison-baseline"><div><span>현재 기준선</span><strong>{currentSelectionNames}</strong></div><div><small>{currentSelectionSummary}</small><em>{currentSelectionPrice !== undefined ? formatWon(currentSelectionPrice) : "가격 확인 필요"}</em></div></div>
     <div className="picker-quick-decision" aria-label="후보 빠른 선택" data-testid="picker-quick-decision"><div className="picker-quick-decision-heading"><div><span>QUICK DECISION</span><strong>{comparisonDecision.label} 기준 빠른 선택</strong><small>{comparisonDecision.summary}</small></div><label><span>기준</span><select aria-label="후보 빠른 선택 기준" value={comparisonCriterion} onChange={(event) => setComparisonCriterion(event.target.value as CandidateComparisonCriterion)}>{CANDIDATE_COMPARISON_CRITERIA.map((criterion) => <option value={criterion} key={criterion}>{PICKER_COMPARISON_CRITERION_LABELS[criterion]}</option>)}</select></label></div><div className="picker-quick-decision-ranking">{comparisonDecision.eligibleRanking.slice(0, 3).map((rank, index) => <span className={index === 0 ? "top" : ""} key={rank.id}><b>{index + 1}</b> {rank.name} · {rank.score}점</span>)}{comparisonDecision.excludedIds.length > 0 && <small>적용하지 않음 {comparisonDecision.excludedIds.length}개 제외</small>}</div>{comparisonTopPart && <button className="button button-small picker-quick-apply" type="button" onClick={() => onSelect(comparisonTopPart)}>{comparisonDecision.top?.name} · 1위 후보 적용</button>}</div>
     <div className="picker-comparison-table-wrap"><table><caption>적용 전에 선택한 후보의 가격·성능·호환 근거를 비교합니다.</caption><thead><tr><th scope="col">비교 항목</th>{parts.map((part) => <th scope="col" key={part.id}>{part.name}</th>)}</tr></thead><tbody>
       <tr><th scope="row">핵심 스펙</th>{parts.map((part) => <td key={`${part.id}-summary`}>{partSummary(part)}</td>)}</tr>
       <tr><th scope="row">가격</th>{parts.map((part) => <td key={`${part.id}-price`}>{pickerCandidatePrice(part, formatWon)}{part.recommendedQuantity !== undefined && <small>추천 킷 {part.recommendedQuantity}개</small>}</td>)}</tr>
       <tr><th scope="row">구매 조건</th>{parts.map((part) => <td key={`${part.id}-purchase`}>{pickerPriceStatusLabelFor(part)}<small>{part.listingType ? LISTING_TYPE_LABELS[part.listingType] : LISTING_TYPE_LABELS.retail}</small></td>)}</tr>
       <tr><th scope="row">성능 유사도</th>{parts.map((part) => <td key={`${part.id}-similarity`}>{part.similarityScore !== undefined && part.similarityLabel ? `${part.similarityLabel} ${part.similarityScore}점` : "계산 불가"}<small>{similarityEvidenceText(part.similarityEvidence)}</small></td>)}</tr>
+      {hasBenchmarkEvidence && <tr data-testid="picker-comparison-benchmark"><th scope="row">원본 성능 근거</th>{parts.map((part, index) => <td key={`${part.id}-benchmark`}><ComparisonBenchmarkCell evidence={benchmarkEvidence[index]} /></td>)}</tr>}
       {parts.some((part) => part.recommendationTrust) && <tr><th scope="row">추천 근거 신뢰도</th>{parts.map((part) => <td key={`${part.id}-trust`}>{part.recommendationTrust ? <><strong>{pickerRecommendationTrustText(part.recommendationTrust)}</strong><small>{pickerRecommendationTrustDetail(part.recommendationTrust)}</small></> : "산정 불가"}</td>)}</tr>}
       {parts.some((part) => part.physicalEvidence && part.physicalEvidence.status !== "not_applicable") && <tr><th scope="row">물리 근거</th>{parts.map((part) => <td key={`${part.id}-physical-evidence`}><PickerPhysicalEvidence part={part} compact /></td>)}</tr>}
       <tr><th scope="row">성능 변화</th>{parts.map((part) => <td key={`${part.id}-performance`}>{part.performanceSummary ?? "비교 근거 확인"}</td>)}</tr>
       <tr><th scope="row">호환 상태</th>{parts.map((part) => <td key={`${part.id}-risk`}>{pickerCandidateRisk(part)}</td>)}</tr>
       {parts.some((part) => part.decision) && <tr><th scope="row">판단 요약</th>{parts.map((part) => <td key={`${part.id}-decision`}>{part.decision ? <><strong>{part.decision.label}</strong><small>{part.decision.summary}</small></> : "산정 불가"}</td>)}</tr>}
       {parts.some((part) => part.remainingBlockers !== undefined) && <tr><th scope="row">적용 후 전체 위험</th>{parts.map((part) => <td key={`${part.id}-full-risk`}>{pickerCandidateFullRiskText(part)}</td>)}</tr>}
-      <tr><th scope="row">데이터</th>{parts.map((part) => <td key={`${part.id}-quality`}>{part.dataQuality === "live" ? "다나와 최신" : part.dataQuality === "manual" ? "수동 검수" : part.dataQuality === "incomplete" ? "일부 스펙 부족" : "프로젝트 데이터"}{pickerFreshnessLabelFor(part) && <small>{pickerFreshnessLabelFor(part)}</small>}{part.updatedAt ? <small>갱신 {new Date(part.updatedAt).toLocaleDateString("ko-KR")}</small> : null}</td>)}</tr>
+      <tr><th scope="row">데이터</th>{parts.map((part) => <td key={`${part.id}-quality`}>{DATA_QUALITY_LABELS[part.dataQuality]}<small>{catalogPriceEvidenceLabelFor(part)}</small>{pickerFreshnessLabelFor(part) && <small>{pickerFreshnessLabelFor(part)}</small>}{part.updatedAt ? <small>갱신 {new Date(part.updatedAt).toLocaleDateString("ko-KR")}</small> : null}</td>)}</tr>
       {onPreview && <tr><th scope="row">가상 적용</th>{parts.map((part) => <td key={`${part.id}-preview`}><button className="button button-small picker-comparison-preview" type="button" disabled={part.candidateRisk === "unsafe"} onClick={() => onPreview(category, part, part.recommendedQuantity, affectedPartIds)}>{part.candidateRisk === "unsafe" ? "차단됨" : "가상 적용"}</button></td>)}</tr>}
       <tr><th scope="row">적용</th>{parts.map((part) => <td key={`${part.id}-apply`}><button className="button button-small picker-comparison-apply" type="button" disabled={part.candidateRisk === "unsafe"} onClick={() => onSelect(part)}>{part.candidateRisk === "unsafe" ? "적용 불가" : "이 후보 적용"}</button></td>)}</tr>
     </tbody></table></div>
@@ -413,8 +534,10 @@ function PickerComparison({ parts, category, affectedPartIds, onSelect, onPrevie
   </section>;
 }
 
-export function PartPicker({ category, build, partMap, profile, recommendationListingPolicy = "retail_only", gamingResolution, gamingRefreshRate, benchmarkCoverage, findingRuleId, findingTitle, initialCandidateMode = findingRuleId ? "safe" : "all", affectedPartIds, selected, onClose, onSelect, onToast, onWatchPart, onShareComparison, onRevokeComparison, onPreview, onCompareScenarios, partSummary, formatWon, formatSpecValue, similarityEvidenceText, PartVisual, PartEvidence, PartWatchButton }: PartPickerProps) {
+export function PartPicker({ category, build, partMap, profile, recommendationListingPolicy = "retail_only", gamingResolution, gamingRefreshRate, benchmarkCoverage, brandOptions = [], findingRuleId, findingTitle, initialCandidateMode = findingRuleId ? "safe" : "all", affectedPartIds, selected, onClose, onSelect, onToast, onWatchPart, onShareComparison, onRevokeComparison, onPreview, onCompareScenarios, partSummary, formatWon, formatSpecValue, similarityEvidenceText, PartVisual, PartEvidence, PartWatchButton }: PartPickerProps) {
+  const modalRef = useModalAccessibility({ onClose });
   const [query, setQuery] = useState("");
+  const [brand, setBrand] = useState("");
   const [quality, setQuality] = useState<"all" | DataQuality>("all");
   const [freshness, setFreshness] = useState<PickerFreshnessFilter>("all");
   const [priceStatus, setPriceStatus] = useState<PickerPriceStatusFilter>("all");
@@ -437,8 +560,11 @@ export function PartPicker({ category, build, partMap, profile, recommendationLi
   const [performanceExcludedCount, setPerformanceExcludedCount] = useState(0);
   const [physicalEvidenceExcludedCount, setPhysicalEvidenceExcludedCount] = useState(0);
   const [freshnessExcludedCount, setFreshnessExcludedCount] = useState(0);
+  const [incompleteExcludedCount, setIncompleteExcludedCount] = useState(0);
+  const [incompleteMissingFields, setIncompleteMissingFields] = useState<Array<{ field: string; count: number }>>([]);
   const [priceExcludedCount, setPriceExcludedCount] = useState(0);
   const [trustExcludedCount, setTrustExcludedCount] = useState(0);
+  const [recommendationTrustCounts, setRecommendationTrustCounts] = useState<RecommendationTrustCounts | null>(null);
   const [specExcludedCount, setSpecExcludedCount] = useState(0);
   const [specFilterDiagnostics, setSpecFilterDiagnostics] = useState<PickerSpecFilterDiagnostic[]>([]);
   const [loading, setLoading] = useState(true);
@@ -446,10 +572,63 @@ export function PartPicker({ category, build, partMap, profile, recommendationLi
   const [error, setError] = useState<string | null>(null);
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const [retryNonce, setRetryNonce] = useState(0);
+  const [cachedSnapshot, setCachedSnapshot] = useState(() => {
+    try {
+      return typeof window === "undefined" ? { schemaVersion: 1 as const, items: [] as Part[] } : catalogPickerCacheSnapshotFromJson(window.localStorage.getItem(CATALOG_PICKER_CACHE_STORAGE_KEY));
+    } catch {
+      return { schemaVersion: 1 as const, items: [] as Part[] };
+    }
+  });
+  const cachedParts = cachedSnapshot.items;
   const requestVersionRef = useRef(0);
+  const requestAbortControllerRef = useRef<AbortController | null>(null);
+  const autoFallbackAttemptedRef = useRef(false);
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      requestVersionRef.current += 1;
+      requestAbortControllerRef.current?.abort();
+      requestAbortControllerRef.current = null;
+    };
+  }, []);
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== CATALOG_PICKER_CACHE_STORAGE_KEY) return;
+      setCachedSnapshot(catalogPickerCacheSnapshotFromJson(event.newValue));
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+  useEffect(() => { autoFallbackAttemptedRef.current = false; }, [category, findingRuleId, initialCandidateMode]);
   const compatibilityPreset = compatibilityFilterPresetFor(category, build, partMap);
   const [presetMessage, setPresetMessage] = useState<string | null>(null);
   const hasActiveSpecFilter = pickerSpecFilterHasValue(specFilter);
+  const currentSelections = selected.flatMap((selection) => {
+    const part = partMap.get(selection.partId);
+    return part ? [{ part, quantity: selection.quantity }] : [];
+  });
+  const pickerCurrentSelectionNames = currentSelections.length > 0 ? currentSelections.map(({ part, quantity }) => `${part.name}${quantity > 1 ? ` ×${quantity}` : ""}`).join(" · ") : undefined;
+  const pickerCurrentSelectionSummary = currentSelections.length > 0 ? currentSelections.map(({ part }) => partSummary(part)).join(" / ") : undefined;
+  const pickerCurrentSelectionPriceKnown = currentSelections.length > 0 && currentSelections.every(({ part }) => isKnownPrice(part.priceWon));
+  const pickerCurrentSelectionPrice = pickerCurrentSelectionPriceKnown ? currentSelections.reduce((total, { part, quantity }) => total + (part.priceWon ?? 0) * quantity, 0) : undefined;
+  const pickerComparisonExportContext = { category: CATEGORY_LABELS[category], ...(pickerCurrentSelectionNames ? { currentPartName: pickerCurrentSelectionNames, currentPartSummary: pickerCurrentSelectionSummary, currentPartPrice: pickerCurrentSelectionPrice !== undefined ? formatWon(pickerCurrentSelectionPrice) : "가격 확인 필요" } : {}) };
+
+  useEffect(() => {
+    try {
+      if (cachedSnapshot.items.length > 0) {
+        window.localStorage.setItem(CATALOG_PICKER_CACHE_STORAGE_KEY, catalogPickerCacheToJson(cachedSnapshot.items, cachedSnapshot.cachedAt));
+        window.dispatchEvent(new Event(CATALOG_CACHE_CHANGED_EVENT));
+      }
+    } catch {
+      // The in-memory cache still provides a fallback when storage is unavailable.
+    }
+  }, [cachedSnapshot]);
+
+  function rememberPickerItems(incoming: ReadonlyArray<Part>) {
+    setCachedSnapshot((current) => ({ schemaVersion: 1, items: mergeCatalogPickerCache(current.items, incoming), cachedAt: new Date().toISOString() }));
+  }
 
   function applyCompatibilityPreset() {
     if (compatibilityPreset.labels.length === 0) {
@@ -465,32 +644,67 @@ export function PartPicker({ category, build, partMap, profile, recommendationLi
     setPresetMessage(null);
   }
 
-  function requestParts(offset: number, limit: number) {
+  function clearCandidateFilters() {
+    setQuality("all");
+    setFreshness("all");
+    setPriceStatus("all");
+    setRiskFilter("all");
+    setPerformanceFilter("all");
+    setPhysicalEvidenceFilter("all");
+    setTrustFilter("all");
+    setCandidateBudget("");
+    setSpecFilter({ ...EMPTY_PICKER_SPEC_FILTER });
+    setPresetMessage("카테고리·검색어·구매 조건은 유지하고 후보 필터만 완화했습니다.");
+  }
+
+  function requestParts(offset: number, limit: number, signal = requestAbortControllerRef.current?.signal) {
     const specFilterPayload = pickerSpecFilterPayloadFor(category, specFilter);
     if (candidateMode !== "all") {
       return api<PickerPartsResponse>("/api/parts/compatible", {
         method: "POST",
-        body: JSON.stringify({ category, build, profile, gamingResolution, gamingRefreshRate, findingRuleId, q: query, quality, priceStatus, freshness, sort, listingPolicy, mode: candidateMode, riskFilter, performanceFilter, physicalEvidenceFilter, recommendationTrustFilter: trustFilter, specFilter: specFilterPayload, ...(candidateBudget.trim() ? { budgetWon: candidateBudget.trim() } : {}), offset, limit }),
-        retry: 2
+        body: JSON.stringify({ category, build, profile, gamingResolution, gamingRefreshRate, findingRuleId, q: query, brand: brand.trim(), quality, priceStatus, freshness, sort, listingPolicy, mode: candidateMode, riskFilter, performanceFilter, physicalEvidenceFilter, recommendationTrustFilter: trustFilter, specFilter: specFilterPayload, ...(candidateBudget.trim() ? { budgetWon: candidateBudget.trim() } : {}), offset, limit }),
+        retry: 2,
+        retryOnRateLimit: true,
+        ...(signal ? { signal } : {})
       });
     }
-    const params = new URLSearchParams({ category, q: query, quality, priceStatus, freshness, sort, listingPolicy, offset: String(offset), limit: String(limit) });
+    const params = new URLSearchParams({ category, q: query, brand: brand.trim(), quality, priceStatus, freshness, sort, listingPolicy, offset: String(offset), limit: String(limit) });
     Object.entries(specFilterPayload).forEach(([key, value]) => params.set(key, value));
-    return api<PickerPartsResponse>(`/api/parts?${params.toString()}`);
+    return api<PickerPartsResponse>(`/api/parts?${params.toString()}`, signal ? { signal } : undefined);
   }
 
   useEffect(() => {
     let cancelled = false;
     const requestVersion = ++requestVersionRef.current;
+    const controller = new AbortController();
+    requestAbortControllerRef.current?.abort();
+    requestAbortControllerRef.current = controller;
     const timer = window.setTimeout(() => {
-      setLoading(true); setItems([]); setTotal(0); setRiskCounts(null); setRiskExcludedCount(0); setBudgetExcludedCount(0); setPerformanceExcludedCount(0); setPhysicalEvidenceExcludedCount(0); setFreshnessExcludedCount(0); setPriceExcludedCount(0); setTrustExcludedCount(0); setSpecExcludedCount(0); setSpecFilterDiagnostics([]); setExpandedPickerId(null); setComparePickerIds([]); setLoadingMore(false); setLoadMoreError(null); setError(null);
-      void requestParts(0, 50)
-        .then((payload) => { if (!cancelled && requestVersionRef.current === requestVersion) { setItems(payload.items); setTotal(payload.total); setRiskCounts(payload.riskCounts ?? null); setRiskExcludedCount(payload.riskExcludedCount ?? 0); setBudgetExcludedCount(payload.budgetExcludedCount ?? 0); setPerformanceExcludedCount(payload.performanceExcludedCount ?? 0); setPhysicalEvidenceExcludedCount(payload.physicalEvidenceExcludedCount ?? 0); setFreshnessExcludedCount(payload.freshnessExcludedCount ?? 0); setPriceExcludedCount(payload.priceExcludedCount ?? 0); setTrustExcludedCount(payload.trustExcludedCount ?? 0); setSpecExcludedCount(payload.specExcludedCount ?? 0); setSpecFilterDiagnostics(payload.specFilterDiagnostics ?? []); setError(null); } })
+      setLoading(true); setItems([]); setTotal(0); setRiskCounts(null); setRecommendationTrustCounts(null); setRiskExcludedCount(0); setBudgetExcludedCount(0); setPerformanceExcludedCount(0); setPhysicalEvidenceExcludedCount(0); setFreshnessExcludedCount(0); setIncompleteExcludedCount(0); setIncompleteMissingFields([]); setPriceExcludedCount(0); setTrustExcludedCount(0); setSpecExcludedCount(0); setSpecFilterDiagnostics([]); setExpandedPickerId(null); setComparePickerIds([]); setLoadingMore(false); setLoadMoreError(null); setError(null);
+      void requestParts(0, 50, controller.signal)
+        .then((payload) => { if (!cancelled && requestVersionRef.current === requestVersion) { rememberPickerItems(payload.items); const shouldFallbackToReview = shouldAutoFallbackToReviewCandidates({ findingRuleId, initialCandidateMode, candidateMode, attempted: autoFallbackAttemptedRef.current, total: payload.total, riskCounts: payload.riskCounts }); if (shouldFallbackToReview) { autoFallbackAttemptedRef.current = true; setPresetMessage("확인된 안전 후보가 없어 차단 오류 없는 확인 필요 후보로 자동 전환했습니다. 후보별 확인 사유를 구매 전에 검토하세요."); setCandidateMode("no_blocker"); return; } setItems(payload.items); setTotal(payload.total); setRiskCounts(payload.riskCounts ?? null); setRecommendationTrustCounts(payload.recommendationTrustCounts ?? null); setRiskExcludedCount(payload.riskExcludedCount ?? 0); setBudgetExcludedCount(payload.budgetExcludedCount ?? 0); setPerformanceExcludedCount(payload.performanceExcludedCount ?? 0); setPhysicalEvidenceExcludedCount(payload.physicalEvidenceExcludedCount ?? 0); setFreshnessExcludedCount(payload.freshnessExcludedCount ?? 0); setIncompleteExcludedCount(payload.incompleteExcludedCount ?? 0); setIncompleteMissingFields(payload.incompleteMissingFields ?? []); setPriceExcludedCount(payload.priceExcludedCount ?? 0); setTrustExcludedCount(payload.trustExcludedCount ?? 0); setSpecExcludedCount(payload.specExcludedCount ?? 0); setSpecFilterDiagnostics(payload.specFilterDiagnostics ?? []); setError(null); } })
         .catch((reason: unknown) => { if (!cancelled && requestVersionRef.current === requestVersion) setError(reason instanceof Error ? reason.message : "부품을 불러오지 못했습니다."); })
         .finally(() => { if (!cancelled && requestVersionRef.current === requestVersion) setLoading(false); });
     }, 220);
-    return () => { cancelled = true; window.clearTimeout(timer); };
-  }, [category, build, profile, gamingResolution, gamingRefreshRate, query, quality, priceStatus, freshness, sort, listingPolicy, candidateMode, riskFilter, performanceFilter, physicalEvidenceFilter, trustFilter, candidateBudget, specFilter, retryNonce]);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+      if (requestAbortControllerRef.current === controller) {
+        controller.abort();
+        requestAbortControllerRef.current = null;
+      }
+    };
+  }, [category, build, profile, gamingResolution, gamingRefreshRate, query, brand, quality, priceStatus, freshness, sort, listingPolicy, candidateMode, riskFilter, performanceFilter, physicalEvidenceFilter, trustFilter, candidateBudget, specFilter, retryNonce, findingRuleId, initialCandidateMode]);
+
+  useEffect(() => {
+    setItems([]);
+    setTotal(0);
+    setRiskCounts(null);
+    setRecommendationTrustCounts(null);
+    setError(null);
+    setExpandedPickerId(null);
+    setComparePickerIds([]);
+  }, [brand, candidateBudget, candidateMode, freshness, performanceFilter, physicalEvidenceFilter, priceStatus, query, quality, riskFilter, sort, specFilter, trustFilter]);
 
   async function loadMore() {
     if (loadingMore || items.length >= total) return;
@@ -499,13 +713,14 @@ export function PartPicker({ category, build, partMap, profile, recommendationLi
     setLoadingMore(true); setLoadMoreError(null);
     try {
       const payload = await requestParts(offset, 50);
-      if (requestVersionRef.current !== requestVersion) return;
+      if (!mountedRef.current || requestVersionRef.current !== requestVersion) return;
+      rememberPickerItems(payload.items);
       setItems((current) => { const known = new Set(current.map((part) => part.id)); return [...current, ...payload.items.filter((part) => !known.has(part.id))]; });
-      setTotal(payload.total); setRiskCounts(payload.riskCounts ?? null); setRiskExcludedCount(payload.riskExcludedCount ?? 0); setBudgetExcludedCount(payload.budgetExcludedCount ?? 0); setPerformanceExcludedCount(payload.performanceExcludedCount ?? 0); setPhysicalEvidenceExcludedCount(payload.physicalEvidenceExcludedCount ?? 0); setFreshnessExcludedCount(payload.freshnessExcludedCount ?? 0); setPriceExcludedCount(payload.priceExcludedCount ?? 0); setTrustExcludedCount(payload.trustExcludedCount ?? 0); setSpecExcludedCount(payload.specExcludedCount ?? 0); setSpecFilterDiagnostics(payload.specFilterDiagnostics ?? []);
+      setTotal(payload.total); setRiskCounts(payload.riskCounts ?? null); setRecommendationTrustCounts(payload.recommendationTrustCounts ?? null); setRiskExcludedCount(payload.riskExcludedCount ?? 0); setBudgetExcludedCount(payload.budgetExcludedCount ?? 0); setPerformanceExcludedCount(payload.performanceExcludedCount ?? 0); setPhysicalEvidenceExcludedCount(payload.physicalEvidenceExcludedCount ?? 0); setFreshnessExcludedCount(payload.freshnessExcludedCount ?? 0); setIncompleteExcludedCount(payload.incompleteExcludedCount ?? 0); setIncompleteMissingFields(payload.incompleteMissingFields ?? []); setPriceExcludedCount(payload.priceExcludedCount ?? 0); setTrustExcludedCount(payload.trustExcludedCount ?? 0); setSpecExcludedCount(payload.specExcludedCount ?? 0); setSpecFilterDiagnostics(payload.specFilterDiagnostics ?? []);
     } catch (reason: unknown) {
-      if (requestVersionRef.current === requestVersion) setLoadMoreError(reason instanceof Error ? reason.message : "추가 부품을 불러오지 못했습니다.");
+      if (mountedRef.current && requestVersionRef.current === requestVersion) setLoadMoreError(reason instanceof Error ? reason.message : "추가 부품을 불러오지 못했습니다.");
     } finally {
-      if (requestVersionRef.current === requestVersion) setLoadingMore(false);
+      if (mountedRef.current && requestVersionRef.current === requestVersion) setLoadingMore(false);
     }
   }
 
@@ -518,14 +733,18 @@ export function PartPicker({ category, build, partMap, profile, recommendationLi
   }
 
   async function copyPickerComparison() {
-    try { await navigator.clipboard.writeText(alternativeComparisonTextFor(pickerComparisonCandidatesFor(comparePickerParts, partSummary, formatWon, similarityEvidenceText))); onToast("후보 비교표를 클립보드에 복사했습니다."); }
-    catch { onToast("후보 비교표 복사에 실패했습니다. 브라우저 클립보드 권한을 확인해 주세요."); }
+    try {
+      await navigator.clipboard.writeText(alternativeComparisonTextFor(pickerComparisonCandidatesFor(comparePickerParts, partSummary, formatWon, similarityEvidenceText), pickerComparisonExportContext));
+      if (mountedRef.current) onToast("후보 비교표를 클립보드에 복사했습니다.");
+    } catch {
+      if (mountedRef.current) onToast("후보 비교표 복사에 실패했습니다. 브라우저 클립보드 권한을 확인해 주세요.");
+    }
   }
   function downloadPickerComparison() {
-    const blob = new Blob([alternativeComparisonCsvFor(pickerComparisonCandidatesFor(comparePickerParts, partSummary, formatWon, similarityEvidenceText))], { type: "text/csv;charset=utf-8" }); const url = window.URL.createObjectURL(blob); const anchor = document.createElement("a"); anchor.href = url; anchor.download = `pc-supporter-candidate-comparison-${new Date().toISOString().slice(0, 10)}.csv`; anchor.click(); window.URL.revokeObjectURL(url); onToast("후보 비교표 CSV를 저장했습니다.");
+    const blob = new Blob([alternativeComparisonCsvFor(pickerComparisonCandidatesFor(comparePickerParts, partSummary, formatWon, similarityEvidenceText), pickerComparisonExportContext)], { type: "text/csv;charset=utf-8" }); const url = window.URL.createObjectURL(blob); const anchor = document.createElement("a"); anchor.href = url; anchor.download = `pc-supporter-candidate-comparison-${new Date().toISOString().slice(0, 10)}.csv`; anchor.click(); window.URL.revokeObjectURL(url); onToast("후보 비교표 CSV를 저장했습니다.");
   }
   function downloadPickerComparisonJson() {
-    const blob = new Blob([alternativeComparisonJsonFor(pickerComparisonCandidatesFor(comparePickerParts, partSummary, formatWon, similarityEvidenceText))], { type: "application/json;charset=utf-8" }); const url = window.URL.createObjectURL(blob); const anchor = document.createElement("a"); anchor.href = url; anchor.download = `pc-supporter-candidate-comparison-${new Date().toISOString().slice(0, 10)}.json`; anchor.click(); window.URL.revokeObjectURL(url); onToast("후보 비교표 JSON을 저장했습니다.");
+    const blob = new Blob([alternativeComparisonJsonFor(pickerComparisonCandidatesFor(comparePickerParts, partSummary, formatWon, similarityEvidenceText), pickerComparisonExportContext)], { type: "application/json;charset=utf-8" }); const url = window.URL.createObjectURL(blob); const anchor = document.createElement("a"); anchor.href = url; anchor.download = `pc-supporter-candidate-comparison-${new Date().toISOString().slice(0, 10)}.json`; anchor.click(); window.URL.revokeObjectURL(url); onToast("후보 비교표 JSON을 저장했습니다.");
   }
 
   useEffect(() => { document.body.classList.add("modal-open"); return () => document.body.classList.remove("modal-open"); }, []);
@@ -538,7 +757,7 @@ export function PartPicker({ category, build, partMap, profile, recommendationLi
   const riskFilterLabel = riskFilter === "safe" ? "안전 후보" : riskFilter === "review" ? "확인 필요 후보" : riskFilter === "unsafe" ? "차단 후보" : "전체 위험도";
   const candidateEmptyMessage = priceStatus !== "all" && total === 0 ? `${priceStatusLabel}에 해당하는 부품이 없습니다. 가격 상태를 전체로 바꾸면 다른 후보를 확인할 수 있습니다.` : freshness !== "all" && total === 0 ? `${freshnessFilterLabel}에 해당하는 부품이 없습니다. 갱신 상태를 전체로 바꾸면 다른 후보를 확인할 수 있습니다.` : candidateMode !== "all" && physicalEvidenceFilter !== "all" && total === 0 ? `${physicalEvidenceFilterLabelText} 후보가 없습니다. 물리 근거 조건을 전체로 바꾸면 호환 우선 후보를 확인할 수 있습니다.` : candidateMode !== "all" && trustFilter !== "all" && total === 0 ? `${trustFilterLabel}가 없습니다. 추천 근거 조건을 낮추면 호환 우선 대안을 확인할 수 있습니다.` : candidateMode !== "all" && performanceFilter !== "all" ? `${performanceFilterLabel}가 없습니다. 성능 기준을 전체로 바꾸면 호환 우선 대안을 확인할 수 있습니다.` : candidateMode === "safe" ? findingTitle ? `${findingTitle}를 해결하면서 새 호환 위험을 만들지 않는 후보가 없습니다.` : "현재 구성에 새 호환 위험을 만들지 않는 후보가 없습니다." : candidateMode === "no_blocker" ? "현재 구성에서 후보 자체에 차단 오류가 없는 부품이 없습니다." : candidateMode === "precision" ? findingTitle ? `${findingTitle}를 해결하는 후보를 전체 정밀 검사했지만 결과가 없습니다.` : "전체 정밀 검사 결과가 없습니다." : "검색 결과가 없습니다.";
   const candidateLoadingMessage = candidateMode === "all" ? "부품 목록을 불러오는 중..." : candidateMode === "precision" ? "전체 후보를 정밀 검사하는 중..." : `${candidateModeLabel}를 계산하는 중...`;
-  const candidateModeHelp = findingTitle && candidateMode === "precision" ? `${findingTitle}를 해결하는 전체 후보를 실제 구성에 대입해 안전·확인 필요·차단 위험을 모두 분류합니다. 차단 후보는 적용하지 마세요.` : findingTitle && candidateMode !== "all" ? `${findingTitle}를 해결하고 새 차단 오류와 확인 필요 항목을 만들지 않는 후보를 우선 표시합니다.` : candidateMode === "safe" ? "현재 구성에 후보를 적용해 새 차단 오류와 확인 필요 항목이 없는 부품만 표시합니다." : candidateMode === "no_blocker" ? "현재 구성에 후보를 적용해 새 차단 오류는 없지만 스펙 확인이 필요한 후보를 포함할 수 있습니다." : candidateMode === "precision" ? "현재 구성에 모든 후보를 대입해 안전·확인 필요·차단 위험을 분류합니다. 차단 후보는 적용하지 마세요." : "현재 구성과 관계없이 카탈로그 조건에 맞는 부품을 표시합니다.";
+  const candidateModeHelp = findingTitle && candidateMode === "precision" ? `${findingTitle}를 해결하는 전체 후보를 실제 구성에 대입해 안전·확인 필요·차단 위험을 모두 분류합니다. 차단 후보는 적용하지 마세요.` : findingTitle && candidateMode === "no_blocker" ? `${findingTitle}를 해결하고 새 차단 오류는 없지만 스펙 확인이 필요한 후보도 포함해 표시합니다.` : findingTitle && candidateMode !== "all" ? `${findingTitle}를 해결하고 새 차단 오류와 확인 필요 항목을 만들지 않는 후보를 우선 표시합니다.` : candidateMode === "safe" ? "현재 구성에 후보를 적용해 새 차단 오류와 확인 필요 항목이 없는 부품만 표시합니다." : candidateMode === "no_blocker" ? "현재 구성에 후보를 적용해 새 차단 오류는 없지만 스펙 확인이 필요한 후보를 포함할 수 있습니다." : candidateMode === "precision" ? "현재 구성에 모든 후보를 대입해 안전·확인 필요·차단 위험을 분류합니다. 차단 후보는 적용하지 마세요." : "현재 구성과 관계없이 카탈로그 조건에 맞는 부품을 표시합니다.";
   const candidateRiskSummary = candidateMode === "all" || !riskCounts ? "" : candidateMode === "precision" ? `안전 ${riskCounts.safe.toLocaleString("ko-KR")}개 · 확인 필요 ${riskCounts.review.toLocaleString("ko-KR")}개 · 차단 ${riskCounts.unsafe.toLocaleString("ko-KR")}개` : `안전 ${riskCounts.safe.toLocaleString("ko-KR")}개 · 확인 필요 ${riskCounts.review.toLocaleString("ko-KR")}개 · 제외 ${riskCounts.unsafe.toLocaleString("ko-KR")}개`;
   const candidateRiskFilterSummary = candidateMode !== "all" && riskFilter !== "all" ? `${riskFilterLabel} · ${total.toLocaleString("ko-KR")}개 표시${riskExcludedCount > 0 ? ` · 다른 위험도 ${riskExcludedCount.toLocaleString("ko-KR")}개 제외` : ""}` : "";
   const candidateBudgetValue = candidateBudget.trim() ? Number(candidateBudget) : undefined;
@@ -558,21 +777,61 @@ export function PartPicker({ category, build, partMap, profile, recommendationLi
   const specFilterLabel = pickerSpecFilterSummaryFor(category, specFilter);
   const specFilterSummary = specFilterLabel ? `${specFilterLabel} · ${total.toLocaleString("ko-KR")}개 표시${specExcludedCount > 0 ? ` · 스펙 조건 미충족 ${specExcludedCount.toLocaleString("ko-KR")}개 제외` : ""}` : "";
   const specFilterDiagnosticSummary = specFilterLabel ? pickerSpecFilterDiagnosticSummaryFor(specFilterDiagnostics) : "";
-  const comparePickerParts = items.filter((part) => comparePickerIds.includes(part.id));
+  const canOfferReviewCandidates = shouldOfferReviewCandidates({ candidateMode, riskFilter, total, riskCounts: riskCounts ?? undefined });
+  const hasNarrowCandidateFilter = candidateMode !== "all" && (quality !== "all" || freshness !== "all" || priceStatus !== "all" || riskFilter !== "all" || performanceFilter !== "all" || physicalEvidenceFilter !== "all" || trustFilter !== "all" || candidateBudget.trim().length > 0 || hasActiveSpecFilter);
+  const canOfferReviewCandidatesInEmpty = candidateMode === "safe" && riskFilter === "all" && total === 0 && (riskCounts?.review ?? 0) > 0;
+  const cachedCatalog = useMemo(() => mergeCatalogPickerCache(cachedParts, [...partMap.values()]), [cachedParts, partMap]);
+  const cachedSort = sort === "name" || sort === "updated" || sort === "price_desc" ? sort : "price_asc";
+  const cachedFallback = useMemo(() => catalogPickerCachedFallbackFor(cachedCatalog, {
+    category,
+    query,
+    brand,
+    quality,
+    freshness,
+    priceStatus,
+    listingPolicy,
+    sort: cachedSort,
+    specFilter: pickerSpecFilterPayloadFor(category, specFilter),
+    limit: 50
+  }), [cachedCatalog, category, query, brand, quality, freshness, priceStatus, listingPolicy, cachedSort, specFilter]);
+  const showCachedFallback = Boolean(error) && candidateMode === "all" && cachedFallback.total > 0;
+  const visibleItems = showCachedFallback ? cachedFallback.items : items;
+  const visibleTotal = showCachedFallback ? cachedFallback.total : total;
+  const cachedLatestUpdatedAt = cachedCatalog.reduce<string | undefined>((latest, part) => !latest || part.updatedAt > latest ? part.updatedAt : latest, undefined);
+  const comparePickerParts = visibleItems.filter((part) => comparePickerIds.includes(part.id));
+  useEffect(() => {
+    if (!showCachedFallback) return;
+    setItems(cachedFallback.items);
+    setTotal(cachedFallback.total);
+  }, [showCachedFallback, cachedFallback]);
+  useEffect(() => {
+    if (!error) return;
+    const retryWhenOnline = () => {
+      if (navigator.onLine) setRetryNonce((current) => current + 1);
+    };
+    window.addEventListener("online", retryWhenOnline);
+    return () => window.removeEventListener("online", retryWhenOnline);
+  }, [error]);
   return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-    <section className="picker-modal" role="dialog" aria-modal="true" aria-labelledby="picker-title">
+    <section ref={modalRef} tabIndex={-1} className="picker-modal" role="dialog" aria-modal="true" aria-labelledby="picker-title">
       <div className="modal-header"><div><p className="eyebrow">PART CATALOG</p><h2 id="picker-title">{CATEGORY_LABELS[category]} 선택</h2><p>다나와 카탈로그와 프로젝트 검수 데이터를 기준으로 검색합니다.</p>{findingTitle && <p className="picker-intent-label">문제 해결 후보 · {findingTitle}</p>}</div><button className="icon-button" type="button" onClick={onClose} aria-label="부품 선택 닫기"><FiXCircle /></button></div>
-      <label className="search-box"><FiSearch /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`${CATEGORY_LABELS[category]} 모델명 검색`} /></label>
+      <label className="search-box"><FiSearch /><input data-modal-autofocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`${CATEGORY_LABELS[category]} 모델명 검색`} /></label>
+      <div className="picker-brand-filter-panel" aria-label="부품 선택기 제조사 필터" data-testid="picker-brand-filter"><label><span>MANUFACTURER FILTER · 제조사</span><input aria-label="부품 선택기 제조사 필터" list="picker-brand-options" type="search" value={brand} onChange={(event) => setBrand(event.target.value.slice(0, 80))} placeholder="예: ASUS · AMD · GIGABYTE" /></label><datalist id="picker-brand-options">{brandOptions.map((option) => <option value={option.brand} label={`${option.count}개`} key={option.brand} />)}</datalist>{brandOptions.length > 0 && <div className="picker-brand-suggestions" role="group" aria-label="부품 선택기 제조사 빠른 선택">{brandOptions.slice(0, 6).map((option) => <button className={brand.trim().toLocaleLowerCase("ko-KR") === option.brand.toLocaleLowerCase("ko-KR") ? "selected" : ""} type="button" aria-pressed={brand.trim().toLocaleLowerCase("ko-KR") === option.brand.toLocaleLowerCase("ko-KR")} onClick={() => setBrand(option.brand)} key={option.brand}>{option.brand}<small>{option.count}</small></button>)}</div>}{brand.trim() && <button className="text-button" type="button" onClick={() => setBrand("")}>제조사 초기화</button>}</div>
       <div className="picker-filters"><label><span>데이터</span><select value={quality} onChange={(event) => setQuality(event.target.value as "all" | DataQuality)}><option value="all">전체 데이터</option><option value="live">다나와 최신</option><option value="seed">프로젝트 데이터</option><option value="manual">수동 검수</option><option value="incomplete">스펙 부족</option></select></label><label><span>구매 조건</span><select value={listingPolicy} onChange={(event) => setListingPolicy(event.target.value as ListingPolicy)}><option value="retail_only">{LISTING_POLICY_LABELS.retail_only}</option><option value="include_bulk">벌크 포함</option><option value="all">{LISTING_POLICY_LABELS.all}</option></select></label><label><span>정렬</span><select value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}><option value="price_asc">가격 낮은 순</option><option value="price_desc">가격 높은 순</option><option value="name">이름 순</option><option value="updated">최근 갱신</option>{candidateMode !== "all" && <><option value="similarity">유사도 높은 순</option><option value="value">가성비 높은 순</option></>}</select></label><label><span>후보</span><select value={candidateMode} onChange={(event) => { const next = event.target.value as typeof candidateMode; setCandidateMode(next); if (next === "all") { setPerformanceFilter("all"); setTrustFilter("all"); if (sort === "similarity" || sort === "value") setSort("price_asc"); } }}><option value="all">전체 카탈로그</option><option value="precision">전체 후보 정밀 탐색</option><option value="no_blocker">차단 오류 없는 후보</option><option value="safe">확인된 안전 후보</option></select></label><label className="picker-risk-filter"><span>위험도</span><select aria-label="후보 위험도" value={riskFilter} disabled={candidateMode === "all"} onChange={(event) => setRiskFilter(event.target.value as PickerRiskFilter)}><option value="all">전체 위험도</option><option value="safe">안전</option><option value="review">확인 필요</option><option value="unsafe">차단</option></select></label><label className="picker-performance-filter"><span>성능 기준</span><select aria-label="대체 후보 성능 기준" value={performanceFilter} disabled={candidateMode === "all"} onChange={(event) => setPerformanceFilter(event.target.value as PickerPerformanceFilter)}><option value="all">전체 성능 후보</option><option value="similar">동급·유사만</option><option value="verified">근거 충분만</option><option value="benchmark">벤치마크 근거 포함</option></select></label><label className="picker-trust-filter"><span>추천 근거</span><select aria-label="대체 후보 추천 근거" value={trustFilter} disabled={candidateMode === "all"} onChange={(event) => setTrustFilter(event.target.value as PickerTrustFilter)}><option value="all">전체 근거</option><option value="medium_plus">보통 이상</option><option value="high">높음만</option></select></label><label className="picker-budget-filter"><span>교체 예산 <em>선택</em></span><input type="number" min="1" step="10000" value={candidateBudget} disabled={candidateMode === "all"} onChange={(event) => setCandidateBudget(event.target.value)} placeholder="예: 300000" /></label>{category === "gpu" && <label className="picker-spec-filter"><span>최소 VRAM</span><PickerSpecSelect ariaLabel="부품 선택기 최소 VRAM" value={specFilter.minVramGb} options={GPU_VRAM_FILTER_OPTIONS} onChange={(value) => setSpecFilter((current) => ({ ...current, minVramGb: value }))} /></label>}{(category === "memory" || category === "ssd" || category === "hdd") && <label className="picker-spec-filter"><span>{category === "memory" ? "최소 모듈 용량" : "최소 용량"}</span><PickerSpecSelect ariaLabel="부품 선택기 최소 용량" value={specFilter.minCapacityGb} options={category === "memory" ? MEMORY_CAPACITY_FILTER_OPTIONS : STORAGE_CAPACITY_FILTER_OPTIONS} onChange={(value) => setSpecFilter((current) => ({ ...current, minCapacityGb: value }))} /></label>}{category === "memory" && <label className="picker-spec-filter"><span>최소 속도</span><PickerSpecSelect ariaLabel="부품 선택기 최소 메모리 속도" value={specFilter.minMemorySpeedMhz} options={MEMORY_SPEED_FILTER_OPTIONS} onChange={(value) => setSpecFilter((current) => ({ ...current, minMemorySpeedMhz: value }))} /></label>}{category === "psu" && <label className="picker-spec-filter"><span>최소 정격</span><PickerSpecSelect ariaLabel="부품 선택기 최소 정격 출력" value={specFilter.minWattageW} options={PSU_WATTAGE_FILTER_OPTIONS} onChange={(value) => setSpecFilter((current) => ({ ...current, minWattageW: value }))} /></label>}{(category === "ssd" || category === "hdd") && <label className="picker-spec-filter"><span>연결 방식</span><PickerSpecSelect ariaLabel="부품 선택기 연결 방식" value={specFilter.storageInterface} options={STORAGE_INTERFACE_FILTER_OPTIONS} onChange={(value) => setSpecFilter((current) => ({ ...current, storageInterface: value as PickerSpecFilter["storageInterface"] }))} /></label>}</div>
-      <div className="picker-compatibility-filters" aria-label="호환 핵심 스펙 필터"><div className="picker-compatibility-filter-heading"><div><strong>호환 핵심 조건</strong><small>비워 두면 조건을 적용하지 않습니다.</small></div><div className="picker-compatibility-filter-actions"><button className="text-button picker-preset-button" type="button" onClick={clearSpecFilters} disabled={!hasActiveSpecFilter}>조건 초기화</button><button className="text-button picker-preset-button" type="button" onClick={applyCompatibilityPreset} disabled={compatibilityPreset.labels.length === 0}>현재 구성 기준 적용</button></div></div>{presetMessage && <p className="picker-preset-message" role="status">{presetMessage}</p>}{["cpu", "cooler", "motherboard"].includes(category) && <label className="picker-spec-filter"><span>소켓</span><PickerSpecTextInput ariaLabel="부품 선택기 소켓" value={specFilter.socket} placeholder="예: AM5" onChange={(value) => setSpecFilter((current) => ({ ...current, socket: value }))} /></label>}{["cpu", "motherboard", "memory"].includes(category) && <label className="picker-spec-filter"><span>메모리 세대</span><PickerSpecTextInput ariaLabel="부품 선택기 메모리 세대" value={specFilter.memoryType} placeholder="예: DDR5" onChange={(value) => setSpecFilter((current) => ({ ...current, memoryType: value }))} /></label>}{["case", "motherboard", "memory", "ssd", "psu"].includes(category) && <label className="picker-spec-filter"><span>폼팩터</span><PickerSpecTextInput ariaLabel="부품 선택기 폼팩터" value={specFilter.formFactor} placeholder="예: ATX · DIMM" onChange={(value) => setSpecFilter((current) => ({ ...current, formFactor: value }))} /></label>}{category === "motherboard" && <><label className="picker-spec-filter"><span>RAM 슬롯 ≥</span><PickerSpecNumberInput ariaLabel="부품 선택기 최소 RAM 슬롯" value={specFilter.minMemorySlots} placeholder="예: 4" onChange={(value) => setSpecFilter((current) => ({ ...current, minMemorySlots: value }))} /></label><label className="picker-spec-filter"><span>M.2 슬롯 ≥</span><PickerSpecNumberInput ariaLabel="부품 선택기 최소 M.2 슬롯" value={specFilter.minM2Slots} placeholder="예: 2" onChange={(value) => setSpecFilter((current) => ({ ...current, minM2Slots: value }))} /></label><label className="picker-spec-filter"><span>SATA 포트 ≥</span><PickerSpecNumberInput ariaLabel="부품 선택기 최소 SATA 포트" value={specFilter.minSataPorts} placeholder="예: 4" onChange={(value) => setSpecFilter((current) => ({ ...current, minSataPorts: value }))} /></label></>}{category === "case" && <><label className="picker-spec-filter"><span>GPU 허용 길이 ≥</span><PickerSpecNumberInput ariaLabel="부품 선택기 최소 GPU 허용 길이" value={specFilter.minMaxGpuLengthMm} placeholder="예: 330" onChange={(value) => setSpecFilter((current) => ({ ...current, minMaxGpuLengthMm: value }))} /></label><label className="picker-spec-filter"><span>쿨러 허용 높이 ≥</span><PickerSpecNumberInput ariaLabel="부품 선택기 최소 쿨러 허용 높이" value={specFilter.minMaxCoolerHeightMm} placeholder="예: 160" onChange={(value) => setSpecFilter((current) => ({ ...current, minMaxCoolerHeightMm: value }))} /></label><label className="picker-spec-filter"><span>HDD 베이 ≥</span><PickerSpecNumberInput ariaLabel="부품 선택기 최소 HDD 베이" value={specFilter.minHddBays} placeholder="예: 2" onChange={(value) => setSpecFilter((current) => ({ ...current, minHddBays: value }))} /></label><label className="picker-spec-filter"><span>PSU 허용 길이 ≥</span><PickerSpecNumberInput ariaLabel="부품 선택기 최소 PSU 허용 길이" value={specFilter.minMaxPsuLengthMm} placeholder="예: 180" onChange={(value) => setSpecFilter((current) => ({ ...current, minMaxPsuLengthMm: value }))} /></label></>}{category === "cooler" && <label className="picker-spec-filter"><span>냉각 용량 ≥</span><PickerSpecNumberInput ariaLabel="부품 선택기 최소 냉각 용량" value={specFilter.minCoolingW} placeholder="예: 180" onChange={(value) => setSpecFilter((current) => ({ ...current, minCoolingW: value }))} /></label>}{category === "gpu" && <label className="picker-spec-filter"><span>GPU 길이 ≤</span><PickerSpecNumberInput ariaLabel="부품 선택기 최대 GPU 길이" value={specFilter.maxLengthMm} placeholder="예: 300" onChange={(value) => setSpecFilter((current) => ({ ...current, maxLengthMm: value }))} /></label>}{category === "psu" && <label className="picker-spec-filter"><span>PSU 깊이 ≤</span><PickerSpecNumberInput ariaLabel="부품 선택기 최대 PSU 깊이" value={specFilter.maxPsuDepthMm} placeholder="예: 160" onChange={(value) => setSpecFilter((current) => ({ ...current, maxPsuDepthMm: value }))} /></label>}{compatibilityPreset.omitted.length > 0 && <p className="picker-preset-omitted">자동 조건에서 제외한 정보: {compatibilityPreset.omitted.join(" · ")}</p>}</div>
+      <div className="picker-compatibility-filters" aria-label="호환 핵심 스펙 필터"><div className="picker-compatibility-filter-heading"><div><strong>호환 핵심 조건</strong><small>비워 두면 조건을 적용하지 않습니다.</small></div><div className="picker-compatibility-filter-actions"><button className="text-button picker-preset-button" type="button" onClick={clearSpecFilters} disabled={!hasActiveSpecFilter}>조건 초기화</button><button className="text-button picker-preset-button" type="button" onClick={applyCompatibilityPreset} disabled={compatibilityPreset.labels.length === 0}>현재 구성 기준 적용</button></div></div>{presetMessage && <p className="picker-preset-message" role="status">{presetMessage}</p>}{["cpu", "cooler", "motherboard"].includes(category) && <label className="picker-spec-filter"><span>소켓</span><PickerSpecTextInput ariaLabel="부품 선택기 소켓" value={specFilter.socket} placeholder="예: AM5" onChange={(value) => setSpecFilter((current) => ({ ...current, socket: value }))} /></label>}{["cpu", "motherboard", "memory"].includes(category) && <label className="picker-spec-filter"><span>메모리 세대</span><PickerSpecTextInput ariaLabel="부품 선택기 메모리 세대" value={specFilter.memoryType} placeholder="예: DDR5" onChange={(value) => setSpecFilter((current) => ({ ...current, memoryType: value }))} /></label>}{["case", "motherboard", "memory", "ssd", "psu"].includes(category) && <label className="picker-spec-filter"><span>폼팩터</span><PickerSpecTextInput ariaLabel="부품 선택기 폼팩터" value={specFilter.formFactor} placeholder="예: ATX · DIMM" onChange={(value) => setSpecFilter((current) => ({ ...current, formFactor: value }))} /></label>}{category === "motherboard" && <><label className="picker-spec-filter"><span>PCIe 슬롯 정보</span><PickerSpecSelect ariaLabel="부품 선택기 PCIe 슬롯 정보 상태" value={specFilter.pcieSlotInfo} options={PCIE_SLOT_INFO_FILTER_OPTIONS} onChange={(value) => setSpecFilter((current) => ({ ...current, pcieSlotInfo: value as PickerSpecFilter["pcieSlotInfo"] }))} /></label><label className="picker-spec-filter"><span>PCIe 슬롯 폭</span><PickerSpecSelect ariaLabel="부품 선택기 PCIe 슬롯 폭" value={specFilter.pcieSlotWidth} options={PCIE_SLOT_WIDTH_FILTER_OPTIONS} onChange={(value) => setSpecFilter((current) => ({ ...current, pcieSlotWidth: value }))} /></label><label className="picker-spec-filter"><span>해당 슬롯 수 ≥</span><PickerSpecNumberInput ariaLabel="부품 선택기 최소 PCIe 슬롯 수" value={specFilter.minPcieSlotCount} placeholder="예: 1" onChange={(value) => setSpecFilter((current) => ({ ...current, minPcieSlotCount: value }))} /></label><label className="picker-spec-filter"><span>RAM 슬롯 ≥</span><PickerSpecNumberInput ariaLabel="부품 선택기 최소 RAM 슬롯" value={specFilter.minMemorySlots} placeholder="예: 4" onChange={(value) => setSpecFilter((current) => ({ ...current, minMemorySlots: value }))} /></label><label className="picker-spec-filter"><span>M.2 슬롯 ≥</span><PickerSpecNumberInput ariaLabel="부품 선택기 최소 M.2 슬롯" value={specFilter.minM2Slots} placeholder="예: 2" onChange={(value) => setSpecFilter((current) => ({ ...current, minM2Slots: value }))} /></label><label className="picker-spec-filter"><span>SATA 포트 ≥</span><PickerSpecNumberInput ariaLabel="부품 선택기 최소 SATA 포트" value={specFilter.minSataPorts} placeholder="예: 4" onChange={(value) => setSpecFilter((current) => ({ ...current, minSataPorts: value }))} /></label></>}{category === "case" && <><label className="picker-spec-filter"><span>GPU 허용 길이 ≥</span><PickerSpecNumberInput ariaLabel="부품 선택기 최소 GPU 허용 길이" value={specFilter.minMaxGpuLengthMm} placeholder="예: 330" onChange={(value) => setSpecFilter((current) => ({ ...current, minMaxGpuLengthMm: value }))} /></label><label className="picker-spec-filter"><span>쿨러 허용 높이 ≥</span><PickerSpecNumberInput ariaLabel="부품 선택기 최소 쿨러 허용 높이" value={specFilter.minMaxCoolerHeightMm} placeholder="예: 160" onChange={(value) => setSpecFilter((current) => ({ ...current, minMaxCoolerHeightMm: value }))} /></label><label className="picker-spec-filter"><span>HDD 베이 ≥</span><PickerSpecNumberInput ariaLabel="부품 선택기 최소 HDD 베이" value={specFilter.minHddBays} placeholder="예: 2" onChange={(value) => setSpecFilter((current) => ({ ...current, minHddBays: value }))} /></label><label className="picker-spec-filter"><span>PSU 허용 길이 ≥</span><PickerSpecNumberInput ariaLabel="부품 선택기 최소 PSU 허용 길이" value={specFilter.minMaxPsuLengthMm} placeholder="예: 180" onChange={(value) => setSpecFilter((current) => ({ ...current, minMaxPsuLengthMm: value }))} /></label></>}{category === "cooler" && <label className="picker-spec-filter"><span>냉각 용량 ≥</span><PickerSpecNumberInput ariaLabel="부품 선택기 최소 냉각 용량" value={specFilter.minCoolingW} placeholder="예: 180" onChange={(value) => setSpecFilter((current) => ({ ...current, minCoolingW: value }))} /></label>}{category === "gpu" && <label className="picker-spec-filter"><span>GPU 길이 ≤</span><PickerSpecNumberInput ariaLabel="부품 선택기 최대 GPU 길이" value={specFilter.maxLengthMm} placeholder="예: 300" onChange={(value) => setSpecFilter((current) => ({ ...current, maxLengthMm: value }))} /></label>}{category === "psu" && <label className="picker-spec-filter"><span>PSU 깊이 ≤</span><PickerSpecNumberInput ariaLabel="부품 선택기 최대 PSU 깊이" value={specFilter.maxPsuDepthMm} placeholder="예: 160" onChange={(value) => setSpecFilter((current) => ({ ...current, maxPsuDepthMm: value }))} /></label>}{compatibilityPreset.omitted.length > 0 && <p className="picker-preset-omitted">자동 조건에서 제외한 정보: {compatibilityPreset.omitted.join(" · ")}</p>}</div>
+      {canOfferReviewCandidates && <button className="button button-small picker-review-candidates-action" type="button" onClick={() => { setCandidateMode("no_blocker"); setPresetMessage("안전 후보와 함께 차단 오류 없는 확인 필요 후보를 표시합니다. 후보별 확인 사유를 구매 전에 검토하세요."); }}>확인 필요 후보도 보기 · {riskCounts?.review.toLocaleString("ko-KR")}개</button>}
       <label className="picker-freshness-filter"><span>데이터 갱신</span><select aria-label="부품 데이터 갱신 상태" value={freshness} onChange={(event) => setFreshness(event.target.value as PickerFreshnessFilter)}><option value="all">전체 상태</option><option value="fresh">{DATA_FRESHNESS_LABELS.fresh}</option><option value="aging">{DATA_FRESHNESS_LABELS.aging}</option><option value="stale">{DATA_FRESHNESS_LABELS.stale}</option><option value="unknown">{DATA_FRESHNESS_LABELS.unknown}</option></select></label>
       <label className="picker-price-status-filter"><span>가격 상태</span><select aria-label="부품 가격 확인 상태" value={priceStatus} onChange={(event) => setPriceStatus(event.target.value as PickerPriceStatusFilter)}><option value="all">{PRICE_AVAILABILITY_LABELS.all}</option><option value="known">{PRICE_AVAILABILITY_LABELS.known}</option><option value="unknown">{PRICE_AVAILABILITY_LABELS.unknown}</option></select></label>
       {(category === "gpu" || category === "case" || category === "psu") && <label className="picker-physical-evidence-filter"><span>물리 근거</span><select aria-label="후보 물리 근거" value={physicalEvidenceFilter} disabled={candidateMode === "all"} onChange={(event) => setPhysicalEvidenceFilter(event.target.value as PickerPhysicalEvidenceFilter)}><option value="all">전체 물리 근거</option><option value="verified">물리 근거 확인됨</option><option value="review">물리 근거 확인 필요</option></select></label>}
       <p className="picker-mode-note"><FiInfo /><span>{candidateModeHelp}</span>{candidateRiskSummary && <span className="picker-risk-summary">{candidateRiskSummary}</span>}{candidateRiskFilterSummary && <span className="picker-risk-filter-summary">{candidateRiskFilterSummary}</span>}{candidatePerformanceSummary && <span className="picker-performance-summary">{candidatePerformanceSummary}</span>}{candidateTrustSummary && <span className="picker-trust-summary">{candidateTrustSummary}</span>}{candidatePriceSummary && <span className="picker-price-summary">{candidatePriceSummary}</span>}{candidateFreshnessSummary && <span className="picker-freshness-summary">{candidateFreshnessSummary}</span>}{benchmarkCoverageSummary && <span className="picker-benchmark-summary">{benchmarkCoverageSummary}</span>}{candidateBudgetSummary && <span className="picker-budget-summary">{candidateBudgetSummary}</span>}{specFilterSummary && <span className="picker-spec-summary">{specFilterSummary}</span>}</p>
+      {candidateMode !== "all" && recommendationTrustCounts && <PickerRecommendationTrustOverview counts={recommendationTrustCounts} displayedCount={total} />}
+      <PickerIncompleteDataNotice category={category} count={candidateMode === "safe" ? incompleteExcludedCount : 0} fields={incompleteMissingFields} />
       {candidatePhysicalEvidenceSummary && <p className="picker-physical-evidence-summary">{candidatePhysicalEvidenceSummary}</p>}
       {specFilterDiagnosticSummary && <p className="picker-spec-diagnostic-summary">{specFilterDiagnosticSummary}</p>}
-      {loading ? <div className="picker-state"><FiLoader className="spin" /><span>{candidateLoadingMessage}</span></div> : error ? <PickerFetchErrorNotice subject={`${CATEGORY_LABELS[category]} ${candidateMode === "all" ? "" : `${candidateModeLabel} `}목록`} message={error} onRetry={() => setRetryNonce((current) => current + 1)} retrying={loading} /> : items.length === 0 ? <div className="picker-state"><FiSearch /><span>{candidateEmptyMessage}</span></div> : <div className="picker-list">{items.map((part) => { const alreadySelected = selected.some((selection) => selection.partId === part.id); const candidateTotalPrice = part.recommendedQuantity !== undefined && isKnownPrice(part.priceWon) ? part.priceWon * part.recommendedQuantity : part.priceWon; const expanded = expandedPickerId === part.id; const compared = comparePickerIds.includes(part.id); const physicalReview = part.physicalEvidence?.status === "review"; const sourceUrl = safeExternalUrl(part.danawaUrl); return <article className={expanded ? "picker-item-card expanded" : "picker-item-card"} key={part.id}><button className={alreadySelected ? "picker-item already" : "picker-item"} type="button" onClick={() => onSelect(part)}><span className="picker-item-icon"><PartVisual part={part} /></span><span className="picker-item-main"><strong>{part.name}</strong><small>{part.recommendedQuantity !== undefined ? `추천 킷 ${part.recommendedQuantity}개 · ` : ""}{partSummary(part)}</small>{candidateMode !== "all" && part.similarityScore !== undefined && part.similarityLabel && <small className="picker-similarity">{part.similarityLabel} {part.similarityScore}점 · {part.performanceSummary ?? "비교 근거 확인"}</small>}{candidateMode !== "all" && part.valueScore !== undefined && part.valueLabel && <small className="picker-value">{part.valueLabel} {valueScoreText(part.valueScore)} · 가격 대비 유사도</small>}{candidateMode !== "all" && part.recommendationTrust && <small className={`picker-trust ${part.recommendationTrust.level}`}>추천 근거 {pickerRecommendationTrustText(part.recommendationTrust)} · {pickerRecommendationTrustDetail(part.recommendationTrust)}</small>}{candidateMode !== "all" && part.physicalEvidence && part.physicalEvidence.status !== "not_applicable" && <small className={`picker-physical-evidence-line ${part.physicalEvidence.status}`}>{pickerPhysicalEvidenceText(part.physicalEvidence)}</small>}{(part.candidateRisk === "review" || part.candidateRisk === "unsafe") && part.candidateReasons && part.candidateReasons.length > 0 && <small className="picker-review-reasons">{part.candidateRisk === "unsafe" ? "차단 있음: " : "확인 필요: "}{part.candidateReasons.slice(0, 2).join(" · ")}</small>}<span className="data-badges">{part.decision && <em className={`decision-badge ${part.decision.status}`}>{part.decision.label}</em>}{pickerFreshnessFor(part) && <em className={`freshness-badge ${pickerFreshnessFor(part)}`}>{pickerFreshnessLabelFor(part)}</em>}<em className={`price-status-badge ${pickerPriceStatusFor(part)}`}>{pickerPriceStatusLabelFor(part)}</em><em className={`quality-badge ${part.dataQuality}`}>{part.dataQuality === "live" ? "다나와 최신" : part.dataQuality === "incomplete" ? "일부 스펙 부족" : "프로젝트 데이터"}</em>{candidateMode !== "all" && part.candidateRisk === "safe" && <em className={physicalReview ? "compatibility-badge review" : "compatibility-badge"}>{physicalReview ? "호환 확인 · 물리 확인 필요" : "호환 확인"}</em>}{(candidateMode === "no_blocker" || candidateMode === "precision") && part.candidateRisk === "review" && <em className="compatibility-badge review">차단 없음 · 확인 필요</em>}{candidateMode === "precision" && part.candidateRisk === "unsafe" && <em className="compatibility-badge unsafe">차단 있음</em>}{part.listingType && part.listingType !== "retail" && <em className="listing-badge">{LISTING_TYPE_LABELS[part.listingType]}</em>}{part.missingFields.length > 0 && <em className="missing-badge">누락 {part.missingFields.length}</em>}</span></span><span className="picker-item-side"><strong>{formatWon(candidateTotalPrice)}</strong>{part.recommendedQuantity !== undefined && <small>1킷 {formatWon(part.priceWon)}</small>}{alreadySelected ? <span><FiCheck /> 선택됨</span> : <span>선택 <FiExternalLink /></span>}</span></button><div className="picker-item-actions"><PartWatchButton part={part} onWatch={onWatchPart} />{sourceUrl && <a className="picker-source-link" href={sourceUrl} target="_blank" rel="noreferrer" aria-label={`${part.name} 다나와 원문 보기`}>다나와 원문 <FiExternalLink /></a>}<button className={compared ? "text-button picker-compare-toggle selected" : "text-button picker-compare-toggle"} type="button" aria-pressed={compared} onClick={() => togglePickerCompare(part)}>{compared ? "비교 중" : "비교"}</button><button className="text-button picker-item-detail-toggle" type="button" aria-expanded={expanded} onClick={() => setExpandedPickerId(expanded ? null : part.id)}>{expanded ? "상세·근거 닫기" : "상세·근거"} <FiChevronDown /></button></div>{expanded && <PickerPartDetail part={part} PartEvidence={PartEvidence} similarityEvidenceText={similarityEvidenceText} />}</article>; })}</div>}
-      {comparePickerParts.length >= 2 && <PickerComparison parts={comparePickerParts} category={category} affectedPartIds={affectedPartIds} onSelect={onSelect} onPreview={onPreview} onCompareScenarios={onCompareScenarios} onCopy={() => void copyPickerComparison()} onDownload={downloadPickerComparison} onJsonDownload={downloadPickerComparisonJson} onShare={(candidates, context) => onShareComparison(candidates, { category: context?.category ?? CATEGORY_LABELS[category] })} onRevoke={onRevokeComparison} partSummary={partSummary} formatWon={formatWon} similarityEvidenceText={similarityEvidenceText} />}
+      {loading ? <div className="picker-state"><FiLoader className="spin" /><span>{candidateLoadingMessage}</span></div> : error ? <PickerFetchErrorNotice subject={`${CATEGORY_LABELS[category]} ${candidateMode === "all" ? "" : `${candidateModeLabel} `}목록`} message={error} onRetry={() => setRetryNonce((current) => current + 1)} retrying={loading} /> : items.length === 0 ? <PickerEmptyState message={candidateEmptyMessage} canRelaxFilters={hasNarrowCandidateFilter} canShowReviewCandidates={canOfferReviewCandidatesInEmpty} reviewCandidateCount={riskCounts?.review ?? 0} onRelaxFilters={clearCandidateFilters} onShowReviewCandidates={() => { setCandidateMode("no_blocker"); setPresetMessage("안전 후보와 함께 차단 오류 없는 확인 필요 후보를 표시합니다. 후보별 확인 사유를 구매 전에 검토하세요."); }} /> : <div className="picker-list">{items.map((part) => { const alreadySelected = selected.some((selection) => selection.partId === part.id); const candidateTotalPrice = part.recommendedQuantity !== undefined && isKnownPrice(part.priceWon) ? part.priceWon * part.recommendedQuantity : part.priceWon; const expanded = expandedPickerId === part.id; const compared = comparePickerIds.includes(part.id); const physicalReview = part.physicalEvidence?.status === "review"; const sourceUrl = safeExternalUrl(part.danawaUrl); return <article className={expanded ? "picker-item-card expanded" : "picker-item-card"} key={part.id}><button className={alreadySelected ? "picker-item already" : "picker-item"} type="button" onClick={() => onSelect(part)}><span className="picker-item-icon"><PartVisual part={part} /></span><span className="picker-item-main"><strong>{part.name}</strong><small>{part.recommendedQuantity !== undefined ? `추천 킷 ${part.recommendedQuantity}개 · ` : ""}{partSummary(part)}</small>{candidateMode !== "all" && part.similarityScore !== undefined && part.similarityLabel && <small className="picker-similarity">{part.similarityLabel} {part.similarityScore}점 · {part.performanceSummary ?? "비교 근거 확인"}</small>}{candidateMode !== "all" && part.valueScore !== undefined && part.valueLabel && <small className="picker-value">{part.valueLabel} {valueScoreText(part.valueScore)} · 가격 대비 유사도</small>}{candidateMode !== "all" && part.recommendationTrust && <small className={`picker-trust ${part.recommendationTrust.level}`}>추천 근거 {pickerRecommendationTrustText(part.recommendationTrust)} · {pickerRecommendationTrustDetail(part.recommendationTrust)}</small>}{candidateMode !== "all" && part.physicalEvidence && part.physicalEvidence.status !== "not_applicable" && <small className={`picker-physical-evidence-line ${part.physicalEvidence.status}`}>{pickerPhysicalEvidenceText(part.physicalEvidence)}</small>}{(part.candidateRisk === "review" || part.candidateRisk === "unsafe") && part.candidateReasons && part.candidateReasons.length > 0 && <small className="picker-review-reasons">{part.candidateRisk === "unsafe" ? "차단 있음: " : "확인 필요: "}{part.candidateReasons.slice(0, 2).join(" · ")}</small>}<span className="data-badges">{part.decision && <em className={`decision-badge ${part.decision.status}`}>{part.decision.label}</em>}{pickerFreshnessFor(part) && <em className={`freshness-badge ${pickerFreshnessFor(part)}`}>{pickerFreshnessLabelFor(part)}</em>}<em className={`price-status-badge ${pickerPriceStatusFor(part)}`} title={catalogPriceEvidenceDescriptionFor(part)}>{pickerPriceStatusLabelFor(part)}</em><em className={`quality-badge ${part.dataQuality}`}>{DATA_QUALITY_LABELS[part.dataQuality]}</em>{candidateMode !== "all" && part.candidateRisk === "safe" && <em className={physicalReview ? "compatibility-badge review" : "compatibility-badge"}>{physicalReview ? "호환 확인 · 물리 확인 필요" : "호환 확인"}</em>}{(candidateMode === "no_blocker" || candidateMode === "precision") && part.candidateRisk === "review" && <em className="compatibility-badge review">차단 없음 · 확인 필요</em>}{candidateMode === "precision" && part.candidateRisk === "unsafe" && <em className="compatibility-badge unsafe">차단 있음</em>}{part.listingType && part.listingType !== "retail" && <em className="listing-badge">{LISTING_TYPE_LABELS[part.listingType]}</em>}{part.missingFields.length > 0 && <em className="missing-badge">누락 {part.missingFields.length}</em>}</span></span><span className="picker-item-side"><strong>{formatWon(candidateTotalPrice)}</strong>{part.recommendedQuantity !== undefined && <small>1킷 {formatWon(part.priceWon)}</small>}{alreadySelected ? <span><FiCheck /> 선택됨</span> : <span>선택 <FiExternalLink /></span>}</span></button><div className="picker-item-actions"><PartWatchButton part={part} onWatch={onWatchPart} />{sourceUrl && <a className="picker-source-link" href={sourceUrl} target="_blank" rel="noreferrer" aria-label={`${part.name} 다나와 원문 보기`}>다나와 원문 <FiExternalLink /></a>}<button className={compared ? "text-button picker-compare-toggle selected" : "text-button picker-compare-toggle"} type="button" aria-pressed={compared} onClick={() => togglePickerCompare(part)}>{compared ? "비교 중" : "비교"}</button><button className="text-button picker-item-detail-toggle" type="button" aria-expanded={expanded} onClick={() => setExpandedPickerId(expanded ? null : part.id)}>{expanded ? "상세·근거 닫기" : "상세·근거"} <FiChevronDown /></button></div>{expanded && <PickerPartDetail part={part} PartEvidence={PartEvidence} similarityEvidenceText={similarityEvidenceText} />}</article>; })}</div>}
+      {showCachedFallback && <PickerCachedCatalogNotice visibleCount={visibleItems.length} total={visibleTotal} latestUpdatedAt={cachedLatestUpdatedAt} cachedAt={cachedSnapshot.cachedAt} />}
+      {showCachedFallback && <PickerCachedCatalogList items={visibleItems} selected={selected} expandedPickerId={expandedPickerId} comparePickerIds={comparePickerIds} onSelect={onSelect} onToggleCompare={togglePickerCompare} onToggleExpanded={(partId) => setExpandedPickerId(expandedPickerId === partId ? null : partId)} partSummary={partSummary} formatWon={formatWon} PartVisual={PartVisual} PartEvidence={PartEvidence} />}
+      {comparePickerParts.length >= 2 && <PickerComparison parts={comparePickerParts} currentSelections={currentSelections} category={category} affectedPartIds={affectedPartIds} onSelect={onSelect} onPreview={onPreview} onCompareScenarios={onCompareScenarios} onCopy={() => void copyPickerComparison()} onDownload={downloadPickerComparison} onJsonDownload={downloadPickerComparisonJson} onShare={(candidates, context) => onShareComparison(candidates, { ...(context?.name ? { name: context.name } : {}), category: context?.category ?? CATEGORY_LABELS[category], ...(context?.currentPartName ? { currentPartName: context.currentPartName, ...(context?.currentPartSummary ? { currentPartSummary: context.currentPartSummary } : {}), ...(context?.currentPartPrice ? { currentPartPrice: context.currentPartPrice } : {}) } : {}) })} onRevoke={onRevokeComparison} partSummary={partSummary} formatWon={formatWon} similarityEvidenceText={similarityEvidenceText} />}
       {items.length < total && <button className="button button-light full-width picker-more" type="button" onClick={() => void loadMore()} disabled={loadingMore}>{loadingMore ? <><FiLoader className="spin" /> 추가 부품 불러오는 중...</> : <>더 많은 부품 불러오기 ({items.length.toLocaleString("ko-KR")} / {total.toLocaleString("ko-KR")})</>}</button>}{loadMoreError && <div className="catalog-more-error"><span>{loadMoreError}</span><button className="text-button" type="button" onClick={() => void loadMore()}>다시 불러오기</button></div>}
       <div className="modal-footer"><span><FiDatabase /> {candidateMode === "all" ? "표시 항목 " : `${candidateModeLabel} `}{items.length.toLocaleString("ko-KR")} / {total.toLocaleString("ko-KR")}개</span><button className="button button-light" type="button" onClick={onClose}>닫기</button></div>
     </section>

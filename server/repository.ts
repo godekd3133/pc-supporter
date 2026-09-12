@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { createHash, randomUUID } from "node:crypto";
 import { Pool, type PoolClient } from "pg";
-import type { BenchmarkOverride, Part, PartCategory, PersistenceDiagnostics } from "../shared/types";
+import type { BenchmarkOverride, Part, PartCategory, PersistenceDiagnostics, SavedBuildPurchasePriceHistory, SavedBuildPurchasePriceHistorySnapshot, SavedBuildPurchaseProgress } from "../shared/types";
 import { appendSavedBuildCheckHistory, savedBuildCheckHistoryFromUnknown, savedBuildCheckSnapshotFromUnknown, SAVED_BUILD_CHECK_HISTORY_LIMIT } from "../shared/saved-build-check";
 import type { SavedBuildCheckSnapshot } from "../shared/types";
 import { savedBuildMonitorSubscriptionFromUnknown } from "../shared/saved-build-monitor-subscription";
@@ -11,11 +11,15 @@ import type { SavedBuildVersionBackupDetail, SavedBuildVersionBackupSummary, Sav
 import type { SavedBuildRecord } from "./build-share";
 import type { AssemblyVerificationSavedSnapshot } from "../shared/assembly-verification";
 import { savedAlternativeComparisonFromUnknown, type SavedAlternativeComparisonRecord } from "./comparison-share";
+import { savedBuildVersionComparisonFromUnknown, type SavedBuildVersionComparisonShareRecord } from "../shared/saved-build-version-share";
 import { savedBudgetLadderFromUnknown } from "./budget-ladder-share";
 import type { SavedBudgetLadderRecord } from "../shared/budget-ladder-share";
 import { savedCatalogWatchlistFromUnknown, savedWatchlistAlertPreferencesFromUnknown, type SavedWatchlistAlertPreferences } from "./watchlist-store";
 import type { SavedCatalogWatchlistRecord } from "./watchlist-share";
+import { savedBuildPurchaseProgressFromUnknown, savedBuildPurchaseProgressHistoryTargetFor, savedBuildPurchaseProgressRevisionMatchesFor, savedBuildPurchaseProgressWithNextRevisionFor } from "./purchase-progress";
+import { savedBuildPurchasePriceHistoryFromUnknown, savedBuildPurchasePriceHistoryHistoryTargetFor, savedBuildPurchasePriceHistoryRevisionMatchesFor, savedBuildPurchasePriceHistoryWithNextRevisionFor } from "./purchase-price-history";
 import { savedWatchlistAlertStateFromUnknown, upsertSavedWatchlistAlertStates } from "./watchlist-alert-state";
+import { savedBuildDecisionNoteFromUnknown, savedBuildMetadataHistoryEntryFor, savedBuildMetadataHistoryFromUnknown, savedBuildMetadataHistoryWithNextEntryFor } from "../shared/saved-build-decision-note";
 import type { SavedWatchlistAlertState } from "./watchlist-alert-state";
 import {
   BUILDS_PATH,
@@ -25,6 +29,7 @@ import {
   BENCHMARK_OVERRIDES_PATH,
   CATALOG_PATH,
   COMPARISONS_PATH,
+  VERSION_COMPARISONS_PATH,
   BUDGET_LADDERS_PATH,
   WATCHLIST_ALERT_STATES_PATH,
   WATCHLISTS_PATH,
@@ -66,7 +71,11 @@ CREATE TABLE IF NOT EXISTS saved_builds (
   derived_from_build_id TEXT,
   check_snapshot JSONB,
   check_history JSONB,
-  monitor_state JSONB
+  monitor_state JSONB,
+  purchase_progress JSONB,
+  purchase_price_history JSONB,
+  decision_note TEXT,
+  metadata_history JSONB
 );
 CREATE INDEX IF NOT EXISTS saved_builds_updated_idx ON saved_builds(updated_at DESC);
 ALTER TABLE saved_builds ADD COLUMN IF NOT EXISTS recommendation_preferences JSONB;
@@ -78,6 +87,10 @@ ALTER TABLE saved_builds ADD COLUMN IF NOT EXISTS derived_from_build_id TEXT;
 ALTER TABLE saved_builds ADD COLUMN IF NOT EXISTS check_snapshot JSONB;
 ALTER TABLE saved_builds ADD COLUMN IF NOT EXISTS check_history JSONB;
 ALTER TABLE saved_builds ADD COLUMN IF NOT EXISTS monitor_state JSONB;
+ALTER TABLE saved_builds ADD COLUMN IF NOT EXISTS purchase_progress JSONB;
+ALTER TABLE saved_builds ADD COLUMN IF NOT EXISTS purchase_price_history JSONB;
+ALTER TABLE saved_builds ADD COLUMN IF NOT EXISTS decision_note TEXT;
+ALTER TABLE saved_builds ADD COLUMN IF NOT EXISTS metadata_history JSONB;
 CREATE TABLE IF NOT EXISTS saved_build_version_backups (
   id TEXT PRIMARY KEY,
   created_at TIMESTAMPTZ NOT NULL,
@@ -107,6 +120,10 @@ CREATE TABLE IF NOT EXISTS saved_comparisons (
   name TEXT NOT NULL,
   category TEXT,
   current_part_name TEXT,
+  current_part_summary TEXT,
+  current_part_price TEXT,
+  catalog_snapshot_at TIMESTAMPTZ,
+  engine_version TEXT,
   candidates JSONB NOT NULL,
   created_at TIMESTAMPTZ NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL,
@@ -114,6 +131,22 @@ CREATE TABLE IF NOT EXISTS saved_comparisons (
   owner_token_hash TEXT
 );
 CREATE INDEX IF NOT EXISTS saved_comparisons_updated_idx ON saved_comparisons(updated_at DESC);
+ALTER TABLE saved_comparisons ADD COLUMN IF NOT EXISTS catalog_snapshot_at TIMESTAMPTZ;
+ALTER TABLE saved_comparisons ADD COLUMN IF NOT EXISTS engine_version TEXT;
+ALTER TABLE saved_comparisons ADD COLUMN IF NOT EXISTS current_part_summary TEXT;
+ALTER TABLE saved_comparisons ADD COLUMN IF NOT EXISTS current_part_price TEXT;
+CREATE TABLE IF NOT EXISTS saved_version_comparisons (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  payload JSONB NOT NULL,
+  source_before_build_id TEXT NOT NULL,
+  source_after_build_id TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL,
+  expires_at TIMESTAMPTZ,
+  owner_token_hash TEXT
+);
+CREATE INDEX IF NOT EXISTS saved_version_comparisons_updated_idx ON saved_version_comparisons(updated_at DESC);
 CREATE TABLE IF NOT EXISTS saved_budget_ladders (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -370,6 +403,10 @@ type SavedBuildDatabaseRow = {
   check_snapshot: SavedBuildRecord["checkSnapshot"] | null;
   check_history: SavedBuildRecord["checkHistory"] | null;
   monitor_state: SavedBuildMonitorSubscription | null;
+  purchase_progress: SavedBuildPurchaseProgress | null;
+  purchase_price_history: SavedBuildPurchasePriceHistory | null;
+  decision_note: string | null;
+  metadata_history: unknown | null;
 };
 
 type SavedBudgetLadderDatabaseRow = {
@@ -394,16 +431,24 @@ export function savedBuildRecordFromUnknown(value: unknown): SavedBuildRecord | 
   const ownerTokenHash = typeof candidate.ownerTokenHash === "string" && /^[0-9a-f]{64}$/.test(candidate.ownerTokenHash) ? candidate.ownerTokenHash : undefined;
   const explicitSnapshot = savedBuildCheckSnapshotFromUnknown(candidate.checkSnapshot);
   const parsedHistory = savedBuildCheckHistoryFromUnknown(candidate.checkHistory);
-  const checkHistory = explicitSnapshot && (parsedHistory.length === 0 || parsedHistory[parsedHistory.length - 1].checkedAt !== explicitSnapshot.checkedAt)
-    ? [...parsedHistory, explicitSnapshot].slice(-SAVED_BUILD_CHECK_HISTORY_LIMIT)
-    : parsedHistory;
+  if (candidate.checkHistory !== undefined && !parsedHistory) return undefined;
+  const normalizedHistory = parsedHistory ?? [];
+  const checkHistory = explicitSnapshot && (normalizedHistory.length === 0 || normalizedHistory[normalizedHistory.length - 1].checkedAt !== explicitSnapshot.checkedAt)
+    ? [...normalizedHistory, explicitSnapshot].slice(-SAVED_BUILD_CHECK_HISTORY_LIMIT)
+    : normalizedHistory;
   const checkSnapshot = explicitSnapshot ?? checkHistory[checkHistory.length - 1];
   const monitorState = savedBuildMonitorSubscriptionFromUnknown(candidate.monitorState);
+  const purchaseProgress = savedBuildPurchaseProgressFromUnknown(candidate.purchaseProgress);
+  const purchasePriceHistory = savedBuildPurchasePriceHistoryFromUnknown(candidate.purchasePriceHistory);
+  const decisionNote = savedBuildDecisionNoteFromUnknown(candidate.decisionNote);
+  const metadataHistory = savedBuildMetadataHistoryFromUnknown(candidate.metadataHistory);
+  if (candidate.metadataHistory !== undefined && !metadataHistory) return undefined;
+  const normalizedMetadataHistory = metadataHistory ?? [];
   const versionGroupId = typeof candidate.versionGroupId === "string" && candidate.versionGroupId.length > 0 && candidate.versionGroupId.length <= 120 ? candidate.versionGroupId : undefined;
   const versionNumber = Number.isInteger(candidate.versionNumber) && (candidate.versionNumber ?? 0) >= 1 && (candidate.versionNumber ?? 0) <= 1_000_000 ? candidate.versionNumber : undefined;
   const derivedFromBuildId = typeof candidate.derivedFromBuildId === "string" && candidate.derivedFromBuildId.length > 0 && candidate.derivedFromBuildId.length <= 120 ? candidate.derivedFromBuildId : undefined;
-  const { ownerTokenHash: _rawOwnerTokenHash, versionGroupId: _rawVersionGroupId, versionNumber: _rawVersionNumber, derivedFromBuildId: _rawDerivedFromBuildId, checkSnapshot: _rawCheckSnapshot, checkHistory: _rawCheckHistory, monitorState: _rawMonitorState, ...build } = candidate as SavedBuildRecord;
-  return { ...build, ...(ownerTokenHash ? { ownerTokenHash } : {}), ...(versionGroupId ? { versionGroupId } : {}), ...(versionNumber ? { versionNumber } : {}), ...(derivedFromBuildId ? { derivedFromBuildId } : {}), ...(checkSnapshot ? { checkSnapshot } : {}), ...(checkHistory.length > 0 ? { checkHistory } : {}), ...(monitorState ? { monitorState } : {}) };
+  const { ownerTokenHash: _rawOwnerTokenHash, versionGroupId: _rawVersionGroupId, versionNumber: _rawVersionNumber, derivedFromBuildId: _rawDerivedFromBuildId, checkSnapshot: _rawCheckSnapshot, checkHistory: _rawCheckHistory, monitorState: _rawMonitorState, purchaseProgress: _rawPurchaseProgress, purchasePriceHistory: _rawPurchasePriceHistory, decisionNote: _rawDecisionNote, metadataHistory: _rawMetadataHistory, ...build } = candidate as SavedBuildRecord;
+  return { ...build, ...(decisionNote ? { decisionNote } : {}), ...(normalizedMetadataHistory.length > 0 ? { metadataHistory: normalizedMetadataHistory } : {}), ...(ownerTokenHash ? { ownerTokenHash } : {}), ...(versionGroupId ? { versionGroupId } : {}), ...(versionNumber ? { versionNumber } : {}), ...(derivedFromBuildId ? { derivedFromBuildId } : {}), ...(checkSnapshot ? { checkSnapshot } : {}), ...(checkHistory.length > 0 ? { checkHistory } : {}), ...(monitorState ? { monitorState } : {}), ...(purchaseProgress ? { purchaseProgress } : {}), ...(purchasePriceHistory ? { purchasePriceHistory } : {}) };
 }
 
 function savedBuildRecordFromDatabaseRow(row: SavedBuildDatabaseRow) {
@@ -421,7 +466,11 @@ function savedBuildRecordFromDatabaseRow(row: SavedBuildDatabaseRow) {
     ...(row.derived_from_build_id ? { derivedFromBuildId: row.derived_from_build_id } : {}),
     ...(row.check_snapshot ? { checkSnapshot: row.check_snapshot } : {}),
     ...(row.check_history ? { checkHistory: row.check_history } : {}),
-    ...(row.monitor_state ? { monitorState: row.monitor_state } : {})
+    ...(row.monitor_state ? { monitorState: row.monitor_state } : {}),
+    ...(row.purchase_progress ? { purchaseProgress: row.purchase_progress } : {}),
+    ...(row.purchase_price_history ? { purchasePriceHistory: row.purchase_price_history } : {}),
+    ...(row.decision_note ? { decisionNote: row.decision_note } : {}),
+    ...(row.metadata_history ? { metadataHistory: row.metadata_history } : {})
   });
 }
 
@@ -429,7 +478,7 @@ export async function readSavedBuilds(): Promise<SavedBuildRecord[]> {
   if (await ensureDatabase()) {
     try {
       const result = await pool!.query<SavedBuildDatabaseRow>(
-        "SELECT id, name, selection, recommendation_preferences, created_at, updated_at, expires_at, owner_token_hash, version_group_id, version_number, derived_from_build_id, check_snapshot, check_history, monitor_state FROM saved_builds ORDER BY updated_at DESC"
+        "SELECT id, name, selection, recommendation_preferences, created_at, updated_at, expires_at, owner_token_hash, version_group_id, version_number, derived_from_build_id, check_snapshot, check_history, monitor_state, purchase_progress, purchase_price_history, decision_note, metadata_history FROM saved_builds ORDER BY updated_at DESC"
       );
       return result.rows.map(savedBuildRecordFromDatabaseRow).filter((value): value is SavedBuildRecord => value !== undefined);
     } catch (error) {
@@ -453,10 +502,11 @@ export async function writeSavedBuilds(builds: SavedBuildRecord[]) {
       }
       for (const build of builds) {
         await client.query(
-          `INSERT INTO saved_builds (id, name, selection, recommendation_preferences, created_at, updated_at, expires_at, owner_token_hash, version_group_id, version_number, derived_from_build_id, check_snapshot, check_history, monitor_state)
-           VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::timestamptz, $6::timestamptz, $7::timestamptz, $8, $9, $10, $11, $12::jsonb, $13::jsonb, $14::jsonb)
+          `INSERT INTO saved_builds (id, name, decision_note, selection, recommendation_preferences, created_at, updated_at, expires_at, owner_token_hash, version_group_id, version_number, derived_from_build_id, check_snapshot, check_history, monitor_state, purchase_progress, purchase_price_history, metadata_history)
+           VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::timestamptz, $7::timestamptz, $8::timestamptz, $9, $10, $11, $12, $13::jsonb, $14::jsonb, $15::jsonb, $16::jsonb, $17::jsonb, $18::jsonb)
            ON CONFLICT (id) DO UPDATE SET
              name = EXCLUDED.name,
+             decision_note = EXCLUDED.decision_note,
              selection = EXCLUDED.selection,
              recommendation_preferences = EXCLUDED.recommendation_preferences,
              updated_at = EXCLUDED.updated_at,
@@ -467,8 +517,11 @@ export async function writeSavedBuilds(builds: SavedBuildRecord[]) {
              derived_from_build_id = EXCLUDED.derived_from_build_id,
              check_snapshot = EXCLUDED.check_snapshot,
              check_history = EXCLUDED.check_history,
-             monitor_state = EXCLUDED.monitor_state`,
-          [build.id, build.name, JSON.stringify(build.selection), build.recommendationPreferences ? JSON.stringify(build.recommendationPreferences) : null, build.createdAt, build.updatedAt, build.expiresAt ?? null, build.ownerTokenHash ?? null, build.versionGroupId ?? null, build.versionNumber ?? null, build.derivedFromBuildId ?? null, build.checkSnapshot ? JSON.stringify(build.checkSnapshot) : null, build.checkHistory ? JSON.stringify(build.checkHistory) : null, build.monitorState ? JSON.stringify(build.monitorState) : null]
+             monitor_state = EXCLUDED.monitor_state,
+             purchase_progress = EXCLUDED.purchase_progress,
+             purchase_price_history = EXCLUDED.purchase_price_history,
+             metadata_history = EXCLUDED.metadata_history`,
+          [build.id, build.name, build.decisionNote ?? null, JSON.stringify(build.selection), build.recommendationPreferences ? JSON.stringify(build.recommendationPreferences) : null, build.createdAt, build.updatedAt, build.expiresAt ?? null, build.ownerTokenHash ?? null, build.versionGroupId ?? null, build.versionNumber ?? null, build.derivedFromBuildId ?? null, build.checkSnapshot ? JSON.stringify(build.checkSnapshot) : null, build.checkHistory ? JSON.stringify(build.checkHistory) : null, build.monitorState ? JSON.stringify(build.monitorState) : null, build.purchaseProgress ? JSON.stringify(build.purchaseProgress) : null, build.purchasePriceHistory ? JSON.stringify(build.purchasePriceHistory) : null, build.metadataHistory ? JSON.stringify(build.metadataHistory) : null]
         );
       }
       await client.query("COMMIT");
@@ -505,9 +558,9 @@ async function appendSavedBuildToDatabase(build: SavedBuildRecord, max: number) 
     const nextVersion = Number(result.rows[0]?.max_version ?? 0) + 1;
     const next = { ...build, versionGroupId, versionNumber: nextVersion } satisfies SavedBuildRecord;
     await client.query(
-      `INSERT INTO saved_builds (id, name, selection, recommendation_preferences, created_at, updated_at, expires_at, owner_token_hash, version_group_id, version_number, derived_from_build_id, check_snapshot, check_history, monitor_state)
-       VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::timestamptz, $6::timestamptz, $7::timestamptz, $8, $9, $10, $11, $12::jsonb, $13::jsonb, $14::jsonb)`,
-      [next.id, next.name, JSON.stringify(next.selection), next.recommendationPreferences ? JSON.stringify(next.recommendationPreferences) : null, next.createdAt, next.updatedAt, next.expiresAt ?? null, next.ownerTokenHash ?? null, next.versionGroupId, next.versionNumber, next.derivedFromBuildId ?? null, next.checkSnapshot ? JSON.stringify(next.checkSnapshot) : null, next.checkHistory ? JSON.stringify(next.checkHistory) : null, next.monitorState ? JSON.stringify(next.monitorState) : null]
+      `INSERT INTO saved_builds (id, name, decision_note, selection, recommendation_preferences, created_at, updated_at, expires_at, owner_token_hash, version_group_id, version_number, derived_from_build_id, check_snapshot, check_history, monitor_state, purchase_progress, purchase_price_history, metadata_history)
+       VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::timestamptz, $7::timestamptz, $8::timestamptz, $9, $10, $11, $12, $13::jsonb, $14::jsonb, $15::jsonb, $16::jsonb, $17::jsonb, $18::jsonb)`,
+      [next.id, next.name, next.decisionNote ?? null, JSON.stringify(next.selection), next.recommendationPreferences ? JSON.stringify(next.recommendationPreferences) : null, next.createdAt, next.updatedAt, next.expiresAt ?? null, next.ownerTokenHash ?? null, next.versionGroupId, next.versionNumber, next.derivedFromBuildId ?? null, next.checkSnapshot ? JSON.stringify(next.checkSnapshot) : null, next.checkHistory ? JSON.stringify(next.checkHistory) : null, next.monitorState ? JSON.stringify(next.monitorState) : null, next.purchaseProgress ? JSON.stringify(next.purchaseProgress) : null, next.purchasePriceHistory ? JSON.stringify(next.purchasePriceHistory) : null, next.metadataHistory ? JSON.stringify(next.metadataHistory) : null]
     );
     const boundedMax = Math.max(1, Math.floor(max));
     const stale = await client.query<{ id: string }>("SELECT id FROM saved_builds ORDER BY updated_at DESC, id DESC OFFSET $1", [boundedMax]);
@@ -540,6 +593,73 @@ export async function appendSavedBuild(build: SavedBuildRecord, max = 100) {
   }));
   if (!fileLease.acquired) throw new Error("다른 저장 요청이 버전 번호를 발급 중입니다. 잠시 후 다시 시도해 주세요.");
   return fileLease.value;
+}
+
+export type SavedBuildMetadataUpdateResult =
+  | { status: "updated"; build: SavedBuildRecord }
+  | { status: "not-found" };
+
+export async function updateSavedBuildMetadata(id: string, name: string, decisionNote?: string): Promise<SavedBuildMetadataUpdateResult> {
+  const updatedAt = new Date().toISOString();
+  if (await ensureDatabase()) {
+    const client = await pool!.connect();
+    try {
+      await client.query("BEGIN");
+      const currentResult = await client.query<{ name: string; decision_note: string | null; metadata_history: unknown }>(
+        "SELECT name, decision_note, metadata_history FROM saved_builds WHERE id = $1 FOR UPDATE",
+        [id]
+      );
+      const current = currentResult.rows[0];
+      if (!current) {
+        await client.query("COMMIT");
+        return { status: "not-found" };
+      }
+      const metadataHistory = savedBuildMetadataHistoryWithNextEntryFor(
+        savedBuildMetadataHistoryFromUnknown(current.metadata_history),
+        savedBuildMetadataHistoryEntryFor(
+          { name: current.name, ...(current.decision_note ? { decisionNote: current.decision_note } : {}) },
+          { name, ...(decisionNote ? { decisionNote } : {}) },
+          updatedAt
+        )
+      );
+      await client.query(
+        "UPDATE saved_builds SET name = $2, decision_note = $3, updated_at = $4::timestamptz, metadata_history = $5::jsonb WHERE id = $1",
+        [id, name, decisionNote ?? null, updatedAt, JSON.stringify(metadataHistory)]
+      );
+      await client.query("COMMIT");
+      const updated = (await readSavedBuilds()).find((build) => build.id === id);
+      return updated ? { status: "updated", build: updated } : { status: "not-found" };
+    } catch (error: unknown) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      databaseDisabled = true;
+      console.warn(`PostgreSQL saved build metadata update failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      client.release();
+    }
+  }
+  return withSerializedFileMutation(BUILDS_PATH, async () => {
+    const builds = await readSavedBuilds();
+    const current = builds.find((build) => build.id === id);
+    if (!current) return { status: "not-found" } as const;
+    const { decisionNote: _currentDecisionNote, ...withoutDecisionNote } = current;
+    const metadataHistory = savedBuildMetadataHistoryWithNextEntryFor(
+      current.metadataHistory,
+      savedBuildMetadataHistoryEntryFor(
+        current,
+        { name, ...(decisionNote ? { decisionNote } : {}) },
+        updatedAt
+      )
+    );
+    const next: SavedBuildRecord = {
+      ...withoutDecisionNote,
+      name,
+      updatedAt,
+      ...(decisionNote ? { decisionNote } : {}),
+      ...(metadataHistory.length > 0 ? { metadataHistory } : {})
+    };
+    await writeSavedBuilds(builds.map((build) => build.id === id ? next : build));
+    return { status: "updated", build: next } as const;
+  });
 }
 
 type SavedBuildVersionBackup = {
@@ -642,7 +762,7 @@ export async function readSavedBuildVersionBackupDetail(backupId: string): Promi
 
 async function readSavedBuildsWithDatabaseClient(client: PoolClient) {
   const result = await client.query<SavedBuildDatabaseRow>(
-    "SELECT id, name, selection, recommendation_preferences, created_at, updated_at, expires_at, owner_token_hash, version_group_id, version_number, derived_from_build_id, check_snapshot, check_history, monitor_state FROM saved_builds ORDER BY updated_at DESC"
+    "SELECT id, name, selection, recommendation_preferences, created_at, updated_at, expires_at, owner_token_hash, version_group_id, version_number, derived_from_build_id, check_snapshot, check_history, monitor_state, purchase_progress, purchase_price_history, decision_note, metadata_history FROM saved_builds ORDER BY updated_at DESC"
   );
   const builds = result.rows.map(savedBuildRecordFromDatabaseRow).filter((value): value is SavedBuildRecord => value !== undefined);
   if (builds.length !== result.rows.length) throw new Error("저장 견적 데이터 일부를 안전하게 해석할 수 없어 마이그레이션을 중단했습니다.");
@@ -803,6 +923,212 @@ export async function updateSavedBuildAssemblyVerification(id: string, verificat
     const next = { ...current, checkSnapshot: nextSnapshot, checkHistory };
     await writeSavedBuilds(builds.map((build) => build.id === id ? next : build));
     return next;
+  });
+}
+
+export type SavedBuildPurchaseProgressUpdateResult =
+  | { status: "updated"; build: SavedBuildRecord; purchaseProgress: SavedBuildPurchaseProgress }
+  | { status: "not-found" }
+  | { status: "conflict"; currentProgress?: SavedBuildPurchaseProgress };
+
+export type SavedBuildPurchaseProgressRestoreResult = SavedBuildPurchaseProgressUpdateResult
+  | { status: "history-unavailable"; currentProgress?: SavedBuildPurchaseProgress };
+
+export async function updateSavedBuildPurchaseProgress(id: string, purchaseProgress: SavedBuildPurchaseProgress, expectedRevision: number | null = null): Promise<SavedBuildPurchaseProgressUpdateResult> {
+  if (await ensureDatabase()) {
+    const client = await pool!.connect();
+    try {
+      await client.query("BEGIN");
+      const currentResult = await client.query<{ purchase_progress: unknown }>("SELECT purchase_progress FROM saved_builds WHERE id = $1 FOR UPDATE", [id]);
+      if (currentResult.rows.length === 0) {
+        await client.query("COMMIT");
+        return { status: "not-found" };
+      }
+      const currentProgress = savedBuildPurchaseProgressFromUnknown(currentResult.rows[0].purchase_progress);
+      if (!savedBuildPurchaseProgressRevisionMatchesFor(currentProgress, expectedRevision)) {
+        await client.query("COMMIT");
+        return { status: "conflict", ...(currentProgress ? { currentProgress } : {}) };
+      }
+      const nextPurchaseProgress = savedBuildPurchaseProgressWithNextRevisionFor(purchaseProgress, currentProgress);
+      await client.query("UPDATE saved_builds SET purchase_progress = $2::jsonb WHERE id = $1", [id, JSON.stringify(nextPurchaseProgress)]);
+      await client.query("COMMIT");
+      const updated = (await readSavedBuilds()).find((build) => build.id === id);
+      return updated ? { status: "updated", build: updated, purchaseProgress: nextPurchaseProgress } : { status: "not-found" };
+    } catch (error: unknown) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      databaseDisabled = true;
+      console.warn(`PostgreSQL purchase progress update failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      client.release();
+    }
+  }
+  return withSerializedFileMutation(BUILDS_PATH, async () => {
+    const builds = await readSavedBuilds();
+    const current = builds.find((build) => build.id === id);
+    if (!current) return { status: "not-found" } as const;
+    if (!savedBuildPurchaseProgressRevisionMatchesFor(current.purchaseProgress, expectedRevision)) {
+      return { status: "conflict", ...(current.purchaseProgress ? { currentProgress: current.purchaseProgress } : {}) } as const;
+    }
+    const nextPurchaseProgress = savedBuildPurchaseProgressWithNextRevisionFor(purchaseProgress, current.purchaseProgress);
+    const next = { ...current, purchaseProgress: nextPurchaseProgress };
+    await writeSavedBuilds(builds.map((build) => build.id === id ? next : build));
+    return { status: "updated", build: next, purchaseProgress: nextPurchaseProgress } as const;
+  });
+}
+
+export type SavedBuildPurchasePriceHistoryUpdateResult =
+  | { status: "updated"; build: SavedBuildRecord; purchasePriceHistory: SavedBuildPurchasePriceHistory }
+  | { status: "not-found" }
+  | { status: "conflict"; currentPriceHistory?: SavedBuildPurchasePriceHistory };
+
+export async function updateSavedBuildPurchasePriceHistory(id: string, purchasePriceHistory: SavedBuildPurchasePriceHistorySnapshot, expectedRevision: number | null = null): Promise<SavedBuildPurchasePriceHistoryUpdateResult> {
+  if (await ensureDatabase()) {
+    const client = await pool!.connect();
+    try {
+      await client.query("BEGIN");
+      const currentResult = await client.query<{ purchase_price_history: unknown }>("SELECT purchase_price_history FROM saved_builds WHERE id = $1 FOR UPDATE", [id]);
+      if (currentResult.rows.length === 0) {
+        await client.query("COMMIT");
+        return { status: "not-found" };
+      }
+      const currentPriceHistory = savedBuildPurchasePriceHistoryFromUnknown(currentResult.rows[0].purchase_price_history);
+      if (!savedBuildPurchasePriceHistoryRevisionMatchesFor(currentPriceHistory, expectedRevision)) {
+        await client.query("COMMIT");
+        return { status: "conflict", ...(currentPriceHistory ? { currentPriceHistory } : {}) };
+      }
+      const nextPriceHistory = savedBuildPurchasePriceHistoryWithNextRevisionFor(purchasePriceHistory, currentPriceHistory);
+      await client.query("UPDATE saved_builds SET purchase_price_history = $2::jsonb WHERE id = $1", [id, JSON.stringify(nextPriceHistory)]);
+      await client.query("COMMIT");
+      const updated = (await readSavedBuilds()).find((build) => build.id === id);
+      return updated ? { status: "updated", build: updated, purchasePriceHistory: nextPriceHistory } : { status: "not-found" };
+    } catch (error: unknown) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      databaseDisabled = true;
+      console.warn(`PostgreSQL purchase price history update failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      client.release();
+    }
+  }
+  return withSerializedFileMutation(BUILDS_PATH, async () => {
+    const builds = await readSavedBuilds();
+    const current = builds.find((build) => build.id === id);
+    if (!current) return { status: "not-found" } as const;
+    if (!savedBuildPurchasePriceHistoryRevisionMatchesFor(current.purchasePriceHistory, expectedRevision)) {
+      return { status: "conflict", ...(current.purchasePriceHistory ? { currentPriceHistory: current.purchasePriceHistory } : {}) } as const;
+    }
+    const nextPriceHistory = savedBuildPurchasePriceHistoryWithNextRevisionFor(purchasePriceHistory, current.purchasePriceHistory);
+    const next = { ...current, purchasePriceHistory: nextPriceHistory };
+    await writeJson(BUILDS_PATH, builds.map((build) => build.id === id ? next : build));
+    return { status: "updated", build: next, purchasePriceHistory: nextPriceHistory } as const;
+  });
+}
+
+export type SavedBuildPurchasePriceHistoryRestoreResult = SavedBuildPurchasePriceHistoryUpdateResult
+  | { status: "history-unavailable"; currentPriceHistory?: SavedBuildPurchasePriceHistory };
+
+export async function restoreSavedBuildPurchasePriceHistory(id: string, targetRevision: number, expectedRevision: number | null = null, expectedFingerprint?: string, expectedRowKeys: string[] = []): Promise<SavedBuildPurchasePriceHistoryRestoreResult> {
+  if (await ensureDatabase()) {
+    const client = await pool!.connect();
+    try {
+      await client.query("BEGIN");
+      const currentResult = await client.query<{ purchase_price_history: unknown }>("SELECT purchase_price_history FROM saved_builds WHERE id = $1 FOR UPDATE", [id]);
+      if (currentResult.rows.length === 0) {
+        await client.query("COMMIT");
+        return { status: "not-found" };
+      }
+      const currentPriceHistory = savedBuildPurchasePriceHistoryFromUnknown(currentResult.rows[0].purchase_price_history);
+      if (!savedBuildPurchasePriceHistoryRevisionMatchesFor(currentPriceHistory, expectedRevision)) {
+        await client.query("COMMIT");
+        return { status: "conflict", ...(currentPriceHistory ? { currentPriceHistory } : {}) };
+      }
+      const target = savedBuildPurchasePriceHistoryHistoryTargetFor(currentPriceHistory, targetRevision);
+      const rowKeysMatch = expectedRowKeys.length === 0 || (target ? target.rowKeys.length === expectedRowKeys.length && target.rowKeys.every((key) => expectedRowKeys.includes(key)) : false);
+      if (!target || (expectedFingerprint && target.inputFingerprint !== expectedFingerprint) || !rowKeysMatch) {
+        await client.query("COMMIT");
+        return { status: "history-unavailable", ...(currentPriceHistory ? { currentPriceHistory } : {}) };
+      }
+      const nextPriceHistory = savedBuildPurchasePriceHistoryWithNextRevisionFor(target, currentPriceHistory);
+      await client.query("UPDATE saved_builds SET purchase_price_history = $2::jsonb WHERE id = $1", [id, JSON.stringify(nextPriceHistory)]);
+      await client.query("COMMIT");
+      const updated = (await readSavedBuilds()).find((build) => build.id === id);
+      return updated ? { status: "updated", build: updated, purchasePriceHistory: nextPriceHistory } : { status: "not-found" };
+    } catch (error: unknown) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      databaseDisabled = true;
+      console.warn(`PostgreSQL purchase price history restore failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      client.release();
+    }
+  }
+  return withSerializedFileMutation(BUILDS_PATH, async () => {
+    const builds = await readSavedBuilds();
+    const current = builds.find((build) => build.id === id);
+    if (!current) return { status: "not-found" } as const;
+    if (!savedBuildPurchasePriceHistoryRevisionMatchesFor(current.purchasePriceHistory, expectedRevision)) {
+      return { status: "conflict", ...(current.purchasePriceHistory ? { currentPriceHistory: current.purchasePriceHistory } : {}) } as const;
+    }
+    const target = savedBuildPurchasePriceHistoryHistoryTargetFor(current.purchasePriceHistory, targetRevision);
+    const rowKeysMatch = expectedRowKeys.length === 0 || (target ? target.rowKeys.length === expectedRowKeys.length && target.rowKeys.every((key) => expectedRowKeys.includes(key)) : false);
+    if (!target || (expectedFingerprint && target.inputFingerprint !== expectedFingerprint) || !rowKeysMatch) {
+      return { status: "history-unavailable", ...(current.purchasePriceHistory ? { currentPriceHistory: current.purchasePriceHistory } : {}) } as const;
+    }
+    const nextPriceHistory = savedBuildPurchasePriceHistoryWithNextRevisionFor(target, current.purchasePriceHistory);
+    const next = { ...current, purchasePriceHistory: nextPriceHistory };
+    await writeJson(BUILDS_PATH, builds.map((build) => build.id === id ? next : build));
+    return { status: "updated", build: next, purchasePriceHistory: nextPriceHistory } as const;
+  });
+}
+
+export async function restoreSavedBuildPurchaseProgress(id: string, targetRevision: number, expectedRevision: number | null = null, expectedFingerprint?: string, expectedRowKeys: string[] = []): Promise<SavedBuildPurchaseProgressRestoreResult> {
+  if (await ensureDatabase()) {
+    const client = await pool!.connect();
+    try {
+      await client.query("BEGIN");
+      const currentResult = await client.query<{ purchase_progress: unknown }>("SELECT purchase_progress FROM saved_builds WHERE id = $1 FOR UPDATE", [id]);
+      if (currentResult.rows.length === 0) {
+        await client.query("COMMIT");
+        return { status: "not-found" };
+      }
+      const currentProgress = savedBuildPurchaseProgressFromUnknown(currentResult.rows[0].purchase_progress);
+      if (!savedBuildPurchaseProgressRevisionMatchesFor(currentProgress, expectedRevision)) {
+        await client.query("COMMIT");
+        return { status: "conflict", ...(currentProgress ? { currentProgress } : {}) };
+      }
+      const target = savedBuildPurchaseProgressHistoryTargetFor(currentProgress, targetRevision);
+      const rowKeysMatch = expectedRowKeys.length === 0 || (target ? target.rowKeys.length === expectedRowKeys.length && target.rowKeys.every((key) => expectedRowKeys.includes(key)) : false);
+      if (!target || (expectedFingerprint && target.inputFingerprint !== expectedFingerprint) || !rowKeysMatch) {
+        await client.query("COMMIT");
+        return { status: "history-unavailable", ...(currentProgress ? { currentProgress } : {}) };
+      }
+      const nextPurchaseProgress = savedBuildPurchaseProgressWithNextRevisionFor(target, currentProgress);
+      await client.query("UPDATE saved_builds SET purchase_progress = $2::jsonb WHERE id = $1", [id, JSON.stringify(nextPurchaseProgress)]);
+      await client.query("COMMIT");
+      const updated = (await readSavedBuilds()).find((build) => build.id === id);
+      return updated ? { status: "updated", build: updated, purchaseProgress: nextPurchaseProgress } : { status: "not-found" };
+    } catch (error: unknown) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      databaseDisabled = true;
+      console.warn(`PostgreSQL purchase progress restore failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      client.release();
+    }
+  }
+  return withSerializedFileMutation(BUILDS_PATH, async () => {
+    const builds = await readSavedBuilds();
+    const current = builds.find((build) => build.id === id);
+    if (!current) return { status: "not-found" } as const;
+    if (!savedBuildPurchaseProgressRevisionMatchesFor(current.purchaseProgress, expectedRevision)) {
+      return { status: "conflict", ...(current.purchaseProgress ? { currentProgress: current.purchaseProgress } : {}) } as const;
+    }
+    const target = savedBuildPurchaseProgressHistoryTargetFor(current.purchaseProgress, targetRevision);
+    const rowKeysMatch = expectedRowKeys.length === 0 || (target ? target.rowKeys.length === expectedRowKeys.length && target.rowKeys.every((key) => expectedRowKeys.includes(key)) : false);
+    if (!target || (expectedFingerprint && target.inputFingerprint !== expectedFingerprint) || !rowKeysMatch) {
+      return { status: "history-unavailable", ...(current.purchaseProgress ? { currentProgress: current.purchaseProgress } : {}) } as const;
+    }
+    const nextPurchaseProgress = savedBuildPurchaseProgressWithNextRevisionFor(target, current.purchaseProgress);
+    const next = { ...current, purchaseProgress: nextPurchaseProgress };
+    await writeSavedBuilds(builds.map((build) => build.id === id ? next : build));
+    return { status: "updated", build: next, purchaseProgress: nextPurchaseProgress } as const;
   });
 }
 
@@ -971,20 +1297,10 @@ export async function deleteSavedWatchlist(id: string) {
 export async function readSavedComparisons(): Promise<SavedAlternativeComparisonRecord[]> {
   if (await ensureDatabase()) {
     try {
-      const result = await pool!.query<{ id: string; name: string; category: string | null; current_part_name: string | null; candidates: SavedAlternativeComparisonRecord["candidates"]; created_at: Date; updated_at: Date; expires_at: Date | null; owner_token_hash: string | null }>(
-        "SELECT id, name, category, current_part_name, candidates, created_at, updated_at, expires_at, owner_token_hash FROM saved_comparisons ORDER BY updated_at DESC"
+      const result = await pool!.query<SavedAlternativeComparisonDatabaseRow>(
+        "SELECT id, name, category, current_part_name, current_part_summary, current_part_price, catalog_snapshot_at, engine_version, candidates, created_at, updated_at, expires_at, owner_token_hash FROM saved_comparisons ORDER BY updated_at DESC"
       );
-      return result.rows.map((row) => ({
-        id: row.id,
-        name: row.name,
-        ...(row.category ? { category: row.category } : {}),
-        ...(row.current_part_name ? { currentPartName: row.current_part_name } : {}),
-        candidates: row.candidates,
-        createdAt: new Date(row.created_at).toISOString(),
-        updatedAt: new Date(row.updated_at).toISOString(),
-        ...(row.expires_at ? { expiresAt: new Date(row.expires_at).toISOString() } : {}),
-        ...(row.owner_token_hash ? { ownerTokenHash: row.owner_token_hash } : {})
-      }));
+      return result.rows.map(savedAlternativeComparisonFromDatabaseRow);
     } catch (error) {
       databaseDisabled = true;
       console.warn(`PostgreSQL comparison read failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
@@ -992,6 +1308,40 @@ export async function readSavedComparisons(): Promise<SavedAlternativeComparison
   }
   const raw = await readJson<unknown[]>(COMPARISONS_PATH, []);
   return raw.map(savedAlternativeComparisonFromUnknown).filter((value): value is SavedAlternativeComparisonRecord => value !== undefined);
+}
+
+type SavedAlternativeComparisonDatabaseRow = {
+  id: string;
+  name: string;
+  category: string | null;
+  current_part_name: string | null;
+  current_part_summary: string | null;
+  current_part_price: string | null;
+  catalog_snapshot_at: Date | null;
+  engine_version: string | null;
+  candidates: SavedAlternativeComparisonRecord["candidates"];
+  created_at: Date;
+  updated_at: Date;
+  expires_at: Date | null;
+  owner_token_hash: string | null;
+};
+
+export function savedAlternativeComparisonFromDatabaseRow(row: SavedAlternativeComparisonDatabaseRow): SavedAlternativeComparisonRecord {
+  return {
+    id: row.id,
+    name: row.name,
+    ...(row.category ? { category: row.category } : {}),
+    ...(row.current_part_name ? { currentPartName: row.current_part_name } : {}),
+    ...(row.current_part_summary ? { currentPartSummary: row.current_part_summary } : {}),
+    ...(row.current_part_price ? { currentPartPrice: row.current_part_price } : {}),
+    ...(row.catalog_snapshot_at ? { catalogSnapshotAt: new Date(row.catalog_snapshot_at).toISOString() } : {}),
+    ...(row.engine_version ? { engineVersion: row.engine_version } : {}),
+    candidates: row.candidates,
+    createdAt: new Date(row.created_at).toISOString(),
+    updatedAt: new Date(row.updated_at).toISOString(),
+    ...(row.expires_at ? { expiresAt: new Date(row.expires_at).toISOString() } : {}),
+    ...(row.owner_token_hash ? { ownerTokenHash: row.owner_token_hash } : {})
+  };
 }
 
 export async function writeSavedComparisons(comparisons: SavedAlternativeComparisonRecord[]) {
@@ -1006,17 +1356,21 @@ export async function writeSavedComparisons(comparisons: SavedAlternativeCompari
       }
       for (const comparison of comparisons) {
         await client.query(
-          `INSERT INTO saved_comparisons (id, name, category, current_part_name, candidates, created_at, updated_at, expires_at, owner_token_hash)
-           VALUES ($1, $2, $3, $4, $5::jsonb, $6::timestamptz, $7::timestamptz, $8::timestamptz, $9)
+          `INSERT INTO saved_comparisons (id, name, category, current_part_name, current_part_summary, current_part_price, catalog_snapshot_at, engine_version, candidates, created_at, updated_at, expires_at, owner_token_hash)
+           VALUES ($1, $2, $3, $4, $5, $6, $7::timestamptz, $8, $9::jsonb, $10::timestamptz, $11::timestamptz, $12::timestamptz, $13)
            ON CONFLICT (id) DO UPDATE SET
              name = EXCLUDED.name,
              category = EXCLUDED.category,
              current_part_name = EXCLUDED.current_part_name,
+             current_part_summary = EXCLUDED.current_part_summary,
+             current_part_price = EXCLUDED.current_part_price,
+             catalog_snapshot_at = EXCLUDED.catalog_snapshot_at,
+             engine_version = EXCLUDED.engine_version,
              candidates = EXCLUDED.candidates,
              updated_at = EXCLUDED.updated_at,
              expires_at = EXCLUDED.expires_at,
              owner_token_hash = EXCLUDED.owner_token_hash`,
-          [comparison.id, comparison.name, comparison.category ?? null, comparison.currentPartName ?? null, JSON.stringify(comparison.candidates), comparison.createdAt, comparison.updatedAt, comparison.expiresAt ?? null, comparison.ownerTokenHash ?? null]
+          [comparison.id, comparison.name, comparison.category ?? null, comparison.currentPartName ?? null, comparison.currentPartSummary ?? null, comparison.currentPartPrice ?? null, comparison.catalogSnapshotAt ?? null, comparison.engineVersion ?? null, JSON.stringify(comparison.candidates), comparison.createdAt, comparison.updatedAt, comparison.expiresAt ?? null, comparison.ownerTokenHash ?? null]
         );
       }
       await client.query("COMMIT");
@@ -1054,6 +1408,112 @@ export async function deleteSavedComparison(id: string) {
     const next = comparisons.filter((comparison) => comparison.id !== id);
     if (next.length === comparisons.length) return false;
     await writeJson(COMPARISONS_PATH, next);
+    return true;
+  });
+}
+
+type SavedBuildVersionComparisonDatabaseRow = {
+  id: string;
+  name: string;
+  payload: SavedBuildVersionComparisonShareRecord["payload"];
+  source_before_build_id: string;
+  source_after_build_id: string;
+  created_at: Date;
+  updated_at: Date;
+  expires_at: Date | null;
+  owner_token_hash: string | null;
+};
+
+function savedBuildVersionComparisonRecordFromDatabaseRow(row: SavedBuildVersionComparisonDatabaseRow) {
+  return savedBuildVersionComparisonFromUnknown({
+    id: row.id,
+    name: row.name,
+    payload: row.payload,
+    sourceBeforeBuildId: row.source_before_build_id,
+    sourceAfterBuildId: row.source_after_build_id,
+    createdAt: new Date(row.created_at).toISOString(),
+    updatedAt: new Date(row.updated_at).toISOString(),
+    ...(row.expires_at ? { expiresAt: new Date(row.expires_at).toISOString() } : {}),
+    ...(row.owner_token_hash ? { ownerTokenHash: row.owner_token_hash } : {})
+  });
+}
+
+export async function readSavedBuildVersionComparisons(): Promise<SavedBuildVersionComparisonShareRecord[]> {
+  if (await ensureDatabase()) {
+    try {
+      const result = await pool!.query<SavedBuildVersionComparisonDatabaseRow>(
+        "SELECT id, name, payload, source_before_build_id, source_after_build_id, created_at, updated_at, expires_at, owner_token_hash FROM saved_version_comparisons ORDER BY updated_at DESC"
+      );
+      return result.rows.map(savedBuildVersionComparisonRecordFromDatabaseRow).filter((value): value is SavedBuildVersionComparisonShareRecord => value !== undefined);
+    } catch (error) {
+      databaseDisabled = true;
+      console.warn(`PostgreSQL saved version comparison read failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  const raw = await readJson<unknown[]>(VERSION_COMPARISONS_PATH, []);
+  return raw.map(savedBuildVersionComparisonFromUnknown).filter((value): value is SavedBuildVersionComparisonShareRecord => value !== undefined);
+}
+
+export async function writeSavedBuildVersionComparisons(comparisons: SavedBuildVersionComparisonShareRecord[]) {
+  if (await ensureDatabase()) {
+    const client = await pool!.connect();
+    try {
+      await client.query("BEGIN");
+      if (comparisons.length === 0) {
+        await client.query("DELETE FROM saved_version_comparisons");
+      } else {
+        await client.query("DELETE FROM saved_version_comparisons WHERE NOT (id = ANY($1::text[]))", [comparisons.map((comparison) => comparison.id)]);
+      }
+      for (const comparison of comparisons) {
+        await client.query(
+          `INSERT INTO saved_version_comparisons (id, name, payload, source_before_build_id, source_after_build_id, created_at, updated_at, expires_at, owner_token_hash)
+           VALUES ($1, $2, $3::jsonb, $4, $5, $6::timestamptz, $7::timestamptz, $8::timestamptz, $9)
+           ON CONFLICT (id) DO UPDATE SET
+             name = EXCLUDED.name,
+             payload = EXCLUDED.payload,
+             source_before_build_id = EXCLUDED.source_before_build_id,
+             source_after_build_id = EXCLUDED.source_after_build_id,
+             updated_at = EXCLUDED.updated_at,
+             expires_at = EXCLUDED.expires_at,
+             owner_token_hash = EXCLUDED.owner_token_hash`,
+          [comparison.id, comparison.name, JSON.stringify(comparison.payload), comparison.sourceBeforeBuildId, comparison.sourceAfterBuildId, comparison.createdAt, comparison.updatedAt, comparison.expiresAt ?? null, comparison.ownerTokenHash ?? null]
+        );
+      }
+      await client.query("COMMIT");
+      return;
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      databaseDisabled = true;
+      console.warn(`PostgreSQL saved version comparison write failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      client.release();
+    }
+  }
+  await writeJson(VERSION_COMPARISONS_PATH, comparisons);
+}
+
+export async function appendSavedBuildVersionComparison(comparison: SavedBuildVersionComparisonShareRecord, max = 100) {
+  return withSerializedFileMutation(VERSION_COMPARISONS_PATH, async () => {
+    const comparisons = await readSavedBuildVersionComparisons();
+    await writeSavedBuildVersionComparisons([comparison, ...comparisons].slice(0, Math.max(1, Math.floor(max))));
+  });
+}
+
+export async function deleteSavedBuildVersionComparison(id: string) {
+  return withSerializedFileMutation(VERSION_COMPARISONS_PATH, async () => {
+    if (await ensureDatabase()) {
+      try {
+        const result = await pool!.query("DELETE FROM saved_version_comparisons WHERE id = $1", [id]);
+        return (result.rowCount ?? 0) > 0;
+      } catch (error) {
+        databaseDisabled = true;
+        console.warn(`PostgreSQL saved version comparison delete failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    const comparisons = await readSavedBuildVersionComparisons();
+    const next = comparisons.filter((comparison) => comparison.id !== id);
+    if (next.length === comparisons.length) return false;
+    await writeSavedBuildVersionComparisons(next);
     return true;
   });
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Part } from "../shared/types";
-import { benchmarkReviewQueueFor } from "./benchmark-review";
+import { benchmark3DMarkReviewWorkPackageFor, benchmarkReviewQueueFor } from "./benchmark-review";
 
 function part(overrides: Partial<Part> = {}): Part {
   return {
@@ -95,13 +95,81 @@ describe("benchmark review queue", () => {
     ], 10, now);
 
     expect(queue.sourceTotals).toEqual({
-      cpu: { benchmarked: 3, unclassified: 2 },
-      gpu: { benchmarked: 0, unclassified: 0 }
+      cpu: { benchmarked: 3, unclassified: 2, sourceCheckNeedsReview: 0 },
+      gpu: { benchmarked: 0, unclassified: 0, sourceCheckNeedsReview: 0 }
     });
     expect(queue.sourceItems).toEqual(expect.arrayContaining([
       expect.objectContaining({ partId: "cpu-complete-unclassified", missingScores: [], presentScores: { cinebenchR23Single: 2000, cinebenchR23Multi: 10000 } }),
       expect.objectContaining({ partId: "cpu-partial-unclassified", missingScores: ["cinebenchR23Multi"] })
     ]));
     expect(queue.sourceItems.some((item) => item.partId === "cpu-complete-official")).toBe(false);
+  });
+
+  it("builds a GPU-only 3DMark work package with stable pagination and fingerprint", () => {
+    const now = "2026-09-06T00:00:00.000Z";
+    const catalog = [
+      part({ id: "gpu-complete", category: "gpu", specs: { gpu3dmarkTimeSpyScore: 15000, gpu3dmarkPortRoyalScore: 11000 } }),
+      part({ id: "gpu-partial", category: "gpu", specs: { gpu3dmarkTimeSpyScore: 14000 }, priceWon: 500000 }),
+      part({ id: "gpu-missing", category: "gpu", specs: {} }),
+      part({ id: "gpu-stale-complete", category: "gpu", specs: { gpu3dmarkTimeSpyScore: 13000, gpu3dmarkPortRoyalScore: 9000 }, updatedAt: "2026-01-01T00:00:00.000Z" }),
+      part({ id: "cpu-missing", category: "cpu", specs: {} })
+    ];
+
+    const first = benchmark3DMarkReviewWorkPackageFor(catalog, { now, generatedAt: now, limit: 1 });
+    expect(first).toMatchObject({
+      schemaVersion: 1,
+      kind: "3dmark-gpu-review-package",
+      readOnly: true,
+      category: "gpu",
+      offset: 0,
+      limit: 1,
+      summary: { totalGpu: 4, completeCount: 2, partialCount: 1, missingCount: 1, queueTotal: 2, includedCount: 1, remainingCount: 1 }
+    });
+    expect(first.items[0]).toMatchObject({ partId: "gpu-partial", status: "partial", missingScores: ["gpu3dmarkPortRoyalScore"], catalogUrl: "/catalog?category=gpu&partId=gpu-partial" });
+    expect(first.nextOffset).toBe(1);
+    expect(first.queueFingerprint).toMatch(/^b3mr1-/);
+
+    const next = benchmark3DMarkReviewWorkPackageFor(catalog, { now, generatedAt: "2026-09-06T01:00:00.000Z", offset: first.nextOffset, limit: 1 });
+    expect(next.items).toHaveLength(1);
+    expect(next.items[0]).toMatchObject({ partId: "gpu-missing", status: "missing", missingScores: ["gpu3dmarkTimeSpyScore", "gpu3dmarkPortRoyalScore"] });
+    expect(next.nextOffset).toBeUndefined();
+    expect(next.queueFingerprint).toBe(first.queueFingerprint);
+
+    const completedPartial = catalog.map((item) => item.id === "gpu-partial" ? { ...item, specs: { gpu3dmarkTimeSpyScore: 14000, gpu3dmarkPortRoyalScore: 10000 } } : item);
+    expect(benchmark3DMarkReviewWorkPackageFor(completedPartial, { now }).queueFingerprint).not.toBe(first.queueFingerprint);
+  });
+
+  it("returns classified benchmark sources whose URL has not passed source-check", () => {
+    const now = "2026-08-31T00:00:00.000Z";
+    const queue = benchmarkReviewQueueFor([
+      part({
+        id: "cpu-url-unchecked",
+        specs: {
+          cinebenchR23Single: 2200,
+          cinebenchR23Multi: 11000,
+          benchmarkProvenance: { sourceKind: "official", sourceNote: "공식 표", sourceUrl: "https://vendor.example/cpu", updatedAt: now }
+        }
+      }),
+      part({
+        id: "cpu-url-checked",
+        specs: {
+          cinebenchR23Single: 2300,
+          cinebenchR23Multi: 12000,
+          benchmarkProvenance: {
+            sourceKind: "official",
+            sourceNote: "공식 표",
+            sourceUrl: "https://vendor.example/cpu-checked",
+            sourceCheck: { requestedUrl: "https://vendor.example/cpu-checked", checkedAt: now, status: "reachable", identityStatus: "matched", redirectCount: 0 },
+            updatedAt: now
+          }
+        }
+      })
+    ], 10, now);
+
+    expect(queue.sourceTotals.cpu.sourceCheckNeedsReview).toBe(1);
+    expect(queue.sourceItems).toEqual(expect.arrayContaining([
+      expect.objectContaining({ partId: "cpu-url-unchecked", sourceCheckNeedsReview: true, reviewReason: "완전 세트 · 원문 점검 필요" })
+    ]));
+    expect(queue.sourceItems.some((item) => item.partId === "cpu-url-checked")).toBe(false);
   });
 });

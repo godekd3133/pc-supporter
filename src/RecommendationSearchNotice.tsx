@@ -25,7 +25,7 @@ export function RecommendationSearchNotice({ search, findings, onOpenPicker }: {
   const selectedTarget = precisionTargets.find((target) => target.key === selectedTargetKey);
   return <div className="recommendation-search-note" data-testid="recommendation-search-note" role="note">
     <FiInfo />
-    <span>대규모 카탈로그라서 {search.candidateSetCount}개 문제별 후보 묶음에서 명백한 조건을 먼저 확인한 뒤, 유사도·가격 우선 후보 {search.evaluatedCandidateCount.toLocaleString("ko-KR")}개를 전체 호환 규칙으로 재검사했습니다. 추천 후보는 실제 조립 환경과 제조사 원문 확인을 대신하지 않습니다.</span>
+    <span>대규모 카탈로그라서 {search.candidateSetCount}개 문제별 후보 묶음에서 명백한 조건을 먼저 확인한 뒤, 비교 범위와 신뢰도를 반영한 유사도·가격 우선 후보 {search.evaluatedCandidateCount.toLocaleString("ko-KR")}개를 전체 호환 규칙으로 재검사했습니다. 추천 후보는 실제 조립 환경과 제조사 원문 확인을 대신하지 않습니다.</span>
     <div className="recommendation-search-controls">
       <label><span>탐색 대상</span><select aria-label="정밀 탐색 대상" value={selectedTargetKey} onChange={(event) => setSelectedTargetKey(event.target.value)}>{precisionTargets.map((target) => <option value={target.key} key={target.key}>{target.title} · {CATEGORY_LABELS[target.category]}</option>)}</select></label>
       <button className="text-button" type="button" disabled={!selectedTarget} onClick={() => { if (selectedTarget) onOpenPicker(selectedTarget.category, `precision:${selectedTarget.ruleId}`, selectedTarget.title, selectedTarget.affectedPartIds); }}>전체 후보 정밀 탐색</button>

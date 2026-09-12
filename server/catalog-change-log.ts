@@ -1,13 +1,42 @@
 import { randomUUID } from "node:crypto";
 import type { AccessoryItem, CatalogChangeKind, CatalogChangeRecord, CatalogChangeSummary, CatalogChangeValueDiff, Part } from "../shared/types";
 import { isKnownPrice } from "../shared/types";
-import { CATALOG_CHANGE_LOG_PATH, readJson, writeJson } from "./storage";
+import { CATALOG_CHANGE_LOG_PATH, fileUpdatedAt, readJson, writeJson } from "./storage";
 
 const MAX_CHANGE_LOG_SIZE = 1000;
 const MAX_VALUE_DIFFS = 8;
 const MAX_VALUE_LENGTH = 420;
 
+let catalogChangeLogCache: { mtime: string; records: CatalogChangeRecord[] } | undefined;
+let catalogChangeLogCacheEpoch = 0;
+let catalogChangeLogInFlight: { mtime: string; epoch: number; promise: Promise<CatalogChangeRecord[]> } | undefined;
+
 type CatalogItem = Part | AccessoryItem;
+
+export function invalidateCatalogChangeLogCache() {
+  catalogChangeLogCache = undefined;
+  catalogChangeLogCacheEpoch += 1;
+  catalogChangeLogInFlight = undefined;
+}
+
+export async function readCatalogChangeLog() {
+  const mtime = await fileUpdatedAt(CATALOG_CHANGE_LOG_PATH, "");
+  if (catalogChangeLogCache?.mtime === mtime) return catalogChangeLogCache.records;
+  const epoch = catalogChangeLogCacheEpoch;
+  if (catalogChangeLogInFlight?.mtime === mtime && catalogChangeLogInFlight.epoch === epoch) return catalogChangeLogInFlight.promise;
+
+  const promise = readJson<unknown>(CATALOG_CHANGE_LOG_PATH, []).then((value) => {
+    const records = Array.isArray(value) ? value as CatalogChangeRecord[] : [];
+    if (catalogChangeLogCacheEpoch === epoch) catalogChangeLogCache = { mtime, records };
+    return records;
+  });
+  catalogChangeLogInFlight = { mtime, epoch, promise };
+  try {
+    return await promise;
+  } finally {
+    if (catalogChangeLogInFlight?.promise === promise) catalogChangeLogInFlight = undefined;
+  }
+}
 
 function stableJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
@@ -37,7 +66,7 @@ function valueDiff(field: string, previous: unknown, next: unknown, price = fals
   return { field, ...(previousText ? { previous: previousText } : {}), ...(nextText ? { next: nextText } : {}) };
 }
 
-function catalogChangeValueDiffs(before: CatalogItem, after: CatalogItem) {
+export function catalogChangeValueDiffsFor(before: CatalogItem, after: CatalogItem) {
   return [
     valueDiff("상품명", before.name, after.name),
     valueDiff("가격", before.priceWon, after.priceWon, true),
@@ -83,7 +112,7 @@ export function catalogChangeRecord(kind: CatalogChangeKind, before: CatalogItem
     ...(previousPriceWon !== undefined ? { previousPriceWon } : {}),
     ...(nextPriceWon !== undefined ? { nextPriceWon } : {}),
     ...(previousPriceWon !== undefined && nextPriceWon !== undefined ? { priceDeltaWon: nextPriceWon - previousPriceWon } : {}),
-    valueDiffs: catalogChangeValueDiffs(before, after)
+    valueDiffs: catalogChangeValueDiffsFor(before, after)
   };
 }
 
@@ -104,7 +133,7 @@ export function filterCatalogChangeRecords(records: CatalogChangeRecord[], optio
 }
 
 export async function readCatalogChangeRecords(options: { kind?: CatalogChangeKind; category?: string; limit?: number; from?: string; to?: string } = {}) {
-  const records = await readJson<CatalogChangeRecord[]>(CATALOG_CHANGE_LOG_PATH, []);
+  const records = await readCatalogChangeLog();
   return filterCatalogChangeRecords(records, options);
 }
 
@@ -118,6 +147,7 @@ export async function appendCatalogChangeRecords(newRecords: CatalogChangeRecord
   const records = await readJson<CatalogChangeRecord[]>(CATALOG_CHANGE_LOG_PATH, []);
   const newIds = new Set(newRecords.map((record) => record.id));
   await writeJson(CATALOG_CHANGE_LOG_PATH, [...newRecords, ...records.filter((record) => !newIds.has(record.id))].slice(0, MAX_CHANGE_LOG_SIZE));
+  invalidateCatalogChangeLogCache();
   return newRecords;
 }
 

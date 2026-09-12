@@ -1,11 +1,11 @@
 import type { AccessorySelection, BuildGenerationDiagnostic, BuildGenerationRequest, BuildSelection, GamingRefreshRate, GamingResolution, ListingPolicy, PartSelection, RecommendationPriority, RecommendationProfile } from "../shared/types";
-import { PART_CATEGORIES } from "../shared/types";
+import { PART_CATEGORIES, RECOMMENDATION_PRIORITY_VALUES } from "../shared/types";
 import { BUDGET_LADDER_BANDS, type BudgetLadderChange, type BudgetLadderExportItem, type BudgetLadderExportLine, type BudgetLadderExportPayload } from "../shared/budget-ladder";
 import type { BudgetLadderShareCreateInput, BudgetLadderShareSnapshot, SavedBudgetLadderRecord } from "../shared/budget-ladder-share";
 import { normalizeShareExpiryAt, shareExpiryDaysFrom, shareExpiryValueProvided, shareExpired, shareExpiresAtFor } from "./share-lifecycle";
 
 const PROFILE_VALUES: RecommendationProfile[] = ["general", "gaming", "creator", "development", "office"];
-const PRIORITY_VALUES: RecommendationPriority[] = ["balanced", "budget", "performance"];
+const PRIORITY_VALUES: RecommendationPriority[] = RECOMMENDATION_PRIORITY_VALUES;
 const RESOLUTION_VALUES: GamingResolution[] = ["1080p", "1440p", "4k"];
 const REFRESH_RATE_VALUES: GamingRefreshRate[] = [60, 144, 240];
 const LISTING_POLICY_VALUES: ListingPolicy[] = ["retail_only", "include_bulk", "all"];
@@ -100,7 +100,7 @@ function buildSelectionFromUnknown(value: unknown): { selection?: BuildSelection
   if (accessories === undefined || (Array.isArray(value.accessories) && accessories.length !== value.accessories.length)) return { error: "accessories 선택 payload 형식이 올바르지 않습니다." };
   let m2SlotSelection: Record<string, string> | undefined;
   if (value.m2SlotSelection !== undefined && value.m2SlotSelection !== null) {
-    if (!isRecord(value.m2SlotSelection) || Object.keys(value.m2SlotSelection).length > 99) return { error: "m2SlotSelection 선택 payload 형식이 올바르지 않습니다." };
+    if (!isRecord(value.m2SlotSelection) || Object.keys(value.m2SlotSelection).length > 8) return { error: "m2SlotSelection 선택 payload 형식이 올바르지 않습니다." };
     const entries = Object.entries(value.m2SlotSelection).flatMap(([slotId, partId]) => typeof partId === "string" && partId.trim() && slotId.trim() ? [[slotId.trim().slice(0, 80), partId.trim().slice(0, 120)] as [string, string]] : []);
     if (entries.length !== Object.keys(value.m2SlotSelection).length) return { error: "m2SlotSelection 선택 payload 형식이 올바르지 않습니다." };
     m2SlotSelection = Object.fromEntries(entries);

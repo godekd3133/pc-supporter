@@ -68,10 +68,12 @@ function isSnapshot(value: SavedBuildCheckSnapshot | undefined): value is SavedB
 
 export function savedBuildRiskScoreFor(snapshot: SavedBuildCheckSnapshot) {
   const accessory = snapshot.accessoryCompatibility;
+  const resourceRisk = snapshot.resourceBudget?.state === "danger" ? 100 : snapshot.resourceBudget?.state === "warning" ? 10 : snapshot.resourceBudget?.state === "unknown" ? 1 : 0;
   return snapshot.blockerCount * 100 + snapshot.warningCount * 10 + snapshot.unknownCount
     + (accessory?.blockerCount ?? 0) * 100
     + (accessory?.warningCount ?? 0) * 10
-    + (accessory?.unknownCount ?? 0);
+    + (accessory?.unknownCount ?? 0)
+    + resourceRisk;
 }
 
 function snapshotsFor(input: SavedBuildPriorityInput) {
@@ -104,8 +106,8 @@ function snapshotPointFor(snapshot: SavedBuildCheckSnapshot): SavedBuildRiskPoin
 function levelFor(snapshot: SavedBuildCheckSnapshot | undefined, current: SavedBuildMonitorItem | undefined, transition: SavedBuildCheckTransitionSummary | undefined, historyLength: number): SavedBuildPriorityLevel {
   if (current && current.status !== "ready") return "failed";
   if (!snapshot) return "failed";
-  if (snapshot.status === "incompatible" || snapshot.blockerCount > 0 || (snapshot.accessoryCompatibility?.blockerCount ?? 0) > 0) return "critical";
-  if (snapshot.status === "needs_review" || snapshot.warningCount > 0 || snapshot.unknownCount > 0 || (snapshot.accessoryCompatibility?.warningCount ?? 0) > 0 || (snapshot.accessoryCompatibility?.unknownCount ?? 0) > 0) return "review";
+  if (snapshot.status === "incompatible" || snapshot.blockerCount > 0 || (snapshot.accessoryCompatibility?.blockerCount ?? 0) > 0 || snapshot.resourceBudget?.state === "danger") return "critical";
+  if (snapshot.status === "needs_review" || snapshot.warningCount > 0 || snapshot.unknownCount > 0 || (snapshot.accessoryCompatibility?.warningCount ?? 0) > 0 || (snapshot.accessoryCompatibility?.unknownCount ?? 0) > 0 || snapshot.resourceBudget?.state === "warning" || snapshot.resourceBudget?.state === "unknown") return "review";
   if (transition?.hasChanges) return "changed";
   return historyLength < 2 ? "baseline" : "stable";
 }

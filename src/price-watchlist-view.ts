@@ -1,6 +1,11 @@
 import type { CatalogWatchEntry } from "../shared/catalog-watchlist";
+import type { PriceWatchDecisionState } from "../shared/price-watch-decision";
+export { priceWatchDecisionCountsFor } from "../shared/price-watch-decision";
+export type { PriceWatchDecisionCounts } from "../shared/price-watch-decision";
+export { catalogWatchlistImportDiffFor } from "../shared/catalog-watchlist-view";
+export type { CatalogWatchlistImportDiff } from "../shared/catalog-watchlist-view";
 
-export type PriceWatchStatusFilter = "all" | "alerts" | "available" | "unavailable" | "error";
+export type PriceWatchStatusFilter = "all" | "alerts" | "target" | "buy" | "wait" | "observe" | "tracking" | "available" | "unavailable" | "error";
 export type PriceWatchSort = "added_desc" | "price_asc" | "price_desc" | "target_gap_asc";
 
 export interface PriceWatchViewObservation {
@@ -13,6 +18,7 @@ export interface PriceWatchViewOptions {
   status?: PriceWatchStatusFilter;
   sort?: PriceWatchSort;
   alertKeys?: ReadonlySet<string>;
+  decisionStates?: Readonly<Record<string, PriceWatchDecisionState>>;
   entryKey?: (entry: Pick<CatalogWatchEntry, "kind" | "itemId">) => string;
 }
 
@@ -38,6 +44,7 @@ export function priceWatchEntriesFor(entries: CatalogWatchEntry[], observations:
     if (query && ![entry.itemName, entry.itemId, entry.category].some((value) => value.toLocaleLowerCase("ko-KR").includes(query))) return false;
     if (status === "alerts") return options.alertKeys?.has(entryKeyValue) === true;
     if (status === "all") return true;
+    if (["target", "buy", "wait", "observe", "tracking"].includes(status)) return options.decisionStates?.[entryKeyValue] === status;
     return observation?.status === status;
   });
   return filtered.slice().sort((left, right) => {

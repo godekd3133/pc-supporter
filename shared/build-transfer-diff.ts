@@ -1,5 +1,5 @@
 import type { BuildSelection, PartCategory, RecommendationPreferences } from "./types";
-import { CATEGORY_LABELS, PART_CATEGORIES } from "./types";
+import { CATEGORY_LABELS, PART_CATEGORIES, RECOMMENDATION_PRIORITY_LABELS } from "./types";
 
 export interface BuildTransferDiffRow {
   id: string;
@@ -20,7 +20,7 @@ type BuildTransferDiffNameResolver = {
 
 const preferenceLabels = {
   profile: { general: "일반형", gaming: "게이밍", creator: "작업·크리에이터", development: "개발·AI", office: "사무·일반" },
-  priority: { balanced: "균형형", budget: "가성비 우선", performance: "성능 우선" },
+  priority: RECOMMENDATION_PRIORITY_LABELS,
   listingPolicy: { retail_only: "신품·정식 유통", include_bulk: "벌크 포함", all: "전체 조건" },
   gamingResolution: { "1080p": "FHD · 1080p", "1440p": "QHD · 1440p", "4k": "4K · 2160p" },
   gamingRefreshRate: { 60: "60Hz · 기본", 144: "144Hz · 고주사율", 240: "240Hz · 초고주사율" }

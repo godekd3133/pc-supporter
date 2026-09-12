@@ -37,4 +37,16 @@ describe("catalog watchlist import", () => {
     expect(missingHeaders.entries).toEqual([]);
     expect(missingHeaders.errors[0]).toContain("필수 CSV 열이 없습니다");
   });
+
+  it("rejects oversized JSON and CSV imports before validating every raw entry", () => {
+    const oversizedEntries = Array.from({ length: 51 }, (_, index) => entry({ itemId: `part-${index}` }));
+    const oversizedJson = catalogWatchlistEntriesFromJson(JSON.stringify(oversizedEntries));
+    const oversizedCsv = catalogWatchlistEntriesFromCsv([
+      "구분,분류,부품명,부품 ID,추가 시각,목표가(원)",
+      ...oversizedEntries.map((item) => `핵심 부품,${item.category},${item.itemName},${item.itemId},${item.addedAt},${item.targetPriceWon}`)
+    ].join("\n"));
+
+    expect(oversizedJson).toEqual({ entries: [], errors: ["관심 목록 JSON은 최대 50개 항목까지 가져올 수 있습니다."] });
+    expect(oversizedCsv).toEqual({ entries: [], errors: ["관심 목록 CSV는 최대 50개 항목까지 가져올 수 있습니다."] });
+  });
 });

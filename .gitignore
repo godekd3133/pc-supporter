@@ -1,5 +1,6 @@
 node_modules/
 dist/
+dist-mobile/
 .env
 .env.*
 !.env.example
@@ -14,3 +15,12 @@ data/*.lock
 data/*.lease
 data/*.tmp
 *.log
+
+# Native projects keep source/configuration in Git; generated sync and build output stays local.
+android/.gradle/
+android/build/
+android/app/build/
+android/app/src/main/assets/public/
+ios/App/Pods/
+ios/App/DerivedData/
+ios/App/build/

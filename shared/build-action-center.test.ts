@@ -55,6 +55,23 @@ describe("build action center", () => {
     expect(center.actions.find((action) => action.id === "physical:psu-cable")?.targetId).toBe("gpu-fit-summary-panel");
   });
 
+  it("adds a focused resource-budget action when calculated headroom needs review", () => {
+    const center = buildActionCenterFor(baseResult({ metrics: { powerHeadroomW: 100, psuWattageW: 850, recommendedPsuW: 750, coolerHeadroomW: 20, coolerCapacityW: 160, cpuPowerW: 140 } }));
+    const action = center.actions.find((candidate) => candidate.id === "physical:resource-budget");
+
+    expect(center.state).toBe("review");
+    expect(action).toMatchObject({ priority: "review", source: "physical", targetId: "build-resource-summary" });
+    expect(action?.summary).toContain("전력 예산 100W 여유");
+    expect(checklistItemIdsForAction("physical:resource-budget")).toEqual(["manual:power-thermal-budget"]);
+  });
+
+  it("elevates a negative resource budget to a blocked action", () => {
+    const center = buildActionCenterFor(baseResult({ metrics: { powerHeadroomW: -10, psuWattageW: 750, recommendedPsuW: 760 } }));
+
+    expect(center.state).toBe("blocked");
+    expect(center.actions.find((action) => action.id === "physical:resource-budget")).toMatchObject({ priority: "blocker" });
+  });
+
   it("adds connectivity actions only for unrepresented review items and links them to the checklist", () => {
     const build: BuildSelection = { motherboard: { partId: "board-1", quantity: 1 }, case: { partId: "case-1", quantity: 1 }, memory: [], ssd: [], hdd: [], useIntegratedGraphics: true };
     const partMap = new Map<string, Part>([

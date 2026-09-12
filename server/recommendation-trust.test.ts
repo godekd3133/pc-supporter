@@ -1,14 +1,15 @@
 import { describe, expect, it } from "vitest";
 import type { Part, SimilarityEvidence } from "../shared/types";
-import { compareRecommendationTrust, recommendationTrustFilterFromUnknown, recommendationTrustFor, recommendationTrustMatchesFilter } from "./recommendation-trust";
+import { compareRecommendationTrust, recommendationTrustCountsFor, recommendationTrustFilterFromUnknown, recommendationTrustFor, recommendationTrustMatchesFilter } from "./recommendation-trust";
 
-function candidate(overrides: Partial<Part> = {}): Pick<Part, "dataQuality" | "missingFields" | "priceWon" | "updatedAt" | "danawaUrl"> {
+function candidate(overrides: Partial<Part> = {}): Pick<Part, "dataQuality" | "missingFields" | "priceWon" | "updatedAt" | "danawaUrl" | "specs"> {
   return {
     dataQuality: "live",
     missingFields: [],
     priceWon: 120000,
     updatedAt: "2026-08-31T00:00:00.000Z",
     danawaUrl: "https://prod.danawa.com/info/?pcode=123",
+    specs: {},
     ...overrides
   };
 }
@@ -21,6 +22,10 @@ const benchmarkEvidence: SimilarityEvidence = {
 };
 
 describe("recommendation trust", () => {
+  it("counts the trust distribution without changing candidate ordering", () => {
+    expect(recommendationTrustCountsFor([{ level: "high" }, { level: "medium" }, { level: "medium" }, { level: "low" }])).toEqual({ high: 1, medium: 2, low: 1 });
+  });
+
   it("orders higher trust before lower trust and keeps missing evidence last", () => {
     const high = recommendationTrustFor({ candidate: candidate(), similarityEvidence: benchmarkEvidence, resolvesTarget: true, candidateBlockers: 0, candidateWarnings: 0, candidateUnknown: 0, remainingBlockers: 0, remainingWarnings: 0, remainingUnknown: 0, now: "2026-08-31T12:00:00.000Z" });
     const highLowerScore = { ...high, score: high.score - 1 };
@@ -81,6 +86,15 @@ describe("recommendation trust", () => {
     ]));
   });
 
+  it("keeps a numeric project reference price out of the confirmed-price trust bonus", () => {
+    const live = recommendationTrustFor({ candidate: candidate(), similarityEvidence: benchmarkEvidence, resolvesTarget: true, candidateBlockers: 0, candidateWarnings: 0, candidateUnknown: 0, remainingBlockers: 0, remainingWarnings: 0, remainingUnknown: 0, now: "2026-08-31T12:00:00.000Z" });
+    const reference = recommendationTrustFor({ candidate: candidate({ dataQuality: "seed" }), similarityEvidence: benchmarkEvidence, resolvesTarget: true, candidateBlockers: 0, candidateWarnings: 0, candidateUnknown: 0, remainingBlockers: 0, remainingWarnings: 0, remainingUnknown: 0, now: "2026-08-31T12:00:00.000Z" });
+
+    expect(reference).toMatchObject({ priceKnown: true, priceEvidence: "reference" });
+    expect(reference.score).toBeLessThan(live.score);
+    expect(reference.reasons).toContain("프로젝트 기준가가 있어 총액 비교에 참고할 수 있지만 실제 판매가로 확정하지 않습니다.");
+  });
+
   it("keeps a safe candidate highly rated while reporting unrelated build issues separately", () => {
     const result = recommendationTrustFor({
       candidate: candidate(),
@@ -114,6 +128,173 @@ describe("recommendation trust", () => {
     expect(official.score).toBeGreaterThan(unclassified.score);
     expect(official.reasons).toContain("벤치마크 출처: 제조사·공식 측정표");
     expect(unclassified.reasons).toContain("벤치마크 출처 유형이 분류되지 않았습니다.");
+  });
+
+  it("downgrades trust and exposes stale benchmark freshness", () => {
+    const result = recommendationTrustFor({
+      candidate: candidate(),
+      similarityEvidence: benchmarkEvidence,
+      resolvesTarget: true,
+      benchmarkSourceKind: "official",
+      benchmarkFreshness: "stale",
+      candidateBlockers: 0,
+      candidateWarnings: 0,
+      candidateUnknown: 0,
+      remainingBlockers: 0,
+      remainingWarnings: 0,
+      remainingUnknown: 0,
+      now: "2026-08-31T12:00:00.000Z"
+    });
+
+    expect(result).toMatchObject({ level: "medium", benchmarkBacked: true, benchmarkFreshness: "stale" });
+    expect(result.reasons).toContain("벤치마크 자료가 오래되어 최신 측정값을 다시 확인해야 합니다.");
+  });
+
+  it("downgrades trust when the benchmark source check cannot verify the registered model", () => {
+    const result = recommendationTrustFor({
+      candidate: candidate(),
+      similarityEvidence: benchmarkEvidence,
+      resolvesTarget: true,
+      benchmarkSourceKind: "official",
+      benchmarkFreshness: "fresh",
+      benchmarkSourceCheck: { requestedUrl: "https://vendor.example/wrong", checkedAt: "2026-08-31T11:59:00.000Z", status: "identity_mismatch", identityStatus: "not_found", redirectCount: 0, httpStatus: 200 },
+      candidateBlockers: 0,
+      candidateWarnings: 0,
+      candidateUnknown: 0,
+      remainingBlockers: 0,
+      remainingWarnings: 0,
+      remainingUnknown: 0,
+      now: "2026-08-31T12:00:00.000Z"
+    });
+
+    expect(result).toMatchObject({ level: "medium", benchmarkSourceCheckNeedsReview: true });
+    expect(result.reasons).toContain("벤치마크 원문 URL 접근·모델 식별을 다시 확인해야 합니다.");
+  });
+
+  it("downgrades trust before a manual catalog-spec source has been checked", () => {
+    const result = recommendationTrustFor({
+      candidate: candidate({
+        dataQuality: "manual",
+        specs: {
+          catalogSpecProvenance: {
+            manufacturerModel: "MANUAL-GPU-16",
+            sourceNote: "제조사 데이터시트",
+            sourceUrl: "https://vendor.example/manual-gpu-16",
+            updatedAt: "2026-08-31T00:00:00.000Z",
+            fields: ["powerW"],
+            baseSpecValues: {},
+            baseDataQuality: "incomplete",
+            baseMissingFields: ["powerW"],
+            baseUpdatedAt: "2026-08-01T00:00:00.000Z"
+          }
+        }
+      }),
+      similarityEvidence: benchmarkEvidence,
+      resolvesTarget: true,
+      benchmarkSourceKind: "official",
+      benchmarkFreshness: "fresh",
+      candidateBlockers: 0,
+      candidateWarnings: 0,
+      candidateUnknown: 0,
+      remainingBlockers: 0,
+      remainingWarnings: 0,
+      remainingUnknown: 0,
+      now: "2026-08-31T12:00:00.000Z"
+    });
+
+    expect(result).toMatchObject({ level: "medium", catalogSpecSourceCheckNeedsReview: true });
+    expect(result.reasons).toEqual(expect.arrayContaining([
+      "제조사 근거 수동 보강값",
+      "제조사 근거 원문 URL 접근·모델 식별을 확인하기 전입니다."
+    ]));
+  });
+
+  it("restores trust only when a manual catalog-spec source is reachable and model-matched", () => {
+    const result = recommendationTrustFor({
+      candidate: candidate({
+        dataQuality: "manual",
+        specs: {
+          catalogSpecProvenance: {
+            manufacturerModel: "MANUAL-GPU-16",
+            sourceNote: "제조사 데이터시트",
+            sourceUrl: "https://vendor.example/manual-gpu-16",
+            updatedAt: "2026-08-31T00:00:00.000Z",
+            sourceCheck: {
+              requestedUrl: "https://vendor.example/manual-gpu-16",
+              checkedAt: "2026-08-31T11:59:00.000Z",
+              status: "reachable",
+              identityStatus: "matched",
+              redirectCount: 0,
+              httpStatus: 200
+            },
+            fields: ["powerW"],
+            baseSpecValues: {},
+            baseDataQuality: "incomplete",
+            baseMissingFields: ["powerW"],
+            baseUpdatedAt: "2026-08-01T00:00:00.000Z"
+          }
+        }
+      }),
+      similarityEvidence: benchmarkEvidence,
+      resolvesTarget: true,
+      benchmarkSourceKind: "official",
+      benchmarkFreshness: "fresh",
+      candidateBlockers: 0,
+      candidateWarnings: 0,
+      candidateUnknown: 0,
+      remainingBlockers: 0,
+      remainingWarnings: 0,
+      remainingUnknown: 0,
+      now: "2026-08-31T12:00:00.000Z"
+    });
+
+    expect(result).toMatchObject({ level: "high", catalogSpecSourceCheckNeedsReview: false });
+    expect(result.reasons).toContain("제조사 근거 원문 URL 접근과 모델 식별을 확인했습니다.");
+  });
+
+  it.each([
+    ["identity mismatch", { status: "identity_mismatch" as const, identityStatus: "not_found" as const, checkedAt: "2026-08-31T11:59:00.000Z" }],
+    ["stale", { status: "reachable" as const, identityStatus: "matched" as const, checkedAt: "2026-08-01T11:59:00.000Z" }],
+    ["requested URL mismatch", { requestedUrl: "https://vendor.example/another-source", status: "reachable" as const, identityStatus: "matched" as const, checkedAt: "2026-08-31T11:59:00.000Z" }]
+  ])("downgrades trust when a manual catalog-spec source check is %s", (_label, check) => {
+    const result = recommendationTrustFor({
+      candidate: candidate({
+        dataQuality: "manual",
+        specs: {
+          catalogSpecProvenance: {
+            manufacturerModel: "MANUAL-GPU-16",
+            sourceNote: "제조사 데이터시트",
+            sourceUrl: "https://vendor.example/manual-gpu-16",
+            updatedAt: "2026-08-31T00:00:00.000Z",
+            sourceCheck: {
+              requestedUrl: "https://vendor.example/manual-gpu-16",
+              redirectCount: 0,
+              httpStatus: 200,
+              ...check
+            },
+            fields: ["powerW"],
+            baseSpecValues: {},
+            baseDataQuality: "incomplete",
+            baseMissingFields: ["powerW"],
+            baseUpdatedAt: "2026-08-01T00:00:00.000Z"
+          }
+        }
+      }),
+      similarityEvidence: benchmarkEvidence,
+      resolvesTarget: true,
+      benchmarkSourceKind: "official",
+      benchmarkFreshness: "fresh",
+      candidateBlockers: 0,
+      candidateWarnings: 0,
+      candidateUnknown: 0,
+      remainingBlockers: 0,
+      remainingWarnings: 0,
+      remainingUnknown: 0,
+      now: "2026-08-31T12:00:00.000Z"
+    });
+
+    expect(result).toMatchObject({ level: "medium", catalogSpecSourceCheckNeedsReview: true });
+    expect(result.reasons).toContain("제조사 근거 원문 URL 접근·모델 식별을 다시 확인해야 합니다.");
   });
 
   it("downgrades trust when a candidate leaves unknowns or has stale incomplete data", () => {

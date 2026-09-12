@@ -30,4 +30,9 @@ describe("budget ladder local share history", () => {
     expect(budgetLadderLocalShareExpired({ expiresAt }, Date.parse(expiresAt))).toBe(true);
     expect(budgetLadderLocalShareExpired({}, Date.parse(expiresAt))).toBe(false);
   });
+
+  it("rejects an oversized raw local history before normalizing every entry", () => {
+    const oversized = Array.from({ length: 21 }, (_, index) => entry(`share-${index}`));
+    expect(budgetLadderLocalSharesFromJson(JSON.stringify(oversized))).toEqual([]);
+  });
 });

@@ -90,6 +90,16 @@ describe("budget ladder share", () => {
     expect(parseBudgetLadderShareInput({ payload: { ...payload, items: [item("economy", 800_000, { selection: { useIntegratedGraphics: true, memory: "invalid", ssd: [], hdd: [], accessories: [] } }), item("target", 1_000_000), item("headroom", 1_200_000)] } }).errors[0]).toContain("선택 목록");
   });
 
+  it("rejects more M.2 slot mappings than the physical slot contract allows", () => {
+    const m2SlotSelection = Object.fromEntries(Array.from({ length: 9 }, (_, index) => [`M2_${index + 1}`, `ssd-${index}`]));
+    const parsed = parseBudgetLadderShareInput({
+      payload: { ...payload, items: [item("economy", 800_000, { selection: { ...payload.items[0].selection, m2SlotSelection } }), payload.items[1], payload.items[2]] },
+      request
+    });
+
+    expect(parsed.errors[0]).toContain("m2SlotSelection");
+  });
+
   it("normalizes persisted records, hides owner credentials, and detects catalog/share expiry", () => {
     const record = savedBudgetLadderFromUnknown({
       id: "budget-share-1",

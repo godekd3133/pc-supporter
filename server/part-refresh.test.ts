@@ -63,6 +63,10 @@ describe("part detail refresh", () => {
     expect(changedPartFields(danawaPart, refreshed)).toEqual(expect.arrayContaining(["원문 스펙", "정규화 스펙"]));
     expect(response.previousMissingFields).toEqual([]);
     expect(response.changedFields).toContain("정규화 스펙");
+    expect(response.valueDiffs).toEqual(expect.arrayContaining([
+      expect.objectContaining({ field: "원문 스펙" }),
+      expect.objectContaining({ field: "정규화 스펙" })
+    ]));
   });
 
   it("refreshes an accessory through the accessory parser and preserves the old price when needed", async () => {

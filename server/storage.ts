@@ -16,6 +16,7 @@ export const CRAWL_MANIFEST_PATH = resolve(DATA_DIR, "crawl-manifest.json");
 export const M2_SLOT_OVERRIDES_PATH = resolve(DATA_DIR, "m2-slot-overrides.json");
 export const GPU_PHYSICAL_OVERRIDES_PATH = resolve(DATA_DIR, "gpu-physical-overrides.json");
 export const PHYSICAL_SOURCE_CHECK_HISTORY_PATH = resolve(DATA_DIR, "physical-source-check-history.json");
+export const BENCHMARK_SOURCE_CHECK_HISTORY_PATH = resolve(DATA_DIR, "benchmark-source-check-history.json");
 export const BENCHMARK_OVERRIDES_PATH = resolve(DATA_DIR, "benchmark-overrides.json");
 export const CASE_RGB_LOAD_OVERRIDES_PATH = resolve(DATA_DIR, "case-rgb-load-overrides.json");
 export const COOLING_FAN_LOAD_OVERRIDES_PATH = resolve(DATA_DIR, "cooling-fan-load-overrides.json");
@@ -24,9 +25,14 @@ export const ACCESSORY_CRAWL_LOCK_PATH = resolve(DATA_DIR, "accessory-crawl.lock
 export const ACCESSORY_CRAWL_MANIFEST_PATH = resolve(DATA_DIR, "accessory-crawl-manifest.json");
 export const ACCESSORY_COVERAGE_PATH = resolve(DATA_DIR, "accessory-coverage.json");
 export const CATALOG_CHANGE_LOG_PATH = resolve(DATA_DIR, "catalog-change-log.json");
+export const CATALOG_SPEC_OVERRIDES_PATH = resolve(DATA_DIR, "catalog-spec-overrides.json");
+export const CATALOG_SPEC_OVERRIDE_SOURCE_CHECK_HISTORY_PATH = resolve(DATA_DIR, "catalog-spec-override-source-check-history.json");
+export const CATALOG_SPEC_REFRESH_HISTORY_PATH = resolve(DATA_DIR, "catalog-spec-refresh-history.json");
+export const CATALOG_SEED_MAPPINGS_PATH = resolve(DATA_DIR, "catalog-seed-mappings.json");
 export const WATCHLISTS_PATH = resolve(DATA_DIR, "watchlists.json");
 export const WATCHLIST_ALERT_STATES_PATH = resolve(DATA_DIR, "watchlist-alert-states.json");
 export const COMPARISONS_PATH = resolve(DATA_DIR, "comparisons.json");
+export const VERSION_COMPARISONS_PATH = resolve(DATA_DIR, "version-comparisons.json");
 export const BUDGET_LADDERS_PATH = resolve(DATA_DIR, "budget-ladders.json");
 
 export async function ensureDataDirectory() {

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { SAVED_BUILD_MONITOR_LIMIT } from "../shared/saved-build-monitor";
 import { parseSavedBuildMonitorRequest } from "./build-monitor";
 
@@ -14,5 +14,17 @@ describe("saved build monitor request", () => {
     const oversized = parseSavedBuildMonitorRequest({ ids: Array.from({ length: SAVED_BUILD_MONITOR_LIMIT + 1 }, (_, index) => `build-${index}`) });
     expect(oversized.ids).toHaveLength(SAVED_BUILD_MONITOR_LIMIT);
     expect(oversized.errors[0]).toContain(`최대 ${SAVED_BUILD_MONITOR_LIMIT}개`);
+  });
+
+  it("tracks duplicate IDs without scanning the accepted list for every input", () => {
+    const includesSpy = vi.spyOn(Array.prototype, "includes");
+    try {
+      const result = parseSavedBuildMonitorRequest({ ids: Array.from({ length: 5_000 }, (_, index) => `build-${index}`) });
+      expect(result.ids).toHaveLength(SAVED_BUILD_MONITOR_LIMIT);
+      expect(result.errors[0]).toContain(`최대 ${SAVED_BUILD_MONITOR_LIMIT}개`);
+      expect(includesSpy).not.toHaveBeenCalled();
+    } finally {
+      includesSpy.mockRestore();
+    }
   });
 });

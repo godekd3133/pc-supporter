@@ -1,8 +1,8 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import { FiAlertTriangle, FiCheckCircle, FiDownload, FiInfo, FiRefreshCw, FiSave, FiShield, FiUpload, FiXCircle } from "react-icons/fi";
-import type { AssemblyVerificationCheckId, AssemblyVerificationCheckStatus, AssemblyVerificationComparisonFilter, AssemblyVerificationHistory, AssemblyVerificationLoadScenario, AssemblyVerificationLoadTool, AssemblyVerificationLog, AssemblyVerificationMeasurementContinuityStatus, AssemblyVerificationMeasurementQuality, AssemblyVerificationSurfaceSummary, AssemblyVerificationTelemetryMetric, AssemblyVerificationTelemetryMetricAnalysis, AssemblyVerificationTelemetryPoint } from "../shared/assembly-verification";
-import { ASSEMBLY_VERIFICATION_CHECKS, ASSEMBLY_VERIFICATION_HISTORY_LIMIT, assemblyVerificationComparisonFor, assemblyVerificationHistoryJsonFor, assemblyVerificationProgressFor, assemblyVerificationRecheckSignalsFor, assemblyVerificationStateFor, assemblyVerificationStateLabel, assemblyVerificationStatusLabel, assemblyVerificationTelemetryAnalysisFor, assemblyVerificationTelemetrySummaryFor, emptyAssemblyVerificationHistory, parseAssemblyVerificationHistoryJson, withAssemblyVerificationCheck, withAssemblyVerificationMeasurements } from "../shared/assembly-verification";
+import type { AssemblyVerificationCheckId, AssemblyVerificationCheckStatus, AssemblyVerificationComparisonFilter, AssemblyVerificationHistory, AssemblyVerificationLoadScenario, AssemblyVerificationLoadTool, AssemblyVerificationLog, AssemblyVerificationMeasurementContinuityStatus, AssemblyVerificationMeasurementQuality, AssemblyVerificationSavedSnapshot, AssemblyVerificationSurfaceSummary, AssemblyVerificationTelemetryMetric, AssemblyVerificationTelemetryMetricAnalysis, AssemblyVerificationTelemetryPoint } from "../shared/assembly-verification";
+import { ASSEMBLY_VERIFICATION_CHECKS, ASSEMBLY_VERIFICATION_HISTORY_LIMIT, assemblyVerificationComparisonFor, assemblyVerificationHistoryFromSavedSnapshots, assemblyVerificationHistoryHasEvidenceFor, assemblyVerificationHistoryJsonFor, assemblyVerificationHistoryMergeFor, assemblyVerificationProgressFor, assemblyVerificationRecheckSignalsFor, assemblyVerificationStateFor, assemblyVerificationStateLabel, assemblyVerificationStatusLabel, assemblyVerificationTelemetryAnalysisFor, assemblyVerificationTelemetrySummaryFor, emptyAssemblyVerificationHistory, parseAssemblyVerificationHistoryJson, withAssemblyVerificationCheck, withAssemblyVerificationMeasurements } from "../shared/assembly-verification";
 import type { AssemblyVerificationCsvImport, AssemblyVerificationCsvMetric, AssemblyVerificationCsvTelemetryMetric } from "../shared/assembly-verification-csv";
 import { ASSEMBLY_VERIFICATION_CSV_METRIC_LABELS, ASSEMBLY_VERIFICATION_CSV_TELEMETRY_LABELS, assemblyVerificationCsvTemplateFor, parseAssemblyVerificationCsv } from "../shared/assembly-verification-csv";
 import type { AssemblyVerificationLoadSegment, AssemblyVerificationLoadSegmentComparison } from "../shared/assembly-verification-load";
@@ -216,7 +216,7 @@ function measurementContinuityStatusText(status: AssemblyVerificationMeasurement
   return status === "continuous" ? "연속" : status === "gapped" ? "공백 있음" : "확인 불가";
 }
 
-export function AssemblyVerificationPanel({ storageKey, savedBuildId, savedBuildOwnerToken, onServerSync, onSummaryChange }: { storageKey: string; savedBuildId?: string; savedBuildOwnerToken?: string; onServerSync?: (saved: SavedBuild) => void; onSummaryChange?: (summary: AssemblyVerificationSurfaceSummary) => void }) {
+export function AssemblyVerificationPanel({ storageKey, savedBuildId, savedBuildOwnerToken, savedVerificationHistory, onServerSync, onSummaryChange }: { storageKey: string; savedBuildId?: string; savedBuildOwnerToken?: string; savedVerificationHistory?: ReadonlyArray<AssemblyVerificationSavedSnapshot>; onServerSync?: (saved: SavedBuild) => void; onSummaryChange?: (summary: AssemblyVerificationSurfaceSummary) => void }) {
   const importInputRef = useRef<HTMLInputElement>(null);
   const csvImportInputRef = useRef<HTMLInputElement>(null);
   const [history, setHistory] = useState<AssemblyVerificationHistory>(() => readStoredHistory(storageKey));
@@ -240,6 +240,21 @@ export function AssemblyVerificationPanel({ storageKey, savedBuildId, savedBuild
   const [resetPending, setResetPending] = useState(false);
   const [overlayReferenceRunId, setOverlayReferenceRunId] = useState<string | null>(null);
   const [overlayIncludedRunIds, setOverlayIncludedRunIds] = useState<string[] | null>(null);
+  const [serverSnapshotRestored, setServerSnapshotRestored] = useState(false);
+  const hydrationStorageKeyRef = useRef(storageKey);
+  const syncRequestVersionRef = useRef(0);
+  const mountedRef = useRef(true);
+  const syncContextKeyRef = useRef("");
+  const syncContextKey = `${storageKey}|${savedBuildId ?? ""}|${savedBuildOwnerToken ?? ""}`;
+  syncContextKeyRef.current = syncContextKey;
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      syncRequestVersionRef.current += 1;
+    };
+  }, []);
 
   const activeRunId = selectedRunId ?? history.activeRunId;
   const activeLog = useMemo(() => history.runs.find((run) => run.runId === activeRunId) ?? history.runs.at(-1)!, [activeRunId, history]);
@@ -271,8 +286,7 @@ export function AssemblyVerificationPanel({ storageKey, savedBuildId, savedBuild
     onSummaryChange?.({ ...progress, state, recheckSignalCount: recheckSignals.length, updatedAt: log.updatedAt, ...(log.runId ? { runId: log.runId } : {}) });
   }, [log.runId, log.updatedAt, onSummaryChange, progress.checked, progress.failed, progress.percent, progress.passed, progress.remaining, progress.total, recheckSignals.length, state]);
 
-  useEffect(() => {
-    const next = readStoredHistory(storageKey);
+  function hydrateHistory(next: AssemblyVerificationHistory, resetViewState: boolean) {
     setHistory(next);
     setSelectedRunId(next.activeRunId);
     const active = next.runs.find((run) => run.runId === next.activeRunId) ?? next.runs.at(-1)!;
@@ -286,15 +300,43 @@ export function AssemblyVerificationPanel({ storageKey, savedBuildId, savedBuild
     setCpuFanRpm(active.cpuFanRpm?.toString() ?? "");
     setGpuFanRpm(active.gpuFanRpm?.toString() ?? "");
     setNote(active.note ?? "");
-    setMessage(null);
-    setImportError(null);
-    setTrendFilter("all");
-    setCsvImportPreview(null);
-    setResetPending(false);
-    setOverlayReferenceRunId(null);
-    setOverlayIncludedRunIds(null);
+    if (resetViewState) {
+      setMessage(null);
+      setImportError(null);
+      setTrendFilter("all");
+      setCsvImportPreview(null);
+      setResetPending(false);
+      setOverlayReferenceRunId(null);
+      setOverlayIncludedRunIds(null);
+    }
+  }
+
+  useEffect(() => {
+    const storageKeyChanged = hydrationStorageKeyRef.current !== storageKey;
+    hydrationStorageKeyRef.current = storageKey;
+    const local = readStoredHistory(storageKey);
+    const saved = savedVerificationHistory && savedVerificationHistory.length > 0
+      ? assemblyVerificationHistoryFromSavedSnapshots(savedVerificationHistory, storageKey)
+      : undefined;
+    const next = saved ? assemblyVerificationHistoryMergeFor(local, saved) : local;
+    setServerSnapshotRestored(Boolean(saved && !assemblyVerificationHistoryHasEvidenceFor(local) && assemblyVerificationHistoryHasEvidenceFor(saved)));
+    hydrateHistory(next, storageKeyChanged);
     setHydratedStorageKey(storageKey);
+  }, [savedVerificationHistory, storageKey]);
+
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== storageKey) return;
+      hydrateHistory(readStoredHistory(storageKey), true);
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, [storageKey]);
+
+  useEffect(() => {
+    syncRequestVersionRef.current += 1;
+    setSyncing(false);
+  }, [syncContextKey]);
 
   useEffect(() => {
     if (hydratedStorageKey === storageKey) writeStoredHistory(storageKey, history);
@@ -493,6 +535,9 @@ export function AssemblyVerificationPanel({ storageKey, savedBuildId, savedBuild
       setMessage("서버 이력에 기록하려면 먼저 이 견적을 저장·공유해 주세요.");
       return;
     }
+    const requestVersion = ++syncRequestVersionRef.current;
+    const contextKey = syncContextKey;
+    const isCurrent = () => mountedRef.current && syncRequestVersionRef.current === requestVersion && syncContextKeyRef.current === contextKey;
     setSyncing(true);
     try {
       const saved = await api<SavedBuild>(`/api/builds/${encodeURIComponent(savedBuildId)}/assembly-verification`, {
@@ -501,12 +546,13 @@ export function AssemblyVerificationPanel({ storageKey, savedBuildId, savedBuild
         body: JSON.stringify({ history }),
         retry: 0
       });
+      if (!isCurrent()) return;
       onServerSync?.(saved);
       setMessage(`${history.runs.length}회차 실측 이력을 저장 견적의 읽기 전용 검사 이력에 기록했습니다.`);
     } catch (reason: unknown) {
-      setMessage(reason instanceof Error ? reason.message : "저장 견적에 실측 로그를 기록하지 못했습니다.");
+      if (isCurrent()) setMessage(reason instanceof Error ? reason.message : "저장 견적에 실측 로그를 기록하지 못했습니다.");
     } finally {
-      setSyncing(false);
+      if (isCurrent()) setSyncing(false);
     }
   }
 
@@ -542,8 +588,9 @@ export function AssemblyVerificationPanel({ storageKey, savedBuildId, savedBuild
     }
   }
 
-  return <section className={`assembly-verification-panel ${state}`} aria-label="실제 조립 검증 로그" data-testid="assembly-verification-panel">
+  return <section className={`assembly-verification-panel ${state}`} aria-label="실제 조립 검증 로그" data-testid="assembly-verification-panel" data-storage-key={storageKey}>
     <div className="assembly-verification-heading"><div><p className="eyebrow">REAL BUILD EVIDENCE</p><h2>실제 조립 검증 로그</h2><p>호환성 검사와 별도로, 조립 후 실제 부팅·인식·온도·소음 결과를 이 견적에 기록합니다. 이 기록은 자동으로 호환 판정을 통과시키지 않습니다.</p></div><span className={`assembly-verification-state ${state}`}>{state === "failed" ? <FiXCircle /> : state === "passed" ? <FiCheckCircle /> : state === "in_progress" ? <FiAlertTriangle /> : <FiInfo />} {assemblyVerificationStateLabel(state)}</span></div>
+    {serverSnapshotRestored && <div className="assembly-verification-server-restored" data-testid="assembly-verification-server-restored" role="status"><FiInfo /><div><strong>저장된 조립 검증 요약을 이 기기에 복원했습니다.</strong><small>서버에는 공유 가능한 compact 요약만 있어 원본 측정 시계열·개별 메모는 포함되지 않습니다. 상세 그래프가 필요하면 원본 JSON/CSV를 같은 견적에서 가져오세요.</small></div></div>}
     <div className="assembly-verification-progress"><div><span>현재 회차 실측 확인 진행률</span><strong>{progress.checked} / {progress.total}개</strong><em>{progress.percent}%</em></div><div className="assembly-verification-progress-track" role="progressbar" aria-label={`현재 조립 검증 ${progress.percent}% 완료`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress.percent}><span style={{ width: `${progress.percent}%` }} /></div><small>{progress.failed > 0 ? `실패 확인 ${progress.failed}개 · 원인을 해결한 뒤 다시 기록하세요.` : progress.remaining > 0 ? `미확인 ${progress.remaining}개 · 조립 후 실제 결과를 기록하세요.` : "모든 항목에 결과가 기록됐습니다."}</small></div>
     <div className="assembly-verification-run-toolbar"><div><span>실측 회차</span><strong>{history.runs.length} / {ASSEMBLY_VERIFICATION_HISTORY_LIMIT}회차</strong></div><input aria-label="실측 회차 이름" value={log.runLabel ?? ""} onChange={(event) => updateRunLabel(event.target.value)} maxLength={160} placeholder="예: 조립 직후 · 드라이버 설치 후" /><button className="button button-secondary" type="button" onClick={addRun} disabled={history.runs.length >= ASSEMBLY_VERIFICATION_HISTORY_LIMIT || syncing}><FiRefreshCw /> 새 회차</button></div>
     <div className="assembly-verification-run-list" role="list" aria-label="실측 회차 목록">{history.runs.slice().reverse().map((run) => { const runProgress = assemblyVerificationProgressFor(run); const runState = assemblyVerificationStateFor(run); return <div role="listitem" key={run.runId}><button className={run.runId === activeRunId ? "selected" : ""} type="button" onClick={() => selectRun(run.runId!)}><span>{run.runLabel ?? "조립 검증 회차"}</span><small>{assemblyVerificationStateLabel(runState)} · {runProgress.checked}/{runProgress.total}개 · {new Date(run.updatedAt).toLocaleDateString("ko-KR")}{run.measurementSource === "csv" ? ` · CSV ${run.measurementSampleCount ?? "-"}샘플 · 시계열 ${run.measurementSeries?.length ?? 0}점` : ""}</small></button></div>; })}</div>

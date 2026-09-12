@@ -1,5 +1,8 @@
 import type { CatalogChangeKind, CatalogChangeRecord } from "./types";
 
+export const CATALOG_WATCHLIST_STORAGE_KEY = "pc-supporter-catalog-watchlist";
+export const CATALOG_WATCHLIST_MAX_ENTRIES = 50;
+
 export interface CatalogWatchEntry {
   itemId: string;
   itemName: string;
@@ -21,7 +24,7 @@ export function addCatalogWatchEntry(entries: CatalogWatchEntry[], entry: Catalo
   const existing = entries.find((candidate) => catalogWatchEntryKey(candidate) === catalogWatchEntryKey(entry));
   const targetPatch = entry.targetPriceWon !== undefined ? { targetPriceWon: entry.targetPriceWon } : {};
   const next = existing ? entries.map((candidate) => candidate === existing ? { ...candidate, itemName: entry.itemName, category: entry.category, ...targetPatch } : candidate) : [entry, ...entries];
-  return next.slice(0, Math.min(50, Math.max(1, Math.floor(limit))));
+  return next.slice(0, Math.min(CATALOG_WATCHLIST_MAX_ENTRIES, Math.max(1, Math.floor(limit))));
 }
 
 export function mergeCatalogWatchEntries(entries: CatalogWatchEntry[], importedEntries: CatalogWatchEntry[], limit = 50) {
@@ -52,6 +55,8 @@ export function catalogWatchlistFromJson(raw: string | null, limit = 50): Catalo
   try {
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
+    const safeLimit = Math.min(CATALOG_WATCHLIST_MAX_ENTRIES, Math.max(1, Math.floor(limit)));
+    if (parsed.length > safeLimit) return [];
     const normalized: CatalogWatchEntry[] = [];
     const seen = new Set<string>();
     for (const value of parsed) {
@@ -60,7 +65,7 @@ export function catalogWatchlistFromJson(raw: string | null, limit = 50): Catalo
       if (seen.has(key)) continue;
       seen.add(key);
       normalized.push(value);
-      if (normalized.length >= Math.min(50, Math.max(1, Math.floor(limit)))) break;
+      if (normalized.length >= safeLimit) break;
     }
     return normalized;
   } catch {

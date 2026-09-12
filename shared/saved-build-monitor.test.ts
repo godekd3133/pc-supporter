@@ -59,6 +59,43 @@ describe("saved build monitor assessment", () => {
     const before = savedBuildCheckSnapshotFor(result());
     const after = savedBuildCheckSnapshotFor(result());
     expect(savedBuildMonitorAssessmentFor(after, savedBuildCheckTransitionSummaryFor(before, after))).toMatchObject({ level: "stable", recordRecommended: false });
+    expect(savedBuildMonitorAssessmentFor(after, savedBuildCheckTransitionSummaryFor(before, after)).summary).toContain("성능 분석");
+  });
+
+  it("surfaces analysis-only changes as non-risk information changes", () => {
+    const before = savedBuildCheckSnapshotFor(result());
+    const after = savedBuildCheckSnapshotFor(result({ analysis: { ...result().analysis, overallScore: 74, scoreLabel: "보완 권장", confidence: "limited" } }));
+    const transition = savedBuildCheckTransitionSummaryFor(before, after);
+
+    expect(transition).toMatchObject({ analysisChanged: true, analysisScoreDelta: -6, hasChanges: true });
+    expect(savedBuildMonitorAssessmentFor(after, transition)).toMatchObject({ level: "changed", requiresAttention: false, recordRecommended: true });
+    expect(savedBuildMonitorAssessmentFor(after, transition).summary).toContain("성능 분석 -6점");
+
+    const reviewAfter = savedBuildCheckSnapshotFor(result({ status: "needs_review", warningCount: 1, analysis: { ...result().analysis, overallScore: 74, scoreLabel: "보완 권장", confidence: "limited" } }));
+    const reviewTransition = savedBuildCheckTransitionSummaryFor(before, reviewAfter);
+    expect(savedBuildMonitorAssessmentFor(reviewAfter, reviewTransition).summary).toContain("성능 분석 -6점");
+
+    const labelOnlyAfter = savedBuildCheckSnapshotFor(result({ analysis: { ...result().analysis, scoreLabel: "균형형", confidence: "limited" } }));
+    const labelOnlyTransition = savedBuildCheckTransitionSummaryFor(before, labelOnlyAfter);
+    expect(labelOnlyTransition).toMatchObject({ analysisChanged: true, analysisScoreDelta: 0 });
+    expect(savedBuildMonitorAssessmentFor(labelOnlyAfter, labelOnlyTransition).summary).toContain("성능 분석 라벨·근거 수준");
+  });
+
+  it("treats a resource-budget regression as monitor attention even when compatibility counts stay clear", () => {
+    const before = savedBuildCheckSnapshotFor(result({ metrics: { powerHeadroomW: 150, psuWattageW: 1000, recommendedPsuW: 850 } }));
+    const after = savedBuildCheckSnapshotFor(result({ metrics: { powerHeadroomW: 100, psuWattageW: 950, recommendedPsuW: 850 } }));
+    const transition = savedBuildCheckTransitionSummaryFor(before, after);
+
+    expect(transition).toMatchObject({ resourceBudgetChanged: true, resourceRiskIncreased: true, powerHeadroomDeltaW: -50 });
+    expect(savedBuildMonitorAssessmentFor(after, transition)).toMatchObject({ level: "review", requiresAttention: true });
+    expect(savedBuildMonitorAssessmentFor(after, transition).summary).toContain("전력 여유 -50W");
+  });
+
+  it("marks an initially below-zero resource budget as critical", () => {
+    const snapshot = savedBuildCheckSnapshotFor(result({ metrics: { powerHeadroomW: -10, psuWattageW: 750, recommendedPsuW: 760 } }));
+
+    expect(savedBuildMonitorAssessmentFor(snapshot)).toMatchObject({ level: "critical", requiresAttention: true });
+    expect(savedBuildMonitorAssessmentFor(snapshot).summary).toContain("전력·냉각 예산 기준 미달");
   });
 
   it("treats peripheral blockers and warnings as saved-build attention signals", () => {

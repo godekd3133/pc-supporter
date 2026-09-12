@@ -1,11 +1,39 @@
-import type { AccessoryConnectivityPlan, AccessoryItem, AccessoryPowerRail, AccessoryRgbConnectionPlan, BuildSelection, CompatibilityResult, Part, PartCategory, RecommendationPreferences } from "./types";
-import { ACCESSORY_CATEGORY_LABELS, CATEGORY_LABELS, PART_CATEGORIES } from "./types";
+import type { AccessoryConnectivityPlan, AccessoryItem, AccessoryPowerRail, AccessoryRgbConnectionPlan, BuildSelection, CompatibilityResult, Part, PartCategory, RecommendationChange, RecommendationPreferences } from "./types";
+import { ACCESSORY_CATEGORY_LABELS, BENCHMARK_SOURCE_KIND_LABELS, CATEGORY_LABELS, PART_CATEGORIES, RECOMMENDATION_PRIORITY_LABELS } from "./types";
+import type { FindingFilter } from "./finding-filters";
+import { savedBuildCheckDiffFor, savedBuildCheckFindingDiffFor, savedBuildCheckSnapshotFor, savedBuildCheckTransitionSummaryFor } from "./saved-build-check";
+import type { SavedBuildCheckFindingChange } from "./saved-build-check";
+import type { SavedBuildCheckSnapshot } from "./types";
+import { benchmarkEvidenceForBuild, benchmarkFreshnessLabelFor, benchmarkSourceCheckLabelFor } from "./benchmark-evidence";
+import type { BenchmarkEvidencePart } from "./benchmark-evidence";
 import { gpuPurchaseEvidenceFor } from "./gpu-fit";
 import { buildActionCenterFor } from "./build-action-center";
 import { buildConnectivitySummaryFor } from "./build-connectivity";
 import { assemblyPlanFor } from "./assembly-plan";
 import { safeHttpsUrl } from "./safe-source-url";
 import { valueScoreText } from "./value-score";
+
+export type CompatibilityReportSection = "findings" | "purchase-list" | "purchase-checklist" | "purchase-decision" | "actions";
+
+export interface CompatibilityReportViewState {
+  path: string;
+  findingFilter: FindingFilter;
+  section?: CompatibilityReportSection;
+}
+
+const reportFindingFilterLabels: Record<FindingFilter, string> = { all: "전체", blocker: "차단 오류", warning: "주의", unknown: "확인 필요", info: "정보" };
+const reportSectionLabels: Record<CompatibilityReportSection, string> = { findings: "검사 결과 상세", "purchase-list": "구매 목록", "purchase-checklist": "구매 전 실행 체크리스트", "purchase-decision": "최종 구매 판단", actions: "우선 조치" };
+
+function viewStateLines(viewState?: CompatibilityReportViewState) {
+  if (!viewState) return [];
+  return [
+    "[열어둔 화면]",
+    `- 결과 경로: ${viewState.path}`,
+    `- 상세 필터: ${reportFindingFilterLabels[viewState.findingFilter]}`,
+    `- 열린 위치: ${viewState.section ? reportSectionLabels[viewState.section] : "결과 상단"}`,
+    ""
+  ];
+}
 
 function priceText(value: number | undefined) {
   return typeof value === "number" && Number.isFinite(value) && value > 0
@@ -39,7 +67,7 @@ function partLine(category: PartCategory, selection: { partId: string; quantity:
 function preferenceLines(preferences: RecommendationPreferences | undefined) {
   if (!preferences) return ["- 추천 기준: 기본값"];
   const profile = { general: "일반형", gaming: "게이밍", creator: "작업·크리에이터", development: "개발·AI", office: "사무·일반" }[preferences.profile];
-  const priority = { balanced: "균형형", budget: "가성비 우선", performance: "성능 우선" }[preferences.priority];
+  const priority = RECOMMENDATION_PRIORITY_LABELS[preferences.priority];
   const listingPolicy = { retail_only: "신품·정식 유통", include_bulk: "벌크 포함", all: "전체 조건" }[preferences.listingPolicy ?? "retail_only"];
   return [
     `- 사용 목적: ${profile}`,
@@ -51,8 +79,50 @@ function preferenceLines(preferences: RecommendationPreferences | undefined) {
   ];
 }
 
+function benchmarkEvidenceStatusLabel(status: BenchmarkEvidencePart["status"]) {
+  return status === "complete" ? "완전 근거" : status === "partial" ? "부분 근거" : "점수 없음";
+}
+
+function benchmarkEvidenceLines(build: BuildSelection, partMap: ReadonlyMap<string, Part>) {
+  const evidences = benchmarkEvidenceForBuild(
+    build.cpu ? partMap.get(build.cpu.partId) : undefined,
+    build.gpu ? partMap.get(build.gpu.partId) : undefined
+  );
+  if (evidences.length === 0) return [];
+  const lines = ["[원본 benchmark 근거]"];
+  for (const evidence of evidences) {
+    lines.push(`- ${evidence.category === "cpu" ? "CPU" : "GPU"}: ${evidence.name} · ${benchmarkEvidenceStatusLabel(evidence.status)} · ${evidence.presentCount}/${evidence.totalCount} · 자료 ${benchmarkFreshnessLabelFor(evidence.benchmarkFreshness)}`);
+    for (const row of evidence.rows) lines.push(`  - ${row.label}: ${row.value === undefined ? "확인 필요" : `${row.value.toLocaleString("ko-KR")}${row.unit}`}`);
+    if (evidence.provenance) {
+      const source = `${BENCHMARK_SOURCE_KIND_LABELS[evidence.provenance.sourceKind]} · ${evidence.provenance.sourceNote}`;
+      lines.push(`  - 점수 근거: ${source}${evidence.provenance.updatedAt ? ` · 갱신 ${new Date(evidence.provenance.updatedAt).toLocaleDateString("ko-KR")}` : ""}${safeHttpsUrl(evidence.provenance.sourceUrl) ? ` · ${safeHttpsUrl(evidence.provenance.sourceUrl)}` : ""}`);
+    } else {
+      lines.push("  - 점수 근거: 출처 유형·근거 메모 확인 필요");
+    }
+    lines.push(`  - 원문 점검: ${benchmarkSourceCheckLabelFor(evidence.sourceCheck)}`);
+    lines.push(`  - 부품 데이터 갱신: ${new Date(evidence.dataUpdatedAt).toLocaleDateString("ko-KR")}`);
+  }
+  lines.push("점수는 측정 조건에 따라 달라지는 카탈로그 참고값이며 실제 FPS·프레임타임·작업 시간·절대 성능 순위를 보장하지 않습니다.", "");
+  return lines;
+}
+
+function benchmarkEvidenceExportFor(build: BuildSelection, partMap: ReadonlyMap<string, Part>) {
+  return benchmarkEvidenceForBuild(
+    build.cpu ? partMap.get(build.cpu.partId) : undefined,
+    build.gpu ? partMap.get(build.gpu.partId) : undefined
+  ).map((evidence) => {
+    if (!evidence.provenance) return evidence;
+    const sourceUrl = safeHttpsUrl(evidence.provenance.sourceUrl);
+    return { ...evidence, provenance: { ...evidence.provenance, ...(sourceUrl ? { sourceUrl } : {}) } };
+  });
+}
+
 function findingSeverityLabel(severity: CompatibilityResult["findings"][number]["severity"]) {
   return severity === "blocker" ? "차단 오류" : severity === "warning" ? "주의" : severity === "unknown" ? "확인 필요" : "정보";
+}
+
+function candidateRiskLabel(risk: NonNullable<NonNullable<CompatibilityResult["findings"][number]["suggestions"]>[number]["candidateRisk"]>) {
+  return risk === "safe" ? "안전" : risk === "unsafe" ? "차단 위험" : "확인 필요";
 }
 
 function accessoryFindingSeverityLabel(severity: NonNullable<CompatibilityResult["accessoryCompatibility"]>["findings"][number]["severity"]) {
@@ -165,7 +235,16 @@ function findingLines(result: CompatibilityResult, partMap: ReadonlyMap<string, 
     if (finding.suggestions && finding.suggestions.length > 0) {
       lines.push("", "대체 후보:");
       for (const suggestion of finding.suggestions) {
-        lines.push(`- ${suggestion.part.name}${suggestion.recommendedQuantity ? ` · 추천 수량 ${suggestion.recommendedQuantity}개` : ""} · ${suggestion.similarityLabel} ${suggestion.similarityScore}점 · ${suggestion.performanceSummary} · ${priceText(suggestion.part.priceWon)}${suggestion.valueScore !== undefined && suggestion.valueLabel ? ` · ${suggestion.valueLabel} ${valueScoreText(suggestion.valueScore)}` : ""}`);
+        const candidateStatus = suggestion.candidateRisk ? candidateRiskLabel(suggestion.candidateRisk) : suggestion.fixesCurrentIssue ? "현재 finding 해결 후보" : "현재 finding 미해결";
+        const candidateRiskCounts = suggestion.candidateBlockerCount !== undefined || suggestion.candidateWarningCount !== undefined || suggestion.candidateUnknownCount !== undefined
+          ? ` · 후보 위험 차단 ${suggestion.candidateBlockerCount ?? "확인 필요"}개/주의 ${suggestion.candidateWarningCount ?? "확인 필요"}개/확인 ${suggestion.candidateUnknownCount ?? "확인 필요"}개`
+          : "";
+        const remainingRisk = ` · 가상 적용 후 차단 ${suggestion.remainingBlockers}개/주의 ${suggestion.remainingWarnings}개/확인 ${suggestion.remainingUnknown}개`;
+        const trust = suggestion.recommendationTrust ? ` · 추천 근거 ${suggestion.recommendationTrust.level} ${suggestion.recommendationTrust.score}점` : "";
+        const physical = suggestion.physicalEvidence ? ` · 물리 근거 ${suggestion.physicalEvidence.status === "verified" ? "확인됨" : suggestion.physicalEvidence.status === "review" ? "확인 필요" : "해당 없음"}` : "";
+        lines.push(`- ${suggestion.part.name}${suggestion.recommendedQuantity ? ` · 추천 수량 ${suggestion.recommendedQuantity}개` : ""} · ${candidateStatus}${candidateRiskCounts}${remainingRisk} · ${suggestion.similarityLabel} ${suggestion.similarityScore}점 · ${suggestion.performanceSummary} · ${priceText(suggestion.part.priceWon)}${suggestion.valueScore !== undefined && suggestion.valueLabel ? ` · ${suggestion.valueLabel} ${valueScoreText(suggestion.valueScore)}` : ""}${trust}${physical}`);
+        if (suggestion.gpuTarget) lines.push(`  게이밍 목표 근거: ${suggestion.gpuTarget.summary}`);
+        if (suggestion.candidateReasons && suggestion.candidateReasons.length > 0) lines.push(`  후보 확인 근거: ${suggestion.candidateReasons.slice(0, 3).join(" · ")}`);
       }
     }
     lines.push("");
@@ -291,6 +370,119 @@ function actionCenterLines(result: CompatibilityResult, build?: BuildSelection, 
   ];
 }
 
+function repairPlanPriceText(priceDeltaWon: number | undefined, priceComplete: boolean) {
+  if (!priceComplete || priceDeltaWon === undefined) return "가격 확인 필요";
+  if (priceDeltaWon === 0) return "변화 없음";
+  return `${priceDeltaWon > 0 ? "+" : ""}${priceDeltaWon.toLocaleString("ko-KR")}원`;
+}
+
+function repairPlanChangeLine(change: RecommendationChange) {
+  const from = change.kind === "change_quantity"
+    ? `${change.fromQuantity ?? "?"}개`
+    : change.fromPartName ?? `${CATEGORY_LABELS[change.category]} 미선택`;
+  const to = change.kind === "change_quantity"
+    ? `${change.toQuantity ?? "?"}개`
+    : change.toPart.name;
+  return `- ${CATEGORY_LABELS[change.category]}: ${from} → ${to} · 가격 ${repairPlanPriceText(change.priceDeltaWon, change.priceDeltaWon !== undefined)} · ${change.performanceSummary}`;
+}
+
+function repairPlanLines(result: CompatibilityResult) {
+  const plans = result.repairPlans ?? [];
+  if (plans.length === 0) return [];
+  const lines = ["[자동 해결 플랜]"];
+  for (const plan of plans) {
+    lines.push(
+      `### [${plan.label}] ${plan.title}`,
+      `- 해결 범위: ${plan.resolvedFindings}개 finding · 차단 ${plan.resolvedBlockers}개 · 확인 필요 ${plan.resolvedUnknown}개`,
+      `- 적용 후 위험: 차단 ${plan.remainingBlockers}개 · 주의 ${plan.remainingWarnings}개 · 확인 필요 ${plan.remainingUnknown}개`,
+      `- 가격 변화: ${repairPlanPriceText(plan.priceDeltaWon, plan.priceComplete)} · 적용 후 ${plan.priceComplete ? priceText(plan.afterTotalPriceWon) : "가격 확인 필요"}`,
+      `- 유사도: ${plan.similarityLabel} ${plan.similarityScore}점 · ${plan.profileSummary}`,
+      `- 전략 근거: ${plan.reason}`
+    );
+    if (plan.budgetWon !== undefined) {
+      const budgetState = !plan.priceComplete
+        ? "예산 적합 여부 확인 필요"
+        : plan.withinBudget
+          ? `예산 내 · ${priceText(plan.budgetWon)} 기준 ${priceText(Math.abs(plan.budgetDeltaWon ?? 0))} 여유`
+          : `예산 초과 · ${priceText(Math.abs(plan.budgetDeltaWon ?? 0))}`;
+      lines.push(`- 목표 예산: ${budgetState}`);
+    }
+    if (plan.resolvedFindingTitles.length > 0) lines.push(`- 해결 범위 상세: ${plan.resolvedFindingTitles.join(" · ")}`);
+    if (plan.remainingFindingTitles && plan.remainingFindingTitles.length > 0) lines.push(`- 적용 후 남는 finding: ${plan.remainingFindingTitles.join(" · ")}`);
+    if (plan.remainingFindingRuleIds && plan.remainingFindingRuleIds.length > 0) lines.push(`- 잔여 규칙 ID: ${plan.remainingFindingRuleIds.join(" · ")}`);
+    if (plan.changes.length > 0) {
+      lines.push("변경 부품:", ...plan.changes.map(repairPlanChangeLine));
+    } else {
+      lines.push("변경 부품: 없음");
+    }
+    lines.push("");
+  }
+  return lines;
+}
+
+function savedCheckStatusLabel(status: CompatibilityResult["status"]) {
+  return status === "compatible" ? "호환 가능" : status === "needs_review" ? "확인 필요" : "호환 불가";
+}
+
+function savedCheckDirectionLabel(direction: ReturnType<typeof savedBuildCheckTransitionSummaryFor>["direction"]) {
+  return direction === "improved" ? "개선" : direction === "regressed" ? "악화" : direction === "changed" ? "일부 변화" : "변화 없음";
+}
+
+function savedCheckFindingChangeLabel(change: SavedBuildCheckFindingChange) {
+  return change === "resolved" ? "해결됨" : change === "new" ? "신규" : change === "severity_changed" ? "심각도 변경" : "내용 변경";
+}
+
+function savedCheckAnalysisText(score: number | undefined, label: string, confidence: "high" | "limited" | "unknown") {
+  const confidenceLabel = confidence === "high" ? "근거 충분" : confidence === "limited" ? "일부 스펙 기준" : "계산 불가";
+  return `${score === undefined ? label : `${score}점 · ${label}`} · ${confidenceLabel}`;
+}
+
+function savedCheckResourceText(snapshot: SavedBuildCheckSnapshot) {
+  const resource = snapshot.resourceBudget;
+  if (!resource) return "미적용";
+  const headroomText = (value: number | undefined) => value === undefined ? "확인 필요" : value >= 0 ? `${value}W 여유` : `${Math.abs(value)}W 부족`;
+  return `전력 ${headroomText(resource.powerHeadroomW)} · 냉각 ${headroomText(resource.coolerHeadroomW)}`;
+}
+
+function savedBuildRecheckLines(snapshot: SavedBuildCheckSnapshot, result: CompatibilityResult) {
+  const currentSnapshot = savedBuildCheckSnapshotFor(result);
+  const diff = savedBuildCheckDiffFor(snapshot, result);
+  const transition = savedBuildCheckTransitionSummaryFor(snapshot, currentSnapshot);
+  const findingDiff = savedBuildCheckFindingDiffFor(snapshot, currentSnapshot);
+  const lines = [
+    "[저장 당시 대비 현재 재검사]",
+    `- 판정: ${savedCheckStatusLabel(snapshot.status)} → ${savedCheckStatusLabel(result.status)}`,
+    `- 위험 카운트: 차단 ${snapshot.blockerCount} → ${result.blockerCount} · 주의 ${snapshot.warningCount} → ${result.warningCount} · 확인 필요 ${snapshot.unknownCount} → ${result.unknownCount}`,
+    `- 가격: ${snapshot.priceComplete && result.priceComplete ? `${priceText(snapshot.totalPriceWon)} → ${priceText(result.totalPriceWon)} · 변화 ${repairPlanPriceText(transition.priceDeltaWon, true)}` : "저장 당시 또는 현재 가격 확인 필요"}`,
+    `- 성능 분석: ${savedCheckAnalysisText(snapshot.analysisScore, snapshot.analysisScoreLabel, snapshot.analysisConfidence)} → ${savedCheckAnalysisText(result.analysis.overallScore, result.analysis.scoreLabel, result.analysis.confidence)}`,
+    `- 전력·냉각 예산: ${savedCheckResourceText(snapshot)} → ${savedCheckResourceText(currentSnapshot)}${transition.resourceBudgetChanged ? ` · 전력 ${transition.powerHeadroomDeltaW === undefined ? "상태 변화" : `${transition.powerHeadroomDeltaW > 0 ? "+" : ""}${transition.powerHeadroomDeltaW}W`} · 냉각 ${transition.coolerHeadroomDeltaW === undefined ? "상태 변화" : `${transition.coolerHeadroomDeltaW > 0 ? "+" : ""}${transition.coolerHeadroomDeltaW}W`}` : ""}`,
+    `- 검사 기준: 엔진 ${snapshot.engineVersion} → ${result.engineVersion} · 카탈로그 ${snapshot.catalogSnapshotAt} → ${result.catalogSnapshotAt}`,
+    `- 변화 방향: ${savedCheckDirectionLabel(transition.direction)}`,
+    `- 상위 변화: 판정 ${diff.statusChanged ? "변경" : "동일"} · 위험 ${diff.riskChanged ? "변경" : "동일"} · 가격 ${diff.priceChanged || diff.priceCompletenessChanged ? "변경" : "동일"} · 성능 분석 ${diff.analysisChanged ? "변경" : "동일"} · 전력·냉각 ${diff.resourceBudgetChanged ? "변경" : "동일"} · 검사 기준 ${diff.engineChanged || diff.catalogChanged ? "변경" : "동일"}`
+  ];
+  if (!findingDiff.available) {
+    lines.push("- finding 상세: 구버전 snapshot이라 규칙별 비교 불가", "");
+    return lines;
+  }
+  const changedFindings = findingDiff.changes.filter((change) => change.change !== "unchanged");
+  lines.push(`- finding 변화: 해결 ${transition.resolvedFindingCount}개 · 신규 ${transition.newFindingCount}개 · 심각도 변경 ${transition.severityChangedFindingCount}개 · 내용 변경 ${transition.detailsChangedFindingCount}개`);
+  if (changedFindings.length === 0) {
+    lines.push("- 변경된 finding: 없음", "");
+    return lines;
+  }
+  lines.push("변경된 finding:");
+  for (const change of changedFindings.slice(0, 8)) {
+    const beforeTitle = change.before?.title;
+    const afterTitle = change.after?.title;
+    const title = afterTitle ?? beforeTitle ?? change.key;
+    const detail = beforeTitle && afterTitle && beforeTitle !== afterTitle ? ` · ${beforeTitle} → ${afterTitle}` : "";
+    lines.push(`- [${savedCheckFindingChangeLabel(change.change)}] ${title}${detail} · 규칙 ${change.key}`);
+  }
+  if (changedFindings.length > 8) lines.push(`- 그 외 변경된 finding ${changedFindings.length - 8}개`);
+  lines.push("");
+  return lines;
+}
+
 function assemblyPlanStateLabel(state: ReturnType<typeof assemblyPlanFor>["state"]) {
   return state === "blocked" ? "구매 보류" : state === "review" ? "확인 후 진행" : "순서대로 진행";
 }
@@ -306,7 +498,7 @@ function assemblyPlanLines(build: BuildSelection, result: CompatibilityResult) {
   ];
 }
 
-export function compatibilityReportTextFor(result: CompatibilityResult, build: BuildSelection, partMap: ReadonlyMap<string, Part>, accessoryMap: ReadonlyMap<string, AccessoryItem>) {
+export function compatibilityReportTextFor(result: CompatibilityResult, build: BuildSelection, partMap: ReadonlyMap<string, Part>, accessoryMap: ReadonlyMap<string, AccessoryItem>, viewState?: CompatibilityReportViewState, savedCheckSnapshot?: SavedBuildCheckSnapshot) {
   const coreTotal = result.coreTotalPriceWon ?? result.totalPriceWon - (result.accessoryTotalPriceWon ?? 0);
   const coreComplete = result.corePriceComplete ?? result.priceComplete;
   const accessoryTotal = result.accessoryTotalPriceWon ?? 0;
@@ -320,6 +512,8 @@ export function compatibilityReportTextFor(result: CompatibilityResult, build: B
     `검사 시각: ${result.checkedAt}`,
     `검사 엔진: ${result.engineVersion}`,
     `카탈로그 기준: ${result.catalogSnapshotAt}`,
+    ...viewStateLines(viewState),
+    ...(savedCheckSnapshot ? savedBuildRecheckLines(savedCheckSnapshot, result) : []),
     "",
     "[추천 기준]",
     ...preferenceLines(result.recommendationPreferences),
@@ -345,6 +539,7 @@ export function compatibilityReportTextFor(result: CompatibilityResult, build: B
     `- 주변 부품: ${accessoryComplete ? priceText(accessoryTotal) : "가격 확인 필요"}`,
     `- 전체 합계: ${result.priceComplete ? priceText(result.totalPriceWon) : "가격 확인 필요"}`,
     "",
+    ...benchmarkEvidenceLines(build, partMap),
     ...gpuFitLines(result),
     ...connectivityLines(build, partMap),
     ...actionCenterLines(result, build, partMap),
@@ -358,11 +553,7 @@ export function compatibilityReportTextFor(result: CompatibilityResult, build: B
     result.analysis.nextActions.forEach((action, index) => lines.push(`${index + 1}. ${action}`));
     lines.push("");
   }
-  if (result.repairPlans && result.repairPlans.length > 0) {
-    lines.push("[자동 해결 플랜]");
-    for (const plan of result.repairPlans) lines.push(`- ${plan.label}: ${plan.title} · ${plan.resolvedBlockers}개 차단 오류 해결 · 적용 후 ${plan.priceComplete ? priceText(plan.afterTotalPriceWon) : "가격 확인 필요"}`);
-    lines.push("");
-  }
+  lines.push(...repairPlanLines(result));
   lines.push(
     "[데이터 경계]",
     "이 리포트의 판정은 검사 시점의 카탈로그와 규칙 엔진을 기준으로 합니다. 실제 FPS·벤치마크 순위·BIOS 호환성·제조사 QVL·케이스 내부 간섭·케이블 배선은 제조사 원문과 실제 조립 조건을 별도로 확인해야 합니다. 확인되지 않은 가격과 스펙은 추정하지 않았습니다."
@@ -370,20 +561,28 @@ export function compatibilityReportTextFor(result: CompatibilityResult, build: B
   return lines.join("\n");
 }
 
-export function compatibilityReportJsonFor(result: CompatibilityResult, build: BuildSelection, preferences: RecommendationPreferences | undefined, partMap?: ReadonlyMap<string, Part>) {
+export function compatibilityReportJsonFor(result: CompatibilityResult, build: BuildSelection, preferences: RecommendationPreferences | undefined, partMap?: ReadonlyMap<string, Part>, viewState?: CompatibilityReportViewState, savedCheckSnapshot?: SavedBuildCheckSnapshot) {
   const actionCenter = buildActionCenterFor(result, build, partMap);
   const connectivity = partMap ? buildConnectivitySummaryFor(
     build.motherboard ? partMap.get(build.motherboard.partId)?.specs : undefined,
     build.case ? partMap.get(build.case.partId)?.specs : undefined
   ) : undefined;
+  const benchmarkEvidence = partMap ? benchmarkEvidenceExportFor(build, partMap) : [];
   return JSON.stringify({
     reportVersion: 1,
     exportedAt: new Date().toISOString(),
+    ...(viewState ? { viewState } : {}),
     build,
     recommendationPreferences: preferences ?? result.recommendationPreferences ?? null,
     actionCenter,
     assemblyPlan: assemblyPlanFor(build, result),
     ...(connectivity && connectivity.status !== "not_applicable" ? { connectivity } : {}),
+    ...(benchmarkEvidence.length > 0 ? { benchmarkEvidence } : {}),
+    ...(savedCheckSnapshot ? {
+      savedCheckSnapshot,
+      savedCheckDiff: savedBuildCheckDiffFor(savedCheckSnapshot, result),
+      savedCheckTransition: savedBuildCheckTransitionSummaryFor(savedCheckSnapshot, savedBuildCheckSnapshotFor(result))
+    } : {}),
     result
   }, null, 2);
 }

@@ -1,0 +1,11 @@
+{
+  "name": "PC Supporter",
+  "short_name": "PC Supporter",
+  "description": "PC 부품 조합과 호환성 문제를 확인하는 웹서비스",
+  "lang": "ko",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f4f7f8",
+  "theme_color": "#122332"
+}

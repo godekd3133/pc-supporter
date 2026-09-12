@@ -1,6 +1,7 @@
 import type { PriceObservation, PriceWatchAlert } from "./price-alerts";
 
 const MAX_PERSISTED_ALERTS = 20;
+const MAX_PERSISTED_BASELINES = 50;
 
 function isFinitePrice(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value > 0;
@@ -11,8 +12,10 @@ export function priceBaselineFromJson(raw: string | null): Record<string, PriceO
   try {
     const parsed: unknown = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const entries = Object.entries(parsed);
+    if (entries.length > MAX_PERSISTED_BASELINES) return {};
     const result: Record<string, PriceObservation> = {};
-    Object.entries(parsed).forEach(([key, value]) => {
+    entries.forEach(([key, value]) => {
       if (!value || typeof value !== "object" || Array.isArray(value)) return;
       const candidate = value as Partial<PriceObservation>;
       if (candidate.status !== "available" && candidate.status !== "unavailable") return;
@@ -25,7 +28,7 @@ export function priceBaselineFromJson(raw: string | null): Record<string, PriceO
 }
 
 export function priceBaselineToJson(value: Record<string, PriceObservation>) {
-  return JSON.stringify(value);
+  return JSON.stringify(Object.fromEntries(Object.entries(value).slice(0, MAX_PERSISTED_BASELINES)));
 }
 
 export function priceAlertsFromJson(raw: string | null): PriceWatchAlert[] {

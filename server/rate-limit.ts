@@ -8,6 +8,7 @@ export interface RateLimitPolicy {
 export interface RateLimitBucket {
   startedAt: number;
   count: number;
+  lastSeenAt?: number;
 }
 
 export interface RateLimitDecision {
@@ -26,6 +27,7 @@ export function rateLimitDecision(buckets: Map<string, RateLimitBucket>, key: st
     ? { startedAt: now, count: 0 }
     : current;
   bucket.count += 1;
+  bucket.lastSeenAt = now;
   buckets.set(key, bucket);
   const resetAt = bucket.startedAt + windowMs;
   const allowed = bucket.count <= limit;
@@ -38,12 +40,20 @@ export function rateLimitDecision(buckets: Map<string, RateLimitBucket>, key: st
   };
 }
 
-function pruneBuckets(buckets: Map<string, RateLimitBucket>, policy: RateLimitPolicy, now: number, maxEntries = 10_000) {
-  if (buckets.size <= maxEntries) return;
+export function pruneBuckets(buckets: Map<string, RateLimitBucket>, policy: RateLimitPolicy, now: number, maxEntries = 10_000) {
+  const boundedMaxEntries = Math.max(1, Math.floor(maxEntries));
+  if (buckets.size <= boundedMaxEntries) return;
   for (const [key, bucket] of buckets) {
     if (now - bucket.startedAt >= policy.windowMs) buckets.delete(key);
-    if (buckets.size <= maxEntries) break;
+    if (buckets.size <= boundedMaxEntries) return;
   }
+  if (buckets.size <= boundedMaxEntries) return;
+  const overflow = buckets.size - boundedMaxEntries;
+  const oldestActiveKeys = [...buckets.entries()]
+    .sort(([, left], [, right]) => (left.lastSeenAt ?? left.startedAt) - (right.lastSeenAt ?? right.startedAt))
+    .slice(0, overflow)
+    .map(([key]) => key);
+  oldestActiveKeys.forEach((key) => buckets.delete(key));
 }
 
 export function createRateLimitMiddleware(name: string, policy: RateLimitPolicy, maxEntries = 10_000): RequestHandler {

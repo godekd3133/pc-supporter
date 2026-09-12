@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { autoRefreshEnabledFromStorage, autoRefreshMinutesFromStorage, priceAlertsFromJson, priceAlertsToJson, priceBaselineFromJson, priceBaselineToJson } from "./price-monitor-storage";
+import type { PriceObservation } from "./price-alerts";
 
 describe("price monitor storage", () => {
   it("normalizes valid baselines and drops malformed entries", () => {
@@ -23,5 +24,11 @@ describe("price monitor storage", () => {
     expect(autoRefreshMinutesFromStorage(null, 30)).toBe(30);
     expect(autoRefreshEnabledFromStorage("true")).toBe(true);
     expect(autoRefreshEnabledFromStorage("1")).toBe(false);
+  });
+
+  it("rejects an oversized raw baseline map before normalizing every key", () => {
+    const oversized: Record<string, PriceObservation> = Object.fromEntries(Array.from({ length: 51 }, (_, index) => [`part:cpu-${index}`, { status: "available" as const, priceWon: 100_000 }]));
+    expect(priceBaselineFromJson(JSON.stringify(oversized))).toEqual({});
+    expect(Object.keys(JSON.parse(priceBaselineToJson(oversized))).length).toBe(50);
   });
 });

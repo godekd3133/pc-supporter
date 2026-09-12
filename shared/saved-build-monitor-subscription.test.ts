@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { CompatibilityResult } from "./types";
-import { savedBuildCheckSnapshotFor } from "./saved-build-check";
-import { completeSavedBuildMonitorRun, configureSavedBuildMonitorSubscription, defaultSavedBuildMonitorSubscription, failSavedBuildMonitorRun, parseSavedBuildMonitorAlertIds, parseSavedBuildMonitorSettings, savedBuildMonitorAlertAllowed, savedBuildMonitorSubscriptionDue, savedBuildMonitorSubscriptionFromUnknown, updateSavedBuildMonitorAlertState } from "./saved-build-monitor-subscription";
+import { savedBuildCheckSnapshotFor, savedBuildCheckTransitionSummaryFor } from "./saved-build-check";
+import { completeSavedBuildMonitorRun, configureSavedBuildMonitorSubscription, defaultSavedBuildMonitorSubscription, failSavedBuildMonitorRun, parseSavedBuildMonitorAlertIds, parseSavedBuildMonitorSettings, savedBuildMonitorAlertAllowed, savedBuildMonitorSubscriptionDue, savedBuildMonitorSubscriptionFromUnknown, savedBuildMonitorTransitionHasActionableChange, updateSavedBuildMonitorAlertState } from "./saved-build-monitor-subscription";
 
 function result(overrides: Partial<CompatibilityResult> = {}): CompatibilityResult {
   return { status: "compatible", blockerCount: 0, warningCount: 0, unknownCount: 0, findings: [], metrics: {} as CompatibilityResult["metrics"], analysis: { profile: "general", overallScore: 80, scoreLabel: "상위권", scoreBasis: "테스트", confidence: "high", factors: [], strengths: [], focusAreas: [], bottlenecks: [], nextActions: [] }, links: [], totalPriceWon: 1_000_000, priceComplete: true, engineVersion: "2.53.0", catalogSnapshotAt: "2026-08-31T00:00:00.000Z", checkedAt: "2026-08-31T00:01:00.000Z", ...overrides };
@@ -37,6 +37,27 @@ describe("saved build server monitor subscription", () => {
     expect(second.alerts).toHaveLength(1);
     const catalogOnly = completeSavedBuildMonitorRun(build, second, { ...critical, catalogSnapshotAt: "2026-09-01T00:00:00.000Z", checkedAt: "2026-08-31T02:00:00.000Z" }, "2026-08-31T02:00:00.000Z");
     expect(catalogOnly.alerts).toHaveLength(1);
+  });
+
+  it("creates an actionable information alert for analysis-only changes", () => {
+    const before = savedBuildCheckSnapshotFor(result());
+    const after = savedBuildCheckSnapshotFor(result({ checkedAt: "2026-08-31T02:00:00.000Z", analysis: { ...result().analysis, overallScore: 74, scoreLabel: "보완 권장", confidence: "limited" } }));
+    const configured = { ...configureSavedBuildMonitorSubscription(undefined, { enabled: false, intervalMinutes: 60, alertPolicy: "all" }, "2026-08-31T00:00:00.000Z"), lastSnapshot: before };
+    const transition = savedBuildCheckTransitionSummaryFor(before, after);
+    const completed = completeSavedBuildMonitorRun(build, configured, after, "2026-08-31T02:00:00.000Z");
+
+    expect(transition).toMatchObject({ analysisChanged: true, analysisScoreDelta: -6 });
+    expect(completed.alerts[0]).toMatchObject({ kind: "changed", message: expect.stringContaining("성능 분석") });
+  });
+
+  it("creates a review alert for a resource-budget regression", () => {
+    const before = savedBuildCheckSnapshotFor(result({ metrics: { powerHeadroomW: 150, psuWattageW: 1000, recommendedPsuW: 850 } }));
+    const after = savedBuildCheckSnapshotFor(result({ metrics: { powerHeadroomW: 100, psuWattageW: 950, recommendedPsuW: 850 } }));
+    const configured = { ...configureSavedBuildMonitorSubscription(undefined, { enabled: false, intervalMinutes: 60, alertPolicy: "risk" }, "2026-08-31T00:00:00.000Z"), lastSnapshot: before };
+    const completed = completeSavedBuildMonitorRun(build, configured, after, "2026-08-31T02:00:00.000Z");
+
+    expect(savedBuildMonitorTransitionHasActionableChange(savedBuildCheckTransitionSummaryFor(before, after))).toBe(true);
+    expect(completed.alerts[0]).toMatchObject({ kind: "review", message: expect.stringContaining("전력 여유 -50W") });
   });
 
   it("records failures without discarding the last successful baseline", () => {

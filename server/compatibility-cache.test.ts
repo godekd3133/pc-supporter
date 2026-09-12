@@ -28,6 +28,19 @@ describe("compatibility result cache", () => {
     await expect(cache.getOrCompute("failed", () => 7)).resolves.toMatchObject({ value: 7, lookup: "MISS" });
   });
 
+  it("does not coalesce a new request with work invalidated by clear", async () => {
+    const cache = new TtlLruInFlightCache<number>({ ttlMs: 1_000, maxEntries: 3 });
+    let resolveOld: (value: number) => void = () => undefined;
+    const old = new Promise<number>((resolve) => { resolveOld = resolve; });
+    const oldPromise = cache.getOrCompute("same", () => old);
+    cache.clear();
+    const fresh = await cache.getOrCompute("same", () => 2);
+    resolveOld(1);
+    await expect(oldPromise).resolves.toMatchObject({ value: 1, lookup: "MISS" });
+    expect(fresh).toMatchObject({ value: 2, lookup: "MISS" });
+    expect(await cache.getOrCompute("same", () => 3)).toMatchObject({ value: 2, lookup: "HIT" });
+  });
+
   it("keeps the serialized response body alongside the compact result on cache hits", async () => {
     const cache = new TtlLruInFlightCache<CompatibilityResponseCacheValue>({ ttlMs: 1_000, maxEntries: 2 });
     const result = { status: "compatible", checkedAt: "2026-08-31T00:00:00.000Z" } as CompatibilityResponseCacheValue["result"];
@@ -81,7 +94,10 @@ describe("compatibility result cache", () => {
   it("separates request keys by input and engine version", () => {
     const build = { memory: [], ssd: [], hdd: [], accessories: [], useIntegratedGraphics: true };
     const preferences = { profile: "general" as const, priority: "balanced" as const };
-    expect(compatibilityRequestKey(build, preferences, "2.53.0")).toBe(compatibilityRequestKey(build, preferences, "2.53.0"));
-    expect(compatibilityRequestKey(build, preferences, "2.54.0")).not.toBe(compatibilityRequestKey(build, preferences, "2.53.0"));
+    const dependencies = { catalogSnapshotAt: "catalog-a", accessoryUpdatedAt: "accessory-a", catalogRevision: 1 };
+    expect(compatibilityRequestKey(build, preferences, "2.53.0", dependencies)).toBe(compatibilityRequestKey(build, preferences, "2.53.0", dependencies));
+    expect(compatibilityRequestKey(build, preferences, "2.54.0", dependencies)).not.toBe(compatibilityRequestKey(build, preferences, "2.53.0", dependencies));
+    expect(compatibilityRequestKey(build, preferences, "2.53.0", { ...dependencies, catalogRevision: 2 })).not.toBe(compatibilityRequestKey(build, preferences, "2.53.0", dependencies));
+    expect(compatibilityRequestKey(build, preferences, "2.53.0", { ...dependencies, accessoryUpdatedAt: "accessory-b" })).not.toBe(compatibilityRequestKey(build, preferences, "2.53.0", dependencies));
   });
 });

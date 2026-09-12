@@ -1,9 +1,36 @@
-import { catalogWatchEntryKey } from "./catalog-watchlist";
+import { catalogWatchEntryKey, mergeCatalogWatchEntries } from "./catalog-watchlist";
+import type { CatalogWatchEntry } from "./catalog-watchlist";
 import type { CatalogWatchSnapshot } from "./catalog-watchlist-export";
 
 export type CatalogWatchlistStatusFilter = "all" | "signals" | "target_reached" | "available" | "price_unavailable" | "out_of_scope";
 
 export type CatalogWatchlistSort = "added_desc" | "signal_desc" | "price_asc" | "target_gap_asc";
+
+export interface CatalogWatchlistImportDiff {
+  currentCount: number;
+  incomingCount: number;
+  sharedCount: number;
+  newCount: number;
+  targetChangedCount: number;
+  resultingCount: number;
+  droppedByLimit: number;
+}
+
+export function catalogWatchlistImportDiffFor(current: CatalogWatchEntry[], incoming: CatalogWatchEntry[], limit = 50): CatalogWatchlistImportDiff {
+  const currentByKey = new Map(current.map((entry) => [catalogWatchEntryKey(entry), entry]));
+  const incomingByKey = new Map(incoming.map((entry) => [catalogWatchEntryKey(entry), entry]));
+  const sharedKeys = [...incomingByKey.keys()].filter((key) => currentByKey.has(key));
+  const resultingEntries = mergeCatalogWatchEntries(current, incoming, limit);
+  return {
+    currentCount: current.length,
+    incomingCount: incoming.length,
+    sharedCount: sharedKeys.length,
+    newCount: incomingByKey.size - sharedKeys.length,
+    targetChangedCount: sharedKeys.filter((key) => currentByKey.get(key)?.targetPriceWon !== incomingByKey.get(key)?.targetPriceWon).length,
+    resultingCount: resultingEntries.length,
+    droppedByLimit: Math.max(0, current.length + incomingByKey.size - resultingEntries.length - sharedKeys.length)
+  };
+}
 
 export function catalogWatchSnapshotTargetGap(snapshot: CatalogWatchSnapshot) {
   return snapshot.targetPriceWon !== undefined && snapshot.latestPriceWon !== undefined ? snapshot.latestPriceWon - snapshot.targetPriceWon : undefined;

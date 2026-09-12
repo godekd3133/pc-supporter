@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CompatibilityResult } from "./types";
-import { savedBuildComparisonDecisionFor, savedBuildComparisonExpansionFor, savedBuildComparisonRankingsFor, savedBuildComparisonRiskScoreFor, type SavedBuildComparisonEntry } from "./saved-build-comparison";
+import { savedBuildComparisonConsensusFor, savedBuildComparisonDecisionFor, savedBuildComparisonExpansionFor, savedBuildComparisonRankingsFor, savedBuildComparisonRiskScoreFor, savedBuildComparisonTradeoffsFor, type SavedBuildComparisonEntry } from "./saved-build-comparison";
 import { savedBuildComparisonRowDiffFor } from "./saved-build-comparison-diff";
 
 function result(overrides: Partial<CompatibilityResult> = {}) {
@@ -114,5 +114,43 @@ describe("saved build comparison decisions", () => {
 
   it("returns no analysis decision when every score is unavailable", () => {
     expect(savedBuildComparisonDecisionFor([entry("a", "A", { analysis: { overallScore: undefined } as CompatibilityResult["analysis"] })], "analysis")).toBeUndefined();
+  });
+
+  it("detects when confirmed decision criteria converge on one build", () => {
+    const consensus = savedBuildComparisonConsensusFor([
+      entry("same", "공통 추천", { blockerCount: 0, warningCount: 0, unknownCount: 0, totalPriceWon: 900_000, priceComplete: true, analysis: { overallScore: 90 } as CompatibilityResult["analysis"], metrics: expansionMetrics() })
+    ]);
+    expect(consensus).toMatchObject({ status: "converged", confirmedCriteria: 4, totalCriteria: 4, winnerIds: ["same"], winnerName: "공통 추천", winnerKinds: ["compatibility", "price", "analysis", "expansion"] });
+    expect(consensus.summary).toContain("확정된 4개 기준");
+  });
+
+  it("explains a split decision when different criteria choose different builds", () => {
+    const consensus = savedBuildComparisonConsensusFor([
+      entry("safe", "안전 우선", { blockerCount: 0, warningCount: 0, unknownCount: 0, totalPriceWon: 1_200_000, priceComplete: true, analysis: { overallScore: 60 } as CompatibilityResult["analysis"], metrics: expansionMetrics({ memoryHeadroomGb: 0, memorySlotHeadroom: 0, m2Headroom: 0, sataHeadroom: 0, hddBayHeadroom: 0, powerHeadroomW: 0, coolerHeadroomW: 0, gpuClearanceMm: 0, psuClearanceMm: 0, coolerClearanceMm: 0 }) }),
+      entry("value", "가성비 우선", { blockerCount: 0, warningCount: 1, unknownCount: 0, totalPriceWon: 800_000, priceComplete: true, analysis: { overallScore: 80 } as CompatibilityResult["analysis"], metrics: expansionMetrics() })
+    ]);
+    expect(consensus).toMatchObject({ status: "split", confirmedCriteria: 4, totalCriteria: 4, winnerIds: ["safe", "value"], winnerNames: ["안전 우선", "가성비 우선"] });
+    expect(consensus.summary).toContain("기준별 1순위");
+  });
+
+  it("keeps genuine version tradeoffs and removes a fully dominated version", () => {
+    const result = savedBuildComparisonTradeoffsFor([
+      entry("cheap", "저렴한 버전", { blockerCount: 0, warningCount: 0, unknownCount: 0, totalPriceWon: 900_000, analysis: { overallScore: 70 } as CompatibilityResult["analysis"], metrics: expansionMetrics({ memoryHeadroomGb: 24, powerHeadroomW: 100 }) }),
+      entry("balanced", "균형 버전", { blockerCount: 0, warningCount: 1, unknownCount: 0, totalPriceWon: 950_000, analysis: { overallScore: 80 } as CompatibilityResult["analysis"], metrics: expansionMetrics({ memoryHeadroomGb: 48, powerHeadroomW: 200 }) }),
+      entry("dominated", "열세 버전", { blockerCount: 0, warningCount: 1, unknownCount: 0, totalPriceWon: 1_050_000, analysis: { overallScore: 75 } as CompatibilityResult["analysis"], metrics: expansionMetrics({ memoryHeadroomGb: 24, powerHeadroomW: 100 }) })
+    ]);
+
+    expect(result.find((item) => item.id === "cheap")?.frontier).toBe(true);
+    expect(result.find((item) => item.id === "balanced")?.frontier).toBe(true);
+    expect(result.find((item) => item.id === "dominated")).toMatchObject({ frontier: false, dominatedByBuildId: "balanced" });
+  });
+
+  it("does not compare a confirmed version against incomplete price or expansion evidence", () => {
+    const result = savedBuildComparisonTradeoffsFor([
+      entry("complete", "완전 버전", { totalPriceWon: 900_000, priceComplete: true, metrics: expansionMetrics() }),
+      entry("incomplete", "확인 필요 버전", { totalPriceWon: 1, priceComplete: false, metrics: undefined })
+    ]);
+
+    expect(result.every((item) => item.frontier)).toBe(true);
   });
 });

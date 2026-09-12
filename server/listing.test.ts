@@ -24,6 +24,13 @@ describe("listing policy", () => {
     expect(inferListingType(part({ name: "정상 SSD 1TB 해외구매" }))).toBe("overseas");
     expect(inferListingType(part({ name: "정상 SSD 1TB 중고" }))).toBe("used");
     expect(inferListingType(part({ name: "USB 3.0 to SATA 컨버터 4TB" }))).toBe("accessory");
+    expect(inferListingType(part({ category: "ssd", name: "M.2 SSD 보관케이스", rawSpecText: "보관케이스 / SSD전용" }))).toBe("accessory");
+    expect(inferListingType(part({ category: "psu", name: "듀얼파워 커넥터", rawSpecText: "전용 액세서리 / 메인전원: 24핀" }))).toBe("accessory");
+  });
+
+  it("separates case-category riser accessories without classifying case features as accessories", () => {
+    expect(inferListingType(part({ category: "case", name: "AONE PCI-E 4.0 라이저 케이블", rawSpecText: "액세서리 / PCIe 라이저" }))).toBe("accessory");
+    expect(inferListingType(part({ category: "case", name: "정상 케이스", rawSpecText: "ATX 케이스 / 라이저 케이블 장착 지원" }))).toBe("retail");
   });
 
   it("keeps bulk opt-in but never allows a storage accessory as a core part", () => {
@@ -36,5 +43,15 @@ describe("listing policy", () => {
     expect(isListingAllowed(used, "include_bulk")).toBe(false);
     expect(isListingAllowed(used, "all")).toBe(true);
     expect(isListingAllowed(accessory, "all")).toBe(false);
+  });
+
+  it("excludes high-confidence non-PC products mislabeled as motherboards from every listing policy", () => {
+    const embedded = part({ category: "motherboard", name: "Raspberry Pi 4 Model B", rawSpecText: "임베디드 보드" });
+    const oldBoard = part({ category: "motherboard", name: "Z390 중고 메인보드", rawSpecText: "인텔(소켓1151v2) / 인텔 Z390" });
+
+    expect(isListingAllowed(embedded, "retail_only")).toBe(false);
+    expect(isListingAllowed(embedded, "include_bulk")).toBe(false);
+    expect(isListingAllowed(embedded, "all")).toBe(false);
+    expect(isListingAllowed(oldBoard, "all")).toBe(true);
   });
 });

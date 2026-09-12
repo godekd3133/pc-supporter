@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { FiAlertTriangle, FiCheckCircle, FiDatabase, FiDownload, FiExternalLink, FiInfo, FiLoader, FiSave, FiSearch, FiShield, FiTrash2, FiXCircle } from "react-icons/fi";
 import type { AccessoryItem, CoolingFanLoadOverride } from "../shared/types";
@@ -83,25 +83,40 @@ export function CoolingFanLoadOverridePanel({ onToast, onMetaRefresh }: { onToas
   const [json, setJson] = useState("");
   const [validation, setValidation] = useState<CoolingFanLoadValidationResponse | null>(null);
   const [validatedInput, setValidatedInput] = useState("");
+  const mountedRef = useRef(false);
+  const dataRequestVersionRef = useRef(0);
+  const mutationRequestVersionRef = useRef(0);
 
   async function loadData() {
+    if (!mountedRef.current) return;
+    const requestVersion = ++dataRequestVersionRef.current;
     setLoading(true);
     try {
       const [overridePayload, coveragePayload] = await Promise.all([
         api<{ items: CoolingFanLoadOverrideListItem[] }>("/api/admin/cooling-fan-load-overrides"),
         api<CoolingFanLoadCoverage>("/api/admin/cooling-fan-load-overrides/coverage")
       ]);
+      if (!mountedRef.current || dataRequestVersionRef.current !== requestVersion) return;
       setOverrides(overridePayload.items);
       setCoverage(coveragePayload);
       setError(null);
     } catch (reason: unknown) {
+      if (!mountedRef.current || dataRequestVersionRef.current !== requestVersion) return;
       setError(reason instanceof Error ? reason.message : "쿨링팬 소비전류 보강 데이터를 불러오지 못했습니다.");
     } finally {
-      setLoading(false);
+      if (mountedRef.current && dataRequestVersionRef.current === requestVersion) setLoading(false);
     }
   }
 
-  useEffect(() => { void loadData(); }, []);
+  useEffect(() => {
+    mountedRef.current = true;
+    void loadData();
+    return () => {
+      mountedRef.current = false;
+      dataRequestVersionRef.current += 1;
+      mutationRequestVersionRef.current += 1;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -138,35 +153,44 @@ export function CoolingFanLoadOverridePanel({ onToast, onMetaRefresh }: { onToas
       onToast("먼저 소비전류를 보강할 쿨링팬을 검색해 선택해 주세요.");
       return;
     }
+    const requestVersion = ++mutationRequestVersionRef.current;
+    const isCurrent = () => mountedRef.current && mutationRequestVersionRef.current === requestVersion;
+    const fan = selectedFan;
     setBusy(true);
     try {
-      await api(`/api/admin/cooling-fan-load-overrides/${encodeURIComponent(selectedFan.id)}`, {
+      await api(`/api/admin/cooling-fan-load-overrides/${encodeURIComponent(fan.id)}`, {
         method: "PUT",
         body: JSON.stringify({ fanCurrentA: currentA.trim(), manufacturerModel, sourceNote, ...(sourceUrl.trim() ? { sourceUrl: sourceUrl.trim() } : {}) })
       });
+      if (!isCurrent()) return;
       await loadData();
+      if (!isCurrent()) return;
       onMetaRefresh();
-      onToast(`${selectedFan.name}의 팬 소비전류 근거를 저장했습니다. 다음 호환성 검사부터 허브 전류를 계산합니다.`);
+      onToast(`${fan.name}의 팬 소비전류 근거를 저장했습니다. 다음 호환성 검사부터 허브 전류를 계산합니다.`);
     } catch (reason: unknown) {
-      onToast(reason instanceof Error ? reason.message : "쿨링팬 소비전류 근거를 저장하지 못했습니다.");
+      if (isCurrent()) onToast(reason instanceof Error ? reason.message : "쿨링팬 소비전류 근거를 저장하지 못했습니다.");
     } finally {
-      setBusy(false);
+      if (isCurrent()) setBusy(false);
     }
   }
 
   async function removeOverride(accessoryId: string) {
     if (!window.confirm("이 쿨링팬의 소비전류 보강을 삭제할까요? 원문에서 파싱된 값이 있으면 원문 값을 다시 사용합니다.")) return;
+    const requestVersion = ++mutationRequestVersionRef.current;
+    const isCurrent = () => mountedRef.current && mutationRequestVersionRef.current === requestVersion;
     setBusy(true);
     try {
       await api(`/api/admin/cooling-fan-load-overrides/${encodeURIComponent(accessoryId)}`, { method: "DELETE" });
+      if (!isCurrent()) return;
       await loadData();
+      if (!isCurrent()) return;
       onMetaRefresh();
       if (selectedFan?.id === accessoryId) clearEditor();
       onToast("쿨링팬 소비전류 보강을 삭제했습니다.");
     } catch (reason: unknown) {
-      onToast(reason instanceof Error ? reason.message : "쿨링팬 소비전류 보강을 삭제하지 못했습니다.");
+      if (isCurrent()) onToast(reason instanceof Error ? reason.message : "쿨링팬 소비전류 보강을 삭제하지 못했습니다.");
     } finally {
-      setBusy(false);
+      if (isCurrent()) setBusy(false);
     }
   }
 
@@ -181,18 +205,23 @@ export function CoolingFanLoadOverridePanel({ onToast, onMetaRefresh }: { onToas
       onToast("JSON 형식이 올바르지 않습니다.");
       return;
     }
+    const requestVersion = ++mutationRequestVersionRef.current;
+    const isCurrent = () => mountedRef.current && mutationRequestVersionRef.current === requestVersion;
     setBusy(true);
     try {
       const result = await api<CoolingFanLoadValidationResponse>("/api/admin/cooling-fan-load-overrides/batch/validate", { method: "POST", body: json });
+      if (!isCurrent()) return;
       setValidation(result);
       setValidatedInput(json);
       onToast(result.invalidCount > 0 ? `검증 완료: ${result.validCount}개 저장 가능, ${result.invalidCount}개 수정 필요` : `${result.validCount}개 쿨링팬 소비전류 보강을 저장할 수 있습니다.`);
     } catch (reason: unknown) {
-      setValidation(null);
-      setValidatedInput("");
-      onToast(reason instanceof Error ? reason.message : "쿨링팬 소비전류 JSON 검증에 실패했습니다.");
+      if (isCurrent()) {
+        setValidation(null);
+        setValidatedInput("");
+        onToast(reason instanceof Error ? reason.message : "쿨링팬 소비전류 JSON 검증에 실패했습니다.");
+      }
     } finally {
-      setBusy(false);
+      if (isCurrent()) setBusy(false);
     }
   }
 
@@ -205,30 +234,38 @@ export function CoolingFanLoadOverridePanel({ onToast, onMetaRefresh }: { onToas
       onToast("수정이 필요한 항목이 있어 저장하지 않았습니다.");
       return;
     }
+    const requestVersion = ++mutationRequestVersionRef.current;
+    const isCurrent = () => mountedRef.current && mutationRequestVersionRef.current === requestVersion;
     setBusy(true);
     try {
       const result = await api<{ saved: boolean; count: number; items: CoolingFanLoadOverrideListItem[] }>("/api/admin/cooling-fan-load-overrides/batch", { method: "PUT", body: json });
+      if (!isCurrent()) return;
       setOverrides(result.items);
-      setCoverage(await api<CoolingFanLoadCoverage>("/api/admin/cooling-fan-load-overrides/coverage"));
+      const nextCoverage = await api<CoolingFanLoadCoverage>("/api/admin/cooling-fan-load-overrides/coverage");
+      if (!isCurrent()) return;
+      setCoverage(nextCoverage);
       onMetaRefresh();
       onToast(`${result.count}개 쿨링팬의 소비전류 보강을 저장했습니다.`);
     } catch (reason: unknown) {
-      onToast(reason instanceof Error ? reason.message : "쿨링팬 소비전류 보강을 저장하지 못했습니다.");
+      if (isCurrent()) onToast(reason instanceof Error ? reason.message : "쿨링팬 소비전류 보강을 저장하지 못했습니다.");
     } finally {
-      setBusy(false);
+      if (isCurrent()) setBusy(false);
     }
   }
 
   async function exportOverrides() {
+    const requestVersion = ++mutationRequestVersionRef.current;
+    const isCurrent = () => mountedRef.current && mutationRequestVersionRef.current === requestVersion;
     setBusy(true);
     try {
       const result = await api<{ exportedAt: string; items: CoolingFanLoadOverrideListItem[] }>("/api/admin/cooling-fan-load-overrides/export");
+      if (!isCurrent()) return;
       downloadJson(`cooling-fan-load-overrides-${new Date(result.exportedAt).toISOString().slice(0, 10)}.json`, { items: result.items });
       onToast(`${result.items.length}개 쿨링팬 소비전류 보강을 JSON으로 내보냈습니다.`);
     } catch (reason: unknown) {
-      onToast(reason instanceof Error ? reason.message : "쿨링팬 소비전류 보강을 내보내지 못했습니다.");
+      if (isCurrent()) onToast(reason instanceof Error ? reason.message : "쿨링팬 소비전류 보강을 내보내지 못했습니다.");
     } finally {
-      setBusy(false);
+      if (isCurrent()) setBusy(false);
     }
   }
 

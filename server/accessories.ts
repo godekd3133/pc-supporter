@@ -1,21 +1,47 @@
-import type { AccessoryCategory, AccessoryCategoryCoverage, AccessoryCoverageSnapshot, AccessoryCrawlCategoryReport, AccessoryItem, AccessoryPriceFilter, DataFreshness, DataQuality } from "../shared/types";
+import type { AccessoryCategory, AccessoryCategoryCoverage, AccessoryCoverageSnapshot, AccessoryCrawlCategoryReport, AccessoryItem, AccessoryPriceFilter, BrandCountOption, DataFreshness, DataQuality } from "../shared/types";
 import { ACCESSORY_CATEGORIES, isKnownPrice } from "../shared/types";
 import { ACCESSORIES_PATH, ACCESSORY_COVERAGE_PATH, COOLING_FAN_LOAD_OVERRIDES_PATH, fileUpdatedAt, readJson, writeJson } from "./storage";
 import { parseM2FormFactors } from "./danawa";
 import { classifyDataFreshness } from "./data-health";
 import { applyCoolingFanLoadOverrides, readCoolingFanLoadOverrides, stripCoolingFanLoadOverride } from "./cooling-fan-load-overrides";
 import { fanCurrentAFromText } from "../shared/fan-connectivity";
+import { parseAdapterPcieSlotWidth, parseAdapterStorageDeviceCount } from "../shared/storage-adapter";
+import { seedAccessories } from "./seed-accessories";
+import { brandCountsFor } from "../shared/brand-counts";
 
 let accessoryCache: AccessoryItem[] | null = null;
 let accessoryMtime: string | null = null;
 let coolingFanOverrideMtime: string | null = null;
+let accessoryLoadInFlight: Promise<AccessoryItem[]> | null = null;
+let baseAccessoriesCache: { mtime: string; value: AccessoryItem[] } | null = null;
 
 function reparseM2Accessories(items: AccessoryItem[]) {
   return items.map((item) => {
     if (item.category !== "storage_accessory" && item.category !== "m2_heatsink") return item;
     const formFactors = parseM2FormFactors(`${item.name} ${item.rawSpecText ?? ""}`);
-    if (formFactors.length === 0) return item;
-    return { ...item, specs: { ...item.specs, formFactor: formFactors[0], supportedFormFactors: formFactors } };
+    const adapterStorageDeviceCount = item.category === "storage_accessory"
+      ? parseAdapterStorageDeviceCount(`${item.name} ${item.rawSpecText ?? ""}`)
+      : undefined;
+    const adapterPcieSlotWidth = item.category === "storage_accessory"
+      ? parseAdapterPcieSlotWidth(`${item.name} ${item.rawSpecText ?? ""}`)
+      : undefined;
+    const hasStoredAdapterEvidence = item.category === "storage_accessory"
+      && (item.specs.adapterStorageDeviceCount !== undefined || item.specs.adapterPcieSlotWidth !== undefined);
+    if (formFactors.length === 0 && adapterStorageDeviceCount === undefined && adapterPcieSlotWidth === undefined && !hasStoredAdapterEvidence) return item;
+    const specs = { ...item.specs };
+    if (item.category === "storage_accessory") {
+      if (adapterStorageDeviceCount !== undefined) specs.adapterStorageDeviceCount = adapterStorageDeviceCount;
+      else delete specs.adapterStorageDeviceCount;
+      if (adapterPcieSlotWidth !== undefined) specs.adapterPcieSlotWidth = adapterPcieSlotWidth;
+      else delete specs.adapterPcieSlotWidth;
+    }
+    return {
+      ...item,
+      specs: {
+        ...specs,
+        ...(formFactors.length > 0 ? { formFactor: formFactors[0], supportedFormFactors: formFactors } : {})
+      }
+    };
   });
 }
 
@@ -28,26 +54,55 @@ function reparseCoolingFanAccessories(items: AccessoryItem[]) {
 }
 
 async function loadBaseAccessoriesFromDisk() {
-  return reparseCoolingFanAccessories(reparseM2Accessories(await readJson<AccessoryItem[]>(ACCESSORIES_PATH, [])));
+  const persisted = await readJson<AccessoryItem[]>(ACCESSORIES_PATH, []);
+  const merged = mergeAccessories(seedAccessories, persisted);
+  if (persisted.length === 0) await writeJson(ACCESSORIES_PATH, merged);
+  return reparseCoolingFanAccessories(reparseM2Accessories(merged));
 }
 
-export async function loadAccessories() {
+async function loadAccessoriesUncoalesced() {
   const persistedMtime = await fileUpdatedAt(ACCESSORIES_PATH, "");
   const persistedCoolingFanOverrideMtime = await fileUpdatedAt(COOLING_FAN_LOAD_OVERRIDES_PATH, "");
   if (accessoryCache && accessoryMtime === persistedMtime && coolingFanOverrideMtime === persistedCoolingFanOverrideMtime) return accessoryCache;
-  const baseAccessories = await loadBaseAccessoriesFromDisk();
+  let baseAccessories = baseAccessoriesCache?.mtime === persistedMtime ? baseAccessoriesCache.value : undefined;
+  if (!baseAccessories) baseAccessories = await loadBaseAccessoriesFromDisk();
+  const effectiveAccessoryMtime = await fileUpdatedAt(ACCESSORIES_PATH, persistedMtime);
+  baseAccessoriesCache = { mtime: effectiveAccessoryMtime, value: baseAccessories };
   accessoryCache = applyCoolingFanLoadOverrides(baseAccessories, await readCoolingFanLoadOverrides());
-  accessoryMtime = persistedMtime;
+  accessoryMtime = effectiveAccessoryMtime;
   coolingFanOverrideMtime = persistedCoolingFanOverrideMtime;
   return accessoryCache;
+}
+
+export async function loadAccessories() {
+  if (accessoryLoadInFlight) return accessoryLoadInFlight;
+  const promise = loadAccessoriesUncoalesced();
+  accessoryLoadInFlight = promise;
+  try {
+    return await promise;
+  } finally {
+    if (accessoryLoadInFlight === promise) accessoryLoadInFlight = null;
+  }
 }
 
 export function findAccessory(items: AccessoryItem[], id: string) {
   return items.find((item) => item.id === id);
 }
 
+const DATA_QUALITY_VALUES: DataQuality[] = ["seed", "live", "manual", "incomplete"];
+
+export function accessoryCategoryQualityCountsFor(items: AccessoryItem[]) {
+  return Object.fromEntries(
+    ACCESSORY_CATEGORIES.map((category) => [
+      category,
+      Object.fromEntries(DATA_QUALITY_VALUES.map((quality) => [quality, items.filter((item) => item.category === category && item.dataQuality === quality).length])) as Record<DataQuality, number>
+    ])
+  ) as Record<AccessoryCategory, Record<DataQuality, number>>;
+}
+
 type AccessorySearchOptions = {
   category?: AccessoryCategory | "all";
+  brand?: string;
   quality?: DataQuality | "all";
   freshness?: DataFreshness | "all";
   now?: string | number;
@@ -64,10 +119,12 @@ function isPriceInFilter(item: AccessoryItem, priceFilter: AccessoryPriceFilter 
   return item.priceWon > 50_000;
 }
 
-function filterAndSortAccessories(items: AccessoryItem[], query: string | undefined, options: AccessorySearchOptions = {}) {
+function filterAccessories(items: AccessoryItem[], query: string | undefined, options: AccessorySearchOptions = {}) {
   const normalizedQuery = query?.trim().toLocaleLowerCase("ko-KR") ?? "";
+  const normalizedBrand = options.brand?.trim().toLocaleLowerCase("ko-KR") ?? "";
   return items
     .filter((item) => !options.category || options.category === "all" || item.category === options.category)
+    .filter((item) => !normalizedBrand || (item.brand ?? "").toLocaleLowerCase("ko-KR").includes(normalizedBrand))
     .filter((item) => !options.quality || options.quality === "all" || item.dataQuality === options.quality)
     .filter((item) => !options.freshness || options.freshness === "all" || classifyDataFreshness(item.updatedAt, options.now) === options.freshness)
     .filter((item) => isPriceInFilter(item, options.priceFilter))
@@ -78,51 +135,71 @@ function filterAndSortAccessories(items: AccessoryItem[], query: string | undefi
         .join(" ")
         .toLocaleLowerCase("ko-KR")
         .includes(normalizedQuery);
-    })
-    .sort((a, b) => {
-      if (options.sort === "name") return a.name.localeCompare(b.name, "ko-KR");
-      if (options.sort === "updated") return b.updatedAt.localeCompare(a.updatedAt);
-      if (options.sort === "price_desc") {
-        if (!isKnownPrice(a.priceWon) && !isKnownPrice(b.priceWon)) return 0;
-        if (!isKnownPrice(a.priceWon)) return 1;
-        if (!isKnownPrice(b.priceWon)) return -1;
-        return b.priceWon - a.priceWon;
-      }
-      if (!isKnownPrice(a.priceWon) && !isKnownPrice(b.priceWon)) return 0;
-      if (!isKnownPrice(a.priceWon)) return 1;
-      if (!isKnownPrice(b.priceWon)) return -1;
-      return a.priceWon - b.priceWon;
     });
 }
 
+function sortAccessories(items: AccessoryItem[], sort: AccessorySearchOptions["sort"]) {
+  return items.sort((a, b) => {
+    if (sort === "name") return a.name.localeCompare(b.name, "ko-KR");
+    if (sort === "updated") return b.updatedAt.localeCompare(a.updatedAt);
+    if (sort === "price_desc") {
+      if (!isKnownPrice(a.priceWon) && !isKnownPrice(b.priceWon)) return 0;
+      if (!isKnownPrice(a.priceWon)) return 1;
+      if (!isKnownPrice(b.priceWon)) return -1;
+      return b.priceWon - a.priceWon;
+    }
+    if (!isKnownPrice(a.priceWon) && !isKnownPrice(b.priceWon)) return 0;
+    if (!isKnownPrice(a.priceWon)) return 1;
+    if (!isKnownPrice(b.priceWon)) return -1;
+    return a.priceWon - b.priceWon;
+  });
+}
+
 export function searchAccessories(items: AccessoryItem[], query: string | undefined, limit = 40, options: AccessorySearchOptions = {}, offset = 0) {
-  return filterAndSortAccessories(items, query, options).slice(Math.max(0, offset), Math.max(0, offset) + limit);
+  return sortAccessories(filterAccessories(items, query, options), options.sort).slice(Math.max(0, offset), Math.max(0, offset) + limit);
 }
 
 export function countAccessories(items: AccessoryItem[], query: string | undefined, options: AccessorySearchOptions = {}) {
-  return filterAndSortAccessories(items, query, options).length;
+  return filterAccessories(items, query, options).length;
 }
 
 export async function accessoryMeta() {
   const items = await loadAccessories();
-  const accessoryUpdatedAt = [accessoryMtime, coolingFanOverrideMtime]
+  const itemsByCategory = new Map(ACCESSORY_CATEGORIES.map((category) => [category, [] as AccessoryItem[]]));
+  const accessoryCategoryQualityCounts = Object.fromEntries(
+    ACCESSORY_CATEGORIES.map((category) => [category, Object.fromEntries(DATA_QUALITY_VALUES.map((quality) => [quality, 0])) as Record<DataQuality, number>])
+  ) as Record<AccessoryCategory, Record<DataQuality, number>>;
+  const accessoryQualityCounts = Object.fromEntries(DATA_QUALITY_VALUES.map((quality) => [quality, 0])) as Record<DataQuality, number>;
+  let priced = 0;
+  for (const item of items) {
+    const knownQuality = DATA_QUALITY_VALUES.includes(item.dataQuality);
+    if (knownQuality) accessoryQualityCounts[item.dataQuality] += 1;
+    if (isKnownPrice(item.priceWon)) priced += 1;
+    const categoryItems = itemsByCategory.get(item.category);
+    if (!categoryItems) continue;
+    categoryItems.push(item);
+    if (knownQuality) accessoryCategoryQualityCounts[item.category][item.dataQuality] += 1;
+  }
+  const accessoryBrandCounts = Object.fromEntries(ACCESSORY_CATEGORIES.map((category) => [category, brandCountsFor(itemsByCategory.get(category) ?? [])])) as Partial<Record<AccessoryCategory, BrandCountOption[]>>;
+  return {
+    accessoryCount: items.length,
+    accessoryCategoryCounts: Object.fromEntries(ACCESSORY_CATEGORIES.map((category) => [category, itemsByCategory.get(category)?.length ?? 0])) as Record<AccessoryCategory, number>,
+    accessoryBrandCounts,
+    accessoryCategoryQualityCounts,
+    accessoryQualityCounts,
+    accessoryPriceCoverage: {
+      priced,
+      unpriced: items.length - priced
+    },
+    accessoryUpdatedAt: currentAccessoryUpdatedAt()
+  };
+}
+
+export function currentAccessoryUpdatedAt() {
+  return [accessoryMtime, coolingFanOverrideMtime]
     .filter((value): value is string => Boolean(value))
     .sort()
     .at(-1) ?? "";
-  return {
-    accessoryCount: items.length,
-    accessoryCategoryCounts: Object.fromEntries(
-      ACCESSORY_CATEGORIES.map((category) => [category, items.filter((item) => item.category === category).length])
-    ) as Record<AccessoryCategory, number>,
-    accessoryQualityCounts: Object.fromEntries(
-      ["seed", "live", "manual", "incomplete"].map((quality) => [quality, items.filter((item) => item.dataQuality === quality).length])
-    ) as Record<DataQuality, number>,
-    accessoryPriceCoverage: {
-      priced: items.filter((item) => isKnownPrice(item.priceWon)).length,
-      unpriced: items.filter((item) => !isKnownPrice(item.priceWon)).length
-    },
-    accessoryUpdatedAt
-  };
 }
 
 export async function readAccessoryCoverage(): Promise<AccessoryCoverageSnapshot> {
@@ -252,14 +329,28 @@ export function mergeAccessories(base: AccessoryItem[], incoming: AccessoryItem[
   return [...merged.values()];
 }
 
-export async function upsertAccessories(items: AccessoryItem[]) {
+export function mergeDanawaAccessorySnapshot(base: AccessoryItem[], incoming: AccessoryItem[], categories: AccessoryCategory[]) {
+  const categorySet = new Set(categories);
+  const retained = base.filter((item) => !(item.source === "danawa" && categorySet.has(item.category)));
+  return mergeAccessories(retained, incoming);
+}
+
+export async function upsertAccessories(
+  items: AccessoryItem[],
+  options: { replaceDanawaCategories?: AccessoryCategory[] } = {}
+) {
+  accessoryLoadInFlight = null;
   // 크롤러 저장은 override가 적용된 런타임 목록이 아니라 원본 파일을
   // 기준으로 병합해야 구조화된 원문 전류가 유실되지 않는다.
   const current = await loadBaseAccessoriesFromDisk();
   const incoming = items.map(stripCoolingFanLoadOverride);
-  const merged = mergeAccessories(current, incoming);
+  const replaceDanawaCategories = options.replaceDanawaCategories ?? [];
+  const merged = replaceDanawaCategories.length > 0
+    ? mergeDanawaAccessorySnapshot(current, incoming, replaceDanawaCategories)
+    : mergeAccessories(current, incoming);
   await writeJson(ACCESSORIES_PATH, merged);
   const baseAccessories = reparseCoolingFanAccessories(reparseM2Accessories(merged));
+  baseAccessoriesCache = { mtime: await fileUpdatedAt(ACCESSORIES_PATH, ""), value: baseAccessories };
   accessoryCache = applyCoolingFanLoadOverrides(baseAccessories, await readCoolingFanLoadOverrides());
   accessoryMtime = await fileUpdatedAt(ACCESSORIES_PATH, "");
   coolingFanOverrideMtime = await fileUpdatedAt(COOLING_FAN_LOAD_OVERRIDES_PATH, "");

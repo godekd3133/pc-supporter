@@ -1,10 +1,5 @@
 import type { BuildGenerationResult, BuildSelection, RecommendationPreferences } from "../shared/types";
-
-const priorityLabels: Record<BuildGenerationResult["priority"], string> = {
-  balanced: "균형형",
-  budget: "가성비 우선",
-  performance: "성능 유지"
-};
+import { RECOMMENDATION_PRIORITY_LABELS } from "../shared/types";
 
 export type GeneratedDraftSaveTarget = {
   build: BuildSelection;
@@ -25,7 +20,7 @@ export function generatedDraftSaveTargetFor(draft: BuildGenerationResult, parent
       gamingRefreshRate: draft.gamingRefreshRate,
       listingPolicy: draft.listingPolicy
     },
-    label: `${priorityLabels[draft.priority]} 자동 구성 견적`,
+    label: `${RECOMMENDATION_PRIORITY_LABELS[draft.priority]} 자동 구성 견적`,
     kind: "generated",
     ...(parentBuildId ? { parentBuildId } : {})
   };

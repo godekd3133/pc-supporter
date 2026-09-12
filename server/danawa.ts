@@ -1,5 +1,5 @@
 import * as cheerio from "cheerio";
-import type { M2LaneSharingScope, MemoryProfile, Part, PartCategory, PartSpecs, PciePowerConnectorKind, PciePowerRequirement, RadiatorMountPosition, RadiatorSupport } from "../shared/types";
+import type { CrawlPageFailure, M2LaneSharingScope, MemoryProfile, Part, PartCategory, PartSpecs, PciePowerConnectorKind, PciePowerRequirement, RadiatorMountPosition, RadiatorSupport } from "../shared/types";
 import { CATEGORY_LABELS } from "../shared/types";
 import { inferListingType } from "./listing";
 
@@ -33,6 +33,17 @@ export type DanawaCrawlerOptions = {
   retries?: number;
   userAgent?: string;
   signal?: AbortSignal;
+  onPageProgress?: (progress: DanawaCategoryCrawlProgress) => void | Promise<void>;
+  onAttempt?: (attempt: number) => void;
+  expectedPages?: number;
+};
+
+export type DanawaCategoryCrawlProgress = {
+  currentPage: number;
+  pagesExpected?: number;
+  lastSuccessfulPage: number;
+  pageRetries: number;
+  failedPages: CrawlPageFailure[];
 };
 
 export type DanawaListItem = {
@@ -83,6 +94,33 @@ export type DanawaCategoryCrawlResult = {
   incompleteSpecs: number;
   coverage: "partial" | "complete";
   specCoverage: "partial" | "complete";
+  lastSuccessfulPage: number;
+  pageRetries: number;
+  failedPages: CrawlPageFailure[];
+  totalProductCount?: number;
+  pageSize?: number;
+  successfulPages: number[];
+  pageProductCodes: Record<string, string[]>;
+  error?: string;
+};
+
+export type DanawaPageRetryResult = {
+  category: PartCategory;
+  categoryId: string;
+  page: number;
+  parts: Part[];
+  listedProducts: number;
+  uniqueProducts: number;
+  detailFetched: number;
+  detailFailed: number;
+  incompleteSpecs: number;
+  pageRetries: number;
+  failedPages: CrawlPageFailure[];
+  successfulPages: number[];
+  pageProductCodes: Record<string, string[]>;
+  totalProductCount?: number;
+  pageSize?: number;
+  error?: string;
 };
 
 function normalizeSpace(value: string | undefined | null) {
@@ -289,7 +327,7 @@ function partFromListItem(category: PartCategory, categoryId: string, item: Dana
   const listingType = inferListingType({ category, name: item.name, rawSpecText: item.rawSpecText });
   const missing = [
     ...missingFields(category, specs),
-    ...(listingType === "accessory" ? ["internal storage device"] : [])
+    ...(listingType === "accessory" && (category === "ssd" || category === "hdd") ? ["internal storage device"] : [])
   ];
   return {
     id: `danawa-${category}-${item.sourceProductCode}`,
@@ -427,14 +465,15 @@ function parseCapacityGb(text: string, preferredText = "") {
 
 function parseSocket(text: string) {
   const labeled = text.match(/(?:소켓|socket)\s*[:：]?\s*([A-Z0-9+/-]+)/i)?.[1];
-  const lga = text.match(/\bLGA\s*\d{4,5}(?:-\d+)?\b/i)?.[0];
-  const raw = (lga ?? labeled)?.replace(/\s/g, "").toUpperCase();
+  const lga = text.match(/\bLGA\s*\d{4,5}(?:-?V?\d+)?\b/i)?.[0];
+  const suffix = text.match(/(\d{4,5}(?:-?V?\d+)?)\s*소켓/i)?.[1];
+  const raw = (lga ?? labeled ?? suffix)?.replace(/\s/g, "").toUpperCase().replace(/-?V(?=\d)/g, "-V");
   if (!raw) return undefined;
-  return /^\d{4,5}(?:-\d+)?$/.test(raw) ? `LGA${raw}` : raw;
+  return /^\d{4,5}(?:-V?\d+)?$/.test(raw) ? `LGA${raw}` : raw;
 }
 
 function parseMemoryType(text: string) {
-  return text.match(/DDR\s*[2345]/i)?.[0].replace(/\s/g, "").toUpperCase();
+  return text.match(/LPDDR\s*[345]|DDR\s*[2345]/i)?.[0].replace(/\s/g, "").toUpperCase();
 }
 
 export function parseM2FormFactors(text: string) {
@@ -733,10 +772,14 @@ function parseSpecs(category: PartCategory, name: string, description: string, r
       if (laneSharing.scopes.includes("pcie")) specs.m2LaneSharing = true;
       specs.m2LaneSharingNote = `M.2 연결: ${normalizeSpace(m2ConnectionText)}`;
     }
-    const expansionSlotText = text.match(/\[확장슬롯\]([\s\S]*?)(?=\[(?:저장장치|후면단자|내부I\/O|특징)\]|$)/i)?.[1] ?? "";
-    if (/PCIe\s*x\d+/i.test(expansionSlotText)) {
-      specs.pcieX16Slots = parseNumber(expansionSlotText, /PCIe\s*x16(?:\s*\([^)]*\))?\s*[:：]?\s*(\d+)\s*개/i) ?? 0;
-      specs.pcieX8Slots = parseNumber(expansionSlotText, /PCIe\s*x8(?:\s*\([^)]*\))?\s*[:：]?\s*(\d+)\s*개/i) ?? 0;
+    const expansionSlotText = text.match(/(?:(?:\[?확장\s*슬롯\]?)|(?:^|\/\s*)PCIe\s*버전\s*[:：]?)([\s\S]*?)(?=\s*(?:\/\s*)?(?:\[?(?:저장장치|후면단자|내부I\/O|특징)\]?)(?:\s|[:/]|$)|$)/i)?.[1] ?? "";
+    const pcieSlotCountPattern = /PCIe\s*x(?:16|8|4|1)(?:\s*\([^)]*\))?\s*[:：]?\s*\d+\s*개/i;
+    const pcieSlotText = expansionSlotText || (pcieSlotCountPattern.test(text) ? text : "");
+    if (pcieSlotText && pcieSlotCountPattern.test(pcieSlotText)) {
+      specs.pcieX16Slots = parseNumber(pcieSlotText, /PCIe\s*x16(?:\s*\([^)]*\))?\s*[:：]?\s*(\d+)\s*개/i) ?? 0;
+      specs.pcieX8Slots = parseNumber(pcieSlotText, /PCIe\s*x8(?:\s*\([^)]*\))?\s*[:：]?\s*(\d+)\s*개/i) ?? 0;
+      specs.pcieX4Slots = parseNumber(pcieSlotText, /PCIe\s*x4(?:\s*\([^)]*\))?\s*[:：]?\s*(\d+)\s*개/i) ?? 0;
+      specs.pcieX1Slots = parseNumber(pcieSlotText, /PCIe\s*x1(?:\s*\([^)]*\))?\s*[:：]?\s*(\d+)\s*개/i) ?? 0;
     }
     specs.sataPorts = parseNumber(text, /SATA\d?[^\d]{0,32}(\d+)\s*개/i);
     const systemFanPorts = parseNumber(text, /시스템팬\s*4핀\s*[:：]?\s*(\d+)\s*개/i);
@@ -817,7 +860,9 @@ function parseSpecs(category: PartCategory, name: string, description: string, r
   if (category === "ssd") {
     specs.capacityGb = parseCapacityGb(text, name);
     specs.interface = /NVMe/i.test(text) ? "NVMe" : /SATA/i.test(text) ? "SATA" : undefined;
-    specs.formFactor = parseM2FormFactor(text) ?? (/2\.5(?:인치|형)|2\.5\"|6\.4cm/i.test(text) ? "2.5인치" : undefined);
+    specs.formFactor = /mSATA|Mini\s*SATA/i.test(text)
+      ? "mSATA"
+      : parseM2FormFactor(text) ?? (/2\.5(?:인치|형)|2\.5\"|6\.4cm/i.test(text) ? "2.5인치" : undefined);
     specs.sequentialReadMbps = parseNumber(text, /순차읽기\s*[:：]?\s*([\d,]+)\s*MB\/s/i);
     specs.sequentialWriteMbps = parseNumber(text, /순차쓰기\s*[:：]?\s*([\d,]+)\s*MB\/s/i);
     const ssdPcieGenerations = parsePcieGenerations(text);
@@ -954,7 +999,7 @@ export function parseDanawaProductPage(
   const listingType = inferListingType({ category, name: effectiveName, rawSpecText });
   const missing = [
     ...missingFields(category, specs),
-    ...(listingType === "accessory" ? ["internal storage device"] : [])
+    ...(listingType === "accessory" && (category === "ssd" || category === "hdd") ? ["internal storage device"] : [])
   ];
   const brand = effectiveName.split(" ")[0];
   return {
@@ -1061,6 +1106,9 @@ export function reparseDanawaPart(part: Part): Part {
       delete specs.m2LaneSharingScopes;
       delete specs.m2LaneSharingNote;
     }
+    for (const field of ["pcieX16Slots", "pcieX8Slots", "pcieX4Slots", "pcieX1Slots"] as const) {
+      if (parsedSpecs[field] === undefined) delete specs[field];
+    }
     if (parsedSpecs.rgb5vPortCount === undefined) delete specs.rgb5vPortCount;
     if (parsedSpecs.rgb12vPortCount === undefined) delete specs.rgb12vPortCount;
   }
@@ -1089,6 +1137,7 @@ export async function fetchDanawaHtml(url: string, options: DanawaCrawlerOptions
   let lastError: unknown;
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     if (options.signal?.aborted) throw new Error("Crawler aborted");
+    options.onAttempt?.(attempt + 1);
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     const abortParent = () => controller.abort();
@@ -1126,6 +1175,22 @@ export async function fetchDanawaHtml(url: string, options: DanawaCrawlerOptions
   throw lastError instanceof Error ? lastError : new Error(`Danawa request failed: ${url}`);
 }
 
+async function fetchDanawaHtmlWithAttempts(url: string, options: DanawaCrawlerOptions, request: DanawaFetchRequest = {}) {
+  let attempts = 0;
+  try {
+    const html = await fetchDanawaHtml(url, {
+      ...options,
+      onAttempt: (attempt) => { attempts = attempt; }
+    }, request);
+    return { html, attempts: Math.max(1, attempts) };
+  } catch (error) {
+    const wrapped = new Error(error instanceof Error ? error.message : String(error));
+    wrapped.name = error instanceof Error ? error.name : "DanawaFetchError";
+    Object.assign(wrapped, { attempts: Math.max(1, attempts) });
+    throw wrapped;
+  }
+}
+
 function sleep(ms: number, signal?: AbortSignal) {
   if (ms <= 0) return Promise.resolve();
   return new Promise<void>((resolvePromise, reject) => {
@@ -1141,65 +1206,14 @@ function sleep(ms: number, signal?: AbortSignal) {
   });
 }
 
-export async function crawlDanawaCategory(
-  category: PartCategory,
-  categoryId: string,
-  options: DanawaCrawlerOptions = {}
-) : Promise<DanawaCategoryCrawlResult> {
-  const exhaustive = options.all === true;
-  const configuredPages = exhaustive ? Number.POSITIVE_INFINITY : Math.max(1, options.pages ?? 1);
-  const limit = Math.max(1, options.limitPerCategory ?? 24);
-  const details = options.details ?? true;
-  const enrichMissingOnly = options.enrichMissingOnly ?? false;
-  const delayMs = Math.max(0, options.delayMs ?? 850);
-  const listItems = new Map<string, DanawaListItem>();
-  const maxSafePages = 1000;
-  let pageLimit = configuredPages;
-  let totalProductCount: number | undefined;
-  let pageSize: number | undefined;
-  let pagesVisited = 0;
-  let listedProducts = 0;
-  const firstPageUrl = `https://prod.danawa.com/list/?cate=${categoryId}`;
-  let requestContext: DanawaListRequestContext | undefined;
-
-  for (let page = 1; page <= pageLimit && page <= maxSafePages; page += 1) {
-    const html = page === 1
-      ? await fetchDanawaHtml(firstPageUrl, options)
-      : requestContext
-        ? await fetchDanawaHtml(DANAWA_LIST_AJAX_URL, options, {
-            method: "POST",
-            referer: firstPageUrl,
-            body: new URLSearchParams(Object.entries(buildDanawaListAjaxParams(page, requestContext)))
-          })
-        : await fetchDanawaHtml(`${firstPageUrl}&page=${page}`, options);
-    pagesVisited += 1;
-    const pageItems = parseDanawaListPage(html);
-    const pageInfo = parseDanawaListPageInfo(html);
-    if (page === 1) {
-      requestContext = parseDanawaListRequestContext(html);
-      totalProductCount = pageInfo.totalProductCount;
-      pageSize = pageInfo.pageSize ?? pageItems.length;
-      if (exhaustive && totalProductCount !== undefined && pageSize) {
-        pageLimit = Math.ceil(totalProductCount / pageSize);
-      }
-    }
-    listedProducts += pageItems.length;
-    const countBefore = listItems.size;
-    for (const item of pageItems) {
-      listItems.set(item.sourceProductCode, item);
-      if (!exhaustive && listItems.size >= limit) break;
-    }
-    if (!exhaustive && listItems.size >= limit) break;
-    if (pageItems.length === 0) break;
-    if (exhaustive && totalProductCount !== undefined && listItems.size >= totalProductCount) break;
-    if (exhaustive && listItems.size === countBefore) break;
-    if (page < pageLimit) await sleep(delayMs, options.signal);
-  }
-
+async function partsFromDanawaListItems(category: PartCategory, categoryId: string, items: DanawaListItem[], options: DanawaCrawlerOptions) {
   const parts: Part[] = [];
   let detailFetched = 0;
   let detailFailed = 0;
-  for (const item of listItems.values()) {
+  const details = options.details ?? true;
+  const enrichMissingOnly = options.enrichMissingOnly ?? false;
+  const delayMs = Math.max(0, options.delayMs ?? 850);
+  for (const item of items) {
     if (options.signal?.aborted) throw new Error("Crawler aborted");
     const listPart = partFromListItem(category, categoryId, item);
     if (!details || (enrichMissingOnly && listPart.missingFields.length === 0)) {
@@ -1213,6 +1227,7 @@ export async function crawlDanawaCategory(
       parts.push(parseDanawaProductPage(category, item, detailHtml, categoryId));
       detailFetched += 1;
     } catch (error) {
+      if (options.signal?.aborted) throw error instanceof Error ? error : new Error("Crawler aborted");
       detailFailed += 1;
       parts.push({
         ...listPart,
@@ -1222,6 +1237,112 @@ export async function crawlDanawaCategory(
       });
     }
   }
+  return { parts, detailFetched, detailFailed };
+}
+
+export async function crawlDanawaCategory(
+  category: PartCategory,
+  categoryId: string,
+  options: DanawaCrawlerOptions = {}
+) : Promise<DanawaCategoryCrawlResult> {
+  const exhaustive = options.all === true;
+  const configuredPages = exhaustive ? Number.POSITIVE_INFINITY : Math.max(1, options.pages ?? 1);
+  const limit = Math.max(1, options.limitPerCategory ?? 24);
+  const delayMs = Math.max(0, options.delayMs ?? 850);
+  const listItems = new Map<string, DanawaListItem>();
+  const maxSafePages = 1000;
+  let pageLimit = configuredPages;
+  let totalProductCount: number | undefined;
+  let pageSize: number | undefined;
+  let pagesVisited = 0;
+  let listedProducts = 0;
+  let lastSuccessfulPage = 0;
+  let pageRetries = 0;
+  let pageError: string | undefined;
+  const failedPages: CrawlPageFailure[] = [];
+  const successfulPages: number[] = [];
+  const pageProductCodes: Record<string, string[]> = {};
+  const firstPageUrl = `https://prod.danawa.com/list/?cate=${categoryId}`;
+  let requestContext: DanawaListRequestContext | undefined;
+
+  const progressPagesExpected = () => totalProductCount !== undefined && pageSize
+    ? Math.ceil(totalProductCount / pageSize)
+    : Number.isFinite(pageLimit)
+      ? pageLimit
+      : undefined;
+  const reportProgress = async (currentPage: number) => {
+    await options.onPageProgress?.({
+      currentPage,
+      pagesExpected: progressPagesExpected(),
+      lastSuccessfulPage,
+      pageRetries,
+      failedPages: failedPages.map((failure) => ({ ...failure }))
+    });
+  };
+
+  for (let page = 1; page <= pageLimit && page <= maxSafePages; page += 1) {
+    await reportProgress(page);
+    let html: string;
+    try {
+      const response = page === 1
+        ? await fetchDanawaHtmlWithAttempts(firstPageUrl, options)
+        : requestContext
+          ? await fetchDanawaHtmlWithAttempts(DANAWA_LIST_AJAX_URL, options, {
+              method: "POST",
+              referer: firstPageUrl,
+              body: new URLSearchParams(Object.entries(buildDanawaListAjaxParams(page, requestContext)))
+            })
+          : await fetchDanawaHtmlWithAttempts(`${firstPageUrl}&page=${page}`, options);
+      html = response.html;
+      pageRetries += Math.max(0, response.attempts - 1);
+    } catch (error) {
+      const attempts = typeof error === "object" && error !== null && "attempts" in error && typeof error.attempts === "number"
+        ? error.attempts
+        : Math.max(1, (options.retries ?? 0) + 1);
+      pageRetries += Math.max(0, attempts - 1);
+      const message = error instanceof Error ? error.message : String(error);
+      failedPages.push({
+        category,
+        page,
+        stage: "list",
+        attempts,
+        message,
+        occurredAt: new Date().toISOString()
+      });
+      pageError = `${page}페이지 목록 수집 실패: ${message}`;
+      await reportProgress(page);
+      break;
+    }
+    pagesVisited += 1;
+    const pageItems = parseDanawaListPage(html);
+    const pageInfo = parseDanawaListPageInfo(html);
+    if (page === 1) {
+      requestContext = parseDanawaListRequestContext(html);
+      totalProductCount = pageInfo.totalProductCount;
+      pageSize = pageInfo.pageSize ?? pageItems.length;
+      if (exhaustive && totalProductCount !== undefined && pageSize) {
+        pageLimit = Math.ceil(totalProductCount / pageSize);
+      }
+    }
+    lastSuccessfulPage = page;
+    successfulPages.push(page);
+    pageProductCodes[String(page)] = pageItems.map((item) => item.sourceProductCode);
+    await reportProgress(page);
+    listedProducts += pageItems.length;
+    const countBefore = listItems.size;
+    for (const item of pageItems) {
+      listItems.set(item.sourceProductCode, item);
+      if (!exhaustive && listItems.size >= limit) break;
+    }
+    if (!exhaustive && listItems.size >= limit) break;
+    if (pageItems.length === 0) break;
+    if (exhaustive && totalProductCount !== undefined && listItems.size >= totalProductCount) break;
+    if (exhaustive && listItems.size === countBefore) break;
+    if (page < pageLimit) await sleep(delayMs, options.signal);
+  }
+
+  const detailResult = await partsFromDanawaListItems(category, categoryId, [...listItems.values()], options);
+  const { parts, detailFetched, detailFailed } = detailResult;
   const pagesExpected = totalProductCount !== undefined && pageSize
     ? Math.ceil(totalProductCount / pageSize)
     : Number.isFinite(pageLimit)
@@ -1231,10 +1352,11 @@ export async function crawlDanawaCategory(
     ? Math.max(0, totalProductCount - listItems.size)
     : 0;
   const listComplete = exhaustive
+    && !pageError
     && totalProductCount !== undefined
     && listItems.size >= totalProductCount
     && pagesVisited >= pagesExpected;
-  const detailsComplete = details && detailFailed === 0 && parts.length === listItems.size;
+  const detailsComplete = (options.details ?? true) && detailFailed === 0 && parts.length === listItems.size;
   const specComplete = parts.every((part) => part.missingFields.length === 0);
   return {
     category,
@@ -1249,7 +1371,126 @@ export async function crawlDanawaCategory(
     missingProducts,
     incompleteSpecs: parts.filter((part) => part.missingFields.length > 0).length,
     coverage: listComplete && detailsComplete ? "complete" : "partial",
-    specCoverage: specComplete ? "complete" : "partial"
+    specCoverage: specComplete ? "complete" : "partial",
+    lastSuccessfulPage,
+    pageRetries,
+    failedPages,
+    ...(totalProductCount !== undefined ? { totalProductCount } : {}),
+    ...(pageSize !== undefined ? { pageSize } : {}),
+    successfulPages,
+    pageProductCodes,
+    ...(pageError ? { error: pageError } : {})
+  };
+}
+
+export async function retryDanawaCategoryPage(
+  category: PartCategory,
+  categoryId: string,
+  page: number,
+  options: DanawaCrawlerOptions = {}
+): Promise<DanawaPageRetryResult> {
+  const targetPage = Math.max(1, Math.floor(page));
+  const firstPageUrl = `https://prod.danawa.com/list/?cate=${categoryId}`;
+  let totalProductCount: number | undefined;
+  let pageSize: number | undefined;
+  let pageRetries = 0;
+  let html: string | undefined;
+  const failedPages: CrawlPageFailure[] = [];
+  const expectedPages = () => options.expectedPages ?? (totalProductCount !== undefined && pageSize ? Math.ceil(totalProductCount / pageSize) : undefined);
+  const reportProgress = async (lastSuccessfulPage: number) => {
+    await options.onPageProgress?.({
+      currentPage: targetPage,
+      pagesExpected: expectedPages(),
+      lastSuccessfulPage,
+      pageRetries,
+      failedPages: failedPages.map((failure) => ({ ...failure }))
+    });
+  };
+  const failureResult = (error: string): DanawaPageRetryResult => ({
+    category,
+    categoryId,
+    page: targetPage,
+    parts: [],
+    listedProducts: 0,
+    uniqueProducts: 0,
+    detailFetched: 0,
+    detailFailed: 0,
+    incompleteSpecs: 0,
+    pageRetries,
+    failedPages,
+    successfulPages: [],
+    pageProductCodes: {},
+    ...(totalProductCount !== undefined ? { totalProductCount } : {}),
+    ...(pageSize !== undefined ? { pageSize } : {}),
+    error
+  });
+
+  await reportProgress(0);
+  try {
+    if (targetPage === 1) {
+      const response = await fetchDanawaHtmlWithAttempts(firstPageUrl, options);
+      pageRetries += Math.max(0, response.attempts - 1);
+      html = response.html;
+    } else {
+      const contextResponse = await fetchDanawaHtmlWithAttempts(firstPageUrl, options);
+      pageRetries += Math.max(0, contextResponse.attempts - 1);
+      const contextHtml = contextResponse.html;
+      const contextInfo = parseDanawaListPageInfo(contextHtml);
+      totalProductCount = contextInfo.totalProductCount;
+      pageSize = contextInfo.pageSize ?? parseDanawaListPage(contextHtml).length;
+      const requestContext = parseDanawaListRequestContext(contextHtml);
+      const targetResponse = requestContext
+        ? await fetchDanawaHtmlWithAttempts(DANAWA_LIST_AJAX_URL, options, {
+            method: "POST",
+            referer: firstPageUrl,
+            body: new URLSearchParams(Object.entries(buildDanawaListAjaxParams(targetPage, requestContext)))
+          })
+        : await fetchDanawaHtmlWithAttempts(`${firstPageUrl}&page=${targetPage}`, options);
+      pageRetries += Math.max(0, targetResponse.attempts - 1);
+      html = targetResponse.html;
+    }
+  } catch (error) {
+    if (options.signal?.aborted) throw error instanceof Error ? error : new Error("Crawler aborted");
+    const attempts = typeof error === "object" && error !== null && "attempts" in error && typeof error.attempts === "number"
+      ? error.attempts
+      : Math.max(1, (options.retries ?? 0) + 1);
+    pageRetries += Math.max(0, attempts - 1);
+    const message = error instanceof Error ? error.message : String(error);
+    failedPages.push({
+      category,
+      page: targetPage,
+      stage: "list",
+      attempts,
+      message,
+      occurredAt: new Date().toISOString()
+    });
+    const errorMessage = `${targetPage}페이지 목록 재시도 실패: ${message}`;
+    await reportProgress(0);
+    return failureResult(errorMessage);
+  }
+
+  const pageItems = parseDanawaListPage(html ?? "");
+  const pageInfo = parseDanawaListPageInfo(html ?? "");
+  totalProductCount ??= pageInfo.totalProductCount;
+  pageSize ??= pageInfo.pageSize ?? pageItems.length;
+  await reportProgress(targetPage);
+  const detailResult = await partsFromDanawaListItems(category, categoryId, pageItems, options);
+  return {
+    category,
+    categoryId,
+    page: targetPage,
+    parts: detailResult.parts,
+    listedProducts: pageItems.length,
+    uniqueProducts: new Set(pageItems.map((item) => item.sourceProductCode)).size,
+    detailFetched: detailResult.detailFetched,
+    detailFailed: detailResult.detailFailed,
+    incompleteSpecs: detailResult.parts.filter((part) => part.missingFields.length > 0).length,
+    pageRetries,
+    failedPages,
+    successfulPages: [targetPage],
+    pageProductCodes: { [String(targetPage)]: pageItems.map((item) => item.sourceProductCode) },
+    ...(totalProductCount !== undefined ? { totalProductCount } : {}),
+    ...(pageSize !== undefined ? { pageSize } : {})
   };
 }
 

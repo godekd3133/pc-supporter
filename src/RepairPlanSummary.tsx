@@ -1,6 +1,7 @@
 import type { RecommendationPlan } from "../shared/types";
 import type { BuildSelection } from "../shared/types";
 import { repairPlanPerformanceRetentionFor } from "../shared/repair-plan-performance";
+import { repairPlanTradeoffFor } from "../shared/repair-plan-tradeoff";
 
 function formatWon(value: number) {
   return `${value.toLocaleString("ko-KR")}원`;
@@ -26,8 +27,11 @@ function budgetText(plan: RecommendationPlan) {
 
 export function RepairPlanSummaryTable({ plans, build, onFocusPlan }: { plans: RecommendationPlan[]; build: BuildSelection; onFocusPlan: (index: number) => void }) {
   if (plans.length < 2) return null;
+  const tradeoffs = repairPlanTradeoffFor(plans);
+  const frontierCount = tradeoffs.filter((tradeoff) => tradeoff.frontier).length;
   return <div className="repair-plan-summary" data-testid="repair-plan-summary">
     <div className="repair-plan-summary-heading"><div><p className="eyebrow">PLAN SNAPSHOT</p><h3>{plans.length}가지 플랜 한눈에 비교</h3><p>잔여 위험과 비용을 먼저 확인한 뒤 원하는 플랜의 상세 카드를 열어보세요.</p></div><span>{plans.length}안 비교</span></div>
+    <div className="repair-plan-tradeoff" data-testid="repair-plan-tradeoff"><div className="repair-plan-tradeoff-heading"><div><strong>비용·위험·변경 규모의 효율 경계</strong><small>다른 플랜에 모든 기준에서 밀리지 않는 선택지만 남겼습니다.</small></div><span>{frontierCount}개 경계</span></div><div className="repair-plan-tradeoff-list">{tradeoffs.map((tradeoff, index) => { const plan = plans[index]; return <button className={`repair-plan-tradeoff-item ${tradeoff.frontier ? "frontier" : "dominated"}`} type="button" onClick={() => onFocusPlan(index)} key={`${plan.label}-${index}`}><div><span>{tradeoff.frontier ? "효율 경계" : "열세"}</span><strong>{plan.label}</strong></div><small>잔여 위험 {tradeoff.riskScore}점 · 변경 {tradeoff.changeCount}개 · 추가 비용 {tradeoff.priceDeltaWon === undefined ? "확인 필요" : `${tradeoff.priceDeltaWon > 0 ? "+" : ""}${tradeoff.priceDeltaWon.toLocaleString("ko-KR")}원`}</small><em>{tradeoff.reason}</em></button>; })}</div><p className="repair-plan-tradeoff-note">가격이 확인되지 않은 플랜은 비용 우열을 단정하지 않습니다. `효율 경계`는 구매 확정이 아니라 비교를 시작할 후보군입니다.</p></div>
     <div className="repair-plan-summary-table-wrap"><table><caption>수리 플랜별 변경·잔여 위험·가격·근거 비교</caption><thead><tr><th scope="col">비교 항목</th>{plans.map((plan, index) => <th scope="col" key={`${plan.label}-${index}`}><span>{plan.label}</span><strong>{plan.title}</strong><button className="text-button" type="button" onClick={() => onFocusPlan(index)}>플랜 보기</button></th>)}</tr></thead><tbody>
       <tr><th scope="row">변경 항목</th>{plans.map((plan) => <td key={`${plan.label}-changes`}>{plan.changes.length}개</td>)}</tr>
       <tr><th scope="row">잔여 차단</th>{plans.map((plan) => <td className={plan.remainingBlockers > 0 ? "risk" : "clear"} key={`${plan.label}-blockers`}>{plan.remainingBlockers}개</td>)}</tr>

@@ -1,6 +1,7 @@
 import type { PurchaseChecklistProgress } from "./purchase-checklist";
 import type { PurchaseReadiness } from "./purchase-readiness";
 import type { AssemblyVerificationSurfaceSummary } from "./assembly-verification";
+import type { PurchaseListExecutionProgress } from "./purchase-list-progress";
 
 export type PurchaseDecisionState = "blocked" | "review" | "pending" | "ready";
 
@@ -9,11 +10,12 @@ export type PurchaseDecision = {
   label: string;
   summary: string;
   checklistProgress?: PurchaseChecklistProgress;
+  purchaseProgress?: PurchaseListExecutionProgress;
   assemblyVerification?: AssemblyVerificationSurfaceSummary;
 };
 
-export function purchaseDecisionFor(readiness: PurchaseReadiness, checklistProgress?: PurchaseChecklistProgress, assemblyVerification?: AssemblyVerificationSurfaceSummary): PurchaseDecision {
-  const evidence = { ...(checklistProgress ? { checklistProgress } : {}), ...(assemblyVerification ? { assemblyVerification } : {}) };
+export function purchaseDecisionFor(readiness: PurchaseReadiness, checklistProgress?: PurchaseChecklistProgress, assemblyVerification?: AssemblyVerificationSurfaceSummary, purchaseProgress?: PurchaseListExecutionProgress): PurchaseDecision {
+  const evidence = { ...(checklistProgress ? { checklistProgress } : {}), ...(purchaseProgress ? { purchaseProgress } : {}), ...(assemblyVerification ? { assemblyVerification } : {}) };
   if (readiness.state === "blocked") return { state: "blocked", label: "구매 보류", summary: readiness.summary, ...evidence };
   if (assemblyVerification?.state === "failed") return { state: "review", label: "실측 확인 후 진행", summary: "실제 조립 검증에 실패 기록이 있어 원인을 확인한 뒤 진행하세요.", ...evidence };
   if (assemblyVerification && assemblyVerification.recheckSignalCount > 0) return { state: "review", label: "실측 재확인 필요", summary: `동일 조건 실측에서 재확인 신호 ${assemblyVerification.recheckSignalCount}개가 감지되었습니다. 원인을 확인한 뒤 진행하세요.`, ...evidence };

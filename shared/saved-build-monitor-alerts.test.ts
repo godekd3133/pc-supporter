@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { savedBuildCheckSnapshotFor, savedBuildCheckTransitionSummaryFor } from "./saved-build-check";
-import { dismissSavedBuildMonitorAlerts, markSavedBuildMonitorAlertsRead, mergeSavedBuildMonitorAlerts, removeSavedBuildMonitorAlert, savedBuildMonitorAlertFor, savedBuildMonitorAlertMatches } from "./saved-build-monitor-alerts";
+import { dismissSavedBuildMonitorAlerts, markSavedBuildMonitorAlertsRead, mergeSavedBuildMonitorAlerts, removeSavedBuildMonitorAlert, savedBuildMonitorAlertFor, savedBuildMonitorAlertMatches, savedBuildMonitorAlertFromUnknown } from "./saved-build-monitor-alerts";
 import type { SavedBuildMonitorItem } from "./saved-build-monitor";
 import type { CompatibilityResult } from "./types";
 
@@ -58,6 +58,36 @@ describe("saved build monitor alerts", () => {
     expect(second?.id).not.toBe(first?.id);
   });
 
+  it("creates a review alert when only resource budget headroom regresses", () => {
+    const before = result({ metrics: { powerHeadroomW: 150, psuWattageW: 1000, recommendedPsuW: 850 } });
+    const after = result({ metrics: { powerHeadroomW: 100, psuWattageW: 950, recommendedPsuW: 850 } });
+    const alert = savedBuildMonitorAlertFor(build, readyItem(before, after), "2026-08-31T01:05:00.000Z");
+
+    expect(alert).toMatchObject({ kind: "review", title: "검토 항목 증가", message: expect.stringContaining("전력 여유 -50W") });
+  });
+
+  it("carries the highest-risk finding context into actionable alerts", () => {
+    const alert = savedBuildMonitorAlertFor(build, readyItem(undefined, result({
+      status: "incompatible",
+      blockerCount: 1,
+      findings: [
+        { id: "warning", ruleId: "memory-speed", severity: "warning", title: "메모리 속도를 확인하세요.", message: "메모리 속도를 확인하세요.", affectedPartIds: [], facts: [], actions: [] },
+        { id: "blocker", ruleId: "gpu-psu-power", severity: "blocker", title: "GPU 전력이 부족합니다.", message: "GPU 전력이 부족합니다.", affectedPartIds: [], facts: [], actions: [] }
+      ]
+    })), "2026-08-31T01:00:00.000Z");
+
+    expect(alert).toMatchObject({
+      findingRuleIds: ["gpu-psu-power", "memory-speed"],
+      findingTitles: ["GPU 전력이 부족합니다.", "메모리 속도를 확인하세요."]
+    });
+    const differentFindingAlert = savedBuildMonitorAlertFor(build, readyItem(undefined, result({
+      status: "incompatible",
+      blockerCount: 1,
+      findings: [{ id: "other", ruleId: "cpu-motherboard-socket", severity: "blocker", title: "CPU 소켓이 다릅니다.", message: "CPU 소켓이 다릅니다.", affectedPartIds: [], facts: [], actions: [] }]
+    })), "2026-08-31T01:05:00.000Z");
+    expect(differentFindingAlert?.id).not.toBe(alert?.id);
+  });
+
   it("keeps isolated failures actionable and supports read and remove actions", () => {
     const failed = savedBuildMonitorAlertFor(build, { id: build.id, status: "not_found", message: "공유 링크가 만료되었습니다." }, "2026-08-31T01:00:00.000Z");
     expect(failed).toMatchObject({ kind: "failed", title: "견적 확인 불가" });
@@ -84,6 +114,21 @@ describe("saved build monitor alerts", () => {
     const merged = mergeSavedBuildMonitorAlerts(existing, [duplicate]);
     expect(merged).toHaveLength(50);
     expect(merged.find((alert) => alert.id === existing[54].id)?.readAt).toBe(existing[54].readAt);
+  });
+
+  it("accepts bounded finding context while keeping legacy alerts valid", () => {
+    const base = {
+      id: "alert-context",
+      buildId: "build-1",
+      buildName: "게임 PC",
+      kind: "review" as const,
+      title: "확인 필요",
+      message: "새 확인 항목이 있습니다.",
+      createdAt: "2026-08-31T01:00:00.000Z"
+    };
+    expect(savedBuildMonitorAlertFromUnknown({ ...base, findingRuleIds: ["gpu-psu-power"], findingTitles: ["GPU 전원을 확인하세요."] })).toMatchObject({ findingRuleIds: ["gpu-psu-power"], findingTitles: ["GPU 전원을 확인하세요."] });
+    expect(savedBuildMonitorAlertFromUnknown(base)).toEqual(base);
+    expect(savedBuildMonitorAlertFromUnknown({ ...base, findingRuleIds: [42] })).toBeUndefined();
   });
 
   it("filters visible alerts by unread, actionable risk, and non-risk changes", () => {

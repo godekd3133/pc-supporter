@@ -17,6 +17,7 @@ import { catalogWatchlistEntriesFromCsv, catalogWatchlistEntriesFromJson } from 
 import { catalogWatchlistShareHashFor, catalogWatchlistSharePayloadFromHash } from "../shared/catalog-watchlist-share";
 import { catalogWatchSnapshotMatches, sortCatalogWatchSnapshots } from "../shared/catalog-watchlist-view";
 import type { CatalogWatchlistStatusFilter, CatalogWatchlistSort } from "../shared/catalog-watchlist-view";
+import { LOCAL_IMPORT_MAX_BYTES } from "../shared/file-import-limits";
 import { api } from "./api";
 import { safeExternalUrl } from "./safe-source-url";
 
@@ -24,6 +25,11 @@ const CATALOG_WATCHLIST_STORAGE_KEY = "pc-supporter-catalog-watchlist";
 const CATALOG_WATCH_THRESHOLD_STORAGE_KEY = "pc-supporter-catalog-watch-threshold";
 const CATALOG_WATCH_THRESHOLDS = [5, 10, 20] as const;
 type CatalogWatchThreshold = (typeof CATALOG_WATCH_THRESHOLDS)[number];
+
+function catalogWatchThresholdFromStorage(raw: string | null): CatalogWatchThreshold {
+  const value = Number(raw);
+  return value === 5 || value === 10 || value === 20 ? value : 10;
+}
 type SavedWatchlistExpiryDays = "never" | 7 | 30;
 type SavedCatalogWatchlist = {
   id: string;
@@ -59,11 +65,7 @@ export function CatalogChangeHistoryPanel({ records, loading, error, historyLimi
   const [changeFilter, setChangeFilter] = useState<CatalogChangeFilter>("all");
   const [selectedChangeId, setSelectedChangeId] = useState<string | null>(null);
   const [watchEntries, setWatchEntries] = useState<CatalogWatchEntry[]>(() => typeof window === "undefined" ? [] : catalogWatchlistFromJson(window.localStorage.getItem(CATALOG_WATCHLIST_STORAGE_KEY)));
-  const [watchThreshold, setWatchThreshold] = useState<CatalogWatchThreshold>(() => {
-    if (typeof window === "undefined") return 10;
-    const value = Number(window.localStorage.getItem(CATALOG_WATCH_THRESHOLD_STORAGE_KEY));
-    return value === 5 || value === 10 || value === 20 ? value : 10;
-  });
+  const [watchThreshold, setWatchThreshold] = useState<CatalogWatchThreshold>(() => typeof window === "undefined" ? 10 : catalogWatchThresholdFromStorage(window.localStorage.getItem(CATALOG_WATCH_THRESHOLD_STORAGE_KEY)));
   const [shareLinkUrl, setShareLinkUrl] = useState<string | null>(null);
   const [shareLinkTruncatedCount, setShareLinkTruncatedCount] = useState(0);
   const [watchlistName, setWatchlistName] = useState("내 관심 가격 목록");
@@ -77,8 +79,44 @@ export function CatalogChangeHistoryPanel({ records, loading, error, historyLimi
   const [watchStatusFilter, setWatchStatusFilter] = useState<CatalogWatchlistStatusFilter>("all");
   const [watchSort, setWatchSort] = useState<CatalogWatchlistSort>("added_desc");
   const watchImportRef = useRef<HTMLInputElement>(null);
+  const mountedRef = useRef(true);
+  const serverMutationRequestRef = useRef(0);
+  const serverMutationContextKey = JSON.stringify({ entries: watchEntries, nearLowThresholdPercent: watchThreshold, name: watchlistName.trim(), expiry: watchlistExpiryDays });
+  const serverMutationContextKeyRef = useRef(serverMutationContextKey);
+  const committedServerMutationContextKeyRef = useRef(serverMutationContextKey);
+  serverMutationContextKeyRef.current = serverMutationContextKey;
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      serverMutationRequestRef.current += 1;
+    };
+  }, []);
+  useEffect(() => {
+    if (committedServerMutationContextKeyRef.current === serverMutationContextKey) return;
+    committedServerMutationContextKeyRef.current = serverMutationContextKey;
+    serverMutationRequestRef.current += 1;
+    if (savingWatchlist || revokingWatchlist) {
+      setSavingWatchlist(false);
+      setRevokingWatchlist(false);
+      setSavedWatchlistUrl(null);
+      setSavedWatchlistId(null);
+      setSavedWatchlistExpiresAt(null);
+    }
+  }, [revokingWatchlist, savingWatchlist, serverMutationContextKey]);
   useEffect(() => { window.localStorage.setItem(CATALOG_WATCHLIST_STORAGE_KEY, catalogWatchlistToJson(watchEntries)); }, [watchEntries]);
   useEffect(() => { window.localStorage.setItem(CATALOG_WATCH_THRESHOLD_STORAGE_KEY, String(watchThreshold)); }, [watchThreshold]);
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === CATALOG_WATCHLIST_STORAGE_KEY) {
+        setWatchEntries(catalogWatchlistFromJson(event.newValue));
+        return;
+      }
+      if (event.key === CATALOG_WATCH_THRESHOLD_STORAGE_KEY) setWatchThreshold(catalogWatchThresholdFromStorage(event.newValue));
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
   useEffect(() => {
     const shared = catalogWatchlistSharePayloadFromHash(window.location.hash);
     if (shared.errors.length > 0) {
@@ -226,8 +264,13 @@ export function CatalogChangeHistoryPanel({ records, loading, error, historyLimi
     const file = event.currentTarget.files?.[0];
     event.currentTarget.value = "";
     if (!file) return;
+    if (file.size > LOCAL_IMPORT_MAX_BYTES) {
+      onToast("관심 목록 파일은 1MB 이하만 가져올 수 있습니다.");
+      return;
+    }
     try {
       const raw = await file.text();
+      if (!mountedRef.current) return;
       const result = file.name.toLocaleLowerCase().endsWith(".csv") ? catalogWatchlistEntriesFromCsv(raw) : catalogWatchlistEntriesFromJson(raw);
       if (result.errors.length > 0) {
         onToast(`관심 목록을 가져오지 못했습니다: ${result.errors.slice(0, 3).join(" · ")}`);
@@ -246,16 +289,16 @@ export function CatalogChangeHistoryPanel({ records, loading, error, historyLimi
       setSavedWatchlistExpiresAt(null);
       onToast(`${result.entries.length}개 관심 가격 항목을 가져와 병합했습니다.`);
     } catch {
-      onToast("관심 목록 파일을 읽지 못했습니다.");
+      if (mountedRef.current) onToast("관심 목록 파일을 읽지 못했습니다.");
     }
   }
   async function copyShareLinkUrl(url: string, truncatedCount = 0) {
     const truncatedMessage = truncatedCount > 0 ? ` ${truncatedCount}개는 URL 길이 제한으로 포함하지 않았습니다.` : "";
     try {
       await navigator.clipboard.writeText(url);
-      onToast(`관심 가격 공유 링크를 복사했습니다.${truncatedMessage}`);
+      if (mountedRef.current) onToast(`관심 가격 공유 링크를 복사했습니다.${truncatedMessage}`);
     } catch {
-      onToast(`관심 가격 공유 링크가 생성되었습니다: ${url}${truncatedMessage}`);
+      if (mountedRef.current) onToast(`관심 가격 공유 링크가 생성되었습니다: ${url}${truncatedMessage}`);
     }
   }
   async function copyWatchlistShareLink() {
@@ -274,48 +317,58 @@ export function CatalogChangeHistoryPanel({ records, loading, error, historyLimi
       onToast("저장할 관심 가격 항목이 없습니다.");
       return;
     }
+    const requestVersion = ++serverMutationRequestRef.current;
+    const requestContextKey = serverMutationContextKey;
+    const isCurrent = () => mountedRef.current && serverMutationRequestRef.current === requestVersion && serverMutationContextKeyRef.current === requestContextKey;
     setSavingWatchlist(true);
     try {
       const saved = await api<SavedCatalogWatchlist>("/api/watchlists", { method: "POST", body: JSON.stringify({ name: watchlistName.trim() || "관심 가격 목록", entries: watchEntries, nearLowThresholdPercent: watchThreshold, expiresInDays: watchlistExpiryDays === "never" ? undefined : watchlistExpiryDays }) });
+      if (!isCurrent()) return;
       const url = `${window.location.origin}/watchlist/${saved.id}`;
       setSavedWatchlistUrl(url);
       setSavedWatchlistId(saved.id);
       setSavedWatchlistExpiresAt(saved.expiresAt ?? null);
       try {
         await navigator.clipboard.writeText(url);
+        if (!isCurrent()) return;
         onToast("관심 가격 목록을 서버에 저장하고 공유 링크를 복사했습니다.");
       } catch {
+        if (!isCurrent()) return;
         onToast(`관심 가격 목록을 서버에 저장했습니다: ${url}`);
       }
     } catch (error: unknown) {
-      onToast(error instanceof Error ? error.message : "관심 가격 목록을 서버에 저장하지 못했습니다.");
+      if (isCurrent()) onToast(error instanceof Error ? error.message : "관심 가격 목록을 서버에 저장하지 못했습니다.");
     } finally {
-      setSavingWatchlist(false);
+      if (isCurrent()) setSavingWatchlist(false);
     }
   }
   async function copySavedWatchlistLink() {
     if (!savedWatchlistUrl) return;
     try {
       await navigator.clipboard.writeText(savedWatchlistUrl);
-      onToast("서버 공유 링크를 복사했습니다.");
+      if (mountedRef.current) onToast("서버 공유 링크를 복사했습니다.");
     } catch {
-      onToast(`서버 공유 링크: ${savedWatchlistUrl}`);
+      if (mountedRef.current) onToast(`서버 공유 링크: ${savedWatchlistUrl}`);
     }
   }
   async function revokeSavedWatchlist() {
     if (!savedWatchlistId || revokingWatchlist) return;
     if (!window.confirm("이 서버 공유 목록을 취소할까요? 이미 전달된 링크도 더 이상 열리지 않습니다.")) return;
+    const requestVersion = ++serverMutationRequestRef.current;
+    const requestContextKey = serverMutationContextKey;
+    const isCurrent = () => mountedRef.current && serverMutationRequestRef.current === requestVersion && serverMutationContextKeyRef.current === requestContextKey;
     setRevokingWatchlist(true);
     try {
       await api(`/api/watchlists/${encodeURIComponent(savedWatchlistId)}`, { method: "DELETE" });
+      if (!isCurrent()) return;
       setSavedWatchlistUrl(null);
       setSavedWatchlistId(null);
       setSavedWatchlistExpiresAt(null);
       onToast("서버 공유 목록을 취소했습니다.");
     } catch (error: unknown) {
-      onToast(error instanceof Error ? error.message : "서버 공유 목록을 취소하지 못했습니다.");
+      if (isCurrent()) onToast(error instanceof Error ? error.message : "서버 공유 목록을 취소하지 못했습니다.");
     } finally {
-      setRevokingWatchlist(false);
+      if (isCurrent()) setRevokingWatchlist(false);
     }
   }
   function resetFilters() {
@@ -398,4 +451,3 @@ export function CatalogChangeHistoryPanel({ records, loading, error, historyLimi
     </>}
   </section>;
 }
-

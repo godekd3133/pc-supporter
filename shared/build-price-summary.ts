@@ -1,5 +1,6 @@
-import type { AccessoryItem, AccessorySelection, BuildSelection, Part, PartCategory, PartSelection } from "./types";
+import type { AccessoryItem, AccessorySelection, BuildSelection, CatalogPriceEvidence, Part, PartCategory, PartSelection } from "./types";
 import { isKnownPrice, PART_CATEGORIES } from "./types";
+import { catalogPriceEvidenceFor } from "./catalog-price-evidence";
 
 export interface BuildPriceSnapshot {
   coreTotalPriceWon: number;
@@ -9,6 +10,8 @@ export interface BuildPriceSnapshot {
   accessoryPriceComplete: boolean;
   priceComplete: boolean;
   unknownPriceCount: number;
+  /** Number of selected rows whose numeric price is not live/manual confirmed. */
+  priceEvidenceReviewCount?: number;
 }
 
 function selectionsForCategory(build: BuildSelection, category: PartCategory): PartSelection[] {
@@ -27,6 +30,10 @@ export function buildPriceSnapshotFor(build: BuildSelection, partMap: ReadonlyMa
   const knownParts = new Map(partMap);
   extraParts.forEach((part) => knownParts.set(part.id, part));
   const unknownPriceIds = new Set<string>();
+  let priceEvidenceReviewCount = 0;
+  const recordPriceEvidence = (evidence: CatalogPriceEvidence) => {
+    if (evidence !== "live" && evidence !== "manual") priceEvidenceReviewCount += 1;
+  };
   let corePriceComplete = true;
   let coreTotalPriceWon = 0;
   for (const category of PART_CATEGORIES) {
@@ -34,9 +41,11 @@ export function buildPriceSnapshotFor(build: BuildSelection, partMap: ReadonlyMa
       const part = knownParts.get(selection.partId);
       if (!part || !isKnownPrice(part.priceWon)) {
         unknownPriceIds.add(`part:${selection.partId}`);
+        recordPriceEvidence(part ? catalogPriceEvidenceFor(part) : "unknown");
         corePriceComplete = false;
         continue;
       }
+      recordPriceEvidence(catalogPriceEvidenceFor(part));
       coreTotalPriceWon += part.priceWon * selection.quantity;
     }
   }
@@ -46,9 +55,11 @@ export function buildPriceSnapshotFor(build: BuildSelection, partMap: ReadonlyMa
     const item = accessoryMap.get(selection.accessoryId);
     if (!item || !isKnownPrice(item.priceWon)) {
       unknownPriceIds.add(`accessory:${selection.accessoryId}`);
+      recordPriceEvidence(item ? catalogPriceEvidenceFor(item) : "unknown");
       accessoryPriceComplete = false;
       continue;
     }
+    recordPriceEvidence(catalogPriceEvidenceFor(item));
     accessoryTotalPriceWon += item.priceWon * selection.quantity;
   }
   return {
@@ -58,6 +69,7 @@ export function buildPriceSnapshotFor(build: BuildSelection, partMap: ReadonlyMa
     corePriceComplete,
     accessoryPriceComplete,
     priceComplete: unknownPriceIds.size === 0,
-    unknownPriceCount: unknownPriceIds.size
+    unknownPriceCount: unknownPriceIds.size,
+    ...(priceEvidenceReviewCount > 0 ? { priceEvidenceReviewCount } : {})
   };
 }

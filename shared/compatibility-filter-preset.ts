@@ -1,4 +1,5 @@
 import type { BuildSelection, Part, PartCategory, PartSelection } from "./types";
+import { pcieSlotWidthFromUnknown } from "./pcie-slot";
 
 export type CompatibilityFilterPresetValues = {
   socket?: string;
@@ -11,6 +12,8 @@ export type CompatibilityFilterPresetValues = {
   minMemorySlots?: string;
   minM2Slots?: string;
   minSataPorts?: string;
+  pcieSlotWidth?: string;
+  minPcieSlotCount?: string;
   minHddBays?: string;
   minMaxGpuLengthMm?: string;
   minMaxCoolerHeightMm?: string;
@@ -121,6 +124,15 @@ export function compatibilityFilterPresetFor(category: PartCategory, build: Buil
       else addNumber("minM2Slots", m2Count, "M.2 슬롯", "min");
       if (storageEntries.length > 0 && sataCount === undefined) omitted.push("SATA 저장장치 연결 방식 확인 필요");
       else addNumber("minSataPorts", sataCount, "SATA 포트", "min");
+      {
+        const gpuSlotWidth = pcieSlotWidthFromUnknown(gpu?.specs.pcieSlotWidth);
+        if (gpu && gpuSlotWidth === undefined) omitted.push("GPU PCIe 슬롯 폭 확인 필요");
+        else if (gpuSlotWidth !== undefined) {
+          values.pcieSlotWidth = String(gpuSlotWidth);
+          values.minPcieSlotCount = "1";
+          labels.push(`PCIe x${gpuSlotWidth} 이상 슬롯 ≥ 1개`);
+        }
+      }
       break;
     case "memory":
       addText("memoryType", motherboard?.specs.memoryType ?? cpu?.specs.memoryType, "메모리 세대");

@@ -3,13 +3,16 @@ import type { ChangeEvent } from "react";
 import { FiCheckCircle, FiCopy, FiDownload, FiInfo, FiLoader, FiPrinter, FiRefreshCw } from "react-icons/fi";
 import type { BuildSelection, CompatibilityResult, Part } from "../shared/types";
 import { actionChecklistIdsFor, checkedChecklistIdsAfterAction } from "../shared/build-action-links";
-import { parsePurchaseChecklistJson, PURCHASE_CHECKLIST_ACTION_EVENT, PURCHASE_CHECKLIST_CHANGE_EVENT, purchaseChecklistItemsFor, purchaseChecklistJsonFor, purchaseChecklistProgressFor, purchaseChecklistTextFor, purchaseChecklistTransferDiffFor, purchaseChecklistTransferMatchesCurrentFor } from "../shared/purchase-checklist";
+import { buildResourceSummaryFor } from "../shared/build-resource-summary";
+import { parsePurchaseChecklistJson, PURCHASE_CHECKLIST_ACTION_EVENT, PURCHASE_CHECKLIST_CHANGE_EVENT, PURCHASE_CHECKLIST_MAX_CHECKED_ITEMS, purchaseChecklistItemsFor, purchaseChecklistJsonFor, purchaseChecklistProgressFor, purchaseChecklistTextFor, purchaseChecklistTransferDiffFor, purchaseChecklistTransferMatchesCurrentFor } from "../shared/purchase-checklist";
 import type { PurchaseChecklistProgress } from "../shared/purchase-checklist";
+import { LOCAL_IMPORT_MAX_BYTES } from "../shared/file-import-limits";
 
 function checkedIdsFromStorage(storageKey: string) {
   try {
     const parsed: unknown = JSON.parse(window.localStorage.getItem(storageKey) ?? "[]");
-    return Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === "string").slice(0, 100) : [];
+    if (!Array.isArray(parsed) || parsed.length > PURCHASE_CHECKLIST_MAX_CHECKED_ITEMS) return [];
+    return parsed.filter((value): value is string => typeof value === "string");
   } catch {
     return [];
   }
@@ -17,7 +20,7 @@ function checkedIdsFromStorage(storageKey: string) {
 
 function writeCheckedIdsToStorage(storageKey: string, checkedIds: string[]) {
   try {
-    window.localStorage.setItem(storageKey, JSON.stringify(checkedIds.slice(0, 100)));
+    window.localStorage.setItem(storageKey, JSON.stringify(checkedIds.slice(0, PURCHASE_CHECKLIST_MAX_CHECKED_ITEMS)));
   } catch {
     // A full local storage bucket must not prevent the result page from working.
   }
@@ -43,6 +46,7 @@ type ChecklistTransferPreview = {
 export function PurchaseChecklistPanel({ build, result, partMap, storageKey, onFocusFinding, onFocusSection, onProgressChange }: { build: BuildSelection; result: CompatibilityResult; partMap: ReadonlyMap<string, Part>; storageKey: string; onFocusFinding?: (ruleId: string) => void; onFocusSection?: (targetId: NonNullable<ReturnType<typeof purchaseChecklistItemsFor>[number]["targetId"]>) => void; onProgressChange?: (progress: PurchaseChecklistProgress) => void }) {
   const items = useMemo(() => purchaseChecklistItemsFor(build, result, partMap), [build, result, partMap]);
   const transferInputRef = useRef<HTMLInputElement>(null);
+  const mountedRef = useRef(true);
   const [checkedIds, setCheckedIds] = useState<string[]>(() => checkedIdsFromStorage(storageKey));
   const [hydratedStorageKey, setHydratedStorageKey] = useState(storageKey);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
@@ -51,10 +55,18 @@ export function PurchaseChecklistPanel({ build, result, partMap, storageKey, onF
   const checkedIdSet = useMemo(() => new Set(checkedIds), [checkedIds]);
   const progress = purchaseChecklistProgressFor(items, checkedIdSet);
   const allChecked = progress.total > 0 && progress.remaining === 0;
-  const state = result.blockerCount > 0 ? "blocked" : result.warningCount > 0 || result.unknownCount > 0 || !allChecked ? "review" : "complete";
+  const resourceSummary = useMemo(() => buildResourceSummaryFor(result.metrics), [result.metrics]);
+  const resourceBlocked = resourceSummary.state === "danger";
+  const resourceNeedsReview = resourceBlocked || resourceSummary.state === "warning" || resourceSummary.state === "unknown";
+  const state = result.blockerCount > 0 || resourceBlocked ? "blocked" : result.warningCount > 0 || result.unknownCount > 0 || resourceNeedsReview || !allChecked ? "review" : "complete";
   const filterOptions: Array<{ id: ChecklistFilter; label: string }> = [{ id: "all", label: "전체" }, { id: "finding", label: "엔진 finding" }, { id: "manual", label: "직접 확인" }];
   const filterCounts: Record<ChecklistFilter, number> = { all: items.length, finding: items.filter((item) => item.kind === "finding").length, manual: items.filter((item) => item.kind === "manual").length };
   const visibleItems = filter === "all" ? items : items.filter((item) => item.kind === filter);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   useEffect(() => {
     setCheckedIds(checkedIdsFromStorage(storageKey));
@@ -84,8 +96,15 @@ export function PurchaseChecklistPanel({ build, result, partMap, storageKey, onF
         return checkedChecklistIdsAfterAction(current, actionId, new Set(items.map((item) => item.id)), detail.checked!);
       });
     };
+    const syncStorage = (event: StorageEvent) => {
+      if (event.key === storageKey) setCheckedIds(checkedIdsFromStorage(storageKey));
+    };
     window.addEventListener(PURCHASE_CHECKLIST_ACTION_EVENT, syncAction);
-    return () => window.removeEventListener(PURCHASE_CHECKLIST_ACTION_EVENT, syncAction);
+    window.addEventListener("storage", syncStorage);
+    return () => {
+      window.removeEventListener(PURCHASE_CHECKLIST_ACTION_EVENT, syncAction);
+      window.removeEventListener("storage", syncStorage);
+    };
   }, [items, storageKey]);
 
   function toggleItem(itemId: string) {
@@ -103,9 +122,9 @@ export function PurchaseChecklistPanel({ build, result, partMap, storageKey, onF
   async function copyChecklist() {
     try {
       await navigator.clipboard.writeText(purchaseChecklistTextFor(items, checkedIdSet));
-      setActionMessage("체크리스트를 클립보드에 복사했습니다.");
+      if (mountedRef.current) setActionMessage("체크리스트를 클립보드에 복사했습니다.");
     } catch {
-      setActionMessage("체크리스트 복사에 실패했습니다. 브라우저 클립보드 권한을 확인해 주세요.");
+      if (mountedRef.current) setActionMessage("체크리스트 복사에 실패했습니다. 브라우저 클립보드 권한을 확인해 주세요.");
     }
   }
 
@@ -126,8 +145,14 @@ export function PurchaseChecklistPanel({ build, result, partMap, storageKey, onF
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
+    if (file.size > LOCAL_IMPORT_MAX_BYTES) {
+      setActionMessage("체크리스트 JSON은 1MB 이하 파일만 가져올 수 있습니다.");
+      setTransferPreview(null);
+      return;
+    }
     try {
       const parsed = parsePurchaseChecklistJson(await file.text(), storageKey, items);
+      if (!mountedRef.current) return;
       if (parsed.errors.length > 0) {
         setActionMessage(parsed.errors[0]);
         setTransferPreview(null);
@@ -136,8 +161,10 @@ export function PurchaseChecklistPanel({ build, result, partMap, storageKey, onF
       setTransferPreview({ checkedIds: parsed.checkedIds, ignoredIds: parsed.ignoredIds, itemIds: parsed.itemIds, exportedAt: parsed.exportedAt });
       setActionMessage(null);
     } catch {
-      setActionMessage("체크리스트 JSON 파일을 읽지 못했습니다.");
-      setTransferPreview(null);
+      if (mountedRef.current) {
+        setActionMessage("체크리스트 JSON 파일을 읽지 못했습니다.");
+        setTransferPreview(null);
+      }
     }
   }
 
@@ -157,17 +184,19 @@ export function PurchaseChecklistPanel({ build, result, partMap, storageKey, onF
 
   const headingLabel = progress.total === 0
     ? "확인 항목 없음"
-    : result.blockerCount > 0
-      ? allChecked ? `체크 완료 · 차단 ${result.blockerCount}개 잔여` : "구매 보류 항목 있음"
+      : result.blockerCount > 0 || resourceBlocked
+        ? allChecked ? resourceBlocked && result.blockerCount === 0 ? "체크 완료 · 전력·냉각 기준 미달" : `체크 완료 · 차단 ${result.blockerCount}개 잔여` : "구매 보류 항목 있음"
       : result.warningCount > 0 || result.unknownCount > 0
         ? allChecked ? "체크 완료 · 검사 확인 필요" : `${progress.remaining}개 남음`
+        : resourceNeedsReview
+          ? allChecked ? "체크 완료 · 전력·냉각 확인 필요" : `${progress.remaining}개 남음`
         : state === "complete" ? "체크·검사 완료" : `${progress.remaining}개 남음`;
-  return <section className={`purchase-checklist-panel ${state}`} aria-label="구매 전 실행 체크리스트" data-testid="purchase-checklist">
+  return <section className={`purchase-checklist-panel ${state}`} aria-label="구매 전 실행 체크리스트" data-testid="purchase-checklist" tabIndex={-1}>
     <div className="purchase-checklist-heading"><div><p className="eyebrow">ASSEMBLY CHECKLIST</p><h2>구매 전 실행 체크리스트</h2><p>검사 엔진 finding과 사용자가 직접 확인할 제조사·실물 조립 항목을 분리해 관리합니다.</p></div><strong><FiCheckCircle /> {headingLabel}</strong></div>
     <div className="purchase-checklist-progress-heading"><span>진행률</span><b>{progress.checked} / {progress.total}개</b><em>{progress.percent}%</em></div>
     <div className="purchase-checklist-progress" role="progressbar" aria-label={`구매 전 체크리스트 ${progress.percent}% 완료`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress.percent}><span style={{ width: `${progress.percent}%` }} /></div>
     <div className="purchase-checklist-filters" role="group" aria-label="구매 전 체크리스트 필터">{filterOptions.map((option) => <button className={filter === option.id ? "selected" : ""} type="button" aria-pressed={filter === option.id} onClick={() => setFilter(option.id)} key={option.id}>{option.label}<span>{filterCounts[option.id]}</span></button>)}</div>
-    <div className="purchase-checklist-actions"><button className="text-button" type="button" onClick={() => void copyChecklist()} disabled={progress.total === 0}><FiCopy /> 체크리스트 복사</button><button className="text-button" type="button" onClick={downloadChecklist} disabled={progress.total === 0}><FiDownload /> JSON 저장</button><input ref={transferInputRef} className="purchase-checklist-transfer-input" type="file" accept=".json,application/json" aria-label="체크리스트 JSON 파일 가져오기" onChange={(event) => void importChecklistFile(event)} disabled={progress.total === 0} /><button className="text-button" type="button" onClick={() => transferInputRef.current?.click()} disabled={progress.total === 0}><FiDownload /> JSON 가져오기</button><button className="text-button" type="button" onClick={() => window.print()} disabled={progress.total === 0}><FiPrinter /> 인쇄</button><button className="text-button" type="button" onClick={checkAll} disabled={progress.total === 0 || progress.remaining === 0}><FiCheckCircle /> 모두 완료 처리</button><button className="text-button" type="button" onClick={clearAll} disabled={progress.checked === 0}><FiRefreshCw /> 체크 초기화</button></div>
+    <div className="purchase-checklist-actions"><button className="text-button" type="button" data-testid="purchase-checklist-copy" onClick={() => void copyChecklist()} disabled={progress.total === 0}><FiCopy /> 체크리스트 복사</button><button className="text-button" type="button" onClick={downloadChecklist} disabled={progress.total === 0}><FiDownload /> JSON 저장</button><input ref={transferInputRef} className="purchase-checklist-transfer-input" type="file" accept=".json,application/json" aria-label="체크리스트 JSON 파일 가져오기" onChange={(event) => void importChecklistFile(event)} disabled={progress.total === 0} /><button className="text-button" type="button" onClick={() => transferInputRef.current?.click()} disabled={progress.total === 0}><FiDownload /> JSON 가져오기</button><button className="text-button" type="button" onClick={() => window.print()} disabled={progress.total === 0}><FiPrinter /> 인쇄</button><button className="text-button" type="button" onClick={checkAll} disabled={progress.total === 0 || progress.remaining === 0}><FiCheckCircle /> 모두 완료 처리</button><button className="text-button" type="button" onClick={clearAll} disabled={progress.checked === 0}><FiRefreshCw /> 체크 초기화</button></div>
     {actionMessage && <p className="purchase-checklist-action-message" role="status">{actionMessage}</p>}
     {transferPreview && transferDiff && <div className="purchase-checklist-transfer-preview" role="region" aria-label="체크리스트 JSON 가져오기 미리보기">
       <div className="purchase-checklist-transfer-preview-heading"><div><strong>체크리스트 가져오기 미리보기</strong><small>내보낸 시각 {transferPreview.exportedAt ?? "알 수 없음"} · 파일 항목 {transferPreview.itemIds.length}개</small></div><span>확인 필요</span></div>

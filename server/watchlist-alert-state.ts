@@ -9,6 +9,7 @@ export interface SavedWatchlistAlertState {
 export function parseSavedWatchlistAlertIds(value: unknown, max = 20): { alertIds: string[]; error?: string } {
   if (!value || typeof value !== "object" || Array.isArray(value) || !Array.isArray((value as { alertIds?: unknown }).alertIds)) return { alertIds: [], error: "alertIds는 알림 ID 배열이어야 합니다." };
   const rawIds = (value as { alertIds: unknown[] }).alertIds;
+  if (rawIds.length > max) return { alertIds: [], error: "한 번에 최대 20개 알림만 처리할 수 있습니다." };
   if (rawIds.some((alertId) => typeof alertId !== "string" || !alertId.trim())) return { alertIds: [], error: "alertIds에는 비어 있지 않은 문자열만 사용할 수 있습니다." };
   const alertIds = [...new Set(rawIds as string[])];
   if (alertIds.length > max) return { alertIds: [], error: "한 번에 최대 20개 알림만 처리할 수 있습니다." };

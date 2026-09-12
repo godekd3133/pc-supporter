@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { BuildSelection, RecommendationPreferences } from "./types";
 import type { BuildInputSnapshot } from "./build-history";
-import { buildInputChangeLabel, changedBuildCategories } from "./build-history";
+import { appendBuildHistoryEntry, buildInputChangeLabel, changedBuildCategories } from "./build-history";
 
 const build: BuildSelection = {
   cpu: { partId: "cpu-1", quantity: 1 },
@@ -38,5 +38,23 @@ describe("build history labels", () => {
 
   it("falls back to a generic label when the snapshots are equal", () => {
     expect(buildInputChangeLabel(snapshot(), snapshot())).toBe("구성 변경");
+  });
+
+  it("coalesces rapid edits while preserving the snapshot before the edit burst", () => {
+    const firstAfter = { ...build, memory: [{ partId: "memory-1", quantity: 3 }] };
+    const secondAfter = { ...build, memory: [{ partId: "memory-1", quantity: 4 }], gpu: { partId: "gpu-2", quantity: 1 } };
+    const first: Parameters<typeof appendBuildHistoryEntry>[1] = { id: "first", label: "RAM 변경", snapshot: snapshot(), changedAt: "2026-09-02T00:00:00.000Z" };
+    const second: Parameters<typeof appendBuildHistoryEntry>[1] = { id: "second", label: "GPU 변경", snapshot: snapshot(firstAfter), changedAt: "2026-09-02T00:00:00.500Z" };
+    const coalesced = appendBuildHistoryEntry([first], second, snapshot(secondAfter));
+
+    expect(coalesced).toHaveLength(1);
+    expect(coalesced[0]).toMatchObject({ id: "first", snapshot: snapshot(), label: "RAM · 그래픽카드 변경", changedAt: second.changedAt });
+  });
+
+  it("starts a new history entry after the coalescing window", () => {
+    const first: Parameters<typeof appendBuildHistoryEntry>[1] = { id: "first", label: "RAM 변경", snapshot: snapshot(), changedAt: "2026-09-02T00:00:00.000Z" };
+    const second: Parameters<typeof appendBuildHistoryEntry>[1] = { id: "second", label: "GPU 변경", snapshot: snapshot(), changedAt: "2026-09-02T00:00:00.801Z" };
+
+    expect(appendBuildHistoryEntry([first], second, snapshot(build, { ...preferences, profile: "gaming" }))).toHaveLength(2);
   });
 });

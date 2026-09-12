@@ -33,6 +33,29 @@ describe("purchase checklist transfer", () => {
     expect(result).toEqual({ checkedIds: [], ignoredIds: [], itemIds: [], errors: ["체크리스트 JSON의 항목 목록 형식이 올바르지 않습니다."] });
   });
 
+  it("rejects oversized imported item lists before expanding them", () => {
+    const result = parsePurchaseChecklistJson(JSON.stringify({
+      type: "pc-supporter-purchase-checklist",
+      schemaVersion: 1,
+      storageKey,
+      exportedAt: "2026-09-01T00:00:00.000Z",
+      itemIds: Array.from({ length: 101 }, (_, index) => `item-${index}`),
+      checkedIds: Array.from({ length: 101 }, (_, index) => `item-${index}`)
+    }), storageKey, items);
+
+    expect(result).toEqual({ checkedIds: [], ignoredIds: [], itemIds: [], errors: ["체크리스트 JSON의 항목 목록은 현재 체크리스트 기준 최대 100개까지 가져올 수 있습니다."] });
+  });
+
+  it("keeps large current item sets importable while preserving the 100 checked-state cap", () => {
+    const largeItems = Array.from({ length: 101 }, (_, index): PurchaseChecklistItem => ({ id: `item-${index}`, kind: "manual", severity: "manual", title: `항목 ${index}`, detail: "확인" }));
+    const exported = JSON.parse(purchaseChecklistJsonFor(storageKey, largeItems, new Set(largeItems.map((item) => item.id)), "2026-09-01T00:00:00.000Z"));
+    const result = parsePurchaseChecklistJson(JSON.stringify(exported), storageKey, largeItems);
+
+    expect(result.errors).toEqual([]);
+    expect(result.itemIds).toHaveLength(101);
+    expect(result.checkedIds).toHaveLength(100);
+  });
+
   it("calculates the import diff without counting duplicate IDs twice", () => {
     expect(purchaseChecklistTransferDiffFor(["a", "b", "b"], ["b", "c", "c"])).toEqual({ currentCheckedCount: 2, incomingCheckedCount: 2, addedCount: 1, removedCount: 1, unchangedCount: 1 });
   });

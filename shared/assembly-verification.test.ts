@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ASSEMBLY_VERIFICATION_CHECKS, assemblyVerificationComparisonFor, assemblyVerificationHistoryJsonFor, assemblyVerificationJsonFor, assemblyVerificationProgressFor, assemblyVerificationRecheckSignalsFor, assemblyVerificationSavedHistoryFor, assemblyVerificationSavedSnapshotFor, assemblyVerificationSavedSnapshotFromUnknown, assemblyVerificationStateFor, assemblyVerificationTelemetryAnalysisFor, assemblyVerificationTrendFor, emptyAssemblyVerificationHistory, emptyAssemblyVerificationLog, parseAssemblyVerificationHistoryJson, parseAssemblyVerificationJson, withAssemblyVerificationCheck, withAssemblyVerificationMeasurements } from "./assembly-verification";
+import { ASSEMBLY_VERIFICATION_CHECKS, assemblyVerificationComparisonFor, assemblyVerificationHistoryFromSavedSnapshots, assemblyVerificationHistoryHasEvidenceFor, assemblyVerificationHistoryJsonFor, assemblyVerificationHistoryMergeFor, assemblyVerificationJsonFor, assemblyVerificationProgressFor, assemblyVerificationRecheckSignalsFor, assemblyVerificationSavedHistoryFor, assemblyVerificationSavedSnapshotFor, assemblyVerificationSavedSnapshotFromUnknown, assemblyVerificationStateFor, assemblyVerificationTelemetryAnalysisFor, assemblyVerificationTrendFor, emptyAssemblyVerificationHistory, emptyAssemblyVerificationLog, parseAssemblyVerificationHistoryJson, parseAssemblyVerificationJson, withAssemblyVerificationCheck, withAssemblyVerificationMeasurements } from "./assembly-verification";
 
 describe("assembly verification log", () => {
   it("starts with six unchecked real-build checks", () => {
@@ -54,6 +54,42 @@ describe("assembly verification log", () => {
     expect(snapshot).not.toHaveProperty("note");
     expect(assemblyVerificationSavedSnapshotFromUnknown(snapshot)).toEqual(snapshot);
     expect(assemblyVerificationSavedSnapshotFromUnknown({ ...snapshot, checked: 6 })).toBeUndefined();
+  });
+
+  it("restores a share-safe snapshot as an editable progress history without private notes or raw series", () => {
+    let log = emptyAssemblyVerificationLog("build-fingerprint", "2026-09-01T00:00:00.000Z");
+    log = withAssemblyVerificationCheck(log, "post", "pass", "개인 메모는 서버에 보내지 않음");
+    const measured = withAssemblyVerificationMeasurements(log, { loadTool: "occt", loadScenario: "mixed", testDurationMinutes: 20, cpuMaxTempC: 78, measurementSource: "csv", measurementSourceLabel: "hwinfo.csv", measurementSampleCount: 120, measurementSeries: [{ sampleIndex: 0, elapsedSeconds: 0, cpuTempC: 70 }, { sampleIndex: 1, elapsedSeconds: 60, cpuTempC: 78 }], measurementQuality: { status: "complete", rowCount: 120, validSampleCount: 120, skippedRowCount: 0, invalidValueCount: 0, recognizedCoreColumnCount: 5, coreColumnCount: 5, telemetryColumnCount: 1, hasTimeAxis: true, seriesPointCount: 2 } }).log!;
+    const snapshot = assemblyVerificationSavedSnapshotFor(measured);
+    const restored = assemblyVerificationHistoryFromSavedSnapshots([snapshot], "pc-supporter-assembly-verification:restored");
+
+    expect(restored).toBeDefined();
+    expect(restored?.runs[0]).toMatchObject({ buildFingerprint: "pc-supporter-assembly-verification:restored", runLabel: "조립 검증 1회차", measurementSeriesPointCount: 2, measurementQuality: { status: "complete" } });
+    expect(restored?.runs[0].checks.post).toEqual({ status: "pass" });
+    expect(restored?.runs[0].note).toBeUndefined();
+    expect(restored?.runs[0].measurementSeries).toBeUndefined();
+    expect(assemblyVerificationHistoryHasEvidenceFor(restored!)).toBe(true);
+  });
+
+  it("keeps newer local evidence when merging an older compact server snapshot", () => {
+    const localRun = withAssemblyVerificationMeasurements(withAssemblyVerificationCheck(emptyAssemblyVerificationLog("local", "2026-09-04T00:00:00.000Z"), "post", "pass"), { loadTool: "occt", loadScenario: "mixed", testDurationMinutes: 20, cpuMaxTempC: 75, measurementSource: "csv", measurementSeries: [{ sampleIndex: 0, elapsedSeconds: 0, cpuTempC: 70 }, { sampleIndex: 1, elapsedSeconds: 60, cpuTempC: 75 }] }).log!;
+    const local = { type: "pc-supporter-assembly-verification-history" as const, schemaVersion: 1 as const, buildFingerprint: "local", updatedAt: localRun.updatedAt, activeRunId: localRun.runId!, runs: [localRun] };
+    const saved = assemblyVerificationHistoryFromSavedSnapshots([assemblyVerificationSavedSnapshotFor({ ...localRun, updatedAt: "2026-09-03T00:00:00.000Z" })], "local")!;
+    const merged = assemblyVerificationHistoryMergeFor(local, saved);
+
+    expect(merged.activeRunId).toBe(localRun.runId);
+    expect(merged.runs.find((run) => run.runId === localRun.runId)).toMatchObject({ measurementSeries: expect.any(Array), cpuMaxTempC: 75 });
+  });
+
+  it("does not keep the generated empty placeholder beside a restored server run", () => {
+    const local = emptyAssemblyVerificationHistory("local", "2026-09-04T00:00:00.000Z");
+    const savedRun = withAssemblyVerificationCheck(emptyAssemblyVerificationLog("saved", "2026-09-03T00:00:00.000Z"), "post", "pass");
+    const saved = assemblyVerificationHistoryFromSavedSnapshots([assemblyVerificationSavedSnapshotFor(savedRun)], "local")!;
+    const merged = assemblyVerificationHistoryMergeFor(local, saved);
+
+    expect(merged.runs).toHaveLength(1);
+    expect(merged.activeRunId).toBe(saved.activeRunId);
+    expect(merged.runs[0].checks.post.status).toBe("pass");
   });
 
   it("upgrades legacy single-run JSON and round-trips a multi-run history", () => {

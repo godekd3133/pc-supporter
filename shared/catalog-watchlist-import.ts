@@ -1,4 +1,4 @@
-import { catalogWatchlistFromJson } from "./catalog-watchlist";
+import { CATALOG_WATCHLIST_MAX_ENTRIES, catalogWatchlistFromJson } from "./catalog-watchlist";
 import type { CatalogWatchEntry } from "./catalog-watchlist";
 
 export interface CatalogWatchlistImportResult {
@@ -8,6 +8,7 @@ export interface CatalogWatchlistImportResult {
 }
 
 const REQUIRED_CSV_HEADERS = ["구분", "분류", "부품명", "부품 ID", "추가 시각"] as const;
+const MAX_CSV_ROWS = CATALOG_WATCHLIST_MAX_ENTRIES + 1;
 
 function parseCsvRows(input: string) {
   const rows: string[][] = [];
@@ -42,7 +43,10 @@ function parseCsvRows(input: string) {
       row.push(field);
       field = "";
       fieldStarted = false;
-      if (row.some((value) => value.length > 0)) rows.push(row);
+      if (row.some((value) => value.length > 0)) {
+        rows.push(row);
+        if (rows.length > MAX_CSV_ROWS) return { rows: [] as string[][], error: `관심 목록 CSV는 최대 ${CATALOG_WATCHLIST_MAX_ENTRIES}개 항목까지 가져올 수 있습니다.` };
+      }
       row = [];
     } else {
       field += character;
@@ -52,7 +56,10 @@ function parseCsvRows(input: string) {
   if (inQuotes) return { rows: [] as string[][], error: "CSV 따옴표가 닫히지 않았습니다." };
   if (field.length > 0 || fieldStarted || row.length > 0) {
     row.push(field);
-    if (row.some((value) => value.length > 0)) rows.push(row);
+    if (row.some((value) => value.length > 0)) {
+      rows.push(row);
+      if (rows.length > MAX_CSV_ROWS) return { rows: [] as string[][], error: `관심 목록 CSV는 최대 ${CATALOG_WATCHLIST_MAX_ENTRIES}개 항목까지 가져올 수 있습니다.` };
+    }
   }
   return { rows, error: undefined };
 }
@@ -82,11 +89,12 @@ export function catalogWatchlistEntriesFromJson(input: string): CatalogWatchlist
     const objectValue = parsed && typeof parsed === "object" ? parsed as { items?: unknown; filters?: { nearLowThresholdPercent?: unknown } } : undefined;
     const rawItems = Array.isArray(parsed) ? parsed : objectValue && Array.isArray(objectValue.items) ? objectValue.items.map((item) => item && typeof item === "object" && "entry" in item ? (item as { entry?: unknown }).entry : item) : undefined;
     if (!rawItems) return { entries: [], errors: ["관심 목록 JSON은 배열 또는 export envelope여야 합니다."] };
+    if (rawItems.length > CATALOG_WATCHLIST_MAX_ENTRIES) return { entries: [], errors: [`관심 목록 JSON은 최대 ${CATALOG_WATCHLIST_MAX_ENTRIES}개 항목까지 가져올 수 있습니다.`] };
     const invalidIndex = rawItems.findIndex((item) => !isValidEntry(item));
     if (invalidIndex >= 0) return { entries: [], errors: [`${invalidIndex + 1}번째 관심 항목의 필수 값이나 목표가가 올바르지 않습니다.`] };
     const thresholdValue = objectValue?.filters?.nearLowThresholdPercent;
     if (thresholdValue !== undefined && thresholdFrom(thresholdValue) === undefined) return { entries: [], errors: ["최저가 근접 기준은 5, 10, 20 중 하나여야 합니다."] };
-    return { entries: catalogWatchlistFromJson(JSON.stringify(rawItems), 50), ...(thresholdFrom(thresholdValue) !== undefined ? { nearLowThresholdPercent: thresholdFrom(thresholdValue) } : {}), errors: [] };
+    return { entries: catalogWatchlistFromJson(JSON.stringify(rawItems), CATALOG_WATCHLIST_MAX_ENTRIES), ...(thresholdFrom(thresholdValue) !== undefined ? { nearLowThresholdPercent: thresholdFrom(thresholdValue) } : {}), errors: [] };
   } catch {
     return { entries: [], errors: ["관심 목록 JSON을 읽을 수 없습니다."] };
   }
@@ -122,5 +130,5 @@ export function catalogWatchlistEntriesFromCsv(input: string): CatalogWatchlistI
     if (kind && category && itemName && itemId && addedAt && (!targetText || (Number.isFinite(targetPriceWon) && isValidTargetPrice(targetPriceWon)))) entries.push({ itemId, itemName, category: category as CatalogWatchEntry["category"], kind, addedAt, ...(targetPriceWon !== undefined ? { targetPriceWon } : {}) });
   });
   if (errors.length > 0) return { entries: [], errors };
-  return { entries: catalogWatchlistFromJson(JSON.stringify(entries), 50), errors: [] };
+  return { entries: catalogWatchlistFromJson(JSON.stringify(entries), CATALOG_WATCHLIST_MAX_ENTRIES), errors: [] };
 }

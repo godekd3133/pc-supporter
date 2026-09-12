@@ -25,7 +25,7 @@ const parts = [
   part("cooler", "cooler", { supportedSockets: ["AM5"], maxCoolingW: 220, maxCoolerHeightMm: 160 }),
   part("motherboard", "motherboard", { socket: "AM5", memoryType: "DDR5", formFactor: "mATX", memorySlots: 4, m2Slots: 4, sataPorts: 6 }),
   part("memory", "memory", { memoryType: "DDR5", formFactor: "DIMM", capacityGb: 32, speedMhz: 6000, memoryModuleCountPerKit: 2 }),
-  part("gpu", "gpu", { lengthMm: 359, vramGb: 32, recommendedPsuW: 1000 }),
+  part("gpu", "gpu", { lengthMm: 359, vramGb: 32, recommendedPsuW: 1000, pcieSlotWidth: 16 }),
   part("ssd", "ssd", { interface: "NVMe", formFactor: "M.2 2280", capacityGb: 1000 }),
   part("hdd", "hdd", { interface: "SATA", formFactor: "3.5인치", capacityGb: 4000 }),
   part("case", "case", { maxGpuLengthMm: 400, maxCoolerHeightMm: 180, maxPsuLengthMm: 200, hddBays: 4, motherboardFormFactors: ["mATX"] }),
@@ -37,8 +37,8 @@ describe("compatibility filter presets", () => {
   it("derives motherboard expansion requirements from the current build", () => {
     const preset = compatibilityFilterPresetFor("motherboard", build, partMap);
 
-    expect(preset.values).toMatchObject({ socket: "AM5", memoryType: "DDR5", minMemorySlots: "4", minM2Slots: "2", minSataPorts: "2" });
-    expect(preset.labels).toEqual(expect.arrayContaining(["소켓 AM5", "메모리 세대 DDR5", "RAM 슬롯 ≥ 4개", "M.2 슬롯 ≥ 2개", "SATA 포트 ≥ 2개"]));
+    expect(preset.values).toMatchObject({ socket: "AM5", memoryType: "DDR5", minMemorySlots: "4", minM2Slots: "2", minSataPorts: "2", pcieSlotWidth: "16", minPcieSlotCount: "1" });
+    expect(preset.labels).toEqual(expect.arrayContaining(["소켓 AM5", "메모리 세대 DDR5", "RAM 슬롯 ≥ 4개", "M.2 슬롯 ≥ 2개", "SATA 포트 ≥ 2개", "PCIe x16 이상 슬롯 ≥ 1개"]));
   });
 
   it("derives case, GPU, cooler, and PSU physical constraints with safe rounding", () => {
@@ -56,5 +56,16 @@ describe("compatibility filter presets", () => {
 
     expect(preset.values.minM2Slots).toBeUndefined();
     expect(preset.omitted).toContain("M.2 SSD 연결 방식 확인 필요");
+  });
+
+  it("does not invent a PCIe slot requirement when the selected GPU width is missing", () => {
+    const incompleteMap = new Map(partMap);
+    incompleteMap.set("gpu", part("gpu", "gpu", { lengthMm: 359, vramGb: 32, recommendedPsuW: 1000 }));
+
+    const preset = compatibilityFilterPresetFor("motherboard", build, incompleteMap);
+
+    expect(preset.values.pcieSlotWidth).toBeUndefined();
+    expect(preset.values.minPcieSlotCount).toBeUndefined();
+    expect(preset.omitted).toContain("GPU PCIe 슬롯 폭 확인 필요");
   });
 });

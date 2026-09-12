@@ -30,4 +30,9 @@ describe("catalog watchlist share", () => {
     const invalid = `#watchlist=${encodeURIComponent(JSON.stringify({ version: 1, nearLowThresholdPercent: 10, entries: [entry(), entry({ targetPriceWon: 0 })] }))}`;
     expect(catalogWatchlistSharePayloadFromHash(invalid).entries).toEqual([]);
   });
+
+  it("rejects a share hash that exceeds the URL payload entry bound", () => {
+    const oversized = `#watchlist=${encodeURIComponent(JSON.stringify({ version: 1, nearLowThresholdPercent: 10, entries: Array.from({ length: 13 }, (_, index) => entry({ itemId: `part-${index}` })) }))}`;
+    expect(catalogWatchlistSharePayloadFromHash(oversized)).toEqual({ entries: [], errors: ["공유 링크는 최대 12개 관심 항목만 포함할 수 있습니다."] });
+  });
 });

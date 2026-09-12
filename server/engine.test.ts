@@ -312,6 +312,52 @@ describe("compatibility engine", () => {
     expect(result.links.every((link) => link.status === "compatible")).toBe(true);
   });
 
+  it("attaches a build-level benchmark snapshot from the selected CPU and GPU", () => {
+    const catalog = seedCatalog.map((part) => part.id === "cpu-7800x3d"
+      ? {
+          ...part,
+          updatedAt: "2026-09-05T00:00:00.000Z",
+          specs: {
+            ...part.specs,
+            cinebenchR23Single: 1810,
+            cinebenchR23Multi: 18200,
+            benchmarkProvenance: {
+              sourceKind: "independent_review" as const,
+              sourceNote: "결정론적 엔진 회귀 테스트용 근거",
+              updatedAt: "2026-09-05T00:00:00.000Z"
+            }
+          }
+        }
+      : part.id === "gpu-rtx-4060"
+        ? {
+            ...part,
+            updatedAt: "2026-09-05T00:00:00.000Z",
+            specs: {
+              ...part.specs,
+              gpu3dmarkTimeSpyScore: 10400,
+              gpu3dmarkPortRoyalScore: 6900,
+              benchmarkProvenance: {
+                sourceKind: "independent_review" as const,
+                sourceNote: "결정론적 엔진 회귀 테스트용 근거",
+                updatedAt: "2026-09-05T00:00:00.000Z"
+              }
+            }
+          }
+        : part);
+
+    const result = evaluateBuild(compatibleBuild(), catalog, { includeSuggestions: false });
+
+    expect(result.benchmarkSnapshot).toMatchObject({
+      status: "complete",
+      expectedScoreCount: 4,
+      presentScoreCount: 4,
+      parts: [
+        expect.objectContaining({ category: "cpu", partId: "cpu-7800x3d", presentCount: 2 }),
+        expect.objectContaining({ category: "gpu", partId: "gpu-rtx-4060", presentCount: 2 })
+      ]
+    });
+  });
+
   it("returns a clearly labeled catalog-relative analysis for the selected profile", () => {
     const result = evaluateBuild(compatibleBuild(), seedCatalog, {
       recommendationPreferences: { priority: "balanced", profile: "gaming" }
@@ -897,8 +943,8 @@ describe("compatibility engine", () => {
 
   it("labels a safe GPU alternative when its physical evidence is not reviewed", () => {
     const baseGpu = seedCatalog.find((part) => part.id === "gpu-rtx-4060")!;
-    const currentGpu: Part = { ...baseGpu, id: "gpu-physical-current", specs: { ...baseGpu.specs, lengthMm: 450 } };
-    const candidateGpu: Part = { ...baseGpu, id: "gpu-physical-candidate", specs: { ...baseGpu.specs, lengthMm: 280 } };
+    const currentGpu: Part = { ...baseGpu, id: "gpu-physical-current", specs: { ...baseGpu.specs, lengthMm: 450, vramGb: 8 } };
+    const candidateGpu: Part = { ...baseGpu, id: "gpu-physical-candidate", specs: { ...baseGpu.specs, lengthMm: 280, vramGb: 8 } };
     const build = compatibleBuild();
     build.gpu = { partId: currentGpu.id, quantity: 1 };
     const catalog = seedCatalog.filter((part) => part.category !== "gpu").concat(currentGpu, candidateGpu);
@@ -908,6 +954,22 @@ describe("compatibility engine", () => {
     expect(suggestion?.fixesCurrentIssue).toBe(true);
     expect(suggestion?.physicalEvidence).toMatchObject({ status: "review" });
     expect(suggestion?.physicalEvidence?.summary).toContain("GPU·케이스 물리 근거");
+
+    const gamingResult = evaluateBuild(build, catalog, {
+      recommendationPreferences: { priority: "balanced", profile: "gaming", gamingResolution: "1440p", gamingRefreshRate: 144 }
+    });
+    const gamingSuggestion = gamingResult.findings.find((item) => item.ruleId === "gpu-case-length")?.suggestions?.find((item) => item.part.id === candidateGpu.id);
+
+    expect(gamingSuggestion?.gpuTarget).toMatchObject({
+      resolution: "1440p",
+      refreshRate: 144,
+      targetVramGb: 12,
+      currentVramGb: currentGpu.specs.vramGb,
+      candidateVramGb: candidateGpu.specs.vramGb,
+      currentFit: "partial",
+      candidateFit: "partial",
+      summary: expect.stringContaining("QHD · 1440p · 144Hz")
+    });
   });
 
   it("marks a GPU alternative's physical evidence as verified only after values and provenance are registered", () => {
@@ -1119,6 +1181,8 @@ describe("compatibility engine", () => {
       expect.arrayContaining(["memory-capacity", "m2-slots", "case-hdd-bays", "gpu-case-length", "gpu-psu-power"])
     );
     expect(result.findings.some((finding) => finding.suggestions?.some((suggestion) => suggestion.priceDeltaWon !== undefined))).toBe(true);
+    expect(result.findings.find((finding) => finding.ruleId === "case-hdd-bays")?.suggestions)
+      .toEqual(expect.arrayContaining([expect.objectContaining({ part: expect.objectContaining({ id: "case-full-airflow" }), candidateRisk: "safe" })]));
     expect(result.links.find((link) => link.id === "motherboard-memory")?.status).toBe("issue");
     expect(result.links.find((link) => link.id === "motherboard-ssd")?.status).toBe("issue");
     expect(result.links.find((link) => link.id === "gpu-case")?.status).toBe("issue");
@@ -2137,6 +2201,52 @@ describe("compatibility engine", () => {
     expect(assessAlternativePart(build, catalog, "motherboard", riskyMotherboard).reasons).toContain("M.2 SSD와 메인보드 M.2 연결 정보를 확인할 수 없습니다.");
   });
 
+  it("surfaces a review candidate when no safe alternative exists", () => {
+    const currentMotherboard = seedCatalog.find((part) => part.id === "mb-b760-intel")!;
+    const baseMotherboard = seedCatalog.find((part) => part.id === "mb-b650-4x3")!;
+    const riskyMotherboard = {
+      ...baseMotherboard,
+      id: "mb-am5-review-only",
+      name: "테스트 AM5 검토 전용 메인보드",
+      specs: { ...baseMotherboard.specs, m2Interfaces: undefined }
+    };
+    const build = compatibleBuild();
+    build.motherboard = { partId: currentMotherboard.id, quantity: 1 };
+    const catalog = seedCatalog
+      .filter((part) => part.category !== "motherboard")
+      .concat(currentMotherboard, riskyMotherboard);
+    const result = evaluateBuild(build, catalog);
+    const suggestions = result.findings.find((item) => item.ruleId === "cpu-motherboard-socket")?.suggestions ?? [];
+
+    expect(suggestions).toHaveLength(1);
+    expect(suggestions[0]).toMatchObject({
+      part: expect.objectContaining({ id: riskyMotherboard.id }),
+      fixesCurrentIssue: true,
+      candidateRisk: "review",
+      candidateUnknownCount: 1,
+      candidateReasons: ["M.2 SSD와 메인보드 M.2 연결 정보를 확인할 수 없습니다."]
+    });
+    expect(suggestions[0]?.reason).toContain("구매 전에 확인해야 합니다");
+  });
+
+  it("does not treat an unrelated baseline blocker as a new candidate risk", () => {
+    const build = compatibleBuild();
+    build.motherboard = { partId: "mb-b760-intel", quantity: 1 };
+    build.ssd = [{ partId: "ssd-nvme-1tb", quantity: 4 }];
+    const catalog = seedCatalog;
+    const result = evaluateBuild(build, catalog);
+    const finding = result.findings.find((item) => item.ruleId === "cpu-motherboard-socket");
+    const candidate = catalog.find((part) => part.id === "mb-b650-4x3")!;
+    const assessment = assessAlternativePart(build, catalog, "motherboard", candidate, finding);
+
+    expect(result.findings.some((item) => item.ruleId === "m2-slots")).toBe(true);
+    expect(assessment).toMatchObject({ risk: "safe", fixesCurrentIssue: true, candidateBlockerCount: 0, candidateUnknownCount: 0 });
+    expect(assessment.remainingBlockers).toBeGreaterThan(0);
+    expect(result.findings.find((item) => item.ruleId === "cpu-motherboard-socket")?.suggestions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ part: expect.objectContaining({ id: candidate.id }), fixesCurrentIssue: true })
+    ]));
+  });
+
   it("uses Cinebench R23 scores when ranking CPU alternatives", () => {
     const baseCpu = seedCatalog.find((part) => part.id === "cpu-7800x3d")!;
     const currentCpu = {
@@ -2297,7 +2407,7 @@ describe("compatibility engine", () => {
     const suggestion = result.findings.find((item) => item.ruleId === "gpu-case-length")?.suggestions?.find((item) => item.part.id === closeGpu.id);
 
     expect(closeSimilarity.similarityScore).toBeGreaterThan(farSimilarity.similarityScore);
-    expect(closeSimilarity.similarityEvidence).toMatchObject({ comparedDimensions: 4, totalDimensions: 4, confidence: "high" });
+    expect(closeSimilarity.similarityEvidence).toMatchObject({ comparedDimensions: 3, totalDimensions: 3, confidence: "high" });
     expect(closeSimilarity.similarityEvidence.notes?.[0]).toContain("동일 GPU 모델 계열의 검증된 카탈로그 참조");
     expect(closeSimilarity.performanceSummary).toContain("동일 GPU 모델 계열 참조 기준");
     expect(suggestion).toBeDefined();
@@ -2369,7 +2479,7 @@ describe("compatibility engine", () => {
     const result = evaluateBuild(build, catalog, { recommendationPreferences: { profile: "general", priority: "performance" } });
     const suggestion = result.findings.find((item) => item.ruleId === "cpu-motherboard-socket")?.suggestions?.find((item) => item.part.id === closeCpu.id);
 
-    expect(closeSimilarity.similarityEvidence).toMatchObject({ comparedDimensions: 5, totalDimensions: 5, confidence: "high", basis: "mixed" });
+    expect(closeSimilarity.similarityEvidence).toMatchObject({ comparedDimensions: 4, totalDimensions: 4, confidence: "high", basis: "mixed" });
     expect(closeSimilarity.similarityEvidence.notes?.[0]).toContain("동일 CPU 모델 계열의 검증된 카탈로그 참조");
     expect(closeSimilarity.performanceSummary).toContain("동일 CPU 모델 계열 참조 기준");
     expect(suggestion).toBeDefined();
@@ -2387,6 +2497,140 @@ describe("compatibility engine", () => {
     const x3dBuild = { ...build, cpu: { partId: x3dCurrentCpu.id, quantity: 1 } };
     const x3dSimilarity = candidateSimilarityForBuild(x3dBuild, [...seedCatalog, x3dReferenceCpu, closeCpu], "cpu", closeCpu, "general");
     expect(x3dSimilarity.similarityEvidence.notes?.[0]).toContain("동일 CPU 모델 계열의 검증된 카탈로그 참조");
+  });
+
+  it("fills missing GPU model-common dimensions from a same-family reference without replacing selected values", () => {
+    const baseGpu = seedCatalog.find((part) => part.id === "gpu-rtx-4060")!;
+    const currentGpu: Part = {
+      ...baseGpu,
+      id: "gpu-partial-rtx4060",
+      name: "부분 스펙 RTX 4060 선택 GPU",
+      model: "RTX 4060",
+      specs: {
+        ...baseGpu.specs,
+        gpuVendor: "nvidia",
+        gpuArchitectureFamily: "RTX 40",
+        vramGb: 12,
+        gpuBoostClockMhz: 2500,
+        gpuMemoryBandwidthGbps: undefined,
+        gpuStreamProcessors: undefined,
+        gpu3dmarkTimeSpyScore: undefined,
+        gpu3dmarkPortRoyalScore: undefined
+      }
+    };
+    const referenceGpu: Part = {
+      ...baseGpu,
+      id: "gpu-rtx4060-model-reference",
+      name: "검증된 RTX 4060 모델 공통 스펙 참조",
+      model: "RTX 4060 Performance Reference",
+      source: "danawa",
+      sourceProductCode: "reference-rtx4060",
+      dataQuality: "live",
+      specs: {
+        ...baseGpu.specs,
+        gpuVendor: "nvidia",
+        gpuArchitectureFamily: "RTX 40",
+        vramGb: 8,
+        gpuBoostClockMhz: 2460,
+        gpuMemoryBandwidthGbps: 272,
+        gpuStreamProcessors: 3072,
+        gpu3dmarkTimeSpyScore: 7800,
+        gpu3dmarkPortRoyalScore: 5200
+      }
+    };
+    const candidateGpu: Part = {
+      ...referenceGpu,
+      id: "gpu-rtx4060-model-candidate",
+      name: "RTX 4060 모델 공통 스펙 후보",
+      model: "RTX 4060 Candidate",
+      sourceProductCode: "candidate-rtx4060",
+      specs: {
+        ...referenceGpu.specs,
+        vramGb: 8,
+        gpuBoostClockMhz: 2470,
+        gpuMemoryBandwidthGbps: 272,
+        gpuStreamProcessors: 3072,
+        gpu3dmarkTimeSpyScore: 7850,
+        gpu3dmarkPortRoyalScore: 5180
+      }
+    };
+    const build = compatibleBuild();
+    build.gpu = { partId: currentGpu.id, quantity: 1 };
+    const similarity = candidateSimilarityForBuild(build, [...seedCatalog, currentGpu, referenceGpu, candidateGpu], "gpu", candidateGpu, "gaming", "1440p");
+
+    expect(similarity.similarityEvidence).toMatchObject({
+      comparedDimensions: 6,
+      totalDimensions: 6,
+      confidence: "high",
+      reference: {
+        partId: referenceGpu.id,
+        transferredDimensions: expect.arrayContaining([
+          "gpu3dmarkTimeSpyScore",
+          "gpu3dmarkPortRoyalScore",
+          "gpuMemoryBandwidthGbps",
+          "gpuStreamProcessors"
+        ])
+      }
+    });
+    expect(similarity.similarityEvidence.dimensions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: "vramGb", currentValue: "12GB", source: "selected" }),
+      expect.objectContaining({ key: "gpuMemoryBandwidthGbps", currentValue: "272GB/s", source: "model_reference" }),
+      expect.objectContaining({ key: "gpuBoostClockMhz", currentValue: "부스트 2,500MHz", source: "selected" })
+    ]));
+    expect(similarity.similarityEvidence.notes?.[0]).toContain("동일 GPU 모델 계열의 검증된 카탈로그 참조");
+  });
+
+  it("recognizes three-digit Intel Core Ultra model families for partial CPU references", () => {
+    const baseCpu = seedCatalog.find((part) => part.id === "cpu-i7-14700k")!;
+    const currentCpu: Part = {
+      ...baseCpu,
+      id: "cpu-core-ultra265k-partial",
+      name: "부분 스펙 인텔 코어 울트라7 시리즈2 265K",
+      model: "인텔 코어 울트라7 시리즈2 265K",
+      specs: {
+        ...baseCpu.specs,
+        socket: "LGA1851",
+        cores: 20,
+        threads: undefined,
+        boostClockGhz: 5.5,
+        cinebenchR23Single: undefined,
+        cinebenchR23Multi: undefined
+      }
+    };
+    const referenceCpu: Part = {
+      ...currentCpu,
+      id: "cpu-core-ultra265k-reference",
+      name: "검증된 인텔 코어 울트라7 265K 참조",
+      model: "인텔 코어 울트라7 시리즈2 265K (정품)",
+      source: "danawa",
+      sourceProductCode: "reference-core-ultra265k",
+      dataQuality: "live",
+      specs: {
+        ...currentCpu.specs,
+        cores: 20,
+        threads: 20,
+        boostClockGhz: 5.5,
+        cinebenchR23Single: 1900,
+        cinebenchR23Multi: 26000
+      }
+    };
+    const candidateCpu: Part = {
+      ...referenceCpu,
+      id: "cpu-core-ultra265k-candidate",
+      name: "인텔 코어 울트라7 265K 유사 성능 후보",
+      model: "Intel Core Ultra7 265K Candidate",
+      sourceProductCode: "candidate-core-ultra265k"
+    };
+    const build = compatibleBuild();
+    build.cpu = { partId: currentCpu.id, quantity: 1 };
+    const similarity = candidateSimilarityForBuild(build, [...seedCatalog, currentCpu, referenceCpu, candidateCpu], "cpu", candidateCpu, "general");
+
+    expect(similarity.similarityEvidence).toMatchObject({ comparedDimensions: 5, totalDimensions: 5, confidence: "high" });
+    expect(similarity.similarityEvidence.reference).toMatchObject({ partId: referenceCpu.id, transferredDimensions: expect.arrayContaining(["threads", "cinebenchR23Single", "cinebenchR23Multi"]) });
+    expect(similarity.similarityEvidence.dimensions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: "cores", currentValue: "20코어", source: "selected" }),
+      expect.objectContaining({ key: "threads", currentValue: "20스레드", source: "model_reference" })
+    ]));
   });
 
   it("uses SSD IOPS alongside sequential throughput when ranking storage alternatives", () => {
@@ -2698,6 +2942,43 @@ describe("compatibility engine", () => {
     expect(suggestions.map((suggestion) => suggestion.part.id).slice(0, 2)).toEqual([cheapReplacement.id, expensiveReplacement.id]);
   });
 
+  it("orders replacement candidates by verification evidence when requested", () => {
+    const currentMotherboard = seedCatalog.find((part) => part.id === "mb-b760-intel")!;
+    const baseReplacement = seedCatalog.find((part) => part.id === "mb-b650-4x3")!;
+    const projectReplacement: Part = {
+      ...baseReplacement,
+      id: "mb-b650-project-evidence",
+      name: "프로젝트 기준 메인보드",
+      dataQuality: "seed",
+      source: "seed",
+      updatedAt: "2020-01-01T00:00:00.000Z",
+      danawaUrl: undefined
+    };
+    const verifiedReplacement: Part = {
+      ...baseReplacement,
+      id: "mb-b650-live-evidence",
+      name: "원문 확인 메인보드",
+      dataQuality: "live",
+      source: "danawa",
+      updatedAt: new Date().toISOString(),
+      danawaUrl: "https://example.com/mb-b650-live-evidence"
+    };
+    const catalog = seedCatalog
+      .filter((part) => part.category !== "motherboard")
+      .concat(currentMotherboard, projectReplacement, verifiedReplacement);
+    const build = compatibleBuild();
+    build.motherboard = { partId: currentMotherboard.id, quantity: 1 };
+
+    const result = evaluateBuild(build, catalog, {
+      recommendationPreferences: { priority: "reliability", profile: "general" }
+    });
+    const suggestions = result.findings.find((finding) => finding.ruleId === "cpu-motherboard-socket")?.suggestions ?? [];
+
+    expect(suggestions[0]?.part.id).toBe(verifiedReplacement.id);
+    expect(suggestions[0]?.recommendationTrust?.dataQuality).toBe("live");
+    expect(suggestions[1]?.recommendationTrust?.dataQuality).toBe("seed");
+  });
+
   it("generates a compatible office draft within the requested budget", () => {
     const draft = generateBuildDraft(seedCatalog, {
       profile: "office",
@@ -2803,6 +3084,144 @@ describe("compatibility engine", () => {
     expect(() => generateBuildDraft(catalog, { profile: "office", budgetWon: 1_500_000, includeGpu: false, hddCount: 1, hddCapacityGb: 4000 })).toThrow(/케이스/);
   });
 
+  it("offers a case with unrelated missing HDD evidence as a review alternative", () => {
+    const baseCase = seedCatalog.find((part) => part.id === "case-full-airflow")!;
+    const currentCase: Part = {
+      ...seedCatalog.find((part) => part.id === "case-compact-matx")!,
+      id: "case-review-baseline",
+      name: "GPU 길이 부족 기준 케이스",
+      specs: { ...seedCatalog.find((part) => part.id === "case-compact-matx")!.specs, maxGpuLengthMm: 100 }
+    };
+    const reviewCase: Part = {
+      ...baseCase,
+      id: "case-review-missing-hdd",
+      name: "HDD 미사용 검토 케이스",
+      dataQuality: "incomplete",
+      missingFields: ["hddBays"],
+      specs: { ...baseCase.specs, hddBays: undefined }
+    };
+    const build = compatibleBuild();
+    build.case = { partId: currentCase.id, quantity: 1 };
+    build.hdd = [];
+    const catalog = seedCatalog.filter((part) => part.category !== "case").concat(currentCase, reviewCase);
+    const result = evaluateBuild(build, catalog);
+    const suggestions = result.findings.find((item) => item.ruleId === "gpu-case-length")?.suggestions ?? [];
+    const suggestion = suggestions.find((item) => item.part.id === reviewCase.id);
+
+    expect(suggestion).toMatchObject({ candidateRisk: "review", fixesCurrentIssue: true });
+    expect(suggestion?.candidateReasons).toContain("필수 스펙 미확인: HDD 베이");
+  });
+
+  it("keeps a verified case candidate when incomplete cases fill the bounded pool", () => {
+    const baseCase = seedCatalog.find((part) => part.id === "case-full-airflow")!;
+    const compactCase = seedCatalog.find((part) => part.id === "case-compact-matx")!;
+    const currentCase: Part = {
+      ...compactCase,
+      id: "case-bounded-pool-baseline",
+      name: "GPU 길이 부족 풀 기준 케이스",
+      specs: { ...compactCase.specs, maxGpuLengthMm: 100 }
+    };
+    const incompleteCases = Array.from({ length: 100 }, (_value, index) => ({
+      ...baseCase,
+      id: `case-bounded-pool-incomplete-${index}`,
+      name: `검토 케이스 ${index + 1}`,
+      priceWon: 1_000 + index,
+      dataQuality: "incomplete" as const,
+      missingFields: ["hddBays"],
+      specs: { ...baseCase.specs, hddBays: undefined }
+    }));
+    const build = compatibleBuild();
+    build.case = { partId: currentCase.id, quantity: 1 };
+    build.hdd = [];
+    const catalog = seedCatalog.filter((part) => part.category !== "case").concat(currentCase, baseCase, ...incompleteCases);
+    const result = evaluateBuild(build, catalog);
+    const suggestions = result.findings.find((item) => item.ruleId === "gpu-case-length")?.suggestions ?? [];
+
+    expect(suggestions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ part: expect.objectContaining({ id: baseCase.id }), candidateRisk: "safe" })
+    ]));
+  });
+
+  it("uses evidence coverage when selecting a performance candidate from a bounded pool", () => {
+    const baseCpu = seedCatalog.find((part) => part.id === "cpu-7800x3d")!;
+    const incompatibleCpu = seedCatalog.find((part) => part.id === "cpu-i7-14700k")!;
+    const currentCpu: Part = {
+      ...incompatibleCpu,
+      id: "cpu-bounded-pool-performance-baseline",
+      name: "성능 근거 풀 기준 CPU",
+      dataQuality: "manual",
+      source: "manual",
+      priceWon: 300000,
+      specs: {
+        ...incompatibleCpu.specs,
+        socket: "LGA1700",
+        memoryType: "DDR5",
+        tdpW: 125,
+        pptW: 170,
+        cores: 16,
+        threads: 24,
+        boostClockGhz: 5.6,
+        cinebenchR23Single: 2200,
+        cinebenchR23Multi: 30000
+      }
+    };
+    const partialCandidates = Array.from({ length: 100 }, (_value, index) => ({
+      ...baseCpu,
+      id: `cpu-bounded-pool-partial-${String(index).padStart(3, "0")}`,
+      name: `단일 점수만 있는 후보 ${index + 1}`,
+      brand: "PC Supporter",
+      model: `Pool Partial ${index + 1}`,
+      source: "manual" as const,
+      dataQuality: "manual" as const,
+      priceWon: 100000 + index,
+      updatedAt: "2026-09-05T00:00:00.000Z",
+      specs: {
+        ...baseCpu.specs,
+        socket: "AM5",
+        memoryType: "DDR5",
+        tdpW: 120,
+        pptW: 150,
+        cinebenchR23Single: 2200
+      }
+    }));
+    const completeCandidate: Part = {
+      ...baseCpu,
+      id: "cpu-bounded-pool-complete",
+      name: "전체 점수 확인 후보",
+      brand: "PC Supporter",
+      model: "Pool Complete",
+      source: "danawa",
+      dataQuality: "live",
+      priceWon: 900000,
+      danawaUrl: "https://example.com/cpu-bounded-pool-complete",
+      updatedAt: "2026-09-05T00:00:00.000Z",
+      specs: {
+        ...baseCpu.specs,
+        socket: "AM5",
+        memoryType: "DDR5",
+        tdpW: 120,
+        pptW: 150,
+        cores: 12,
+        threads: 24,
+        boostClockGhz: 5,
+        cinebenchR23Single: 1800,
+        cinebenchR23Multi: 20000
+      }
+    };
+    const build = compatibleBuild();
+    build.cpu = { partId: currentCpu.id, quantity: 1 };
+    const catalog = seedCatalog.filter((part) => part.category !== "cpu").concat(currentCpu, completeCandidate, ...partialCandidates);
+    const result = evaluateBuild(build, catalog, {
+      recommendationPreferences: { profile: "general", priority: "performance" }
+    });
+    const socketFinding = result.findings.find((finding) => finding.ruleId === "cpu-motherboard-socket");
+    const cpuSuggestions = socketFinding?.suggestions?.filter((suggestion) => suggestion.part.category === "cpu") ?? [];
+
+    expect(result.recommendationSearch).toMatchObject({ mode: "bounded", evaluatedCandidateCount: expect.any(Number) });
+    expect(cpuSuggestions[0]?.part.id).toBe(completeCandidate.id);
+    expect(cpuSuggestions[0]?.similarityEvidence).toMatchObject({ comparedDimensions: 5, totalDimensions: 5, confidence: "high" });
+  });
+
   it("honors budget and performance priority when generating a draft", () => {
     const baseCpu = seedCatalog.find((part) => part.id === "cpu-7800x3d")!;
     const budgetCpu: Part = {
@@ -2829,6 +3248,36 @@ describe("compatibility engine", () => {
     expect(performanceDraft.selection.cpu?.partId).toBe(performanceCpu.id);
     expect(budgetDraft.blockerCount).toBe(0);
     expect(performanceDraft.blockerCount).toBe(0);
+  });
+
+  it("uses verified catalog evidence for a reliability-first generated draft", () => {
+    const baseCpu = seedCatalog.find((part) => part.id === "cpu-7800x3d")!;
+    const projectCpu: Part = {
+      ...baseCpu,
+      id: "cpu-generator-project-evidence",
+      name: "프로젝트 기준 자동 구성 CPU",
+      dataQuality: "seed",
+      source: "seed",
+      updatedAt: "2020-01-01T00:00:00.000Z",
+      danawaUrl: undefined
+    };
+    const verifiedCpu: Part = {
+      ...baseCpu,
+      id: "cpu-generator-live-evidence",
+      name: "원문 확인 자동 구성 CPU",
+      dataQuality: "live",
+      source: "danawa",
+      updatedAt: new Date().toISOString(),
+      danawaUrl: "https://example.com/cpu-generator-live-evidence"
+    };
+    const catalog = seedCatalog.filter((part) => part.category !== "cpu").concat(projectCpu, verifiedCpu);
+
+    const draft = generateBuildDraft(catalog, { profile: "office", priority: "reliability", budgetWon: 2_000_000, includeGpu: false });
+
+    expect(draft.priority).toBe("reliability");
+    expect(draft.selection.cpu?.partId).toBe(verifiedCpu.id);
+    expect(draft.rationale[1]).toContain("검증 우선");
+    expect(draft.blockerCount).toBe(0);
   });
 
   it("honors the requested RAM capacity in an automatic draft", () => {

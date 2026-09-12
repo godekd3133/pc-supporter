@@ -95,6 +95,24 @@ describe("benchmark overrides", () => {
     expect(applied[0].specs.benchmarkProvenance).toMatchObject({ sourceKind: "official", sourceNote: "검수 표", sourceUrl: "https://example.com/benchmark" });
   });
 
+  it("carries a persisted source-check result into benchmark provenance", () => {
+    const cpu = part({ id: "cpu-source-checked", sourceProductCode: "cpu-source-checked", specs: { socket: "AM5" } });
+    const sourceCheck = { requestedUrl: "https://example.com/benchmark", checkedAt: "2026-09-03T00:00:00.000Z", status: "reachable" as const, identityStatus: "matched" as const, redirectCount: 0, httpStatus: 200, contentType: "text/html", detail: "모델 식별 확인" };
+    const applied = applyBenchmarkOverrides([cpu], {
+      "cpu-source-checked": {
+        partId: "cpu-source-checked",
+        scores: { cinebenchR23Multi: 18000 },
+        sourceKind: "official",
+        sourceNote: "검수 표",
+        sourceUrl: "https://example.com/benchmark",
+        sourceCheck,
+        updatedAt: "2026-09-03T00:00:00.000Z"
+      }
+    });
+
+    expect(applied[0].specs.benchmarkProvenance?.sourceCheck).toEqual(sourceCheck);
+  });
+
   it("keeps legacy overrides usable and marks their provenance as unclassified", () => {
     const cpu = part({ id: "cpu-legacy", sourceProductCode: "cpu-legacy", specs: { socket: "AM5" } });
     const applied = applyBenchmarkOverrides([cpu], {

@@ -1,12 +1,15 @@
 import type { BuildSelection, CompatibilityResult, Finding, FindingSeverity, Part } from "./types";
 import { gpuPurchaseEvidenceFor } from "./gpu-fit";
 import { buildConnectivitySummaryFor } from "./build-connectivity";
+import { buildResourceSummaryFor } from "./build-resource-summary";
+import { CHECKLIST_MAX_CHECKED_IDS } from "./checklist-storage-limits";
 
 export type PurchaseChecklistItemKind = "finding" | "manual";
 export type PurchaseChecklistItemSeverity = Exclude<FindingSeverity, "info"> | "manual";
 
 export const PURCHASE_CHECKLIST_CHANGE_EVENT = "pc-supporter-purchase-checklist-change";
 export const PURCHASE_CHECKLIST_ACTION_EVENT = "pc-supporter-purchase-checklist-action";
+export const PURCHASE_CHECKLIST_MAX_CHECKED_ITEMS = CHECKLIST_MAX_CHECKED_IDS;
 
 export type PurchaseChecklistItem = {
   id: string;
@@ -15,7 +18,7 @@ export type PurchaseChecklistItem = {
   title: string;
   detail: string;
   ruleId?: string;
-  targetId?: "gpu-fit-summary-panel" | "accessory-compatibility-panel" | "data-health-panel" | "purchase-list-panel" | "repair-plan-panel" | "build-connectivity-panel";
+  targetId?: "gpu-fit-summary-panel" | "build-resource-summary" | "accessory-compatibility-panel" | "data-health-panel" | "purchase-list-panel" | "repair-plan-panel" | "build-connectivity-panel";
   actionLabel?: string;
 };
 
@@ -160,6 +163,8 @@ export function purchaseChecklistItemsFor(build: BuildSelection, result: Compati
     || result.metrics.coolerHeightMm !== undefined
     || result.metrics.maxCoolerHeightMm !== undefined;
   const hasPowerPath = Boolean(build.gpu || build.psu) || result.metrics.powerHeadroomW !== undefined;
+  const resourceSummary = buildResourceSummaryFor(result.metrics);
+  const resourceNeedsReview = resourceSummary.state === "danger" || resourceSummary.state === "warning" || resourceSummary.state === "unknown";
   const hasM2Storage = build.ssd.length > 0 || (result.metrics.m2SlotAssignments?.length ?? 0) > 0;
   const gpuPurchaseEvidence = result.gpuFit ? gpuPurchaseEvidenceFor(result.gpuFit) : undefined;
   const missingGpuPhysicalEvidence = gpuPurchaseEvidence?.physical === "needs_review";
@@ -187,6 +192,15 @@ export function purchaseChecklistItemsFor(build: BuildSelection, result: Compati
       title: missingPcieTopologyEvidence ? "다중 8핀 독립 케이블·분배 구조 확인" : "파워 보조전원 케이블 경로 확인",
       detail: missingPcieTopologyEvidence ? "커넥터 개수만 보지 말고 다중 8핀 GPU를 서로 독립된 PCIe 케이블 런으로 연결할 수 있는지와 분배·공유 구조를 제조사 케이블 표에서 확인하세요." : "GPU 보조전원·CPU EPS·분배 케이블의 커넥터와 케이블 꺾임 여유를 실제 파워 구성에서 확인하세요.",
       ...(gpuPurchaseEvidence ? { targetId: "gpu-fit-summary-panel" as const, actionLabel: "GPU FIT 보기" } : {})
+    }] : []),
+    ...(resourceNeedsReview ? [{
+      id: "manual:power-thermal-budget",
+      kind: "manual" as const,
+      severity: resourceSummary.state === "danger" ? "blocker" as const : resourceSummary.state === "warning" ? "warning" as const : "unknown" as const,
+      title: resourceSummary.state === "danger" ? "전력·냉각 예산 기준 미달 확인" : resourceSummary.state === "unknown" ? "전력·냉각 원문 수치 확인" : "전력·냉각 여유 확인",
+      detail: `${resourceSummary.summary} 실제 소비전력·온도·소음은 조립 후 별도로 측정해야 합니다.`,
+      targetId: "build-resource-summary" as const,
+      actionLabel: "전력·냉각 보기"
     }] : []),
     ...(hasM2Storage ? [{
       id: "manual:m2-placement",
@@ -242,7 +256,7 @@ export function purchaseChecklistJsonFor(storageKey: string, items: PurchaseChec
     storageKey,
     exportedAt,
     itemIds,
-    checkedIds: Array.from(checkedIds).filter((id) => itemIdSet.has(id))
+    checkedIds: Array.from(checkedIds).filter((id) => itemIdSet.has(id)).slice(0, PURCHASE_CHECKLIST_MAX_CHECKED_ITEMS)
   };
   return JSON.stringify(envelope, null, 2);
 }
@@ -259,7 +273,11 @@ export function parsePurchaseChecklistJson(input: string, expectedStorageKey: st
   if (candidate.type !== "pc-supporter-purchase-checklist" || candidate.schemaVersion !== 1) return { checkedIds: [], ignoredIds: [], itemIds: [], errors: ["지원하지 않는 체크리스트 JSON 버전입니다."] };
   if (typeof candidate.storageKey !== "string" || candidate.storageKey !== expectedStorageKey) return { checkedIds: [], ignoredIds: [], itemIds: [], errors: ["현재 견적과 다른 체크리스트입니다. 같은 견적에서 내보낸 JSON만 가져올 수 있습니다."] };
   if (typeof candidate.exportedAt !== "string" || candidate.exportedAt.length === 0 || candidate.exportedAt.length > 120) return { checkedIds: [], ignoredIds: [], itemIds: [], errors: ["체크리스트 JSON의 내보낸 시각이 올바르지 않습니다."] };
-  if (!Array.isArray(candidate.itemIds) || !candidate.itemIds.every((id) => typeof id === "string") || !Array.isArray(candidate.checkedIds) || !candidate.checkedIds.every((id) => typeof id === "string")) return { checkedIds: [], ignoredIds: [], itemIds: [], errors: ["체크리스트 JSON의 항목 목록 형식이 올바르지 않습니다."] };
+  if (!Array.isArray(candidate.itemIds) || !Array.isArray(candidate.checkedIds)) return { checkedIds: [], ignoredIds: [], itemIds: [], errors: ["체크리스트 JSON의 항목 목록 형식이 올바르지 않습니다."] };
+  const maxImportedItemIds = Math.max(PURCHASE_CHECKLIST_MAX_CHECKED_ITEMS, items.length);
+  if (candidate.itemIds.length > maxImportedItemIds) return { checkedIds: [], ignoredIds: [], itemIds: [], errors: [`체크리스트 JSON의 항목 목록은 현재 체크리스트 기준 최대 ${maxImportedItemIds}개까지 가져올 수 있습니다.`] };
+  if (candidate.checkedIds.length > PURCHASE_CHECKLIST_MAX_CHECKED_ITEMS) return { checkedIds: [], ignoredIds: [], itemIds: [], errors: [`체크리스트 JSON의 완료 상태는 최대 ${PURCHASE_CHECKLIST_MAX_CHECKED_ITEMS}개까지 가져올 수 있습니다.`] };
+  if (!candidate.itemIds.every((id) => typeof id === "string") || !candidate.checkedIds.every((id) => typeof id === "string")) return { checkedIds: [], ignoredIds: [], itemIds: [], errors: ["체크리스트 JSON의 항목 목록 형식이 올바르지 않습니다."] };
   const currentIds = new Set(items.map((item) => item.id));
   const itemIds = [...new Set(candidate.itemIds as string[])];
   const checkedIds = [...new Set(candidate.checkedIds as string[])];

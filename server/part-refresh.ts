@@ -2,6 +2,7 @@ import type { AccessoryItem, AccessoryRefreshResponse, Part, PartRefreshResponse
 import { isKnownPrice } from "../shared/types";
 import { DANAWA_CATEGORIES, fetchDanawaHtml, isAllowedSourceUrl, parseDanawaProductPage, type DanawaCrawlerOptions, type DanawaListItem } from "./danawa";
 import { DANAWA_ACCESSORY_CATEGORIES, parseDanawaAccessoryPage } from "./accessory-crawler";
+import { catalogChangeValueDiffsFor } from "./catalog-change-log";
 
 function categoryConfig(part: Part) {
   return DANAWA_CATEGORIES.find((config) => config.category === part.category);
@@ -80,11 +81,13 @@ export async function refreshDanawaPart(part: Part, options: PartRefreshOptions 
 }
 
 export function partRefreshResponse(before: Part, refreshed: Part, refreshedAt = new Date().toISOString()): PartRefreshResponse {
+  const valueDiffs = catalogChangeValueDiffsFor(before, refreshed);
   return {
     part: refreshed,
     previousDataQuality: before.dataQuality,
     previousMissingFields: [...before.missingFields],
     changedFields: changedPartFields(before, refreshed),
+    ...(valueDiffs.length > 0 ? { valueDiffs } : {}),
     refreshedAt
   };
 }
@@ -156,11 +159,13 @@ export async function refreshDanawaAccessory(item: AccessoryItem, options: PartR
 }
 
 export function accessoryRefreshResponse(before: AccessoryItem, refreshed: AccessoryItem, refreshedAt = new Date().toISOString()): AccessoryRefreshResponse {
+  const valueDiffs = catalogChangeValueDiffsFor(before, refreshed);
   return {
     item: refreshed,
     previousDataQuality: before.dataQuality,
     previousMissingFields: [...before.missingFields],
     changedFields: changedAccessoryFields(before, refreshed),
+    ...(valueDiffs.length > 0 ? { valueDiffs } : {}),
     refreshedAt
   };
 }

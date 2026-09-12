@@ -19,6 +19,7 @@ import {
 } from "./danawa";
 import { loadAccessories, recordAccessoryCoverage, upsertAccessories } from "./accessories";
 import { fanCurrentAFromText } from "../shared/fan-connectivity";
+import { parseAdapterPcieSlotWidth, parseAdapterStorageDeviceCount } from "../shared/storage-adapter";
 import { appendCatalogChangeRecords, catalogChangeRecord, catalogChangeSummary, catalogItemKey, meaningfulCatalogChangeFields } from "./catalog-change-log";
 import {
   ACCESSORY_CRAWL_LOCK_PATH,
@@ -285,6 +286,10 @@ export function parseAccessorySpecs(category: AccessoryCategory, text: string): 
     specs.formFactor = m2FormFactors[0] ?? (/2\.5(?:인치|형)|2\.5\"|6\.4cm/i.test(text) ? "2.5인치" : undefined);
     if (m2FormFactors.length > 0) specs.supportedFormFactors = m2FormFactors;
     specs.capacityGb = parseCapacityGb(text);
+    const adapterStorageDeviceCount = parseAdapterStorageDeviceCount(text);
+    if (adapterStorageDeviceCount !== undefined) specs.adapterStorageDeviceCount = adapterStorageDeviceCount;
+    const adapterPcieSlotWidth = parseAdapterPcieSlotWidth(text);
+    if (adapterPcieSlotWidth !== undefined) specs.adapterPcieSlotWidth = adapterPcieSlotWidth;
   }
   if (category === "cooling_fan") {
     specs.fanCount = parseNumber(text, /팬\s*개수\s*[:：]?\s*(\d+)\s*개/i);
@@ -309,6 +314,21 @@ export function parseAccessorySpecs(category: AccessoryCategory, text: string): 
     specs.formFactor = m2FormFactors[0];
     if (m2FormFactors.length > 0) specs.supportedFormFactors = m2FormFactors;
     specs.thicknessMm = parseNumber(text, /(?:두께|높이)\s*[:：]?\s*([\d,.]+)\s*mm/i);
+  }
+  if (category === "gpu_cooler" || category === "memory_cooler") {
+    specs.fanCount = parseNumber(text, /(?:팬\s*(?:개수|수)|장착\s*팬|팬)\s*[:：]?\s*(\d+)\s*개/i);
+    const fanCurrentA = fanCurrentAFromText(text);
+    if (fanCurrentA !== undefined) specs.fanCurrentA = fanCurrentA;
+    const dimension = text.match(/(?:팬\s*크기|크기|규격)\s*[:：]?\s*(\d{2,3})\s*[x×]\s*(\d{2,3})(?:\s*[x×]\s*(\d{1,3}))?\s*mm/i);
+    if (dimension) {
+      specs.lengthMm = Number(dimension[1]);
+      specs.widthMm = Number(dimension[2]);
+      specs.thicknessMm = dimension[3] ? Number(dimension[3]) : undefined;
+    }
+    const ledText = text.replace(/ARGB/gi, "");
+    const hasArgbDevice = /ARGB/i.test(text);
+    const hasRgbDevice = /\bRGB\b/i.test(ledText);
+    specs.rgbDeviceVoltage = hasArgbDevice && hasRgbDevice ? "mixed" : hasArgbDevice ? "5V" : hasRgbDevice ? "12V" : undefined;
   }
   if (category === "thermal_pad") {
     specs.thicknessMm = parseNumber(text, /(?:두께|높이)\s*[:：]?\s*([\d,.]+)\s*mm/i);

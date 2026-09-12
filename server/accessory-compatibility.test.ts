@@ -44,7 +44,7 @@ function build(accessories: AccessorySelection[], ssdQuantity = 1): BuildSelecti
 }
 
 const casePart = part("case", "case", { fanCount: 2 }, "전면 120mm / 후면 140mm / 쿨링팬: 총 2개");
-const motherboardPart = part("board", "motherboard", { fanPortCount: 3 });
+const motherboardPart = part("board", "motherboard", { fanPortCount: 3, pcieX16Slots: 1, pcieX8Slots: 1, pcieX4Slots: 1, pcieX1Slots: 1 });
 const ssdPart = part("ssd", "ssd", { formFactor: "M.2 2280" });
 
 describe("accessory compatibility", () => {
@@ -289,7 +289,7 @@ describe("accessory compatibility", () => {
 
   it("checks M.2 storage adapter form factor and signal support without treating missing targets as compatible", () => {
     const nvmeSsd = part("ssd", "ssd", { formFactor: "M.2 2280", interface: "NVMe" });
-    const pcieAdapter = accessory("pcie-adapter", "storage_accessory", { interface: "NVMe", formFactor: "M.2 2280" }, "변환 컨버터 / 크기 변환: M.2→PCIe 카드 / 인터페이스 변환: PCIe→PCIe(NVMe)");
+    const pcieAdapter = accessory("pcie-adapter", "storage_accessory", { interface: "NVMe", formFactor: "M.2 2280", adapterPcieSlotWidth: 4 }, "변환 컨버터 / 크기 변환: M.2→PCIe x4 카드 / 인터페이스 변환: PCIe→PCIe(NVMe)");
     const compatible = accessoryCompatibilityFor(build([{ accessoryId: pcieAdapter.id, quantity: 1 }]), [casePart, motherboardPart, nvmeSsd], [pcieAdapter]);
     expect(compatible).toMatchObject({ status: "compatible", blockerCount: 0, warningCount: 0, unknownCount: 0 });
 
@@ -305,6 +305,66 @@ describe("accessory compatibility", () => {
     const noTarget = accessoryCompatibilityFor({ ...build([{ accessoryId: pcieAdapter.id, quantity: 1 }]), ssd: [] }, [casePart, motherboardPart], [pcieAdapter]);
     expect(noTarget).toMatchObject({ status: "needs_review", unknownCount: 1 });
     expect(noTarget.findings[0].title).toContain("대상 SSD");
+
+    const limitedAdapter = accessory("limited-pcie-adapter", "storage_accessory", { interface: "NVMe", formFactor: "M.2 2280", adapterStorageDeviceCount: 1, adapterPcieSlotWidth: 4 }, "변환 컨버터 / 크기 변환: M.2→PCIe x4 카드 / 인터페이스 변환: PCIe→PCIe(NVMe) / 보관(장착) 개수: 최대 1개");
+    const multiTargetBuild = { ...build([{ accessoryId: limitedAdapter.id, quantity: 1 }]), ssd: [{ partId: nvmeSsd.id, quantity: 2 }] };
+    const limited = accessoryCompatibilityFor(multiTargetBuild, [casePart, motherboardPart, nvmeSsd], [limitedAdapter]);
+    expect(limited).toMatchObject({ status: "incompatible", blockerCount: 1, warningCount: 0, unknownCount: 0 });
+    expect(limited.findings[0]).toMatchObject({ ruleId: "accessory-storage-adapter-capacity", severity: "blocker" });
+    expect(limited.findings[0].facts).toEqual(expect.arrayContaining([
+      { label: "연결 대상 M.2 SSD", actual: "2개" },
+      { label: "어댑터 장착 한도", actual: "1개 × 1개 = 1개" }
+    ]));
+
+    const twoUnits = accessoryCompatibilityFor({ ...multiTargetBuild, accessories: [{ accessoryId: limitedAdapter.id, quantity: 2 }] }, [casePart, motherboardPart, nvmeSsd], [limitedAdapter]);
+    expect(twoUnits).toMatchObject({ status: "compatible", blockerCount: 0, warningCount: 0, unknownCount: 0 });
+
+    const unknownCapacity = accessoryCompatibilityFor({ ...multiTargetBuild, accessories: [{ accessoryId: pcieAdapter.id, quantity: 1 }] }, [casePart, motherboardPart, nvmeSsd], [pcieAdapter]);
+    expect(unknownCapacity).toMatchObject({ status: "needs_review", blockerCount: 0, warningCount: 0, unknownCount: 1 });
+    expect(unknownCapacity.findings[0]).toMatchObject({ ruleId: "accessory-storage-adapter-capacity", severity: "unknown" });
+  });
+
+  it("checks PCIe adapter width against the board's available expansion slots", () => {
+    const nvmeSsd = part("ssd", "ssd", { formFactor: "M.2 2280", interface: "NVMe" });
+    const adapter = accessory("pcie-x4-adapter", "storage_accessory", { interface: "NVMe", formFactor: "M.2 2280", adapterPcieSlotWidth: 4 }, "M.2 2280 / NVMe → PCIe x4 / 보관(장착) 개수: 최대 1개");
+    const boardWithRoom = part("board-with-room", "motherboard", { pcieX16Slots: 1, pcieX8Slots: 1, pcieX4Slots: 0, pcieX1Slots: 0 });
+    const boardWithoutRoom = part("board-without-room", "motherboard", { pcieX16Slots: 0, pcieX8Slots: 0, pcieX4Slots: 0, pcieX1Slots: 2 });
+    const boardWithUnknownSlots = part("board-unknown-slots", "motherboard", { pcieX16Slots: 0 });
+
+    const compatible = accessoryCompatibilityFor({ ...build([{ accessoryId: adapter.id, quantity: 1 }]), motherboard: { partId: boardWithRoom.id, quantity: 1 } }, [casePart, boardWithRoom, nvmeSsd], [adapter]);
+    expect(compatible).toMatchObject({ status: "compatible", blockerCount: 0, warningCount: 0, unknownCount: 0 });
+
+    const blocked = accessoryCompatibilityFor({ ...build([{ accessoryId: adapter.id, quantity: 1 }]), motherboard: { partId: boardWithoutRoom.id, quantity: 1 } }, [casePart, boardWithoutRoom, nvmeSsd], [adapter]);
+    expect(blocked).toMatchObject({ status: "incompatible", blockerCount: 1, warningCount: 0, unknownCount: 0 });
+    expect(blocked.findings).toEqual(expect.arrayContaining([expect.objectContaining({ ruleId: "accessory-pcie-slot-capacity", severity: "blocker" })]));
+    expect(blocked.findings.find((finding) => finding.ruleId === "accessory-pcie-slot-capacity")?.facts).toEqual(expect.arrayContaining([
+      { label: "어댑터 PCIe 요구 폭", actual: "x4" },
+      { label: "확인된 여유 슬롯", actual: "0개" }
+    ]));
+
+    const unknown = accessoryCompatibilityFor({ ...build([{ accessoryId: adapter.id, quantity: 1 }]), motherboard: { partId: boardWithUnknownSlots.id, quantity: 1 } }, [casePart, boardWithUnknownSlots, nvmeSsd], [adapter]);
+    expect(unknown).toMatchObject({ status: "needs_review", blockerCount: 0, unknownCount: 1 });
+    expect(unknown.findings).toEqual(expect.arrayContaining([expect.objectContaining({ ruleId: "accessory-pcie-slot-capacity", severity: "unknown" })]));
+
+    const widthUnknown = accessory("pcie-width-unknown", "storage_accessory", { interface: "NVMe", formFactor: "M.2 2280" }, "M.2 2280 / NVMe → PCIe");
+    const missingWidth = accessoryCompatibilityFor({ ...build([{ accessoryId: widthUnknown.id, quantity: 1 }]), motherboard: { partId: boardWithRoom.id, quantity: 1 } }, [casePart, boardWithRoom, nvmeSsd], [widthUnknown]);
+    expect(missingWidth).toMatchObject({ status: "needs_review", blockerCount: 0, unknownCount: 1 });
+    expect(missingWidth.findings[0]).toMatchObject({ ruleId: "accessory-pcie-slot-width", severity: "unknown" });
+  });
+
+  it("keeps GPU clearance and M.2-to-PCIe lane sharing reviewable", () => {
+    const nvmeSsd = part("ssd", "ssd", { formFactor: "M.2 2280", interface: "NVMe" });
+    const gpu = part("gpu", "gpu", { pcieSlotWidth: 16, gpuSlotOccupancy: 2 });
+    const adapter = accessory("pcie-x4-adapter", "storage_accessory", { interface: "NVMe", formFactor: "M.2 2280", adapterPcieSlotWidth: 4 }, "M.2 2280 / NVMe → PCIe x4 / 보관(장착) 개수: 최대 1개");
+    const board = part("board", "motherboard", { pcieX16Slots: 1, pcieX8Slots: 1, pcieX4Slots: 0, pcieX1Slots: 0 });
+    const result = accessoryCompatibilityFor({ ...build([{ accessoryId: adapter.id, quantity: 1 }]), motherboard: { partId: board.id, quantity: 1 }, gpu: { partId: gpu.id, quantity: 1 }, useIntegratedGraphics: false }, [casePart, board, nvmeSsd, gpu], [adapter]);
+    expect(result).toMatchObject({ status: "needs_review", blockerCount: 0, unknownCount: 1 });
+    expect(result.findings[0]).toMatchObject({ ruleId: "accessory-pcie-slot-clearance", severity: "unknown" });
+
+    const sharedBoard = part("shared-board", "motherboard", { pcieX16Slots: 1, pcieX8Slots: 1, pcieX4Slots: 0, pcieX1Slots: 0, m2LaneSharing: true, m2LaneSharingScopes: ["pcie"], m2LaneSharingNote: "M.2 연결: PCIe 레인공유" });
+    const shared = accessoryCompatibilityFor({ ...build([{ accessoryId: adapter.id, quantity: 1 }]), motherboard: { partId: sharedBoard.id, quantity: 1 } }, [casePart, sharedBoard, nvmeSsd], [adapter]);
+    expect(shared).toMatchObject({ status: "needs_review", blockerCount: 0, unknownCount: 1 });
+    expect(shared.findings[0]).toMatchObject({ ruleId: "accessory-pcie-lane-sharing", severity: "unknown" });
   });
 
   it("validates raw fan hub ports and RGB controller voltage/output after adding a recommendation", () => {

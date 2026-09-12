@@ -25,6 +25,7 @@ describe("catalog change impact mapping", () => {
 
   it("maps category-specific storage and board fields", () => {
     expect(catalogChangeImpactsFor(record({ category: "motherboard" }), { field: "정규화 스펙 · M.2 슬롯", previous: "2개", next: "3개" })[0].ruleIds).toEqual(["m2-slots"]);
+    expect(catalogChangeImpactsFor(record({ category: "motherboard" }), { field: "정규화 스펙 · PCIe x4 슬롯", previous: "0개", next: "1개" })[0].ruleIds).toEqual(["accessory-pcie-slot-capacity", "accessory-pcie-slot-clearance"]);
     expect(catalogChangeImpactsFor(record({ category: "psu" }), { field: "정규화 스펙 · PSU 보조전원 커넥터", previous: "8핀 2개", next: "16핀 1개" })[0].ruleIds).toEqual(["gpu-psu-connector"]);
     expect(catalogChangeImpactsFor(record({ category: "gpu" }), { field: "정규화 스펙 · GPU 어댑터 전원 경로", previous: "8핀 2개", next: "8핀 3개" })[0].ruleIds).toEqual(["gpu-psu-connector"]);
     expect(catalogChangeImpactsFor(record({ category: "gpu" }), { field: "정규화 스펙 · GPU 케이블 굽힘 여유", previous: "30mm", next: "40mm" })[0].ruleIds).toEqual(["gpu-cable-clearance"]);

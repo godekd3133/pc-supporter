@@ -52,18 +52,25 @@ import type {
 } from "../shared/types";
 import { CATEGORY_LABELS, GAMING_REFRESH_RATE_LABELS, GAMING_RESOLUTION_LABELS, GAMING_RESOLUTION_VRAM_TARGETS, isKnownPrice, LISTING_POLICY_LABELS, PART_CATEGORIES, RECOMMENDATION_PRIORITY_LABELS, RECOMMENDATION_PROFILE_LABELS } from "../shared/types";
 import { savedBuildComparisonExpansionFor } from "../shared/saved-build-comparison";
+import { buildBenchmarkSnapshotFor } from "../shared/build-benchmark-snapshot";
 import { VALUE_SCORE_MAX } from "../shared/value-score";
 import { gpuFitSummaryFor, gpuPurchaseEvidenceFor, pcieCableTopologyStatusFor, pciePowerMatchFor } from "../shared/gpu-fit";
 import { physicalSourceCheckNeedsReview } from "../shared/physical-source-check";
 import { isListingAllowed } from "./listing";
+import { classifyDataFreshness } from "./data-health";
 import { compareRecommendationTrust, recommendationTrustFor } from "./recommendation-trust";
 
-export const ENGINE_VERSION = "2.56.0";
+export const ENGINE_VERSION = "2.58.0";
+
+function benchmarkFreshnessFor(part: Part) {
+  return classifyDataFreshness(part.specs.benchmarkProvenance?.updatedAt ?? part.updatedAt);
+}
 
 const GPU_THICKNESS_WARNING_MM = 55;
 const MAX_EVALUATION_CACHE_ENTRIES = 4096;
 const REPAIR_PLAN_OPTIONS_PER_CATEGORY = 4;
 const CANDIDATE_EVALUATION_POOL_SIZE = 192;
+const VERIFIED_CANDIDATE_RESERVE_SIZE = 12;
 const BUNDLE_CANDIDATE_MAX_PER_CATEGORY = 4;
 const BUNDLE_CANDIDATE_MAX_TOTAL = 24;
 const BUNDLE_BEAM_WIDTH = 24;
@@ -263,6 +270,70 @@ function candidateCompatibilityDeltaFindings(baseline: CompatibilityResult, eval
       const previous = baselineByRule.get(finding.ruleId);
       return !previous || severityRank[finding.severity] < severityRank[previous.severity];
     });
+}
+
+const CANDIDATE_MISSING_FIELD_LABELS: Record<string, string> = {
+  socket: "소켓",
+  tdpW: "TDP",
+  supportedSockets: "지원 소켓",
+  radiatorSizeMm: "라디에이터 크기",
+  maxCoolingW: "냉각 지원",
+  memoryType: "메모리 세대",
+  maxMemoryGb: "최대 메모리",
+  memorySlots: "RAM 슬롯",
+  m2Slots: "M.2 슬롯",
+  maxMemorySpeedMhz: "최대 메모리 속도",
+  speedMhz: "메모리 속도",
+  capacityGb: "용량",
+  powerW: "소비전력",
+  recommendedPsuW: "권장 PSU",
+  lengthMm: "GPU 길이",
+  interface: "연결 방식",
+  formFactor: "폼팩터",
+  hddBays: "HDD 베이",
+  maxGpuLengthMm: "GPU 허용 길이",
+  maxCoolerHeightMm: "쿨러 허용 높이",
+  maxPsuLengthMm: "PSU 허용 길이",
+  wattageW: "정격 출력",
+  "internal storage device": "저장장치 종류",
+  "detail page": "상세 페이지"
+};
+
+function candidateDataQualityReasonsFor(candidate: Part) {
+  if (candidate.dataQuality !== "incomplete" && candidate.missingFields.length === 0) return [];
+  const missingFields = candidate.missingFields.map((field) => CANDIDATE_MISSING_FIELD_LABELS[field] ?? field);
+  return [missingFields.length > 0 ? `필수 스펙 미확인: ${missingFields.join(", ")}` : "필수 스펙 미확인"];
+}
+
+// 후보 풀을 줄일 때도 검증 우선 후보가 유사도 상위권 밖으로 밀려나지 않도록
+// 신뢰도 계산과 같은 입력 축을 사용하는 정렬용 점수입니다. 최종 추천 순서는
+// 후보를 실제로 대입한 뒤 계산하는 recommendationTrust를 사용합니다.
+const reliabilityDataQualityPoints: Record<Part["dataQuality"], number> = {
+  manual: 40,
+  live: 32,
+  seed: 18,
+  incomplete: 0
+};
+
+const reliabilityFreshnessPoints: Record<ReturnType<typeof classifyDataFreshness>, number> = {
+  fresh: 12,
+  aging: 7,
+  stale: 1,
+  unknown: 0
+};
+
+function partReliabilityScoreFor(part: Part) {
+  const freshness = classifyDataFreshness(part.updatedAt);
+  const missingFieldScore = part.missingFields.length === 0
+    ? 14
+    : Math.max(0, 10 - part.missingFields.length * 2);
+  return reliabilityDataQualityPoints[part.dataQuality]
+    + reliabilityFreshnessPoints[freshness]
+    + missingFieldScore
+    + (isKnownPrice(part.priceWon) ? 6 : 0)
+    + (part.danawaUrl ? 5 : 0)
+    + (part.specs.catalogSpecProvenance ? 4 : 0)
+    + (part.specs.benchmarkProvenance ? 2 : 0);
 }
 
 function selectedPart(catalog: Part[], selection: PartSelection | undefined) {
@@ -836,7 +907,6 @@ export type AlternativeAssessment = {
 export function assessAlternativePart(build: BuildSelection, catalog: Part[], category: PartCategory, candidate: Part, intentFinding?: Finding): AlternativeAssessment {
   const intentDetails = (fixesCurrentIssue: boolean) => intentFinding ? { fixesCurrentIssue } : {};
   if (candidate.category !== category) return { risk: "unsafe", reasons: ["부품 카테고리가 다릅니다."], candidateBlockerCount: 1, candidateWarningCount: 0, candidateUnknownCount: 0, remainingBlockers: 1, remainingWarnings: 0, remainingUnknown: 0, ...intentDetails(false) };
-  if (candidate.dataQuality === "incomplete") return { risk: "unsafe", reasons: ["필수 스펙이 부족합니다."], candidateBlockerCount: 1, candidateWarningCount: 0, candidateUnknownCount: 0, remainingBlockers: 1, remainingWarnings: 0, remainingUnknown: 0, ...intentDetails(false) };
   if (selectedCorePartIds(build).has(candidate.id)) return { risk: "unsafe", reasons: ["이미 선택된 부품입니다."], candidateBlockerCount: 1, candidateWarningCount: 0, candidateUnknownCount: 0, remainingBlockers: 1, remainingWarnings: 0, remainingUnknown: 0, ...intentDetails(false) };
   const recommendedQuantity = category === "memory" && build.memory.length > 1
     ? recommendedMemoryKitQuantity(build, catalog, candidate)
@@ -867,22 +937,28 @@ export function assessAlternativePart(build: BuildSelection, catalog: Part[], ca
       ...intentDetails(false)
     };
   }
+  const baseline = evaluateBuild(build, catalog, { includeSuggestions: false });
   const evaluation = evaluateBuild(replaceSelection(build, category, candidate.id, recommendedQuantity), catalog, { includeSuggestions: false });
   const intentEligible = intentFinding === undefined || candidateIsPlausible(intentFinding, build, candidate, catalog, category);
   const fixesCurrentIssue = intentFinding === undefined
     ? undefined
     : intentEligible && !evaluation.findings.some((item) => item.ruleId === intentFinding.ruleId);
-  const candidateFindings = evaluation.findings.filter((finding) => finding.affectedPartIds.includes(candidate.id));
-  const reasons = [...new Set(candidateFindings
-    .filter((finding) => finding.severity === "blocker" || finding.severity === "unknown")
-    .map((finding) => finding.title))];
+  // 후보 교체 전부터 존재하던 동일 규칙의 finding은 후보가 새로 만든
+  // 위험이 아니다. 후보 위험은 baseline 대비 신규·악화된 finding만 센다.
+  const candidateFindings = candidateCompatibilityDeltaFindings(baseline, evaluation, candidate.id);
+  const reasons = [...new Set([
+    ...candidateDataQualityReasonsFor(candidate),
+    ...candidateFindings
+      .filter((finding) => finding.severity === "blocker" || finding.severity === "unknown")
+      .map((finding) => finding.title)
+  ])];
   const candidateBlockerCount = candidateFindings.filter((finding) => finding.severity === "blocker").length;
   const candidateWarningCount = candidateFindings.filter((finding) => finding.severity === "warning").length;
   const candidateUnknownCount = candidateFindings.filter((finding) => finding.severity === "unknown").length;
   const physicalEvidence = physicalEvidenceSummaryFor(category, evaluation);
   const physicalEvidenceDetails = physicalEvidence ? { physicalEvidence } : {};
   if (candidateBlockerCount > 0) return { risk: "unsafe", reasons, recommendedQuantity, candidateBlockerCount, candidateWarningCount, candidateUnknownCount, remainingBlockers: evaluation.blockerCount, remainingWarnings: evaluation.warningCount, remainingUnknown: evaluation.unknownCount, ...physicalEvidenceDetails, ...intentDetails(fixesCurrentIssue ?? false) };
-  if (candidateUnknownCount > 0) return { risk: "review", reasons, recommendedQuantity, candidateBlockerCount, candidateWarningCount, candidateUnknownCount, remainingBlockers: evaluation.blockerCount, remainingWarnings: evaluation.warningCount, remainingUnknown: evaluation.unknownCount, ...physicalEvidenceDetails, ...intentDetails(fixesCurrentIssue ?? false) };
+  if (candidateUnknownCount > 0 || candidateDataQualityReasonsFor(candidate).length > 0) return { risk: "review", reasons, recommendedQuantity, candidateBlockerCount, candidateWarningCount, candidateUnknownCount, remainingBlockers: evaluation.blockerCount, remainingWarnings: evaluation.warningCount, remainingUnknown: evaluation.unknownCount, ...physicalEvidenceDetails, ...intentDetails(fixesCurrentIssue ?? false) };
   return { risk: "safe", reasons: [], recommendedQuantity, candidateBlockerCount, candidateWarningCount, candidateUnknownCount, remainingBlockers: evaluation.blockerCount, remainingWarnings: evaluation.warningCount, remainingUnknown: evaluation.unknownCount, ...physicalEvidenceDetails, ...intentDetails(fixesCurrentIssue ?? false) };
 }
 
@@ -981,41 +1057,43 @@ function candidateIsPlausible(finding: Finding, build: BuildSelection, candidate
   if (!candidatePreservesStorageIntent(finding, build, catalog, targetCategory, candidate)) return false;
 
   if (finding.ruleId === "cpu-motherboard-socket") {
-    if (targetCategory === "motherboard" && cpu?.specs.socket && candidate.specs.socket) return candidate.specs.socket === cpu.specs.socket;
-    if (targetCategory === "cpu" && motherboard?.specs.socket && candidate.specs.socket) return candidate.specs.socket === motherboard.specs.socket;
+    if (targetCategory === "motherboard" && cpu?.specs.socket) return candidate.specs.socket !== undefined && candidate.specs.socket === cpu.specs.socket;
+    if (targetCategory === "cpu" && motherboard?.specs.socket) return candidate.specs.socket !== undefined && candidate.specs.socket === motherboard.specs.socket;
   }
   if (finding.ruleId === "cpu-motherboard-power") {
-    if (targetCategory === "motherboard" && cpu?.specs.pptW && candidate.specs.vrmCapacityW) return candidate.specs.vrmCapacityW >= cpu.specs.pptW;
+    if (targetCategory === "motherboard" && cpu?.specs.pptW) return candidate.specs.vrmCapacityW !== undefined && candidate.specs.vrmCapacityW >= cpu.specs.pptW;
   }
   if (finding.ruleId === "memory-type") {
     const expected = targetCategory === "motherboard" ? cpu?.specs.memoryType : motherboard?.specs.memoryType;
-    if (expected && candidate.specs.memoryType) return candidate.specs.memoryType === expected;
+    if (expected) return candidate.specs.memoryType !== undefined && candidate.specs.memoryType === expected;
   }
   if (finding.ruleId === "memory-profile") {
     const selectedProfiles = [...new Set(memory.flatMap(({ part }) => part.specs.memoryProfiles ?? []))];
-    if (targetCategory === "motherboard" && selectedProfiles.length > 0 && candidate.specs.memoryProfiles) {
-      return selectedProfiles.every((profile) => candidate.specs.memoryProfiles!.includes(profile));
+    if (targetCategory === "motherboard" && selectedProfiles.length > 0) {
+      return candidate.specs.memoryProfiles !== undefined && selectedProfiles.every((profile) => candidate.specs.memoryProfiles!.includes(profile));
     }
-    if (targetCategory === "memory" && motherboard?.specs.memoryProfiles && candidate.specs.memoryProfiles) {
-      return candidate.specs.memoryProfiles.some((profile) => motherboard.specs.memoryProfiles!.includes(profile));
+    if (targetCategory === "memory" && motherboard?.specs.memoryProfiles && motherboard.specs.memoryProfiles.length > 0) {
+      return candidate.specs.memoryProfiles !== undefined && candidate.specs.memoryProfiles.some((profile) => motherboard.specs.memoryProfiles!.includes(profile));
     }
   }
   if (finding.ruleId === "memory-mixing" && targetCategory === "memory") {
     return recommendedMemoryKitQuantity(build, catalog, candidate) !== undefined;
   }
   if (finding.ruleId === "memory-form-factor") {
-    if (targetCategory === "motherboard" && memoryFormFactors.length === 1 && candidate.specs.memoryFormFactor) return candidate.specs.memoryFormFactor === memoryFormFactors[0];
-    if (targetCategory === "memory" && motherboard?.specs.memoryFormFactor && candidate.specs.formFactor) return candidate.specs.formFactor === motherboard.specs.memoryFormFactor;
+    if (targetCategory === "motherboard" && memoryFormFactors.length === 1) return candidate.specs.memoryFormFactor !== undefined && candidate.specs.memoryFormFactor === memoryFormFactors[0];
+    if (targetCategory === "memory" && motherboard?.specs.memoryFormFactor) return candidate.specs.formFactor !== undefined && candidate.specs.formFactor === motherboard.specs.memoryFormFactor;
   }
-  if (finding.ruleId === "memory-capacity" && targetCategory === "motherboard" && totalMemoryGb !== undefined && candidate.specs.maxMemoryGb !== undefined) return candidate.specs.maxMemoryGb >= totalMemoryGb;
-  if (finding.ruleId === "memory-slots" && targetCategory === "motherboard" && candidate.specs.memorySlots !== undefined) return candidate.specs.memorySlots >= memoryCount;
-  if (finding.ruleId === "m2-slots" && targetCategory === "motherboard" && m2Count !== undefined && candidate.specs.m2Slots !== undefined) return candidate.specs.m2Slots >= m2Count;
+  if (finding.ruleId === "memory-capacity" && targetCategory === "motherboard" && totalMemoryGb !== undefined) return candidate.specs.maxMemoryGb !== undefined && candidate.specs.maxMemoryGb >= totalMemoryGb;
+  if (finding.ruleId === "memory-slots" && targetCategory === "motherboard") return candidate.specs.memorySlots !== undefined && candidate.specs.memorySlots >= memoryCount;
+  if (finding.ruleId === "m2-slots" && targetCategory === "motherboard" && m2Count !== undefined) return candidate.specs.m2Slots !== undefined && candidate.specs.m2Slots >= m2Count;
   if (finding.ruleId === "m2-interface") {
-    if (targetCategory === "motherboard" && requiredM2Interfaces.length > 0 && candidate.specs.m2Interfaces) {
-      return requiredM2Interfaces.every((interfaceName) => candidate.specs.m2Interfaces!.includes(interfaceName));
+    if (targetCategory === "motherboard" && requiredM2Interfaces.length > 0) {
+      return candidate.specs.m2Interfaces !== undefined && requiredM2Interfaces.every((interfaceName) => candidate.specs.m2Interfaces!.includes(interfaceName));
     }
-    if (targetCategory === "ssd" && candidate.specs.formFactor?.toLowerCase().includes("m.2") && candidate.specs.interface && motherboard?.specs.m2Interfaces) {
-      return motherboard.specs.m2Interfaces.includes(candidate.specs.interface as "NVMe" | "SATA");
+    if (targetCategory === "ssd" && motherboard?.specs.m2Interfaces && motherboard.specs.m2Interfaces.length > 0) {
+      return candidate.specs.formFactor?.toLowerCase().includes("m.2") === true
+        && candidate.specs.interface !== undefined
+        && motherboard.specs.m2Interfaces.includes(candidate.specs.interface as "NVMe" | "SATA");
     }
   }
   if (finding.ruleId === "m2-pcie-generation") {
@@ -1026,8 +1104,10 @@ function candidateIsPlausible(finding: Finding, build: BuildSelection, candidate
     const motherboardGenerations = motherboard?.specs.m2PcieGenerations;
     const motherboardMaxGeneration = motherboardGenerations && motherboardGenerations.length > 0 ? Math.max(...motherboardGenerations) : undefined;
     const requiredGeneration = currentNvmeGenerations.length > 0 ? Math.max(...currentNvmeGenerations) : undefined;
-    if (targetCategory === "motherboard" && requiredGeneration !== undefined && candidate.specs.m2PcieGenerations?.length) {
-      return Math.max(...candidate.specs.m2PcieGenerations) >= requiredGeneration;
+    if (targetCategory === "motherboard" && requiredGeneration !== undefined) {
+      return candidate.specs.m2PcieGenerations !== undefined
+        && candidate.specs.m2PcieGenerations.length > 0
+        && Math.max(...candidate.specs.m2PcieGenerations) >= requiredGeneration;
     }
     if (targetCategory === "ssd" && motherboardMaxGeneration !== undefined) {
       return candidate.specs.interface === "NVMe"
@@ -1049,20 +1129,25 @@ function candidateIsPlausible(finding: Finding, build: BuildSelection, candidate
   }
   if (finding.ruleId === "gpu-motherboard-pcie") {
     const gpuSlotWidth = gpu?.specs.pcieSlotWidth;
-    if (targetCategory === "motherboard" && gpuSlotWidth !== undefined && (gpuSlotWidth === 16 || gpuSlotWidth === 8) && candidate.specs.pcieX16Slots !== undefined) {
-      return gpuSlotWidth === 16 ? candidate.specs.pcieX16Slots > 0 : candidate.specs.pcieX16Slots > 0 || (candidate.specs.pcieX8Slots ?? 0) > 0;
+    if (targetCategory === "motherboard" && gpuSlotWidth !== undefined && (gpuSlotWidth === 16 || gpuSlotWidth === 8)) {
+      return candidate.specs.pcieX16Slots !== undefined
+        && (gpuSlotWidth === 16 ? candidate.specs.pcieX16Slots > 0 : candidate.specs.pcieX16Slots > 0 || (candidate.specs.pcieX8Slots ?? 0) > 0);
     }
-    if (targetCategory === "gpu" && motherboard?.specs.pcieX16Slots !== undefined && candidate.specs.pcieSlotWidth !== undefined && (candidate.specs.pcieSlotWidth === 16 || candidate.specs.pcieSlotWidth === 8)) {
-      return candidate.specs.pcieSlotWidth === 16 ? motherboard.specs.pcieX16Slots > 0 : motherboard.specs.pcieX16Slots > 0 || (motherboard.specs.pcieX8Slots ?? 0) > 0;
+    if (targetCategory === "gpu" && motherboard?.specs.pcieX16Slots !== undefined) {
+      return candidate.specs.pcieSlotWidth !== undefined
+        && (candidate.specs.pcieSlotWidth === 16 || candidate.specs.pcieSlotWidth === 8)
+        && (candidate.specs.pcieSlotWidth === 16 ? motherboard.specs.pcieX16Slots > 0 : motherboard.specs.pcieX16Slots > 0 || (motherboard.specs.pcieX8Slots ?? 0) > 0);
     }
   }
   if (finding.ruleId === "gpu-psu-connector") {
     const gpuPowerOptions = gpu?.specs.pciePowerOptions;
-    if (targetCategory === "psu" && gpuPowerOptions && candidate.specs.pciePowerConnectors) {
-      return pciePowerMatchFor(gpuPowerOptions, candidate.specs.pciePowerConnectors).status === "compatible";
+    if (targetCategory === "psu" && gpuPowerOptions) {
+      return candidate.specs.pciePowerConnectors !== undefined
+        && pciePowerMatchFor(gpuPowerOptions, candidate.specs.pciePowerConnectors).status === "compatible";
     }
-    if (targetCategory === "gpu" && psu?.specs.pciePowerConnectors && candidate.specs.pciePowerOptions) {
-      return pciePowerMatchFor(candidate.specs.pciePowerOptions, psu.specs.pciePowerConnectors).status === "compatible";
+    if (targetCategory === "gpu" && psu?.specs.pciePowerConnectors) {
+      return candidate.specs.pciePowerOptions !== undefined
+        && pciePowerMatchFor(candidate.specs.pciePowerOptions, psu.specs.pciePowerConnectors).status === "compatible";
     }
   }
   if (finding.ruleId === "gpu-psu-cable-topology" && targetCategory === "psu" && gpu?.specs.pciePowerOptions) {
@@ -1077,19 +1162,19 @@ function candidateIsPlausible(finding: Finding, build: BuildSelection, candidate
       candidate.specs.psuPcieCableTopology
     ) === "compatible";
   }
-  if (finding.ruleId === "case-hdd-bays" && targetCategory === "case" && candidate.specs.hddBays !== undefined) return candidate.specs.hddBays >= hddCount;
-  if (finding.ruleId === "cpu-cooler-socket" && targetCategory === "cooler" && cpu?.specs.socket && candidate.specs.supportedSockets) return candidate.specs.supportedSockets.includes(cpu.specs.socket);
-  if (finding.ruleId === "case-cooler-height" && targetCategory === "case" && cooler?.specs.maxCoolerHeightMm && candidate.specs.maxCoolerHeightMm) return candidate.specs.maxCoolerHeightMm >= cooler.specs.maxCoolerHeightMm;
-  if (finding.ruleId === "case-cooler-height" && targetCategory === "cooler" && computerCase?.specs.maxCoolerHeightMm && candidate.specs.maxCoolerHeightMm) return candidate.specs.maxCoolerHeightMm <= computerCase.specs.maxCoolerHeightMm;
-  if (finding.ruleId === "gpu-case-length" && targetCategory === "case" && gpu?.specs.lengthMm && candidate.specs.maxGpuLengthMm) return candidate.specs.maxGpuLengthMm >= gpu.specs.lengthMm;
-  if (finding.ruleId === "gpu-case-length" && targetCategory === "gpu" && computerCase?.specs.maxGpuLengthMm && candidate.specs.lengthMm) return candidate.specs.lengthMm <= computerCase.specs.maxGpuLengthMm;
-  if (finding.ruleId === "psu-case-length" && targetCategory === "case" && psu?.specs.psuDepthMm !== undefined && candidate.specs.maxPsuLengthMm !== undefined) return candidate.specs.maxPsuLengthMm >= psu.specs.psuDepthMm;
-  if (finding.ruleId === "psu-case-length" && targetCategory === "psu" && computerCase?.specs.maxPsuLengthMm !== undefined && candidate.specs.psuDepthMm !== undefined) return candidate.specs.psuDepthMm <= computerCase.specs.maxPsuLengthMm;
-  if (finding.ruleId === "psu-case-form-factor" && targetCategory === "case" && psu?.specs.psuFormFactor && candidate.specs.supportedPsuFormFactors) return candidate.specs.supportedPsuFormFactors.includes(psu.specs.psuFormFactor);
-  if (finding.ruleId === "psu-case-form-factor" && targetCategory === "psu" && computerCase?.specs.supportedPsuFormFactors && candidate.specs.psuFormFactor) return computerCase.specs.supportedPsuFormFactors.includes(candidate.specs.psuFormFactor);
-  if (finding.ruleId === "gpu-psu-power" && targetCategory === "psu" && gpu?.specs.recommendedPsuW && candidate.specs.wattageW) return candidate.specs.wattageW >= gpu.specs.recommendedPsuW;
-  if (finding.ruleId === "gpu-psu-power" && targetCategory === "gpu" && psu?.specs.wattageW && candidate.specs.recommendedPsuW) return candidate.specs.recommendedPsuW <= psu.specs.wattageW;
-  if (finding.ruleId === "case-motherboard-form-factor" && targetCategory === "case" && motherboard?.specs.formFactor && candidate.specs.motherboardFormFactors) return candidate.specs.motherboardFormFactors.includes(motherboard.specs.formFactor);
+  if (finding.ruleId === "case-hdd-bays" && targetCategory === "case") return candidate.specs.hddBays !== undefined && candidate.specs.hddBays >= hddCount;
+  if (finding.ruleId === "cpu-cooler-socket" && targetCategory === "cooler" && cpu?.specs.socket) return candidate.specs.supportedSockets !== undefined && candidate.specs.supportedSockets.includes(cpu.specs.socket);
+  if (finding.ruleId === "case-cooler-height" && targetCategory === "case" && cooler?.specs.maxCoolerHeightMm !== undefined) return candidate.specs.maxCoolerHeightMm !== undefined && candidate.specs.maxCoolerHeightMm >= cooler.specs.maxCoolerHeightMm;
+  if (finding.ruleId === "case-cooler-height" && targetCategory === "cooler" && computerCase?.specs.maxCoolerHeightMm !== undefined) return candidate.specs.maxCoolerHeightMm !== undefined && candidate.specs.maxCoolerHeightMm <= computerCase.specs.maxCoolerHeightMm;
+  if (finding.ruleId === "gpu-case-length" && targetCategory === "case" && gpu?.specs.lengthMm !== undefined) return candidate.specs.maxGpuLengthMm !== undefined && candidate.specs.maxGpuLengthMm >= gpu.specs.lengthMm;
+  if (finding.ruleId === "gpu-case-length" && targetCategory === "gpu" && computerCase?.specs.maxGpuLengthMm !== undefined) return candidate.specs.lengthMm !== undefined && candidate.specs.lengthMm <= computerCase.specs.maxGpuLengthMm;
+  if (finding.ruleId === "psu-case-length" && targetCategory === "case" && psu?.specs.psuDepthMm !== undefined) return candidate.specs.maxPsuLengthMm !== undefined && candidate.specs.maxPsuLengthMm >= psu.specs.psuDepthMm;
+  if (finding.ruleId === "psu-case-length" && targetCategory === "psu" && computerCase?.specs.maxPsuLengthMm !== undefined) return candidate.specs.psuDepthMm !== undefined && candidate.specs.psuDepthMm <= computerCase.specs.maxPsuLengthMm;
+  if (finding.ruleId === "psu-case-form-factor" && targetCategory === "case" && psu?.specs.psuFormFactor) return candidate.specs.supportedPsuFormFactors !== undefined && candidate.specs.supportedPsuFormFactors.includes(psu.specs.psuFormFactor);
+  if (finding.ruleId === "psu-case-form-factor" && targetCategory === "psu" && computerCase?.specs.supportedPsuFormFactors) return candidate.specs.psuFormFactor !== undefined && computerCase.specs.supportedPsuFormFactors.includes(candidate.specs.psuFormFactor);
+  if (finding.ruleId === "gpu-psu-power" && targetCategory === "psu" && gpu?.specs.recommendedPsuW !== undefined) return candidate.specs.wattageW !== undefined && candidate.specs.wattageW >= gpu.specs.recommendedPsuW;
+  if (finding.ruleId === "gpu-psu-power" && targetCategory === "gpu" && psu?.specs.wattageW !== undefined) return candidate.specs.recommendedPsuW !== undefined && candidate.specs.recommendedPsuW <= psu.specs.wattageW;
+  if (finding.ruleId === "case-motherboard-form-factor" && targetCategory === "case" && motherboard?.specs.formFactor) return candidate.specs.motherboardFormFactors !== undefined && candidate.specs.motherboardFormFactors.includes(motherboard.specs.formFactor);
   return true;
 }
 
@@ -1197,6 +1282,34 @@ function performanceDataCoverageFor(part: Part) {
   return Object.values(performanceDimensions(part)).filter((value): value is number => typeof value === "number" && Number.isFinite(value)).length;
 }
 
+type PerformanceReferenceCategory = Extract<PartCategory, "cpu" | "gpu">;
+
+type SimilarityComparison = {
+  part: Part;
+  reference?: Part;
+  transferredDimensions: string[];
+};
+
+const MODEL_FAMILY_TRANSFER_DIMENSIONS: Record<PerformanceReferenceCategory, ReadonlySet<string>> = {
+  cpu: new Set([
+    "cinebenchR23Single",
+    "cinebenchR23Multi",
+    "cores",
+    "threads"
+  ]),
+  gpu: new Set([
+    "gpu3dmarkTimeSpyScore",
+    "gpu3dmarkPortRoyalScore",
+    "vramGb",
+    "gpuMemoryBandwidthGbps",
+    "gpuStreamProcessors"
+  ])
+};
+
+function isUsablePerformanceValue(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
 function gpuModelFamilyFor(part: Part) {
   if (part.category !== "gpu") return undefined;
   const source = `${part.model ?? ""} ${part.name}`;
@@ -1207,9 +1320,19 @@ function gpuModelFamilyFor(part: Part) {
 function cpuModelFamilyFor(part: Part) {
   if (part.category !== "cpu") return undefined;
   const source = `${part.model ?? ""} ${part.name}`;
-  const vendor = /(?:AMD|라이젠|RYZEN)/i.test(source) ? "AMD" : /(?:INTEL|인텔|코어)/i.test(source) ? "INTEL" : undefined;
-  const match = source.match(/\b(?:I[3579]-?)?\d{4,5}[A-Z0-9]{0,5}\b/i);
-  return match?.[0] && vendor ? `${vendor}:${match[0].replace(/-/g, "").toUpperCase()}` : undefined;
+  const vendor = /(?:AMD|라이젠|RYZEN|애슬론)/i.test(source)
+    ? "AMD"
+    : /(?:INTEL|인텔|코어|셀러론|펜티엄|프로세서)/i.test(source)
+      ? "INTEL"
+      : undefined;
+  // 다나와에는 i7-14700K뿐 아니라 Core Ultra 7 265K, Pentium G6405,
+  // Core2Duo E7500처럼 3자리·문자 접두 모델도 함께 들어온다. 제품명에
+  // 세대 표기가 섞여 있어 숫자 토큰 하나를 넓게 잡되, i5/i7 등 등급 접두는
+  // 제거해 같은 실제 모델 번호의 판매 변형을 하나의 계열로 정규화한다.
+  const match = source.match(/\b(?:I[3579]\s*-\s*\d{3,5}|[A-Z]\d{3,5}|\d{3,5})[A-Z0-9]{0,5}\b/i);
+  if (!match?.[0] || !vendor) return undefined;
+  const model = match[0].replace(/[\s-]/g, "").toUpperCase().replace(/^I[3579]/, "");
+  return `${vendor}:${model}`;
 }
 
 function performanceFamilyFor(part: Part) {
@@ -1222,16 +1345,51 @@ function performanceFamilyFor(part: Part) {
 }
 
 function performanceReferenceFor(current: Part | undefined, catalog: Part[]) {
-  if (!current || (current.category !== "cpu" && current.category !== "gpu") || performanceDataCoverageFor(current) > 0) return undefined;
+  if (!current || (current.category !== "cpu" && current.category !== "gpu")) return undefined;
   const family = performanceFamilyFor(current);
   if (!family) return undefined;
+  const currentDimensions = performanceDimensions(current) as Record<string, unknown>;
+  const transferableDimensions = MODEL_FAMILY_TRANSFER_DIMENSIONS[current.category];
+  const missingTransferableDimensions = Object.entries(currentDimensions)
+    .filter(([key, value]) => transferableDimensions.has(key) && !isUsablePerformanceValue(value))
+    .map(([key]) => key);
+  if (missingTransferableDimensions.length === 0) return undefined;
   const qualityRank: Record<Part["dataQuality"], number> = { manual: 4, live: 3, seed: 2, incomplete: 1 };
   return catalog
-    .filter((part) => part.id !== current.id && part.category === current.category && part.dataQuality !== "incomplete" && performanceFamilyFor(part) === family && performanceDataCoverageFor(part) >= 2)
+    .filter((part) => {
+      if (part.id === current.id || part.category !== current.category || part.dataQuality === "incomplete" || performanceFamilyFor(part) !== family || performanceDataCoverageFor(part) < 2) return false;
+      const referenceDimensions = performanceDimensions(part) as Record<string, unknown>;
+      return missingTransferableDimensions.some((key) => isUsablePerformanceValue(referenceDimensions[key]));
+    })
     .sort((left, right) => qualityRank[right.dataQuality] - qualityRank[left.dataQuality]
       || performanceDataCoverageFor(right) - performanceDataCoverageFor(left)
       || right.updatedAt.localeCompare(left.updatedAt)
       || left.name.localeCompare(right.name, "ko-KR"))[0];
+}
+
+function performanceComparisonFor(current: Part | undefined, catalog: Part[]): SimilarityComparison | undefined {
+  if (!current) return undefined;
+  const reference = performanceReferenceFor(current, catalog);
+  if (!reference) return { part: current, transferredDimensions: [] };
+
+  const transferableDimensions = MODEL_FAMILY_TRANSFER_DIMENSIONS[current.category as PerformanceReferenceCategory];
+  const currentDimensions = performanceDimensions(current) as Record<string, unknown>;
+  const referenceDimensions = performanceDimensions(reference) as Record<string, unknown>;
+  const mergedSpecs = { ...current.specs };
+  const transferredDimensions: string[] = [];
+  for (const [key, currentValue] of Object.entries(currentDimensions)) {
+    if (!transferableDimensions.has(key) || isUsablePerformanceValue(currentValue)) continue;
+    const referenceValue = referenceDimensions[key];
+    if (!isUsablePerformanceValue(referenceValue)) continue;
+    (mergedSpecs as Record<string, unknown>)[key] = referenceValue;
+    transferredDimensions.push(key);
+  }
+  if (transferredDimensions.length === 0) return { part: current, transferredDimensions: [] };
+  return {
+    part: { ...current, specs: mergedSpecs },
+    reference,
+    transferredDimensions
+  };
 }
 
 function formatPerformanceDimension(key: string, value: number) {
@@ -1361,8 +1519,8 @@ function performanceChangeText(currentValue: number, candidateValue: number) {
   return `${percentage > 0 ? "+" : ""}${percentage.toFixed(1)}%`;
 }
 
-function performanceSummaryFor(current: Part | undefined, candidate: Part, comparisonReference?: Part) {
-  const comparisonCurrent = comparisonReference ?? current;
+function performanceSummaryFor(current: Part | undefined, candidate: Part, comparison?: SimilarityComparison) {
+  const comparisonCurrent = comparison?.part ?? current;
   if (!comparisonCurrent) return "기존 부품 없음 · 호환 조건 우선";
   const currentDimensions = performanceDimensions(comparisonCurrent);
   const candidateDimensions = performanceDimensions(candidate);
@@ -1379,8 +1537,8 @@ function performanceSummaryFor(current: Part | undefined, candidate: Part, compa
   const summary = comparisons.length > 0
     ? comparisons.join(" · ")
     : "비교 가능한 스펙 부족 · 호환 조건 우선";
-  const referenceCategoryLabel = comparisonReference?.category === "gpu" ? "GPU" : "CPU";
-  return comparisonReference ? `동일 ${referenceCategoryLabel} 모델 계열 참조 기준 · ${summary}` : summary;
+  const referenceCategoryLabel = comparison?.reference?.category === "gpu" ? "GPU" : "CPU";
+  return comparison?.reference ? `동일 ${referenceCategoryLabel} 모델 계열 참조 기준 · ${summary}` : summary;
 }
 
 const BASE_PERFORMANCE_DIMENSION_WEIGHTS: Record<string, number> = {
@@ -1438,10 +1596,10 @@ function similarityFor(
   candidate: Part,
   profile: RecommendationProfile = "general",
   gamingResolution: GamingResolution = DEFAULT_GAMING_RESOLUTION,
-  comparisonReference?: Part,
+  comparison?: SimilarityComparison,
   gamingRefreshRate: GamingRefreshRate = DEFAULT_GAMING_REFRESH_RATE
 ) {
-  const comparisonCurrent = comparisonReference ?? current;
+  const comparisonCurrent = comparison?.part ?? current;
   if (!comparisonCurrent) {
     return {
       score: 50,
@@ -1472,7 +1630,8 @@ function similarityFor(
       currentValue: formatPerformanceEvidenceValue(key, currentValue),
       candidateValue: formatPerformanceEvidenceValue(key, candidateValue),
       score: Math.round(score),
-      weight
+      weight,
+      source: comparison?.transferredDimensions.includes(key) ? "model_reference" : "selected"
     });
   }
   const confidence = totalDimensions === 0 || comparedDimensions === 0
@@ -1482,15 +1641,27 @@ function similarityFor(
       : "limited" as const;
   const score = totalWeight > 0 ? Math.round(weightedScore / totalWeight) : 50;
   const gpuNote = gpuSimilarityNote(comparisonCurrent, candidate);
-  const referenceNote = comparisonReference
-    ? `현재 선택 부품의 성능 스펙이 부족해 동일 ${comparisonReference.category === "gpu" ? "GPU" : "CPU"} 모델 계열의 검증된 카탈로그 참조(${comparisonReference.name})를 기준으로 유사도를 계산했습니다.`
+  const referenceNote = comparison?.reference
+    ? `현재 선택 부품에 없는 ${comparison.transferredDimensions.map((key) => performanceDimensionLabel(key)).join(" · ")}는 동일 ${comparison.reference.category === "gpu" ? "GPU" : "CPU"} 모델 계열의 검증된 카탈로그 참조(${comparison.reference.name})에서 보완했습니다. 선택 부품에 직접 확인된 값은 그대로 사용했습니다.`
     : undefined;
   const notes = [referenceNote, gpuNote].filter((note): note is string => Boolean(note));
   const basis = similarityBasisForDimensions(dimensions);
+  const reference = comparison?.reference
+    ? {
+      partId: comparison.reference.id,
+      partName: comparison.reference.name,
+      category: comparison.reference.category as PerformanceReferenceCategory,
+      dataQuality: comparison.reference.dataQuality,
+      updatedAt: comparison.reference.updatedAt,
+      transferredDimensions: comparison.transferredDimensions,
+      ...(comparison.reference.specs.benchmarkProvenance?.sourceKind ? { benchmarkSourceKind: comparison.reference.specs.benchmarkProvenance.sourceKind } : {}),
+      ...(comparison.reference.specs.benchmarkProvenance?.sourceCheck ? { benchmarkSourceCheck: comparison.reference.specs.benchmarkProvenance.sourceCheck } : {})
+    }
+    : undefined;
   return {
     score,
     label: similarityLabelFor(score, confidence),
-    evidence: { comparedDimensions, totalDimensions, confidence, ...(basis ? { basis } : {}), dimensions, ...(notes.length > 0 ? { notes } : {}) } satisfies SimilarityEvidence
+    evidence: { comparedDimensions, totalDimensions, confidence, ...(basis ? { basis } : {}), dimensions, ...(reference ? { reference } : {}), ...(notes.length > 0 ? { notes } : {}) } satisfies SimilarityEvidence
   };
 }
 
@@ -1504,14 +1675,14 @@ export function candidateSimilarityForBuild(
   gamingRefreshRate: GamingRefreshRate = DEFAULT_GAMING_REFRESH_RATE
 ) {
   const current = currentCategoryPart(catalog, build, category);
-  const comparisonReference = performanceReferenceFor(current, catalog);
-  const similarity = similarityFor(current, candidate, profile, gamingResolution, comparisonReference, gamingRefreshRate);
+  const comparison = performanceComparisonFor(current, catalog);
+  const similarity = similarityFor(current, candidate, profile, gamingResolution, comparison, gamingRefreshRate);
   const value = valueForPrices(current?.priceWon, candidate.priceWon, similarity.score, similarity.evidence);
   return {
     similarityScore: similarity.score,
     similarityLabel: similarity.label,
     similarityEvidence: similarity.evidence,
-    performanceSummary: performanceSummaryFor(current, candidate, comparisonReference),
+    performanceSummary: performanceSummaryFor(current, candidate, comparison),
     ...(value ?? {})
   };
 }
@@ -1675,8 +1846,8 @@ export function buildUpgradeRecommendations(
       const nextBuild = replaceSelection(build, category, candidate.id);
       const evaluation = evaluateBuild(nextBuild, catalog, { includeSuggestions: false, evaluationCache: cache });
       if (evaluation.blockerCount > 0 || evaluation.unknownCount > 0 || evaluation.warningCount > baseline.warningCount) continue;
-      const comparisonReference = performanceReferenceFor(current, catalog);
-      const similarity = similarityFor(current, candidate, profile, gamingResolution, comparisonReference, gamingRefreshRate);
+      const comparison = performanceComparisonFor(current, catalog);
+      const similarity = similarityFor(current, candidate, profile, gamingResolution, comparison, gamingRefreshRate);
       const gpuTarget = profile === "gaming" && category === "gpu"
         ? gpuTargetEvidenceFor(current, candidate, gamingResolution, gamingRefreshRate)
         : undefined;
@@ -1692,6 +1863,8 @@ export function buildUpgradeRecommendations(
         similarityEvidence: similarity.evidence,
         resolvesTarget: true,
         benchmarkSourceKind: candidate.specs.benchmarkProvenance?.sourceKind,
+        benchmarkFreshness: benchmarkFreshnessFor(candidate),
+        benchmarkSourceCheck: candidate.specs.benchmarkProvenance?.sourceCheck,
         candidateBlockers: candidateDeltaFindings.filter((item) => item.severity === "blocker").length,
         candidateWarnings: candidateDeltaFindings.filter((item) => item.severity === "warning").length,
         candidateUnknown: candidateDeltaFindings.filter((item) => item.severity === "unknown").length,
@@ -1710,7 +1883,7 @@ export function buildUpgradeRecommendations(
         upgradeScore: assessment.upgradeScore,
         improvementPercent: assessment.improvementPercent,
         improvedDimensions: assessment.improvedDimensions,
-        performanceSummary: performanceSummaryFor(current, candidate, comparisonReference),
+        performanceSummary: performanceSummaryFor(current, candidate, comparison),
         similarityScore: similarity.score,
         similarityLabel: similarity.label,
         similarityEvidence: similarity.evidence,
@@ -1728,13 +1901,15 @@ export function buildUpgradeRecommendations(
   }
   const rankedRecommendations = recommendations
     .sort((left, right) => {
-      const priorityComparison = priority === "performance"
-        ? right.improvementPercent - left.improvementPercent
-        : priority === "budget"
-          ? Number(right.budgetEvidence?.withinBudget === true) - Number(left.budgetEvidence?.withinBudget === true)
-            || (left.budgetEvidence?.afterCoreTotalPriceWon ?? Number.MAX_SAFE_INTEGER) - (right.budgetEvidence?.afterCoreTotalPriceWon ?? Number.MAX_SAFE_INTEGER)
-            || (left.priceDeltaWon ?? Number.MAX_SAFE_INTEGER) - (right.priceDeltaWon ?? Number.MAX_SAFE_INTEGER)
-          : right.upgradeScore - left.upgradeScore;
+      const priorityComparison = priority === "reliability"
+        ? compareRecommendationTrust(left.recommendationTrust, right.recommendationTrust)
+        : priority === "performance"
+          ? right.improvementPercent - left.improvementPercent
+          : priority === "budget"
+            ? Number(right.budgetEvidence?.withinBudget === true) - Number(left.budgetEvidence?.withinBudget === true)
+              || (left.budgetEvidence?.afterCoreTotalPriceWon ?? Number.MAX_SAFE_INTEGER) - (right.budgetEvidence?.afterCoreTotalPriceWon ?? Number.MAX_SAFE_INTEGER)
+              || (left.priceDeltaWon ?? Number.MAX_SAFE_INTEGER) - (right.priceDeltaWon ?? Number.MAX_SAFE_INTEGER)
+            : right.upgradeScore - left.upgradeScore;
       const targetFitRank = (fit: GpuTargetFit | undefined) => fit === "met" ? 0 : fit === "partial" ? 1 : 2;
       const targetFitComparison = left.gpuTarget && right.gpuTarget
         ? targetFitRank(left.gpuTarget.candidateFit) - targetFitRank(right.gpuTarget.candidateFit)
@@ -1778,21 +1953,27 @@ function emptyUpgradeBundleSearchResult(recommendations: UpgradeRecommendation[]
   };
 }
 
-type UpgradeBundleSortMode = "recommended" | "performance" | "budget" | "expansion" | "saving";
+type UpgradeBundleSortMode = "recommended" | "performance" | "budget" | "reliability" | "expansion" | "saving";
+
+function upgradeBundleReliabilityScoreFor(bundle: UpgradeBundleRecommendation) {
+  return bundle.changes.reduce((total, recommendation) => total + (recommendation.recommendationTrust?.score ?? 0), 0);
+}
 
 function upgradeBundleSortComparisonFor(left: UpgradeBundleRecommendation, right: UpgradeBundleRecommendation, mode: UpgradeBundleSortMode) {
-  const priorityComparison = mode === "performance"
-    ? right.totalImprovementPercent - left.totalImprovementPercent
-    : mode === "budget"
-      ? Number(right.budgetEvidence?.withinBudget === true) - Number(left.budgetEvidence?.withinBudget === true)
-        || (left.budgetEvidence?.afterCoreTotalPriceWon ?? Number.MAX_SAFE_INTEGER) - (right.budgetEvidence?.afterCoreTotalPriceWon ?? Number.MAX_SAFE_INTEGER)
-        || (left.totalPriceDeltaWon ?? Number.MAX_SAFE_INTEGER) - (right.totalPriceDeltaWon ?? Number.MAX_SAFE_INTEGER)
-      : mode === "expansion"
-        ? (right.expansionEvidence?.scoreDelta ?? Number.NEGATIVE_INFINITY) - (left.expansionEvidence?.scoreDelta ?? Number.NEGATIVE_INFINITY)
-          || (right.expansionEvidence?.candidateScore ?? Number.NEGATIVE_INFINITY) - (left.expansionEvidence?.candidateScore ?? Number.NEGATIVE_INFINITY)
-        : mode === "saving"
-          ? (left.totalPriceDeltaWon ?? Number.MAX_SAFE_INTEGER) - (right.totalPriceDeltaWon ?? Number.MAX_SAFE_INTEGER)
-          : right.totalUpgradeScore - left.totalUpgradeScore;
+  const priorityComparison = mode === "reliability"
+    ? upgradeBundleReliabilityScoreFor(right) - upgradeBundleReliabilityScoreFor(left)
+    : mode === "performance"
+      ? right.totalImprovementPercent - left.totalImprovementPercent
+      : mode === "budget"
+        ? Number(right.budgetEvidence?.withinBudget === true) - Number(left.budgetEvidence?.withinBudget === true)
+          || (left.budgetEvidence?.afterCoreTotalPriceWon ?? Number.MAX_SAFE_INTEGER) - (right.budgetEvidence?.afterCoreTotalPriceWon ?? Number.MAX_SAFE_INTEGER)
+          || (left.totalPriceDeltaWon ?? Number.MAX_SAFE_INTEGER) - (right.totalPriceDeltaWon ?? Number.MAX_SAFE_INTEGER)
+        : mode === "expansion"
+          ? (right.expansionEvidence?.scoreDelta ?? Number.NEGATIVE_INFINITY) - (left.expansionEvidence?.scoreDelta ?? Number.NEGATIVE_INFINITY)
+            || (right.expansionEvidence?.candidateScore ?? Number.NEGATIVE_INFINITY) - (left.expansionEvidence?.candidateScore ?? Number.NEGATIVE_INFINITY)
+          : mode === "saving"
+            ? (left.totalPriceDeltaWon ?? Number.MAX_SAFE_INTEGER) - (right.totalPriceDeltaWon ?? Number.MAX_SAFE_INTEGER)
+            : right.totalUpgradeScore - left.totalUpgradeScore;
   return priorityComparison
     || right.totalImprovementPercent - left.totalImprovementPercent
     || (left.totalPriceDeltaWon ?? 0) - (right.totalPriceDeltaWon ?? 0)
@@ -1800,7 +1981,7 @@ function upgradeBundleSortComparisonFor(left: UpgradeBundleRecommendation, right
 }
 
 function upgradeBundleSortModeForPriority(priority: RecommendationPreferences["priority"]): UpgradeBundleSortMode {
-  return priority === "performance" ? "performance" : priority === "budget" ? "budget" : "recommended";
+  return priority === "performance" ? "performance" : priority === "budget" ? "budget" : priority === "reliability" ? "reliability" : "recommended";
 }
 
 function upgradeBundleKeyFor(bundle: UpgradeBundleRecommendation) {
@@ -1872,6 +2053,8 @@ export function buildUpgradeBundlesWithSummary(
     ? ["performance", "expansion", "recommended"]
     : primaryBeamMode === "budget"
       ? ["budget", "saving", "expansion"]
+      : primaryBeamMode === "reliability"
+        ? ["reliability", "recommended", "expansion"]
       : ["recommended", "expansion", "performance"];
   const beamPairLimitPerMode = Math.max(1, Math.ceil(BUNDLE_BEAM_WIDTH / beamModes.length));
   const beamPairMap = new Map<string, UpgradeBundleRecommendation>();
@@ -1956,6 +2139,16 @@ export function compareCandidateSimilarity(
     || right.similarityEvidence.comparedDimensions - left.similarityEvidence.comparedDimensions;
 }
 
+function compareSimilarityResults(
+  left: { score: number; evidence: SimilarityEvidence },
+  right: { score: number; evidence: SimilarityEvidence }
+) {
+  return compareCandidateSimilarity(
+    { similarityScore: left.score, similarityEvidence: left.evidence },
+    { similarityScore: right.score, similarityEvidence: right.evidence }
+  );
+}
+
 export function compareCandidateValue(
   left: { valueScore?: number; similarityScore: number; similarityEvidence: SimilarityEvidence },
   right: { valueScore?: number; similarityScore: number; similarityEvidence: SimilarityEvidence }
@@ -1997,16 +2190,15 @@ function candidateSuggestions(
     : undefined;
   const cache = evaluationCache ?? new Map<string, CompatibilityResult>();
   const baseline = evaluateBuild(build, catalog, { includeSuggestions: false, evaluationCache: cache });
-  const comparisonReference = performanceReferenceFor(currentTarget, catalog);
+  const comparison = performanceComparisonFor(currentTarget, catalog);
   const candidates = catalog
     .filter((part) => part.category === targetCategory && !currentPartIds.has(part.id))
-    .filter((part) => part.dataQuality !== "incomplete")
     .filter((part) => isListingAllowed(part, listingPolicy))
     .filter((part) => candidateIsPlausible(finding, build, part, catalog, targetCategory));
-  return candidateEvaluationPoolFor(
+  const evaluatedSuggestions = candidateEvaluationPoolFor(
     candidates,
     currentTarget,
-    comparisonReference,
+    comparison,
     profile,
     priority,
     gamingResolution,
@@ -2029,7 +2221,20 @@ function candidateSuggestions(
       const candidateBlockerCount = candidateDeltaFindings.filter((item) => item.severity === "blocker").length;
       const candidateWarningCount = candidateDeltaFindings.filter((item) => item.severity === "warning").length;
       const candidateUnknownCount = candidateDeltaFindings.filter((item) => item.severity === "unknown").length;
+      const candidateDataQualityReasons = candidateDataQualityReasonsFor(part);
+      const candidateRisk: AlternativeRisk = candidateBlockerCount > 0
+        ? "unsafe"
+        : candidateUnknownCount > 0 || candidateDataQualityReasons.length > 0
+          ? "review"
+          : "safe";
+      const candidateReasons = [...new Set(candidateDeltaFindings
+        .filter((item) => item.severity === "blocker" || item.severity === "unknown")
+        .map((item) => item.title))];
+      candidateReasons.unshift(...candidateDataQualityReasons.filter((reason) => !candidateReasons.includes(reason)));
       const physicalEvidence = physicalEvidenceSummaryFor(targetCategory, evaluation);
+      const gpuTarget = profile === "gaming" && targetCategory === "gpu" && currentTarget
+        ? gpuTargetEvidenceFor(currentTarget, part, gamingResolution, gamingRefreshRate)
+        : undefined;
       const priceDeltaWon = finding.ruleId === "memory-mixing" && recommendedQuantity !== undefined
         ? isKnownPrice(part.priceWon) && currentMemoryPriceTotal !== undefined
           ? part.priceWon * recommendedQuantity - currentMemoryPriceTotal
@@ -2047,6 +2252,8 @@ function candidateSuggestions(
         similarityEvidence: similarity.evidence,
         resolvesTarget: fixesCurrentIssue,
         benchmarkSourceKind: part.specs.benchmarkProvenance?.sourceKind,
+        benchmarkFreshness: benchmarkFreshnessFor(part),
+        benchmarkSourceCheck: part.specs.benchmarkProvenance?.sourceCheck,
         candidateBlockers: candidateBlockerCount,
         candidateWarnings: candidateWarningCount,
         candidateUnknown: candidateUnknownCount,
@@ -2060,9 +2267,14 @@ function candidateSuggestions(
           ...(recommendedQuantity !== undefined ? { recommendedQuantity } : {}),
           ...(currentPriceWon !== undefined ? { currentPriceWon } : {}),
           score,
+          candidateRisk,
+          ...(candidateReasons.length > 0 ? { candidateReasons } : {}),
+          candidateBlockerCount,
+          candidateWarningCount,
+          candidateUnknownCount,
           reason: fullyCompatible
-            ? "이 후보로 교체하면 전체 구성도 호환됩니다."
-            : `이 호환 문제를 해결합니다. ${remainingIssueSummary(evaluation.blockerCount, evaluation.warningCount, evaluation.unknownCount)}는 별도로 남습니다.`,
+            ? `이 후보로 교체하면 전체 구성도 호환됩니다.${candidateReasons.length > 0 ? ` ${candidateReasons.join(" · ")}는 구매 전에 확인해야 합니다.` : ""}`
+            : `이 호환 문제를 해결합니다. ${remainingIssueSummary(evaluation.blockerCount, evaluation.warningCount, evaluation.unknownCount)}는 별도로 남습니다.${candidateReasons.length > 0 ? ` ${candidateReasons.join(" · ")}는 구매 전에 확인해야 합니다.` : ""}`,
           remainingBlockers: evaluation.blockerCount,
           remainingWarnings: evaluation.warningCount,
           remainingUnknown: evaluation.unknownCount,
@@ -2071,30 +2283,39 @@ function candidateSuggestions(
           similarityScore: similarity.score,
           similarityLabel: similarity.label,
           similarityEvidence: similarity.evidence,
-          performanceSummary: performanceSummaryFor(currentTarget, part, comparisonReference),
+          performanceSummary: performanceSummaryFor(currentTarget, part, comparison),
           profileSummary: profileSummaryFor(profile),
           recommendationTrust,
           ...(physicalEvidence ? { physicalEvidence } : {}),
+          ...(gpuTarget ? { gpuTarget } : {}),
           ...(value ?? {})
-        },
-        introducesNewCompatibilityRisk: candidateBlockerCount > 0 || candidateUnknownCount > 0
+        }
       };
-    })
-    .filter(({ suggestion, introducesNewCompatibilityRisk }) => suggestion.fixesCurrentIssue && !introducesNewCompatibilityRisk)
+    });
+  const safeSuggestions = evaluatedSuggestions
+    .filter(({ suggestion }) => suggestion.fixesCurrentIssue && suggestion.candidateRisk === "safe");
+  const reviewSuggestions = evaluatedSuggestions
+    .filter(({ suggestion }) => suggestion.fixesCurrentIssue
+      && suggestion.candidateRisk === "review"
+      && suggestion.candidateBlockerCount === 0);
+  const selectedSuggestions = safeSuggestions.length > 0 ? safeSuggestions : reviewSuggestions;
+  return selectedSuggestions
     .map(({ suggestion }) => suggestion)
     .sort((a, b) => {
       const aFullyCompatible = a.remainingBlockers === 0 && a.remainingWarnings === 0 && a.remainingUnknown === 0;
       const bFullyCompatible = b.remainingBlockers === 0 && b.remainingWarnings === 0 && b.remainingUnknown === 0;
-      const priorityComparison = priority === "budget"
-        ? (a.part.priceWon ?? Number.MAX_SAFE_INTEGER) - (b.part.priceWon ?? Number.MAX_SAFE_INTEGER)
-        : priority === "performance"
-          ? compareCandidateSimilarity(a, b)
-          : 0;
+      const priorityComparison = priority === "reliability"
+        ? compareRecommendationTrust(a.recommendationTrust, b.recommendationTrust)
+        : priority === "budget"
+          ? (a.part.priceWon ?? Number.MAX_SAFE_INTEGER) - (b.part.priceWon ?? Number.MAX_SAFE_INTEGER)
+          : priority === "performance"
+            ? compareCandidateSimilarity(a, b)
+            : 0;
       return Number(bFullyCompatible) - Number(aFullyCompatible)
-        || a.score - b.score
+        || (priority === "reliability" ? priorityComparison : a.score - b.score)
         || (priority === "balanced" ? compareRecommendationTrust(a.recommendationTrust, b.recommendationTrust) : 0)
-        || priorityComparison
-        || (priority !== "balanced" ? compareRecommendationTrust(a.recommendationTrust, b.recommendationTrust) : 0)
+        || (priority === "reliability" ? 0 : priorityComparison)
+        || (priority !== "balanced" && priority !== "reliability" ? compareRecommendationTrust(a.recommendationTrust, b.recommendationTrust) : 0)
         || compareCandidateSimilarity(a, b)
         || Math.abs(a.priceDeltaWon ?? 0) - Math.abs(b.priceDeltaWon ?? 0)
         || (a.part.priceWon ?? 0) - (b.part.priceWon ?? 0);
@@ -2118,7 +2339,7 @@ type CandidateEvaluationPoolEntry = {
 function candidateEvaluationPoolFor(
   candidates: Part[],
   currentTarget: Part | undefined,
-  comparisonReference: Part | undefined,
+  comparison: SimilarityComparison | undefined,
   profile: RecommendationProfile,
   priority: RecommendationPreferences["priority"],
   gamingResolution: GamingResolution,
@@ -2128,7 +2349,7 @@ function candidateEvaluationPoolFor(
 ): CandidateEvaluationPoolEntry[] {
   const entries = candidates.map((part) => ({
     part,
-    similarity: similarityFor(currentTarget, part, profile, gamingResolution, comparisonReference, gamingRefreshRate)
+    similarity: similarityFor(currentTarget, part, profile, gamingResolution, comparison, gamingRefreshRate)
   }));
   const poolSize = Math.max(64, Math.min(CANDIDATE_EVALUATION_POOL_SIZE, limit * 24));
   const recordSearch = (evaluatedCount: number, bounded: boolean) => {
@@ -2145,28 +2366,36 @@ function candidateEvaluationPoolFor(
   }
 
   const similarityRanked = [...entries].sort((left, right) =>
-    right.similarity.score - left.similarity.score
-    || right.similarity.evidence.comparedDimensions - left.similarity.evidence.comparedDimensions
-    || right.similarity.evidence.totalDimensions - left.similarity.evidence.totalDimensions
+    compareSimilarityResults(left.similarity, right.similarity)
     || left.part.id.localeCompare(right.part.id)
   );
   const priceRanked = entries
     .filter(({ part }) => isKnownPrice(part.priceWon))
     .sort((left, right) =>
       (left.part.priceWon ?? Number.MAX_SAFE_INTEGER) - (right.part.priceWon ?? Number.MAX_SAFE_INTEGER)
-      || right.similarity.score - left.similarity.score
+      || compareSimilarityResults(left.similarity, right.similarity)
       || left.part.id.localeCompare(right.part.id)
     );
-  const priorityRanked = priority === "budget" ? priceRanked : similarityRanked;
+  const reliabilityRanked = [...entries].sort((left, right) =>
+    partReliabilityScoreFor(right.part) - partReliabilityScoreFor(left.part)
+    || compareSimilarityResults(left.similarity, right.similarity)
+    || left.part.id.localeCompare(right.part.id)
+  );
+  const priorityRanked = priority === "budget" ? priceRanked : priority === "reliability" ? reliabilityRanked : similarityRanked;
+  const verifiedRanked = similarityRanked.filter(({ part }) => part.dataQuality !== "incomplete");
   const selected = new Map<string, CandidateEvaluationPoolEntry>();
   const add = (items: CandidateEvaluationPoolEntry[], count: number) => {
     for (const item of items.slice(0, count)) {
       if (!selected.has(item.part.id)) selected.set(item.part.id, item);
     }
   };
+  // 불완전 후보가 많아도 검증된 후보가 bounded pool 밖으로 밀리지 않도록
+  // 유사도 기준 상위 verified 후보를 먼저 예약한다.
+  add(verifiedRanked, VERIFIED_CANDIDATE_RESERVE_SIZE);
   add(priorityRanked, poolSize);
   add(similarityRanked, poolSize);
   add(priceRanked, Math.ceil(poolSize / 2));
+  add(reliabilityRanked, Math.ceil(poolSize / 2));
   const pool = [...selected.values()];
   recordSearch(pool.length, true);
   return pool;
@@ -2245,6 +2474,8 @@ function quantityPlanOptions(
             similarityEvidence,
             resolvesTarget: fixesCurrentIssue,
             benchmarkSourceKind: current.specs.benchmarkProvenance?.sourceKind,
+            benchmarkFreshness: benchmarkFreshnessFor(current),
+            benchmarkSourceCheck: current.specs.benchmarkProvenance?.sourceCheck,
             candidateBlockers: candidateDeltaFindings.filter((item) => item.severity === "blocker").length,
             candidateWarnings: candidateDeltaFindings.filter((item) => item.severity === "warning").length,
             candidateUnknown: candidateDeltaFindings.filter((item) => item.severity === "unknown").length,
@@ -2495,6 +2726,7 @@ function buildRepairPlans(
   const fullPlanBeamWidth = 64;
   const fullPlanOptionsPerCategory = 8;
   const repairRiskScoreFor = (evaluation: CompatibilityResult) => evaluation.blockerCount * 1000 + evaluation.unknownCount * 100 + evaluation.warningCount * 10;
+  const planRecommendationTrustScoreFor = (options: PlanOption[]) => options.reduce((total, option) => total + (option.suggestion.recommendationTrust?.score ?? 0), 0);
   const planOptionBuildFor = (current: BuildSelection, option: PlanOption) => option.kind === "change_quantity" && option.toQuantity !== undefined
     ? setSingleSelectionQuantity(current, option.category, option.toQuantity) ?? current
     : replaceSelection(current, option.category, option.suggestion.part.id, option.suggestion.recommendedQuantity);
@@ -2525,11 +2757,13 @@ function buildRepairPlans(
           const leftFullyCompatible = isFullyCompatible(left.evaluation.blockerCount, left.evaluation.warningCount, left.evaluation.unknownCount);
           const rightFullyCompatible = isFullyCompatible(right.evaluation.blockerCount, right.evaluation.warningCount, right.evaluation.unknownCount);
           const riskComparison = repairRiskScoreFor(left.evaluation) - repairRiskScoreFor(right.evaluation);
-          const preferenceComparison = priority === "budget"
-            ? left.evaluation.totalPriceWon - right.evaluation.totalPriceWon
-            : priority === "performance"
-              ? right.chosen.reduce((total, option) => total + option.suggestion.similarityScore, 0) - left.chosen.reduce((total, option) => total + option.suggestion.similarityScore, 0)
-              : left.chosen.length - right.chosen.length;
+          const preferenceComparison = priority === "reliability"
+            ? planRecommendationTrustScoreFor(right.chosen) - planRecommendationTrustScoreFor(left.chosen)
+            : priority === "budget"
+              ? left.evaluation.totalPriceWon - right.evaluation.totalPriceWon
+              : priority === "performance"
+                ? right.chosen.reduce((total, option) => total + option.suggestion.similarityScore, 0) - left.chosen.reduce((total, option) => total + option.suggestion.similarityScore, 0)
+                : left.chosen.length - right.chosen.length;
           return Number(rightFullyCompatible) - Number(leftFullyCompatible) || riskComparison || preferenceComparison || left.chosen.length - right.chosen.length;
         })
         .slice(0, fullPlanBeamWidth);
@@ -2537,11 +2771,13 @@ function buildRepairPlans(
     fullPlanState = beam
       .filter((state) => state.chosen.length > 0 && isFullyCompatible(state.evaluation.blockerCount, state.evaluation.warningCount, state.evaluation.unknownCount))
       .sort((left, right) => {
-        const preferenceComparison = priority === "budget"
-          ? left.evaluation.totalPriceWon - right.evaluation.totalPriceWon
-          : priority === "performance"
-            ? right.chosen.reduce((total, option) => total + option.suggestion.similarityScore, 0) - left.chosen.reduce((total, option) => total + option.suggestion.similarityScore, 0)
-            : left.chosen.length - right.chosen.length;
+        const preferenceComparison = priority === "reliability"
+          ? planRecommendationTrustScoreFor(right.chosen) - planRecommendationTrustScoreFor(left.chosen)
+          : priority === "budget"
+            ? left.evaluation.totalPriceWon - right.evaluation.totalPriceWon
+            : priority === "performance"
+              ? right.chosen.reduce((total, option) => total + option.suggestion.similarityScore, 0) - left.chosen.reduce((total, option) => total + option.suggestion.similarityScore, 0)
+              : left.chosen.length - right.chosen.length;
         return preferenceComparison || left.chosen.length - right.chosen.length || repairRiskScoreFor(left.evaluation) - repairRiskScoreFor(right.evaluation);
       })[0];
   }
@@ -2586,6 +2822,7 @@ function buildRepairPlans(
     .sort()
     .join("|");
   const byQuality = (a: RecommendationPlan, b: RecommendationPlan) => planQuality(a) - planQuality(b);
+  const planTrustScore = (plan: RecommendationPlan) => plan.changes.reduce((total, change) => total + (change.recommendationTrust?.score ?? 0), 0);
   const strategies: Array<{
     label: RecommendationPlan["label"];
     qualityTolerance: number;
@@ -2594,7 +2831,8 @@ function buildRepairPlans(
     {
       label: "최소 변경",
       qualityTolerance: 0,
-      compare: (a, b) => byQuality(a, b)
+      compare: (a, b) => (priority === "reliability" ? planTrustScore(b) - planTrustScore(a) : byQuality(a, b))
+        || (priority === "reliability" ? byQuality(a, b) : 0)
         || a.changes.length - b.changes.length
         || similarityScoreForSort(b) - similarityScoreForSort(a)
         || planPrice(a) - planPrice(b)
@@ -2602,7 +2840,8 @@ function buildRepairPlans(
     {
       label: "가성비",
       qualityTolerance: 1000,
-      compare: (a, b) => budgetScore(a) - budgetScore(b)
+      compare: (a, b) => (priority === "reliability" ? planTrustScore(b) - planTrustScore(a) : budgetScore(a) - budgetScore(b))
+        || (priority === "reliability" ? budgetScore(a) - budgetScore(b) : 0)
         || byQuality(a, b)
         || a.changes.length - b.changes.length
         || similarityScoreForSort(b) - similarityScoreForSort(a)
@@ -2610,7 +2849,8 @@ function buildRepairPlans(
     {
       label: "성능 유지",
       qualityTolerance: 1000,
-      compare: (a, b) => similarityScoreForSort(b) - similarityScoreForSort(a)
+      compare: (a, b) => (priority === "reliability" ? planTrustScore(b) - planTrustScore(a) : similarityScoreForSort(b) - similarityScoreForSort(a))
+        || (priority === "reliability" ? similarityScoreForSort(b) - similarityScoreForSort(a) : 0)
         || byQuality(a, b)
         || a.changes.length - b.changes.length
         || planPrice(a) - planPrice(b)
@@ -2619,7 +2859,8 @@ function buildRepairPlans(
   const strategyOrder: Record<RecommendationPreferences["priority"], RecommendationPlan["label"][]> = {
     balanced: ["최소 변경", "가성비", "성능 유지"],
     budget: ["가성비", "최소 변경", "성능 유지"],
-    performance: ["성능 유지", "최소 변경", "가성비"]
+    performance: ["성능 유지", "최소 변경", "가성비"],
+    reliability: ["최소 변경", "성능 유지", "가성비"]
   };
   const orderedStrategies = strategyOrder[preferences?.priority ?? "balanced"]
     .map((label) => strategies.find((strategy) => strategy.label === label))
@@ -2695,16 +2936,18 @@ function attachSuggestions(
       .sort((a, b) => {
         const aFullyCompatible = a.remainingBlockers === 0 && a.remainingWarnings === 0 && a.remainingUnknown === 0;
         const bFullyCompatible = b.remainingBlockers === 0 && b.remainingWarnings === 0 && b.remainingUnknown === 0;
-        const priorityComparison = priority === "budget"
-          ? (a.part.priceWon ?? Number.MAX_SAFE_INTEGER) - (b.part.priceWon ?? Number.MAX_SAFE_INTEGER)
-          : priority === "performance"
-            ? compareCandidateSimilarity(a, b)
-            : 0;
+        const priorityComparison = priority === "reliability"
+          ? compareRecommendationTrust(a.recommendationTrust, b.recommendationTrust)
+          : priority === "budget"
+            ? (a.part.priceWon ?? Number.MAX_SAFE_INTEGER) - (b.part.priceWon ?? Number.MAX_SAFE_INTEGER)
+            : priority === "performance"
+              ? compareCandidateSimilarity(a, b)
+              : 0;
       return Number(bFullyCompatible) - Number(aFullyCompatible)
-        || a.score - b.score
+        || (priority === "reliability" ? priorityComparison : a.score - b.score)
         || (priority === "balanced" ? compareRecommendationTrust(a.recommendationTrust, b.recommendationTrust) : 0)
-        || priorityComparison
-        || (priority !== "balanced" ? compareRecommendationTrust(a.recommendationTrust, b.recommendationTrust) : 0)
+        || (priority === "reliability" ? 0 : priorityComparison)
+        || (priority !== "balanced" && priority !== "reliability" ? compareRecommendationTrust(a.recommendationTrust, b.recommendationTrust) : 0)
         || compareCandidateSimilarity(a, b)
           || Math.abs(a.priceDeltaWon ?? 0) - Math.abs(b.priceDeltaWon ?? 0)
           || (a.part.priceWon ?? 0) - (b.part.priceWon ?? 0);
@@ -4318,6 +4561,7 @@ export function evaluateBuild(
     metrics,
     analysis,
     gpuFit: gpuFitSummaryFor(metrics, gpu, computerCase, psu, orderedFindings),
+    benchmarkSnapshot: buildBenchmarkSnapshotFor(cpu, gpu),
     links: compatibilityLinks,
     totalPriceWon: priceInfo.total,
     priceComplete: priceInfo.complete,
@@ -4778,6 +5022,7 @@ function generatorCandidatePool(
   const priceLimit = category === "cpu" ? 500 : category === "memory" || category === "gpu" ? 120 : 60;
   [...candidates].sort((a, b) => (scores.get(b.id) ?? 0) - (scores.get(a.id) ?? 0) || (a.priceWon ?? 0) - (b.priceWon ?? 0)).slice(0, 40).forEach((part) => selected.set(part.id, part));
   [...candidates].sort((a, b) => (a.priceWon ?? Number.MAX_SAFE_INTEGER) - (b.priceWon ?? Number.MAX_SAFE_INTEGER)).slice(0, priceLimit).forEach((part) => selected.set(part.id, part));
+  [...candidates].sort((a, b) => partReliabilityScoreFor(b) - partReliabilityScoreFor(a) || (a.priceWon ?? Number.MAX_SAFE_INTEGER) - (b.priceWon ?? Number.MAX_SAFE_INTEGER)).slice(0, 20).forEach((part) => selected.set(part.id, part));
   return { parts: [...selected.values()], scores };
 }
 
@@ -4814,6 +5059,12 @@ function generatorStateScore(state: GeneratorState, budgetWon: number) {
   return state.capabilityScore - overBudgetRatio * 2000 - (state.priceWon / Math.max(budgetWon, 1)) * 8;
 }
 
+function generatorStateReliabilityScoreFor(state: GeneratorState) {
+  return Object.values(state.parts)
+    .filter((part): part is Part => Boolean(part))
+    .reduce((total, part) => total + partReliabilityScoreFor(part), 0);
+}
+
 function pruneGeneratorStates(states: GeneratorState[], budgetWon: number, limit = 160) {
   const unique = new Map<string, GeneratorState>();
   for (const state of states) {
@@ -4825,8 +5076,9 @@ function pruneGeneratorStates(states: GeneratorState[], budgetWon: number, limit
   }
   const sorted = [...unique.values()].sort((a, b) => generatorStateScore(b, budgetWon) - generatorStateScore(a, budgetWon) || a.priceWon - b.priceWon);
   const cheap = [...unique.values()].sort((a, b) => a.priceWon - b.priceWon).slice(0, Math.max(1, Math.floor(limit / 4)));
+  const reliable = [...unique.values()].sort((a, b) => generatorStateReliabilityScoreFor(b) - generatorStateReliabilityScoreFor(a) || a.priceWon - b.priceWon).slice(0, Math.max(1, Math.floor(limit / 4)));
   const kept = new Map<string, GeneratorState>();
-  for (const state of [...cheap, ...sorted]) {
+  for (const state of [...cheap, ...sorted, ...reliable]) {
     const key = ["cpu", "gpu", "motherboard", "memory", "cooler", "case", "ssd", "psu"]
       .map((category) => state.parts[category as PartCategory]?.id ?? "")
       .join("|");
@@ -5009,8 +5261,8 @@ export function generateBuildDraft(catalog: Part[], request: BuildGenerationRequ
     throw new Error("예산은 1원 이상의 정수여야 합니다.");
   }
   const profile = request.profile;
-  if (request.priority !== undefined && !["balanced", "budget", "performance"].includes(request.priority)) {
-    throw new Error("자동 구성 우선순위는 balanced, budget, performance 중 하나여야 합니다.");
+  if (request.priority !== undefined && !["balanced", "budget", "performance", "reliability"].includes(request.priority)) {
+    throw new Error("자동 구성 우선순위는 balanced, budget, performance, reliability 중 하나여야 합니다.");
   }
   const priority = request.priority ?? "balanced";
   const memoryCapacityGb = request.memoryCapacityGb ?? 32;
@@ -5215,6 +5467,8 @@ export function generateBuildDraft(catalog: Part[], request: BuildGenerationRequ
       ? a.state.priceWon - b.state.priceWon
       : priority === "performance"
         ? b.state.capabilityScore - a.state.capabilityScore
+        : priority === "reliability"
+          ? generatorStateReliabilityScoreFor(b.state) - generatorStateReliabilityScoreFor(a.state)
         : generatorStateScore(b.state, request.budgetWon) - generatorStateScore(a.state, request.budgetWon);
     return Number(bValid) - Number(aValid)
       || Number(bWithin) - Number(aWithin)
@@ -5275,7 +5529,9 @@ export function generateBuildDraft(catalog: Part[], request: BuildGenerationRequ
     lines: buildGeneratedLines(chosen.state),
     rationale: [
       profileSummaryFor(profile),
-      `${RECOMMENDATION_PRIORITY_LABELS[priority]} 기준으로 예산·후보 성능 점수를 정렬했습니다.`,
+      priority === "reliability"
+        ? `${RECOMMENDATION_PRIORITY_LABELS[priority]} 기준으로 호환 판정·데이터 품질·갱신 시점·원문 연결이 확인된 후보를 먼저 정렬했습니다.`
+        : `${RECOMMENDATION_PRIORITY_LABELS[priority]} 기준으로 예산·후보 성능 점수를 정렬했습니다.`,
       request.includeGpu ? "외장 그래픽카드를 포함한 구성입니다." : "CPU 내장 그래픽을 사용하는 구성입니다.",
       request.includeGpu && profile === "gaming"
         ? `${GAMING_RESOLUTION_LABELS[gamingResolution]} · ${GAMING_REFRESH_RATE_LABELS[gamingRefreshRate]} 기준으로 권장 VRAM ${GAMING_RESOLUTION_VRAM_TARGETS[gamingResolution]}GB와 GPU·CPU 처리 스펙을 더 중요하게 반영했습니다.`

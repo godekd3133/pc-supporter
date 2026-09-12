@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { candidateComparisonDecisionFor } from "./candidate-comparison";
+import { candidateComparisonDecisionFor, candidateComparisonTradeoffsFor } from "./candidate-comparison";
 
 const candidates = [
   {
@@ -54,12 +54,61 @@ describe("candidate comparison decision", () => {
     expect(result.top?.reason).toContain("50,000원");
   });
 
+  it("does not rank a project reference price as a confirmed price", () => {
+    const result = candidateComparisonDecisionFor([
+      ...candidates,
+      { id: "reference", name: "프로젝트 기준가 후보", priceWon: 1000, priceEvidence: "reference" as const }
+    ], "price");
+
+    expect(result.top?.id).toBe("cheap-review");
+    expect(result.ranking.find((item) => item.id === "reference")?.reason).toContain("실판매가가 아니어서 가격 점수를 산정하지 않음");
+  });
+
   it("uses similarity for performance but never recommends an unsafe top candidate", () => {
     const result = candidateComparisonDecisionFor(candidates, "performance");
 
     expect(result.ranking[0].id).toBe("unsafe");
     expect(result.top?.id).toBe("safe-balanced");
-    expect(result.top?.reason).toContain("성능 유사도 82점");
+    expect(result.top?.reason).toContain("성능 종합 82점 · 부품 유사도 82점");
+  });
+
+  it("shows performance comparison coverage and basis in the ranking reason", () => {
+    const result = candidateComparisonDecisionFor([{
+      id: "mixed-evidence",
+      name: "혼합 근거 후보",
+      similarityScore: 84,
+      similarityEvidence: { comparedDimensions: 3, totalDimensions: 5, confidence: "limited", basis: "mixed" },
+      candidateRisk: "safe"
+    }], "performance");
+
+    expect(result.top?.reason).toContain("비교 3/5 · 벤치마크·스펙 혼합 · 일부 근거");
+  });
+
+  it("blends component similarity with the full-build result when available", () => {
+    const result = candidateComparisonDecisionFor([
+      { ...candidates[0], id: "component-strong", name: "부품 유사도 우수", similarityScore: 88, analysisScore: 40, analysisScoreDelta: -40 },
+      { ...candidates[0], id: "build-balanced", name: "적용 후 균형 후보", similarityScore: 82, analysisScore: 90, analysisScoreDelta: 10 }
+    ], "performance");
+
+    expect(result.top?.id).toBe("build-balanced");
+    expect(result.top?.reason).toContain("성능 종합 84점");
+    expect(result.top?.reason).toContain("현재 대비 +10점");
+    expect(result.summary).toContain("적용 후 전체 성능");
+  });
+
+  it("reduces the influence of limited analysis and ignores unknown analysis evidence", () => {
+    const result = candidateComparisonDecisionFor([
+      { id: "high", name: "완전 근거", similarityScore: 80, analysisScore: 100, analysisConfidence: "high" },
+      { id: "limited", name: "부분 근거", similarityScore: 80, analysisScore: 100, analysisConfidence: "limited" },
+      { id: "unknown", name: "근거 미확인", similarityScore: 80, analysisScore: 100, analysisConfidence: "unknown" }
+    ], "performance");
+
+    expect(result.ranking.map((item) => item.id)).toEqual(["high", "limited", "unknown"]);
+    expect(result.ranking[0].score).toBe(85);
+    expect(result.ranking[1].score).toBe(82);
+    expect(result.ranking[2].score).toBe(80);
+    expect(result.ranking[1].reason).toContain("일부 스펙 기준");
+    expect(result.ranking[2].reason).toContain("근거 확인 필요");
   });
 
   it("downgrades stale or physically unverified evidence in the evidence and balanced scores", () => {
@@ -70,5 +119,28 @@ describe("candidate comparison decision", () => {
 
     expect(result.top?.id).toBe("fresh");
     expect(balanced.top?.id).toBe("fresh");
+  });
+
+  it("keeps genuine candidate tradeoffs and marks a fully dominated scenario", () => {
+    const result = candidateComparisonTradeoffsFor([
+      { id: "cheap", name: "저렴한 후보", priceDeltaWon: 0, analysisScore: 70, analysisConfidence: "high", recommendationTrustScore: 80, remainingBlockers: 0, remainingWarnings: 0, remainingUnknown: 0 },
+      { id: "performance", name: "성능 후보", priceDeltaWon: 100000, analysisScore: 90, analysisConfidence: "high", recommendationTrustScore: 90, remainingBlockers: 0, remainingWarnings: 0, remainingUnknown: 0 },
+      { id: "dominated", name: "열세 후보", priceDeltaWon: 150000, analysisScore: 80, analysisConfidence: "high", recommendationTrustScore: 70, remainingBlockers: 0, remainingWarnings: 1, remainingUnknown: 0 },
+      { id: "unsafe", name: "차단 후보", priceDeltaWon: -100000, analysisScore: 100, analysisConfidence: "high", recommendationTrustScore: 100, candidateRisk: "unsafe", remainingBlockers: 0, remainingWarnings: 0, remainingUnknown: 0 }
+    ]);
+
+    expect(result.find((item) => item.id === "cheap")?.frontier).toBe(true);
+    expect(result.find((item) => item.id === "performance")?.frontier).toBe(true);
+    expect(result.find((item) => item.id === "dominated")).toMatchObject({ frontier: false, dominatedByCandidateId: "performance", riskScore: 10 });
+    expect(result.find((item) => item.id === "unsafe")).toMatchObject({ frontier: false, eligible: false });
+  });
+
+  it("does not order candidates when only one candidate has a confirmed scenario price", () => {
+    const result = candidateComparisonTradeoffsFor([
+      { id: "known", name: "가격 확인", priceDeltaWon: 0, remainingBlockers: 0, remainingWarnings: 0, remainingUnknown: 0 },
+      { id: "unknown", name: "가격 확인 필요", remainingBlockers: 1, remainingWarnings: 0, remainingUnknown: 0 }
+    ]);
+
+    expect(result.every((item) => item.frontier)).toBe(true);
   });
 });

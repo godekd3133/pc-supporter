@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CatalogWatchSnapshot } from "./catalog-watchlist-export";
-import { catalogWatchSnapshotMatches, catalogWatchSnapshotTargetGap, sortCatalogWatchSnapshots } from "./catalog-watchlist-view";
+import { catalogWatchlistImportDiffFor, catalogWatchSnapshotMatches, catalogWatchSnapshotTargetGap, sortCatalogWatchSnapshots } from "./catalog-watchlist-view";
 
 const snapshot = (overrides: Partial<CatalogWatchSnapshot> = {}): CatalogWatchSnapshot => ({
   entry: { itemId: "part-1", itemName: "테스트 CPU", category: "cpu", kind: "part", addedAt: "2026-08-28T00:00:00.000Z" },
@@ -39,5 +39,6 @@ describe("catalog watchlist view", () => {
 
     expect(sortCatalogWatchSnapshots(source, "signal_desc").map((item) => item.entry.itemId)).toEqual(["active", "quiet"]);
     expect(source.map((item) => item.entry.itemId)).toEqual(["quiet", "active"]);
+    expect(catalogWatchlistImportDiffFor([quiet.entry], [{ ...quiet.entry, targetPriceWon: 85000 }, { ...quiet.entry, itemId: "new" }])).toMatchObject({ currentCount: 1, incomingCount: 2, sharedCount: 1, newCount: 1, targetChangedCount: 1, resultingCount: 2, droppedByLimit: 0 });
   });
 });

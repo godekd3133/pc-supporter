@@ -31,6 +31,15 @@ describe("saved build priority board", () => {
     expect(savedBuildRiskScoreFor(snapshot({ accessoryCompatibility: { status: "needs_review", blockerCount: 1, warningCount: 2, unknownCount: 1, findings: [] } }))).toBe(121);
   });
 
+  it("promotes a resource-budget failure to the same attention board", () => {
+    const tight = snapshot({ resourceBudget: { state: "warning", powerState: "warning", coolingState: "good", powerHeadroomW: 100, coolerHeadroomW: 120 } });
+    const blocked = snapshot({ resourceBudget: { state: "danger", powerState: "danger", coolingState: "good", powerHeadroomW: -20, coolerHeadroomW: 120 } });
+
+    expect(savedBuildRiskScoreFor(tight)).toBe(10);
+    expect(savedBuildRiskScoreFor(blocked)).toBe(100);
+    expect(savedBuildPriorityRowsFor([{ id: "tight", name: "여유 좁은 견적", checkSnapshot: tight }, { id: "blocked", name: "전력 기준 미달", checkSnapshot: blocked }]).map((row) => row.level)).toEqual(["critical", "review"]);
+  });
+
   it("uses the newest monitor snapshot, preserves a trend, and calculates deltas", () => {
     const first = snapshot({ blockerCount: 1, totalPriceWon: 900_000, checkedAt: "2026-08-29T00:00:00.000Z" });
     const second = snapshot({ blockerCount: 0, warningCount: 1, totalPriceWon: 1_000_000, checkedAt: "2026-08-30T00:00:00.000Z" });

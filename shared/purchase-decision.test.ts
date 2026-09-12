@@ -28,4 +28,10 @@ describe("purchase decision gate", () => {
     expect(purchaseDecisionFor(readiness("ready"), progress(0), assembly("failed"))).toMatchObject({ state: "review", label: "실측 확인 후 진행" });
     expect(purchaseDecisionFor(readiness("ready"), progress(0), assembly("passed", 1))).toMatchObject({ state: "review", label: "실측 재확인 필요" });
   });
+
+  it("keeps purchase stages as context without letting a partial purchase hide a readiness blocker", () => {
+    const purchaseProgress = { total: 3, checked: 1, remaining: 2, percent: 33, stageCounts: { planned: 1, ordered: 1, received: 0, installed: 1 } };
+    expect(purchaseDecisionFor(readiness("blocked"), progress(0), undefined, purchaseProgress)).toMatchObject({ state: "blocked", purchaseProgress });
+    expect(purchaseDecisionFor(readiness("ready"), progress(0), undefined, purchaseProgress)).toMatchObject({ state: "ready", purchaseProgress: { percent: 33, stageCounts: { ordered: 1, installed: 1 } } });
+  });
 });

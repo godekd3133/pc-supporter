@@ -1,6 +1,7 @@
 import type { AccessoryCompatibilityFinding, AccessoryCompatibilityResult, AccessoryConnectivityPlan, AccessoryFanHubTargetRecommendation, AccessoryItem, AccessorySelection, BuildSelection, Part } from "../shared/types";
 import { fanHubConnectionPlanFor, fanHubPowerInputFor, fanHubPortCountFor, hasRgbControllerEvidenceFor, rgbControllerConnectionPlanFor, rgbHubPortCountFor, rgbVoltageFor } from "./accessory-connectivity";
 import { rgbFanDeviceCountFor, rgbFanVoltageFor } from "../shared/rgb-connectivity";
+import { pcieCompatibleSlotInventoryFor, pcieSlotInventoryText } from "../shared/pcie-slot";
 
 function selectedPart(catalog: Part[], partId: string | undefined) {
   return partId ? catalog.find((part) => part.id === partId) : undefined;
@@ -31,11 +32,11 @@ function accessoryFanSizeFor(item: AccessoryItem) {
   return Number.isFinite(parsedSize) && parsedSize >= 80 && parsedSize <= 200 ? parsedSize : undefined;
 }
 
-function normalizedM2FormFactor(value: string | undefined) {
+export function normalizedM2FormFactor(value: string | undefined) {
   return value?.toLocaleLowerCase("ko-KR").replace(/[\s._-]/g, "") ?? "";
 }
 
-function m2FormFactorsFor(item: AccessoryItem | Part | undefined) {
+export function m2FormFactorsFor(item: AccessoryItem | Part | undefined) {
   if (!item) return [];
   return [...new Set([item.specs.formFactor, ...(item.specs.supportedFormFactors ?? [])]
     .map(normalizedM2FormFactor)
@@ -48,28 +49,29 @@ function m2FormFactorLabelsFor(item: AccessoryItem | Part | undefined) {
     .filter((value): value is string => Boolean(value && normalizedM2FormFactor(value).startsWith("m2"))))];
 }
 
-function m2FormsOverlap(candidateForms: string[], selectedForms: string[]) {
+export function m2FormsOverlap(candidateForms: string[], selectedForms: string[]) {
   return candidateForms.some((candidate) => candidate === "m2" || selectedForms.some((selected) => selected === "m2" || selected === candidate));
 }
 
-function storageAdapterKindFor(item: AccessoryItem) {
+export function storageAdapterKindFor(item: AccessoryItem) {
   const text = rawText(item);
   if (!/m\.2/i.test(text)) return undefined;
-  if (/m\.2[^/]{0,100}(?:→|to|->)\s*pci[- ]?e/i.test(text)) return "pcie" as const;
-  if (item.specs.interface === "SATA" && /m\.2[^/]{0,100}(?:→|to|->)\s*(?:sata|2\.5)/i.test(text)) return "sata" as const;
+  if (/m\.2[\s\S]{0,160}(?:→|to|->)\s*pci[- ]?e/i.test(text)) return "pcie" as const;
+  if (item.specs.interface?.toLocaleLowerCase("ko-KR") === "sata" && /m\.2[\s\S]{0,160}(?:→|to|->)\s*(?:sata|2\.5)/i.test(text)) return "sata" as const;
   return undefined;
 }
 
-function storageAdapterSupportFor(item: AccessoryItem, kind: "pcie" | "sata") {
+export function storageAdapterSupportFor(item: AccessoryItem, kind: "pcie" | "sata") {
   const text = rawText(item);
   if (kind === "sata") return { nvme: false, sata: true };
+  const interfaceValue = item.specs.interface?.toLocaleLowerCase("ko-KR");
   return {
-    nvme: item.specs.interface === "NVMe" || /NVMe/i.test(text),
-    sata: item.specs.interface === "SATA" || /SATA|NGFF/i.test(text)
+    nvme: interfaceValue === "nvme" || /NVMe/i.test(text),
+    sata: interfaceValue === "sata" || /SATA|NGFF/i.test(text)
   };
 }
 
-function storageAdapterConnectionLabel(kind: "pcie" | "sata") {
+export function storageAdapterConnectionLabel(kind: "pcie" | "sata") {
   return kind === "pcie" ? "M.2 → PCIe" : "M.2 → SATA/2.5형";
 }
 
@@ -287,6 +289,10 @@ export function accessoryCompatibilityFor(build: BuildSelection, catalog: Part[]
       if (adapterKind) {
         const adapterForms = m2FormFactorsFor(item);
         const adapterSupport = storageAdapterSupportFor(item, adapterKind);
+        const adapterStorageDeviceCount = item.specs.adapterStorageDeviceCount;
+        const adapterStorageCapacity = adapterStorageDeviceCount === undefined
+          ? undefined
+          : adapterStorageDeviceCount * selection.quantity;
         const selectedInterfaces = [...new Set(selectedM2.map(({ part }) => part.specs.interface?.toLocaleLowerCase("ko-KR")))];
         const selectedInterfaceLabels = selectedInterfaces.filter((value): value is string => Boolean(value)).map((value) => value === "nvme" ? "NVMe" : value.toUpperCase());
         const supportedInterfaceLabels = [adapterSupport.nvme ? "NVMe" : undefined, adapterSupport.sata ? "SATA" : undefined].filter((value): value is string => Boolean(value));
@@ -352,6 +358,129 @@ export function accessoryCompatibilityFor(build: BuildSelection, catalog: Part[]
             ],
             action: "M.2 Key와 NVMe/SATA 지원 여부를 제조사 원문에서 확인하세요."
           });
+        } else if (adapterStorageCapacity !== undefined && adapterStorageCapacity < selectedM2Count) {
+          addFinding(findings, selection, item, selectedM2.map(({ part }) => part.id), {
+            ruleId: "accessory-storage-adapter-capacity",
+            severity: "blocker",
+            title: "M.2 변환 어댑터의 동시 장착 수가 부족합니다.",
+            message: `${storageAdapterConnectionLabel(adapterKind)} 어댑터의 확인된 장착 한도가 현재 연결 대상 M.2 SSD 수보다 적어 모든 대상을 수용할 수 없습니다.`,
+            facts: [
+              { label: "연결 대상 M.2 SSD", actual: `${selectedM2Count}개` },
+              { label: "어댑터 장착 한도", actual: `${adapterStorageDeviceCount}개 × ${selection.quantity}개 = ${adapterStorageCapacity}개` }
+            ],
+            action: "어댑터 수량을 늘리거나 동시 장착 수가 충분한 어댑터로 바꾸고, 다른 SSD는 별도 연결 대상으로 지정하세요."
+          });
+        } else if (adapterStorageCapacity === undefined && selectedM2Count > 1) {
+          addFinding(findings, selection, item, selectedM2.map(({ part }) => part.id), {
+            ruleId: "accessory-storage-adapter-capacity",
+            severity: "unknown",
+            title: "M.2 변환 어댑터의 동시 장착 수를 확인할 수 없습니다.",
+            message: "여러 M.2 SSD를 연결 대상으로 지정했지만 어댑터 원문에 동시 장착 수가 없어 전체 연결을 확정할 수 없습니다.",
+            facts: [
+              { label: "연결 대상 M.2 SSD", actual: `${selectedM2Count}개` },
+              { label: "어댑터 장착 한도", expected: "원문 확인 필요" }
+            ],
+            action: "어댑터 원문에서 보관·장착 개수를 확인하거나 대상 SSD를 나누어 지정하세요."
+          });
+        }
+
+        if (selectedM2Count > 0 && adapterKind === "pcie") {
+          const relatedPartIds = [motherboard?.id, gpu?.id, ...selectedM2.map(({ part }) => part.id)].filter((partId): partId is string => Boolean(partId));
+          const adapterPcieSlotWidth = item.specs.adapterPcieSlotWidth;
+          if (adapterPcieSlotWidth === undefined) {
+            addFinding(findings, selection, item, relatedPartIds, {
+              ruleId: "accessory-pcie-slot-width",
+              severity: "unknown",
+              title: "PCIe 어댑터가 요구하는 슬롯 폭을 확인할 수 없습니다.",
+              message: "M.2→PCIe 연결은 확인됐지만 어댑터의 PCIe x1·x4·x8·x16 요구 폭이 원문에 없어 메인보드의 수용 슬롯을 대조할 수 없습니다.",
+              facts: [
+                { label: "어댑터 연결 방식", actual: storageAdapterConnectionLabel(adapterKind) },
+                { label: "어댑터 PCIe 요구 폭", expected: "PCIe x1·x4·x8·x16 원문 확인 필요" }
+              ],
+              action: "어댑터 원문에서 PCIe 인터페이스 폭과 브래킷 형태를 확인하세요."
+            });
+          } else if (!motherboard) {
+            addFinding(findings, selection, item, relatedPartIds, {
+              ruleId: "accessory-pcie-slot-capacity",
+              severity: "unknown",
+              title: "PCIe 어댑터를 꽂을 메인보드가 없습니다.",
+              message: "어댑터 요구 폭은 확인됐지만 메인보드의 PCIe 슬롯 수를 선택하지 않아 장착 가능 여부를 확정할 수 없습니다.",
+              facts: [
+                { label: "어댑터 PCIe 요구 폭", actual: `x${adapterPcieSlotWidth}` },
+                { label: "메인보드 PCIe 슬롯", expected: "확인 필요" }
+              ],
+              action: "메인보드를 선택하고 PCIe 슬롯 구성을 다시 확인하세요."
+            });
+          } else {
+            const inventory = pcieCompatibleSlotInventoryFor(motherboard.specs, adapterPcieSlotWidth);
+            const gpuWidth = gpu?.specs.pcieSlotWidth;
+            const gpuConsumesKnownSlot = gpu ? gpuWidth !== undefined : false;
+            const knownAvailableSlots = Math.max(0, inventory.knownSlotCount - (gpuConsumesKnownSlot ? 1 : 0));
+            const requiredAdapterSlots = Math.max(1, selection.quantity);
+            const gpuSlotRouteUnknown = Boolean(gpu && gpuWidth === undefined);
+            if (gpuSlotRouteUnknown || (knownAvailableSlots < requiredAdapterSlots && !inventory.complete)) {
+              addFinding(findings, selection, item, relatedPartIds, {
+                ruleId: "accessory-pcie-slot-capacity",
+                severity: "unknown",
+                title: "PCIe 어댑터의 여유 슬롯을 확정할 수 없습니다.",
+                message: "메인보드의 어댑터 수용 슬롯 일부가 누락됐거나 GPU가 사용할 PCIe 경로가 확인되지 않아 남은 슬롯 수를 확정할 수 없습니다.",
+                facts: [
+                  { label: "어댑터 PCIe 요구 폭", actual: `x${adapterPcieSlotWidth}` },
+                  { label: "메인보드 호환 슬롯", actual: pcieSlotInventoryText(motherboard.specs) },
+                  { label: "확인된 여유 슬롯", actual: `${knownAvailableSlots}개 / 필요 ${requiredAdapterSlots}개` },
+                  ...(inventory.unknownWidths.length > 0 ? [{ label: "누락된 호스트 폭", expected: inventory.unknownWidths.map((width) => `x${width}`).join(" · ") }] : []),
+                  ...(gpu ? [{ label: "GPU PCIe 폭", actual: gpuWidth === undefined ? "확인 필요" : `x${gpuWidth}` }] : [])
+                ],
+                action: "메인보드 매뉴얼에서 빈 PCIe 슬롯의 폭·위치를 확인하고 GPU와 물리적으로 겹치지 않는지 확인하세요."
+              });
+            } else if (knownAvailableSlots < requiredAdapterSlots) {
+              addFinding(findings, selection, item, relatedPartIds, {
+                ruleId: "accessory-pcie-slot-capacity",
+                severity: "blocker",
+                title: "PCIe 어댑터를 꽂을 슬롯이 부족합니다.",
+                message: "GPU가 점유하는 경로를 제외하고 어댑터 요구 폭을 수용할 메인보드 슬롯이 부족해 이 연결을 사용할 수 없습니다.",
+                facts: [
+                  { label: "어댑터 PCIe 요구 폭", actual: `x${adapterPcieSlotWidth}` },
+                  { label: "확인된 여유 슬롯", actual: `${knownAvailableSlots}개` },
+                  { label: "필요한 어댑터 슬롯", expected: `${requiredAdapterSlots}개` },
+                  { label: "메인보드 PCIe 슬롯", actual: pcieSlotInventoryText(motherboard.specs) }
+                ],
+                action: "어댑터 수량을 줄이거나, 요구 폭을 수용하는 보조 PCIe 슬롯이 있는 메인보드로 변경하세요."
+              });
+            } else if (gpu && (gpu.specs.gpuSlotOccupancy === undefined || gpu.specs.gpuSlotOccupancy > 1)) {
+              addFinding(findings, selection, item, relatedPartIds, {
+                ruleId: "accessory-pcie-slot-clearance",
+                severity: "unknown",
+                title: "GPU와 PCIe 어댑터의 물리적 슬롯 간격을 확인해야 합니다.",
+                message: "전기적으로 수용 가능한 슬롯은 확인됐지만 GPU의 물리 슬롯 점유 또는 슬롯별 위치 정보가 부족해 어댑터 브래킷·GPU 방열판 간 간섭을 확정할 수 없습니다.",
+                facts: [
+                  { label: "확인된 여유 슬롯", actual: `${knownAvailableSlots}개` },
+                  { label: "GPU 물리 슬롯 점유", actual: gpu.specs.gpuSlotOccupancy === undefined ? "확인 필요" : `${gpu.specs.gpuSlotOccupancy} 슬롯` },
+                  { label: "어댑터 PCIe 요구 폭", actual: `x${adapterPcieSlotWidth}` }
+                ],
+                action: "GPU 두께와 메인보드 슬롯 배치를 실제 도면에서 대조하세요."
+              });
+            }
+          }
+
+          const m2LaneSharingScopes = motherboard?.specs.m2LaneSharingScopes;
+          const hasPcieLaneSharing = m2LaneSharingScopes !== undefined
+            ? m2LaneSharingScopes.includes("pcie")
+            : motherboard?.specs.m2LaneSharing === true;
+          if (motherboard && hasPcieLaneSharing) {
+            addFinding(findings, selection, item, relatedPartIds, {
+              ruleId: "accessory-pcie-lane-sharing",
+              severity: "unknown",
+              title: "M.2 어댑터와 메인보드 PCIe 레인 공유 조건을 확인해야 합니다.",
+              message: "메인보드 원문에 M.2·PCIe 레인 공유 신호가 있어, 어댑터 장착 시 GPU 링크 폭·비활성화 조건·부팅 가능 여부를 매뉴얼로 확인해야 합니다.",
+              facts: [
+                { label: "M.2 공유 범위", actual: m2LaneSharingScopes?.join(" · ") ?? "PCIe" },
+                { label: "메인보드 원문 표기", actual: motherboard.specs.m2LaneSharingNote ?? "레인 공유" },
+                { label: "어댑터 PCIe 요구 폭", actual: adapterPcieSlotWidth === undefined ? "확인 필요" : `x${adapterPcieSlotWidth}` }
+              ],
+              action: "메인보드 매뉴얼에서 PCIe bifurcation·레인 배분·M.2 사용 시 비활성화 조건과 부팅 지원을 확인하세요."
+            });
+          }
         }
       }
     }

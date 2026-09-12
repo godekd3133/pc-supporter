@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CatalogWatchEntry } from "../shared/catalog-watchlist";
-import { priceWatchEntriesFor } from "./price-watchlist-view";
+import { priceWatchDecisionCountsFor, priceWatchEntriesFor } from "./price-watchlist-view";
 
 const entries: CatalogWatchEntry[] = [
   { itemId: "cpu-1", itemName: "테스트 CPU", category: "cpu", kind: "part", addedAt: "2026-08-28T01:00:00.000Z", targetPriceWon: 100000 },
@@ -27,5 +27,13 @@ describe("price watchlist view", () => {
     expect(priceWatchEntriesFor(entries, observations, { status: "alerts", alertKeys })).toEqual([entries[1]]);
     expect(priceWatchEntriesFor(entries, observations, { sort: "price_asc" }).map((entry) => entry.itemId)).toEqual(["cpu-1", "gpu-1", "fan-1"]);
     expect(priceWatchEntriesFor(entries, observations, { sort: "target_gap_asc" }).map((entry) => entry.itemId)).toEqual(["cpu-1", "gpu-1", "fan-1"]);
+  });
+
+  it("filters by the derived price decision state without losing raw status filters", () => {
+    const decisionStates = { "part:cpu-1": "buy" as const, "part:gpu-1": "error" as const, "accessory:fan-1": "unavailable" as const };
+
+    expect(priceWatchEntriesFor(entries, observations, { status: "buy", decisionStates })).toEqual([entries[0]]);
+    expect(priceWatchEntriesFor(entries, observations, { status: "error", decisionStates })).toEqual([entries[1]]);
+    expect(priceWatchDecisionCountsFor(decisionStates)).toEqual({ target: 0, buy: 1, wait: 0, observe: 0, tracking: 0, unavailable: 1, error: 1 });
   });
 });

@@ -20,6 +20,8 @@ export type PhysicalSourceCheckDependencies = {
   maxRedirects?: number;
 };
 
+export type PhysicalSourceIdentity = string | string[];
+
 class BlockedSourceError extends Error {}
 class UnreachableSourceError extends Error {}
 
@@ -123,16 +125,16 @@ function normalizedIdentity(value: string) {
   return value.toLocaleLowerCase("en-US").replace(/[^a-z0-9가-힣]+/g, "");
 }
 
-function identityMatchFor(text: string, manufacturerModel: string): { status: PhysicalSourceIdentityStatus; detail: string } {
-  const identity = normalizedIdentity(manufacturerModel);
-  if (!identity) return { status: "not_checked", detail: "제조사 모델/SKU가 없어 본문 식별을 실행하지 않았습니다." };
+function identityMatchFor(text: string, manufacturerModel: PhysicalSourceIdentity): { status: PhysicalSourceIdentityStatus; detail: string } {
+  const identities = (Array.isArray(manufacturerModel) ? manufacturerModel : [manufacturerModel]).map(normalizedIdentity).filter(Boolean);
+  if (identities.length === 0) return { status: "not_checked", detail: "제조사 모델/SKU가 없어 본문 식별을 실행하지 않았습니다." };
   const normalizedText = text.toLocaleLowerCase("en-US").replace(/[^a-z0-9가-힣]+/g, "");
-  return normalizedText.includes(identity)
-    ? { status: "matched", detail: "응답 본문에서 등록한 제조사 모델/SKU를 확인했습니다." }
+  return identities.some((identity) => normalizedText.includes(identity))
+    ? { status: "matched", detail: "응답 본문에서 등록한 제조사 모델/SKU 중 하나를 확인했습니다." }
     : { status: "not_found", detail: "응답 본문에서 등록한 제조사 모델/SKU를 찾지 못했습니다. URL과 변형을 수동 확인해야 합니다." };
 }
 
-async function identityFor(contentType: string | undefined, finalUrl: string, body: Uint8Array, manufacturerModel: string, truncated: boolean, pdfTextExtractor: (body: Uint8Array) => Promise<string | undefined>): Promise<{ status: PhysicalSourceIdentityStatus; detail: string }> {
+async function identityFor(contentType: string | undefined, finalUrl: string, body: Uint8Array, manufacturerModel: PhysicalSourceIdentity, truncated: boolean, pdfTextExtractor: (body: Uint8Array) => Promise<string | undefined>): Promise<{ status: PhysicalSourceIdentityStatus; detail: string }> {
   const isPdf = contentType?.includes("pdf") || /\.pdf(?:[?#]|$)/i.test(finalUrl);
   if (isPdf) {
     if (truncated) return { status: "manual_required", detail: "PDF 응답이 제한 용량을 넘어 URL 접근만 확인했습니다. 모델/SKU는 문서에서 수동 확인해야 합니다." };
@@ -188,7 +190,7 @@ function checkedResult(base: Pick<PhysicalSourceCheck, "requestedUrl" | "checked
   return { ...base, status, identityStatus, detail, ...extra };
 }
 
-export async function checkPhysicalSourceUrl(rawUrl: string, manufacturerModel: string, dependencies: PhysicalSourceCheckDependencies = {}): Promise<PhysicalSourceCheck> {
+export async function checkPhysicalSourceUrl(rawUrl: string, manufacturerModel: PhysicalSourceIdentity, dependencies: PhysicalSourceCheckDependencies = {}): Promise<PhysicalSourceCheck> {
   const requestedUrl = rawUrl.trim();
   const checkedAt = dependencies.now?.() ?? new Date().toISOString();
   const fetcher = dependencies.fetcher ?? ((input, init) => fetch(input, init));

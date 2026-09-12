@@ -7,9 +7,40 @@ services:
       POSTGRES_USER: pcsupporter
       POSTGRES_PASSWORD: pcsupporter
     ports:
-      - "5432:5432"
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
     volumes:
       - pc-supporter-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pcsupporter -d pcsupporter"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 4174
+      PC_SUPPORTER_DATA_DIR: /app/data
+      DATABASE_URL: postgresql://pcsupporter:pcsupporter@postgres:5432/pcsupporter
+      DANAWA_CRAWL_ON_START: "false"
+      BUILD_MONITOR_SCHEDULER_ENABLED: "false"
+    ports:
+      - "${APP_HOST_PORT:-4174}:4174"
+    volumes:
+      - pc-supporter-data:/app/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4174/api/health').then((response) => { if (!response.ok) process.exit(1); }).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
 
 volumes:
   pc-supporter-postgres:
+  pc-supporter-data:

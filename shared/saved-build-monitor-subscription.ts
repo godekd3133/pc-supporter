@@ -116,6 +116,8 @@ export function savedBuildMonitorTransitionHasActionableChange(transition: Retur
     || transition.accessoryRiskChanged
     || transition.priceCompletenessChanged
     || (transition.priceDeltaWon !== undefined && transition.priceDeltaWon !== 0)
+    || transition.analysisChanged
+    || transition.resourceBudgetChanged
     || transition.resolvedFindingCount > 0
     || transition.newFindingCount > 0
     || transition.severityChangedFindingCount > 0

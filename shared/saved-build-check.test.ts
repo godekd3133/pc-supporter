@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { CompatibilityResult } from "./types";
 import { assemblyVerificationSavedSnapshotFor, emptyAssemblyVerificationLog, withAssemblyVerificationCheck } from "./assembly-verification";
-import { appendSavedBuildCheckHistory, SAVED_BUILD_CHECK_FINDING_LIMIT, savedBuildCheckDiffFor, savedBuildCheckFindingDiffFor, savedBuildCheckHistoryFromUnknown, savedBuildCheckSnapshotFor, savedBuildCheckSnapshotFromUnknown, savedBuildCheckTransitionSummaryFor } from "./saved-build-check";
+import { buildBenchmarkSnapshotFor } from "./build-benchmark-snapshot";
+import { seedCatalog } from "../server/seed-catalog";
+import { appendSavedBuildCheckHistory, SAVED_BUILD_CHECK_ACCESSORY_FINDING_LIMIT, SAVED_BUILD_CHECK_FINDING_LIMIT, SAVED_BUILD_CHECK_HISTORY_LIMIT, savedBuildCheckDiffFor, savedBuildCheckFindingDiffFor, savedBuildCheckHistoryFromUnknown, savedBuildCheckSnapshotFor, savedBuildCheckSnapshotFromUnknown, savedBuildCheckTransitionSummaryFor } from "./saved-build-check";
 
 function result(overrides: Partial<CompatibilityResult> = {}): CompatibilityResult {
   return {
@@ -133,6 +135,26 @@ describe("saved build check snapshots", () => {
     expect(snapshot.findings?.[0].facts).toHaveLength(4);
   });
 
+  it("rejects persisted finding arrays above the compact snapshot contract before normalizing them", () => {
+    const snapshot = savedBuildCheckSnapshotFor(result());
+    const finding = { id: "finding", ruleId: "rule", severity: "warning" as const, title: "경고", message: "확인 필요", affectedPartIds: [], facts: [] };
+    expect(savedBuildCheckSnapshotFromUnknown({ ...snapshot, findings: Array.from({ length: SAVED_BUILD_CHECK_FINDING_LIMIT + 1 }, () => finding) })).toBeUndefined();
+
+    const accessorySnapshot = savedBuildCheckSnapshotFor(result({ accessoryCompatibility: { status: "needs_review", blockerCount: 0, warningCount: 0, unknownCount: 0, findings: [] } }));
+    const accessoryFinding = { id: "accessory-finding", ruleId: "accessory-rule", severity: "warning" as const, accessoryId: "accessory-1", accessoryName: "주변 부품", relatedPartIds: [], title: "확인 필요", message: "확인 필요", facts: [] };
+    expect(savedBuildCheckSnapshotFromUnknown({ ...accessorySnapshot, accessoryCompatibility: { ...accessorySnapshot.accessoryCompatibility!, findings: Array.from({ length: SAVED_BUILD_CHECK_ACCESSORY_FINDING_LIMIT + 1 }, () => accessoryFinding) } })).toBeUndefined();
+  });
+
+  it("rejects oversized per-finding ID and fact arrays before filtering them", () => {
+    const snapshot = savedBuildCheckSnapshotFor(result());
+    const finding = { id: "finding", ruleId: "rule", severity: "warning" as const, title: "경고", message: "확인 필요", affectedPartIds: Array.from({ length: 9 }, (_, index) => `part-${index}`), facts: [] };
+    expect(savedBuildCheckSnapshotFromUnknown({ ...snapshot, findings: [finding] })).toBeUndefined();
+
+    const accessorySnapshot = savedBuildCheckSnapshotFor(result({ accessoryCompatibility: { status: "needs_review", blockerCount: 0, warningCount: 0, unknownCount: 0, findings: [] } }));
+    const accessoryFinding = { id: "accessory-finding", ruleId: "accessory-rule", severity: "warning" as const, accessoryId: "accessory-1", accessoryName: "주변 부품", relatedPartIds: [], title: "확인 필요", message: "확인 필요", facts: Array.from({ length: 5 }, (_, index) => ({ label: `fact-${index}` })) };
+    expect(savedBuildCheckSnapshotFromUnknown({ ...accessorySnapshot, accessoryCompatibility: { ...accessorySnapshot.accessoryCompatibility!, findings: [accessoryFinding] } })).toBeUndefined();
+  });
+
   it("reports drift between the saved check and the current catalog check", () => {
     const snapshot = savedBuildCheckSnapshotFor(result());
     expect(savedBuildCheckDiffFor(snapshot, result())).toMatchObject({ hasChanges: false });
@@ -145,18 +167,61 @@ describe("saved build check snapshots", () => {
     });
   });
 
+  it("detects performance-analysis drift separately from compatibility and price", () => {
+    const before = savedBuildCheckSnapshotFor(result());
+    const changedAnalysis = { ...result().analysis, overallScore: 74, scoreLabel: "보완 권장" as const, confidence: "limited" as const };
+    const after = savedBuildCheckSnapshotFor(result({ analysis: changedAnalysis }));
+
+    expect(savedBuildCheckDiffFor(before, result({ analysis: changedAnalysis }))).toMatchObject({ analysisChanged: true, riskChanged: false, priceChanged: false, hasChanges: true });
+    expect(savedBuildCheckTransitionSummaryFor(before, after)).toMatchObject({ analysisChanged: true, analysisScoreDelta: -8, hasChanges: true });
+  });
+
+  it("persists resource budgets and detects a narrower recheck budget", () => {
+    const beforeResult = result({ metrics: { powerHeadroomW: 150, psuWattageW: 1000, recommendedPsuW: 850, coolerHeadroomW: 120, coolerCapacityW: 240, cpuPowerW: 120 } });
+    const afterResult = result({ metrics: { powerHeadroomW: 100, psuWattageW: 950, recommendedPsuW: 850, coolerHeadroomW: 40, coolerCapacityW: 180, cpuPowerW: 140 } });
+    const before = savedBuildCheckSnapshotFor(beforeResult);
+    const after = savedBuildCheckSnapshotFor(afterResult);
+
+    expect(before.resourceBudget).toEqual({ state: "good", powerState: "good", coolingState: "good", powerHeadroomW: 150, coolerHeadroomW: 120 });
+    expect(after.resourceBudget).toEqual({ state: "warning", powerState: "warning", coolingState: "warning", powerHeadroomW: 100, coolerHeadroomW: 40 });
+    expect(savedBuildCheckSnapshotFromUnknown(before)).toEqual(before);
+    expect(savedBuildCheckDiffFor(before, afterResult)).toMatchObject({ resourceBudgetChanged: true, hasChanges: true });
+    expect(savedBuildCheckTransitionSummaryFor(before, after)).toMatchObject({ resourceBudgetChanged: true, resourceRiskIncreased: true, resourceRiskDecreased: false, powerHeadroomDeltaW: -50, coolerHeadroomDeltaW: -80, hasChanges: true });
+  });
+
+  it("persists the full-build benchmark snapshot and detects score drift separately", () => {
+    const cpuBase = seedCatalog.find((part) => part.category === "cpu")!;
+    const gpuBase = seedCatalog.find((part) => part.category === "gpu")!;
+    const cpu = { ...cpuBase, updatedAt: "2026-09-05T00:00:00.000Z", specs: { ...cpuBase.specs, cinebenchR23Single: 1800, cinebenchR23Multi: 18000 } };
+    const gpu = { ...gpuBase, updatedAt: "2026-09-05T00:00:00.000Z", specs: { ...gpuBase.specs, gpu3dmarkTimeSpyScore: 12000, gpu3dmarkPortRoyalScore: 8000 } };
+    const benchmarkSnapshot = buildBenchmarkSnapshotFor(cpu, gpu, "2026-09-05T00:00:00.000Z");
+    const saved = savedBuildCheckSnapshotFor(result({ benchmarkSnapshot }));
+    const changedBenchmark = buildBenchmarkSnapshotFor({ ...cpu, specs: { ...cpu.specs, cinebenchR23Multi: 18500 } }, gpu, "2026-09-05T00:00:00.000Z");
+
+    expect(saved.benchmarkSnapshot).toEqual(benchmarkSnapshot);
+    expect(savedBuildCheckSnapshotFromUnknown(saved)).toEqual(saved);
+    expect(savedBuildCheckDiffFor(saved, result({ benchmarkSnapshot: changedBenchmark }))).toMatchObject({ benchmarkChanged: true, benchmarkNeedsReview: false, benchmarkImpact: { changedScoreCount: 1, changedPartCount: 1 }, hasChanges: true });
+  });
+
   it("keeps the latest twenty valid history entries and uses the newest entry as the append target", () => {
-    const snapshots = Array.from({ length: 22 }, (_, index) => savedBuildCheckSnapshotFor(result({
+    const snapshots = Array.from({ length: SAVED_BUILD_CHECK_HISTORY_LIMIT }, (_, index) => savedBuildCheckSnapshotFor(result({
       checkedAt: `2026-08-31T00:${String(index).padStart(2, "0")}:00.000Z`,
       totalPriceWon: 1_250_000 + index
     })));
-    const parsed = savedBuildCheckHistoryFromUnknown([snapshots[0], { broken: true }, ...snapshots.slice(1)]);
+    const parsed = savedBuildCheckHistoryFromUnknown(snapshots);
+    expect(parsed).toBeDefined();
+    if (!parsed) return;
     expect(parsed).toHaveLength(20);
-    expect(parsed[0].checkedAt).toBe(snapshots[2].checkedAt);
-    expect(parsed[19].checkedAt).toBe(snapshots[21].checkedAt);
+    expect(parsed[0].checkedAt).toBe(snapshots[0].checkedAt);
+    expect(parsed[19].checkedAt).toBe(snapshots[19].checkedAt);
     const next = savedBuildCheckSnapshotFor(result({ checkedAt: "2026-09-01T00:00:00.000Z" }));
     expect(appendSavedBuildCheckHistory(parsed, next)).toHaveLength(20);
     expect(appendSavedBuildCheckHistory(parsed, next).at(-1)).toEqual(next);
+  });
+
+  it("rejects persisted check history above the twenty-snapshot contract before parsing entries", () => {
+    const snapshots = Array.from({ length: SAVED_BUILD_CHECK_HISTORY_LIMIT + 1 }, (_, index) => savedBuildCheckSnapshotFor(result({ checkedAt: `2026-08-31T00:${String(index).padStart(2, "0")}:00.000Z` })));
+    expect(savedBuildCheckHistoryFromUnknown(snapshots)).toBeUndefined();
   });
 
   it("classifies rule-level findings as resolved, new, changed, or unchanged", () => {

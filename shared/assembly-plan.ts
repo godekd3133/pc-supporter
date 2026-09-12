@@ -1,9 +1,13 @@
 import { gpuPurchaseEvidenceFor } from "./gpu-fit";
 import { purchaseReadinessFor } from "./purchase-readiness";
+import { buildResourceSummaryFor } from "./build-resource-summary";
 import type { BuildSelection, CompatibilityResult } from "./types";
+import type { PurchaseChecklistProgress } from "./purchase-checklist";
+import type { PurchaseListExecutionProgress } from "./purchase-list-progress";
+import type { AssemblyVerificationSurfaceSummary } from "./assembly-verification";
 
 export type AssemblyPlanStepStatus = "blocked" | "review" | "ready" | "pending";
-export type AssemblyPlanTargetId = "gpu-fit-summary-panel" | "data-health-panel" | "purchase-list-panel" | "purchase-checklist" | "repair-plan-panel" | "build-connectivity-panel" | "accessory-compatibility-panel" | "assembly-verification-panel";
+export type AssemblyPlanTargetId = "gpu-fit-summary-panel" | "build-resource-summary" | "data-health-panel" | "purchase-list-panel" | "purchase-checklist" | "repair-plan-panel" | "build-connectivity-panel" | "accessory-compatibility-panel" | "assembly-verification-panel";
 
 export type AssemblyPlanStep = {
   id: "resolve-conflicts" | "confirm-evidence" | "confirm-purchase" | "bench-assemble" | "wire-peripherals" | "post-build-test";
@@ -14,6 +18,13 @@ export type AssemblyPlanStep = {
   detail: string;
   dependsOn: string[];
   targetId?: AssemblyPlanTargetId;
+  progress?: { label: string; percent: number };
+};
+
+export type AssemblyPlanExecutionContext = {
+  checklistProgress?: PurchaseChecklistProgress;
+  purchaseProgress?: PurchaseListExecutionProgress;
+  assemblyVerification?: AssemblyVerificationSurfaceSummary;
 };
 
 export type AssemblyPlan = {
@@ -21,6 +32,10 @@ export type AssemblyPlan = {
   summary: string;
   steps: AssemblyPlanStep[];
 };
+
+export function assemblyPlanNextStepFor(plan: AssemblyPlan) {
+  return plan.steps.find((step) => step.status !== "ready") ?? plan.steps.at(-1);
+}
 
 function hasBlocked(status: AssemblyPlanStepStatus) {
   return status === "blocked";
@@ -43,7 +58,10 @@ function targetForEvidence(result: CompatibilityResult): AssemblyPlanTargetId {
   if (result.blockerCount > 0 || (result.accessoryCompatibility?.blockerCount ?? 0) > 0) return "repair-plan-panel";
   const physicalState = readinessItemState(result, "physical");
   if (physicalState === "blocked" || physicalState === "review") {
-    return result.gpuFit ? "gpu-fit-summary-panel" : "purchase-checklist";
+    if (result.gpuFit) return "gpu-fit-summary-panel";
+    const resourceState = buildResourceSummaryFor(result.metrics).state;
+    if (resourceState === "danger" || resourceState === "warning" || resourceState === "unknown") return "build-resource-summary";
+    return "purchase-checklist";
   }
   const dataState = readinessItemState(result, "data");
   if (dataState === "blocked" || dataState === "review") return "data-health-panel";
@@ -65,7 +83,7 @@ function evidenceDetailFor(result: CompatibilityResult) {
   return details.length > 0 ? details.join(" · ") : "선택 부품의 스펙·가격·장착 근거가 구매 기준을 충족합니다.";
 }
 
-export function assemblyPlanFor(build: BuildSelection, result: CompatibilityResult): AssemblyPlan {
+export function assemblyPlanFor(build: BuildSelection, result: CompatibilityResult, execution: AssemblyPlanExecutionContext = {}): AssemblyPlan {
   const accessory = result.accessoryCompatibility;
   const blockerCount = result.blockerCount + (accessory?.blockerCount ?? 0);
   const reviewCount = resultReviewCount(result);
@@ -161,10 +179,36 @@ export function assemblyPlanFor(build: BuildSelection, result: CompatibilityResu
     }
   ];
 
-  const state = steps.some((step) => hasBlocked(step.status)) ? "blocked" : steps.some((step) => hasReview(step.status)) ? "review" : "ready";
+  const purchase = execution.purchaseProgress;
+  const checklist = execution.checklistProgress;
+  const assembly = execution.assemblyVerification;
+  const purchasedCount = purchase ? purchase.stageCounts.received + purchase.stageCounts.installed : 0;
+  const purchaseComplete = !purchase || purchase.total === 0 || purchasedCount >= purchase.total;
+  const checklistComplete = !checklist || checklist.total === 0 || checklist.remaining === 0;
+  let executionSteps = steps.map((step) => {
+    if (step.id === "confirm-evidence" && checklist && checklist.total > 0 && !checklistComplete) {
+      return { ...step, status: step.status === "blocked" ? step.status : "review" as const, summary: `구매 전 체크리스트 ${checklist.remaining}개를 먼저 확인합니다.`, progress: { label: `체크리스트 ${checklist.checked}/${checklist.total}개`, percent: checklist.percent } };
+    }
+    if (step.id === "confirm-purchase" && purchase && purchase.total > 0) {
+      return { ...step, status: step.status === "blocked" ? step.status : purchaseComplete ? step.status : "review" as const, summary: purchaseComplete ? step.summary : `구매 목록 ${purchase.total - purchasedCount}개가 아직 수령 전입니다.`, progress: { label: `수령·조립 ${purchasedCount}/${purchase.total}개`, percent: purchase.percent } };
+    }
+    if (step.id === "confirm-purchase" && checklist && checklist.total > 0 && !checklistComplete && step.status === "ready") {
+      return { ...step, status: "review" as const, summary: `체크리스트 ${checklist.remaining}개 확인 후 구매를 진행합니다.`, progress: { label: `체크리스트 ${checklist.checked}/${checklist.total}개`, percent: checklist.percent } };
+    }
+    if (["bench-assemble", "wire-peripherals", "post-build-test"].includes(step.id) && ((purchase && !purchaseComplete) || (checklist && !checklistComplete)) && step.status === "ready") {
+      return { ...step, status: "pending" as const, summary: purchase && !purchaseComplete ? "구매 항목을 모두 수령한 뒤 진행합니다." : "구매 전 체크리스트를 모두 확인한 뒤 진행합니다." };
+    }
+    if (step.id === "post-build-test" && ((purchase && !purchaseComplete) || (checklist && !checklistComplete))) return step;
+    if (step.id === "post-build-test" && assembly && assembly.state !== "not_started") {
+      const measurementReview = assembly.state === "failed" || assembly.state === "in_progress" || assembly.recheckSignalCount > 0;
+      return { ...step, status: measurementReview ? "review" as const : step.status, summary: assembly.state === "failed" ? "실측 실패 원인을 확인한 뒤 다시 테스트합니다." : assembly.state === "in_progress" ? "실측 기록을 완료한 뒤 결과를 확인합니다." : assembly.recheckSignalCount > 0 ? `실측 재확인 신호 ${assembly.recheckSignalCount}개를 확인한 뒤 진행합니다.` : "실측 검증을 통과했습니다.", progress: { label: `실측 ${assembly.checked}/${assembly.total}개`, percent: assembly.percent } };
+    }
+    return step;
+  });
+  const state = executionSteps.some((step) => hasBlocked(step.status)) ? "blocked" : executionSteps.some((step) => hasReview(step.status)) ? "review" : "ready";
   return {
     state,
-    summary: state === "blocked" ? "차단 항목을 해결한 뒤 다음 구매·조립 단계로 이동하세요." : state === "review" ? "구매는 가능하지만 원문·가격·연결 근거를 확인한 뒤 조립하세요." : "검사·근거 기준을 통과했습니다. 아래 순서대로 구매와 조립을 진행하세요.",
-    steps
+    summary: state === "blocked" ? "차단 항목을 해결한 뒤 다음 구매·조립 단계로 이동하세요." : !purchaseComplete ? `구매 항목 ${purchase!.total - purchasedCount}개를 수령한 뒤 조립 단계로 이동하세요.` : !checklistComplete ? `구매 전 체크리스트 ${checklist!.remaining}개를 확인한 뒤 다음 단계로 이동하세요.` : assembly?.state === "failed" || (assembly?.recheckSignalCount ?? 0) > 0 ? "실측 결과를 재확인한 뒤 최종 구매·조립 상태를 판단하세요." : state === "review" ? "구매는 가능하지만 원문·가격·연결 근거를 확인한 뒤 조립하세요." : "검사·근거 기준을 통과했습니다. 아래 순서대로 구매와 조립을 진행하세요.",
+    steps: executionSteps
   };
 }

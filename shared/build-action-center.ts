@@ -1,5 +1,6 @@
 import { gpuPurchaseEvidenceFor } from "./gpu-fit";
 import { buildConnectivitySummaryFor } from "./build-connectivity";
+import { buildResourceSummaryFor } from "./build-resource-summary";
 import type { BuildSelection, CompatibilityResult, Finding, FindingSeverity, BuildDataHealthItem, Part } from "./types";
 
 export type BuildActionPriority = "blocker" | "review" | "manual";
@@ -12,7 +13,7 @@ export interface BuildAction {
   title: string;
   summary: string;
   ruleId?: string;
-  targetId?: "gpu-fit-summary-panel" | "data-health-panel" | "purchase-list-panel" | "purchase-checklist" | "repair-plan-panel" | "build-connectivity-panel";
+  targetId?: "gpu-fit-summary-panel" | "build-resource-summary" | "data-health-panel" | "purchase-list-panel" | "purchase-checklist" | "repair-plan-panel" | "build-connectivity-panel";
 }
 
 export interface BuildActionCenter {
@@ -73,6 +74,23 @@ function connectivityActionsFor(result: CompatibilityResult, build: BuildSelecti
     }));
 }
 
+function resourceActionFor(result: CompatibilityResult): BuildAction | undefined {
+  const summary = buildResourceSummaryFor(result.metrics);
+  if (summary.state !== "danger" && summary.state !== "warning" && summary.state !== "unknown") return undefined;
+  const affectedCards = summary.cards
+    .filter((card) => card.state === "danger" || card.state === "warning" || card.state === "unknown")
+    .map((card) => `${card.label} ${card.headline}`)
+    .join(" · ");
+  return {
+    id: "physical:resource-budget",
+    priority: summary.state === "danger" ? "blocker" : "review",
+    source: "physical",
+    title: summary.state === "danger" ? "전력·냉각 예산 기준 미달" : summary.state === "unknown" ? "전력·냉각 원문 수치 확인" : "전력·냉각 여유 확인",
+    summary: `${affectedCards} · ${summary.summary}`,
+    targetId: "build-resource-summary"
+  };
+}
+
 export function buildActionCenterFor(result: CompatibilityResult, build?: BuildSelection, partMap?: ReadonlyMap<string, Part>): BuildActionCenter {
   const actions: BuildAction[] = [];
   const seen = new Set<string>();
@@ -118,10 +136,12 @@ export function buildActionCenterFor(result: CompatibilityResult, build?: BuildS
       addAction(actions, seen, { id: "physical:psu-cable", priority: evidence.pcieCableTopology === "incompatible" ? "blocker" : "review", source: "physical", title: evidence.pcieCableTopology === "incompatible" ? "PSU PCIe 케이블 경로 변경" : "PSU PCIe 케이블 분배 확인", summary: evidence.pcieCableTopology === "incompatible" ? "현재 PSU의 확인된 케이블 구조로 GPU 연결 요구를 충족할 수 없습니다." : "커넥터 수와 별도로 독립 PCIe 케이블 런·분배 구조를 확인해야 합니다.", targetId: "gpu-fit-summary-panel" });
     }
   }
+  const resourceAction = resourceActionFor(result);
+  if (resourceAction) addAction(actions, seen, resourceAction);
   if (!result.priceComplete) addAction(actions, seen, { id: "price:total", priority: "review", source: "price", title: "전체 구매 금액 확인", summary: "가격 미확인 부품이 있어 실제 구매 전에 상품 가격과 유통 조건을 다시 확인해야 합니다.", targetId: "purchase-list-panel" });
 
   actions.sort((left, right) => priorityRank[left.priority] - priorityRank[right.priority]);
-  const hasBlocker = result.blockerCount > 0 || result.accessoryCompatibility?.blockerCount !== undefined && result.accessoryCompatibility.blockerCount > 0;
+  const hasBlocker = result.blockerCount > 0 || result.accessoryCompatibility?.blockerCount !== undefined && result.accessoryCompatibility.blockerCount > 0 || actions.some((action) => action.priority === "blocker");
   const hasReview = result.warningCount > 0 || result.unknownCount > 0 || result.accessoryCompatibility?.warningCount !== undefined && result.accessoryCompatibility.warningCount > 0 || result.accessoryCompatibility?.unknownCount !== undefined && result.accessoryCompatibility.unknownCount > 0 || actions.some((action) => action.priority === "review");
   if (actions.length === 0) {
     actions.push({ id: "assembly:final-check", priority: "manual", source: "assembly", title: "실제 조립 전 최종 확인", summary: "제조사 QVL·BIOS, 실제 케이스 여유, 첫 부팅 POST·온도·소음은 별도로 확인하세요.", targetId: "purchase-checklist" });

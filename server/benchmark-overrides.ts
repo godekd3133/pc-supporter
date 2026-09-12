@@ -1,5 +1,6 @@
-import type { BenchmarkOverride, BenchmarkOverrideOperation, BenchmarkScoreKey, BenchmarkSourceKind, Part, PartSpecs } from "../shared/types";
+import type { BenchmarkOverride, BenchmarkOverrideOperation, BenchmarkScoreKey, BenchmarkSourceKind, Part, PartSpecs, PhysicalSourceCheck } from "../shared/types";
 import { readBenchmarkOverrideRecords, writeBenchmarkOverrideRecords } from "./repository";
+import { physicalSourceCheckFromUnknown } from "./physical-source-check-history";
 
 export const BENCHMARK_SCORE_KEYS = [
   "cinebenchR23Single",
@@ -43,6 +44,7 @@ function usableBenchmarkOverride(value: unknown): value is BenchmarkOverride {
   if (!candidate.scores || typeof candidate.scores !== "object" || Array.isArray(candidate.scores)) return false;
   if (candidate.sourceKind !== undefined && (typeof candidate.sourceKind !== "string" || !BENCHMARK_SOURCE_KINDS.has(candidate.sourceKind as BenchmarkSourceKind))) return false;
   if (candidate.sourceUrl !== undefined && (typeof candidate.sourceUrl !== "string" || sourceUrlErrors(candidate.sourceUrl.trim()).length > 0)) return false;
+  if (candidate.sourceCheck !== undefined && !physicalSourceCheckFromUnknown(candidate.sourceCheck)) return false;
   const scoreEntries = Object.entries(candidate.scores);
   return scoreEntries.length > 0 && scoreEntries.every(([key, value]) => BENCHMARK_SCORE_KEYS.includes(key as BenchmarkScoreKey) && scoreValue(value) !== undefined);
 }
@@ -186,10 +188,12 @@ export function applyBenchmarkOverrides(parts: Part[], overrides: BenchmarkOverr
     const safeSourceUrl = sourceUrl && sourceUrlErrors(sourceUrl).length === 0 ? sourceUrl : undefined;
     if (appliedScoreCount > 0 && typeof override.sourceNote === "string" && override.sourceNote.trim()) {
       const sourceKind = benchmarkSourceKindFromUnknown(override.sourceKind) ?? "other";
+      const sourceCheck = physicalSourceCheckFromUnknown(override.sourceCheck);
       specs.benchmarkProvenance = {
         sourceKind,
         sourceNote: override.sourceNote,
         ...(safeSourceUrl ? { sourceUrl: safeSourceUrl } : {}),
+        ...(sourceCheck ? { sourceCheck } : {}),
         updatedAt: typeof override.updatedAt === "string" ? override.updatedAt : new Date(0).toISOString()
       };
     }
@@ -215,6 +219,18 @@ export async function saveBenchmarkOverrides(values: BenchmarkOverride[]) {
     for (const value of values) overrides[value.partId] = value;
     await writeBenchmarkOverrideRecords(overrides);
     return values;
+  });
+}
+
+export async function saveBenchmarkSourceCheck(partId: string, sourceCheck: PhysicalSourceCheck) {
+  return withBenchmarkWriteLock(async (overrides) => {
+    if (!physicalSourceCheckFromUnknown(sourceCheck)) return undefined;
+    const current = overrides[partId];
+    if (!current) return undefined;
+    const updated = { ...current, sourceCheck };
+    overrides[partId] = updated;
+    await writeBenchmarkOverrideRecords(overrides);
+    return updated;
   });
 }
 

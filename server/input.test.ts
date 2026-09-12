@@ -38,6 +38,36 @@ describe("build request validation", () => {
     expect(parsed.build.rgbControllerAccessoryId).toBe("hub-1");
   });
 
+  it("rejects oversized repeated selection lists before build evaluation", () => {
+    const parsed = parseBuild({
+      memory: Array.from({ length: 101 }, (_, index) => ({ partId: `memory-${index}`, quantity: 1 })),
+      accessories: Array.from({ length: 101 }, (_, index) => ({ accessoryId: `accessory-${index}`, quantity: 1 }))
+    });
+
+    expect(parsed.errors).toEqual(expect.arrayContaining([
+      "memory은 한 번에 최대 100개까지 선택할 수 있습니다.",
+      "accessories은 한 번에 최대 100개까지 선택할 수 있습니다."
+    ]));
+    expect(parsed.build.memory).toEqual([]);
+    expect(parsed.build.accessories).toEqual([]);
+  });
+
+  it("rejects overlong build and accessory identifiers before catalog lookup", () => {
+    const parsed = parseBuild({
+      cpu: { partId: "x".repeat(161), quantity: 1 },
+      accessories: [{ accessoryId: "accessory-1", quantity: 1, targetPartId: "z".repeat(161) }],
+      rgbControllerAccessoryId: "h".repeat(161)
+    });
+    const overlongAccessory = parseBuild({ accessories: [{ accessoryId: "y".repeat(161), quantity: 1 }] });
+
+    expect(parsed.errors).toEqual(expect.arrayContaining([
+      "cpu.partId는 160자 이하의 ID여야 합니다.",
+      "accessories[0].targetPartId는 비어 있지 않은 160자 이하 SSD ID여야 합니다.",
+      "rgbControllerAccessoryId는 비어 있지 않은 160자 이하 팬 허브 ID여야 합니다."
+    ]));
+    expect(overlongAccessory.errors).toContain("accessories[0].accessoryId는 160자 이하의 ID여야 합니다.");
+  });
+
   it("validates accessory target SSD IDs against the selected SSD list", () => {
     const parsed = parseBuild({ ssd: [{ partId: "ssd-nvme-1tb", quantity: 1 }], accessories: [{ accessoryId: "accessory-1", quantity: 1, targetPartId: "missing-ssd" }] });
     expect(parsed.errors).toHaveLength(0);
@@ -69,6 +99,15 @@ describe("build request validation", () => {
 
     const duplicate = parseBuild({ m2SlotSelection: { "M.2_1": "ssd-one", "M2 1": "ssd-two" } });
     expect(duplicate.errors).toContain("M2_1 슬롯이 m2SlotSelection에서 중복되었습니다.");
+  });
+
+  it("rejects oversized M.2 slot selection objects before expanding every key", () => {
+    const parsed = parseBuild({
+      m2SlotSelection: Object.fromEntries(Array.from({ length: 9 }, (_, index) => [`invalid-${index}`, `ssd-${index}`]))
+    });
+
+    expect(parsed.errors).toEqual(["m2SlotSelection은 최대 8개 슬롯까지 지정할 수 있습니다."]);
+    expect(parsed.build.m2SlotSelection).toBeUndefined();
   });
 
   it("validates a batch M.2 import against the catalog and keeps valid entries atomic", () => {
@@ -209,6 +248,7 @@ describe("build request validation", () => {
   it("preserves recommendation priority, profile, budget, and listing policy", () => {
     expect(parseRecommendationPreferences({ priority: "budget", profile: "gaming", budgetWon: 2_000_000, listingPolicy: "all" }))
       .toEqual({ priority: "budget", profile: "gaming", budgetWon: 2_000_000, listingPolicy: "all" });
+    expect(parseRecommendationPreferences({ priority: "reliability", profile: "general" }).priority).toBe("reliability");
     expect(parseRecommendationPreferences({ profile: "gaming", gamingResolution: "4k" }).gamingResolution).toBe("4k");
     expect(parseRecommendationPreferences({ profile: "gaming", gamingRefreshRate: 240 }).gamingRefreshRate).toBe(240);
     expect(parseRecommendationPreferences(undefined)).toEqual({ priority: "balanced", profile: "general", listingPolicy: "retail_only" });
@@ -249,7 +289,7 @@ describe("build request validation", () => {
     expect(parsed.request).toBeUndefined();
     expect(parsed.errors).toEqual(expect.arrayContaining([
       "budgetWon은 1원부터 100,000,000원 사이의 정수여야 합니다.",
-      "priority는 balanced, budget, performance 중 하나여야 합니다.",
+      "priority는 balanced, budget, performance, reliability 중 하나여야 합니다.",
       "includeGpu는 boolean이어야 합니다.",
       "includeNonRetail은 boolean이어야 합니다.",
       "listingPolicy는 retail_only, include_bulk, all 중 하나여야 합니다."

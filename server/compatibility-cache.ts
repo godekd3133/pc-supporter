@@ -39,6 +39,7 @@ export class TtlLruInFlightCache<T> {
   private missCount = 0;
   private coalescedCount = 0;
   private evictionCount = 0;
+  private generation = 0;
 
   constructor(options: { ttlMs: number; maxEntries: number }) {
     this.ttlMs = Math.max(1, Math.floor(options.ttlMs));
@@ -62,10 +63,12 @@ export class TtlLruInFlightCache<T> {
     }
 
     this.missCount += 1;
+    const generation = this.generation;
     const job = Promise.resolve().then(compute);
     this.inFlight.set(key, job);
     try {
       const value = await job;
+      if (generation !== this.generation) return { value, lookup: "MISS" };
       const storedAt = new Date().toISOString();
       this.set(key, { value, expiresAt: now + this.ttlMs, storedAt });
       return { value, lookup: "MISS", storedAt };
@@ -76,6 +79,8 @@ export class TtlLruInFlightCache<T> {
 
   clear() {
     this.entries.clear();
+    this.inFlight.clear();
+    this.generation += 1;
   }
 
   stats(): CompatibilityCacheStats {
@@ -121,8 +126,20 @@ export class InFlightDeduper<T> {
   }
 }
 
-export function compatibilityRequestKey(build: BuildSelection, recommendationPreferences: RecommendationPreferences, engineVersion: string) {
-  const payload = JSON.stringify({ version: 1, engineVersion, input: buildCompatibilityInputFingerprint(build, recommendationPreferences) });
+export function compatibilityRequestKey(
+  build: BuildSelection,
+  recommendationPreferences: RecommendationPreferences,
+  engineVersion: string,
+  dependencies: { catalogSnapshotAt: string; accessoryUpdatedAt: string; catalogRevision: number }
+) {
+  const payload = JSON.stringify({
+    version: 2,
+    engineVersion,
+    catalogSnapshotAt: dependencies.catalogSnapshotAt,
+    accessoryUpdatedAt: dependencies.accessoryUpdatedAt,
+    catalogRevision: dependencies.catalogRevision,
+    input: buildCompatibilityInputFingerprint(build, recommendationPreferences)
+  });
   return `compatibility-request:${createHash("sha256").update(payload).digest("hex")}`;
 }
 

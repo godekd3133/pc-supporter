@@ -1,4 +1,6 @@
 import type { AccessorySelection, BuildSelection, PartSelection, RecommendationPreferences } from "./types";
+import { isRecommendationPriority } from "./types";
+import { BUILD_INPUT_MAX_ID_LENGTH, BUILD_INPUT_MAX_M2_SLOTS, BUILD_INPUT_MAX_SELECTIONS_PER_LIST } from "./build-input-limits";
 
 export const BUILD_TRANSFER_SCHEMA_VERSION = 1 as const;
 
@@ -36,15 +38,20 @@ function selectionFromUnknown(value: unknown, path: string, errors: string[]): P
   }
   const partId = typeof record.partId === "string" ? record.partId.trim() : "";
   if (!partId) errors.push(`${path}.partId가 필요합니다.`);
+  if (partId.length > BUILD_INPUT_MAX_ID_LENGTH) errors.push(`${path}.partId는 ${BUILD_INPUT_MAX_ID_LENGTH}자 이하의 ID여야 합니다.`);
   const quantity = record.quantity;
   if (typeof quantity !== "number" || !Number.isInteger(quantity) || quantity < 1 || quantity > 99) errors.push(`${path}.quantity는 1부터 99 사이의 정수여야 합니다.`);
-  return partId && typeof quantity === "number" && Number.isInteger(quantity) && quantity >= 1 && quantity <= 99 ? { partId, quantity } : undefined;
+  return partId && partId.length <= BUILD_INPUT_MAX_ID_LENGTH && typeof quantity === "number" && Number.isInteger(quantity) && quantity >= 1 && quantity <= 99 ? { partId, quantity } : undefined;
 }
 
 function selectionListFromUnknown(value: unknown, path: string, errors: string[]): PartSelection[] {
   if (value === undefined) return [];
   if (!Array.isArray(value)) {
     errors.push(`${path}는 배열이어야 합니다.`);
+    return [];
+  }
+  if (value.length > BUILD_INPUT_MAX_SELECTIONS_PER_LIST) {
+    errors.push(`${path}은 한 번에 최대 ${BUILD_INPUT_MAX_SELECTIONS_PER_LIST}개까지 선택할 수 있습니다.`);
     return [];
   }
   return value.map((item, index) => selectionFromUnknown(item, `${path}[${index}]`, errors)).filter((item): item is PartSelection => Boolean(item));
@@ -56,16 +63,22 @@ function accessoryListFromUnknown(value: unknown, errors: string[]): AccessorySe
     errors.push("selection.accessories는 배열이어야 합니다.");
     return [];
   }
+  if (value.length > BUILD_INPUT_MAX_SELECTIONS_PER_LIST) {
+    errors.push(`selection.accessories는 한 번에 최대 ${BUILD_INPUT_MAX_SELECTIONS_PER_LIST}개까지 선택할 수 있습니다.`);
+    return [];
+  }
   return value.map((item, index) => {
     const record = recordFromUnknown(item);
     const rawTargetPartId = record?.targetPartId;
     const targetPartId = typeof rawTargetPartId === "string" && rawTargetPartId.trim().length > 0 ? rawTargetPartId.trim() : undefined;
     if (rawTargetPartId !== undefined && targetPartId === undefined) errors.push(`selection.accessories[${index}].targetPartId는 비어 있지 않은 SSD ID여야 합니다.`);
+    if (targetPartId && targetPartId.length > BUILD_INPUT_MAX_ID_LENGTH) errors.push(`selection.accessories[${index}].targetPartId는 ${BUILD_INPUT_MAX_ID_LENGTH}자 이하 SSD ID여야 합니다.`);
     const rawTargetAccessoryId = record?.targetAccessoryId;
     const targetAccessoryId = typeof rawTargetAccessoryId === "string" && rawTargetAccessoryId.trim().length > 0 ? rawTargetAccessoryId.trim() : undefined;
     if (rawTargetAccessoryId !== undefined && targetAccessoryId === undefined) errors.push(`selection.accessories[${index}].targetAccessoryId는 비어 있지 않은 팬 허브 ID여야 합니다.`);
+    if (targetAccessoryId && targetAccessoryId.length > BUILD_INPUT_MAX_ID_LENGTH) errors.push(`selection.accessories[${index}].targetAccessoryId는 ${BUILD_INPUT_MAX_ID_LENGTH}자 이하 팬 허브 ID여야 합니다.`);
     const parsed = selectionFromUnknown(record ? { partId: record.accessoryId, quantity: record.quantity } : item, `selection.accessories[${index}]`, errors);
-    return parsed ? { accessoryId: parsed.partId, quantity: parsed.quantity, ...(targetPartId ? { targetPartId } : {}), ...(targetAccessoryId ? { targetAccessoryId } : {}) } : undefined;
+    return parsed ? { accessoryId: parsed.partId, quantity: parsed.quantity, ...(targetPartId && targetPartId.length <= BUILD_INPUT_MAX_ID_LENGTH ? { targetPartId } : {}), ...(targetAccessoryId && targetAccessoryId.length <= BUILD_INPUT_MAX_ID_LENGTH ? { targetAccessoryId } : {}) } : undefined;
   }).filter((item): item is AccessorySelection => Boolean(item));
 }
 
@@ -77,6 +90,11 @@ function m2SlotSelectionFromUnknown(value: unknown, errors: string[]) {
     return undefined;
   }
   const normalized: Record<string, string> = {};
+  const rawSlotKeys = Object.keys(record);
+  if (rawSlotKeys.length > BUILD_INPUT_MAX_M2_SLOTS) {
+    errors.push(`selection.m2SlotSelection은 최대 ${BUILD_INPUT_MAX_M2_SLOTS}개 슬롯까지 지정할 수 있습니다.`);
+    return undefined;
+  }
   for (const [rawSlotId, rawPartId] of Object.entries(record)) {
     const slotId = rawSlotId.trim().toUpperCase().replaceAll(" ", "_");
     if (!/^M2_[1-8]$/.test(slotId)) {
@@ -89,6 +107,10 @@ function m2SlotSelectionFromUnknown(value: unknown, errors: string[]) {
     }
     if (typeof rawPartId !== "string" || !rawPartId.trim()) {
       errors.push(`${slotId}의 SSD ID가 필요합니다.`);
+      continue;
+    }
+    if (rawPartId.trim().length > BUILD_INPUT_MAX_ID_LENGTH) {
+      errors.push(`${slotId}의 SSD ID는 ${BUILD_INPUT_MAX_ID_LENGTH}자 이하이어야 합니다.`);
       continue;
     }
     normalized[slotId] = rawPartId.trim();
@@ -108,7 +130,7 @@ function recommendationPreferencesFromUnknown(value: unknown, errors: string[]):
   const listingPolicy = record.listingPolicy;
   const gamingResolution = record.gamingResolution;
   const gamingRefreshRate = record.gamingRefreshRate;
-  if (priority !== undefined && priority !== "balanced" && priority !== "budget" && priority !== "performance") errors.push("recommendationPreferences.priority가 올바르지 않습니다.");
+  if (priority !== undefined && !isRecommendationPriority(priority)) errors.push("recommendationPreferences.priority가 올바르지 않습니다.");
   if (profile !== undefined && profile !== "general" && profile !== "gaming" && profile !== "creator" && profile !== "development" && profile !== "office") errors.push("recommendationPreferences.profile이 올바르지 않습니다.");
   if (listingPolicy !== undefined && listingPolicy !== "retail_only" && listingPolicy !== "include_bulk" && listingPolicy !== "all") errors.push("recommendationPreferences.listingPolicy가 올바르지 않습니다.");
   if (gamingResolution !== undefined && gamingResolution !== "1080p" && gamingResolution !== "1440p" && gamingResolution !== "4k") errors.push("recommendationPreferences.gamingResolution이 올바르지 않습니다.");
@@ -117,7 +139,7 @@ function recommendationPreferencesFromUnknown(value: unknown, errors: string[]):
   if (budget !== undefined && (typeof budget !== "number" || !Number.isInteger(budget) || budget <= 0 || budget > 100_000_000)) errors.push("recommendationPreferences.budgetWon은 1부터 100,000,000 사이의 정수여야 합니다.");
   const parsedProfile = profile === "general" || profile === "gaming" || profile === "creator" || profile === "development" || profile === "office" ? profile : defaultPreferences.profile;
   return {
-    priority: priority === "balanced" || priority === "budget" || priority === "performance" ? priority : defaultPreferences.priority,
+    priority: isRecommendationPriority(priority) ? priority : defaultPreferences.priority,
     profile: parsedProfile,
     listingPolicy: listingPolicy === "retail_only" || listingPolicy === "include_bulk" || listingPolicy === "all" ? listingPolicy : defaultPreferences.listingPolicy,
     ...(typeof budget === "number" && Number.isInteger(budget) && budget > 0 && budget <= 100_000_000 ? { budgetWon: budget } : {}),
@@ -160,6 +182,7 @@ export function parseBuildTransfer(input: unknown): BuildTransferParseResult {
   const rawRgbControllerAccessoryId = source.rgbControllerAccessoryId;
   const rgbControllerAccessoryId = typeof rawRgbControllerAccessoryId === "string" && rawRgbControllerAccessoryId.trim().length > 0 ? rawRgbControllerAccessoryId.trim() : undefined;
   if (rawRgbControllerAccessoryId !== undefined && rgbControllerAccessoryId === undefined) errors.push("selection.rgbControllerAccessoryId는 비어 있지 않은 팬 허브 ID여야 합니다.");
+  if (rgbControllerAccessoryId && rgbControllerAccessoryId.length > BUILD_INPUT_MAX_ID_LENGTH) errors.push(`selection.rgbControllerAccessoryId는 ${BUILD_INPUT_MAX_ID_LENGTH}자 이하 팬 허브 ID여야 합니다.`);
   const selection: BuildSelection = {
     cpu: selectionFromUnknown(source.cpu, "selection.cpu", errors),
     cooler: selectionFromUnknown(source.cooler, "selection.cooler", errors),
@@ -172,7 +195,7 @@ export function parseBuildTransfer(input: unknown): BuildTransferParseResult {
     psu: selectionFromUnknown(source.psu, "selection.psu", errors),
     accessories: accessoryListFromUnknown(source.accessories, errors),
     m2SlotSelection: m2SlotSelectionFromUnknown(source.m2SlotSelection, errors),
-    ...(rgbControllerAccessoryId ? { rgbControllerAccessoryId } : {}),
+    ...(rgbControllerAccessoryId && rgbControllerAccessoryId.length <= BUILD_INPUT_MAX_ID_LENGTH ? { rgbControllerAccessoryId } : {}),
     useIntegratedGraphics: useIntegratedGraphics !== false
   };
   const recommendationPreferences = recommendationPreferencesFromUnknown(root.recommendationPreferences, errors);

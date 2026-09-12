@@ -108,6 +108,11 @@ export function AdminGpuPhysicalPanel({ onToast, onMetaRefresh }: { onToast: (me
   const [validatedBulkInput, setValidatedBulkInput] = useState("");
   const bulkCsvInputRef = useRef<HTMLInputElement>(null);
   const bulkJsonInputRef = useRef<HTMLInputElement>(null);
+  const mountedRef = useRef(false);
+  const overrideListRequestVersionRef = useRef(0);
+  const partSearchRequestVersionRef = useRef(0);
+  const sourceHistoryRequestVersionRef = useRef(0);
+  const mutationRequestVersionRef = useRef(0);
   const [reviewQueue, setReviewQueue] = useState<PhysicalReviewQueue | null>(null);
   const [reviewQueueLoading, setReviewQueueLoading] = useState(true);
   const [reviewQueueError, setReviewQueueError] = useState<string | null>(null);
@@ -126,19 +131,33 @@ export function AdminGpuPhysicalPanel({ onToast, onMetaRefresh }: { onToast: (me
   const [sourceHistoryError, setSourceHistoryError] = useState<string | null>(null);
 
   async function loadOverrides() {
+    if (!mountedRef.current) return;
+    const requestVersion = ++overrideListRequestVersionRef.current;
     setLoading(true);
     try {
       const payload = await api<{ items: GpuPhysicalOverrideListItem[] }>("/api/admin/gpu-physical-overrides");
+      if (!mountedRef.current || overrideListRequestVersionRef.current !== requestVersion) return;
       setItems(payload.items);
       setError(null);
     } catch (reason: unknown) {
+      if (!mountedRef.current || overrideListRequestVersionRef.current !== requestVersion) return;
       setError(reason instanceof Error ? reason.message : "GPU 물리 호환 검수 데이터를 불러오지 못했습니다.");
     } finally {
-      setLoading(false);
+      if (mountedRef.current && overrideListRequestVersionRef.current === requestVersion) setLoading(false);
     }
   }
 
-  useEffect(() => { void loadOverrides(); }, []);
+  useEffect(() => {
+    mountedRef.current = true;
+    void loadOverrides();
+    return () => {
+      mountedRef.current = false;
+      overrideListRequestVersionRef.current += 1;
+      partSearchRequestVersionRef.current += 1;
+      sourceHistoryRequestVersionRef.current += 1;
+      mutationRequestVersionRef.current += 1;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -165,14 +184,27 @@ export function AdminGpuPhysicalPanel({ onToast, onMetaRefresh }: { onToast: (me
 
   async function searchParts(event: FormEvent) {
     event.preventDefault();
+    const requestVersion = ++partSearchRequestVersionRef.current;
+    setParts([]);
+    setSelectedPart(null);
+    setSlotOccupancy("");
+    setGpuCableClearance("");
+    setCaseSideClearance("");
+    setPsuCableRuns("");
+    setPsuCableTopology("");
+    setSourceNote("");
+    setSourceUrl("");
+    setManufacturerModel("");
+    setManufacturerRevision("");
     setSearching(true);
     try {
       const payload = await api<{ items: Part[] }>(`/api/parts?category=${category}&q=${encodeURIComponent(query.trim())}&limit=12&sort=name`);
+      if (partSearchRequestVersionRef.current !== requestVersion) return;
       setParts(payload.items);
     } catch (reason: unknown) {
-      onToast(reason instanceof Error ? reason.message : "검수 대상 부품을 찾지 못했습니다.");
+      if (partSearchRequestVersionRef.current === requestVersion) onToast(reason instanceof Error ? reason.message : "검수 대상 부품을 찾지 못했습니다.");
     } finally {
-      setSearching(false);
+      if (partSearchRequestVersionRef.current === requestVersion) setSearching(false);
     }
   }
 
@@ -192,94 +224,118 @@ export function AdminGpuPhysicalPanel({ onToast, onMetaRefresh }: { onToast: (me
 
   async function save() {
     if (!selectedPart) return;
+    const requestVersion = ++mutationRequestVersionRef.current;
+    const isCurrent = () => mountedRef.current && mutationRequestVersionRef.current === requestVersion;
+    const part = selectedPart;
     setBusy(true);
     const payload: Record<string, unknown> = { manufacturerModel: manufacturerModel.trim(), ...(manufacturerRevision.trim() ? { manufacturerRevision: manufacturerRevision.trim() } : {}), sourceNote: sourceNote.trim(), ...(sourceUrl.trim() ? { sourceUrl: sourceUrl.trim() } : {}) };
-    if (selectedPart.category === "gpu") {
+    if (part.category === "gpu") {
       if (slotOccupancy.trim()) payload.gpuSlotOccupancy = Number(slotOccupancy);
       if (gpuCableClearance.trim()) payload.gpuCableBendClearanceMm = Number(gpuCableClearance);
-    } else if (selectedPart.category === "case" && caseSideClearance.trim()) {
+    } else if (part.category === "case" && caseSideClearance.trim()) {
       payload.caseSidePanelClearanceMm = Number(caseSideClearance);
-    } else if (selectedPart.category === "psu") {
+    } else if (part.category === "psu") {
       if (psuCableRuns.trim()) payload.psuIndependentPcieCableRuns = Number(psuCableRuns);
       if (psuCableTopology) payload.psuPcieCableTopology = psuCableTopology;
     }
     try {
-      await api(`/api/admin/gpu-physical-overrides/${encodeURIComponent(selectedPart.id)}`, { method: "PUT", body: JSON.stringify(payload) });
+      await api(`/api/admin/gpu-physical-overrides/${encodeURIComponent(part.id)}`, { method: "PUT", body: JSON.stringify(payload) });
+      if (!isCurrent()) return;
       await loadOverrides();
+      if (!isCurrent()) return;
       setReviewQueueRefreshNonce((current) => current + 1);
       onMetaRefresh();
-      onToast(`${selectedPart.name}의 물리 호환 검수값을 저장했습니다.`);
+      onToast(`${part.name}의 물리 호환 검수값을 저장했습니다.`);
     } catch (reason: unknown) {
-      onToast(reason instanceof Error ? reason.message : "물리 호환 검수값을 저장하지 못했습니다.");
+      if (isCurrent()) onToast(reason instanceof Error ? reason.message : "물리 호환 검수값을 저장하지 못했습니다.");
     } finally {
-      setBusy(false);
+      if (isCurrent()) setBusy(false);
     }
   }
 
   async function remove(partId: string) {
+    const requestVersion = ++mutationRequestVersionRef.current;
+    const isCurrent = () => mountedRef.current && mutationRequestVersionRef.current === requestVersion;
     setBusy(true);
     try {
       await api(`/api/admin/gpu-physical-overrides/${encodeURIComponent(partId)}`, { method: "DELETE" });
+      if (!isCurrent()) return;
       setItems((current) => current.filter((item) => item.partId !== partId));
       setReviewQueueRefreshNonce((current) => current + 1);
       if (selectedPart?.id === partId) setSelectedPart(null);
       onMetaRefresh();
       onToast("물리 호환 검수값을 삭제했습니다. 원문 파싱값만 다시 사용합니다.");
     } catch (reason: unknown) {
-      onToast(reason instanceof Error ? reason.message : "물리 호환 검수값을 삭제하지 못했습니다.");
+      if (isCurrent()) onToast(reason instanceof Error ? reason.message : "물리 호환 검수값을 삭제하지 못했습니다.");
     } finally {
-      setBusy(false);
+      if (isCurrent()) setBusy(false);
     }
   }
 
   async function checkSource(partId: string) {
+    const requestVersion = ++mutationRequestVersionRef.current;
+    const isCurrent = () => mountedRef.current && mutationRequestVersionRef.current === requestVersion;
     setBusy(true);
     setSourceCheckingPartId(partId);
     try {
       const result = await api<{ sourceCheck: PhysicalSourceCheck; override: GpuPhysicalOverride }>(`/api/admin/gpu-physical-overrides/${encodeURIComponent(partId)}/source-check`, { method: "POST" });
+      if (!isCurrent()) return;
       setItems((current) => current.map((item) => item.partId === partId ? { ...item, ...result.override } : item));
       setReviewQueueRefreshNonce((current) => current + 1);
       onMetaRefresh();
       onToast(`근거 URL 점검 완료: ${physicalSourceCheckText(result.sourceCheck)}`);
     } catch (reason: unknown) {
-      onToast(reason instanceof Error ? reason.message : "근거 URL을 점검하지 못했습니다.");
+      if (isCurrent()) onToast(reason instanceof Error ? reason.message : "근거 URL을 점검하지 못했습니다.");
     } finally {
-      setSourceCheckingPartId(null);
-      setBusy(false);
+      if (isCurrent()) {
+        setSourceCheckingPartId(null);
+        setBusy(false);
+      }
     }
   }
 
   async function checkSourcesBatch() {
+    const requestVersion = ++mutationRequestVersionRef.current;
+    const isCurrent = () => mountedRef.current && mutationRequestVersionRef.current === requestVersion;
     setBusy(true);
     try {
       const result = await api<PhysicalSourceCheckBatchResponse>("/api/admin/gpu-physical-overrides/source-check/batch", { method: "POST", body: JSON.stringify({ category, limit: 50 }) });
+      if (!isCurrent()) return;
       await loadOverrides();
+      if (!isCurrent()) return;
       setReviewQueueRefreshNonce((current) => current + 1);
       onMetaRefresh();
       onToast(`${result.checkedCount}개 ${CATEGORY_LABELS[category]} 근거 URL을 점검했습니다. 통과 ${result.passedCount}개 · 재확인 ${result.reviewCount}개 · ${result.persisted ? `저장 ${result.persistedCount}개${result.persistFailureCount > 0 ? ` · 저장 실패 ${result.persistFailureCount}개` : ""}` : "미리보기(저장 안 함)"}${result.totalCandidates > result.checkedCount ? ` · 남은 URL ${result.totalCandidates - result.checkedCount}개` : ""}`);
     } catch (reason: unknown) {
-      onToast(reason instanceof Error ? reason.message : "근거 URL 일괄 점검에 실패했습니다.");
+      if (isCurrent()) onToast(reason instanceof Error ? reason.message : "근거 URL 일괄 점검에 실패했습니다.");
     } finally {
-      setBusy(false);
+      if (isCurrent()) setBusy(false);
     }
   }
 
   async function toggleSourceHistory(partId: string) {
+    const requestVersion = ++sourceHistoryRequestVersionRef.current;
     if (sourceHistoryPartId === partId) {
       setSourceHistoryPartId(null);
+      setSourceHistory([]);
+      setSourceHistoryError(null);
+      setSourceHistoryLoading(false);
       return;
     }
     setSourceHistoryPartId(partId);
+    setSourceHistory([]);
     setSourceHistoryLoading(true);
     setSourceHistoryError(null);
     try {
       const result = await api<{ partId: string; entries: PhysicalSourceCheckHistoryEntry[] }>(`/api/admin/gpu-physical-overrides/${encodeURIComponent(partId)}/source-check/history?limit=8`);
+      if (sourceHistoryRequestVersionRef.current !== requestVersion) return;
       setSourceHistory(result.entries);
     } catch (reason: unknown) {
+      if (sourceHistoryRequestVersionRef.current !== requestVersion) return;
       setSourceHistory([]);
       setSourceHistoryError(reason instanceof Error ? reason.message : "근거 URL 점검 이력을 불러오지 못했습니다.");
     } finally {
-      setSourceHistoryLoading(false);
+      if (sourceHistoryRequestVersionRef.current === requestVersion) setSourceHistoryLoading(false);
     }
   }
 
@@ -340,16 +396,19 @@ export function AdminGpuPhysicalPanel({ onToast, onMetaRefresh }: { onToast: (me
       onToast("검증할 물리 검수 JSON을 입력해 주세요.");
       return;
     }
+    const requestVersion = ++mutationRequestVersionRef.current;
+    const isCurrent = () => mountedRef.current && mutationRequestVersionRef.current === requestVersion;
     setBusy(true);
     try {
       const result = await api<GpuPhysicalOverrideValidationResponse>("/api/admin/gpu-physical-overrides/batch/validate", { method: "POST", body: bulkJson });
+      if (!isCurrent()) return;
       setBulkValidation(result);
       setValidatedBulkInput(bulkJson);
       onToast(result.invalidCount === 0 ? `${result.validCount}개 물리 검수값을 저장할 수 있습니다.` : `${result.invalidCount}개 물리 검수 행을 수정해야 합니다.`);
     } catch (reason: unknown) {
-      onToast(reason instanceof Error ? reason.message : "물리 검수 일괄 검증에 실패했습니다.");
+      if (isCurrent()) onToast(reason instanceof Error ? reason.message : "물리 검수 일괄 검증에 실패했습니다.");
     } finally {
-      setBusy(false);
+      if (isCurrent()) setBusy(false);
     }
   }
 
@@ -358,9 +417,12 @@ export function AdminGpuPhysicalPanel({ onToast, onMetaRefresh }: { onToast: (me
       onToast("입력 내용을 바꿨다면 먼저 물리 검수 JSON 검증을 다시 실행해 주세요.");
       return;
     }
+    const requestVersion = ++mutationRequestVersionRef.current;
+    const isCurrent = () => mountedRef.current && mutationRequestVersionRef.current === requestVersion;
     setBusy(true);
     try {
       const result = await api<{ saved: boolean; count: number; items: GpuPhysicalOverrideListItem[] }>("/api/admin/gpu-physical-overrides/batch", { method: "PUT", body: bulkJson });
+      if (!isCurrent()) return;
       setItems(result.items);
       setReviewQueueRefreshNonce((current) => current + 1);
       onMetaRefresh();
@@ -368,64 +430,76 @@ export function AdminGpuPhysicalPanel({ onToast, onMetaRefresh }: { onToast: (me
       setValidatedBulkInput("");
       onToast(`${result.count}개 GPU·케이스·PSU 물리 검수값을 원자적으로 저장했습니다.`);
     } catch (reason: unknown) {
-      onToast(reason instanceof Error ? reason.message : "물리 검수 일괄 저장에 실패했습니다.");
+      if (isCurrent()) onToast(reason instanceof Error ? reason.message : "물리 검수 일괄 저장에 실패했습니다.");
     } finally {
-      setBusy(false);
+      if (isCurrent()) setBusy(false);
     }
   }
 
   async function exportBulkCsv() {
+    const requestVersion = ++mutationRequestVersionRef.current;
+    const isCurrent = () => mountedRef.current && mutationRequestVersionRef.current === requestVersion;
     setBusy(true);
     try {
       const result = await api<{ exportedAt: string; items: GpuPhysicalOverrideListItem[] }>("/api/admin/gpu-physical-overrides/export");
+      if (!isCurrent()) return;
       downloadText(`gpu-physical-overrides-${new Date(result.exportedAt).toISOString().slice(0, 10)}.csv`, gpuPhysicalOverridesToCsv(result.items), "text/csv;charset=utf-8");
       onToast(`${result.items.length}개 저장된 물리 검수값을 CSV로 내보냈습니다.`);
     } catch (reason: unknown) {
-      onToast(reason instanceof Error ? reason.message : "물리 검수값을 내보내지 못했습니다.");
+      if (isCurrent()) onToast(reason instanceof Error ? reason.message : "물리 검수값을 내보내지 못했습니다.");
     } finally {
-      setBusy(false);
+      if (isCurrent()) setBusy(false);
     }
   }
 
   async function exportReviewPackage() {
+    const requestVersion = ++mutationRequestVersionRef.current;
+    const isCurrent = () => mountedRef.current && mutationRequestVersionRef.current === requestVersion;
     setBusy(true);
     try {
       const params = new URLSearchParams({ category, limit: "100", offset: String(reviewPackageOffset) });
       const result = await api<PhysicalReviewWorkPackage>(`/api/admin/gpu-physical-overrides/review-package?${params.toString()}`);
+      if (!isCurrent()) return;
       downloadText(`gpu-physical-review-package-${category}-${new Date(result.generatedAt).toISOString().slice(0, 10)}.json`, `${JSON.stringify(result, null, 2)}\n`, "application/json;charset=utf-8");
       setReviewPackageOffset(result.nextOffset ?? 0);
       onToast(`${result.items.length}개 ${CATEGORY_LABELS[category]} 우선 검수 작업 패키지를 저장했습니다. ${result.nextOffset !== undefined ? `다음 묶음은 ${result.nextOffset}번부터 재개합니다.` : "현재 큐를 모두 담았습니다."}`);
     } catch (reason: unknown) {
-      onToast(reason instanceof Error ? reason.message : "물리 검수 작업 패키지를 내보내지 못했습니다.");
+      if (isCurrent()) onToast(reason instanceof Error ? reason.message : "물리 검수 작업 패키지를 내보내지 못했습니다.");
     } finally {
-      setBusy(false);
+      if (isCurrent()) setBusy(false);
     }
   }
 
   async function exportBulkTemplate() {
+    const requestVersion = ++mutationRequestVersionRef.current;
+    const isCurrent = () => mountedRef.current && mutationRequestVersionRef.current === requestVersion;
     setBusy(true);
     try {
       const result = await api<{ generatedAt: string; total: number; items: GpuPhysicalOverrideCsvItem[] }>(`/api/admin/gpu-physical-overrides/review-template?category=${category}&limit=500&offset=0`);
+      if (!isCurrent()) return;
       downloadText(`gpu-physical-review-template-${category}-${new Date(result.generatedAt).toISOString().slice(0, 10)}.csv`, gpuPhysicalOverridesToCsv(result.items), "text/csv;charset=utf-8");
       onToast(`${result.items.length}개 ${CATEGORY_LABELS[category]} 검수 템플릿을 저장했습니다. 전체 ${result.total}개 중 첫 500개입니다.`);
     } catch (reason: unknown) {
-      onToast(reason instanceof Error ? reason.message : "물리 검수 템플릿을 내보내지 못했습니다.");
+      if (isCurrent()) onToast(reason instanceof Error ? reason.message : "물리 검수 템플릿을 내보내지 못했습니다.");
     } finally {
-      setBusy(false);
+      if (isCurrent()) setBusy(false);
     }
   }
 
   async function openReviewItem(item: PhysicalReviewQueueItem) {
+    const requestVersion = ++mutationRequestVersionRef.current;
+    const isCurrent = () => mountedRef.current && mutationRequestVersionRef.current === requestVersion;
     setBusy(true);
     try {
       const part = await api<Part>(`/api/parts/${encodeURIComponent(item.partId)}`);
+      if (!isCurrent()) return;
       setParts([part]);
       setQuery(part.name);
       selectPart(part);
     } catch (reason: unknown) {
-      onToast(reason instanceof Error ? reason.message : "검수 대상 부품을 불러오지 못했습니다.");
+      if (isCurrent()) onToast(reason instanceof Error ? reason.message : "검수 대상 부품을 불러오지 못했습니다.");
     } finally {
-      setBusy(false);
+      if (isCurrent()) setBusy(false);
     }
   }
 
@@ -437,7 +511,7 @@ export function AdminGpuPhysicalPanel({ onToast, onMetaRefresh }: { onToast: (me
     <div className="gpu-physical-admin-summary"><span>GPU 검수 <strong>{items.filter((item) => item.category === "gpu").length}개</strong></span><span>케이스 검수 <strong>{items.filter((item) => item.category === "case").length}개</strong></span><span>PSU 검수 <strong>{items.filter((item) => item.category === "psu").length}개</strong></span>{loading && <span>불러오는 중...</span>}{error && <span className="gpu-physical-admin-error">{error}</span>}</div>
     {physicalCoverageLoading ? <div className="gpu-physical-coverage-state" role="status"><FiLoader className="spin" /> 전체 물리 근거 coverage를 계산하는 중...</div> : physicalCoverageError ? <div className="gpu-physical-coverage-state error" role="alert"><FiAlertTriangle /> {physicalCoverageError}</div> : physicalCoverage && <PhysicalReviewCoveragePanel coverage={physicalCoverage} />}
     {reviewQueueLoading ? <div className="gpu-physical-review-queue loading" role="status"><FiLoader className="spin" /> {CATEGORY_LABELS[category]} 물리 검수 우선순위를 계산하는 중...</div> : reviewQueueError ? <div className="gpu-physical-review-queue error" role="alert"><FiAlertTriangle /> {reviewQueueError}</div> : reviewQueue && <div className="gpu-physical-review-queue" aria-label="물리 호환 검수 우선순위"><div className="gpu-physical-review-queue-heading"><div><span>REVIEW QUEUE</span><strong>{CATEGORY_LABELS[category]} 물리 검수 우선순위</strong><small>우선순위 점수는 호환 판정이 아니라, 실제 간섭 가능성이 큰 부품의 제조사 근거를 먼저 채우기 위한 운영용 신호입니다.</small></div><span className="gpu-physical-review-coverage">완료 {reviewQueue.coveragePercent}%</span></div><div className="gpu-physical-review-controls"><label><span>큐 검색</span><input aria-label="물리 검수 큐 검색" value={reviewQueueQuery} onChange={(event) => { setReviewQueueQuery(event.target.value); setReviewQueuePage(0); }} placeholder="부품명·ID 검색" disabled={busy} /></label><label><span>우선순위</span><select aria-label="물리 검수 큐 우선순위" value={reviewQueuePriority} onChange={(event) => { setReviewQueuePriority(event.target.value as "all" | PhysicalReviewPriority); setReviewQueuePage(0); }} disabled={busy}><option value="all">전체 우선순위</option><option value="high">우선 검수</option><option value="medium">검수 권장</option><option value="low">일반 검수</option></select></label></div><div className="gpu-physical-review-stats"><span>검수 완료 <strong>{reviewQueue.reviewedCount}개</strong></span><span>부분 검수 <strong>{reviewQueue.partialCount}개</strong></span><span>근거 재확인 <strong>{reviewQueue.staleCount}개</strong></span><span>미검수 <strong>{reviewQueue.pendingCount}개</strong></span><span>대기 목록 <strong>{reviewQueue.queueTotal}{reviewQueue.queueTotal !== reviewQueue.allQueueTotal ? ` / ${reviewQueue.allQueueTotal}` : ""}개</strong></span></div>{reviewQueue.items.length === 0 ? <p className="gpu-physical-review-empty"><FiCheckCircle /> 현재 조건에 맞는 미완료 물리 검수 항목이 없습니다.</p> : <div className="gpu-physical-review-list">{reviewQueue.items.map((item) => <article key={item.partId}><div className="gpu-physical-review-main"><div className="gpu-physical-review-top"><span className={`gpu-physical-review-priority ${item.priority}`}>{REVIEW_PRIORITY_LABELS[item.priority]}</span><span className={`gpu-physical-review-status ${item.reviewStatus}`}>{REVIEW_STATUS_LABELS[item.reviewStatus]}</span><strong>{item.priorityScore}점</strong></div><strong>{item.partName}</strong><small>{item.partId} · {item.dataQuality === "live" ? "다나와 최신" : item.dataQuality === "manual" ? "수동 검수" : item.dataQuality === "seed" ? "프로젝트 기준" : "일부 스펙 부족"}{item.priceWon !== undefined ? ` · ${item.priceWon.toLocaleString("ko-KR")}원` : " · 가격 확인 필요"}</small><small>{item.reviewReason}</small><small className={item.freshness === "stale" || item.freshness === "unknown" ? "gpu-physical-review-freshness stale" : "gpu-physical-review-freshness"}>근거 {DATA_FRESHNESS_LABELS[item.freshness]}{item.evidenceUpdatedAt ? ` · 갱신 ${new Date(item.evidenceUpdatedAt).toLocaleDateString("ko-KR")}` : ""}</small></div><div className="gpu-physical-review-side"><span>{item.focusFields.join(" · ")}</span><button className="button button-small button-secondary" type="button" onClick={() => void openReviewItem(item)} disabled={busy}><FiSearch /> 검수 열기</button></div></article>)}</div>}{reviewQueue.queueTotal > 0 && <div className="gpu-physical-review-pagination"><button className="button button-small button-light" type="button" onClick={() => setReviewQueuePage((current) => Math.max(0, current - 1))} disabled={busy || reviewQueuePage === 0}>이전</button><span>{reviewQueuePage + 1} / {Math.max(1, Math.ceil(reviewQueue.queueTotal / REVIEW_QUEUE_PAGE_SIZE))}</span><button className="button button-small button-light" type="button" onClick={() => setReviewQueuePage((current) => current + 1)} disabled={busy || (reviewQueuePage + 1) * REVIEW_QUEUE_PAGE_SIZE >= reviewQueue.queueTotal}>다음</button></div>}</div>}
-    <form className="gpu-physical-search" onSubmit={searchParts}><label><span>대상</span><select aria-label="물리 호환 검수 대상" value={category} onChange={(event) => { setCategory(event.target.value as PhysicalCategory); setParts([]); setSelectedPart(null); setReviewQueuePage(0); setReviewPackageOffset(0); }} disabled={busy}><option value="gpu">GPU</option><option value="case">케이스</option><option value="psu">PSU</option></select></label><label className="gpu-physical-search-query"><span>부품 검색</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={category === "gpu" ? "GPU 모델명·브랜드" : category === "case" ? "케이스 모델명·브랜드" : "PSU 모델명·브랜드"} disabled={busy} /></label><button className="button button-secondary" type="submit" disabled={busy || searching}>{searching ? <><FiLoader className="spin" /> 검색 중...</> : <><FiSearch /> 부품 찾기</>}</button></form>
+    <form className="gpu-physical-search" onSubmit={searchParts}><label><span>대상</span><select aria-label="물리 호환 검수 대상" value={category} onChange={(event) => { partSearchRequestVersionRef.current += 1; setSearching(false); setCategory(event.target.value as PhysicalCategory); setParts([]); setSelectedPart(null); setReviewQueuePage(0); setReviewPackageOffset(0); }} disabled={busy}><option value="gpu">GPU</option><option value="case">케이스</option><option value="psu">PSU</option></select></label><label className="gpu-physical-search-query"><span>부품 검색</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={category === "gpu" ? "GPU 모델명·브랜드" : category === "case" ? "케이스 모델명·브랜드" : "PSU 모델명·브랜드"} disabled={busy} /></label><button className="button button-secondary" type="submit" disabled={busy || searching}>{searching ? <><FiLoader className="spin" /> 검색 중...</> : <><FiSearch /> 부품 찾기</>}</button></form>
     {parts.length > 0 && <div className="gpu-physical-search-results">{parts.map((part) => <button className={selectedPart?.id === part.id ? "selected" : ""} type="button" key={part.id} onClick={() => selectPart(part)} disabled={busy}><strong>{part.name}</strong><small>{CATEGORY_LABELS[part.category]} · {part.id} · {part.dataQuality === "live" ? "다나와 최신" : part.dataQuality === "manual" ? "수동 검수" : "프로젝트 데이터"}</small></button>)}</div>}
     {selectedPart && <div className="gpu-physical-editor"><div className="gpu-physical-selected"><div><span>선택한 검수 대상</span><strong>{selectedPart.name}</strong><small>{selectedPart.id} · {CATEGORY_LABELS[selectedPart.category]}</small></div><span>{savedForSelected ? "저장된 검수값" : "새 검수값"}</span></div><div className="gpu-physical-fields">{selectedPart.category === "gpu" ? <><label><span>GPU 물리 슬롯 점유</span><input type="number" min="1" max="6" step="0.5" value={slotOccupancy} onChange={(event) => setSlotOccupancy(event.target.value)} placeholder="예: 3.5" disabled={busy} /><small>제조사 표기의 2-slot·2.5-slot·3-slot 등을 숫자로 입력합니다.</small></label><label><span>GPU 케이블 굽힘 최소 여유 (mm)</span><input type="number" min="0" max="500" step="1" value={gpuCableClearance} onChange={(event) => setGpuCableClearance(event.target.value)} placeholder="예: 40" disabled={busy} /><small>제조사 설치 가이드에서 확인한 측면 케이블 공간입니다.</small></label></> : selectedPart.category === "case" ? <label><span>케이스 측면 케이블 여유 (mm)</span><input type="number" min="0" max="500" step="1" value={caseSideClearance} onChange={(event) => setCaseSideClearance(event.target.value)} placeholder="예: 45" disabled={busy} /><small>GPU 전원 케이블과 측판 사이에 확인된 실제 여유입니다.</small></label> : <><label><span>독립 PCIe 케이블 런 수</span><input type="number" min="1" max="8" step="1" value={psuCableRuns} onChange={(event) => setPsuCableRuns(event.target.value)} placeholder="예: 2" disabled={busy} /><small>제조사 케이블 표에서 서로 독립된 PCIe 케이블 가닥 수를 입력합니다.</small></label><label><span>PCIe 케이블 분배 구조</span><select aria-label="PSU PCIe 케이블 분배 구조" value={psuCableTopology} onChange={(event) => setPsuCableTopology(event.target.value as "" | "independent" | "shared")} disabled={busy}><option value="">확인 필요</option><option value="independent">독립 케이블</option><option value="shared">분배·공유 케이블</option></select><small>커넥터 개수와 독립 케이블 수가 다르면 공유 구조로 확인합니다.</small></label></>}</div><div className="gpu-physical-source-fields"><label><span>검수 근거 메모</span><textarea value={sourceNote} onChange={(event) => setSourceNote(event.target.value)} maxLength={500} placeholder="예: 제조사 설치 가이드 12페이지, 측면 패널 장착 기준" disabled={busy} /></label><label><span>근거 URL (HTTPS)</span><input value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} placeholder="https://..." disabled={busy} /></label></div><div className="gpu-physical-actions"><button className="button button-primary" type="button" onClick={() => void save()} disabled={busy}><FiCheckCircle /> {busy ? "저장 중..." : "검수값 저장"}</button>{savedForSelected?.sourceUrl && <button className="button button-secondary" type="button" onClick={() => void checkSource(selectedPart.id)} disabled={busy}><FiSearch /> {sourceCheckingPartId === selectedPart.id ? "URL 점검 중..." : "근거 URL 점검"}</button>}{savedForSelected && <button className="button button-light" type="button" onClick={() => void remove(selectedPart.id)} disabled={busy}><FiTrash2 /> 검수값 삭제</button>}</div></div>}
     <div className="gpu-physical-bulk-tools" aria-label="물리 호환 일괄 검수"><div className="gpu-physical-bulk-heading"><div><strong>대량 검수 도구</strong><small>스프레드시트에서 여러 GPU·케이스·PSU의 제조사 근거를 채운 뒤 한 번에 검증합니다. 오류가 하나라도 있으면 전체 저장을 중단합니다.</small></div><FiDatabase /></div><div className="gpu-physical-bulk-actions"><button className="button button-light" type="button" onClick={() => void checkSourcesBatch()} disabled={busy || !categoryItems.some((item) => Boolean(item.sourceUrl))}><FiSearch /> 저장 URL 일괄 점검</button><button className="button button-light" type="button" onClick={() => void exportReviewPackage()} disabled={busy}><FiDownload /> {reviewPackageOffset > 0 ? `다음 작업 패키지 (${reviewPackageOffset}번부터)` : "우선 검수 작업 패키지"}</button><button className="button button-light" type="button" onClick={() => void exportBulkTemplate()} disabled={busy}><FiDownload /> {CATEGORY_LABELS[category]} 검수 템플릿</button><button className="button button-light" type="button" onClick={() => void exportBulkCsv()} disabled={busy}><FiDownload /> 저장값 CSV</button><button className="button button-secondary" type="button" aria-expanded={bulkOpen} onClick={() => setBulkOpen((current) => !current)}><FiChevronDown /> {bulkOpen ? "일괄 검수 닫기" : "CSV·JSON 일괄 검수"}</button></div>{bulkOpen && <div className="gpu-physical-bulk-body"><div className="gpu-physical-bulk-csv"><label><span>CSV 직접 붙여넣기</span><textarea aria-label="물리 호환 검수 CSV" value={bulkCsvText} onChange={(event) => setBulkCsvText(event.target.value)} placeholder="partId,partName,category,gpuSlotOccupancy,gpuCableBendClearanceMm,caseSidePanelClearanceMm,psuIndependentPcieCableRuns,psuPcieCableTopology,sourceNote,sourceUrl,updatedAt&#10;psu-...,테스트 PSU,psu,,,,2,independent,제조사 케이블 구성표,https://...," disabled={busy} /></label><input ref={bulkCsvInputRef} className="gpu-physical-csv-input" type="file" accept=".csv,text/csv" aria-label="물리 호환 검수 CSV 파일 가져오기" onChange={(event) => void importBulkCsvFile(event)} disabled={busy} /><div><button className="button button-secondary" type="button" onClick={importBulkCsv} disabled={busy || !bulkCsvText.trim()}><FiDatabase /> CSV를 JSON으로 변환</button><button className="button button-light" type="button" onClick={() => bulkCsvInputRef.current?.click()} disabled={busy}><FiDownload /> CSV 파일 가져오기</button></div></div><label><span>일괄 검수 JSON</span><textarea aria-label="물리 호환 검수 JSON" value={bulkJson} onChange={(event) => updateBulkJson(event.target.value)} placeholder='{"items":[{"partId":"psu-...","psuIndependentPcieCableRuns":2,"psuPcieCableTopology":"independent","sourceNote":"제조사 케이블 구성표"}]}' disabled={busy} /></label><input ref={bulkJsonInputRef} className="gpu-physical-csv-input" type="file" accept=".json,application/json" aria-label="물리 호환 검수 JSON 파일 가져오기" onChange={(event) => void importBulkJsonFile(event)} disabled={busy} /><div className="gpu-physical-bulk-actions"><button className="button button-secondary" type="button" onClick={() => bulkJsonInputRef.current?.click()} disabled={busy}><FiDownload /> 작업 패키지·JSON 가져오기</button><button className="button button-secondary" type="button" onClick={() => void validateBulk()} disabled={busy || !bulkJson.trim()}><FiCheckCircle /> JSON 검증</button><button className="button button-primary" type="button" onClick={() => void saveBulk()} disabled={busy || !canSaveBulk}><FiSave /> 일괄 저장</button></div>{bulkValidation && <div className={bulkValidation.invalidCount === 0 ? "gpu-physical-bulk-validation valid" : "gpu-physical-bulk-validation invalid"} role="status"><strong>{bulkValidation.invalidCount === 0 ? <><FiCheckCircle /> 저장 가능</> : <><FiAlertTriangle /> 저장 차단</>} · {bulkValidation.validCount}개 저장 가능 · {bulkValidation.invalidCount}개 수정 필요</strong>{bulkValidation.items.filter((item) => !item.valid).slice(0, 5).map((item) => <p key={`bulk-error-${item.partId}`}><b>{item.partName ?? item.partId}</b> · {item.errors.join(" · ")}</p>)}{bulkValidation.invalidCount > 5 && <small>그 외 {bulkValidation.invalidCount - 5}개 오류도 서버 응답에 포함되어 있습니다.</small>}</div>}</div>}</div>

@@ -46,6 +46,11 @@ describe("catalog watchlist", () => {
     expect(catalogWatchlistFromJson(JSON.stringify([entry({ targetPriceWon: 0 })]))).toEqual([]);
   });
 
+  it("rejects an oversized raw local watchlist before normalizing every entry", () => {
+    const oversized = Array.from({ length: 51 }, (_, index) => entry({ itemId: `part-${index}` }));
+    expect(catalogWatchlistFromJson(JSON.stringify(oversized))).toEqual([]);
+  });
+
   it("merges imported entries in file order while preserving existing order and deduplicating", () => {
     const existing = [entry({ itemId: "existing" })];
     const imported = [entry({ itemId: "part-1", itemName: "갱신 CPU", targetPriceWon: 90000 }), entry({ itemId: "new" })];

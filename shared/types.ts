@@ -26,6 +26,15 @@ export const CATEGORY_LABELS: Record<PartCategory, string> = {
 
 export type DataQuality = "seed" | "live" | "manual" | "incomplete";
 
+export type CatalogPriceEvidence = "live" | "manual" | "reference" | "recorded" | "unknown";
+
+export const DATA_QUALITY_LABELS: Record<DataQuality, string> = {
+  live: "다나와 최신",
+  seed: "프로젝트 기준",
+  manual: "수동 검수",
+  incomplete: "일부 스펙 부족"
+};
+
 export type ListingType = "retail" | "bulk" | "parallel_import" | "overseas" | "used" | "accessory" | "unknown";
 
 export type ListingPolicy = "retail_only" | "include_bulk" | "all";
@@ -34,8 +43,16 @@ export type PriceAvailabilityFilter = "all" | "known" | "unknown";
 
 export const PRICE_AVAILABILITY_LABELS: Record<PriceAvailabilityFilter, string> = {
   all: "전체 가격 상태",
-  known: "가격 확인 상품만",
-  unknown: "가격 미확인 상품만"
+  known: "가격 기록 있음",
+  unknown: "가격 확인 필요"
+};
+
+export type BenchmarkAvailabilityFilter = "all" | "complete" | "incomplete";
+
+export const BENCHMARK_AVAILABILITY_LABELS: Record<BenchmarkAvailabilityFilter, string> = {
+  all: "전체 성능 근거",
+  complete: "완전 세트만",
+  incomplete: "일부·없음"
 };
 
 export const LISTING_TYPE_LABELS: Record<ListingType, string> = {
@@ -54,13 +71,27 @@ export const LISTING_POLICY_LABELS: Record<ListingPolicy, string> = {
   all: "전체 조건"
 };
 
-export type RecommendationPriority = "balanced" | "budget" | "performance";
+export type RecommendationPriority = "balanced" | "budget" | "performance" | "reliability";
+
+export const RECOMMENDATION_PRIORITY_VALUES: RecommendationPriority[] = ["balanced", "budget", "performance", "reliability"];
 
 export const RECOMMENDATION_PRIORITY_LABELS: Record<RecommendationPriority, string> = {
   balanced: "균형형",
   budget: "가성비 우선",
-  performance: "성능 우선"
+  performance: "성능 우선",
+  reliability: "검증 우선"
 };
+
+export const RECOMMENDATION_PRIORITY_DESCRIPTIONS: Record<RecommendationPriority, string> = {
+  balanced: "호환성·성능·가격을 함께 고려합니다.",
+  budget: "예산 안 후보와 가격 대비 성능을 우선합니다.",
+  performance: "성능 유사도와 처리 여유를 우선합니다.",
+  reliability: "호환 판정·물리 장착·카탈로그 근거가 충분한 후보를 우선합니다."
+};
+
+export function isRecommendationPriority(value: unknown): value is RecommendationPriority {
+  return RECOMMENDATION_PRIORITY_VALUES.includes(value as RecommendationPriority);
+}
 
 export type RecommendationProfile = "general" | "gaming" | "creator" | "development" | "office";
 
@@ -182,6 +213,52 @@ export interface PhysicalSourceCheckBatchResponse {
   skipped: Array<{ partId: string; partName?: string; reason: string }>;
 }
 
+export interface CatalogSpecSourceCheckBatchItem {
+  partId: string;
+  partName: string;
+  category: PartCategory;
+  sourceUrl: string;
+  sourceCheck: PhysicalSourceCheck;
+  persisted: boolean;
+}
+
+export interface CatalogSpecSourceCheckBatchResponse {
+  checkedAt: string;
+  persisted: boolean;
+  totalCandidates: number;
+  offset: number;
+  nextOffset?: number;
+  checkedCount: number;
+  reviewCount: number;
+  passedCount: number;
+  persistedCount: number;
+  persistFailureCount: number;
+  items: CatalogSpecSourceCheckBatchItem[];
+  skipped: Array<{ partId: string; partName?: string; reason: string }>;
+}
+
+export interface BenchmarkSourceCheckBatchItem {
+  partId: string;
+  partName: string;
+  category: "cpu" | "gpu";
+  sourceUrl: string;
+  sourceCheck: PhysicalSourceCheck;
+  persisted: boolean;
+}
+
+export interface BenchmarkSourceCheckBatchResponse {
+  checkedAt: string;
+  persisted: boolean;
+  totalCandidates: number;
+  checkedCount: number;
+  reviewCount: number;
+  passedCount: number;
+  persistedCount: number;
+  persistFailureCount: number;
+  items: BenchmarkSourceCheckBatchItem[];
+  skipped: Array<{ partId: string; partName?: string; reason: string }>;
+}
+
 export type PhysicalSourceCheckTransition = "initial" | "unchanged" | "changed";
 
 export interface PhysicalSourceCheckHistoryEntry {
@@ -191,6 +268,8 @@ export interface PhysicalSourceCheckHistoryEntry {
   sourceCheck: PhysicalSourceCheck;
   transition: PhysicalSourceCheckTransition;
 }
+
+export type BenchmarkSourceCheckHistoryEntry = PhysicalSourceCheckHistoryEntry;
 
 export interface GpuPhysicalOverride {
   partId: string;
@@ -457,6 +536,19 @@ export interface RadiatorSupport {
 }
 
 export interface PartSpecs {
+  /** Runtime-only provenance applied from the admin catalog spec override store. */
+  catalogSpecProvenance?: {
+    manufacturerModel: string;
+    sourceNote: string;
+    sourceUrl: string;
+    updatedAt: string;
+    sourceCheck?: PhysicalSourceCheck;
+    fields: string[];
+    baseSpecValues: Record<string, unknown>;
+    baseDataQuality: DataQuality;
+    baseMissingFields: string[];
+    baseUpdatedAt: string;
+  };
   socket?: string;
   supportedSockets?: string[];
   memoryType?: string;
@@ -481,6 +573,10 @@ export interface PartSpecs {
   maxMemorySpeedMhz?: number;
   speedMhz?: number;
   capacityGb?: number;
+  /** Maximum number of storage devices a storage adapter can mount at once. */
+  adapterStorageDeviceCount?: number;
+  /** Minimum electrical PCIe connector width explicitly stated for a storage adapter. */
+  adapterPcieSlotWidth?: 1 | 4 | 8 | 16;
   sequentialReadMbps?: number;
   sequentialWriteMbps?: number;
   ssdController?: string;
@@ -499,6 +595,8 @@ export interface PartSpecs {
   m2SlotProfiles?: M2SlotProfile[];
   pcieX16Slots?: number;
   pcieX8Slots?: number;
+  pcieX4Slots?: number;
+  pcieX1Slots?: number;
   pcieSlotWidth?: number;
   pciePowerOptions?: PciePowerRequirement[][];
   pciePowerAdapterOptions?: PciePowerRequirement[][];
@@ -605,6 +703,7 @@ export interface PartRefreshResponse {
   previousDataQuality: DataQuality;
   previousMissingFields: string[];
   changedFields: string[];
+  valueDiffs?: CatalogChangeValueDiff[];
   refreshedAt: string;
 }
 
@@ -613,6 +712,7 @@ export interface AccessoryRefreshResponse {
   previousDataQuality: DataQuality;
   previousMissingFields: string[];
   changedFields: string[];
+  valueDiffs?: CatalogChangeValueDiff[];
   refreshedAt: string;
 }
 
@@ -734,7 +834,7 @@ export type AccessoryPriceFilter = "all" | "priced" | "under_10000" | "10000_500
 
 export const ACCESSORY_PRICE_FILTER_LABELS: Record<AccessoryPriceFilter, string> = {
   all: "전체 가격",
-  priced: "가격 확인 상품만",
+  priced: "가격 기록 있음",
   under_10000: "1만원 이하",
   "10000_50000": "1~5만원",
   over_50000: "5만원 초과"
@@ -775,6 +875,12 @@ export type RecommendationTrustLevel = "high" | "medium" | "low";
 
 export type RecommendationTrustFilter = "all" | "medium_plus" | "high";
 
+export interface RecommendationTrustCounts {
+  high: number;
+  medium: number;
+  low: number;
+}
+
 export interface RecommendationTrustEvidence {
   level: RecommendationTrustLevel;
   score: number;
@@ -792,8 +898,14 @@ export interface RecommendationTrustEvidence {
   totalDimensions: number;
   missingFieldCount: number;
   priceKnown: boolean;
+  /** Numeric-price provenance; unlike priceKnown, this distinguishes reference data from collected prices. */
+  priceEvidence?: CatalogPriceEvidence;
   sourceAvailable: boolean;
   benchmarkBacked: boolean;
+  benchmarkFreshness?: DataFreshness;
+  benchmarkSourceCheckNeedsReview?: boolean;
+  /** Runtime-only flag: a manual catalog-spec overlay needs its manufacturer source checked again. */
+  catalogSpecSourceCheckNeedsReview?: boolean;
   benchmarkSourceKind?: BenchmarkSourceKind;
   reasons: string[];
 }
@@ -1108,6 +1220,19 @@ export type SimilarityConfidence = "high" | "limited" | "unknown";
 
 export type SimilarityBasis = "benchmark" | "spec" | "mixed";
 
+export type SimilarityDimensionSource = "selected" | "model_reference";
+
+export interface SimilarityReferenceEvidence {
+  partId: string;
+  partName: string;
+  category: "cpu" | "gpu";
+  dataQuality: DataQuality;
+  updatedAt: string;
+  transferredDimensions: string[];
+  benchmarkSourceKind?: BenchmarkSourceKind;
+  benchmarkSourceCheck?: PhysicalSourceCheck;
+}
+
 export interface SimilarityDimensionEvidence {
   key: string;
   label: string;
@@ -1115,6 +1240,7 @@ export interface SimilarityDimensionEvidence {
   candidateValue: string;
   score: number;
   weight: number;
+  source?: SimilarityDimensionSource;
 }
 
 export interface SimilarityEvidence {
@@ -1123,6 +1249,7 @@ export interface SimilarityEvidence {
   confidence: SimilarityConfidence;
   basis?: SimilarityBasis;
   dimensions?: SimilarityDimensionEvidence[];
+  reference?: SimilarityReferenceEvidence;
   notes?: string[];
 }
 
@@ -1150,6 +1277,13 @@ export interface Suggestion {
   currentPriceWon?: number;
   score: number;
   reason: string;
+  /** Runtime-only risk classification for the replacement candidate itself. */
+  candidateRisk?: AlternativeRisk;
+  /** Runtime-only reasons that require a buyer check before applying a review candidate. */
+  candidateReasons?: string[];
+  candidateBlockerCount?: number;
+  candidateWarningCount?: number;
+  candidateUnknownCount?: number;
   remainingBlockers: number;
   remainingWarnings: number;
   priceDeltaWon?: number;
@@ -1165,6 +1299,7 @@ export interface Suggestion {
   valueEvidence?: ValueEvidence;
   recommendationTrust?: RecommendationTrustEvidence;
   physicalEvidence?: PhysicalEvidenceSummary;
+  gpuTarget?: GpuTargetEvidence;
 }
 
 export interface UpgradeRecommendation {
@@ -1477,6 +1612,8 @@ export interface CompatibilityResult {
   upgradeBundles?: UpgradeBundleRecommendation[];
   upgradeBundlePayload?: UpgradeBundlePayload;
   upgradeBundleSearch?: UpgradeBundleSearchSummary;
+  /** Compact CPU/GPU benchmark evidence captured with this full-build check. */
+  benchmarkSnapshot?: import("./build-benchmark-snapshot").BuildBenchmarkSnapshot;
   coreTotalPriceWon?: number;
   corePriceComplete?: boolean;
   accessoryTotalPriceWon?: number;
@@ -1520,6 +1657,16 @@ export interface SavedBuildAccessoryCompatibilitySnapshot {
   findings?: SavedBuildAccessoryFindingSummary[];
 }
 
+export type SavedBuildResourceState = "good" | "warning" | "danger" | "unknown" | "neutral";
+
+export interface SavedBuildResourceBudgetSnapshot {
+  state: SavedBuildResourceState;
+  powerState: SavedBuildResourceState;
+  coolingState: SavedBuildResourceState;
+  powerHeadroomW?: number;
+  coolerHeadroomW?: number;
+}
+
 export interface SavedBuildCheckSnapshot {
   status: CompatibilityResult["status"];
   blockerCount: number;
@@ -1539,8 +1686,12 @@ export interface SavedBuildCheckSnapshot {
   actionCenterState?: "blocked" | "review" | "ready";
   actionCenterSummary?: string;
   actionCenterTotalCount?: number;
+  resourceBudget?: SavedBuildResourceBudgetSnapshot;
+  /** Compact CPU/GPU benchmark evidence captured with this saved check. */
+  benchmarkSnapshot?: import("./build-benchmark-snapshot").BuildBenchmarkSnapshot;
   assemblyVerification?: import("./assembly-verification").AssemblyVerificationSavedSnapshot;
   assemblyVerificationHistory?: import("./assembly-verification").AssemblyVerificationSavedSnapshot[];
+  catalogRefreshReport?: import("./catalog-refresh-report").CatalogRefreshReport;
   engineVersion: string;
   catalogSnapshotAt: string;
   checkedAt: string;
@@ -1549,6 +1700,7 @@ export interface SavedBuildCheckSnapshot {
 export interface SavedBuild {
   id: string;
   name: string;
+  decisionNote?: string;
   selection: BuildSelection;
   recommendationPreferences?: RecommendationPreferences;
   versionGroupId?: string;
@@ -1557,6 +1709,8 @@ export interface SavedBuild {
   summary?: SavedBuildSummary;
   checkSnapshot?: SavedBuildCheckSnapshot;
   checkHistory?: SavedBuildCheckSnapshot[];
+  purchaseProgress?: SavedBuildPurchaseProgress;
+  purchasePriceHistory?: SavedBuildPurchasePriceHistory;
   createdAt: string;
   updatedAt: string;
   expiresAt?: string;
@@ -1585,9 +1739,46 @@ export interface SavedBuildSummary {
   accessoryLines: SavedBuildAccessoryLineSummary[];
 }
 
+export interface SavedBuildPurchaseProgressSnapshot {
+  inputFingerprint: string;
+  rowKeys: string[];
+  checkedIds: string[];
+  itemStates?: import("./purchase-list-status").PurchaseListItemStatus[];
+  revision: number;
+  updatedAt: string;
+}
+
+export interface SavedBuildPurchaseProgress extends SavedBuildPurchaseProgressSnapshot {
+  history?: SavedBuildPurchaseProgressSnapshot[];
+}
+
+export interface SavedBuildPurchasePriceHistorySnapshot {
+  inputFingerprint: string;
+  rowKeys: string[];
+  priceHistory: import("./purchase-list-price-history").PurchaseListPriceHistory;
+  revision: number;
+  updatedAt: string;
+}
+
+export interface SavedBuildPurchasePriceHistory extends SavedBuildPurchasePriceHistorySnapshot {
+  history?: SavedBuildPurchasePriceHistorySnapshot[];
+}
+
 export interface CrawlStatus {
-  status: "idle" | "running" | "completed" | "failed";
+  status: "idle" | "running" | "completed" | "failed" | "cancelled";
   mode: "sample" | "all";
+  operation?: "catalog" | "page-retry" | "page-retry-batch";
+  category?: PartCategory;
+  currentCategory?: PartCategory;
+  currentPage?: number;
+  currentPagesExpected?: number;
+  lastSuccessfulPage?: number;
+  manifestStartedAt?: string;
+  pageRetries?: number;
+  failedPages?: CrawlPageFailure[];
+  pageRetryBatch?: CrawlPageRetryBatchProgress;
+  resumed?: boolean;
+  skippedCategories?: PartCategory[];
   startedAt?: string;
   finishedAt?: string;
   categoriesCompleted: number;
@@ -1611,9 +1802,20 @@ export interface CrawlStatus {
   error?: string;
 }
 
+export interface CrawlPageFailure {
+  category: PartCategory;
+  page: number;
+  stage: "list" | "detail";
+  attempts: number;
+  message: string;
+  occurredAt: string;
+}
+
 export interface CrawlCategoryReport {
   category: PartCategory;
   categoryId: string;
+  totalProductCount?: number;
+  pageSize?: number;
   pagesExpected: number;
   pagesVisited: number;
   listedProducts: number;
@@ -1624,12 +1826,36 @@ export interface CrawlCategoryReport {
   incompleteSpecs: number;
   coverage: "partial" | "complete";
   specCoverage: "partial" | "complete";
+  lastSuccessfulPage?: number;
+  pageRetries?: number;
+  failedPages?: CrawlPageFailure[];
+  successfulPages?: number[];
+  pageProductCodes?: Record<string, string[]>;
   error?: string;
+}
+
+export interface CrawlPageRetryRecord {
+  category: PartCategory;
+  page: number;
+  startedAt: string;
+  finishedAt: string;
+  attempts: number;
+  succeeded: boolean;
+  error?: string;
+}
+
+export interface CrawlPageRetryBatchProgress {
+  total: number;
+  completed: number;
+  succeeded: number;
+  failed: number;
 }
 
 export interface CrawlManifest {
   mode: "sample" | "all";
+  category?: PartCategory;
   startedAt: string;
+  resumedFromStartedAt?: string;
   finishedAt?: string;
   generatedAt: string;
   coverage: "partial" | "complete";
@@ -1640,8 +1866,27 @@ export interface CrawlManifest {
   totalDetailFailed: number;
   totalMissingProducts: number;
   totalIncompleteSpecs: number;
+  totalPageRetries?: number;
+  failedPages?: CrawlPageFailure[];
+  pageRetryHistory?: CrawlPageRetryRecord[];
+  lastPageRetryAt?: string;
   changeSummary?: CatalogChangeSummary;
   categories: CrawlCategoryReport[];
+}
+
+export interface CrawlResumePreview {
+  schemaVersion: 1;
+  kind: "crawl-resume-preview";
+  readOnly: true;
+  running: boolean;
+  available: boolean;
+  mode?: "sample" | "all";
+  category?: PartCategory;
+  manifestStartedAt?: string;
+  manifestFinishedAt?: string;
+  completedCategories: PartCategory[];
+  remainingCategories: PartCategory[];
+  reason?: string;
 }
 
 export interface AccessoryCrawlStatus {
@@ -1810,6 +2055,7 @@ export interface BenchmarkProvenance {
   sourceKind: BenchmarkSourceKind;
   sourceNote: string;
   sourceUrl?: string;
+  sourceCheck?: PhysicalSourceCheck;
   updatedAt: string;
 }
 
@@ -1827,7 +2073,56 @@ export interface BenchmarkOverride {
   sourceNote: string;
   sourceKind?: BenchmarkSourceKind;
   sourceUrl?: string;
+  sourceCheck?: PhysicalSourceCheck;
   updatedAt: string;
+}
+
+export type Benchmark3DMarkResultKind = "time_spy" | "port_royal";
+
+export interface Benchmark3DMarkImportPreview {
+  sourceUrl: string;
+  resultId: string;
+  benchmark: Benchmark3DMarkResultKind;
+  benchmarkLabel: string;
+  scoreKey: Extract<BenchmarkScoreKey, "gpu3dmarkTimeSpyScore" | "gpu3dmarkPortRoyalScore">;
+  score: number;
+  gpuName?: string;
+  identityStatus: "matched" | "not_found" | "manual_required";
+  identityDetail: string;
+  fetchedAt: string;
+}
+
+export const BENCHMARK_3DMARK_BATCH_MAX_ITEMS = 12;
+
+export type Benchmark3DMarkBatchStatus = Benchmark3DMarkImportPreview["identityStatus"] | "failed";
+
+export interface Benchmark3DMarkBatchRequestItem {
+  partId: string;
+  sourceUrl: string;
+}
+
+export interface Benchmark3DMarkBatchItem {
+  row: number;
+  partId: string;
+  sourceUrl: string;
+  partName?: string;
+  status: Benchmark3DMarkBatchStatus;
+  preview?: Benchmark3DMarkImportPreview;
+  error?: string;
+}
+
+export interface Benchmark3DMarkBatchResponse {
+  schemaVersion: 1;
+  kind: "3dmark-batch-preview";
+  readOnly: true;
+  generatedAt: string;
+  maxItems: number;
+  requestedCount: number;
+  processedCount: number;
+  matchedCount: number;
+  reviewCount: number;
+  failedCount: number;
+  items: Benchmark3DMarkBatchItem[];
 }
 
 export type BenchmarkReviewStatus = "missing" | "partial" | "stale";
@@ -1869,6 +2164,9 @@ export interface BenchmarkSourceReviewItem {
   benchmarkFreshness: DataFreshness;
   sourceUrl?: string;
   benchmarkSourceKind?: BenchmarkSourceKind;
+  sourceCheckNeedsReview?: boolean;
+  sourceCheckStatus?: PhysicalSourceCheckStatus;
+  sourceCheckIdentityStatus?: PhysicalSourceIdentityStatus;
 }
 
 export interface BenchmarkReviewQueue {
@@ -1877,8 +2175,8 @@ export interface BenchmarkReviewQueue {
   items: BenchmarkReviewItem[];
   sourceItems: BenchmarkSourceReviewItem[];
   sourceTotals: {
-    cpu: { benchmarked: number; unclassified: number };
-    gpu: { benchmarked: number; unclassified: number };
+    cpu: { benchmarked: number; unclassified: number; sourceCheckNeedsReview: number };
+    gpu: { benchmarked: number; unclassified: number; sourceCheckNeedsReview: number };
   };
   totals: {
     cpu: { total: number; complete: number; partial: number; missing: number; stale: number };
@@ -1886,10 +2184,67 @@ export interface BenchmarkReviewQueue {
   };
 }
 
+export interface Benchmark3DMarkReviewWorkItem {
+  partId: string;
+  partName: string;
+  category: "gpu";
+  status: "missing" | "partial";
+  reviewPriorityScore: number;
+  reviewReason: string;
+  missingScores: Extract<BenchmarkScoreKey, "gpu3dmarkTimeSpyScore" | "gpu3dmarkPortRoyalScore">[];
+  presentScores: Partial<Record<Extract<BenchmarkScoreKey, "gpu3dmarkTimeSpyScore" | "gpu3dmarkPortRoyalScore">, number>>;
+  dataQuality: DataQuality;
+  missingFields: string[];
+  priceKnown: boolean;
+  priceWon?: number;
+  updatedAt: string;
+  benchmarkUpdatedAt?: string;
+  benchmarkFreshness: DataFreshness;
+  sourceUrl?: string;
+  benchmarkSourceKind?: BenchmarkSourceKind;
+  catalogUrl: string;
+}
+
+export interface Benchmark3DMarkReviewWorkPackageSummary {
+  totalGpu: number;
+  completeCount: number;
+  partialCount: number;
+  missingCount: number;
+  queueTotal: number;
+  includedCount: number;
+  remainingCount: number;
+}
+
+export interface Benchmark3DMarkReviewWorkPackage {
+  schemaVersion: 1;
+  kind: "3dmark-gpu-review-package";
+  readOnly: true;
+  generatedAt: string;
+  category: "gpu";
+  offset: number;
+  limit: number;
+  nextOffset?: number;
+  queueFingerprint: string;
+  queueChanged?: boolean;
+  summary: Benchmark3DMarkReviewWorkPackageSummary;
+  items: Benchmark3DMarkReviewWorkItem[];
+}
+
 export interface ServiceMeta {
   catalogCount: number;
+  catalogEligibleCount?: number;
+  catalogExcludedNonCoreCount?: number;
+  catalogCategoryIntegrity?: import("./catalog-category-integrity").CatalogCategoryIntegritySummary;
+  catalogBrandCounts?: Partial<Record<PartCategory, BrandCountOption[]>>;
+  catalogEligibleQualityCounts?: Record<DataQuality, number>;
+  catalogEligiblePriceCoverage?: {
+    priced: number;
+    unpriced: number;
+  };
   accessoryCount: number;
   accessoryCategoryCounts: Record<AccessoryCategory, number>;
+  accessoryBrandCounts?: Partial<Record<AccessoryCategory, BrandCountOption[]>>;
+  accessoryCategoryQualityCounts?: Record<AccessoryCategory, Record<DataQuality, number>>;
   accessoryQualityCounts: Record<DataQuality, number>;
   accessoryPriceCoverage: {
     priced: number;
@@ -1898,6 +2253,7 @@ export interface ServiceMeta {
   accessoryUpdatedAt: string;
   accessoryCoverage: AccessoryCoverageSnapshot;
   benchmarkCoverage: CatalogBenchmarkCoverage;
+  catalogSpecCoverage?: import("./catalog-spec-coverage").CatalogSpecCoverage;
   persistence: PersistenceDiagnostics;
   categoryCounts: Record<PartCategory, number>;
   qualityCounts: Record<DataQuality, number>;
@@ -1910,4 +2266,9 @@ export interface ServiceMeta {
   engineVersion: string;
   storageMode: "postgres" | "file";
   adminAuthEnabled: boolean;
+}
+
+export interface BrandCountOption {
+  brand: string;
+  count: number;
 }

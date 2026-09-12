@@ -31,9 +31,10 @@ describe("saved build share ownership", () => {
 
   it("never includes the owner hash in public build responses", () => {
     const credential = createShareOwnerCredential();
-    const publicBuild = publicSavedBuild({ ...build, ownerTokenHash: credential.hash, monitorState: { enabled: true, intervalMinutes: 60, alertPolicy: "all", updatedAt: "2026-08-31T01:00:00.000Z", alerts: [] } });
-    expect(publicBuild).toEqual(build);
+    const publicBuild = publicSavedBuild({ ...build, ownerTokenHash: credential.hash, monitorState: { enabled: true, intervalMinutes: 60, alertPolicy: "all", updatedAt: "2026-08-31T01:00:00.000Z", alerts: [] }, purchaseProgress: { inputFingerprint: "build-fingerprint-1", rowKeys: ["part:cpu:cpu-1"], checkedIds: ["part:cpu:cpu-1"], revision: 1, updatedAt: "2026-08-31T01:00:00.000Z" } });
+    expect(publicBuild).toMatchObject(build);
     expect("ownerTokenHash" in publicBuild).toBe(false);
     expect("monitorState" in publicBuild).toBe(false);
+    expect(publicBuild.purchaseProgress).toMatchObject({ inputFingerprint: "build-fingerprint-1", checkedIds: ["part:cpu:cpu-1"] });
   });
 });

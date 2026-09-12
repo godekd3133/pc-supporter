@@ -2,6 +2,7 @@ import type { AccessoryItem, AccessoryRecommendation, BuildSelection, Part } fro
 import { isKnownPrice } from "../shared/types";
 import { buildConnectivitySummaryFor } from "../shared/build-connectivity";
 import { fanHubPowerInputFor, fanHubPortCountFor, rgbHubPortCountFor, rgbVoltageFor } from "./accessory-connectivity";
+import { m2FormsOverlap, m2FormFactorsFor, normalizedM2FormFactor, storageAdapterConnectionLabel, storageAdapterKindFor, storageAdapterSupportFor } from "./accessory-compatibility";
 
 function selectedPart(catalog: Part[], selection: BuildSelection["cpu"] | undefined) {
   return selection ? catalog.find((part) => part.id === selection.partId) : undefined;
@@ -68,6 +69,7 @@ export function recommendAccessories(build: BuildSelection, catalog: Part[], acc
   const gpu = selectedPart(catalog, build.gpu);
   const motherboard = selectedPart(catalog, build.motherboard);
   const computerCase = selectedPart(catalog, build.case);
+  const memories = selectedParts(catalog, build.memory);
   const ssds = selectedParts(catalog, build.ssd);
   const m2Count = ssds.reduce((total, { selection, part }) => total + (part.specs.formFactor?.toLowerCase().includes("m.2") ? selection.quantity : 0), 0);
   const selectedM2FormFactors = [...new Set(ssds
@@ -79,6 +81,26 @@ export function recommendAccessories(build: BuildSelection, catalog: Part[], acc
   const gpuLengthMm = gpu?.specs.lengthMm;
   const gpuThicknessMm = gpu?.specs.thicknessMm;
   const connectivitySummary = buildConnectivitySummaryFor(motherboard?.specs, computerCase?.specs);
+  const selectedMemoryTypes = [...new Set(memories
+    .map(({ part }) => part.specs.memoryType)
+    .filter((memoryType): memoryType is string => Boolean(memoryType)))];
+  const selectedMemoryModuleCount = memories.reduce(
+    (total, { selection, part }) => total + selection.quantity * (part.specs.memoryModuleCountPerKit ?? 1),
+    0
+  );
+  const verifiedMemorySpeeds = memories
+    .map(({ part }) => part.specs.speedMhz)
+    .filter((speed): speed is number => speed !== undefined && Number.isFinite(speed) && speed > 0);
+  const maxMemorySpeedMhz = verifiedMemorySpeeds.length > 0 ? Math.max(...verifiedMemorySpeeds) : undefined;
+  const memoryCoolingTriggered = maxMemorySpeedMhz !== undefined
+    && (maxMemorySpeedMhz >= 6000 || (maxMemorySpeedMhz >= 5600 && selectedMemoryModuleCount >= 4));
+  const selectedM2InterfaceValues = ssds
+    .filter(({ part }) => part.specs.formFactor?.toLowerCase().includes("m.2"))
+    .map(({ part }) => part.specs.interface?.toLocaleLowerCase("ko-KR"))
+  const selectedM2Interfaces = [...new Set(selectedM2InterfaceValues.filter((value): value is string => Boolean(value)))];
+  const hasUnknownM2Interface = selectedM2InterfaceValues.some((value) => !value);
+  const motherboardM2Slots = motherboard?.specs.m2Slots;
+  const m2OverflowCount = motherboardM2Slots !== undefined ? Math.max(0, m2Count - motherboardM2Slots) : 0;
 
   if (m2Count > 0) {
     addRecommendations(
@@ -102,6 +124,64 @@ export function recommendAccessories(build: BuildSelection, catalog: Part[], acc
     );
   }
 
+  if (m2OverflowCount > 0) {
+    const slotLabel = motherboardM2Slots === 0 ? "M.2 슬롯 0개" : `M.2 슬롯 ${motherboardM2Slots}개`;
+    addRecommendations(
+      recommendations,
+      accessories,
+      "storage_accessory",
+      `M.2 SSD ${m2Count}개가 메인보드의 ${slotLabel}를 넘어 ${m2OverflowCount}개 확장 경로가 필요할 수 있어 변환 어댑터를 제안합니다.`,
+      `선택한 SSD의 폼팩터·NVMe/SATA 신호를 직접 지원하고, 한 어댑터에 최소 ${m2OverflowCount}개를 장착할 수 있다는 원문 근거가 있는 후보만 표시합니다. PCIe 슬롯·레인 공유·부팅 지원은 별도 확인이 필요합니다.`,
+      "recommended",
+      "medium",
+      (item) => {
+        const adapterKind = storageAdapterKindFor(item);
+        if (!adapterKind) return false;
+        const adapterStorageDeviceCount = item.specs.adapterStorageDeviceCount;
+        if (adapterStorageDeviceCount === undefined || adapterStorageDeviceCount < m2OverflowCount) return false;
+        if (hasUnknownM2Interface) return false;
+        const candidateForms = m2FormFactorsFor(item);
+        const formFactorMatches = candidateForms.length > 0
+          && (selectedM2FormFactors.length === 0 || m2FormsOverlap(candidateForms, selectedM2FormFactors.map(normalizedM2FormFactor)));
+        if (!formFactorMatches) return false;
+        const support = storageAdapterSupportFor(item, adapterKind);
+        return selectedM2Interfaces.length > 0 && selectedM2Interfaces.every((value) => value === "nvme" ? support.nvme : value === "sata" ? support.sata : false);
+      },
+      (a, b) => {
+        const aKind = storageAdapterKindFor(a);
+        const bKind = storageAdapterKindFor(b);
+        const preferredKind = selectedM2Interfaces.includes("nvme") ? "pcie" : selectedM2Interfaces.includes("sata") ? "sata" : undefined;
+        return (aKind === preferredKind ? 0 : 1) - (bKind === preferredKind ? 0 : 1)
+          || (a.specs.adapterStorageDeviceCount ?? Number.MAX_SAFE_INTEGER) - (b.specs.adapterStorageDeviceCount ?? Number.MAX_SAFE_INTEGER)
+          || priceAscending(a, b);
+      }
+    );
+  }
+
+  if (memoryCoolingTriggered) {
+    const memorySpeedLabel = `${maxMemorySpeedMhz}MHz`;
+    addRecommendations(
+      recommendations,
+      accessories,
+      "memory_cooler",
+      `확인된 RAM 속도 ${memorySpeedLabel}${selectedMemoryModuleCount >= 4 ? ` · 실제 모듈 ${selectedMemoryModuleCount}개` : ""} 구성이라 메모리 발열 보완용 쿨링팬을 제안합니다.`,
+      `메모리·DDR·DIMM 표기와 팬·쿨링 근거가 함께 있는 후보를 우선합니다. DIMM 높이, CPU 쿨러 간섭, 메모리 세대별 장착 가능 여부는 구매 전에 확인해야 합니다.`,
+      "optional",
+      "medium",
+      (item) => {
+        const text = rawText(item);
+        const compactText = text.toLocaleLowerCase("ko-KR").replace(/\s+/g, "");
+        const hasMemorySignal = /(?:메모리|램\b|RAM\b|DDR\s*[2345]|DIMM)/i.test(text);
+        const hasCoolingSignal = item.specs.fanCount !== undefined || /(?:팬|쿨링|cool)/i.test(text);
+        const hasSelectedMemoryType = selectedMemoryTypes.length === 0
+          || selectedMemoryTypes.some((memoryType) => compactText.includes(memoryType.toLocaleLowerCase("ko-KR").replace(/\s+/g, "")));
+        const hasOtherDdrType = /DDR\s*[2345]/i.test(text) && !hasSelectedMemoryType;
+        return hasMemorySignal && hasCoolingSignal && !hasOtherDdrType;
+      },
+      (a, b) => (b.specs.fanCount ?? 0) - (a.specs.fanCount ?? 0) || priceAscending(a, b)
+    );
+  }
+
   if ((gpuLengthMm !== undefined && gpuLengthMm >= 300) || (gpuThicknessMm !== undefined && gpuThicknessMm >= 55)) {
     const gpuShape = gpuLengthMm !== undefined ? `길이 ${gpuLengthMm}mm` : `두께 ${gpuThicknessMm}mm`;
     addRecommendations(
@@ -114,6 +194,25 @@ export function recommendAccessories(build: BuildSelection, catalog: Part[], acc
       "medium",
       () => true,
       priceAscending
+    );
+  }
+
+  if (gpuPowerW >= 300 || (gpuThicknessMm !== undefined && gpuThicknessMm >= 55)) {
+    const gpuLoadLabel = gpuPowerW >= 300 ? `전력 ${gpuPowerW}W` : `두께 ${gpuThicknessMm}mm`;
+    addRecommendations(
+      recommendations,
+      accessories,
+      "gpu_cooler",
+      `그래픽카드 ${gpuLoadLabel}로 보조 냉각 여지가 있어 GPU 쿨링 액세서리를 제안합니다.`,
+      "그래픽카드·PCI 슬롯·팬·쿨링 근거가 있는 보조 제품만 표시합니다. GPU 기본 쿨러를 대체하는 추천이 아니며 슬롯 점유, 팬 크기, 케이스 흡·배기 간섭을 따로 확인해야 합니다.",
+      "optional",
+      "medium",
+      (item) => {
+        const text = rawText(item);
+        return /(?:그래픽\s*카드|그래픽카드|GPU|VGA|PCI\s*슬롯)/i.test(text)
+          && (item.specs.fanCount !== undefined || /(?:쿨러|쿨링|냉각|fan|팬)/i.test(text));
+      },
+      (a, b) => (b.specs.fanCount ?? 0) - (a.specs.fanCount ?? 0) || priceAscending(a, b)
     );
   }
 

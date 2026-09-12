@@ -20,6 +20,12 @@ describe("saved build monitor persistence", () => {
     const malformed = savedBuildRecordFromUnknown({ ...build, monitorState: { ...monitorState, intervalMinutes: 5 } });
     expect(malformed).toBeDefined();
     expect(malformed?.monitorState).toBeUndefined();
+    const purchaseProgress = { inputFingerprint: "build-fingerprint-1", rowKeys: ["part:cpu:cpu-1"], checkedIds: ["part:cpu:cpu-1"], revision: 1, updatedAt: "2026-08-31T01:00:00.000Z" };
+    expect(savedBuildRecordFromUnknown({ ...build, purchaseProgress })?.purchaseProgress).toEqual(purchaseProgress);
+    expect(savedBuildRecordFromUnknown({ ...build, purchaseProgress: { ...purchaseProgress, checkedIds: ["removed"] } })?.purchaseProgress).toBeUndefined();
+    const purchasePriceHistory = { inputFingerprint: "build-fingerprint-1", rowKeys: ["part:cpu:cpu-1"], priceHistory: { "part:cpu:cpu-1": [{ checkedAt: "2026-08-31T01:00:00.000Z", unitPriceWon: 100_000 }] }, revision: 1, updatedAt: "2026-08-31T01:00:00.000Z" };
+    expect(savedBuildRecordFromUnknown({ ...build, purchasePriceHistory })?.purchasePriceHistory).toEqual(purchasePriceHistory);
+    expect(savedBuildRecordFromUnknown({ ...build, purchasePriceHistory: { ...purchasePriceHistory, priceHistory: { removed: purchasePriceHistory.priceHistory["part:cpu:cpu-1"] } } })?.purchasePriceHistory).toBeUndefined();
   });
 
   it("never exposes persisted monitor state through the public saved build shape", () => {
@@ -44,7 +50,11 @@ describe("saved build monitor persistence", () => {
     expect(schema).toContain("check_snapshot JSONB");
     expect(schema).toContain("check_history JSONB");
     expect(schema).toContain("monitor_state JSONB");
+    expect(schema).toContain("purchase_progress JSONB");
+    expect(schema).toContain("purchase_price_history JSONB");
     expect(schema).toContain("ADD COLUMN IF NOT EXISTS monitor_state JSONB");
+    expect(schema).toContain("ADD COLUMN IF NOT EXISTS purchase_progress JSONB");
+    expect(schema).toContain("ADD COLUMN IF NOT EXISTS purchase_price_history JSONB");
     expect(schema).toContain("version_group_id TEXT");
     expect(schema).toContain("version_number INTEGER");
     expect(schema).toContain("derived_from_build_id TEXT");

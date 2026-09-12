@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { CATALOG_BATCH_ID_LIMIT, parseCatalogBatchIds, parseCatalogBatchQuery } from "./catalog-batch";
 
 describe("catalog batch id request", () => {
@@ -13,6 +13,18 @@ describe("catalog batch id request", () => {
     const oversized = parseCatalogBatchIds({ ids: Array.from({ length: CATALOG_BATCH_ID_LIMIT + 1 }, (_, index) => `part-${index}`) });
     expect(oversized.ids).toHaveLength(CATALOG_BATCH_ID_LIMIT);
     expect(oversized.errors[0]).toContain(`최대 ${CATALOG_BATCH_ID_LIMIT}개`);
+  });
+
+  it("tracks duplicate IDs without scanning the accepted list for every input", () => {
+    const includesSpy = vi.spyOn(Array.prototype, "includes");
+    try {
+      const result = parseCatalogBatchIds({ ids: Array.from({ length: 5_000 }, (_, index) => `part-${index}`) });
+      expect(result.ids).toHaveLength(CATALOG_BATCH_ID_LIMIT);
+      expect(result.errors[0]).toContain(`최대 ${CATALOG_BATCH_ID_LIMIT}개`);
+      expect(includesSpy).not.toHaveBeenCalled();
+    } finally {
+      includesSpy.mockRestore();
+    }
   });
 
   it("parses comma-separated GET query ids with the same validation", () => {

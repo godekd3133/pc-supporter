@@ -60,4 +60,30 @@ describe("purchase readiness", () => {
     expect(readiness.state).toBe("ready");
     expect(readiness.items.find((item) => item.id === "physical")).toMatchObject({ state: "pass" });
   });
+
+  it("keeps a build in review when power or cooling headroom is narrow", () => {
+    const readiness = purchaseReadinessFor({
+      ...baseResult,
+      metrics: {
+        powerHeadroomW: 100,
+        psuWattageW: 850,
+        recommendedPsuW: 750,
+        coolerHeadroomW: 20,
+        coolerCapacityW: 160,
+        cpuPowerW: 140
+      }
+    });
+    const physical = readiness.items.find((item) => item.id === "physical");
+
+    expect(readiness.state).toBe("review");
+    expect(physical).toMatchObject({ state: "review", label: "장착·전력·냉각" });
+    expect(physical?.summary).toContain("냉각 여유");
+  });
+
+  it("blocks purchase when a resource budget is below zero", () => {
+    const readiness = purchaseReadinessFor({ ...baseResult, metrics: { powerHeadroomW: -1, psuWattageW: 750, recommendedPsuW: 751 } });
+
+    expect(readiness.state).toBe("blocked");
+    expect(readiness.items.find((item) => item.id === "physical")).toMatchObject({ state: "blocked" });
+  });
 });

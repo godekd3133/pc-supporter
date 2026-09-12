@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   buildDanawaListAjaxParams,
   parseDanawaListPage,
@@ -10,8 +10,14 @@ import {
   parsePciePowerConnectors,
   parsePciePowerOptions,
   parseDanawaProductPage,
-  reparseDanawaPart
+  reparseDanawaPart,
+  crawlDanawaCategory,
+  retryDanawaCategoryPage
 } from "./danawa";
+
+function listPageHtml(productCodes: string[], totalProductCount: number) {
+  return `<input id="totalProductCount" value="${totalProductCount}" /><ul>${productCodes.map((code) => `<li class="prod_item" id="productItem${code}"><p class="prod_name"><a name="productName" href="https://prod.danawa.com/info/?pcode=${code}&cate=112747">CPU ${code}</a></p></li>`).join("")}</ul>`;
+}
 
 describe("Danawa parser", () => {
   it("extracts product codes from the structured list markup", () => {
@@ -238,6 +244,22 @@ describe("Danawa parser", () => {
     expect(part.specs.socket).toBe("LGA1851");
   });
 
+  it("normalizes reverse numeric socket labels and socket revisions", () => {
+    const lga1700 = parseDanawaProductPage("cpu", {
+      name: "인텔 CPU",
+      url: "https://prod.danawa.com/info/?pcode=27016&cate=112747",
+      sourceProductCode: "27016"
+    }, `<title>인텔 CPU : 다나와 가격비교</title><meta name="description" content="인텔(1700소켓) / 6코어 / DDR5 / TDP: 65W" />`, "112747");
+    const lga1151v2 = parseDanawaProductPage("cpu", {
+      name: "인텔 구형 CPU",
+      url: "https://prod.danawa.com/info/?pcode=27017&cate=112747",
+      sourceProductCode: "27017"
+    }, `<title>인텔 구형 CPU : 다나와 가격비교</title><meta name="description" content="인텔(1151-v2소켓) / 4코어 / DDR4 / TDP: 65W" />`, "112747");
+
+    expect(lga1700.specs.socket).toBe("LGA1700");
+    expect(lga1151v2.specs.socket).toBe("LGA1151-V2");
+  });
+
   it("reads alternate CPU labels used by newer Danawa products", () => {
     const item = {
       name: "인텔 코어 울트라7",
@@ -276,6 +298,8 @@ describe("Danawa parser", () => {
     expect(part.specs.m2Interfaces).toEqual(["NVMe"]);
     expect(part.specs.pcieX16Slots).toBe(1);
     expect(part.specs.pcieX8Slots).toBe(0);
+    expect(part.specs.pcieX4Slots).toBe(1);
+    expect(part.specs.pcieX1Slots).toBe(0);
     expect(part.specs.memoryFormFactor).toBeUndefined();
     expect(part.missingFields).toEqual([]);
   });
@@ -336,6 +360,28 @@ describe("Danawa parser", () => {
     expect(memory.specs.speedMhz).toBe(800);
     expect(memory.specs.formFactor).toBe("SO-DIMM");
     expect(ssd.specs.formFactor).toBe("2.5인치");
+  });
+
+  it("normalizes mSATA form factors without treating them as unknown storage", () => {
+    const ssd = parseDanawaProductPage("ssd", {
+      name: "트랜센드 mSATA 256GB",
+      url: "https://prod.danawa.com/info/?pcode=27018&cate=112760",
+      sourceProductCode: "27018"
+    }, `<title>트랜센드 mSATA 256GB : 다나와 가격비교</title><meta name="description" content="Mini SATA(mSATA) / SATA3 / TLC / 256GB" />`, "112760");
+
+    expect(ssd.specs.formFactor).toBe("mSATA");
+    expect(ssd.missingFields).not.toContain("formFactor");
+  });
+
+  it("does not attach storage-only missing fields to non-storage accessories", () => {
+    const computerCase = parseDanawaProductPage("case", {
+      name: "AONE PCI-E 라이저 케이블",
+      url: "https://prod.danawa.com/info/?pcode=27019&cate=112775",
+      sourceProductCode: "27019"
+    }, `<title>AONE PCI-E 라이저 케이블 : 다나와 가격비교</title><meta name="description" content="액세서리 / 라이저 케이블" />`, "112775");
+
+    expect(computerCase.listingType).toBe("accessory");
+    expect(computerCase.missingFields).not.toContain("internal storage device");
   });
 
   it("normalizes EXPO and XMP memory profile labels for RAM and motherboards", () => {
@@ -647,7 +693,7 @@ describe("Danawa parser", () => {
       source: "danawa" as const,
       sourceProductCode: "27019",
       rawSpecText: "AMD(소켓AM5) / DDR5 / SATA3: 4개",
-      specs: { m2Slots: 2, m2Interfaces: ["SATA" as const], m2PcieGenerations: [5], m2LaneSharing: true as const, m2LaneSharingScopes: ["pcie" as const], m2LaneSharingNote: "오래된 원문" },
+      specs: { m2Slots: 2, m2Interfaces: ["SATA" as const], m2PcieGenerations: [5], m2LaneSharing: true as const, m2LaneSharingScopes: ["pcie" as const], m2LaneSharingNote: "오래된 원문", pcieX16Slots: 1, pcieX8Slots: 1, pcieX4Slots: 1, pcieX1Slots: 1 },
       dataQuality: "live" as const,
       missingFields: [],
       updatedAt: "2026-08-27T00:00:00.000Z"
@@ -659,6 +705,94 @@ describe("Danawa parser", () => {
     expect(reparsed.specs.m2LaneSharing).toBeUndefined();
     expect(reparsed.specs.m2LaneSharingScopes).toBeUndefined();
     expect(reparsed.specs.m2LaneSharingNote).toBeUndefined();
+    expect(reparsed.specs.pcieX16Slots).toBeUndefined();
+    expect(reparsed.specs.pcieX8Slots).toBeUndefined();
+    expect(reparsed.specs.pcieX4Slots).toBeUndefined();
+    expect(reparsed.specs.pcieX1Slots).toBeUndefined();
+  });
+
+  it("parses unbracketed Danawa expansion-slot headings from stored summaries", () => {
+    const stored = {
+      id: "danawa-motherboard-27020",
+      category: "motherboard" as const,
+      name: "무괄호 확장슬롯 보드",
+      source: "danawa" as const,
+      sourceProductCode: "27020",
+      rawSpecText: "AMD(소켓AM4) / DDR4 / 확장슬롯 PCIe버전: PCIe3.0 / PCIex16: 1개 / PCIex1: 2개 / 저장장치 SATA3: 4개 / M.2: 1개",
+      specs: { socket: "AM4", memoryType: "DDR4" },
+      dataQuality: "incomplete" as const,
+      missingFields: ["m2Slots"],
+      updatedAt: "2026-08-27T00:00:00.000Z"
+    };
+
+    const reparsed = reparseDanawaPart(stored);
+    expect(reparsed.specs.pcieX16Slots).toBe(1);
+    expect(reparsed.specs.pcieX8Slots).toBe(0);
+    expect(reparsed.specs.pcieX4Slots).toBe(0);
+    expect(reparsed.specs.pcieX1Slots).toBe(2);
+  });
+
+  it("parses PCIe version sections when Danawa omits the expansion-slot label", () => {
+    const stored = {
+      id: "danawa-motherboard-27021",
+      category: "motherboard" as const,
+      name: "PCIe 버전 section 보드",
+      source: "danawa" as const,
+      sourceProductCode: "27021",
+      rawSpecText: "인텔 H610 / 인텔(소켓1700) / DDR4 / PCIe버전: PCIe4.0, PCIe3.0 / PCIex16: 1개 / PCIex1: 2개 / [저장장치] M.2: 1개 / SATA3: 4개",
+      specs: { socket: "LGA1700", memoryType: "DDR4" },
+      dataQuality: "incomplete" as const,
+      missingFields: ["m2Slots"],
+      updatedAt: "2026-08-27T00:00:00.000Z"
+    };
+
+    const reparsed = reparseDanawaPart(stored);
+    expect(reparsed.specs.pcieX16Slots).toBe(1);
+    expect(reparsed.specs.pcieX8Slots).toBe(0);
+    expect(reparsed.specs.pcieX4Slots).toBe(0);
+    expect(reparsed.specs.pcieX1Slots).toBe(2);
+  });
+
+  it("parses explicit PCIe slot counts without a section heading", () => {
+    const stored = {
+      id: "danawa-motherboard-27022",
+      category: "motherboard" as const,
+      name: "구형 PCIe label 보드",
+      source: "danawa" as const,
+      sourceProductCode: "27022",
+      rawSpecText: "인텔 H61 / 인텔(소켓1155) / DDR3 / VGA 연결: PCIe x16 / M-ATX / PCIex16: 1개 / PCIex1: 3개 / [후면단자] HDMI / DVI",
+      specs: { socket: "LGA1155", memoryType: "DDR3" },
+      dataQuality: "incomplete" as const,
+      missingFields: ["m2Slots"],
+      updatedAt: "2026-08-27T00:00:00.000Z"
+    };
+
+    const reparsed = reparseDanawaPart(stored);
+    expect(reparsed.specs.pcieX16Slots).toBe(1);
+    expect(reparsed.specs.pcieX8Slots).toBe(0);
+    expect(reparsed.specs.pcieX4Slots).toBe(0);
+    expect(reparsed.specs.pcieX1Slots).toBe(3);
+  });
+
+  it("does not infer PCIe slot counts from a VGA interface label alone", () => {
+    const stored = {
+      id: "danawa-motherboard-27023",
+      category: "motherboard" as const,
+      name: "VGA 인터페이스만 있는 보드",
+      source: "danawa" as const,
+      sourceProductCode: "27023",
+      rawSpecText: "인텔 H61 / 인텔(소켓1155) / DDR3 / VGA 연결: PCIe x16 / M-ATX / [후면단자] HDMI / DVI",
+      specs: { socket: "LGA1155", memoryType: "DDR3" },
+      dataQuality: "incomplete" as const,
+      missingFields: ["m2Slots"],
+      updatedAt: "2026-08-27T00:00:00.000Z"
+    };
+
+    const reparsed = reparseDanawaPart(stored);
+    expect(reparsed.specs.pcieX16Slots).toBeUndefined();
+    expect(reparsed.specs.pcieX8Slots).toBeUndefined();
+    expect(reparsed.specs.pcieX4Slots).toBeUndefined();
+    expect(reparsed.specs.pcieX1Slots).toBeUndefined();
   });
 
   it("marks storage capacity as unknown when raw text only contains DRAM and SLC cache sizes", () => {
@@ -698,5 +832,178 @@ describe("Danawa parser", () => {
     expect(part.specs.radiatorSizeMm).toBe(360);
     expect(part.specs.maxCoolerHeightMm).toBeUndefined();
     expect(part.missingFields).toEqual([]);
+  });
+
+  it("reports page-level progress and successful page telemetry", async () => {
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const url = String(input);
+      const html = url.includes("page=2")
+        ? listPageHtml(["1003", "1004"], 4)
+        : listPageHtml(["1001", "1002"], 4);
+      return new Response(html, { status: 200, headers: { "content-type": "text/html" } });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const progress: Array<{ currentPage: number; pagesExpected?: number; lastSuccessfulPage: number; pageRetries: number }> = [];
+      const result = await crawlDanawaCategory("cpu", "112747", {
+        all: true,
+        details: false,
+        delayMs: 0,
+        retries: 0,
+        onPageProgress: (snapshot) => {
+          progress.push({
+            currentPage: snapshot.currentPage,
+            pagesExpected: snapshot.pagesExpected,
+            lastSuccessfulPage: snapshot.lastSuccessfulPage,
+            pageRetries: snapshot.pageRetries
+          });
+        }
+      });
+
+      expect(result.pagesExpected).toBe(2);
+      expect(result.pagesVisited).toBe(2);
+      expect(result.lastSuccessfulPage).toBe(2);
+      expect(result.pageRetries).toBe(0);
+      expect(result.failedPages).toEqual([]);
+      expect(result.successfulPages).toEqual([1, 2]);
+      expect(result.pageProductCodes).toEqual({ "1": ["1001", "1002"], "2": ["1003", "1004"] });
+      expect(result.error).toBeUndefined();
+      expect(progress).toEqual(expect.arrayContaining([
+        expect.objectContaining({ currentPage: 1, pagesExpected: 2, lastSuccessfulPage: 1, pageRetries: 0 }),
+        expect.objectContaining({ currentPage: 2, pagesExpected: 2, lastSuccessfulPage: 2, pageRetries: 0 })
+      ]));
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("retries one page with the same pagination context and returns only that page", async () => {
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const url = String(input);
+      const html = url.includes("page=2")
+        ? listPageHtml(["3003", "3004"], 4)
+        : listPageHtml(["3001", "3002"], 4);
+      return new Response(html, { status: 200, headers: { "content-type": "text/html" } });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const result = await retryDanawaCategoryPage("cpu", "112747", 2, {
+        details: false,
+        delayMs: 0,
+        retries: 0,
+        expectedPages: 2
+      });
+
+      expect(result.page).toBe(2);
+      expect(result.parts.map((part) => part.sourceProductCode)).toEqual(["3003", "3004"]);
+      expect(result.listedProducts).toBe(2);
+      expect(result.successfulPages).toEqual([2]);
+      expect(result.pageProductCodes).toEqual({ "2": ["3003", "3004"] });
+      expect(result.failedPages).toEqual([]);
+      expect(result.error).toBeUndefined();
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("keeps the failed list page and actual retry count when exhaustive collection stops", async () => {
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const url = String(input);
+      if (url.includes("page=2")) throw new TypeError("simulated page timeout");
+      return new Response(listPageHtml(["2001", "2002"], 4), { status: 200, headers: { "content-type": "text/html" } });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const result = await crawlDanawaCategory("cpu", "112747", {
+        all: true,
+        details: false,
+        delayMs: 0,
+        retries: 1,
+        onPageProgress: () => undefined
+      });
+
+      expect(result.pagesExpected).toBe(2);
+      expect(result.pagesVisited).toBe(1);
+      expect(result.lastSuccessfulPage).toBe(1);
+      expect(result.pageRetries).toBe(1);
+      expect(result.coverage).toBe("partial");
+      expect(result.failedPages).toHaveLength(1);
+      expect(result.failedPages[0]).toMatchObject({ category: "cpu", page: 2, stage: "list", attempts: 2, message: "simulated page timeout" });
+      expect(result.error).toContain("2페이지 목록 수집 실패");
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("propagates an aborted page retry to the batch owner instead of recording a false page failure", async () => {
+    const controller = new AbortController();
+    const abortError = Object.assign(new Error("The operation was aborted."), { name: "AbortError" });
+    const fetchMock = vi.fn(async (_input: string | URL, init?: RequestInit) => {
+      await new Promise<never>((_resolve, reject) => {
+        if (init?.signal?.aborted) {
+          reject(abortError);
+          return;
+        }
+        init?.signal?.addEventListener("abort", () => reject(abortError), { once: true });
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const retry = retryDanawaCategoryPage("cpu", "112747", 2, {
+        details: false,
+        delayMs: 0,
+        retries: 2,
+        signal: controller.signal
+      });
+      for (let attempt = 0; attempt < 20 && fetchMock.mock.calls.length === 0; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      controller.abort();
+      await expect(retry).rejects.toMatchObject({ name: "AbortError" });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("propagates an abort during detail enrichment instead of downgrading the page to an incomplete result", async () => {
+    const controller = new AbortController();
+    const abortError = Object.assign(new Error("The operation was aborted."), { name: "AbortError" });
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/list/")) {
+        return new Response(listPageHtml(["4001", "4002"], 2), { status: 200, headers: { "content-type": "text/html" } });
+      }
+      await new Promise<never>((_resolve, reject) => {
+        if (init?.signal?.aborted) {
+          reject(abortError);
+          return;
+        }
+        init?.signal?.addEventListener("abort", () => reject(abortError), { once: true });
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const retry = retryDanawaCategoryPage("cpu", "112747", 1, {
+        details: true,
+        delayMs: 0,
+        retries: 0,
+        expectedPages: 1,
+        signal: controller.signal
+      });
+      for (let attempt = 0; attempt < 20 && fetchMock.mock.calls.length < 2; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      controller.abort();
+      await expect(retry).rejects.toMatchObject({ name: "AbortError" });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

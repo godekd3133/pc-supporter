@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { AccessoryConnectivityPlan, AccessoryItem, AccessoryRgbConnectionPlan, BuildSelection, CompatibilityResult, Part } from "./types";
+import type { AccessoryConnectivityPlan, AccessoryItem, AccessoryRgbConnectionPlan, BuildSelection, CompatibilityResult, Part, RecommendationPlan } from "./types";
 import type { GpuFitSummary } from "./gpu-fit";
 import { compatibilityReportJsonFor, compatibilityReportTextFor } from "./compatibility-report";
+import { savedBuildCheckSnapshotFor } from "./saved-build-check";
 
 const cpu: Part = {
   id: "cpu-1", category: "cpu", name: "테스트 CPU", priceWon: 100000, source: "seed", specs: {}, dataQuality: "seed", missingFields: [], updatedAt: "2026-08-28T00:00:00.000Z", danawaUrl: "https://prod.danawa.com/info/?pcode=1"
@@ -15,7 +16,7 @@ const result = {
   blockerCount: 1,
   warningCount: 0,
   unknownCount: 0,
-  findings: [{ id: "finding-1", ruleId: "cpu-motherboard-socket", severity: "blocker", title: "소켓이 맞지 않습니다.", message: "CPU와 메인보드 소켓이 다릅니다.", affectedPartIds: [cpu.id], facts: [{ label: "CPU 소켓", actual: "AM5", expected: "LGA1700" }], actions: [], suggestions: [{ part: { ...cpu, id: "cpu-2", name: "대체 CPU", priceWon: 120000 }, score: 1, reason: "소켓 호환", remainingBlockers: 0, remainingWarnings: 0, fixesCurrentIssue: true, similarityScore: 82, similarityLabel: "유사", similarityEvidence: { comparedDimensions: 2, totalDimensions: 2, confidence: "high" }, performanceSummary: "비교 스펙 +5%", profileSummary: "일반형 기준", valueScore: 120, valueLabel: "가성비 균형", valueEvidence: { scoreScale: 200, currentPriceWon: 200000, candidatePriceWon: 120000, priceDeltaWon: -80000, priceChangePercent: -40, similarityScore: 82 }, remainingUnknown: 0 }] }],
+  findings: [{ id: "finding-1", ruleId: "cpu-motherboard-socket", severity: "blocker", title: "소켓이 맞지 않습니다.", message: "CPU와 메인보드 소켓이 다릅니다.", affectedPartIds: [cpu.id], facts: [{ label: "CPU 소켓", actual: "AM5", expected: "LGA1700" }], actions: [], suggestions: [{ part: { ...cpu, id: "cpu-2", name: "대체 CPU", priceWon: 120000 }, score: 1, reason: "소켓 호환", candidateRisk: "safe", candidateReasons: ["소켓 일치", "전체 규칙 재검사 통과"], candidateBlockerCount: 0, candidateWarningCount: 0, candidateUnknownCount: 0, remainingBlockers: 0, remainingWarnings: 0, fixesCurrentIssue: true, similarityScore: 82, similarityLabel: "유사", similarityEvidence: { comparedDimensions: 2, totalDimensions: 2, confidence: "high" }, performanceSummary: "비교 스펙 +5%", profileSummary: "일반형 기준", valueScore: 120, valueLabel: "가성비 균형", valueEvidence: { scoreScale: 200, currentPriceWon: 200000, candidatePriceWon: 120000, priceDeltaWon: -80000, priceChangePercent: -40, similarityScore: 82 }, remainingUnknown: 0 }] }],
   repairPlans: [],
   recommendationPreferences: { profile: "gaming", priority: "balanced", listingPolicy: "retail_only", gamingResolution: "1440p", gamingRefreshRate: 144 },
   metrics: {},
@@ -52,13 +53,15 @@ const result = {
 
 describe("compatibility report export", () => {
   it("includes status, facts, accessory quantities, suggestions, and price summary", () => {
-    const report = compatibilityReportTextFor(result, build, new Map([[cpu.id, cpu]]), new Map([[accessory.id, accessory]]));
+    const report = compatibilityReportTextFor(result, build, new Map([[cpu.id, cpu]]), new Map([[accessory.id, accessory]]), { path: "/result?finding=blocker#findings", findingFilter: "blocker", section: "findings" });
 
     expect(report).toContain("판정: 호환 불가");
     expect(report).toContain("CPU 소켓: AM5 · 기대값 LGA1700");
     expect(report).toContain("테스트 써멀 ×2");
     expect(report).toContain("대상 SSD ssd-target");
-    expect(report).toContain("대체 CPU · 유사 82점");
+    expect(report).toContain("대체 CPU · 안전 · 후보 위험 차단 0개/주의 0개/확인 0개");
+    expect(report).toContain("가상 적용 후 차단 0개/주의 0개/확인 0개");
+    expect(report).toContain("후보 확인 근거: 소켓 일치 · 전체 규칙 재검사 통과");
     expect(report).toContain("[주변 부품 호환 점검]");
     expect(report).toContain("방열판 수량이 적습니다.");
     expect(report).toContain("다음 행동: 방열판 수량을 조정하세요.");
@@ -70,6 +73,9 @@ describe("compatibility report export", () => {
     expect(report).toContain("해결해야 할 충돌 제거");
     expect(report).toContain("소켓이 맞지 않습니다.");
     expect(report).toContain("실제 FPS·벤치마크 순위");
+    expect(report).toContain("결과 경로: /result?finding=blocker#findings");
+    expect(report).toContain("상세 필터: 차단 오류");
+    expect(report).toContain("열린 위치: 검사 결과 상세");
   });
 
   it("does not turn an unknown price into a numeric zero", () => {
@@ -77,6 +83,139 @@ describe("compatibility report export", () => {
     const report = compatibilityReportTextFor(result, build, new Map([[cpu.id, unknownPrice]]), new Map([[accessory.id, accessory]]));
 
     expect(report).toContain("CPU: 테스트 CPU · 가격 확인 필요");
+  });
+
+  it("includes gaming target evidence for GPU alternatives in text and JSON reports", () => {
+    const gpuTarget = {
+      resolution: "1440p" as const,
+      refreshRate: 144 as const,
+      targetVramGb: 12,
+      currentVramGb: 8,
+      candidateVramGb: 12,
+      currentFit: "partial" as const,
+      candidateFit: "met" as const,
+      summary: "QHD · 1440p · 144Hz · 권장 VRAM 12GB · 현재 8GB → 후보 12GB · 권장 기준 충족"
+    };
+    const gpuPart: Part = { ...cpu, id: "gpu-report", category: "gpu", name: "대체 GPU", specs: { vramGb: 12 } };
+    const gpuSuggestion = { ...result.findings[0].suggestions![0], part: gpuPart, gpuTarget };
+    const gpuResult = { ...result, findings: [{ ...result.findings[0], suggestions: [gpuSuggestion] }] };
+    const report = compatibilityReportTextFor(gpuResult, build, new Map([[cpu.id, cpu], [gpuPart.id, gpuPart]]), new Map([[accessory.id, accessory]]));
+    const payload = JSON.parse(compatibilityReportJsonFor(gpuResult, build, gpuResult.recommendationPreferences, new Map([[cpu.id, cpu], [gpuPart.id, gpuPart]])));
+
+    expect(report).toContain("게이밍 목표 근거: QHD · 1440p · 144Hz");
+    expect(payload.result.findings[0].suggestions[0].gpuTarget).toMatchObject({ candidateFit: "met", targetVramGb: 12 });
+  });
+
+  it("exports selected CPU and GPU benchmark evidence without inventing missing scores", () => {
+    const benchmarkCpu: Part = {
+      ...cpu,
+      id: "benchmark-cpu",
+      name: "벤치 CPU",
+      specs: {
+        cinebenchR23Single: 2200,
+        cinebenchR23Multi: 12000,
+        benchmarkProvenance: { sourceKind: "official", sourceNote: "공식 측정표", sourceUrl: "https://vendor.example/cpu", updatedAt: "2026-09-01T00:00:00.000Z" }
+      }
+    };
+    const benchmarkGpu: Part = { ...cpu, id: "benchmark-gpu", category: "gpu", name: "벤치 GPU", specs: { gpu3dmarkTimeSpyScore: 21000 } };
+    const benchmarkBuild = { ...build, cpu: { partId: benchmarkCpu.id, quantity: 1 }, gpu: { partId: benchmarkGpu.id, quantity: 1 } };
+    const partMap = new Map([[benchmarkCpu.id, benchmarkCpu], [benchmarkGpu.id, benchmarkGpu]]);
+    const report = compatibilityReportTextFor(result, benchmarkBuild, partMap, new Map([[accessory.id, accessory]]));
+    const payload = JSON.parse(compatibilityReportJsonFor(result, benchmarkBuild, result.recommendationPreferences, partMap));
+
+    expect(report).toContain("[원본 benchmark 근거]");
+    expect(report).toContain("Cinebench R23 싱글: 2,200점");
+    expect(report).toContain("Cinebench R23 멀티: 12,000점");
+    expect(report).toContain("3DMark Time Spy: 21,000점");
+    expect(report).toContain("3DMark Port Royal: 확인 필요");
+    expect(report).toContain("제조사·공식 측정표 · 공식 측정표");
+    expect(payload.benchmarkEvidence).toHaveLength(2);
+    expect(payload.benchmarkEvidence[0]).toMatchObject({ category: "cpu", status: "complete", provenance: { sourceUrl: "https://vendor.example/cpu" } });
+    expect(payload.benchmarkEvidence[1]).toMatchObject({ category: "gpu", status: "partial", presentCount: 1, totalCount: 2 });
+  });
+
+  it("includes actionable repair-plan detail in the text report", () => {
+    const plan: RecommendationPlan = {
+      label: "최소 변경",
+      title: "소켓 해결 플랜",
+      changes: [{
+        kind: "replace_part",
+        category: "cpu",
+        fromPartId: cpu.id,
+        fromPartName: cpu.name,
+        toPart: { ...cpu, id: "cpu-plan", name: "플랜 CPU", priceWon: 80000 },
+        priceDeltaWon: -20000,
+        similarityScore: 91,
+        similarityLabel: "동급",
+        performanceSummary: "비교 스펙 유지",
+      }],
+      resolvedFindings: 1,
+      resolvedFindingTitles: ["소켓이 맞지 않습니다."],
+      remainingFindingTitles: ["M.2 슬롯 확인 필요"],
+      remainingFindingRuleIds: ["m2-slot-generation"],
+      resolvedBlockers: 1,
+      resolvedUnknown: 0,
+      remainingBlockers: 0,
+      remainingWarnings: 1,
+      remainingUnknown: 1,
+      afterTotalPriceWon: 130000,
+      priceDeltaWon: -20000,
+      budgetWon: 150000,
+      budgetDeltaWon: -20000,
+      withinBudget: true,
+      priceComplete: true,
+      similarityScore: 91,
+      similarityLabel: "동급",
+      reason: "소켓 충돌을 해결하고 남은 M.2 조건은 별도로 확인합니다.",
+      profileSummary: "게이밍 기준",
+    };
+    const report = compatibilityReportTextFor({ ...result, repairPlans: [plan] }, build, new Map([[cpu.id, cpu]]), new Map([[accessory.id, accessory]]));
+
+    expect(report).toContain("[자동 해결 플랜]");
+    expect(report).toContain("### [최소 변경] 소켓 해결 플랜");
+    expect(report).toContain("적용 후 위험: 차단 0개 · 주의 1개 · 확인 필요 1개");
+    expect(report).toContain("적용 후 남는 finding: M.2 슬롯 확인 필요");
+    expect(report).toContain("잔여 규칙 ID: m2-slot-generation");
+    expect(report).toContain("변경 부품:");
+    expect(report).toContain("CPU: 테스트 CPU → 플랜 CPU · 가격 -20,000원 · 비교 스펙 유지");
+    expect(report).toContain("목표 예산: 예산 내 · 150,000원 기준 20,000원 여유");
+  });
+
+  it("includes saved-versus-current recheck diff in text and JSON exports", () => {
+    const savedSnapshot = savedBuildCheckSnapshotFor(result);
+    const currentResult: CompatibilityResult = {
+      ...result,
+      status: "needs_review",
+      blockerCount: 0,
+      warningCount: 1,
+      totalPriceWon: 120000,
+      checkedAt: "2026-08-28T01:00:00.000Z",
+      findings: [{ ...result.findings[0], severity: "warning", title: "소켓 확인 필요", message: "현재 소켓 상태를 다시 확인하세요." }]
+    };
+    const report = compatibilityReportTextFor(currentResult, build, new Map([[cpu.id, cpu]]), new Map([[accessory.id, accessory]]), undefined, savedSnapshot);
+    const payload = JSON.parse(compatibilityReportJsonFor(currentResult, build, currentResult.recommendationPreferences, undefined, undefined, savedSnapshot));
+
+    expect(report).toContain("[저장 당시 대비 현재 재검사]");
+    expect(report).toContain("판정: 호환 불가 → 확인 필요");
+    expect(report).toContain("가격: 110,000원 → 120,000원 · 변화 +10,000원");
+    expect(report).toContain("변화 방향: 개선");
+    expect(report).toContain("finding 변화: 해결 0개 · 신규 0개 · 심각도 변경 1개 · 내용 변경 0개");
+    expect(report).toContain("[심각도 변경] 소켓 확인 필요 · 소켓이 맞지 않습니다. → 소켓 확인 필요 · 규칙 cpu-motherboard-socket");
+    expect(payload.savedCheckSnapshot.status).toBe("incompatible");
+    expect(payload.savedCheckDiff).toMatchObject({ statusChanged: true, riskChanged: true, priceChanged: true });
+    expect(payload.savedCheckTransition).toMatchObject({ direction: "improved", blockerDelta: -1, warningDelta: 1, priceDeltaWon: 10000, severityChangedFindingCount: 1 });
+  });
+
+  it("includes resource-budget drift in saved recheck exports", () => {
+    const savedResult = { ...result, metrics: { powerHeadroomW: 150, psuWattageW: 1000, recommendedPsuW: 850, coolerHeadroomW: 120, coolerCapacityW: 240, cpuPowerW: 120 } };
+    const currentResult = { ...result, metrics: { powerHeadroomW: 100, psuWattageW: 950, recommendedPsuW: 850, coolerHeadroomW: 40, coolerCapacityW: 180, cpuPowerW: 140 }, checkedAt: "2026-08-28T01:00:00.000Z" };
+    const savedSnapshot = savedBuildCheckSnapshotFor(savedResult);
+    const report = compatibilityReportTextFor(currentResult, build, new Map([[cpu.id, cpu]]), new Map([[accessory.id, accessory]]), undefined, savedSnapshot);
+    const payload = JSON.parse(compatibilityReportJsonFor(currentResult, build, currentResult.recommendationPreferences, undefined, undefined, savedSnapshot));
+
+    expect(report).toContain("전력·냉각 예산: 전력 150W 여유 · 냉각 120W 여유 → 전력 100W 여유 · 냉각 40W 여유");
+    expect(payload.savedCheckDiff).toMatchObject({ resourceBudgetChanged: true });
+    expect(payload.savedCheckTransition).toMatchObject({ resourceBudgetChanged: true, resourceRiskIncreased: true, powerHeadroomDeltaW: -50, coolerHeadroomDeltaW: -80 });
   });
 
   it("includes structured GPU fit evidence when the engine provides it", () => {
@@ -217,7 +356,7 @@ describe("compatibility report export", () => {
   });
 
   it("exports a parseable JSON envelope with the build and result", () => {
-    const payload = JSON.parse(compatibilityReportJsonFor(result, build, result.recommendationPreferences));
+    const payload = JSON.parse(compatibilityReportJsonFor(result, build, result.recommendationPreferences, undefined, { path: "/result#purchase-list", findingFilter: "all", section: "purchase-list" }));
 
     expect(payload.reportVersion).toBe(1);
     expect(payload.build.cpu.partId).toBe("cpu-1");
@@ -226,6 +365,7 @@ describe("compatibility report export", () => {
     expect(payload.actionCenter.state).toBe("blocked");
     expect(payload.actionCenter.actions[0].id).toBe("finding:cpu-motherboard-socket");
     expect(payload.assemblyPlan.steps[0]).toMatchObject({ id: "resolve-conflicts", status: "blocked" });
+    expect(payload.viewState).toEqual({ path: "/result#purchase-list", findingFilter: "all", section: "purchase-list" });
   });
 
   it("exports structured connectivity evidence when catalog parts are supplied", () => {

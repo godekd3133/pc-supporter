@@ -12,6 +12,9 @@ export interface BuildHistoryEntry {
   changedAt: string;
 }
 
+export const BUILD_HISTORY_MAX_ENTRIES = 20;
+export const BUILD_HISTORY_COALESCE_WINDOW_MS = 800;
+
 const BUILD_CATEGORY_KEYS: Array<[PartCategory, keyof BuildSelection]> = [
   ["cpu", "cpu"],
   ["cooler", "cooler"],
@@ -64,4 +67,23 @@ export function buildInputChangeLabel(before: BuildInputSnapshot, after: BuildIn
   const preferences = changedPreferenceLabels(before.recommendationPreferences, after.recommendationPreferences);
   const labels = [...categories, ...preferences];
   return labels.length > 0 ? labels.join(" · ") + " 변경" : "구성 변경";
+}
+
+/**
+ * Treat rapid edits as one user-level change while keeping the earliest
+ * snapshot so a restore returns to the state before the edit burst.
+ */
+export function appendBuildHistoryEntry(entries: ReadonlyArray<BuildHistoryEntry>, entry: BuildHistoryEntry, currentSnapshot: BuildInputSnapshot) {
+  const latest = entries[0];
+  const latestAt = latest ? Date.parse(latest.changedAt) : Number.NaN;
+  const entryAt = Date.parse(entry.changedAt);
+  const canCoalesce = latest !== undefined
+    && Number.isFinite(latestAt)
+    && Number.isFinite(entryAt)
+    && entryAt >= latestAt
+    && entryAt - latestAt <= BUILD_HISTORY_COALESCE_WINDOW_MS;
+  if (canCoalesce) {
+    return [{ ...latest, label: buildInputChangeLabel(latest.snapshot, currentSnapshot), changedAt: entry.changedAt }, ...entries.slice(1)].slice(0, BUILD_HISTORY_MAX_ENTRIES);
+  }
+  return [entry, ...entries].slice(0, BUILD_HISTORY_MAX_ENTRIES);
 }

@@ -39,6 +39,20 @@ export function M2SlotOverridePanel({ onToast, onMetaRefresh }: { onToast: (mess
   const [batchValidatedInput, setBatchValidatedInput] = useState("");
   const [batchBusy, setBatchBusy] = useState(false);
   const [coverageRefreshKey, setCoverageRefreshKey] = useState(0);
+  const boardSearchRequestVersionRef = useRef(0);
+  const coverageBoardRequestVersionRef = useRef(0);
+  const mountedRef = useRef(false);
+  const mutationRequestVersionRef = useRef(0);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      boardSearchRequestVersionRef.current += 1;
+      coverageBoardRequestVersionRef.current += 1;
+      mutationRequestVersionRef.current += 1;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,16 +79,21 @@ export function M2SlotOverridePanel({ onToast, onMetaRefresh }: { onToast: (mess
 
   async function searchBoards(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const requestVersion = ++boardSearchRequestVersionRef.current;
+    coverageBoardRequestVersionRef.current += 1;
+    setBoards([]);
+    setSelectedBoard(null);
     setBoardSearching(true);
     try {
       const query = boardQuery.trim();
       const payload = await api<{ items: Part[] }>(`/api/parts?category=motherboard&q=${encodeURIComponent(query)}&quality=all&sort=name&listingPolicy=all&limit=20`);
+      if (boardSearchRequestVersionRef.current !== requestVersion) return;
       setBoards(payload.items);
       if (payload.items.length === 0) onToast("검색 조건에 맞는 메인보드를 찾지 못했습니다.");
     } catch (error: unknown) {
-      onToast(error instanceof Error ? error.message : "메인보드 검색에 실패했습니다.");
+      if (boardSearchRequestVersionRef.current === requestVersion) onToast(error instanceof Error ? error.message : "메인보드 검색에 실패했습니다.");
     } finally {
-      setBoardSearching(false);
+      if (boardSearchRequestVersionRef.current === requestVersion) setBoardSearching(false);
     }
   }
 
@@ -83,14 +102,16 @@ export function M2SlotOverridePanel({ onToast, onMetaRefresh }: { onToast: (mess
       onToast("진행 중인 저장 작업이 끝난 뒤 메인보드를 열어 주세요.");
       return;
     }
+    const requestVersion = ++coverageBoardRequestVersionRef.current;
     try {
       const part = await api<Part>(`/api/parts/${encodeURIComponent(partId)}`);
+      if (coverageBoardRequestVersionRef.current !== requestVersion) return;
       setBoardQuery(part.name);
       setBoards([part]);
       selectBoard(part);
       window.setTimeout(() => document.querySelector(".m2-override-editor")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
     } catch (error: unknown) {
-      onToast(error instanceof Error ? error.message : "검수 큐의 메인보드를 열지 못했습니다.");
+      if (coverageBoardRequestVersionRef.current === requestVersion) onToast(error instanceof Error ? error.message : "검수 큐의 메인보드를 열지 못했습니다.");
     }
   }
 
@@ -137,6 +158,9 @@ export function M2SlotOverridePanel({ onToast, onMetaRefresh }: { onToast: (mess
       onToast("먼저 매핑할 메인보드를 검색해 선택해 주세요.");
       return;
     }
+    const requestVersion = ++mutationRequestVersionRef.current;
+    const isCurrent = () => mountedRef.current && mutationRequestVersionRef.current === requestVersion;
+    const board = selectedBoard;
     setSaving(true);
     try {
       const payload = {
@@ -150,16 +174,17 @@ export function M2SlotOverridePanel({ onToast, onMetaRefresh }: { onToast: (mess
         ...(sourceNote.trim() ? { sourceNote: sourceNote.trim() } : {}),
         ...(sourceUrl.trim() ? { sourceUrl: sourceUrl.trim() } : {})
       };
-      const result = await api<{ override: M2SlotOverride; part: Part }>(`/api/admin/m2-overrides/${encodeURIComponent(selectedBoard.id)}`, { method: "PUT", body: JSON.stringify(payload) });
+      const result = await api<{ override: M2SlotOverride; part: Part }>(`/api/admin/m2-overrides/${encodeURIComponent(board.id)}`, { method: "PUT", body: JSON.stringify(payload) });
+      if (!isCurrent()) return;
       setOverrides((current) => [result.override, ...current.filter((override) => override.partId !== result.override.partId)]);
       setSlots(result.override.slots);
       setCoverageRefreshKey((current) => current + 1);
       onMetaRefresh();
-      onToast(`${selectedBoard.name}의 M.2 슬롯 매핑을 저장했습니다.`);
+      onToast(`${board.name}의 M.2 슬롯 매핑을 저장했습니다.`);
     } catch (error: unknown) {
-      onToast(error instanceof Error ? error.message : "M.2 슬롯 매핑을 저장하지 못했습니다.");
+      if (isCurrent()) onToast(error instanceof Error ? error.message : "M.2 슬롯 매핑을 저장하지 못했습니다.");
     } finally {
-      setSaving(false);
+      if (isCurrent()) setSaving(false);
     }
   }
 
@@ -169,20 +194,24 @@ export function M2SlotOverridePanel({ onToast, onMetaRefresh }: { onToast: (mess
       return;
     }
     if (!selectedBoard || !window.confirm("이 메인보드의 수동 M.2 슬롯 매핑을 삭제할까요?")) return;
+    const requestVersion = ++mutationRequestVersionRef.current;
+    const isCurrent = () => mountedRef.current && mutationRequestVersionRef.current === requestVersion;
+    const board = selectedBoard;
     setSaving(true);
     try {
-      await api(`/api/admin/m2-overrides/${encodeURIComponent(selectedBoard.id)}`, { method: "DELETE" });
-      setOverrides((current) => current.filter((override) => override.partId !== selectedBoard.id));
-      setSlots(blankSlots(selectedBoard));
+      await api(`/api/admin/m2-overrides/${encodeURIComponent(board.id)}`, { method: "DELETE" });
+      if (!isCurrent()) return;
+      setOverrides((current) => current.filter((override) => override.partId !== board.id));
+      setSlots(blankSlots(board));
       setSourceNote("");
       setSourceUrl("");
       setCoverageRefreshKey((current) => current + 1);
       onMetaRefresh();
       onToast("수동 M.2 슬롯 매핑을 삭제했습니다.");
     } catch (error: unknown) {
-      onToast(error instanceof Error ? error.message : "M.2 슬롯 매핑을 삭제하지 못했습니다.");
+      if (isCurrent()) onToast(error instanceof Error ? error.message : "M.2 슬롯 매핑을 삭제하지 못했습니다.");
     } finally {
-      setSaving(false);
+      if (isCurrent()) setSaving(false);
     }
   }
 
@@ -197,23 +226,28 @@ export function M2SlotOverridePanel({ onToast, onMetaRefresh }: { onToast: (mess
       onToast("검증할 M.2 override JSON을 입력해 주세요.");
       return;
     }
+    const requestVersion = ++mutationRequestVersionRef.current;
+    const isCurrent = () => mountedRef.current && mutationRequestVersionRef.current === requestVersion;
     setBatchBusy(true);
     try {
       const result = await api<M2SlotBatchValidationResponse>("/api/admin/m2-overrides/batch/validate", {
         method: "POST",
         body: batchJson
       });
+      if (!isCurrent()) return;
       setBatchValidation(result);
       setBatchValidatedInput(batchJson);
       onToast(result.invalidCount > 0
         ? `검증 완료: ${result.validCount}개 저장 가능, ${result.invalidCount}개 형식 수정 필요`
         : `검증 완료: ${result.completeCount}개 즉시 적용 가능, ${result.incompleteCount}개는 보완 후 적용됩니다.`);
     } catch (error: unknown) {
-      setBatchValidation(null);
-      setBatchValidatedInput("");
-      onToast(error instanceof Error ? error.message : "M.2 override 일괄 검증에 실패했습니다.");
+      if (isCurrent()) {
+        setBatchValidation(null);
+        setBatchValidatedInput("");
+        onToast(error instanceof Error ? error.message : "M.2 override 일괄 검증에 실패했습니다.");
+      }
     } finally {
-      setBatchBusy(false);
+      if (isCurrent()) setBatchBusy(false);
     }
   }
 
@@ -230,27 +264,33 @@ export function M2SlotOverridePanel({ onToast, onMetaRefresh }: { onToast: (mess
       onToast("수정이 필요한 항목이 있어 일괄 저장하지 않았습니다.");
       return;
     }
+    const requestVersion = ++mutationRequestVersionRef.current;
+    const isCurrent = () => mountedRef.current && mutationRequestVersionRef.current === requestVersion;
     setBatchBusy(true);
     try {
       const result = await api<{ saved: boolean; count: number; items: M2SlotOverride[] }>("/api/admin/m2-overrides/batch", {
         method: "PUT",
         body: batchJson
       });
+      if (!isCurrent()) return;
       setOverrides(result.items);
       setCoverageRefreshKey((current) => current + 1);
       onMetaRefresh();
       onToast(`${result.count}개 메인보드의 M.2 슬롯 매핑을 원자적으로 저장했습니다.`);
     } catch (error: unknown) {
-      onToast(error instanceof Error ? error.message : "M.2 override 일괄 저장에 실패했습니다.");
+      if (isCurrent()) onToast(error instanceof Error ? error.message : "M.2 override 일괄 저장에 실패했습니다.");
     } finally {
-      setBatchBusy(false);
+      if (isCurrent()) setBatchBusy(false);
     }
   }
 
   async function exportBatch() {
+    const requestVersion = ++mutationRequestVersionRef.current;
+    const isCurrent = () => mountedRef.current && mutationRequestVersionRef.current === requestVersion;
     setBatchBusy(true);
     try {
       const result = await api<{ exportedAt: string; items: M2SlotOverride[] }>("/api/admin/m2-overrides/export");
+      if (!isCurrent()) return;
       const blob = new Blob([JSON.stringify({ items: result.items }, null, 2)], { type: "application/json" });
       const url = window.URL.createObjectURL(blob);
       const anchor = document.createElement("a");
@@ -262,9 +302,9 @@ export function M2SlotOverridePanel({ onToast, onMetaRefresh }: { onToast: (mess
       window.URL.revokeObjectURL(url);
       onToast(`${result.items.length}개 M.2 슬롯 매핑을 JSON으로 내보냈습니다.`);
     } catch (error: unknown) {
-      onToast(error instanceof Error ? error.message : "M.2 override 내보내기에 실패했습니다.");
+      if (isCurrent()) onToast(error instanceof Error ? error.message : "M.2 override 내보내기에 실패했습니다.");
     } finally {
-      setBatchBusy(false);
+      if (isCurrent()) setBatchBusy(false);
     }
   }
 
@@ -279,6 +319,15 @@ function M2CoveragePanel({ refreshKey, onSelectBoard, onToast }: { refreshKey: n
   const [error, setError] = useState<string | null>(null);
   const [retryNonce, setRetryNonce] = useState(0);
   const [templateBusy, setTemplateBusy] = useState(false);
+  const mountedRef = useRef(false);
+  const mutationRequestRef = useRef(0);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      mutationRequestRef.current += 1;
+    };
+  }, []);
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -290,9 +339,12 @@ function M2CoveragePanel({ refreshKey, onSelectBoard, onToast }: { refreshKey: n
   }, [refreshKey, retryNonce]);
 
   async function exportReviewTemplate() {
+    const requestVersion = ++mutationRequestRef.current;
+    const isCurrent = () => mountedRef.current && mutationRequestRef.current === requestVersion;
     setTemplateBusy(true);
     try {
       const result = await api<M2SlotReviewTemplate>("/api/admin/m2-overrides/review-template?status=needs_review&limit=100");
+      if (!isCurrent()) return;
       const blob = new Blob([JSON.stringify({ items: result.items }, null, 2)], { type: "application/json" });
       const url = window.URL.createObjectURL(blob);
       const anchor = document.createElement("a");
@@ -304,9 +356,9 @@ function M2CoveragePanel({ refreshKey, onSelectBoard, onToast }: { refreshKey: n
       window.URL.revokeObjectURL(url);
       onToast(`${result.items.length}개 미등록·불완전 보드의 검수 템플릿을 내보냈습니다.`);
     } catch (reason: unknown) {
-      onToast(reason instanceof Error ? reason.message : "M.2 검수 템플릿을 내보내지 못했습니다.");
+      if (isCurrent()) onToast(reason instanceof Error ? reason.message : "M.2 검수 템플릿을 내보내지 못했습니다.");
     } finally {
-      setTemplateBusy(false);
+      if (isCurrent()) setTemplateBusy(false);
     }
   }
 
@@ -338,6 +390,16 @@ function M2ReviewTablePanel({ refreshKey, onToast, onSaved }: { refreshKey: numb
   const csvInputRef = useRef<HTMLInputElement>(null);
   const [csvPasteOpen, setCsvPasteOpen] = useState(false);
   const [csvText, setCsvText] = useState("");
+  const mountedRef = useRef(false);
+  const mutationRequestRef = useRef(0);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      mutationRequestRef.current += 1;
+    };
+  }, []);
 
   useEffect(() => {
     if (!expanded) return;
@@ -388,9 +450,12 @@ function M2ReviewTablePanel({ refreshKey, onToast, onSaved }: { refreshKey: numb
       return;
     }
     const snapshot = serializeDraft();
+    const requestVersion = ++mutationRequestRef.current;
+    const isCurrent = () => mountedRef.current && mutationRequestRef.current === requestVersion;
     setWorking(true);
     try {
       const result = await api<M2SlotBatchValidationResponse>("/api/admin/m2-overrides/batch/validate", { method: "POST", body: snapshot });
+      if (!isCurrent()) return;
       setValidation(result);
       setValidatedSnapshot(snapshot);
       onToast(result.invalidCount > 0
@@ -399,11 +464,13 @@ function M2ReviewTablePanel({ refreshKey, onToast, onSaved }: { refreshKey: numb
           ? `검증 완료: ${result.incompleteCount}개 행은 필수 슬롯 정보를 더 채워야 합니다.`
           : `${result.completeCount}개 보드의 슬롯 정보가 완전합니다.`);
     } catch (reason: unknown) {
-      setValidation(null);
-      setValidatedSnapshot("");
-      onToast(reason instanceof Error ? reason.message : "M.2 검수 테이블 검증에 실패했습니다.");
+      if (isCurrent()) {
+        setValidation(null);
+        setValidatedSnapshot("");
+        onToast(reason instanceof Error ? reason.message : "M.2 검수 테이블 검증에 실패했습니다.");
+      }
     } finally {
-      setWorking(false);
+      if (isCurrent()) setWorking(false);
     }
   }
 
@@ -415,18 +482,21 @@ function M2ReviewTablePanel({ refreshKey, onToast, onSaved }: { refreshKey: numb
       onToast("모든 행을 완전하게 입력하고 검증한 뒤 저장해 주세요.");
       return;
     }
+    const requestVersion = ++mutationRequestRef.current;
+    const isCurrent = () => mountedRef.current && mutationRequestRef.current === requestVersion;
     setWorking(true);
     try {
       const completeItems = items.filter((item) => completePartIds.has(item.partId));
       const result = await api<{ saved: boolean; count: number; items: M2SlotOverride[] }>("/api/admin/m2-overrides/batch", { method: "PUT", body: JSON.stringify({ items: completeItems }) });
+      if (!isCurrent()) return;
       onSaved();
       setValidation(null);
       setValidatedSnapshot("");
       onToast(`${result.count}개 M.2 매핑을 저장했습니다.`);
     } catch (reason: unknown) {
-      onToast(reason instanceof Error ? reason.message : "M.2 검수 테이블 저장에 실패했습니다.");
+      if (isCurrent()) onToast(reason instanceof Error ? reason.message : "M.2 검수 테이블 저장에 실패했습니다.");
     } finally {
-      setWorking(false);
+      if (isCurrent()) setWorking(false);
     }
   }
 
@@ -449,13 +519,17 @@ function M2ReviewTablePanel({ refreshKey, onToast, onSaved }: { refreshKey: numb
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
+    const requestVersion = ++mutationRequestRef.current;
+    const isCurrent = () => mountedRef.current && mutationRequestRef.current === requestVersion;
     setWorking(true);
     try {
-      applyCsvText(await file.text());
+      const text = await file.text();
+      if (!isCurrent()) return;
+      applyCsvText(text);
     } catch (reason: unknown) {
-      onToast(reason instanceof Error ? reason.message : "CSV를 읽지 못했습니다.");
+      if (isCurrent()) onToast(reason instanceof Error ? reason.message : "CSV를 읽지 못했습니다.");
     } finally {
-      setWorking(false);
+      if (isCurrent()) setWorking(false);
     }
   }
 

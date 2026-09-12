@@ -16,7 +16,7 @@ function optionalTextValue(value: unknown, maxLength: number) {
   return value === undefined ? undefined : textValue(value, maxLength);
 }
 
-function sourceCheckFromUnknown(value: unknown): PhysicalSourceCheck | undefined {
+export function physicalSourceCheckFromUnknown(value: unknown): PhysicalSourceCheck | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
   const candidate = value as Record<string, unknown>;
   const requestedUrl = textValue(candidate.requestedUrl, 2_000);
@@ -35,14 +35,14 @@ function sourceCheckFromUnknown(value: unknown): PhysicalSourceCheck | undefined
 }
 
 export function physicalSourceCheckHistoryEntriesFromUnknown(value: unknown): PhysicalSourceCheckHistoryEntry[] {
-  if (!Array.isArray(value)) return [];
+  if (!Array.isArray(value) || value.length > MAX_HISTORY_ENTRIES) return [];
   return value.flatMap((item) => {
     if (!item || typeof item !== "object" || Array.isArray(item)) return [];
     const candidate = item as Record<string, unknown>;
     const id = textValue(candidate.id, 120);
     const partId = textValue(candidate.partId, 160);
     const recordedAt = textValue(candidate.recordedAt, 120);
-    const sourceCheck = sourceCheckFromUnknown(candidate.sourceCheck);
+    const sourceCheck = physicalSourceCheckFromUnknown(candidate.sourceCheck);
     const transition = SOURCE_TRANSITIONS.includes(candidate.transition as typeof SOURCE_TRANSITIONS[number]) ? candidate.transition as PhysicalSourceCheckTransition : undefined;
     return id && partId && recordedAt && sourceCheck && transition ? [{ id, partId, recordedAt, sourceCheck, transition }] : [];
   }).slice(-MAX_HISTORY_ENTRIES);

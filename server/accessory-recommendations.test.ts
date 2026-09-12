@@ -110,6 +110,66 @@ describe("accessory recommendations", () => {
     expect(recommendations[0].fitBasis).toContain("M.2 2242");
   });
 
+  it("recommends a memory cooler only for verified high-speed memory with matching evidence", () => {
+    const catalog = [
+      part({ id: "memory-ddr5-7200", category: "memory", name: "DDR5-7200 DIMM", specs: { memoryType: "DDR5", speedMhz: 7200, formFactor: "DIMM" } })
+    ];
+    const build = { memory: [{ partId: "memory-ddr5-7200", quantity: 1 }], ssd: [], hdd: [], useIntegratedGraphics: true };
+    const accessories = [
+      accessory({ id: "ram-good", category: "memory_cooler", name: "DDR5 메모리 모듈 쿨링팬", rawSpecText: "DDR5 DIMM용 · 팬 2개 · 5V ARGB", specs: { fanCount: 2, rgbDeviceVoltage: "5V" } }),
+      accessory({ id: "ram-wrong-generation", category: "memory_cooler", name: "DDR4 메모리 쿨링팬", rawSpecText: "DDR4 DIMM용 · 팬 2개", specs: { fanCount: 2 } }),
+      accessory({ id: "ram-no-cooling-evidence", category: "memory_cooler", name: "DDR5 메모리 방열판", rawSpecText: "DDR5 DIMM용 방열판", specs: {} })
+    ];
+
+    const recommendations = recommendAccessories(build, catalog, accessories).filter((item) => item.category === "memory_cooler");
+
+    expect(recommendations.map((item) => item.item.id)).toEqual(["ram-good"]);
+    expect(recommendations[0].reason).toContain("7200MHz");
+    expect(recommendations[0].fitBasis).toContain("DIMM");
+  });
+
+  it("recommends a storage adapter only when M.2 capacity exceeds verified motherboard slots", () => {
+    const catalog = [
+      part({ id: "motherboard", category: "motherboard", specs: { m2Slots: 1 } }),
+      part({ id: "ssd-nvme", category: "ssd", specs: { interface: "NVMe", formFactor: "M.2 2280" } })
+    ];
+    const build = { motherboard: { partId: "motherboard", quantity: 1 }, memory: [], ssd: [{ partId: "ssd-nvme", quantity: 3 }], hdd: [], useIntegratedGraphics: true };
+    const accessories = [
+      accessory({ id: "adapter-too-small", category: "storage_accessory", name: "M.2 1개용 PCIe 어댑터", rawSpecText: "M.2 2280 · NVMe → PCIe x4 · 보관(장착) 개수: 최대 1개", specs: { interface: "NVMe", formFactor: "M.2 2280", supportedFormFactors: ["M.2 2280"], adapterStorageDeviceCount: 1 }, priceWon: 1000 }),
+      accessory({ id: "adapter-good", category: "storage_accessory", name: "M.2 NVMe 2개용 PCIe 어댑터", rawSpecText: "M.2 2280 · NVMe → PCIe x4 · 보관(장착) 개수: 최대 2개", specs: { interface: "NVMe", formFactor: "M.2 2280", supportedFormFactors: ["M.2 2280"], adapterStorageDeviceCount: 2 } }),
+      accessory({ id: "adapter-over", category: "storage_accessory", name: "M.2 NVMe 4개용 PCIe 어댑터", rawSpecText: "M.2 2280 · NVMe → PCIe x4 · 보관(장착) 개수: 최대 4개", specs: { interface: "NVMe", formFactor: "M.2 2280", supportedFormFactors: ["M.2 2280"], adapterStorageDeviceCount: 4 }, priceWon: 20000 }),
+      accessory({ id: "adapter-sata", category: "storage_accessory", name: "M.2 SATA 어댑터", rawSpecText: "M.2 2280 · SATA → SATA 2.5인치 · 보관(장착) 개수: 최대 4개", specs: { interface: "SATA", formFactor: "M.2 2280", supportedFormFactors: ["M.2 2280"], adapterStorageDeviceCount: 4 } }),
+      accessory({ id: "bracket-only", category: "storage_accessory", name: "2.5인치 SSD 브라켓", rawSpecText: "2.5인치 SATA SSD용 브라켓", specs: { formFactor: "2.5인치" } })
+    ];
+
+    const recommendations = recommendAccessories(build, catalog, accessories).filter((item) => item.category === "storage_accessory");
+
+    expect(recommendations.map((item) => item.item.id)).toEqual(["adapter-good", "adapter-over"]);
+    expect(recommendations[0].priority).toBe("recommended");
+    expect(recommendations[0].reason).toContain("2개 확장 경로");
+    expect(recommendations[0].fitBasis).toContain("최소 2개");
+    expect(recommendations[0].item.specs.adapterStorageDeviceCount).toBe(2);
+    expect(recommendations.some((item) => item.item.id === "adapter-too-small")).toBe(false);
+    expect(recommendAccessories({ ...build, ssd: [{ partId: "ssd-nvme", quantity: 1 }] }, catalog, accessories).some((item) => item.category === "storage_accessory")).toBe(false);
+  });
+
+  it("recommends supplemental GPU cooling only when the GPU is high-load and the candidate has cooling evidence", () => {
+    const catalog = [
+      part({ id: "gpu", category: "gpu", specs: { powerW: 450, thicknessMm: 60 } })
+    ];
+    const build = { gpu: { partId: "gpu", quantity: 1 }, memory: [], ssd: [], hdd: [], useIntegratedGraphics: false };
+    const accessories = [
+      accessory({ id: "gpu-cooler-good", category: "gpu_cooler", name: "그래픽카드 보조 쿨링 브라켓", rawSpecText: "PCI 슬롯 장착형 · 92mm 팬 장착 지원", specs: { fanCount: 1 } }),
+      accessory({ id: "gpu-cover", category: "gpu_cooler", name: "그래픽카드 장식 커버", rawSpecText: "그래픽카드 커버", specs: {} })
+    ];
+
+    const recommendations = recommendAccessories(build, catalog, accessories).filter((item) => item.category === "gpu_cooler");
+
+    expect(recommendations.map((item) => item.item.id)).toEqual(["gpu-cooler-good"]);
+    expect(recommendations[0].confidence).toBe("medium");
+    expect(recommendations[0].fitBasis).toContain("대체하는 추천이 아니며");
+  });
+
   it("recommends a fan hub when verified case fans exceed motherboard headers", () => {
     const catalog = [
       part({ id: "motherboard", category: "motherboard", specs: { fanPortCount: 2 } }),

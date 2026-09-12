@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">PC Supporter</string>
+    <string name="title_activity_main">PC Supporter</string>
+    <string name="package_name">com.godekd3133.pcsupporter</string>
+    <string name="custom_url_scheme">com.godekd3133.pcsupporter</string>
+</resources>

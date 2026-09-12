@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { rateLimitDecision, type RateLimitBucket } from "./rate-limit";
+import { pruneBuckets, rateLimitDecision, type RateLimitBucket } from "./rate-limit";
 
 const policy = { limit: 2, windowMs: 10_000 };
 
@@ -28,5 +28,30 @@ describe("rate limit decision", () => {
   it("clamps malformed policies to safe minimums", () => {
     const buckets = new Map<string, RateLimitBucket>();
     expect(rateLimitDecision(buckets, "client-a", { limit: 0, windowMs: 0 }, 1_000)).toMatchObject({ allowed: true, limit: 1, resetAt: 2_000, retryAfterSeconds: 1 });
+  });
+
+  it("bounds active buckets when unique clients exceed the memory cap", () => {
+    const buckets = new Map<string, RateLimitBucket>([
+      ["oldest", { startedAt: 1_000, count: 1 }],
+      ["middle", { startedAt: 2_000, count: 1 }],
+      ["newest", { startedAt: 3_000, count: 1 }]
+    ]);
+
+    pruneBuckets(buckets, { limit: 2, windowMs: 10_000 }, 4_000, 2);
+
+    expect(buckets.size).toBe(2);
+    expect([...buckets.keys()]).toEqual(["middle", "newest"]);
+  });
+
+  it("evicts by last activity instead of window start time", () => {
+    const buckets = new Map<string, RateLimitBucket>([
+      ["quiet-old-window", { startedAt: 1_000, count: 1, lastSeenAt: 1_000 }],
+      ["recent-old-window", { startedAt: 1_000, count: 2, lastSeenAt: 3_900 }],
+      ["new-window", { startedAt: 3_500, count: 1, lastSeenAt: 3_500 }]
+    ]);
+
+    pruneBuckets(buckets, { limit: 2, windowMs: 10_000 }, 4_000, 2);
+
+    expect([...buckets.keys()]).toEqual(["recent-old-window", "new-window"]);
   });
 });

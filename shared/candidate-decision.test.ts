@@ -62,4 +62,18 @@ describe("candidate decision summary", () => {
     expect(uncertain.status).toBe("review");
     expect(uncertain.reasons).toContain("현재 문제를 직접 해결하는 후보인지 추가 확인해야 합니다.");
   });
+
+  it("requires a manufacturer source check before applying a manual spec candidate", () => {
+    const summary = candidateDecisionSummaryFor({
+      risk: "safe",
+      resolvesTarget: true,
+      recommendationTrustLevel: "medium",
+      catalogSpecSourceCheckNeedsReview: true,
+      freshness: "fresh"
+    });
+
+    expect(summary).toMatchObject({ status: "review", label: "확인 후 적용" });
+    expect(summary.summary).toContain("제조사 원문 확인 필요");
+    expect(summary.reasons).toContain("수동 보강 스펙의 제조사 원문 URL 접근과 모델 식별을 확인해야 후보를 적용할 수 있습니다.");
+  });
 });

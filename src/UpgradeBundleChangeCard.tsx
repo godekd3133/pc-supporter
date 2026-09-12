@@ -1,4 +1,4 @@
-import { useState, type ComponentType } from "react";
+import { useEffect, useRef, useState, type ComponentType } from "react";
 import { FiChevronDown, FiLoader } from "react-icons/fi";
 import type { Part, UpgradeRecommendation } from "../shared/types";
 import { CATEGORY_LABELS } from "../shared/types";
@@ -18,19 +18,33 @@ export function UpgradeBundleChangeCard({ change, catalogSnapshotAt, Detail }: {
   const [hydratedPart, setHydratedPart] = useState<Part | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const mountedRef = useRef(false);
+  const requestVersionRef = useRef(0);
   const detailReady = Boolean(hydratedPart) || !upgradeBundlePartNeedsHydration(change.part);
   const recommendation = hydratedPart ? { ...change, part: hydratedPart } : change;
 
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      requestVersionRef.current += 1;
+    };
+  }, []);
+
   async function loadDetails() {
     if (detailReady || loading) return;
+    const requestVersion = ++requestVersionRef.current;
+    const isCurrent = () => mountedRef.current && requestVersionRef.current === requestVersion;
     setLoading(true);
     setError(null);
     try {
-      setHydratedPart(await upgradeBundlePartDetailsCache.get(change.part.id, catalogSnapshotAt));
+      const part = await upgradeBundlePartDetailsCache.get(change.part.id, catalogSnapshotAt);
+      if (!isCurrent()) return;
+      setHydratedPart(part);
     } catch (reason: unknown) {
-      setError(reason instanceof Error ? reason.message : "상세 스펙을 불러오지 못했습니다.");
+      if (isCurrent()) setError(reason instanceof Error ? reason.message : "상세 스펙을 불러오지 못했습니다.");
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
   }
 

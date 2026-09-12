@@ -1,4 +1,5 @@
 import { gpuPurchaseEvidenceFor } from "./gpu-fit";
+import { buildResourceSummaryFor } from "./build-resource-summary";
 import type { CompatibilityResult } from "./types";
 
 export type PurchaseReadinessState = "ready" | "review" | "blocked";
@@ -34,9 +35,12 @@ export function purchaseReadinessFor(result: CompatibilityResult): PurchaseReadi
   const physicalRuleIds = new Set(["gpu-case-length", "gpu-thickness", "gpu-cable-clearance", "gpu-psu-power", "gpu-psu-connector", "gpu-psu-cable-topology", "case-cooler-height", "case-radiator-support", "psu-case-length", "psu-case-form-factor", "m2-lane-sharing", "m2-pcie-lane-sharing", "case-fan-headers", "case-rgb-headers", "case-rgb-voltage"]);
   const physicalFindings = result.findings.filter((finding) => physicalRuleIds.has(finding.ruleId));
   const gpuPurchaseEvidence = result.gpuFit ? gpuPurchaseEvidenceFor(result.gpuFit) : undefined;
-  const physicalState: PurchaseReadinessItemState = physicalFindings.some((finding) => finding.severity === "blocker") || gpuPurchaseEvidence?.status === "incompatible"
+  const resourceSummary = buildResourceSummaryFor(result.metrics);
+  const resourceBlocked = resourceSummary.state === "danger";
+  const resourceNeedsReview = resourceSummary.state === "warning" || resourceSummary.state === "unknown";
+  const physicalState: PurchaseReadinessItemState = physicalFindings.some((finding) => finding.severity === "blocker") || gpuPurchaseEvidence?.status === "incompatible" || resourceBlocked
     ? "blocked"
-    : physicalFindings.some((finding) => finding.severity === "warning" || finding.severity === "unknown") || gpuPurchaseEvidence?.status === "needs_review"
+    : physicalFindings.some((finding) => finding.severity === "warning" || finding.severity === "unknown") || gpuPurchaseEvidence?.status === "needs_review" || resourceNeedsReview
       ? "review"
       : "pass";
   const items: PurchaseReadinessItem[] = [
@@ -44,7 +48,7 @@ export function purchaseReadinessFor(result: CompatibilityResult): PurchaseReadi
     ...(accessoryCompatibility ? [{ id: "accessory-compatibility", label: "주변 부품", state: accessoryState, summary: accessoryState === "blocked" ? `주변 부품 차단 ${accessoryCompatibility.blockerCount}개를 먼저 수정해야 합니다.` : accessoryState === "review" ? `주변 부품 주의 ${accessoryCompatibility.warningCount}개 · 확인 필요 ${accessoryCompatibility.unknownCount}개를 구매 전에 확인하세요.` : "선택한 주변 부품의 확인 가능한 규격을 통과했습니다." }] : []),
     { id: "price", label: "가격", state: priceState, summary: priceState === "pass" ? "선택한 핵심·주변 부품의 가격이 모두 확인됐습니다." : "가격 미확인 항목이 있어 전체 구매 금액을 확정할 수 없습니다." },
     { id: "data", label: "데이터 신뢰도", state: healthState, summary: healthState === "pass" ? "선택 부품의 스펙·갱신 시점·가격 상태가 구매 기준을 충족합니다." : health ? `부분 정보 ${health.incompleteCount}개 · 재확인 ${health.agingCount + health.staleCount + health.unknownFreshnessCount}개 · 가격 미확인 ${health.unpricedCount}개` : "선택 부품의 데이터 상태를 확인해야 합니다." },
-    { id: "physical", label: "장착·전력", state: physicalState, summary: physicalState === "blocked" ? "케이스·전력·커넥터 관련 차단 오류를 먼저 해결해야 합니다." : physicalState === "review" ? "장착 공간·전력·커넥터 또는 물리 검수 근거를 구매 전에 확인해야 합니다." : "확인된 장착·전력 기준을 통과했고 추가 물리 근거가 필요한 항목이 없습니다." },
+    { id: "physical", label: "장착·전력·냉각", state: physicalState, summary: physicalState === "blocked" ? resourceBlocked ? "전력·냉각 예산이 기준에 미달합니다. 부품을 바꾸거나 조건을 다시 확인해야 합니다." : "케이스·전력·커넥터 관련 차단 오류를 먼저 해결해야 합니다." : physicalState === "review" ? resourceNeedsReview ? "장착 공간·전력·냉각 여유 또는 물리 검수 근거를 구매 전에 확인해야 합니다." : "장착 공간·전력·커넥터 또는 물리 검수 근거를 구매 전에 확인해야 합니다." : "확인된 장착·전력·냉각 기준을 통과했고 추가 물리 근거가 필요한 항목이 없습니다." },
     { id: "budget", label: "목표 예산", state: budgetState, summary: budgetWon === undefined ? "목표 예산이 설정되지 않았습니다." : !result.priceComplete ? "가격 확인 후 목표 예산 적합 여부를 계산합니다." : result.totalPriceWon > budgetWon ? `현재 전체 합계가 목표보다 ${(result.totalPriceWon - budgetWon).toLocaleString("ko-KR")}원 초과합니다.` : `목표 예산보다 ${(budgetWon - result.totalPriceWon).toLocaleString("ko-KR")}원 여유가 있습니다.` }
   ];
   const state: PurchaseReadinessState = items.some((item) => item.state === "blocked") ? "blocked" : items.some((item) => item.state === "review") ? "review" : "ready";

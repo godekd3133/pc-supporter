@@ -9,6 +9,7 @@ export type BuildComparisonMetricResult = {
   totalPriceWon: number;
   analysis?: CompatibilityResult["analysis"];
   metrics?: CompatibilityResult["metrics"];
+  benchmarkSnapshot?: CompatibilityResult["benchmarkSnapshot"];
 };
 
 export type SavedBuildComparisonEntry = {
@@ -19,10 +20,24 @@ export type SavedBuildComparisonEntry = {
 
 export type SavedBuildComparisonDecisionKind = "compatibility" | "price" | "analysis" | "expansion";
 
+export const SAVED_BUILD_COMPARISON_DECISION_KINDS: readonly SavedBuildComparisonDecisionKind[] = ["compatibility", "price", "analysis", "expansion"];
+
 export type SavedBuildComparisonDecision = {
   kind: SavedBuildComparisonDecisionKind;
   entry: SavedBuildComparisonEntry;
   metric: number;
+};
+
+export type SavedBuildComparisonConsensus = {
+  status: "pending" | "converged" | "split";
+  confirmedCriteria: number;
+  totalCriteria: number;
+  winnerIds: string[];
+  winnerNames: string[];
+  winnerKinds: SavedBuildComparisonDecisionKind[];
+  winnerId?: string;
+  winnerName?: string;
+  summary: string;
 };
 
 export type SavedBuildComparisonRanking = {
@@ -32,6 +47,18 @@ export type SavedBuildComparisonRanking = {
   eligible: boolean;
   reason?: string;
 };
+
+export interface SavedBuildComparisonTradeoff {
+  id: string;
+  name: string;
+  riskScore: number;
+  totalPriceWon?: number;
+  analysisScore?: number;
+  expansionScore?: number;
+  frontier: boolean;
+  dominatedByBuildId?: string;
+  reason: string;
+}
 
 const statusRank: Record<BuildComparisonMetricResult["status"], number> = {
   compatible: 0,
@@ -106,6 +133,68 @@ export function savedBuildComparisonExpansionFor(metrics: CompatibilityResult["m
   return { score, knownDimensionCount, totalDimensionCount, level, summary: `확장성 ${score ?? "-"}점 · ${knownDimensionCount}/${totalDimensionCount}개 여유 지표 확인`, details };
 }
 
+type SavedBuildTradeoffMetric = Pick<SavedBuildComparisonTradeoff, "id" | "name" | "riskScore" | "totalPriceWon" | "analysisScore" | "expansionScore">;
+
+function savedBuildTradeoffDominates(left: SavedBuildTradeoffMetric, right: SavedBuildTradeoffMetric) {
+  const comparablePrice = left.totalPriceWon === undefined && right.totalPriceWon === undefined || left.totalPriceWon !== undefined && right.totalPriceWon !== undefined;
+  const comparableAnalysis = left.analysisScore === undefined && right.analysisScore === undefined || left.analysisScore !== undefined && right.analysisScore !== undefined;
+  const comparableExpansion = left.expansionScore === undefined && right.expansionScore === undefined || left.expansionScore !== undefined && right.expansionScore !== undefined;
+  if (!comparablePrice || !comparableAnalysis || !comparableExpansion) return false;
+  if (left.riskScore > right.riskScore) return false;
+  if (left.totalPriceWon !== undefined && right.totalPriceWon !== undefined && left.totalPriceWon > right.totalPriceWon) return false;
+  if (left.analysisScore !== undefined && right.analysisScore !== undefined && left.analysisScore < right.analysisScore) return false;
+  if (left.expansionScore !== undefined && right.expansionScore !== undefined && left.expansionScore < right.expansionScore) return false;
+  return left.riskScore < right.riskScore
+    || left.totalPriceWon !== undefined && right.totalPriceWon !== undefined && left.totalPriceWon < right.totalPriceWon
+    || left.analysisScore !== undefined && right.analysisScore !== undefined && left.analysisScore > right.analysisScore
+    || left.expansionScore !== undefined && right.expansionScore !== undefined && left.expansionScore > right.expansionScore;
+}
+
+function savedBuildTradeoffDimensionReason(left: SavedBuildTradeoffMetric, right: SavedBuildTradeoffMetric) {
+  const dimensions: string[] = [];
+  if (left.riskScore < right.riskScore) dimensions.push("호환 위험");
+  if (left.totalPriceWon !== undefined && right.totalPriceWon !== undefined && left.totalPriceWon < right.totalPriceWon) dimensions.push("총액");
+  if (left.analysisScore !== undefined && right.analysisScore !== undefined && left.analysisScore > right.analysisScore) dimensions.push("분석 점수");
+  if (left.expansionScore !== undefined && right.expansionScore !== undefined && left.expansionScore > right.expansionScore) dimensions.push("확장성");
+  return dimensions.length > 0 ? dimensions.join("·") : "비교 기준";
+}
+
+export function savedBuildComparisonTradeoffsFor(entries: SavedBuildComparisonEntry[]): SavedBuildComparisonTradeoff[] {
+  const metrics = entries.map((entry) => {
+    const expansion = savedBuildComparisonExpansionFor(entry.result.metrics);
+    const analysisScore = entry.result.analysis?.overallScore;
+    return {
+      id: entry.id,
+      name: entry.name,
+      riskScore: savedBuildComparisonRiskScoreFor(entry.result),
+      ...(entry.result.priceComplete && isKnownPrice(entry.result.totalPriceWon) ? { totalPriceWon: entry.result.totalPriceWon } : {}),
+      ...(analysisScore !== undefined && Number.isFinite(analysisScore) ? { analysisScore: Math.max(0, Math.min(100, Math.round(analysisScore))) } : {}),
+      ...(expansion.score !== undefined ? { expansionScore: expansion.score } : {})
+    } satisfies SavedBuildTradeoffMetric;
+  });
+  return metrics.map((metric) => {
+    const dominators = metrics
+      .filter((candidate) => candidate.id !== metric.id && savedBuildTradeoffDominates(candidate, metric))
+      .sort((left, right) => left.riskScore - right.riskScore || (left.totalPriceWon ?? Number.POSITIVE_INFINITY) - (right.totalPriceWon ?? Number.POSITIVE_INFINITY) || (right.analysisScore ?? Number.NEGATIVE_INFINITY) - (left.analysisScore ?? Number.NEGATIVE_INFINITY) || (right.expansionScore ?? Number.NEGATIVE_INFINITY) - (left.expansionScore ?? Number.NEGATIVE_INFINITY));
+    const dominator = dominators[0];
+    if (!dominator) {
+      return {
+        ...metric,
+        frontier: true,
+        reason: metric.totalPriceWon === undefined || metric.analysisScore === undefined || metric.expansionScore === undefined
+          ? "가격·분석·확장성 근거가 일부 없어 우열을 확정하지 않고 효율 경계에 남겼습니다."
+          : "호환 위험·총액·분석 점수·확장성에서 다른 버전에 일방적으로 대체되지 않는 선택지입니다."
+      };
+    }
+    return {
+      ...metric,
+      frontier: false,
+      dominatedByBuildId: dominator.id,
+      reason: `${dominator.name}이(가) ${savedBuildTradeoffDimensionReason(dominator, metric)} 기준으로 더 유리해 효율 경계에서 제외했습니다.`
+    };
+  });
+}
+
 export function savedBuildComparisonRankingsFor(entries: SavedBuildComparisonEntry[], kind: SavedBuildComparisonDecisionKind): SavedBuildComparisonRanking[] {
   if (entries.length === 0) return [];
 
@@ -167,4 +256,21 @@ export function savedBuildComparisonRankingsFor(entries: SavedBuildComparisonEnt
 export function savedBuildComparisonDecisionFor(entries: SavedBuildComparisonEntry[], kind: SavedBuildComparisonDecisionKind): SavedBuildComparisonDecision | undefined {
   const winner = savedBuildComparisonRankingsFor(entries, kind).find((ranking) => ranking.eligible);
   return winner?.metric === undefined ? undefined : { kind, entry: winner.entry, metric: winner.metric };
+}
+
+export function savedBuildComparisonConsensusFor(entries: SavedBuildComparisonEntry[], kinds: readonly SavedBuildComparisonDecisionKind[] = SAVED_BUILD_COMPARISON_DECISION_KINDS): SavedBuildComparisonConsensus {
+  const decisions = kinds.flatMap((kind) => {
+    const decision = savedBuildComparisonDecisionFor(entries, kind);
+    return decision ? [decision] : [];
+  });
+  const winnerIds = [...new Set(decisions.map((decision) => decision.entry.id))];
+  const winnerNames = winnerIds.map((id) => entries.find((entry) => entry.id === id)?.name ?? id);
+  const winnerKinds = decisions.map((decision) => decision.kind);
+  const base = { confirmedCriteria: decisions.length, totalCriteria: kinds.length, winnerIds, winnerNames, winnerKinds };
+  if (decisions.length === 0) return { ...base, status: "pending", summary: "재검사 완료 후 확정 기준별 1순위를 계산합니다." };
+  if (winnerIds.length === 1) {
+    const winner = decisions[0].entry;
+    return { ...base, status: "converged", winnerId: winner.id, winnerName: winner.name, summary: `${winner.name}이(가) 확정된 ${decisions.length}개 기준에서 모두 1순위입니다.` };
+  }
+  return { ...base, status: "split", summary: `기준별 1순위가 ${winnerNames.join(" · ")} 후보로 나뉩니다.` };
 }

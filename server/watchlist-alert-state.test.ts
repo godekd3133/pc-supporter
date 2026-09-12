@@ -26,4 +26,8 @@ describe("watchlist alert state", () => {
     expect(parseSavedWatchlistAlertIds({ alertIds: ["", "alert-1"] }).error).toBe("alertIds에는 비어 있지 않은 문자열만 사용할 수 있습니다.");
     expect(parseSavedWatchlistAlertIds({ alertIds: Array.from({ length: 21 }, (_value, index) => "alert-" + index) }).error).toBe("한 번에 최대 20개 알림만 처리할 수 있습니다.");
   });
+
+  it("rejects oversized alert arrays before validating every raw ID", () => {
+    expect(parseSavedWatchlistAlertIds({ alertIds: Array.from({ length: 21 }, () => "alert") })).toEqual({ alertIds: [], error: "한 번에 최대 20개 알림만 처리할 수 있습니다." });
+  });
 });

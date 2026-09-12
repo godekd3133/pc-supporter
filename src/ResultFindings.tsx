@@ -1,12 +1,17 @@
-import { useState, type ComponentType } from "react";
+import { useEffect, useRef, useState, type ComponentType } from "react";
 import { FiActivity, FiAlertTriangle, FiCheckCircle, FiChevronDown, FiCopy, FiDatabase, FiDownload, FiEdit3, FiExternalLink, FiInfo, FiShare2, FiTrash2, FiXCircle } from "react-icons/fi";
-import type { Finding, Part, PartCategory, PhysicalEvidenceSource, RecommendationTrustEvidence, SimilarityEvidence } from "../shared/types";
-import { BENCHMARK_SOURCE_KIND_LABELS, CATEGORY_LABELS, isKnownPrice, LISTING_TYPE_LABELS } from "../shared/types";
-import { alternativeComparisonCsvFor, alternativeComparisonJsonFor, alternativeComparisonTextFor } from "../shared/alternative-comparison-export";
+import type { Finding, GpuTargetEvidence, Part, PartCategory, PhysicalEvidenceSource, RecommendationTrustEvidence, SimilarityEvidence } from "../shared/types";
+import type { CandidateApplicationEvidence } from "../shared/candidate-application";
+import { BENCHMARK_SOURCE_KIND_LABELS, CATEGORY_LABELS, DATA_FRESHNESS_LABELS, DATA_QUALITY_LABELS, isKnownPrice, LISTING_TYPE_LABELS } from "../shared/types";
+import { alternativeComparisonBenchmarkEvidenceFor, alternativeComparisonCsvFor, alternativeComparisonJsonFor, alternativeComparisonSimilarityEvidenceFor, alternativeComparisonTextFor } from "../shared/alternative-comparison-export";
+import { benchmarkEvidenceForPart } from "../shared/benchmark-evidence";
 import type { AlternativeComparisonCandidate } from "../shared/alternative-comparison-export";
 import { candidateDecisionSummaryFor } from "../shared/candidate-decision";
 import { valueScoreText } from "../shared/value-score";
+import { similarityReferenceTextFor, similarityReferenceUsedCategoryFor } from "../shared/similarity-evidence";
 import { safeExternalUrl, safeHttpsUrl } from "./safe-source-url";
+import { ComparisonBenchmarkCell } from "./ComparisonBenchmarkCell";
+import { CATALOG_PRICE_EVIDENCE_LABELS, catalogPriceEvidenceDescriptionFor, catalogPriceEvidenceFor, catalogPriceEvidenceLabelFor } from "../shared/catalog-price-evidence";
 
 export type ResultFindingSuggestion = NonNullable<Finding["suggestions"]>[number];
 type Suggestion = ResultFindingSuggestion;
@@ -18,7 +23,7 @@ export type ResultComparisonShareResult = {
   expiresAt?: string;
 };
 
-export type ResultComparisonShareHandler = (candidates: AlternativeComparisonCandidate[], context?: { category?: string; currentPartName?: string }) => Promise<ResultComparisonShareResult | undefined>;
+export type ResultComparisonShareHandler = (candidates: AlternativeComparisonCandidate[], context?: { name?: string; category?: string; currentPartName?: string; currentPartSummary?: string; currentPartPrice?: string }) => Promise<ResultComparisonShareResult | undefined>;
 export type ResultComparisonRevokeHandler = (share: ResultComparisonShareResult) => Promise<boolean>;
 type PartWatchButtonRenderer = ComponentType<{ part: Part; onWatch: (part: Part) => boolean }>;
 type PartVisualRenderer = ComponentType<{ part: Part }>;
@@ -28,8 +33,8 @@ type ResultFindingCardProps = {
   partMap: ReadonlyMap<string, Part>;
   onOpenPicker: (category: PartCategory, findingRuleId?: string, findingTitle?: string, affectedPartIds?: string[]) => void;
   onEdit: () => void;
-  onApplySuggestion: (category: PartCategory, part: Part, quantity?: number, affectedPartIds?: string[]) => void;
-  onPreviewSuggestion: (category: PartCategory, part: Part, quantity?: number, affectedPartIds?: string[]) => void;
+  onApplySuggestion: (category: PartCategory, part: Part, quantity?: number, affectedPartIds?: string[], evidence?: CandidateApplicationEvidence) => void;
+  onPreviewSuggestion: (category: PartCategory, part: Part, quantity?: number, affectedPartIds?: string[], evidence?: CandidateApplicationEvidence) => void;
   onCompareSuggestions?: (suggestions: ResultFindingSuggestion[], affectedPartIds: string[]) => void;
   onFocusRepairPlans?: () => void;
   onToast: (message: string) => void;
@@ -78,14 +83,20 @@ function recommendationTrustText(trust: RecommendationTrustEvidence | undefined)
 function recommendationTrustDetail(trust: RecommendationTrustEvidence) {
   const compatibility = trust.compatibility === "verified" ? "후보 호환 검증" : "후보 호환 추가 확인";
   const comparison = trust.totalDimensions > 0 ? `비교 ${trust.comparedDimensions}/${trust.totalDimensions}` : "성능 비교 없음";
-  const price = trust.priceKnown ? "가격 확인" : "가격 미확인";
+  const price = trust.priceEvidence ? CATALOG_PRICE_EVIDENCE_LABELS[trust.priceEvidence] : trust.priceKnown ? "가격 기록 있음" : "가격 미기록";
   const fullBuild = trust.fullBuildStatus === "clean" ? "전체 견적 정리됨" : `전체 견적 잔여 차단 ${trust.remainingBlockerCount}개·주의 ${trust.remainingWarningCount}개·확인 필요 ${trust.remainingUnknownCount}개`;
   const benchmark = trust.benchmarkBacked ? `벤치마크 ${trust.benchmarkSourceKind ? BENCHMARK_SOURCE_KIND_LABELS[trust.benchmarkSourceKind] : "출처 유형 미분류"}` : undefined;
-  return `${compatibility} · ${comparison} · ${recommendationFreshnessLabels[trust.freshness]} · ${price}${benchmark ? ` · ${benchmark}` : ""} · ${fullBuild}`;
+  const benchmarkFreshness = benchmark && trust.benchmarkFreshness ? ` · 자료 ${DATA_FRESHNESS_LABELS[trust.benchmarkFreshness]}` : "";
+  const catalogSpecSource = trust.catalogSpecSourceCheckNeedsReview === undefined ? "" : trust.catalogSpecSourceCheckNeedsReview ? " · 제조사 원문 재확인 필요" : " · 제조사 원문·모델 확인";
+  return `${compatibility} · ${comparison} · ${recommendationFreshnessLabels[trust.freshness]} · ${price}${benchmark ? ` · ${benchmark}${benchmarkFreshness}` : ""}${catalogSpecSource} · ${fullBuild}`;
 }
 
 function physicalEvidenceLabel(status: NonNullable<Suggestion["physicalEvidence"]>["status"]) {
   return status === "verified" ? "확인됨" : status === "review" ? "확인 필요" : "미적용";
+}
+
+function gpuTargetFitLabel(fit: GpuTargetEvidence["candidateFit"] | undefined) {
+  return fit === "met" ? "권장 기준 충족" : fit === "partial" ? "권장 기준 미달" : "VRAM 확인 필요";
 }
 
 function physicalEvidenceSourceLabel(category: PhysicalEvidenceSource["category"]) {
@@ -118,28 +129,38 @@ function suggestionComparisonCandidatesFor(suggestions: Suggestion[], props: Pic
   return suggestions.map((suggestion) => {
     const sourceUrl = safeExternalUrl(suggestion.part.danawaUrl);
     const physicalEvidenceSources = safePhysicalEvidenceSources(suggestion.physicalEvidence?.sources);
+    const benchmarkEvidence = alternativeComparisonBenchmarkEvidenceFor(benchmarkEvidenceForPart(suggestion.part));
     const decision = candidateDecisionSummaryFor({
-      risk: "safe",
+      risk: suggestion.candidateRisk ?? "safe",
+      reasons: suggestion.candidateReasons,
       resolvesTarget: suggestion.fixesCurrentIssue,
       physicalStatus: suggestion.physicalEvidence?.status,
       recommendationTrustLevel: suggestion.recommendationTrust?.level,
+      catalogSpecSourceCheckNeedsReview: suggestion.recommendationTrust?.catalogSpecSourceCheckNeedsReview,
       freshness: suggestion.recommendationTrust?.freshness
     });
     return {
       name: suggestion.part.name,
+      category: suggestion.part.category,
+      partId: suggestion.part.id,
       summary: props.partSummary(suggestion.part),
       price: props.formatWon(suggestionTotalPrice(suggestion, props.formatWon)),
-      purchaseCondition: `${isKnownPrice(suggestion.part.priceWon) ? "가격 확인" : "가격 확인 필요"} · ${suggestion.part.listingType ? LISTING_TYPE_LABELS[suggestion.part.listingType] : LISTING_TYPE_LABELS.retail}`,
+      ...(isKnownPrice(suggestion.part.priceWon) ? { priceWon: suggestion.part.priceWon } : {}),
+      priceEvidence: catalogPriceEvidenceFor(suggestion.part),
+      purchaseCondition: `${catalogPriceEvidenceLabelFor(suggestion.part)} · ${suggestion.part.listingType ? LISTING_TYPE_LABELS[suggestion.part.listingType] : LISTING_TYPE_LABELS.retail}`,
       ...(suggestion.recommendedQuantity !== undefined ? { recommendedQuantity: suggestion.recommendedQuantity } : {}),
       similarity: `${suggestion.similarityLabel} ${suggestion.similarityScore}점 · ${props.similarityEvidenceText(suggestion.similarityEvidence)}`,
+      ...(suggestion.gpuTarget ? { gpuTarget: suggestion.gpuTarget.summary } : {}),
       ...(suggestion.valueScore !== undefined && suggestion.valueLabel ? { valueScore: suggestion.valueScore, valueLabel: suggestion.valueLabel, valueScoreScale: suggestion.valueEvidence?.scoreScale ?? 200 } : {}),
       ...(suggestion.recommendationTrust ? { recommendationTrust: recommendationTrustText(suggestion.recommendationTrust) } : {}),
       performance: suggestion.performanceSummary,
       compatibility: suggestionCompatibilityText(suggestion),
-      decisionSummary: `${decision.label} · ${decision.summary}`,
+      ...(benchmarkEvidence ? { benchmarkEvidence } : {}),
+      ...(alternativeComparisonSimilarityEvidenceFor(suggestion.similarityEvidence) ? { similarityEvidence: alternativeComparisonSimilarityEvidenceFor(suggestion.similarityEvidence) } : {}),
+      decisionSummary: `${decision.label} · ${decision.summary}${suggestion.candidateReasons && suggestion.candidateReasons.length > 0 ? ` · ${suggestion.candidateReasons.join(" · ")}` : ""}`,
       ...(suggestion.physicalEvidence && suggestion.physicalEvidence.status !== "not_applicable" ? { physicalEvidence: `${physicalEvidenceLabel(suggestion.physicalEvidence.status)} · ${suggestion.physicalEvidence.summary}` } : {}),
       ...(physicalEvidenceSources.length > 0 ? { physicalEvidenceSources } : {}),
-      dataQuality: suggestion.part.dataQuality === "live" ? "다나와 최신" : suggestion.part.dataQuality === "manual" ? "수동 검수" : suggestion.part.dataQuality === "incomplete" ? "일부 스펙 부족" : "프로젝트 데이터",
+      dataQuality: DATA_QUALITY_LABELS[suggestion.part.dataQuality],
       ...(suggestion.recommendationTrust ? { dataFreshness: suggestion.recommendationTrust.freshness } : {}),
       ...(suggestion.part.updatedAt ? { updatedAt: new Date(suggestion.part.updatedAt).toLocaleDateString("ko-KR") } : {}),
       ...(sourceUrl ? { sourceUrl } : {})
@@ -149,25 +170,54 @@ function suggestionComparisonCandidatesFor(suggestions: Suggestion[], props: Pic
 
 function SuggestionDecisionLine({ suggestion }: { suggestion: Suggestion }) {
   const decision = candidateDecisionSummaryFor({
-    risk: "safe",
+    risk: suggestion.candidateRisk ?? "safe",
+    reasons: suggestion.candidateReasons,
     resolvesTarget: suggestion.fixesCurrentIssue,
     physicalStatus: suggestion.physicalEvidence?.status,
     recommendationTrustLevel: suggestion.recommendationTrust?.level,
+    catalogSpecSourceCheckNeedsReview: suggestion.recommendationTrust?.catalogSpecSourceCheckNeedsReview,
     freshness: suggestion.recommendationTrust?.freshness
   });
   return <em className={`suggestion-decision-line ${decision.status}`}>판단 · {decision.label} · {decision.summary}</em>;
 }
 
+function suggestionApplicationEvidenceFor(suggestion: Suggestion): CandidateApplicationEvidence {
+  const decision = candidateDecisionSummaryFor({
+    risk: suggestion.candidateRisk ?? "safe",
+    reasons: suggestion.candidateReasons,
+    resolvesTarget: suggestion.fixesCurrentIssue,
+    physicalStatus: suggestion.physicalEvidence?.status,
+    recommendationTrustLevel: suggestion.recommendationTrust?.level,
+    catalogSpecSourceCheckNeedsReview: suggestion.recommendationTrust?.catalogSpecSourceCheckNeedsReview,
+    freshness: suggestion.recommendationTrust?.freshness
+  });
+  return {
+    risk: suggestion.candidateRisk ?? "safe",
+    decision,
+    ...(suggestion.candidateReasons ? { reasons: suggestion.candidateReasons } : {}),
+    ...(suggestion.candidateBlockerCount !== undefined ? { candidateBlockerCount: suggestion.candidateBlockerCount } : {}),
+    ...(suggestion.candidateWarningCount !== undefined ? { candidateWarningCount: suggestion.candidateWarningCount } : {}),
+    ...(suggestion.candidateUnknownCount !== undefined ? { candidateUnknownCount: suggestion.candidateUnknownCount } : {}),
+    remainingBlockers: suggestion.remainingBlockers,
+    remainingWarnings: suggestion.remainingWarnings,
+    remainingUnknown: suggestion.remainingUnknown
+  };
+}
+
 function SuggestionDetail({ suggestion, suggestionSpecRows, formatSpecValue, formatSignedPercent, formatWon, similarityEvidenceText }: { suggestion: Suggestion; suggestionSpecRows: ResultFindingCardProps["suggestionSpecRows"]; formatSpecValue: ResultFindingCardProps["formatSpecValue"]; formatSignedPercent: ResultFindingCardProps["formatSignedPercent"]; formatWon: ResultFindingCardProps["formatWon"]; similarityEvidenceText: ResultFindingCardProps["similarityEvidenceText"] }) {
   const sourceUrl = safeExternalUrl(suggestion.part.danawaUrl);
-  const qualityLabel = suggestion.part.dataQuality === "live" ? "다나와 최신" : suggestion.part.dataQuality === "seed" ? "프로젝트 데이터" : suggestion.part.dataQuality === "manual" ? "수동 검수" : "일부 스펙 부족";
+  const qualityLabel = DATA_QUALITY_LABELS[suggestion.part.dataQuality];
+  const priceEvidence = catalogPriceEvidenceFor(suggestion.part);
   return <div className="suggestion-detail">
     {suggestion.recommendationTrust && <div className={`recommendation-trust ${suggestion.recommendationTrust.level}`} aria-label="추천 근거 신뢰도"><div className="recommendation-trust-heading"><strong>추천 근거 신뢰도</strong><span>{recommendationTrustText(suggestion.recommendationTrust)}</span></div><p>{recommendationTrustDetail(suggestion.recommendationTrust)}</p><ul>{suggestion.recommendationTrust.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul><small>성능·호환성 보장이 아니라 현재 카탈로그 근거의 완성도 지수입니다.</small></div>}
+    <p className={`suggestion-price-evidence-detail ${priceEvidence}`} data-testid="suggestion-price-evidence" title={catalogPriceEvidenceDescriptionFor(suggestion.part)}><FiInfo /> 가격 근거 · <strong>{catalogPriceEvidenceLabelFor(suggestion.part)}</strong> · {catalogPriceEvidenceDescriptionFor(suggestion.part)}</p>
     {suggestion.physicalEvidence && suggestion.physicalEvidence.status !== "not_applicable" && <div className={`suggestion-physical-evidence ${suggestion.physicalEvidence.status}`} aria-label="후보 물리 근거"><div><strong>물리 근거</strong><span>{physicalEvidenceLabel(suggestion.physicalEvidence.status)}</span></div><p>{suggestion.physicalEvidence.summary}</p><PhysicalEvidenceSourceList sources={suggestion.physicalEvidence.sources} /><small>규칙상 안전 후보와 실제 제조사 물리 검수 완료는 별도 기준입니다.</small></div>}
+    {suggestion.gpuTarget && <div className={`suggestion-gpu-target ${suggestion.gpuTarget.candidateFit ?? "unknown"}`} aria-label="게이밍 목표 근거"><div><strong>게이밍 목표</strong><span>{gpuTargetFitLabel(suggestion.gpuTarget.candidateFit)}</span></div><p>{suggestion.gpuTarget.summary}</p><small>권장 VRAM은 해상도별 보수적 확인 기준이며 실제 FPS를 보장하지 않습니다.</small></div>}
     {suggestion.valueScore !== undefined && suggestion.valueLabel && suggestion.valueEvidence && <div className="suggestion-value-summary" aria-label="가격 대비 유사도"><div><strong>가격 대비 유사도</strong><span>{suggestion.valueLabel} {valueScoreText(suggestion.valueScore)}</span></div><small>현재 {formatWon(suggestion.valueEvidence.currentPriceWon)} → 후보 {formatWon(suggestion.valueEvidence.candidatePriceWon)} · 가격 {formatSignedPercent(suggestion.valueEvidence.priceChangePercent)} · 유사도 {suggestion.valueEvidence.similarityScore}점 기준</small></div>}
     <div className="suggestion-detail-grid">{suggestionSpecRows(suggestion.part).map(([label, value]) => <div className="suggestion-detail-row" key={label}><span>{label}</span><strong>{formatSpecValue(value)}</strong></div>)}</div>
     {suggestion.similarityEvidence.dimensions && suggestion.similarityEvidence.dimensions.length > 0 && <div className="similarity-breakdown" aria-label="유사도 산정 근거"><div className="similarity-breakdown-heading"><strong>유사도 산정 근거</strong><span>항목 점수 · 가중치</span></div><div className="similarity-breakdown-list">{suggestion.similarityEvidence.dimensions.map((dimension) => <div className="similarity-breakdown-row" key={dimension.key}><div><span>{dimension.label}</span><strong>{dimension.currentValue} → {dimension.candidateValue}</strong></div><em>{dimension.score}점 · ×{dimension.weight}</em></div>)}</div></div>}
-    {suggestion.similarityEvidence.notes?.map((note) => <p className="similarity-breakdown-note" key={note}><FiInfo /> {note}</p>)}
+    {suggestion.similarityEvidence.reference && <p className="similarity-breakdown-note similarity-reference-note" data-testid="suggestion-similarity-reference"><FiInfo /> {similarityReferenceTextFor(suggestion.similarityEvidence)}. 선택 부품에 직접 확인된 값은 유지하고, 비어 있던 모델 공통 지표만 참조값으로 보완했습니다.</p>}
+    {suggestion.similarityEvidence.notes?.filter((note) => !(suggestion.similarityEvidence.reference && note.startsWith("현재 선택 부품에 없는"))).map((note) => <p className="similarity-breakdown-note" key={note}><FiInfo /> {note}</p>)}
     <div className="suggestion-detail-footer"><span><FiDatabase /> {qualityLabel}{suggestion.part.missingFields.length > 0 ? ` · 누락 ${suggestion.part.missingFields.length}개` : " · 필수 스펙 확인"} · {similarityEvidenceText(suggestion.similarityEvidence)}{suggestion.part.listingType && suggestion.part.listingType !== "retail" ? ` · ${LISTING_TYPE_LABELS[suggestion.part.listingType]}` : ""}</span>{sourceUrl && <a href={sourceUrl} target="_blank" rel="noreferrer">다나와 원문 보기 <FiExternalLink /></a>}</div>
   </div>;
 }
@@ -176,34 +226,60 @@ function SuggestionComparison({ suggestions, currentPart, affectedPartIds, onCom
   const specRows = [...new Set(suggestions.flatMap((suggestion) => props.suggestionSpecRows(suggestion.part).map(([label]) => label)))];
   const currentSpec = (label: string) => currentPart ? props.suggestionSpecRows(currentPart).find(([rowLabel]) => rowLabel === label)?.[1] : undefined;
   const currentPriceWon = suggestions.find((suggestion) => suggestion.currentPriceWon !== undefined)?.currentPriceWon ?? currentPart?.priceWon;
+  const currentPriceEvidenceLabel = currentPart ? catalogPriceEvidenceLabelFor({ ...currentPart, priceWon: currentPriceWon }) : "가격 확인 필요";
   const currentHeaderLabel = currentPart?.name;
+  const currentBenchmarkEvidence = benchmarkEvidenceForPart(currentPart);
+  const suggestionBenchmarkEvidence = suggestions.map((suggestion) => benchmarkEvidenceForPart(suggestion.part));
+  const hasBenchmarkEvidence = Boolean(currentBenchmarkEvidence) || suggestionBenchmarkEvidence.some((evidence) => Boolean(evidence));
   const exportCandidates = suggestionComparisonCandidatesFor(suggestions, props);
+  const exportContext = { ...(currentPart ? { category: CATEGORY_LABELS[currentPart.category], currentPartName: currentPart.name, currentPartSummary: props.partSummary(currentPart), currentPartPrice: currentPriceWon !== undefined ? props.formatWon(currentPriceWon) : "가격 확인 필요" } : {}) };
   const [sharedComparison, setSharedComparison] = useState<ResultComparisonShareResult | null>(null);
+  const mountedRef = useRef(true);
+  const comparisonRequestRef = useRef(0);
+  const comparisonContextKey = `${currentPart?.id ?? ""}|${suggestions.map((suggestion) => suggestion.part.id).join(",")}|${affectedPartIds.join(",")}`;
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+  useEffect(() => {
+    comparisonRequestRef.current += 1;
+    setSharedComparison(null);
+  }, [comparisonContextKey]);
+  useEffect(() => () => { comparisonRequestRef.current += 1; }, []);
   async function copyComparison() {
-    try { await navigator.clipboard.writeText(alternativeComparisonTextFor(exportCandidates)); onToast("대체 후보 비교표를 클립보드에 복사했습니다."); }
-    catch { onToast("대체 후보 비교표 복사에 실패했습니다. 브라우저 클립보드 권한을 확인해 주세요."); }
+    const requestVersion = comparisonRequestRef.current;
+    const isCurrent = () => mountedRef.current && comparisonRequestRef.current === requestVersion;
+    try { await navigator.clipboard.writeText(alternativeComparisonTextFor(exportCandidates, exportContext)); if (isCurrent()) onToast("대체 후보 비교표를 클립보드에 복사했습니다."); }
+    catch { if (isCurrent()) onToast("대체 후보 비교표 복사에 실패했습니다. 브라우저 클립보드 권한을 확인해 주세요."); }
   }
   function downloadComparison() {
-    const blob = new Blob([alternativeComparisonCsvFor(exportCandidates)], { type: "text/csv;charset=utf-8" }); const url = window.URL.createObjectURL(blob); const anchor = document.createElement("a"); anchor.href = url; anchor.download = `pc-supporter-suggestion-comparison-${new Date().toISOString().slice(0, 10)}.csv`; anchor.click(); window.URL.revokeObjectURL(url); onToast("대체 후보 비교표 CSV를 저장했습니다.");
+    const blob = new Blob([alternativeComparisonCsvFor(exportCandidates, exportContext)], { type: "text/csv;charset=utf-8" }); const url = window.URL.createObjectURL(blob); const anchor = document.createElement("a"); anchor.href = url; anchor.download = `pc-supporter-suggestion-comparison-${new Date().toISOString().slice(0, 10)}.csv`; anchor.click(); window.URL.revokeObjectURL(url); onToast("대체 후보 비교표 CSV를 저장했습니다.");
   }
   function downloadComparisonJson() {
-    const blob = new Blob([alternativeComparisonJsonFor(exportCandidates)], { type: "application/json;charset=utf-8" }); const url = window.URL.createObjectURL(blob); const anchor = document.createElement("a"); anchor.href = url; anchor.download = `pc-supporter-suggestion-comparison-${new Date().toISOString().slice(0, 10)}.json`; anchor.click(); window.URL.revokeObjectURL(url); onToast("대체 후보 비교표 JSON을 저장했습니다.");
+    const blob = new Blob([alternativeComparisonJsonFor(exportCandidates, exportContext)], { type: "application/json;charset=utf-8" }); const url = window.URL.createObjectURL(blob); const anchor = document.createElement("a"); anchor.href = url; anchor.download = `pc-supporter-suggestion-comparison-${new Date().toISOString().slice(0, 10)}.json`; anchor.click(); window.URL.revokeObjectURL(url); onToast("대체 후보 비교표 JSON을 저장했습니다.");
   }
   async function shareComparison() {
-    const share = await onShare(exportCandidates, { category: currentPart ? CATEGORY_LABELS[currentPart.category] : undefined, currentPartName: currentPart?.name });
-    if (share) setSharedComparison(share);
+    const requestVersion = ++comparisonRequestRef.current;
+    const isCurrent = () => mountedRef.current && comparisonRequestRef.current === requestVersion;
+    const share = await onShare(exportCandidates, { name: currentPart ? `${currentPart.name} 대체 후보 비교` : "대체 후보 비교", category: currentPart ? CATEGORY_LABELS[currentPart.category] : undefined, currentPartName: currentPart?.name, ...(currentPart ? { currentPartSummary: props.partSummary(currentPart), currentPartPrice: currentPriceWon !== undefined ? props.formatWon(currentPriceWon) : "가격 확인 필요" } : {}) });
+    if (isCurrent() && share) setSharedComparison(share);
   }
   async function revokeComparison() {
-    if (sharedComparison && await onRevoke(sharedComparison)) setSharedComparison(null);
+    if (!sharedComparison) return;
+    const requestVersion = ++comparisonRequestRef.current;
+    const isCurrent = () => mountedRef.current && comparisonRequestRef.current === requestVersion;
+    if (await onRevoke(sharedComparison) && isCurrent()) setSharedComparison(null);
   }
   return <section className="suggestion-comparison" aria-label={currentPart ? "현재 부품과 대체 부품 비교" : "대체 부품 비교"}>
     <div className="suggestion-comparison-heading"><div><strong>대체 후보 비교</strong><span>선택한 {suggestions.length}개</span></div><div className="suggestion-comparison-actions">{onCompareSuggestions && <button className="text-button" type="button" onClick={() => onCompareSuggestions(suggestions, affectedPartIds)}><FiActivity /> 전체 가상 비교</button>}<button className="text-button" type="button" onClick={() => void copyComparison()}><FiCopy /> 비교 복사</button><button className="text-button" type="button" onClick={downloadComparison}><FiDownload /> CSV 저장</button><button className="text-button" type="button" onClick={downloadComparisonJson}><FiDownload /> JSON 저장</button><button className="text-button" type="button" onClick={() => void shareComparison()}><FiShare2 /> 공유 링크</button><FiActivity /></div></div>
     <div className="suggestion-comparison-table-wrap"><table><caption>{currentPart ? "현재 선택 부품을 기준으로 호환 대체 후보를 비교합니다." : "서로 다른 부품 범주의 후보를 비교합니다. 현재 기준선은 범주가 달라 생략됩니다."}</caption><thead><tr><th scope="col">비교 항목</th>{currentPart && <th className="suggestion-comparison-current" scope="col">현재 기준<br /><small>{currentHeaderLabel}</small></th>}{suggestions.map((suggestion) => <th scope="col" key={suggestion.part.id}>{suggestion.part.name}</th>)}</tr></thead><tbody>
       <tr><th scope="row">유사도</th>{currentPart && <td className="suggestion-comparison-current">현재 기준</td>}{suggestions.map((suggestion) => <td key={`${suggestion.part.id}-similarity`}>{suggestion.similarityLabel} {suggestion.similarityScore}점<br /><small>{props.similarityEvidenceText(suggestion.similarityEvidence)}</small></td>)}</tr>
+      {hasBenchmarkEvidence && <tr data-testid="suggestion-comparison-benchmark"><th scope="row">원본 성능 근거</th>{currentPart && <td className="suggestion-comparison-current"><ComparisonBenchmarkCell evidence={currentBenchmarkEvidence} /></td>}{suggestions.map((suggestion, index) => <td key={`${suggestion.part.id}-benchmark`}><ComparisonBenchmarkCell evidence={suggestionBenchmarkEvidence[index]} /></td>)}</tr>}
       {suggestions.some((suggestion) => suggestion.recommendationTrust) && <tr><th scope="row">추천 근거 신뢰도</th>{currentPart && <td className="suggestion-comparison-current">현재 기준</td>}{suggestions.map((suggestion) => <td key={`${suggestion.part.id}-trust`}>{suggestion.recommendationTrust ? <><strong>{recommendationTrustText(suggestion.recommendationTrust)}</strong><br /><small>{recommendationTrustDetail(suggestion.recommendationTrust)}</small></> : "산정 불가"}</td>)}</tr>}
       {suggestions.some((suggestion) => suggestion.physicalEvidence && suggestion.physicalEvidence.status !== "not_applicable") && <tr><th scope="row">물리 근거</th>{currentPart && <td className="suggestion-comparison-current">현재 기준</td>}{suggestions.map((suggestion) => <td key={`${suggestion.part.id}-physical-evidence`}>{suggestion.physicalEvidence && suggestion.physicalEvidence.status !== "not_applicable" ? <><strong>{physicalEvidenceLabel(suggestion.physicalEvidence.status)}</strong><br /><small>{suggestion.physicalEvidence.summary}</small><PhysicalEvidenceSourceList sources={suggestion.physicalEvidence.sources} compact /></> : "산정 불가"}</td>)}</tr>}
+      {suggestions.some((suggestion) => suggestion.gpuTarget) && <tr><th scope="row">게이밍 목표</th>{currentPart && <td className="suggestion-comparison-current">현재 기준</td>}{suggestions.map((suggestion) => <td key={`${suggestion.part.id}-gpu-target`}>{suggestion.gpuTarget ? <><strong>{gpuTargetFitLabel(suggestion.gpuTarget.candidateFit)}</strong><br /><small>{suggestion.gpuTarget.summary}</small></> : "산정 불가"}</td>)}</tr>}
       <tr><th scope="row">가격</th>{currentPart && <td className="suggestion-comparison-current">{currentPriceWon !== undefined ? props.formatWon(currentPriceWon) : "가격 확인 필요"}{suggestions.some((suggestion) => suggestion.recommendedQuantity !== undefined) && <><br /><small>혼용 킷 합계</small></>}</td>}{suggestions.map((suggestion) => <td key={`${suggestion.part.id}-price`}>{props.formatWon(suggestionTotalPrice(suggestion, props.formatWon))}{suggestion.recommendedQuantity !== undefined ? <><br /><small>추천 킷 {suggestion.recommendedQuantity}개 · 1킷 {props.formatWon(suggestion.part.priceWon)}</small></> : null}</td>)}</tr>
-      <tr><th scope="row">가격 상태</th>{currentPart && <td className="suggestion-comparison-current">{isKnownPrice(currentPriceWon) ? "가격 확인" : "가격 확인 필요"}</td>}{suggestions.map((suggestion) => <td key={`${suggestion.part.id}-price-status`}>{isKnownPrice(suggestion.part.priceWon) ? "가격 확인" : "가격 확인 필요"}</td>)}</tr>
+      <tr><th scope="row">가격 근거</th>{currentPart && <td className="suggestion-comparison-current" title={catalogPriceEvidenceDescriptionFor({ ...currentPart, priceWon: currentPriceWon })}>{currentPriceEvidenceLabel}</td>}{suggestions.map((suggestion) => <td key={`${suggestion.part.id}-price-status`} title={catalogPriceEvidenceDescriptionFor(suggestion.part)}>{catalogPriceEvidenceLabelFor(suggestion.part)}</td>)}</tr>
       <tr><th scope="row">가격 변화</th>{currentPart && <td className="suggestion-comparison-current">기준</td>}{suggestions.map((suggestion) => <td key={`${suggestion.part.id}-delta`}>{props.formatPriceDelta(suggestion.priceDeltaWon)}</td>)}</tr>
       {suggestions.some((suggestion) => suggestion.valueScore !== undefined && suggestion.valueLabel) && <tr><th scope="row">가격 대비 유사도</th>{currentPart && <td className="suggestion-comparison-current">현재 기준</td>}{suggestions.map((suggestion) => <td key={`${suggestion.part.id}-value`}>{suggestion.valueScore !== undefined && suggestion.valueLabel ? `${suggestion.valueLabel} ${valueScoreText(suggestion.valueScore)}` : "산정 불가"}</td>)}</tr>}
       <tr><th scope="row">적용 후 전체 위험</th>{currentPart && <td className="suggestion-comparison-current">현재 기준</td>}{suggestions.map((suggestion) => <td key={`${suggestion.part.id}-full-risk`}>{suggestionFullBuildRiskText(suggestion)}</td>)}</tr>
@@ -230,20 +306,29 @@ export function ResultFindingCard({ finding, partMap, onOpenPicker, onEdit, onAp
   const currentSuggestionPart = suggestionCategory ? finding.affectedPartIds.map((id) => partMap.get(id)).find((part) => part?.category === suggestionCategory) : undefined;
   const hasReplacementAction = finding.actions.some((action) => action.type === "replace_part" && action.targetCategory);
   const hasQuantityAction = finding.actions.some((action) => action.type === "change_quantity" && action.targetCategory);
-  const performanceReferenceCategory = (finding.suggestions ?? []).flatMap((suggestion) => suggestion.similarityEvidence.notes ?? []).find((note) => note.startsWith("현재 선택 부품의 성능 스펙이 부족해"))?.includes("동일 GPU 모델 계열") ? "GPU" : "CPU";
-  const usesPerformanceReference = Boolean(performanceReferenceCategory && (finding.suggestions ?? []).some((suggestion) => suggestion.similarityEvidence.notes?.some((note) => note.startsWith("현재 선택 부품의 성능 스펙이 부족해"))));
+  const performanceReferenceCategories = (finding.suggestions ?? []).map((suggestion) => similarityReferenceUsedCategoryFor(suggestion.similarityEvidence)).filter((category): category is "cpu" | "gpu" => Boolean(category));
+  const performanceReferenceCategory = performanceReferenceCategories.includes("gpu") ? "GPU" : performanceReferenceCategories.includes("cpu") ? "CPU" : undefined;
+  const usesPerformanceReference = performanceReferenceCategories.length > 0;
   const hasComparablePerformanceSuggestion = (finding.suggestions ?? []).some((suggestion) => suggestion.similarityLabel === "동급" || suggestion.similarityLabel === "유사");
+  const hasReviewSuggestion = (finding.suggestions ?? []).some((suggestion) => suggestion.candidateRisk === "review");
+  const suggestionHeadingNote = hasReviewSuggestion
+    ? "안전 후보가 확인되지 않은 범주에는 신규 차단 없이 현재 문제를 해결하지만 추가 확인이 필요한 후보를 표시합니다. 카드의 '확인 후 적용' 근거를 구매 전에 확인하세요."
+    : usesPerformanceReference && !hasComparablePerformanceSuggestion
+      ? `검증된 동일 ${performanceReferenceCategory} 모델 계열을 기준으로 비교했지만 유사 성능 후보를 확인하지 못해 호환 우선 대안을 표시합니다.`
+      : usesPerformanceReference
+        ? `검증된 동일 ${performanceReferenceCategory} 모델 계열을 기준으로 유사도를 계산하고 유사 성능 후보를 우선 표시합니다.`
+        : "카탈로그 확인 점수·스펙 유사도 · 전체 벤치마크 순위 아님 · 근거를 열거나 후보 2개를 선택해 비교할 수 있습니다.";
   function toggleCompareSuggestion(partId: string) {
     setCompareSuggestionIds((current) => current.includes(partId) ? current.filter((id) => id !== partId) : current.length >= 3 ? current : [...current, partId]);
   }
   const suggestionProps = { partSummary, formatWon, formatPriceDelta, formatSpecValue, similarityEvidenceText, suggestionSpecRows };
-  return <article id={`finding-${finding.ruleId}`} className={`finding-card ${finding.severity}${ruleOpen ? " rule-open" : ""}`}>
+  return <article id={`finding-${finding.ruleId}`} className={`finding-card ${finding.severity}${ruleOpen ? " rule-open" : ""}`} tabIndex={-1}>
     <div className="finding-card-heading"><span className="finding-severity"><SeverityIcon /> {severityLabel}</span><div className="finding-card-heading-actions"><span className="rule-id">{finding.ruleId}</span><button className="rule-explanation-toggle" type="button" aria-expanded={ruleOpen} onClick={() => setRuleOpen((current) => !current)}>판정 근거 <FiChevronDown /></button></div></div>
     <h3>{finding.title}</h3><p className="finding-message">{finding.message}</p>
     {ruleOpen && <div className="rule-explanation" role="region" aria-label={`${finding.ruleId} 판정 근거`}><div><span>검사 규칙</span><p>{ruleGuide}</p></div><div><span>판정 상태</span><p>{severityLabel} · {finding.title}</p></div><div><span>데이터 경계</span><p>{ruleBoundary}</p></div></div>}
     {finding.facts.length > 0 && <div className="facts-grid">{finding.facts.map((fact, index) => <div className="fact" key={`${fact.label}-${index}`}><span>{fact.label}</span><strong>{fact.actual ?? fact.expected ?? "확인 필요"}</strong>{fact.actual && fact.expected && <small>기대: {fact.expected}</small>}</div>)}</div>}
     <div className="finding-actions">{finding.actions.map((action, index) => { const target = action.targetCategory; if (action.type === "replace_part" && target) return <button className="button button-small button-fix" key={`${action.label}-${index}`} disabled={disabled} onClick={() => onOpenPicker(target, finding.ruleId, finding.title, finding.affectedPartIds)}><FiEdit3 /> {action.label}</button>; if (action.type === "change_quantity") return <button className="button button-small button-fix" key={`${action.label}-${index}`} disabled={disabled} onClick={onEdit}><FiEdit3 /> {action.label}</button>; return <button className="button button-small button-light" key={`${action.label}-${index}`} disabled={disabled} onClick={onEdit}><FiInfo /> {action.label}</button>; })}</div>
-    {finding.suggestions && finding.suggestions.length > 0 && <div className="suggestions"><div className="suggestion-heading"><FiActivity /><span>이 문제를 줄이는 대체 부품</span><small>{usesPerformanceReference && !hasComparablePerformanceSuggestion ? `검증된 동일 ${performanceReferenceCategory} 모델 계열을 기준으로 비교했지만 유사 성능 후보를 확인하지 못해 호환 우선 대안을 표시합니다.` : usesPerformanceReference ? `검증된 동일 ${performanceReferenceCategory} 모델 계열을 기준으로 유사도를 계산하고 유사 성능 후보를 우선 표시합니다.` : "카탈로그 확인 점수·스펙 유사도 · 전체 벤치마크 순위 아님 · 근거를 열거나 후보 2개를 선택해 비교할 수 있습니다."}</small></div><div className="suggestion-list">{finding.suggestions.map((suggestion) => { const target = suggestion.part.category; const expanded = expandedSuggestionId === suggestion.part.id; const physicalSourceCount = suggestion.physicalEvidence?.sources?.length ?? 0; const sourceUrl = safeExternalUrl(suggestion.part.danawaUrl); return <article className={expanded ? "suggestion-card expanded" : "suggestion-card"} key={suggestion.part.id}><button className="suggestion-apply" type="button" aria-label={`${suggestion.part.name} 적용`} disabled={disabled} onClick={() => onApplySuggestion(target, suggestion.part, suggestion.recommendedQuantity, finding.affectedPartIds)}><span className="suggestion-icon"><PartVisual part={suggestion.part} /></span><span className="suggestion-content"><span className="category-badge suggestion-category-badge">{CATEGORY_LABELS[target]}</span><strong>{suggestion.part.name}</strong><small>{suggestion.recommendedQuantity !== undefined ? `추천 킷 ${suggestion.recommendedQuantity}개 · ` : ""}{partSummary(suggestion.part)} · {suggestion.similarityLabel} {suggestion.similarityScore}점 · {similarityEvidenceText(suggestion.similarityEvidence)}{suggestion.recommendationTrust ? ` · 근거 ${recommendationTrustText(suggestion.recommendationTrust)}` : ""}{suggestion.valueScore !== undefined && suggestion.valueLabel ? ` · ${suggestion.valueLabel} ${valueScoreText(suggestion.valueScore)}` : ""} · 이 문제 해결{suggestion.part.listingType && suggestion.part.listingType !== "retail" ? ` · ${LISTING_TYPE_LABELS[suggestion.part.listingType]}` : ""}</small><em>{suggestion.performanceSummary}</em><em>{suggestion.profileSummary}</em>{suggestion.physicalEvidence && suggestion.physicalEvidence.status !== "not_applicable" && <em className={`suggestion-physical-evidence-line ${suggestion.physicalEvidence.status}`}>물리 근거 · {physicalEvidenceLabel(suggestion.physicalEvidence.status)}{physicalSourceCount > 0 ? ` · 출처 ${physicalSourceCount}건` : " · 출처 메모 확인 필요"} · {suggestion.physicalEvidence.summary}</em>}<SuggestionDecisionLine suggestion={suggestion} /><em>{suggestion.reason}</em></span><span className="suggestion-price"><strong>{formatWon(suggestionTotalPrice(suggestion, formatWon))}</strong><small>{suggestion.recommendedQuantity !== undefined ? `킷 ${suggestion.recommendedQuantity}개 · 1킷 ${formatWon(suggestion.part.priceWon)}` : formatPriceDelta(suggestion.priceDeltaWon)}</small>{suggestion.recommendedQuantity !== undefined && <small>{formatPriceDelta(suggestion.priceDeltaWon)}</small>}<FiExternalLink /></span></button><div className="suggestion-card-actions"><PartWatchButton part={suggestion.part} onWatch={onWatchPart} />{sourceUrl && <a className="suggestion-source-link" href={sourceUrl} target="_blank" rel="noreferrer" aria-label={`${suggestion.part.name} 다나와 원문 보기`}>다나와 원문 <FiExternalLink /></a>}<button className={compareSuggestionIds.includes(suggestion.part.id) ? "suggestion-compare-toggle selected" : "suggestion-compare-toggle"} type="button" aria-pressed={compareSuggestionIds.includes(suggestion.part.id)} onClick={() => toggleCompareSuggestion(suggestion.part.id)}>{compareSuggestionIds.includes(suggestion.part.id) ? "비교 중" : "비교"}</button><button className="suggestion-preview-button" type="button" onClick={() => onPreviewSuggestion(target, suggestion.part, suggestion.recommendedQuantity, finding.affectedPartIds)} disabled={disabled}>가상 적용</button><button className="suggestion-detail-toggle" type="button" aria-expanded={expanded} onClick={() => setExpandedSuggestionId(expanded ? null : suggestion.part.id)}><span>근거</span><FiChevronDown /></button></div>{expanded && <SuggestionDetail suggestion={suggestion} suggestionSpecRows={suggestionSpecRows} formatSpecValue={formatSpecValue} formatSignedPercent={formatSignedPercent} formatWon={formatWon} similarityEvidenceText={similarityEvidenceText} />}</article>; })}</div>{compareSuggestions.length >= 2 && <SuggestionComparison suggestions={compareSuggestions} currentPart={currentSuggestionPart} affectedPartIds={finding.affectedPartIds} onCompareSuggestions={disabled ? undefined : onCompareSuggestions} onToast={onToast} onShare={onShareComparison} onRevoke={onRevokeComparison} props={suggestionProps} />}</div>}
+    {finding.suggestions && finding.suggestions.length > 0 && <div className="suggestions"><div className="suggestion-heading"><FiActivity /><span>이 문제를 줄이는 대체 부품</span><small>{suggestionHeadingNote}</small></div><div className="suggestion-list">{finding.suggestions.map((suggestion) => { const target = suggestion.part.category; const expanded = expandedSuggestionId === suggestion.part.id; const physicalSourceCount = suggestion.physicalEvidence?.sources?.length ?? 0; const sourceUrl = safeExternalUrl(suggestion.part.danawaUrl); const applicationEvidence = suggestionApplicationEvidenceFor(suggestion); return <article className={expanded ? "suggestion-card expanded" : "suggestion-card"} key={suggestion.part.id}><button className="suggestion-apply" type="button" aria-label={`${suggestion.part.name} 적용`} disabled={disabled} onClick={() => onApplySuggestion(target, suggestion.part, suggestion.recommendedQuantity, finding.affectedPartIds, applicationEvidence)}><span className="suggestion-icon"><PartVisual part={suggestion.part} /></span><span className="suggestion-content"><span className="category-badge suggestion-category-badge">{CATEGORY_LABELS[target]}</span>{suggestion.candidateRisk === "review" && <em className="decision-badge review suggestion-candidate-risk-badge">확인 후 적용</em>}<strong>{suggestion.part.name}</strong><small>{suggestion.recommendedQuantity !== undefined ? `추천 킷 ${suggestion.recommendedQuantity}개 · ` : ""}{partSummary(suggestion.part)} · {suggestion.similarityLabel} {suggestion.similarityScore}점 · {similarityEvidenceText(suggestion.similarityEvidence)}{suggestion.recommendationTrust ? ` · 근거 ${recommendationTrustText(suggestion.recommendationTrust)}` : ""}{suggestion.valueScore !== undefined && suggestion.valueLabel ? ` · ${suggestion.valueLabel} ${valueScoreText(suggestion.valueScore)}` : ""} · 이 문제 해결{suggestion.part.listingType && suggestion.part.listingType !== "retail" ? ` · ${LISTING_TYPE_LABELS[suggestion.part.listingType]}` : ""}</small><em>{suggestion.performanceSummary}</em><em>{suggestion.profileSummary}</em>{suggestion.physicalEvidence && suggestion.physicalEvidence.status !== "not_applicable" && <em className={`suggestion-physical-evidence-line ${suggestion.physicalEvidence.status}`}>물리 근거 · {physicalEvidenceLabel(suggestion.physicalEvidence.status)}{physicalSourceCount > 0 ? ` · 출처 ${physicalSourceCount}건` : " · 출처 메모 확인 필요"} · {suggestion.physicalEvidence.summary}</em>}{suggestion.gpuTarget && <em className={`suggestion-gpu-target-line ${suggestion.gpuTarget.candidateFit ?? "unknown"}`}>GPU 목표 · {gpuTargetFitLabel(suggestion.gpuTarget.candidateFit)} · {suggestion.gpuTarget.summary}</em>}<SuggestionDecisionLine suggestion={suggestion} /><em>{suggestion.reason}</em></span><span className="suggestion-price"><strong>{formatWon(suggestionTotalPrice(suggestion, formatWon))}</strong><small>{suggestion.recommendedQuantity !== undefined ? `킷 ${suggestion.recommendedQuantity}개 · 1킷 ${formatWon(suggestion.part.priceWon)}` : formatPriceDelta(suggestion.priceDeltaWon)}</small>{suggestion.recommendedQuantity !== undefined && <small>{formatPriceDelta(suggestion.priceDeltaWon)}</small>}<FiExternalLink /></span></button><div className="suggestion-card-actions"><PartWatchButton part={suggestion.part} onWatch={onWatchPart} />{sourceUrl && <a className="suggestion-source-link" href={sourceUrl} target="_blank" rel="noreferrer" aria-label={`${suggestion.part.name} 다나와 원문 보기`}>다나와 원문 <FiExternalLink /></a>}<button className={compareSuggestionIds.includes(suggestion.part.id) ? "suggestion-compare-toggle selected" : "suggestion-compare-toggle"} type="button" aria-pressed={compareSuggestionIds.includes(suggestion.part.id)} onClick={() => toggleCompareSuggestion(suggestion.part.id)}>{compareSuggestionIds.includes(suggestion.part.id) ? "비교 중" : "비교"}</button><button className="suggestion-preview-button" type="button" onClick={() => onPreviewSuggestion(target, suggestion.part, suggestion.recommendedQuantity, finding.affectedPartIds, applicationEvidence)} disabled={disabled}>가상 적용</button><button className="suggestion-detail-toggle" type="button" aria-expanded={expanded} onClick={() => setExpandedSuggestionId(expanded ? null : suggestion.part.id)}><span>근거</span><FiChevronDown /></button></div>{expanded && <SuggestionDetail suggestion={suggestion} suggestionSpecRows={suggestionSpecRows} formatSpecValue={formatSpecValue} formatSignedPercent={formatSignedPercent} formatWon={formatWon} similarityEvidenceText={similarityEvidenceText} />}</article>; })}</div>{compareSuggestions.length >= 2 && <SuggestionComparison suggestions={compareSuggestions} currentPart={currentSuggestionPart} affectedPartIds={finding.affectedPartIds} onCompareSuggestions={disabled ? undefined : onCompareSuggestions} onToast={onToast} onShare={onShareComparison} onRevoke={onRevokeComparison} props={suggestionProps} />}</div>}
     {hasReplacementAction && !hasQuantityAction && (!finding.suggestions || finding.suggestions.length === 0) && <div className="suggestion-empty"><FiInfo /><div><strong>안전한 대체 후보를 찾지 못했습니다.</strong><p>현재 카탈로그에서 이 문제를 해결하면서 새로운 차단 오류나 확인 필요 항목을 만들지 않는 후보가 확인되지 않았습니다. 원문 스펙을 확인하거나 검색 조건을 넓혀 직접 선택해 주세요.</p></div></div>}
     {hasQuantityAction && (!finding.suggestions || finding.suggestions.length === 0) && <div className="suggestion-empty quantity-guidance" data-testid="quantity-guidance"><FiInfo /><div><strong>이 문제는 수량·구성 조정 플랜으로 해결합니다.</strong><p>현재 부품의 성능이 아니라 메인보드 슬롯·저장장치 포트·케이스 베이 여유가 기준을 넘었습니다. 추천 수리 플랜에서 수량을 줄이거나 기준 부품을 함께 바꾸면 적용 전후 결과를 비교할 수 있습니다.</p><button className="text-button" type="button" onClick={onFocusRepairPlans ?? onEdit}>추천 수리 플랜 보기 <FiExternalLink /></button></div></div>}
     {finding.affectedPartIds.length > 0 && <p className="affected-parts"><FiInfo /> 영향받은 부품: {finding.affectedPartIds.map((id) => partMap.get(id)?.name ?? id).join(", ")}</p>}

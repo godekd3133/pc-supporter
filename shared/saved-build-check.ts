@@ -1,6 +1,10 @@
-import type { AccessoryCompatibilityFinding, CompatibilityResult, Finding, FindingFact, FindingSeverity, SavedBuildAccessoryCompatibilitySnapshot, SavedBuildAccessoryFindingSummary, SavedBuildCheckFindingSummary, SavedBuildCheckSnapshot } from "./types";
+import type { AccessoryCompatibilityFinding, CompatibilityResult, Finding, FindingFact, FindingSeverity, SavedBuildAccessoryCompatibilitySnapshot, SavedBuildAccessoryFindingSummary, SavedBuildCheckFindingSummary, SavedBuildCheckSnapshot, SavedBuildResourceBudgetSnapshot } from "./types";
 import { buildActionCenterFor } from "./build-action-center";
 import { assemblyVerificationSavedHistoryFromUnknown, assemblyVerificationSavedSnapshotFromUnknown } from "./assembly-verification";
+import { buildBenchmarkImpactFor, buildBenchmarkSnapshotFromUnknown } from "./build-benchmark-snapshot";
+import type { BuildBenchmarkImpact } from "./build-benchmark-snapshot";
+import { buildResourceSummaryFor } from "./build-resource-summary";
+import { catalogRefreshReportFromUnknown } from "./catalog-refresh-report";
 
 const COMPATIBILITY_STATUSES = ["compatible", "incompatible", "needs_review"] as const;
 const ANALYSIS_SCORE_LABELS = ["상위권", "균형형", "보완 권장", "계산 불가"] as const;
@@ -82,6 +86,18 @@ function accessoryCompatibilitySnapshotFor(result: CompatibilityResult): SavedBu
   };
 }
 
+function resourceBudgetForResult(result: CompatibilityResult): SavedBuildResourceBudgetSnapshot | undefined {
+  const summary = buildResourceSummaryFor(result.metrics);
+  if (summary.state === "neutral") return undefined;
+  return {
+    state: summary.state,
+    powerState: summary.cards[0].state,
+    coolingState: summary.cards[1].state,
+    ...(summary.cards[0].headroomW !== undefined ? { powerHeadroomW: summary.cards[0].headroomW } : {}),
+    ...(summary.cards[1].headroomW !== undefined ? { coolerHeadroomW: summary.cards[1].headroomW } : {})
+  };
+}
+
 export function savedBuildCheckSnapshotFor(result: CompatibilityResult): SavedBuildCheckSnapshot {
   const coreTotalPriceWon = result.coreTotalPriceWon ?? Math.max(0, result.totalPriceWon - (result.accessoryTotalPriceWon ?? 0));
   const corePriceComplete = result.corePriceComplete ?? result.priceComplete;
@@ -89,6 +105,7 @@ export function savedBuildCheckSnapshotFor(result: CompatibilityResult): SavedBu
   const accessoryPriceComplete = result.accessoryPriceComplete ?? true;
   const accessoryCompatibility = accessoryCompatibilitySnapshotFor(result);
   const actionCenter = buildActionCenterFor(result);
+  const resourceBudget = resourceBudgetForResult(result);
   return {
     status: result.status,
     blockerCount: result.blockerCount,
@@ -108,6 +125,8 @@ export function savedBuildCheckSnapshotFor(result: CompatibilityResult): SavedBu
     actionCenterState: actionCenter.state,
     actionCenterSummary: actionCenter.summary,
     actionCenterTotalCount: actionCenter.totalCount,
+    ...(resourceBudget ? { resourceBudget } : {}),
+    ...(result.benchmarkSnapshot ? { benchmarkSnapshot: result.benchmarkSnapshot } : {}),
     engineVersion: result.engineVersion,
     catalogSnapshotAt: result.catalogSnapshotAt,
     checkedAt: result.checkedAt
@@ -119,6 +138,8 @@ function savedBuildCheckFindingSummaryFromUnknown(value: unknown): SavedBuildChe
   if (!textWithinLimit(value.id, 120) || !textWithinLimit(value.ruleId, 120)) return undefined;
   if (!FINDING_SEVERITIES.includes(value.severity as typeof FINDING_SEVERITIES[number])) return undefined;
   if (!textWithinLimit(value.title, 160) || !textWithinLimit(value.message)) return undefined;
+  if (Array.isArray(value.affectedPartIds) && value.affectedPartIds.length > SAVED_BUILD_CHECK_AFFECTED_PART_LIMIT) return undefined;
+  if (Array.isArray(value.facts) && value.facts.length > SAVED_BUILD_CHECK_FACT_LIMIT) return undefined;
   const affectedPartIds = Array.isArray(value.affectedPartIds)
     ? value.affectedPartIds.filter((partId): partId is string => textWithinLimit(partId, 120)).slice(0, SAVED_BUILD_CHECK_AFFECTED_PART_LIMIT)
     : [];
@@ -137,7 +158,8 @@ function savedBuildCheckFindingSummaryFromUnknown(value: unknown): SavedBuildChe
 }
 
 function savedBuildCheckFindingsFromUnknown(value: unknown) {
-  if (!Array.isArray(value)) return [];
+  if (!Array.isArray(value) || value.length > SAVED_BUILD_CHECK_FINDING_LIMIT) return undefined;
+  if (value.some((item) => isRecord(item) && (Array.isArray(item.affectedPartIds) && item.affectedPartIds.length > SAVED_BUILD_CHECK_AFFECTED_PART_LIMIT || Array.isArray(item.facts) && item.facts.length > SAVED_BUILD_CHECK_FACT_LIMIT))) return undefined;
   return value
     .map(savedBuildCheckFindingSummaryFromUnknown)
     .filter((finding): finding is SavedBuildCheckFindingSummary => finding !== undefined)
@@ -149,6 +171,8 @@ function savedBuildAccessoryFindingSummaryFromUnknown(value: unknown): SavedBuil
   if (!textWithinLimit(value.id, 160) || !textWithinLimit(value.ruleId, 120) || !ACCESSORY_FINDING_SEVERITIES.includes(value.severity as typeof ACCESSORY_FINDING_SEVERITIES[number])) return undefined;
   if (!textWithinLimit(value.accessoryId, 120) || !textWithinLimit(value.accessoryName, 160) || !textWithinLimit(value.title, 160) || !textWithinLimit(value.message)) return undefined;
   if (value.action !== undefined && !textWithinLimit(value.action, 200)) return undefined;
+  if (Array.isArray(value.relatedPartIds) && value.relatedPartIds.length > SAVED_BUILD_CHECK_AFFECTED_PART_LIMIT) return undefined;
+  if (Array.isArray(value.facts) && value.facts.length > SAVED_BUILD_CHECK_FACT_LIMIT) return undefined;
   const relatedPartIds = Array.isArray(value.relatedPartIds)
     ? value.relatedPartIds.filter((partId): partId is string => textWithinLimit(partId, 120)).slice(0, SAVED_BUILD_CHECK_AFFECTED_PART_LIMIT)
     : [];
@@ -170,7 +194,8 @@ function savedBuildAccessoryFindingSummaryFromUnknown(value: unknown): SavedBuil
 }
 
 function savedBuildAccessoryFindingsFromUnknown(value: unknown) {
-  if (!Array.isArray(value)) return [];
+  if (!Array.isArray(value) || value.length > SAVED_BUILD_CHECK_ACCESSORY_FINDING_LIMIT) return undefined;
+  if (value.some((item) => isRecord(item) && (Array.isArray(item.relatedPartIds) && item.relatedPartIds.length > SAVED_BUILD_CHECK_AFFECTED_PART_LIMIT || Array.isArray(item.facts) && item.facts.length > SAVED_BUILD_CHECK_FACT_LIMIT))) return undefined;
   return value
     .map(savedBuildAccessoryFindingSummaryFromUnknown)
     .filter((finding): finding is SavedBuildAccessoryFindingSummary => finding !== undefined)
@@ -184,12 +209,35 @@ function savedBuildAccessoryCompatibilityFromUnknown(value: unknown): SavedBuild
     || !nonNegativeInteger(value.warningCount)
     || !nonNegativeInteger(value.unknownCount)) return undefined;
   const findings = value.findings === undefined ? undefined : savedBuildAccessoryFindingsFromUnknown(value.findings);
+  if (value.findings !== undefined && !findings) return undefined;
   return {
     status: value.status as SavedBuildAccessoryCompatibilitySnapshot["status"],
     blockerCount: value.blockerCount,
     warningCount: value.warningCount,
     unknownCount: value.unknownCount,
     ...(findings !== undefined ? { findings } : {})
+  };
+}
+
+const RESOURCE_STATES = ["good", "warning", "danger", "unknown", "neutral"] as const;
+
+function boundedResourceNumber(value: unknown): value is number {
+  return finiteNumber(value) && Math.abs(value) <= 100_000;
+}
+
+function savedBuildResourceBudgetFromUnknown(value: unknown): SavedBuildResourceBudgetSnapshot | undefined {
+  if (!isRecord(value)
+    || !RESOURCE_STATES.includes(value.state as typeof RESOURCE_STATES[number])
+    || !RESOURCE_STATES.includes(value.powerState as typeof RESOURCE_STATES[number])
+    || !RESOURCE_STATES.includes(value.coolingState as typeof RESOURCE_STATES[number])
+    || (value.powerHeadroomW !== undefined && !boundedResourceNumber(value.powerHeadroomW))
+    || (value.coolerHeadroomW !== undefined && !boundedResourceNumber(value.coolerHeadroomW))) return undefined;
+  return {
+    state: value.state as SavedBuildResourceBudgetSnapshot["state"],
+    powerState: value.powerState as SavedBuildResourceBudgetSnapshot["powerState"],
+    coolingState: value.coolingState as SavedBuildResourceBudgetSnapshot["coolingState"],
+    ...(value.powerHeadroomW !== undefined ? { powerHeadroomW: value.powerHeadroomW } : {}),
+    ...(value.coolerHeadroomW !== undefined ? { coolerHeadroomW: value.coolerHeadroomW } : {})
   };
 }
 
@@ -205,17 +253,24 @@ export function savedBuildCheckSnapshotFromUnknown(value: unknown): SavedBuildCh
   if (value.actionCenterState !== undefined && !actionCenterStates.includes(value.actionCenterState as typeof actionCenterStates[number])) return undefined;
   if (value.actionCenterSummary !== undefined && !textWithinLimit(value.actionCenterSummary, 500)) return undefined;
   if (value.actionCenterTotalCount !== undefined && !nonNegativeInteger(value.actionCenterTotalCount)) return undefined;
+  const resourceBudget = value.resourceBudget === undefined ? undefined : savedBuildResourceBudgetFromUnknown(value.resourceBudget);
+  if (value.resourceBudget !== undefined && !resourceBudget) return undefined;
+  const benchmarkSnapshot = value.benchmarkSnapshot === undefined ? undefined : buildBenchmarkSnapshotFromUnknown(value.benchmarkSnapshot);
+  if (value.benchmarkSnapshot !== undefined && !benchmarkSnapshot) return undefined;
   if (typeof value.engineVersion !== "string" || value.engineVersion.length === 0 || value.engineVersion.length > 80) return undefined;
   if (typeof value.catalogSnapshotAt !== "string" || value.catalogSnapshotAt.length === 0 || value.catalogSnapshotAt.length > 120) return undefined;
   if (typeof value.checkedAt !== "string" || value.checkedAt.length === 0 || value.checkedAt.length > 120) return undefined;
   if (value.analysisScore !== undefined && (!finiteNumber(value.analysisScore) || value.analysisScore < 0 || value.analysisScore > 100)) return undefined;
   const findings = value.findings === undefined ? undefined : savedBuildCheckFindingsFromUnknown(value.findings);
+  if (value.findings !== undefined && !findings) return undefined;
   const accessoryCompatibility = value.accessoryCompatibility === undefined ? undefined : savedBuildAccessoryCompatibilityFromUnknown(value.accessoryCompatibility);
   if (value.accessoryCompatibility !== undefined && !accessoryCompatibility) return undefined;
   const assemblyVerification = value.assemblyVerification === undefined ? undefined : assemblyVerificationSavedSnapshotFromUnknown(value.assemblyVerification);
   if (value.assemblyVerification !== undefined && !assemblyVerification) return undefined;
   const assemblyVerificationHistory = value.assemblyVerificationHistory === undefined ? undefined : assemblyVerificationSavedHistoryFromUnknown(value.assemblyVerificationHistory);
   if (value.assemblyVerificationHistory !== undefined && !assemblyVerificationHistory) return undefined;
+  const catalogRefreshReport = value.catalogRefreshReport === undefined ? undefined : catalogRefreshReportFromUnknown(value.catalogRefreshReport);
+  if (value.catalogRefreshReport !== undefined && !catalogRefreshReport) return undefined;
   return {
     status: value.status as SavedBuildCheckSnapshot["status"],
     blockerCount: value.blockerCount,
@@ -235,16 +290,20 @@ export function savedBuildCheckSnapshotFromUnknown(value: unknown): SavedBuildCh
     ...(value.actionCenterState !== undefined ? { actionCenterState: value.actionCenterState as SavedBuildCheckSnapshot["actionCenterState"] } : {}),
     ...(value.actionCenterSummary !== undefined ? { actionCenterSummary: value.actionCenterSummary } : {}),
     ...(value.actionCenterTotalCount !== undefined ? { actionCenterTotalCount: value.actionCenterTotalCount } : {}),
+    ...(resourceBudget ? { resourceBudget } : {}),
+    ...(benchmarkSnapshot ? { benchmarkSnapshot } : {}),
     ...(assemblyVerification ? { assemblyVerification } : {}),
     ...(assemblyVerificationHistory ? { assemblyVerificationHistory } : {}),
+    ...(catalogRefreshReport ? { catalogRefreshReport } : {}),
     engineVersion: value.engineVersion,
     catalogSnapshotAt: value.catalogSnapshotAt,
     checkedAt: value.checkedAt
   };
 }
 
-export function savedBuildCheckHistoryFromUnknown(value: unknown): SavedBuildCheckSnapshot[] {
+export function savedBuildCheckHistoryFromUnknown(value: unknown): SavedBuildCheckSnapshot[] | undefined {
   if (!Array.isArray(value)) return [];
+  if (value.length > SAVED_BUILD_CHECK_HISTORY_LIMIT) return undefined;
   return value
     .map((item) => savedBuildCheckSnapshotFromUnknown(item))
     .filter((item): item is SavedBuildCheckSnapshot => item !== undefined)
@@ -280,12 +339,32 @@ function accessoryRiskFromResult(result: CompatibilityResult) {
   return result.accessoryCompatibility;
 }
 
+function resourceBudgetFingerprint(value: SavedBuildResourceBudgetSnapshot | undefined) {
+  return JSON.stringify(value ?? null);
+}
+
+function resourceRiskRank(value: SavedBuildResourceBudgetSnapshot | undefined) {
+  const state = value?.state;
+  return state === "danger" ? 3 : state === "warning" || state === "unknown" ? 2 : state === "neutral" ? 1 : 0;
+}
+
+function resourceHeadroomDeltaFor(before: SavedBuildResourceBudgetSnapshot | undefined, after: SavedBuildResourceBudgetSnapshot | undefined, key: "powerHeadroomW" | "coolerHeadroomW") {
+  const previous = before?.[key];
+  const next = after?.[key];
+  return typeof previous === "number" && typeof next === "number" ? next - previous : undefined;
+}
+
 export interface SavedBuildCheckDiff {
   statusChanged: boolean;
   riskChanged: boolean;
   accessoryRiskChanged: boolean;
   priceChanged: boolean;
   priceCompletenessChanged: boolean;
+  analysisChanged: boolean;
+  resourceBudgetChanged: boolean;
+  benchmarkChanged: boolean;
+  benchmarkNeedsReview: boolean;
+  benchmarkImpact: BuildBenchmarkImpact;
   engineChanged: boolean;
   catalogChanged: boolean;
   hasChanges: boolean;
@@ -300,6 +379,13 @@ export function savedBuildCheckDiffFor(snapshot: SavedBuildCheckSnapshot, result
     || accessoryRiskChanged;
   const priceCompletenessChanged = snapshot.priceComplete !== result.priceComplete;
   const priceChanged = snapshot.priceComplete && result.priceComplete && snapshot.totalPriceWon !== result.totalPriceWon;
+  const analysisChanged = snapshot.analysisScore !== result.analysis.overallScore
+    || snapshot.analysisScoreLabel !== result.analysis.scoreLabel
+    || snapshot.analysisConfidence !== result.analysis.confidence;
+  const resourceBudgetChanged = resourceBudgetFingerprint(snapshot.resourceBudget) !== resourceBudgetFingerprint(resourceBudgetForResult(result));
+  const benchmarkImpact = buildBenchmarkImpactFor(snapshot.benchmarkSnapshot, result.benchmarkSnapshot);
+  const benchmarkChanged = benchmarkImpact.status === "changed";
+  const benchmarkNeedsReview = benchmarkImpact.status === "unverified";
   const engineChanged = snapshot.engineVersion !== result.engineVersion;
   const catalogChanged = snapshot.catalogSnapshotAt !== result.catalogSnapshotAt;
   return {
@@ -308,9 +394,14 @@ export function savedBuildCheckDiffFor(snapshot: SavedBuildCheckSnapshot, result
     accessoryRiskChanged,
     priceChanged,
     priceCompletenessChanged,
+    analysisChanged,
+    resourceBudgetChanged,
+    benchmarkChanged,
+    benchmarkNeedsReview,
+    benchmarkImpact,
     engineChanged,
     catalogChanged,
-    hasChanges: statusChanged || riskChanged || priceChanged || priceCompletenessChanged || engineChanged || catalogChanged
+    hasChanges: statusChanged || riskChanged || priceChanged || priceCompletenessChanged || analysisChanged || resourceBudgetChanged || benchmarkChanged || benchmarkNeedsReview || engineChanged || catalogChanged
   };
 }
 
@@ -323,6 +414,13 @@ export function savedBuildCheckSnapshotDiffFor(before: SavedBuildCheckSnapshot, 
     || accessoryRiskChanged;
   const priceCompletenessChanged = before.priceComplete !== after.priceComplete;
   const priceChanged = before.priceComplete && after.priceComplete && before.totalPriceWon !== after.totalPriceWon;
+  const analysisChanged = before.analysisScore !== after.analysisScore
+    || before.analysisScoreLabel !== after.analysisScoreLabel
+    || before.analysisConfidence !== after.analysisConfidence;
+  const resourceBudgetChanged = resourceBudgetFingerprint(before.resourceBudget) !== resourceBudgetFingerprint(after.resourceBudget);
+  const benchmarkImpact = buildBenchmarkImpactFor(before.benchmarkSnapshot, after.benchmarkSnapshot);
+  const benchmarkChanged = benchmarkImpact.status === "changed";
+  const benchmarkNeedsReview = benchmarkImpact.status === "unverified";
   const engineChanged = before.engineVersion !== after.engineVersion;
   const catalogChanged = before.catalogSnapshotAt !== after.catalogSnapshotAt;
   return {
@@ -331,9 +429,14 @@ export function savedBuildCheckSnapshotDiffFor(before: SavedBuildCheckSnapshot, 
     accessoryRiskChanged,
     priceChanged,
     priceCompletenessChanged,
+    analysisChanged,
+    resourceBudgetChanged,
+    benchmarkChanged,
+    benchmarkNeedsReview,
+    benchmarkImpact,
     engineChanged,
     catalogChanged,
-    hasChanges: statusChanged || riskChanged || priceChanged || priceCompletenessChanged || engineChanged || catalogChanged
+    hasChanges: statusChanged || riskChanged || priceChanged || priceCompletenessChanged || analysisChanged || resourceBudgetChanged || benchmarkChanged || benchmarkNeedsReview || engineChanged || catalogChanged
   };
 }
 
@@ -404,6 +507,16 @@ export interface SavedBuildCheckTransitionSummary {
   accessoryRiskChanged: boolean;
   priceDeltaWon?: number;
   priceCompletenessChanged: boolean;
+  analysisScoreDelta?: number;
+  analysisChanged: boolean;
+  resourceBudgetChanged: boolean;
+  resourceRiskIncreased: boolean;
+  resourceRiskDecreased: boolean;
+  powerHeadroomDeltaW?: number;
+  coolerHeadroomDeltaW?: number;
+  benchmarkChanged: boolean;
+  benchmarkNeedsReview: boolean;
+  benchmarkImpact: BuildBenchmarkImpact;
   engineChanged: boolean;
   catalogChanged: boolean;
   findingDiffAvailable: boolean;
@@ -430,6 +543,8 @@ export function savedBuildCheckTransitionSummaryFor(before: SavedBuildCheckSnaps
   const detailsChangedFindingCount = findingDiff.changes.filter((change) => change.change === "details_changed").length;
   const unchangedFindingCount = findingDiff.changes.filter((change) => change.change === "unchanged").length;
   const findingHasChanges = findingDiff.changes.some((change) => change.change !== "unchanged");
+  const powerHeadroomDeltaW = resourceHeadroomDeltaFor(before.resourceBudget, after.resourceBudget, "powerHeadroomW");
+  const coolerHeadroomDeltaW = resourceHeadroomDeltaFor(before.resourceBudget, after.resourceBudget, "coolerHeadroomW");
   const statusRankDelta = CHECK_STATUS_RANK[after.status] - CHECK_STATUS_RANK[before.status];
   const direction: SavedBuildCheckTransitionDirection = statusRankDelta > 0
     ? "improved"
@@ -450,6 +565,16 @@ export function savedBuildCheckTransitionSummaryFor(before: SavedBuildCheckSnaps
     accessoryRiskChanged: topLevelDiff.accessoryRiskChanged,
     ...(before.priceComplete && after.priceComplete ? { priceDeltaWon: after.totalPriceWon - before.totalPriceWon } : {}),
     priceCompletenessChanged: topLevelDiff.priceCompletenessChanged,
+    ...(before.analysisScore !== undefined && after.analysisScore !== undefined ? { analysisScoreDelta: after.analysisScore - before.analysisScore } : {}),
+    analysisChanged: topLevelDiff.analysisChanged,
+    resourceBudgetChanged: topLevelDiff.resourceBudgetChanged,
+    resourceRiskIncreased: resourceRiskRank(after.resourceBudget) > resourceRiskRank(before.resourceBudget),
+    resourceRiskDecreased: resourceRiskRank(after.resourceBudget) < resourceRiskRank(before.resourceBudget),
+    ...(powerHeadroomDeltaW !== undefined ? { powerHeadroomDeltaW } : {}),
+    ...(coolerHeadroomDeltaW !== undefined ? { coolerHeadroomDeltaW } : {}),
+    benchmarkChanged: topLevelDiff.benchmarkChanged,
+    benchmarkNeedsReview: topLevelDiff.benchmarkNeedsReview,
+    benchmarkImpact: topLevelDiff.benchmarkImpact,
     engineChanged: topLevelDiff.engineChanged,
     catalogChanged: topLevelDiff.catalogChanged,
     findingDiffAvailable: findingDiff.available,

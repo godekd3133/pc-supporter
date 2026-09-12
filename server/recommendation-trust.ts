@@ -1,15 +1,19 @@
-import type { BenchmarkSourceKind, Part, RecommendationTrustEvidence, RecommendationTrustFilter, SimilarityEvidence } from "../shared/types";
+import type { BenchmarkSourceKind, DataFreshness, Part, PhysicalSourceCheck, RecommendationTrustCounts, RecommendationTrustEvidence, RecommendationTrustFilter, SimilarityEvidence } from "../shared/types";
 import { BENCHMARK_SOURCE_KIND_LABELS, isKnownPrice } from "../shared/types";
+import { catalogPriceEvidenceFor } from "../shared/catalog-price-evidence";
 import { classifyDataFreshness } from "./data-health";
+import { physicalSourceCheckNeedsReview } from "../shared/physical-source-check";
 
 export type RecommendationTrustInput = {
-  candidate: Pick<Part, "dataQuality" | "missingFields" | "priceWon" | "updatedAt" | "danawaUrl">;
+  candidate: Pick<Part, "dataQuality" | "missingFields" | "priceWon" | "updatedAt" | "danawaUrl" | "specs">;
   similarityEvidence: SimilarityEvidence;
   resolvesTarget: boolean;
   candidateBlockers: number;
   candidateWarnings: number;
   candidateUnknown: number;
   benchmarkSourceKind?: BenchmarkSourceKind;
+  benchmarkFreshness?: DataFreshness;
+  benchmarkSourceCheck?: PhysicalSourceCheck;
   remainingBlockers: number;
   remainingWarnings: number;
   remainingUnknown: number;
@@ -24,6 +28,13 @@ export function recommendationTrustMatchesFilter(filter: RecommendationTrustFilt
   if (filter === "all") return true;
   if (!trust) return false;
   return filter === "high" ? trust.level === "high" : trust.level === "high" || trust.level === "medium";
+}
+
+export function recommendationTrustCountsFor(trusts: ReadonlyArray<Pick<RecommendationTrustEvidence, "level">>): RecommendationTrustCounts {
+  return trusts.reduce<RecommendationTrustCounts>((counts, trust) => {
+    counts[trust.level] += 1;
+    return counts;
+  }, { high: 0, medium: 0, low: 0 });
 }
 
 export function compareRecommendationTrust(left: RecommendationTrustEvidence | undefined, right: RecommendationTrustEvidence | undefined) {
@@ -65,12 +76,24 @@ function comparisonReason(evidence: SimilarityEvidence) {
   return `비교 가능한 스펙 ${evidence.comparedDimensions}/${evidence.totalDimensions}개 · ${basis}`;
 }
 
+function catalogSpecSourceCheckNeedsReviewFor(provenance: Part["specs"]["catalogSpecProvenance"], now: string | number | undefined) {
+  if (!provenance) return undefined;
+  if (!provenance.sourceCheck) return true;
+  if (provenance.sourceCheck.requestedUrl.trim() !== provenance.sourceUrl.trim()) return true;
+  return physicalSourceCheckNeedsReview(provenance.sourceCheck, true, now);
+}
+
 export function recommendationTrustFor(input: RecommendationTrustInput): RecommendationTrustEvidence {
   const { candidate, similarityEvidence } = input;
   const freshness = classifyDataFreshness(candidate.updatedAt, input.now);
   const priceKnown = isKnownPrice(candidate.priceWon);
+  const priceEvidence = catalogPriceEvidenceFor(candidate);
   const sourceAvailable = Boolean(candidate.danawaUrl);
   const benchmarkBacked = similarityEvidence.basis === "benchmark" || similarityEvidence.basis === "mixed";
+  const benchmarkFreshness = benchmarkBacked ? input.benchmarkFreshness ?? freshness : undefined;
+  const benchmarkSourceCheckNeedsReview = benchmarkBacked && input.benchmarkSourceCheck ? physicalSourceCheckNeedsReview(input.benchmarkSourceCheck, true, input.now) : undefined;
+  const catalogSpecProvenance = candidate.specs.catalogSpecProvenance;
+  const catalogSpecSourceCheckNeedsReview = catalogSpecSourceCheckNeedsReviewFor(catalogSpecProvenance, input.now);
   const compatibility = input.candidateBlockers === 0 && input.candidateUnknown === 0 ? "verified" : "review";
   const fullBuildStatus = input.remainingBlockers === 0 && input.remainingWarnings === 0 && input.remainingUnknown === 0 ? "clean" : "remaining_issues";
   const reasons: string[] = [];
@@ -117,6 +140,35 @@ export function recommendationTrustFor(input: RecommendationTrustInput): Recomme
     else if (input.benchmarkSourceKind === "independent_review") score += 4;
     else if (input.benchmarkSourceKind === "community_measurement") score += 2;
     reasons.push(input.benchmarkSourceKind ? `벤치마크 출처: ${BENCHMARK_SOURCE_KIND_LABELS[input.benchmarkSourceKind]}` : "벤치마크 출처 유형이 분류되지 않았습니다.");
+    if (benchmarkFreshness === "fresh") score += 3;
+    else if (benchmarkFreshness === "aging") reasons.push("벤치마크 자료 갱신을 권장합니다.");
+    else if (benchmarkFreshness === "stale") {
+      score -= 5;
+      reasons.push("벤치마크 자료가 오래되어 최신 측정값을 다시 확인해야 합니다.");
+    } else if (benchmarkFreshness === "unknown") {
+      score -= 7;
+      reasons.push("벤치마크 자료의 갱신 시점을 확인할 수 없습니다.");
+    }
+    if (benchmarkSourceCheckNeedsReview === false) {
+      score += 4;
+      reasons.push("벤치마크 원문 URL 접근과 모델 식별을 확인했습니다.");
+    } else if (benchmarkSourceCheckNeedsReview === true) {
+      score -= 8;
+      reasons.push("벤치마크 원문 URL 접근·모델 식별을 다시 확인해야 합니다.");
+    }
+  }
+
+  if (catalogSpecProvenance) {
+    reasons.push("제조사 근거 수동 보강값");
+    if (catalogSpecSourceCheckNeedsReview === false) {
+      score += 4;
+      reasons.push("제조사 근거 원문 URL 접근과 모델 식별을 확인했습니다.");
+    } else {
+      score -= 8;
+      reasons.push(catalogSpecProvenance.sourceCheck
+        ? "제조사 근거 원문 URL 접근·모델 식별을 다시 확인해야 합니다."
+        : "제조사 근거 원문 URL 접근·모델 식별을 확인하기 전입니다.");
+    }
   }
 
   score += dataQualityPoints[candidate.dataQuality];
@@ -130,8 +182,15 @@ export function recommendationTrustFor(input: RecommendationTrustInput): Recomme
   else if (freshness === "aging") score += 2;
   else reasons.push(`${freshnessLabels[freshness]} 상태입니다.`);
 
-  if (priceKnown) score += 4;
-  else reasons.push("현재 가격을 확인할 수 없어 총액 비교는 확정하지 않습니다.");
+  if (priceEvidence === "live" || priceEvidence === "manual") {
+    score += 4;
+  } else if (priceEvidence === "reference") {
+    reasons.push("프로젝트 기준가가 있어 총액 비교에 참고할 수 있지만 실제 판매가로 확정하지 않습니다.");
+  } else if (priceEvidence === "recorded") {
+    reasons.push("가격 숫자는 기록되어 있지만 데이터 품질이 완전하지 않아 실제 판매가로 확정하지 않습니다.");
+  } else {
+    reasons.push("현재 가격을 확인할 수 없어 총액 비교는 확정하지 않습니다.");
+  }
 
   if (sourceAvailable) score += 3;
   else reasons.push("원문 링크가 없어 구매 전 출처를 별도로 확인해야 합니다.");
@@ -140,6 +199,9 @@ export function recommendationTrustFor(input: RecommendationTrustInput): Recomme
   let level: RecommendationTrustEvidence["level"] = boundedScore >= 80 ? "high" : boundedScore >= 55 ? "medium" : "low";
   if (input.candidateBlockers > 0 || candidate.dataQuality === "incomplete") level = "low";
   else if (input.candidateUnknown > 0 || freshness === "stale" || freshness === "unknown") level = level === "high" ? "medium" : level;
+  if (benchmarkBacked && (benchmarkFreshness === "stale" || benchmarkFreshness === "unknown")) level = level === "high" ? "medium" : "low";
+  if (benchmarkSourceCheckNeedsReview === true) level = level === "high" ? "medium" : "low";
+  if (catalogSpecSourceCheckNeedsReview === true) level = level === "high" ? "medium" : "low";
 
   return {
     level,
@@ -158,8 +220,12 @@ export function recommendationTrustFor(input: RecommendationTrustInput): Recomme
     totalDimensions: similarityEvidence.totalDimensions,
     missingFieldCount: candidate.missingFields.length,
     priceKnown,
+    priceEvidence,
     sourceAvailable,
     benchmarkBacked,
+    ...(benchmarkFreshness ? { benchmarkFreshness } : {}),
+    ...(benchmarkSourceCheckNeedsReview !== undefined ? { benchmarkSourceCheckNeedsReview } : {}),
+    ...(catalogSpecSourceCheckNeedsReview !== undefined ? { catalogSpecSourceCheckNeedsReview } : {}),
     ...(input.benchmarkSourceKind ? { benchmarkSourceKind: input.benchmarkSourceKind } : {}),
     reasons: [...new Set(reasons)]
   };

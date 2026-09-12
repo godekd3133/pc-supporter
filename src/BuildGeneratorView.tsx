@@ -1,15 +1,20 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type { IconType } from "react-icons";
-import { FiActivity, FiAlertTriangle, FiArrowLeft, FiBox, FiCheck, FiCopy, FiCpu, FiDatabase, FiDownload, FiEdit3, FiHardDrive, FiInfo, FiLayers, FiLoader, FiMonitor, FiSave, FiShare2, FiTool, FiXCircle, FiZap } from "react-icons/fi";
+import { FiActivity, FiAlertTriangle, FiArrowLeft, FiBox, FiCheck, FiCopy, FiCpu, FiDatabase, FiDownload, FiEdit3, FiHardDrive, FiInfo, FiLayers, FiLoader, FiMessageSquare, FiMonitor, FiSave, FiShare2, FiTool, FiTrash2, FiUpload, FiXCircle, FiZap } from "react-icons/fi";
 import type { BuildAnalysis, BuildGenerationDiagnostic, BuildGenerationRecoveryOption, BuildGenerationRequest, BuildGenerationResult, GamingRefreshRate, GamingResolution, PartCategory, RecommendationPriority, RecommendationProfile, ListingPolicy } from "../shared/types";
 import { budgetLadderBaseRequestFor, budgetLadderChangeFor, budgetLadderCsvFor, budgetLadderExportPayloadFor, budgetLadderJsonFor, budgetLadderTextFor } from "../shared/budget-ladder";
 import type { BudgetLadderOutcome } from "../shared/budget-ladder";
+import { budgetLadderTradeoffFor } from "../shared/budget-ladder-tradeoff";
 import type { BudgetLadderShareSnapshot } from "../shared/budget-ladder-share";
 import type { BudgetLadderLocalShareEntry } from "../shared/budget-ladder-local-history";
-import { CATEGORY_LABELS, GAMING_REFRESH_RATE_LABELS, GAMING_RESOLUTION_LABELS, isKnownPrice, LISTING_POLICY_LABELS, PART_CATEGORIES, RECOMMENDATION_PRIORITY_LABELS, RECOMMENDATION_PROFILE_LABELS } from "../shared/types";
+import { addSavedGeneratorPreset, generatorPresetConfigFromUnknown, GENERATOR_PRESET_STORAGE_KEY, mergeSavedGeneratorPresets, removeSavedGeneratorPreset, savedGeneratorPresetsFromJson, savedGeneratorPresetsToJson } from "../shared/generator-preset";
+import type { GeneratorPresetConfig, SavedGeneratorPreset } from "../shared/generator-preset";
+import { CATEGORY_LABELS, GAMING_REFRESH_RATE_LABELS, GAMING_RESOLUTION_LABELS, isKnownPrice, LISTING_POLICY_LABELS, PART_CATEGORIES, RECOMMENDATION_PRIORITY_DESCRIPTIONS, RECOMMENDATION_PRIORITY_LABELS, RECOMMENDATION_PROFILE_LABELS } from "../shared/types";
 import { savedBuildComparisonDecisionFor } from "../shared/saved-build-comparison";
 import type { SavedBuildComparisonDecisionKind, SavedBuildComparisonEntry } from "../shared/saved-build-comparison";
+import { generatorBriefInterpretationFor } from "../shared/generator-brief";
+import type { GeneratorBriefConfig, GeneratorBriefInterpretation } from "../shared/generator-brief";
 import { api } from "./api";
 
 export type GeneratorVariantResult = {
@@ -54,23 +59,338 @@ function CategoryIcon({ category }: { category: PartCategory }) {
   return <Icon />;
 }
 
+function initialGeneratorParam(name: string) {
+  if (typeof window === "undefined") return undefined;
+  return new URLSearchParams(window.location.search).get(name) ?? undefined;
+}
+
+function initialGeneratorProfile(fallback: RecommendationProfile) {
+  const value = initialGeneratorParam("profile");
+  return value === "gaming" || value === "creator" || value === "development" || value === "office" || value === "general" ? value : fallback;
+}
+
+function initialGeneratorPriority() {
+  const value = initialGeneratorParam("priority");
+  return value === "budget" || value === "performance" || value === "balanced" ? value : "balanced" as const;
+}
+
+function initialGeneratorResolution() {
+  const value = initialGeneratorParam("resolution");
+  return value === "1080p" || value === "4k" || value === "1440p" ? value : "1440p" as const;
+}
+
+function initialGeneratorRefreshRate() {
+  const value = Number(initialGeneratorParam("refresh"));
+  return value === 60 || value === 240 || value === 144 ? value as GamingRefreshRate : 144;
+}
+
+function initialGeneratorChoice(name: string, allowed: readonly string[], fallback: string) {
+  const value = initialGeneratorParam(name);
+  return value && allowed.includes(value) ? value : fallback;
+}
+
+function initialGeneratorBudget() {
+  const value = Number(initialGeneratorParam("budget"));
+  return Number.isInteger(value) && value > 0 && value <= 1_000_000_000 ? String(value) : "1500000";
+}
+
+function initialGeneratorIncludeGpu() {
+  return initialGeneratorParam("gpu") !== "0";
+}
+
+type GeneratorPreset = GeneratorPresetConfig & {
+  id: string;
+  label: string;
+  summary: string;
+};
+
+const GENERATOR_PRESETS: GeneratorPreset[] = [
+  { id: "office", label: "사무·일반", summary: "내장 그래픽 · 16GB · 80만원", profile: "office", priority: "budget", gamingResolution: "1440p", gamingRefreshRate: 144, memoryCapacityGb: 16, budgetWon: 800_000, includeGpu: false, storageCapacityGb: 500, hddCount: 0, hddCapacityGb: 4_000, listingPolicy: "retail_only" },
+  { id: "fhd-gaming", label: "FHD 게이밍", summary: "1080p · 144Hz · 150만원", profile: "gaming", priority: "balanced", gamingResolution: "1080p", gamingRefreshRate: 144, memoryCapacityGb: 32, budgetWon: 1_500_000, includeGpu: true, storageCapacityGb: 1_000, hddCount: 0, hddCapacityGb: 4_000, listingPolicy: "retail_only" },
+  { id: "qhd-gaming", label: "QHD 게이밍", summary: "1440p · 144Hz · 220만원", profile: "gaming", priority: "performance", gamingResolution: "1440p", gamingRefreshRate: 144, memoryCapacityGb: 32, budgetWon: 2_200_000, includeGpu: true, storageCapacityGb: 1_000, hddCount: 0, hddCapacityGb: 4_000, listingPolicy: "retail_only" },
+  { id: "4k-gaming", label: "4K 게이밍", summary: "4K · 60Hz · 350만원", profile: "gaming", priority: "performance", gamingResolution: "4k", gamingRefreshRate: 60, memoryCapacityGb: 64, budgetWon: 3_500_000, includeGpu: true, storageCapacityGb: 2_000, hddCount: 0, hddCapacityGb: 4_000, listingPolicy: "retail_only" },
+  { id: "development-ai", label: "개발·AI", summary: "64GB · GPU 포함 · 250만원", profile: "development", priority: "balanced", gamingResolution: "1440p", gamingRefreshRate: 144, memoryCapacityGb: 64, budgetWon: 2_500_000, includeGpu: true, storageCapacityGb: 2_000, hddCount: 0, hddCapacityGb: 4_000, listingPolicy: "retail_only" }
+];
+
 export function BuildGeneratorView({ initialProfile, draft, variants, budgetLadder, requestError, diagnostics = [], recoveryOptions = [], loading, onGenerate, onGenerateVariants, onGenerateBudgetLadder, onApply, onSave, onToast, onBudgetLadderShareSaved, onBudgetLadderShareRevoked, onBack }: { initialProfile: RecommendationProfile; draft: BuildGenerationResult | null; variants: GeneratorVariantResult[]; budgetLadder: GeneratorBudgetResult[]; requestError?: string | null; diagnostics?: BuildGenerationDiagnostic[]; recoveryOptions?: BuildGenerationRecoveryOption[]; loading: boolean; onGenerate: (request: BuildGenerationRequest) => Promise<void>; onGenerateVariants: (request: BuildGenerationRequest) => Promise<void>; onGenerateBudgetLadder: (request: BuildGenerationRequest) => Promise<void>; onApply: (draft: BuildGenerationResult, checkNow: boolean) => Promise<void>; onSave?: (draft: BuildGenerationResult) => void; onToast: (message: string) => void; onBudgetLadderShareSaved: (share: BudgetLadderLocalShareEntry) => void; onBudgetLadderShareRevoked: (id: string) => void; onBack: () => void }) {
-  const [profile, setProfile] = useState<RecommendationProfile>(initialProfile);
-  const [priority, setPriority] = useState<RecommendationPriority>("balanced");
-  const [gamingResolution, setGamingResolution] = useState<GamingResolution>("1440p");
-  const [gamingRefreshRate, setGamingRefreshRate] = useState<GamingRefreshRate>(144);
-  const [memoryCapacityGb, setMemoryCapacityGb] = useState("32");
-  const [budget, setBudget] = useState("1500000");
-  const [includeGpu, setIncludeGpu] = useState(true);
-  const [storageCapacityGb, setStorageCapacityGb] = useState("1000");
-  const [hddCount, setHddCount] = useState("0");
-  const [hddCapacityGb, setHddCapacityGb] = useState("4000");
-  const [listingPolicy, setListingPolicy] = useState<ListingPolicy>("retail_only");
+  const [profile, setProfile] = useState<RecommendationProfile>(() => initialGeneratorProfile(initialProfile));
+  const [priority, setPriority] = useState<RecommendationPriority>(initialGeneratorPriority);
+  const [gamingResolution, setGamingResolution] = useState<GamingResolution>(initialGeneratorResolution);
+  const [gamingRefreshRate, setGamingRefreshRate] = useState<GamingRefreshRate>(initialGeneratorRefreshRate);
+  const [memoryCapacityGb, setMemoryCapacityGb] = useState(() => initialGeneratorChoice("ram", ["16", "32", "64", "128"], "32"));
+  const [budget, setBudget] = useState(initialGeneratorBudget);
+  const [includeGpu, setIncludeGpu] = useState(initialGeneratorIncludeGpu);
+  const [storageCapacityGb, setStorageCapacityGb] = useState(() => initialGeneratorChoice("ssd", ["500", "1000", "2000", "4000"], "1000"));
+  const [hddCount, setHddCount] = useState(() => initialGeneratorChoice("hdd", ["0", "1", "2", "4"], "0"));
+  const [hddCapacityGb, setHddCapacityGb] = useState(() => initialGeneratorChoice("hddCapacity", ["2000", "4000", "8000", "16000"], "4000"));
+  const [listingPolicy, setListingPolicy] = useState<ListingPolicy>(() => initialGeneratorChoice("listingPolicy", ["retail_only", "include_bulk", "all"], "retail_only") as ListingPolicy);
   const [error, setError] = useState<string | null>(null);
   const [budgetLadderShare, setBudgetLadderShare] = useState<GeneratorBudgetShareResult | null>(null);
+  const [savedPresets, setSavedPresets] = useState<SavedGeneratorPreset[]>(() => typeof window === "undefined" ? [] : savedGeneratorPresetsFromJson(window.localStorage.getItem(GENERATOR_PRESET_STORAGE_KEY)));
+  const [presetName, setPresetName] = useState("");
+  const [presetImportPreview, setPresetImportPreview] = useState<SavedGeneratorPreset[] | null>(null);
+  const [brief, setBrief] = useState("");
+  const [briefInterpretation, setBriefInterpretation] = useState<GeneratorBriefInterpretation | null>(null);
+  const [briefApplied, setBriefApplied] = useState(false);
+  const presetImportInputRef = useRef<HTMLInputElement | null>(null);
+  const budgetLadderShareMutationRequestRef = useRef(0);
+  const mountedRef = useRef(true);
 
-  useEffect(() => { setProfile(initialProfile); }, [initialProfile]);
-  useEffect(() => { if (budgetLadder.length === 0) setBudgetLadderShare(null); }, [budgetLadder.length]);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== GENERATOR_PRESET_STORAGE_KEY) return;
+      setSavedPresets(savedGeneratorPresetsFromJson(event.newValue));
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  const initialProfileRef = useRef(initialProfile);
+  const previousGeneratorBudgetRef = useRef<string | null>(null);
+  const previousGeneratorUrlRef = useRef<string | null>(null);
+  const restoreGeneratorUrlRef = useRef(false);
+  const generatorBudgetHistoryActiveRef = useRef(false);
+  const generatorBudgetHistoryTimerRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (initialProfileRef.current === initialProfile) return;
+    initialProfileRef.current = initialProfile;
+    setProfile(initialProfile);
+  }, [initialProfile]);
+  useEffect(() => {
+    budgetLadderShareMutationRequestRef.current += 1;
+    if (budgetLadder.length === 0) setBudgetLadderShare(null);
+  }, [budgetLadder]);
+  useEffect(() => () => { budgetLadderShareMutationRequestRef.current += 1; }, []);
+  useEffect(() => {
+    try {
+      if (savedPresets.length > 0) window.localStorage.setItem(GENERATOR_PRESET_STORAGE_KEY, savedGeneratorPresetsToJson(savedPresets));
+      else window.localStorage.removeItem(GENERATOR_PRESET_STORAGE_KEY);
+    } catch {
+      // A full local storage bucket must not prevent automatic configuration from working.
+    }
+  }, [savedPresets]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.location.pathname.startsWith("/recommend")) return;
+    const params = new URLSearchParams();
+    params.set("profile", profile);
+    if (priority !== "balanced") params.set("priority", priority);
+    if (profile === "gaming") {
+      if (gamingResolution !== "1440p") params.set("resolution", gamingResolution);
+      if (gamingRefreshRate !== 144) params.set("refresh", String(gamingRefreshRate));
+    }
+    if (memoryCapacityGb !== "32") params.set("ram", memoryCapacityGb);
+    if (budget !== "1500000") params.set("budget", budget);
+    if (!includeGpu) params.set("gpu", "0");
+    if (storageCapacityGb !== "1000") params.set("ssd", storageCapacityGb);
+    if (hddCount !== "0") params.set("hdd", hddCount);
+    if (hddCount !== "0" && hddCapacityGb !== "4000") params.set("hddCapacity", hddCapacityGb);
+    if (listingPolicy !== "retail_only") params.set("listingPolicy", listingPolicy);
+    const nextSearch = params.toString();
+    const nextUrl = `/recommend${nextSearch ? `?${nextSearch}` : ""}`;
+    const currentUrl = window.location.pathname + window.location.search;
+    const budgetChanged = previousGeneratorBudgetRef.current !== null && previousGeneratorBudgetRef.current !== budget;
+    const clearBudgetHistoryTimer = () => {
+      if (generatorBudgetHistoryTimerRef.current !== null) {
+        window.clearTimeout(generatorBudgetHistoryTimerRef.current);
+        generatorBudgetHistoryTimerRef.current = null;
+      }
+    };
+    if (restoreGeneratorUrlRef.current) {
+      clearBudgetHistoryTimer();
+      generatorBudgetHistoryActiveRef.current = false;
+      restoreGeneratorUrlRef.current = false;
+      if (currentUrl !== nextUrl) window.history.replaceState(window.history.state, "", nextUrl);
+    } else if (budgetChanged) {
+      if (currentUrl !== nextUrl) {
+        if (generatorBudgetHistoryActiveRef.current) window.history.replaceState(window.history.state, "", nextUrl);
+        else if (previousGeneratorUrlRef.current === null) window.history.replaceState(window.history.state, "", nextUrl);
+        else window.history.pushState(window.history.state, "", nextUrl);
+      }
+      previousGeneratorUrlRef.current = nextUrl;
+      generatorBudgetHistoryActiveRef.current = true;
+      clearBudgetHistoryTimer();
+      generatorBudgetHistoryTimerRef.current = window.setTimeout(() => {
+        generatorBudgetHistoryActiveRef.current = false;
+        generatorBudgetHistoryTimerRef.current = null;
+      }, 800);
+    } else {
+      clearBudgetHistoryTimer();
+      generatorBudgetHistoryActiveRef.current = false;
+      if (currentUrl !== nextUrl) {
+        if (previousGeneratorUrlRef.current === null) window.history.replaceState(window.history.state, "", nextUrl);
+        else window.history.pushState(window.history.state, "", nextUrl);
+      }
+    }
+    previousGeneratorUrlRef.current = nextUrl;
+    previousGeneratorBudgetRef.current = budget;
+  }, [budget, gamingRefreshRate, gamingResolution, hddCapacityGb, hddCount, includeGpu, initialProfile, listingPolicy, memoryCapacityGb, priority, profile, storageCapacityGb]);
+
+  useEffect(() => {
+    const onPopState = () => {
+      if (!window.location.pathname.startsWith("/recommend")) return;
+      restoreGeneratorUrlRef.current = true;
+      setProfile(initialGeneratorProfile(initialProfile));
+      setPriority(initialGeneratorPriority());
+      setGamingResolution(initialGeneratorResolution());
+      setGamingRefreshRate(initialGeneratorRefreshRate());
+      setMemoryCapacityGb(initialGeneratorChoice("ram", ["16", "32", "64", "128"], "32"));
+      setBudget(initialGeneratorBudget());
+      setIncludeGpu(initialGeneratorIncludeGpu());
+      setStorageCapacityGb(initialGeneratorChoice("ssd", ["500", "1000", "2000", "4000"], "1000"));
+      setHddCount(initialGeneratorChoice("hdd", ["0", "1", "2", "4"], "0"));
+      setHddCapacityGb(initialGeneratorChoice("hddCapacity", ["2000", "4000", "8000", "16000"], "4000"));
+      setListingPolicy(initialGeneratorChoice("listingPolicy", ["retail_only", "include_bulk", "all"], "retail_only") as ListingPolicy);
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [initialProfile]);
+
+  function currentGeneratorPresetConfig(): GeneratorPresetConfig | null {
+    return generatorPresetConfigFromUnknown({
+      profile,
+      priority,
+      gamingResolution,
+      gamingRefreshRate,
+      memoryCapacityGb: Number(memoryCapacityGb),
+      budgetWon: Number(budget),
+      includeGpu,
+      storageCapacityGb: Number(storageCapacityGb),
+      hddCount: Number(hddCount),
+      hddCapacityGb: Number(hddCapacityGb),
+      listingPolicy
+    });
+  }
+
+  function applyGeneratorPresetConfig(config: GeneratorPresetConfig, label: string) {
+    setProfile(config.profile);
+    setPriority(config.priority);
+    setGamingResolution(config.gamingResolution);
+    setGamingRefreshRate(config.gamingRefreshRate);
+    setMemoryCapacityGb(String(config.memoryCapacityGb));
+    setBudget(String(config.budgetWon));
+    setIncludeGpu(config.includeGpu);
+    setStorageCapacityGb(String(config.storageCapacityGb));
+    setHddCount(String(config.hddCount));
+    setHddCapacityGb(String(config.hddCapacityGb));
+    setListingPolicy(config.listingPolicy);
+    setError(null);
+    onToast(`${label} 조건을 불러왔습니다. 생성 전에 조건을 확인해 주세요.`);
+  }
+
+  function applyPreset(preset: GeneratorPreset) {
+    applyGeneratorPresetConfig(preset, preset.label);
+  }
+
+  function interpretBrief() {
+    setBriefInterpretation(generatorBriefInterpretationFor(brief));
+    setBriefApplied(false);
+  }
+
+  function appendBriefPhrase(phrase: string) {
+    const nextBrief = brief.trim() ? `${brief.trim()}, ${phrase}` : phrase;
+    setBrief(nextBrief);
+    setBriefInterpretation(generatorBriefInterpretationFor(nextBrief));
+    setBriefApplied(false);
+    onToast(`${phrase} 조건을 추가해 다시 해석했습니다. 아직 폼에는 적용하지 않았습니다.`);
+  }
+
+  function applyBriefConfig(config: GeneratorBriefConfig, matchCount: number) {
+    if (config.profile !== undefined) setProfile(config.profile);
+    if (config.priority !== undefined) setPriority(config.priority);
+    if (config.gamingResolution !== undefined) setGamingResolution(config.gamingResolution);
+    if (config.gamingRefreshRate !== undefined) setGamingRefreshRate(config.gamingRefreshRate);
+    if (config.memoryCapacityGb !== undefined) setMemoryCapacityGb(String(config.memoryCapacityGb));
+    if (config.budgetWon !== undefined) setBudget(String(config.budgetWon));
+    if (config.includeGpu !== undefined) setIncludeGpu(config.includeGpu);
+    if (config.storageCapacityGb !== undefined) setStorageCapacityGb(String(config.storageCapacityGb));
+    if (config.hddCount !== undefined) setHddCount(String(config.hddCount));
+    if (config.hddCapacityGb !== undefined) setHddCapacityGb(String(config.hddCapacityGb));
+    if (config.listingPolicy !== undefined) setListingPolicy(config.listingPolicy);
+    setError(null);
+    setBriefApplied(true);
+    onToast(`${matchCount}개 조건을 폼에 적용했습니다. 생성 전에 적용된 값을 확인해 주세요.`);
+  }
+
+  function clearBrief() {
+    setBrief("");
+    setBriefInterpretation(null);
+    setBriefApplied(false);
+  }
+
+  function saveCurrentPreset() {
+    const name = presetName.trim().slice(0, 60);
+    const config = currentGeneratorPresetConfig();
+    if (!name) {
+      onToast("저장할 프리셋 이름을 입력해 주세요.");
+      return;
+    }
+    if (!config) {
+      onToast("예산과 구성 조건을 확인한 뒤 프리셋을 저장해 주세요.");
+      return;
+    }
+    const now = new Date().toISOString();
+    const preset: SavedGeneratorPreset = { ...config, id: `generator-preset-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, name, createdAt: now, updatedAt: now };
+    setSavedPresets((current) => addSavedGeneratorPreset(current, preset));
+    setPresetName("");
+    onToast(`${name} 프리셋을 저장했습니다.`);
+  }
+
+  function exportSavedPresets() {
+    if (savedPresets.length === 0) {
+      onToast("저장된 내 프리셋이 없습니다.");
+      return;
+    }
+    const blob = new Blob([savedGeneratorPresetsToJson(savedPresets)], { type: "application/json;charset=utf-8" });
+    const url = window.URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `pc-supporter-generator-presets-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.URL.revokeObjectURL(url);
+    onToast(`${savedPresets.length}개 내 프리셋을 JSON으로 저장했습니다.`);
+  }
+
+  async function importSavedPresets(file: File | undefined) {
+    if (!file) return;
+    if (file.size > 1_000_000) {
+      onToast("프리셋 JSON은 1MB 이하 파일만 가져올 수 있습니다.");
+      return;
+    }
+    const imported = savedGeneratorPresetsFromJson(await file.text());
+    if (!mountedRef.current) return;
+    if (imported.length === 0) {
+      onToast("가져올 수 있는 유효한 프리셋이 없습니다.");
+      return;
+    }
+    setPresetImportPreview(imported);
+    onToast(`${imported.length}개 내 프리셋을 가져왔습니다. 병합 전 내용을 확인해 주세요.`);
+  }
+
+  function confirmImportSavedPresets() {
+    if (!presetImportPreview) return;
+    const importedCount = presetImportPreview.length;
+    setSavedPresets((current) => mergeSavedGeneratorPresets(current, presetImportPreview));
+    setPresetImportPreview(null);
+    onToast(`${importedCount}개 내 프리셋을 기존 목록과 병합했습니다.`);
+  }
+
+  function cancelImportSavedPresets() {
+    setPresetImportPreview(null);
+    onToast("내 프리셋 가져오기를 취소했습니다.");
+  }
+
+  function removeSavedPreset(preset: SavedGeneratorPreset) {
+    setSavedPresets((current) => removeSavedGeneratorPreset(current, preset.id));
+    onToast(`${preset.name} 프리셋을 삭제했습니다.`);
+  }
 
   function requestFromForm(): BuildGenerationRequest | undefined {
     const budgetWon = Number(budget);
@@ -112,9 +432,20 @@ export function BuildGeneratorView({ initialProfile, draft, variants, budgetLadd
   async function copyBudgetLadder() {
     try {
       await navigator.clipboard.writeText(budgetLadderTextFor(budgetLadder));
-      onToast("예산 구간 비교표를 클립보드에 복사했습니다.");
+      if (mountedRef.current) onToast("예산 구간 비교표를 클립보드에 복사했습니다.");
     } catch {
-      onToast("예산 구간 비교표 복사에 실패했습니다. 브라우저 클립보드 권한을 확인해 주세요.");
+      if (mountedRef.current) onToast("예산 구간 비교표 복사에 실패했습니다. 브라우저 클립보드 권한을 확인해 주세요.");
+    }
+  }
+
+  async function copyGeneratorConditionsLink() {
+    const url = window.location.origin + window.location.pathname + window.location.search;
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("clipboard-unavailable");
+      await navigator.clipboard.writeText(url);
+      if (mountedRef.current) onToast("자동 구성 조건 링크를 복사했습니다.");
+    } catch {
+      if (mountedRef.current) onToast("자동 구성 조건 링크: " + url);
     }
   }
 
@@ -137,6 +468,8 @@ export function BuildGeneratorView({ initialProfile, draft, variants, budgetLadd
       onToast("공유할 예산 구간 비교 결과가 없습니다.");
       return;
     }
+    const requestVersion = ++budgetLadderShareMutationRequestRef.current;
+    const isCurrent = () => mountedRef.current && budgetLadderShareMutationRequestRef.current === requestVersion;
     try {
       const request = budgetLadderBaseRequestFor(budgetLadder);
       const saved = await api<GeneratorBudgetShareResponse>("/api/budget-ladders", {
@@ -149,29 +482,37 @@ export function BuildGeneratorView({ initialProfile, draft, variants, budgetLadd
         }),
         retry: 0
       });
+      if (!isCurrent()) return;
       const url = `${window.location.origin}/budget-ladder/${saved.id}`;
       try {
         await navigator.clipboard.writeText(url);
+        if (!isCurrent()) return;
         onToast("예산 구간 비교 공유 링크를 클립보드에 복사했습니다.");
       } catch {
+        if (!isCurrent()) return;
         onToast(`예산 구간 비교 링크가 생성되었습니다: ${url}`);
       }
+      if (!isCurrent()) return;
       setBudgetLadderShare({ id: saved.id, url, ownerToken: saved.ownerToken, ...(saved.expiresAt ? { expiresAt: saved.expiresAt } : {}), catalogSnapshotAt: saved.catalogSnapshotAt });
       onBudgetLadderShareSaved({ id: saved.id, url, name: saved.name, createdAt: saved.createdAt, ...(saved.versionNumber !== undefined ? { versionNumber: saved.versionNumber } : {}), ...(saved.expiresAt ? { expiresAt: saved.expiresAt } : {}), ownerToken: saved.ownerToken });
     } catch (error: unknown) {
-      onToast(error instanceof Error ? error.message : "예산 구간 비교 공유 링크를 만들지 못했습니다.");
+      if (isCurrent()) onToast(error instanceof Error ? error.message : "예산 구간 비교 공유 링크를 만들지 못했습니다.");
     }
   }
 
   async function revokeBudgetLadder() {
     if (!budgetLadderShare || !window.confirm("이 예산 구간 비교 공유 링크를 취소할까요? 이미 전달된 링크도 더 이상 열리지 않습니다.")) return;
+    const requestVersion = ++budgetLadderShareMutationRequestRef.current;
+    const isCurrent = () => mountedRef.current && budgetLadderShareMutationRequestRef.current === requestVersion;
+    const share = budgetLadderShare;
     try {
-      await api(`/api/budget-ladders/${encodeURIComponent(budgetLadderShare.id)}`, { method: "DELETE", headers: { "X-Share-Owner-Token": budgetLadderShare.ownerToken }, retry: 0 });
+      await api(`/api/budget-ladders/${encodeURIComponent(share.id)}`, { method: "DELETE", headers: { "X-Share-Owner-Token": share.ownerToken }, retry: 0 });
+      if (!isCurrent()) return;
       setBudgetLadderShare(null);
-      onBudgetLadderShareRevoked(budgetLadderShare.id);
+      onBudgetLadderShareRevoked(share.id);
       onToast("예산 구간 비교 공유 링크를 취소했습니다.");
     } catch (error: unknown) {
-      onToast(error instanceof Error ? error.message : "예산 구간 비교 공유 링크를 취소하지 못했습니다.");
+      if (isCurrent()) onToast(error instanceof Error ? error.message : "예산 구간 비교 공유 링크를 취소하지 못했습니다.");
     }
   }
 
@@ -196,14 +537,27 @@ export function BuildGeneratorView({ initialProfile, draft, variants, budgetLadd
     await onGenerate(request);
   }
 
+  const presetImportSummary = presetImportPreview ? (() => {
+    const existingIds = new Set(savedPresets.map((preset) => preset.id));
+    const replacementCount = presetImportPreview.filter((preset) => existingIds.has(preset.id)).length;
+    return { importedCount: presetImportPreview.length, replacementCount, newCount: presetImportPreview.length - replacementCount };
+  })() : null;
   const statusLabel = draft?.status === "compatible" ? "호환 가능한 초안" : draft?.status === "needs_review" ? "확인이 필요한 초안" : "검토가 필요한 초안";
   return <div className="generator-page">
     <div className="workspace-heading"><div><button className="back-link" onClick={onBack}><FiArrowLeft /> 홈으로</button><p className="eyebrow">AUTO BUILD DRAFT</p><h1>조건으로 PC 견적 만들기</h1><p>사용 목적과 예산을 입력하면 현재 카탈로그에서 호환 가능한 초안을 구성합니다.</p></div></div>
     <div className="generator-layout">
       <form className="generator-form" onSubmit={submit}>
-        <div className="generator-form-heading"><span className="generator-form-icon"><FiZap /></span><div><p className="eyebrow">STARTING POINT</p><h2>원하는 구성 조건</h2></div></div>
+        <div className="generator-form-heading"><span className="generator-form-icon"><FiZap /></span><div><p className="eyebrow">STARTING POINT</p><h2>원하는 구성 조건</h2></div><button className="text-button generator-condition-link-button" type="button" data-testid="generator-copy-condition-link" onClick={() => void copyGeneratorConditionsLink()}><FiCopy /> 조건 링크 복사</button></div>
+        <section className="generator-brief" aria-label="한 줄 요구사항 해석" data-testid="generator-brief">
+          <div className="generator-brief-heading"><div><span className="generator-brief-icon"><FiMessageSquare /></span><div><p className="eyebrow">BRIEF TO BUILD</p><h3>요구사항을 한 줄로 시작</h3></div></div><span>미리보기 후 적용</span></div>
+          <label className="generator-brief-input"><span>원하는 PC를 자연어로 적어 주세요</span><textarea data-testid="generator-brief-input" rows={2} value={brief} onChange={(event) => { setBrief(event.target.value); setBriefInterpretation(null); setBriefApplied(false); }} placeholder="예: QHD 게이밍 220만원, RAM 32GB, SSD 2TB, 144Hz" disabled={loading} /></label>
+          <div className="generator-brief-actions"><button className="button button-brief" type="button" data-testid="generator-interpret-brief" onClick={interpretBrief} disabled={loading || !brief.trim()}><FiMessageSquare /> 요구사항 해석</button><button className="button button-brief-ghost" type="button" onClick={clearBrief} disabled={loading || (!brief && !briefInterpretation)}>지우기</button></div>
+          {briefInterpretation && <div className={`generator-brief-preview ${briefInterpretation.confidence}`} data-testid="generator-brief-preview" aria-live="polite"><div className="generator-brief-preview-heading"><div><strong>해석 미리보기</strong><small>{briefInterpretation.matches.length}개 조건 · 핵심 {briefInterpretation.coverage.matched}/{briefInterpretation.coverage.total} · {briefInterpretation.confidence === "high" ? "근거 충분" : briefInterpretation.confidence === "medium" ? "일부 조건 확인" : "확인 필요"}</small></div><span>{briefApplied ? "폼에 적용됨" : "아직 적용하지 않음"}</span></div>{briefInterpretation.matches.length > 0 ? <div className="generator-brief-matches">{briefInterpretation.matches.map((match) => <span key={match.field}><b>{match.label}</b><strong>{match.value}</strong></span>)}</div> : <p className="generator-brief-empty"><FiInfo /> 적용할 수 있는 조건을 찾지 못했습니다.</p>}{briefInterpretation.warnings.length > 0 && <ul className="generator-brief-warnings">{briefInterpretation.warnings.map((warning) => <li key={warning}><FiAlertTriangle /> {warning}</li>)}</ul>}{briefInterpretation.guidance.length > 0 && <div className="generator-brief-guidance" data-testid="generator-brief-guidance"><div className="generator-brief-guidance-heading"><strong>정확도를 더 높이려면</strong><small>{briefInterpretation.coverage.missing.slice(0, 3).join(" · ")}{briefInterpretation.coverage.missing.length > 3 ? " · 외 추가 조건" : ""}</small></div><div className="generator-brief-guidance-grid">{briefInterpretation.guidance.map((item) => item.phrase ? <button className="generator-brief-guidance-item actionable" type="button" key={item.id} data-testid={`generator-guidance-${item.id}`} onClick={() => appendBriefPhrase(item.phrase!)} disabled={loading}><strong>{item.label}</strong><small>{item.detail}</small><em>+ {item.phrase}</em></button> : <div className="generator-brief-guidance-item" key={item.id}><strong>{item.label}</strong><small>{item.detail}</small></div>)}</div></div>}<p className="generator-brief-note"><FiInfo /> 해석 가능한 값만 폼에 반영합니다. 해석 결과가 불완전하거나 충돌하면 현재 값은 유지되며, 자동 생성은 직접 눌러야 시작됩니다.</p><button className="button button-brief-apply" type="button" data-testid="generator-apply-brief" onClick={() => applyBriefConfig(briefInterpretation.config, briefInterpretation.matches.length)} disabled={loading || briefInterpretation.matches.length === 0 || briefApplied}>{briefApplied ? <><FiCheck /> 적용 완료 · 폼에서 확인</> : <><FiEdit3 /> 해석한 조건을 폼에 적용</>}</button></div>}
+        </section>
+        <section className="generator-presets" aria-label="자동 구성 빠른 시작"><div className="generator-presets-heading"><strong>빠른 시작</strong><span>조건만 채우고 생성 전 직접 수정할 수 있습니다.</span></div><div className="generator-preset-list">{GENERATOR_PRESETS.map((preset) => <button className="generator-preset" type="button" key={preset.id} data-testid={`generator-preset-${preset.id}`} onClick={() => applyPreset(preset)} disabled={loading}><strong>{preset.label}</strong><small>{preset.summary}</small></button>)}</div><p className="generator-presets-note"><FiInfo /> 프리셋은 추천 기본값일 뿐이며 실제 호환성·가격은 생성 후 현재 카탈로그 기준으로 다시 확인합니다.</p><div className="generator-saved-preset-editor"><label><span>내 프리셋 이름</span><input data-testid="generator-preset-name" type="text" maxLength={60} value={presetName} onChange={(event) => setPresetName(event.target.value)} placeholder="예: 회사 개발용 PC" disabled={loading} /></label><button className="button button-light" type="button" data-testid="generator-save-preset" onClick={saveCurrentPreset} disabled={loading || !presetName.trim()}><FiSave /> 현재 조건 저장</button></div><div className="generator-saved-preset-tools"><input ref={presetImportInputRef} className="generator-saved-preset-file" type="file" accept=".json,application/json" aria-label="내 자동 구성 프리셋 JSON 가져오기" onChange={(event) => { void importSavedPresets(event.target.files?.[0]); event.currentTarget.value = ""; }} disabled={loading} /><button className="button button-light" type="button" data-testid="generator-import-presets" onClick={() => presetImportInputRef.current?.click()} disabled={loading}><FiUpload /> JSON 가져오기</button><button className="button button-light" type="button" data-testid="generator-export-presets" onClick={exportSavedPresets} disabled={loading || savedPresets.length === 0}><FiDownload /> JSON 저장</button></div>{presetImportSummary && presetImportPreview && <section className="generator-preset-import-preview" data-testid="generator-preset-import-preview" aria-label="내 프리셋 가져오기 미리보기"><div><strong>가져올 프리셋 확인</strong><span>{presetImportSummary.importedCount}개 가져옴 · 신규 {presetImportSummary.newCount}개 · 기존 ID 대체 {presetImportSummary.replacementCount}개</span></div><ul>{presetImportPreview.slice(0, 6).map((preset) => <li key={preset.id}>{preset.name} · {RECOMMENDATION_PROFILE_LABELS[preset.profile]} · {preset.budgetWon.toLocaleString("ko-KR")}원</li>)}{presetImportPreview.length > 6 && <li>외 {presetImportPreview.length - 6}개</li>}</ul><p><FiInfo /> 확인하면 기존 목록과 병합하며 최대 10개만 보관합니다. 현재 목록의 오래된 항목은 밀려날 수 있습니다.</p><div><button className="button button-light" type="button" data-testid="generator-cancel-import-presets" onClick={cancelImportSavedPresets}>취소</button><button className="button button-primary" type="button" data-testid="generator-confirm-import-presets" onClick={confirmImportSavedPresets}>확인 후 병합</button></div></section>}{savedPresets.length > 0 && <div className="generator-saved-preset-list" aria-label="내 자동 구성 프리셋">{savedPresets.map((preset) => <article key={preset.id}><div><strong>{preset.name}</strong><small>{RECOMMENDATION_PROFILE_LABELS[preset.profile]} · {preset.budgetWon.toLocaleString("ko-KR")}원 · 저장 {new Date(preset.updatedAt).toLocaleDateString("ko-KR")}</small></div><div><button className="text-button" type="button" data-testid={`generator-load-preset-${preset.id}`} onClick={() => applyGeneratorPresetConfig(preset, preset.name)} disabled={loading}><FiEdit3 /> 불러오기</button><button className="text-button danger-text-button" type="button" data-testid={`generator-delete-preset-${preset.id}`} onClick={() => removeSavedPreset(preset)} disabled={loading}><FiTrash2 /> 삭제</button></div></article>)}</div>}</section>
         <label><span>사용 목적</span><select value={profile} disabled={loading} onChange={(event) => setProfile(event.target.value as RecommendationProfile)}><option value="general">{RECOMMENDATION_PROFILE_LABELS.general}</option><option value="gaming">{RECOMMENDATION_PROFILE_LABELS.gaming}</option><option value="creator">{RECOMMENDATION_PROFILE_LABELS.creator}</option><option value="development">{RECOMMENDATION_PROFILE_LABELS.development}</option><option value="office">{RECOMMENDATION_PROFILE_LABELS.office}</option></select></label>
-        <label><span>구성 우선순위</span><select value={priority} disabled={loading} onChange={(event) => setPriority(event.target.value as RecommendationPriority)}><option value="balanced">{RECOMMENDATION_PRIORITY_LABELS.balanced}</option><option value="budget">{RECOMMENDATION_PRIORITY_LABELS.budget}</option><option value="performance">{RECOMMENDATION_PRIORITY_LABELS.performance}</option></select></label>
+        <label><span>구성 우선순위</span><select data-testid="generator-priority" value={priority} disabled={loading} onChange={(event) => setPriority(event.target.value as RecommendationPriority)}><option value="balanced">{RECOMMENDATION_PRIORITY_LABELS.balanced}</option><option value="budget">{RECOMMENDATION_PRIORITY_LABELS.budget}</option><option value="performance">{RECOMMENDATION_PRIORITY_LABELS.performance}</option><option value="reliability">{RECOMMENDATION_PRIORITY_LABELS.reliability}</option></select></label>
+        <p className="generator-note generator-priority-note" data-testid="generator-priority-note"><FiInfo /> <strong>{RECOMMENDATION_PRIORITY_LABELS[priority]}</strong> · {RECOMMENDATION_PRIORITY_DESCRIPTIONS[priority]}</p>
         {profile === "gaming" && <label><span>게임 해상도 <em>게이밍 추천 기준</em></span><select value={gamingResolution} disabled={loading} onChange={(event) => setGamingResolution(event.target.value as GamingResolution)}><option value="1080p">{GAMING_RESOLUTION_LABELS["1080p"]}</option><option value="1440p">{GAMING_RESOLUTION_LABELS["1440p"]}</option><option value="4k">{GAMING_RESOLUTION_LABELS["4k"]}</option></select></label>}
         {profile === "gaming" && <label><span>목표 주사율 <em>성능 우선 가중치</em></span><select value={gamingRefreshRate} disabled={loading} onChange={(event) => setGamingRefreshRate(Number(event.target.value) as GamingRefreshRate)}><option value="60">{GAMING_REFRESH_RATE_LABELS[60]}</option><option value="144">{GAMING_REFRESH_RATE_LABELS[144]}</option><option value="240">{GAMING_REFRESH_RATE_LABELS[240]}</option></select></label>}
         <label><span>RAM 목표 용량</span><select value={memoryCapacityGb} disabled={loading} onChange={(event) => setMemoryCapacityGb(event.target.value)}><option value="16">16GB 이상</option><option value="32">32GB 이상</option><option value="64">64GB 이상</option><option value="128">128GB 이상</option></select></label>
@@ -359,6 +713,8 @@ function GeneratorVariantsPanel({ variants, loading, onApply, onSave }: { varian
 
 function GeneratorBudgetLadderPanel({ scenarios, loading, onApply, onSave, onCopy, onDownload, share, onShare, onRevoke }: { scenarios: GeneratorBudgetResult[]; loading: boolean; onApply: (draft: BuildGenerationResult, checkNow: boolean) => Promise<void>; onSave?: (draft: BuildGenerationResult) => void; onCopy: () => Promise<void>; onDownload: (format: "csv" | "json") => void; share: GeneratorBudgetShareResult | null; onShare: () => void; onRevoke: () => void }) {
   const readyScenarios = scenarios.filter((scenario): scenario is GeneratorBudgetResult & { draft: BuildGenerationResult } => Boolean(scenario.draft));
+  const tradeoffs = budgetLadderTradeoffFor(scenarios);
+  const frontierCount = tradeoffs.filter((tradeoff) => tradeoff.frontier && tradeoff.riskScore !== undefined).length;
   const budgetDeltaText = (draft: BuildGenerationResult) => draft.withinBudget
     ? `${Math.abs(draft.budgetDeltaWon).toLocaleString("ko-KR")}원 여유`
     : `${draft.budgetDeltaWon.toLocaleString("ko-KR")}원 초과`;
@@ -384,6 +740,7 @@ function GeneratorBudgetLadderPanel({ scenarios, loading, onApply, onSave, onCop
     {share && <div className="generator-budget-share-preview" role="status"><label><span>예산 비교 공유 링크{share.expiresAt ? ` · ${new Date(share.expiresAt).toLocaleString("ko-KR")} 만료` : ""}</span><input aria-label="예산 구간 비교 공유 링크" type="text" value={share.url} readOnly onFocus={(event) => event.currentTarget.select()} /></label><div><a className="text-button" href={share.url}><FiShare2 /> 열기</a><button className="text-button danger-text-button" type="button" onClick={onRevoke}><FiXCircle /> 공유 취소</button></div></div>}
     {scenarios.some((scenario) => scenario.error) && <div className="generator-budget-errors" role="status"><FiAlertTriangle /><div><strong>일부 예산 구간은 구성을 만들지 못했습니다.</strong>{scenarios.filter((scenario) => scenario.error).map((scenario) => <p key={scenario.id}>{scenario.label} · {scenario.error}</p>)}</div></div>}
     {readyScenarios.length > 0 && <>
+      <section className="generator-budget-tradeoff" data-testid="generator-budget-tradeoff" aria-label="예산 구간 효율 경계"><div className="generator-budget-tradeoff-heading"><div><strong>예산·위험·분석 지수의 효율 경계</strong><span>비용만 늘고 결과가 같아지는 구간은 열세로 표시합니다.</span></div><small>{frontierCount}개 경계</small></div><div className="generator-budget-tradeoff-list">{tradeoffs.map((tradeoff, index) => { const scenario = scenarios[index]; return <article className={tradeoff.frontier ? "frontier" : "dominated"} key={scenario.id}><div><span>{tradeoff.frontier ? "효율 경계" : "열세"}</span><strong>{scenario.label}</strong></div><small>{tradeoff.riskScore === undefined ? "생성 실패" : `잔여 위험 ${tradeoff.riskScore}점 · 실제 합계 ${tradeoff.totalPriceWon === undefined ? "확인 필요" : `${tradeoff.totalPriceWon.toLocaleString("ko-KR")}원`} · 분석 ${tradeoff.analysisScore === undefined ? "확인 필요" : `${tradeoff.analysisScore}점`}`}</small><p>{tradeoff.reason}</p></article>; })}</div><p className="generator-budget-tradeoff-note"><FiInfo /> 가격·분석 지수가 확인되지 않은 구간은 우열을 확정하지 않습니다. 이 표는 예산 선택을 돕는 비교 기준이며 성능 보장이 아닙니다.</p></section>
       <div className="generator-budget-table-wrap"><table><caption>예산별 자동 구성 비교표</caption><thead><tr><th scope="col">비교 항목</th>{scenarios.map((scenario) => <th scope="col" key={scenario.id}>{scenario.label}</th>)}</tr></thead><tbody>{rows.map((row) => <tr key={row.label}><th scope="row">{row.label}</th>{row.values.map((value, index) => <td key={`${row.label}-${scenarios[index].id}`}>{value}</td>)}</tr>)}</tbody></table></div>
       {budgetChanges.length > 0 && <section className="generator-budget-deltas" aria-label="예산 증액 효과"><div className="generator-budget-deltas-heading"><div><strong>예산 증액으로 바뀐 것</strong><span>인접한 두 구간의 차이만 계산합니다.</span></div><small>카탈로그 기준 관찰</small></div><div className="generator-budget-delta-list">{budgetChanges.map((change) => <article className={change.sameConfiguration ? "same" : "changed"} key={`${change.fromId}-${change.toId}`}><div className="generator-budget-delta-top"><strong>{change.fromLabel} → {change.toLabel}</strong><span>예산 {signedWon(change.budgetDeltaWon)}</span></div><div className="generator-budget-delta-stats"><span>실제 합계 <b>{signedWon(change.totalPriceDeltaWon)}</b></span><span>{riskDeltaText(change)}</span>{change.analysisScoreDelta !== undefined && <span>분석 지수 <b>{signedCount(change.analysisScoreDelta)}점</b></span>}</div>{change.sameConfiguration ? <p className="generator-budget-delta-same"><FiCheck /> 두 구간의 부품·수량 구성이 같습니다. 예산이 늘어도 현재 카탈로그에서 다른 선택으로 전환되지 않았습니다.</p> : <div className="generator-budget-delta-lines"><span>변경 부품</span>{change.changedLines.map((line) => <p key={line.category}><b>{line.label}</b> {line.before} → {line.after}</p>)}</div>}</article>)}</div><p className="generator-budget-deltas-note"><FiInfo /> 분석 지수와 위험 변화는 현재 카탈로그·호환 규칙 기준입니다. 증액이 실제 FPS나 체감 성능을 보장하지 않으며, 같은 구성이라도 가격·재고는 다시 확인해야 합니다.</p></section>}
       <GeneratorBudgetScoreChart scenarios={scenarios} />

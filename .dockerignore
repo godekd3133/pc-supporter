@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.git/
+.github/
+.playwright-mcp/
+artifacts/
+*.log
+.DS_Store
+.env
+.env.*
+!.env.example
+data/*.json
+data/*.lock
+data/*.lease
+data/*.tmp

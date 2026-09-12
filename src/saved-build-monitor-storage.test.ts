@@ -25,4 +25,14 @@ describe("saved build monitor storage", () => {
     expect(savedBuildMonitorAutoRefreshMinutesFromStorage("30")).toBe(30);
     expect(savedBuildMonitorAutoRefreshMinutesFromStorage("2")).toBe(15);
   });
+
+  it("rejects an oversized raw alert array before normalizing every entry", () => {
+    const oversized = Array.from({ length: 51 }, (_, index) => ({ ...alert, id: `alert-${index}` }));
+    expect(savedBuildMonitorAlertsFromJson(JSON.stringify(oversized))).toEqual([]);
+  });
+
+  it("rejects oversized finding context arrays before filtering every raw title", () => {
+    const oversized = { ...alert, findingRuleIds: Array.from({ length: 5 }, (_, index) => `rule-${index}`) };
+    expect(savedBuildMonitorAlertsFromJson(JSON.stringify([oversized]))).toEqual([]);
+  });
 });

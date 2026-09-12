@@ -12,13 +12,17 @@ export function parseCatalogBatchIds(value: unknown, max = CATALOG_BATCH_ID_LIMI
   const rawIds = (value as { ids: unknown[] }).ids;
   const errors: string[] = [];
   const ids: string[] = [];
+  const seenIds = new Set<string>();
   rawIds.forEach((rawId, index) => {
     if (typeof rawId !== "string" || rawId.trim().length === 0 || rawId.trim().length > 160) {
       errors.push(`ids[${index}]가 올바른 카탈로그 ID가 아닙니다.`);
       return;
     }
     const id = rawId.trim();
-    if (!ids.includes(id)) ids.push(id);
+    if (!seenIds.has(id)) {
+      seenIds.add(id);
+      ids.push(id);
+    }
   });
   const limit = Math.max(1, Math.min(CATALOG_BATCH_ID_LIMIT, Math.floor(max)));
   if (ids.length === 0 && errors.length === 0) errors.push("조회할 카탈로그 ID가 없습니다.");

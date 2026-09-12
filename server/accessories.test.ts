@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { ACCESSORY_CATEGORIES } from "../shared/types";
 import type { AccessoryItem } from "../shared/types";
-import { countAccessories, findAccessory, mergeAccessories, searchAccessories } from "./accessories";
+import { accessoryCategoryQualityCountsFor, countAccessories, findAccessory, mergeAccessories, mergeDanawaAccessorySnapshot, searchAccessories } from "./accessories";
+import { seedAccessories } from "./seed-accessories";
 
 function accessory(overrides: Partial<AccessoryItem>): AccessoryItem {
   return {
@@ -19,6 +21,25 @@ function accessory(overrides: Partial<AccessoryItem>): AccessoryItem {
 }
 
 describe("accessory catalog", () => {
+  it("provides a deterministic starter item for every peripheral category", () => {
+    expect(seedAccessories.length).toBeGreaterThanOrEqual(40);
+    expect(new Set(seedAccessories.map((item) => item.category))).toEqual(new Set(ACCESSORY_CATEGORIES));
+    expect(seedAccessories.every((item) => item.source === "manual" && item.dataQuality === "seed" && item.listingType === "accessory" && item.missingFields.length === 0)).toBe(true);
+    expect(mergeAccessories([], seedAccessories)).toHaveLength(seedAccessories.length);
+  });
+
+  it("keeps seed quality counts separate for each peripheral category", () => {
+    const counts = accessoryCategoryQualityCountsFor([
+      accessory({ id: "seed-fan", category: "cooling_fan", dataQuality: "seed" }),
+      accessory({ id: "live-fan", category: "cooling_fan", dataQuality: "live" }),
+      accessory({ id: "incomplete-ups", category: "ups", dataQuality: "incomplete" })
+    ]);
+
+    expect(counts.cooling_fan).toEqual({ seed: 1, live: 1, manual: 0, incomplete: 0 });
+    expect(counts.ups).toEqual({ seed: 0, live: 0, manual: 0, incomplete: 1 });
+    expect(counts.fan_hub).toEqual({ seed: 0, live: 0, manual: 0, incomplete: 0 });
+  });
+
   it("searches, sorts, paginates, and finds accessories", () => {
     const items = [
       accessory({ id: "a", name: "M.2 방열판", priceWon: 20000 }),
@@ -61,6 +82,15 @@ describe("accessory catalog", () => {
     expect(searchAccessories(items, undefined, 10, { category: "ups" })[0].name).toBe("UPS 950VA");
   });
 
+  it("filters peripheral catalog results by a normalized manufacturer condition", () => {
+    const items = [
+      accessory({ id: "asus", brand: "ASUS", name: "ASUS 팬" }),
+      accessory({ id: "corsair", brand: "CORSAIR", name: "CORSAIR 팬" })
+    ];
+
+    expect(searchAccessories(items, undefined, 10, { brand: " asus " }).map((item) => item.id)).toEqual(["asus"]);
+  });
+
   it("filters peripheral catalog results by explicit freshness", () => {
     const now = "2026-09-01T00:00:00.000Z";
     const items = [
@@ -96,5 +126,15 @@ describe("accessory catalog", () => {
 
     expect(merged).toHaveLength(1);
     expect(merged[0]).toMatchObject({ id: "new", dataQuality: "live", rawSpecText: "상세 스펙" });
+  });
+
+  it("replaces stale Danawa rows only inside the selected accessory categories", () => {
+    const staleFan = accessory({ id: "stale-fan", category: "cooling_fan", sourceProductCode: "fan-old", name: "이전 팬" });
+    const currentFan = accessory({ id: "current-fan", category: "cooling_fan", sourceProductCode: "fan-new", name: "현재 팬" });
+    const unrelatedUps = accessory({ id: "keep-ups", category: "ups", sourceProductCode: "ups-keep", name: "유지할 UPS" });
+
+    const merged = mergeDanawaAccessorySnapshot([staleFan, unrelatedUps], [currentFan], ["cooling_fan"]);
+
+    expect(merged.map((item) => item.name)).toEqual(["유지할 UPS", "현재 팬"]);
   });
 });

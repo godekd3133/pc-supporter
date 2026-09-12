@@ -33,7 +33,11 @@ CREATE TABLE IF NOT EXISTS saved_builds (
   derived_from_build_id TEXT,
   check_snapshot JSONB,
   check_history JSONB,
-  monitor_state JSONB
+  monitor_state JSONB,
+  purchase_progress JSONB,
+  purchase_price_history JSONB,
+  decision_note TEXT,
+  metadata_history JSONB
 );
 
 CREATE INDEX IF NOT EXISTS saved_builds_updated_idx ON saved_builds(updated_at DESC);
@@ -46,6 +50,10 @@ ALTER TABLE saved_builds ADD COLUMN IF NOT EXISTS derived_from_build_id TEXT;
 ALTER TABLE saved_builds ADD COLUMN IF NOT EXISTS check_snapshot JSONB;
 ALTER TABLE saved_builds ADD COLUMN IF NOT EXISTS check_history JSONB;
 ALTER TABLE saved_builds ADD COLUMN IF NOT EXISTS monitor_state JSONB;
+ALTER TABLE saved_builds ADD COLUMN IF NOT EXISTS purchase_progress JSONB;
+ALTER TABLE saved_builds ADD COLUMN IF NOT EXISTS purchase_price_history JSONB;
+ALTER TABLE saved_builds ADD COLUMN IF NOT EXISTS decision_note TEXT;
+ALTER TABLE saved_builds ADD COLUMN IF NOT EXISTS metadata_history JSONB;
 
 CREATE TABLE IF NOT EXISTS saved_build_version_backups (
   id TEXT PRIMARY KEY,
@@ -80,6 +88,10 @@ CREATE TABLE IF NOT EXISTS saved_comparisons (
   name TEXT NOT NULL,
   category TEXT,
   current_part_name TEXT,
+  current_part_summary TEXT,
+  current_part_price TEXT,
+  catalog_snapshot_at TIMESTAMPTZ,
+  engine_version TEXT,
   candidates JSONB NOT NULL,
   created_at TIMESTAMPTZ NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL,
@@ -88,6 +100,24 @@ CREATE TABLE IF NOT EXISTS saved_comparisons (
 );
 
 CREATE INDEX IF NOT EXISTS saved_comparisons_updated_idx ON saved_comparisons(updated_at DESC);
+ALTER TABLE saved_comparisons ADD COLUMN IF NOT EXISTS catalog_snapshot_at TIMESTAMPTZ;
+ALTER TABLE saved_comparisons ADD COLUMN IF NOT EXISTS engine_version TEXT;
+ALTER TABLE saved_comparisons ADD COLUMN IF NOT EXISTS current_part_summary TEXT;
+ALTER TABLE saved_comparisons ADD COLUMN IF NOT EXISTS current_part_price TEXT;
+
+CREATE TABLE IF NOT EXISTS saved_version_comparisons (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  payload JSONB NOT NULL,
+  source_before_build_id TEXT NOT NULL,
+  source_after_build_id TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL,
+  expires_at TIMESTAMPTZ,
+  owner_token_hash TEXT
+);
+
+CREATE INDEX IF NOT EXISTS saved_version_comparisons_updated_idx ON saved_version_comparisons(updated_at DESC);
 
 CREATE TABLE IF NOT EXISTS saved_watchlist_alert_states (
   watchlist_id TEXT NOT NULL,

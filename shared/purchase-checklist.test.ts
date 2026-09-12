@@ -40,6 +40,7 @@ describe("purchase checklist", () => {
     expect(items.filter((item) => item.kind === "finding").map((item) => item.severity)).toEqual(["blocker", "unknown", "warning"]);
     expect(items.some((item) => item.id === "finding:info")).toBe(false);
     expect(items.filter((item) => item.kind === "manual").map((item) => item.id)).toEqual([
+      "manual:power-thermal-budget",
       "manual:manufacturer-support",
       "manual:physical-clearance",
       "manual:power-cabling",
@@ -52,7 +53,7 @@ describe("purchase checklist", () => {
   it("calculates progress only for current checklist items", () => {
     const items = purchaseChecklistItemsFor(build, result);
     const progress = purchaseChecklistProgressFor(items, new Set(["finding:socket", "manual:manufacturer-support", "not-in-this-build"]));
-    expect(progress).toMatchObject({ total: 9, checked: 2, remaining: 7, percent: 22 });
+    expect(progress).toMatchObject({ total: 10, checked: 2, remaining: 8, percent: 20 });
   });
 
   it("does not claim completion when there are no checked items", () => {
