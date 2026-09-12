@@ -1422,6 +1422,7 @@ function App() {
   const catalogRefreshRequestRef = useRef(0);
   const routeRequestSequenceRef = useRef(0);
   const selectionHydrationAbortControllerRef = useRef<AbortController | null>(null);
+  const buildHydrationAbortControllerRef = useRef<AbortController | null>(null);
   const saveBuildRequestRef = useRef(0);
   const savedBuildMutationRequestRef = useRef(0);
   const generatorRequestRef = useRef(0);
@@ -1784,6 +1785,7 @@ function App() {
 
   function abortSelectionHydration() {
     selectionHydrationAbortControllerRef.current?.abort();
+    buildHydrationAbortControllerRef.current?.abort();
   }
 
   async function rememberBuildSelection(nextBuild: BuildSelection, signal?: AbortSignal) {
@@ -1909,7 +1911,16 @@ function App() {
   }, [bootstrapRetryRequest]);
 
   useEffect(() => {
-    void rememberBuildSelection(build);
+    const hydrationController = new AbortController();
+    buildHydrationAbortControllerRef.current = hydrationController;
+    void rememberBuildSelection(build, hydrationController.signal).catch(() => {
+      // Draft hydration is best effort; route-owned cancellation must not surface
+      // as an editor error.
+    });
+    return () => {
+      hydrationController.abort();
+      if (buildHydrationAbortControllerRef.current === hydrationController) buildHydrationAbortControllerRef.current = null;
+    };
   }, [build]);
 
   useEffect(() => {
@@ -2105,6 +2116,7 @@ function App() {
 
   function resetRouteTransientState() {
     scenarioRequestSequenceRef.current += 1;
+    setToast(null);
     setPicker(null);
     setBuildImportPreview(null);
     setPendingBuildChange(null);
@@ -3333,6 +3345,10 @@ function App() {
   async function openSavedBuild(saved: SavedBuild, focus?: SavedBuildOpenFocus) {
     if (openingSavedBuildIdRef.current) return false;
     const requestVersion = ++openingSavedBuildRequestRef.current;
+    abortSelectionHydration();
+    const hydrationController = new AbortController();
+    selectionHydrationAbortControllerRef.current = hydrationController;
+    const isCurrent = () => openingSavedBuildRequestRef.current === requestVersion && !hydrationController.signal.aborted;
     openingSavedBuildIdRef.current = saved.id;
     setOpeningSavedBuildId(saved.id);
     setPendingResultFindingRuleId(focus && typeof focus !== "string" && focus.type === "finding" ? focus.ruleId : null);
@@ -3342,15 +3358,16 @@ function App() {
     setRecommendationPreferences(nextPreferences);
     setCatalogRefreshReport(null);
     try {
-      await rememberBuildSelection(saved.selection);
-      if (openingSavedBuildRequestRef.current !== requestVersion) return false;
+      await rememberBuildSelection(saved.selection, hydrationController.signal);
+      if (!isCurrent()) return false;
       const checked = await api<CompatibilityResult>("/api/compatibility/check", {
         method: "POST",
         body: JSON.stringify({ ...saved.selection, recommendationPreferences: nextPreferences }),
         retry: 2,
-        retryOnRateLimit: true
+        retryOnRateLimit: true,
+        signal: hydrationController.signal
       });
-      if (openingSavedBuildRequestRef.current !== requestVersion) return false;
+      if (!isCurrent()) return false;
       setResult(checked);
       setSavedCheckHistory(saved.checkHistory ?? (saved.checkSnapshot ? [saved.checkSnapshot] : null));
       setCheckedInputFingerprint(buildCompatibilityInputFingerprint(saved.selection, nextPreferences));
@@ -3362,7 +3379,7 @@ function App() {
       setToast(null);
       return true;
     } catch (error: unknown) {
-      if (openingSavedBuildRequestRef.current !== requestVersion) return false;
+      if (!isCurrent()) return false;
       const message = error instanceof Error ? error.message : "저장된 견적을 검사하지 못했습니다.";
       setCheckError(message);
       setToast(message);
@@ -3373,6 +3390,7 @@ function App() {
         openingSavedBuildIdRef.current = null;
         setOpeningSavedBuildId(null);
       }
+      if (selectionHydrationAbortControllerRef.current === hydrationController) selectionHydrationAbortControllerRef.current = null;
     }
   }
 

@@ -63,6 +63,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Prepare deterministic browser fixture
+        env:
+          PC_SUPPORTER_BROWSER_SMOKE_FIXTURE: "1"
+        run: npx --no-install tsx scripts/prepare-browser-smoke-data.ts
+
       - name: Start local web and API servers
         run: |
           npm run dev > "${RUNNER_TEMP}/pc-supporter-dev.log" 2>&1 &

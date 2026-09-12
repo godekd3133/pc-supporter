@@ -163,6 +163,15 @@ describe("CI verification contracts", () => {
     expect(browserProbe).toContain("accessoryAbortedCalls");
   });
 
+  it("keeps saved-build open hydration cancellation wired", async () => {
+    const packageJson = await readFile(resolve(projectRoot, "package.json"), "utf8");
+    const browserProbe = await readFile(resolve(projectRoot, "scripts/saved-build-open-hydration-route-abort-probe.mjs"), "utf8");
+    expect(packageJson).toContain('"test:browser:saved-build-open-hydration-route-abort": "node scripts/saved-build-open-hydration-route-abort-probe.mjs"');
+    expect(browserProbe).toContain("partsAbortedCalls");
+    expect(browserProbe).toContain("accessoryAbortedCalls");
+    expect(browserProbe).toContain("compatibilityAbortedCalls");
+  });
+
   it("keeps the development evidence matrix free of stale fixed test counts", async () => {
     const processDoc = await readFile(resolve(projectRoot, "docs/development-process.md"), "utf8");
     expect(processDoc).not.toMatch(/\b\d+\s+files\s*\/\s*[\d,]+\s+tests\b/);

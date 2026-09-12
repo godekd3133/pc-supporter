@@ -53,6 +53,7 @@
     "test:browser:shared-budget-ladder-partial-preview-route-abort": "node scripts/shared-budget-ladder-partial-preview-route-abort-probe.mjs",
     "test:browser:build-selection-hydration-route-abort": "node scripts/build-selection-hydration-route-abort-probe.mjs",
     "test:browser:check-hydration-route-abort": "node scripts/check-hydration-route-abort-probe.mjs",
+    "test:browser:saved-build-open-hydration-route-abort": "node scripts/saved-build-open-hydration-route-abort-probe.mjs",
     "test:browser:shared-budget-ladder-route-abort": "node scripts/shared-budget-ladder-route-abort-probe.mjs",
     "test:browser:notification-route": "node scripts/browser-notification-route-probe.mjs",
     "test:browser:build-change-context": "node scripts/build-change-context-probe.mjs",
