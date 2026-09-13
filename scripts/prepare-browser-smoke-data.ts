@@ -1,6 +1,6 @@
-import { ACCESSORY_COVERAGE_PATH, CATALOG_PATH, writeJson } from "../server/storage";
+import { ACCESSORIES_PATH, ACCESSORY_COVERAGE_PATH, CATALOG_PATH, writeJson } from "../server/storage";
 import { starterCatalog } from "../server/seed-catalog-starter";
-import type { AccessoryCoverageSnapshot, Part } from "../shared/types";
+import type { AccessoryCoverageSnapshot, AccessoryItem, Part } from "../shared/types";
 
 if (process.env.PC_SUPPORTER_BROWSER_SMOKE_FIXTURE !== "1") {
   throw new Error("PC_SUPPORTER_BROWSER_SMOKE_FIXTURE=1 is required; refusing to modify a normal data directory.");
@@ -37,6 +37,35 @@ const categoryMismatchBoards: Part[] = ["A", "B", "C"].map((suffix) => ({
   specs: {}
 }));
 
+const pcieSlotMotherboard: Part = {
+  id: "browser-smoke-pcie-slot-motherboard",
+  category: "motherboard",
+  name: "브라우저 smoke PCIe 슬롯 메인보드",
+  brand: "browser-smoke",
+  model: "BROWSER-SMOKE-MB-PCIE",
+  source: "manual",
+  listingType: "retail",
+  dataQuality: "manual",
+  missingFields: [],
+  updatedAt,
+  priceWon: 189000,
+  specs: {
+    socket: "AM5",
+    memoryType: "DDR5",
+    formFactor: "ATX",
+    maxMemoryGb: 128,
+    memorySlots: 4,
+    m2Slots: 2,
+    m2Interfaces: ["NVMe"],
+    m2PcieGenerations: [4],
+    sataPorts: 4,
+    pcieX16Slots: 1,
+    pcieX8Slots: 1,
+    pcieX4Slots: 2,
+    pcieX1Slots: 2
+  }
+};
+
 const unknownPriceMotherboard: Part = {
   id: "browser-smoke-unknown-price-motherboard",
   category: "motherboard",
@@ -68,21 +97,37 @@ const extraBenchmarkQueueGpus: Part[] = Array.from({ length: 34 }, (_, index) =>
   specs: {}
 }));
 
+const asusCoolingFan: AccessoryItem = {
+  id: "browser-smoke-asus-cooling-fan",
+  category: "cooling_fan",
+  name: "ASUS 120mm browser smoke PWM 팬",
+  brand: "ASUS",
+  model: "BROWSER-SMOKE-FAN-ASUS",
+  source: "manual",
+  listingType: "accessory",
+  dataQuality: "manual",
+  missingFields: [],
+  updatedAt,
+  priceWon: 14900,
+  rawSpecText: "120mm · 4핀 PWM · 팬 전류 0.18A · 비RGB",
+  specs: { lengthMm: 120, widthMm: 120, fanCount: 1, fanCurrentA: 0.18 }
+};
+
 const accessoryCoverage: AccessoryCoverageSnapshot = {
   updatedAt,
   categories: [{
     category: "cooling_fan",
     categoryId: "browser-smoke-cooling-fan",
-    totalProductCount: 6,
-    storedProductCount: 6,
+    totalProductCount: 7,
+    storedProductCount: 7,
     liveProducts: 0,
     incompleteProducts: 0,
-    pricedProducts: 6,
+    pricedProducts: 7,
     pagesExpected: 1,
     pagesVisited: 1,
-    listedProducts: 6,
-    uniqueProducts: 6,
-    detailFetched: 6,
+    listedProducts: 7,
+    uniqueProducts: 7,
+    detailFetched: 7,
     detailFailed: 0,
     missingProducts: 0,
     incompleteSpecs: 1,
@@ -97,13 +142,14 @@ const accessoryCoverage: AccessoryCoverageSnapshot = {
   }]
 };
 
-await writeJson(CATALOG_PATH, [...incompleteCases, ...categoryMismatchBoards, unknownPriceMotherboard, ...extraBenchmarkQueueGpus]);
+await writeJson(CATALOG_PATH, [...incompleteCases, ...categoryMismatchBoards, pcieSlotMotherboard, unknownPriceMotherboard, ...extraBenchmarkQueueGpus]);
 await writeJson(ACCESSORY_COVERAGE_PATH, accessoryCoverage);
+await writeJson(ACCESSORIES_PATH, [asusCoolingFan]);
 
 console.log(JSON.stringify({
   ok: true,
   starterCatalogCount: starterCatalog.length,
-  persistedCatalogFixtureCount: incompleteCases.length + categoryMismatchBoards.length + 1 + extraBenchmarkQueueGpus.length,
+  persistedCatalogFixtureCount: incompleteCases.length + categoryMismatchBoards.length + 2 + extraBenchmarkQueueGpus.length,
   incompleteCaseCount: incompleteCases.length,
   categoryMismatchCount: categoryMismatchBoards.length,
   accessoryCoverageCategories: accessoryCoverage.categories.length
