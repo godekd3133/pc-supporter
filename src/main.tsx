@@ -15,6 +15,15 @@ function registerOfflineShell() {
 
 registerOfflineShell();
 
+const nativeWindow = window as { Capacitor?: { isNativePlatform?: () => boolean } };
+if (nativeWindow.Capacitor?.isNativePlatform?.() === true) {
+  void import("./native-shell")
+    .then((module) => module.initNativeShell())
+    .catch((error: unknown) => {
+      console.warn("[PC Supporter] native shell initialization failed", error);
+    });
+}
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <AppErrorBoundary>

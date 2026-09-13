@@ -23,6 +23,19 @@ const config: CapacitorConfig = {
   android: {
     backgroundColor: "#f4f7f8",
     ...(allowLocalHttpApi ? { allowMixedContent: true } : {})
+  },
+  plugins: {
+    SplashScreen: {
+      launchShowDuration: 0,
+      launchAutoHide: true,
+      backgroundColor: "#122332",
+      androidScaleType: "CENTER_CROP",
+      showSpinner: false
+    },
+    Keyboard: {
+      resize: "body",
+      resizeOnFullScreen: true
+    }
   }
 };
 
