@@ -26,6 +26,24 @@ function sleep(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
+function killServerTree(signal) {
+  // npm → sh → tsx → node 자손까지 함께 종료하기 위해 detached 프로세스 그룹을 시그널한다.
+  // 그룹이 없으면(Windows/이미 종료) 직접 자식만 시그널한다.
+  if (process.platform !== "win32" && server?.pid) {
+    try {
+      process.kill(-server.pid, signal);
+      return;
+    } catch {
+      // fall through to direct kill
+    }
+  }
+  try {
+    server?.kill(signal);
+  } catch {
+    // already gone
+  }
+}
+
 async function jsonResponse(path, init = {}) {
   const response = await fetch(`${baseUrl}${path}`, {
     ...init,
@@ -96,7 +114,8 @@ try {
       BUILD_MONITOR_SCHEDULER_ENABLED: "false",
       NODE_ENV: "test"
     },
-    stdio: ["ignore", "pipe", "pipe"]
+    stdio: ["ignore", "pipe", "pipe"],
+    detached: process.platform !== "win32"
   });
   server.stdout.on("data", recordOutput);
   server.stderr.on("data", recordOutput);
@@ -209,9 +228,12 @@ try {
   process.exitCode = 1;
 } finally {
   if (server && server.exitCode === null) {
-    server.kill("SIGTERM");
+    killServerTree("SIGTERM");
     await Promise.race([new Promise((resolve) => server.once("exit", resolve)), sleep(2_000)]);
-    if (server.exitCode === null) server.kill("SIGKILL");
+    if (server.exitCode === null) killServerTree("SIGKILL");
+    await Promise.race([new Promise((resolve) => server.once("exit", resolve)), sleep(2_000)]);
   }
+  server?.stdout?.destroy();
+  server?.stderr?.destroy();
   await rm(dataDirectory, { recursive: true, force: true });
 }
