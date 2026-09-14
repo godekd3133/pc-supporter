@@ -27,7 +27,7 @@ describe("benchmark review queue", () => {
       part({ id: "gpu-complete", category: "gpu", specs: { gpu3dmarkTimeSpyScore: 15000, gpu3dmarkPortRoyalScore: 11000 } }),
       part({ id: "gpu-partial", category: "gpu", specs: { gpu3dmarkTimeSpyScore: 14000 } }),
       part({ id: "gpu-missing", category: "gpu", specs: {} })
-    ], 10);
+    ], 10, "2026-08-31T00:00:00.000Z");
 
     expect(queue.totals).toEqual({
       cpu: { total: 3, complete: 1, partial: 1, missing: 1, stale: 0 },
