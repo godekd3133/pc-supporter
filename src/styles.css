@@ -17543,3 +17543,8 @@ button.metric-card:disabled { cursor: not-allowed; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 }
+
+.skip-to-content { position: fixed; top: 0; left: 0; z-index: 3000; padding: 10px 16px; background: #122332; color: #fff; font-size: 13px; font-weight: 700; text-decoration: none; transform: translateY(-110%); transition: transform 0.16s ease; }
+.skip-to-content:focus-visible { transform: translateY(0); outline: 2px solid #fff; outline-offset: -2px; }
+#main-content:focus { outline: none; }
+.mobile-more-sheet:focus { outline: none; }

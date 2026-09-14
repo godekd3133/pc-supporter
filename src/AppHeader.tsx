@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FiBookmark, FiCpu, FiDatabase, FiLayers, FiMenu, FiMoreHorizontal, FiSearch, FiTool, FiTrendingUp, FiX, FiZap } from "react-icons/fi";
 import type { ApiStatusDetails } from "./api";
 
@@ -30,7 +30,21 @@ type HeaderProps = {
 
 export function AppHeader({ view, networkOnline, apiStatus, bootstrapLoading, bootstrapErrorCount, savedBuildUnreadAlertCount, catalogRefreshProgress, onHome, onBuild, onGenerate, onCatalog, onAccessories, onPriceWatchlist, onHistory, onAdmin }: HeaderProps) {
   const [moreOpen, setMoreOpen] = useState(false);
+  const moreTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const moreSheetRef = useRef<HTMLElement | null>(null);
   useEffect(() => setMoreOpen(false), [view]);
+  useEffect(() => {
+    if (!moreOpen) return undefined;
+    moreSheetRef.current?.focus({ preventScroll: true });
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setMoreOpen(false);
+      moreTriggerRef.current?.focus({ preventScroll: true });
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [moreOpen]);
 
   const statusLabel = !networkOnline ? "오프라인 · 로컬 기능" : apiStatus.status === "offline" ? "API 서버 확인 필요" : apiStatus.status === "degraded" ? "API 응답 지연" : bootstrapErrorCount > 0 ? "일부 정보 확인 필요" : bootstrapLoading ? "서비스 동기화 중" : "규칙 엔진 정상";
   const statusClass = !networkOnline || apiStatus.status === "offline" || apiStatus.status === "degraded" || bootstrapErrorCount > 0 ? "degraded" : bootstrapLoading ? "loading" : "";
@@ -81,13 +95,13 @@ export function AppHeader({ view, networkOnline, apiStatus, bootstrapLoading, bo
         <button className={`mobile-bottom-nav-item ${view === "history" ? "active" : ""}`} type="button" aria-current={view === "history" ? "page" : undefined} onClick={onHistory} aria-label={savedBuildUnreadAlertCount > 0 ? `저장 견적, 미읽음 알림 ${savedBuildUnreadAlertCount}건` : "저장 견적"}>
           <span className="mobile-bottom-nav-icon"><FiBookmark aria-hidden="true" />{savedBuildUnreadAlertCount > 0 && <span className="mobile-bottom-nav-badge" aria-hidden="true">{savedBuildUnreadAlertCount > 99 ? "99+" : savedBuildUnreadAlertCount}</span>}</span><span>저장</span>
         </button>
-        <button className={`mobile-bottom-nav-item ${moreOpen || ["generator", "pricewatchlist", "admin"].includes(view) ? "active" : ""}`} type="button" aria-expanded={moreOpen} aria-controls="mobile-more-sheet" onClick={() => setMoreOpen((open) => !open)}>
+        <button ref={moreTriggerRef} className={`mobile-bottom-nav-item ${moreOpen || ["generator", "pricewatchlist", "admin"].includes(view) ? "active" : ""}`} type="button" aria-expanded={moreOpen} aria-controls="mobile-more-sheet" aria-haspopup="dialog" onClick={() => setMoreOpen((open) => !open)}>
           {moreOpen ? <FiX aria-hidden="true" /> : <FiMoreHorizontal aria-hidden="true" />}<span>더보기</span>
         </button>
       </nav>
       {moreOpen && <div className="mobile-more-layer">
         <button className="mobile-more-scrim" type="button" aria-label="더보기 메뉴 닫기" onClick={() => setMoreOpen(false)} />
-        <section className="mobile-more-sheet" id="mobile-more-sheet" role="dialog" aria-modal="false" aria-labelledby="mobile-more-title">
+        <section ref={moreSheetRef} className="mobile-more-sheet" id="mobile-more-sheet" role="dialog" aria-modal="false" aria-labelledby="mobile-more-title" tabIndex={-1}>
           <div className="mobile-more-sheet-handle" aria-hidden="true" />
           <div className="mobile-more-sheet-heading"><div><p className="mobile-kicker">MORE TOOLS</p><h2 id="mobile-more-title">더 필요한 도구</h2></div><button className="mobile-more-close" type="button" onClick={() => setMoreOpen(false)} aria-label="더보기 메뉴 닫기"><FiX /></button></div>
           <div className="mobile-more-grid">

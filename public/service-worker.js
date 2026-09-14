@@ -1,5 +1,5 @@
 const CACHE_NAME = "pc-supporter-shell-v1";
-const SHELL_URLS = ["/", "/index.html", "/manifest.webmanifest"];
+const SHELL_URLS = ["/", "/index.html", "/manifest.webmanifest", "/favicon-32.png", "/apple-touch-icon.png", "/icons/icon-192.png", "/icons/icon-512.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
