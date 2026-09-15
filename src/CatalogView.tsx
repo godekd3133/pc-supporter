@@ -1020,12 +1020,14 @@ export function CatalogView({ meta, build, partMap, profile, gamingResolution, g
     ? `안전 ${riskCounts.safe.toLocaleString("ko-KR")} · 확인 필요 ${riskCounts.review.toLocaleString("ko-KR")} · 차단 ${riskCounts.unsafe.toLocaleString("ko-KR")}`
     : undefined;
   const candidateEmptyMessage = mode !== "compatible"
-    ? "조건에 맞는 부품이 없습니다."
+    ? query.trim()
+      ? `"${query.trim().slice(0, 40)}" 검색 결과가 없습니다. 다른 모델명이나 조건을 확인해 주세요.`
+      : "조건에 맞는 부품이 없습니다."
     : candidateScope === "safe"
       ? "현재 견적에 새 위험을 만들지 않는 안전 후보가 없습니다."
       : candidateScope === "no_blocker"
         ? "현재 견적에 새 차단 오류가 없는 후보가 없습니다. 안전 후보 또는 확인 필요 후보 범위를 조정해 보세요."
-        : "전체 정밀 평가 결과 후보가 없습니다.";
+        : "전체 정밀 검사 결과 후보가 없습니다.";
 
   const brandOptions = meta?.catalogBrandCounts?.[category] ?? [];
 

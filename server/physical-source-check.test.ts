@@ -14,7 +14,7 @@ describe("physical source URL check", () => {
     });
 
     expect(result).toMatchObject({ status: "reachable", identityStatus: "matched", httpStatus: 200, redirectCount: 0, finalUrl: "https://vendor.example/gpu" });
-    expect(physicalSourceCheckNeedsReview(result)).toBe(false);
+    expect(physicalSourceCheckNeedsReview(result, false, now())).toBe(false);
   });
 
   it("follows a bounded HTTPS redirect and reports the final identity", async () => {
@@ -67,7 +67,7 @@ describe("physical source URL check", () => {
 
     expect(result).toMatchObject({ status: "reachable", identityStatus: "matched", contentType: "application/pdf" });
     expect(result.detail).toContain("PDF 본문");
-    expect(physicalSourceCheckNeedsReview(result)).toBe(false);
+    expect(physicalSourceCheckNeedsReview(result, false, now())).toBe(false);
   });
 
   it("does not run PDF extraction after the bounded document body limit", async () => {

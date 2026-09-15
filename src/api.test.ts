@@ -209,6 +209,67 @@ describe("api client", () => {
     expect(abortFetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("turns a stalled request into a timeout error instead of hanging forever", async () => {
+    const fetchMock = vi.fn((_path: string, init?: RequestInit) => new Promise<never>((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(init.signal!.reason), { once: true });
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(api("/api/parts?category=cpu&timeout-test=hang", { retry: 0, timeoutMs: 20 })).rejects.toThrow(
+      "API 서버 응답 시간이 초과되었습니다. 네트워크 상태를 확인한 뒤 다시 시도해 주세요."
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(apiStatusSnapshot()).toBe("offline");
+  });
+
+  it("retries a timed-out read request and succeeds on the next attempt", async () => {
+    const fetchMock = vi.fn()
+      .mockImplementationOnce((_path: string, init?: RequestInit) => new Promise<never>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(init.signal!.reason), { once: true });
+      }))
+      .mockResolvedValueOnce({ ok: true, status: 200, json: vi.fn().mockResolvedValue({ ok: true }) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(api<{ ok: boolean }>("/api/health?timeout-retry", { retry: 1, retryDelayMs: 0, timeoutMs: 20 })).resolves.toEqual({ ok: true });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("lets a caller abort win over the request timeout", async () => {
+    const controller = new AbortController();
+    const fetchMock = vi.fn((_path: string, init?: RequestInit) => new Promise<never>((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(init.signal!.reason), { once: true });
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const pending = api("/api/parts?timeout-abort", { retry: 2, retryDelayMs: 0, timeoutMs: 60_000, signal: controller.signal });
+    controller.abort();
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("serves the catalog session cache when a request times out", async () => {
+    const path = "/api/parts?category=cpu&cache-test=timeout-fallback";
+    const payload = { items: [{ id: "cached-on-timeout" }] };
+    const storage = new Map<string, string>();
+    vi.stubGlobal("window", {
+      location: { origin: "http://localhost" },
+      sessionStorage: {
+        getItem: (key: string) => storage.get(key) ?? null,
+        setItem: (key: string, value: string) => storage.set(key, value),
+        removeItem: (key: string) => storage.delete(key)
+      }
+    });
+    const headers = { get: () => null };
+    const fetchMock = vi.fn().mockResolvedValueOnce({ ok: true, status: 200, headers, json: vi.fn().mockResolvedValue(payload) });
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(api<typeof payload>(path, { retry: 0 })).resolves.toEqual(payload);
+
+    fetchMock.mockImplementation((_p: string, init?: RequestInit) => new Promise<never>((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(init.signal!.reason), { once: true });
+    }));
+    await expect(api<typeof payload>(path, { retry: 0, timeoutMs: 20 })).resolves.toEqual(payload);
+  });
+
   it("publishes offline and online transitions for the global API status", async () => {
     const events: ApiStatus[] = [];
     const unsubscribe = subscribeApiStatus((details) => events.push(details.status));

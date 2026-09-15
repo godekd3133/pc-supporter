@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { FiBookmark, FiCpu, FiDatabase, FiLayers, FiMenu, FiMoreHorizontal, FiSearch, FiTool, FiTrendingUp, FiX, FiZap } from "react-icons/fi";
+import { FiActivity, FiBookmark, FiCpu, FiDatabase, FiLayers, FiLoader, FiMenu, FiMoreHorizontal, FiSearch, FiTool, FiTrendingUp, FiX, FiZap } from "react-icons/fi";
+import { api } from "./api";
 import type { ApiStatusDetails } from "./api";
 
 export type CatalogRefreshProgress = {
@@ -30,9 +31,33 @@ type HeaderProps = {
 
 export function AppHeader({ view, networkOnline, apiStatus, bootstrapLoading, bootstrapErrorCount, savedBuildUnreadAlertCount, catalogRefreshProgress, onHome, onBuild, onGenerate, onCatalog, onAccessories, onPriceWatchlist, onHistory, onAdmin }: HeaderProps) {
   const [moreOpen, setMoreOpen] = useState(false);
+  const [connectionCheckRunning, setConnectionCheckRunning] = useState(false);
+  const [connectionCheckLines, setConnectionCheckLines] = useState<string[]>([]);
   const moreTriggerRef = useRef<HTMLButtonElement | null>(null);
   const moreSheetRef = useRef<HTMLElement | null>(null);
   useEffect(() => setMoreOpen(false), [view]);
+
+  async function runConnectionCheck() {
+    if (connectionCheckRunning) return;
+    setConnectionCheckRunning(true);
+    setConnectionCheckLines([]);
+    const lines: string[] = [];
+    const push = (line: string) => { lines.push(line); setConnectionCheckLines([...lines]); };
+    try {
+      const startedAt = performance.now();
+      const health = await api<{ ok?: boolean; engineVersion?: string }>("/api/health", { retry: 0, timeoutMs: 10_000 });
+      push(`서버 상태 확인 완료 · 엔진 ${health.engineVersion ?? "버전 미상"} · ${Math.round(performance.now() - startedAt)}ms`);
+    } catch (error) {
+      push(`서버 상태 확인 실패 · ${error instanceof Error ? error.message : String(error)}`);
+    }
+    try {
+      const parts = await api<{ total?: number }>("/api/parts?category=cpu&limit=1", { retry: 0, timeoutMs: 10_000 });
+      push(`부품 목록 확인 완료 · CPU ${parts.total ?? "?"}개`);
+    } catch (error) {
+      push(`부품 목록 확인 실패 · ${error instanceof Error ? error.message : String(error)}`);
+    }
+    setConnectionCheckRunning(false);
+  }
   useEffect(() => {
     if (!moreOpen) return undefined;
     moreSheetRef.current?.focus({ preventScroll: true });
@@ -46,7 +71,7 @@ export function AppHeader({ view, networkOnline, apiStatus, bootstrapLoading, bo
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [moreOpen]);
 
-  const statusLabel = !networkOnline ? "오프라인 · 로컬 기능" : apiStatus.status === "offline" ? "API 서버 확인 필요" : apiStatus.status === "degraded" ? "API 응답 지연" : bootstrapErrorCount > 0 ? "일부 정보 확인 필요" : bootstrapLoading ? "서비스 동기화 중" : "규칙 엔진 정상";
+  const statusLabel = !networkOnline ? "오프라인 · 저장된 기능만" : apiStatus.status === "offline" ? "서버 연결 확인 필요" : apiStatus.status === "degraded" ? "응답이 느려요" : bootstrapErrorCount > 0 ? "일부 정보 확인 필요" : bootstrapLoading ? "불러오는 중" : "정상 작동 중";
   const statusClass = !networkOnline || apiStatus.status === "offline" || apiStatus.status === "degraded" || bootstrapErrorCount > 0 ? "degraded" : bootstrapLoading ? "loading" : "";
   const statusTitle = apiStatus.fallbackAt ? `마지막 확인 데이터 사용 · ${new Date(apiStatus.fallbackAt).toLocaleString("ko-KR")}` : apiStatus.lastSuccessAt ? `API 마지막 성공 ${new Date(apiStatus.lastSuccessAt).toLocaleString("ko-KR")}` : undefined;
   const refreshTotal = Math.max(1, catalogRefreshProgress?.requestedCount ?? 1);
@@ -78,7 +103,7 @@ export function AppHeader({ view, networkOnline, apiStatus, bootstrapLoading, bo
         <div className="topbar-refresh-progress-heading">
           <div>
             <span className="topbar-refresh-progress-kicker">CATALOG REFRESH</span>
-            <strong>원문 데이터 확인 중</strong>
+            <strong>부품 정보 새로 확인 중</strong>
           </div>
           <span className="topbar-refresh-progress-count">{refreshCompleted} / {refreshTotal}</span>
         </div>
@@ -108,8 +133,10 @@ export function AppHeader({ view, networkOnline, apiStatus, bootstrapLoading, bo
             <button type="button" onClick={() => { setMoreOpen(false); onGenerate(); }}><span><FiZap /></span><strong>자동 구성</strong><small>예산에 맞는 조합 찾기</small></button>
             <button type="button" onClick={() => { setMoreOpen(false); onAccessories(); }}><span><FiTool /></span><strong>주변 부품</strong><small>쿨링·허브·RGB 더하기</small></button>
             <button type="button" onClick={() => { setMoreOpen(false); onPriceWatchlist(); }}><span><FiTrendingUp /></span><strong>가격 추적</strong><small>관심 부품 가격 보기</small></button>
-            <button type="button" onClick={() => { setMoreOpen(false); onAdmin(); }}><span><FiDatabase /></span><strong>데이터 센터</strong><small>카탈로그 근거 확인</small></button>
+            <button type="button" onClick={() => { setMoreOpen(false); onAdmin(); }}><span><FiDatabase /></span><strong>데이터 센터</strong><small>부품 정보·수집 관리</small></button>
+            <button type="button" onClick={() => void runConnectionCheck()} disabled={connectionCheckRunning}><span>{connectionCheckRunning ? <FiLoader className="spin" /> : <FiActivity />}</span><strong>서버 연결 확인</strong><small>API 상태·부품 목록 점검</small></button>
           </div>
+          {connectionCheckLines.length > 0 && <div className="mobile-more-connection-check" role="status" aria-label="서버 연결 확인 결과">{connectionCheckLines.map((line) => <p key={line}>{line}</p>)}</div>}
         </section>
       </div>}
     </header>

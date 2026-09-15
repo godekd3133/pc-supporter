@@ -6,6 +6,11 @@ export type ApiRequestInit = RequestInit & {
    * Keep this false for mutations because replaying a write can duplicate it.
    */
   retryOnRateLimit?: boolean;
+  /**
+   * Per-attempt fetch timeout in milliseconds. A stalled request would otherwise
+   * leave the UI waiting forever on mobile networks.
+   */
+  timeoutMs?: number;
 };
 
 export type ApiStatus = "unknown" | "online" | "offline" | "degraded";
@@ -17,6 +22,7 @@ const API_SESSION_CACHE_MAX_BYTES = 512_000;
 const MAX_RATE_LIMIT_AUTO_RETRY_COUNT = 1;
 const MAX_RATE_LIMIT_AUTO_RETRY_WAIT_MS = 3_000;
 const MAX_RETRY_AFTER_SECONDS = 24 * 60 * 60;
+const API_REQUEST_TIMEOUT_MS = 20_000;
 const configuredApiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? "").trim().replace(/\/+$/, "");
 
 export function apiRequestUrl(path: string) {
@@ -197,12 +203,13 @@ function notifyAdminAuthMisconfigured(path: string, status: number, payload: unk
 }
 
 async function requestApi<T>(path: string, init?: ApiRequestInit): Promise<T> {
-  const { retry: requestedRetries, retryDelayMs = 250, retryOnRateLimit, ...requestInit } = init ?? {};
+  const { retry: requestedRetries, retryDelayMs = 250, retryOnRateLimit, timeoutMs: requestedTimeoutMs, ...requestInit } = init ?? {};
   const apiRequestVersion = ++latestApiRequestVersion;
   const isCurrentApiRequest = () => latestApiRequestVersion === apiRequestVersion;
   const method = (requestInit.method ?? "GET").toUpperCase();
   const retries = Math.max(0, Math.min(3, requestedRetries ?? (method === "GET" || method === "HEAD" ? 2 : 0)));
   const canRetryRateLimit = retryOnRateLimit ?? (method === "GET" || method === "HEAD");
+  const timeoutMs = Math.max(1_000, Math.min(120_000, requestedTimeoutMs ?? API_REQUEST_TIMEOUT_MS));
   const sessionCacheKey = apiSessionCacheKey(path, method);
   const sessionCacheRequestVersion = sessionCacheKey
     ? (sessionCacheRequestVersions.get(sessionCacheKey) ?? 0) + 1
@@ -214,9 +221,21 @@ async function requestApi<T>(path: string, init?: ApiRequestInit): Promise<T> {
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     let response: Response;
     const cachedForRequest = readApiSessionCache(sessionCacheKey);
+    const attemptController = new AbortController();
+    let attemptTimedOut = false;
+    const onCallerAbort = () => attemptController.abort(requestInit.signal?.reason);
+    if (requestInit.signal) {
+      if (requestInit.signal.aborted) onCallerAbort();
+      else requestInit.signal.addEventListener("abort", onCallerAbort, { once: true });
+    }
+    const timeoutTimer = globalThis.setTimeout(() => {
+      attemptTimedOut = true;
+      attemptController.abort(new DOMException("요청 시간이 초과되었습니다.", "TimeoutError"));
+    }, timeoutMs);
     try {
       response = await fetch(apiRequestUrl(path), {
         ...requestInit,
+        signal: attemptController.signal,
         credentials: requestInit.credentials ?? "include",
         headers: {
           "Content-Type": "application/json",
@@ -226,20 +245,29 @@ async function requestApi<T>(path: string, init?: ApiRequestInit): Promise<T> {
       });
     } catch (error) {
       lastNetworkError = error;
-      if (!(error instanceof TypeError && /fetch|network|connect/i.test(error.message)) || attempt >= retries) {
-        if (error instanceof TypeError && /fetch|network|connect/i.test(error.message)) {
+      const callerAborted = Boolean(requestInit.signal?.aborted);
+      const isNetworkFailure = error instanceof TypeError && /fetch|network|connect/i.test(error.message);
+      const isTimeout = !callerAborted && (attemptTimedOut || (error instanceof DOMException && error.name === "TimeoutError"));
+      if (callerAborted || (!(isNetworkFailure || isTimeout)) || attempt >= retries) {
+        if (callerAborted) throw error;
+        if (isNetworkFailure || isTimeout) {
           if (isCurrentApiRequest()) publishApiStatus("offline", { fallbackAt: undefined, fallbackPath: undefined });
           const cachedPayload = readApiSessionCache(sessionCacheKey);
           if (cachedPayload !== undefined) {
             if (isCurrentApiRequest()) publishApiStatus("offline", { fallbackAt: new Date().toISOString(), fallbackPath: path });
             return cachedPayload.payload as T;
           }
-          throw new Error("API 서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.");
+          throw new Error(isTimeout
+            ? "API 서버 응답 시간이 초과되었습니다. 네트워크 상태를 확인한 뒤 다시 시도해 주세요."
+            : "API 서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.");
         }
         throw error;
       }
       await wait(retryDelayMs * (attempt + 1), requestInit.signal);
       continue;
+    } finally {
+      globalThis.clearTimeout(timeoutTimer);
+      requestInit.signal?.removeEventListener("abort", onCallerAbort);
     }
 
     const responseLiveAt = new Date().toISOString();
