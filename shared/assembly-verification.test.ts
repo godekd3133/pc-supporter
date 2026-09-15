@@ -41,7 +41,7 @@ describe("assembly verification log", () => {
     expect(parsed.errors).toEqual([]);
     expect(parsed.log?.checks.bios.status).toBe("pass");
     expect(wrongBuild.log).toBeUndefined();
-    expect(wrongBuild.errors[0]).toContain("다른 조립 검증 로그");
+    expect(wrongBuild.errors[0]).toContain("다른 조립 확인 로그");
   });
 
   it("creates a compact share-safe snapshot without per-check notes", () => {
@@ -64,7 +64,7 @@ describe("assembly verification log", () => {
     const restored = assemblyVerificationHistoryFromSavedSnapshots([snapshot], "pc-supporter-assembly-verification:restored");
 
     expect(restored).toBeDefined();
-    expect(restored?.runs[0]).toMatchObject({ buildFingerprint: "pc-supporter-assembly-verification:restored", runLabel: "조립 검증 1회차", measurementSeriesPointCount: 2, measurementQuality: { status: "complete" } });
+    expect(restored?.runs[0]).toMatchObject({ buildFingerprint: "pc-supporter-assembly-verification:restored", runLabel: "조립 확인 1회차", measurementSeriesPointCount: 2, measurementQuality: { status: "complete" } });
     expect(restored?.runs[0].checks.post).toEqual({ status: "pass" });
     expect(restored?.runs[0].note).toBeUndefined();
     expect(restored?.runs[0].measurementSeries).toBeUndefined();
@@ -90,6 +90,17 @@ describe("assembly verification log", () => {
     expect(merged.runs).toHaveLength(1);
     expect(merged.activeRunId).toBe(saved.activeRunId);
     expect(merged.runs[0].checks.post.status).toBe("pass");
+  });
+
+  it("does not keep a legacy-labeled empty placeholder beside a restored server run", () => {
+    const local = emptyAssemblyVerificationHistory("local", "2026-09-04T00:00:00.000Z");
+    local.runs[0].runLabel = "조립 검증 1회차";
+    const savedRun = withAssemblyVerificationCheck(emptyAssemblyVerificationLog("saved", "2026-09-03T00:00:00.000Z"), "post", "pass");
+    const saved = assemblyVerificationHistoryFromSavedSnapshots([assemblyVerificationSavedSnapshotFor(savedRun)], "local")!;
+    const merged = assemblyVerificationHistoryMergeFor(local, saved);
+
+    expect(merged.runs).toHaveLength(1);
+    expect(merged.activeRunId).toBe(saved.activeRunId);
   });
 
   it("upgrades legacy single-run JSON and round-trips a multi-run history", () => {

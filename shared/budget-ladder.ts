@@ -227,7 +227,7 @@ export function budgetLadderTextFor(outcomes: BudgetLadderOutcome[]) {
     } else {
       lines.push(`- 오류: ${outcome.error ?? "자동 구성을 만들지 못했습니다."}`);
       const diagnostics = compactDiagnosticsText(outcome);
-      if (diagnostics) lines.push(`- 실패 근거: ${diagnostics}`);
+      if (diagnostics) lines.push(`- 실패 정보: ${diagnostics}`);
     }
     lines.push("");
   });
@@ -290,7 +290,7 @@ export function budgetLadderTextForPayload(payload: BudgetLadderExportPayload) {
         ...diagnostic.facts.slice(0, 4).map((fact) => `${fact.label} ${fact.value}`),
         ...(diagnostic.recommendation ? [`권장 ${diagnostic.recommendation}`] : [])
       ]).join(" · ");
-      if (diagnostics) lines.push(`- 실패 근거: ${diagnostics}`);
+      if (diagnostics) lines.push(`- 실패 정보: ${diagnostics}`);
     }
     lines.push("");
   });

@@ -59,7 +59,7 @@ try {
       await wait(900);
       const body = document.body?.innerText ?? "";
       const panelText = document.querySelector('[data-testid="home-budget-ladder-shares"]')?.textContent ?? "";
-      return { stage: "checked", deleteCalls, newEntry: panelText.includes(newEntry.name), staleToast: body.includes("공유 snapshot을 서버에서 취소했습니다"), path: location.pathname };
+      return { stage: "checked", deleteCalls, newEntry: panelText.includes(newEntry.name), staleToast: body.includes("공유 저장본을 서버에서 취소했습니다"), path: location.pathname };
     } finally {
       window.fetch = originalFetch;
       if (original === null) localStorage.removeItem(key); else localStorage.setItem(key, original);

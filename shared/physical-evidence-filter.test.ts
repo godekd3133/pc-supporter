@@ -6,7 +6,7 @@ describe("physical evidence filter", () => {
     expect(physicalEvidenceFilterFromUnknown("verified")).toBe("verified");
     expect(physicalEvidenceFilterFromUnknown("review")).toBe("review");
     expect(physicalEvidenceFilterFromUnknown("not-applicable")).toBe("all");
-    expect(physicalEvidenceFilterLabel("verified")).toBe("물리 근거 확인됨");
+    expect(physicalEvidenceFilterLabel("verified")).toBe("장착 정보 확인됨");
   });
 
   it("matches only the requested evidence status", () => {

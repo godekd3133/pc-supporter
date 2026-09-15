@@ -50,7 +50,7 @@ const BENCHMARK_ROWS_BY_CATEGORY: Record<"cpu" | "gpu", Array<{ key: BenchmarkSc
 
 function benchmarkEvidenceFromUnknown(value: unknown, index: number): { evidence?: AlternativeComparisonBenchmarkEvidence; error?: string } {
   if (value === undefined) return {};
-  if (!value || typeof value !== "object" || Array.isArray(value)) return { error: `${index + 1}번째 후보의 원본 성능 근거 형식이 올바르지 않습니다.` };
+  if (!value || typeof value !== "object" || Array.isArray(value)) return { error: `${index + 1}번째 후보의 원본 성능 정보 형식이 올바르지 않습니다.` };
   const raw = value as Record<string, unknown>;
   const partId = textValue(raw.partId, 160);
   const category = raw.category === "cpu" || raw.category === "gpu" ? raw.category : undefined;
@@ -58,7 +58,7 @@ function benchmarkEvidenceFromUnknown(value: unknown, index: number): { evidence
   const dataUpdatedAt = textValue(raw.dataUpdatedAt, 80);
   const benchmarkFreshness = dataFreshnessFromUnknown(raw.benchmarkFreshness);
   const expectedRows = category ? BENCHMARK_ROWS_BY_CATEGORY[category] : undefined;
-  if (!partId || !category || !name || !dataUpdatedAt || !benchmarkFreshness || !expectedRows || !Array.isArray(raw.rows) || raw.rows.length !== expectedRows.length) return { error: `${index + 1}번째 후보의 원본 성능 근거 요약이 올바르지 않습니다.` };
+  if (!partId || !category || !name || !dataUpdatedAt || !benchmarkFreshness || !expectedRows || !Array.isArray(raw.rows) || raw.rows.length !== expectedRows.length) return { error: `${index + 1}번째 후보의 원본 성능 정보 요약이 올바르지 않습니다.` };
 
   const rows: AlternativeComparisonBenchmarkEvidenceRow[] = [];
   for (const [rowIndex, expected] of expectedRows.entries()) {
@@ -119,13 +119,13 @@ function benchmarkEvidenceFromUnknown(value: unknown, index: number): { evidence
 
 function similarityEvidenceFromUnknown(value: unknown, index: number): { evidence?: AlternativeComparisonSimilarityEvidence; error?: string } {
   if (value === undefined) return {};
-  if (!value || typeof value !== "object" || Array.isArray(value)) return { error: `${index + 1}번째 후보의 성능 비교 근거 형식이 올바르지 않습니다.` };
+  if (!value || typeof value !== "object" || Array.isArray(value)) return { error: `${index + 1}번째 후보의 성능 비교 정보 형식이 올바르지 않습니다.` };
   const raw = value as Record<string, unknown>;
   const comparedDimensions = Number(raw.comparedDimensions);
   const totalDimensions = Number(raw.totalDimensions);
   const confidence: SimilarityConfidence | undefined = raw.confidence === "high" || raw.confidence === "limited" || raw.confidence === "unknown" ? raw.confidence : undefined;
   const basis: SimilarityBasis | undefined = raw.basis === "benchmark" || raw.basis === "spec" || raw.basis === "mixed" ? raw.basis : undefined;
-  if (!Number.isInteger(comparedDimensions) || comparedDimensions < 0 || comparedDimensions > 24 || !Number.isInteger(totalDimensions) || totalDimensions < 0 || totalDimensions > 24 || comparedDimensions > totalDimensions || !confidence || raw.basis !== undefined && !basis) return { error: `${index + 1}번째 후보의 성능 비교 근거 요약이 올바르지 않습니다.` };
+  if (!Number.isInteger(comparedDimensions) || comparedDimensions < 0 || comparedDimensions > 24 || !Number.isInteger(totalDimensions) || totalDimensions < 0 || totalDimensions > 24 || comparedDimensions > totalDimensions || !confidence || raw.basis !== undefined && !basis) return { error: `${index + 1}번째 후보의 성능 비교 정보 요약이 올바르지 않습니다.` };
 
   let dimensions: AlternativeComparisonSimilarityDimension[] | undefined;
   if (raw.dimensions !== undefined) {
@@ -168,9 +168,9 @@ function similarityEvidenceFromUnknown(value: unknown, index: number): { evidenc
 
   let notes: string[] | undefined;
   if (raw.notes !== undefined) {
-    if (!Array.isArray(raw.notes) || raw.notes.length > 8) return { error: `${index + 1}번째 후보의 성능 근거 메모 형식이 올바르지 않습니다.` };
+    if (!Array.isArray(raw.notes) || raw.notes.length > 8) return { error: `${index + 1}번째 후보의 성능 정보 메모 형식이 올바르지 않습니다.` };
     const parsedNotes = raw.notes.map((item) => textValue(item, 500));
-    if (parsedNotes.some((item) => !item)) return { error: `${index + 1}번째 후보의 성능 근거 메모 값이 올바르지 않습니다.` };
+    if (parsedNotes.some((item) => !item)) return { error: `${index + 1}번째 후보의 성능 정보 메모 값이 올바르지 않습니다.` };
     notes = parsedNotes.filter((item): item is string => Boolean(item));
     if (notes.length === 0) notes = undefined;
   }
@@ -220,7 +220,7 @@ function scenarioChecksFromUnknown(value: unknown, index: number): { checks?: Al
 
 function scenarioTradeoffFromUnknown(value: unknown, index: number): { tradeoff?: AlternativeComparisonScenarioTradeoff; error?: string } {
   if (value === undefined) return {};
-  if (!value || typeof value !== "object" || Array.isArray(value)) return { error: `${index + 1}번째 후보의 효율 경계 형식이 올바르지 않습니다.` };
+  if (!value || typeof value !== "object" || Array.isArray(value)) return { error: `${index + 1}번째 후보의 비교 우위 형식이 올바르지 않습니다.` };
   const raw = value as Record<string, unknown>;
   const frontier = raw.frontier;
   const eligible = raw.eligible;
@@ -235,22 +235,22 @@ function scenarioTradeoffFromUnknown(value: unknown, index: number): { tradeoff?
     || (priceDeltaWon !== undefined && (!Number.isInteger(priceDeltaWon) || !Number.isFinite(priceDeltaWon)))
     || (analysisScore !== undefined && (!Number.isInteger(analysisScore) || analysisScore < 0 || analysisScore > 100))
     || (evidenceScore !== undefined && (!Number.isInteger(evidenceScore) || evidenceScore < 0 || evidenceScore > 100))
-    || (raw.dominatedByCandidateId !== undefined && !dominatedByCandidateId)) return { error: `${index + 1}번째 후보의 효율 경계 값이 올바르지 않습니다.` };
+    || (raw.dominatedByCandidateId !== undefined && !dominatedByCandidateId)) return { error: `${index + 1}번째 후보의 비교 우위 값이 올바르지 않습니다.` };
   return { tradeoff: { frontier, ...(eligible !== undefined ? { eligible } : {}), ...(riskScore !== undefined ? { riskScore } : {}), ...(priceDeltaWon !== undefined ? { priceDeltaWon } : {}), ...(analysisScore !== undefined ? { analysisScore } : {}), ...(evidenceScore !== undefined ? { evidenceScore } : {}), ...(dominatedByCandidateId ? { dominatedByCandidateId } : {}), reason } };
 }
 
 function scenarioFromUnknown(value: unknown, index: number): { scenario?: AlternativeComparisonScenario; error?: string } {
   if (value === undefined) return {};
-  if (!value || typeof value !== "object" || Array.isArray(value)) return { error: `${index + 1}번째 후보의 가상 적용 판단 형식이 올바르지 않습니다.` };
+  if (!value || typeof value !== "object" || Array.isArray(value)) return { error: `${index + 1}번째 후보의 미리 적용 판단 형식이 올바르지 않습니다.` };
   const scenario = value as Record<string, unknown>;
   const status = scenario.status === "compatible" || scenario.status === "needs_review" || scenario.status === "incompatible" ? scenario.status : undefined;
   const blockerCount = Number(scenario.blockerCount);
   const warningCount = Number(scenario.warningCount);
   const unknownCount = Number(scenario.unknownCount);
-  if (!status || !Number.isInteger(blockerCount) || blockerCount < 0 || !Number.isInteger(warningCount) || warningCount < 0 || !Number.isInteger(unknownCount) || unknownCount < 0) return { error: `${index + 1}번째 후보의 가상 적용 위험 수가 올바르지 않습니다.` };
+  if (!status || !Number.isInteger(blockerCount) || blockerCount < 0 || !Number.isInteger(warningCount) || warningCount < 0 || !Number.isInteger(unknownCount) || unknownCount < 0) return { error: `${index + 1}번째 후보의 미리 적용 위험 수가 올바르지 않습니다.` };
   const rawPriceDelta = scenario.priceDeltaWon;
   const priceDeltaWon = rawPriceDelta === undefined ? undefined : Number(rawPriceDelta);
-  if (priceDeltaWon !== undefined && (!Number.isFinite(priceDeltaWon) || !Number.isInteger(priceDeltaWon))) return { error: `${index + 1}번째 후보의 가상 적용 가격 변화가 올바르지 않습니다.` };
+  if (priceDeltaWon !== undefined && (!Number.isFinite(priceDeltaWon) || !Number.isInteger(priceDeltaWon))) return { error: `${index + 1}번째 후보의 미리 적용 가격 변화가 올바르지 않습니다.` };
   const rawAnalysisScore = scenario.analysisScore;
   const analysisScore = rawAnalysisScore === undefined ? undefined : Number(rawAnalysisScore);
   const analysisScoreLabel = scenario.analysisScoreLabel === undefined
@@ -270,7 +270,7 @@ function scenarioFromUnknown(value: unknown, index: number): { scenario?: Altern
     || (scenario.analysisScoreLabel !== undefined && !analysisScoreLabel)
     || (scenario.analysisConfidence !== undefined && !analysisConfidence)
     || (hasAnalysisMetadata && (!analysisScoreLabel || !analysisConfidence))
-    || (analysisScoreDelta !== undefined && (!Number.isFinite(analysisScoreDelta) || analysisScoreDelta < -100 || analysisScoreDelta > 100))) return { error: `${index + 1}번째 후보의 가상 적용 성능 분석 값이 올바르지 않습니다.` };
+    || (analysisScoreDelta !== undefined && (!Number.isFinite(analysisScoreDelta) || analysisScoreDelta < -100 || analysisScoreDelta > 100))) return { error: `${index + 1}번째 후보의 미리 적용 성능 분석 값이 올바르지 않습니다.` };
   const purchaseDecision = textValue(scenario.purchaseDecision, 80);
   const purchaseDecisionSummary = textValue(scenario.purchaseDecisionSummary, 500);
   const rawHistory = scenario.priceHistory;
@@ -328,9 +328,9 @@ function candidateFromUnknown(value: unknown, index: number) {
   if ((candidate.category !== undefined && category === undefined) || (candidate.partId !== undefined && !partId) || (category === undefined) !== (partId === undefined)) return { error: `${index + 1}번째 후보의 카탈로그 식별자가 올바르지 않습니다.` };
   const dataQuality = textValue(candidate.dataQuality, 80);
   if (!name || !summary || !price || !similarity || !performance || !compatibility || !dataQuality) return { error: `${index + 1}번째 후보의 비교 정보가 부족합니다.` };
-  if (benchmarkEvidenceResult.evidence && (!category || !partId || benchmarkEvidenceResult.evidence.category !== category || benchmarkEvidenceResult.evidence.partId !== partId)) return { error: `${index + 1}번째 후보의 원본 성능 근거와 카탈로그 식별자가 일치하지 않습니다.` };
+  if (benchmarkEvidenceResult.evidence && (!category || !partId || benchmarkEvidenceResult.evidence.category !== category || benchmarkEvidenceResult.evidence.partId !== partId)) return { error: `${index + 1}번째 후보의 원본 성능 정보와 카탈로그 식별자가 일치하지 않습니다.` };
   if (priceWon !== undefined && (!Number.isInteger(priceWon) || !isKnownPrice(priceWon))) return { error: `${index + 1}번째 후보의 현재 가격 값이 올바르지 않습니다.` };
-  if (candidate.priceEvidence !== undefined && !priceEvidence) return { error: `${index + 1}번째 후보의 가격 근거 값이 올바르지 않습니다.` };
+  if (candidate.priceEvidence !== undefined && !priceEvidence) return { error: `${index + 1}번째 후보의 가격 출처 값이 올바르지 않습니다.` };
   if (valueScore !== undefined && (!Number.isInteger(valueScore) || valueScore < 0 || valueScore > VALUE_SCORE_MAX || !valueLabel)) return { error: `${index + 1}번째 후보의 가격 대비 유사도 점수가 올바르지 않습니다.` };
   if (valueLabel && valueScore === undefined) return { error: `${index + 1}번째 후보의 가격 대비 유사도 점수가 필요합니다.` };
   if (valueScoreScale !== undefined && valueScoreScale !== VALUE_SCORE_MAX) return { error: `${index + 1}번째 후보의 가격 대비 유사도 점수 스케일이 올바르지 않습니다.` };
@@ -381,8 +381,8 @@ export function parseAlternativeComparisonInput(input: unknown): AlternativeComp
   const catalogSnapshotAt = candidate.catalogSnapshotAt === undefined ? undefined : textValue(candidate.catalogSnapshotAt, 80);
   const engineVersion = candidate.engineVersion === undefined ? undefined : textValue(candidate.engineVersion, 120);
   const context = { name, ...(category ? { category } : {}), ...(currentPartName ? { currentPartName } : {}), ...(currentPartSummary ? { currentPartSummary } : {}), ...(currentPartPrice ? { currentPartPrice } : {}), ...(catalogSnapshotAt ? { catalogSnapshotAt } : {}), ...(engineVersion ? { engineVersion } : {}) };
-  if (candidate.catalogSnapshotAt !== undefined && (!catalogSnapshotAt || !Number.isFinite(Date.parse(catalogSnapshotAt)))) return { ...context, candidates: [], errors: ["비교 snapshot의 카탈로그 기준 시점이 올바르지 않습니다."] };
-  if (candidate.engineVersion !== undefined && !engineVersion) return { ...context, candidates: [], errors: ["비교 snapshot의 엔진 버전이 올바르지 않습니다."] };
+  if (candidate.catalogSnapshotAt !== undefined && (!catalogSnapshotAt || !Number.isFinite(Date.parse(catalogSnapshotAt)))) return { ...context, candidates: [], errors: ["비교 저장본의 카탈로그 기준 시점이 올바르지 않습니다."] };
+  if (candidate.engineVersion !== undefined && !engineVersion) return { ...context, candidates: [], errors: ["비교 저장본의 검사 버전이 올바르지 않습니다."] };
   const expiresInDays = shareExpiryDaysFrom(candidate.expiresInDays);
   if (shareExpiryValueProvided(candidate.expiresInDays) && expiresInDays === undefined) return { ...context, candidates: [], errors: ["비교 링크 유효기간은 무기한, 7일, 30일 중 하나여야 합니다."] };
   if (!Array.isArray(candidate.candidates) || candidate.candidates.length < 2 || candidate.candidates.length > MAX_CANDIDATES) return { ...context, candidates: [], errors: [`후보 비교는 2개 이상 ${MAX_CANDIDATES}개 이하로 저장할 수 있습니다.`] };

@@ -252,7 +252,7 @@ export function fanHubConnectionPlanFor(hub: AccessoryItem, selectedFans: Array<
   const hubFanOutputs = hubOutputTypes.map(fanConnectorLabel);
   const fanInputTypes = [...new Set(fanPlans.flatMap((fan) => fan.connectorTypes))];
   const currentSummary = totalCurrentA === undefined || maxFanCurrentA === undefined
-    ? "전류 근거 확인 필요"
+    ? "전류 정보 확인 필요"
     : `${totalCurrentA.toFixed(2)}A / ${maxFanCurrentA.toFixed(2)}A · ${Math.max(0, maxFanCurrentA - totalCurrentA).toFixed(2)}A 여유`;
   const portSummary = hubFanPortCount === undefined
     ? "허브 포트 수 확인 필요"
@@ -260,7 +260,7 @@ export function fanHubConnectionPlanFor(hub: AccessoryItem, selectedFans: Array<
   const summary = status === "blocked"
     ? "허브 포트·연결 타입 또는 전류 한도를 초과해 현재 연결 계획을 사용할 수 없습니다."
     : status === "review"
-      ? "연결 경로는 구성됐지만 커넥터·제어 방식·전류 근거를 추가로 확인해야 합니다."
+      ? "연결 경로는 구성됐지만 커넥터·제어 방식·전류 정보를 추가로 확인해야 합니다."
       : "선택한 팬을 허브 출력에 연결할 수 있으며 확인된 전류 범위 안입니다.";
   return {
     id: `fan-hub-plan:${hub.id}`,
@@ -374,7 +374,7 @@ export function rgbControllerConnectionPlanFor(
       : issue === "power_unknown"
         ? "RGB 출력과 전압은 맞지만 컨트롤러 외부 전원 입력을 확인해야 합니다."
         : issue === "rgb_load_unknown"
-          ? "RGB 장치별 소비전력·전류 근거가 없어 해당 전원 레일의 실제 부하를 계산할 수 없습니다."
+          ? "RGB 장치별 소비전력·전류 정보가 없어 해당 전원 레일의 실제 부하를 계산할 수 없습니다."
           : issue === "rgb_capacity_unknown"
             ? "RGB 장치 부하는 확인됐지만 컨트롤러의 해당 전원 레일 최대 용량을 확인할 수 없습니다."
             : issue === "rgb_power_over_limit"

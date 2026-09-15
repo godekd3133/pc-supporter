@@ -112,7 +112,7 @@ function loadProfileText(profile: AssemblyVerificationLoadProfile) {
   if (profile.reason === "usage-not-recorded") return "사용률 센서 미기록";
   const segments = profile.segments.map((segment) => `${segment.breakBefore === "gap" ? `공백 ${segment.gapBeforeSeconds ?? "-"}초 후 ` : segment.breakBefore === "non-monotonic" ? "시간 역순 후 " : ""}${segment.label} ${segment.pointCount}점`).join(" → ");
   const stability = profile.segments.flatMap((segment) => [segment.cpuTempStability ? `CPU 안정화 ${segment.cpuTempStability.stabilized ? "확인" : "미확인"}` : undefined, segment.gpuTempStability ? `GPU 안정화 ${segment.gpuTempStability.stabilized ? "확인" : "미확인"}` : undefined]).filter((value): value is string => Boolean(value));
-  return `${segments || "구간 없음"} · 커버리지 ${profile.usageCoveragePercent}% · 미분류 ${profile.unclassifiedPointCount}점${stability.length > 0 ? ` · ${stability.join(" · ")}` : ""}`;
+  return `${segments || "구간 없음"} · 커버리지 ${profile.usageCoveragePercent}% · 확인 필요 ${profile.unclassifiedPointCount}점${stability.length > 0 ? ` · ${stability.join(" · ")}` : ""}`;
 }
 
 function loadProfileComparisonText(comparison: AssemblyVerificationLoadProfileComparison) {
@@ -180,13 +180,13 @@ export function assemblyVerificationReportTextFor(report: AssemblyVerificationRe
     `생성 시각: ${report.generatedAt}`,
     `비교 범위: ${report.filter === "same-load" ? "같은 부하 조건" : "전체 회차"}`,
     `회차 수: ${report.runs.length}`,
-    `재확인 신호: ${report.signals.length}개`,
+    `다시 볼 항목: ${report.signals.length}개`,
     ""
   ];
   if (report.signals.length > 0) {
-    lines.push("## 재확인 신호", "");
+    lines.push("## 다시 볼 항목", "");
     for (const signal of report.signals) {
-      lines.push(`- ${signal.title}: ${signal.summary}`, `  - 근거: ${signal.evidence}`, `  - 해당 회차: ${signal.runIds.join(", ")}`);
+      lines.push(`- ${signal.title}: ${signal.summary}`, `  - 정보: ${signal.evidence}`, `  - 해당 회차: ${signal.runIds.join(", ")}`);
     }
     lines.push("");
   }
@@ -234,7 +234,7 @@ function csvCell(value: string | number | boolean | undefined) {
 }
 
 export function assemblyVerificationReportCsvFor(report: AssemblyVerificationReport) {
-  const header = ["회차", "회차 이름", "runId", "상태", "부하 도구", "부하 시나리오", "테스트 시간(분)", "주변 온도(°C)", "CPU 최고(°C)", "GPU 최고(°C)", "CPU 보정(°C)", "GPU 보정(°C)", "Δ CPU(°C)", "Δ GPU(°C)", "Δ CPU 보정(°C)", "Δ GPU 보정(°C)", "CPU 팬(RPM)", "GPU 팬(RPM)", "소음", "측정 출처", "측정 입력 품질", "유효 행", "기본 센서", "추가 센서", "시간축", "시간축 연속성", "측정 공백", "예상 누락", "제외 행", "오류 셀", "원본 샘플 수", "시계열 포인트", "CPU 시계열 관찰", "GPU 시계열 관찰", "CPU 변화율(°C/분)", "GPU 변화율(°C/분)", "CPU 사용률 평균(%)", "GPU 사용률 평균(%)", "CPU 클럭 평균(MHz)", "GPU 클럭 평균(MHz)", "CPU 전력 평균(W)", "GPU 전력 평균(W)", "부하 구간 요약", "사용률 커버리지(%)", "미분류 포인트", "안정화 관찰", "이전 동일 조건 비교", "overlay 회차 수", "품질 검토 overlay 회차 수", "결정 상태", "결정 다음 행동", "비교 제외 사유", "비교 가능"];
+  const header = ["회차", "회차 이름", "runId", "상태", "부하 도구", "부하 시나리오", "테스트 시간(분)", "주변 온도(°C)", "CPU 최고(°C)", "GPU 최고(°C)", "CPU 보정(°C)", "GPU 보정(°C)", "Δ CPU(°C)", "Δ GPU(°C)", "Δ CPU 보정(°C)", "Δ GPU 보정(°C)", "CPU 팬(RPM)", "GPU 팬(RPM)", "소음", "측정 출처", "측정 입력 품질", "유효 행", "기본 센서", "추가 센서", "시간축", "시간축 연속성", "측정 공백", "예상 누락", "제외 행", "오류 셀", "원본 샘플 수", "시계열 포인트", "CPU 시계열 관찰", "GPU 시계열 관찰", "CPU 변화율(°C/분)", "GPU 변화율(°C/분)", "CPU 사용률 평균(%)", "GPU 사용률 평균(%)", "CPU 클럭 평균(MHz)", "GPU 클럭 평균(MHz)", "CPU 전력 평균(W)", "GPU 전력 평균(W)", "부하 구간 요약", "사용률 커버리지(%)", "확인 필요 포인트", "안정화 관찰", "이전 동일 조건 비교", "overlay 회차 수", "품질 검토 overlay 회차 수", "결정 상태", "결정 다음 행동", "비교 제외 사유", "비교 가능"];
   const rows = report.runs.map((run) => [
     run.index,
     run.runLabel,

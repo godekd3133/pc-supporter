@@ -481,7 +481,7 @@ const FIELD_DEFINITIONS: Record<PartCategory, FieldDefinition[]> = {
   motherboard: [
     { field: "socket", label: "소켓", weight: 40, instruction: "메인보드 CPU 소켓을 제조사 원문에서 확인합니다." },
     { field: "memoryType", label: "메모리 세대", weight: 32, instruction: "지원 메모리 세대(DDR4·DDR5 등)를 확인합니다." },
-    { field: "m2Slots", label: "M.2 슬롯", weight: 32, instruction: "사용 가능한 M.2 슬롯 수를 확인합니다. 슬롯별 연결 방식은 별도 매핑에서 검수합니다." },
+    { field: "m2Slots", label: "M.2 슬롯", weight: 32, instruction: "사용 가능한 M.2 슬롯 수를 확인합니다. 슬롯별 연결 방식은 별도 매핑에서 확인합니다." },
     { field: "maxMemoryGb", label: "최대 메모리", weight: 25, instruction: "제조사 공식 최대 메모리 용량을 확인합니다." },
     { field: "memorySlots", label: "메모리 슬롯", weight: 24, instruction: "물리 DIMM 슬롯 수를 확인합니다." },
     { field: "sataPorts", label: "SATA 포트", weight: 22, instruction: "사용 가능한 SATA 포트 수를 확인합니다." },

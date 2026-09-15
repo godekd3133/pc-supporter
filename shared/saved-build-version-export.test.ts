@@ -69,7 +69,7 @@ describe("saved build version export", () => {
     const text = savedBuildVersionComparisonTextFor({ before, after, fallbackPreferences: before.recommendationPreferences! }, "2026-09-07T02:00:00.000Z");
     expect(text).toContain("원본 견적");
     expect(text).toContain("새 확인 항목");
-    expect(text).toContain("데이터 경계");
+    expect(text).toContain("확인 범위");
   });
 
   it("keeps selection and snapshot boundaries explicit when checks are missing", () => {
@@ -79,6 +79,6 @@ describe("saved build version export", () => {
     expect(exported.transition).toBeUndefined();
     expect(exported.findingChanges).toEqual([]);
     expect(exported.summary.selectionChangedCategoryCount).toBe(1);
-    expect(savedBuildVersionComparisonTextFor({ before, after, fallbackPreferences: before.recommendationPreferences! })).toContain("저장된 검사 snapshot이 한쪽 이상 없어");
+    expect(savedBuildVersionComparisonTextFor({ before, after, fallbackPreferences: before.recommendationPreferences! })).toContain("저장된 검사 저장본이 한쪽 이상 없어");
   });
 });

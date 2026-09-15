@@ -62,12 +62,12 @@ function psuCableTopologyDetail(fit: GpuFitSummary["connector"]) {
 }
 
 function physicalEvidenceDetail(fit: GpuFitSummary["physical"], status: GpuFitStatus) {
-  if (fit.status === "not_applicable" && status === "needs_review") return "GPU 슬롯·케이블 굽힘·케이스 측면의 제조사 물리 검수 근거가 아직 등록되지 않았습니다.";
+  if (fit.status === "not_applicable" && status === "needs_review") return "GPU 슬롯·케이블 굽힘·케이스 측면의 제조사 물리 확인 정보가 아직 등록되지 않았습니다.";
   return physicalDetail(fit);
 }
 
 function cableTopologyEvidenceDetail(fit: GpuFitSummary["connector"], status: GpuFitStatus) {
-  if (fit.psuCableTopologyStatus === "not_applicable" && status === "needs_review") return "다중 8핀 연결 경로의 독립 PCIe 케이블 근거가 아직 등록되지 않았습니다.";
+  if (fit.psuCableTopologyStatus === "not_applicable" && status === "needs_review") return "다중 8핀 연결 경로의 독립 PCIe 케이블 정보가 아직 등록되지 않았습니다.";
   return psuCableTopologyDetail(fit);
 }
 
@@ -86,7 +86,7 @@ function EvidenceSourceList({ sources }: { sources: PhysicalEvidenceSource[] | u
     const url = safeHttpsUrl(source.url);
     return [{ ...source, note, ...(url ? { url } : {}) }];
   });
-  return <div className="gpu-fit-evidence-sources" aria-label="물리 근거 출처"><strong>물리 근거 출처</strong>{safeSources.length === 0 ? <small>등록된 출처 메모 없음 · 제조사 매뉴얼 확인 필요</small> : safeSources.map((source) => <small key={`${source.category}-${source.note}-${source.url ?? ""}`}><b>{evidenceSourceIdentity(source)}</b> {source.note}{source.updatedAt ? ` · 검수 갱신 ${new Date(source.updatedAt).toLocaleDateString("ko-KR")}` : ""}{source.url && <a href={source.url} target="_blank" rel="noreferrer">원문 <FiExternalLink /></a>}</small>)}</div>;
+  return <div className="gpu-fit-evidence-sources" aria-label="장착 정보 출처"><strong>장착 정보 출처</strong>{safeSources.length === 0 ? <small>등록된 출처 메모 없음 · 제조사 매뉴얼 확인 필요</small> : safeSources.map((source) => <small key={`${source.category}-${source.note}-${source.url ?? ""}`}><b>{evidenceSourceIdentity(source)}</b> {source.note}{source.updatedAt ? ` · 확인 갱신 ${new Date(source.updatedAt).toLocaleDateString("ko-KR")}` : ""}{source.url && <a href={source.url} target="_blank" rel="noreferrer">원문 <FiExternalLink /></a>}</small>)}</div>;
 }
 
 function mmDetail(actualMm: number | undefined, limitMm: number | undefined, clearanceMm: number | undefined, actualLabel: string, limitLabel: string) {
@@ -138,18 +138,18 @@ export function GpuFitSummaryPanel({ fit, gpu, computerCase, psu }: { fit: GpuFi
   const thicknessValue = fit.thickness.actualMm === undefined ? "확인 필요" : `${fit.thickness.actualMm}mm`;
   const powerValue = fit.power.psuWattageW === undefined ? "확인 필요" : `${fit.power.psuWattageW}W PSU`;
   const connectorValue = !fit.connector.requirementsKnown ? "요구 정보 확인 필요" : fit.connector.options.length === 0 ? "보조전원 없음" : fit.connector.matchedOptionIndex !== undefined ? `경로 ${fit.connector.matchedOptionIndex + 1}` : "경로 확인 필요";
-  return <section className={`gpu-fit-summary-panel ${toneFor(displayStatus)}`} aria-label="GPU 실장·전원 요약" data-testid="gpu-fit-summary-panel">
-    <div className="gpu-fit-summary-heading"><div><p className="eyebrow">GPU FIT DOSSIER</p><h2>GPU 실장·전원 요약</h2><p>{gpu.name}를 기준으로 케이스 장착 치수와 PSU 전원 경로를 한 번에 확인합니다.</p></div><div className="gpu-fit-summary-badge"><FiMonitor /><strong>{STATUS_LABELS[displayStatus]}</strong></div></div>
+  return <section className={`gpu-fit-summary-panel ${toneFor(displayStatus)}`} aria-label="GPU 장착·전원 요약" data-testid="gpu-fit-summary-panel">
+    <div className="gpu-fit-summary-heading"><div><p className="eyebrow">GPU FIT</p><h2>GPU 장착·전원 요약</h2><p>{gpu.name}를 기준으로 케이스 장착 치수와 PSU 전원 경로를 한 번에 확인합니다.</p></div><div className="gpu-fit-summary-badge"><FiMonitor /><strong>{STATUS_LABELS[displayStatus]}</strong></div></div>
     <div className="gpu-fit-summary-context"><span><FiMonitor /> GPU · {gpu.name}</span><span><FiBox /> 케이스 · {computerCase?.name ?? "미선택"}</span><span><FiZap /> PSU · {psu?.name ?? "미선택"}</span></div>
     <div className="gpu-fit-metrics">
       <FitMetric icon={FiBox} label="케이스 장착 길이" value={fit.length.actualMm !== undefined && fit.length.limitMm !== undefined ? `${fit.length.actualMm} / ${fit.length.limitMm}mm` : "확인 필요"} detail={mmDetail(fit.length.actualMm, fit.length.limitMm, fit.length.clearanceMm, "GPU", "케이스 허용")} status={fit.length.status} />
       <FitMetric icon={FiLayers} label="두께·슬롯 간섭" value={thicknessValue} detail={fit.thickness.actualMm === undefined ? "GPU 두께 원문 확인 필요" : `${fit.thickness.warningThresholdMm}mm 이상이면 인접 슬롯·측판을 확인합니다.`} status={fit.thickness.status} />
       <FitMetric icon={FiZap} label="PSU 전력 여유" value={powerValue} detail={powerDetail(fit.power)} status={fit.power.status} />
       <FitMetric icon={FiMonitor} label="보조전원 연결" value={connectorValue} detail={connectorStatusText} status={fit.connector.status} />
-      {purchaseEvidence.physical !== "not_applicable" && <FitMetric icon={FiLayers} label="물리 슬롯·케이블" value={fit.physical.gpuSlotOccupancy === undefined ? "검수 필요" : `${fit.physical.gpuSlotOccupancy} 슬롯`} detail={physicalEvidenceDetail(fit.physical, purchaseEvidence.physical)} status={purchaseEvidence.physical} />}
-      {purchaseEvidence.pcieCableTopology !== "not_applicable" && <FitMetric icon={FiZap} label="PCIe 케이블 분배" value={fit.connector.psuIndependentPcieCableRuns === undefined ? "검수 필요" : `${fit.connector.psuIndependentPcieCableRuns}개 런`} detail={cableTopologyEvidenceDetail(fit.connector, purchaseEvidence.pcieCableTopology)} status={purchaseEvidence.pcieCableTopology} />}
+      {purchaseEvidence.physical !== "not_applicable" && <FitMetric icon={FiLayers} label="물리 슬롯·케이블" value={fit.physical.gpuSlotOccupancy === undefined ? "확인 필요" : `${fit.physical.gpuSlotOccupancy} 슬롯`} detail={physicalEvidenceDetail(fit.physical, purchaseEvidence.physical)} status={purchaseEvidence.physical} />}
+      {purchaseEvidence.pcieCableTopology !== "not_applicable" && <FitMetric icon={FiZap} label="PCIe 케이블 분배" value={fit.connector.psuIndependentPcieCableRuns === undefined ? "확인 필요" : `${fit.connector.psuIndependentPcieCableRuns}개 런`} detail={cableTopologyEvidenceDetail(fit.connector, purchaseEvidence.pcieCableTopology)} status={purchaseEvidence.pcieCableTopology} />}
     </div>
-    <div className="gpu-fit-connector-panel"><div><strong>GPU가 요구하는 연결 선택지</strong><small>{optionText(fit.connector.options, fit.connector.requirementsKnown, fit.connector.adapterOptionIndices)}</small></div><div><strong>PSU에서 확인된 커넥터</strong><small>{connectorText(fit.connector.connectors)}</small><small>{psuStructureText(fit.connector.psuCableType, fit.connector.psuRailType)}</small></div>{fit.connector.optionFits.length > 0 && <div className="gpu-fit-connector-options"><strong>선택지별 판정</strong>{fit.connector.optionFits.map((option, index) => <span className={option.status === "compatible" ? "good" : option.status === "blocker" ? "danger" : "unknown"} key={`${index}-${option.status}`}>{optionFitText(option, index, fit.connector.adapterOptionIndices.includes(index))}</span>)}</div>}</div>
+    <div className="gpu-fit-connector-panel"><div><strong>GPU가 요구하는 연결 선택지</strong><small>{optionText(fit.connector.options, fit.connector.requirementsKnown, fit.connector.adapterOptionIndices)}</small></div><div><strong>PSU에서 확인된 커넥터</strong><small>{connectorText(fit.connector.connectors)}</small><small>{psuStructureText(fit.connector.psuCableType, fit.connector.psuRailType)}</small></div>{fit.connector.optionFits.length > 0 && <div className="gpu-fit-connector-options"><strong>선택지별 결과</strong>{fit.connector.optionFits.map((option, index) => <span className={option.status === "compatible" ? "good" : option.status === "blocker" ? "danger" : "unknown"} key={`${index}-${option.status}`}>{optionFitText(option, index, fit.connector.adapterOptionIndices.includes(index))}</span>)}</div>}</div>
     {purchaseEvidence.status !== "not_applicable" && <EvidenceSourceList sources={purchaseEvidence.sources} />}
     <div className="gpu-fit-actions"><div><strong>다음 행동</strong>{actionText(fit, computerCase, psu).map((action) => <p key={action}><FiCheckCircle /> {action}</p>)}</div></div>
     <p className="gpu-fit-note"><FiInfo /> 수치가 확인된 경우에만 길이·전력 여유를 계산합니다. PSU 커넥터 개수만으로 독립 케이블·레일 구성이나 케이블 굽힘 반경을 추정하지 않으며, 실제 조립 전 제조사 매뉴얼·케이스 전면 구조·측면 여유를 별도로 확인해야 합니다.</p>

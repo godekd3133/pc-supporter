@@ -11,9 +11,9 @@ export type CandidateDecisionInput = {
 };
 
 const TRUST_LABELS: Record<RecommendationTrustLevel, string> = {
-  high: "높은 근거",
-  medium: "보통 근거",
-  low: "낮은 근거"
+  high: "높음",
+  medium: "보통",
+  low: "낮음"
 };
 
 function uniqueReasons(reasons: string[]) {
@@ -32,8 +32,8 @@ export function candidateDecisionSummaryFor(input: CandidateDecisionInput): Cand
     : status === "review"
       ? [input.resolvesTarget === false ? "현재 문제 해결 여부 확인 필요" : "추가 확인 필요"]
       : ["현재 문제 해결", "새 차단 없음"];
-  if (input.physicalStatus === "verified") summaryParts.push("물리 근거 확인됨");
-  if (input.physicalStatus === "review") summaryParts.push("물리 근거 확인 필요");
+  if (input.physicalStatus === "verified") summaryParts.push("장착 정보 확인됨");
+  if (input.physicalStatus === "review") summaryParts.push("장착 정보 확인 필요");
   if (input.catalogSpecSourceCheckNeedsReview === true) summaryParts.push("제조사 원문 확인 필요");
   if (input.freshness) summaryParts.push(DATA_FRESHNESS_LABELS[input.freshness]);
   if (input.recommendationTrustLevel) summaryParts.push(TRUST_LABELS[input.recommendationTrustLevel]);
@@ -41,10 +41,10 @@ export function candidateDecisionSummaryFor(input: CandidateDecisionInput): Cand
   const reasons = [
     ...(input.reasons ?? []),
     ...(input.resolvesTarget === false ? ["현재 문제를 직접 해결하는 후보인지 추가 확인해야 합니다."] : []),
-    ...(input.physicalStatus === "review" ? ["물리 근거가 확인 필요 상태라 실제 장착 전에 제조사 원문을 확인해야 합니다."] : []),
+    ...(input.physicalStatus === "review" ? ["장착 정보가 확인 필요 상태라 실제 장착 전에 제조사 원문을 확인해야 합니다."] : []),
     ...(input.catalogSpecSourceCheckNeedsReview === true ? ["수동 보강 스펙의 제조사 원문 URL 접근과 모델 식별을 확인해야 후보를 적용할 수 있습니다."] : []),
     ...(input.freshness === "stale" || input.freshness === "unknown" ? [`데이터가 ${DATA_FRESHNESS_LABELS[input.freshness]} 상태입니다.`] : []),
-    ...(input.recommendationTrustLevel === "low" ? ["추천 근거가 낮아 후보 적용 전에 스펙과 호환 결과를 다시 확인해야 합니다."] : [])
+    ...(input.recommendationTrustLevel === "low" ? ["추천 점수가 낮아 후보 적용 전에 스펙과 호환 결과를 다시 확인해야 합니다."] : [])
   ];
   return {
     status,

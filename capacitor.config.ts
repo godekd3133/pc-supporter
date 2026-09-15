@@ -15,20 +15,20 @@ const config: CapacitorConfig = {
   appId: "com.godekd3133.pcsupporter",
   appName: "PC Supporter",
   webDir: webDirectory,
-  backgroundColor: "#f4f7f8",
+  backgroundColor: "#f9fafb",
   ios: {
     contentInset: "never",
-    backgroundColor: "#f4f7f8"
+    backgroundColor: "#f9fafb"
   },
   android: {
-    backgroundColor: "#f4f7f8",
+    backgroundColor: "#f9fafb",
     ...(allowLocalHttpApi ? { allowMixedContent: true } : {})
   },
   plugins: {
     SplashScreen: {
       launchShowDuration: 0,
       launchAutoHide: true,
-      backgroundColor: "#122332",
+      backgroundColor: "#f9fafb",
       androidScaleType: "CENTER_CROP",
       showSpinner: false
     },

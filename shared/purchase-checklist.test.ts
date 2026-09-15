@@ -64,8 +64,8 @@ describe("purchase checklist", () => {
   it("exports checked and unchecked items without dropping the source detail", () => {
     const items = purchaseChecklistItemsFor(build, result);
     const text = purchaseChecklistTextFor(items.slice(0, 2), new Set([items[0].id]));
-    expect(text).toContain(`[x] 엔진 finding · ${items[0].title}`);
-    expect(text).toContain(`[ ] 엔진 finding · ${items[1].title}`);
+    expect(text).toContain(`[x] 검사 항목 · ${items[0].title}`);
+    expect(text).toContain(`[ ] 검사 항목 · ${items[1].title}`);
     expect(text).toContain(items[0].detail);
   });
 

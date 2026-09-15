@@ -1,4 +1,5 @@
 import type { BuildSelection, CatalogChangeRecord, CatalogChangeValueDiff } from "./types";
+import { CATALOG_DATA_QUALITY_CHANGE_FIELD_LABEL, isCatalogDataQualityChangeField } from "./types";
 
 function selectedIdsFor(build: BuildSelection) {
   return [
@@ -48,7 +49,7 @@ export function savedBuildCatalogChangeValueDiffsFor(record: CatalogChangeRecord
   }
   if (record.changedFields.includes("원문 스펙")) diffs.push(fallbackValueDiff("원문 스펙", undefined, undefined));
   if (record.changedFields.includes("정규화 스펙")) diffs.push(fallbackValueDiff("정규화 스펙", undefined, undefined));
-  if (record.changedFields.includes("데이터 품질")) diffs.push(fallbackValueDiff("데이터 품질", record.previousDataQuality, record.nextDataQuality));
+  if (record.changedFields.some(isCatalogDataQualityChangeField)) diffs.push(fallbackValueDiff(CATALOG_DATA_QUALITY_CHANGE_FIELD_LABEL, record.previousDataQuality, record.nextDataQuality));
   if (record.changedFields.includes("누락 필드")) {
     const previous = record.previousMissingFields.length === 0 ? "없음" : record.previousMissingFields.join(" · ");
     const next = record.nextMissingFields.length === 0 ? "없음" : record.nextMissingFields.join(" · ");

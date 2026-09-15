@@ -92,7 +92,7 @@ describe("recommendation trust", () => {
 
     expect(reference).toMatchObject({ priceKnown: true, priceEvidence: "reference" });
     expect(reference.score).toBeLessThan(live.score);
-    expect(reference.reasons).toContain("프로젝트 기준가가 있어 총액 비교에 참고할 수 있지만 실제 판매가로 확정하지 않습니다.");
+    expect(reference.reasons).toContain("참고 가격가 있어 총액 비교에 참고할 수 있지만 실제 판매가로 확정하지 않습니다.");
   });
 
   it("keeps a safe candidate highly rated while reporting unrelated build issues separately", () => {
@@ -127,7 +127,7 @@ describe("recommendation trust", () => {
 
     expect(official.score).toBeGreaterThan(unclassified.score);
     expect(official.reasons).toContain("벤치마크 출처: 제조사·공식 측정표");
-    expect(unclassified.reasons).toContain("벤치마크 출처 유형이 분류되지 않았습니다.");
+    expect(unclassified.reasons).toContain("벤치마크 출처이 분류되지 않았습니다.");
   });
 
   it("downgrades trust and exposes stale benchmark freshness", () => {
@@ -204,8 +204,8 @@ describe("recommendation trust", () => {
 
     expect(result).toMatchObject({ level: "medium", catalogSpecSourceCheckNeedsReview: true });
     expect(result.reasons).toEqual(expect.arrayContaining([
-      "제조사 근거 수동 보강값",
-      "제조사 근거 원문 URL 접근·모델 식별을 확인하기 전입니다."
+      "제조사 정보 수동 보강값",
+      "제조사 정보 원문 URL 접근·모델 식별을 확인하기 전입니다."
     ]));
   });
 
@@ -249,7 +249,7 @@ describe("recommendation trust", () => {
     });
 
     expect(result).toMatchObject({ level: "high", catalogSpecSourceCheckNeedsReview: false });
-    expect(result.reasons).toContain("제조사 근거 원문 URL 접근과 모델 식별을 확인했습니다.");
+    expect(result.reasons).toContain("제조사 정보 원문 URL 접근과 모델 식별을 확인했습니다.");
   });
 
   it.each([
@@ -294,7 +294,7 @@ describe("recommendation trust", () => {
     });
 
     expect(result).toMatchObject({ level: "medium", catalogSpecSourceCheckNeedsReview: true });
-    expect(result.reasons).toContain("제조사 근거 원문 URL 접근·모델 식별을 다시 확인해야 합니다.");
+    expect(result.reasons).toContain("제조사 정보 원문 URL 접근·모델 식별을 다시 확인해야 합니다.");
   });
 
   it("downgrades trust when a candidate leaves unknowns or has stale incomplete data", () => {

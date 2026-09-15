@@ -78,7 +78,7 @@ describe("saved build monitor assessment", () => {
     const labelOnlyAfter = savedBuildCheckSnapshotFor(result({ analysis: { ...result().analysis, scoreLabel: "균형형", confidence: "limited" } }));
     const labelOnlyTransition = savedBuildCheckTransitionSummaryFor(before, labelOnlyAfter);
     expect(labelOnlyTransition).toMatchObject({ analysisChanged: true, analysisScoreDelta: 0 });
-    expect(savedBuildMonitorAssessmentFor(labelOnlyAfter, labelOnlyTransition).summary).toContain("성능 분석 라벨·근거 수준");
+    expect(savedBuildMonitorAssessmentFor(labelOnlyAfter, labelOnlyTransition).summary).toContain("성능 분석 라벨·정보 수준");
   });
 
   it("treats a resource-budget regression as monitor attention even when compatibility counts stay clear", () => {

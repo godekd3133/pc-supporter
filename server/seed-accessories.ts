@@ -1,6 +1,6 @@
 import type { AccessoryItem } from "../shared/types";
 
-// 외부 수집 결과가 없는 새 checkout에서도 주변 부품 탐색·호환 판정을
+// 외부 수집 결과가 없는 새 checkout에서도 주변 부품 탐색·호환 결과를
 // 재현할 수 있도록 제공하는 개발용 starter catalog입니다. 실판매가나
 // 최신 재고를 의미하지 않으며, live 수집 결과가 들어오면 merge됩니다.
 const updatedAt = "2026-08-26T00:00:00.000Z";

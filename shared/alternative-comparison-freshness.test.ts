@@ -31,7 +31,7 @@ describe("alternative comparison freshness", () => {
 
   it("marks a newer catalog or engine as requiring recheck", () => {
     expect(alternativeComparisonFreshnessFor(snapshot(), meta({ catalogUpdatedAt: "2026-09-02T00:00:00.000Z" }))).toMatchObject({ tone: "stale", label: "현재 기준 재확인 권장" });
-    expect(alternativeComparisonFreshnessFor(snapshot(), meta({ engineVersion: "engine-2" }))).toMatchObject({ tone: "stale", detail: expect.stringContaining("엔진 engine-1 → engine-2") });
+    expect(alternativeComparisonFreshnessFor(snapshot(), meta({ engineVersion: "engine-2" }))).toMatchObject({ tone: "stale", detail: expect.stringContaining("검사 버전 engine-1 → engine-2") });
   });
 
   it("reports the same current basis and handles malformed legacy dates safely", () => {

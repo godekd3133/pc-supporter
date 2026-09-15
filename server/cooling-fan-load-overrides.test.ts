@@ -45,7 +45,7 @@ describe("cooling fan motor current evidence", () => {
     expect(invalid.errors).toEqual(expect.arrayContaining([
       "팬 소비전류(fanCurrentA)가 필요합니다.",
       "제조사 모델/SKU(manufacturerModel)가 필요합니다.",
-      "검수 근거 sourceNote가 필요합니다.",
+      "확인 정보 sourceNote가 필요합니다.",
       "sourceUrl은 HTTPS 주소만 사용할 수 있습니다."
     ]));
   });
@@ -68,7 +68,7 @@ describe("cooling fan motor current evidence", () => {
 
   it("applies override provenance and reports raw-vs-manual coverage separately", () => {
     const rawFan = accessory({ id: "raw-fan", rawSpecText: "팬 소비전류: 0.18A" });
-    const missingFan = accessory({ id: "missing-fan", name: "근거 없는 팬" });
+    const missingFan = accessory({ id: "missing-fan", name: "정보 없는 팬" });
     const override = {
       accessoryId: missingFan.id,
       fanCurrentA: 0.22,

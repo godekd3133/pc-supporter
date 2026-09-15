@@ -49,7 +49,7 @@ function preview(sourceUrl: string, identityStatus: Benchmark3DMarkImportPreview
     score,
     gpuName: portRoyal ? "AMD Radeon RX 7900 XTX" : "NVIDIA GeForce RTX 4060",
     identityStatus,
-    identityDetail: identityStatus === "matched" ? "일치" : "수동 검수",
+    identityDetail: identityStatus === "matched" ? "일치" : "수동 확인",
     fetchedAt: "2026-09-06T00:00:00.000Z"
   };
 }

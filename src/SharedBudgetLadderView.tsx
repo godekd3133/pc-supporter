@@ -148,7 +148,7 @@ function assignSelectionCategory(selection: BuildSelection, category: PartCatego
 function SharedBudgetLadderRefreshComparison({ before, after, outcomes, catalogSnapshotAt, onApplyDraft, applying, onSaveSnapshot, savedSnapshot, savingSnapshot, onRevokeSnapshot }: { before: BudgetLadderExportPayload; after: BudgetLadderExportPayload; outcomes: BudgetLadderOutcome[]; catalogSnapshotAt?: string; onApplyDraft: (draft: BuildGenerationResult, checkNow: boolean) => Promise<void>; applying: boolean; onSaveSnapshot: () => Promise<void>; savedSnapshot: BudgetLadderShareLink | null; savingSnapshot: boolean; onRevokeSnapshot: () => Promise<void> }) {
   return <section className="shared-budget-ladder-refresh" aria-label="현재 카탈로그 재생성 비교">
     <div className="shared-budget-ladder-refresh-heading">
-      <div><p className="eyebrow">CURRENT CATALOG RECHECK</p><h3>현재 카탈로그로 다시 생성한 결과</h3><p>공유 당시 snapshot과 현재 카탈로그로 독립적으로 생성한 결과를 구간별로 비교합니다.</p></div>
+      <div><p className="eyebrow">CURRENT CATALOG RECHECK</p><h3>현재 카탈로그로 다시 생성한 결과</h3><p>공유 당시 저장본과 현재 카탈로그로 독립적으로 생성한 결과를 구간별로 비교합니다.</p></div>
       <span><FiRefreshCw /> {catalogSnapshotAt ? `현재 기준 ${new Date(catalogSnapshotAt).toLocaleString("ko-KR")}` : "현재 기준 확인 필요"}</span>
     </div>
     <div className="shared-budget-ladder-refresh-grid">
@@ -165,13 +165,13 @@ function SharedBudgetLadderRefreshComparison({ before, after, outcomes, catalogS
         return <article className={afterItem?.status === "생성 실패" ? "failed" : ""} key={beforeItem.id}>
           <div className="shared-budget-ladder-refresh-card-top"><strong>{beforeItem.label}</strong><span>{beforeItem.status} → {afterItem?.status ?? "현재 결과 없음"}</span></div>
           {beforeItem.status === "생성 실패"
-            ? <p className="shared-budget-ladder-refresh-failure"><FiXCircle /> 공유 당시 생성 실패: {beforeItem.error ?? "공유 당시 이 구간을 생성하지 못했습니다."} · 현재 결과 {afterItem?.status ?? "없음"}{beforeItem.diagnostics?.length ? ` · 근거 ${sharedBudgetLadderDiagnosticText(beforeItem)}` : ""}</p>
+            ? <p className="shared-budget-ladder-refresh-failure"><FiXCircle /> 공유 당시 생성 실패: {beforeItem.error ?? "공유 당시 이 구간을 생성하지 못했습니다."} · 현재 결과 {afterItem?.status ?? "없음"}{beforeItem.diagnostics?.length ? ` · 정보 ${sharedBudgetLadderDiagnosticText(beforeItem)}` : ""}</p>
             : afterItem?.status === "생성 실패"
-              ? <p className="shared-budget-ladder-refresh-failure"><FiXCircle /> {afterItem.error ?? "현재 카탈로그에서 이 구간을 생성하지 못했습니다."}{afterItem.diagnostics?.length ? ` · 근거 ${sharedBudgetLadderDiagnosticText(afterItem)}` : ""}</p>
+              ? <p className="shared-budget-ladder-refresh-failure"><FiXCircle /> {afterItem.error ?? "현재 카탈로그에서 이 구간을 생성하지 못했습니다."}{afterItem.diagnostics?.length ? ` · 정보 ${sharedBudgetLadderDiagnosticText(afterItem)}` : ""}</p>
             : <>
               <div className="shared-budget-ladder-refresh-metrics">
                 <div><span>예상 합계</span><strong>{beforeItem.totalPriceWon === undefined ? "-" : `${beforeItem.totalPriceWon.toLocaleString("ko-KR")}원`} <em>→ {afterItem?.totalPriceWon === undefined ? "-" : `${afterItem.totalPriceWon.toLocaleString("ko-KR")}원`}</em></strong><small>{totalDelta === undefined ? "비교 불가" : sharedBudgetLadderSignedWon(totalDelta)}</small></div>
-                <div><span>위험 카운트 변화</span><strong>{riskDelta}</strong><small>{scoreDelta === undefined ? "분석 지수 비교 불가" : `분석 지수 ${scoreDelta >= 0 ? "+" : ""}${scoreDelta}점`}</small></div>
+                <div><span>위험 카운트 변화</span><strong>{riskDelta}</strong><small>{scoreDelta === undefined ? "분석 점수 비교 불가" : `분석 점수 ${scoreDelta >= 0 ? "+" : ""}${scoreDelta}점`}</small></div>
                 <div><span>예산 결과</span><strong>{sharedBudgetLadderResultText(beforeItem)} <em>→ {afterItem ? sharedBudgetLadderResultText(afterItem) : "-"}</em></strong><small>{beforeItem.priceComplete === false || afterItem?.priceComplete === false ? "가격 일부 확인 필요" : "가격 상태 포함"}</small></div>
               </div>
               {changedLines.length > 0
@@ -183,13 +183,13 @@ function SharedBudgetLadderRefreshComparison({ before, after, outcomes, catalogS
       })}
     </div>
     <p className="shared-budget-ladder-refresh-note"><FiInfo /> 현재 재생성 결과도 카탈로그·호환 규칙 기준의 새 초안입니다. 공유 당시 결과를 덮어쓰지 않으며, 실제 구매 전에는 가격·재고·BIOS·QVL을 다시 확인해야 합니다.</p>
-    <div className="shared-budget-ladder-refresh-save"><div><strong>최신 결과 저장</strong><span>현재 재생성 결과를 원본과 분리된 새 공유 snapshot으로 보관합니다.</span></div><button className="button button-secondary" type="button" onClick={() => void onSaveSnapshot()} disabled={savingSnapshot}><FiShare2 /> {savingSnapshot ? "새 snapshot 저장 중..." : "새 snapshot으로 공유"}</button>{savedSnapshot && <div className="shared-budget-ladder-refresh-share-preview" role="status"><label><span>v{savedSnapshot.versionNumber ?? 1} 새 공유 링크 · {savedSnapshot.expiresAt ? `${new Date(savedSnapshot.expiresAt).toLocaleString("ko-KR")} 만료` : "무기한"}</span><input aria-label="현재 재생성 결과 새 공유 링크" type="text" value={savedSnapshot.url} readOnly onFocus={(event) => event.currentTarget.select()} /></label><div>{savedSnapshot.parentId && <a className="text-button" href={`/budget-ladder/${encodeURIComponent(savedSnapshot.parentId)}`}><FiArrowLeft /> 원본 보기</a>}<a className="text-button" href={savedSnapshot.url}><FiShare2 /> 열기</a><button className="text-button danger-text-button" type="button" onClick={() => void onRevokeSnapshot()}><FiTrash2 /> 공유 취소</button></div></div>}</div>
+    <div className="shared-budget-ladder-refresh-save"><div><strong>최신 결과 저장</strong><span>현재 재생성 결과를 원본과 분리된 새 공유 저장본으로 보관합니다.</span></div><button className="button button-secondary" type="button" onClick={() => void onSaveSnapshot()} disabled={savingSnapshot}><FiShare2 /> {savingSnapshot ? "새 저장본 저장 중..." : "새 저장본으로 공유"}</button>{savedSnapshot && <div className="shared-budget-ladder-refresh-share-preview" role="status"><label><span>v{savedSnapshot.versionNumber ?? 1} 새 공유 링크 · {savedSnapshot.expiresAt ? `${new Date(savedSnapshot.expiresAt).toLocaleString("ko-KR")} 만료` : "무기한"}</span><input aria-label="현재 재생성 결과 새 공유 링크" type="text" value={savedSnapshot.url} readOnly onFocus={(event) => event.currentTarget.select()} /></label><div>{savedSnapshot.parentId && <a className="text-button" href={`/budget-ladder/${encodeURIComponent(savedSnapshot.parentId)}`}><FiArrowLeft /> 원본 보기</a>}<a className="text-button" href={savedSnapshot.url}><FiShare2 /> 열기</a><button className="text-button danger-text-button" type="button" onClick={() => void onRevokeSnapshot()}><FiTrash2 /> 공유 취소</button></div></div>}</div>
   </section>;
 }
 
 function SharedBudgetLadderLineage({ lineage }: { lineage: BudgetLadderShareLineageResponse }) {
   if (lineage.entries.length < 2) return null;
-  return <nav className="shared-budget-ladder-lineage" aria-label="예산 비교 버전 이력"><div><strong>예산 비교 버전 이력</strong><span>원본과 최신 재생성 snapshot을 분리해 보관합니다.</span></div><div className="shared-budget-ladder-lineage-list">{lineage.entries.map((entry) => entry.expired ? <span className="expired" key={entry.id}>v{entry.versionNumber} · 만료</span> : <a className={entry.id === lineage.currentId ? "current" : ""} href={`/budget-ladder/${encodeURIComponent(entry.id)}`} key={entry.id}>v{entry.versionNumber}{entry.id === lineage.currentId ? " · 현재" : " · 이전"}</a>)}</div></nav>;
+  return <nav className="shared-budget-ladder-lineage" aria-label="예산 비교 버전 이력"><div><strong>예산 비교 버전 이력</strong><span>원본과 최신 재생성 저장본을 분리해 보관합니다.</span></div><div className="shared-budget-ladder-lineage-list">{lineage.entries.map((entry) => entry.expired ? <span className="expired" key={entry.id}>v{entry.versionNumber} · 만료</span> : <a className={entry.id === lineage.currentId ? "current" : ""} href={`/budget-ladder/${encodeURIComponent(entry.id)}`} key={entry.id}>v{entry.versionNumber}{entry.id === lineage.currentId ? " · 현재" : " · 이전"}</a>)}</div></nav>;
 }
 
 const BUDGET_LADDER_TREND_COLORS = ["#6f9bbd", "#6f9b87", "#9b7fb0"];
@@ -230,7 +230,7 @@ function SharedBudgetLadderVersionTrendGraph({ snapshots, metric, title, descrip
 }
 
 function SharedBudgetLadderVersionTrendCharts({ snapshots }: { snapshots: BudgetLadderShareSnapshot[] }) {
-  return <section className="shared-budget-ladder-version-trends" aria-label="버전별 예산 비교 추이"><div className="shared-budget-ladder-version-trends-heading"><div><p className="eyebrow">VERSION TRENDS</p><h3>버전별 변화 추이</h3><p>선택한 snapshot 사이의 예산 구간별 합계와 카탈로그 분석 지수를 실제 확인값만 연결해 보여줍니다.</p></div><span>{snapshots.length}개 버전</span></div><div className="shared-budget-ladder-version-trends-grid"><SharedBudgetLadderVersionTrendGraph snapshots={snapshots} metric="total" title="예상 합계 추이" description="단위: 천원 · 저장 당시 합계" /><SharedBudgetLadderVersionTrendGraph snapshots={snapshots} metric="analysis" title="카탈로그 분석 지수 추이" description="단위: 점 · 실제 FPS 아님" /></div><p className="shared-budget-ladder-version-trends-note"><FiInfo /> 분석 점수나 가격이 없는 버전은 점을 연결하지 않고 공백으로 남깁니다. 그래프는 가격·스펙 기반 참고값이며 성능 보증이 아닙니다.</p></section>;
+  return <section className="shared-budget-ladder-version-trends" aria-label="버전별 예산 비교 추이"><div className="shared-budget-ladder-version-trends-heading"><div><p className="eyebrow">VERSION TRENDS</p><h3>버전별 변화 추이</h3><p>선택한 저장본 사이의 예산 구간별 합계와 카탈로그 분석 점수를 실제 확인값만 연결해 보여줍니다.</p></div><span>{snapshots.length}개 버전</span></div><div className="shared-budget-ladder-version-trends-grid"><SharedBudgetLadderVersionTrendGraph snapshots={snapshots} metric="total" title="예상 합계 추이" description="단위: 천원 · 저장 당시 합계" /><SharedBudgetLadderVersionTrendGraph snapshots={snapshots} metric="analysis" title="카탈로그 분석 점수 추이" description="단위: 점 · 실제 FPS 아님" /></div><p className="shared-budget-ladder-version-trends-note"><FiInfo /> 분석 점수나 가격이 없는 버전은 점을 연결하지 않고 공백으로 남깁니다. 그래프는 가격·스펙 기반 참고값이며 성능 보증이 아닙니다.</p></section>;
 }
 
 function SharedBudgetLadderVersionComparison({ lineage, currentSnapshot, onApplyVersion, onApplyMergedSelection, onPreviewMergedSelection }: { lineage: BudgetLadderShareLineageResponse; currentSnapshot: BudgetLadderShareSnapshot; onApplyVersion: (snapshot: BudgetLadderShareSnapshot) => Promise<void>; onApplyMergedSelection: (selection: BuildSelection, request: BuildGenerationRequest, checkNow: boolean) => Promise<void>; onPreviewMergedSelection: (selection: BuildSelection, request: BuildGenerationRequest, signal: AbortSignal) => Promise<CompatibilityResult> }) {
@@ -306,16 +306,16 @@ function SharedBudgetLadderVersionComparison({ lineage, currentSnapshot, onApply
   }
   if (availableEntries.length < 2) return null;
   return <section className="shared-budget-ladder-version-comparison" aria-label="예산 비교 버전 상세 비교">
-    <div className="shared-budget-ladder-version-comparison-heading"><div><p className="eyebrow">VERSION COMPARISON</p><h3>예산 비교 버전 한눈에 보기</h3><p>같은 lineage에서 최대 3개 snapshot을 선택해 당시 조건·금액·위험·부품 구성을 나란히 비교합니다.</p></div><span>{availableEntries.length}개 버전 중 {selectedIds.length}개 선택</span></div>
-    <div className="shared-budget-ladder-version-controls" role="group" aria-label="비교할 예산 snapshot 선택">{selectedIds.map((id, index) => <label key={`version-select-${index}`}><span>비교 열 {index + 1}</span><select aria-label={`비교 버전 ${index + 1}`} value={id} onChange={(event) => { setShowDifferencesOnly(false); setVersion(index, event.target.value); }}>{availableEntries.map((entry) => <option value={entry.id} disabled={selectedIds.includes(entry.id) && entry.id !== id} key={entry.id}>v{entry.versionNumber} · {entry.id === lineage.currentId ? "현재 링크" : entry.name}</option>)}</select></label>)}</div>
+    <div className="shared-budget-ladder-version-comparison-heading"><div><p className="eyebrow">VERSION COMPARISON</p><h3>예산 비교 버전 한눈에 보기</h3><p>같은 lineage에서 최대 3개 저장본을 선택해 당시 조건·금액·위험·부품 구성을 나란히 비교합니다.</p></div><span>{availableEntries.length}개 버전 중 {selectedIds.length}개 선택</span></div>
+    <div className="shared-budget-ladder-version-controls" role="group" aria-label="비교할 예산 저장본 선택">{selectedIds.map((id, index) => <label key={`version-select-${index}`}><span>비교 열 {index + 1}</span><select aria-label={`비교 버전 ${index + 1}`} value={id} onChange={(event) => { setShowDifferencesOnly(false); setVersion(index, event.target.value); }}>{availableEntries.map((entry) => <option value={entry.id} disabled={selectedIds.includes(entry.id) && entry.id !== id} key={entry.id}>v{entry.versionNumber} · {entry.id === lineage.currentId ? "현재 링크" : entry.name}</option>)}</select></label>)}</div>
     <div className="shared-budget-ladder-version-toolbar"><span>결과가 달라진 행 {changedRows.length}개</span><button className={showDifferencesOnly ? "selected" : ""} type="button" aria-pressed={showDifferencesOnly} onClick={() => setShowDifferencesOnly((current) => !current)} disabled={changedRows.length === 0}>변경된 항목만 보기</button></div>
-    {loading && <div className="shared-budget-ladder-version-state" role="status"><FiLoader className="spin" /> 선택한 버전 snapshot을 불러오는 중...</div>}
+    {loading && <div className="shared-budget-ladder-version-state" role="status"><FiLoader className="spin" /> 선택한 버전 저장본을 불러오는 중...</div>}
     {error && <div className="shared-budget-ladder-version-state error" role="alert"><FiXCircle /> {error}</div>}
-    {!loading && !error && selectedSnapshots.length === selectedIds.length && <div className="shared-budget-ladder-version-table-wrap"><table><caption>{showDifferencesOnly ? "선택한 버전 사이에서 결과가 달라진 항목만 표시합니다." : "선택한 예산 비교 snapshot의 저장 당시 결과입니다."}</caption><thead><tr><th scope="col">비교 항목</th>{selectedSnapshots.map((snapshot) => <th scope="col" key={snapshot.id}><span>v{snapshot.versionNumber ?? 1}</span><small>{selectedEntryFor(snapshot.id)?.id === lineage.currentId ? "현재 링크" : "snapshot"}</small></th>)}</tr></thead><tbody>{visibleRows.length > 0 ? visibleRows.map((row) => <tr key={row.id}><th scope="row">{row.label}</th>{row.values.map((value, index) => <td className={row.diffable && row.changed && index > 0 ? "changed" : undefined} key={`${row.id}-${selectedSnapshots[index].id}`}>{value}</td>)}</tr>) : <tr><td className="shared-budget-ladder-version-empty" colSpan={selectedSnapshots.length + 1}>선택한 버전 사이에 달라진 결과 항목이 없습니다.</td></tr>}</tbody></table></div>}
+    {!loading && !error && selectedSnapshots.length === selectedIds.length && <div className="shared-budget-ladder-version-table-wrap"><table><caption>{showDifferencesOnly ? "선택한 버전 사이에서 결과가 달라진 항목만 표시합니다." : "선택한 예산 비교 저장본의 저장 당시 결과입니다."}</caption><thead><tr><th scope="col">비교 항목</th>{selectedSnapshots.map((snapshot) => <th scope="col" key={snapshot.id}><span>v{snapshot.versionNumber ?? 1}</span><small>{selectedEntryFor(snapshot.id)?.id === lineage.currentId ? "현재 링크" : "snapshot"}</small></th>)}</tr></thead><tbody>{visibleRows.length > 0 ? visibleRows.map((row) => <tr key={row.id}><th scope="row">{row.label}</th>{row.values.map((value, index) => <td className={row.diffable && row.changed && index > 0 ? "changed" : undefined} key={`${row.id}-${selectedSnapshots[index].id}`}>{value}</td>)}</tr>) : <tr><td className="shared-budget-ladder-version-empty" colSpan={selectedSnapshots.length + 1}>선택한 버전 사이에 달라진 결과 항목이 없습니다.</td></tr>}</tbody></table></div>}
     {!loading && !error && selectedSnapshots.length === selectedIds.length && <SharedBudgetLadderVersionTrendCharts snapshots={selectedSnapshots} />}
     {!loading && !error && selectedSnapshots.length === selectedIds.length && <SharedBudgetLadderPartialMergePanel snapshots={selectedSnapshots} onApplyMergedSelection={onApplyMergedSelection} onPreviewMergedSelection={onPreviewMergedSelection} />}
     {!loading && !error && selectedSnapshots.length === selectedIds.length && <div className="shared-budget-ladder-version-apply-actions" aria-label="선택 버전 적용">{selectedSnapshots.map((snapshot) => <button className="button button-light" type="button" key={`${snapshot.id}-apply`} onClick={() => void applyVersion(snapshot)} disabled={!snapshot.request || applyingVersionId !== null}><FiActivity /> {applyingVersionId === snapshot.id ? "적용 준비 중..." : `v${snapshot.versionNumber ?? 1} 조건으로 현재 구성 시작`}</button>)}</div>}
-    <p className="shared-budget-ladder-version-note"><FiInfo /> 버전 비교는 저장된 snapshot을 읽기 전용으로 나란히 보여줍니다. 현재 카탈로그로 다시 계산하려면 각 버전의 `현재 기준 재생성`을 사용하세요.</p>
+    <p className="shared-budget-ladder-version-note"><FiInfo /> 버전 비교는 저장된 저장본을 읽기 전용으로 나란히 보여줍니다. 현재 카탈로그로 다시 계산하려면 각 버전의 `현재 기준 재생성`을 사용하세요.</p>
   </section>;
 }
 
@@ -355,7 +355,7 @@ function SharedBudgetLadderPartialMergePanel({ snapshots, onApplyMergedSelection
     setApplying(false);
   }, [sourceSnapshots.map((snapshot) => snapshot.id).join(","), fallbackSourceId]);
 
-  if (sourceSnapshots.length === 0) return <section className="shared-budget-ladder-merge" aria-label="예산 비교 부분 병합"><div className="shared-budget-ladder-merge-heading"><div><p className="eyebrow">PARTIAL MERGE</p><h3>범주별 부분 병합</h3><p>구형 snapshot에는 실제 부품 ID가 없어 부분 병합을 제공하지 않습니다.</p></div></div><p className="shared-budget-ladder-merge-unavailable"><FiInfo /> 새 snapshot으로 저장한 버전부터 부분 병합을 사용할 수 있습니다.</p></section>;
+  if (sourceSnapshots.length === 0) return <section className="shared-budget-ladder-merge" aria-label="예산 비교 부분 병합"><div className="shared-budget-ladder-merge-heading"><div><p className="eyebrow">PARTIAL MERGE</p><h3>범주별 부분 병합</h3><p>구형 저장본에는 실제 부품 ID가 없어 부분 병합을 제공하지 않습니다.</p></div></div><p className="shared-budget-ladder-merge-unavailable"><FiInfo /> 새 저장본으로 저장한 버전부터 부분 병합을 사용할 수 있습니다.</p></section>;
 
   function mergedSelectionFor() {
     const base = targetSelectionFor(sourceSnapshots.at(-1)!);
@@ -469,7 +469,7 @@ export function SharedBudgetLadderView({ onBack, onToast, onApplyDraft, onApplyM
 
   async function refreshAgainstCurrentCatalog() {
     if (!snapshot?.request) {
-      setRefreshState({ status: "error", error: "이 공유 snapshot에는 재생성에 필요한 원래 조건이 없습니다." });
+      setRefreshState({ status: "error", error: "이 공유 저장본에는 재생성에 필요한 원래 조건이 없습니다." });
       return;
     }
     refreshAbortControllerRef.current?.abort();
@@ -565,13 +565,13 @@ export function SharedBudgetLadderView({ onBack, onToast, onApplyDraft, onApplyM
       try {
         await navigator.clipboard.writeText(url);
         if (!mountedRef.current || mutationRequestVersionRef.current !== requestVersion || controller.signal.aborted) return;
-        onToast("현재 재생성 결과를 새 snapshot으로 저장하고 링크를 복사했습니다.");
+        onToast("현재 재생성 결과를 새 저장본으로 저장하고 링크를 복사했습니다.");
       } catch {
         if (!mountedRef.current || mutationRequestVersionRef.current !== requestVersion || controller.signal.aborted) return;
-        onToast(`현재 재생성 결과를 새 snapshot으로 저장했습니다: ${url}`);
+        onToast(`현재 재생성 결과를 새 저장본으로 저장했습니다: ${url}`);
       }
     } catch (reason: unknown) {
-      if (mountedRef.current && mutationRequestVersionRef.current === requestVersion && !controller.signal.aborted) onToast(reason instanceof Error ? reason.message : "현재 재생성 결과를 snapshot으로 저장하지 못했습니다.");
+      if (mountedRef.current && mutationRequestVersionRef.current === requestVersion && !controller.signal.aborted) onToast(reason instanceof Error ? reason.message : "현재 재생성 결과를 저장본으로 저장하지 못했습니다.");
     } finally {
       if (mountedRef.current && mutationRequestVersionRef.current === requestVersion) setSavingRefreshSnapshot(false);
       if (snapshotSaveAbortControllerRef.current === controller) snapshotSaveAbortControllerRef.current = null;
@@ -579,7 +579,7 @@ export function SharedBudgetLadderView({ onBack, onToast, onApplyDraft, onApplyM
   }
 
   async function revokeSavedRefreshSnapshot() {
-    if (!savedRefreshSnapshot || !window.confirm("현재 재생성 결과의 새 공유 snapshot을 취소할까요? 이미 전달된 링크도 더 이상 열리지 않습니다.")) return;
+    if (!savedRefreshSnapshot || !window.confirm("현재 재생성 결과의 새 공유 저장본을 취소할까요? 이미 전달된 링크도 더 이상 열리지 않습니다.")) return;
     snapshotSaveAbortControllerRef.current?.abort();
     const controller = new AbortController();
     snapshotSaveAbortControllerRef.current = controller;
@@ -590,9 +590,9 @@ export function SharedBudgetLadderView({ onBack, onToast, onApplyDraft, onApplyM
       if (!mountedRef.current || mutationRequestVersionRef.current !== requestVersion || controller.signal.aborted) return;
       setSavedRefreshSnapshot(null);
       onBudgetLadderShareRevoked(snapshotId);
-      if (mountedRef.current) onToast("현재 재생성 결과의 공유 snapshot을 취소했습니다.");
+      if (mountedRef.current) onToast("현재 재생성 결과의 공유 저장본을 취소했습니다.");
     } catch (reason: unknown) {
-      if (mountedRef.current && mutationRequestVersionRef.current === requestVersion && !controller.signal.aborted) onToast(reason instanceof Error ? reason.message : "현재 재생성 결과의 공유 snapshot을 취소하지 못했습니다.");
+      if (mountedRef.current && mutationRequestVersionRef.current === requestVersion && !controller.signal.aborted) onToast(reason instanceof Error ? reason.message : "현재 재생성 결과의 공유 저장본을 취소하지 못했습니다.");
     } finally {
       if (snapshotSaveAbortControllerRef.current === controller) snapshotSaveAbortControllerRef.current = null;
     }
@@ -630,7 +630,7 @@ export function SharedBudgetLadderView({ onBack, onToast, onApplyDraft, onApplyM
       ? "공유 후 카탈로그가 갱신되었습니다. 당시 결과는 그대로 보존됩니다."
       : "공유 당시와 현재 카탈로그 기준 시각이 같습니다.";
   return <div className="shared-budget-ladder-page">
-    <div className="workspace-heading"><div><button className="back-link" type="button" onClick={onBack}><FiArrowLeft /> 홈으로</button><p className="eyebrow">SHARED BUDGET LADDER</p><h1>{snapshot?.name ?? (loading ? "공유 예산 비교를 불러오는 중" : "공유 예산 구간 비교")}</h1><p>공유된 예산 구간 자동 구성 결과를 읽기 전용 snapshot으로 확인합니다.</p></div><span className="admin-badge"><FiShare2 /> 읽기 전용</span></div>
+    <div className="workspace-heading"><div><button className="back-link" type="button" onClick={onBack}><FiArrowLeft /> 홈으로</button><p className="eyebrow">SHARED BUDGET LADDER</p><h1>{snapshot?.name ?? (loading ? "공유 예산 비교를 불러오는 중" : "공유 예산 구간 비교")}</h1><p>공유된 예산 구간 자동 구성 결과를 읽기 전용 저장본으로 확인합니다.</p></div><span className="admin-badge"><FiShare2 /> 읽기 전용</span></div>
     {loading
       ? <div className="shared-budget-ladder-state"><FiLoader className="spin" /> 공유 예산 비교를 불러오는 중...</div>
       : error
@@ -642,10 +642,10 @@ export function SharedBudgetLadderView({ onBack, onToast, onApplyDraft, onApplyM
           {refreshState.status === "error" && <div className="shared-budget-ladder-refresh-error" role="alert"><FiXCircle /> {refreshState.error}</div>}
           {refreshState.status === "loading" && <div className="shared-budget-ladder-refresh-loading" role="status"><FiLoader className="spin" /> 현재 카탈로그 기준으로 절약형·목표 예산·여유형을 다시 생성하는 중...</div>}
           {refreshState.status === "ready" && refreshState.payload && refreshState.outcomes && <SharedBudgetLadderRefreshComparison before={payload} after={refreshState.payload} outcomes={refreshState.outcomes} catalogSnapshotAt={refreshState.catalogSnapshotAt} onApplyDraft={applyRefreshedDraft} applying={applyingDraft} onSaveSnapshot={saveCurrentRefreshSnapshot} savedSnapshot={savedRefreshSnapshot} savingSnapshot={savingRefreshSnapshot} onRevokeSnapshot={revokeSavedRefreshSnapshot} />}
-          <div className="shared-budget-ladder-table-wrap"><table><caption>공유 당시 저장된 예산 구간·부품·분석 근거입니다. 현재 견적에는 자동 적용되지 않습니다.</caption><thead><tr><th scope="col">비교 항목</th>{payload.items.map((item) => <th scope="col" key={item.id}>{item.label}</th>)}</tr></thead><tbody><tr><th scope="row">상태</th>{payload.items.map((item) => <td key={`${item.id}-status`}><span className={`shared-budget-ladder-status ${sharedBudgetLadderStatusTone(item.status)}`}>{item.status}</span></td>)}</tr><tr><th scope="row">목표 예산</th>{payload.items.map((item) => <td key={`${item.id}-budget`}>{item.budgetWon.toLocaleString("ko-KR")}원</td>)}</tr><tr><th scope="row">예상 합계</th>{payload.items.map((item) => <td key={`${item.id}-total`}>{item.totalPriceWon === undefined ? "-" : `${item.totalPriceWon.toLocaleString("ko-KR")}원`}</td>)}</tr><tr><th scope="row">예산 결과</th>{payload.items.map((item) => <td key={`${item.id}-budget-result`}>{sharedBudgetLadderResultText(item)}</td>)}</tr><tr><th scope="row">위험</th>{payload.items.map((item) => <td key={`${item.id}-risk`}>{sharedBudgetLadderRiskText(item)}</td>)}</tr><tr><th scope="row">카탈로그 분석</th>{payload.items.map((item) => <td key={`${item.id}-analysis`}>{item.analysisScore === undefined ? "계산 불가" : `${item.analysisScore}점`}</td>)}</tr>{PART_CATEGORIES.map((category) => <tr key={category}><th scope="row">{CATEGORY_LABELS[category]}</th>{payload.items.map((item) => <td key={`${item.id}-${category}`}>{sharedBudgetLadderLineText(item, category)}</td>)}</tr>)}{payload.items.some((item) => item.error) && <tr><th scope="row">오류</th>{payload.items.map((item) => <td key={`${item.id}-error`}>{item.error ?? "-"}</td>)}</tr>}</tbody></table></div>
+          <div className="shared-budget-ladder-table-wrap"><table><caption>공유 당시 저장된 예산 구간·부품·분석 정보입니다. 현재 견적에는 자동 적용되지 않습니다.</caption><thead><tr><th scope="col">비교 항목</th>{payload.items.map((item) => <th scope="col" key={item.id}>{item.label}</th>)}</tr></thead><tbody><tr><th scope="row">상태</th>{payload.items.map((item) => <td key={`${item.id}-status`}><span className={`shared-budget-ladder-status ${sharedBudgetLadderStatusTone(item.status)}`}>{item.status}</span></td>)}</tr><tr><th scope="row">목표 예산</th>{payload.items.map((item) => <td key={`${item.id}-budget`}>{item.budgetWon.toLocaleString("ko-KR")}원</td>)}</tr><tr><th scope="row">예상 합계</th>{payload.items.map((item) => <td key={`${item.id}-total`}>{item.totalPriceWon === undefined ? "-" : `${item.totalPriceWon.toLocaleString("ko-KR")}원`}</td>)}</tr><tr><th scope="row">예산 결과</th>{payload.items.map((item) => <td key={`${item.id}-budget-result`}>{sharedBudgetLadderResultText(item)}</td>)}</tr><tr><th scope="row">위험</th>{payload.items.map((item) => <td key={`${item.id}-risk`}>{sharedBudgetLadderRiskText(item)}</td>)}</tr><tr><th scope="row">카탈로그 분석</th>{payload.items.map((item) => <td key={`${item.id}-analysis`}>{item.analysisScore === undefined ? "계산 불가" : `${item.analysisScore}점`}</td>)}</tr>{PART_CATEGORIES.map((category) => <tr key={category}><th scope="row">{CATEGORY_LABELS[category]}</th>{payload.items.map((item) => <td key={`${item.id}-${category}`}>{sharedBudgetLadderLineText(item, category)}</td>)}</tr>)}{payload.items.some((item) => item.error) && <tr><th scope="row">오류</th>{payload.items.map((item) => <td key={`${item.id}-error`}>{item.error ?? "-"}</td>)}</tr>}</tbody></table></div>
           {payload.items.some((item) => item.diagnostics?.length) && <section className="shared-budget-ladder-diagnostics" aria-label="실패 구간 진단"><strong><FiInfo /> 실패 구간의 서버 진단</strong>{payload.items.filter((item) => item.diagnostics?.length).map((item) => <article key={`${item.id}-diagnostics`}><b>{item.label}</b>{item.diagnostics?.slice(0, 2).map((diagnostic) => <div key={diagnostic.id}><strong>{diagnostic.title}</strong><p>{diagnostic.summary}</p><small>{diagnostic.facts.map((fact) => `${fact.label} ${fact.value}`).join(" · ")}{diagnostic.recommendation ? ` · 권장 ${diagnostic.recommendation}` : ""}</small></div>)}</article>)}</section>}
-          {payload.changes.length > 0 && <section className="shared-budget-ladder-changes" aria-label="예산 증액 효과"><div><strong>예산 증액으로 바뀐 것</strong><span>공유 당시 성공한 인접 구간만 표시합니다.</span></div>{payload.changes.map((change) => <article key={`${change.fromId}-${change.toId}`}><div><strong>{change.fromLabel} → {change.toLabel}</strong><span>예산 {change.budgetDeltaWon >= 0 ? "+" : ""}{change.budgetDeltaWon.toLocaleString("ko-KR")}원 · 실제 합계 {change.totalPriceDeltaWon >= 0 ? "+" : ""}{change.totalPriceDeltaWon.toLocaleString("ko-KR")}원</span></div><p>위험 변화 · 차단 {change.blockerDelta >= 0 ? "+" : ""}{change.blockerDelta} · 주의 {change.warningDelta >= 0 ? "+" : ""}{change.warningDelta} · 확인 필요 {change.unknownDelta >= 0 ? "+" : ""}{change.unknownDelta}{change.analysisScoreDelta !== undefined ? ` · 분석 지수 ${change.analysisScoreDelta >= 0 ? "+" : ""}${change.analysisScoreDelta}점` : ""}</p>{change.sameConfiguration ? <small>부품·수량 구성 동일</small> : <div>{change.changedLines.map((line) => <small key={line.category}><b>{line.label}</b> {line.before} → {line.after}</small>)}</div>}</article>)}</section>}
-          <p className="shared-budget-ladder-note"><FiInfo /> 이 링크는 생성 당시의 예산 비교 snapshot을 읽기 전용으로 보여줍니다. 카탈로그가 갱신되어도 저장된 결과를 임의로 다시 계산하지 않습니다.</p>
+          {payload.changes.length > 0 && <section className="shared-budget-ladder-changes" aria-label="예산 증액 효과"><div><strong>예산 증액으로 바뀐 것</strong><span>공유 당시 성공한 인접 구간만 표시합니다.</span></div>{payload.changes.map((change) => <article key={`${change.fromId}-${change.toId}`}><div><strong>{change.fromLabel} → {change.toLabel}</strong><span>예산 {change.budgetDeltaWon >= 0 ? "+" : ""}{change.budgetDeltaWon.toLocaleString("ko-KR")}원 · 실제 합계 {change.totalPriceDeltaWon >= 0 ? "+" : ""}{change.totalPriceDeltaWon.toLocaleString("ko-KR")}원</span></div><p>위험 변화 · 차단 {change.blockerDelta >= 0 ? "+" : ""}{change.blockerDelta} · 주의 {change.warningDelta >= 0 ? "+" : ""}{change.warningDelta} · 확인 필요 {change.unknownDelta >= 0 ? "+" : ""}{change.unknownDelta}{change.analysisScoreDelta !== undefined ? ` · 분석 점수 ${change.analysisScoreDelta >= 0 ? "+" : ""}${change.analysisScoreDelta}점` : ""}</p>{change.sameConfiguration ? <small>부품·수량 구성 동일</small> : <div>{change.changedLines.map((line) => <small key={line.category}><b>{line.label}</b> {line.before} → {line.after}</small>)}</div>}</article>)}</section>}
+          <p className="shared-budget-ladder-note"><FiInfo /> 이 링크는 생성 당시의 예산 비교 저장본을 읽기 전용으로 보여줍니다. 카탈로그가 갱신되어도 저장된 결과를 임의로 다시 계산하지 않습니다.</p>
         </section>}
   </div>;
 }

@@ -39,13 +39,13 @@ describe("catalog merge", () => {
   });
 
   it("does not downgrade a verified live item with an incomplete crawl", () => {
-    const existing = part({ name: "검증된 CPU", dataQuality: "live" });
+    const existing = part({ name: "확인된 CPU", dataQuality: "live" });
     const incomplete = part({ name: "불완전한 CPU", dataQuality: "incomplete", missingFields: ["tdpW"] });
 
     const merged = mergeCatalog([existing], [incomplete]);
 
     expect(merged).toHaveLength(1);
-    expect(merged[0].name).toBe("검증된 CPU");
+    expect(merged[0].name).toBe("확인된 CPU");
     expect(merged[0].dataQuality).toBe("live");
   });
 

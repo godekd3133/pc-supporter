@@ -84,7 +84,7 @@ describe("alternative comparison benchmark recheck", () => {
 
     expect(result).toMatchObject({ status: "not_recorded", benchmarkDecisionImpact: "not_recorded", changedRowCount: 0, needsRecheck: false });
     expect(alternativeComparisonBenchmarkRecheckStatusText(result.status)).toBe("공유 당시 기록 없음");
-    expect(alternativeComparisonBenchmarkDecisionImpactText(result.benchmarkDecisionImpact)).toBe("benchmark 판단 근거 없음");
+    expect(alternativeComparisonBenchmarkDecisionImpactText(result.benchmarkDecisionImpact)).toBe("벤치마크 판단 정보 없음");
   });
 
   it("classifies equal complete evidence as stable", () => {
@@ -93,7 +93,7 @@ describe("alternative comparison benchmark recheck", () => {
     expect(result).toMatchObject({ status: "same", benchmarkDecisionImpact: "stable", currentStatus: "complete", changedRowCount: 0, sourceChanged: false, benchmarkDateChanged: false, needsRecheck: false });
     expect(result.rows.every((row) => row.changed)).toBe(false);
     expect(alternativeComparisonBenchmarkRecheckStatusText(result.status)).toBe("공유 당시와 동일");
-    expect(alternativeComparisonBenchmarkDecisionImpactText(result.benchmarkDecisionImpact)).toBe("benchmark 판단 영향 없음");
+    expect(alternativeComparisonBenchmarkDecisionImpactText(result.benchmarkDecisionImpact)).toBe("벤치마크 판단 영향 없음");
   });
 
   it("separates score, source, and date drift from the shared snapshot", () => {

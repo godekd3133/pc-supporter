@@ -6,7 +6,7 @@ function part(overrides: Partial<Part>): Part {
   return {
     id: "provenance-part",
     category: "gpu",
-    name: "근거 GPU",
+    name: "정보 GPU",
     source: "manual",
     specs: {},
     dataQuality: "manual",

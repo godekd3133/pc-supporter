@@ -384,13 +384,13 @@ export function buildBenchmarkImpactFor(before: BuildBenchmarkSnapshot | undefin
 }
 
 export function buildBenchmarkSnapshotStatusText(status: BuildBenchmarkSnapshotStatus) {
-  return status === "complete" ? "근거 충분" : status === "partial" ? "일부 근거" : status === "missing" ? "근거 부족" : "적용 지표 없음";
+  return status === "complete" ? "정보 충분" : status === "partial" ? "일부 정보" : status === "missing" ? "정보 부족" : "적용 지표 없음";
 }
 
 export function buildBenchmarkImpactStatusText(status: BuildBenchmarkImpactStatus) {
-  return status === "same" ? "benchmark 동일" : status === "changed" ? "benchmark 변경" : status === "unverified" ? "benchmark 확인 필요" : "benchmark 기록 없음";
+  return status === "same" ? "벤치마크 동일" : status === "changed" ? "벤치마크 변경" : status === "unverified" ? "벤치마크 확인 필요" : "벤치마크 기록 없음";
 }
 
 export function buildBenchmarkDecisionImpactText(impact: BuildBenchmarkDecisionImpact) {
-  return impact === "stable" ? "성능 판단 영향 없음" : impact === "changed" ? "성능 판단 재검토" : impact === "unverified" ? "성능 판단 확인 필요" : "성능 판단 근거 없음";
+  return impact === "stable" ? "성능 판단 영향 없음" : impact === "changed" ? "성능 판단 재검토" : impact === "unverified" ? "성능 판단 확인 필요" : "성능 판단 정보 없음";
 }

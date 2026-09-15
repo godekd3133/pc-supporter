@@ -65,7 +65,7 @@ try {
       await wait(950);
       const stored = localStorage.getItem("pc-supporter-saved-build-version-shares") ?? "";
       const body = document.body?.innerText ?? "";
-      return { stage: "checked", buildCalls, shareCalls, path: location.pathname, staleStored: stored.includes("version-route-share"), staleToast: body.includes("견적 버전 비교 공유 링크가 생성되었습니다") || body.includes("견적 버전 비교 공유 링크를 클립보드에") };
+      return { stage: "checked", buildCalls, shareCalls, path: location.pathname, staleStored: stored.includes("version-route-share"), staleToast: body.includes("견적 버전 비교 링크가 생성되었습니다") || body.includes("견적 버전 비교 공유 링크를 클립보드에") };
     } finally {
       window.fetch = originalFetch;
       setStored("pc-supporter-saved-build-ids", originalIds);

@@ -142,7 +142,7 @@ export function validateCatalogSpecOverrideBatch(input: unknown, catalog: Part[]
     if (!manufacturerModel) itemErrors.push("제조사 모델/SKU가 필요합니다.");
     else if (manufacturerModel.length > 160) itemErrors.push("제조사 모델/SKU는 160자 이하로 입력해야 합니다.");
     const sourceNote = normalizedString(candidate.sourceNote);
-    if (!sourceNote) itemErrors.push("검수 근거 sourceNote가 필요합니다.");
+    if (!sourceNote) itemErrors.push("확인 정보 sourceNote가 필요합니다.");
     else if (sourceNote.length > 500) itemErrors.push("sourceNote는 500자 이하로 입력해야 합니다.");
     const sourceUrl = normalizedString(candidate.sourceUrl);
     itemErrors.push(...sourceUrlErrors(sourceUrl));

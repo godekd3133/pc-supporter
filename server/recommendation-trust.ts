@@ -60,7 +60,7 @@ const freshnessLabels: Record<RecommendationTrustEvidence["freshness"], string> 
 };
 
 const dataQualityLabels: Record<Part["dataQuality"], string> = {
-  manual: "수동 검수 데이터",
+  manual: "수동 확인 데이터",
   live: "다나와 최신 데이터",
   seed: "프로젝트 기준 데이터",
   incomplete: "필수 스펙 누락 데이터"
@@ -139,7 +139,7 @@ export function recommendationTrustFor(input: RecommendationTrustInput): Recomme
     if (input.benchmarkSourceKind === "official") score += 6;
     else if (input.benchmarkSourceKind === "independent_review") score += 4;
     else if (input.benchmarkSourceKind === "community_measurement") score += 2;
-    reasons.push(input.benchmarkSourceKind ? `벤치마크 출처: ${BENCHMARK_SOURCE_KIND_LABELS[input.benchmarkSourceKind]}` : "벤치마크 출처 유형이 분류되지 않았습니다.");
+    reasons.push(input.benchmarkSourceKind ? `벤치마크 출처: ${BENCHMARK_SOURCE_KIND_LABELS[input.benchmarkSourceKind]}` : "벤치마크 출처이 분류되지 않았습니다.");
     if (benchmarkFreshness === "fresh") score += 3;
     else if (benchmarkFreshness === "aging") reasons.push("벤치마크 자료 갱신을 권장합니다.");
     else if (benchmarkFreshness === "stale") {
@@ -159,15 +159,15 @@ export function recommendationTrustFor(input: RecommendationTrustInput): Recomme
   }
 
   if (catalogSpecProvenance) {
-    reasons.push("제조사 근거 수동 보강값");
+    reasons.push("제조사 정보 수동 보강값");
     if (catalogSpecSourceCheckNeedsReview === false) {
       score += 4;
-      reasons.push("제조사 근거 원문 URL 접근과 모델 식별을 확인했습니다.");
+      reasons.push("제조사 정보 원문 URL 접근과 모델 식별을 확인했습니다.");
     } else {
       score -= 8;
       reasons.push(catalogSpecProvenance.sourceCheck
-        ? "제조사 근거 원문 URL 접근·모델 식별을 다시 확인해야 합니다."
-        : "제조사 근거 원문 URL 접근·모델 식별을 확인하기 전입니다.");
+        ? "제조사 정보 원문 URL 접근·모델 식별을 다시 확인해야 합니다."
+        : "제조사 정보 원문 URL 접근·모델 식별을 확인하기 전입니다.");
     }
   }
 
@@ -185,9 +185,9 @@ export function recommendationTrustFor(input: RecommendationTrustInput): Recomme
   if (priceEvidence === "live" || priceEvidence === "manual") {
     score += 4;
   } else if (priceEvidence === "reference") {
-    reasons.push("프로젝트 기준가가 있어 총액 비교에 참고할 수 있지만 실제 판매가로 확정하지 않습니다.");
+    reasons.push("참고 가격가 있어 총액 비교에 참고할 수 있지만 실제 판매가로 확정하지 않습니다.");
   } else if (priceEvidence === "recorded") {
-    reasons.push("가격 숫자는 기록되어 있지만 데이터 품질이 완전하지 않아 실제 판매가로 확정하지 않습니다.");
+    reasons.push("가격 숫자는 기록되어 있지만 데이터 상태가 완전하지 않아 실제 판매가로 확정하지 않습니다.");
   } else {
     reasons.push("현재 가격을 확인할 수 없어 총액 비교는 확정하지 않습니다.");
   }

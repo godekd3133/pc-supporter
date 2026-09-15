@@ -23,7 +23,7 @@ describe("purchase list serialization", () => {
   it("preserves quantities, source URLs, newlines, and unknown price labels in text", () => {
     const text = purchaseListTextFor(rows);
     expect(text).toContain("테스트, CPU\n\"특별판\" ×1");
-    expect(text).toContain("가격 미확인 팬 ×2 · 가격 확인 필요 · 가격 근거 가격 확인 필요 · 신품·정식 유통 · 오래된 정보");
+    expect(text).toContain("가격 미확인 팬 ×2 · 가격 확인 필요 · 가격 출처 가격 확인 필요 · 신품·정식 유통 · 오래된 정보");
     expect(text).toContain("https://prod.danawa.com/info/?pcode=1");
     expect(text).toContain("전체 합계: 가격 확인 필요");
   });
@@ -39,7 +39,7 @@ describe("purchase list serialization", () => {
     const targetedRows = [{ ...rows[1]!, id: "accessory:fan:hub-a", connectionTarget: "팬 허브 허브 A" }];
     expect(purchaseListTextFor(targetedRows)).toContain("연결 대상 팬 허브 허브 A");
     const csv = purchaseListCsvFor(targetedRows);
-    expect(csv).toContain("가격 근거,유통 조건,갱신 상태,연결 대상,원문 링크");
+    expect(csv).toContain("가격 출처,유통 조건,갱신 상태,연결 대상,원문 링크");
     expect(csv).toContain("가격 확인 필요,신품·정식 유통,오래된 정보,팬 허브 허브 A,");
   });
 

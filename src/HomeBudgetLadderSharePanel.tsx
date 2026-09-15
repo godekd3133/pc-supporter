@@ -82,9 +82,9 @@ export function HomeBudgetLadderSharePanel({ entries, onCopy, onRemove, onToast 
       if (!isCurrent()) return;
       onRemove(entry.id);
       setPendingRevoke(null);
-      onToast("공유 snapshot을 서버에서 취소했습니다. 이 브라우저 이력에서도 제거했습니다.");
+      onToast("공유 저장본을 서버에서 취소했습니다. 이 브라우저 이력에서도 제거했습니다.");
     } catch (error: unknown) {
-      if (isCurrent()) onToast(error instanceof Error ? error.message : "공유 snapshot을 서버에서 취소하지 못했습니다.");
+      if (isCurrent()) onToast(error instanceof Error ? error.message : "공유 저장본을 서버에서 취소하지 못했습니다.");
     } finally {
       if (isCurrent()) setRevokingId(null);
     }
@@ -92,7 +92,7 @@ export function HomeBudgetLadderSharePanel({ entries, onCopy, onRemove, onToast 
 
   return <>
   <section className="home-budget-ladder-shares" aria-label="최근 예산 비교 공유" data-testid="home-budget-ladder-shares">
-    <div className="home-budget-ladder-shares-heading"><div><p className="eyebrow">RECENT SHARES</p><h2><FiShare2 /> 최근 예산 비교 공유</h2><p>이 브라우저에서 만든 공유 snapshot을 다시 열거나 링크를 복사할 수 있습니다.</p></div><div className="home-budget-ladder-shares-heading-actions"><span>{entries.length}개 보관</span><button className="text-button home-budget-ladder-share-refresh" type="button" onClick={() => setRefreshNonce((current) => current + 1)} disabled={refreshing || visibleEntries.length === 0}><FiRefreshCw className={refreshing ? "spin" : undefined} /> {refreshing ? "상태 확인 중" : "서버 상태 확인"}</button></div></div>
+    <div className="home-budget-ladder-shares-heading"><div><p className="eyebrow">RECENT SHARES</p><h2><FiShare2 /> 최근 예산 비교 공유</h2><p>이 브라우저에서 만든 공유 저장본을 다시 열거나 링크를 복사할 수 있습니다.</p></div><div className="home-budget-ladder-shares-heading-actions"><span>{entries.length}개 보관</span><button className="text-button home-budget-ladder-share-refresh" type="button" onClick={() => setRefreshNonce((current) => current + 1)} disabled={refreshing || visibleEntries.length === 0}><FiRefreshCw className={refreshing ? "spin" : undefined} /> {refreshing ? "상태 확인 중" : "서버 상태 확인"}</button></div></div>
     {entries.length > 5 && <div className="home-budget-ladder-share-tools"><label><FiSearch /><span>공유 이력 검색</span><input type="search" aria-label="공유 이력 검색" placeholder="공유 이름·버전·ID 검색" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} /></label><button className="text-button home-budget-ladder-share-history-toggle" type="button" data-testid="toggle-budget-ladder-share-history" onClick={() => setShowAll((current) => !current)}>{showAll ? "최근 5개만 보기" : `전체 이력 보기 (${entries.length})`}</button><small>{normalizedSearchQuery ? `검색 결과 ${matchingEntries.length}개` : showingAll ? `전체 ${matchingEntries.length}개 표시` : `최근 ${Math.min(5, matchingEntries.length)}개 표시`}</small></div>}
     {visibleEntries.length === 0 ? <div className="home-budget-ladder-share-empty"><FiSearch /><span>검색 조건에 맞는 공유 이력이 없습니다.</span></div> : <div className="home-budget-ladder-share-list">
       {visibleEntries.map((entry) => {

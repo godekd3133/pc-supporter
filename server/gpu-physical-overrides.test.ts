@@ -94,7 +94,7 @@ describe("GPU physical compatibility overrides", () => {
     expect(result.validOverrides).toEqual([]);
     expect(result.items[0]).toMatchObject({ partId: gpu.id, valid: true, operation: "create" });
     expect(result.items[1]).toMatchObject({ partId: psu.id, valid: false });
-    expect(result.errors.some((error) => error.includes("검수 근거"))).toBe(true);
+    expect(result.errors.some((error) => error.includes("확인 정보"))).toBe(true);
   });
 
   it("rejects cross-category fields and unsupported values", () => {
@@ -102,7 +102,7 @@ describe("GPU physical compatibility overrides", () => {
       gpuSlotOccupancy: 3.25,
       caseSidePanelClearanceMm: 20,
       manufacturerModel: "GPU-TEST-1",
-      sourceNote: "근거"
+      sourceNote: "정보"
     });
 
     expect(result.value).toBeUndefined();
@@ -116,7 +116,7 @@ describe("GPU physical compatibility overrides", () => {
     const result = validateGpuPhysicalOverride(computerCase, { caseSidePanelClearanceMm: 40, manufacturerModel: "CASE-TEST-1" });
 
     expect(result.errors).toEqual(expect.arrayContaining([
-      expect.stringContaining("검수 근거"),
+      expect.stringContaining("확인 정보"),
     ]));
   });
 

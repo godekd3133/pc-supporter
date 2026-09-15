@@ -122,7 +122,7 @@ describe("budget ladder scenarios", () => {
     expect(text).toContain("[목표 예산] 입력한 목표 예산 그대로");
     expect(text).toContain("예상 합계: 980,000원");
     expect(text).toContain("변경: CPU · 이전 CPU → 새 CPU");
-    expect(text).toContain("실패 근거: GPU 후보 부족: 조건을 만족하는 후보가 없습니다. · 후보 수 0개 · 권장 예산을 상향해 주세요.");
+    expect(text).toContain("실패 정보: GPU 후보 부족: 조건을 만족하는 후보가 없습니다. · 후보 수 0개 · 권장 예산을 상향해 주세요.");
 
     const csv = budgetLadderCsvFor(outcomes);
     expect(csv.startsWith("\uFEFF구간 ID,구간,설명")).toBe(true);

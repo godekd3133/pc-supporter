@@ -14,7 +14,7 @@ describe("candidate decision summary", () => {
     expect(summary).toMatchObject({
       status: "recommended",
       label: "추천 후보",
-      summary: "현재 문제 해결 · 새 차단 없음 · 물리 근거 확인됨 · 최근 확인 · 높은 근거"
+      summary: "현재 문제 해결 · 새 차단 없음 · 장착 정보 확인됨 · 최근 확인 · 높음"
     });
   });
 
@@ -32,7 +32,7 @@ describe("candidate decision summary", () => {
     expect(summary.label).toBe("확인 후 적용");
     expect(summary.summary).toContain("추가 확인 필요");
     expect(summary.reasons).toContain("PCIe 세대가 확인되지 않습니다.");
-    expect(summary.reasons).toContain("물리 근거가 확인 필요 상태라 실제 장착 전에 제조사 원문을 확인해야 합니다.");
+    expect(summary.reasons).toContain("장착 정보가 확인 필요 상태라 실제 장착 전에 제조사 원문을 확인해야 합니다.");
   });
 
   it("never presents an unsafe candidate as an applicable recommendation", () => {

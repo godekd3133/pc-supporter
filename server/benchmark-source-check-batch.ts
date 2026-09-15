@@ -27,7 +27,7 @@ function fallbackSourceCheck(sourceUrl: string, checkedAt: string): PhysicalSour
     status: "unreachable",
     identityStatus: "not_checked",
     redirectCount: 0,
-    detail: "benchmark 원문 점검 중 예기치 않은 오류가 발생했습니다."
+    detail: "벤치마크 원문 점검 중 예기치 않은 오류가 발생했습니다."
   };
 }
 

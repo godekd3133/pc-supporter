@@ -79,7 +79,7 @@ const PROFILE_MATCHERS: Array<{ profile: RecommendationProfile; pattern: RegExp;
 ];
 
 const PRIORITY_MATCHERS: Array<{ priority: RecommendationPriority; pattern: RegExp; label: string }> = [
-  { priority: "reliability", pattern: /검증\s*우선|신뢰\s*우선|안전\s*우선|호환\s*우선|근거\s*우선|데이터\s*확실/i, label: RECOMMENDATION_PRIORITY_LABELS.reliability },
+  { priority: "reliability", pattern: /확인\s*우선|신뢰\s*우선|안전\s*우선|호환\s*우선|정보\s*우선|데이터\s*확실/i, label: RECOMMENDATION_PRIORITY_LABELS.reliability },
   { priority: "budget", pattern: /가성비|저렴|절약|최저가|예산\s*우선/i, label: RECOMMENDATION_PRIORITY_LABELS.budget },
   { priority: "performance", pattern: /성능\s*우선|고사양|최고\s*성능|빠른|성능\s*중심/i, label: RECOMMENDATION_PRIORITY_LABELS.performance },
   { priority: "balanced", pattern: /균형형|균형|밸런스/i, label: RECOMMENDATION_PRIORITY_LABELS.balanced }

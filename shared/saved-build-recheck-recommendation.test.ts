@@ -39,7 +39,7 @@ describe("saved-build recheck recommendation", () => {
 
     expect(candidates.map((candidate) => candidate.suggestion.part.id)).toEqual(["safe-candidate", "residual-warning", "blocked-candidate"]);
     expect(candidates[0].decision.state).toBe("review");
-    expect(candidates[0].decision.reasons).toContain("프로젝트 기준가만 있어 후보 실제 판매 가격을 확정할 수 없습니다.");
+    expect(candidates[0].decision.reasons).toContain("참고 가격만 있어 후보 실제 판매 가격을 확정할 수 없습니다.");
     expect(candidates[1].decision.state).toBe("review");
     expect(candidates[2].decision.state).toBe("hold");
   });

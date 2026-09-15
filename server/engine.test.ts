@@ -105,26 +105,26 @@ function balanceFixture() {
   const weakCpu: Part = {
     ...baseCpu,
     id: "cpu-balance-weak",
-    name: "테스트 CPU 상대 지수 낮음",
+    name: "테스트 CPU 상대 점수 낮음",
     specs: { ...baseCpu.specs, cores: 4, threads: 8, boostClockGhz: 3.8, cinebenchR23Single: 1100, cinebenchR23Multi: 6500 }
   };
   const peerCpu: Part = {
     ...baseCpu,
     id: "cpu-balance-peer",
-    name: "테스트 CPU 상대 지수 높음",
+    name: "테스트 CPU 상대 점수 높음",
     specs: { ...baseCpu.specs, cores: 16, threads: 32, boostClockGhz: 5.4, cinebenchR23Single: 2200, cinebenchR23Multi: 30000 }
   };
   const baseGpu = seedCatalog.find((part) => part.id === "gpu-rtx-4060")!;
   const strongGpu: Part = {
     ...baseGpu,
     id: "gpu-balance-strong",
-    name: "테스트 GPU 상대 지수 높음",
+    name: "테스트 GPU 상대 점수 높음",
     specs: { ...baseGpu.specs, vramGb: 24, gpuStreamProcessors: 10000, gpuMemoryBandwidthGbps: 900, gpuBoostClockMhz: 3000 }
   };
   const peerGpu: Part = {
     ...baseGpu,
     id: "gpu-balance-peer",
-    name: "테스트 GPU 상대 지수 낮음",
+    name: "테스트 GPU 상대 점수 낮음",
     specs: { ...baseGpu.specs, vramGb: 4, gpuStreamProcessors: 1000, gpuMemoryBandwidthGbps: 128, gpuBoostClockMhz: 1500 }
   };
   const build = compatibleBuild();
@@ -323,7 +323,7 @@ describe("compatibility engine", () => {
             cinebenchR23Multi: 18200,
             benchmarkProvenance: {
               sourceKind: "independent_review" as const,
-              sourceNote: "결정론적 엔진 회귀 테스트용 근거",
+              sourceNote: "결정론적 검사 기준 회귀 테스트용 정보",
               updatedAt: "2026-09-05T00:00:00.000Z"
             }
           }
@@ -338,7 +338,7 @@ describe("compatibility engine", () => {
               gpu3dmarkPortRoyalScore: 6900,
               benchmarkProvenance: {
                 sourceKind: "independent_review" as const,
-                sourceNote: "결정론적 엔진 회귀 테스트용 근거",
+                sourceNote: "결정론적 검사 기준 회귀 테스트용 정보",
                 updatedAt: "2026-09-05T00:00:00.000Z"
               }
             }
@@ -378,13 +378,13 @@ describe("compatibility engine", () => {
     expect(result.analysis.balance).toMatchObject({ status: "cpu_limited" });
     expect(result.analysis.balance?.cpuScore).toBeLessThan(result.analysis.balance?.gpuScore ?? 0);
     expect(result.analysis.balance?.gap).toBeGreaterThanOrEqual(20);
-    expect(result.analysis.balance?.summary).toContain("카탈로그 상대 지수");
+    expect(result.analysis.balance?.summary).toContain("카탈로그 상대 점수");
     expect(result.analysis.strengths).toHaveLength(2);
     expect(result.analysis.strengths.every((insight) => insight.score >= 75)).toBe(true);
     expect(result.analysis.focusAreas).toEqual(expect.arrayContaining([
       expect.objectContaining({ category: "cpu", score: expect.any(Number), title: "CPU 보완" })
     ]));
-    expect(result.analysis.nextActions).toContain("CPU·GPU 상대 지수 차이를 확인하고 CPU 업그레이드 후보를 먼저 비교해 보세요.");
+    expect(result.analysis.nextActions).toContain("CPU·GPU 상대 점수 차이를 확인하고 CPU 업그레이드 후보를 먼저 비교해 보세요.");
   });
 
   it("surfaces unknown GPU VRAM as an analysis signal without changing compatibility status", () => {
@@ -536,7 +536,7 @@ describe("compatibility engine", () => {
     expect(recommendation?.similarityEvidence).toMatchObject({ basis: "mixed" });
     expect(recommendation?.performanceSummary).toContain("Time Spy");
     expect(recommendation?.physicalEvidence).toMatchObject({ status: "review" });
-    expect(recommendation?.physicalEvidence?.summary).toContain("GPU·케이스 물리 근거");
+    expect(recommendation?.physicalEvidence?.summary).toContain("GPU·케이스 장착 정보");
   });
 
   it("applies the selected gaming refresh rate to target evidence and CPU-GPU comparison weights", () => {
@@ -564,7 +564,7 @@ describe("compatibility engine", () => {
     const candidateSsd: Part = {
       ...baseSsd,
       id: "ssd-upgrade-evidence-candidate",
-      name: "테스트 카테고리 근거 2TB SSD",
+      name: "테스트 카테고리 정보 2TB SSD",
       specs: {
         ...baseSsd.specs,
         capacityGb: 2000,
@@ -953,7 +953,7 @@ describe("compatibility engine", () => {
 
     expect(suggestion?.fixesCurrentIssue).toBe(true);
     expect(suggestion?.physicalEvidence).toMatchObject({ status: "review" });
-    expect(suggestion?.physicalEvidence?.summary).toContain("GPU·케이스 물리 근거");
+    expect(suggestion?.physicalEvidence?.summary).toContain("GPU·케이스 장착 정보");
 
     const gamingResult = evaluateBuild(build, catalog, {
       recommendationPreferences: { priority: "balanced", profile: "gaming", gamingResolution: "1440p", gamingRefreshRate: 144 }
@@ -1005,7 +1005,7 @@ describe("compatibility engine", () => {
     expect(finding?.severity).toBe("warning");
     expect(finding?.facts).toEqual(expect.arrayContaining([
       expect.objectContaining({ label: "필요한 8핀 커넥터", actual: "2개" }),
-      expect.objectContaining({ label: "검수된 독립 PCIe 케이블 런", actual: "1개" })
+      expect.objectContaining({ label: "확인된 독립 PCIe 케이블 런", actual: "1개" })
     ]));
     expect(result.gpuFit?.connector.psuCableTopologyStatus).toBe("needs_review");
     expect(result.links.find((link) => link.id === "gpu-psu")?.status).toBe("issue");
@@ -1031,7 +1031,7 @@ describe("compatibility engine", () => {
     const candidateWithoutProof: Part = {
       ...basePsu,
       id: "psu-topology-candidate-no-proof",
-      name: "토폴로지 근거 없는 후보 PSU",
+      name: "연결 방식 정보 없는 후보 PSU",
       specs: { ...basePsu.specs, psuIndependentPcieCableRuns: undefined, psuPcieCableTopology: undefined }
     };
     const finding = evaluateBuild(fixture.build, catalog, { includeSuggestions: false }).findings.find((item) => item.ruleId === "gpu-psu-cable-topology");
@@ -1050,7 +1050,7 @@ describe("compatibility engine", () => {
     const verifiedCandidate: Part = {
       ...basePsu,
       id: "psu-topology-candidate-verified",
-      name: "독립 케이블 검수 후보 PSU",
+      name: "독립 케이블 확인 후보 PSU",
       specs: { ...basePsu.specs, psuIndependentPcieCableRuns: 2, psuPcieCableTopology: "independent" as const }
     };
     const finding = evaluateBuild(fixture.build, catalog, { includeSuggestions: false }).findings.find((item) => item.ruleId === "gpu-psu-cable-topology");
@@ -1066,7 +1066,7 @@ describe("compatibility engine", () => {
     const candidate: Part = {
       ...basePsu,
       id: "psu-picker-physical-evidence",
-      name: "물리 근거가 표시되는 후보 PSU",
+      name: "장착 정보가 표시되는 후보 PSU",
       specs: {
         ...basePsu.specs,
         psuIndependentPcieCableRuns: 2,
@@ -2144,13 +2144,13 @@ describe("compatibility engine", () => {
     const completeCpu = {
       ...baseCpu,
       id: "cpu-am5-complete-evidence",
-      name: "테스트 AM5 완전 근거 CPU",
+      name: "테스트 AM5 완전 자료 CPU",
       specs: { ...baseCpu.specs, cores: 8, threads: 16, boostClockGhz: 5 }
     };
     const limitedCpu = {
       ...completeCpu,
       id: "cpu-am5-limited-evidence",
-      name: "테스트 AM5 제한 근거 CPU",
+      name: "테스트 AM5 제한 정보 CPU",
       specs: { ...completeCpu.specs, threads: undefined, boostClockGhz: undefined }
     };
     const build = compatibleBuild();
@@ -2352,7 +2352,7 @@ describe("compatibility engine", () => {
     const referenceGpu: Part = {
       ...baseGpu,
       id: "gpu-rtx5090-performance-reference",
-      name: "검증된 RTX 5090 계열 참조 모델",
+      name: "확인된 RTX 5090 계열 참조 모델",
       model: "RTX 5090 Compact Reference",
       source: "danawa",
       sourceProductCode: "reference-5090",
@@ -2408,7 +2408,7 @@ describe("compatibility engine", () => {
 
     expect(closeSimilarity.similarityScore).toBeGreaterThan(farSimilarity.similarityScore);
     expect(closeSimilarity.similarityEvidence).toMatchObject({ comparedDimensions: 3, totalDimensions: 3, confidence: "high" });
-    expect(closeSimilarity.similarityEvidence.notes?.[0]).toContain("동일 GPU 모델 계열의 검증된 카탈로그 참조");
+    expect(closeSimilarity.similarityEvidence.notes?.[0]).toContain("동일 GPU 모델 계열의 확인된 카탈로그 참조");
     expect(closeSimilarity.performanceSummary).toContain("동일 GPU 모델 계열 참조 기준");
     expect(suggestion).toBeDefined();
     expect(suggestion?.similarityScore).toBe(closeSimilarity.similarityScore);
@@ -2425,7 +2425,7 @@ describe("compatibility engine", () => {
     const referenceCpu: Part = {
       ...currentCpu,
       id: "cpu-7500f-performance-reference",
-      name: "검증된 Ryzen 5 7500F 계열 참조 모델",
+      name: "확인된 Ryzen 5 7500F 계열 참조 모델",
       model: "AMD Ryzen 5 7500F Reference",
       source: "danawa",
       sourceProductCode: "reference-7500f",
@@ -2480,7 +2480,7 @@ describe("compatibility engine", () => {
     const suggestion = result.findings.find((item) => item.ruleId === "cpu-motherboard-socket")?.suggestions?.find((item) => item.part.id === closeCpu.id);
 
     expect(closeSimilarity.similarityEvidence).toMatchObject({ comparedDimensions: 4, totalDimensions: 4, confidence: "high", basis: "mixed" });
-    expect(closeSimilarity.similarityEvidence.notes?.[0]).toContain("동일 CPU 모델 계열의 검증된 카탈로그 참조");
+    expect(closeSimilarity.similarityEvidence.notes?.[0]).toContain("동일 CPU 모델 계열의 확인된 카탈로그 참조");
     expect(closeSimilarity.performanceSummary).toContain("동일 CPU 모델 계열 참조 기준");
     expect(suggestion).toBeDefined();
     expect(suggestion?.performanceSummary).toContain("동일 CPU 모델 계열 참조 기준");
@@ -2489,14 +2489,14 @@ describe("compatibility engine", () => {
     const x3dReferenceCpu: Part = {
       ...referenceCpu,
       id: "cpu-7800x3d-performance-reference",
-      name: "검증된 Ryzen 7 7800X3D 계열 참조 모델",
+      name: "확인된 Ryzen 7 7800X3D 계열 참조 모델",
       model: "AMD Ryzen 7 7800X3D Reference",
       sourceProductCode: "reference-7800x3d",
       specs: { ...referenceCpu.specs, cores: 8, threads: 16, boostClockGhz: 5, cinebenchR23Single: 1788, cinebenchR23Multi: 18208 }
     };
     const x3dBuild = { ...build, cpu: { partId: x3dCurrentCpu.id, quantity: 1 } };
     const x3dSimilarity = candidateSimilarityForBuild(x3dBuild, [...seedCatalog, x3dReferenceCpu, closeCpu], "cpu", closeCpu, "general");
-    expect(x3dSimilarity.similarityEvidence.notes?.[0]).toContain("동일 CPU 모델 계열의 검증된 카탈로그 참조");
+    expect(x3dSimilarity.similarityEvidence.notes?.[0]).toContain("동일 CPU 모델 계열의 확인된 카탈로그 참조");
   });
 
   it("fills missing GPU model-common dimensions from a same-family reference without replacing selected values", () => {
@@ -2521,7 +2521,7 @@ describe("compatibility engine", () => {
     const referenceGpu: Part = {
       ...baseGpu,
       id: "gpu-rtx4060-model-reference",
-      name: "검증된 RTX 4060 모델 공통 스펙 참조",
+      name: "확인된 RTX 4060 모델 공통 스펙 참조",
       model: "RTX 4060 Performance Reference",
       source: "danawa",
       sourceProductCode: "reference-rtx4060",
@@ -2577,7 +2577,7 @@ describe("compatibility engine", () => {
       expect.objectContaining({ key: "gpuMemoryBandwidthGbps", currentValue: "272GB/s", source: "model_reference" }),
       expect.objectContaining({ key: "gpuBoostClockMhz", currentValue: "부스트 2,500MHz", source: "selected" })
     ]));
-    expect(similarity.similarityEvidence.notes?.[0]).toContain("동일 GPU 모델 계열의 검증된 카탈로그 참조");
+    expect(similarity.similarityEvidence.notes?.[0]).toContain("동일 GPU 모델 계열의 확인된 카탈로그 참조");
   });
 
   it("recognizes three-digit Intel Core Ultra model families for partial CPU references", () => {
@@ -2600,7 +2600,7 @@ describe("compatibility engine", () => {
     const referenceCpu: Part = {
       ...currentCpu,
       id: "cpu-core-ultra265k-reference",
-      name: "검증된 인텔 코어 울트라7 265K 참조",
+      name: "인텔 코어 울트라7 265K 계열 확인 참조",
       model: "인텔 코어 울트라7 시리즈2 265K (정품)",
       source: "danawa",
       sourceProductCode: "reference-core-ultra265k",
@@ -3148,7 +3148,7 @@ describe("compatibility engine", () => {
     const currentCpu: Part = {
       ...incompatibleCpu,
       id: "cpu-bounded-pool-performance-baseline",
-      name: "성능 근거 풀 기준 CPU",
+      name: "성능 정보 풀 기준 CPU",
       dataQuality: "manual",
       source: "manual",
       priceWon: 300000,
@@ -3276,7 +3276,7 @@ describe("compatibility engine", () => {
 
     expect(draft.priority).toBe("reliability");
     expect(draft.selection.cpu?.partId).toBe(verifiedCpu.id);
-    expect(draft.rationale[1]).toContain("검증 우선");
+    expect(draft.rationale[1]).toContain("안심 우선");
     expect(draft.blockerCount).toBe(0);
   });
 

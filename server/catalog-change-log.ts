@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { AccessoryItem, CatalogChangeKind, CatalogChangeRecord, CatalogChangeSummary, CatalogChangeValueDiff, Part } from "../shared/types";
-import { isKnownPrice } from "../shared/types";
+import { CATALOG_DATA_QUALITY_CHANGE_FIELD_LABEL, isKnownPrice } from "../shared/types";
 import { CATALOG_CHANGE_LOG_PATH, fileUpdatedAt, readJson, writeJson } from "./storage";
 
 const MAX_CHANGE_LOG_SIZE = 1000;
@@ -72,7 +72,7 @@ export function catalogChangeValueDiffsFor(before: CatalogItem, after: CatalogIt
     valueDiff("가격", before.priceWon, after.priceWon, true),
     valueDiff("원문 스펙", before.rawSpecText, after.rawSpecText),
     valueDiff("정규화 스펙", before.specs, after.specs),
-    valueDiff("데이터 품질", before.dataQuality, after.dataQuality),
+    valueDiff(CATALOG_DATA_QUALITY_CHANGE_FIELD_LABEL, before.dataQuality, after.dataQuality),
     valueDiff("누락 필드", before.missingFields, after.missingFields)
   ].filter((diff): diff is CatalogChangeValueDiff => diff !== undefined).slice(0, MAX_VALUE_DIFFS);
 }
@@ -87,7 +87,7 @@ export function meaningfulCatalogChangeFields(before: CatalogItem, after: Catalo
     ["가격", before.priceWon, after.priceWon],
     ["원문 스펙", before.rawSpecText, after.rawSpecText],
     ["정규화 스펙", before.specs, after.specs],
-    ["데이터 품질", before.dataQuality, after.dataQuality],
+    [CATALOG_DATA_QUALITY_CHANGE_FIELD_LABEL, before.dataQuality, after.dataQuality],
     ["누락 필드", before.missingFields, after.missingFields]
   ];
   return fields.filter(([, left, right]) => stableJson(left) !== stableJson(right)).map(([label]) => label);

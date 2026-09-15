@@ -485,7 +485,7 @@ function m2CoveragePriority(part: Awaited<ReturnType<typeof loadCatalog>>[number
   }
   const reasons: string[] = [];
   let score = status === "stale" ? 65 : status === "incomplete" ? 35 : 25;
-  if (status === "stale") reasons.push("카탈로그 원문이 매핑 이후 갱신됨 · 재검수 필요");
+  if (status === "stale") reasons.push("카탈로그 원문이 매핑 이후 갱신됨 · 재확인 필요");
   else if (status === "incomplete") reasons.push("기존 매핑의 필수 정보 보완");
   else reasons.push("슬롯별 매핑 미등록");
   if (slotCount >= 2) {
@@ -1086,7 +1086,7 @@ app.get("/api/admin/build-versions/backups/:id", requireAdmin, async (request, r
 app.post("/api/admin/build-versions/migrate", adminVersionMigrationRateLimit, requireAdmin, async (request, response) => {
   const expectedFingerprint = typeof request.body?.expectedFingerprint === "string" ? request.body.expectedFingerprint.trim().toLowerCase() : "";
   if (!/^[0-9a-f]{64}$/.test(expectedFingerprint)) {
-    response.status(400).json({ error: "최신 마이그레이션 프리뷰 fingerprint가 필요합니다.", code: "VERSION_MIGRATION_FINGERPRINT_REQUIRED" });
+    response.status(400).json({ error: "최신 마이그레이션 프리뷰 식별자가 필요합니다.", code: "VERSION_MIGRATION_FINGERPRINT_REQUIRED" });
     return;
   }
   if (request.body?.confirmation !== SAVED_BUILD_VERSION_MIGRATION_CONFIRMATION) {
@@ -1113,7 +1113,7 @@ app.post("/api/admin/build-versions/rollback", adminVersionRollbackRateLimit, re
   const backupId = typeof request.body?.backupId === "string" ? request.body.backupId.trim() : "";
   const expectedFingerprint = typeof request.body?.expectedFingerprint === "string" ? request.body.expectedFingerprint.trim().toLowerCase() : "";
   if (!backupId || backupId.length > 120 || !/^[0-9a-f]{64}$/.test(expectedFingerprint)) {
-    response.status(400).json({ error: "rollback에는 backupId와 최신 적용 fingerprint가 필요합니다.", code: "VERSION_ROLLBACK_INPUT_REQUIRED" });
+    response.status(400).json({ error: "rollback에는 backupId와 최신 적용 식별자가 필요합니다.", code: "VERSION_ROLLBACK_INPUT_REQUIRED" });
     return;
   }
   if (request.body?.confirmation !== SAVED_BUILD_VERSION_ROLLBACK_CONFIRMATION) {
@@ -1349,7 +1349,7 @@ function parseCatalogSpecRefreshBatchFilters(value: unknown): { filters?: Catalo
   const offsetInvalid = offset !== undefined && (!Number.isInteger(offset) || offset < 0 || offset > 100_000);
   const limitInvalid = limit !== undefined && (!Number.isInteger(limit) || limit < 1 || limit > 100);
   if (candidate.category !== undefined && !category || candidate.priority !== undefined && !priority || candidate.action !== undefined && !action || candidate.evidence !== undefined && !evidence || candidate.query !== undefined && query === undefined || candidate.missingField !== undefined && missingField === undefined || offsetInvalid || limitInvalid) {
-    return { error: "filters의 카테고리·우선순위·작업 유형·근거 범위·검색어·offset·limit을 확인해 주세요." };
+    return { error: "filters의 카테고리·우선순위·작업 유형·정보 범위·검색어·offset·limit을 확인해 주세요." };
   }
   return { filters: { ...(category ? { category } : {}), ...(priority ? { priority } : {}), ...(action ? { action } : {}), ...(evidence ? { evidence } : {}), ...(query ? { query } : {}), ...(missingField ? { missingField } : {}), ...(offset !== undefined ? { offset } : {}), ...(limit !== undefined ? { limit } : {}) } };
 }
@@ -2207,7 +2207,7 @@ app.post("/api/budget-ladders", budgetLadderCreateRateLimit, async (request, res
   const existingLadders = parsed.parentId ? await readSavedBudgetLadders() : [];
   const parent = parsed.parentId ? existingLadders.find((item) => item.id === parsed.parentId) : undefined;
   if (parsed.parentId && (!parent || budgetLadderShareExpired(parent))) {
-    response.status(400).json({ error: "원본 예산 비교 snapshot을 찾을 수 없거나 만료되었습니다." });
+    response.status(400).json({ error: "원본 예산 비교 저장본을 찾을 수 없거나 만료되었습니다." });
     return;
   }
   const id = randomUUID();
@@ -2813,36 +2813,36 @@ app.post("/api/builds/:id/check", buildShareRateLimit, async (request, response)
 });
 
 app.put("/api/builds/:id/assembly-verification", buildShareRateLimit, async (request, response) => {
-  const build = await ownedSavedBuildForRequest(request, response, "조립 검증 기록 저장", "조립 검증 기록을 저장하려면 견적 소유자 인증이 필요합니다.");
+  const build = await ownedSavedBuildForRequest(request, response, "조립 확인 기록 저장", "조립 확인 기록을 저장하려면 견적 소유자 인증이 필요합니다.");
   if (!build) return;
   const id = build.id;
   const rawHistory = request.body?.history ?? request.body?.log;
   if (!rawHistory || typeof rawHistory !== "object" || Array.isArray(rawHistory)) {
-    response.status(400).json({ error: "조립 검증 이력 본문이 필요합니다." });
+    response.status(400).json({ error: "조립 확인 이력 본문이 필요합니다." });
     return;
   }
   const rawFingerprint = typeof rawHistory.buildFingerprint === "string" ? rawHistory.buildFingerprint : "";
   const parsed = parseAssemblyVerificationHistoryJson(JSON.stringify(rawHistory), rawFingerprint);
   if (parsed.errors.length > 0 || !parsed.history) {
-    response.status(400).json({ error: "조립 검증 이력 형식이 올바르지 않습니다.", details: parsed.errors });
+    response.status(400).json({ error: "조립 확인 이력 형식이 올바르지 않습니다.", details: parsed.errors });
     return;
   }
   const recommendationPreferences = build.recommendationPreferences ?? parseRecommendationPreferences(undefined);
   const expectedFingerprint = buildCompatibilityInputFingerprint(build.selection, recommendationPreferences);
   const expectedPrefix = `pc-supporter-assembly-verification:${expectedFingerprint}:`;
   if (!parsed.history.buildFingerprint.startsWith(expectedPrefix)) {
-    response.status(409).json({ error: "현재 저장 견적과 다른 조립 검증 로그입니다. 같은 견적에서 생성한 로그만 저장할 수 있습니다.", code: "ASSEMBLY_VERIFICATION_BUILD_MISMATCH" });
+    response.status(409).json({ error: "현재 저장 견적과 다른 조립 확인 로그입니다. 같은 견적에서 생성한 로그만 저장할 수 있습니다.", code: "ASSEMBLY_VERIFICATION_BUILD_MISMATCH" });
     return;
   }
   const verificationHistory = assemblyVerificationSavedHistoryFor(parsed.history);
   const verification = verificationHistory.find((item) => item.runId === parsed.history!.activeRunId) ?? verificationHistory.at(-1);
   if (!verification) {
-    response.status(400).json({ error: "조립 검증 이력이 비어 있습니다." });
+    response.status(400).json({ error: "조립 확인 이력이 비어 있습니다." });
     return;
   }
   const updated = await updateSavedBuildAssemblyVerification(id ?? "", verification, verificationHistory);
   if (!updated) {
-    response.status(409).json({ error: "저장 견적에 먼저 검사 결과를 기록해야 조립 검증 로그를 연결할 수 있습니다.", code: "ASSEMBLY_VERIFICATION_CHECK_REQUIRED" });
+    response.status(409).json({ error: "저장 견적에 먼저 검사 결과를 기록해야 조립 확인 로그를 연결할 수 있습니다.", code: "ASSEMBLY_VERIFICATION_CHECK_REQUIRED" });
     return;
   }
   response.json(savedBuildPresentationFor(updated, await loadSavedBuildPresentationContext()));
@@ -2906,13 +2906,13 @@ app.get("/api/admin/catalog-spec/review-package", requireAdmin, async (request, 
   const rawEvidence = typeof request.query.evidence === "string" ? request.query.evidence : undefined;
   const evidence: CatalogSpecReviewEvidence | undefined = rawEvidence === "all" || rawEvidence === "spec" || rawEvidence === "pcie" ? rawEvidence : undefined;
   if (rawEvidence !== undefined && evidence === undefined) {
-    response.status(400).json({ error: "스펙 보강 큐 근거 범위가 올바르지 않습니다.", details: ["evidence는 all, spec, pcie 중 하나여야 합니다."] });
+    response.status(400).json({ error: "스펙 보강 목록 정보 범위가 올바르지 않습니다.", details: ["evidence는 all, spec, pcie 중 하나여야 합니다."] });
     return;
   }
   const query = typeof request.query.q === "string" ? request.query.q.slice(0, 120) : undefined;
   const missingField = parseCatalogMissingField(request.query.missingField);
   if (missingField.error) {
-    response.status(400).json({ error: "스펙 보강 큐 누락 필드 형식이 올바르지 않습니다.", details: [missingField.error] });
+    response.status(400).json({ error: "스펙 보강 목록 누락 필드 형식이 올바르지 않습니다.", details: [missingField.error] });
     return;
   }
   const requestedLimit = Number(request.query.limit ?? 24);
@@ -3063,7 +3063,7 @@ app.post("/api/admin/catalog-spec-overrides/source-check/batch", catalogSpecSour
   const candidateIds = new Set(candidates.map(({ part }) => part.id));
   const skipped = offset === 0 ? (requestedPartIds ?? [])
     .filter((partId) => !candidateIds.has(partId))
-    .map((partId) => ({ partId, reason: "저장된 HTTPS 카탈로그 스펙 근거 URL이 없거나 현재 카탈로그와 일치하지 않습니다." })) : [];
+    .map((partId) => ({ partId, reason: "저장된 HTTPS 카탈로그 스펙 정보 URL이 없거나 현재 카탈로그와 일치하지 않습니다." })) : [];
   const result = await catalogSpecSourceCheckBatchFor(candidates.map(({ part, override }) => ({
     partId: part.id,
     partName: part.name,
@@ -3113,7 +3113,7 @@ app.post("/api/admin/catalog-spec-overrides/:partId/source-check", catalogSpecSo
     if (remainingMs > 0) {
       const retryAfterSeconds = Math.ceil(remainingMs / 1000);
       response.setHeader("Retry-After", String(retryAfterSeconds));
-      response.status(429).json({ error: `같은 근거는 ${retryAfterSeconds}초 후 다시 점검할 수 있습니다.`, code: "CATALOG_SPEC_SOURCE_CHECK_COOLDOWN", retryAfterSeconds });
+      response.status(429).json({ error: `같은 정보는 ${retryAfterSeconds}초 후 다시 점검할 수 있습니다.`, code: "CATALOG_SPEC_SOURCE_CHECK_COOLDOWN", retryAfterSeconds });
       return;
     }
     catalogSpecSourceCheckLastRunAt.delete(partId);
@@ -3134,7 +3134,7 @@ app.post("/api/admin/catalog-spec-overrides/:partId/source-check", catalogSpecSo
     const refreshedCatalog = persist ? await loadCatalog() : catalog;
     response.json({ persisted: persist, historyRecorded: Boolean(historyEntry), sourceCheck, override: checkedOverride, part: refreshedCatalog.find((candidate) => candidate.id === partId) });
   } catch (error: unknown) {
-    response.status(422).json({ error: error instanceof Error ? error.message : "수동 스펙 근거를 점검하지 못했습니다.", code: "CATALOG_SPEC_SOURCE_CHECK_FAILED" });
+    response.status(422).json({ error: error instanceof Error ? error.message : "수동 스펙 정보를 점검하지 못했습니다.", code: "CATALOG_SPEC_SOURCE_CHECK_FAILED" });
   } finally {
     if (catalogSpecSourceCheckJobs.get(partId) === job) catalogSpecSourceCheckJobs.delete(partId);
   }
@@ -3687,7 +3687,7 @@ app.post("/api/admin/gpu-physical-overrides/source-check/batch", gpuPhysicalSour
   const candidateIds = new Set(candidates.map(({ part }) => part.id));
   const skipped = (requestedPartIds ?? [])
     .filter((partId) => !candidateIds.has(partId))
-    .map((partId) => ({ partId, reason: "저장된 HTTPS 근거 URL이 없거나 현재 카탈로그 범주와 일치하지 않습니다." }));
+    .map((partId) => ({ partId, reason: "저장된 HTTPS 정보 URL이 없거나 현재 카탈로그 범주와 일치하지 않습니다." }));
   response.json(await physicalSourceCheckBatchFor(candidates.map(({ part, override }) => ({ partId: part.id, partName: part.name, category: part.category, sourceUrl: override.sourceUrl, manufacturerModel: override.manufacturerModel })), {
     limit,
     concurrency: 2,
@@ -3760,27 +3760,27 @@ app.post("/api/admin/gpu-physical-overrides/:partId/source-check", gpuPhysicalSo
   const catalog = await loadCatalog();
   const partId = routeParam(request.params.partId);
   if (!partId) {
-    response.status(400).json({ error: "물리 근거 점검 대상 식별자가 필요합니다." });
+    response.status(400).json({ error: "장착 정보 점검 대상 식별자가 필요합니다." });
     return;
   }
   const part = findPart(catalog, partId);
   if (!part || (part.category !== "gpu" && part.category !== "case" && part.category !== "psu")) {
-    response.status(404).json({ error: "물리 근거를 점검할 GPU·케이스·PSU를 찾을 수 없습니다." });
+    response.status(404).json({ error: "장착 정보를 점검할 GPU·케이스·PSU를 찾을 수 없습니다." });
     return;
   }
   const overrides = await readGpuPhysicalOverrides();
   const override = overrides[partId];
   if (!override) {
-    response.status(404).json({ error: "먼저 물리 검수값을 저장해야 근거 URL을 점검할 수 있습니다." });
+    response.status(404).json({ error: "먼저 물리 확인값을 저장해야 정보 URL을 점검할 수 있습니다." });
     return;
   }
   if (!override.sourceUrl) {
-    response.status(400).json({ error: "저장된 근거 URL이 없어 점검할 수 없습니다." });
+    response.status(400).json({ error: "저장된 정보 URL이 없어 점검할 수 없습니다." });
     return;
   }
   const persist = request.query.persist !== "false";
   if (gpuPhysicalSourceCheckJobs.has(partId)) {
-    response.status(409).json({ error: "이 물리 근거의 원문 점검이 이미 실행 중입니다.", code: "GPU_PHYSICAL_SOURCE_CHECK_RUNNING" });
+    response.status(409).json({ error: "이 장착 정보의 원문 점검이 이미 실행 중입니다.", code: "GPU_PHYSICAL_SOURCE_CHECK_RUNNING" });
     return;
   }
   const lastRunAt = gpuPhysicalSourceCheckLastRunAt.get(partId);
@@ -3789,7 +3789,7 @@ app.post("/api/admin/gpu-physical-overrides/:partId/source-check", gpuPhysicalSo
     if (remainingMs > 0) {
       const retryAfterSeconds = Math.ceil(remainingMs / 1000);
       response.setHeader("Retry-After", String(retryAfterSeconds));
-      response.status(429).json({ error: `같은 물리 근거는 ${retryAfterSeconds}초 후 다시 점검할 수 있습니다.`, code: "GPU_PHYSICAL_SOURCE_CHECK_COOLDOWN", retryAfterSeconds });
+      response.status(429).json({ error: `같은 장착 정보는 ${retryAfterSeconds}초 후 다시 점검할 수 있습니다.`, code: "GPU_PHYSICAL_SOURCE_CHECK_COOLDOWN", retryAfterSeconds });
       return;
     }
     gpuPhysicalSourceCheckLastRunAt.delete(partId);
@@ -3801,7 +3801,7 @@ app.post("/api/admin/gpu-physical-overrides/:partId/source-check", gpuPhysicalSo
     gpuPhysicalSourceCheckLastRunAt.set(partId, Date.now());
     const checkedOverride = persist ? await saveGpuPhysicalSourceCheck(partId, sourceCheck) : override;
     if (!checkedOverride) {
-      response.status(404).json({ error: "물리 검수값이 점검 중 사라졌습니다." });
+      response.status(404).json({ error: "물리 확인값이 점검 중 사라졌습니다." });
       return;
     }
     const historyEntry = persist && checkedOverride ? await appendPhysicalSourceCheckHistory(partId, sourceCheck).catch(() => undefined) : undefined;
@@ -3818,7 +3818,7 @@ app.get("/api/admin/gpu-physical-overrides/:partId/source-check/history", requir
   const partId = routeParam(request.params.partId);
   const part = partId ? findPart(catalog, partId) : undefined;
   if (!part || (part.category !== "gpu" && part.category !== "case" && part.category !== "psu")) {
-    response.status(404).json({ error: "근거 점검 이력을 조회할 GPU·케이스·PSU를 찾을 수 없습니다." });
+    response.status(404).json({ error: "정보 점검 이력을 조회할 GPU·케이스·PSU를 찾을 수 없습니다." });
     return;
   }
   const requestedLimit = Number(request.query.limit ?? 20);
@@ -3993,7 +3993,7 @@ app.post("/api/admin/benchmark-overrides/source-check/batch", benchmarkSourceChe
   const candidateIds = new Set(candidates.map(({ part }) => part.id));
   const skipped = (requestedPartIds ?? [])
     .filter((partId) => !candidateIds.has(partId))
-    .map((partId) => ({ partId, reason: "저장된 HTTPS benchmark 근거 URL이 없거나 현재 CPU·GPU 카탈로그와 일치하지 않습니다." }));
+    .map((partId) => ({ partId, reason: "저장된 HTTPS 벤치마크 정보 URL이 없거나 현재 CPU·GPU 카탈로그와 일치하지 않습니다." }));
   response.json(await benchmarkSourceCheckBatchFor(candidates.map(({ part, override }) => ({ partId: part.id, partName: part.name, category: part.category, sourceUrl: override.sourceUrl, manufacturerModel: part.model?.trim() || part.name })), {
     limit,
     concurrency: 2,
@@ -4025,12 +4025,12 @@ app.post("/api/admin/benchmark-overrides/:partId/source-check", benchmarkSourceC
     return;
   }
   if (!override.sourceUrl) {
-    response.status(400).json({ error: "저장된 benchmark 근거 URL이 없어 점검할 수 없습니다." });
+    response.status(400).json({ error: "저장된 벤치마크 정보 URL이 없어 점검할 수 없습니다." });
     return;
   }
   const persist = request.query.persist !== "false";
   if (benchmarkSourceCheckJobs.has(partId)) {
-    response.status(409).json({ error: "이 benchmark 근거의 원문 점검이 이미 실행 중입니다.", code: "BENCHMARK_SOURCE_CHECK_RUNNING" });
+    response.status(409).json({ error: "이 벤치마크 정보의 원문 점검이 이미 실행 중입니다.", code: "BENCHMARK_SOURCE_CHECK_RUNNING" });
     return;
   }
   const lastRunAt = benchmarkSourceCheckLastRunAt.get(partId);
@@ -4039,7 +4039,7 @@ app.post("/api/admin/benchmark-overrides/:partId/source-check", benchmarkSourceC
     if (remainingMs > 0) {
       const retryAfterSeconds = Math.ceil(remainingMs / 1000);
       response.setHeader("Retry-After", String(retryAfterSeconds));
-      response.status(429).json({ error: `같은 benchmark 근거는 ${retryAfterSeconds}초 후 다시 점검할 수 있습니다.`, code: "BENCHMARK_SOURCE_CHECK_COOLDOWN", retryAfterSeconds });
+      response.status(429).json({ error: `같은 벤치마크 정보는 ${retryAfterSeconds}초 후 다시 점검할 수 있습니다.`, code: "BENCHMARK_SOURCE_CHECK_COOLDOWN", retryAfterSeconds });
       return;
     }
     benchmarkSourceCheckLastRunAt.delete(partId);
@@ -4068,7 +4068,7 @@ app.get("/api/admin/benchmark-overrides/:partId/source-check/history", requireAd
   const partId = routeParam(request.params.partId);
   const part = partId ? findPart(catalog, partId) : undefined;
   if (!part || (part.category !== "cpu" && part.category !== "gpu")) {
-    response.status(404).json({ error: "benchmark 원문 점검 이력을 조회할 CPU·GPU를 찾을 수 없습니다." });
+    response.status(404).json({ error: "벤치마크 원문 점검 이력을 조회할 CPU·GPU를 찾을 수 없습니다." });
     return;
   }
   const requestedLimit = Number(request.query.limit ?? 20);

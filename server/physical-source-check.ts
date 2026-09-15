@@ -61,9 +61,9 @@ async function publicHttpsUrlFor(rawUrl: string, lookup: (hostname: string, opti
   try {
     parsed = new URL(rawUrl);
   } catch {
-    throw new BlockedSourceError("근거 URL 형식이 올바르지 않습니다.");
+    throw new BlockedSourceError("정보 URL 형식이 올바르지 않습니다.");
   }
-  if (parsed.protocol !== "https:") throw new BlockedSourceError("HTTPS 근거 URL만 점검할 수 있습니다.");
+  if (parsed.protocol !== "https:") throw new BlockedSourceError("HTTPS 정보 URL만 점검할 수 있습니다.");
   if (parsed.username || parsed.password) throw new BlockedSourceError("사용자명·비밀번호가 포함된 URL은 점검할 수 없습니다.");
   if (parsed.port && parsed.port !== "443") throw new BlockedSourceError("기본 HTTPS 포트(443) 외의 URL은 점검할 수 없습니다.");
   const hostname = normalizedHostname(parsed.hostname);
@@ -72,7 +72,7 @@ async function publicHttpsUrlFor(rawUrl: string, lookup: (hostname: string, opti
   }
   const family = isIP(hostname);
   const addresses = family > 0 ? [{ address: hostname, family }] : await lookup(hostname, { all: true }).catch(() => {
-    throw new UnreachableSourceError("근거 호스트의 DNS를 확인하지 못했습니다.");
+    throw new UnreachableSourceError("정보 호스트의 DNS를 확인하지 못했습니다.");
   });
   if (addresses.length === 0 || addresses.some((address) => !addressIsPublic(address.address))) throw new BlockedSourceError("공개 인터넷 주소로 확인되지 않는 호스트입니다.");
   return parsed;
@@ -207,7 +207,7 @@ export async function checkPhysicalSourceUrl(rawUrl: string, manufacturerModel: 
       await publicHttpsUrlFor(currentUrl, lookup);
     } catch (error) {
       const status = error instanceof BlockedSourceError ? "blocked" : "unreachable";
-      return checkedResult({ ...base, redirectCount }, status, "not_checked", error instanceof Error ? error.message : "근거 URL을 점검하지 못했습니다.", { finalUrl: currentUrl });
+      return checkedResult({ ...base, redirectCount }, status, "not_checked", error instanceof Error ? error.message : "정보 URL을 점검하지 못했습니다.", { finalUrl: currentUrl });
     }
 
     const controller = new AbortController();
@@ -225,7 +225,7 @@ export async function checkPhysicalSourceUrl(rawUrl: string, manufacturerModel: 
       });
     } catch (error) {
       clearTimeout(timer);
-      return checkedResult({ ...base, redirectCount }, "unreachable", "not_checked", error instanceof Error && error.name === "AbortError" ? "근거 URL 응답 시간이 초과되었습니다." : "근거 URL에 연결하지 못했습니다.", { finalUrl: currentUrl });
+      return checkedResult({ ...base, redirectCount }, "unreachable", "not_checked", error instanceof Error && error.name === "AbortError" ? "정보 URL 응답 시간이 초과되었습니다." : "정보 URL에 연결하지 못했습니다.", { finalUrl: currentUrl });
     } finally {
       clearTimeout(timer);
     }
@@ -247,14 +247,14 @@ export async function checkPhysicalSourceUrl(rawUrl: string, manufacturerModel: 
     const contentType = response.headers.get("content-type")?.split(";", 1)[0]?.trim() || undefined;
     if (!response.ok) {
       await cancelBody(response);
-      return checkedResult({ ...base, redirectCount }, "http_error", "not_checked", `근거 URL이 HTTP ${response.status}를 반환했습니다.`, { finalUrl: currentUrl, httpStatus: response.status, ...(contentType ? { contentType } : {}) });
+      return checkedResult({ ...base, redirectCount }, "http_error", "not_checked", `정보 URL이 HTTP ${response.status}를 반환했습니다.`, { finalUrl: currentUrl, httpStatus: response.status, ...(contentType ? { contentType } : {}) });
     }
     let body: { bytes: Uint8Array; truncated: boolean };
     try {
       const maxBodyBytes = contentType?.includes("pdf") || /\.pdf(?:[?#]|$)/i.test(currentUrl) ? MAX_PDF_BODY_BYTES : MAX_TEXT_BODY_BYTES;
       body = await boundedBodyFor(response, maxBodyBytes);
     } catch {
-      return checkedResult({ ...base, redirectCount }, "unreachable", "not_checked", "근거 URL 응답 본문을 읽지 못했습니다.", { finalUrl: currentUrl, httpStatus: response.status, ...(contentType ? { contentType } : {}) });
+      return checkedResult({ ...base, redirectCount }, "unreachable", "not_checked", "정보 URL 응답 본문을 읽지 못했습니다.", { finalUrl: currentUrl, httpStatus: response.status, ...(contentType ? { contentType } : {}) });
     }
     const identity = await identityFor(contentType, currentUrl, body.bytes, manufacturerModel, body.truncated, pdfTextExtractor);
     const status: PhysicalSourceCheckStatus = identity.status === "not_found" ? "identity_mismatch" : redirectCount > 0 ? "redirected" : "reachable";

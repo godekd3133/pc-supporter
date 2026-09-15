@@ -69,7 +69,7 @@ describe("benchmark overrides", () => {
       expect.stringContaining("CPU에 사용할 수 없는 벤치마크 필드"),
       expect.stringContaining("같은 partId가 일괄 입력에서 중복"),
       expect.stringContaining("cinebenchR23Single는 1부터 1,000,000 사이의 정수"),
-      expect.stringContaining("검수 근거 sourceNote가 필요"),
+      expect.stringContaining("확인 정보 sourceNote가 필요"),
       expect.stringContaining("sourceKind은 official"),
       expect.stringContaining("sourceUrl은 HTTPS 주소만")
     ]));
@@ -83,7 +83,7 @@ describe("benchmark overrides", () => {
         partId: "cpu-1",
         scores: { cinebenchR23Single: 2000, cinebenchR23Multi: 18000, gpu3dmarkTimeSpyScore: 15000, gpu3dmarkPortRoyalScore: 0 },
         sourceKind: "official",
-        sourceNote: "검수 표",
+        sourceNote: "확인 표",
         sourceUrl: "https://example.com/benchmark",
         updatedAt: "2026-08-28T00:00:00.000Z"
       }
@@ -92,7 +92,7 @@ describe("benchmark overrides", () => {
     expect(applied[0]).toMatchObject({ id: "cpu-1", name: "벤치마크 CPU", specs: { socket: "AM5", cores: 6, cinebenchR23Single: 2000, cinebenchR23Multi: 18000 } });
     expect(applied[0].specs.gpu3dmarkTimeSpyScore).toBeUndefined();
     expect(applied[0].specs.gpu3dmarkPortRoyalScore).toBeUndefined();
-    expect(applied[0].specs.benchmarkProvenance).toMatchObject({ sourceKind: "official", sourceNote: "검수 표", sourceUrl: "https://example.com/benchmark" });
+    expect(applied[0].specs.benchmarkProvenance).toMatchObject({ sourceKind: "official", sourceNote: "확인 표", sourceUrl: "https://example.com/benchmark" });
   });
 
   it("carries a persisted source-check result into benchmark provenance", () => {
@@ -103,7 +103,7 @@ describe("benchmark overrides", () => {
         partId: "cpu-source-checked",
         scores: { cinebenchR23Multi: 18000 },
         sourceKind: "official",
-        sourceNote: "검수 표",
+        sourceNote: "확인 표",
         sourceUrl: "https://example.com/benchmark",
         sourceCheck,
         updatedAt: "2026-09-03T00:00:00.000Z"

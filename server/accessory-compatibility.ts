@@ -165,11 +165,11 @@ function fanHubTargetRecommendationFor(fan: { selection: AccessorySelection; ite
     ...(suggestedHubId ? { suggestedHubId } : {}),
     candidates,
     summary: recommendedHubId
-      ? `포트·커넥터·전류 근거가 모두 확인된 ${candidates.find((candidate) => candidate.hubId === recommendedHubId)?.hubName ?? "허브"}를 우선 연결 후보로 제안합니다.`
+      ? `포트·커넥터·전류 정보가 모두 확인된 ${candidates.find((candidate) => candidate.hubId === recommendedHubId)?.hubName ?? "허브"}를 우선 연결 후보로 제안합니다.`
       : suggestedHubId
-        ? `${candidates.find((candidate) => candidate.hubId === suggestedHubId)?.hubName ?? "허브"}가 현재 배치에서 우선 확인할 후보입니다. 전류 근거가 없으면 최종 안전성을 확정하지 않습니다.`
+        ? `${candidates.find((candidate) => candidate.hubId === suggestedHubId)?.hubName ?? "허브"}가 현재 배치에서 우선 확인할 후보입니다. 전류 정보가 없으면 최종 안전성을 확정하지 않습니다.`
       : candidates.some((candidate) => candidate.status !== "blocked")
-        ? "차단되지 않은 허브 후보가 있지만 전류·포트·커넥터 근거를 추가로 확인해야 합니다."
+        ? "차단되지 않은 허브 후보가 있지만 전류·포트·커넥터 정보를 추가로 확인해야 합니다."
         : "현재 선택한 허브 중 추가 팬을 안전하게 배치할 후보를 확인하지 못했습니다."
   };
 }
@@ -795,7 +795,7 @@ export function accessoryCompatibilityFor(build: BuildSelection, catalog: Part[]
       accessoryName: targetEntry?.item.name ?? "RGB 연결 컨트롤러",
       relatedPartIds: [computerCase?.id, ...(motherboard ? [motherboard.id] : [])].filter((partId): partId is string => Boolean(partId)),
       title: "케이스 RGB 장치의 연결 컨트롤러를 지정해야 합니다.",
-      message: targetId ? "지정한 RGB 연결 컨트롤러가 선택되지 않았거나 RGB 출력·전압 근거가 없어 케이스 RGB 장치 연결을 확정할 수 없습니다." : "RGB 기능이 있는 허브가 여러 개 선택되어 케이스 RGB 장치를 어느 컨트롤러에 연결할지 확정할 수 없습니다.",
+      message: targetId ? "지정한 RGB 연결 컨트롤러가 선택되지 않았거나 RGB 출력·전압 정보가 없어 케이스 RGB 장치 연결을 확정할 수 없습니다." : "RGB 기능이 있는 허브가 여러 개 선택되어 케이스 RGB 장치를 어느 컨트롤러에 연결할지 확정할 수 없습니다.",
       facts: [
         { label: "케이스 RGB 장치", actual: `${rgbDeviceCount}개` },
         { label: "지정한 RGB 컨트롤러", actual: targetEntry?.item.name ?? targetId ?? "미지정" },

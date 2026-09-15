@@ -33,7 +33,7 @@ const entry: SavedBuildVersionCurrentRecheckEntry = {
     analysisScoreLabel: "상위권",
     findings: [{ key: "rule-new", title: "신규 현재 finding", severity: "warning" }],
     resources: { power: "120W 여유", cooling: "80W 여유", state: "여유 있음" },
-    benchmark: { status: "완전 근거", presentScoreCount: 2, expectedScoreCount: 2, rows: [{ label: "Cinebench R23 멀티", value: 18_000 }] },
+    benchmark: { status: "완전 자료", presentScoreCount: 2, expectedScoreCount: 2, rows: [{ label: "Cinebench R23 멀티", value: 18_000 }] },
     engineVersion: "2.58.0",
     catalogSnapshotAt: "2026-09-07T02:00:00.000Z",
     checkedAt: "2026-09-07T02:01:00.000Z"

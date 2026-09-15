@@ -7,7 +7,7 @@ import { api } from "./api";
 const SOURCE_LABELS: Record<keyof CatalogSeedPreview["active"]["sourceCounts"], string> = {
   seed: "프로젝트 기준",
   danawa: "다나와 수집",
-  manual: "수동 검수"
+  manual: "수동 확인"
 };
 
 const DIFFERENCE_LABELS: Record<CatalogSeedPreviewConflict["differences"][number], string> = {
@@ -89,7 +89,7 @@ export function AdminSeedCatalogPanel() {
         </section>
       </div>
       {preview.conflicts.length > 0 && <section className="admin-seed-preview-conflicts" aria-label="starter 값 충돌 목록"><div className="admin-seed-preview-subheading"><div><span>REVIEW BEFORE MERGE</span><strong>병합 전 다시 확인할 값</strong></div><small>{numberText(preview.conflicts.length)}개</small></div><div className="admin-seed-preview-conflict-list">{preview.conflicts.slice(0, 8).map((conflict) => <article key={`${conflict.category}:${conflict.id}`}><div><span>{CATEGORY_LABELS[conflict.category]}</span><strong>{conflict.starterName}</strong></div><small>현재 · {conflict.activeName} · {sourceLabel(conflict.activeSource)} · {DATA_QUALITY_LABELS[conflict.activeDataQuality]}</small><em>차이 · {conflictDifferences(conflict)}</em></article>)}</div>{preview.conflicts.length > 8 && <p className="admin-seed-preview-more">외 {numberText(preview.conflicts.length - 8)}개 충돌은 JSON 응답의 conflicts에서 확인할 수 있습니다.</p>}</section>}
-      <p className="admin-seed-preview-note"><FiInfo /> 대조 키는 <code>category:id</code>입니다. 같은 ID가 없다는 사실은 상품이 판매되지 않는다는 뜻이 아니며, live 수집 데이터에는 별도의 source product code가 있을 수 있습니다. 실제 카탈로그 반영은 기존 수집·검수 작업과 데이터 품질 정책을 거쳐야 합니다. 마지막 계산 {new Date(preview.generatedAt).toLocaleString("ko-KR")}.</p>
+      <p className="admin-seed-preview-note"><FiInfo /> 대조 키는 <code>category:id</code>입니다. 같은 ID가 없다는 사실은 상품이 판매되지 않는다는 뜻이 아니며, live 수집 데이터에는 별도의 source product code가 있을 수 있습니다. 실제 카탈로그 반영은 기존 수집·확인 작업과 데이터 상태 정책을 거쳐야 합니다. 마지막 계산 {new Date(preview.generatedAt).toLocaleString("ko-KR")}.</p>
     </>}
   </section>;
 }

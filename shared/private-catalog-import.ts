@@ -24,5 +24,5 @@ export function assertCompleteReplacementSnapshot(
   coverage: ReplacementCoverage
 ) {
   if (coverage.complete) return;
-  throw new Error(`${flag}를 사용하려면 모든 지원 범주가 포함된 전체 snapshot이 필요합니다. 누락 범주: ${coverage.missingCategories.join(", ")}. 부분 데이터는 ${flag === "--replace-danawa" ? "--apply만 사용해 병합" : "--include-accessories만 사용해 병합"}하세요.`);
+  throw new Error(`${flag}를 사용하려면 모든 지원 범주가 포함된 전체 저장본이 필요합니다. 누락 범주: ${coverage.missingCategories.join(", ")}. 부분 데이터는 ${flag === "--replace-danawa" ? "--apply만 사용해 병합" : "--include-accessories만 사용해 병합"}하세요.`);
 }

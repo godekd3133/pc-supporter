@@ -8,7 +8,7 @@ export function physicalEvidenceFilterFromUnknown(value: unknown): PhysicalEvide
 }
 
 export function physicalEvidenceFilterLabel(filter: PhysicalEvidenceFilter) {
-  return filter === "verified" ? "물리 근거 확인됨" : filter === "review" ? "물리 근거 확인 필요" : "전체 물리 근거";
+  return filter === "verified" ? "장착 정보 확인됨" : filter === "review" ? "장착 정보 확인 필요" : "전체 장착 정보";
 }
 
 export function physicalEvidenceMatches(filter: PhysicalEvidenceFilter, evidence: PhysicalEvidenceSummary | undefined) {

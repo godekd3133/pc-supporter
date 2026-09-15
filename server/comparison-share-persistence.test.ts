@@ -19,7 +19,7 @@ function candidate(id: string, priceWon: number) {
     similarity: "동급 88점",
     performance: "현재 기준 성능 비교",
     compatibility: "호환 가능",
-    dataQuality: "수동 검수"
+    dataQuality: "수동 확인"
   };
 }
 
@@ -43,7 +43,7 @@ describe("alternative comparison persistence API", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: "GPU 후보 전체 가상 비교",
+          name: "GPU 후보 전체 미리 비교",
           category: "그래픽카드",
           currentPartName: "기존 GPU",
           currentPartSummary: "PCIe 4.0 · VRAM 8GB",

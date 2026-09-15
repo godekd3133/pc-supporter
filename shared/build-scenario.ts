@@ -57,7 +57,7 @@ export function buildScenarioComparisonFor(current: CompatibilityResult, next: C
     warningDelta !== 0 ? `주의 ${signedDelta(warningDelta)}` : undefined,
     unknownDelta !== 0 ? `확인 필요 ${signedDelta(unknownDelta)}` : undefined,
     priceDeltaWon !== undefined ? `총액 ${priceDeltaWon > 0 ? "+" : ""}${priceDeltaWon.toLocaleString("ko-KR")}원` : undefined,
-    statusChanged ? `판정 ${statusLabel(current.status)} → ${statusLabel(next.status)}` : undefined
+    statusChanged ? `결과 ${statusLabel(current.status)} → ${statusLabel(next.status)}` : undefined
   ].filter((value): value is string => Boolean(value));
 
   return {

@@ -15,7 +15,7 @@ function statusIcon(status: AssemblyPlanStep["status"]) {
 }
 
 function targetLabel(targetId: AssemblyPlanTargetId) {
-  return targetId === "repair-plan-panel" ? "수리 플랜 보기" : targetId === "gpu-fit-summary-panel" ? "GPU FIT 보기" : targetId === "build-resource-summary" ? "전력·냉각 보기" : targetId === "data-health-panel" ? "데이터 보기" : targetId === "purchase-list-panel" ? "구매 목록 보기" : targetId === "build-connectivity-panel" ? "연결 자원 보기" : targetId === "accessory-compatibility-panel" ? "주변 부품 보기" : targetId === "assembly-verification-panel" ? "실측 로그 보기" : "체크리스트 보기";
+  return targetId === "repair-plan-panel" ? "수리 플랜 보기" : targetId === "gpu-fit-summary-panel" ? "GPU 장착 보기" : targetId === "build-resource-summary" ? "전력·냉각 보기" : targetId === "data-health-panel" ? "데이터 보기" : targetId === "purchase-list-panel" ? "구매 목록 보기" : targetId === "build-connectivity-panel" ? "연결 자원 보기" : targetId === "accessory-compatibility-panel" ? "주변 부품 보기" : targetId === "assembly-verification-panel" ? "실측 로그 보기" : "체크리스트 보기";
 }
 
 function targetIcon(targetId: AssemblyPlanTargetId) {

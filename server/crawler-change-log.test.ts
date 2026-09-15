@@ -55,7 +55,7 @@ describe("crawler change log selection", () => {
     const records = crawlAccessoryChangeRecords(before, after, after, "2026-08-28T01:00:00.000Z");
 
     expect(records).toHaveLength(1);
-    expect(records[0].changedFields).toEqual(["데이터 품질", "누락 필드"]);
+    expect(records[0].changedFields).toEqual(["데이터 상태", "누락 필드"]);
     expect(records[0].changedFields).not.toContain("이미지");
   });
 });

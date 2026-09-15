@@ -36,7 +36,7 @@ describe("catalog spec overrides", () => {
       expect.stringContaining("vramGb은 현재 누락 필드가 아니므로"),
       expect.stringContaining("powerW 값의 형식 또는 범위"),
       expect.stringContaining("제조사 모델/SKU가 필요"),
-      expect.stringContaining("검수 근거 sourceNote가 필요"),
+      expect.stringContaining("확인 정보 sourceNote가 필요"),
       expect.stringContaining("sourceUrl은 HTTPS")
     ]));
 

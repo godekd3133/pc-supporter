@@ -124,7 +124,7 @@ const fieldsByCategory: Record<PartCategory, SpecField[]> = {
     { key: "psuCableType", label: "케이블", get: (part) => part.specs.psuCableType },
     { key: "psuRailType", label: "레일", get: (part) => part.specs.psuRailType },
     { key: "psuIndependentPcieCableRuns", label: "독립 PCIe", get: (part) => part.specs.psuIndependentPcieCableRuns, suffix: "개" },
-    { key: "psuPcieCableTopology", label: "PCIe 토폴로지", get: (part) => part.specs.psuPcieCableTopology }
+    { key: "psuPcieCableTopology", label: "PCIe 연결 방식", get: (part) => part.specs.psuPcieCableTopology }
   ]
 };
 

@@ -526,7 +526,7 @@ export function PriceWatchlistView({ onBack, onToast }: { onBack: () => void; on
     return item.category in CATEGORY_LABELS ? CATEGORY_LABELS[item.category as PartCategory] : ACCESSORY_CATEGORY_LABELS[item.category as AccessoryCategory];
   }
   function qualityLabel(item: Part | AccessoryItem) {
-    return item.dataQuality === "live" ? "다나와 최신" : item.dataQuality === "manual" ? "수동 검수" : item.dataQuality === "seed" ? "프로젝트 데이터" : "일부 정보 부족";
+    return item.dataQuality === "live" ? "다나와 최신" : item.dataQuality === "manual" ? "수동 확인" : item.dataQuality === "seed" ? "프로젝트 데이터" : "일부 정보 부족";
   }
   function entryKey(entry: Pick<CatalogWatchEntry, "kind" | "itemId">) {
     return entry.kind + ":" + entry.itemId;

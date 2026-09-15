@@ -1,5 +1,5 @@
 import type { AccessoryItem, AccessoryRefreshResponse, Part, PartRefreshResponse } from "../shared/types";
-import { isKnownPrice } from "../shared/types";
+import { CATALOG_DATA_QUALITY_CHANGE_FIELD_LABEL, isKnownPrice } from "../shared/types";
 import { DANAWA_CATEGORIES, fetchDanawaHtml, isAllowedSourceUrl, parseDanawaProductPage, type DanawaCrawlerOptions, type DanawaListItem } from "./danawa";
 import { DANAWA_ACCESSORY_CATEGORIES, parseDanawaAccessoryPage } from "./accessory-crawler";
 import { catalogChangeValueDiffsFor } from "./catalog-change-log";
@@ -9,7 +9,7 @@ function categoryConfig(part: Part) {
 }
 
 export function partRefreshBlockReason(part: Part) {
-  if (part.source !== "danawa") return "프로젝트 또는 수동 검수 부품은 다나와 원문 재확인 대상이 아닙니다.";
+  if (part.source !== "danawa") return "프로젝트 또는 수동 확인 부품은 다나와 원문 재확인 대상이 아닙니다.";
   if (!categoryConfig(part)) return "지원하지 않는 부품 카테고리입니다.";
   if (!part.sourceProductCode) return "다나와 상품 코드가 없어 원문을 다시 찾을 수 없습니다.";
   if (!part.danawaUrl || !isAllowedSourceUrl(part.danawaUrl)) return "허용된 다나와 원문 링크가 없어 재확인할 수 없습니다.";
@@ -34,7 +34,7 @@ export function changedPartFields(before: Part, after: Part) {
     ["이미지", before.imageUrl, after.imageUrl],
     ["원문 스펙", before.rawSpecText, after.rawSpecText],
     ["정규화 스펙", before.specs, after.specs],
-    ["데이터 품질", before.dataQuality, after.dataQuality],
+    [CATALOG_DATA_QUALITY_CHANGE_FIELD_LABEL, before.dataQuality, after.dataQuality],
     ["누락 필드", before.missingFields, after.missingFields]
   ];
   return fields.filter(([, beforeValue, afterValue]) => fieldChanged(beforeValue, afterValue)).map(([label]) => label);
@@ -97,7 +97,7 @@ function accessoryCategoryConfig(item: AccessoryItem) {
 }
 
 export function accessoryRefreshBlockReason(item: AccessoryItem) {
-  if (item.source !== "danawa") return "수동 검수 주변 부품은 다나와 원문 재확인 대상이 아닙니다.";
+  if (item.source !== "danawa") return "수동 확인 주변 부품은 다나와 원문 재확인 대상이 아닙니다.";
   if (!accessoryCategoryConfig(item)) return "지원하지 않는 주변 부품 카테고리입니다.";
   if (!item.sourceProductCode) return "다나와 상품 코드가 없어 원문을 다시 찾을 수 없습니다.";
   if (!item.danawaUrl || !isAllowedSourceUrl(item.danawaUrl)) return "허용된 다나와 원문 링크가 없어 재확인할 수 없습니다.";
@@ -118,7 +118,7 @@ export function changedAccessoryFields(before: AccessoryItem, after: AccessoryIt
     ["이미지", before.imageUrl, after.imageUrl],
     ["원문 스펙", before.rawSpecText, after.rawSpecText],
     ["정규화 스펙", before.specs, after.specs],
-    ["데이터 품질", before.dataQuality, after.dataQuality],
+    [CATALOG_DATA_QUALITY_CHANGE_FIELD_LABEL, before.dataQuality, after.dataQuality],
     ["누락 필드", before.missingFields, after.missingFields]
   ];
   return fields.filter(([, beforeValue, afterValue]) => fieldChanged(beforeValue, afterValue)).map(([label]) => label);

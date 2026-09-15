@@ -11,7 +11,7 @@ describe("candidate application evidence", () => {
         summary: "추가 확인 필요",
         reasons: ["제조사 원문 확인 필요", "제조사 원문 확인 필요"]
       },
-      reasons: ["물리 근거 확인 필요"],
+      reasons: ["장착 정보 확인 필요"],
       candidateBlockerCount: 0,
       candidateWarningCount: 1,
       candidateUnknownCount: 1,
@@ -29,7 +29,7 @@ describe("candidate application evidence", () => {
       remainingBlockers: 0,
       remainingWarnings: 2,
       remainingUnknown: 1,
-      reasons: ["제조사 원문 확인 필요", "물리 근거 확인 필요"]
+      reasons: ["제조사 원문 확인 필요", "장착 정보 확인 필요"]
     });
   });
 

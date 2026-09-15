@@ -44,7 +44,7 @@ describe("assembly verification report", () => {
     const text = assemblyVerificationReportTextFor(assemblyVerificationReportFor(historyForReport(), "all", undefined, "2026-09-04T00:00:00.000Z"));
 
     expect(text).toContain("# PC Supporter 실측 리포트");
-    expect(text).toContain("## 재확인 신호");
+    expect(text).toContain("## 다시 볼 항목");
     expect(text).toContain("CSV · hwinfo.csv · 원본 120샘플 · 시계열 2점");
     expect(text).toContain("측정 입력 품질: complete");
     expect(text).toContain("시간축 연속성 연속");

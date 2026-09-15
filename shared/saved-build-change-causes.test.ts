@@ -54,11 +54,18 @@ describe("saved build catalog change causes", () => {
   it("uses persisted before/after values and provides a bounded fallback for legacy records", () => {
     const persisted = record({ valueDiffs: [{ field: "정규화 스펙", previous: "DDR5-5600", next: "DDR5-6000" }] });
     expect(savedBuildCatalogChangeValueDiffsFor(persisted)).toEqual([{ field: "정규화 스펙", previous: "DDR5-5600", next: "DDR5-6000" }]);
-    const legacy = record({ changedFields: ["가격", "데이터 품질", "누락 필드"], previousDataQuality: "incomplete", nextDataQuality: "live", previousMissingFields: ["socket"], nextMissingFields: [], previousPriceWon: undefined, nextPriceWon: 110000, priceDeltaWon: undefined });
+    const legacy = record({ changedFields: ["가격", "데이터 상태", "누락 필드"], previousDataQuality: "incomplete", nextDataQuality: "live", previousMissingFields: ["socket"], nextMissingFields: [], previousPriceWon: undefined, nextPriceWon: 110000, priceDeltaWon: undefined });
     expect(savedBuildCatalogChangeValueDiffsFor(legacy)).toEqual([
       { field: "가격", previous: "확인 정보 없음", next: "110,000원" },
-      { field: "데이터 품질", previous: "incomplete", next: "live" },
+      { field: "데이터 상태", previous: "incomplete", next: "live" },
       { field: "누락 필드", previous: "socket", next: "없음" }
+    ]);
+  });
+
+  it("still generates the data-quality fallback diff for records stored before the label rename", () => {
+    const legacyLabelRecord = record({ changedFields: ["데이터 품질"], previousDataQuality: "incomplete", nextDataQuality: "live", previousPriceWon: undefined, nextPriceWon: undefined, priceDeltaWon: undefined });
+    expect(savedBuildCatalogChangeValueDiffsFor(legacyLabelRecord)).toEqual([
+      { field: "데이터 상태", previous: "incomplete", next: "live" }
     ]);
   });
 });

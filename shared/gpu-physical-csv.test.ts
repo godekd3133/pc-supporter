@@ -33,7 +33,7 @@ describe("GPU physical override CSV", () => {
   it("reports malformed physical values before sending them to the server", () => {
     const csv = [
       "partId,partName,category,manufacturerModel,manufacturerRevision,gpuSlotOccupancy,gpuCableBendClearanceMm,caseSidePanelClearanceMm,psuIndependentPcieCableRuns,psuPcieCableTopology,sourceNote,sourceUrl,updatedAt",
-      "gpu-1,GPU,gpu,GPU-TEST-1,,three,,,,,근거,,"
+      "gpu-1,GPU,gpu,GPU-TEST-1,,three,,,,,정보,,"
     ].join("\n");
     const parsed = parseGpuPhysicalOverridesCsv(csv);
 
@@ -44,7 +44,7 @@ describe("GPU physical override CSV", () => {
   it("requires the manufacturer model column value for each row", () => {
     const csv = [
       "partId,partName,category,manufacturerModel,manufacturerRevision,gpuSlotOccupancy,gpuCableBendClearanceMm,caseSidePanelClearanceMm,psuIndependentPcieCableRuns,psuPcieCableTopology,sourceNote,sourceUrl,updatedAt",
-      "gpu-1,GPU,gpu,,rev-A,3,,,,,근거,,"
+      "gpu-1,GPU,gpu,,rev-A,3,,,,,정보,,"
     ].join("\n");
     const parsed = parseGpuPhysicalOverridesCsv(csv);
 

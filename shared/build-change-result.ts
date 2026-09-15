@@ -145,7 +145,7 @@ function directionLabel(direction: BuildChangeResultExport["direction"]) {
 }
 
 function confidenceLabel(confidence: CompatibilityResult["analysis"]["confidence"]) {
-  return confidence === "high" ? "근거 충분" : confidence === "limited" ? "일부 스펙 기준" : "계산 불가";
+  return confidence === "high" ? "정보 충분" : confidence === "limited" ? "일부 스펙 기준" : "계산 불가";
 }
 
 function priceText(snapshot: BuildChangeResultSnapshotExport) {
@@ -157,7 +157,7 @@ function signed(value: number) {
 }
 
 function findingChangeLabel(change: SavedBuildCheckFindingChange) {
-  return change === "resolved" ? "해결됨" : change === "new" ? "신규" : change === "severity_changed" ? "심각도 변경" : "내용 변경";
+  return change === "resolved" ? "해결됨" : change === "new" ? "신규" : change === "severity_changed" ? "중요도 변경" : "내용 변경";
 }
 
 export function buildChangeResultTextFor(comparison: BuildChangeResultComparison, generatedAt = new Date().toISOString()) {
@@ -173,23 +173,23 @@ export function buildChangeResultTextFor(comparison: BuildChangeResultComparison
     `결과 방향: ${directionLabel(exported.direction)}`,
     "",
     "[적용 전 → 적용 후]",
-    `판정: ${statusLabel(before.status)} → ${statusLabel(after.status)}`,
+    `결과: ${statusLabel(before.status)} → ${statusLabel(after.status)}`,
     `위험: 차단 ${before.blockerCount} → ${after.blockerCount} · 주의 ${before.warningCount} → ${after.warningCount} · 확인 필요 ${before.unknownCount} → ${after.unknownCount}`,
     `위험 변화: 차단 ${signed(exported.deltas.blockerDelta)} · 주의 ${signed(exported.deltas.warningDelta)} · 확인 필요 ${signed(exported.deltas.unknownDelta)}`,
     `구매 금액: ${priceText(before)} → ${priceText(after)}${exported.deltas.priceDeltaWon !== undefined ? ` · ${exported.deltas.priceDeltaWon === 0 ? "변화 없음" : `${exported.deltas.priceDeltaWon > 0 ? "+" : ""}${exported.deltas.priceDeltaWon.toLocaleString("ko-KR")}원`}` : ""}`,
     `성능 분석: ${before.analysisScore !== undefined ? `${before.analysisScore}점 · ` : ""}${before.analysisScoreLabel} → ${after.analysisScore !== undefined ? `${after.analysisScore}점 · ` : ""}${after.analysisScoreLabel}`,
-    `근거 수준: ${confidenceLabel(before.analysisConfidence)} → ${confidenceLabel(after.analysisConfidence)}`,
+    `정보 수준: ${confidenceLabel(before.analysisConfidence)} → ${confidenceLabel(after.analysisConfidence)}`,
     `전력·냉각 여유 변경: ${exported.deltas.resourceBudgetChanged ? "변경됨" : "변화 없음"}`,
-    `benchmark 근거: ${exported.deltas.benchmarkNeedsReview ? "확인 필요" : exported.deltas.benchmarkChanged ? "변경됨" : "변화 없음"}`,
+    `벤치마크 정보: ${exported.deltas.benchmarkNeedsReview ? "확인 필요" : exported.deltas.benchmarkChanged ? "변경됨" : "변화 없음"}`,
     "",
     "[변경 부품]",
     ...(exported.changes.length > 0 ? exported.changes.map((row) => `- ${row.label}: ${row.before} → ${row.after}`) : ["- 변경 부품 없음"]),
     "",
-    "[변경된 호환성 판정]",
-    ...(exported.findingChanges.length > 0 ? exported.findingChanges.map((finding) => `- ${findingChangeLabel(finding.change)}: ${(finding.after ?? finding.before)?.title ?? finding.key}`) : ["- finding 변화 없음"]),
+    "[변경된 호환성 결과]",
+    ...(exported.findingChanges.length > 0 ? exported.findingChanges.map((finding) => `- ${findingChangeLabel(finding.change)}: ${(finding.after ?? finding.before)?.title ?? finding.key}`) : ["- 항목 변화 없음"]),
     "",
-    "[데이터 경계]",
-    "이 비교는 적용 전후 검사 snapshot의 차이를 보여주는 읽기 전용 결과입니다. 실제 판매가·재고·FPS·제조사 QVL·실제 장착·케이블 배선은 별도로 확인해야 합니다."
+    "[확인 범위]",
+    "이 비교는 적용 전후 검사 저장본의 차이를 보여주는 읽기 전용 결과입니다. 실제 판매가·재고·FPS·제조사 QVL·실제 장착·케이블 배선은 별도로 확인해야 합니다."
   ];
   return lines.join("\n");
 }
@@ -203,5 +203,5 @@ export function buildChangeResultDecisionNoteFor(comparison: BuildChangeResultCo
   const score = exported.deltas.analysisScoreDelta === undefined
     ? after.analysisScoreLabel
     : `${exported.deltas.analysisScoreDelta > 0 ? "+" : ""}${exported.deltas.analysisScoreDelta}점`;
-  return `적용 후 검사 · ${comparison.title} · ${directionLabel(exported.direction)} · 판정 ${statusLabel(after.status)} · 차단 ${after.blockerCount} · 주의 ${after.warningCount} · 확인 ${after.unknownCount} · 금액 ${price} · 성능 ${score} · 검사 ${after.checkedAt}`;
+  return `적용 후 검사 · ${comparison.title} · ${directionLabel(exported.direction)} · 결과 ${statusLabel(after.status)} · 차단 ${after.blockerCount} · 주의 ${after.warningCount} · 확인 ${after.unknownCount} · 금액 ${price} · 성능 ${score} · 검사 ${after.checkedAt}`;
 }

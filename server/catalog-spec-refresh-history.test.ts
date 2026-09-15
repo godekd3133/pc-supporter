@@ -17,7 +17,7 @@ const response: CatalogSpecRefreshBatchResponse = {
   skippedCount: 0,
   failedCount: 0,
   changedFieldCount: 2,
-  items: [{ partId: "gpu-1", partName: "검수 GPU", category: "gpu", status: "refreshed", changedFields: ["정규화 스펙", "누락 필드"], previousMissingFields: ["powerW"], nextMissingFields: [], refreshedAt: "2026-09-03T00:01:00.000Z" }]
+  items: [{ partId: "gpu-1", partName: "확인 GPU", category: "gpu", status: "refreshed", changedFields: ["정규화 스펙", "누락 필드"], previousMissingFields: ["powerW"], nextMissingFields: [], refreshedAt: "2026-09-03T00:01:00.000Z" }]
 };
 
 describe("catalog spec refresh history", () => {
@@ -105,7 +105,7 @@ describe("catalog spec refresh history", () => {
       coverageAfter: { total: 1, complete: 1, partial: 0, incompleteCount: 0, coveragePercent: 100, pcieSlotCoverage: pcieAfter },
       coverageDelta: { complete: 1, partial: -1, incompleteCount: -1, coveragePercent: 100, pcieSlotCoverage: pcieDelta },
       pcieImpact: { newlyCompleteCount: 1, newlyResolvedFieldCount: 4 },
-      items: [{ partId: "board-1", partName: "PCIe 검수 보드", category: "motherboard", status: "refreshed", changedFields: ["PCIe 슬롯"], previousPcieMissingFields: ["pcieX16Slots", "pcieX8Slots", "pcieX4Slots", "pcieX1Slots"], nextPcieMissingFields: [], refreshedAt: "2026-09-03T00:01:00.000Z" }]
+      items: [{ partId: "board-1", partName: "PCIe 확인 보드", category: "motherboard", status: "refreshed", changedFields: ["PCIe 슬롯"], previousPcieMissingFields: ["pcieX16Slots", "pcieX8Slots", "pcieX4Slots", "pcieX1Slots"], nextPcieMissingFields: [], refreshedAt: "2026-09-03T00:01:00.000Z" }]
     };
 
     const entry = catalogSpecRefreshHistoryEntryFor(withPcie, "2026-09-03T00:02:00.000Z");

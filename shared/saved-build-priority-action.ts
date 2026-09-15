@@ -63,7 +63,7 @@ export function savedBuildNextActionFor(result: CompatibilityResult): SavedBuild
     return {
       kind: "analysis",
       title: "분석 기준 다음 행동",
-      summary: "현재 전체 수리 플랜으로 계산된 안전한 후보가 없어, 분석 엔진이 제안한 다음 행동을 먼저 확인합니다.",
+      summary: "현재 전체 수리 플랜으로 계산된 안전한 후보가 없어, 분석이 제안한 다음 행동을 먼저 확인합니다.",
       nextAction: analysisAction,
       changes: [],
       resolvedBlockers: 0,
@@ -76,8 +76,8 @@ export function savedBuildNextActionFor(result: CompatibilityResult): SavedBuild
 
   return {
     kind: "none",
-    title: "추가 조치 없음",
-    summary: "현재 분석 기준에서 별도로 제안할 다음 조치가 없습니다.",
+    title: "추가 할 일 없음",
+    summary: "현재 분석 기준에서 별도로 제안할 다음 할 일이 없습니다.",
     changes: [],
     resolvedBlockers: 0,
     remainingBlockers: result.blockerCount,

@@ -103,7 +103,7 @@ try {
       if (!(refresh instanceof HTMLButtonElement)) return { stage: "missing-refresh", mounted, ...state };
       refresh.click();
       for (let index = 0; index < 200 && !document.querySelector(".shared-budget-ladder-refresh"); index += 1) await wait(25);
-      const save = [...document.querySelectorAll("button")].find((candidate) => (candidate.textContent ?? "").includes("새 snapshot으로 공유"));
+      const save = [...document.querySelectorAll("button")].find((candidate) => (candidate.textContent ?? "").includes("새 저장본으로 공유"));
       if (!(save instanceof HTMLButtonElement)) return { stage: "missing-save", mounted, comparison: Boolean(document.querySelector(".shared-budget-ladder-refresh")), ...state };
       save.click();
       for (let index = 0; index < 160 && state.saveCalls < 1; index += 1) await wait(25);

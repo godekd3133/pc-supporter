@@ -46,7 +46,7 @@ describe("purchase readiness", () => {
     expect(readiness.state).toBe("review");
     expect(readiness.label).toBe("확인 후 구매");
     expect(physical).toMatchObject({ state: "review" });
-    expect(physical?.summary).toContain("물리 검수 근거");
+    expect(physical?.summary).toContain("물리 확인 정보");
   });
 
   it("can become purchase-ready after complete physical evidence is registered", () => {

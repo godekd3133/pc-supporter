@@ -224,7 +224,7 @@ describe("build request validation", () => {
 
     expect(staleCoverage.totals).toMatchObject({ mapped: 0, stale: 1, incomplete: 0, unmapped: 0, coveragePercent: 0 });
     expect(staleCoverage.items[0]).toMatchObject({ mappingStatus: "stale", reviewPriority: "medium" });
-    expect(staleCoverage.items[0].reviewReason).toContain("재검수 필요");
+    expect(staleCoverage.items[0].reviewReason).toContain("재확인 필요");
     expect(staleCoverage.bySlotCount[0]).toMatchObject({ slotCount: 2, stale: 1 });
 
     const currentCoverage = buildM2SlotCoverage([board], { [board.id]: { ...override, updatedAt: "2026-08-28T13:00:00.000Z" } }, { filter: "all" });

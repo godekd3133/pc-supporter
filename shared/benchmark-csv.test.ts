@@ -6,7 +6,7 @@ describe("benchmark override CSV", () => {
   it("round-trips quoted names, notes, URLs, and benchmark scores", () => {
     const items: BenchmarkOverrideCsvItem[] = [{
       partId: "gpu-1",
-      partName: "GPU, 검수 \"완료\"",
+      partName: "GPU, 확인 \"완료\"",
       category: "gpu",
       scores: { gpu3dmarkTimeSpyScore: 12345, gpu3dmarkPortRoyalScore: 9876 },
       sourceNote: "3DMark 결과표,\n드라이버 고정",
@@ -40,7 +40,7 @@ describe("benchmark override CSV", () => {
 
     const invalid = parseBenchmarkOverridesCsv([
       "partId,partName,category,cinebenchR23Single,cinebenchR23Multi,gpu3dmarkTimeSpyScore,gpu3dmarkPortRoyalScore,sourceNote,sourceUrl,updatedAt",
-      "gpu-1,GPU,gpu,12.5,,not-a-score,,근거,,"
+      "gpu-1,GPU,gpu,12.5,,not-a-score,,정보,,"
     ].join("\n"));
     expect(invalid.items).toEqual([]);
     expect(invalid.errors).toEqual(expect.arrayContaining([
@@ -50,19 +50,19 @@ describe("benchmark override CSV", () => {
   });
 
   it("rejects missing headers and unclosed quotes", () => {
-    expect(parseBenchmarkOverridesCsv("partId,sourceNote\ngpu-1,근거").errors[0]).toContain("필수 CSV 열이 없습니다");
-    expect(parseBenchmarkOverridesCsv('partId,partName,category,cinebenchR23Single,cinebenchR23Multi,gpu3dmarkTimeSpyScore,gpu3dmarkPortRoyalScore,sourceNote,sourceUrl,updatedAt\n"gpu-1,GPU,gpu,1,,,,근거,,').errors).toEqual(["CSV 따옴표가 닫히지 않았습니다."]);
+    expect(parseBenchmarkOverridesCsv("partId,sourceNote\ngpu-1,정보").errors[0]).toContain("필수 CSV 열이 없습니다");
+    expect(parseBenchmarkOverridesCsv('partId,partName,category,cinebenchR23Single,cinebenchR23Multi,gpu3dmarkTimeSpyScore,gpu3dmarkPortRoyalScore,sourceNote,sourceUrl,updatedAt\n"gpu-1,GPU,gpu,1,,,,정보,,').errors).toEqual(["CSV 따옴표가 닫히지 않았습니다."]);
   });
 
   it("creates a blank-source review template without inventing provenance", () => {
     const csv = benchmarkReviewItemsToCsv([{
       partId: "cpu-1",
-      partName: "검수 CPU",
+      partName: "확인 CPU",
       category: "cpu",
       scores: { cinebenchR23Single: 2100 },
       updatedAt: "2026-08-31T00:00:00.000Z"
     }]);
-    expect(csv).toContain("cpu-1,검수 CPU,cpu,2100,,,,,,,2026-08-31T00:00:00.000Z");
+    expect(csv).toContain("cpu-1,확인 CPU,cpu,2100,,,,,,,2026-08-31T00:00:00.000Z");
     expect(parseBenchmarkOverridesCsv(csv)).toMatchObject({
       items: [{ partId: "cpu-1", cinebenchR23Single: 2100, sourceNote: "" }],
       errors: []

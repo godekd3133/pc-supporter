@@ -43,7 +43,7 @@ const COMPARISON_CRITERION_LABELS: Record<CandidateComparisonCriterion, string> 
   compatibility: "호환 우선",
   performance: "성능 우선",
   price: "가격 우선",
-  evidence: "근거 우선"
+  evidence: "정보 우선"
 };
 
 type CandidateScenarioShareResult = { id: string; url: string; ownerToken: string; expiresAt?: string };
@@ -110,7 +110,7 @@ function analysisScoreText(score: number | undefined, label: CompatibilityResult
 }
 
 function analysisConfidenceLabel(confidence: CompatibilityResult["analysis"]["confidence"]) {
-  return confidence === "high" ? "근거 충분" : confidence === "limited" ? "일부 스펙 기준" : "계산 불가";
+  return confidence === "high" ? "정보 충분" : confidence === "limited" ? "일부 스펙 기준" : "계산 불가";
 }
 
 function scenarioAnalysisDetail(current: CompatibilityResult, next: CompatibilityResult) {
@@ -118,7 +118,7 @@ function scenarioAnalysisDetail(current: CompatibilityResult, next: Compatibilit
     const delta = next.analysis.overallScore - current.analysis.overallScore;
     return `현재 대비 ${delta > 0 ? "+" : ""}${delta}점 · ${analysisConfidenceLabel(next.analysis.confidence)}`;
   }
-  return `분석 근거 ${analysisConfidenceLabel(next.analysis.confidence)}`;
+  return `분석 정보 ${analysisConfidenceLabel(next.analysis.confidence)}`;
 }
 
 function scenarioAnalysisSummary(current: CompatibilityResult, next: CompatibilityResult) {
@@ -181,10 +181,10 @@ function scenarioChecksFor(item: CandidateScenarioCompareItem, result: Compatibi
     id: "compatibility",
     kind: "compatibility",
     status: compatibilityStatus,
-    label: compatibilityStatus === "blocked" ? "가상 적용 차단 원인 해결" : compatibilityStatus === "review" ? "가상 적용 후 잔여 위험 확인" : "가상 적용 호환 판정 확인",
+    label: compatibilityStatus === "blocked" ? "미리 적용 차단 원인 해결" : compatibilityStatus === "review" ? "미리 적용 후 잔여 위험 확인" : "미리 적용 호환 결과 확인",
     detail: result.blockerCount > 0 || result.warningCount > 0 || result.unknownCount > 0
       ? `차단 ${result.blockerCount}개 · 주의 ${result.warningCount}개 · 확인 필요 ${result.unknownCount}개가 남아 있어 적용 전 원인을 확인해야 합니다.`
-      : "가상 적용 후 차단·주의·확인 필요 항목이 없습니다. 실제 적용 전 변경 미리보기를 확인하세요."
+      : "미리 적용 후 차단·주의·확인 필요 항목이 없습니다. 실제 적용 전 변경 미리보기를 확인하세요."
   });
 
   const priceEvidence = catalogPriceEvidenceFor(item.part);
@@ -196,9 +196,9 @@ function scenarioChecksFor(item: CandidateScenarioCompareItem, result: Compatibi
     status: priceStatus,
     label: priceStatus === "review" ? "가격·가격 이력 확인" : "후보·적용 후 가격 확인",
     detail: priceEvidence === "reference"
-      ? "프로젝트 기준가만 기록되어 후보의 실제 판매 가격을 확정할 수 없습니다. 구매 전에 판매처 원문을 확인하세요."
+      ? "참고 가격만 기록되어 후보의 실제 판매 가격을 확정할 수 없습니다. 구매 전에 판매처 원문을 확인하세요."
       : priceEvidence === "recorded"
-        ? "후보 가격은 기록되어 있지만 데이터 품질이 완전하지 않습니다. 구매 전에 판매처 원문을 확인하세요."
+        ? "후보 가격은 기록되어 있지만 데이터 상태가 완전하지 않습니다. 구매 전에 판매처 원문을 확인하세요."
         : priceEvidence === "unknown" || !result.priceComplete
           ? "후보 또는 전체 견적의 가격이 확정되지 않아 구매 전 실제 판매 가격을 확인해야 합니다."
       : `${formatWon(item.part.priceWon)} 후보 · 적용 후 ${formatWon(result.totalPriceWon)} · ${history?.summary.sampleCount ? `최근 ${history.windowDays}일 ${history.summary.sampleCount}회 가격 이력` : "가격 변경 이력 없음"}`
@@ -210,10 +210,10 @@ function scenarioChecksFor(item: CandidateScenarioCompareItem, result: Compatibi
       id: "physical",
       kind: "physical",
       status: physicalStatus,
-      label: physicalStatus === "ready" ? "물리 장착 근거 확인" : "물리 장착·전원 근거 확인",
+      label: physicalStatus === "ready" ? "물리 장착 정보 확인" : "장착·전원 정보 확인",
       detail: item.part.physicalEvidence?.status === "verified"
-        ? "후보의 물리 장착·전원 관련 검수 근거가 확인되었습니다. 실제 케이스·케이블 배치는 조립 전에 다시 확인하세요."
-        : "길이·두께·전원·케이블 또는 케이스 간섭 근거가 완전히 검수되지 않아 제조사 원문과 실제 조립 조건을 확인해야 합니다."
+        ? "후보의 물리 장착·전원 관련 확인 정보가 확인되었습니다. 실제 케이스·케이블 배치는 조립 전에 다시 확인하세요."
+        : "길이·두께·전원·케이블 또는 케이스 간섭 정보가 완전히 확인되지 않아 제조사 원문과 실제 조립 조건을 확인해야 합니다."
     });
   }
 
@@ -222,10 +222,10 @@ function scenarioChecksFor(item: CandidateScenarioCompareItem, result: Compatibi
     id: "data",
     kind: "data",
     status: dataStatus,
-    label: dataStatus === "review" ? "카탈로그 원문·갱신 시점 확인" : "카탈로그 근거 확인",
+    label: dataStatus === "review" ? "카탈로그 원문·갱신 시점 확인" : "카탈로그 정보 확인",
     detail: dataStatus === "review"
       ? "스펙 일부가 부족하거나 갱신 시점이 오래되어 구매 전에 제조사·판매처 원문을 다시 확인해야 합니다."
-      : "후보의 가격·스펙·갱신 상태 근거가 현재 비교 기준에 포함되어 있습니다."
+      : "후보의 가격·스펙·갱신 상태 정보가 현재 비교 기준에 포함되어 있습니다."
   });
 
   const applicationStatus: AlternativeComparisonScenarioCheck["status"] = decision.state === "hold" ? "blocked" : decision.state === "review" || decision.state === "wait" ? "review" : "ready";
@@ -235,7 +235,7 @@ function scenarioChecksFor(item: CandidateScenarioCompareItem, result: Compatibi
     status: applicationStatus,
     label: applicationStatus === "blocked" ? "후보 적용 보류" : "현재 견적 적용 전 미리보기 확인",
     detail: applicationStatus === "blocked"
-      ? "현재 snapshot의 차단 위험 때문에 이 후보는 실제 견적에 적용하지 않습니다."
+      ? "현재 저장본의 차단 위험 때문에 이 후보는 실제 견적에 적용하지 않습니다."
       : "후보를 실제 견적에 적용할 때는 변경 예정 부품·가격·전체 재검사 결과를 확인한 뒤 진행하세요."
   });
   return checks;
@@ -315,7 +315,7 @@ function CandidateBenchmarkEvidence({ currentParts, candidate, similarityEvidenc
   const currentStatus = currentEvidence ? `${currentEvidence.presentCount}/${currentEvidence.totalCount}개 · ${benchmarkFreshnessLabelFor(currentEvidence.benchmarkFreshness)}` : "점수 미기록";
   const candidateStatus = `${candidateEvidence.presentCount}/${candidateEvidence.totalCount}개 · ${benchmarkFreshnessLabelFor(candidateEvidence.benchmarkFreshness)}`;
   const sourceCheck = benchmarkSourceCheckLabelFor(candidateEvidence.sourceCheck);
-  return <div className={`candidate-scenario-benchmark ${candidateEvidence.status}`} data-testid="candidate-scenario-benchmark"><div className="candidate-scenario-benchmark-heading"><strong>원본 benchmark 비교</strong><small>{currentStatus} → 후보 {candidateStatus}</small></div><div className="candidate-scenario-benchmark-list">{comparisonRows.map((row) => { const delta = benchmarkDeltaText(row.delta, row.deltaPercent); return <div key={row.key}><span>{row.label}</span><em>{benchmarkScoreText(row.currentValue)}</em><b>→</b><em>{benchmarkScoreText(row.candidateValue)}</em><small className={delta === "비교 불가" ? "review" : row.delta !== undefined && row.delta >= 0 ? "positive" : "negative"}>{delta}</small></div>; })}</div><small className="candidate-scenario-benchmark-note">후보 원문 점검 · {sourceCheck} · 자료 {benchmarkFreshnessLabelFor(candidateEvidence.benchmarkFreshness)} · 유사도 {similarityBasisLabelFor(similarityEvidence)}. 원본 점수 변화는 성능 참고 근거이며 실제 FPS·작업 시간·절대 순위를 보장하지 않습니다.</small>{similarityEvidence?.reference && <small className="candidate-scenario-benchmark-reference" data-testid="candidate-scenario-benchmark-reference"><FiInfo /> {similarityReferenceTextFor(similarityEvidence)}. 후보 원본 점수와 동일한 측정값으로 간주하지 않습니다.</small>}</div>;
+  return <div className={`candidate-scenario-benchmark ${candidateEvidence.status}`} data-testid="candidate-scenario-benchmark"><div className="candidate-scenario-benchmark-heading"><strong>원본 벤치마크 비교</strong><small>{currentStatus} → 후보 {candidateStatus}</small></div><div className="candidate-scenario-benchmark-list">{comparisonRows.map((row) => { const delta = benchmarkDeltaText(row.delta, row.deltaPercent); return <div key={row.key}><span>{row.label}</span><em>{benchmarkScoreText(row.currentValue)}</em><b>→</b><em>{benchmarkScoreText(row.candidateValue)}</em><small className={delta === "비교 불가" ? "review" : row.delta !== undefined && row.delta >= 0 ? "positive" : "negative"}>{delta}</small></div>; })}</div><small className="candidate-scenario-benchmark-note">후보 원문 점검 · {sourceCheck} · 자료 {benchmarkFreshnessLabelFor(candidateEvidence.benchmarkFreshness)} · 유사도 {similarityBasisLabelFor(similarityEvidence)}. 원본 점수 변화는 성능 참고 정보이며 실제 FPS·작업 시간·절대 순위를 보장하지 않습니다.</small>{similarityEvidence?.reference && <small className="candidate-scenario-benchmark-reference" data-testid="candidate-scenario-benchmark-reference"><FiInfo /> {similarityReferenceTextFor(similarityEvidence)}. 후보 원본 점수와 동일한 측정값으로 간주하지 않습니다.</small>}</div>;
 }
 
 function priceHistoryBarHeight(history: CandidatePriceHistory, priceWon: number) {
@@ -493,7 +493,7 @@ export function CandidateScenarioComparisonPanel({ state, currentResult, onApply
       const currentPartPriceKnown = currentParts.length > 0 && currentParts.every((part) => isKnownPrice(part.priceWon));
       const currentPartPriceWon = currentPartPriceKnown ? currentParts.reduce((total, part, index) => total + (part.priceWon ?? 0) * (currentPartQuantities?.[index] ?? 1), 0) : undefined;
       const shared = await onShareComparison(shareCandidates, {
-        name: `${CATEGORY_LABELS[state.category]} 후보 전체 가상 비교`,
+        name: `${CATEGORY_LABELS[state.category]} 후보 전체 미리 비교`,
         category: CATEGORY_LABELS[state.category],
         currentPartName: currentPartLabel(currentParts, currentPartQuantities),
         ...(currentPartSummary ? { currentPartSummary } : {}),
@@ -512,11 +512,11 @@ export function CandidateScenarioComparisonPanel({ state, currentResult, onApply
 
   return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <section ref={modalRef} tabIndex={-1} className="candidate-scenario-dialog" role="dialog" aria-modal="true" aria-labelledby="candidate-scenario-title">
-      <div className="modal-header"><div><p className="eyebrow">MULTI CANDIDATE WHAT-IF</p><h2 id="candidate-scenario-title">선택 후보 전체 가상 비교</h2><p>현재 견적은 바꾸지 않고 선택한 {state.items.length}개 후보를 각각 전체 규칙 엔진에 대입합니다.</p></div><button className="icon-button" type="button" onClick={onClose} aria-label="후보 가상 비교 닫기"><FiXCircle /></button></div>
+      <div className="modal-header"><div><p className="eyebrow">MULTI CANDIDATE WHAT-IF</p><h2 id="candidate-scenario-title">선택 후보 전체 미리 비교</h2><p>현재 견적은 바꾸지 않고 선택한 {state.items.length}개 후보를 각각 전체 검사 규칙에 적용합니다.</p></div><button className="icon-button" type="button" onClick={onClose} aria-label="후보 미리 비교 닫기"><FiXCircle /></button></div>
       <div className="candidate-scenario-baseline"><span><FiActivity /> 현재 기준</span><strong>{statusLabel(currentResult.status)}</strong><small>차단 {currentResult.blockerCount}개 · 주의 {currentResult.warningCount}개 · 확인 필요 {currentResult.unknownCount}개 · {currentResult.priceComplete ? formatWon(currentResult.totalPriceWon) : "가격 확인 필요"}</small></div>
       <div className="candidate-scenario-history-toolbar"><div><strong><FiClock /> 후보 가격 이력</strong><small>공개된 카탈로그 변경 로그만 읽어오며, 현재 견적과 후보 적용 상태에는 영향을 주지 않습니다.</small></div><label><span>기간</span><select aria-label="후보 비교 가격 이력 기간" value={priceHistoryDays} onChange={(event) => setPriceHistoryDays(Number(event.target.value) as CandidatePriceHistoryDays)}><option value={7}>7일</option><option value={30}>30일</option><option value={90}>90일</option></select></label></div>
-      <section className="candidate-scenario-purchase-summary" aria-label="후보 구매 판단 요약" data-testid="candidate-purchase-summary"><div className="candidate-scenario-purchase-summary-heading"><div><strong>구매 판단 요약</strong><small>엔진의 실제 판정을 우선하고 가격·성능·근거·이력은 보조 기준으로 해석합니다.</small></div><label><span>빠른 선택 기준</span><select aria-label="가상 비교 빠른 선택 기준" value={comparisonCriterion} onChange={(event) => setComparisonCriterion(event.target.value as CandidateComparisonCriterion)}>{CANDIDATE_COMPARISON_CRITERIA.map((criterion) => <option value={criterion} key={criterion}>{COMPARISON_CRITERION_LABELS[criterion]}</option>)}</select></label><span>{purchaseDecisions.length} / {state.items.length}개 계산</span></div><div className="candidate-scenario-purchase-counts"><span className="buy">구매 추천 <b>{decisionCountFor("buy")}</b></span><span className="performance">성능 우선 <b>{decisionCountFor("performance")}</b></span><span className="wait">가격 대기 <b>{decisionCountFor("wait")}</b></span><span className="review">확인 후 구매 <b>{decisionCountFor("review")}</b></span><span className="hold">적용 보류 <b>{decisionCountFor("hold")}</b></span></div>{comparisonDecision && <div className="candidate-scenario-ranking"><strong>{comparisonDecision.label} 기준 1순위</strong><small>{comparisonDecision.summary}</small><div>{comparisonDecision.eligibleRanking.slice(0, 3).map((rank, index) => <span className={index === 0 ? "top" : ""} key={rank.id} title={rank.reason} aria-label={`${index + 1}위 ${rank.name}, ${rank.score}점. ${rank.reason}`}><b>{index + 1}</b> {rank.name} · {rank.score}점<small>{rank.reason}</small></span>)}{comparisonDecision.excludedIds.length > 0 && <em>차단 후보 {comparisonDecision.excludedIds.length}개 제외</em>}</div></div>}{purchaseDecisions.length === 0 && <p className="candidate-scenario-purchase-pending">후보별 전체 가상 검사가 끝나면 구매 판단을 계산합니다.</p>} {onShareComparison && <div className="candidate-scenario-share"><button className="button button-small button-light" type="button" onClick={() => void shareComparison()} disabled={shareCandidates.length < 2 || sharingComparison}>{sharingComparison ? "공유 준비 중..." : <><FiShare2 /> 비교 결과 공유</>}</button>{sharedComparison && <div className="candidate-scenario-share-preview"><input aria-label="가상 비교 공유 링크" type="text" value={sharedComparison.url} readOnly onFocus={(event) => event.currentTarget.select()} /><a className="text-button" href={sharedComparison.url}>열기</a>{onRevokeComparison && <button className="text-button danger-text-button" type="button" onClick={() => void revokeComparison()}>공유 취소</button>}</div>}</div>}</section>
-      {purchaseDecisions.length >= 2 && tradeoffs.length >= 2 && <section className="candidate-scenario-tradeoff" data-testid="candidate-tradeoff-frontier" aria-label="후보 비교 효율 경계"><div className="candidate-scenario-tradeoff-heading"><div><strong>호환·가격·분석·근거의 효율 경계</strong><small>전체 가상 적용 결과에서 다른 후보가 모든 기준에서 앞서는 경우만 열세로 표시합니다.</small></div><span>{tradeoffs.filter((tradeoff) => tradeoff.frontier && tradeoff.eligible !== false).length}개 경계</span></div><div className="candidate-scenario-tradeoff-list">{tradeoffs.map((tradeoff) => <article className={tradeoff.eligible === false ? "excluded" : tradeoff.frontier ? "frontier" : "dominated"} key={tradeoff.id}><div><span>{tradeoff.eligible === false ? "비교 제외" : tradeoff.frontier ? "효율 경계" : "열세"}</span><strong>{tradeoff.name}</strong></div><small>{tradeoff.riskScore === undefined ? "위험 확인 필요" : `위험 ${tradeoff.riskScore}점`} · 가격 변화 {tradeoff.priceDeltaWon === undefined ? "확인 필요" : `${tradeoff.priceDeltaWon > 0 ? "+" : ""}${tradeoff.priceDeltaWon.toLocaleString("ko-KR")}원`} · 분석 {tradeoff.analysisScore === undefined ? "확인 필요" : `${tradeoff.analysisScore}점`} · 근거 {tradeoff.evidenceScore ?? "확인 필요"}점</small><p>{tradeoff.reason}</p></article>)}</div><p className="candidate-scenario-tradeoff-note"><FiInfo /> 가격·분석 근거가 한쪽만 없는 후보 사이에는 우열을 만들지 않습니다. 효율 경계는 구매 확정이 아니라 상세 확인을 시작할 후보군입니다.</p></section>}
+      <section className="candidate-scenario-purchase-summary" aria-label="후보 구매 판단 요약" data-testid="candidate-purchase-summary"><div className="candidate-scenario-purchase-summary-heading"><div><strong>구매 판단 요약</strong><small>검사의 실제 결과를 우선하고 가격·성능·정보·이력은 보조 기준으로 해석합니다.</small></div><label><span>빠른 선택 기준</span><select aria-label="미리 비교 빠른 선택 기준" value={comparisonCriterion} onChange={(event) => setComparisonCriterion(event.target.value as CandidateComparisonCriterion)}>{CANDIDATE_COMPARISON_CRITERIA.map((criterion) => <option value={criterion} key={criterion}>{COMPARISON_CRITERION_LABELS[criterion]}</option>)}</select></label><span>{purchaseDecisions.length} / {state.items.length}개 계산</span></div><div className="candidate-scenario-purchase-counts"><span className="buy">구매 추천 <b>{decisionCountFor("buy")}</b></span><span className="performance">성능 우선 <b>{decisionCountFor("performance")}</b></span><span className="wait">가격 대기 <b>{decisionCountFor("wait")}</b></span><span className="review">확인 후 구매 <b>{decisionCountFor("review")}</b></span><span className="hold">적용 보류 <b>{decisionCountFor("hold")}</b></span></div>{comparisonDecision && <div className="candidate-scenario-ranking"><strong>{comparisonDecision.label} 기준 1순위</strong><small>{comparisonDecision.summary}</small><div>{comparisonDecision.eligibleRanking.slice(0, 3).map((rank, index) => <span className={index === 0 ? "top" : ""} key={rank.id} title={rank.reason} aria-label={`${index + 1}위 ${rank.name}, ${rank.score}점. ${rank.reason}`}><b>{index + 1}</b> {rank.name} · {rank.score}점<small>{rank.reason}</small></span>)}{comparisonDecision.excludedIds.length > 0 && <em>차단 후보 {comparisonDecision.excludedIds.length}개 제외</em>}</div></div>}{purchaseDecisions.length === 0 && <p className="candidate-scenario-purchase-pending">후보별 전체 미리 검사가 끝나면 구매 판단을 계산합니다.</p>} {onShareComparison && <div className="candidate-scenario-share"><button className="button button-small button-light" type="button" onClick={() => void shareComparison()} disabled={shareCandidates.length < 2 || sharingComparison}>{sharingComparison ? "공유 준비 중..." : <><FiShare2 /> 비교 결과 공유</>}</button>{sharedComparison && <div className="candidate-scenario-share-preview"><input aria-label="미리 비교 공유 링크" type="text" value={sharedComparison.url} readOnly onFocus={(event) => event.currentTarget.select()} /><a className="text-button" href={sharedComparison.url}>열기</a>{onRevokeComparison && <button className="text-button danger-text-button" type="button" onClick={() => void revokeComparison()}>공유 취소</button>}</div>}</div>}</section>
+      {purchaseDecisions.length >= 2 && tradeoffs.length >= 2 && <section className="candidate-scenario-tradeoff" data-testid="candidate-tradeoff-frontier" aria-label="후보 비교 우위"><div className="candidate-scenario-tradeoff-heading"><div><strong>호환·가격·분석·정보의 비교 우위</strong><small>전체 미리 적용 결과에서 다른 후보가 모든 기준에서 앞서는 경우만 밀림으로 표시합니다.</small></div><span>{tradeoffs.filter((tradeoff) => tradeoff.frontier && tradeoff.eligible !== false).length}개 후보</span></div><div className="candidate-scenario-tradeoff-list">{tradeoffs.map((tradeoff) => <article className={tradeoff.eligible === false ? "excluded" : tradeoff.frontier ? "frontier" : "dominated"} key={tradeoff.id}><div><span>{tradeoff.eligible === false ? "비교 제외" : tradeoff.frontier ? "비교 우위" : "밀림"}</span><strong>{tradeoff.name}</strong></div><small>{tradeoff.riskScore === undefined ? "위험 확인 필요" : `위험 ${tradeoff.riskScore}점`} · 가격 변화 {tradeoff.priceDeltaWon === undefined ? "확인 필요" : `${tradeoff.priceDeltaWon > 0 ? "+" : ""}${tradeoff.priceDeltaWon.toLocaleString("ko-KR")}원`} · 분석 {tradeoff.analysisScore === undefined ? "확인 필요" : `${tradeoff.analysisScore}점`} · 정보 {tradeoff.evidenceScore ?? "확인 필요"}점</small><p>{tradeoff.reason}</p></article>)}</div><p className="candidate-scenario-tradeoff-note"><FiInfo /> 가격·분석 정보가 한쪽만 없는 후보 사이에는 우위를 만들지 않습니다. 비교 우위는 구매 확정이 아니라 상세 확인을 시작할 후보군입니다.</p></section>}
       <div className="candidate-scenario-list">
         {state.items.map((item) => {
           const result = item.result;
@@ -529,22 +529,22 @@ export function CandidateScenarioComparisonPanel({ state, currentResult, onApply
           const evidence = [
             item.part.similarityScore !== undefined ? `성능 유사도 ${item.part.similarityLabel ?? "비교"} ${item.part.similarityScore}점` : undefined,
             item.part.performanceSummary ? `성능 · ${item.part.performanceSummary}` : undefined,
-            `가격 근거 · ${catalogPriceEvidenceLabelFor(item.part)}`,
+            `가격 출처 · ${catalogPriceEvidenceLabelFor(item.part)}`,
             item.part.valueScore !== undefined && item.part.valueLabel ? `${item.part.valueLabel} ${item.part.valueScore}점` : undefined,
-            item.part.recommendationTrust ? `추천 근거 ${trustLabel(item.part.recommendationTrust.level)} ${item.part.recommendationTrust.score}점` : undefined
+            item.part.recommendationTrust ? `추천 점수 ${trustLabel(item.part.recommendationTrust.level)} ${item.part.recommendationTrust.score}점` : undefined
           ].filter((value): value is string => Boolean(value));
           return <article className={`candidate-scenario-card ${item.status} ${item.comparison?.direction ?? ""}`} key={item.id}>
             <div className="candidate-scenario-card-heading"><div><span className="category-badge">{CATEGORY_LABELS[item.category]}</span><strong>{item.part.name}</strong><small>{riskLabel(item.risk)}{item.quantity && item.quantity > 1 ? ` · 수량 ${item.quantity}개` : ""}</small></div>{item.status === "loading" ? <span className="candidate-scenario-status loading"><FiLoader className="spin" /> 검사 중</span> : item.status === "error" ? <span className="candidate-scenario-status error"><FiXCircle /> 실패</span> : <span className={`candidate-scenario-status ${item.comparison?.direction ?? "unchanged"}`}>{item.comparison ? directionLabel(item.comparison.direction) : "검사 완료"}</span>}</div>
             <div className="candidate-scenario-current-part"><span>교체 전 기준</span><strong>{currentPartLabel(item.currentParts)}</strong></div>
-            {item.status === "loading" && <div className="candidate-scenario-loading"><FiClock className="spin" /> 후보를 전체 구성에 대입해 호환성·가격·잔여 finding을 계산하는 중입니다.</div>}
-            {item.status === "error" && <div className="candidate-scenario-error"><FiXCircle /><span>{item.error ?? "가상 비교에 실패했습니다."}</span><button className="text-button" type="button" onClick={() => onRetry(item.id)}><FiRefreshCw /> 다시 검사</button></div>}
+            {item.status === "loading" && <div className="candidate-scenario-loading"><FiClock className="spin" /> 후보를 전체 구성에 적용해 호환성·가격·잔여 항목을 계산하는 중입니다.</div>}
+            {item.status === "error" && <div className="candidate-scenario-error"><FiXCircle /><span>{item.error ?? "미리 비교에 실패했습니다."}</span><button className="text-button" type="button" onClick={() => onRetry(item.id)}><FiRefreshCw /> 다시 검사</button></div>}
             {item.status === "ready" && result && <div className="candidate-scenario-analysis" data-testid="candidate-scenario-analysis"><div><span>후보 적용 후 성능 분석</span><strong>{analysisScoreText(currentResult.analysis.overallScore, currentResult.analysis.scoreLabel)} → {analysisScoreText(result.analysis.overallScore, result.analysis.scoreLabel)}</strong><small>{scenarioAnalysisDetail(currentResult, result)}</small></div></div>}
             {item.status === "ready" && <CandidateBenchmarkEvidence currentParts={item.currentParts} candidate={item.part} similarityEvidence={item.part.similarityEvidence} />}
-            {item.status === "ready" && result && <>{purchaseDecision && <div className={`candidate-scenario-purchase-decision ${purchaseDecision.state}`}><strong>{purchaseDecision.label}</strong><span>{purchaseDecision.summary}</span><small>{purchaseDecision.reasons.slice(0, 2).join(" · ")}</small></div>}<div className="candidate-scenario-result"><div><span>전체 판정</span><strong>{statusLabel(result.status)}</strong></div><div><span>차단</span><strong>{result.blockerCount}개</strong></div><div><span>주의</span><strong>{result.warningCount}개</strong></div><div><span>확인 필요</span><strong>{result.unknownCount}개</strong></div><div><span>적용 후 합계</span><strong>{result.priceComplete ? formatWon(result.totalPriceWon) : "확인 필요"}</strong></div><div><span>가격 변화</span><strong>{priceDeltaLabel(currentResult, result)}</strong></div></div><p className="candidate-scenario-delta"><FiActivity /> {item.comparison?.summary ?? "현재 구성과 비교할 변화가 없습니다."}</p>{(specDiff.length > 0 || evidence.length > 0) && <div className="candidate-scenario-evidence">{evidence.length > 0 && <div className="candidate-scenario-evidence-lines"><strong>후보 근거</strong>{evidence.map((line) => <span key={line}>{line}</span>)}</div>}<div className="candidate-scenario-spec-diff"><strong>핵심 스펙 변화</strong>{specDiff.length > 0 ? specDiff.map((row) => <div key={row.key}><span>{row.label}</span><em>{row.before}</em><b>→</b><em>{row.after}</em></div>) : <small>현재 부품이 없거나 비교 가능한 핵심 스펙 변화가 없습니다.</small>}</div></div>}<CandidatePriceHistoryPanel history={priceHistory} days={priceHistoryDays} loading={priceHistoryLoading} error={priceHistoryError} /><CandidateScenarioChecks checks={purchaseChecks} />{issues.length > 0 && <div className="candidate-scenario-findings"><strong>적용 후 남는 finding</strong><ul>{issues.map((finding) => <li key={finding.id}><b>{finding.severity === "blocker" ? "차단" : finding.severity === "warning" ? "주의" : "확인"}</b>{finding.title}</li>)}</ul></div>}{issues.length === 0 && <p className="candidate-scenario-clean"><FiCheckCircle /> 차단·주의·확인 필요 finding이 없습니다.</p>}<div className="candidate-scenario-actions">{onWatchPart && <CandidateWatchControl part={item.part} history={priceHistory} onWatch={onWatchPart} onToast={onToast} />}<button className="button button-small button-fix" type="button" disabled={blocked} onClick={() => onApply(item)}>{blocked ? <><FiXCircle /> 적용 불가</> : <><FiZap /> 이 후보 적용 전 미리보기</>}</button>{onSave && <button className="button button-small button-light" type="button" disabled={blocked} onClick={() => onSave(item)}><FiSave /> 새 견적으로 저장</button>}</div></>}
+            {item.status === "ready" && result && <>{purchaseDecision && <div className={`candidate-scenario-purchase-decision ${purchaseDecision.state}`}><strong>{purchaseDecision.label}</strong><span>{purchaseDecision.summary}</span><small>{purchaseDecision.reasons.slice(0, 2).join(" · ")}</small></div>}<div className="candidate-scenario-result"><div><span>전체 결과</span><strong>{statusLabel(result.status)}</strong></div><div><span>차단</span><strong>{result.blockerCount}개</strong></div><div><span>주의</span><strong>{result.warningCount}개</strong></div><div><span>확인 필요</span><strong>{result.unknownCount}개</strong></div><div><span>적용 후 합계</span><strong>{result.priceComplete ? formatWon(result.totalPriceWon) : "확인 필요"}</strong></div><div><span>가격 변화</span><strong>{priceDeltaLabel(currentResult, result)}</strong></div></div><p className="candidate-scenario-delta"><FiActivity /> {item.comparison?.summary ?? "현재 구성과 비교할 변화가 없습니다."}</p>{(specDiff.length > 0 || evidence.length > 0) && <div className="candidate-scenario-evidence">{evidence.length > 0 && <div className="candidate-scenario-evidence-lines"><strong>후보 정보</strong>{evidence.map((line) => <span key={line}>{line}</span>)}</div>}<div className="candidate-scenario-spec-diff"><strong>핵심 스펙 변화</strong>{specDiff.length > 0 ? specDiff.map((row) => <div key={row.key}><span>{row.label}</span><em>{row.before}</em><b>→</b><em>{row.after}</em></div>) : <small>현재 부품이 없거나 비교 가능한 핵심 스펙 변화가 없습니다.</small>}</div></div>}<CandidatePriceHistoryPanel history={priceHistory} days={priceHistoryDays} loading={priceHistoryLoading} error={priceHistoryError} /><CandidateScenarioChecks checks={purchaseChecks} />{issues.length > 0 && <div className="candidate-scenario-findings"><strong>적용 후 남는 항목</strong><ul>{issues.map((finding) => <li key={finding.id}><b>{finding.severity === "blocker" ? "차단" : finding.severity === "warning" ? "주의" : "확인"}</b>{finding.title}</li>)}</ul></div>}{issues.length === 0 && <p className="candidate-scenario-clean"><FiCheckCircle /> 차단·주의·확인 필요 항목이 없습니다.</p>}<div className="candidate-scenario-actions">{onWatchPart && <CandidateWatchControl part={item.part} history={priceHistory} onWatch={onWatchPart} onToast={onToast} />}<button className="button button-small button-fix" type="button" disabled={blocked} onClick={() => onApply(item)}>{blocked ? <><FiXCircle /> 적용 불가</> : <><FiZap /> 이 후보 적용 전 미리보기</>}</button>{onSave && <button className="button button-small button-light" type="button" disabled={blocked} onClick={() => onSave(item)}><FiSave /> 새 견적으로 저장</button>}</div></>}
           </article>;
         })}
       </div>
-      <p className="candidate-scenario-note"><FiInfo /> 가상 비교는 현재 견적을 바꾸지 않습니다. 실제 적용은 후보별 전체 판정 후 변경 예정·가격을 다시 확인하는 미리보기를 거칩니다. {readyCount} / {state.items.length}개 후보 검사 완료</p>
+      <p className="candidate-scenario-note"><FiInfo /> 미리 비교는 현재 견적을 바꾸지 않습니다. 실제 적용은 후보별 전체 결과 후 변경 예정·가격을 다시 확인하는 미리보기를 거칩니다. {readyCount} / {state.items.length}개 후보 검사 완료</p>
       <div className="candidate-scenario-footer"><button className="button button-light" type="button" onClick={onClose}>비교 닫기</button></div>
     </section>
   </div>;

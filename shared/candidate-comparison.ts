@@ -53,7 +53,7 @@ const CRITERION_LABELS: Record<CandidateComparisonCriterion, string> = {
   compatibility: "호환 우선",
   performance: "성능 우선",
   price: "가격 우선",
-  evidence: "근거 우선"
+  evidence: "정보 우선"
 };
 
 function clampScore(value: number) {
@@ -104,7 +104,7 @@ function evidenceScore(item: CandidateComparisonItem) {
 }
 
 function analysisConfidenceLabel(confidence: CandidateComparisonItem["analysisConfidence"]) {
-  return confidence === "high" ? "근거 충분" : confidence === "limited" ? "일부 스펙 기준" : "근거 확인 필요";
+  return confidence === "high" ? "정보 충분" : confidence === "limited" ? "일부 스펙 기준" : "정보 확인 필요";
 }
 
 function analysisWeightFor(item: CandidateComparisonItem) {
@@ -123,15 +123,15 @@ function performanceScore(item: CandidateComparisonItem) {
 }
 
 function similarityEvidenceSummary(evidence: SimilarityEvidence | undefined) {
-  if (!evidence) return "성능 근거 확인 필요";
+  if (!evidence) return "성능 정보 확인 필요";
   const basis = evidence.basis === "benchmark"
     ? "벤치마크 기준"
     : evidence.basis === "mixed"
       ? "벤치마크·스펙 혼합"
       : evidence.basis === "spec"
         ? "확인 스펙 기준"
-        : "기준 미분류";
-  const confidence = evidence.confidence === "high" ? "근거 충분" : evidence.confidence === "limited" ? "일부 근거" : "근거 확인 필요";
+        : "기준 확인 필요";
+  const confidence = evidence.confidence === "high" ? "정보 충분" : evidence.confidence === "limited" ? "일부 정보" : "정보 확인 필요";
   return `비교 ${evidence.comparedDimensions}/${evidence.totalDimensions} · ${basis} · ${confidence}`;
 }
 
@@ -147,12 +147,12 @@ function reasonFor(criterion: CandidateComparisonCriterion, item: CandidateCompa
   }
   if (criterion === "price") {
     if (confirmedPriceFor(item)) return `가격 ${item.priceWon!.toLocaleString("ko-KR")}원 · 가격 점수 ${priceScore}점`;
-    if (item.priceEvidence === "reference") return "프로젝트 기준가 · 실판매가가 아니어서 가격 점수를 산정하지 않음";
+    if (item.priceEvidence === "reference") return "참고 가격 · 실판매가가 아니어서 가격 점수를 산정하지 않음";
     if (item.priceEvidence === "recorded") return "기록 가격 · 재확인 전까지 가격 점수를 산정하지 않음";
     return "가격 확인 필요";
   }
-  if (criterion === "evidence") return `근거 ${evidence}점 · ${item.freshness === "fresh" ? "최근 확인" : item.freshness === "aging" ? "갱신 권장" : item.freshness === "stale" ? "오래된 정보" : item.freshness === "unknown" ? "시점 확인 필요" : "상태 미확인"}`;
-  return `균형 ${score}점 · 호환 ${compatibility} · 성능 ${performance} · 근거 ${evidence} · ${similarityEvidenceSummary(item.similarityEvidence)}`;
+  if (criterion === "evidence") return `정보 ${evidence}점 · ${item.freshness === "fresh" ? "최근 확인" : item.freshness === "aging" ? "갱신 권장" : item.freshness === "stale" ? "오래된 정보" : item.freshness === "unknown" ? "시점 확인 필요" : "상태 미확인"}`;
+  return `균형 ${score}점 · 호환 ${compatibility} · 성능 ${performance} · 정보 ${evidence} · ${similarityEvidenceSummary(item.similarityEvidence)}`;
 }
 
 export function candidateComparisonDecisionFor(items: CandidateComparisonItem[], criterion: CandidateComparisonCriterion = "balanced"): CandidateComparisonDecision {
@@ -182,7 +182,7 @@ export function candidateComparisonDecisionFor(items: CandidateComparisonItem[],
   const eligibleRanking = ranked.filter((item) => !excludedIds.includes(item.id));
   const top = eligibleRanking[0];
   const criterionSummary = criterion === "balanced"
-    ? "호환·성능·가격·근거를 함께 반영한 균형 기준"
+    ? "호환·성능·가격·정보를 함께 반영한 균형 기준"
     : criterion === "performance"
       ? "부품 유사도와 후보 적용 후 전체 성능을 함께 반영한 성능 기준"
       : `${CRITERION_LABELS[criterion]} 기준`;
@@ -228,7 +228,7 @@ function candidateTradeoffDimensionReason(left: CandidateTradeoffMetric, right: 
   if (left.riskScore !== undefined && right.riskScore !== undefined && left.riskScore < right.riskScore) dimensions.push("잔여 위험");
   if (left.priceDeltaWon !== undefined && right.priceDeltaWon !== undefined && left.priceDeltaWon < right.priceDeltaWon) dimensions.push("가격 변화");
   if (left.analysisScore !== undefined && right.analysisScore !== undefined && left.analysisScore > right.analysisScore) dimensions.push("적용 후 분석");
-  if (left.evidenceScore! > right.evidenceScore!) dimensions.push("근거");
+  if (left.evidenceScore! > right.evidenceScore!) dimensions.push("정보");
   return dimensions.length > 0 ? dimensions.join("·") : "비교 기준";
 }
 
@@ -244,7 +244,7 @@ export function candidateComparisonTradeoffsFor(items: CandidateComparisonItem[]
   return metrics.map((metric) => {
     const excluded = items.find((item) => item.id === metric.id)?.candidateRisk === "unsafe" || items.find((item) => item.id === metric.id)?.decisionStatus === "avoid";
     if (excluded) return { ...metric, eligible: false, frontier: false, reason: "후보 자체가 차단 상태여서 효율 비교에서 제외했습니다." };
-    if (metric.riskScore === undefined) return { ...metric, frontier: true, reason: "잔여 위험 카운트가 모두 확인되지 않아 다른 후보와 우열을 확정하지 않았습니다." };
+    if (metric.riskScore === undefined) return { ...metric, frontier: true, reason: "잔여 위험 카운트가 모두 확인되지 않아 다른 후보와 우위를 확정하지 않았습니다." };
     const dominators = metrics
       .filter((candidate) => candidate.id !== metric.id && !items.find((item) => item.id === candidate.id && (item.candidateRisk === "unsafe" || item.decisionStatus === "avoid")) && candidateTradeoffDominates(candidate, metric))
       .sort((left, right) => left.riskScore! - right.riskScore! || (left.priceDeltaWon ?? Number.POSITIVE_INFINITY) - (right.priceDeltaWon ?? Number.POSITIVE_INFINITY) || (right.analysisScore ?? Number.NEGATIVE_INFINITY) - (left.analysisScore ?? Number.NEGATIVE_INFINITY) || right.evidenceScore! - left.evidenceScore!);
@@ -254,15 +254,15 @@ export function candidateComparisonTradeoffsFor(items: CandidateComparisonItem[]
         ...metric,
         frontier: true,
         reason: metric.priceDeltaWon === undefined || metric.analysisScore === undefined
-          ? "가격·분석 근거가 일부 확인되지 않아 우열을 확정하지 않고 효율 경계에 남겼습니다."
-          : "호환 위험·가격 변화·적용 후 분석·근거에서 다른 후보에 일방적으로 대체되지 않는 선택지입니다."
+          ? "가격·분석 정보가 일부 확인되지 않아 우위를 확정하지 않고 비교 우위에 남겼습니다."
+          : "호환 위험·가격 변화·적용 후 분석·정보에서 다른 후보에 일방적으로 대체되지 않는 선택지입니다."
       };
     }
     return {
       ...metric,
       frontier: false,
       dominatedByCandidateId: dominator.id,
-      reason: `${dominator.name}이(가) ${candidateTradeoffDimensionReason(dominator, metric)} 기준으로 더 유리해 효율 경계에서 제외했습니다.`
+      reason: `${dominator.name}이(가) ${candidateTradeoffDimensionReason(dominator, metric)} 기준으로 더 유리해 비교 우위에서 제외했습니다.`
     };
   });
 }

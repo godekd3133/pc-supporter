@@ -113,7 +113,7 @@ export function validateBenchmarkOverrideBatch(input: unknown, catalog: Part[], 
     if (part && part.category !== "cpu" && part.category !== "gpu") itemErrors.push("CPU 또는 GPU만 벤치마크 보강 대상입니다.");
 
     const sourceNote = normalizedString(candidate.sourceNote);
-    if (!sourceNote) itemErrors.push("검수 근거 sourceNote가 필요합니다.");
+    if (!sourceNote) itemErrors.push("확인 정보 sourceNote가 필요합니다.");
     if (sourceNote.length > 500) itemErrors.push("sourceNote는 500자 이하로 입력해야 합니다.");
     const sourceUrl = normalizedString(candidate.sourceUrl);
     itemErrors.push(...sourceUrlErrors(sourceUrl));

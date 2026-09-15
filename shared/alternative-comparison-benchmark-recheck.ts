@@ -92,11 +92,11 @@ export function alternativeComparisonBenchmarkRecheckFor(candidate: AlternativeC
 }
 
 export function alternativeComparisonBenchmarkRecheckStatusText(status: AlternativeComparisonBenchmarkRecheckStatus) {
-  return status === "same" ? "공유 당시와 동일" : status === "changed" ? "benchmark 변경" : status === "current_missing" ? "현재 점수 없음" : status === "current_incomplete" ? "현재 점수 일부" : status === "needs_review" ? "benchmark 재확인 필요" : status === "current_unavailable" ? "현재 근거 확인 불가" : "공유 당시 기록 없음";
+  return status === "same" ? "공유 당시와 동일" : status === "changed" ? "벤치마크 변경" : status === "current_missing" ? "현재 점수 없음" : status === "current_incomplete" ? "현재 점수 일부" : status === "needs_review" ? "벤치마크 재확인 필요" : status === "current_unavailable" ? "현재 정보 확인 불가" : "공유 당시 기록 없음";
 }
 
 export function alternativeComparisonBenchmarkDecisionImpactText(impact: AlternativeComparisonBenchmarkDecisionImpact) {
-  return impact === "stable" ? "benchmark 판단 영향 없음" : impact === "changed" ? "추천 성능 판단 재검토" : impact === "unverified" ? "추천 성능 판단 확인 필요" : "benchmark 판단 근거 없음";
+  return impact === "stable" ? "벤치마크 판단 영향 없음" : impact === "changed" ? "추천 성능 판단 재검토" : impact === "unverified" ? "추천 성능 판단 확인 필요" : "벤치마크 판단 정보 없음";
 }
 
 export function alternativeComparisonBenchmarkRecheckRowText(row: AlternativeComparisonBenchmarkRecheckRow) {

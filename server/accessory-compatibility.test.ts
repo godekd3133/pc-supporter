@@ -235,7 +235,7 @@ describe("accessory compatibility", () => {
       "accessory-fan-hub-current"
     ]);
     expect(result.connectionPlans).toEqual([
-      expect.objectContaining({ status: "review", connectorStatus: "review", currentStatus: "review", connectorIssue: "unknown", currentIssue: "unknown", fanCount: 1, summary: expect.stringContaining("전류 근거 확인 필요") })
+      expect.objectContaining({ status: "review", connectorStatus: "review", currentStatus: "review", connectorIssue: "unknown", currentIssue: "unknown", fanCount: 1, summary: expect.stringContaining("전류 정보 확인 필요") })
     ]);
   });
 

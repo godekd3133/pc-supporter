@@ -70,7 +70,7 @@ describe("assembly plan", () => {
     const plan = assemblyPlanFor(accessoryBuild, result({ accessoryCompatibility: { status: "needs_review", blockerCount: 0, warningCount: 0, unknownCount: 1, findings: [] } }));
 
     expect(plan.steps.find((step) => step.id === "wire-peripherals")).toMatchObject({ status: "pending", targetId: "accessory-compatibility-panel" });
-    expect(plan.summary).toContain("원문·가격·연결 근거");
+    expect(plan.summary).toContain("원문·가격·연결 정보");
   });
 
   it("routes a calculated resource-budget review to the resource summary", () => {

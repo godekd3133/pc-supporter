@@ -239,7 +239,7 @@ function gpuTargetScoreFor(part: Part, resolution: GamingResolution) {
   return Math.max(0, Math.min(100, Math.round((vramGb / targetVramGb) * 100)));
 }
 
-const ANALYSIS_SCORE_BASIS = "실제 벤치마크·FPS가 아닌, 현재 카탈로그의 확인된 스펙을 같은 범주 안에서 비교한 상대 지수입니다.";
+const ANALYSIS_SCORE_BASIS = "실제 벤치마크·FPS가 아닌, 현재 카탈로그의 확인된 스펙을 같은 범주 안에서 비교한 상대 점수입니다.";
 
 function emptyBuildAnalysis(profile: RecommendationProfile): BuildAnalysis {
   return {
@@ -305,9 +305,9 @@ function candidateDataQualityReasonsFor(candidate: Part) {
   return [missingFields.length > 0 ? `필수 스펙 미확인: ${missingFields.join(", ")}` : "필수 스펙 미확인"];
 }
 
-// 후보 풀을 줄일 때도 검증 우선 후보가 유사도 상위권 밖으로 밀려나지 않도록
-// 신뢰도 계산과 같은 입력 축을 사용하는 정렬용 점수입니다. 최종 추천 순서는
-// 후보를 실제로 대입한 뒤 계산하는 recommendationTrust를 사용합니다.
+// 후보 풀을 줄일 때도 확인 우선 후보가 유사도 상위권 밖으로 밀려나지 않도록
+// 점수 계산과 같은 입력 축을 사용하는 정렬용 점수입니다. 최종 추천 순서는
+// 후보를 실제로 적용한 뒤 계산하는 recommendationTrust를 사용합니다.
 const reliabilityDataQualityPoints: Record<Part["dataQuality"], number> = {
   manual: 40,
   live: 32,
@@ -943,8 +943,8 @@ export function assessAlternativePart(build: BuildSelection, catalog: Part[], ca
   const fixesCurrentIssue = intentFinding === undefined
     ? undefined
     : intentEligible && !evaluation.findings.some((item) => item.ruleId === intentFinding.ruleId);
-  // 후보 교체 전부터 존재하던 동일 규칙의 finding은 후보가 새로 만든
-  // 위험이 아니다. 후보 위험은 baseline 대비 신규·악화된 finding만 센다.
+  // 후보 교체 전부터 존재하던 동일 규칙의 항목은 후보가 새로 만든
+  // 위험이 아니다. 후보 위험은 baseline 대비 신규·악화된 항목만 센다.
   const candidateFindings = candidateCompatibilityDeltaFindings(baseline, evaluation, candidate.id);
   const reasons = [...new Set([
     ...candidateDataQualityReasonsFor(candidate),
@@ -975,13 +975,13 @@ function physicalEvidenceSummaryFor(targetCategory: PartCategory, evaluation: Co
   if (!evaluation.gpuFit) return undefined;
   const evidence = gpuPurchaseEvidenceFor(evaluation.gpuFit);
   const sources = evidence.sources && evidence.sources.length > 0 ? { sources: evidence.sources } : {};
-  if (evidence.status === "not_applicable") return { status: "not_applicable", summary: "현재 구성에서는 GPU 물리·PCIe 케이블 근거 검수가 적용되지 않습니다.", ...sources };
-  if (evidence.status === "compatible") return { status: "verified", summary: "필요한 GPU·케이스 물리와 PCIe 케이블 근거가 확인되었습니다.", ...sources };
+  if (evidence.status === "not_applicable") return { status: "not_applicable", summary: "현재 구성에서는 GPU 물리·PCIe 케이블 확인이 적용되지 않습니다.", ...sources };
+  if (evidence.status === "compatible") return { status: "verified", summary: "필요한 GPU·케이스 물리와 PCIe 케이블 정보가 확인되었습니다.", ...sources };
   const missing: string[] = [];
-  if (evidence.sources?.some((source) => physicalSourceCheckNeedsReview(source.sourceCheck, Boolean(source.url)))) missing.push("근거 URL·모델 식별");
-  if (evidence.physical === "needs_review") missing.push("GPU·케이스 물리 근거");
-  if (evidence.pcieCableTopology === "needs_review") missing.push("다중 8핀 케이블 토폴로지 근거");
-  return { status: "review", summary: `${missing.join(" · ") || "물리 근거"}를 구매 전 확인해야 합니다.`, ...sources };
+  if (evidence.sources?.some((source) => physicalSourceCheckNeedsReview(source.sourceCheck, Boolean(source.url)))) missing.push("정보 URL·모델 식별");
+  if (evidence.physical === "needs_review") missing.push("GPU·케이스 장착 정보");
+  if (evidence.pcieCableTopology === "needs_review") missing.push("다중 8핀 케이블 연결 방식 정보");
+  return { status: "review", summary: `${missing.join(" · ") || "장착 정보"}를 구매 전 확인해야 합니다.`, ...sources };
 }
 
 function storageFormFactorFamily(value: string | undefined) {
@@ -1642,7 +1642,7 @@ function similarityFor(
   const score = totalWeight > 0 ? Math.round(weightedScore / totalWeight) : 50;
   const gpuNote = gpuSimilarityNote(comparisonCurrent, candidate);
   const referenceNote = comparison?.reference
-    ? `현재 선택 부품에 없는 ${comparison.transferredDimensions.map((key) => performanceDimensionLabel(key)).join(" · ")}는 동일 ${comparison.reference.category === "gpu" ? "GPU" : "CPU"} 모델 계열의 검증된 카탈로그 참조(${comparison.reference.name})에서 보완했습니다. 선택 부품에 직접 확인된 값은 그대로 사용했습니다.`
+    ? `현재 선택 부품에 없는 ${comparison.transferredDimensions.map((key) => performanceDimensionLabel(key)).join(" · ")}는 동일 ${comparison.reference.category === "gpu" ? "GPU" : "CPU"} 모델 계열의 확인된 카탈로그 참조(${comparison.reference.name})에서 보완했습니다. 선택 부품에 직접 확인된 값은 그대로 사용했습니다.`
     : undefined;
   const notes = [referenceNote, gpuNote].filter((note): note is string => Boolean(note));
   const basis = similarityBasisForDimensions(dimensions);
@@ -2389,7 +2389,7 @@ function candidateEvaluationPoolFor(
       if (!selected.has(item.part.id)) selected.set(item.part.id, item);
     }
   };
-  // 불완전 후보가 많아도 검증된 후보가 bounded pool 밖으로 밀리지 않도록
+  // 불완전 후보가 많아도 확인된 후보가 bounded pool 밖으로 밀리지 않도록
   // 유사도 기준 상위 verified 후보를 먼저 예약한다.
   add(verifiedRanked, VERIFIED_CANDIDATE_RESERVE_SIZE);
   add(priorityRanked, poolSize);
@@ -4319,7 +4319,7 @@ export function evaluateBuild(
           "gpu-cable-clearance",
           "blocker",
           "GPU 전원 케이블 측면 여유가 부족합니다.",
-          "검수된 GPU 케이블 굽힘 요구 여유보다 케이스 측면 공간이 작아 전원 케이블이 측판과 간섭할 수 있습니다.",
+          "확인된 GPU 케이블 굽힘 요구 여유보다 케이스 측면 공간이 작아 전원 케이블이 측판과 간섭할 수 있습니다.",
           partIds(gpu, computerCase),
           [
             { label: "GPU 케이블 굽힘 여유", expected: formatNumber(gpuCableBendClearance, "mm") },
@@ -4507,8 +4507,8 @@ export function evaluateBuild(
               [
                 { label: "충족한 GPU 연결 선택지", actual: formatPciePowerRequirements(gpuPowerOptions[connectorMatch.matchedOptionIndex] ?? []) },
                 { label: "필요한 8핀 커넥터", actual: `${requiredEightPinCount}개` },
-                { label: "검수된 독립 PCIe 케이블 런", actual: pcieCableRuns === undefined ? "확인 필요" : `${pcieCableRuns}개` },
-                { label: "검수된 분배 구조", actual: pcieCableTopology === "shared" ? "분배·공유 케이블" : pcieCableTopology === "independent" ? "독립 케이블" : "확인 필요" }
+                { label: "확인된 독립 PCIe 케이블 런", actual: pcieCableRuns === undefined ? "확인 필요" : `${pcieCableRuns}개` },
+                { label: "확인된 분배 구조", actual: pcieCableTopology === "shared" ? "분배·공유 케이블" : pcieCableTopology === "independent" ? "독립 케이블" : "확인 필요" }
               ],
               [action("verify_spec", "PSU PCIe 케이블 연결 방식 확인", "psu"), replaceAction("psu")]
             );
@@ -4523,7 +4523,7 @@ export function evaluateBuild(
       "psu-data-quality",
       "warning",
       "파워서플라이의 일부 스펙을 확인할 수 없습니다.",
-      "현재 데이터만으로는 전력 공급 안정성을 완전히 검증할 수 없습니다. 제조사 공식 스펙을 확인해 주세요.",
+      "현재 데이터만으로는 전력 공급 안정성을 완전히 확인할 수 없습니다. 제조사 공식 스펙을 확인해 주세요.",
       [psu.id],
       psu.missingFields.map((field) => ({ label: "확인되지 않은 항목", actual: field })),
       [action("verify_spec", "파워서플라이 스펙 확인", "psu"), replaceAction("psu")]
@@ -4715,7 +4715,7 @@ function buildAnalysisBalanceFor(cpuScore: number | undefined, gpuScore: number 
       gpuScore,
       gap,
       status: "balanced",
-      summary: `카탈로그 상대 지수 기준 CPU ${cpuScore}점 · GPU ${gpuScore}점으로 차이가 ${gap}점입니다. 큰 한쪽 쏠림 없이 균형 범위로 봅니다.`
+      summary: `카탈로그 상대 점수 기준 CPU ${cpuScore}점 · GPU ${gpuScore}점으로 차이가 ${gap}점입니다. 큰 한쪽 쏠림 없이 균형 범위로 봅니다.`
     };
   }
   if (difference > 0) {
@@ -4724,7 +4724,7 @@ function buildAnalysisBalanceFor(cpuScore: number | undefined, gpuScore: number 
       gpuScore,
       gap,
       status: "cpu_limited",
-      summary: `카탈로그 상대 지수에서 GPU ${gpuScore}점이 CPU ${cpuScore}점보다 ${gap}점 높습니다. 작업·게임에 따라 CPU 쪽을 먼저 비교할 여지가 있습니다.`
+      summary: `카탈로그 상대 점수에서 GPU ${gpuScore}점이 CPU ${cpuScore}점보다 ${gap}점 높습니다. 작업·게임에 따라 CPU 쪽을 먼저 비교할 여지가 있습니다.`
     };
   }
   return {
@@ -4732,7 +4732,7 @@ function buildAnalysisBalanceFor(cpuScore: number | undefined, gpuScore: number 
     gpuScore,
     gap,
     status: "gpu_limited",
-    summary: `카탈로그 상대 지수에서 CPU ${cpuScore}점이 GPU ${gpuScore}점보다 ${gap}점 높습니다. 고해상도·그래픽 작업에 따라 GPU 쪽을 먼저 비교할 여지가 있습니다.`
+    summary: `카탈로그 상대 점수에서 CPU ${cpuScore}점이 GPU ${gpuScore}점보다 ${gap}점 높습니다. 고해상도·그래픽 작업에 따라 GPU 쪽을 먼저 비교할 여지가 있습니다.`
   };
 }
 
@@ -4743,8 +4743,8 @@ function buildAnalysisInsightsFor(factors: BuildAnalysisFactor[], profile: Recom
     score: factor.score,
     title: kind === "strength" ? `${CATEGORY_LABELS[factor.category]} 강점` : `${CATEGORY_LABELS[factor.category]} 보완`,
     summary: kind === "strength"
-      ? `${RECOMMENDATION_PROFILE_LABELS[profile]} 기준에서 확인 스펙 상대 지수 ${factor.score}점으로 강점입니다.`
-      : `${RECOMMENDATION_PROFILE_LABELS[profile]} 기준에서 확인 스펙 상대 지수 ${factor.score}점으로 먼저 비교할 영역입니다.`
+      ? `${RECOMMENDATION_PROFILE_LABELS[profile]} 기준에서 확인 스펙 상대 점수 ${factor.score}점으로 강점입니다.`
+      : `${RECOMMENDATION_PROFILE_LABELS[profile]} 기준에서 확인 스펙 상대 점수 ${factor.score}점으로 먼저 비교할 영역입니다.`
   });
   const strengths = [...scored]
     .filter((factor) => factor.score >= 75)
@@ -4792,7 +4792,7 @@ function analyzeBuild(
       weight,
       basis: score === undefined
         ? "비교 가능한 확인 스펙이 부족합니다."
-        : `현재 카탈로그 확인 스펙의 상대 지수 ${score}점${entries.length > 1 ? " · 선택 수량 반영" : ""}`
+        : `현재 카탈로그 확인 스펙의 상대 점수 ${score}점${entries.length > 1 ? " · 선택 수량 반영" : ""}`
     });
   }
 
@@ -4975,10 +4975,10 @@ function analyzeBuild(
 
   const sortedBottlenecks = bottlenecks.sort((a, b) => ({ critical: 0, warning: 1, info: 2 }[a.severity] - { critical: 0, warning: 1, info: 2 }[b.severity]));
   const nextActions = [...sortedBottlenecks.map((item) => item.action).filter((item): item is string => Boolean(item))];
-  if (balance?.status === "cpu_limited") nextActions.push("CPU·GPU 상대 지수 차이를 확인하고 CPU 업그레이드 후보를 먼저 비교해 보세요.");
-  if (balance?.status === "gpu_limited") nextActions.push("CPU·GPU 상대 지수 차이를 확인하고 GPU 업그레이드 후보를 먼저 비교해 보세요.");
+  if (balance?.status === "cpu_limited") nextActions.push("CPU·GPU 상대 점수 차이를 확인하고 CPU 업그레이드 후보를 먼저 비교해 보세요.");
+  if (balance?.status === "gpu_limited") nextActions.push("CPU·GPU 상대 점수 차이를 확인하고 GPU 업그레이드 후보를 먼저 비교해 보세요.");
   for (const factor of factors.filter((item) => item.score !== undefined && item.score < 45)) {
-    nextActions.push(`${factor.label}의 카탈로그 상대 지수(${factor.score}점)를 우선 비교해 보세요.`);
+    nextActions.push(`${factor.label}의 카탈로그 상대 점수(${factor.score}점)를 우선 비교해 보세요.`);
   }
   const uniqueActions = [...new Set(nextActions)].slice(0, 4);
   if (uniqueActions.length === 0) uniqueActions.push("현재 확인된 스펙 기준에서 우선 교체할 병목이 없습니다.");
@@ -4986,7 +4986,7 @@ function analyzeBuild(
     profile,
     overallScore,
     scoreLabel,
-    scoreBasis: "실제 벤치마크·FPS가 아닌, 현재 카탈로그의 확인된 스펙을 같은 범주 안에서 비교한 상대 지수입니다.",
+    scoreBasis: "실제 벤치마크·FPS가 아닌, 현재 카탈로그의 확인된 스펙을 같은 범주 안에서 비교한 상대 점수입니다.",
     confidence,
     factors: factors.sort((a, b) => (a.score ?? 101) - (b.score ?? 101)),
     ...(balance ? { balance } : {}),
@@ -5530,13 +5530,13 @@ export function generateBuildDraft(catalog: Part[], request: BuildGenerationRequ
     rationale: [
       profileSummaryFor(profile),
       priority === "reliability"
-        ? `${RECOMMENDATION_PRIORITY_LABELS[priority]} 기준으로 호환 판정·데이터 품질·갱신 시점·원문 연결이 확인된 후보를 먼저 정렬했습니다.`
+        ? `${RECOMMENDATION_PRIORITY_LABELS[priority]} 기준으로 호환 결과·데이터 상태·갱신 시점·원문 연결이 확인된 후보를 먼저 정렬했습니다.`
         : `${RECOMMENDATION_PRIORITY_LABELS[priority]} 기준으로 예산·후보 성능 점수를 정렬했습니다.`,
       request.includeGpu ? "외장 그래픽카드를 포함한 구성입니다." : "CPU 내장 그래픽을 사용하는 구성입니다.",
       request.includeGpu && profile === "gaming"
         ? `${GAMING_RESOLUTION_LABELS[gamingResolution]} · ${GAMING_REFRESH_RATE_LABELS[gamingRefreshRate]} 기준으로 권장 VRAM ${GAMING_RESOLUTION_VRAM_TARGETS[gamingResolution]}GB와 GPU·CPU 처리 스펙을 더 중요하게 반영했습니다.`
         : "게임 해상도 기준은 게이밍 프로필에서만 GPU 추천 가중치에 반영했습니다.",
-      "후보 부품을 같은 호환성 규칙으로 다시 검증한 뒤 초안으로 제공합니다.",
+      "후보 부품을 같은 호환성 규칙으로 다시 확인한 뒤 초안으로 제공합니다.",
       `RAM ${memoryCapacityGb.toLocaleString("ko-KR")}GB 이상을 충족하는 2개 구성과 ${storageCapacityGb.toLocaleString("ko-KR")}GB 이상 SSD 1개를 기본으로 구성했습니다.`,
       hddCount > 0
         ? `${hddCapacityGb.toLocaleString("ko-KR")}GB 이상 HDD ${hddCount}개를 포함하고 메인보드 SATA 포트와 케이스 베이를 함께 확인했습니다.`

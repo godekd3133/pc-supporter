@@ -270,9 +270,12 @@ function emptyChecks(): Record<AssemblyVerificationCheckId, AssemblyVerification
   return Object.fromEntries(ASSEMBLY_VERIFICATION_CHECKS.map((check) => [check.id, { status: "unchecked" as const }])) as Record<AssemblyVerificationCheckId, AssemblyVerificationEntry>;
 }
 
+const ASSEMBLY_VERIFICATION_DEFAULT_RUN_LABEL = "조립 확인 1회차";
+const LEGACY_ASSEMBLY_VERIFICATION_DEFAULT_RUN_LABEL = "조립 검증 1회차";
+
 export function emptyAssemblyVerificationLog(buildFingerprint: string, updatedAt = nowIso()): AssemblyVerificationLog {
   const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  return { type: "pc-supporter-assembly-verification", schemaVersion: 1, buildFingerprint, updatedAt, checks: emptyChecks(), noiseLevel: "not_recorded", loadTool: "not_recorded", loadScenario: "not_recorded", runId, runLabel: "조립 검증 1회차", createdAt: updatedAt };
+  return { type: "pc-supporter-assembly-verification", schemaVersion: 1, buildFingerprint, updatedAt, checks: emptyChecks(), noiseLevel: "not_recorded", loadTool: "not_recorded", loadScenario: "not_recorded", runId, runLabel: ASSEMBLY_VERIFICATION_DEFAULT_RUN_LABEL, createdAt: updatedAt };
 }
 
 export function emptyAssemblyVerificationHistory(buildFingerprint: string, updatedAt = nowIso()): AssemblyVerificationHistory {
@@ -433,7 +436,7 @@ function measurementContinuityFromUnknown(value: unknown, errors: string[]) {
   const sampleIntervalSeconds = optionalRange(value.sampleIntervalSeconds, "평균 샘플 간격", 0, 172_800, errors);
   const observedDurationSeconds = optionalRange(value.observedDurationSeconds, "관찰 기간", 0, 172_800, errors);
   const largestGapSeconds = optionalRange(value.largestGapSeconds, "최대 측정 공백", 0, 172_800, errors);
-  const gapToleranceSeconds = optionalRange(value.gapToleranceSeconds, "공백 판정 기준", 0, 172_800, errors);
+  const gapToleranceSeconds = optionalRange(value.gapToleranceSeconds, "공백 결과 기준", 0, 172_800, errors);
   if (timestampCount === undefined || unparsedTimestampCount === undefined || gapCount === undefined || nonMonotonicCount === undefined || estimatedMissingSamples === undefined) return undefined;
   if (gapCount > Math.max(0, timestampCount - 1) || nonMonotonicCount > Math.max(0, timestampCount - 1) || largestGapSeconds !== undefined && largestGapSeconds > 0 && gapCount === 0) {
     errors.push("측정 시간축 연속성의 간격·공백 수가 서로 일치하지 않습니다.");
@@ -580,7 +583,8 @@ export function assemblyVerificationHistoryHasEvidenceFor(history: AssemblyVerif
 }
 
 function assemblyVerificationRunIsPristinePlaceholderFor(run: AssemblyVerificationLog) {
-  return (run.runLabel ?? "조립 검증 1회차") === "조립 검증 1회차"
+  const label = run.runLabel ?? ASSEMBLY_VERIFICATION_DEFAULT_RUN_LABEL;
+  return (label === ASSEMBLY_VERIFICATION_DEFAULT_RUN_LABEL || label === LEGACY_ASSEMBLY_VERIFICATION_DEFAULT_RUN_LABEL)
     && Object.values(run.checks).every((entry) => entry.status === "unchecked" && !entry.note?.trim())
     && run.noiseLevel === "not_recorded"
     && run.loadTool === "not_recorded"
@@ -631,7 +635,7 @@ export function assemblyVerificationTrendFor(history: AssemblyVerificationHistor
     return {
       index: index + 1,
       runId: run.runId ?? `run-${index + 1}`,
-      runLabel: run.runLabel ?? `조립 검증 ${index + 1}회차`,
+      runLabel: run.runLabel ?? `조립 확인 ${index + 1}회차`,
       state: assemblyVerificationStateFor(run),
       checked: progress.checked,
       total: progress.total,
@@ -813,7 +817,7 @@ export function withAssemblyVerificationMeasurements(log: AssemblyVerificationLo
   const cpuFanRpm = optionalRange(values.cpuFanRpm, "CPU 팬 RPM", 0, 30_000, errors, true);
   const gpuFanRpm = optionalRange(values.gpuFanRpm, "GPU 팬 RPM", 0, 30_000, errors, true);
   const note = values.note === undefined ? log.note : typeof values.note === "string" ? values.note.trim() : "";
-  if (note && note.length > 1_000) errors.push("조립 검증 메모는 1,000자 이하로 입력해야 합니다.");
+  if (note && note.length > 1_000) errors.push("조립 확인 메모는 1,000자 이하로 입력해야 합니다.");
   const measurementSource = values.measurementSource === undefined ? log.measurementSource : values.measurementSource;
   if (measurementSource !== undefined && !["manual", "csv"].includes(String(measurementSource))) errors.push("측정값 출처가 올바르지 않습니다.");
   const measurementSourceLabel = values.measurementSourceLabel === undefined ? log.measurementSourceLabel : typeof values.measurementSourceLabel === "string" ? values.measurementSourceLabel.trim() : "";
@@ -932,14 +936,14 @@ export function parseAssemblyVerificationJson(input: string, expectedBuildFinger
   try {
     parsed = JSON.parse(input);
   } catch {
-    return { errors: ["조립 검증 로그 JSON 형식이 올바르지 않습니다."] };
+    return { errors: ["조립 확인 로그 JSON 형식이 올바르지 않습니다."] };
   }
-  if (!isRecord(parsed)) return { errors: ["조립 검증 로그 JSON은 객체여야 합니다."] };
-  if (parsed.type !== "pc-supporter-assembly-verification" || parsed.schemaVersion !== 1) return { errors: ["지원하지 않는 조립 검증 로그 버전입니다."] };
-  if (typeof parsed.buildFingerprint !== "string" || parsed.buildFingerprint.length === 0 || parsed.buildFingerprint.length > 5_000) return { errors: ["조립 검증 로그의 견적 fingerprint가 올바르지 않습니다."] };
-  if (parsed.buildFingerprint !== expectedBuildFingerprint) return { errors: ["현재 견적과 다른 조립 검증 로그입니다. 같은 견적에서 내보낸 JSON만 가져올 수 있습니다."] };
-  if (typeof parsed.updatedAt !== "string" || parsed.updatedAt.length === 0 || parsed.updatedAt.length > 120) return { errors: ["조립 검증 로그의 갱신 시각이 올바르지 않습니다."] };
-  if (!isRecord(parsed.checks)) return { errors: ["조립 검증 로그의 checks 형식이 올바르지 않습니다."] };
+  if (!isRecord(parsed)) return { errors: ["조립 확인 로그 JSON은 객체여야 합니다."] };
+  if (parsed.type !== "pc-supporter-assembly-verification" || parsed.schemaVersion !== 1) return { errors: ["지원하지 않는 조립 확인 로그 버전입니다."] };
+  if (typeof parsed.buildFingerprint !== "string" || parsed.buildFingerprint.length === 0 || parsed.buildFingerprint.length > 5_000) return { errors: ["조립 확인 로그의 견적 식별자가 올바르지 않습니다."] };
+  if (parsed.buildFingerprint !== expectedBuildFingerprint) return { errors: ["현재 견적과 다른 조립 확인 로그입니다. 같은 견적에서 내보낸 JSON만 가져올 수 있습니다."] };
+  if (typeof parsed.updatedAt !== "string" || parsed.updatedAt.length === 0 || parsed.updatedAt.length > 120) return { errors: ["조립 확인 로그의 갱신 시각이 올바르지 않습니다."] };
+  if (!isRecord(parsed.checks)) return { errors: ["조립 확인 로그의 checks 형식이 올바르지 않습니다."] };
 
   const errors: string[] = [];
   const checks = emptyChecks();
@@ -980,10 +984,10 @@ export function parseAssemblyVerificationJson(input: string, expectedBuildFinger
   if (measurementSeries && measurementSeriesPointCount !== undefined && measurementSeries.length !== measurementSeriesPointCount) errors.push("측정 시계열 포인트 수가 실제 시계열과 일치하지 않습니다.");
   const measurementQuality = measurementQualityFromUnknown(parsed.measurementQuality, errors);
   const note = parsed.note;
-  if (note !== undefined && (typeof note !== "string" || note.length > 1_000)) errors.push("조립 검증 메모는 문자열 1,000자 이하이어야 합니다.");
+  if (note !== undefined && (typeof note !== "string" || note.length > 1_000)) errors.push("조립 확인 메모는 문자열 1,000자 이하이어야 합니다.");
   if (errors.length > 0) return { errors };
   const runId = typeof parsed.runId === "string" && parsed.runId.length > 0 && parsed.runId.length <= 120 ? parsed.runId : `legacy-${parsed.updatedAt}`;
-  const runLabel = typeof parsed.runLabel === "string" && parsed.runLabel.length > 0 && parsed.runLabel.length <= 160 ? parsed.runLabel : "기존 조립 검증";
+  const runLabel = typeof parsed.runLabel === "string" && parsed.runLabel.length > 0 && parsed.runLabel.length <= 160 ? parsed.runLabel : "기존 조립 확인";
   const createdAt = typeof parsed.createdAt === "string" && parsed.createdAt.length > 0 && parsed.createdAt.length <= 120 ? parsed.createdAt : parsed.updatedAt;
   return {
     log: {
@@ -1031,19 +1035,19 @@ export function parseAssemblyVerificationHistoryJson(input: string, expectedBuil
   try {
     parsed = JSON.parse(input);
   } catch {
-    return { errors: ["조립 검증 이력 JSON 형식이 올바르지 않습니다."] };
+    return { errors: ["조립 확인 이력 JSON 형식이 올바르지 않습니다."] };
   }
-  if (!isRecord(parsed)) return { errors: ["조립 검증 이력 JSON은 객체여야 합니다."] };
+  if (!isRecord(parsed)) return { errors: ["조립 확인 이력 JSON은 객체여야 합니다."] };
   if (parsed.type === "pc-supporter-assembly-verification") {
     const legacy = parseAssemblyVerificationJson(input, expectedBuildFingerprint);
     if (legacy.errors.length > 0 || !legacy.log) return { errors: legacy.errors };
     return { history: { type: "pc-supporter-assembly-verification-history", schemaVersion: 1, buildFingerprint: expectedBuildFingerprint, updatedAt: legacy.log.updatedAt, activeRunId: legacy.log.runId!, runs: [legacy.log] }, errors: [] };
   }
-  if (parsed.type !== "pc-supporter-assembly-verification-history" || parsed.schemaVersion !== 1) return { errors: ["지원하지 않는 조립 검증 이력 버전입니다."] };
-  if (typeof parsed.buildFingerprint !== "string" || parsed.buildFingerprint.length === 0 || parsed.buildFingerprint.length > 5_000) return { errors: ["조립 검증 이력의 견적 fingerprint가 올바르지 않습니다."] };
-  if (parsed.buildFingerprint !== expectedBuildFingerprint) return { errors: ["현재 견적과 다른 조립 검증 이력입니다. 같은 견적에서 내보낸 JSON만 가져올 수 있습니다."] };
-  if (typeof parsed.updatedAt !== "string" || parsed.updatedAt.length === 0 || parsed.updatedAt.length > 120) return { errors: ["조립 검증 이력의 갱신 시각이 올바르지 않습니다."] };
-  if (typeof parsed.activeRunId !== "string" || parsed.activeRunId.length === 0 || !Array.isArray(parsed.runs) || parsed.runs.length < 1 || parsed.runs.length > ASSEMBLY_VERIFICATION_HISTORY_LIMIT) return { errors: [`조립 검증 이력은 1~${ASSEMBLY_VERIFICATION_HISTORY_LIMIT}회차 배열이어야 합니다.`] };
+  if (parsed.type !== "pc-supporter-assembly-verification-history" || parsed.schemaVersion !== 1) return { errors: ["지원하지 않는 조립 확인 이력 버전입니다."] };
+  if (typeof parsed.buildFingerprint !== "string" || parsed.buildFingerprint.length === 0 || parsed.buildFingerprint.length > 5_000) return { errors: ["조립 확인 이력의 견적 식별자가 올바르지 않습니다."] };
+  if (parsed.buildFingerprint !== expectedBuildFingerprint) return { errors: ["현재 견적과 다른 조립 확인 이력입니다. 같은 견적에서 내보낸 JSON만 가져올 수 있습니다."] };
+  if (typeof parsed.updatedAt !== "string" || parsed.updatedAt.length === 0 || parsed.updatedAt.length > 120) return { errors: ["조립 확인 이력의 갱신 시각이 올바르지 않습니다."] };
+  if (typeof parsed.activeRunId !== "string" || parsed.activeRunId.length === 0 || !Array.isArray(parsed.runs) || parsed.runs.length < 1 || parsed.runs.length > ASSEMBLY_VERIFICATION_HISTORY_LIMIT) return { errors: [`조립 확인 이력은 1~${ASSEMBLY_VERIFICATION_HISTORY_LIMIT}회차 배열이어야 합니다.`] };
   const runs: AssemblyVerificationLog[] = [];
   const errors: string[] = [];
   const seenRunIds = new Set<string>();

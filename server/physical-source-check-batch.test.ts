@@ -56,11 +56,11 @@ describe("physical source check batch", () => {
       limit: 2,
       persist: false,
       persistCheck: async () => { persistCalls += 1; return true; },
-      skipped: [{ partId: "missing", reason: "근거 URL 없음" }],
+      skipped: [{ partId: "missing", reason: "정보 URL 없음" }],
       check: async (sourceUrl) => passedCheck(sourceUrl)
     });
 
-    expect(result).toMatchObject({ persisted: false, totalCandidates: 3, checkedCount: 2, passedCount: 2, persistedCount: 0, persistFailureCount: 0, skipped: [{ partId: "missing", reason: "근거 URL 없음" }] });
+    expect(result).toMatchObject({ persisted: false, totalCandidates: 3, checkedCount: 2, passedCount: 2, persistedCount: 0, persistFailureCount: 0, skipped: [{ partId: "missing", reason: "정보 URL 없음" }] });
     expect(persistCalls).toBe(0);
   });
 

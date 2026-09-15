@@ -37,9 +37,9 @@ describe("GPU physical review queue", () => {
     const computerCase = part("case-review-1", "case", { maxGpuLengthMm: 330 });
     const psu = part("psu-review-1", "psu", { wattageW: 1300, pciePowerConnectors: { pcie_8pin_6plus2: 6, "12v2x6": 2 } });
     const overrides: Record<string, GpuPhysicalOverride> = {
-      [gpu.id]: { partId: gpu.id, gpuSlotOccupancy: 3, manufacturerModel: "GPU-REVIEW-2", sourceNote: "부분 검수", updatedAt: "2026-09-01T00:00:00.000Z" },
-      [computerCase.id]: { partId: computerCase.id, caseSidePanelClearanceMm: 45, manufacturerModel: "CASE-REVIEW-1", sourceNote: "완료 검수", updatedAt: "2026-09-01T00:00:00.000Z" },
-      [psu.id]: { partId: psu.id, psuIndependentPcieCableRuns: 2, psuPcieCableTopology: "independent", manufacturerModel: "PSU-REVIEW-1", sourceNote: "완료 검수", updatedAt: "2026-09-01T00:00:00.000Z" }
+      [gpu.id]: { partId: gpu.id, gpuSlotOccupancy: 3, manufacturerModel: "GPU-REVIEW-2", sourceNote: "부분 확인", updatedAt: "2026-09-01T00:00:00.000Z" },
+      [computerCase.id]: { partId: computerCase.id, caseSidePanelClearanceMm: 45, manufacturerModel: "CASE-REVIEW-1", sourceNote: "완료 확인", updatedAt: "2026-09-01T00:00:00.000Z" },
+      [psu.id]: { partId: psu.id, psuIndependentPcieCableRuns: 2, psuPcieCableTopology: "independent", manufacturerModel: "PSU-REVIEW-1", sourceNote: "완료 확인", updatedAt: "2026-09-01T00:00:00.000Z" }
     };
     const queue = physicalReviewQueueFor([gpu, computerCase, psu], overrides, { now: "2026-09-01T00:00:00.000Z" });
 
@@ -83,8 +83,8 @@ describe("GPU physical review queue", () => {
 
     expect(queue).toMatchObject({ total: 1, queueTotal: 1, registeredCount: 1, reviewedCount: 0, partialCount: 0, staleCount: 1, pendingCount: 0, coveragePercent: 0 });
     expect(queue.items[0]).toMatchObject({ reviewStatus: "stale", freshness: "stale", evidenceUpdatedAt: "2026-07-01T00:00:00.000Z" });
-    expect(queue.items[0].focusFields).toEqual(["제조사 근거 신선도 재확인"]);
-    expect(queue.items[0].reviewReason).toContain("근거 오래된 정보");
+    expect(queue.items[0].focusFields).toEqual(["제조사 정보 신선도 재확인"]);
+    expect(queue.items[0].reviewReason).toContain("정보 오래된 정보");
   });
 
   it("moves a complete review back into the queue when its URL identity check fails", () => {
@@ -111,8 +111,8 @@ describe("GPU physical review queue", () => {
     const queue = physicalReviewQueueFor([gpu], overrides, { now: "2026-09-01T00:00:00.000Z" });
 
     expect(queue).toMatchObject({ total: 1, queueTotal: 1, reviewedCount: 0, staleCount: 1, coveragePercent: 0 });
-    expect(queue.items[0]).toMatchObject({ reviewStatus: "stale", focusFields: ["근거 URL 접근·모델 식별 재확인"] });
-    expect(queue.items[0].reviewReason).toContain("근거 URL 접근·모델 식별 재확인 필요");
+    expect(queue.items[0]).toMatchObject({ reviewStatus: "stale", focusFields: ["정보 URL 접근·모델 식별 재확인"] });
+    expect(queue.items[0].reviewReason).toContain("정보 URL 접근·모델 식별 재확인 필요");
   });
 
   it("aggregates cross-category review coverage and evidence freshness", () => {
@@ -122,10 +122,10 @@ describe("GPU physical review queue", () => {
     const pendingPsu = part("psu-coverage-pending", "psu", { wattageW: 750 });
     const agingPsu = part("psu-coverage-aging", "psu", { wattageW: 1000 });
     const overrides: Record<string, GpuPhysicalOverride> = {
-      [partialGpu.id]: { partId: partialGpu.id, gpuSlotOccupancy: 3, manufacturerModel: "GPU-COVERAGE-PARTIAL", sourceNote: "부분 근거", updatedAt: "2026-09-01T00:00:00.000Z" },
+      [partialGpu.id]: { partId: partialGpu.id, gpuSlotOccupancy: 3, manufacturerModel: "GPU-COVERAGE-PARTIAL", sourceNote: "부분 자료", updatedAt: "2026-09-01T00:00:00.000Z" },
       [staleGpu.id]: { partId: staleGpu.id, gpuSlotOccupancy: 3.5, gpuCableBendClearanceMm: 40, manufacturerModel: "GPU-COVERAGE-STALE", sourceNote: "재확인 필요", updatedAt: "2026-07-01T00:00:00.000Z" },
-      [computerCase.id]: { partId: computerCase.id, caseSidePanelClearanceMm: 45, manufacturerModel: "CASE-COVERAGE-REVIEWED", sourceNote: "현재 근거", updatedAt: "2026-09-01T00:00:00.000Z" },
-      [agingPsu.id]: { partId: agingPsu.id, psuIndependentPcieCableRuns: 2, psuPcieCableTopology: "independent", manufacturerModel: "PSU-COVERAGE-AGING", sourceNote: "갱신 권장 근거", updatedAt: "2026-08-20T00:00:00.000Z" }
+      [computerCase.id]: { partId: computerCase.id, caseSidePanelClearanceMm: 45, manufacturerModel: "CASE-COVERAGE-REVIEWED", sourceNote: "현재 정보", updatedAt: "2026-09-01T00:00:00.000Z" },
+      [agingPsu.id]: { partId: agingPsu.id, psuIndependentPcieCableRuns: 2, psuPcieCableTopology: "independent", manufacturerModel: "PSU-COVERAGE-AGING", sourceNote: "갱신 권장 정보", updatedAt: "2026-08-20T00:00:00.000Z" }
     };
     const coverage = physicalReviewCoverageFor([partialGpu, staleGpu, computerCase, pendingPsu, agingPsu], overrides, "2026-09-01T00:00:00.000Z");
 
@@ -141,7 +141,7 @@ describe("GPU physical review queue", () => {
     const highGpu = part("gpu-package-high", "gpu", { powerW: 575, lengthMm: 359, thicknessMm: 72, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 4 }]] });
     const lowGpu = part("gpu-package-low", "gpu", { powerW: 180 });
     const overrides: Record<string, GpuPhysicalOverride> = {
-      [highGpu.id]: { partId: highGpu.id, gpuSlotOccupancy: 3.5, manufacturerModel: "GPU-PACKAGE-HIGH", sourceNote: "슬롯 근거", updatedAt: "2026-09-01T00:00:00.000Z" }
+      [highGpu.id]: { partId: highGpu.id, gpuSlotOccupancy: 3.5, manufacturerModel: "GPU-PACKAGE-HIGH", sourceNote: "슬롯 정보", updatedAt: "2026-09-01T00:00:00.000Z" }
     };
     const workPackage = physicalReviewWorkPackageFor([highGpu, lowGpu], overrides, { category: "gpu", limit: 1, offset: 0, now: "2026-09-01T00:00:00.000Z" });
 

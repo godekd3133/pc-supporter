@@ -57,7 +57,7 @@ describe("candidate comparison decision", () => {
   it("does not rank a project reference price as a confirmed price", () => {
     const result = candidateComparisonDecisionFor([
       ...candidates,
-      { id: "reference", name: "프로젝트 기준가 후보", priceWon: 1000, priceEvidence: "reference" as const }
+      { id: "reference", name: "참고 가격 후보", priceWon: 1000, priceEvidence: "reference" as const }
     ], "price");
 
     expect(result.top?.id).toBe("cheap-review");
@@ -75,13 +75,13 @@ describe("candidate comparison decision", () => {
   it("shows performance comparison coverage and basis in the ranking reason", () => {
     const result = candidateComparisonDecisionFor([{
       id: "mixed-evidence",
-      name: "혼합 근거 후보",
+      name: "혼합 정보 후보",
       similarityScore: 84,
       similarityEvidence: { comparedDimensions: 3, totalDimensions: 5, confidence: "limited", basis: "mixed" },
       candidateRisk: "safe"
     }], "performance");
 
-    expect(result.top?.reason).toContain("비교 3/5 · 벤치마크·스펙 혼합 · 일부 근거");
+    expect(result.top?.reason).toContain("비교 3/5 · 벤치마크·스펙 혼합 · 일부 정보");
   });
 
   it("blends component similarity with the full-build result when available", () => {
@@ -98,9 +98,9 @@ describe("candidate comparison decision", () => {
 
   it("reduces the influence of limited analysis and ignores unknown analysis evidence", () => {
     const result = candidateComparisonDecisionFor([
-      { id: "high", name: "완전 근거", similarityScore: 80, analysisScore: 100, analysisConfidence: "high" },
-      { id: "limited", name: "부분 근거", similarityScore: 80, analysisScore: 100, analysisConfidence: "limited" },
-      { id: "unknown", name: "근거 미확인", similarityScore: 80, analysisScore: 100, analysisConfidence: "unknown" }
+      { id: "high", name: "완전 자료", similarityScore: 80, analysisScore: 100, analysisConfidence: "high" },
+      { id: "limited", name: "부분 자료", similarityScore: 80, analysisScore: 100, analysisConfidence: "limited" },
+      { id: "unknown", name: "정보 미확인", similarityScore: 80, analysisScore: 100, analysisConfidence: "unknown" }
     ], "performance");
 
     expect(result.ranking.map((item) => item.id)).toEqual(["high", "limited", "unknown"]);
@@ -108,7 +108,7 @@ describe("candidate comparison decision", () => {
     expect(result.ranking[1].score).toBe(82);
     expect(result.ranking[2].score).toBe(80);
     expect(result.ranking[1].reason).toContain("일부 스펙 기준");
-    expect(result.ranking[2].reason).toContain("근거 확인 필요");
+    expect(result.ranking[2].reason).toContain("정보 확인 필요");
   });
 
   it("downgrades stale or physically unverified evidence in the evidence and balanced scores", () => {
@@ -125,7 +125,7 @@ describe("candidate comparison decision", () => {
     const result = candidateComparisonTradeoffsFor([
       { id: "cheap", name: "저렴한 후보", priceDeltaWon: 0, analysisScore: 70, analysisConfidence: "high", recommendationTrustScore: 80, remainingBlockers: 0, remainingWarnings: 0, remainingUnknown: 0 },
       { id: "performance", name: "성능 후보", priceDeltaWon: 100000, analysisScore: 90, analysisConfidence: "high", recommendationTrustScore: 90, remainingBlockers: 0, remainingWarnings: 0, remainingUnknown: 0 },
-      { id: "dominated", name: "열세 후보", priceDeltaWon: 150000, analysisScore: 80, analysisConfidence: "high", recommendationTrustScore: 70, remainingBlockers: 0, remainingWarnings: 1, remainingUnknown: 0 },
+      { id: "dominated", name: "밀림 후보", priceDeltaWon: 150000, analysisScore: 80, analysisConfidence: "high", recommendationTrustScore: 70, remainingBlockers: 0, remainingWarnings: 1, remainingUnknown: 0 },
       { id: "unsafe", name: "차단 후보", priceDeltaWon: -100000, analysisScore: 100, analysisConfidence: "high", recommendationTrustScore: 100, candidateRisk: "unsafe", remainingBlockers: 0, remainingWarnings: 0, remainingUnknown: 0 }
     ]);
 

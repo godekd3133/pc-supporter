@@ -211,7 +211,7 @@ function exportItemFromUnknown(value: unknown): { item?: BudgetLadderExportItem;
   if (parsedSelection.error) return { error: `${band.label} ${parsedSelection.error}` };
   const error = textValue(value.error, 500);
   const diagnostics = diagnosticsFromUnknown(value.diagnostics);
-  if (value.diagnostics !== undefined && diagnostics === undefined) return { error: `${band.label} 구간의 실패 근거 형식이 올바르지 않습니다.` };
+  if (value.diagnostics !== undefined && diagnostics === undefined) return { error: `${band.label} 구간의 실패 정보 형식이 올바르지 않습니다.` };
   if (status !== "생성 실패" && totalPriceWon === undefined) return { error: `${band.label} 구간의 성공 결과에 예상 합계가 없습니다.` };
   return {
     item: {
@@ -280,13 +280,13 @@ function changeFromUnknown(value: unknown): { change?: BudgetLadderChange; error
 }
 
 function payloadFromUnknown(value: unknown): { payload?: BudgetLadderExportPayload; error?: string } {
-  if (!isRecord(value) || value.type !== "pc-supporter-budget-ladder" || value.version !== 1 || typeof value.exportedAt !== "string" || !Number.isFinite(Date.parse(value.exportedAt)) || !Array.isArray(value.items) || value.items.length !== BUDGET_LADDER_BANDS.length || !Array.isArray(value.changes) || value.changes.length > BUDGET_LADDER_BANDS.length - 1) return { error: "예산 비교 snapshot 형식이 올바르지 않습니다." };
+  if (!isRecord(value) || value.type !== "pc-supporter-budget-ladder" || value.version !== 1 || typeof value.exportedAt !== "string" || !Number.isFinite(Date.parse(value.exportedAt)) || !Array.isArray(value.items) || value.items.length !== BUDGET_LADDER_BANDS.length || !Array.isArray(value.changes) || value.changes.length > BUDGET_LADDER_BANDS.length - 1) return { error: "예산 비교 저장본 형식이 올바르지 않습니다." };
   const parsedItems = value.items.map(exportItemFromUnknown);
   const itemErrors = parsedItems.flatMap((result) => result.error ? [result.error] : []);
   const items = parsedItems.flatMap((result) => result.item ? [result.item] : []);
   if (itemErrors.length > 0 || items.length !== BUDGET_LADDER_BANDS.length || new Set(items.map((item) => item.id)).size !== items.length) return { error: itemErrors[0] ?? "예산 비교 구간이 중복되었거나 누락되었습니다." };
   const expectedIds = BUDGET_LADDER_BANDS.map((band) => band.id);
-  if (items.map((item) => item.id).sort().join(",") !== expectedIds.slice().sort().join(",")) return { error: "예산 비교 snapshot에는 절약형·목표 예산·여유형이 모두 필요합니다." };
+  if (items.map((item) => item.id).sort().join(",") !== expectedIds.slice().sort().join(",")) return { error: "예산 비교 저장본에는 절약형·목표 예산·여유형이 모두 필요합니다." };
   const parsedChanges = value.changes.map(changeFromUnknown);
   const changeErrors = parsedChanges.flatMap((result) => result.error ? [result.error] : []);
   const changes = parsedChanges.flatMap((result) => result.change ? [result.change] : []);

@@ -151,8 +151,8 @@ export function purchaseChecklistItemsFor(build: BuildSelection, result: Compati
       id: `connectivity:${item.id}`,
       kind: "manual",
       severity: item.status === "review" ? "warning" : "unknown",
-      title: `${item.label} ${item.status === "review" ? "주의 확인" : "근거 확인"}`,
-      detail: `${item.detail} 케이스 기본 장치와 메인보드 연결 근거를 확인해야 합니다.`,
+      title: `${item.label} ${item.status === "review" ? "주의 확인" : "정보 확인"}`,
+      detail: `${item.detail} 케이스 기본 장치와 메인보드 연결 정보를 확인해야 합니다.`,
       targetId: "build-connectivity-panel",
       actionLabel: "연결 자원 보기"
     }));
@@ -181,7 +181,7 @@ export function purchaseChecklistItemsFor(build: BuildSelection, result: Compati
       id: missingGpuPhysicalEvidence ? "manual:gpu-physical-evidence" : "manual:physical-clearance",
       kind: "manual" as const,
       severity: "manual" as const,
-      title: missingGpuPhysicalEvidence ? "GPU·케이스 물리 검수 근거 확인" : "케이스 내부 간섭·케이블 여유 확인",
+      title: missingGpuPhysicalEvidence ? "GPU·케이스 물리 확인 정보 확인" : "케이스 내부 간섭·케이블 여유 확인",
       detail: missingGpuPhysicalEvidence ? "GPU 물리 슬롯 점유·케이블 굽힘 최소 여유·케이스 측면 공간 중 등록되지 않은 값을 제조사 매뉴얼 또는 도면에서 확인하세요." : "GPU·쿨러·파워의 실제 길이와 두께, 전면 라디에이터·케이블이 함께 들어가는지 실물 또는 제조사 도면으로 확인하세요.",
       ...(gpuPurchaseEvidence ? { targetId: "gpu-fit-summary-panel" as const, actionLabel: "GPU FIT 보기" } : {})
     }] : []),
@@ -241,7 +241,7 @@ export function purchaseChecklistTextFor(items: PurchaseChecklistItem[], checked
   const lines = ["PC Supporter 구매 전 실행 체크리스트", ""];
   items.forEach((item) => {
     const marker = checkedIds.has(item.id) ? "[x]" : "[ ]";
-    const kind = item.kind === "finding" ? "엔진 finding" : "직접 확인";
+    const kind = item.kind === "finding" ? "검사 항목" : "직접 확인";
     lines.push(`${marker} ${kind} · ${item.title}`, `    ${item.detail}`);
   });
   return lines.join("\n");

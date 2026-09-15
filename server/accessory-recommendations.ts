@@ -131,7 +131,7 @@ export function recommendAccessories(build: BuildSelection, catalog: Part[], acc
       accessories,
       "storage_accessory",
       `M.2 SSD ${m2Count}개가 메인보드의 ${slotLabel}를 넘어 ${m2OverflowCount}개 확장 경로가 필요할 수 있어 변환 어댑터를 제안합니다.`,
-      `선택한 SSD의 폼팩터·NVMe/SATA 신호를 직접 지원하고, 한 어댑터에 최소 ${m2OverflowCount}개를 장착할 수 있다는 원문 근거가 있는 후보만 표시합니다. PCIe 슬롯·레인 공유·부팅 지원은 별도 확인이 필요합니다.`,
+      `선택한 SSD의 폼팩터·NVMe/SATA 신호를 직접 지원하고, 한 어댑터에 최소 ${m2OverflowCount}개를 장착할 수 있다는 원문 정보가 있는 후보만 표시합니다. PCIe 슬롯·레인 공유·부팅 지원은 별도 확인이 필요합니다.`,
       "recommended",
       "medium",
       (item) => {
@@ -165,7 +165,7 @@ export function recommendAccessories(build: BuildSelection, catalog: Part[], acc
       accessories,
       "memory_cooler",
       `확인된 RAM 속도 ${memorySpeedLabel}${selectedMemoryModuleCount >= 4 ? ` · 실제 모듈 ${selectedMemoryModuleCount}개` : ""} 구성이라 메모리 발열 보완용 쿨링팬을 제안합니다.`,
-      `메모리·DDR·DIMM 표기와 팬·쿨링 근거가 함께 있는 후보를 우선합니다. DIMM 높이, CPU 쿨러 간섭, 메모리 세대별 장착 가능 여부는 구매 전에 확인해야 합니다.`,
+      `메모리·DDR·DIMM 표기와 팬·쿨링 정보가 함께 있는 후보를 우선합니다. DIMM 높이, CPU 쿨러 간섭, 메모리 세대별 장착 가능 여부는 구매 전에 확인해야 합니다.`,
       "optional",
       "medium",
       (item) => {
@@ -204,7 +204,7 @@ export function recommendAccessories(build: BuildSelection, catalog: Part[], acc
       accessories,
       "gpu_cooler",
       `그래픽카드 ${gpuLoadLabel}로 보조 냉각 여지가 있어 GPU 쿨링 액세서리를 제안합니다.`,
-      "그래픽카드·PCI 슬롯·팬·쿨링 근거가 있는 보조 제품만 표시합니다. GPU 기본 쿨러를 대체하는 추천이 아니며 슬롯 점유, 팬 크기, 케이스 흡·배기 간섭을 따로 확인해야 합니다.",
+      "그래픽카드·PCI 슬롯·팬·쿨링 정보가 있는 보조 제품만 표시합니다. GPU 기본 쿨러를 대체하는 추천이 아니며 슬롯 점유, 팬 크기, 케이스 흡·배기 간섭을 따로 확인해야 합니다.",
       "optional",
       "medium",
       (item) => {

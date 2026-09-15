@@ -21,7 +21,7 @@ function recommendation(id: string, category: Part["category"]): UpgradeBundleRe
     similarityLabel: "유사",
     similarityEvidence: { comparedDimensions: 1, totalDimensions: 1, confidence: "high", dimensions: [] },
     compatibilityEvidence: { blockerCount: 0, warningCount: 0, unknownCount: 0 },
-    ...(category === "gpu" ? { physicalEvidence: { status: "review" as const, summary: "GPU·케이스 물리 근거 확인 필요", sources: [{ category: "gpu" as const, note: "GPU 제조사 문서" }] } } : {}),
+    ...(category === "gpu" ? { physicalEvidence: { status: "review" as const, summary: "GPU·케이스 장착 정보 확인 필요", sources: [{ category: "gpu" as const, note: "GPU 제조사 문서" }] } } : {}),
     reason: "테스트",
     expansionEvidence: { baselineScore: 40, candidateScore: 50, scoreDelta: 10, baselineKnownDimensionCount: 3, baselineTotalDimensionCount: 3, candidateKnownDimensionCount: 3, candidateTotalDimensionCount: 3, baselineLevel: "complete", candidateLevel: "complete", baselineSummary: "기준", candidateSummary: "후보" }
   };

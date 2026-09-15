@@ -39,4 +39,9 @@ describe("catalog change impact mapping", () => {
     expect(catalogChangeImpactsFor(record(), { field: "누락 필드", previous: "socket", next: "없음" })[0]).toMatchObject({ kind: "data", ruleIds: [] });
     expect(catalogChangeImpactsFor(record(), { field: "정규화 스펙 · 알 수 없는 키", previous: "a", next: "b" })).toEqual([]);
   });
+
+  it("maps the data-confidence impact for both current and legacy field labels", () => {
+    expect(catalogChangeImpactsFor(record(), { field: "데이터 상태", previous: "incomplete", next: "live" })[0]).toMatchObject({ id: "data-confidence", kind: "data" });
+    expect(catalogChangeImpactsFor(record(), { field: "데이터 품질", previous: "incomplete", next: "live" })[0]).toMatchObject({ id: "data-confidence", kind: "data" });
+  });
 });

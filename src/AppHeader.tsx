@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { FiActivity, FiBookmark, FiCpu, FiDatabase, FiLayers, FiLoader, FiMenu, FiMoreHorizontal, FiSearch, FiTool, FiTrendingUp, FiX, FiZap } from "react-icons/fi";
+import { FiActivity, FiBookmark, FiCpu, FiLayers, FiLoader, FiMenu, FiMoreHorizontal, FiSearch, FiTool, FiTrendingUp, FiX, FiZap } from "react-icons/fi";
 import { api } from "./api";
 import type { ApiStatusDetails } from "./api";
 
@@ -26,10 +26,9 @@ type HeaderProps = {
   onAccessories: () => void;
   onPriceWatchlist: () => void;
   onHistory: () => void;
-  onAdmin: () => void;
 };
 
-export function AppHeader({ view, networkOnline, apiStatus, bootstrapLoading, bootstrapErrorCount, savedBuildUnreadAlertCount, catalogRefreshProgress, onHome, onBuild, onGenerate, onCatalog, onAccessories, onPriceWatchlist, onHistory, onAdmin }: HeaderProps) {
+export function AppHeader({ view, networkOnline, apiStatus, bootstrapLoading, bootstrapErrorCount, savedBuildUnreadAlertCount, catalogRefreshProgress, onHome, onBuild, onGenerate, onCatalog, onAccessories, onPriceWatchlist, onHistory }: HeaderProps) {
   const [moreOpen, setMoreOpen] = useState(false);
   const [connectionCheckRunning, setConnectionCheckRunning] = useState(false);
   const [connectionCheckLines, setConnectionCheckLines] = useState<string[]>([]);
@@ -95,7 +94,6 @@ export function AppHeader({ view, networkOnline, apiStatus, bootstrapLoading, bo
           <button className={view === "accessories" ? "nav-link active" : "nav-link"} onClick={onAccessories}>주변 부품</button>
           <button className={view === "pricewatchlist" ? "nav-link active" : "nav-link"} onClick={onPriceWatchlist}>가격 추적</button>
           <button className={view === "history" ? "nav-link nav-link-with-badge active" : "nav-link nav-link-with-badge"} onClick={onHistory} aria-label={savedBuildUnreadAlertCount > 0 ? `저장 견적, 미읽음 알림 ${savedBuildUnreadAlertCount}건` : "저장 견적"}><span>저장 견적</span>{savedBuildUnreadAlertCount > 0 && <span className="nav-alert-badge" aria-hidden="true">{savedBuildUnreadAlertCount > 99 ? "99+" : savedBuildUnreadAlertCount}</span>}</button>
-          <button className={view === "admin" ? "nav-link active" : "nav-link"} onClick={onAdmin}>데이터 센터</button>
         </nav>
         <div className={`topbar-status ${statusClass}`} title={statusTitle}><span className={`status-dot ${statusClass}`} /> {statusLabel}{apiStatus.fallbackAt && <small>마지막 확인 {new Date(apiStatus.fallbackAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}</small>}</div>
       </div>
@@ -111,7 +109,7 @@ export function AppHeader({ view, networkOnline, apiStatus, bootstrapLoading, bo
         <small>{catalogRefreshProgress.currentName ? `${catalogRefreshProgress.currentName} 확인 중` : "확인 대상 준비 중"} · 성공 {catalogRefreshProgress.successCount}개 · 실패 {catalogRefreshProgress.failureCount}개</small>
       </div>}
       <nav className="mobile-bottom-nav" aria-label="모바일 주 메뉴">
-        <button className={`mobile-bottom-nav-item ${view === "editor" || view === "result" ? "active" : ""}`} type="button" aria-current={view === "editor" || view === "result" ? "page" : undefined} onClick={onBuild}>
+        <button className={`mobile-bottom-nav-item ${view === "home" || view === "editor" || view === "result" ? "active" : ""}`} type="button" aria-current={view === "home" || view === "editor" || view === "result" ? "page" : undefined} onClick={onBuild}>
           <FiSearch aria-hidden="true" /><span>검사</span>
         </button>
         <button className={`mobile-bottom-nav-item ${view === "catalog" || view === "accessories" ? "active" : ""}`} type="button" aria-current={view === "catalog" || view === "accessories" ? "page" : undefined} onClick={onCatalog}>
@@ -120,7 +118,7 @@ export function AppHeader({ view, networkOnline, apiStatus, bootstrapLoading, bo
         <button className={`mobile-bottom-nav-item ${view === "history" ? "active" : ""}`} type="button" aria-current={view === "history" ? "page" : undefined} onClick={onHistory} aria-label={savedBuildUnreadAlertCount > 0 ? `저장 견적, 미읽음 알림 ${savedBuildUnreadAlertCount}건` : "저장 견적"}>
           <span className="mobile-bottom-nav-icon"><FiBookmark aria-hidden="true" />{savedBuildUnreadAlertCount > 0 && <span className="mobile-bottom-nav-badge" aria-hidden="true">{savedBuildUnreadAlertCount > 99 ? "99+" : savedBuildUnreadAlertCount}</span>}</span><span>저장</span>
         </button>
-        <button ref={moreTriggerRef} className={`mobile-bottom-nav-item ${moreOpen || ["generator", "pricewatchlist", "admin"].includes(view) ? "active" : ""}`} type="button" aria-expanded={moreOpen} aria-controls="mobile-more-sheet" aria-haspopup="dialog" onClick={() => setMoreOpen((open) => !open)}>
+        <button ref={moreTriggerRef} className={`mobile-bottom-nav-item ${moreOpen || ["generator", "pricewatchlist"].includes(view) ? "active" : ""}`} type="button" aria-expanded={moreOpen} aria-controls="mobile-more-sheet" aria-haspopup="dialog" onClick={() => setMoreOpen((open) => !open)}>
           {moreOpen ? <FiX aria-hidden="true" /> : <FiMoreHorizontal aria-hidden="true" />}<span>더보기</span>
         </button>
       </nav>
@@ -133,7 +131,6 @@ export function AppHeader({ view, networkOnline, apiStatus, bootstrapLoading, bo
             <button type="button" onClick={() => { setMoreOpen(false); onGenerate(); }}><span><FiZap /></span><strong>자동 구성</strong><small>예산에 맞는 조합 찾기</small></button>
             <button type="button" onClick={() => { setMoreOpen(false); onAccessories(); }}><span><FiTool /></span><strong>주변 부품</strong><small>쿨링·허브·RGB 더하기</small></button>
             <button type="button" onClick={() => { setMoreOpen(false); onPriceWatchlist(); }}><span><FiTrendingUp /></span><strong>가격 추적</strong><small>관심 부품 가격 보기</small></button>
-            <button type="button" onClick={() => { setMoreOpen(false); onAdmin(); }}><span><FiDatabase /></span><strong>데이터 센터</strong><small>부품 정보·수집 관리</small></button>
             <button type="button" onClick={() => void runConnectionCheck()} disabled={connectionCheckRunning}><span>{connectionCheckRunning ? <FiLoader className="spin" /> : <FiActivity />}</span><strong>서버 연결 확인</strong><small>API 상태·부품 목록 점검</small></button>
           </div>
           {connectionCheckLines.length > 0 && <div className="mobile-more-connection-check" role="status" aria-label="서버 연결 확인 결과">{connectionCheckLines.map((line) => <p key={line}>{line}</p>)}</div>}

@@ -66,7 +66,7 @@ try {
       return originalFetch(input, init);
     };
     try {
-      const action = [...document.querySelectorAll('button')].find((candidate) => candidate instanceof HTMLButtonElement && !candidate.disabled && (candidate.textContent ?? '').includes('다음 조치 분석'));
+      const action = [...document.querySelectorAll('button')].find((candidate) => candidate instanceof HTMLButtonElement && !candidate.disabled && (candidate.textContent ?? '').includes('다음 할 일 분석'));
       if (!(action instanceof HTMLButtonElement)) return { stage: 'missing-action', id, body: (document.body?.innerText ?? '').slice(-1800) };
       action.click();
       for (let index = 0; index < 80 && compatibilityCalls < 1; index += 1) await wait(25);

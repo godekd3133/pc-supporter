@@ -96,7 +96,7 @@ export function validateCoolingFanLoadOverride(item: AccessoryItem, input: unkno
   if (!manufacturerModel) errors.push("제조사 모델/SKU(manufacturerModel)가 필요합니다.");
   if (manufacturerModel.length > MAX_MANUFACTURER_MODEL_LENGTH) errors.push(`manufacturerModel은 ${MAX_MANUFACTURER_MODEL_LENGTH}자 이하로 입력해야 합니다.`);
   const sourceNote = normalizedString(body.sourceNote);
-  if (!sourceNote) errors.push("검수 근거 sourceNote가 필요합니다.");
+  if (!sourceNote) errors.push("확인 정보 sourceNote가 필요합니다.");
   if (sourceNote.length > MAX_SOURCE_NOTE_LENGTH) errors.push(`sourceNote는 ${MAX_SOURCE_NOTE_LENGTH}자 이하로 입력해야 합니다.`);
   const sourceUrl = normalizedString(body.sourceUrl);
   errors.push(...sourceUrlErrors(sourceUrl));

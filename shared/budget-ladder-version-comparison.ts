@@ -12,7 +12,7 @@ export interface BudgetLadderVersionComparisonRow {
 }
 
 export function budgetLadderVersionRequestText(request: BudgetLadderShareSnapshot["request"]) {
-  if (!request) return "생성 조건을 저장하지 않은 snapshot";
+  if (!request) return "생성 조건을 저장하지 않은 저장본";
   const parts = [
     RECOMMENDATION_PROFILE_LABELS[request.profile],
     RECOMMENDATION_PRIORITY_LABELS[request.priority ?? "balanced"],

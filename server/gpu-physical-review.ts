@@ -104,12 +104,12 @@ function priorityFor(score: number): PhysicalReviewPriority {
 }
 
 function reviewReasonFor(part: Part, focusFields: string[], priorityReasons: string[], reviewStatus: PhysicalReviewStatus, freshness: DataFreshness, sourceCheckNeedsReview: boolean) {
-  const reason = priorityReasons.length > 0 ? priorityReasons.join(" · ") : "일반 물리 호환 근거";
+  const reason = priorityReasons.length > 0 ? priorityReasons.join(" · ") : "일반 물리 호환 정보";
   const freshnessReason = reviewStatus === "stale" && (freshness === "stale" || freshness === "unknown")
-    ? `근거 ${DATA_FRESHNESS_LABELS[freshness]} · 제조사 원문 재확인 필요`
+    ? `정보 ${DATA_FRESHNESS_LABELS[freshness]} · 제조사 원문 재확인 필요`
     : undefined;
-  const sourceCheckReason = sourceCheckNeedsReview ? "근거 URL 접근·모델 식별 재확인 필요" : undefined;
-  return [reason, freshnessReason, sourceCheckReason, `우선 검수: ${focusFields.join(" · ") || "현재 등록값 재확인"}`].filter(Boolean).join(" · ");
+  const sourceCheckReason = sourceCheckNeedsReview ? "정보 URL 접근·모델 식별 재확인 필요" : undefined;
+  return [reason, freshnessReason, sourceCheckReason, `우선 확인: ${focusFields.join(" · ") || "현재 등록값 재확인"}`].filter(Boolean).join(" · ");
 }
 
 function queueItemFor(part: Part & { category: PhysicalOverrideCategory }, overrides: Record<string, GpuPhysicalOverride>, now: string | number): PhysicalReviewQueueItem {
@@ -118,7 +118,7 @@ function queueItemFor(part: Part & { category: PhysicalOverrideCategory }, overr
   const freshness = override ? classifyDataFreshness(override.updatedAt, now) : "unknown";
   const sourceCheckReviewRequired = physicalSourceCheckNeedsReview(override?.sourceCheck, Boolean(override?.sourceUrl), now);
   const focusFields = reviewStatus === "stale"
-    ? [...focusFieldsFor(part, override), sourceCheckReviewRequired ? "근거 URL 접근·모델 식별 재확인" : "제조사 근거 신선도 재확인"]
+    ? [...focusFieldsFor(part, override), sourceCheckReviewRequired ? "정보 URL 접근·모델 식별 재확인" : "제조사 정보 신선도 재확인"]
     : focusFieldsFor(part, override);
   const priorityData = priorityScoreFor(part);
   return {
@@ -241,8 +241,8 @@ export function physicalReviewCoverageFor(catalog: Part[], overrides: Record<str
 const commonPhysicalReviewWorkFields: PhysicalReviewWorkField[] = [
   { key: "manufacturerModel", label: "제조사 모델/SKU", type: "text", required: true, instruction: "문서가 적용되는 정확한 제조사 모델 또는 SKU를 입력합니다." },
   { key: "manufacturerRevision", label: "문서 revision", type: "text", required: false, instruction: "문서에 revision·개정일이 있을 때만 입력합니다." },
-  { key: "sourceNote", label: "검수 근거 메모", type: "text", required: true, instruction: "제조사 매뉴얼 페이지·설치 가이드·케이블 표의 확인 위치를 남깁니다." },
-  { key: "sourceUrl", label: "근거 URL", type: "url", required: false, instruction: "가능하면 제조사 공식 HTTPS 원문 URL을 입력합니다." }
+  { key: "sourceNote", label: "확인 정보 메모", type: "text", required: true, instruction: "제조사 매뉴얼 페이지·설치 가이드·케이블 표의 확인 위치를 남깁니다." },
+  { key: "sourceUrl", label: "정보 URL", type: "url", required: false, instruction: "가능하면 제조사 공식 HTTPS 원문 URL을 입력합니다." }
 ];
 
 const physicalReviewWorkFields: Record<PhysicalOverrideCategory, PhysicalReviewWorkField[]> = {
@@ -266,9 +266,9 @@ function physicalReviewWorkFieldsFor(category: PhysicalOverrideCategory | undefi
 }
 
 function physicalReviewWorkActionFor(status: PhysicalReviewStatus): { action: PhysicalReviewWorkAction; label: string } {
-  if (status === "stale") return { action: "refresh_evidence", label: "제조사 근거 재확인" };
+  if (status === "stale") return { action: "refresh_evidence", label: "제조사 정보 재확인" };
   if (status === "partial") return { action: "complete_missing_fields", label: "누락 물리 필드 보완" };
-  return { action: "register_evidence", label: "근거와 필수값 등록" };
+  return { action: "register_evidence", label: "정보와 필수값 등록" };
 }
 
 function physicalReviewWorkItemFor(item: PhysicalReviewQueueItem, override: GpuPhysicalOverride | undefined): PhysicalReviewWorkItem {

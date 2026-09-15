@@ -104,7 +104,7 @@ export function buildResourceSummaryFor(metrics: BuildMetrics): BuildResourceSum
   const summary = state === "danger"
     ? "전력 또는 냉각 기준을 충족하지 못합니다. 부품을 바꾸거나 실제 조건을 다시 확인해야 합니다."
     : state === "warning"
-      ? "호환 규칙은 통과할 수 있지만 전력·냉각 여유가 좁아 구매 전에 근거를 확인하세요."
+      ? "호환 규칙은 통과할 수 있지만 전력·냉각 여유가 좁아 구매 전에 정보를 확인하세요."
       : state === "unknown"
         ? "전력·냉각 비교에 필요한 원문 수치가 부족합니다. 확인되지 않은 값을 안전하다고 가정하지 않습니다."
         : state === "good"

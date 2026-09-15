@@ -65,7 +65,7 @@ describe("build change result export", () => {
 
     expect(text).toContain("PC Supporter 적용 후 검사 비교");
     expect(text).toContain("결과 방향: 위험 감소");
-    expect(text).toContain("[데이터 경계]");
+    expect(text).toContain("[확인 범위]");
     expect(text).toContain("실제 판매가·재고·FPS");
   });
 
@@ -79,7 +79,7 @@ describe("build change result export", () => {
     });
 
     expect(note).toContain("적용 후 검사");
-    expect(note).toContain("판정 호환 가능");
+    expect(note).toContain("결과 호환 가능");
     expect(note.length).toBeLessThanOrEqual(500);
   });
 });

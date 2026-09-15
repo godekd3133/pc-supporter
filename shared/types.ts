@@ -30,8 +30,8 @@ export type CatalogPriceEvidence = "live" | "manual" | "reference" | "recorded" 
 
 export const DATA_QUALITY_LABELS: Record<DataQuality, string> = {
   live: "다나와 최신",
-  seed: "프로젝트 기준",
-  manual: "수동 검수",
+  seed: "기본 정보",
+  manual: "직접 확인",
   incomplete: "일부 스펙 부족"
 };
 
@@ -50,8 +50,8 @@ export const PRICE_AVAILABILITY_LABELS: Record<PriceAvailabilityFilter, string> 
 export type BenchmarkAvailabilityFilter = "all" | "complete" | "incomplete";
 
 export const BENCHMARK_AVAILABILITY_LABELS: Record<BenchmarkAvailabilityFilter, string> = {
-  all: "전체 성능 근거",
-  complete: "완전 세트만",
+  all: "벤치마크 전체",
+  complete: "점수 전부 있음",
   incomplete: "일부·없음"
 };
 
@@ -79,14 +79,14 @@ export const RECOMMENDATION_PRIORITY_LABELS: Record<RecommendationPriority, stri
   balanced: "균형형",
   budget: "가성비 우선",
   performance: "성능 우선",
-  reliability: "검증 우선"
+  reliability: "안심 우선"
 };
 
 export const RECOMMENDATION_PRIORITY_DESCRIPTIONS: Record<RecommendationPriority, string> = {
   balanced: "호환성·성능·가격을 함께 고려합니다.",
   budget: "예산 안 후보와 가격 대비 성능을 우선합니다.",
   performance: "성능 유사도와 처리 여유를 우선합니다.",
-  reliability: "호환 판정·물리 장착·카탈로그 근거가 충분한 후보를 우선합니다."
+  reliability: "호환·장착·카탈로그 정보가 충분히 확인된 후보를 우선합니다."
 };
 
 export function isRecommendationPriority(value: unknown): value is RecommendationPriority {
@@ -743,6 +743,13 @@ export interface CatalogChangeRecord {
   valueDiffs?: CatalogChangeValueDiff[];
 }
 
+export const CATALOG_DATA_QUALITY_CHANGE_FIELD_LABEL = "데이터 상태";
+const LEGACY_CATALOG_DATA_QUALITY_CHANGE_FIELD_LABEL = "데이터 품질";
+
+export function isCatalogDataQualityChangeField(field: string) {
+  return field === CATALOG_DATA_QUALITY_CHANGE_FIELD_LABEL || field === LEGACY_CATALOG_DATA_QUALITY_CHANGE_FIELD_LABEL;
+}
+
 export interface CatalogChangeSummary {
   inspectedProducts: number;
   changedProducts: number;
@@ -866,9 +873,9 @@ export type DataFreshness = "fresh" | "aging" | "stale" | "unknown";
 
 export const DATA_FRESHNESS_LABELS: Record<DataFreshness, string> = {
   fresh: "최근 확인",
-  aging: "갱신 권장",
+  aging: "확인한 지 오래됨",
   stale: "오래된 정보",
-  unknown: "시점 확인 필요"
+  unknown: "확인 시점 모름"
 };
 
 export type RecommendationTrustLevel = "high" | "medium" | "low";
@@ -2035,8 +2042,8 @@ export type BenchmarkSourceKind = "official" | "independent_review" | "community
 export const BENCHMARK_SOURCE_KIND_LABELS: Record<BenchmarkSourceKind, string> = {
   official: "제조사·공식 측정표",
   independent_review: "독립 리뷰·벤치마크 DB",
-  community_measurement: "사용자 실측",
-  other: "기타·출처 유형 미분류"
+  community_measurement: "사용자 측정값",
+  other: "기타·출처 확인 필요"
 };
 
 export type BenchmarkSourceCoverageKey = BenchmarkSourceKind | "unclassified";

@@ -127,7 +127,7 @@ function signed(value: number) {
 }
 
 function findingChangeText(change: ReturnType<typeof savedBuildCheckFindingDiffFor>["changes"][number]) {
-  const label = change.change === "resolved" ? "해결됨" : change.change === "new" ? "신규" : change.change === "severity_changed" ? "심각도 변경" : change.change === "details_changed" ? "내용 변경" : "변화 없음";
+  const label = change.change === "resolved" ? "해결됨" : change.change === "new" ? "신규" : change.change === "severity_changed" ? "중요도 변경" : change.change === "details_changed" ? "내용 변경" : "변화 없음";
   return `${label}: ${(change.after ?? change.before)?.title ?? change.key}`;
 }
 
@@ -163,7 +163,7 @@ export function savedBuildVersionComparisonExportFor(input: SavedBuildVersionCom
     ...(transition ? { transition } : {}),
     changes,
     findingChanges,
-    dataBoundary: "저장된 두 버전의 선택·검사 snapshot 비교입니다. 실제 판매가·재고·FPS·제조사 QVL·물리 장착·케이블 배선은 별도로 확인해야 합니다."
+    dataBoundary: "저장된 두 버전의 선택·검사 저장본 비교입니다. 실제 판매가·재고·FPS·제조사 QVL·물리 장착·케이블 배선은 별도로 확인해야 합니다."
   };
 }
 
@@ -185,24 +185,24 @@ export function savedBuildVersionComparisonTextFor(input: SavedBuildVersionCompa
     `변경 범주: ${exported.summary.selectionChangedCategoryCount}개`,
     ...(exported.changes.length > 0 ? exported.changes.map((row) => `- ${row.label}: ${row.before} → ${row.after}`) : ["- 변경 부품 없음"]),
     "",
-    "[검사 snapshot]",
+    "[검사 저장본]",
     ...(beforeCheck && afterCheck ? [
-      `판정: ${statusText(beforeCheck.status)} → ${statusText(afterCheck.status)}`,
+      `결과: ${statusText(beforeCheck.status)} → ${statusText(afterCheck.status)}`,
       `위험: 차단 ${beforeCheck.blockerCount} → ${afterCheck.blockerCount} · 주의 ${beforeCheck.warningCount} → ${afterCheck.warningCount} · 확인 필요 ${beforeCheck.unknownCount} → ${afterCheck.unknownCount}`,
       `위험 변화: 차단 ${signed(transition?.blockerDelta ?? 0)} · 주의 ${signed(transition?.warningDelta ?? 0)} · 확인 필요 ${signed(transition?.unknownDelta ?? 0)}`,
       `구매 금액: ${priceText(beforeCheck.totalPriceWon, beforeCheck.priceComplete)} → ${priceText(afterCheck.totalPriceWon, afterCheck.priceComplete)}${transition?.priceDeltaWon !== undefined ? ` · ${transition.priceDeltaWon === 0 ? "변화 없음" : `${transition.priceDeltaWon > 0 ? "+" : ""}${transition.priceDeltaWon.toLocaleString("ko-KR")}원`}` : ""}`,
       `성능 분석: ${beforeCheck.analysisScore !== undefined ? `${beforeCheck.analysisScore}점 · ` : ""}${beforeCheck.analysisScoreLabel} → ${afterCheck.analysisScore !== undefined ? `${afterCheck.analysisScore}점 · ` : ""}${afterCheck.analysisScoreLabel}`,
-      `finding 변화: 해결 ${transition?.resolvedFindingCount ?? 0}개 · 신규 ${transition?.newFindingCount ?? 0}개 · 변경 ${((transition?.severityChangedFindingCount ?? 0) + (transition?.detailsChangedFindingCount ?? 0))}개`
-    ] : ["- 저장된 검사 snapshot이 한쪽 이상 없어 전체 검사 비교를 계산할 수 없습니다."]),
+      `항목 변화: 해결 ${transition?.resolvedFindingCount ?? 0}개 · 신규 ${transition?.newFindingCount ?? 0}개 · 변경 ${((transition?.severityChangedFindingCount ?? 0) + (transition?.detailsChangedFindingCount ?? 0))}개`
+    ] : ["- 저장된 검사 저장본이 한쪽 이상 없어 전체 검사 비교를 계산할 수 없습니다."]),
     "",
-    "[변경된 호환성 판정]",
-    ...(exported.findingChanges.length > 0 ? exported.findingChanges.map(findingChangeText).map((line) => `- ${line}`) : ["- finding 변화 없음 또는 snapshot 없음"]),
+    "[변경된 호환성 결과]",
+    ...(exported.findingChanges.length > 0 ? exported.findingChanges.map(findingChangeText).map((line) => `- ${line}`) : ["- 항목 변화 없음 또는 저장본 없음"]),
     "",
     "[선택 이유]",
     `${before.label}: ${before.decisionNote ?? "메모 없음"}`,
     `${after.label}: ${after.decisionNote ?? "메모 없음"}`,
     "",
-    "[데이터 경계]",
+    "[확인 범위]",
     exported.dataBoundary
   ];
   return lines.join("\n");

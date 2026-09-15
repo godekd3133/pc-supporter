@@ -10,11 +10,11 @@ const candidate = (overrides: Record<string, unknown> = {}) => ({
   priceWon: 1200000,
   priceEvidence: "live",
   purchaseCondition: "가격 확인 · 신품·정식 유통",
-  similarity: "대안 43점 · 근거 충분",
+  similarity: "대안 43점 · 정보 충분",
   performance: "VRAM 32GB → 12GB (-62.5%)",
   compatibility: "호환 확인",
   decisionSummary: "추천 후보 · 현재 문제 해결 · 새 차단 없음",
-  physicalEvidence: "확인 필요 · 물리 근거",
+  physicalEvidence: "확인 필요 · 장착 정보",
   physicalEvidenceSources: [{ category: "gpu", manufacturerModel: "GPU-TEST-1", manufacturerRevision: "rev-A", updatedAt: "2026-09-01", note: "GPU 제조사 문서", url: "https://vendor.example/gpu" }, { category: "case", manufacturerModel: "CASE-TEST-1", note: "케이스 설명서", url: "http://unsafe.example/case" }],
   recommendationTrust: "높음 90점",
   dataQuality: "다나와 최신",
@@ -44,7 +44,7 @@ describe("alternative comparison share", () => {
     expect(result.candidates[0].decisionSummary).toBe("추천 후보 · 현재 문제 해결 · 새 차단 없음");
     expect(result.candidates[0].gpuTarget).toBeUndefined();
     expect(result.candidates[0].dataFreshness).toBe("stale");
-    expect(result.candidates[0].physicalEvidence).toBe("확인 필요 · 물리 근거");
+    expect(result.candidates[0].physicalEvidence).toBe("확인 필요 · 장착 정보");
     expect(result.candidates[0].physicalEvidenceSources).toEqual([{ category: "gpu", manufacturerModel: "GPU-TEST-1", manufacturerRevision: "rev-A", updatedAt: "2026-09-01", note: "GPU 제조사 문서", url: "https://vendor.example/gpu" }, { category: "case", manufacturerModel: "CASE-TEST-1", note: "케이스 설명서" }]);
     expect(result.candidates[1].sourceUrl).toBeUndefined();
     expect(result.expiresInDays).toBe(30);
@@ -74,7 +74,7 @@ describe("alternative comparison share", () => {
     expect(invalidPrice.errors[0]).toContain("현재 가격 값");
 
     const invalidPriceEvidence = parseAlternativeComparisonInput({ candidates: [candidate({ priceEvidence: "checkout" }), candidate()] });
-    expect(invalidPriceEvidence.errors[0]).toContain("가격 근거 값");
+    expect(invalidPriceEvidence.errors[0]).toContain("가격 출처 값");
   });
 
   it("preserves optional GPU target evidence in a public comparison", () => {
@@ -145,7 +145,7 @@ describe("alternative comparison share", () => {
       confidence: "high",
       basis: "spec",
       dimensions: [{ key: "vramGb", label: "VRAM", currentValue: "8GB", candidateValue: "12GB", score: 100, weight: 5, source: "selected" }],
-      reference: { partId: "gpu-reference", partName: "검증 참조 GPU", category: "gpu", dataQuality: "live", updatedAt: "2026-09-01", transferredDimensions: ["gpuMemoryBandwidthGbps"], benchmarkSourceKind: "independent_review" },
+      reference: { partId: "gpu-reference", partName: "확인 참조 GPU", category: "gpu", dataQuality: "live", updatedAt: "2026-09-01", transferredDimensions: ["gpuMemoryBandwidthGbps"], benchmarkSourceKind: "independent_review" },
       notes: ["같은 모델 계열의 카탈로그 참조로 누락값을 보완했습니다."]
     } as const;
     const result = parseAlternativeComparisonInput({ candidates: [candidate({ similarityEvidence }), candidate()] });
@@ -157,7 +157,7 @@ describe("alternative comparison share", () => {
   });
 
   it("preserves optional virtual application facts and rejects malformed scenario data", () => {
-    const scenario = { status: "needs_review", blockerCount: 0, warningCount: 1, unknownCount: 2, analysisScore: 74, analysisScoreLabel: "보완 권장", analysisConfidence: "limited", analysisScoreDelta: -8, priceDeltaWon: 45000, purchaseDecision: "확인 후 구매", purchaseDecisionSummary: "주의·확인 필요를 확인한 뒤 구매하세요.", priceHistory: { windowDays: 30, sampleCount: 4, minPriceWon: 100000, currentPositionPercent: 80, hasDropThenRebound: true }, checks: [{ id: "compatibility", kind: "compatibility", status: "review", label: "가상 적용 후 잔여 위험 확인", detail: "확인 필요 2개를 확인하세요." }, { id: "price", kind: "price", status: "ready", label: "후보·적용 후 가격 확인", detail: "가격을 확인했습니다." }] };
+    const scenario = { status: "needs_review", blockerCount: 0, warningCount: 1, unknownCount: 2, analysisScore: 74, analysisScoreLabel: "보완 권장", analysisConfidence: "limited", analysisScoreDelta: -8, priceDeltaWon: 45000, purchaseDecision: "확인 후 구매", purchaseDecisionSummary: "주의·확인 필요를 확인한 뒤 구매하세요.", priceHistory: { windowDays: 30, sampleCount: 4, minPriceWon: 100000, currentPositionPercent: 80, hasDropThenRebound: true }, checks: [{ id: "compatibility", kind: "compatibility", status: "review", label: "미리 적용 후 잔여 위험 확인", detail: "확인 필요 2개를 확인하세요." }, { id: "price", kind: "price", status: "ready", label: "후보·적용 후 가격 확인", detail: "가격을 확인했습니다." }] };
     const valid = parseAlternativeComparisonInput({ candidates: [candidate({ scenario }), candidate()] });
     expect(valid.errors).toEqual([]);
     expect(valid.candidates[0].scenario).toEqual(scenario);
@@ -168,13 +168,13 @@ describe("alternative comparison share", () => {
     expect(validTradeoff.candidates[0].scenario?.tradeoff).toEqual(tradeoff);
 
     const invalidTradeoff = parseAlternativeComparisonInput({ candidates: [candidate({ scenario: { ...scenario, tradeoff: { ...tradeoff, riskScore: -1 } } }), candidate()] });
-    expect(invalidTradeoff.errors[0]).toContain("효율 경계 값");
+    expect(invalidTradeoff.errors[0]).toContain("비교 우위 값");
 
     const invalidAnalysis = parseAlternativeComparisonInput({ candidates: [candidate({ scenario: { ...scenario, analysisScore: 101 } }), candidate()] });
     expect(invalidAnalysis.errors[0]).toContain("성능 분석 값");
 
     const invalid = parseAlternativeComparisonInput({ candidates: [candidate({ scenario: { ...scenario, status: "unknown" } }), candidate()] });
-    expect(invalid.errors[0]).toContain("가상 적용 위험 수");
+    expect(invalid.errors[0]).toContain("미리 적용 위험 수");
 
     const invalidChecks = parseAlternativeComparisonInput({ candidates: [candidate({ scenario: { ...scenario, checks: [{ ...scenario.checks[0], id: "duplicate" }, { ...scenario.checks[0], id: "duplicate" }] } }), candidate()] });
     expect(invalidChecks.errors[0]).toContain("구매 전 확인 항목 값");

@@ -4,7 +4,7 @@ import { buildResourceSummaryFor, type BuildResourceCard, type BuildResourceStat
 
 function stateMessageFor(state: BuildResourceState) {
   return state === "danger"
-    ? "기준 미달 · 교체 또는 재검증"
+    ? "기준 미달 · 교체 또는 재확인"
     : state === "warning"
       ? "호환 통과 · 구매 전 확인"
       : state === "unknown"
@@ -20,7 +20,7 @@ function ResourceCard({ card }: { card: BuildResourceCard }) {
     <div className="build-resource-card-heading"><span className="build-resource-card-icon"><Icon /></span><div><span>{card.label}</span><strong>{card.stateLabel}</strong></div></div>
     <b className="build-resource-card-headline">{card.headline}</b>
     <p>{card.detail}</p>
-    <dl className="build-resource-card-facts"><div><dt>계산 기준</dt><dd>{card.basis}</dd></div><div><dt>확인 기준</dt><dd>{card.reviewThresholdW}W 이상 권장</dd></div>{card.headroomW !== undefined && <div><dt>판정</dt><dd>{stateMessageFor(card.state)}</dd></div>}</dl>
+    <dl className="build-resource-card-facts"><div><dt>계산 기준</dt><dd>{card.basis}</dd></div><div><dt>확인 기준</dt><dd>{card.reviewThresholdW}W 이상 권장</dd></div>{card.headroomW !== undefined && <div><dt>결과</dt><dd>{stateMessageFor(card.state)}</dd></div>}</dl>
   </article>;
 }
 

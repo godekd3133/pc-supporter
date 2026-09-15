@@ -20,7 +20,7 @@ function benchmarkPart(category: "cpu" | "gpu", scores: { first: number; second:
       ...scoreSpecs,
       benchmarkProvenance: {
         sourceKind: "independent_review",
-        sourceNote: "결정론적 테스트용 benchmark 근거",
+        sourceNote: "결정론적 테스트용 벤치마크 정보",
         sourceUrl: "https://example.com/benchmark-fixture",
         sourceCheck: {
           requestedUrl: "https://example.com/benchmark-fixture",

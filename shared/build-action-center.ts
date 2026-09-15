@@ -130,7 +130,7 @@ export function buildActionCenterFor(result: CompatibilityResult, build?: BuildS
   if (result.gpuFit) {
     const evidence = gpuPurchaseEvidenceFor(result.gpuFit);
     if (evidence.physical === "incompatible" || evidence.physical === "needs_review") {
-      addAction(actions, seen, { id: "physical:gpu-case", priority: evidence.physical === "incompatible" ? "blocker" : "review", source: "physical", title: evidence.physical === "incompatible" ? "GPU·케이스 물리 간섭 해결" : "GPU·케이스 물리 근거 확인", summary: evidence.physical === "incompatible" ? "케이블 요구 여유보다 케이스 측면 공간이 작아 실제 장착 조건을 바꿔야 합니다." : "GPU 슬롯·케이블 굽힘 여유와 케이스 측면 공간을 제조사 근거로 확인해야 합니다.", targetId: "gpu-fit-summary-panel" });
+      addAction(actions, seen, { id: "physical:gpu-case", priority: evidence.physical === "incompatible" ? "blocker" : "review", source: "physical", title: evidence.physical === "incompatible" ? "GPU·케이스 물리 간섭 해결" : "GPU·케이스 장착 정보 확인", summary: evidence.physical === "incompatible" ? "케이블 요구 여유보다 케이스 측면 공간이 작아 실제 장착 조건을 바꿔야 합니다." : "GPU 슬롯·케이블 굽힘 여유와 케이스 측면 공간을 제조사 정보로 확인해야 합니다.", targetId: "gpu-fit-summary-panel" });
     }
     if (evidence.pcieCableTopology === "incompatible" || evidence.pcieCableTopology === "needs_review") {
       addAction(actions, seen, { id: "physical:psu-cable", priority: evidence.pcieCableTopology === "incompatible" ? "blocker" : "review", source: "physical", title: evidence.pcieCableTopology === "incompatible" ? "PSU PCIe 케이블 경로 변경" : "PSU PCIe 케이블 분배 확인", summary: evidence.pcieCableTopology === "incompatible" ? "현재 PSU의 확인된 케이블 구조로 GPU 연결 요구를 충족할 수 없습니다." : "커넥터 수와 별도로 독립 PCIe 케이블 런·분배 구조를 확인해야 합니다.", targetId: "gpu-fit-summary-panel" });

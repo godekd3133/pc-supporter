@@ -86,7 +86,7 @@ export function validateGpuPhysicalOverride(part: Part, input: unknown): { value
     errors.push("GPU, 케이스 또는 PSU만 물리 호환 override 대상입니다.");
   }
   const sourceNote = normalizedString(body.sourceNote);
-  if (!sourceNote) errors.push("검수 근거 sourceNote가 필요합니다.");
+  if (!sourceNote) errors.push("확인 정보 sourceNote가 필요합니다.");
   if (sourceNote.length > 500) errors.push("sourceNote는 500자 이하로 입력해야 합니다.");
   const manufacturerModel = normalizedString(body.manufacturerModel);
   if (!manufacturerModel) errors.push("제조사 모델/SKU(manufacturerModel)가 필요합니다.");

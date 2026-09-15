@@ -6,7 +6,7 @@ function part(overrides: Partial<Part> = {}): Part {
   return {
     id: "cpu-default",
     category: "cpu",
-    name: "검수 CPU",
+    name: "확인 CPU",
     source: "danawa",
     sourceProductCode: "cpu-default",
     priceWon: 120000,

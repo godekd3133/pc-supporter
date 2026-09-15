@@ -50,21 +50,21 @@ describe("candidate purchase decision", () => {
     const result = candidatePurchaseDecisionFor({ ...base, similarityScore: 97, priceDeltaWon: 120000, analysisScoreDelta: -8 });
 
     expect(result).toMatchObject({ state: "review", label: "확인 후 구매" });
-    expect(result.reasons.join(" ")).toContain("전체 성능 지수가 현재보다 8점 낮습니다");
+    expect(result.reasons.join(" ")).toContain("전체 성능 점수가 현재보다 8점 낮습니다");
   });
 
   it("keeps a project reference price in review instead of treating it as a purchase-ready price", () => {
     const result = candidatePurchaseDecisionFor({ ...base, priceEvidence: "reference" });
 
     expect(result).toMatchObject({ state: "review", label: "확인 후 구매" });
-    expect(result.reasons).toContain("프로젝트 기준가만 있어 후보 실제 판매 가격을 확정할 수 없습니다.");
+    expect(result.reasons).toContain("참고 가격만 있어 후보 실제 판매 가격을 확정할 수 없습니다.");
   });
 
   it("requires review when a performance change has unknown analysis evidence", () => {
     const result = candidatePurchaseDecisionFor({ ...base, similarityScore: 97, priceDeltaWon: 120000, analysisScoreDelta: 8, analysisConfidence: "unknown" });
 
     expect(result).toMatchObject({ state: "review", label: "확인 후 구매" });
-    expect(result.reasons.join(" ")).toContain("성능 분석 근거가 확인되지 않았습니다");
+    expect(result.reasons.join(" ")).toContain("성능 분석 정보가 확인되지 않았습니다");
   });
 
   it("requires review when a high similarity score has limited comparison coverage", () => {
@@ -78,14 +78,14 @@ describe("candidate purchase decision", () => {
     const result = candidatePurchaseDecisionFor({ ...base, similarityScore: 97, similarityConfidence: "high", benchmarkFreshness: "stale", priceDeltaWon: 120000 });
 
     expect(result).toMatchObject({ state: "review", label: "확인 후 구매" });
-    expect(result.reasons.join(" ")).toContain("benchmark 자료의 갱신 상태");
+    expect(result.reasons.join(" ")).toContain("벤치마크 자료의 갱신 상태");
   });
 
   it("requires review when the benchmark source check needs review", () => {
     const result = candidatePurchaseDecisionFor({ ...base, similarityScore: 97, similarityConfidence: "high", benchmarkSourceCheckNeedsReview: true, priceDeltaWon: 120000 });
 
     expect(result).toMatchObject({ state: "review", label: "확인 후 구매" });
-    expect(result.reasons.join(" ")).toContain("benchmark 원문 검증");
+    expect(result.reasons.join(" ")).toContain("벤치마크 원문 확인");
   });
 
   it("requires review when a manual catalog-spec source check needs review", () => {

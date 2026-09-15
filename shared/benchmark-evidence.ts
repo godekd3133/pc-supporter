@@ -82,8 +82,8 @@ export function benchmarkFreshnessLabelFor(value: DataFreshness) {
 }
 
 export function benchmarkSourceCheckLabelFor(value: PhysicalSourceCheck | undefined) {
-  if (!value) return "원문 검증 안 함";
-  return physicalSourceCheckNeedsReview(value, true) ? "원문 재확인 필요" : "원문 검증됨";
+  if (!value) return "원문 미확인";
+  return physicalSourceCheckNeedsReview(value, true) ? "원문 재확인 필요" : "원문 확인됨";
 }
 
 export function benchmarkComparisonRowsFor(current: BenchmarkEvidencePart | undefined, candidate: BenchmarkEvidencePart): BenchmarkComparisonRow[] {

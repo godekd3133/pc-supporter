@@ -35,7 +35,7 @@ export function similarityReferenceUsedCategoryFor(evidence: SimilarityEvidence 
 }
 
 export function similarityBasisLabelFor(evidence: SimilarityEvidence | undefined) {
-  if (!evidence) return "비교 근거 확인 필요";
+  if (!evidence) return "비교 정보 확인 필요";
   const dimensions = evidence.dimensions ?? [];
   const basis = evidence.basis ?? similarityBasisForDimensions(dimensions);
   if (basis === "benchmark") {
@@ -44,7 +44,7 @@ export function similarityBasisLabelFor(evidence: SimilarityEvidence | undefined
   }
   if (basis === "mixed") return "벤치마크·확인 스펙 기반";
   if (basis === "spec") return "확인 스펙 기반";
-  return "비교 근거 확인 필요";
+  return "비교 정보 확인 필요";
 }
 
 function similarityBasisForDimensions(dimensions: SimilarityEvidence["dimensions"]): SimilarityBasis | undefined {

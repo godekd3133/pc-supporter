@@ -6,7 +6,7 @@ describe("M.2 review CSV", () => {
   it("round-trips quoted commas, newlines, quotes, and explicit no-sharing", () => {
     const items: M2SlotReviewTemplateItem[] = [{
       partId: "mb-csv-1",
-      partName: "보드, WiFi \"검수판\"",
+      partName: "보드, WiFi \"확인판\"",
       slots: [{ slotId: "M2_1", interfaces: ["NVMe", "SATA"], pcieGeneration: 5, connection: "cpu", sharedWith: [] }],
       sourceNote: "매뉴얼 12페이지,\nRev \"A\"",
       sourceUrl: "https://example.com/manual.pdf"
@@ -21,8 +21,8 @@ describe("M.2 review CSV", () => {
   it("groups slot rows into one board and accepts Korean connection labels", () => {
     const csv = [
       "partId,partName,slotId,interfaces,pcieGeneration,connection,sharedWith,sourceNote,sourceUrl",
-      "mb-csv-2,검수 보드,M2_1,NVMe,4,CPU 직결,없음,,",
-      "mb-csv-2,검수 보드,M2_2,NVMe|SATA,4,칩셋,SATA_3|PCIe_2,,"
+      "mb-csv-2,확인 보드,M2_1,NVMe,4,CPU 직결,없음,,",
+      "mb-csv-2,확인 보드,M2_2,NVMe|SATA,4,칩셋,SATA_3|PCIe_2,,"
     ].join("\n");
 
     const parsed = parseM2ReviewCsv(csv);
@@ -30,7 +30,7 @@ describe("M.2 review CSV", () => {
     expect(parsed.errors).toEqual([]);
     expect(parsed.items).toEqual([{
       partId: "mb-csv-2",
-      partName: "검수 보드",
+      partName: "확인 보드",
       slots: [
         { slotId: "M2_1", interfaces: ["NVMe"], pcieGeneration: 4, connection: "cpu", sharedWith: [] },
         { slotId: "M2_2", interfaces: ["NVMe", "SATA"], pcieGeneration: 4, connection: "chipset", sharedWith: ["SATA_3", "PCIe_2"] }

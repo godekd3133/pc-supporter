@@ -66,7 +66,7 @@ function riskDeltaText(transition: SavedBuildCheckTransitionSummary) {
 function analysisDeltaText(transition: SavedBuildCheckTransitionSummary) {
   if (!transition.analysisChanged) return undefined;
   if (transition.analysisScoreDelta === undefined) return "성능 분석 기준";
-  if (transition.analysisScoreDelta === 0) return "성능 분석 라벨·근거 수준";
+  if (transition.analysisScoreDelta === 0) return "성능 분석 라벨·정보 수준";
   return `성능 분석 ${transition.analysisScoreDelta > 0 ? "+" : ""}${transition.analysisScoreDelta}점`;
 }
 
@@ -112,7 +112,7 @@ export function savedBuildMonitorAssessmentFor(snapshot: SavedBuildCheckSnapshot
     return {
       level: "improved",
       label: "상태 개선",
-      summary: `${transitionDeltaText ? `마지막 기록 대비 ${transitionDeltaText}` : "호환 판정이 개선되었습니다."}`,
+      summary: `${transitionDeltaText ? `마지막 기록 대비 ${transitionDeltaText}` : "호환 결과가 개선되었습니다."}`,
       requiresAttention: false,
       recordRecommended: true
     };
@@ -124,9 +124,9 @@ export function savedBuildMonitorAssessmentFor(snapshot: SavedBuildCheckSnapshot
       transition.priceCompletenessChanged ? "가격 확인 상태" : undefined,
       analysisText,
       transition.catalogChanged ? "카탈로그 기준" : undefined,
-      transition.engineChanged ? "검사 엔진" : undefined,
+      transition.engineChanged ? "검사 기준" : undefined,
       transition.resourceBudgetChanged ? "전력·냉각 예산" : undefined,
-      transition.newFindingCount > 0 || transition.resolvedFindingCount > 0 || transition.severityChangedFindingCount > 0 || transition.detailsChangedFindingCount > 0 ? "판정 상세" : undefined
+      transition.newFindingCount > 0 || transition.resolvedFindingCount > 0 || transition.severityChangedFindingCount > 0 || transition.detailsChangedFindingCount > 0 ? "결과 상세" : undefined
     ].filter((value): value is string => Boolean(value));
     return {
       level: "changed",
@@ -140,7 +140,7 @@ export function savedBuildMonitorAssessmentFor(snapshot: SavedBuildCheckSnapshot
   return {
     level: "stable",
     label: "현재 상태 안정",
-    summary: "마지막 기록과 현재 호환 판정·가격·성능 분석·전력·냉각 예산·검사 기준이 같습니다.",
+    summary: "마지막 기록과 현재 호환 결과·가격·성능 분석·전력·냉각 예산·검사 기준이 같습니다.",
     requiresAttention: false,
     recordRecommended: false
   };

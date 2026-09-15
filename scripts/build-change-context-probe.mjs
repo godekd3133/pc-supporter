@@ -52,16 +52,16 @@ try {
   stages.push({ label: "candidate-selected", selected });
   if (selected < 2) throw new Error(`candidate compare controls missing shape=${JSON.stringify(suggestionShape)}`);
   await waitForValue(client, "document.querySelector('.suggestion-comparison') !== null", "후보 비교표");
-  const virtualCompareClicked = await clickText(client, "전체 가상 비교", ".suggestion-comparison button");
+  const virtualCompareClicked = await clickText(client, "전체 미리 비교", ".suggestion-comparison button");
   stages.push({ label: "virtual-compare-click", virtualCompareClicked });
   if (!virtualCompareClicked) throw new Error("suggestion comparison virtual-compare button missing");
   await new Promise((resolve) => setTimeout(resolve, 5000));
   const firstDialog = await client.evaluate("({ dialog: Boolean(document.querySelector('.candidate-scenario-dialog')), loading: Boolean(document.querySelector('.candidate-scenario-dialog-loading')), errors: window.__pcSupporterSmokeErrors ?? [], resources: performance.getEntriesByType('resource').filter((entry) => /CandidateScenarioComparison|BuildChangeDecisionDialog/.test(entry.name)).map((entry) => entry.name) })");
   stages.push({ label: "candidate-dialog-first", firstDialog });
   if (firstDialog.dialog) {
-    await clickSelector(client, '[aria-label="후보 가상 비교 닫기"]', 1);
+    await clickSelector(client, '[aria-label="후보 미리 비교 닫기"]', 1);
     await waitForValue(client, "document.querySelector('.candidate-scenario-dialog') === null", "candidate dialog close");
-    await clickText(client, "전체 가상 비교");
+    await clickText(client, "전체 미리 비교");
     await new Promise((resolve) => setTimeout(resolve, 5000));
     stages.push({ label: "candidate-dialog-second", secondDialog: await client.evaluate("({ dialog: Boolean(document.querySelector('.candidate-scenario-dialog')), loading: Boolean(document.querySelector('.candidate-scenario-dialog-loading')) })") });
     await client.evaluate("(() => { history.pushState({}, '', '/'); window.dispatchEvent(new PopStateEvent('popstate')); })()");

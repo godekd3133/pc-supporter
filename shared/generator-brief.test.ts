@@ -47,9 +47,9 @@ describe("generator brief interpretation", () => {
   });
 
   it("interprets a verification-first priority from natural language", () => {
-    const interpretation = generatorBriefInterpretationFor("검증 우선 200만원 게이밍 PC");
+    const interpretation = generatorBriefInterpretationFor("확인 우선 200만원 게이밍 PC");
     expect(interpretation.config.priority).toBe("reliability");
-    expect(interpretation.matches).toEqual(expect.arrayContaining([expect.objectContaining({ field: "priority", value: "검증 우선" })]));
+    expect(interpretation.matches).toEqual(expect.arrayContaining([expect.objectContaining({ field: "priority", value: "안심 우선" })]));
   });
 
   it("accepts spaced profile and priority phrases", () => {

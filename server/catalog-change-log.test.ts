@@ -8,14 +8,14 @@ const part = (overrides: Partial<Part> = {}): Part => ({
 
 describe("catalog change log", () => {
   it("records quality, missing fields, and price delta before and after refresh", () => {
-    const record = catalogChangeRecord("part", part(), part({ dataQuality: "live", missingFields: [], priceWon: 120000 }), ["가격", "데이터 품질"], { id: "change-1", changedAt: "2026-08-28T01:00:00.000Z" });
+    const record = catalogChangeRecord("part", part(), part({ dataQuality: "live", missingFields: [], priceWon: 120000 }), ["가격", "데이터 상태"], { id: "change-1", changedAt: "2026-08-28T01:00:00.000Z" });
 
     expect(record).toMatchObject({ id: "change-1", previousDataQuality: "incomplete", nextDataQuality: "live", previousPriceWon: 100000, nextPriceWon: 120000, priceDeltaWon: 20000 });
     expect(record.previousMissingFields).toEqual(["socket"]);
     expect(record.nextMissingFields).toEqual([]);
     expect(record.valueDiffs).toEqual(expect.arrayContaining([
       { field: "가격", previous: "100,000원", next: "120,000원" },
-      { field: "데이터 품질", previous: "incomplete", next: "live" },
+      { field: "데이터 상태", previous: "incomplete", next: "live" },
       { field: "누락 필드", previous: "socket", next: "없음" }
     ]));
   });
@@ -54,13 +54,13 @@ describe("catalog change log", () => {
     const meaningful = meaningfulCatalogChangeFields(part(), part({ priceWon: 120000, dataQuality: "live", missingFields: [], specs: { socket: "AM5" }, rawSpecText: "AMD AM5" }));
 
     expect(imageOnly).toEqual([]);
-    expect(meaningful).toEqual(expect.arrayContaining(["가격", "원문 스펙", "정규화 스펙", "데이터 품질", "누락 필드"]));
+    expect(meaningful).toEqual(expect.arrayContaining(["가격", "원문 스펙", "정규화 스펙", "데이터 상태", "누락 필드"]));
   });
 
   it("summarizes only the relevant change dimensions", () => {
     const records = [
       catalogChangeRecord("part", part(), part({ priceWon: 120000 }), ["가격"], { changedAt: "2026-08-28T03:00:00.000Z" }),
-      catalogChangeRecord("accessory", part(), part({ dataQuality: "live", missingFields: [] }), ["데이터 품질", "누락 필드", "정규화 스펙"], { changedAt: "2026-08-28T02:00:00.000Z" })
+      catalogChangeRecord("accessory", part(), part({ dataQuality: "live", missingFields: [] }), ["데이터 상태", "누락 필드", "정규화 스펙"], { changedAt: "2026-08-28T02:00:00.000Z" })
     ];
 
     expect(catalogChangeSummary(records, 5)).toEqual({ inspectedProducts: 5, changedProducts: 2, priceChangedProducts: 1, qualityChangedProducts: 1, missingFieldChangedProducts: 1, specChangedProducts: 1 });

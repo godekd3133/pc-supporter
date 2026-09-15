@@ -58,6 +58,6 @@ describe("saved build priority action", () => {
 
   it("reports no action when the analysis has no next action", () => {
     const action = savedBuildNextActionFor(result({ repairPlans: [], analysis: { ...result().analysis, nextActions: [] } }));
-    expect(action).toMatchObject({ kind: "none", title: "추가 조치 없음", remainingBlockers: 2 });
+    expect(action).toMatchObject({ kind: "none", title: "추가 할 일 없음", remainingBlockers: 2 });
   });
 });

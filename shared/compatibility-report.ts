@@ -22,7 +22,7 @@ export interface CompatibilityReportViewState {
 }
 
 const reportFindingFilterLabels: Record<FindingFilter, string> = { all: "전체", blocker: "차단 오류", warning: "주의", unknown: "확인 필요", info: "정보" };
-const reportSectionLabels: Record<CompatibilityReportSection, string> = { findings: "검사 결과 상세", "purchase-list": "구매 목록", "purchase-checklist": "구매 전 실행 체크리스트", "purchase-decision": "최종 구매 판단", actions: "우선 조치" };
+const reportSectionLabels: Record<CompatibilityReportSection, string> = { findings: "검사 결과 상세", "purchase-list": "구매 목록", "purchase-checklist": "구매 전 실행 체크리스트", "purchase-decision": "최종 구매 판단", actions: "우선 할 일" };
 
 function viewStateLines(viewState?: CompatibilityReportViewState) {
   if (!viewState) return [];
@@ -80,7 +80,7 @@ function preferenceLines(preferences: RecommendationPreferences | undefined) {
 }
 
 function benchmarkEvidenceStatusLabel(status: BenchmarkEvidencePart["status"]) {
-  return status === "complete" ? "완전 근거" : status === "partial" ? "부분 근거" : "점수 없음";
+  return status === "complete" ? "완전 자료" : status === "partial" ? "부분 자료" : "점수 없음";
 }
 
 function benchmarkEvidenceLines(build: BuildSelection, partMap: ReadonlyMap<string, Part>) {
@@ -89,15 +89,15 @@ function benchmarkEvidenceLines(build: BuildSelection, partMap: ReadonlyMap<stri
     build.gpu ? partMap.get(build.gpu.partId) : undefined
   );
   if (evidences.length === 0) return [];
-  const lines = ["[원본 benchmark 근거]"];
+  const lines = ["[원본 벤치마크 정보]"];
   for (const evidence of evidences) {
     lines.push(`- ${evidence.category === "cpu" ? "CPU" : "GPU"}: ${evidence.name} · ${benchmarkEvidenceStatusLabel(evidence.status)} · ${evidence.presentCount}/${evidence.totalCount} · 자료 ${benchmarkFreshnessLabelFor(evidence.benchmarkFreshness)}`);
     for (const row of evidence.rows) lines.push(`  - ${row.label}: ${row.value === undefined ? "확인 필요" : `${row.value.toLocaleString("ko-KR")}${row.unit}`}`);
     if (evidence.provenance) {
       const source = `${BENCHMARK_SOURCE_KIND_LABELS[evidence.provenance.sourceKind]} · ${evidence.provenance.sourceNote}`;
-      lines.push(`  - 점수 근거: ${source}${evidence.provenance.updatedAt ? ` · 갱신 ${new Date(evidence.provenance.updatedAt).toLocaleDateString("ko-KR")}` : ""}${safeHttpsUrl(evidence.provenance.sourceUrl) ? ` · ${safeHttpsUrl(evidence.provenance.sourceUrl)}` : ""}`);
+      lines.push(`  - 점수 정보: ${source}${evidence.provenance.updatedAt ? ` · 갱신 ${new Date(evidence.provenance.updatedAt).toLocaleDateString("ko-KR")}` : ""}${safeHttpsUrl(evidence.provenance.sourceUrl) ? ` · ${safeHttpsUrl(evidence.provenance.sourceUrl)}` : ""}`);
     } else {
-      lines.push("  - 점수 근거: 출처 유형·근거 메모 확인 필요");
+      lines.push("  - 점수 정보: 출처·출처 메모 확인 필요");
     }
     lines.push(`  - 원문 점검: ${benchmarkSourceCheckLabelFor(evidence.sourceCheck)}`);
     lines.push(`  - 부품 데이터 갱신: ${new Date(evidence.dataUpdatedAt).toLocaleDateString("ko-KR")}`);
@@ -130,7 +130,7 @@ function accessoryFindingSeverityLabel(severity: NonNullable<CompatibilityResult
 }
 
 function accessoryPowerRailText(powerRails?: AccessoryPowerRail[]) {
-  if (!powerRails || powerRails.length === 0) return "전원 레일 근거 확인 필요";
+  if (!powerRails || powerRails.length === 0) return "전원 레일 정보 확인 필요";
   const roleLabel = (role: AccessoryPowerRail["role"]) => role === "fan" ? "팬" : role === "rgb" ? "RGB" : role === "shared" ? "공용" : "역할 확인 필요";
   return powerRails.map((rail) => {
     const values = [
@@ -158,7 +158,7 @@ function accessoryRgbLoadText(plan: AccessoryRgbConnectionPlan) {
 }
 
 function accessoryRgbLoadProvenanceText(plan: AccessoryRgbConnectionPlan) {
-  return plan.rgbLoadProvenance ? ` · 부하 근거 ${plan.rgbLoadProvenance.manufacturerModel}: ${plan.rgbLoadProvenance.sourceNote}` : "";
+  return plan.rgbLoadProvenance ? ` · 부하 정보 ${plan.rgbLoadProvenance.manufacturerModel}: ${plan.rgbLoadProvenance.sourceNote}` : "";
 }
 
 function accessoryRgbDeviceSummaryText(plan: AccessoryRgbConnectionPlan) {
@@ -173,7 +173,7 @@ function accessoryConnectionPlanLines(compatibility: NonNullable<CompatibilityRe
   const statusLabel = (status: typeof plans[number]["status"]) => status === "pass" ? "확인됨" : status === "blocked" ? "차단" : "확인 필요";
   const fanEvidence = (plan: typeof plans[number]) => {
     const evidence = plan.fans.filter((fan) => fan.currentProvenance).map((fan) => `${fan.name}: ${fan.currentProvenance?.manufacturerModel}`);
-    return evidence.length > 0 ? ` · 전류 근거 ${evidence.join(", ")}` : "";
+    return evidence.length > 0 ? ` · 전류 정보 ${evidence.join(", ")}` : "";
   };
   return [
     "[주변 부품 연결 계획]",
@@ -181,7 +181,7 @@ function accessoryConnectionPlanLines(compatibility: NonNullable<CompatibilityRe
       const fanInputs = [...new Set(plan.fans.flatMap((fan) => fan.connectorTypes))].join(" · ");
       const current = plan.totalCurrentA !== undefined && plan.maxFanCurrentA !== undefined
         ? `${plan.totalCurrentA.toFixed(2)}A / ${plan.maxFanCurrentA.toFixed(2)}A · 여유 ${plan.currentHeadroomA?.toFixed(2) ?? "확인 필요"}A`
-        : plan.maxFanCurrentA !== undefined ? `허브 최대 ${plan.maxFanCurrentA.toFixed(2)}A · 팬별 전류 확인 필요` : "전류 근거 확인 필요";
+        : plan.maxFanCurrentA !== undefined ? `허브 최대 ${plan.maxFanCurrentA.toFixed(2)}A · 팬별 전류 확인 필요` : "전류 정보 확인 필요";
       return [
         `- ${plan.hubName}: ${statusLabel(plan.status)} · 팬 ${plan.fanCount}개 · 허브 출력 ${plan.hubFanOutputs.join(" · ") || "확인 필요"} · 팬 입력 ${fanInputs || "확인 필요"} · 포트 ${plan.portIssue === "over_limit" ? `${plan.hubFanPortCount ?? "확인 필요"}개 중 ${plan.assignedFanCount ?? "확인 필요"}개` : plan.portIssue === "unknown" ? "확인 필요" : `${plan.assignedFanCount ?? plan.fanCount}/${plan.hubFanPortCount ?? "확인 필요"}`}`,
         `  전원 ${plan.externalPower ?? "확인 필요"} · ${current} · 레일 ${accessoryPowerRailText(plan.powerRails)}${fanEvidence(plan)}`,
@@ -225,7 +225,7 @@ function findingLines(result: CompatibilityResult, partMap: ReadonlyMap<string, 
     lines.push(`### [${findingSeverityLabel(finding.severity)}] ${finding.title}`);
     lines.push(finding.message);
     if (finding.facts.length > 0) {
-      lines.push("", "판정 사실:");
+      lines.push("", "확인된 내용:");
       for (const fact of finding.facts) lines.push(`- ${fact.label}: ${fact.actual ?? "확인 필요"}${fact.expected ? ` · 기대값 ${fact.expected}` : ""}`);
     }
     if (finding.affectedPartIds.length > 0) {
@@ -235,16 +235,16 @@ function findingLines(result: CompatibilityResult, partMap: ReadonlyMap<string, 
     if (finding.suggestions && finding.suggestions.length > 0) {
       lines.push("", "대체 후보:");
       for (const suggestion of finding.suggestions) {
-        const candidateStatus = suggestion.candidateRisk ? candidateRiskLabel(suggestion.candidateRisk) : suggestion.fixesCurrentIssue ? "현재 finding 해결 후보" : "현재 finding 미해결";
+        const candidateStatus = suggestion.candidateRisk ? candidateRiskLabel(suggestion.candidateRisk) : suggestion.fixesCurrentIssue ? "현재 항목 해결 후보" : "현재 항목 미해결";
         const candidateRiskCounts = suggestion.candidateBlockerCount !== undefined || suggestion.candidateWarningCount !== undefined || suggestion.candidateUnknownCount !== undefined
           ? ` · 후보 위험 차단 ${suggestion.candidateBlockerCount ?? "확인 필요"}개/주의 ${suggestion.candidateWarningCount ?? "확인 필요"}개/확인 ${suggestion.candidateUnknownCount ?? "확인 필요"}개`
           : "";
-        const remainingRisk = ` · 가상 적용 후 차단 ${suggestion.remainingBlockers}개/주의 ${suggestion.remainingWarnings}개/확인 ${suggestion.remainingUnknown}개`;
-        const trust = suggestion.recommendationTrust ? ` · 추천 근거 ${suggestion.recommendationTrust.level} ${suggestion.recommendationTrust.score}점` : "";
-        const physical = suggestion.physicalEvidence ? ` · 물리 근거 ${suggestion.physicalEvidence.status === "verified" ? "확인됨" : suggestion.physicalEvidence.status === "review" ? "확인 필요" : "해당 없음"}` : "";
+        const remainingRisk = ` · 미리 적용 후 차단 ${suggestion.remainingBlockers}개/주의 ${suggestion.remainingWarnings}개/확인 ${suggestion.remainingUnknown}개`;
+        const trust = suggestion.recommendationTrust ? ` · 추천 점수 ${suggestion.recommendationTrust.level} ${suggestion.recommendationTrust.score}점` : "";
+        const physical = suggestion.physicalEvidence ? ` · 장착 정보 ${suggestion.physicalEvidence.status === "verified" ? "확인됨" : suggestion.physicalEvidence.status === "review" ? "확인 필요" : "해당 없음"}` : "";
         lines.push(`- ${suggestion.part.name}${suggestion.recommendedQuantity ? ` · 추천 수량 ${suggestion.recommendedQuantity}개` : ""} · ${candidateStatus}${candidateRiskCounts}${remainingRisk} · ${suggestion.similarityLabel} ${suggestion.similarityScore}점 · ${suggestion.performanceSummary} · ${priceText(suggestion.part.priceWon)}${suggestion.valueScore !== undefined && suggestion.valueLabel ? ` · ${suggestion.valueLabel} ${valueScoreText(suggestion.valueScore)}` : ""}${trust}${physical}`);
-        if (suggestion.gpuTarget) lines.push(`  게이밍 목표 근거: ${suggestion.gpuTarget.summary}`);
-        if (suggestion.candidateReasons && suggestion.candidateReasons.length > 0) lines.push(`  후보 확인 근거: ${suggestion.candidateReasons.slice(0, 3).join(" · ")}`);
+        if (suggestion.gpuTarget) lines.push(`  게이밍 목표 정보: ${suggestion.gpuTarget.summary}`);
+        if (suggestion.candidateReasons && suggestion.candidateReasons.length > 0) lines.push(`  후보 확인 정보: ${suggestion.candidateReasons.slice(0, 3).join(" · ")}`);
       }
     }
     lines.push("");
@@ -257,7 +257,7 @@ function accessoryFindingLines(result: CompatibilityResult) {
   if (!compatibility) return [];
   const lines = [
     "[주변 부품 호환 점검]",
-    `판정: ${compatibility.status === "compatible" ? "호환 확인" : compatibility.status === "needs_review" ? "확인 필요" : "구매 보류"}`,
+    `결과: ${compatibility.status === "compatible" ? "호환 확인" : compatibility.status === "needs_review" ? "확인 필요" : "구매 보류"}`,
     `차단: ${compatibility.blockerCount}개 · 주의: ${compatibility.warningCount}개 · 확인 필요: ${compatibility.unknownCount}개`
   ];
   lines.push(...accessoryFanHubTargetRecommendationLines(compatibility), ...accessoryConnectionPlanLines(compatibility), ...accessoryRgbConnectionPlanLines(compatibility));
@@ -307,7 +307,7 @@ function gpuFitLines(result: CompatibilityResult) {
   const fit = result.gpuFit;
   if (!fit) return [];
   const purchaseEvidence = gpuPurchaseEvidenceFor(fit);
-  const lines = ["[GPU 실장·전원 요약]", `종합 판정: ${gpuFitStatusLabel(fit.status)}`];
+  const lines = ["[GPU 장착·전원 요약]", `종합 결과: ${gpuFitStatusLabel(fit.status)}`];
   lines.push(`- 케이스 장착 길이: ${fit.length.actualMm === undefined || fit.length.limitMm === undefined ? "확인 필요" : `${fit.length.actualMm}mm / ${fit.length.limitMm}mm · ${fit.length.clearanceMm === undefined ? "여유 확인 필요" : `${fit.length.clearanceMm}mm 여유`}`} · ${gpuFitStatusLabel(fit.length.status)}`);
   lines.push(`- GPU 두께: ${fit.thickness.actualMm === undefined ? "확인 필요" : `${fit.thickness.actualMm}mm`} · ${fit.thickness.warningThresholdMm}mm 이상은 인접 슬롯·측판 확인 · ${gpuFitStatusLabel(fit.thickness.status)}`);
   lines.push(`- PSU 전력: ${fit.power.gpuPowerW === undefined || fit.power.recommendedPsuW === undefined || fit.power.psuWattageW === undefined ? "확인 필요" : `GPU ${fit.power.gpuPowerW}W · 권장 ${fit.power.recommendedPsuW}W · 선택 ${fit.power.psuWattageW}W · 여유 ${fit.power.headroomW ?? "확인 필요"}W`} · ${gpuFitStatusLabel(fit.power.status)}`);
@@ -318,7 +318,7 @@ function gpuFitLines(result: CompatibilityResult) {
       fit.physical.caseSidePanelClearanceMm === undefined ? undefined : `케이스 측면 ${fit.physical.caseSidePanelClearanceMm}mm`,
       fit.physical.cableClearanceMm === undefined ? undefined : `차이 ${fit.physical.cableClearanceMm}mm`
     ].filter((value): value is string => Boolean(value));
-    const physicalDetail = physicalParts.length > 0 ? physicalParts.join(" · ") : "제조사 물리 검수 근거 미등록";
+    const physicalDetail = physicalParts.length > 0 ? physicalParts.join(" · ") : "제조사 물리 확인 정보 미등록";
     lines.push(`- GPU 물리 슬롯·케이블: ${physicalDetail} · ${gpuFitStatusLabel(purchaseEvidence.physical)}`);
   }
   const connectorPath = fit.connector.matchedOptionIndex === undefined
@@ -327,11 +327,11 @@ function gpuFitLines(result: CompatibilityResult) {
   lines.push(`- 보조전원: ${!fit.connector.requirementsKnown ? "GPU 요구 정보 확인 필요" : fit.connector.options.length > 0 ? fit.connector.options.map((option, index) => `${fit.connector.adapterOptionIndices.includes(index) ? "어댑터" : "원문"} 경로 ${index + 1}: ${option.map((requirement) => `${requirement.kind} ${requirement.count}개`).join(" + ")}`).join(" 또는 ") : "요구 없음"} · PSU ${gpuConnectorText(fit.connector.connectors)} · ${connectorPath} · 구조 ${gpuPsuStructureText(fit)}`);
   if (purchaseEvidence.pcieCableTopology !== "not_applicable") {
     const topologyDetail = fit.connector.psuCableTopologyStatus === "not_applicable"
-      ? "다중 8핀 경로의 독립 케이블 근거 미등록"
+      ? "다중 8핀 경로의 독립 케이블 정보 미등록"
       : `${fit.connector.psuIndependentPcieCableRuns === undefined ? "독립 런 수 확인 필요" : `독립 런 ${fit.connector.psuIndependentPcieCableRuns}개`} · ${fit.connector.psuPcieCableTopology === "shared" ? "분배·공유 케이블" : fit.connector.psuPcieCableTopology === "independent" ? "독립 케이블" : "분배 구조 확인 필요"}`;
     lines.push(`- PCIe 케이블 분배: ${topologyDetail} · ${gpuFitStatusLabel(purchaseEvidence.pcieCableTopology)}`);
   }
-  if (purchaseEvidence.status !== "not_applicable") lines.push(`- 물리 근거 출처: ${physicalSourceText(fit)}`);
+  if (purchaseEvidence.status !== "not_applicable") lines.push(`- 장착 정보 출처: ${physicalSourceText(fit)}`);
   lines.push("커넥터 개수만으로 독립 케이블·레일 구성이나 케이블 굽힘 반경을 추정하지 않습니다.", "");
   return lines;
 }
@@ -362,7 +362,7 @@ function connectivityLines(build: BuildSelection, partMap: ReadonlyMap<string, P
 function actionCenterLines(result: CompatibilityResult, build?: BuildSelection, partMap?: ReadonlyMap<string, Part>) {
   const center = buildActionCenterFor(result, build, partMap);
   return [
-    "[우선 조치]",
+    "[우선 할 일]",
     `상태: ${actionCenterStateLabel(center.state)} · ${center.summary}`,
     ...center.actions.map((action, index) => `${index + 1}. [${action.priority}] ${action.title}: ${action.summary}`),
     ...(center.hiddenCount > 0 ? [`그 외 우선순위가 낮은 확인 항목 ${center.hiddenCount}개는 구매 전 실행 체크리스트에서 확인할 수 있습니다.`] : []),
@@ -393,11 +393,11 @@ function repairPlanLines(result: CompatibilityResult) {
   for (const plan of plans) {
     lines.push(
       `### [${plan.label}] ${plan.title}`,
-      `- 해결 범위: ${plan.resolvedFindings}개 finding · 차단 ${plan.resolvedBlockers}개 · 확인 필요 ${plan.resolvedUnknown}개`,
+      `- 해결 범위: ${plan.resolvedFindings}개 항목 · 차단 ${plan.resolvedBlockers}개 · 확인 필요 ${plan.resolvedUnknown}개`,
       `- 적용 후 위험: 차단 ${plan.remainingBlockers}개 · 주의 ${plan.remainingWarnings}개 · 확인 필요 ${plan.remainingUnknown}개`,
       `- 가격 변화: ${repairPlanPriceText(plan.priceDeltaWon, plan.priceComplete)} · 적용 후 ${plan.priceComplete ? priceText(plan.afterTotalPriceWon) : "가격 확인 필요"}`,
       `- 유사도: ${plan.similarityLabel} ${plan.similarityScore}점 · ${plan.profileSummary}`,
-      `- 전략 근거: ${plan.reason}`
+      `- 전략 정보: ${plan.reason}`
     );
     if (plan.budgetWon !== undefined) {
       const budgetState = !plan.priceComplete
@@ -408,7 +408,7 @@ function repairPlanLines(result: CompatibilityResult) {
       lines.push(`- 목표 예산: ${budgetState}`);
     }
     if (plan.resolvedFindingTitles.length > 0) lines.push(`- 해결 범위 상세: ${plan.resolvedFindingTitles.join(" · ")}`);
-    if (plan.remainingFindingTitles && plan.remainingFindingTitles.length > 0) lines.push(`- 적용 후 남는 finding: ${plan.remainingFindingTitles.join(" · ")}`);
+    if (plan.remainingFindingTitles && plan.remainingFindingTitles.length > 0) lines.push(`- 적용 후 남는 항목: ${plan.remainingFindingTitles.join(" · ")}`);
     if (plan.remainingFindingRuleIds && plan.remainingFindingRuleIds.length > 0) lines.push(`- 잔여 규칙 ID: ${plan.remainingFindingRuleIds.join(" · ")}`);
     if (plan.changes.length > 0) {
       lines.push("변경 부품:", ...plan.changes.map(repairPlanChangeLine));
@@ -429,11 +429,11 @@ function savedCheckDirectionLabel(direction: ReturnType<typeof savedBuildCheckTr
 }
 
 function savedCheckFindingChangeLabel(change: SavedBuildCheckFindingChange) {
-  return change === "resolved" ? "해결됨" : change === "new" ? "신규" : change === "severity_changed" ? "심각도 변경" : "내용 변경";
+  return change === "resolved" ? "해결됨" : change === "new" ? "신규" : change === "severity_changed" ? "중요도 변경" : "내용 변경";
 }
 
 function savedCheckAnalysisText(score: number | undefined, label: string, confidence: "high" | "limited" | "unknown") {
-  const confidenceLabel = confidence === "high" ? "근거 충분" : confidence === "limited" ? "일부 스펙 기준" : "계산 불가";
+  const confidenceLabel = confidence === "high" ? "정보 충분" : confidence === "limited" ? "일부 스펙 기준" : "계산 불가";
   return `${score === undefined ? label : `${score}점 · ${label}`} · ${confidenceLabel}`;
 }
 
@@ -451,26 +451,26 @@ function savedBuildRecheckLines(snapshot: SavedBuildCheckSnapshot, result: Compa
   const findingDiff = savedBuildCheckFindingDiffFor(snapshot, currentSnapshot);
   const lines = [
     "[저장 당시 대비 현재 재검사]",
-    `- 판정: ${savedCheckStatusLabel(snapshot.status)} → ${savedCheckStatusLabel(result.status)}`,
+    `- 결과: ${savedCheckStatusLabel(snapshot.status)} → ${savedCheckStatusLabel(result.status)}`,
     `- 위험 카운트: 차단 ${snapshot.blockerCount} → ${result.blockerCount} · 주의 ${snapshot.warningCount} → ${result.warningCount} · 확인 필요 ${snapshot.unknownCount} → ${result.unknownCount}`,
     `- 가격: ${snapshot.priceComplete && result.priceComplete ? `${priceText(snapshot.totalPriceWon)} → ${priceText(result.totalPriceWon)} · 변화 ${repairPlanPriceText(transition.priceDeltaWon, true)}` : "저장 당시 또는 현재 가격 확인 필요"}`,
     `- 성능 분석: ${savedCheckAnalysisText(snapshot.analysisScore, snapshot.analysisScoreLabel, snapshot.analysisConfidence)} → ${savedCheckAnalysisText(result.analysis.overallScore, result.analysis.scoreLabel, result.analysis.confidence)}`,
     `- 전력·냉각 예산: ${savedCheckResourceText(snapshot)} → ${savedCheckResourceText(currentSnapshot)}${transition.resourceBudgetChanged ? ` · 전력 ${transition.powerHeadroomDeltaW === undefined ? "상태 변화" : `${transition.powerHeadroomDeltaW > 0 ? "+" : ""}${transition.powerHeadroomDeltaW}W`} · 냉각 ${transition.coolerHeadroomDeltaW === undefined ? "상태 변화" : `${transition.coolerHeadroomDeltaW > 0 ? "+" : ""}${transition.coolerHeadroomDeltaW}W`}` : ""}`,
-    `- 검사 기준: 엔진 ${snapshot.engineVersion} → ${result.engineVersion} · 카탈로그 ${snapshot.catalogSnapshotAt} → ${result.catalogSnapshotAt}`,
+    `- 검사 기준: 검사 버전 ${snapshot.engineVersion} → ${result.engineVersion} · 카탈로그 ${snapshot.catalogSnapshotAt} → ${result.catalogSnapshotAt}`,
     `- 변화 방향: ${savedCheckDirectionLabel(transition.direction)}`,
-    `- 상위 변화: 판정 ${diff.statusChanged ? "변경" : "동일"} · 위험 ${diff.riskChanged ? "변경" : "동일"} · 가격 ${diff.priceChanged || diff.priceCompletenessChanged ? "변경" : "동일"} · 성능 분석 ${diff.analysisChanged ? "변경" : "동일"} · 전력·냉각 ${diff.resourceBudgetChanged ? "변경" : "동일"} · 검사 기준 ${diff.engineChanged || diff.catalogChanged ? "변경" : "동일"}`
+    `- 상위 변화: 결과 ${diff.statusChanged ? "변경" : "동일"} · 위험 ${diff.riskChanged ? "변경" : "동일"} · 가격 ${diff.priceChanged || diff.priceCompletenessChanged ? "변경" : "동일"} · 성능 분석 ${diff.analysisChanged ? "변경" : "동일"} · 전력·냉각 ${diff.resourceBudgetChanged ? "변경" : "동일"} · 검사 기준 ${diff.engineChanged || diff.catalogChanged ? "변경" : "동일"}`
   ];
   if (!findingDiff.available) {
-    lines.push("- finding 상세: 구버전 snapshot이라 규칙별 비교 불가", "");
+    lines.push("- 항목 상세: 구버전 저장본이라 규칙별 비교 불가", "");
     return lines;
   }
   const changedFindings = findingDiff.changes.filter((change) => change.change !== "unchanged");
-  lines.push(`- finding 변화: 해결 ${transition.resolvedFindingCount}개 · 신규 ${transition.newFindingCount}개 · 심각도 변경 ${transition.severityChangedFindingCount}개 · 내용 변경 ${transition.detailsChangedFindingCount}개`);
+  lines.push(`- 항목 변화: 해결 ${transition.resolvedFindingCount}개 · 신규 ${transition.newFindingCount}개 · 중요도 변경 ${transition.severityChangedFindingCount}개 · 내용 변경 ${transition.detailsChangedFindingCount}개`);
   if (changedFindings.length === 0) {
-    lines.push("- 변경된 finding: 없음", "");
+    lines.push("- 변경된 항목: 없음", "");
     return lines;
   }
-  lines.push("변경된 finding:");
+  lines.push("변경된 항목:");
   for (const change of changedFindings.slice(0, 8)) {
     const beforeTitle = change.before?.title;
     const afterTitle = change.after?.title;
@@ -478,7 +478,7 @@ function savedBuildRecheckLines(snapshot: SavedBuildCheckSnapshot, result: Compa
     const detail = beforeTitle && afterTitle && beforeTitle !== afterTitle ? ` · ${beforeTitle} → ${afterTitle}` : "";
     lines.push(`- [${savedCheckFindingChangeLabel(change.change)}] ${title}${detail} · 규칙 ${change.key}`);
   }
-  if (changedFindings.length > 8) lines.push(`- 그 외 변경된 finding ${changedFindings.length - 8}개`);
+  if (changedFindings.length > 8) lines.push(`- 그 외 변경된 항목 ${changedFindings.length - 8}개`);
   lines.push("");
   return lines;
 }
@@ -507,10 +507,10 @@ export function compatibilityReportTextFor(result: CompatibilityResult, build: B
   const lines = [
     "PC Supporter 호환성 검사 리포트",
     "===============================",
-    `판정: ${status}`,
+    `결과: ${status}`,
     `차단 오류: ${result.blockerCount}개 · 주의: ${result.warningCount}개 · 확인 필요: ${result.unknownCount}개`,
     `검사 시각: ${result.checkedAt}`,
-    `검사 엔진: ${result.engineVersion}`,
+    `검사 기준: ${result.engineVersion}`,
     `카탈로그 기준: ${result.catalogSnapshotAt}`,
     ...viewStateLines(viewState),
     ...(savedCheckSnapshot ? savedBuildRecheckLines(savedCheckSnapshot, result) : []),
@@ -555,8 +555,8 @@ export function compatibilityReportTextFor(result: CompatibilityResult, build: B
   }
   lines.push(...repairPlanLines(result));
   lines.push(
-    "[데이터 경계]",
-    "이 리포트의 판정은 검사 시점의 카탈로그와 규칙 엔진을 기준으로 합니다. 실제 FPS·벤치마크 순위·BIOS 호환성·제조사 QVL·케이스 내부 간섭·케이블 배선은 제조사 원문과 실제 조립 조건을 별도로 확인해야 합니다. 확인되지 않은 가격과 스펙은 추정하지 않았습니다."
+    "[확인 범위]",
+    "이 리포트의 결과는 검사 시점의 카탈로그와 검사 규칙을 기준으로 합니다. 실제 FPS·벤치마크 순위·BIOS 호환성·제조사 QVL·케이스 내부 간섭·케이블 배선은 제조사 원문과 실제 조립 조건을 별도로 확인해야 합니다. 확인되지 않은 가격과 스펙은 추정하지 않았습니다."
   );
   return lines.join("\n");
 }

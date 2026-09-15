@@ -137,7 +137,7 @@ describe("saved build comparison decisions", () => {
     const result = savedBuildComparisonTradeoffsFor([
       entry("cheap", "저렴한 버전", { blockerCount: 0, warningCount: 0, unknownCount: 0, totalPriceWon: 900_000, analysis: { overallScore: 70 } as CompatibilityResult["analysis"], metrics: expansionMetrics({ memoryHeadroomGb: 24, powerHeadroomW: 100 }) }),
       entry("balanced", "균형 버전", { blockerCount: 0, warningCount: 1, unknownCount: 0, totalPriceWon: 950_000, analysis: { overallScore: 80 } as CompatibilityResult["analysis"], metrics: expansionMetrics({ memoryHeadroomGb: 48, powerHeadroomW: 200 }) }),
-      entry("dominated", "열세 버전", { blockerCount: 0, warningCount: 1, unknownCount: 0, totalPriceWon: 1_050_000, analysis: { overallScore: 75 } as CompatibilityResult["analysis"], metrics: expansionMetrics({ memoryHeadroomGb: 24, powerHeadroomW: 100 }) })
+      entry("dominated", "밀림 버전", { blockerCount: 0, warningCount: 1, unknownCount: 0, totalPriceWon: 1_050_000, analysis: { overallScore: 75 } as CompatibilityResult["analysis"], metrics: expansionMetrics({ memoryHeadroomGb: 24, powerHeadroomW: 100 }) })
     ]);
 
     expect(result.find((item) => item.id === "cheap")?.frontier).toBe(true);

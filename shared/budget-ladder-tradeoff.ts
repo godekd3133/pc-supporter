@@ -44,7 +44,7 @@ function dimensionReason(left: BudgetLadderTradeoffMetric, right: BudgetLadderTr
   const dimensions: string[] = [];
   if (left.riskScore !== undefined && right.riskScore !== undefined && left.riskScore < right.riskScore) dimensions.push("잔여 위험");
   if (left.totalPriceWon !== undefined && right.totalPriceWon !== undefined && left.totalPriceWon < right.totalPriceWon) dimensions.push("실제 합계");
-  if (left.analysisScore !== undefined && right.analysisScore !== undefined && left.analysisScore > right.analysisScore) dimensions.push("분석 지수");
+  if (left.analysisScore !== undefined && right.analysisScore !== undefined && left.analysisScore > right.analysisScore) dimensions.push("분석 점수");
   return dimensions.length > 0 ? dimensions.join("·") : "비교 기준";
 }
 
@@ -69,15 +69,15 @@ export function budgetLadderTradeoffFor(outcomes: ReadonlyArray<BudgetLadderOutc
         ...metric,
         frontier: true,
         reason: metric.totalPriceWon === undefined || metric.analysisScore === undefined
-          ? "확인된 비용·분석 지수 범위 안에서 보수적으로 효율 경계에 남겼습니다."
-          : "위험·실제 합계·분석 지수에서 다른 구간에 일방적으로 대체되지 않는 선택지입니다."
+          ? "확인된 비용·분석 점수 범위 안에서 보수적으로 비교 우위에 남겼습니다."
+          : "위험·실제 합계·분석 점수에서 다른 구간에 일방적으로 대체되지 않는 선택지입니다."
       };
     }
     return {
       ...metric,
       frontier: false,
       dominatedByScenarioIndex: dominator.scenarioIndex,
-      reason: `${outcomes[dominator.scenarioIndex]?.label ?? "다른"} 구간이 ${dimensionReason(dominator, metric)} 기준으로 더 유리해 효율 경계에서 제외했습니다.`
+      reason: `${outcomes[dominator.scenarioIndex]?.label ?? "다른"} 구간이 ${dimensionReason(dominator, metric)} 기준으로 더 유리해 비교 우위에서 제외했습니다.`
     };
   });
 }

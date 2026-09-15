@@ -5,12 +5,12 @@ import { Keyboard, KeyboardResize } from "@capacitor/keyboard";
 import { SplashScreen } from "@capacitor/splash-screen";
 import { StatusBar, Style } from "@capacitor/status-bar";
 
-const STATUS_BAR_COLOR = "#122332";
+const STATUS_BAR_COLOR = "#f9fafb";
 const HAPTIC_SELECTOR = ".button-primary, .mobile-primary-action, .picker-item";
 
 async function configureStatusBar() {
   try {
-    await StatusBar.setStyle({ style: Style.Dark });
+    await StatusBar.setStyle({ style: Style.Light });
     if (Capacitor.getPlatform() === "android") {
       await StatusBar.setBackgroundColor({ color: STATUS_BAR_COLOR });
     }

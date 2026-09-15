@@ -182,7 +182,7 @@ export function savedBuildComparisonTradeoffsFor(entries: SavedBuildComparisonEn
         ...metric,
         frontier: true,
         reason: metric.totalPriceWon === undefined || metric.analysisScore === undefined || metric.expansionScore === undefined
-          ? "가격·분석·확장성 근거가 일부 없어 우열을 확정하지 않고 효율 경계에 남겼습니다."
+          ? "가격·분석·확장성 정보가 일부 없어 우위를 확정하지 않고 비교 우위에 남겼습니다."
           : "호환 위험·총액·분석 점수·확장성에서 다른 버전에 일방적으로 대체되지 않는 선택지입니다."
       };
     }
@@ -190,7 +190,7 @@ export function savedBuildComparisonTradeoffsFor(entries: SavedBuildComparisonEn
       ...metric,
       frontier: false,
       dominatedByBuildId: dominator.id,
-      reason: `${dominator.name}이(가) ${savedBuildTradeoffDimensionReason(dominator, metric)} 기준으로 더 유리해 효율 경계에서 제외했습니다.`
+      reason: `${dominator.name}이(가) ${savedBuildTradeoffDimensionReason(dominator, metric)} 기준으로 더 유리해 비교 우위에서 제외했습니다.`
     };
   });
 }

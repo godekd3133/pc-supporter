@@ -48,7 +48,7 @@ function reviewItemFor(part: Part, now: string | number): BenchmarkReviewItem | 
   if (benchmarkFreshness === "unknown") reviewPriorityScore += 8;
   const missingLabel = missingScores.length > 0 ? `${missingScores.map((key) => scoreLabels[key]).join("·")} 미확인` : "완전 세트";
   const freshnessReason = status === "stale" ? `벤치마크 ${benchmarkFreshness === "unknown" ? "시점 불명" : "갱신 필요"}` : undefined;
-  const reviewReason = [missingLabel, freshnessReason, part.dataQuality === "live" ? "다나와 최신" : part.dataQuality === "manual" ? "수동 검수" : part.dataQuality === "seed" ? "프로젝트 기준" : "일부 스펙 부족"].filter(Boolean).join(" · ");
+  const reviewReason = [missingLabel, freshnessReason, part.dataQuality === "live" ? "다나와 최신" : part.dataQuality === "manual" ? "수동 확인" : part.dataQuality === "seed" ? "프로젝트 기준" : "일부 스펙 부족"].filter(Boolean).join(" · ");
   return {
     partId: part.id,
     partName: part.name,
@@ -89,7 +89,7 @@ function sourceReviewItemFor(part: Part, now: string | number): BenchmarkSourceR
   if (benchmarkFreshness === "stale") reviewPriorityScore += 5;
   if (benchmarkFreshness === "unknown") reviewPriorityScore += 8;
   const missingLabel = missingScores.length > 0 ? `${missingScores.map((key) => scoreLabels[key]).join("·")} 미확인` : "완전 세트";
-  const sourceReason = provenance?.sourceKind ? undefined : "출처 유형 미분류";
+  const sourceReason = provenance?.sourceKind ? undefined : "출처 확인 필요";
   const sourceCheckReason = sourceCheckNeedsReview ? "원문 점검 필요" : undefined;
   return {
     partId: part.id,
