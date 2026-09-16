@@ -1,5 +1,5 @@
-import { Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { FiActivity, FiAlertTriangle, FiArrowLeft, FiArrowRight, FiCheckCircle, FiCopy, FiCpu, FiDownload, FiEdit3, FiExternalLink, FiInfo, FiLoader, FiPrinter, FiRefreshCw, FiSave, FiShare2, FiTool, FiTrash2, FiXCircle } from "react-icons/fi";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { FiActivity, FiAlertTriangle, FiArrowLeft, FiArrowRight, FiCheckCircle, FiCopy, FiCpu, FiDownload, FiEdit3, FiExternalLink, FiInfo, FiLoader, FiMoreHorizontal, FiPrinter, FiRefreshCw, FiSave, FiShare2, FiTool, FiTrash2, FiXCircle } from "react-icons/fi";
 import type { AccessoryItem, AccessorySelection, BuildSelection, CompatibilityResult, Finding, Part, PartCategory, PartSelection, RecommendationPlan, RecommendationPreferences, SavedBuild, SavedBuildCheckSnapshot, SavedBuildPurchasePriceHistory, SavedBuildPurchaseProgress, SimilarityEvidence, UpgradeBudgetEvidence, UpgradeBundleRecommendation, UpgradeCompatibilityEvidence, UpgradeExpansionEvidence, UpgradeRecommendation } from "../shared/types";
 import type { BuildHistoryEntry } from "../shared/build-history";
 import type { BuildPriceSnapshot } from "../shared/build-price-summary";
@@ -151,6 +151,23 @@ const savedVerificationHistory = useMemo(() => {
 }, [savedCheckHistory]);
 useEffect(() => { setFindingFilter(resultFindingFilterFromSearch(window.location.search)); }, [result?.checkedAt]);
 useEffect(() => { setPurchaseChecklistProgress(null); setPurchaseListProgress(null); setPurchaseListFocusStatus(null); setAssemblyVerificationSummary(null); }, [purchaseChecklistKey, result?.checkedAt]);
+const moreToolsRef = useRef<HTMLDetailsElement | null>(null);
+useEffect(() => {
+  const closeOnOutsidePointer = (event: PointerEvent) => {
+    const details = moreToolsRef.current;
+    if (details?.open && event.target instanceof Node && !details.contains(event.target)) details.open = false;
+  };
+  const closeOnEscape = (event: KeyboardEvent) => {
+    const details = moreToolsRef.current;
+    if (event.key === "Escape" && details?.open) details.open = false;
+  };
+  document.addEventListener("pointerdown", closeOnOutsidePointer);
+  document.addEventListener("keydown", closeOnEscape);
+  return () => {
+    document.removeEventListener("pointerdown", closeOnOutsidePointer);
+    document.removeEventListener("keydown", closeOnEscape);
+  };
+}, []);
 useEffect(() => {
   if (!scenarioPreview) return;
   const timer = window.setTimeout(() => {
@@ -215,12 +232,20 @@ function focusResultSection(targetId: string) {
   if (section) syncResultLocation(findingFilter, section);
   focusSection(targetId);
 }
+function openAncestorDetails(target: HTMLElement) {
+  let details = target.closest("details");
+  while (details) {
+    if (!details.open) details.open = true;
+    details = details.parentElement?.closest("details") ?? null;
+  }
+}
 function focusSection(targetId: string) {
   let attempts = 0;
   let timer: number | undefined;
   const focusTarget = () => {
     const target = document.querySelector<HTMLElement>(`[data-testid="${targetId}"]`);
     if (target) {
+      openAncestorDetails(target);
       target.scrollIntoView({ behavior: "smooth", block: "start" });
       target.focus({ preventScroll: true });
       return;
@@ -247,6 +272,7 @@ async function addAccessoryAndFocus(item: AccessoryItem) {
 function focusRepairPlans() {
   const repairPlans = document.querySelector<HTMLElement>(".repair-plan-panel");
   if (repairPlans) {
+    openAncestorDetails(repairPlans);
     repairPlans.scrollIntoView({ behavior: "smooth", block: "start" });
     repairPlans.focus({ preventScroll: true });
     return;
@@ -262,15 +288,15 @@ const displayStatus: CompatibilityResult["status"] = result.status === "incompat
     ? "needs_review"
     : "compatible";
 const statusCopy = displayStatus === "incompatible"
-  ? result.status === "incompatible" ? "함께 쓸 수 없는 부품이 있습니다." : "주변 부품도 함께 고쳐야 합니다."
+  ? result.status === "incompatible" ? "같이 쓸 수 없는 부품이 있어요." : "주변 부품도 확인이 필요해요."
   : displayStatus === "needs_review"
-    ? result.status === "needs_review" ? "확인이 필요한 항목이 있습니다." : "핵심 부품은 맞지만 주변 부품을 확인해 주세요."
-    : result.warningCount > 0 ? "쓸 수 있지만 확인할 항목이 있습니다." : "함께 쓸 수 있는 조합입니다.";
+    ? result.status === "needs_review" ? "확인이 필요한 항목이 있어요." : "주변 부품을 확인해 주세요."
+    : result.warningCount > 0 ? "쓸 수 있지만 확인할 항목이 있어요." : "같이 쓸 수 있는 조합이에요.";
 const statusDescription = displayStatus === "incompatible"
-  ? result.status === "incompatible" ? "선택한 부품 조합에서 함께 사용할 수 없는 문제를 찾았습니다." : "핵심 부품은 괜찮지만 선택한 주변 부품의 장착 규격이 맞지 않습니다. 아래 주변 부품 점검을 확인해 주세요."
+  ? result.status === "incompatible" ? "호환되지 않는 부품을 확인하고 바꿔보세요." : "주변 부품의 장착 규격을 확인해 주세요."
   : displayStatus === "needs_review"
-    ? result.status === "needs_review" ? "막히는 오류는 없지만 정보가 부족해서 확실하지 않은 항목이 있습니다." : "핵심 부품은 괜찮지만 주변 부품의 규격·수량을 확인할 정보가 부족합니다."
-    : result.warningCount > 0 ? `막히는 오류는 없지만 ${result.warningCount}개 주의 항목을 사기 전에 확인해 주세요.` : "등록된 부품 정보 기준으로 함께 사용할 수 있습니다.";
+    ? result.status === "needs_review" ? "정보가 부족한 항목을 확인해 주세요." : "주변 부품의 규격과 수량을 확인해 주세요."
+    : result.warningCount > 0 ? `${result.warningCount}개 항목을 구매 전에 확인해 주세요.` : "현재 확인된 정보 기준으로 사용할 수 있어요.";
 const coreTotalPriceWon = result.coreTotalPriceWon ?? Math.max(0, result.totalPriceWon - (result.accessoryTotalPriceWon ?? 0));
 const corePriceComplete = result.corePriceComplete ?? result.priceComplete;
 const accessoryTotalPriceWon = result.accessoryTotalPriceWon ?? 0;
@@ -287,22 +313,35 @@ const resultPriceSnapshot: BuildPriceSnapshot = {
   unknownPriceCount: result.dataHealth?.unpricedCount ?? Math.max(localPriceSnapshot.unknownPriceCount, result.priceComplete ? 0 : 1)
 };
 const upgradeBundles = upgradeBundlesFromPayload(result.upgradeBundlePayload) ?? result.upgradeBundles;
-const metricCards: Array<{ filter: Exclude<FindingFilter, "all">; tone: "danger" | "warning" | "unknown"; label: string; count: number; detail: string }> = [
-  { filter: "blocker", tone: "danger", label: "차단 오류", count: result.blockerCount, detail: "반드시 해결해야 합니다" },
-  { filter: "warning", tone: "warning", label: "주의 사항", count: result.warningCount, detail: "성능·안정성 확인 권장" },
-  { filter: "unknown", tone: "unknown", label: "확인 필요", count: result.unknownCount, detail: "정보가 부족합니다" }
+  const metricCards: Array<{ filter: Exclude<FindingFilter, "all">; tone: "danger" | "warning" | "unknown"; label: string; count: number }> = [
+  { filter: "blocker", tone: "danger", label: "차단 오류", count: result.blockerCount },
+  { filter: "warning", tone: "warning", label: "주의 사항", count: result.warningCount },
+  { filter: "unknown", tone: "unknown", label: "확인 필요", count: result.unknownCount }
 ];
 return (
   <div className="result-page">
     <div className="mobile-result-toolbar"><button className="mobile-result-back" type="button" onClick={onBack} aria-label="홈으로"><FiArrowLeft /></button><div><span className="mobile-kicker">CHECK / RESULT</span><strong>검사 결과</strong></div><button className="mobile-result-share" type="button" onClick={onCopyResultLink} aria-label="결과 링크 복사"><FiShare2 /></button></div>
     <div className="result-toolbar">
       <button className="back-link" onClick={onBack}><FiArrowLeft /> 홈으로</button>
-      <div className="result-actions"><button className="button button-ghost" onClick={onSave}><FiSave /> 견적 저장·공유</button>{shareId && shareOwnerTokenAvailable && <button className="button button-light" type="button" onClick={onRevokeShare} disabled={revokingShare}>{revokingShare ? <><FiLoader className="spin" /> 취소 중...</> : <><FiTrash2 /> 공유 링크 취소</>}</button>}<button className="button button-light result-link-copy-button" type="button" onClick={onCopyResultLink}><FiShare2 /> 결과 링크 복사</button><button className="button button-light" onClick={onCopyReport}><FiCopy /> 리포트 복사</button><button className="button button-light" onClick={onDownloadReport}><FiDownload /> JSON 저장</button><button className="button button-light result-print-button" type="button" onClick={() => window.print()}><FiPrinter /> 인쇄·PDF</button><button className="button button-secondary" data-testid={shareId && !shareOwnerTokenAvailable ? "shared-build-clone" : undefined} onClick={shareId && !shareOwnerTokenAvailable ? onCloneSharedBuild : onEdit}>{shareId && !shareOwnerTokenAvailable ? <><FiCopy /> 내 견적으로 복제</> : <><FiEdit3 /> 견적 수정</>}</button></div>
+      <div className="result-actions">
+        <button className="button button-ghost" onClick={onSave}><FiSave /> 견적 저장·공유</button>
+        <button className="button button-secondary" data-testid={shareId && !shareOwnerTokenAvailable ? "shared-build-clone" : undefined} onClick={shareId && !shareOwnerTokenAvailable ? onCloneSharedBuild : onEdit}>{shareId && !shareOwnerTokenAvailable ? <><FiCopy /> 내 견적으로 복제</> : <><FiEdit3 /> 견적 수정</>}</button>
+        <details className="result-more-tools" ref={moreToolsRef}>
+          <summary><FiMoreHorizontal /> 더 보기</summary>
+          <div onClick={() => { if (moreToolsRef.current) moreToolsRef.current.open = false; }}>
+            {shareId && shareOwnerTokenAvailable && <button className="button button-light" type="button" onClick={onRevokeShare} disabled={revokingShare}>{revokingShare ? <><FiLoader className="spin" /> 취소 중...</> : <><FiTrash2 /> 공유 링크 취소</>}</button>}
+            <button className="button button-light result-link-copy-button" type="button" onClick={onCopyResultLink}><FiShare2 /> 결과 링크 복사</button>
+            <button className="button button-light" onClick={onCopyReport}><FiCopy /> 리포트 복사</button>
+            <button className="button button-light" onClick={onDownloadReport}><FiDownload /> JSON 저장</button>
+            <button className="button button-light result-print-button" type="button" onClick={() => window.print()}><FiPrinter /> 인쇄·PDF</button>
+          </div>
+        </details>
+      </div>
     </div>
     {checkError && <RequestErrorNotice message={checkError} onRetry={onCheck} retrying={checking} hasLastResult />}
     <section className={`result-hero ${displayStatus}`}>
       <div className="result-hero-main"><span className="result-status-icon">{displayStatus === "compatible" ? <FiCheckCircle /> : displayStatus === "needs_review" ? <FiAlertTriangle /> : <FiXCircle />}</span><div><p className="eyebrow">CHECK RESULT</p><h1>{statusCopy}</h1><p>{statusDescription}</p>{decisionNote && <div className="result-decision-note" data-testid="result-decision-note"><FiInfo /><div><span>선택 메모</span><strong>{decisionNote}</strong></div></div>}</div></div>
-      <div className="result-version"><span>검사 시각</span><strong>{new Date(result.checkedAt).toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" })}</strong><small>버전 {result.engineVersion}</small><small>카탈로그 {new Date(result.catalogSnapshotAt).toLocaleDateString("ko-KR")}</small></div>
+      <div className="result-version"><span>검사 시각</span><strong>{new Date(result.checkedAt).toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" })}</strong></div>
     </section>
     <div className="mobile-result-metric-strip" aria-label="검사 결과 요약">{metricCards.map((metric) => <button className={`mobile-result-metric ${metric.tone}`} type="button" aria-label={`${metric.label} ${metric.count}개. 해당 상세 결과 보기`} aria-pressed={findingFilter === metric.filter} disabled={metric.count === 0} onClick={() => focusFindingFilter(metric.filter)} key={metric.filter}><span>{metric.label}</span><strong>{metric.count}</strong></button>)}</div>
     <div className="mobile-result-actions"><button className="mobile-primary-action" type="button" onClick={onEdit}><FiEdit3 /><span>견적 수정하기</span><FiArrowRight className="mobile-result-action-arrow" /></button><div><button className="mobile-secondary-action" type="button" onClick={onSave}><FiSave /><span>견적 저장·공유</span><FiArrowRight className="mobile-result-action-arrow" /></button><button className="mobile-secondary-action" type="button" onClick={onCopyResultLink}><FiShare2 /><span>결과 링크 복사</span><FiArrowRight className="mobile-result-action-arrow" /></button></div></div>
@@ -312,12 +351,20 @@ return (
     {shareId && savedCheckHistory && savedCheckHistory.length > 0 && <Suspense fallback={null}><LazySavedBuildRecheckDiffPanel snapshot={savedCheckHistory[savedCheckHistory.length - 1]} result={result} partMap={partMap} onFocusFinding={focusFinding} onPreviewSuggestion={onPreviewSuggestion} onFocusRepairPlans={focusRepairPlans} onFocusSection={focusResultSection} /></Suspense>}
     <div className="result-layout">
       <section className="findings-section">
-        <div className="result-metrics">{metricCards.map((metric) => <button className={`metric-card ${metric.tone}${findingFilter === metric.filter ? " selected" : ""}`} type="button" aria-label={`${metric.label} ${metric.count}개. 해당 상세 결과 보기`} aria-pressed={findingFilter === metric.filter} disabled={metric.count === 0} onClick={() => focusFindingFilter(metric.filter)} key={metric.filter}><span>{metric.label}</span><strong>{metric.count}</strong><small>{metric.detail}</small></button>)}</div>
+        <div className="result-metrics">{metricCards.map((metric) => <button className={`metric-card ${metric.tone}${findingFilter === metric.filter ? " selected" : ""}`} type="button" aria-label={`${metric.label} ${metric.count}개. 해당 상세 결과 보기`} aria-pressed={findingFilter === metric.filter} disabled={metric.count === 0} onClick={() => focusFindingFilter(metric.filter)} key={metric.filter}><span>{metric.label}</span><strong>{metric.count}</strong></button>)}</div>
         <Suspense fallback={<div className="purchase-readiness-panel loading" aria-label="구매 준비 상태 로딩" role="status"><FiLoader className="spin" /> 구매 준비 상태를 확인하는 중...</div>}><LazyPurchaseReadinessPanel result={result} onEdit={onEdit} build={build} onChangeAccessoryHubTarget={onChangeAccessoryHubTarget} checklistProgress={purchaseChecklistProgress ?? undefined} purchaseProgress={purchaseListProgress ?? undefined} assemblyVerification={assemblyVerificationSummary ?? undefined} onFocusChecklist={() => focusResultSection("purchase-checklist")} onFocusPurchaseList={(status: PurchaseItemStatus | undefined) => { setPurchaseListFocusStatus(status ?? null); focusResultSection("purchase-list-panel"); }} onFocusAssemblyVerification={() => focusResultSection("assembly-verification-panel")} /></Suspense>
         <Suspense fallback={<div className="build-action-center loading" aria-label="먼저 할 일 목록 로딩" role="status"><FiLoader className="spin" /> 먼저 할 일 목록을 준비하는 중...</div>}><LazyBuildActionCenterPanel build={build} result={result} partMap={partMap} checklistStorageKey={`pc-supporter-purchase-checklist:${purchaseChecklistKey}:${result.engineVersion}:${result.catalogSnapshotAt}`} onFocusFinding={focusFinding} onFocusSection={focusResultSection} onFocusRepairPlans={focusRepairPlans} /></Suspense>
-        <Suspense fallback={<div className="assembly-plan-panel loading" aria-label="구매·조립 순서 로딩" role="status"><FiLoader className="spin" /> 구매·조립 순서를 준비하는 중...</div>}><LazyAssemblyPlanPanel build={build} result={result} checklistProgress={purchaseChecklistProgress ?? undefined} purchaseProgress={purchaseListProgress ?? undefined} assemblyVerification={assemblyVerificationSummary ?? undefined} onFocusSection={focusResultSection} onFocusRepairPlans={focusRepairPlans} /></Suspense>
+        <details className="result-assembly-details">
+          <summary><span>구매·조립 순서</span><FiMoreHorizontal /></summary>
+          <div className="result-assembly-details-body">
+            <Suspense fallback={<div className="assembly-plan-panel loading" aria-label="구매·조립 순서 로딩" role="status"><FiLoader className="spin" /> 구매·조립 순서를 준비하는 중...</div>}><LazyAssemblyPlanPanel build={build} result={result} checklistProgress={purchaseChecklistProgress ?? undefined} purchaseProgress={purchaseListProgress ?? undefined} assemblyVerification={assemblyVerificationSummary ?? undefined} onFocusSection={focusResultSection} onFocusRepairPlans={focusRepairPlans} /></Suspense>
+          </div>
+        </details>
         {scenarioPreview && <BuildScenarioPreviewPanel preview={scenarioPreview} currentResult={result} onApply={() => onApplySuggestion(scenarioPreview.category, scenarioPreview.part, scenarioPreview.quantity, scenarioPreview.affectedPartIds, scenarioPreview.candidateEvidence)} onRetry={() => onPreviewSuggestion(scenarioPreview.category, scenarioPreview.part, scenarioPreview.quantity, scenarioPreview.affectedPartIds, scenarioPreview.candidateEvidence)} onClose={onDismissScenarioPreview} />}
         {upgradeBundleScenarioPreview && <Suspense fallback={<div className="upgrade-bundle-scenario-preview loading" aria-label="업그레이드 조합 미리 확인 로딩" role="status"><FiLoader className="spin" /> 업그레이드 조합을 미리 확인하는 중...</div>}><LazyUpgradeBundleScenarioPreviewPanel state={upgradeBundleScenarioPreview} currentResult={result} onApply={() => onApplyUpgradeBundle(upgradeBundleScenarioPreview.bundle)} onRetry={() => onPreviewUpgradeBundle(upgradeBundleScenarioPreview.bundle)} onClose={onDismissUpgradeBundleScenarioPreview} formatWon={formatWon} /></Suspense>}
+        <details className="result-more-details">
+          <summary><span><FiInfo /> 세부 정보·구매 도구</span><FiMoreHorizontal /></summary>
+          <div className="result-more-details-body">
         <Suspense fallback={<div className="purchase-checklist-panel loading" aria-label="구매 전 체크리스트 로딩" role="status"><FiLoader className="spin" /> 구매 전 체크리스트를 준비하는 중...</div>}><LazyPurchaseChecklistPanel build={build} result={result} partMap={partMap} storageKey={`pc-supporter-purchase-checklist:${purchaseChecklistKey}:${result.engineVersion}:${result.catalogSnapshotAt}`} onFocusFinding={focusFinding} onFocusSection={focusResultSection} onProgressChange={setPurchaseChecklistProgress} /></Suspense>
         <Suspense fallback={<div className="assembly-verification-panel loading" aria-label="실제 조립 확인 기록 로딩" role="status"><FiLoader className="spin" /> 실제 조립 확인 기록을 준비하는 중...</div>}><LazyAssemblyVerificationPanel storageKey={`pc-supporter-assembly-verification:${purchaseChecklistKey}:${result.engineVersion}:${result.catalogSnapshotAt}`} savedBuildId={shareId ?? undefined} savedBuildOwnerToken={shareOwnerToken ?? undefined} savedVerificationHistory={savedVerificationHistory} onServerSync={onAssemblyVerificationSynced} onSummaryChange={setAssemblyVerificationSummary} /></Suspense>
         {savedCheckHistory && savedCheckHistory.length > 0 && <SavedBuildCheckTimeline history={savedCheckHistory} buildId={shareId ?? undefined} partMap={partMap} accessoryMap={accessoryMap} canRecord={shareOwnerTokenAvailable && Boolean(shareId)} recording={recordingSavedCheck} onRecordCheck={onRecordSavedCheck} />}
@@ -340,9 +387,11 @@ return (
         <Suspense fallback={<div className="accessory-cart-panel loading" aria-label="주변 부품 목록 로딩" role="status">추가한 주변 부품을 준비하는 중...</div>}><LazyAccessoryCartPanel selections={accessorySelections(build)} accessoryMap={accessoryMap} partMap={partMap} ssdSelections={build.ssd} onChangeQuantity={onChangeAccessoryQuantity} onChangeTarget={onChangeAccessoryTarget} onChangeHubTarget={onChangeAccessoryHubTarget} onChangeRgbController={onChangeRgbController} rgbControllerAccessoryId={build.rgbControllerAccessoryId} rgbDeviceCount={build.case ? partMap.get(build.case.partId)?.specs.rgbDeviceCount : undefined} onRemove={onRemoveAccessory} AccessoryVisual={AccessoryVisual} /></Suspense>
         {result.links.length > 0 && <CompatibilityMap links={result.links} findings={result.findings} onFocusFinding={focusFinding} />}
         {result.repairPlans && result.repairPlans.length > 0 && <RepairPlanPanel plans={result.repairPlans} build={build} currentResult={result} partMap={partMap} onApply={onApplyRepairPlan} onSavePlan={(nextBuild: BuildSelection, nextPreferences: RecommendationPreferences, label: string) => onSavePlan(nextBuild, nextPreferences, label, shareOwnerTokenAvailable && shareId ? shareId : undefined)} onFocusFinding={(ruleId: string) => { setFindingFilter("all"); window.setTimeout(() => document.getElementById("finding-" + ruleId)?.scrollIntoView({ behavior: "smooth", block: "center" }), 0); }} />}
-        {result.findings.length === 0 ? <div className="success-empty" data-testid="result-findings" tabIndex={-1}><FiCheckCircle /><h2>모든 규칙을 통과했습니다.</h2><p>선택한 구성에서 현재 확인 가능한 충돌이 없습니다.</p><button className="button button-secondary" onClick={onEdit}>부품 구성 다시 보기</button></div> : <div className="findings-list" data-testid="result-findings" tabIndex={-1}><div className="section-title-row"><div><p className="eyebrow">DETAILED MESSAGE</p><h2>검사 결과 상세</h2></div><span className="muted-count">{visibleFindings.length} / {result.findings.length}개 항목</span></div><div className="finding-filter-controls" role="group" aria-label="검사 결과 필터">{FINDING_FILTERS.map((filter: FindingFilter) => <button className={findingFilter === filter ? "finding-filter-button selected" : "finding-filter-button"} type="button" aria-pressed={findingFilter === filter} disabled={filter !== "all" && findingCounts[filter] === 0} onClick={() => selectFindingFilter(filter)} key={filter}>{findingFilterLabels[filter]} <strong>{findingCounts[filter]}</strong></button>)}</div>{visibleFindings.length === 0 ? <div className="finding-filter-empty"><FiInfo /><span>선택한 중요도의 결과 항목이 없습니다.</span><button className="text-button" type="button" onClick={() => selectFindingFilter("all")}>전체 보기</button></div> : visibleFindings.map((finding: Finding) => <Suspense key={`${result.checkedAt}-${finding.id}`} fallback={<div className="finding-card-loading" aria-busy="true"><FiLoader className="spin" /> 결과 상세를 불러오는 중...</div>}><ResultFindingCard finding={finding} partMap={partMap} onOpenPicker={onOpenPicker} onEdit={onEdit} onApplySuggestion={onApplySuggestion} onPreviewSuggestion={onPreviewSuggestion} onCompareSuggestions={onCompareSuggestions} onFocusRepairPlans={focusRepairPlans} onToast={onToast} onWatchPart={onWatchPart} onShareComparison={onShareComparison} onRevokeComparison={onRevokeComparison} disabled={checking} ruleGuides={RULE_GUIDES} partSummary={partSummary} formatWon={formatWon} formatPriceDelta={formatPriceDelta} formatSignedPercent={formatSignedPercent} formatSpecValue={formatSpecValue} similarityEvidenceText={similarityEvidenceText} suggestionSpecRows={suggestionSpecRows} PartVisual={PartVisual} PartWatchButton={PartWatchButton} /></Suspense>)}</div>}
+          </div>
+        </details>
+        {result.findings.length === 0 ? <div className="success-empty" data-testid="result-findings" tabIndex={-1}><FiCheckCircle /><h2>모든 규칙을 통과했습니다.</h2><button className="button button-secondary" onClick={onEdit}>부품 구성 다시 보기</button></div> : <div className="findings-list" data-testid="result-findings" tabIndex={-1}><div className="section-title-row"><div><p className="eyebrow">DETAILED MESSAGE</p><h2>검사 결과 상세</h2></div><span className="muted-count">{visibleFindings.length} / {result.findings.length}개 항목</span></div><div className="finding-filter-controls" role="group" aria-label="검사 결과 필터">{FINDING_FILTERS.map((filter: FindingFilter) => <button className={findingFilter === filter ? "finding-filter-button selected" : "finding-filter-button"} type="button" aria-pressed={findingFilter === filter} disabled={filter !== "all" && findingCounts[filter] === 0} onClick={() => selectFindingFilter(filter)} key={filter}>{findingFilterLabels[filter]} <strong>{findingCounts[filter]}</strong></button>)}</div>{visibleFindings.length === 0 ? <div className="finding-filter-empty"><FiInfo /><span>선택한 중요도의 결과 항목이 없습니다.</span><button className="text-button" type="button" onClick={() => selectFindingFilter("all")}>전체 보기</button></div> : visibleFindings.map((finding: Finding) => <Suspense key={`${result.checkedAt}-${finding.id}`} fallback={<div className="finding-card-loading" aria-busy="true"><FiLoader className="spin" /> 결과 상세를 불러오는 중...</div>}><ResultFindingCard finding={finding} partMap={partMap} onOpenPicker={onOpenPicker} onEdit={onEdit} onApplySuggestion={onApplySuggestion} onPreviewSuggestion={onPreviewSuggestion} onCompareSuggestions={onCompareSuggestions} onFocusRepairPlans={focusRepairPlans} onToast={onToast} onWatchPart={onWatchPart} onShareComparison={onShareComparison} onRevokeComparison={onRevokeComparison} disabled={checking} ruleGuides={RULE_GUIDES} partSummary={partSummary} formatWon={formatWon} formatPriceDelta={formatPriceDelta} formatSignedPercent={formatSignedPercent} formatSpecValue={formatSpecValue} similarityEvidenceText={similarityEvidenceText} suggestionSpecRows={suggestionSpecRows} PartVisual={PartVisual} PartWatchButton={PartWatchButton} /></Suspense>)}</div>}
       </section>
-      <aside className="result-sidebar"><div className="sticky-summary"><div className="summary-header"><div><p className="eyebrow">YOUR BUILD</p><h2>선택한 견적</h2></div><span className="summary-pulse"><FiCpu /></span></div><div className="build-mini-list">{PART_CATEGORIES.map((category: PartCategory) => { const selections = selectionList(build, category) as PartSelection[]; return <div className="build-mini-row" key={category}><span className="mini-category-icon"><CategoryIcon category={category} /></span><div><strong>{CATEGORY_LABELS[category]}</strong><span>{selections.length === 0 ? "미선택" : selections.map((selection: PartSelection) => `${partMap.get(selection.partId)?.name ?? selection.partId}${selection.quantity > 1 ? ` ×${selection.quantity}` : ""}`).join(", ")}</span></div></div>; })}{accessorySelections(build).length > 0 && <div className="build-mini-row"><span className="mini-category-icon"><FiTool /></span><div><strong>주변 부품</strong><span>{accessorySelections(build).length}종 · {accessorySelections(build).reduce((total: number, selection: AccessorySelection) => total + selection.quantity, 0)}개</span></div></div>}</div><div className="summary-divider" /><BuildPriceSummaryPanel snapshot={resultPriceSnapshot} budgetWon={recommendationPreferences.budgetWon} unknownItems={unknownPriceItemsFor(build, partMap, accessoryMap)} onRefresh={onRefreshCatalogItem} refreshingItemId={refreshingPartId} compact testId="result-price-summary" /><button className="button button-primary full-width" onClick={onEdit}><FiEdit3 /> 오류 수정하기</button><button className="button button-light full-width" onClick={onCheck} disabled={checking}>{checking ? <><FiLoader className="spin" /> 다시 검사 중...</> : <><FiRefreshCw /> 같은 구성 다시 검사</>}</button>{shareId && <p className="share-ready"><FiShare2 /> 공유 링크가 생성되었습니다. {shareExpiresAt ? `만료 ${new Date(shareExpiresAt).toLocaleString("ko-KR")}` : "무기한"}</p>}</div></aside>
+      <aside className="result-sidebar"><div className="sticky-summary"><div className="summary-header"><div><p className="eyebrow">YOUR BUILD</p><h2>선택한 견적</h2></div><span className="summary-pulse"><FiCpu /></span></div><div className="build-mini-list">{PART_CATEGORIES.map((category: PartCategory) => { const selections = selectionList(build, category) as PartSelection[]; return <div className="build-mini-row" key={category}><span className="mini-category-icon"><CategoryIcon category={category} /></span><div><strong>{CATEGORY_LABELS[category]}</strong><span>{selections.length === 0 ? "미선택" : selections.map((selection: PartSelection) => `${partMap.get(selection.partId)?.name ?? selection.partId}${selection.quantity > 1 ? ` ×${selection.quantity}` : ""}`).join(", ")}</span></div></div>; })}{accessorySelections(build).length > 0 && <div className="build-mini-row"><span className="mini-category-icon"><FiTool /></span><div><strong>주변 부품</strong><span>{accessorySelections(build).length}종 · {accessorySelections(build).reduce((total: number, selection: AccessorySelection) => total + selection.quantity, 0)}개</span></div></div>}</div><div className="summary-divider" /><BuildPriceSummaryPanel snapshot={resultPriceSnapshot} budgetWon={recommendationPreferences.budgetWon} unknownItems={unknownPriceItemsFor(build, partMap, accessoryMap)} onRefresh={onRefreshCatalogItem} refreshingItemId={refreshingPartId} compact testId="result-price-summary" /><button className="button button-primary full-width" onClick={onEdit}><FiEdit3 /> 오류 수정하기</button><button className="button button-light full-width" onClick={onCheck} disabled={checking}>{checking ? <><FiLoader className="spin" /> 다시 검사 중...</> : <><FiRefreshCw /> 같은 구성 다시 검사</>}</button></div></aside>
     </div>
   </div>
 );

@@ -33,13 +33,13 @@ function comparisonRankingMetricText(ranking: SavedBuildComparisonRanking, kind:
 
 function purchaseProgressText(build: SavedBuild | undefined) {
   const summary = savedBuildPurchaseProgressSummaryFor(build?.purchaseProgress);
-  if (summary.status === "unrecorded") return "구매 진행 미기록";
+  if (summary.status === "unrecorded") return "구매 진행 기록 없음";
   return `구매 ${summary.percent}% · 예정 ${summary.stageCounts.planned} · 주문 ${summary.stageCounts.ordered} · 수령 ${summary.stageCounts.received} · 조립 ${summary.stageCounts.installed}`;
 }
 
 function benchmarkEvidenceText(result: BuildComparisonMetricResult) {
   const benchmark = result.benchmarkSnapshot;
-  if (!benchmark) return "벤치마크 저장본 미기록";
+  if (!benchmark) return "벤치마크 저장본 기록 없음";
   return `benchmark ${buildBenchmarkSnapshotStatusText(benchmark.status)} · ${benchmark.presentScoreCount}/${benchmark.expectedScoreCount}개 점수`;
 }
 
@@ -61,8 +61,8 @@ export function SavedBuildComparisonDecisionSummary({ builds, liveChecks, format
       <span className="history-comparison-consensus-icon">{consensus.status === "converged" ? <FiCheckCircle /> : <FiAlertTriangle />}</span>
       <div className="history-comparison-consensus-copy"><strong>{consensus.status === "converged" ? "기준이 한 견적으로 수렴했습니다." : consensus.status === "split" ? "기준에 따라 추천 견적이 달라집니다." : "결정 요약을 계산하는 중입니다."}</strong><p>{consensus.summary}</p>{consensus.status === "split" && <small>안전성·가격·분석·확장성 중 무엇을 더 중요하게 볼지 선택한 뒤, 아래 기준별 순위를 확인하세요.</small>}</div>
       <span className="history-comparison-consensus-count">{consensus.confirmedCriteria} / {consensus.totalCriteria} 기준 확정</span>
-      {consensus.status === "converged" && consensus.winnerId && <div className="history-comparison-consensus-context"><span>공통 후보</span><strong>{consensus.winnerName}</strong><small>{buildById.get(consensus.winnerId)?.decisionNote ? `선택 이유 · ${buildById.get(consensus.winnerId)?.decisionNote}` : "선택 이유 메모 없음"} · {purchaseProgressText(buildById.get(consensus.winnerId))}</small></div>}
-      {consensus.status === "split" && <div className="history-comparison-consensus-context split"><span>기준별 후보</span><strong>{consensus.winnerNames.join(" · ")}</strong><small>각 후보의 선택 이유와 구매 진행은 기준별 카드에서 함께 확인할 수 있습니다.</small></div>}
+      {consensus.status === "converged" && consensus.winnerId && <div className="history-comparison-consensus-context"><span>공통 부품</span><strong>{consensus.winnerName}</strong><small>{buildById.get(consensus.winnerId)?.decisionNote ? `선택 이유 · ${buildById.get(consensus.winnerId)?.decisionNote}` : "선택 이유 메모 없음"} · {purchaseProgressText(buildById.get(consensus.winnerId))}</small></div>}
+      {consensus.status === "split" && <div className="history-comparison-consensus-context split"><span>기준별 부품</span><strong>{consensus.winnerNames.join(" · ")}</strong><small>각 부품의 선택 이유와 구매 진행은 기준별 카드에서 함께 확인할 수 있습니다.</small></div>}
     </div>
     <div className="history-comparison-decision-grid">
       {savedBuildDecisionDefinitions.map((definition) => {
@@ -88,6 +88,6 @@ export function SavedBuildComparisonDecisionSummary({ builds, liveChecks, format
       <p className="history-comparison-ranking-note"><FiInfo /> {partial ? "아직 재검사가 끝나지 않은 견적은 순위에서 잠시 제외하고, 완료될 때마다 다시 계산합니다." : "가격·분석 점수·확장성 지표가 부족한 견적은 해당 기준의 확정 순위에서 제외하고 사유를 남깁니다."}</p>
     </div>
     {entries.length >= 2 && <section className="history-comparison-tradeoff" data-testid="saved-build-comparison-tradeoff" aria-label="저장 견적 버전 비교 우위"><div className="history-comparison-tradeoff-heading"><div><strong>호환·비용·분석·확장성의 비교 우위</strong><small>현재 카탈로그 재검사 결과에서 다른 버전이 모든 기준으로 앞서는 경우만 밀림으로 표시합니다.</small></div><span>{tradeoffs.filter((tradeoff) => tradeoff.frontier).length}개 버전</span></div><div className="history-comparison-tradeoff-list">{tradeoffs.map((tradeoff) => <article className={tradeoff.frontier ? "frontier" : "dominated"} key={tradeoff.id}><div><span>{tradeoff.frontier ? "비교 우위" : "밀림"}</span><strong>{tradeoff.name}</strong></div><small>위험 {tradeoff.riskScore}점 · 총액 {tradeoff.totalPriceWon === undefined ? "확인 필요" : formatWon(tradeoff.totalPriceWon)} · 분석 {tradeoff.analysisScore === undefined ? "확인 필요" : `${tradeoff.analysisScore}점`} · 확장성 {tradeoff.expansionScore === undefined ? "확인 필요" : `${tradeoff.expansionScore}점`}</small><p>{tradeoff.reason}</p></article>)}</div><p className="history-comparison-tradeoff-note"><FiInfo /> 한쪽에만 존재하는 가격·분석·확장성 정보로는 버전을 밀림으로 단정하지 않습니다. 비교 우위는 읽기 전용 비교 기준입니다.</p></section>}
-    <p className="history-comparison-decision-note"><FiInfo /> 호환 우선·가격 우선·분석 점수 우선·확장성 우선은 서로 다른 선택 기준입니다. 가격·분석·확장성 데이터가 부족한 견적은 해당 기준 후보로 확정하지 않습니다.</p>
+    <p className="history-comparison-decision-note"><FiInfo /> 호환 우선·가격 우선·분석 점수 우선·확장성 우선은 서로 다른 선택 기준입니다. 가격·분석·확장성 데이터가 부족한 견적은 해당 기준의 1순위로 정하지 않아요.</p>
   </section>;
 }

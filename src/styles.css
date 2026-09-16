@@ -18988,6 +18988,98 @@ html[data-theme="dark"] .history-compare-toggle {
 }
 
 html[data-theme="dark"] :where(
+  .price-watchlist-search-card,
+  .price-watchlist-tracker-card,
+  .price-watchlist-search-tools,
+  .price-watchlist-search-item,
+  .price-watchlist-decision-overview,
+  .price-watchlist-monitor-controls,
+  .price-watchlist-alert-preferences,
+  .price-watchlist-alerts,
+  .price-watchlist-entry-filters,
+  .price-watchlist-tracked-item,
+  .price-watchlist-saved-link,
+  .price-watchlist-filter-empty,
+  .price-watchlist-empty,
+  .price-watchlist-import-dialog,
+  .price-watchlist-import-threshold,
+  .price-watchlist-import-change,
+  .price-watchlist-import-warning
+) {
+  border-color: var(--line) !important;
+  color: var(--ink) !important;
+  background: #202631 !important;
+}
+
+html[data-theme="dark"] :where(
+  .price-watchlist-search-item strong,
+  .price-watchlist-tracked-copy strong,
+  .price-watchlist-empty strong,
+  .price-watchlist-alert-preferences-heading strong,
+  .price-watchlist-alerts-heading > strong,
+  .price-watchlist-saved-links-heading strong
+) { color: var(--ink) !important; }
+
+html[data-theme="dark"] :where(
+  .price-watchlist-search-item small,
+  .price-watchlist-tracked-copy small,
+  .price-watchlist-section-heading p:not(.eyebrow),
+  .price-watchlist-checked,
+  .price-watchlist-monitor-status,
+  .price-watchlist-alert-preferences-heading small,
+  .price-watchlist-alert span,
+  .price-watchlist-alert small,
+  .price-watchlist-entry-count,
+  .price-watchlist-current span,
+  .price-watchlist-history > small,
+  .price-watchlist-saved-link > small,
+  .price-watchlist-saved-link-meta > small,
+  .price-watchlist-note
+) { color: var(--muted) !important; }
+
+html[data-theme="dark"] :where(
+  .price-watchlist-section-heading .price-watchlist-filter-link-button,
+  .price-watchlist-search-tools input,
+  .price-watchlist-search-tools select,
+  .price-watchlist-server-tools input,
+  .price-watchlist-server-tools select,
+  .price-watchlist-saved-link input,
+  .price-watchlist-entry-filters input,
+  .price-watchlist-entry-filters select,
+  .price-watchlist-tracked-item label input,
+  .price-watchlist-monitor-interval select,
+  .price-watchlist-history-window select,
+  .price-watchlist-alert-preferences-controls select
+) {
+  border-color: #354152 !important;
+  color: var(--ink) !important;
+  background: #171c24 !important;
+}
+
+html[data-theme="dark"] :where(
+  .price-watchlist-decision-overview button,
+  .price-watchlist-current .price-watchlist-decision,
+  .price-watchlist-alert-summary
+) { border-color: var(--line) !important; background: var(--teal-soft) !important; color: var(--teal-deep) !important; }
+
+html[data-theme="dark"] :where(
+  .price-watchlist-decision-overview button.wait,
+  .price-watchlist-decision-overview button.observe,
+  .price-watchlist-current .price-watchlist-decision.wait,
+  .price-watchlist-current .price-watchlist-decision.observe
+) { color: var(--yellow) !important; background: var(--yellow-soft) !important; }
+
+html[data-theme="dark"] :where(
+  .price-watchlist-decision-overview button.error,
+  .price-watchlist-current .price-watchlist-decision.unavailable,
+  .price-watchlist-current .price-watchlist-decision.error
+) { color: var(--red) !important; background: var(--red-soft) !important; }
+
+html[data-theme="dark"] .price-watchlist-alerts { border-color: #5a4b29 !important; background: var(--yellow-soft) !important; }
+
+html[data-theme="dark"] .price-watchlist-saved-link.active { border-color: #3f6da8 !important; box-shadow: 0 0 0 2px rgba(91, 157, 247, .16); }
+
+html[data-theme="dark"] :where(
   .generator-form-heading .generator-condition-link-button,
   .generator-brief-icon,
   .generator-brief-input textarea,

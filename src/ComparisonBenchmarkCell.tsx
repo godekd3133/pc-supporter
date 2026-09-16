@@ -14,8 +14,8 @@ export function ComparisonBenchmarkCell({ evidence }: { evidence?: BenchmarkEvid
   return <span className={`comparison-benchmark-cell ${evidence.status}`} data-testid="comparison-benchmark-cell">
     <strong>{benchmarkStatusLabel(evidence.status)} · {evidence.presentCount}/{evidence.totalCount}개</strong>
     <span className="comparison-benchmark-cell-scores">{evidence.rows.map((row) => `${row.label} ${row.value === undefined ? "확인 필요" : `${row.value.toLocaleString("ko-KR")}${row.unit}`}`).join(" · ")}</span>
-    <small>출처 · {evidence.provenance ? `${BENCHMARK_SOURCE_KIND_LABELS[evidence.provenance.sourceKind]} · ${evidence.provenance.sourceNote}` : "출처 미등록"}</small>
+    <small>출처 · {evidence.provenance ? `${BENCHMARK_SOURCE_KIND_LABELS[evidence.provenance.sourceKind]} · ${evidence.provenance.sourceNote}` : "출처 없음"}</small>
     <small>점검 · {benchmarkSourceCheckLabelFor(evidence.sourceCheck)} · 자료 {benchmarkFreshnessLabelFor(evidence.benchmarkFreshness)}</small>
-    {sourceUrl && <a href={sourceUrl} target="_blank" rel="noreferrer">원문 <FiExternalLink /></a>}
+    {sourceUrl && <a href={sourceUrl} target="_blank" rel="noreferrer">점수 출처 <FiExternalLink /></a>}
   </span>;
 }

@@ -11,7 +11,7 @@ export function SavedBuildPurchasePriceHistoryComparison({ builds }: { builds: S
       const label = row.summary.status === "multi-sample" ? "2회 이상 확인" : row.summary.status === "recorded" ? "가격 이력 있음" : "가격 이력 없음";
       return <article className={`saved-build-purchase-price-history-comparison-card ${row.summary.status}`} data-testid={`saved-build-purchase-price-history-comparison-${row.id}`} key={row.id}>
         <div className="saved-build-purchase-price-history-comparison-card-heading"><strong>{row.name}</strong><span>{label}</span></div>
-        <div className="saved-build-purchase-price-history-comparison-count"><strong>{row.summary.status === "unrecorded" ? "미기록" : `${row.summary.recordedRowCount}개 행`}</strong><small>{row.summary.status === "unrecorded" ? "가격 확인 기록이 없습니다." : `${row.summary.sampleCount}개 샘플 · 최소 ${row.summary.minSampleCount}회 · 최대 ${row.summary.maxSampleCount}회`}</small></div>
+        <div className="saved-build-purchase-price-history-comparison-count"><strong>{row.summary.status === "unrecorded" ? "기록 없음" : `${row.summary.recordedRowCount}개 행`}</strong><small>{row.summary.status === "unrecorded" ? "가격 확인 기록이 없습니다." : `${row.summary.sampleCount}개 샘플 · 최소 ${row.summary.minSampleCount}회 · 최대 ${row.summary.maxSampleCount}회`}</small></div>
         <small className="saved-build-purchase-price-history-comparison-meta">{row.summary.revision !== undefined ? `revision ${row.summary.revision}` : "revision 없음"}{row.summary.historyCount > 0 ? ` · 이전 이력 ${row.summary.historyCount}개` : ""}{row.summary.updatedAt ? ` · ${new Date(row.summary.updatedAt).toLocaleString("ko-KR", { dateStyle: "short", timeStyle: "short" })}` : ""}</small>
       </article>;
     })}</div>

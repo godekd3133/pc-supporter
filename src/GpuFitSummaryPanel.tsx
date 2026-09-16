@@ -29,7 +29,7 @@ function requirementText(requirements: PciePowerRequirement[]) {
 
 function optionText(options: PciePowerRequirement[][], requirementsKnown: boolean, adapterOptionIndices: number[]) {
   if (!requirementsKnown) return "GPU 보조전원 정보 확인 필요";
-  return options.length > 0 ? options.map((option, index) => `${adapterOptionIndices.includes(index) ? "어댑터" : "원문"} 경로 ${index + 1}: ${requirementText(option)}`).join(" 또는 ") : "GPU 보조전원 요구 없음";
+  return options.length > 0 ? options.map((option, index) => `${adapterOptionIndices.includes(index) ? "어댑터" : "제품 페이지"} 경로 ${index + 1}: ${requirementText(option)}`).join(" 또는 ") : "GPU 보조전원 요구 없음";
 }
 
 function connectorText(connectors: Partial<Record<PciePowerConnectorKind, number>> | undefined) {
@@ -41,7 +41,7 @@ function connectorText(connectors: Partial<Record<PciePowerConnectorKind, number
 }
 
 function optionFitText(option: PciePowerOptionFit, index: number, isAdapter: boolean) {
-  const path = isAdapter ? "어댑터 경로" : "원문 경로";
+  const path = isAdapter ? "어댑터 경로" : "제조사 표기 경로";
   if (option.status === "compatible") return `${path} ${index + 1} · 충족`;
   if (option.status === "blocker") return `${path} ${index + 1} · 부족 ${requirementText(option.missing)}`;
   const unknown = option.unknown.length > 0 ? ` · 미확인 ${requirementText(option.unknown)}` : "";
@@ -86,11 +86,11 @@ function EvidenceSourceList({ sources }: { sources: PhysicalEvidenceSource[] | u
     const url = safeHttpsUrl(source.url);
     return [{ ...source, note, ...(url ? { url } : {}) }];
   });
-  return <div className="gpu-fit-evidence-sources" aria-label="장착 정보 출처"><strong>장착 정보 출처</strong>{safeSources.length === 0 ? <small>등록된 출처 메모 없음 · 제조사 매뉴얼 확인 필요</small> : safeSources.map((source) => <small key={`${source.category}-${source.note}-${source.url ?? ""}`}><b>{evidenceSourceIdentity(source)}</b> {source.note}{source.updatedAt ? ` · 확인 갱신 ${new Date(source.updatedAt).toLocaleDateString("ko-KR")}` : ""}{source.url && <a href={source.url} target="_blank" rel="noreferrer">원문 <FiExternalLink /></a>}</small>)}</div>;
+  return <div className="gpu-fit-evidence-sources" aria-label="장착 정보 출처"><strong>장착 정보 출처</strong>{safeSources.length === 0 ? <small>등록된 출처 메모 없음 · 제조사 매뉴얼 확인 필요</small> : safeSources.map((source) => <small key={`${source.category}-${source.note}-${source.url ?? ""}`}><b>{evidenceSourceIdentity(source)}</b> {source.note}{source.updatedAt ? ` · 확인 갱신 ${new Date(source.updatedAt).toLocaleDateString("ko-KR")}` : ""}{source.url && <a href={source.url} target="_blank" rel="noreferrer">제조사 페이지 <FiExternalLink /></a>}</small>)}</div>;
 }
 
 function mmDetail(actualMm: number | undefined, limitMm: number | undefined, clearanceMm: number | undefined, actualLabel: string, limitLabel: string) {
-  if (actualMm === undefined || limitMm === undefined) return `${actualLabel} 또는 ${limitLabel} 원문 확인 필요`;
+  if (actualMm === undefined || limitMm === undefined) return `${actualLabel} 또는 ${limitLabel} 페이지 확인 필요`;
   if (clearanceMm === undefined) return `${actualLabel} ${actualMm}mm · ${limitLabel} ${limitMm}mm · 여유 계산 필요`;
   return `${actualLabel} ${actualMm}mm · ${limitLabel} ${limitMm}mm · ${clearanceMm >= 0 ? `${clearanceMm}mm 여유` : `${Math.abs(clearanceMm)}mm 초과`}`;
 }
@@ -116,12 +116,12 @@ function actionText(fit: GpuFitSummary, computerCase: Part | undefined, psu: Par
   const purchaseEvidence = gpuPurchaseEvidenceFor(fit);
   const actions: string[] = [];
   if (fit.length.status === "incompatible") actions.push(`GPU 길이가 케이스 한도를 넘습니다. ${fit.length.limitMm !== undefined ? `${fit.length.limitMm}mm 이하 GPU` : "더 여유 있는 케이스"}를 선택하세요.`);
-  else if (fit.length.status === "needs_review") actions.push("GPU와 케이스의 장착 길이 원문을 함께 확인하세요.");
-  if (fit.thickness.status === "needs_review") actions.push(`${fit.thickness.warningThresholdMm}mm 기준을 넘거나 두께 원문이 부족합니다. 메인보드 인접 슬롯·케이스 측판 간섭을 확인하세요.`);
+  else if (fit.length.status === "needs_review") actions.push("GPU와 케이스의 장착 길이 정보를 함께 확인해 주세요.");
+  if (fit.thickness.status === "needs_review") actions.push(`${fit.thickness.warningThresholdMm}mm 기준을 넘거나 두께 정보가 부족합니다. 메인보드 인접 슬롯·케이스 측판 간섭을 확인하세요.`);
   if (fit.power.status === "incompatible") actions.push(`PSU 정격이 권장 기준보다 낮습니다. ${fit.power.recommendedPsuW !== undefined ? `${fit.power.recommendedPsuW}W 이상 PSU` : "더 큰 PSU"}를 비교하세요.`);
   else if (fit.power.status === "needs_review") actions.push(`${psu ? "GPU·PSU" : "PSU"} 전력 스펙을 확인해야 합니다.`);
   if (fit.connector.status === "incompatible") actions.push("GPU의 보조전원 선택지를 충족하는 PSU 커넥터를 선택하세요.");
-  else if (fit.connector.status === "needs_review") actions.push("PSU 커넥터 수량과 GPU 원문에 명시된 연결 경로를 확인하세요.");
+  else if (fit.connector.status === "needs_review") actions.push("PSU 커넥터 수량과 GPU 제품 페이지에 명시된 연결 경로를 확인해 주세요.");
   if (purchaseEvidence.pcieCableTopology === "needs_review") actions.push("커넥터 수량과 별도로 PSU PCIe 케이블 런 수·분배 구조가 GPU 연결 요구를 충족하는지 제조사 표에서 확인하세요.");
   if (purchaseEvidence.physical === "incompatible") actions.push("GPU 전원 케이블 요구 여유보다 케이스 측면 공간이 작습니다. 더 여유 있는 케이스 또는 케이블 조건이 맞는 GPU를 비교하세요.");
   else if (purchaseEvidence.physical === "needs_review") actions.push("GPU 물리 슬롯·케이블 굽힘 여유와 케이스 측면 공간을 제조사 매뉴얼에서 확인하세요.");
@@ -133,8 +133,8 @@ export function GpuFitSummaryPanel({ fit, gpu, computerCase, psu }: { fit: GpuFi
   const purchaseEvidence = gpuPurchaseEvidenceFor(fit);
   const displayStatus: GpuFitStatus = fit.status === "compatible" && purchaseEvidence.status !== "compatible" ? purchaseEvidence.status : fit.status;
   const connectorStatusText = fit.connector.matchedOptionIndex !== undefined
-    ? `${fit.connector.adapterOptionIndices.includes(fit.connector.matchedOptionIndex) ? "어댑터" : "원문"} 경로 ${fit.connector.matchedOptionIndex + 1} 충족`
-    : fit.connector.status === "incompatible" ? "확인된 커넥터로 충족 경로 없음" : fit.connector.status === "needs_review" ? "충족 경로를 확정하지 못함" : "보조전원 요구 없음";
+    ? `${fit.connector.adapterOptionIndices.includes(fit.connector.matchedOptionIndex) ? "어댑터" : "제품 페이지"} 경로 ${fit.connector.matchedOptionIndex + 1} 충족`
+    : fit.connector.status === "incompatible" ? "확인된 커넥터로 충족 경로 없음" : fit.connector.status === "needs_review" ? "충족 경로를 확인하지 못함" : "보조전원 요구 없음";
   const thicknessValue = fit.thickness.actualMm === undefined ? "확인 필요" : `${fit.thickness.actualMm}mm`;
   const powerValue = fit.power.psuWattageW === undefined ? "확인 필요" : `${fit.power.psuWattageW}W PSU`;
   const connectorValue = !fit.connector.requirementsKnown ? "요구 정보 확인 필요" : fit.connector.options.length === 0 ? "보조전원 없음" : fit.connector.matchedOptionIndex !== undefined ? `경로 ${fit.connector.matchedOptionIndex + 1}` : "경로 확인 필요";
@@ -143,7 +143,7 @@ export function GpuFitSummaryPanel({ fit, gpu, computerCase, psu }: { fit: GpuFi
     <div className="gpu-fit-summary-context"><span><FiMonitor /> GPU · {gpu.name}</span><span><FiBox /> 케이스 · {computerCase?.name ?? "미선택"}</span><span><FiZap /> PSU · {psu?.name ?? "미선택"}</span></div>
     <div className="gpu-fit-metrics">
       <FitMetric icon={FiBox} label="케이스 장착 길이" value={fit.length.actualMm !== undefined && fit.length.limitMm !== undefined ? `${fit.length.actualMm} / ${fit.length.limitMm}mm` : "확인 필요"} detail={mmDetail(fit.length.actualMm, fit.length.limitMm, fit.length.clearanceMm, "GPU", "케이스 허용")} status={fit.length.status} />
-      <FitMetric icon={FiLayers} label="두께·슬롯 간섭" value={thicknessValue} detail={fit.thickness.actualMm === undefined ? "GPU 두께 원문 확인 필요" : `${fit.thickness.warningThresholdMm}mm 이상이면 인접 슬롯·측판을 확인합니다.`} status={fit.thickness.status} />
+      <FitMetric icon={FiLayers} label="두께·슬롯 간섭" value={thicknessValue} detail={fit.thickness.actualMm === undefined ? "GPU 두께 페이지 확인 필요" : `${fit.thickness.warningThresholdMm}mm 이상이면 인접 슬롯·측판을 확인합니다.`} status={fit.thickness.status} />
       <FitMetric icon={FiZap} label="PSU 전력 여유" value={powerValue} detail={powerDetail(fit.power)} status={fit.power.status} />
       <FitMetric icon={FiMonitor} label="보조전원 연결" value={connectorValue} detail={connectorStatusText} status={fit.connector.status} />
       {purchaseEvidence.physical !== "not_applicable" && <FitMetric icon={FiLayers} label="물리 슬롯·케이블" value={fit.physical.gpuSlotOccupancy === undefined ? "확인 필요" : `${fit.physical.gpuSlotOccupancy} 슬롯`} detail={physicalEvidenceDetail(fit.physical, purchaseEvidence.physical)} status={purchaseEvidence.physical} />}

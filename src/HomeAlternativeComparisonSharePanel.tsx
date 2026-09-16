@@ -84,7 +84,7 @@ export function HomeAlternativeComparisonSharePanel({ entries, onCopy, onRemove,
       if (!entry.ownerToken) onToast("이 링크에는 취소용 owner token이 없어 서버에서 취소할 수 없습니다. 브라우저 이력에서만 제거할 수 있습니다.");
       return;
     }
-    if (!window.confirm("이 후보 비교 공유 링크를 취소할까요? 이미 전달된 링크도 더 이상 열리지 않습니다.")) return;
+    if (!window.confirm("이 부품 비교 공유 링크를 취소할까요? 이미 전달된 링크도 더 이상 열리지 않습니다.")) return;
     const requestVersion = ++mutationRequestVersionRef.current;
     const requestContextKey = mutationContextKey;
     const isCurrent = () => mountedRef.current && mutationRequestVersionRef.current === requestVersion && mutationContextKeyRef.current === requestContextKey;
@@ -97,9 +97,9 @@ export function HomeAlternativeComparisonSharePanel({ entries, onCopy, onRemove,
     }
   }
 
-  return <section className="home-alternative-comparison-shares" aria-label="최근 후보 비교 공유" data-testid="home-alternative-comparison-shares">
-    <div className="home-alternative-comparison-shares-heading"><div><p className="eyebrow">RECENT SHARES</p><h2><FiShare2 /> 최근 후보 비교 공유</h2><p>이 브라우저에서 만든 후보 비교 저장본을 다시 열거나 링크를 복사할 수 있습니다.</p></div><div className="home-alternative-comparison-shares-heading-actions"><span>{entries.length}개 보관</span><button className="text-button home-alternative-comparison-share-refresh" type="button" onClick={() => setRefreshNonce((current) => current + 1)} disabled={refreshing || visibleEntries.length === 0}><FiRefreshCw className={refreshing ? "spin" : undefined} /> {refreshing ? "상태 확인 중" : "서버 상태 확인"}</button></div></div>
-    {(entries.length > 5 || normalizedSearchQuery) && <div className="home-alternative-comparison-share-tools"><label><FiSearch /><span>공유 이력 검색</span><input type="search" aria-label="후보 비교 공유 이력 검색" placeholder="공유 이름·범주·현재 부품·사양·가격·ID 검색" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} /></label>{entries.length > 5 && <button className="text-button home-alternative-comparison-share-history-toggle" type="button" onClick={() => setShowAll((current) => !current)}>{showAll ? "최근 5개만 보기" : `전체 이력 보기 (${entries.length})`}</button>}<small>{normalizedSearchQuery ? `검색 결과 ${matchingEntries.length}개` : showingAll ? `전체 ${matchingEntries.length}개 표시` : `최근 ${Math.min(5, matchingEntries.length)}개 표시`}</small></div>}
+  return <section className="home-alternative-comparison-shares" aria-label="최근 부품 비교 공유" data-testid="home-alternative-comparison-shares">
+    <div className="home-alternative-comparison-shares-heading"><div><p className="eyebrow">RECENT SHARES</p><h2><FiShare2 /> 최근 부품 비교 공유</h2><p>이 브라우저에서 만든 부품 비교 저장본을 다시 열거나 링크를 복사할 수 있습니다.</p></div><div className="home-alternative-comparison-shares-heading-actions"><span>{entries.length}개 보관</span><button className="text-button home-alternative-comparison-share-refresh" type="button" onClick={() => setRefreshNonce((current) => current + 1)} disabled={refreshing || visibleEntries.length === 0}><FiRefreshCw className={refreshing ? "spin" : undefined} /> {refreshing ? "상태 확인 중" : "서버 상태 확인"}</button></div></div>
+    {(entries.length > 5 || normalizedSearchQuery) && <div className="home-alternative-comparison-share-tools"><label><FiSearch /><span>공유 이력 검색</span><input type="search" aria-label="부품 비교 공유 이력 검색" placeholder="공유 이름·범주·현재 부품·사양·가격·ID 검색" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} /></label>{entries.length > 5 && <button className="text-button home-alternative-comparison-share-history-toggle" type="button" onClick={() => setShowAll((current) => !current)}>{showAll ? "최근 5개만 보기" : `전체 이력 보기 (${entries.length})`}</button>}<small>{normalizedSearchQuery ? `검색 결과 ${matchingEntries.length}개` : showingAll ? `전체 ${matchingEntries.length}개 표시` : `최근 ${Math.min(5, matchingEntries.length)}개 표시`}</small></div>}
     {visibleEntries.length === 0 ? <div className="home-alternative-comparison-share-empty"><FiSearch /><span>검색 조건에 맞는 공유 이력이 없습니다.</span></div> : <div className="home-alternative-comparison-share-list">{visibleEntries.map((entry) => {
       const localExpired = alternativeComparisonLocalShareExpired(entry);
       const serverStatus = serverHealthById[entry.id]?.status ?? "checking";

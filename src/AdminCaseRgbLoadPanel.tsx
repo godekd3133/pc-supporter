@@ -176,7 +176,7 @@ export function CaseRgbLoadOverridePanel({ onToast, onMetaRefresh }: { onToast: 
   }
 
   async function removeOverride(partId: string) {
-    if (!window.confirm("이 케이스의 RGB 부하 보강을 삭제할까요? 원문에서 파싱된 값이 있으면 원문 값을 다시 사용합니다.")) return;
+    if (!window.confirm("이 케이스의 RGB 부하 보강을 삭제할까요? 페이지에서 파싱된 값이 있으면 페이지 값을 다시 사용합니다.")) return;
     const requestVersion = ++mutationRequestVersionRef.current;
     const isCurrent = () => mountedRef.current && mutationRequestVersionRef.current === requestVersion;
     setBusy(true);
@@ -276,7 +276,7 @@ export function CaseRgbLoadOverridePanel({ onToast, onMetaRefresh }: { onToast: 
   }, [listQuery, overrides]);
 
   return <section className="admin-card case-rgb-load-card" data-testid="admin-case-rgb-load">
-    <div className="admin-card-heading"><div><p className="eyebrow">RGB POWER EVIDENCE</p><h3>케이스 RGB 부하 확인</h3><p className="admin-card-description">케이스 원문에 없는 RGB 장치당 소비전력·소비전류를 제조사 정보로 보강합니다. 저장값은 원본 카탈로그를 덮어쓰지 않고 호환성 검사에만 런타임 적용됩니다.</p></div><FiShield /></div>
+    <div className="admin-card-heading"><div><p className="eyebrow">RGB POWER EVIDENCE</p><h3>케이스 RGB 부하 확인</h3><p className="admin-card-description">케이스 페이지에 없는 RGB 장치당 소비전력·소비전류를 제조사 정보로 보강합니다. 저장값은 원본 카탈로그를 덮어쓰지 않고 호환성 검사에만 런타임 적용됩니다.</p></div><FiShield /></div>
     {error && <div className="case-rgb-load-error" role="alert"><FiXCircle /> {error}</div>}
     <div className="case-rgb-load-coverage"><div><strong>{coverage?.totalRgbCases.toLocaleString("ko-KR") ?? "-"}</strong><span>RGB 케이스</span></div><div><strong>{coverage?.registeredCount.toLocaleString("ko-KR") ?? "-"}</strong><span>부하 보강 등록</span></div><div><strong>{coverage?.missingCount.toLocaleString("ko-KR") ?? "-"}</strong><span>정보 미등록</span></div><div><strong>{coverage ? `${coverage.coveragePercent}%` : "-"}</strong><span>coverage</span></div></div>
     <div className="case-rgb-load-grid">
@@ -301,7 +301,7 @@ export function CaseRgbLoadOverridePanel({ onToast, onMetaRefresh }: { onToast: 
       </div>
     </div>
     <div className="case-rgb-load-list-heading"><strong>저장된 RGB 부하 정보</strong><span>{visibleOverrides.length} / {overrides.length}개</span><input aria-label="저장된 RGB 부하 정보 검색" value={listQuery} onChange={(event) => setListQuery(event.target.value)} placeholder="등록 목록 검색" disabled={busy} /></div>
-    {loading ? <p className="case-rgb-load-state"><FiLoader className="spin" /> 저장 목록을 불러오는 중...</p> : visibleOverrides.length === 0 ? <p className="case-rgb-load-state"><FiDatabase /> 저장된 RGB 부하 정보가 없습니다.</p> : <div className="case-rgb-load-list">{visibleOverrides.map((item) => <article key={item.partId}><div><strong>{item.partName ?? item.partId}</strong><small>{loadText(item)} · {new Date(item.updatedAt).toLocaleDateString("ko-KR")}</small><small>{item.sourceNote}</small></div><div>{item.sourceUrl && <a href={item.sourceUrl} target="_blank" rel="noreferrer" aria-label={`${item.partName ?? item.partId} RGB 부하 정보 원문`}><FiExternalLink /></a>}<button className="text-button danger-text-button" type="button" onClick={() => void removeOverride(item.partId)} disabled={busy}><FiTrash2 /> 삭제</button></div></article>)}</div>}
-    <p className="case-rgb-load-note"><FiInfo /> 보강값은 원본 카탈로그와 분리됩니다. 삭제하면 원문에서 자동 파싱된 값만 다시 사용하며, 원문에도 값이 없으면 연결 계획은 확인 필요로 돌아갑니다.</p>
+    {loading ? <p className="case-rgb-load-state"><FiLoader className="spin" /> 저장 목록을 불러오는 중...</p> : visibleOverrides.length === 0 ? <p className="case-rgb-load-state"><FiDatabase /> 저장된 RGB 부하 정보가 없습니다.</p> : <div className="case-rgb-load-list">{visibleOverrides.map((item) => <article key={item.partId}><div><strong>{item.partName ?? item.partId}</strong><small>{loadText(item)} · {new Date(item.updatedAt).toLocaleDateString("ko-KR")}</small><small>{item.sourceNote}</small></div><div>{item.sourceUrl && <a href={item.sourceUrl} target="_blank" rel="noreferrer" aria-label={`${item.partName ?? item.partId} RGB 부하 정보 페이지`}><FiExternalLink /></a>}<button className="text-button danger-text-button" type="button" onClick={() => void removeOverride(item.partId)} disabled={busy}><FiTrash2 /> 삭제</button></div></article>)}</div>}
+    <p className="case-rgb-load-note"><FiInfo /> 보강값은 원본 카탈로그와 분리됩니다. 삭제하면 페이지에서 자동 파싱된 값만 다시 사용하며, 페이지에도 값이 없으면 연결 계획은 확인 필요로 돌아갑니다.</p>
   </section>;
 }

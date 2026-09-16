@@ -34,7 +34,7 @@ function expansionScenarioText(currentResult: CompatibilityResult, nextResult: C
 
 export function UpgradeBundleScenarioPreviewPanel({ state, currentResult, onApply, onRetry, onClose, formatWon }: { state: UpgradeBundleScenarioPreviewState; currentResult: CompatibilityResult; onApply: () => void; onRetry: () => void; onClose: () => void; formatWon: (value: number | undefined) => string }) {
   if (state.status === "loading") {
-    return <section className="upgrade-bundle-scenario-preview loading" aria-label="업그레이드 조합 미리 확인" data-testid="upgrade-bundle-scenario-preview" role="status"><div className="upgrade-bundle-scenario-heading"><div><p className="eyebrow">BUNDLE WHAT-IF CHECK</p><h2>업그레이드 조합 확인 중...</h2><p>현재 견적을 바꾸지 않고 {state.bundle.changes.length}개 부품 조합을 전체 검사 규칙에 적용합니다.</p></div><FiLoader className="spin" /></div><div className="upgrade-bundle-scenario-loading"><FiActivity /> 조합 전체의 호환성·가격·잔여 항목을 계산하는 중입니다.</div></section>;
+    return <section className="upgrade-bundle-scenario-preview loading" aria-label="업그레이드 조합 미리 확인" data-testid="upgrade-bundle-scenario-preview" role="status"><div className="upgrade-bundle-scenario-heading"><div><p className="eyebrow">BUNDLE WHAT-IF CHECK</p><h2>업그레이드 조합 확인 중...</h2><p>현재 견적을 바꾸지 않고 {state.bundle.changes.length}개 부품 조합을 전체 검사 규칙에 적용합니다.</p></div><FiLoader className="spin" /></div><div className="upgrade-bundle-scenario-loading"><FiActivity /> 조합 전체의 호환성·가격·남은 항목을 계산하는 중입니다.</div></section>;
   }
   if (state.status === "error" || !state.result) {
     return <section className="upgrade-bundle-scenario-preview error" aria-label="업그레이드 조합 미리 확인" data-testid="upgrade-bundle-scenario-preview" role="alert"><div className="upgrade-bundle-scenario-heading"><div><p className="eyebrow">BUNDLE WHAT-IF CHECK</p><h2>업그레이드 조합 확인에 실패했습니다.</h2><p>{state.error ?? "업그레이드 조합을 전체 견적에 적용하지 못했습니다."}</p></div><FiXCircle /></div><div className="upgrade-bundle-scenario-actions"><button className="button button-light" type="button" onClick={onRetry}><FiActivity /> 다시 확인</button><button className="button button-light" type="button" onClick={onClose}>닫기</button></div></section>;
@@ -47,7 +47,7 @@ export function UpgradeBundleScenarioPreviewPanel({ state, currentResult, onAppl
   const unsafe = comparison.direction === "worsened";
   const outcomeNote = comparison.direction === "improved"
     ? comparison.unknownDelta > 0
-      ? `전체 위험은 줄었지만 확인 필요 항목이 ${comparison.unknownDelta}개 늘었습니다. 해당 원문을 확인해 주세요.`
+      ? `전체 위험은 줄었지만 확인 필요 항목이 ${comparison.unknownDelta}개 늘었습니다. 해당 부품의 실제 정보를 확인해 주세요.`
       : comparison.warningDelta > 0
         ? `차단 위험은 줄었지만 주의 항목이 ${comparison.warningDelta}개 늘었습니다. 성능·안정성 조건을 확인해 주세요.`
         : "조합 전체를 적용한 결과 현재 구성보다 위험이 줄었습니다."

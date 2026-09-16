@@ -102,7 +102,7 @@ export function AdminSeedCollectionQueuePanel({ refreshKey, onFocusMapping, onSt
     setError(null);
     void api<CatalogSeedCollectionQueue>("/api/admin/catalog/seed-collection-queue")
       .then((next) => { if (!cancelled) setQueue(next); })
-      .catch((reason: unknown) => { if (!cancelled) setError(reason instanceof Error ? reason.message : "원문 수집 작업 목록을 불러오지 못했습니다."); })
+      .catch((reason: unknown) => { if (!cancelled) setError(reason instanceof Error ? reason.message : "상품 페이지 수집 작업 목록을 불러오지 못했습니다."); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [refreshKey, reloadKey]);
@@ -115,22 +115,22 @@ export function AdminSeedCollectionQueuePanel({ refreshKey, onFocusMapping, onSt
       .slice(0, 12);
   }, [category, filter, queue]);
 
-  return <section className="admin-seed-collection-queue" data-testid="admin-seed-collection-queue" aria-label="starter 원문 수집 작업 목록" aria-busy={loading}>
+  return <section className="admin-seed-collection-queue" data-testid="admin-seed-collection-queue" aria-label="기본 목록 정보 수집 작업 목록" aria-busy={loading}>
     <div className="admin-seed-collection-queue-heading">
       <div>
         <p className="eyebrow">SOURCE COLLECTION PLAN</p>
-        <h3>원문 수집 작업 목록</h3>
-        <p>자동 후보가 없는 starter를 범주 수집·검색·재확인 작업으로 나눠 다음 수집 범위를 결정합니다. 목록 계산은 읽기 전용이며, 빠른 수집은 확인 후 해당 범주의 기존 수집기를 실행합니다.</p>
+        <h3>상품 페이지 수집 작업 목록</h3>
+        <p>자동 부품이 없는 기본 목록을 범주 수집·검색·재확인 작업으로 나눠 다음 수집 범위를 결정합니다. 목록 계산은 읽기 전용이며, 빠른 수집은 확인 후 해당 범주의 기존 수집기를 실행합니다.</p>
       </div>
       <div className="admin-seed-collection-queue-actions">
         <button className="button button-light button-small" type="button" onClick={() => { if (queue) downloadQueueCsv(queue); }} disabled={!queue || loading}><FiDownload /> CSV</button>
         <button className="button button-light button-small" type="button" onClick={() => { if (queue) downloadQueueJson(queue); }} disabled={!queue || loading}><FiDownload /> JSON</button>
-        <button className="icon-button" type="button" aria-label="원문 수집 작업 목록 새로고침" title="다시 계산" onClick={() => setReloadKey((current) => current + 1)} disabled={loading}><FiRefreshCw className={loading ? "spin" : undefined} /></button>
+        <button className="icon-button" type="button" aria-label="상품 페이지 수집 작업 목록 새로고침" title="다시 계산" onClick={() => setReloadKey((current) => current + 1)} disabled={loading}><FiRefreshCw className={loading ? "spin" : undefined} /></button>
       </div>
     </div>
     {loading ? <div className="admin-seed-collection-queue-state" role="status"><FiLoader className="spin" /> 수집 작업 범위를 계산하는 중...</div> : error ? <div className="admin-seed-collection-queue-state error" role="alert"><FiInfo /> {error}</div> : queue && <>
       <div className="admin-seed-collection-queue-summary" data-testid="admin-seed-collection-queue-summary">
-        <div><span>작업 대상</span><strong>{numberText(queue.summary.queueCount)}개</strong><small>자동 후보 없음·재확인</small></div>
+        <div><span>작업 대상</span><strong>{numberText(queue.summary.queueCount)}개</strong><small>자동 부품 없음·재확인</small></div>
         <div className="high"><span>높은 우선순위</span><strong>{numberText(queue.summary.highPriorityCount)}개</strong><small>CPU·GPU·핵심 전원 우선</small></div>
         <div><span>범주 수집 필요</span><strong>{numberText(queue.summary.collectCategoryCount)}개</strong><small>해당 범주 live 없음</small></div>
         <div className="review"><span>검색 후 수집</span><strong>{numberText(queue.summary.searchAndCollectCount)}개</strong><small>현재 범주에는 live 존재</small></div>
@@ -138,12 +138,12 @@ export function AdminSeedCollectionQueuePanel({ refreshKey, onFocusMapping, onSt
       </div>
       {queue.categoryRows.length > 0 && <div className="admin-seed-collection-queue-categories" aria-label="범주별 수집 목록"><strong>범주별 작업량</strong>{queue.categoryRows.map((row) => <div key={row.category}><span>{CATEGORY_LABELS[row.category]}</span><b>{numberText(row.queueCount)}개</b><small>수집 {row.collectCategoryCount} · 검색 {row.searchAndCollectCount} · 재확인 {row.recheckMappingCount}</small></div>)}</div>}
       <div className="admin-seed-collection-queue-toolbar">
-        <div className="admin-seed-collection-queue-filters" role="group" aria-label="원문 수집 목록 우선순위 필터"><button type="button" className={filter === "all" ? "active" : ""} onClick={() => setFilter("all")}>전체 {numberText(queue.summary.queueCount)}</button><button type="button" className={filter === "high" ? "active" : ""} onClick={() => setFilter("high")}>높은 우선순위 {numberText(queue.summary.highPriorityCount)}</button></div>
+        <div className="admin-seed-collection-queue-filters" role="group" aria-label="상품 페이지 수집 목록 우선순위 필터"><button type="button" className={filter === "all" ? "active" : ""} onClick={() => setFilter("all")}>전체 {numberText(queue.summary.queueCount)}</button><button type="button" className={filter === "high" ? "active" : ""} onClick={() => setFilter("high")}>높은 우선순위 {numberText(queue.summary.highPriorityCount)}</button></div>
         <label><span>범주</span><select value={category} onChange={(event) => setCategory(event.target.value as PartCategory | "all")}><option value="all">전체 범주</option>{queue.categoryRows.map((row) => <option key={row.category} value={row.category}>{CATEGORY_LABELS[row.category]}</option>)}</select></label>
       </div>
       {visibleItems.length === 0 ? <p className="admin-seed-collection-queue-empty">현재 조건에 해당하는 수집 작업이 없습니다.</p> : <div className="admin-seed-collection-queue-list">{visibleItems.map((item) => <QueueItem key={item.starter.id} item={item} onFocusMapping={onFocusMapping} onStartCategory={onStartCategory} categoryCrawlRunning={categoryCrawlRunning} />)}</div>}
       {queue.items.length > visibleItems.length && <p className="admin-seed-collection-queue-more">현재 화면에는 최대 12개만 표시합니다. CSV·JSON 전체 작업 패키지에는 {numberText(queue.items.length)}개가 포함됩니다.</p>}
-      <p className="admin-seed-collection-queue-note"><FiInfo /> 작업 목록 fingerprint <code>{queue.queueFingerprint}</code> · 범주 빠른 수집은 최대 16개 상품을 확인하는 샘플 실행이며, 화면에서 시작한 수집은 완료 후 매핑 후보와 목록을 자동으로 다시 계산합니다. 외부 CLI 실행 후에는 `다시 계산`을 눌러 주세요. 수집 전 상품을 이 화면에서 임의로 생성하지 않습니다.</p>
+      <p className="admin-seed-collection-queue-note"><FiInfo /> 작업 목록 fingerprint <code>{queue.queueFingerprint}</code> · 범주 빠른 수집은 최대 16개 상품을 확인하는 샘플 실행이며, 화면에서 시작한 수집은 완료 후 매핑 부품과 목록을 자동으로 다시 계산합니다. 외부 CLI 실행 후에는 `다시 계산`을 눌러 주세요. 수집 전 상품을 이 화면에서 임의로 생성하지 않습니다.</p>
     </>}
   </section>;
 }

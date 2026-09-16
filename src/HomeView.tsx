@@ -1,6 +1,6 @@
 import { Suspense, lazy, useEffect, useState } from "react";
 import type { IconType } from "react-icons";
-import { FiActivity, FiAlertTriangle, FiArrowRight, FiBookmark, FiCheckCircle, FiChevronDown, FiClock, FiCpu, FiDatabase, FiEdit3, FiInfo, FiLoader, FiMonitor, FiRefreshCw, FiSearch, FiShield, FiTrash2, FiXCircle, FiZap } from "react-icons/fi";
+import { FiActivity, FiAlertTriangle, FiArrowRight, FiCheckCircle, FiChevronDown, FiCpu, FiDatabase, FiEdit3, FiInfo, FiLoader, FiMonitor, FiRefreshCw, FiSearch, FiShield, FiTrash2, FiXCircle, FiZap } from "react-icons/fi";
 import type { BuildSelection, CompatibilityResult, Part, PartCategory, PartSelection, ServiceMeta } from "../shared/types";
 import { DATA_FRESHNESS_LABELS, PART_CATEGORIES } from "../shared/types";
 import type { BudgetLadderLocalShareEntry } from "../shared/budget-ladder-local-history";
@@ -110,7 +110,7 @@ function HomeDraftResumePanel({ build, result, resultIsStale, onResume, onOpenRe
   const resultLabel = !result ? "아직 검사하지 않음" : resultIsStale ? "입력 변경 후 재검사 필요" : scenarioStatusLabel(result.status);
   const resultClass = !result || resultIsStale ? "review" : result.status;
   return <section className="home-draft-resume" aria-label="작업 중인 견적">
-    <div className="home-draft-resume-heading"><div><p className="eyebrow">CONTINUE BUILD</p><h2>작업 중인 견적이 있습니다</h2><p>이 브라우저에 저장된 마지막 구성부터 이어서 작업할 수 있습니다.</p></div><span className={`home-draft-result ${resultClass}`}><span className="status-dot" /> {resultLabel}</span></div>
+    <div className="home-draft-resume-heading"><div><p className="eyebrow">CONTINUE BUILD</p><h2>작업 중인 견적이 있습니다</h2></div><span className={`home-draft-result ${resultClass}`}><span className="status-dot" /> {resultLabel}</span></div>
     <div className="home-draft-resume-summary"><div><span>선택한 핵심 부품</span><strong>{coreEntries.length}개 · {coreCategoryCount}개 범주</strong></div><div><span>주변 부품</span><strong>{accessoryCount}종</strong></div>{result && !resultIsStale ? <div><span>최근 검사</span><strong>차단 {result.blockerCount} · 주의 {result.warningCount} · 확인 필요 {result.unknownCount}</strong></div> : <div><span>이어서 할 일</span><strong>견적을 열어 검사 준비 확인</strong></div>}</div>
     <div className="home-draft-resume-actions"><button className="button button-primary" type="button" onClick={onResume}><FiEdit3 /> 견적 이어서 보기</button>{result && !resultIsStale && <button className="button button-light" type="button" onClick={onOpenResult}><FiActivity /> 최근 검사 결과 보기</button>}</div>
   </section>;
@@ -134,7 +134,7 @@ function HomeDataTrustPanel({ meta, bootstrapLoading, bootstrapErrorCount }: { m
     <div className="home-data-trust-heading"><div><p className="eyebrow">DATA TRUST</p><h2>검사에 쓰는 부품 정보</h2><p>부품을 고르기 전에 어떤 정보를 쓰는지 확인해 보세요.</p></div><span className={`home-data-trust-status ${state}`}><span className="status-dot" /> {statusLabel}</span></div>
     {meta ? <>
       <div className="home-data-trust-grid">
-        <div><span>핵심 부품 후보</span><strong>{catalogEligibleCount.toLocaleString("ko-KR")}개</strong><small>전체 {meta.catalogCount.toLocaleString("ko-KR")}개 · 부품 아님 {meta.catalogExcludedNonCoreCount ?? 0}개 제외 · 기본 정보 {catalogEligibleQualityCounts?.seed ?? 0}개 · 스펙 부족 {catalogEligibleQualityCounts?.incomplete ?? 0}개</small></div>
+        <div><span>핵심 부품</span><strong>{catalogEligibleCount.toLocaleString("ko-KR")}개</strong><small>전체 {meta.catalogCount.toLocaleString("ko-KR")}개 · 부품 아님 {meta.catalogExcludedNonCoreCount ?? 0}개 제외 · 기본 정보 {catalogEligibleQualityCounts?.seed ?? 0}개 · 스펙 부족 {catalogEligibleQualityCounts?.incomplete ?? 0}개</small></div>
         <div><span>주변 부품 카탈로그</span><strong>{meta.accessoryCount.toLocaleString("ko-KR")}개</strong><small>10개 범주 · 기본 정보 {meta.accessoryQualityCounts.seed.toLocaleString("ko-KR")}개</small></div>
         <div><span>가격 확인 범위</span><strong>{catalogPriceCoverage === undefined ? "확인 필요" : `${catalogPriceCoverage.toFixed(1)}%`}</strong><small>{catalogEligiblePriceCoverage.priced.toLocaleString("ko-KR")}개 확인 · {catalogEligiblePriceCoverage.unpriced.toLocaleString("ko-KR")}개 미확인</small></div>
         <div><span>카탈로그 기준</span><strong>{homeCatalogFreshnessLabel(meta)}</strong><small>{meta.catalogUpdatedAt && Number.isFinite(Date.parse(meta.catalogUpdatedAt)) ? new Date(meta.catalogUpdatedAt).toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" }) : "갱신 시점 확인 필요"}</small></div>
@@ -148,7 +148,6 @@ function HomeDataTrustPanel({ meta, bootstrapLoading, bootstrapErrorCount }: { m
         {benchmarkCpuIncompleteCount > 0 && <a className="button button-small button-light" data-testid="home-data-trust-open-cpu-benchmark" href="/catalog?category=cpu&benchmarkStatus=incomplete">CPU 벤치 점수 없음 {benchmarkCpuIncompleteCount.toLocaleString("ko-KR")}개 보기 <FiArrowRight /></a>}
         {benchmarkGpuIncompleteCount > 0 && <a className="button button-small button-light" data-testid="home-data-trust-open-gpu-benchmark" href="/catalog?category=gpu&benchmarkStatus=incomplete">GPU 벤치 점수 없음 {benchmarkGpuIncompleteCount.toLocaleString("ko-KR")}개 보기 <FiArrowRight /></a>}
       </div>
-      <p className="home-data-trust-note"><FiShield /> 버전 {meta.engineVersion} · 가격·스펙 확인 상태는 결과와 추천에 함께 보여드리고, 정보가 오래되면 다시 확인하도록 알려드려요.</p>
     </> : <p className="home-data-trust-loading"><FiLoader className="spin" /> 부품 정보를 불러오는 중입니다. 잠시 후 검사 화면에서 상태를 확인할 수 있어요.</p>}
   </section>;
 }
@@ -173,10 +172,10 @@ function mobileHomeRowState(build: BuildSelection, result: CompatibilityResult |
   const hasFinding = result && !resultIsStale && result.findings.some((finding) => selections.some((selection) => finding.affectedPartIds.includes(selection.partId)));
   if (hasFinding) return { state: "확인 필요", tone: "warning", name: names };
   if (result && !resultIsStale) return { state: "호환 양호", tone: "success", name: names };
-  return { state: "선택됨", tone: "neutral", name: names };
+  return { state: "", tone: "neutral", name: names };
 }
 
-function MobileHomeView({ build, result, resultIsStale, partMap, onStart, onGenerate, onDemo, onCompatibleDemo, onResume, onOpenResult, onOpenHistory }: { build: BuildSelection; result: CompatibilityResult | null; resultIsStale: boolean; partMap: ReadonlyMap<string, Part>; onStart: () => void; onGenerate: () => void; onDemo: () => void; onCompatibleDemo: () => void; onResume: () => void; onOpenResult: () => void; onOpenHistory: () => void }) {
+function MobileHomeView({ build, result, resultIsStale, partMap, onStart, onGenerate, onDemo, onCompatibleDemo, onOpenResult, onOpenHistory }: { build: BuildSelection; result: CompatibilityResult | null; resultIsStale: boolean; partMap: ReadonlyMap<string, Part>; onStart: () => void; onGenerate: () => void; onDemo: () => void; onCompatibleDemo: () => void; onOpenResult: () => void; onOpenHistory: () => void }) {
   const selectedCategoryCount = PART_CATEGORIES.filter((category) => selectionList(build, category).length > 0).length;
   const selectedItemCount = PART_CATEGORIES.reduce((count, category) => count + selectionList(build, category).length, 0);
   const hasBuild = selectedItemCount > 0;
@@ -191,56 +190,59 @@ function MobileHomeView({ build, result, resultIsStale, partMap, onStart, onGene
     </div>
     <section className="mobile-current-build" aria-label="현재 견적">
       <div className="mobile-section-heading"><div><span className="mobile-kicker">CURRENT BUILD</span><h2>{hasBuild ? resultReady ? "최근 검사 구성" : "현재 구성" : "새 견적"}</h2></div><button type="button" className="mobile-section-link" onClick={resultReady ? onOpenResult : onStart}>{resultReady ? "상세 보기" : "편집하기"}<FiArrowRight /></button></div>
-      <div className="mobile-health-summary"><div className="mobile-health-score"><strong>{resultReady ? Math.max(0, PART_CATEGORIES.length - result!.blockerCount) : selectedCategoryCount}</strong><span>/ {PART_CATEGORIES.length}</span></div><div className="mobile-health-copy"><strong>{resultReady ? (result!.status === "compatible" ? "호환에 문제가 없습니다" : result!.status === "needs_review" ? "확인이 필요한 항목이 있어요" : "수정이 필요한 항목이 있어요") : hasBuild ? "검사 전 구성을 확인해 주세요" : "첫 견적을 시작해 보세요"}</strong><p>{resultReady ? `차단 ${result!.blockerCount} · 주의 ${result!.warningCount} · 확인 필요 ${result!.unknownCount}` : `${selectedItemCount}개 부품 · ${selectedCategoryCount}개 범주 선택됨`}</p></div></div>
+      <div className="mobile-health-summary"><div className="mobile-health-score"><strong>{resultReady ? Math.max(0, PART_CATEGORIES.length - result!.blockerCount) : selectedCategoryCount}</strong><span>/ {PART_CATEGORIES.length}</span></div><div className="mobile-health-copy">{resultReady ? <strong>{result!.status === "compatible" ? "호환에 문제가 없습니다" : result!.status === "needs_review" ? "확인이 필요한 항목이 있어요" : "수정이 필요한 항목이 있어요"}</strong> : !hasBuild ? <strong>첫 견적을 시작해 보세요</strong> : null}</div></div>
       <div className="mobile-progress-track" aria-label={`필수 부품 ${selectedCategoryCount}개 선택, ${PART_CATEGORIES.length}개 중`} role="progressbar" aria-valuemin={0} aria-valuemax={PART_CATEGORIES.length} aria-valuenow={selectedCategoryCount}><span style={{ width: `${progress}%` }} /></div>
-      <div className="mobile-build-list">{MOBILE_HOME_ROWS.map(({ label, category, Icon }) => { const row = mobileHomeRowState(build, result, resultIsStale, category, partMap); return <button className={`mobile-build-row ${row.tone}`} type="button" key={category} onClick={onStart}><span className="mobile-build-icon"><Icon /></span><span className="mobile-build-copy"><strong>{label}</strong><small>{row.name}</small></span><span className={`mobile-row-state ${row.tone}`}>{row.state}</span><FiArrowRight className="mobile-build-arrow" /></button>; })}</div>
+    <div className="mobile-build-list">{MOBILE_HOME_ROWS.map(({ label, category, Icon }) => { const row = mobileHomeRowState(build, result, resultIsStale, category, partMap); return <button className={`mobile-build-row ${row.tone}`} type="button" key={category} onClick={onStart}><span className="mobile-build-icon"><Icon /></span><span className="mobile-build-copy"><strong>{label}</strong><small>{row.name}</small></span>{row.state && <span className={`mobile-row-state ${row.tone}`}>{row.state}</span>}<FiArrowRight className="mobile-build-arrow" /></button>; })}</div>
     </section>
-    <div className="mobile-primary-actions"><button className="mobile-primary-action" type="button" onClick={onStart}><FiSearch /><span>{hasBuild ? "견적 검사 준비" : "견적 검사 시작"}</span><FiArrowRight /></button><button className="mobile-secondary-action" type="button" onClick={onResume} disabled={!hasBuild}><FiEdit3 /><span>마지막 구성 이어하기</span><FiArrowRight /></button></div>
-    <section className="mobile-next-steps" aria-label="빠른 시작"><div className="mobile-section-heading"><div><span className="mobile-kicker">QUICK START</span><h2>빠른 시작</h2></div><button type="button" className="mobile-section-link" onClick={onOpenHistory}>저장 견적<FiArrowRight /></button></div><div className="mobile-quick-grid"><button type="button" onClick={onStart}><span><FiCpu /></span><strong>부품 선택</strong><small>직접 구성하기</small></button><button type="button" onClick={onGenerate}><span><FiZap /></span><strong>자동 구성</strong><small>예산으로 찾기</small></button><button type="button" onClick={onOpenHistory}><span><FiBookmark /></span><strong>저장 견적</strong><small>이어 보기</small></button></div></section>
-    <div className="mobile-home-footnote"><FiShield /> 입력한 구성은 이 기기에 자동으로 보관됩니다. 로그인 없이 바로 시작할 수 있어요.</div>
-    <details className="mobile-demo-tools" open><summary>시연용 구성 보기</summary><div><button type="button" onClick={onDemo}>오류 시연 견적</button><button type="button" onClick={onCompatibleDemo}>호환 완료 시연 견적</button></div></details>
+    <div className="mobile-primary-actions"><button className="mobile-primary-action" data-testid="mobile-home-primary-action" type="button" onClick={resultReady ? onOpenResult : onStart}><FiSearch /><span>{resultReady ? "최근 검사 결과 보기" : hasBuild ? "견적 검사 준비" : "견적 검사 시작"}</span><FiArrowRight /></button>{resultReady && <button className="mobile-secondary-action" type="button" onClick={onStart}><FiEdit3 /><span>견적 수정하기</span><FiArrowRight /></button>}</div>
+    <section className="mobile-next-steps" aria-label="다음 단계"><div className="mobile-section-heading"><div><span className="mobile-kicker">QUICK START</span><h2>추천 구성</h2></div><button type="button" className="mobile-section-link" onClick={onOpenHistory}>저장 견적<FiArrowRight /></button></div><button className="mobile-recommend-card" data-testid="mobile-home-recommend" type="button" onClick={onGenerate}><span className="mobile-recommend-icon"><FiZap /></span><span className="mobile-recommend-copy"><strong>조건으로 자동 구성</strong></span><FiArrowRight /></button></section>
+    <details className="mobile-demo-tools"><summary>예시 구성 보기</summary><div><button type="button" onClick={onDemo}>문제 있는 예시 견적</button><button type="button" onClick={onCompatibleDemo}>문제 없는 예시 견적</button></div></details>
   </section>;
 }
 
 export function HomeView({ meta, bootstrapLoading, bootstrapErrorCount, build, result, resultIsStale, partMap, budgetLadderShares, alternativeComparisonShares, savedBuildVersionShares, onStart, onGenerate, onDemo, onCompatibleDemo, onResume, onOpenResult, onOpenHistory, onCopyBudgetLadderShare, onRemoveBudgetLadderShare, onToastBudgetLadderShare, onCopyAlternativeComparisonShare, onRemoveAlternativeComparisonShare, onRevokeAlternativeComparisonShare, onToastAlternativeComparisonShare, onCopySavedBuildVersionShare, onRemoveSavedBuildVersionShare, onRevokeSavedBuildVersionShare, onToastSavedBuildVersionShare, onToast }: { meta: ServiceMeta | null; bootstrapLoading: boolean; bootstrapErrorCount: number; build: BuildSelection; result: CompatibilityResult | null; resultIsStale: boolean; partMap: ReadonlyMap<string, Part>; budgetLadderShares: BudgetLadderLocalShareEntry[]; alternativeComparisonShares: AlternativeComparisonLocalShareEntry[]; savedBuildVersionShares: SavedBuildVersionLocalShareEntry[]; onStart: () => void; onGenerate: () => void; onDemo: () => void; onCompatibleDemo: () => void; onResume: () => void; onOpenResult: () => void; onOpenHistory: () => void; onCopyBudgetLadderShare: (entry: BudgetLadderLocalShareEntry) => void; onRemoveBudgetLadderShare: (id: string) => void; onToastBudgetLadderShare: (message: string) => void; onCopyAlternativeComparisonShare: (entry: AlternativeComparisonLocalShareEntry) => void; onRemoveAlternativeComparisonShare: (id: string) => void; onRevokeAlternativeComparisonShare: (entry: AlternativeComparisonLocalShareEntry) => Promise<boolean>; onToastAlternativeComparisonShare: (message: string) => void; onCopySavedBuildVersionShare: (entry: SavedBuildVersionLocalShareEntry) => void; onRemoveSavedBuildVersionShare: (id: string) => void; onRevokeSavedBuildVersionShare: (entry: SavedBuildVersionLocalShareEntry) => Promise<boolean>; onToastSavedBuildVersionShare: (message: string) => void; onToast: (message: string) => void }) {
+  const localShareCount = budgetLadderShares.length + alternativeComparisonShares.length + savedBuildVersionShares.length;
   return <div className="home-page">
-    <MobileHomeView build={build} result={result} resultIsStale={resultIsStale} partMap={partMap} onStart={onStart} onGenerate={onGenerate} onDemo={onDemo} onCompatibleDemo={onCompatibleDemo} onResume={onResume} onOpenResult={onOpenResult} onOpenHistory={onOpenHistory} />
+    <MobileHomeView build={build} result={result} resultIsStale={resultIsStale} partMap={partMap} onStart={onStart} onGenerate={onGenerate} onDemo={onDemo} onCompatibleDemo={onCompatibleDemo} onOpenResult={onOpenResult} onOpenHistory={onOpenHistory} />
     <section className="hero-section">
       <div className="hero-copy">
         <p className="eyebrow"><FiShield /> PC 조립 전 마지막 체크</p>
         <h1>내가 고른 부품,<br /><span>정말 같이 쓸 수 있을까?</span></h1>
-        <p className="hero-description">부품을 하나씩 선택하면 소켓, 슬롯, 전력, 장착 공간을 한 번에 검사하고 문제가 생긴 이유와 해결 방법까지 알려드려요.</p>
+        <p className="hero-description">부품을 고르면 함께 쓸 수 있는지 바로 확인하고, 문제가 있으면 해결 방법까지 알려드려요.</p>
         <div className="hero-actions">
           <button className="button button-primary button-large" onClick={onStart}>견적 검사 시작하기 <FiArrowRight /></button>
-          <button className="button button-secondary button-large" onClick={onGenerate}>예산으로 자동 구성 <FiZap /></button>
+          <button className="button button-secondary button-large hero-secondary-action" onClick={onGenerate}>조건으로 자동 구성 <FiZap /></button>
         </div>
-        <details className="hero-demo-tools" open><summary>시연용 구성 보기 <FiChevronDown /></summary><div><button type="button" onClick={onDemo}><FiActivity /> 오류 시연 견적</button><button type="button" onClick={onCompatibleDemo}><FiCheckCircle /> 호환 완료 시연 견적</button></div></details>
-        <div className="hero-note"><FiClock /> 로그인 없이 바로 시작 · 문제가 생기면 이유와 해결 방법까지 바로 보여드려요.</div>
+        <details className="hero-demo-tools"><summary>예시 구성 보기 <FiChevronDown /></summary><div><button type="button" onClick={onDemo}><FiActivity /> 문제 있는 예시 견적</button><button type="button" onClick={onCompatibleDemo}><FiCheckCircle /> 문제 없는 예시 견적</button></div></details>
       </div>
       <div className="hero-panel">
         <div className="panel-kicker">CHECK PREVIEW</div>
-        <div className="preview-status"><span className="status-icon danger"><FiXCircle /></span><div><strong>함께 쓸 수 없는 부품이 있습니다.</strong><span>차단 오류 3개 · 주의 1개</span></div></div>
+      <div className="preview-status"><span className="status-icon danger"><FiXCircle /></span><div><strong>같이 쓸 수 없는 부품이 있어요.</strong><span>차단 오류 3개 · 주의 1개</span></div></div>
         <div className="preview-rule"><span className="rule-icon danger"><FiXCircle /></span><div><strong>CPU와 메인보드 소켓이 다릅니다.</strong><small>CPU: AM5 · 메인보드: LGA1700</small></div><FiChevronDown /></div>
         <div className="preview-rule"><span className="rule-icon warning"><FiAlertTriangle /></span><div><strong>RAM 속도가 지원 범위를 초과합니다.</strong><small>다운클럭될 수 있어요.</small></div><FiChevronDown /></div>
-        <div className="preview-rule"><span className="rule-icon success"><FiCheckCircle /></span><div><strong>문제 부품을 바로 바꿀 수 있습니다.</strong><small>수정 후 다시 검사하기</small></div><FiChevronDown /></div>
-        <div className="preview-footer"><span>검사 버전 {meta?.engineVersion ?? "불러오는 중"}</span><span>데이터 기준 {meta?.catalogUpdatedAt && Number.isFinite(Date.parse(meta.catalogUpdatedAt)) ? new Date(meta.catalogUpdatedAt).toLocaleDateString("ko-KR") : "불러오는 중"}</span></div>
+        <div className="preview-rule"><span className="rule-icon success"><FiCheckCircle /></span><div><strong>문제 부품을 바로 바꿔볼 수 있어요.</strong><small>바꾼 뒤 다시 검사하기</small></div><FiChevronDown /></div>
       </div>
     </section>
     <HomeDraftResumePanel build={build} result={result} resultIsStale={resultIsStale} onResume={onResume} onOpenResult={onOpenResult} />
-    {budgetLadderShares.length > 0 && <Suspense fallback={null}><LazyHomeBudgetLadderSharePanel entries={budgetLadderShares} onCopy={onCopyBudgetLadderShare} onRemove={onRemoveBudgetLadderShare} onToast={onToastBudgetLadderShare} /></Suspense>}
-    {alternativeComparisonShares.length > 0 && <Suspense fallback={null}><LazyHomeAlternativeComparisonSharePanel entries={alternativeComparisonShares} onCopy={onCopyAlternativeComparisonShare} onRemove={onRemoveAlternativeComparisonShare} onRevoke={onRevokeAlternativeComparisonShare} onToast={onToastAlternativeComparisonShare} /></Suspense>}
-    {savedBuildVersionShares.length > 0 && <Suspense fallback={null}><LazyHomeSavedBuildVersionSharePanel entries={savedBuildVersionShares} currentCatalogSnapshotAt={meta?.catalogUpdatedAt} onCopy={onCopySavedBuildVersionShare} onRemove={onRemoveSavedBuildVersionShare} onRevoke={onRevokeSavedBuildVersionShare} onToast={onToastSavedBuildVersionShare} /></Suspense>}
-    <HomeDataTrustPanel meta={meta} bootstrapLoading={bootstrapLoading} bootstrapErrorCount={bootstrapErrorCount} />
-    <HomeCatalogCachePanel onToast={onToast} />
-    <section className="feature-grid">
-      <FeatureCard Icon={FiSearch} number="01" title="부품을 검색해 선택" description="모델명을 몰라도 카테고리별 검색과 주요 스펙을 보며 고를 수 있습니다." />
-      <FeatureCard Icon={FiActivity} number="02" title="모든 문제를 한 번에 검사" description="첫 번째 오류에서 멈추지 않고 선택한 견적의 전체 연결 관계를 확인합니다." />
-      <FeatureCard Icon={FiCheckCircle} number="03" title="원인부터 해결까지" description="현재값과 지원값을 비교하고 교체·수량 조정 방법을 바로 안내합니다." />
-    </section>
-    <section className="home-trust-row">
-      <div><span className="trust-icon"><FiDatabase /></span><div><strong>부품 정보 카탈로그</strong><p>다나와에서 모은 정보와 직접 확인한 정보를 함께 보여줍니다.</p></div></div>
-      <div><span className="trust-icon"><FiShield /></span><div><strong>이유를 보여주는 결과</strong><p>왜 안 되는지 규칙과 함께 알려드리고, 같은 입력엔 같은 결과를 드립니다.</p></div></div>
-      <div><span className="trust-icon"><FiRefreshCw /></span><div><strong>수정하고 재검사</strong><p>오류 카드에서 부품을 바꾼 뒤 바로 다시 검사합니다.</p></div></div>
-    </section>
+    <details className="home-secondary-details" aria-label="홈 추가 정보">
+      <summary><span><FiInfo /> 저장·데이터 정보</span><small>{localShareCount > 0 ? `${localShareCount}개 저장됨` : "필요할 때 확인하세요"}</small><FiChevronDown /></summary>
+      <div className="home-secondary-details-body">
+        {budgetLadderShares.length > 0 && <Suspense fallback={null}><LazyHomeBudgetLadderSharePanel entries={budgetLadderShares} onCopy={onCopyBudgetLadderShare} onRemove={onRemoveBudgetLadderShare} onToast={onToastBudgetLadderShare} /></Suspense>}
+        {alternativeComparisonShares.length > 0 && <Suspense fallback={null}><LazyHomeAlternativeComparisonSharePanel entries={alternativeComparisonShares} onCopy={onCopyAlternativeComparisonShare} onRemove={onRemoveAlternativeComparisonShare} onRevoke={onRevokeAlternativeComparisonShare} onToast={onToastAlternativeComparisonShare} /></Suspense>}
+        {savedBuildVersionShares.length > 0 && <Suspense fallback={null}><LazyHomeSavedBuildVersionSharePanel entries={savedBuildVersionShares} currentCatalogSnapshotAt={meta?.catalogUpdatedAt} onCopy={onCopySavedBuildVersionShare} onRemove={onRemoveSavedBuildVersionShare} onRevoke={onRevokeSavedBuildVersionShare} onToast={onToastSavedBuildVersionShare} /></Suspense>}
+        <HomeDataTrustPanel meta={meta} bootstrapLoading={bootstrapLoading} bootstrapErrorCount={bootstrapErrorCount} />
+        <HomeCatalogCachePanel onToast={onToast} />
+        <section className="feature-grid">
+          <FeatureCard Icon={FiSearch} number="01" title="부품을 검색해 선택" description="모델명을 몰라도 카테고리별 검색과 주요 스펙을 보며 고를 수 있습니다." />
+          <FeatureCard Icon={FiActivity} number="02" title="모든 문제를 한 번에 검사" description="첫 번째 오류에서 멈추지 않고 선택한 견적의 전체 연결 관계를 확인합니다." />
+          <FeatureCard Icon={FiCheckCircle} number="03" title="원인부터 해결까지" description="현재값과 지원값을 비교하고 교체·수량 조정 방법을 바로 안내합니다." />
+        </section>
+        <section className="home-trust-row">
+          <div><span className="trust-icon"><FiDatabase /></span><div><strong>부품 정보 카탈로그</strong><p>다나와에서 모은 정보와 직접 확인한 정보를 함께 보여줍니다.</p></div></div>
+          <div><span className="trust-icon"><FiShield /></span><div><strong>이유를 보여주는 결과</strong><p>왜 안 되는지 규칙과 함께 알려드리고, 같은 입력엔 같은 결과를 드립니다.</p></div></div>
+          <div><span className="trust-icon"><FiRefreshCw /></span><div><strong>수정하고 재검사</strong><p>오류 카드에서 부품을 바꾼 뒤 바로 다시 검사합니다.</p></div></div>
+        </section>
+      </div>
+    </details>
   </div>;
 }

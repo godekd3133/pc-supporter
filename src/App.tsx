@@ -106,6 +106,7 @@ import { m2ReviewTemplatesToCsv, parseM2ReviewCsv } from "../shared/m2-csv";
 import { benchmarkOverridesToCsv, benchmarkReviewItemsToCsv, parseBenchmarkOverridesCsv } from "../shared/benchmark-csv";
 import { similarityBasisLabelFor, similarityReferenceUsedCategoryFor } from "../shared/similarity-evidence";
 import { CATALOG_PRICE_EVIDENCE_LABELS, catalogPriceEvidenceDescriptionFor, catalogPriceEvidenceFor, catalogPriceEvidenceLabelFor } from "../shared/catalog-price-evidence";
+import { catalogChangeFieldLabelFor, catalogMissingFieldLabelFor } from "../shared/catalog-spec-coverage";
 import { purchaseListCsvFor, purchaseListTextFor, purchaseListTotals } from "../shared/purchase-list";
 import type { PurchaseListRow } from "../shared/purchase-list";
 import type { PurchaseListWatchTarget } from "../shared/purchase-list-watch";
@@ -220,7 +221,6 @@ import type { ResultViewDependencies } from "./ResultView";
 import type { SavedBuildLiveCheck } from "./SavedBuildComparisonDecision";
 import type { UpgradeBundleScenarioPreviewState } from "./UpgradeBundleScenarioPreview";
 import type { SavedCatalogWatchlist } from "./SharedWatchlistView";
-import { budgetLadderScenariosFor } from "../shared/budget-ladder";
 import { LOCAL_IMPORT_MAX_BYTES } from "../shared/file-import-limits";
 
 const PriceWatchlistView = lazy(() => import("./PriceWatchlistView").then((module) => ({ default: module.PriceWatchlistView })));
@@ -475,34 +475,34 @@ const RULE_GUIDES: Record<string, string> = {
   "memory-slots": "선택한 RAM 수량과 킷당 물리 모듈 수를 곱한 값이 메인보드의 물리 슬롯 수를 넘지 않는지 확인합니다.",
   "memory-dual-channel": "RAM 수량과 킷당 물리 모듈 수를 계산해 2개 모듈 듀얼채널 구성을 권장합니다. 호환 차단이 아니라 성능 주의 항목입니다.",
   "memory-speed": "RAM 속도와 메인보드 상한을 비교하고, EXPO/XMP 프로파일이 확인된 고속 RAM은 CPU 공식 지원 상한도 함께 고려해 둘 중 더 낮은 확인값을 유효 상한으로 사용합니다.",
-  "memory-profile": "RAM에 표시된 EXPO/XMP 프로파일과 메인보드 원문에 확인된 지원 프로파일이 겹치는지 확인합니다. 불일치는 물리적 불호환으로 단정하지 않고 기본 속도 동작·수동 설정 가능성을 주의로 표시합니다.",
+  "memory-profile": "RAM에 표시된 EXPO/XMP 프로파일과 메인보드 상세 정보에 확인된 지원 프로파일과 겹치는지 확인합니다. 불일치는 물리적 불호환으로 단정하지 않고 기본 속도 동작·수동 설정 가능성을 주의로 표시합니다.",
   "memory-mixing": "서로 다른 RAM 상품의 용량·속도·CL·전압·프로파일을 비교합니다. 차이가 있거나 정보가 부족하면 혼용 안정성을 보수적으로 표시합니다.",
   "m2-slots": "선택한 M.2 SSD 수량과 메인보드의 M.2 슬롯 수를 비교합니다.",
-  "m2-interface": "SATA 방식 M.2 SSD를 선택한 경우 메인보드 원문에서 SATA M.2 연결을 지원하는지 확인합니다.",
+  "m2-interface": "SATA 방식 M.2 SSD를 선택한 경우 메인보드 상세 정보에서 SATA M.2 연결을 지원하는지 확인합니다.",
   "m2-pcie-generation": "NVMe SSD가 요구하는 PCIe 세대와 메인보드 M.2가 확인한 세대를 비교합니다. SSD 세대가 더 높아도 장착 차단이 아니라 메인보드 세대로 링크되는 성능 주의로 표시합니다.",
-  "m2-slot-topology": "여러 M.2 SSD를 사용할 때 메인보드 원문에서 각 슬롯의 PCIe 세대·CPU 직결 여부·레인 공유 조건이 분리되어 확인되는지 검사합니다. 집계 정보만 있으면 임의로 슬롯을 배정하지 않고 확인 필요로 표시합니다.",
+  "m2-slot-topology": "여러 M.2 SSD를 사용할 때 메인보드 상세 정보에서 각 슬롯의 PCIe 세대·CPU 직결 여부·레인 공유 조건이 분리되어 확인되는지 검사합니다. 집계 정보만 있으면 임의로 슬롯을 배정하지 않고 확인 필요로 표시합니다.",
   "m2-slot-selection": "사용자가 지정한 M.2 슬롯 수·슬롯 ID·SSD 수량이 현재 선택과 일치하는지 확인합니다. 다른 메인보드나 SSD로 바꾸면 이전 배치를 지우고 다시 지정해야 합니다.",
   "m2-slot-routing": "등록된 M.2 슬롯의 인터페이스 조건과 SSD 연결 방식이 맞는지 확인합니다. 수동 배치에서는 지정한 위치를 그대로 검사합니다.",
   "m2-slot-sharing": "관리자가 등록한 M.2 슬롯의 공유 대상과 현재 선택한 GPU·SATA 저장장치를 비교합니다. 비활성화·링크 폭 변경 조건이 매뉴얼에 명확히 등록되지 않으면 확인 필요로 표시합니다.",
-  "m2-pcie-lane-sharing": "메인보드 M.2 연결 구간에 명시된 PCIe 레인 공유 신호를 확인합니다. 이 정보만으로는 공유 슬롯·조건·비활성화를 확정하지 않고 확인 필요로 표시합니다.",
+  "m2-pcie-lane-sharing": "메인보드 M.2 연결 구간에 명시된 PCIe 레인 공유 신호를 확인합니다. 이 정보만으로는 공유 슬롯·조건·비활성화를 정하지 않고 확인 필요로 표시합니다.",
   "sata-ports": "SATA SSD와 HDD가 사용하는 포트 수가 메인보드의 SATA 포트 수를 넘지 않는지 확인합니다.",
   "hdd-interface": "내장 HDD가 일반 SATA인지 확인합니다. SAS 등 별도 HBA·RAID 컨트롤러가 필요한 HDD는 일반 SATA 메인보드에 직접 연결할 수 없습니다.",
   "case-hdd-bays": "HDD 수량과 케이스의 3.5인치 장착 베이 수를 비교합니다.",
   "case-motherboard-form-factor": "메인보드 폼팩터가 케이스가 지원하는 폼팩터 목록에 포함되는지 확인합니다.",
   "case-fan-headers": "케이스에 기본 장착된 팬 수와 메인보드의 확인된 팬 헤더 수를 비교합니다. 직접 연결이 부족하면 팬 허브가 필요할 수 있습니다.",
-  "case-rgb-headers": "케이스 RGB 장치 수와 메인보드의 RGB/ARGB 헤더 정보를 비교하되, 5V·12V 전압과 허브 연결은 제조사 원문으로 재확인합니다.",
-  "case-rgb-voltage": "케이스 RGB 장치의 5V ARGB·12V RGB 타입과 메인보드의 같은 전압 헤더 정보를 비교합니다. 전압이 다르면 직접 연결하지 말고 컨트롤러 원문을 확인해야 합니다.",
+  "case-rgb-headers": "케이스 RGB 장치 수와 메인보드의 RGB/ARGB 헤더 정보를 비교하되, 5V·12V 전압과 허브 연결은 제조사 페이지에서 다시 확인합니다.",
+  "case-rgb-voltage": "케이스 RGB 장치의 5V ARGB·12V RGB 타입과 메인보드의 같은 전압 헤더 정보를 비교합니다. 전압이 다르면 직접 연결하지 말고 컨트롤러 제조사 페이지를 확인해 주세요.",
   "cpu-cooler-socket": "CPU 소켓이 쿨러의 지원 소켓 목록에 포함되는지 확인합니다.",
   "cpu-cooler-capacity": "CPU 기준 전력과 쿨러의 확인된 냉각 지원 용량을 비교합니다.",
   "case-cooler-height": "쿨러 높이가 케이스의 허용 높이를 넘지 않는지 확인합니다.",
   "case-radiator-support": "수랭 쿨러의 라디에이터 크기가 케이스의 지원 크기 목록에 포함되는지 확인하고, 양쪽 위치 정보가 확인되면 전면·상단 등 장착 위치까지 대조합니다.",
   "display-output": "외장 그래픽카드가 없을 때 CPU가 내장 그래픽을 제공하는지 확인합니다.",
   "gpu-motherboard-pcie": "그래픽카드의 PCIe 장착 폭과 메인보드의 PCIe x16/x8 슬롯 수를 비교합니다. PCIe 세대 차이 자체는 이 규칙에서 불호환으로 판단하지 않습니다.",
-  "gpu-thickness": "그래픽카드 두께가 55mm 이상이면 인접 슬롯·케이스 구조물 간섭을 주의 항목으로 표시합니다. 실제 슬롯 점유 수는 제조사 원문을 추가로 확인해야 합니다.",
+  "gpu-thickness": "그래픽카드 두께가 55mm 이상이면 인접 슬롯·케이스 구조물 간섭을 주의 항목으로 표시합니다. 실제 슬롯 점유 수는 제조사 페이지에서 한 번 더 확인해 주세요.",
   "gpu-case-length": "그래픽카드 길이와 케이스의 최대 GPU 허용 길이를 비교합니다.",
   "gpu-cable-clearance": "확인된 GPU 전원 케이블 굽힘 여유와 케이스 측면 공간이 모두 맞을 때만 케이블 간섭 여부를 알려드립니다.",
   "gpu-psu-power": "그래픽카드·CPU의 권장 파워 용량과 선택한 파워의 정격 출력을 비교합니다.",
-  "gpu-psu-connector": "그래픽카드가 요구하는 PCIe 보조전원 커넥터와 파워서플라이에서 확인된 제공 커넥터 수를 비교합니다. 어댑터가 필요한 경우 원문에 명시된 경로만 인정합니다.",
+  "gpu-psu-connector": "그래픽카드가 요구하는 PCIe 보조전원 커넥터와 파워서플라이에서 확인된 제공 커넥터 수를 비교합니다. 어댑터가 필요한 경우 제품 페이지에 명시된 경로만 인정합니다.",
   "gpu-psu-cable-topology": "커넥터 수량이 맞아도 여러 8핀 커넥터를 독립 케이블로 연결할 수 있는지 또는 제조사 허용 분배 경로인지 확인합니다.",
   "psu-case-length": "파워서플라이 깊이와 케이스의 파워 장착 허용 길이를 비교합니다.",
   "psu-case-form-factor": "파워서플라이의 ATX/SFX 규격이 케이스의 지원 파워 규격 목록에 포함되는지 확인합니다.",
@@ -1325,7 +1325,7 @@ function AppHeaderLoadingFallback() {
       <span className="mobile-header-menu"><FiMenu /></span>
       <span className="brand">
         <span className="brand-mark"><FiCpu /></span>
-        <span><strong>PC Supporter</strong><small>견적 호환성 검사</small></span>
+        <span><strong>PC Supporter</strong></span>
       </span>
       <span className="topbar-status loading"><span className="status-dot loading" /> 서비스 동기화 중</span>
     </div>
@@ -2114,6 +2114,18 @@ function App() {
     window.scrollTo({ top: 0, behavior: "auto" });
   }
 
+  function openGenerator(priority?: RecommendationPriority) {
+    generatorRequestRef.current += 1;
+    setGenerating(false);
+    setGeneratorDraft(null);
+    setGeneratorVariants([]);
+    setGeneratorBudgetLadder([]);
+    setGeneratorError(null);
+    setGeneratorDiagnostics([]);
+    setGeneratorRecoveryOptions([]);
+    navigate(`/recommend${priority ? `?priority=${encodeURIComponent(priority)}` : ""}`, "generator");
+  }
+
   function resetRouteTransientState() {
     scenarioRequestSequenceRef.current += 1;
     setToast(null);
@@ -2174,9 +2186,9 @@ function App() {
       if (!navigator.clipboard?.writeText) throw new Error("clipboard-unavailable");
       await navigator.clipboard.writeText(entry.url);
       if (!isCurrent()) return;
-      setToast("후보 비교 공유 링크를 복사했습니다.");
+      setToast("부품 비교 공유 링크를 복사했어요.");
     } catch {
-      if (isCurrent()) setToast(`후보 비교 공유 링크: ${entry.url}`);
+      if (isCurrent()) setToast(`부품 비교 공유 링크: ${entry.url}`);
     }
   }
 
@@ -2306,11 +2318,11 @@ function App() {
       setCatalogRefreshProgress(null);
       const checked = await checkBuild(build, recommendationPreferences, { catalogRefreshRequest: refreshRequest });
       if (!isCurrent()) return;
-      if (checked) setToast(`${refreshed.name} 원문 확인 완료 · ${changedSummary} · 현재 구성 재검사했습니다.`);
+      if (checked) setToast(`${refreshed.name} 정보 확인 완료 · ${changedSummary} · 현재 구성 재검사했습니다.`);
       setCatalogRefreshReport(report);
     } catch (error: unknown) {
       if (!isCurrent()) return;
-      const message = error instanceof Error ? error.message : "부품 상세 원문을 다시 확인하지 못했습니다.";
+      const message = error instanceof Error ? error.message : "부품 상세 정보를 다시 확인하지 못했습니다.";
       setCatalogRefreshReport({ inputFingerprint, status: "failed", requestedCount: 1, successCount: 0, failureCount: 1, items: [], failures: [{ target, message }], completedAt: new Date().toISOString() });
       setToast(message);
     } finally {
@@ -2353,7 +2365,7 @@ function App() {
           changedFieldCount += refreshed.changedFields.length;
           reportItems.push(refreshed.reportItem);
         } catch (error: unknown) {
-          failures.push({ target, message: error instanceof Error ? error.message : "원문 확인 실패" });
+          failures.push({ target, message: error instanceof Error ? error.message : "정보 확인 실패" });
         }
         setCatalogRefreshProgress(progressFor(index + 1, uniqueTargets[index + 1]));
       }
@@ -2362,7 +2374,7 @@ function App() {
       setCatalogRefreshProgress(null);
       if (successCount === 0) {
         setCatalogRefreshReport({ inputFingerprint, status: "failed", requestedCount: uniqueTargets.length, successCount: 0, failureCount: failures.length, items: [], failures, completedAt: new Date().toISOString() });
-        setToast(failures[0]?.message ?? "주변 부품 원문을 다시 확인하지 못했습니다.");
+        setToast(failures[0]?.message ?? "주변 부품 정보를 다시 확인하지 못했습니다.");
         return;
       }
       setCheckedInputFingerprint(null);
@@ -2370,7 +2382,7 @@ function App() {
       const failureSummary = failures.length > 0 ? ` · 실패 ${failures.length}개` : "";
       const checked = await checkBuild(build, recommendationPreferences, { catalogRefreshRequest: refreshRequest });
       if (!isCurrent()) return;
-      if (checked) setToast(`${successCount}개 부품 원문 확인 완료 · ${changedFieldCount}개 영역 갱신${failureSummary} · 현재 구성 재검사했습니다.`);
+      if (checked) setToast(`${successCount}개 부품 정보 확인 완료 · ${changedFieldCount}개 영역 갱신${failureSummary} · 현재 구성 재검사했습니다.`);
       setCatalogRefreshReport({ inputFingerprint, status: failures.length > 0 ? "partial" : "success", requestedCount: uniqueTargets.length, successCount, failureCount: failures.length, items: reportItems, failures, completedAt: new Date().toISOString() });
     } finally {
       if (isCurrent()) {
@@ -2527,10 +2539,10 @@ function App() {
       try {
         await navigator.clipboard.writeText(url);
         if (routeRequestSequenceRef.current !== routeRequestSequence) return undefined;
-        setToast("후보 비교 공유 링크를 클립보드에 복사했습니다.");
+        setToast("부품 비교 공유 링크를 클립보드에 복사했어요.");
       } catch {
         if (routeRequestSequenceRef.current !== routeRequestSequence) return undefined;
-        setToast(`후보 비교 링크가 생성되었습니다: ${url}`);
+        setToast(`부품 비교 링크가 만들어졌어요: ${url}`);
       }
       const share = { id: saved.id, url, ownerToken: saved.ownerToken, ...(saved.expiresAt ? { expiresAt: saved.expiresAt } : {}) };
       rememberAlternativeComparisonShare({
@@ -2547,7 +2559,7 @@ function App() {
       });
       return share;
     } catch (error: unknown) {
-      if (routeRequestSequenceRef.current === routeRequestSequence) setToast(error instanceof Error ? error.message : "후보 비교 공유 링크를 만들지 못했습니다.");
+      if (routeRequestSequenceRef.current === routeRequestSequence) setToast(error instanceof Error ? error.message : "부품 비교 공유 링크를 만들지 못했어요.");
       return undefined;
     } finally {
       alternativeComparisonShareInFlightRef.current.delete(shareKey);
@@ -2557,7 +2569,7 @@ function App() {
   async function revokeAlternativeComparison(share: AlternativeComparisonShareResult) {
     const routeRequestSequence = routeRequestSequenceRef.current;
     if (alternativeComparisonRevokeInFlightRef.current.get(share.id) === routeRequestSequence) return false;
-    if (!window.confirm("이 후보 비교 공유 링크를 취소할까요? 이미 전달된 링크도 더 이상 열리지 않습니다.")) return false;
+    if (!window.confirm("이 부품 비교 공유 링크를 취소할까요? 이미 전달된 링크도 더 이상 열리지 않아요.")) return false;
     alternativeComparisonRevokeInFlightRef.current.set(share.id, routeRequestSequence);
     const requestContextVersion = localShareMutationContextRef.current;
     const isCurrent = () => routeRequestSequenceRef.current === routeRequestSequence
@@ -2567,10 +2579,10 @@ function App() {
       await api(`/api/comparisons/${encodeURIComponent(share.id)}`, { method: "DELETE", headers: { "X-Share-Owner-Token": share.ownerToken }, retry: 0 });
       if (!isCurrent()) return false;
       forgetAlternativeComparisonShare(share.id);
-      setToast("후보 비교 공유 링크를 취소했습니다.");
+      setToast("부품 비교 공유 링크를 취소했어요.");
       return true;
     } catch (error: unknown) {
-      if (isCurrent()) setToast(error instanceof Error ? error.message : "후보 비교 공유 링크를 취소하지 못했습니다.");
+      if (isCurrent()) setToast(error instanceof Error ? error.message : "부품 비교 공유 링크를 취소하지 못했어요.");
       return false;
     } finally {
       if (alternativeComparisonRevokeInFlightRef.current.get(share.id) === routeRequestSequence) alternativeComparisonRevokeInFlightRef.current.delete(share.id);
@@ -2735,20 +2747,15 @@ function App() {
     setGeneratorDiagnostics([]);
     setGeneratorRecoveryOptions([]);
     try {
-      const scenarios = budgetLadderScenariosFor(request);
-      const results = await Promise.all(scenarios.map(async (scenario): Promise<GeneratorBudgetResult> => {
-        try {
-          const draft = await api<BuildGenerationResult>("/api/builds/recommend", {
-            method: "POST",
-            body: JSON.stringify(scenario.request),
-            retry: 2,
-            retryOnRateLimit: true
-          });
-          await rememberBuildSelection(draft.selection);
-          return { id: scenario.id, label: scenario.label, description: scenario.description, budgetWon: scenario.budgetWon, request: scenario.request, draft };
-        } catch (error: unknown) {
-          return { id: scenario.id, label: scenario.label, description: scenario.description, budgetWon: scenario.budgetWon, request: scenario.request, error: error instanceof Error ? error.message : "이 예산 구간의 자동 구성을 만들지 못했습니다.", diagnostics: diagnosticsFromError(error) };
-        }
+      const payload = await api<{ scenarios: GeneratorBudgetResult[] }>("/api/builds/recommend/budget-ladder", {
+        method: "POST",
+        body: JSON.stringify(request),
+        retry: 2,
+        retryOnRateLimit: true
+      });
+      const results = await Promise.all(payload.scenarios.map(async (scenario) => {
+        if (scenario.draft) await rememberBuildSelection(scenario.draft.selection);
+        return scenario;
       }));
       if (!isCurrent()) return;
       setGeneratorBudgetLadder(results);
@@ -2969,7 +2976,7 @@ function App() {
         const continuationRouteRequestSequence = routeRequestSequenceRef.current;
         const isContinuationCurrent = () => saveBuildRequestRef.current === continuationRequestVersion
           && routeRequestSequenceRef.current === continuationRouteRequestSequence;
-        const savedTargetLabel = target.kind === "candidate" ? "후보 구성" : target.kind === "generated" ? "자동 구성" : "수리 플랜";
+        const savedTargetLabel = target.kind === "candidate" ? "비교 구성" : target.kind === "generated" ? "자동 구성" : "수리 플랜";
         try {
           await navigator.clipboard.writeText(url);
           if (!isContinuationCurrent()) return;
@@ -3094,7 +3101,7 @@ function App() {
       ...(pickerPart.remainingUnknown !== undefined ? { remainingUnknown: pickerPart.remainingUnknown } : {})
     };
     if (candidateApplicationBlockedFor(candidateEvidence)) {
-      setToast("차단 오류가 확인된 후보는 자동 적용하지 않습니다. 다른 후보를 고르거나 이유를 확인해 주세요.");
+      setToast("차단 오류가 확인된 부품은 자동으로 적용하지 않아요. 다른 부품을 고르거나 이유를 확인해 주세요.");
       return;
     }
     if (picker.findingRuleId) {
@@ -3102,7 +3109,7 @@ function App() {
       setPicker(null);
       if (view === "result") {
         const quantityText = pickerPart.recommendedQuantity !== undefined && picker.category === "memory" ? ` ${pickerPart.recommendedQuantity}킷` : "";
-        openBuildChangePreview("대체 부품 적용", `${part.name}${quantityText}을 이 문제의 대체 후보로 적용합니다. 확인 후 견적 전체를 다시 검사해요.`, nextBuild, [part], candidateEvidence);
+        openBuildChangePreview("대체 부품 적용", `${part.name}${quantityText}을 이 문제의 대체 부품으로 적용해요. 확인 후 견적 전체를 다시 검사해요.`, nextBuild, [part], candidateEvidence);
       } else {
         rememberParts([part]);
         setCheckError(null);
@@ -3115,7 +3122,7 @@ function App() {
 
   function applySuggestion(category: PartCategory, part: Part, quantity?: number, affectedPartIds: string[] = [], candidateEvidence?: CandidateApplicationEvidence) {
     if (candidateApplicationBlockedFor(candidateEvidence)) {
-      setToast("차단 오류가 확인된 후보는 적용하지 않습니다. 다른 후보를 고르거나 이유를 확인해 주세요.");
+      setToast("차단 오류가 확인된 부품은 적용하지 않아요. 다른 부품을 고르거나 이유를 확인해 주세요.");
       return;
     }
     scenarioRequestSequenceRef.current += 1;
@@ -3212,7 +3219,7 @@ function App() {
 
   function compareCatalogScenarios(category: PartCategory, partsToCompare: CatalogPart[]) {
     if (!result || resultIsStale) {
-      setToast("현재 견적을 먼저 검사한 뒤 후보 미리 비교를 시작해 주세요.");
+      setToast("현재 견적을 먼저 검사한 뒤 부품 미리 비교를 시작해 주세요.");
       return;
     }
     void compareCandidateScenarios(partsToCompare.map((part) => ({
@@ -3258,18 +3265,18 @@ function App() {
 
   function applyCandidateScenario(item: CandidateScenarioCompareItem) {
     if (item.status !== "ready" || !item.result) {
-      setToast("미리 비교가 완료된 후보만 적용할 수 있습니다.");
+      setToast("미리 비교가 끝난 부품만 적용할 수 있어요.");
       return;
     }
     if (item.risk === "unsafe" || (!item.risk && item.result.blockerCount > 0)) {
-      setToast("전체 구성에서 차단 오류가 확인된 후보는 적용하지 않습니다.");
+      setToast("전체 구성에서 차단 오류가 확인된 부품은 적용하지 않아요.");
       return;
     }
     scenarioRequestSequenceRef.current += 1;
     setCandidateScenarioComparison(null);
     const quantityText = item.quantity !== undefined && item.category === "memory" ? ` ${item.quantity}킷` : "";
     const candidateRisk = item.risk ?? item.part.candidateRisk;
-    openBuildChangePreview("후보 미리 적용", `${item.part.name}${quantityText}을 전체 미리 비교 결과 기준으로 적용합니다. 확인 후 전체 호환성 규칙으로 다시 검사합니다.`, item.nextBuild, [item.part], {
+    openBuildChangePreview("부품 미리 적용", `${item.part.name}${quantityText}을 전체 미리 비교 결과 기준으로 적용합니다. 확인 후 전체 호환성 규칙으로 다시 검사합니다.`, item.nextBuild, [item.part], {
       ...(candidateRisk ? { risk: candidateRisk } : {}),
       ...(item.part.decision ? { decision: item.part.decision } : {}),
       ...(item.part.candidateReasons ? { reasons: item.part.candidateReasons } : {}),
@@ -3281,11 +3288,11 @@ function App() {
 
   function saveCandidateScenario(item: CandidateScenarioCompareItem) {
     if (item.status !== "ready" || !item.result) {
-      setToast("미리 비교가 완료된 후보만 저장할 수 있습니다.");
+      setToast("미리 비교가 끝난 부품만 저장할 수 있어요.");
       return;
     }
     if (item.risk === "unsafe" || (!item.risk && item.result.blockerCount > 0)) {
-      setToast("전체 구성에서 차단 오류가 확인된 후보는 새 견적으로 저장하지 않습니다.");
+      setToast("전체 구성에서 차단 오류가 확인된 부품은 새 견적으로 저장하지 않아요.");
       return;
     }
     scenarioRequestSequenceRef.current += 1;
@@ -3293,7 +3300,7 @@ function App() {
     requestSaveBuild({
       build: item.nextBuild,
       preferences: recommendationPreferences,
-      label: `${CATEGORY_LABELS[item.category]} 후보 적용 견적`,
+      label: `${CATEGORY_LABELS[item.category]} 부품 적용 견적`,
       kind: "candidate",
       ...(shareId && shareOwnerToken ? { parentBuildId: shareId } : {})
     });
@@ -3622,9 +3629,9 @@ function App() {
       alternativeComparisonShares={alternativeComparisonShares}
       savedBuildVersionShares={savedBuildVersionShares}
       onStart={() => navigate("/build", "editor")}
-      onGenerate={() => { generatorRequestRef.current += 1; setGenerating(false); setGeneratorDraft(null); setGeneratorVariants([]); setGeneratorBudgetLadder([]); setGeneratorError(null); setGeneratorDiagnostics([]); setGeneratorRecoveryOptions([]); navigate("/recommend", "generator"); }}
-      onDemo={() => loadDemoBuild(demoBuild(), "오류가 있는 시연 견적을 불러왔습니다. 호환성 오류와 대체 후보를 확인해 보세요.")}
-      onCompatibleDemo={() => loadDemoBuild(compatibleDemoBuild(), "호환 완료 시연 견적을 불러왔습니다. 업그레이드 후보와 조합 비교를 확인해 보세요.")}
+      onGenerate={() => openGenerator()}
+      onDemo={() => loadDemoBuild(demoBuild(), "문제가 있는 예시 견적을 불러왔습니다. 호환성 오류와 대체 부품을 확인해 보세요.")}
+      onCompatibleDemo={() => loadDemoBuild(compatibleDemoBuild(), "문제 없는 예시 견적을 불러왔습니다. 업그레이드 부품과 조합 비교를 확인해 보세요.")}
       onResume={() => navigate("/build", "editor")}
       onOpenResult={() => navigate("/result", "result")}
       onOpenHistory={() => navigate("/history", "history")}
@@ -3714,7 +3721,7 @@ function App() {
   ) : view === "version-comparison" ? (
     <Suspense fallback={<div className="shared-version-comparison-state"><FiLoader className="spin" /> 공유 견적 버전 비교 화면을 불러오는 중...</div>}><LazySharedSavedBuildVersionView onBack={() => navigate("/", "home")} onToast={setToast} /></Suspense>
   ) : view === "comparison" ? (
-    <Suspense fallback={<div className="shared-comparison-state"><FiLoader className="spin" /> 공유 후보 비교 화면을 불러오는 중...</div>}><LazySharedAlternativeComparisonView onBack={() => navigate("/", "home")} onToast={setToast} /></Suspense>
+    <Suspense fallback={<div className="shared-comparison-state"><FiLoader className="spin" /> 공유 부품 비교 화면을 불러오는 중...</div>}><LazySharedAlternativeComparisonView onBack={() => navigate("/", "home")} onToast={setToast} /></Suspense>
   ) : view === "watchlist" ? (
     <Suspense fallback={<div className="shared-watchlist-state"><FiLoader className="spin" /> 공유 가격 추적 목록을 불러오는 중...</div>}><LazySharedWatchlistView onBack={() => navigate("/", "home")} onImport={importSavedWatchlist} /></Suspense>
   ) : view === "admin" ? (
@@ -3835,9 +3842,9 @@ function App() {
   return (
     <div className="app-shell" data-route-key={locationKey}>
       <a className="skip-to-content" href="#main-content">본문으로 건너뛰기</a>
-      <Suspense fallback={<AppHeaderLoadingFallback />}><LazyAppHeader view={view} networkOnline={networkOnline} apiStatus={apiStatusDetails} bootstrapLoading={bootstrapLoading} bootstrapErrorCount={bootstrapIssues.length} savedBuildUnreadAlertCount={savedBuildUnreadAlertCount} catalogRefreshProgress={catalogRefreshProgress} onHome={() => navigate("/", "home")} onBuild={() => navigate("/build", "editor")} onGenerate={() => { generatorRequestRef.current += 1; setGenerating(false); setGeneratorDraft(null); setGeneratorVariants([]); setGeneratorBudgetLadder([]); setGeneratorError(null); setGeneratorDiagnostics([]); setGeneratorRecoveryOptions([]); navigate("/recommend", "generator"); }} onCatalog={() => navigate("/catalog", "catalog")} onAccessories={() => navigate("/accessories", "accessories")} onPriceWatchlist={() => navigate("/watchlist", "pricewatchlist")} onHistory={() => navigate("/history", "history")} /></Suspense>
+      <Suspense fallback={<AppHeaderLoadingFallback />}><LazyAppHeader view={view} networkOnline={networkOnline} apiStatus={apiStatusDetails} bootstrapLoading={bootstrapLoading} bootstrapErrorCount={bootstrapIssues.length} savedBuildUnreadAlertCount={savedBuildUnreadAlertCount} catalogRefreshProgress={catalogRefreshProgress} onHome={() => navigate("/", "home")} onBuild={() => navigate("/build", "editor")} onGenerate={() => openGenerator()} onCatalog={() => navigate("/catalog", "catalog")} onAccessories={() => navigate("/accessories", "accessories")} onPriceWatchlist={() => navigate("/watchlist", "pricewatchlist")} onHistory={() => navigate("/history", "history")} /></Suspense>
       <main className="page-container" id="main-content" tabIndex={-1}>{(incomingDraft || incomingPreferences) && <DraftSyncNotice build={incomingDraft ?? undefined} preferences={incomingPreferences ?? undefined} onApply={() => { skipNextHistoryRef.current = true; if (incomingDraft) setBuild(incomingDraft); if (incomingPreferences) setRecommendationPreferences(incomingPreferences); setResult(null); setCheckedInputFingerprint(null); setChangeHistory([]); setIncomingDraft(null); setIncomingPreferences(null); setToast("다른 탭에서 변경한 견적 또는 추천 기준을 불러왔습니다. 현재 기준으로 다시 검사해 주세요."); }} onDismiss={() => { setIncomingDraft(null); setIncomingPreferences(null); }} />}{(bootstrapIssues.length > 0 || !networkOnline || apiStatusDetails.status === "offline" || apiStatusDetails.status === "degraded") && <BootstrapNotice issues={bootstrapIssues} online={networkOnline} apiStatus={apiStatusDetails} onRetry={(resource) => setBootstrapRetryRequest((current) => ({ resource, nonce: current.nonce + 1 }))} onRetryAll={() => setBootstrapRetryRequest((current) => ({ resource: null, nonce: current.nonce + 1 }))} retryingResource={bootstrapLoading ? bootstrapRetryRequest.resource : null} retryingAll={bootstrapLoading && bootstrapRetryRequest.resource === null} />}<div className={`route-stage route-stage-${view}`} key={view}>{content}</div></main>
-      {candidateScenarioComparison && result && <Suspense fallback={<div className="modal-backdrop" role="presentation"><section className="candidate-scenario-dialog candidate-scenario-dialog-loading" role="dialog" aria-modal="true" aria-label="후보 미리 비교 로딩"><FiLoader className="spin" /> 선택 후보를 전체 구성에 적용하는 중...</section></div>}><LazyCandidateScenarioComparisonPanel state={candidateScenarioComparison} currentResult={result} onApply={applyCandidateScenario} onSave={saveCandidateScenario} onRetry={(itemId) => void retryCandidateScenario(itemId)} onClose={() => { scenarioRequestSequenceRef.current += 1; setCandidateScenarioComparison(null); }} onWatchPart={watchPart} onShareComparison={shareAlternativeComparison} onRevokeComparison={revokeAlternativeComparison} onToast={setToast} formatWon={formatWon} /></Suspense>}
+      {candidateScenarioComparison && result && <Suspense fallback={<div className="modal-backdrop" role="presentation"><section className="candidate-scenario-dialog candidate-scenario-dialog-loading" role="dialog" aria-modal="true" aria-label="부품 미리 비교 불러오는 중"><FiLoader className="spin" /> 선택한 부품을 전체 구성에 적용하는 중...</section></div>}><LazyCandidateScenarioComparisonPanel state={candidateScenarioComparison} currentResult={result} onApply={applyCandidateScenario} onSave={saveCandidateScenario} onRetry={(itemId) => void retryCandidateScenario(itemId)} onClose={() => { scenarioRequestSequenceRef.current += 1; setCandidateScenarioComparison(null); }} onWatchPart={watchPart} onShareComparison={shareAlternativeComparison} onRevokeComparison={revokeAlternativeComparison} onToast={setToast} formatWon={formatWon} /></Suspense>}
       {picker && (
         <PartPicker
           key={`${picker.category}-${picker.findingRuleId ?? "catalog"}`}
@@ -3898,8 +3905,8 @@ function BuildImportPreviewDialog({ envelope, currentBuild, currentPreferences, 
 
 function SaveBuildDialog({ name, decisionNote, targetLabel, targetKind, saving, expiryDays, onChange, onDecisionNoteChange, onExpiryChange, onClose, onSubmit }: { name: string; decisionNote: string; targetLabel?: string; targetKind?: SaveBuildTarget["kind"]; saving: boolean; expiryDays: SavedWatchlistExpiryDays; onChange: (value: string) => void; onDecisionNoteChange: (value: string) => void; onExpiryChange: (value: SavedWatchlistExpiryDays) => void; onClose: () => void; onSubmit: () => void }) {
   useModalAccessibility({ onClose, closeOnEscape: !saving, selector: '[aria-labelledby="save-build-dialog-title"]' });
-  const targetTitle = targetKind === "candidate" ? "후보 구성 새 견적 저장" : targetKind === "generated" ? "자동 구성 새 견적 저장" : "수리 플랜 새 견적 저장";
-  const targetInfo = targetKind === "candidate" ? "현재 견적은 유지되고, 비교한 후보 구성이 별도 저장됩니다." : targetKind === "generated" ? "현재 견적은 유지되고, 자동 구성 결과가 별도 저장됩니다." : "현재 견적은 유지되고, 비교한 수리 플랜 구성이 별도 저장됩니다.";
+  const targetTitle = targetKind === "candidate" ? "비교 구성 새 견적으로 저장" : targetKind === "generated" ? "자동 구성 새 견적 저장" : "수리 플랜 새 견적 저장";
+  const targetInfo = targetKind === "candidate" ? "현재 견적은 그대로 두고, 비교한 구성이 따로 저장돼요." : targetKind === "generated" ? "현재 견적은 유지되고, 자동 구성 결과가 별도 저장됩니다." : "현재 견적은 유지되고, 비교한 수리 플랜 구성이 별도 저장됩니다.";
   return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) onClose(); }}><section className="save-build-dialog" role="dialog" aria-modal="true" aria-labelledby="save-build-dialog-title"><div className="modal-header"><div><p className="eyebrow">SAVE BUILD</p><h2 id="save-build-dialog-title">{targetLabel ? targetTitle : "견적 저장·공유"}</h2><p>{targetLabel ? `${targetLabel}을 현재 견적과 별도의 새 견적으로 저장합니다.` : "이름과 선택 이유를 남기고 공유 링크 유효기간을 정합니다."}</p></div><button className="icon-button" type="button" onClick={onClose} disabled={saving} aria-label="견적 저장 창 닫기"><FiXCircle /></button></div><form className="save-build-form" onSubmit={(event) => { event.preventDefault(); if (name.trim()) onSubmit(); }}><label htmlFor="save-build-name">견적 이름</label><input id="save-build-name" data-modal-autofocus maxLength={SAVED_BUILD_NAME_MAX_LENGTH} value={name} onChange={(event) => onChange(event.target.value)} placeholder="예: 4K 게이밍 PC" disabled={saving} /><label htmlFor="save-build-decision-note">선택 이유 <span>(선택)</span></label><textarea id="save-build-decision-note" maxLength={SAVED_BUILD_DECISION_NOTE_MAX_LENGTH} rows={3} value={decisionNote} onChange={(event) => onDecisionNoteChange(event.target.value)} placeholder="예: QHD 게이밍, 그래픽카드 교체 여유, 예산 우선" disabled={saving} /><small className="save-build-note-counter">{decisionNote.length}/{SAVED_BUILD_DECISION_NOTE_MAX_LENGTH} · 공유 링크에도 함께 표시됩니다.</small><label htmlFor="save-build-expiry">공유 링크 유효기간</label><select id="save-build-expiry" aria-label="견적 공유 링크 유효기간" value={expiryDays} onChange={(event) => onExpiryChange(event.target.value === "7" ? 7 : event.target.value === "30" ? 30 : "never")} disabled={saving}><option value="never">무기한</option><option value="7">7일</option><option value="30">30일</option></select><p><FiInfo /> {targetLabel ? targetInfo : "현재 부품, 주변 부품, 추천 기준과 저장 순간의 검사 요약이 함께 보존됩니다."} {decisionNote.trim() ? "선택 이유는 공유 견적과 이력에서 다시 확인할 수 있습니다." : "선택 이유를 남기면 나중에 견적을 고른 기준을 다시 확인할 수 있습니다."} 만료된 링크는 다시 열 수 없습니다.</p><div className="save-build-actions"><button className="button button-light" type="button" onClick={onClose} disabled={saving}>취소</button><button className="button button-primary" type="submit" disabled={saving || !name.trim()}>{saving ? <><FiLoader className="spin" /> 저장 중...</> : <><FiSave /> 저장하고 링크 복사</>}</button></div></form></section></div>;
 }
 
@@ -3910,7 +3917,7 @@ function EditSavedBuildMetadataDialog({ name, decisionNote, saving, onChange, on
 
 function RequestErrorNotice({ message, onRetry, retrying, hasLastResult }: { message: string; onRetry: () => void; retrying: boolean; hasLastResult: boolean }) {
   return <div className="request-error" role="alert">
-    <div className="request-error-copy"><FiXCircle /><div><strong>검사 요청을 완료하지 못했습니다.</strong><p>{message}</p><small>{hasLastResult ? "마지막 성공 검사 결과는 유지됩니다." : "현재 견적 입력은 유지됩니다."}</small></div></div>
+    <div className="request-error-copy"><FiXCircle /><div><strong>잠시 문제가 생겼어요.</strong></div></div>
     <RetryAfterButton className="button button-small button-light" message={message} onRetry={onRetry} retrying={retrying} idleContent={<><FiRefreshCw /> 다시 시도</>} retryingContent={<><FiLoader className="spin" /> 재시도 중...</>} testId="request-retry-button" />
   </div>;
 }
@@ -3955,13 +3962,13 @@ function MobileEditorSurface({ build, partMap, accessoryMap, checking, checkErro
   }
 
   return <section className="mobile-editor-surface" aria-label="모바일 견적 편집">
-    <div className="mobile-editor-heading"><div><span className="mobile-kicker">BUILD / EDIT</span><h1>견적 구성</h1><p>필요한 부품을 순서대로 선택해 주세요.</p></div><span className="mobile-editor-count"><strong>{selectedCount}</strong><small>/ {preflight.requiredTotal} 필수</small></span></div>
+    <div className="mobile-editor-heading"><div><span className="mobile-kicker">BUILD / EDIT</span><h1>견적 구성</h1></div><span className="mobile-editor-count"><strong>{selectedCount}</strong><small>/ {preflight.requiredTotal} 필수</small></span></div>
     <div className="mobile-editor-tools"><input ref={importInputRef} type="file" accept=".json,application/json" aria-label="견적 JSON 파일 가져오기" onChange={(event) => void importBuildFile(event)} disabled={checking} /><button type="button" onClick={() => importInputRef.current?.click()} disabled={checking}><FiDatabase /> 가져오기</button><button type="button" onClick={onExportBuild} disabled={checking}><FiDownload /> 저장</button><button type="button" onClick={onReset} disabled={checking}><FiRefreshCw /> 초기화</button></div>
-    <div className="mobile-editor-progress"><div><span>검사 준비</span><strong>{selectedCount} / {preflight.requiredTotal}</strong></div><div className="mobile-progress-track"><span style={{ width: `${progress}%` }} /></div><small>{preflight.status === "ready" ? "모든 필수 부품을 선택했습니다." : "필수 부품을 모두 선택하면 검사를 시작할 수 있어요."}</small></div>
-    <section className="mobile-editor-list" aria-label="부품 선택 목록"><div className="mobile-section-heading"><div><span className="mobile-kicker">COMPONENTS</span><h2>부품 선택</h2></div><span className="mobile-section-meta">{PART_CATEGORIES.length}개 범주</span></div><div className="mobile-editor-rows">{PART_CATEGORIES.map((category) => { const categoryMeta = CATEGORY_META[category]; const selections = selectionList(build, category); const boxedCooler = category === "cooler" && build.cpu ? partMap.get(build.cpu.partId)?.specs.coolerIncluded === true : false; const chosen = selections.length > 0 || boxedCooler; const summary = selections.length === 0 ? boxedCooler ? "선택한 CPU에 기본 포함" : categoryMeta.required ? "필수 부품을 선택해 주세요" : "선택 사항" : selections.map((selection) => `${partMap.get(selection.partId)?.name ?? selection.partId}${selection.quantity > 1 ? ` ×${selection.quantity}` : ""}`).join(", "); const RowIcon = categoryMeta.Icon; return <button className={`mobile-editor-row ${chosen ? "chosen" : ""}`} type="button" key={category} onClick={() => onOpenPicker(category)}><span className="mobile-editor-row-icon"><RowIcon /></span><span className="mobile-editor-row-copy"><strong>{categoryMeta.label}{categoryMeta.required && <em>필수</em>}</strong><small>{summary}</small></span><span className={`mobile-editor-row-state ${chosen ? "chosen" : categoryMeta.required ? "required" : "optional"}`}>{chosen ? "선택됨" : categoryMeta.required ? "필수" : "선택"}</span><FiArrowRight className="mobile-editor-row-arrow" /></button>; })}</div></section>
-    <details className="mobile-editor-advanced"><summary><span><FiActivity /> 추천 기준·가격·데이터 확인</span><small>선택 사항</small></summary><div className="mobile-editor-advanced-content"><RecommendationControls preferences={recommendationPreferences} onChange={onRecommendationPreferencesChange} disabled={checking} /><BuildPriceSummaryPanel snapshot={buildPriceSnapshotFor(build, partMap, accessoryMap)} budgetWon={recommendationPreferences.budgetWon} unknownItems={unknownPriceItemsFor(build, partMap, accessoryMap)} onRefresh={onRefreshCatalogItem} refreshingItemId={refreshingPartId} /><BuildPreflightPanel preflight={preflight} onRefresh={onRefreshCatalogItem} onRefreshAll={onRefreshAllCatalogItems} refreshingPartId={refreshingPartId} /></div></details>
+    <div className="mobile-editor-progress"><div><span>검사 준비</span><strong>{selectedCount} / {preflight.requiredTotal}</strong></div><div className="mobile-progress-track"><span style={{ width: `${progress}%` }} /></div></div>
+    <section className="mobile-editor-list" aria-label="부품 선택 목록"><div className="mobile-section-heading"><div><span className="mobile-kicker">COMPONENTS</span><h2>부품 선택</h2></div></div><div className="mobile-editor-rows">{PART_CATEGORIES.map((category) => { const categoryMeta = CATEGORY_META[category]; const selections = selectionList(build, category); const boxedCooler = category === "cooler" && build.cpu ? partMap.get(build.cpu.partId)?.specs.coolerIncluded === true : false; const chosen = selections.length > 0 || boxedCooler; const summary = selections.length === 0 ? boxedCooler ? "선택한 CPU에 기본 포함" : categoryMeta.required ? "필수 부품을 선택해 주세요" : "선택 사항" : selections.map((selection) => `${partMap.get(selection.partId)?.name ?? selection.partId}${selection.quantity > 1 ? ` ×${selection.quantity}` : ""}`).join(", "); const RowIcon = categoryMeta.Icon; return <button className={`mobile-editor-row ${chosen ? "chosen" : ""}`} type="button" key={category} onClick={() => onOpenPicker(category)}><span className="mobile-editor-row-icon"><RowIcon /></span><span className="mobile-editor-row-copy"><strong>{categoryMeta.label}{categoryMeta.required && <em>필수</em>}</strong><small>{summary}</small></span>{!chosen && <span className={`mobile-editor-row-state ${categoryMeta.required ? "required" : "optional"}`}>{categoryMeta.required ? "필수" : "선택"}</span>}<FiArrowRight className="mobile-editor-row-arrow" /></button>; })}</div></section>
+    <details className="mobile-editor-advanced"><summary><span><FiActivity /> 추천 기준·가격·데이터 확인</span></summary><div className="mobile-editor-advanced-content"><RecommendationControls preferences={recommendationPreferences} onChange={onRecommendationPreferencesChange} disabled={checking} /><BuildPriceSummaryPanel snapshot={buildPriceSnapshotFor(build, partMap, accessoryMap)} budgetWon={recommendationPreferences.budgetWon} unknownItems={unknownPriceItemsFor(build, partMap, accessoryMap)} onRefresh={onRefreshCatalogItem} refreshingItemId={refreshingPartId} /><BuildPreflightPanel preflight={preflight} onRefresh={onRefreshCatalogItem} onRefreshAll={onRefreshAllCatalogItems} refreshingPartId={refreshingPartId} /></div></details>
     {checkError && <RequestErrorNotice message={checkError} onRetry={onCheck} retrying={checking} hasLastResult={hasLastResult} />}
-    <div className="mobile-editor-submit"><button className="mobile-primary-action" type="button" onClick={onCheck} disabled={checking || preflight.status !== "ready"}>{checking ? <><FiLoader className="spin" /><span>검사 중...</span></> : <><FiSearch /><span>호환성 검사하기</span><FiArrowRight /></>}</button><small>현재 카탈로그 기준으로 확인해요.</small></div>
+    <div className="mobile-editor-submit"><button className="mobile-primary-action" type="button" onClick={onCheck} disabled={checking || preflight.status !== "ready"}>{checking ? <><FiLoader className="spin" /><span>검사 중...</span></> : <><FiSearch /><span>호환성 검사하기</span><FiArrowRight /></>}</button></div>
   </section>;
 }
 
@@ -4045,14 +4052,14 @@ function EditorView({
       <MobileEditorSurface build={build} partMap={partMap} accessoryMap={accessoryMap} checking={checking} checkError={checkError} hasLastResult={hasLastResult} recommendationPreferences={recommendationPreferences} onRecommendationPreferencesChange={onRecommendationPreferencesChange} onOpenPicker={onOpenPicker} onCheck={onCheck} onExportBuild={onExportBuild} onImportBuild={onImportBuild} onReset={onReset} onRefreshCatalogItem={onRefreshCatalogItem} onRefreshAllCatalogItems={onRefreshAllCatalogItems} refreshingPartId={refreshingPartId} onToast={onToast} />
       <div className="desktop-editor-surface">
       <div className="workspace-heading">
-        <div><button className="back-link" onClick={onBack}><FiArrowLeft /> 홈으로</button><p className="eyebrow">BUILD EDITOR</p><h1>나의 PC 견적 구성</h1><p>부품을 선택하면 호환성 검사를 위한 사실과 규칙을 준비합니다.</p></div>
+        <div><button className="back-link" onClick={onBack}><FiArrowLeft /> 홈으로</button><p className="eyebrow">BUILD EDITOR</p><h1>내 견적 구성</h1><p>부품을 고르면, 함께 쓸 수 있는지 바로 확인할 수 있어요.</p></div>
         <div className="build-editor-actions"><input ref={buildImportInputRef} className="build-transfer-input" type="file" accept=".json,application/json" aria-label="견적 JSON 파일 가져오기" onChange={(event) => void importBuildFile(event)} disabled={checking} /><button className="button button-light" type="button" onClick={() => buildImportInputRef.current?.click()} disabled={checking}><FiDatabase /> 견적 JSON 가져오기</button><button className="button button-light" type="button" onClick={onExportBuild} disabled={checking}><FiDownload /> 견적 JSON 저장</button><button className="button button-ghost" type="button" onClick={onReset} disabled={checking}><FiRefreshCw /> 초기화</button></div>
       </div>
-      <div className="progress-strip"><div><span className="progress-label">필수 부품 선택</span><strong>{selectedCount} / {requiredCount}</strong></div><div className="progress-track"><span style={{ width: `${(selectedCount / requiredCount) * 100}%` }} /></div><span className="progress-hint">{selectedCount === requiredCount ? "검사할 준비가 되었습니다." : "필수 부품을 모두 선택해 주세요."}</span></div>
+      <div className="progress-strip"><div><span className="progress-label">필수 부품 선택</span><strong>{selectedCount} / {requiredCount}</strong></div><div className="progress-track"><span style={{ width: `${(selectedCount / requiredCount) * 100}%` }} /></div></div>
       {checking && <Suspense fallback={<div className="compatibility-check-progress" data-testid="compatibility-check-progress" role="status"><FiLoader className="spin" /> 검사 준비 중...</div>}><LazyCompatibilityCheckProgress /></Suspense>}
       <div className="editor-layout">
         <section className="component-list">
-          <div className="section-title-row"><div><p className="eyebrow">COMPONENTS</p><h2>부품 선택</h2></div><span className="muted-count">총 {PART_CATEGORIES.length}개 항목</span></div>
+          <div className="section-title-row"><div><p className="eyebrow">COMPONENTS</p><h2>부품 선택</h2></div></div>
           {PART_CATEGORIES.map((category) => (
             <ComponentCard key={category} category={category} build={build} setBuild={setBuild} partMap={partMap} onOpenPicker={onOpenPicker} />
           ))}
@@ -4063,16 +4070,19 @@ function EditorView({
         <aside className="summary-sidebar">
           <div className="sticky-summary">
             <div className="summary-header"><div><p className="eyebrow">LIVE SUMMARY</p><h2>검사 준비 상태</h2></div><span className="summary-pulse"><FiActivity /></span></div>
-            <div className="summary-list">{PART_CATEGORIES.map((category) => { const boxed = category === "cooler" && build.cpu ? partMap.get(build.cpu.partId)?.specs.coolerIncluded === true : false; const chosen = selectionList(build, category).length > 0 || boxed; return <div className={chosen ? "summary-row chosen" : "summary-row"} key={category}><span className="summary-check">{chosen ? <FiCheck /> : <span />}</span><span>{CATEGORY_LABELS[category]}</span><small>{chosen ? (boxed && selectionList(build, category).length === 0 ? "CPU 기본 포함" : selectionList(build, category).length > 1 ? `${selectionList(build, category).length}종` : "선택됨") : "미선택"}</small></div>; })}</div>
+            <div className="summary-list">{PART_CATEGORIES.map((category) => { const boxed = category === "cooler" && build.cpu ? partMap.get(build.cpu.partId)?.specs.coolerIncluded === true : false; const chosen = selectionList(build, category).length > 0 || boxed; return <div className={chosen ? "summary-row chosen" : "summary-row"} key={category}><span className="summary-check">{chosen ? <FiCheck /> : <span />}</span><span>{CATEGORY_LABELS[category]}</span></div>; })}</div>
             <div className="summary-divider" />
             <div className="graphics-mode"><div><span className="mini-label">그래픽 출력</span><strong>{build.gpu ? "외장 그래픽카드" : build.useIntegratedGraphics ? "CPU 내장 그래픽" : "선택 필요"}</strong></div><FiMonitor /></div>
-            <RecommendationControls preferences={recommendationPreferences} onChange={onRecommendationPreferencesChange} disabled={checking} />
-            <BuildPriceSummaryPanel snapshot={buildPriceSnapshotFor(build, partMap, accessoryMap)} budgetWon={recommendationPreferences.budgetWon} unknownItems={unknownPriceItemsFor(build, partMap, accessoryMap)} onRefresh={onRefreshCatalogItem} refreshingItemId={refreshingPartId} />
-            <BuildPreflightPanel preflight={preflight} onRefresh={onRefreshCatalogItem} onRefreshAll={onRefreshAllCatalogItems} refreshingPartId={refreshingPartId} />
+            <details className="desktop-summary-details">
+              <summary><span><FiActivity /> 추천·가격·확인 정보</span><FiChevronDown /></summary>
+              <div className="desktop-summary-details-body">
+                <RecommendationControls preferences={recommendationPreferences} onChange={onRecommendationPreferencesChange} disabled={checking} />
+                <BuildPriceSummaryPanel snapshot={buildPriceSnapshotFor(build, partMap, accessoryMap)} budgetWon={recommendationPreferences.budgetWon} unknownItems={unknownPriceItemsFor(build, partMap, accessoryMap)} onRefresh={onRefreshCatalogItem} refreshingItemId={refreshingPartId} />
+                <BuildPreflightPanel preflight={preflight} onRefresh={onRefreshCatalogItem} onRefreshAll={onRefreshAllCatalogItems} refreshingPartId={refreshingPartId} />
+              </div>
+            </details>
             <button className="button button-primary full-width" onClick={onCheck} disabled={checking}>{checking ? <><FiLoader className="spin" /> 검사 중...</> : <><FiActivity /> 호환성 검사하기</>}</button>
             {checkError && <RequestErrorNotice message={checkError} onRetry={onCheck} retrying={checking} hasLastResult={hasLastResult} />}
-            <p className="summary-footnote"><FiInfo /> 검사는 현재 카탈로그 기준으로 실행해요.</p>
-            {meta && <p className="catalog-mini"><FiDatabase /> {meta.catalogEligibleCount ?? meta.catalogCount}개 핵심 후보 · 원본 {meta.catalogCount}개 · {new Date(meta.catalogUpdatedAt).toLocaleDateString("ko-KR")} 기준</p>}
           </div>
         </aside>
       </div>
@@ -4132,7 +4142,7 @@ function ComponentCard({ category, build, setBuild, partMap, onOpenPicker }: { c
   const [expandedPartId, setExpandedPartId] = useState<string | null>(null);
   return (
     <article className={selections.length > 0 || boxedCooler ? "component-card selected" : "component-card"}>
-      <div className="component-card-top"><div className="component-heading"><span className="component-icon"><Icon /></span><div><div className="component-label-row"><h3>{meta.label}</h3>{meta.required && !boxedCooler ? <span className="required-badge">필수</span> : <span className="optional-badge">선택</span>}</div><p>{meta.helper}</p></div></div><span className={selections.length > 0 || boxedCooler ? "selection-state selected-state" : "selection-state"}>{selections.length > 0 ? <><FiCheck /> 선택됨</> : boxedCooler ? <><FiCheck /> CPU 기본 포함</> : "미선택"}</span></div>
+      <div className="component-card-top"><div className="component-heading"><span className="component-icon"><Icon /></span><div><div className="component-label-row"><h3>{meta.label}</h3>{meta.required && !boxedCooler ? <span className="required-badge">필수</span> : <span className="optional-badge">선택</span>}</div><p>{meta.helper}</p></div></div><span className={selections.length > 0 || boxedCooler ? "selection-state selected-state" : "selection-state"}>{selections.length > 0 ? <FiCheck /> : boxedCooler ? <><FiCheck /> CPU 기본 포함</> : "미선택"}</span></div>
       <div className="component-card-body">
         {selections.length === 0 ? boxedCooler ? <div className="included-selection"><FiCheck /><span>선택한 CPU에 기본 쿨러가 포함되어 있습니다.</span><button className="text-button" onClick={() => onOpenPicker(category)}>별도 쿨러 선택 <FiPlus /></button></div> : <div className="empty-selection"><span>선택된 부품이 없습니다.</span><button className="button button-small button-light" onClick={() => onOpenPicker(category)}><FiPlus /> {meta.multiple ? "부품 추가" : "부품 선택"}</button></div> : <div className="selected-lines">{selections.map((selection, index) => { const part = partMap.get(selection.partId); const expanded = expandedPartId === selection.partId; const quantityLabel = category === "memory" && (part?.specs.memoryModuleCountPerKit ?? 1) > 1 ? "킷 수량" : "수량"; return <div className={expanded ? "selected-line expanded" : "selected-line"} key={`${selection.partId}-${index}`}><div className="selected-line-main"><div className="selected-line-info"><strong>{part?.name ?? selection.partId}</strong><span>{partSummary(part)}</span>{part && <button className="text-button part-detail-toggle" type="button" aria-expanded={expanded} onClick={() => setExpandedPartId(expanded ? null : selection.partId)}>{expanded ? "상세 스펙 닫기" : "상세 스펙 보기"} <FiChevronDown /></button>}</div><div className="selected-line-controls"><label className="quantity-control"><span>{quantityLabel}</span><input type="number" inputMode="numeric" min="1" max="99" value={selection.quantity} onChange={(event) => setBuild((current) => updateQuantity(current, category, index, Number(event.target.value)))} aria-label={`${meta.label} ${quantityLabel}`} /></label><button className="icon-button danger-button" onClick={() => setBuild((current) => removeSelection(current, category, index))} aria-label={`${part?.name ?? meta.label} 삭제`}><FiTrash2 /></button></div></div>{part && expanded && <PartEvidence part={part} />}</div>; })}<button className="text-button" onClick={() => onOpenPicker(category)}><FiPlus /> {meta.multiple ? "다른 부품 추가" : "다른 부품으로 변경"}</button></div>}
         {category === "gpu" && <label className={build.gpu ? "graphics-toggle disabled" : "graphics-toggle"}><input type="checkbox" checked={build.useIntegratedGraphics} disabled={Boolean(build.gpu)} onChange={(event) => setBuild((current) => ({ ...current, useIntegratedGraphics: event.target.checked }))} /><span className="toggle-ui" /><span><strong>CPU 내장 그래픽만 사용</strong><small>{build.gpu ? "외장 그래픽카드가 선택되어 있습니다." : "외장 그래픽카드 없이 화면을 출력합니다."}</small></span></label>}
@@ -4192,8 +4202,8 @@ function PartEvidence({ part }: { part: Part }) {
     <div className="part-evidence-meta"><span><FiDatabase /> {qualityLabel}</span><span className={`part-evidence-price ${priceEvidence}`} title={catalogPriceEvidenceDescriptionFor(part)}>{isKnownPrice(part.priceWon) ? `가격 ${formatWon(part.priceWon)}` : "가격 확인 필요"} · {catalogPriceEvidenceLabelFor(part)}</span><span>{part.updatedAt ? `갱신 ${new Date(part.updatedAt).toLocaleDateString("ko-KR")}` : "갱신 시점 없음"}</span></div>
     <CatalogSpecProvenance part={part} compact />
     <div className="part-evidence-grid">{suggestionSpecRows(part).map(([label, value]) => <div className="part-evidence-row" key={label}><span>{label}</span><strong>{formatSpecValue(value)}</strong></div>)}</div>
-    {part.missingFields.length > 0 && <p className="part-evidence-missing"><FiInfo /> 확인되지 않은 항목: {part.missingFields.join(", ")}</p>}
-    <div className="part-evidence-actions">{part.rawSpecText && <button className="text-button" type="button" aria-expanded={rawOpen} onClick={() => setRawOpen((current) => !current)}>{rawOpen ? "원문 스펙 닫기" : "원문 스펙 보기"} <FiChevronDown /></button>}{sourceUrl && <a href={sourceUrl} target="_blank" rel="noreferrer">다나와 원문 <FiExternalLink /></a>}</div>
+    {part.missingFields.length > 0 && <p className="part-evidence-missing"><FiInfo /> 확인되지 않은 항목: {part.missingFields.map((field) => catalogMissingFieldLabelFor(field)).join(", ")}</p>}
+    <div className="part-evidence-actions">{part.rawSpecText && <button className="text-button" type="button" aria-expanded={rawOpen} onClick={() => setRawOpen((current) => !current)}>{rawOpen ? "수집된 스펙 닫기" : "수집된 스펙 보기"} <FiChevronDown /></button>}{sourceUrl && <a href={sourceUrl} target="_blank" rel="noreferrer">다나와 보기 <FiExternalLink /></a>}</div>
     {rawOpen && part.rawSpecText && <pre className="part-evidence-raw">{part.rawSpecText}</pre>}
   </div>;
 }
@@ -4230,7 +4240,7 @@ function StaleResultView({ build, partMap, lastCheckedAt, entries, onRestore, ch
       <div>
         <p className="eyebrow">RECHECK REQUIRED</p>
         <h1>현재 구성은 아직 검사되지 않았습니다.</h1>
-        <p>부품 수량·선택 또는 추천 기준이 마지막 검사 이후 바뀌었습니다. 이전 결과와 추천 후보는 지금 구성에 적용하지 않아요. 다시 검사한 뒤 확인해 주세요.</p>
+        <p>부품 수량·선택 또는 추천 기준이 마지막 검사 이후 바뀌었습니다. 이전 결과와 추천 부품은 지금 구성에 적용하지 않아요. 다시 검사한 뒤 확인해 주세요.</p>
         <small>마지막 성공 검사: {new Date(lastCheckedAt).toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" })}</small>
       </div>
       <button className="button button-primary" onClick={onCheck} disabled={checking}>{checking ? <><FiLoader className="spin" /> 검사 중...</> : <><FiActivity /> 현재 구성 다시 검사</>}</button>
@@ -4241,7 +4251,7 @@ function StaleResultView({ build, partMap, lastCheckedAt, entries, onRestore, ch
         const selections = selectionList(build, category);
         return <div className="stale-build-item" key={category}><span>{CATEGORY_LABELS[category]}</span><strong>{selections.length === 0 ? "미선택" : selections.map((selection) => `${partMap.get(selection.partId)?.name ?? selection.partId}${selection.quantity > 1 ? ` ×${selection.quantity}` : ""}`).join(", ")}</strong></div>;
       })}{accessorySelections(build).length > 0 && <div className="stale-build-item"><span>주변 부품</span><strong>{accessorySelections(build).length}종 · {accessorySelections(build).reduce((total, selection) => total + selection.quantity, 0)}개</strong></div>}</div>
-      <p className="stale-result-note"><FiInfo /> 다시 검사하기 전까지 이전 결과의 수정 제안·대체 후보·업그레이드 추천은 숨겨 둬요. 오래된 결과와 섞이지 않게 하려는 거예요.</p>
+      <p className="stale-result-note"><FiInfo /> 다시 검사하기 전까지 이전 결과의 수정 제안·대체 부품·업그레이드 추천은 숨겨 둬요. 오래된 결과와 섞이지 않게 하려는 거예요.</p>
     </section>
     <ChangeHistoryPanel entries={entries} onRestore={onRestore} restoring={checking} />
   </div>;
@@ -4250,7 +4260,7 @@ function StaleResultView({ build, partMap, lastCheckedAt, entries, onRestore, ch
 function ChangeHistoryPanel({ entries, onRestore, restoring }: { entries: BuildHistoryEntry[]; onRestore: (entry: BuildHistoryEntry) => void; restoring: boolean }) {
   if (entries.length === 0) return null;
   return <section className="change-history-panel" aria-label="견적 변경 이력">
-    <div className="change-history-heading"><div><p className="eyebrow">BUILD HISTORY</p><h2>변경 이력</h2><p>후보를 시험하거나 수량을 바꾼 뒤 이전 구성으로 복원할 수 있습니다.</p></div><span className="change-history-icon"><FiClock /></span></div>
+    <div className="change-history-heading"><div><p className="eyebrow">BUILD HISTORY</p><h2>변경 이력</h2><p>부품을 시험하거나 수량을 바꾼 뒤 이전 구성으로 되돌릴 수 있어요.</p></div><span className="change-history-icon"><FiClock /></span></div>
     <div className="change-history-list">{entries.slice(0, 6).map((entry, index) => <article className="change-history-item" key={entry.id}><div className="change-history-item-copy"><span>{index === 0 ? "최근 변경" : `${index + 1}단계 전`}</span><strong>{entry.label}</strong><small>{new Date(entry.changedAt).toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" })}</small></div><button className="button button-small button-light" type="button" onClick={() => onRestore(entry)} disabled={restoring}><FiRefreshCw /> {restoring ? "검사 중..." : "이전 구성 복원"}</button></article>)}</div>
     <p className="change-history-note"><FiInfo /> 복원은 선택 부품과 추천 기준을 함께 되돌린 뒤 현재 카탈로그 기준으로 자동 재검사합니다.</p>
   </section>;
@@ -4269,7 +4279,7 @@ function BuildScenarioPreviewPanel({ preview, currentResult, onApply, onRetry, o
     return <section className="build-scenario-preview loading" aria-label="구성 미리 보기" data-testid="build-scenario-preview" role="status"><div className="build-scenario-preview-heading"><div><p className="eyebrow">WHAT-IF CHECK</p><h2>구성을 미리 확인하는 중...</h2><p>{preview.summary}</p></div><FiLoader className="spin" /></div><div className="build-scenario-loading-line"><FiActivity /> 견적은 바꾸지 않고 전체 호환성을 다시 계산해요.</div></section>;
   }
   if (preview.status === "error" || !preview.result) {
-    return <section className="build-scenario-preview error" aria-label="구성 미리 보기" data-testid="build-scenario-preview" role="alert"><div className="build-scenario-preview-heading"><div><p className="eyebrow">WHAT-IF CHECK</p><h2>구성을 미리 확인하지 못했습니다.</h2><p>{preview.error ?? "후보를 전체 견적에 적용하지 못했습니다."}</p></div><FiXCircle /></div><div className="build-scenario-preview-actions"><button className="button button-light" type="button" onClick={onRetry}><FiRefreshCw /> 다시 확인</button><button className="button button-light" type="button" onClick={onClose}>닫기</button></div></section>;
+    return <section className="build-scenario-preview error" aria-label="구성 미리 보기" data-testid="build-scenario-preview" role="alert"><div className="build-scenario-preview-heading"><div><p className="eyebrow">WHAT-IF CHECK</p><h2>구성을 미리 확인하지 못했습니다.</h2><p>{preview.error ?? "부품을 전체 견적에 적용하지 못했어요."}</p></div><FiXCircle /></div><div className="build-scenario-preview-actions"><button className="button button-light" type="button" onClick={onRetry}><FiRefreshCw /> 다시 확인</button><button className="button button-light" type="button" onClick={onClose}>닫기</button></div></section>;
   }
   const nextResult = preview.result;
   const comparison = buildScenarioComparisonFor(currentResult, nextResult);
@@ -4282,18 +4292,18 @@ function BuildScenarioPreviewPanel({ preview, currentResult, onApply, onRetry, o
         ? `차단 위험은 줄었지만 주의 항목이 ${comparison.warningDelta}개 늘었습니다. 성능·안정성 조건을 함께 확인해 주세요.`
         : "전체 위험이 줄었습니다. 남은 항목이 있다면 아래 목록을 확인해 주세요."
     : comparison.direction === "worsened"
-      ? "후보 적용 뒤 위험이 늘어 실제 적용하지 않는 편이 안전합니다."
+      ? "부품 적용 뒤 위험이 늘어 실제로 적용하지 않는 편이 안전해요."
       : comparison.direction === "changed"
         ? "결과나 가격이 바뀌었지만 위험 수준은 같아요. 바뀐 이유를 확인해 주세요."
         : "현재 구성과 위험·가격 결과가 같아 교체 이점이 확인되지 않습니다.";
   return <section className={`build-scenario-preview ${comparison.direction}`} aria-label="구성 미리 보기" data-testid="build-scenario-preview">
     <div className="build-scenario-preview-heading"><div><p className="eyebrow">WHAT-IF CHECK</p><h2>구성 미리 보기</h2><p>{preview.summary}</p></div><div className="build-scenario-preview-heading-actions"><span className={`build-scenario-direction ${comparison.direction}`}>{directionLabel}</span><button className="icon-button" type="button" onClick={onClose} aria-label="구성 미리 보기 닫기"><FiXCircle /></button></div></div>
-    <div className="build-scenario-candidate"><span>{CATEGORY_LABELS[preview.category]}</span><strong>{preview.part.name}</strong><small>후보를 전체 부품 조합에 적용한 결과 · 실제 견적은 아직 바뀌지 않음</small></div>
+    <div className="build-scenario-candidate"><span>{CATEGORY_LABELS[preview.category]}</span><strong>{preview.part.name}</strong><small>부품을 전체 조합에 적용한 결과 · 실제 견적은 아직 바뀌지 않음</small></div>
     <div className="build-scenario-comparison"><div><span>현재 구성</span><strong>{scenarioStatusLabel(comparison.currentStatus)}</strong><small>{scenarioRiskText(currentResult)}</small>{currentResult.priceComplete ? <small>총액 {formatWon(currentResult.totalPriceWon)}</small> : <small>총액 가격 확인 필요</small>}</div><b>→</b><div className="next"><span>미리 적용</span><strong>{scenarioStatusLabel(comparison.nextStatus)}</strong><small>{scenarioRiskText(nextResult)}</small>{nextResult.priceComplete ? <small>총액 {formatWon(nextResult.totalPriceWon)}</small> : <small>총액 가격 확인 필요</small>}</div></div>
     <div className="build-scenario-summary"><strong>{comparison.summary}</strong><span>{scenarioOutcomeNote}</span></div>
     <div className="build-scenario-findings"><div><strong>미리 적용 후 남는 확인 항목</strong><span>{nextFindings.length > 0 ? `${nextResult.findings.filter((finding) => finding.severity !== "info").length}개 중 최대 3개 표시` : "차단·주의·확인 필요 없음"}</span></div>{nextFindings.length > 0 && <ul>{nextFindings.map((finding) => <li key={finding.id}><b>{finding.severity === "blocker" ? "차단" : finding.severity === "warning" ? "주의" : "확인"}</b>{finding.title}</li>)}</ul>}</div>
     <div className="build-scenario-preview-actions"><button className="button button-light" type="button" onClick={onClose}>계속 비교</button><button className="button button-primary" type="button" onClick={onApply}><FiActivity /> 이 구성 적용 후 다시 검사</button></div>
-    <p className="build-scenario-note"><FiInfo /> 이 화면은 후보를 적용해 보기만 한 결과예요. 적용 버튼을 누르기 전까지 선택·저장 견적·검사 결과는 바뀌지 않아요.</p>
+    <p className="build-scenario-note"><FiInfo /> 이 화면은 부품을 적용해 보기만 한 결과예요. 적용 버튼을 누르기 전까지 선택·저장 견적·검사 결과는 바뀌지 않아요.</p>
   </section>;
 }
 
@@ -4330,7 +4340,7 @@ function BuildHealthPanel({ metrics, gpuSelected, psuSelected, caseSelected }: {
     {
       label: "GPU 두께",
       value: metrics.gpuThicknessMm === undefined ? gpuSelected ? "확인 필요" : "미선택" : `${metrics.gpuThicknessMm}mm`,
-      detail: metrics.gpuThicknessMm === undefined ? "GPU 두께 원문을 확인해야 합니다" : metrics.gpuThicknessMm >= 55 ? "두꺼운 GPU · 주변 슬롯 간섭 확인" : "인접 슬롯 간섭 기준 이내",
+      detail: metrics.gpuThicknessMm === undefined ? "GPU 두께 정보를 확인해야 합니다" : metrics.gpuThicknessMm >= 55 ? "두꺼운 GPU · 주변 슬롯 간섭 확인" : "인접 슬롯 간섭 기준 이내",
       Icon: FiLayers,
       tone: gpuSelected && (metrics.gpuThicknessMm === undefined || metrics.gpuThicknessMm >= 55) ? "warning" : "good"
     },
@@ -4342,13 +4352,13 @@ function BuildHealthPanel({ metrics, gpuSelected, psuSelected, caseSelected }: {
       tone: metrics.psuClearanceMm !== undefined && metrics.psuClearanceMm < 0 ? "danger" : psuSelected && caseSelected && metrics.psuClearanceMm === undefined ? "warning" : "good"
     }
   ];
-  return <section className="health-panel" data-testid="data-health-panel"><div className="health-heading"><div><p className="eyebrow">BUILD TELEMETRY</p><h2>구성 자원 진단</h2></div><span><FiActivity /> 규칙 기준</span></div><div className="health-grid">{healthItems.map(({ label, value, detail, Icon, tone }) => <div className={`health-item ${tone}`} key={label}><span className="health-icon"><Icon /></span><div><span>{label}</span><strong>{value}</strong><small>{detail}</small></div></div>)}</div></section>;
+  return <section className="health-panel" data-testid="data-health-panel"><div className="health-heading"><div><p className="eyebrow">BUILD TELEMETRY</p><h2>구성 자원 확인</h2></div><span><FiActivity /> 규칙으로 확인</span></div><div className="health-grid">{healthItems.map(({ label, value, detail, Icon, tone }) => <div className={`health-item ${tone}`} key={label}><span className="health-icon"><Icon /></span><div><span>{label}</span><strong>{value}</strong><small>{detail}</small></div></div>)}</div></section>;
 }
 
 function M2SlotAssignmentPanel({ assignments, mode }: { assignments: M2SlotAssignment[]; mode?: BuildMetrics["m2SlotAssignmentMode"] }) {
   const connectionLabels: Record<string, string> = { cpu: "CPU 직결", chipset: "칩셋", unknown: "연결 주체 확인" };
   const isManual = mode === "manual";
-  return <section className="m2-assignment-panel"><div className="m2-assignment-heading"><div><p className="eyebrow">M.2 SLOT PLAN</p><h2>{isManual ? "수동 지정 슬롯 배치" : "자동 계산 슬롯 배치"}</h2><p>{isManual ? "사용자가 지정한 슬롯 위치를 제조사 매뉴얼 등록 정보와 대조했습니다." : "관리자가 등록한 제조사 매뉴얼 정보를 기준으로 SSD 연결 위치를 계산했습니다."}</p></div><FiHardDrive /></div><div className="m2-assignment-list">{assignments.map((assignment) => <div className="m2-assignment-row" key={`${assignment.slotId}-${assignment.partId}`}><span className="m2-assignment-slot">{assignment.slotId}</span><div><strong>{assignment.partName}</strong><small>{assignment.interface ?? "인터페이스 확인"} · 슬롯 PCIe {assignment.slotPcieGeneration?.toFixed(1) ?? "확인 필요"} · 실제 링크 PCIe {assignment.linkGeneration?.toFixed(1) ?? "확인 필요"} · {assignment.connection ? connectionLabels[assignment.connection] ?? assignment.connection : "연결 주체 확인"}</small><small>{assignment.sharedWith && assignment.sharedWith.length > 0 ? `공유 대상: ${assignment.sharedWith.join(", ")}` : "공유 대상 없음으로 등록"}</small></div></div>)}</div><p className="m2-assignment-note"><FiInfo /> 슬롯별 매뉴얼 override 기준의 배치 결과이며, 실제 조립 전 보드 매뉴얼과 장착 위치를 다시 확인해 주세요.</p></section>;
+  return <section className="m2-assignment-panel"><div className="m2-assignment-heading"><div><p className="eyebrow">M.2 SLOT PLAN</p><h2>{isManual ? "수동 지정 슬롯 배치" : "자동 계산 슬롯 배치"}</h2><p>{isManual ? "사용자가 지정한 슬롯 위치를 제조사 매뉴얼 등록 정보와 비교했습니다." : "관리자가 등록한 제조사 매뉴얼 정보를 기준으로 SSD 연결 위치를 계산했습니다."}</p></div><FiHardDrive /></div><div className="m2-assignment-list">{assignments.map((assignment) => <div className="m2-assignment-row" key={`${assignment.slotId}-${assignment.partId}`}><span className="m2-assignment-slot">{assignment.slotId}</span><div><strong>{assignment.partName}</strong><small>{assignment.interface ?? "인터페이스 확인"} · 슬롯 PCIe {assignment.slotPcieGeneration?.toFixed(1) ?? "확인 필요"} · 실제 링크 PCIe {assignment.linkGeneration?.toFixed(1) ?? "확인 필요"} · {assignment.connection ? connectionLabels[assignment.connection] ?? assignment.connection : "연결 주체 확인"}</small><small>{assignment.sharedWith && assignment.sharedWith.length > 0 ? `공유 대상: ${assignment.sharedWith.join(", ")}` : "공유 대상 없음으로 등록"}</small></div></div>)}</div><p className="m2-assignment-note"><FiInfo /> 슬롯별 매뉴얼 override 기준의 배치 결과이며, 실제 조립 전 보드 매뉴얼과 장착 위치를 다시 확인해 주세요.</p></section>;
 }
 
 function DataHealthPanel({ health, partMap, accessoryMap, onRefresh, onRefreshAll, refreshingPartId }: { health: BuildDataHealth; partMap: ReadonlyMap<string, Part>; accessoryMap: ReadonlyMap<string, AccessoryItem>; onRefresh: (target: RefreshTarget) => void; onRefreshAll: (targets: RefreshTarget[]) => void; refreshingPartId: string | null }) {
@@ -4420,7 +4430,7 @@ function BuildWatchlistPanel({ build, partMap, accessoryMap, onToast }: { build:
       window.localStorage.setItem(CATALOG_WATCHLIST_STORAGE_KEY, catalogWatchlistToJson(next));
       const parts: string[] = [`새로 등록 ${addedCount}개`];
       if (alreadyTrackedCount > 0) parts.push(`이미 추적 중 ${alreadyTrackedCount}개`);
-      if (omittedCount > 0) parts.push(`목록 한도로 미등록 ${omittedCount}개`);
+      if (omittedCount > 0) parts.push(`목록 한도로 제외 ${omittedCount}개`);
       if (unpricedCount > 0) parts.push(`가격 미확인 ${unpricedCount}개`);
       if (unknownCatalogCount > 0) parts.push(`카탈로그 미확인 ${unknownCatalogCount}개`);
       onToast(`${parts.join(" · ")} · 가격 추적 화면에서 목표가와 알림 조건을 설정해 주세요.`);
@@ -4429,7 +4439,7 @@ function BuildWatchlistPanel({ build, partMap, accessoryMap, onToast }: { build:
     }
   }
 
-  return <section className="build-watchlist-panel" aria-label="견적 전체 가격 추적"><div><p className="eyebrow">PRICE WATCH</p><h2>견적 전체 가격 추적</h2><p>선택한 부품을 한 번에 관심 목록에 담고 가격 변화를 모니터링합니다.</p><small>{coreCount}개 핵심 부품{accessoryCount > 0 ? ` · ${accessoryCount}개 주변 부품` : ""}{unpricedCount > 0 ? ` · 가격 미확인 ${unpricedCount}개도 추적 가능` : ""}</small></div><button className="button button-secondary" type="button" onClick={watchAll}><FiClock /> 전체 추적 등록</button></section>;
+  return <section className="build-watchlist-panel" aria-label="견적 전체 가격 추적"><div><p className="eyebrow">PRICE WATCH</p><h2>견적 전체 가격 추적</h2><p>선택한 부품을 한 번에 관심 목록에 담고 가격 변화를 지켜볼 수 있어요.</p><small>{coreCount}개 핵심 부품{accessoryCount > 0 ? ` · ${accessoryCount}개 주변 부품` : ""}{unpricedCount > 0 ? ` · 가격 미확인 ${unpricedCount}개도 추적 가능` : ""}</small></div><button className="button button-secondary" type="button" onClick={watchAll}><FiClock /> 전체 추적 등록</button></section>;
 }
 
 function BuildAnalysisPanel({ analysis }: { analysis: BuildAnalysis }) {
@@ -4502,8 +4512,8 @@ function upgradeValueScore(recommendation: UpgradeRecommendation) {
 }
 
 function upgradeExpansionText(evidence: UpgradeExpansionEvidence | undefined) {
-  if (!evidence) return "확장성 비교 불가 · 후보 적용 후 다시 확인";
-  const coverage = `후보 ${evidence.candidateKnownDimensionCount}/${evidence.candidateTotalDimensionCount}개 지표`;
+  if (!evidence) return "확장성 비교 불가 · 부품 적용 후 다시 확인";
+  const coverage = `비교 부품 ${evidence.candidateKnownDimensionCount}/${evidence.candidateTotalDimensionCount}개 지표`;
   if (evidence.candidateScore === undefined) return `확장성 비교 불가 · ${coverage}`;
   if (evidence.scoreDelta === undefined || evidence.baselineScore === undefined) return `교체 후 확장성 ${evidence.candidateScore}점 · ${coverage}`;
   return `확장성 ${evidence.baselineScore}점 → ${evidence.candidateScore}점 · ${evidence.scoreDelta >= 0 ? "+" : ""}${evidence.scoreDelta}점 · ${coverage}`;
@@ -4558,10 +4568,10 @@ function recommendationTrustText(trust: RecommendationTrustEvidence | undefined)
 }
 
 function recommendationTrustDetail(trust: RecommendationTrustEvidence) {
-  const compatibility = trust.compatibility === "verified" ? "후보 호환 확인됨" : "후보 호환 추가 확인";
+  const compatibility = trust.compatibility === "verified" ? "호환 확인됨" : "호환 추가 확인";
   const comparison = trust.totalDimensions > 0 ? `비교 ${trust.comparedDimensions}/${trust.totalDimensions}` : "성능 비교 없음";
-  const price = trust.priceEvidence ? CATALOG_PRICE_EVIDENCE_LABELS[trust.priceEvidence] : trust.priceKnown ? "가격 기록 있음" : "가격 미기록";
-  const fullBuild = trust.fullBuildStatus === "clean" ? "전체 견적 정리됨" : `전체 견적 잔여 차단 ${trust.remainingBlockerCount}개·주의 ${trust.remainingWarningCount}개·확인 필요 ${trust.remainingUnknownCount}개`;
+  const price = trust.priceEvidence ? CATALOG_PRICE_EVIDENCE_LABELS[trust.priceEvidence] : trust.priceKnown ? "가격 기록 있음" : "가격 기록 없음";
+  const fullBuild = trust.fullBuildStatus === "clean" ? "전체 견적 정리됨" : `전체 견적 남은 차단 ${trust.remainingBlockerCount}개·주의 ${trust.remainingWarningCount}개·확인 필요 ${trust.remainingUnknownCount}개`;
   const benchmark = trust.benchmarkBacked ? `벤치마크 ${trust.benchmarkSourceKind ? BENCHMARK_SOURCE_KIND_LABELS[trust.benchmarkSourceKind] : "출처 확인 필요"}` : undefined;
   const benchmarkFreshness = benchmark && trust.benchmarkFreshness ? ` · 자료 ${recommendationFreshnessLabels[trust.benchmarkFreshness]}` : "";
   const catalogSpecSource = trust.catalogSpecSourceCheckNeedsReview === undefined ? "" : trust.catalogSpecSourceCheckNeedsReview ? " · 제조사 정보 다시 확인 필요" : " · 제조사 정보 확인됨";
@@ -4582,7 +4592,7 @@ function UpgradePhysicalEvidence({ evidence }: { evidence: UpgradeRecommendation
   const text = upgradePhysicalEvidenceText(evidence);
   if (!evidence || !text) return null;
   const sources = sharedPhysicalEvidenceSources(evidence.sources);
-  return <div className={`upgrade-physical-evidence ${evidence.status}`} aria-label="업그레이드 후보 장착 정보"><div><strong>장착 정보</strong><span>{upgradePhysicalEvidenceLabel(evidence.status)}</span></div><p>{evidence.summary}</p>{sources.length > 0 ? <div className="upgrade-physical-evidence-sources">{sources.map((source) => <small key={`${source.category}-${source.note}-${source.url ?? ""}`}><b>{sharedPhysicalEvidenceSourceIdentity(source)}</b> {source.note}{source.updatedAt ? ` · 정보 갱신 ${new Date(source.updatedAt).toLocaleDateString("ko-KR")}` : ""}{source.url && <a href={source.url} target="_blank" rel="noreferrer">원문 <FiExternalLink /></a>}</small>)}</div> : <small className="upgrade-physical-evidence-sources-empty">출처 메모가 없어요 · 제조사 페이지에서 확인해 주세요</small>}</div>;
+  return <div className={`upgrade-physical-evidence ${evidence.status}`} aria-label="업그레이드 부품 장착 정보"><div><strong>장착 정보</strong><span>{upgradePhysicalEvidenceLabel(evidence.status)}</span></div><p>{evidence.summary}</p>{sources.length > 0 ? <div className="upgrade-physical-evidence-sources">{sources.map((source) => <small key={`${source.category}-${source.note}-${source.url ?? ""}`}><b>{sharedPhysicalEvidenceSourceIdentity(source)}</b> {source.note}{source.updatedAt ? ` · 정보 갱신 ${new Date(source.updatedAt).toLocaleDateString("ko-KR")}` : ""}{source.url && <a href={source.url} target="_blank" rel="noreferrer">상품 페이지 <FiExternalLink /></a>}</small>)}</div> : <small className="upgrade-physical-evidence-sources-empty">출처 메모가 없어요 · 제조사 페이지에서 확인해 주세요</small>}</div>;
 }
 
 function UpgradeRecommendationPanel({ recommendations, onApply, onPreview, onWatchPart }: { recommendations: UpgradeRecommendation[]; onApply: (recommendation: UpgradeRecommendation) => void; onPreview: (recommendation: UpgradeRecommendation) => void; onWatchPart: PartWatchHandler }) {
@@ -4607,13 +4617,13 @@ function UpgradeRecommendationPanel({ recommendations, onApply, onPreview, onWat
 
   return <section className="upgrade-recommendation-panel" data-upgrade-sort={sortMode}>
     <p className="upgrade-price-evidence-legend" data-testid="upgrade-price-evidence-legend"><FiInfo /> 가격은 출처를 함께 봐야 해요. 다나와 가격은 카탈로그 기록이고, 참고 가격은 실제 판매가가 아닙니다. 사기 전에 판매 페이지와 재고를 다시 확인해 주세요.</p>
-    <div className="upgrade-recommendation-heading"><div><p className="eyebrow">COMPATIBLE UPGRADES</p><h2>호환 유지 업그레이드</h2><p>지금 구성에 새 문제를 만들지 않으면서 성능·용량·확장성이 나아지는 후보입니다.</p><small className="upgrade-recommendation-sort-note">개선 점수·우선순위·호환 유지 여부를 함께 계산한 결과 · 최대 3개 비교</small></div><span className="upgrade-recommendation-icon"><FiZap /></span></div>
-    <div className="upgrade-category-filters" role="group" aria-label="업그레이드 후보 분류"><button className={categoryFilter === "all" ? "selected" : ""} type="button" aria-pressed={categoryFilter === "all"} onClick={() => setCategoryFilter("all")}>전체 {recommendations.length}</button>{availableCategories.map((category) => { const count = recommendations.filter((recommendation) => recommendation.category === category).length; return <button className={categoryFilter === category ? "selected" : ""} type="button" aria-pressed={categoryFilter === category} onClick={() => setCategoryFilter(category)} key={category}>{CATEGORY_LABELS[category]} {count}</button>; })}</div>
-    <div className="upgrade-recommendation-sort"><label><span>후보 정렬</span><select aria-label="업그레이드 후보 정렬" value={sortMode} onChange={(event) => setSortMode(event.target.value as UpgradeSortMode)}><option value="recommended">추천 순</option><option value="reliability">정보 충분한 순</option><option value="performance">성능 개선 폭</option><option value="expansion">확장성 개선 폭</option><option value="value">가성비</option><option value="saving">추가 지출 낮은 순</option></select></label><small>{sortMode === "recommended" ? "서버가 계산한 호환·우선순위 순서" : sortMode === "reliability" ? "추천 점수·비교 정보가 충분한 순" : sortMode === "performance" ? "비교 가능한 스펙 개선 비율이 큰 순" : sortMode === "expansion" ? "후보 적용 후 확장성 점수 변화가 큰 순" : sortMode === "value" ? "가격 변화 대비 개선 효율이 높은 순" : "교체 후 추가 지출이 낮은 순"}</small></div>
-    <div className="upgrade-recommendation-list">{visibleRecommendations.map((recommendation, index) => { const id = `${recommendation.category}-${recommendation.part.id}`; const compared = compareIds.includes(id); const budgetClass = recommendation.budgetEvidence?.priceComplete ? recommendation.budgetEvidence.withinBudget ? "within" : "over" : "unknown"; const expanded = expandedId === id; const sourceUrl = safeExternalUrl(recommendation.part.danawaUrl); return <article className={compared ? "upgrade-recommendation-card compared" : "upgrade-recommendation-card"} key={id}><div className="upgrade-recommendation-top"><div className="upgrade-recommendation-badges"><span className="category-badge">{CATEGORY_LABELS[recommendation.category]}</span>{index === 0 && categoryFilter === "all" && <span className="upgrade-rank-badge">우선 추천</span>}{recommendation.recommendationTrust && <span className={`upgrade-trust-badge ${recommendation.recommendationTrust.level}`}>추천 {recommendationTrustText(recommendation.recommendationTrust)}</span>}</div><span className="upgrade-score">개선 점수 {recommendation.upgradeScore}점 · 비교 변화 +{recommendation.improvementPercent.toFixed(1)}%</span></div><div className="upgrade-recommendation-body"><span className="upgrade-recommendation-image"><PartVisual part={recommendation.part} /></span><div className="upgrade-recommendation-copy"><strong>{recommendation.part.name}</strong><small>현재: {recommendation.currentPartName}</small><button className="upgrade-detail-toggle" type="button" aria-expanded={expanded} onClick={() => setExpandedId(expanded ? null : id)}>{expanded ? "상세 스펙 닫기" : "상세 스펙 보기"} <FiChevronDown /></button><p>{recommendation.reason}</p><em>개선 지표: {recommendation.improvedDimensions.join(" · ")}</em><em>{recommendation.performanceSummary}</em>{recommendation.gpuTarget && <em className={`upgrade-gpu-target ${recommendation.gpuTarget.candidateFit}`}>{recommendation.gpuTarget.summary}</em>}<em className="upgrade-compatibility">{upgradeCompatibilityStatus(recommendation.compatibilityEvidence)} · {upgradeCompatibilityText(recommendation.compatibilityEvidence)}</em>{recommendation.expansionEvidence && <em className={`upgrade-expansion ${upgradeExpansionTone(recommendation.expansionEvidence)}`}>{upgradeExpansionText(recommendation.expansionEvidence)}</em>}{recommendation.budgetEvidence && <em className={`upgrade-budget ${budgetClass}`}>{upgradeBudgetText(recommendation.budgetEvidence)}</em>}{recommendation.recommendationTrust && <em className={`upgrade-recommendation-trust ${recommendation.recommendationTrust.level}`}>추천 점수 {recommendationTrustText(recommendation.recommendationTrust)} · {recommendationTrustDetail(recommendation.recommendationTrust)}</em>}<em>유사도 {recommendation.similarityLabel} {recommendation.similarityScore}점 · {similarityEvidenceText(recommendation.similarityEvidence)}</em></div><div className="upgrade-recommendation-side"><strong>{formatWon(recommendation.part.priceWon)}</strong><small>{recommendation.quantity > 1 ? `수량 ${recommendation.quantity}개 · ` : ""}{formatPriceDelta(recommendation.priceDeltaWon)}</small>{sourceUrl && <a className="upgrade-source-link" href={sourceUrl} target="_blank" rel="noreferrer">원문 <FiExternalLink /></a>}<PartWatchButton part={recommendation.part} onWatch={onWatchPart} /><button className={compared ? "button button-small upgrade-compare-button selected" : "button button-small upgrade-compare-button"} type="button" onClick={() => toggleCompare(recommendation)} disabled={!compared && compareIds.length >= 3} aria-pressed={compared}><FiLayers /> {compared ? "비교 중" : "비교"}</button><button className="button button-small upgrade-preview-button" type="button" onClick={() => onPreview(recommendation)}><FiActivity /> 미리 적용</button><button className="button button-small button-fix" type="button" onClick={() => onApply(recommendation)}><FiZap /> 적용 후 재검사</button></div></div>{expanded && <UpgradeRecommendationDetail recommendation={recommendation} />}</article>; })}</div>
-    {visibleRecommendations.some((recommendation) => recommendation.physicalEvidence && recommendation.physicalEvidence.status !== "not_applicable") && <section className="upgrade-physical-evidence-overview" aria-label="업그레이드 후보 장착 정보"><div><strong>업그레이드 후보 장착 정보</strong><span>GPU·케이스·PSU 후보의 구매 전 확인 상태</span></div><div className="upgrade-physical-evidence-overview-list">{visibleRecommendations.filter((recommendation) => recommendation.physicalEvidence && recommendation.physicalEvidence.status !== "not_applicable").map((recommendation) => <article key={`${recommendation.category}-${recommendation.part.id}`}><strong>{recommendation.part.name}</strong><UpgradePhysicalEvidence evidence={recommendation.physicalEvidence} /></article>)}</div></section>}
+    <div className="upgrade-recommendation-heading"><div><p className="eyebrow">COMPATIBLE UPGRADES</p><h2>호환 유지 업그레이드</h2><p>지금 구성에 새 문제를 만들지 않으면서 성능·용량·확장성이 나아지는 부품이에요.</p><small className="upgrade-recommendation-sort-note">개선 점수·우선순위·호환 유지 여부를 함께 계산한 결과 · 최대 3개 비교</small></div><span className="upgrade-recommendation-icon"><FiZap /></span></div>
+    <div className="upgrade-category-filters" role="group" aria-label="업그레이드 부품 분류"><button className={categoryFilter === "all" ? "selected" : ""} type="button" aria-pressed={categoryFilter === "all"} onClick={() => setCategoryFilter("all")}>전체 {recommendations.length}</button>{availableCategories.map((category) => { const count = recommendations.filter((recommendation) => recommendation.category === category).length; return <button className={categoryFilter === category ? "selected" : ""} type="button" aria-pressed={categoryFilter === category} onClick={() => setCategoryFilter(category)} key={category}>{CATEGORY_LABELS[category]} {count}</button>; })}</div>
+    <div className="upgrade-recommendation-sort"><label><span>부품 정렬</span><select aria-label="업그레이드 부품 정렬" value={sortMode} onChange={(event) => setSortMode(event.target.value as UpgradeSortMode)}><option value="recommended">추천 순</option><option value="reliability">정보 충분한 순</option><option value="performance">성능 개선 폭</option><option value="expansion">확장성 개선 폭</option><option value="value">가성비</option><option value="saving">추가 지출 낮은 순</option></select></label><small>{sortMode === "recommended" ? "서버가 계산한 호환·우선순위 순서" : sortMode === "reliability" ? "추천 점수·비교 정보가 충분한 순" : sortMode === "performance" ? "비교 가능한 스펙 개선 비율이 큰 순" : sortMode === "expansion" ? "부품 적용 후 확장성 점수 변화가 큰 순" : sortMode === "value" ? "가격 변화 대비 개선 효율이 높은 순" : "교체 후 추가 지출이 낮은 순"}</small></div>
+    <div className="upgrade-recommendation-list">{visibleRecommendations.map((recommendation, index) => { const id = `${recommendation.category}-${recommendation.part.id}`; const compared = compareIds.includes(id); const budgetClass = recommendation.budgetEvidence?.priceComplete ? recommendation.budgetEvidence.withinBudget ? "within" : "over" : "unknown"; const expanded = expandedId === id; const sourceUrl = safeExternalUrl(recommendation.part.danawaUrl); return <article className={compared ? "upgrade-recommendation-card compared" : "upgrade-recommendation-card"} key={id}><div className="upgrade-recommendation-top"><div className="upgrade-recommendation-badges"><span className="category-badge">{CATEGORY_LABELS[recommendation.category]}</span>{index === 0 && categoryFilter === "all" && <span className="upgrade-rank-badge">우선 추천</span>}{recommendation.recommendationTrust && <span className={`upgrade-trust-badge ${recommendation.recommendationTrust.level}`}>추천 {recommendationTrustText(recommendation.recommendationTrust)}</span>}</div><span className="upgrade-score">개선 점수 {recommendation.upgradeScore}점 · 비교 변화 +{recommendation.improvementPercent.toFixed(1)}%</span></div><div className="upgrade-recommendation-body"><span className="upgrade-recommendation-image"><PartVisual part={recommendation.part} /></span><div className="upgrade-recommendation-copy"><strong>{recommendation.part.name}</strong><small>현재: {recommendation.currentPartName}</small><button className="upgrade-detail-toggle" type="button" aria-expanded={expanded} onClick={() => setExpandedId(expanded ? null : id)}>{expanded ? "상세 스펙 닫기" : "상세 스펙 보기"} <FiChevronDown /></button><p>{recommendation.reason}</p><em>개선 지표: {recommendation.improvedDimensions.join(" · ")}</em><em>{recommendation.performanceSummary}</em>{recommendation.gpuTarget && <em className={`upgrade-gpu-target ${recommendation.gpuTarget.candidateFit}`}>{recommendation.gpuTarget.summary}</em>}<em className="upgrade-compatibility">{upgradeCompatibilityStatus(recommendation.compatibilityEvidence)} · {upgradeCompatibilityText(recommendation.compatibilityEvidence)}</em>{recommendation.expansionEvidence && <em className={`upgrade-expansion ${upgradeExpansionTone(recommendation.expansionEvidence)}`}>{upgradeExpansionText(recommendation.expansionEvidence)}</em>}{recommendation.budgetEvidence && <em className={`upgrade-budget ${budgetClass}`}>{upgradeBudgetText(recommendation.budgetEvidence)}</em>}{recommendation.recommendationTrust && <em className={`upgrade-recommendation-trust ${recommendation.recommendationTrust.level}`}>추천 점수 {recommendationTrustText(recommendation.recommendationTrust)} · {recommendationTrustDetail(recommendation.recommendationTrust)}</em>}<em>유사도 {recommendation.similarityLabel} {recommendation.similarityScore}점 · {similarityEvidenceText(recommendation.similarityEvidence)}</em></div><div className="upgrade-recommendation-side"><strong>{formatWon(recommendation.part.priceWon)}</strong><small>{recommendation.quantity > 1 ? `수량 ${recommendation.quantity}개 · ` : ""}{formatPriceDelta(recommendation.priceDeltaWon)}</small>{sourceUrl && <a className="upgrade-source-link" href={sourceUrl} target="_blank" rel="noreferrer">상품 페이지 <FiExternalLink /></a>}<PartWatchButton part={recommendation.part} onWatch={onWatchPart} /><button className={compared ? "button button-small upgrade-compare-button selected" : "button button-small upgrade-compare-button"} type="button" onClick={() => toggleCompare(recommendation)} disabled={!compared && compareIds.length >= 3} aria-pressed={compared}><FiLayers /> {compared ? "비교 중" : "비교"}</button><button className="button button-small upgrade-preview-button" type="button" onClick={() => onPreview(recommendation)}><FiActivity /> 미리 적용</button><button className="button button-small button-fix" type="button" onClick={() => onApply(recommendation)}><FiZap /> 적용 후 재검사</button></div></div>{expanded && <UpgradeRecommendationDetail recommendation={recommendation} />}</article>; })}</div>
+    {visibleRecommendations.some((recommendation) => recommendation.physicalEvidence && recommendation.physicalEvidence.status !== "not_applicable") && <section className="upgrade-physical-evidence-overview" aria-label="업그레이드 부품 장착 정보"><div><strong>업그레이드 부품 장착 정보</strong><span>GPU·케이스·PSU 부품의 구매 전 확인 상태</span></div><div className="upgrade-physical-evidence-overview-list">{visibleRecommendations.filter((recommendation) => recommendation.physicalEvidence && recommendation.physicalEvidence.status !== "not_applicable").map((recommendation) => <article key={`${recommendation.category}-${recommendation.part.id}`}><strong>{recommendation.part.name}</strong><UpgradePhysicalEvidence evidence={recommendation.physicalEvidence} /></article>)}</div></section>}
     {comparedRecommendations.length >= 2 && <UpgradeRecommendationComparison recommendations={comparedRecommendations} />}
-    <p className="upgrade-recommendation-note"><FiInfo /> 개선 점수는 실제 FPS나 벤치 순위가 아니라 카탈로그에서 확인한 같은 범주 스펙의 상대 변화입니다. 비교표의 호환 여유는 후보를 견적 전체에 적용해 계산한 결과예요. 사기 전에 제조사 안내와 실제 사용 목적을 확인해 주세요.</p>
+    <p className="upgrade-recommendation-note"><FiInfo /> 개선 점수는 실제 FPS나 벤치 순위가 아니라 카탈로그에서 확인한 같은 범주 스펙의 상대 변화입니다. 비교표의 호환 여유는 부품을 견적 전체에 적용해 계산한 결과예요. 사기 전에 제조사 안내와 실제 사용 목적을 확인해 주세요.</p>
   </section>;
 }
 
@@ -4625,11 +4635,11 @@ function UpgradeRecommendationDetail({ recommendation }: { recommendation: Upgra
   const part = recommendation.part;
   const sourceUrl = safeExternalUrl(part.danawaUrl);
   const priceEvidence = catalogPriceEvidenceFor(part);
-  return <div className="upgrade-recommendation-detail">{recommendation.recommendationTrust && <div className={`recommendation-trust ${recommendation.recommendationTrust.level}`} aria-label="추천 점수"><div className="recommendation-trust-heading"><strong>추천 점수</strong><span>{recommendationTrustText(recommendation.recommendationTrust)}</span></div><p>{recommendationTrustDetail(recommendation.recommendationTrust)}</p><ul>{recommendation.recommendationTrust.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul><small>현재 카탈로그에서 확인된 정보가 얼마나 충분한지 보여주는 점수입니다. 성능 보장은 아니에요.</small></div>}<p className={`upgrade-price-evidence ${priceEvidence}`} data-testid="upgrade-price-evidence" title={catalogPriceEvidenceDescriptionFor(part)}><FiInfo /> 가격 출처 · <strong>{catalogPriceEvidenceLabelFor(part)}</strong> · {catalogPriceEvidenceDescriptionFor(part)}</p><div className="upgrade-detail-grid">{suggestionSpecRows(part).map(([label, value]) => <div className="upgrade-detail-row" key={label}><span>{label}</span><strong>{formatSpecValue(value)}</strong></div>)}</div>{part.rawSpecText && <div className="upgrade-raw-spec"><span>저장된 원문 스펙</span><p>{part.rawSpecText}</p></div>}<div className="upgrade-detail-footer"><span><FiDatabase /> {upgradePartQualityLabel(part)}{part.missingFields.length > 0 ? ` · 누락 ${part.missingFields.length}개` : " · 필수 스펙 확인"} · {part.updatedAt ? `갱신 ${new Date(part.updatedAt).toLocaleDateString("ko-KR")}` : "갱신 시점 없음"}{part.listingType && part.listingType !== "retail" ? ` · ${LISTING_TYPE_LABELS[part.listingType]}` : ""}</span>{sourceUrl && <a href={sourceUrl} target="_blank" rel="noreferrer">다나와 원문 보기 <FiExternalLink /></a>}</div></div>;
+  return <div className="upgrade-recommendation-detail">{recommendation.recommendationTrust && <div className={`recommendation-trust ${recommendation.recommendationTrust.level}`} aria-label="추천 점수"><div className="recommendation-trust-heading"><strong>추천 점수</strong><span>{recommendationTrustText(recommendation.recommendationTrust)}</span></div><p>{recommendationTrustDetail(recommendation.recommendationTrust)}</p><ul>{recommendation.recommendationTrust.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul><small>현재 카탈로그에서 확인된 정보가 얼마나 충분한지 보여주는 점수입니다. 성능 보장은 아니에요.</small></div>}<p className={`upgrade-price-evidence ${priceEvidence}`} data-testid="upgrade-price-evidence" title={catalogPriceEvidenceDescriptionFor(part)}><FiInfo /> 가격 출처 · <strong>{catalogPriceEvidenceLabelFor(part)}</strong> · {catalogPriceEvidenceDescriptionFor(part)}</p><div className="upgrade-detail-grid">{suggestionSpecRows(part).map(([label, value]) => <div className="upgrade-detail-row" key={label}><span>{label}</span><strong>{formatSpecValue(value)}</strong></div>)}</div>{part.rawSpecText && <div className="upgrade-raw-spec"><span>저장된 스펙 정보</span><p>{part.rawSpecText}</p></div>}<div className="upgrade-detail-footer"><span><FiDatabase /> {upgradePartQualityLabel(part)}{part.missingFields.length > 0 ? ` · 누락 ${part.missingFields.length}개` : " · 필수 스펙 확인"} · {part.updatedAt ? `갱신 ${new Date(part.updatedAt).toLocaleDateString("ko-KR")}` : "갱신 시점 없음"}{part.listingType && part.listingType !== "retail" ? ` · ${LISTING_TYPE_LABELS[part.listingType]}` : ""}</span>{sourceUrl && <a href={sourceUrl} target="_blank" rel="noreferrer">다나와 상품 페이지 보기 <FiExternalLink /></a>}</div></div>;
 }
 
 function UpgradeRecommendationComparison({ recommendations }: { recommendations: UpgradeRecommendation[] }) {
-  return <div className="upgrade-comparison"><div className="upgrade-comparison-heading"><div><strong>업그레이드 후보 비교</strong><span>{recommendations.length}개 선택</span></div><FiLayers /></div><div className="upgrade-comparison-table-wrap"><table><caption>각 후보를 현재 구성에 적용해 계산한 비교입니다.</caption><thead><tr><th scope="col">비교 항목</th>{recommendations.map((recommendation) => <th scope="col" key={`${recommendation.category}-${recommendation.part.id}`}>{recommendation.part.name}</th>)}</tr></thead><tbody><tr><th scope="row">현재 부품</th>{recommendations.map((recommendation) => <td key={`${recommendation.part.id}-current`}>{recommendation.currentPartName}</td>)}</tr><tr><th scope="row">분류</th>{recommendations.map((recommendation) => <td key={`${recommendation.part.id}-category`}>{CATEGORY_LABELS[recommendation.category]}</td>)}</tr><tr><th scope="row">수량</th>{recommendations.map((recommendation) => <td key={`${recommendation.part.id}-quantity`}>{recommendation.quantity}개</td>)}</tr><tr><th scope="row">개선 지표</th>{recommendations.map((recommendation) => <td key={`${recommendation.part.id}-dimensions`}>{recommendation.improvedDimensions.join(" · ")}</td>)}</tr><tr><th scope="row">비교 변화</th>{recommendations.map((recommendation) => <td key={`${recommendation.part.id}-improvement`}>+{recommendation.improvementPercent.toFixed(1)}%<br /><small>{recommendation.performanceSummary}</small></td>)}</tr><tr><th scope="row">가격</th>{recommendations.map((recommendation) => <td key={`${recommendation.part.id}-price`}>{recommendation.currentPriceWon !== undefined ? `${formatWon(recommendation.currentPriceWon)} → ` : "현재 가격 확인 필요 → "}{formatWon(recommendation.part.priceWon)}</td>)}</tr><tr><th scope="row">가격 변화</th>{recommendations.map((recommendation) => <td key={`${recommendation.part.id}-delta`}>{formatPriceDelta(recommendation.priceDeltaWon)}</td>)}</tr>{recommendations.some((recommendation) => recommendation.budgetEvidence) && <tr><th scope="row">예산</th>{recommendations.map((recommendation) => <td key={`${recommendation.part.id}-budget`}>{upgradeBudgetText(recommendation.budgetEvidence) ?? "목표 예산 미설정"}</td>)}</tr>}<tr><th scope="row">호환 여유</th>{recommendations.map((recommendation) => <td key={`${recommendation.part.id}-compatibility`}><strong>{upgradeCompatibilityStatus(recommendation.compatibilityEvidence)}</strong><br /><small>{upgradeCompatibilityText(recommendation.compatibilityEvidence)}</small></td>)}</tr>{recommendations.some((recommendation) => recommendation.expansionEvidence) && <tr><th scope="row">확장성 변화</th>{recommendations.map((recommendation) => <td className={`upgrade-expansion-cell ${upgradeExpansionTone(recommendation.expansionEvidence)}`} key={`${recommendation.part.id}-expansion`}>{upgradeExpansionText(recommendation.expansionEvidence)}</td>)}</tr>}{recommendations.some((recommendation) => recommendation.gpuTarget) && <tr><th scope="row">GPU 목표</th>{recommendations.map((recommendation) => <td key={`${recommendation.part.id}-target`}>{recommendation.gpuTarget?.summary ?? "해당 없음"}</td>)}</tr>}<tr><th scope="row">유사도</th>{recommendations.map((recommendation) => <td key={`${recommendation.part.id}-similarity`}>{recommendation.similarityLabel} {recommendation.similarityScore}점<br /><small>{similarityEvidenceText(recommendation.similarityEvidence)}</small></td>)}</tr>{recommendations.some((recommendation) => recommendation.recommendationTrust) && <tr><th scope="row">추천 점수</th>{recommendations.map((recommendation) => <td key={`${recommendation.part.id}-trust`}>{recommendation.recommendationTrust ? <><strong>{recommendationTrustText(recommendation.recommendationTrust)}</strong><br /><small>{recommendationTrustDetail(recommendation.recommendationTrust)}</small></> : "산정 불가"}</td>)}</tr>}</tbody></table></div></div>;
+  return <div className="upgrade-comparison"><div className="upgrade-comparison-heading"><div><strong>업그레이드 부품 비교</strong><span>{recommendations.length}개 선택</span></div><FiLayers /></div><div className="upgrade-comparison-table-wrap"><table><caption>각 부품을 현재 구성에 적용해 계산한 비교예요.</caption><thead><tr><th scope="col">비교 항목</th>{recommendations.map((recommendation) => <th scope="col" key={`${recommendation.category}-${recommendation.part.id}`}>{recommendation.part.name}</th>)}</tr></thead><tbody><tr><th scope="row">현재 부품</th>{recommendations.map((recommendation) => <td key={`${recommendation.part.id}-current`}>{recommendation.currentPartName}</td>)}</tr><tr><th scope="row">분류</th>{recommendations.map((recommendation) => <td key={`${recommendation.part.id}-category`}>{CATEGORY_LABELS[recommendation.category]}</td>)}</tr><tr><th scope="row">수량</th>{recommendations.map((recommendation) => <td key={`${recommendation.part.id}-quantity`}>{recommendation.quantity}개</td>)}</tr><tr><th scope="row">개선 지표</th>{recommendations.map((recommendation) => <td key={`${recommendation.part.id}-dimensions`}>{recommendation.improvedDimensions.join(" · ")}</td>)}</tr><tr><th scope="row">비교 변화</th>{recommendations.map((recommendation) => <td key={`${recommendation.part.id}-improvement`}>+{recommendation.improvementPercent.toFixed(1)}%<br /><small>{recommendation.performanceSummary}</small></td>)}</tr><tr><th scope="row">가격</th>{recommendations.map((recommendation) => <td key={`${recommendation.part.id}-price`}>{recommendation.currentPriceWon !== undefined ? `${formatWon(recommendation.currentPriceWon)} → ` : "현재 가격 확인 필요 → "}{formatWon(recommendation.part.priceWon)}</td>)}</tr><tr><th scope="row">가격 변화</th>{recommendations.map((recommendation) => <td key={`${recommendation.part.id}-delta`}>{formatPriceDelta(recommendation.priceDeltaWon)}</td>)}</tr>{recommendations.some((recommendation) => recommendation.budgetEvidence) && <tr><th scope="row">예산</th>{recommendations.map((recommendation) => <td key={`${recommendation.part.id}-budget`}>{upgradeBudgetText(recommendation.budgetEvidence) ?? "목표 예산 미설정"}</td>)}</tr>}<tr><th scope="row">호환 여유</th>{recommendations.map((recommendation) => <td key={`${recommendation.part.id}-compatibility`}><strong>{upgradeCompatibilityStatus(recommendation.compatibilityEvidence)}</strong><br /><small>{upgradeCompatibilityText(recommendation.compatibilityEvidence)}</small></td>)}</tr>{recommendations.some((recommendation) => recommendation.expansionEvidence) && <tr><th scope="row">확장성 변화</th>{recommendations.map((recommendation) => <td className={`upgrade-expansion-cell ${upgradeExpansionTone(recommendation.expansionEvidence)}`} key={`${recommendation.part.id}-expansion`}>{upgradeExpansionText(recommendation.expansionEvidence)}</td>)}</tr>}{recommendations.some((recommendation) => recommendation.gpuTarget) && <tr><th scope="row">GPU 목표</th>{recommendations.map((recommendation) => <td key={`${recommendation.part.id}-target`}>{recommendation.gpuTarget?.summary ?? "해당 없음"}</td>)}</tr>}<tr><th scope="row">유사도</th>{recommendations.map((recommendation) => <td key={`${recommendation.part.id}-similarity`}>{recommendation.similarityLabel} {recommendation.similarityScore}점<br /><small>{similarityEvidenceText(recommendation.similarityEvidence)}</small></td>)}</tr>{recommendations.some((recommendation) => recommendation.recommendationTrust) && <tr><th scope="row">추천 점수</th>{recommendations.map((recommendation) => <td key={`${recommendation.part.id}-trust`}>{recommendation.recommendationTrust ? <><strong>{recommendationTrustText(recommendation.recommendationTrust)}</strong><br /><small>{recommendationTrustDetail(recommendation.recommendationTrust)}</small></> : "산정 불가"}</td>)}</tr>}</tbody></table></div></div>;
 }
 
 type AccessoryRecommendationSort = "recommended" | "price_asc" | "confidence";
@@ -4739,9 +4749,9 @@ function AccessoryRecommendationPanel({ recommendations, selectedAccessories, on
   return <section className="peripheral-recommendation-panel" data-testid="peripheral-recommendation-panel">
     <div className="peripheral-recommendation-heading"><div><p className="eyebrow">PERIPHERAL ADD-ONS</p><h2>현재 구성에 맞는 주변 부품</h2><p>선택한 핵심 부품의 확인된 스펙을 기준으로 조립·정비에 도움이 될 수 있는 주변 부품을 제안합니다. 팬 헤더·RGB 전압이 부족할 때는 보완 컨트롤러를 우선 표시합니다.</p></div><span className="peripheral-recommendation-icon"><FiTool /></span></div>
     <div className="peripheral-recommendation-controls"><div className="peripheral-recommendation-filters" role="group" aria-label="주변 부품 추천 범주"><button className={categoryFilter === "all" ? "selected" : ""} type="button" data-testid="accessory-recommendation-filter-all" aria-pressed={categoryFilter === "all"} onClick={() => setCategoryFilter("all")}>전체 {recommendations.length}</button>{availableCategories.map((category) => { const count = recommendations.filter((recommendation) => recommendation.category === category).length; return <button className={categoryFilter === category ? "selected" : ""} type="button" data-testid={`accessory-recommendation-filter-${category}`} aria-pressed={categoryFilter === category} onClick={() => setCategoryFilter(category)} key={category}>{ACCESSORY_CATEGORY_LABELS[category]} {count}</button>; })}</div><label className="peripheral-recommendation-sort"><span>추천 정렬</span><select aria-label="주변 부품 추천 정렬" data-testid="accessory-recommendation-sort" value={sortMode} onChange={(event) => setSortMode(event.target.value as AccessoryRecommendationSort)}><option value="recommended">추천 순</option><option value="price_asc">가격 낮은 순</option><option value="confidence">정보 충분한 순</option></select></label><a className="peripheral-recommendation-catalog-link" href="/accessories"><FiSearch /> 전체 카탈로그</a></div>
-    <div className="peripheral-recommendation-compare-status">{compareIds.length > 0 ? <><FiLayers /> 같은 범주 후보 비교 {compareIds.length} / 3{compareCategory ? ` · ${ACCESSORY_CATEGORY_LABELS[compareCategory]}` : ""}</> : <><FiLayers /> 후보를 선택하면 같은 범주끼리 최대 3개를 비교할 수 있습니다.</>}</div>
+    <div className="peripheral-recommendation-compare-status">{compareIds.length > 0 ? <><FiLayers /> 같은 범주 부품 비교 {compareIds.length} / 3{compareCategory ? ` · ${ACCESSORY_CATEGORY_LABELS[compareCategory]}` : ""}</> : <><FiLayers /> 부품을 고르면 같은 범주끼리 최대 3개를 비교할 수 있어요.</>}</div>
     <div className="peripheral-recommendation-list">{visibleRecommendations.map((recommendation) => <AccessoryRecommendationCard key={recommendation.id} recommendation={recommendation} selected={selectedAccessories.some((selection) => selection.accessoryId === recommendation.item.id)} compared={compareIds.includes(recommendation.id)} compareDisabled={!compareIds.includes(recommendation.id) && (compareIds.length >= 3 || Boolean(compareCategory && compareCategory !== recommendation.category))} onToggleCompare={() => toggleCompare(recommendation)} onAddAccessory={onAddAccessory} onWatchAccessory={onWatchAccessory} isAccessoryWatched={isAccessoryWatched} />)}</div>
-    {visibleRecommendations.length === 0 && <div className="peripheral-recommendation-empty"><FiSearch /> 선택한 범주에 해당하는 추천 후보가 없습니다. 전체 추천으로 돌아가 보세요.</div>}
+    {visibleRecommendations.length === 0 && <div className="peripheral-recommendation-empty"><FiSearch /> 선택한 범주에 맞는 추천 부품이 없어요. 전체 추천으로 돌아가 보세요.</div>}
     {comparedRecommendations.length >= 2 && <AccessoryRecommendationComparison recommendations={comparedRecommendations} />}
     <p className="peripheral-recommendation-note"><FiInfo /> {visibleRecommendations.length}개 / 전체 {recommendations.length}개 추천 표시 · 주변 부품은 핵심 호환성과 별도의 보완 제안이에요. 케이스 내부 간섭·전원·커넥터는 사기 전에 제조사 페이지를 확인해 주세요.</p>
   </section>;
@@ -4804,7 +4814,7 @@ function AccessoryRecommendationComparison({ recommendations }: { recommendation
     { label: "추천 이유", value: (recommendation: AccessoryRecommendation) => recommendation.reason },
     { label: "맞는 이유", value: (recommendation: AccessoryRecommendation) => recommendation.fitBasis }
   ];
-  return <section className="peripheral-recommendation-comparison" data-testid="accessory-recommendation-comparison" aria-label="주변 부품 추천 후보 비교"><div className="peripheral-recommendation-comparison-heading"><div><span>READ-ONLY COMPARISON</span><strong>{ACCESSORY_CATEGORY_LABELS[category]} 후보 비교</strong><small>선택한 후보의 저장 데이터만 나란히 비교합니다. 이 표는 견적을 변경하거나 호환성을 새로 확정하지 않습니다.</small></div><div className="peripheral-recommendation-comparison-heading-actions"><label><span>가격 이력</span><select aria-label="주변 부품 추천 가격 이력 기간" data-testid="accessory-recommendation-history-days" value={historyDays} onChange={(event) => setHistoryDays(Number(event.target.value) as 7 | 30 | 90)}><option value={7}>7일</option><option value={30}>30일</option><option value={90}>90일</option></select></label><span>{recommendations.length}개 선택</span></div></div>{historyError && <p className="peripheral-recommendation-comparison-history-error" role="status"><FiInfo /> 가격 이력을 불러오지 못해 현재 가격과 저장된 추천 이유만 표시해요. {historyError}</p>}{historyLoading && <p className="peripheral-recommendation-comparison-history-loading" role="status"><FiLoader className="spin" /> 최근 가격 이력을 확인하는 중...</p>}<div className="peripheral-recommendation-comparison-table-wrap"><table><caption>주변 부품 추천 후보 비교</caption><thead><tr><th scope="col">비교 항목</th>{recommendations.map((recommendation) => <th scope="col" key={recommendation.id}>{recommendation.item.name}</th>)}</tr></thead><tbody>{rows.map((row) => <tr key={row.label}><th scope="row">{row.label}</th>{recommendations.map((recommendation) => <td key={`${recommendation.id}-${row.label}`}>{row.value(recommendation)}</td>)}</tr>)}</tbody></table></div><p className="peripheral-recommendation-comparison-note"><FiInfo /> 가격 이력이 2회 미만이면 구매 행동을 추정하지 않고 기록 없음으로 표시합니다. 현재 가격은 카탈로그 확인값이며, 실제 결제 가격·재고·배송비를 보장하지 않습니다.</p></section>;
+  return <section className="peripheral-recommendation-comparison" data-testid="accessory-recommendation-comparison" aria-label="주변 부품 추천 비교"><div className="peripheral-recommendation-comparison-heading"><div><span>READ-ONLY COMPARISON</span><strong>{ACCESSORY_CATEGORY_LABELS[category]} 부품 비교</strong><small>선택한 부품의 저장된 데이터만 나란히 비교해요. 이 표는 견적을 변경하거나 호환성을 새로 정하지 않아요.</small></div><div className="peripheral-recommendation-comparison-heading-actions"><label><span>가격 이력</span><select aria-label="주변 부품 추천 가격 이력 기간" data-testid="accessory-recommendation-history-days" value={historyDays} onChange={(event) => setHistoryDays(Number(event.target.value) as 7 | 30 | 90)}><option value={7}>7일</option><option value={30}>30일</option><option value={90}>90일</option></select></label><span>{recommendations.length}개 선택</span></div></div>{historyError && <p className="peripheral-recommendation-comparison-history-error" role="status"><FiInfo /> 가격 이력을 불러오지 못해 현재 가격과 저장된 추천 이유만 표시해요. {historyError}</p>}{historyLoading && <p className="peripheral-recommendation-comparison-history-loading" role="status"><FiLoader className="spin" /> 최근 가격 이력을 확인하는 중...</p>}<div className="peripheral-recommendation-comparison-table-wrap"><table><caption>주변 부품 추천 비교</caption><thead><tr><th scope="col">비교 항목</th>{recommendations.map((recommendation) => <th scope="col" key={recommendation.id}>{recommendation.item.name}</th>)}</tr></thead><tbody>{rows.map((row) => <tr key={row.label}><th scope="row">{row.label}</th>{recommendations.map((recommendation) => <td key={`${recommendation.id}-${row.label}`}>{row.value(recommendation)}</td>)}</tr>)}</tbody></table></div><p className="peripheral-recommendation-comparison-note"><FiInfo /> 가격 이력이 2회 미만이면 구매 행동을 추정하지 않고 기록 없음으로 표시합니다. 현재 가격은 카탈로그 확인값이며, 실제 결제 가격·재고·배송비를 보장하지 않습니다.</p></section>;
 }
 
 function AccessoryRecommendationCard({ recommendation, selected, compared, compareDisabled, onToggleCompare, onAddAccessory, onWatchAccessory, isAccessoryWatched }: { recommendation: AccessoryRecommendation; selected: boolean; compared: boolean; compareDisabled: boolean; onToggleCompare: () => void; onAddAccessory: (item: AccessoryItem) => void; onWatchAccessory?: (item: AccessoryItem, targetPriceWon?: number) => boolean; isAccessoryWatched?: (item: AccessoryItem) => boolean }) {
@@ -4831,8 +4841,8 @@ function AccessoryRecommendationCard({ recommendation, selected, compared, compa
   }
   return <article className={selected ? "peripheral-recommendation selected" : "peripheral-recommendation"}>
     <div className="peripheral-recommendation-top"><span className="category-badge">{ACCESSORY_CATEGORY_LABELS[recommendation.category]}</span>{recommendation.item.dataFreshness && <span className={`freshness-badge ${recommendation.item.dataFreshness}`}>{DATA_FRESHNESS_LABELS[recommendation.item.dataFreshness]}</span>}<span className={"peripheral-confidence " + recommendation.confidence}>{recommendation.priority === "recommended" ? "추천" : "선택"} · {recommendation.confidence === "high" ? "정보 충분" : recommendation.confidence === "medium" ? "조건부" : "참고"}</span></div>
-    <div className="peripheral-recommendation-body"><span className="peripheral-recommendation-image"><AccessoryVisual item={recommendation.item} /></span><div className="peripheral-recommendation-copy"><strong>{recommendation.item.name}</strong><p>{recommendation.reason}</p><small>{recommendation.fitBasis}</small>{recommendation.category === "storage_accessory" && recommendation.item.specs.adapterStorageDeviceCount !== undefined && <em className="peripheral-recommendation-capacity" data-testid="accessory-recommendation-capacity">어댑터 1개당 M.2 SSD 최대 {recommendation.item.specs.adapterStorageDeviceCount}개</em>}{recommendation.category === "storage_accessory" && recommendation.item.specs.adapterPcieSlotWidth !== undefined && <em className="peripheral-recommendation-capacity peripheral-recommendation-pcie-slot" data-testid="accessory-recommendation-pcie-slot">PCIe 슬롯 x{recommendation.item.specs.adapterPcieSlotWidth} 필요</em>}</div><div className="peripheral-recommendation-side"><strong>{formatWon(recommendation.item.priceWon)}</strong>{sourceUrl && <a href={sourceUrl} target="_blank" rel="noreferrer">원문 <FiExternalLink /></a>}<a className="peripheral-recommendation-catalog-item-link" data-testid="accessory-recommendation-open-catalog" href={catalogUrl}><FiSearch /> 카탈로그</a><button className={compared ? "button button-small accessory-compare-button selected" : "button button-small accessory-compare-button"} type="button" data-testid="accessory-recommendation-compare" onClick={onToggleCompare} disabled={compareDisabled} aria-pressed={compared} title={compareDisabled && !compared ? "같은 범주의 후보만 비교할 수 있습니다." : undefined}><FiLayers /> {compared ? "비교 중" : "비교"}</button><button className="button button-small accessory-add-button" type="button" onClick={() => onAddAccessory(recommendation.item)} disabled={selected}>{selected ? <><FiCheck /> 추가됨</> : <><FiPlus /> 견적에 추가</>}</button>{onWatchAccessory && <div className="peripheral-recommendation-watch"><label><span>목표가</span><input type="number" min="1" step="1000" placeholder="선택" value={targetPriceDraft} data-testid="accessory-recommendation-watch-target" aria-label={`${recommendation.item.name} 추천 목표가`} onChange={(event) => { setTargetPriceDraft(event.target.value); setWatchError(null); }} /></label><button className="text-button" type="button" data-testid="accessory-recommendation-watch" onClick={savePriceWatch}>{watching ? "목표가 저장" : "가격 추적"}</button></div>}{watchError && <small className="peripheral-recommendation-watch-error" role="alert">{watchError}</small>}</div></div>
-    <details className="peripheral-recommendation-details" data-testid="accessory-recommendation-details"><summary>스펙·이유 보기 <FiChevronDown /></summary><div className="peripheral-recommendation-detail-grid"><div><span>데이터 상태</span><strong>{DATA_QUALITY_LABELS[recommendation.item.dataQuality]}</strong></div><div><span>마지막 갱신</span><strong>{accessoryRecommendationUpdatedLabel(recommendation.item)}</strong></div><div><span>필수 누락</span><strong>{recommendation.item.missingFields.length > 0 ? `${recommendation.item.missingFields.length}개` : "없음"}</strong></div></div><div className="peripheral-recommendation-raw-spec"><span>저장된 원문 스펙</span><p>{recommendation.item.rawSpecText || "저장된 스펙 원문이 없어요. 제조사·판매처 페이지를 확인해 주세요."}</p></div></details>
+    <div className="peripheral-recommendation-body"><span className="peripheral-recommendation-image"><AccessoryVisual item={recommendation.item} /></span><div className="peripheral-recommendation-copy"><strong>{recommendation.item.name}</strong><p>{recommendation.reason}</p><small>{recommendation.fitBasis}</small>{recommendation.category === "storage_accessory" && recommendation.item.specs.adapterStorageDeviceCount !== undefined && <em className="peripheral-recommendation-capacity" data-testid="accessory-recommendation-capacity">어댑터 1개당 M.2 SSD 최대 {recommendation.item.specs.adapterStorageDeviceCount}개</em>}{recommendation.category === "storage_accessory" && recommendation.item.specs.adapterPcieSlotWidth !== undefined && <em className="peripheral-recommendation-capacity peripheral-recommendation-pcie-slot" data-testid="accessory-recommendation-pcie-slot">PCIe 슬롯 x{recommendation.item.specs.adapterPcieSlotWidth} 필요</em>}</div><div className="peripheral-recommendation-side"><strong>{formatWon(recommendation.item.priceWon)}</strong>{sourceUrl && <a href={sourceUrl} target="_blank" rel="noreferrer">상품 페이지 <FiExternalLink /></a>}<a className="peripheral-recommendation-catalog-item-link" data-testid="accessory-recommendation-open-catalog" href={catalogUrl}><FiSearch /> 카탈로그</a><button className={compared ? "button button-small accessory-compare-button selected" : "button button-small accessory-compare-button"} type="button" data-testid="accessory-recommendation-compare" onClick={onToggleCompare} disabled={compareDisabled} aria-pressed={compared} title={compareDisabled && !compared ? "같은 범주의 부품만 비교할 수 있어요." : undefined}><FiLayers /> {compared ? "비교 중" : "비교"}</button><button className="button button-small accessory-add-button" type="button" onClick={() => onAddAccessory(recommendation.item)} disabled={selected}>{selected ? <><FiCheck /> 추가됨</> : <><FiPlus /> 견적에 추가</>}</button>{onWatchAccessory && <div className="peripheral-recommendation-watch"><label><span>목표가</span><input type="number" min="1" step="1000" placeholder="선택" value={targetPriceDraft} data-testid="accessory-recommendation-watch-target" aria-label={`${recommendation.item.name} 추천 목표가`} onChange={(event) => { setTargetPriceDraft(event.target.value); setWatchError(null); }} /></label><button className="text-button" type="button" data-testid="accessory-recommendation-watch" onClick={savePriceWatch}>{watching ? "목표가 저장" : "가격 추적"}</button></div>}{watchError && <small className="peripheral-recommendation-watch-error" role="alert">{watchError}</small>}</div></div>
+    <details className="peripheral-recommendation-details" data-testid="accessory-recommendation-details"><summary>스펙·이유 보기 <FiChevronDown /></summary><div className="peripheral-recommendation-detail-grid"><div><span>데이터 상태</span><strong>{DATA_QUALITY_LABELS[recommendation.item.dataQuality]}</strong></div><div><span>마지막 갱신</span><strong>{accessoryRecommendationUpdatedLabel(recommendation.item)}</strong></div><div><span>필수 누락</span><strong>{recommendation.item.missingFields.length > 0 ? `${recommendation.item.missingFields.length}개` : "없음"}</strong></div></div><div className="peripheral-recommendation-raw-spec"><span>저장된 스펙 정보</span><p>{recommendation.item.rawSpecText || "저장된 스펙 정보가 없어요. 제조사·판매처 페이지를 확인해 주세요."}</p></div></details>
   </article>;
 }
 
@@ -4852,7 +4862,7 @@ function CompatibilityMap({ links, findings = [], onFocusFinding }: { links: Com
 
   return <section className="compatibility-map" data-testid="compatibility-map" tabIndex={-1}>
     <div className="compatibility-map-heading">
-      <div><p className="eyebrow">COMPATIBILITY MAP</p><h2>부품 연결 상태</h2><p>추천 후보를 고를 때 영향을 주는 연결 관계를 규칙별로 요약합니다.</p></div>
+      <div><p className="eyebrow">COMPATIBILITY MAP</p><h2>부품 연결 상태</h2><p>추천 부품을 고를 때 영향을 주는 연결 관계를 규칙별로 요약해요.</p></div>
       <span className="compatibility-map-icon"><FiShare2 /></span>
     </div>
     <div className="compatibility-link-grid">
@@ -4872,7 +4882,7 @@ function CompatibilityMap({ links, findings = [], onFocusFinding }: { links: Com
         </article>;
       })}
     </div>
-    <p className="compatibility-map-note"><FiInfo /> “문제 있음”은 차단 오류 또는 주의 항목이 연결된 상태이며, “확인 필요”는 현재 카탈로그 데이터만으로 확정할 수 없는 상태입니다.</p>
+    <p className="compatibility-map-note"><FiInfo /> “문제 있음”은 차단 오류 또는 주의 항목이 연결된 상태이며, “확인 필요”는 현재 카탈로그 정보만으로는 알 수 없는 상태예요.</p>
   </section>;
 }
 
@@ -5099,10 +5109,10 @@ function RepairPlanPanel({ plans, build, currentResult, partMap, onApply, onSave
   const hasFullyCompatiblePlan = plans.some((plan) => plan.remainingBlockers === 0 && plan.remainingWarnings === 0 && plan.remainingUnknown === 0);
   const unresolvedUnknownTitles = currentResult.findings.filter((finding) => finding.severity === "unknown").map((finding) => finding.title).slice(0, 2);
   const fullPlanNote = unresolvedUnknownTitles.length > 0
-    ? `확인 필요 데이터(${unresolvedUnknownTitles.join(" · ")})가 남아 완전 호환을 자동 확정할 수 없습니다. 해당 원문을 확인한 뒤 다시 검사해 주세요.`
-    : "현재 후보 탐색 범위에서 모든 차단 오류·주의·확인 필요 항목을 동시에 없애는 단일 플랜을 찾지 못했습니다. 각 플랜의 잔여 문제를 확인해 개별 조정해 주세요.";
+    ? `확인 필요 데이터(${unresolvedUnknownTitles.join(" · ")})가 남아 완전 호환으로 판단할 수 없어요. 해당 부품의 실제 정보를 확인한 뒤 다시 검사해 주세요.`
+    : "지금 부품 범위에서 모든 차단 오류·주의·확인 필요 항목을 한 번에 없애는 플랜을 찾지 못했어요. 각 플랜의 잔여 문제를 확인해 개별 조정해 주세요.";
   const comparisonReady = comparisonPlan && comparisonState;
-  return <section className="repair-plan-panel" data-testid="repair-plan-panel" tabIndex={-1}><div className="repair-plan-heading"><div><p className="eyebrow">AUTO REPAIR PLANS</p><h2>한 번에 해결하는 추천 플랜</h2><p>호환 오류를 가장 많이 줄이면서 성능과 가격 변화를 함께 비교합니다.</p></div><span className="repair-plan-heading-icon"><FiZap /></span></div>{!hasFullyCompatiblePlan && <div className="repair-plan-goal-note" role="status"><FiInfo /><div><strong>완전 호환 플랜을 자동 확정하지 않았습니다.</strong><p>{fullPlanNote}</p></div></div>}<Suspense fallback={<div className="repair-plan-summary loading" data-testid="repair-plan-summary-loading">플랜 요약을 불러오는 중...</div>}><LazyRepairPlanSummaryTable plans={plans} build={build} onFocusPlan={focusPlan} /></Suspense><div className="repair-plan-grid">{plans.map((plan, index) => { const performanceRetention = repairPlanPerformanceRetentionFor(build, plan); return <article id={"repair-plan-card-" + index} className={index === 0 ? "repair-plan-card featured" : "repair-plan-card"} key={`${plan.label}-${plan.changes.map((change) => change.toPart.id).join("-")}`}><div className="repair-plan-top"><span className="repair-plan-label">{index === 0 ? `추천 1순위 · ${plan.label}` : plan.label}</span><span className="repair-plan-similarity">{plan.similarityLabel} {plan.similarityScore}점 · 스펙 유사도{plan.similarityEvidence ? ` · ${similarityEvidenceText(plan.similarityEvidence)}` : ""}</span></div><h3>{plan.title}</h3><p className="repair-plan-reason">{plan.reason}</p><p className="repair-plan-profile"><FiActivity /> {plan.profileSummary}</p><p className={`repair-plan-performance-retention ${performanceRetention.status}`}><FiActivity /> {performanceRetention.summary}</p><div className="repair-plan-resolved"><span>해결 범위</span><div>{plan.resolvedFindingTitles.slice(0, 4).map((title) => <em key={title}>{title}</em>)}{plan.resolvedFindingTitles.length > 4 && <em>외 {plan.resolvedFindingTitles.length - 4}개</em>}</div></div>{plan.remainingFindingTitles && plan.remainingFindingTitles.length > 0 && <div className="repair-plan-remaining"><span>적용 후 남는 문제</span><div>{plan.remainingFindingTitles.slice(0, 3).map((title, index) => remainingFindingChip(plan, title, index))}{plan.remainingFindingTitles.length > 3 && <em>{"외 " + (plan.remainingFindingTitles.length - 3) + "개"}</em>}</div></div>}<div className="repair-plan-stats"><span><strong>{plan.resolvedBlockers}</strong> 차단 오류 해결</span><span><strong>{plan.remainingBlockers}</strong>개 남음</span><span><strong>{plan.remainingWarnings}</strong>개 주의 남음</span><span><strong>{plan.remainingUnknown}</strong>개 확인 필요</span><span><strong>{formatPriceDelta(plan.priceDeltaWon)}</strong> 가격 변화</span>{plan.budgetWon !== undefined && <span><strong>{!plan.priceComplete ? "확인 필요" : plan.withinBudget ? "예산 내" : `${formatPriceDelta(plan.budgetDeltaWon)} 초과`}</strong> 목표 예산</span>}</div><div className="repair-plan-changes">{plan.changes.map((change) => <div className="repair-plan-change" key={`${change.category}-${change.kind}-${change.toPart.id}-${change.toQuantity ?? ""}`}><span className="repair-plan-change-icon"><CategoryIcon category={change.category} /></span><div><small>{change.fromPartName ?? `${CATEGORY_LABELS[change.category]} 미선택`}</small><strong>{change.kind === "change_quantity" ? `수량 ${change.fromQuantity ?? "?"}개 → ${change.toQuantity ?? "?"}개` : `→ ${change.toPart.name}`}</strong>{change.toPart.listingType && change.toPart.listingType !== "retail" && <small>{LISTING_TYPE_LABELS[change.toPart.listingType]}</small>}<small>{change.performanceSummary}</small>{change.similarityEvidence && <small>{similarityEvidenceText(change.similarityEvidence)}</small>}{change.recommendationTrust && <small>추천 점수 {recommendationTrustText(change.recommendationTrust)} · {recommendationTrustDetail(change.recommendationTrust)}</small>}{change.valueScore !== undefined && change.valueLabel && <small>{change.valueLabel} {valueScoreText(change.valueScore)}</small>}</div><em>{formatPriceDelta(change.priceDeltaWon)}</em></div>)}</div><div className="repair-plan-footer"><span>적용 후 {plan.priceComplete ? formatWon(plan.afterTotalPriceWon) : "가격 일부 확인 필요"}</span><div className="repair-plan-footer-actions"><button className="button button-small button-light" type="button" onClick={() => void comparePlan(plan)} disabled={comparisonState?.status === "loading"}><FiActivity /> {comparisonPlan === plan ? "비교 중" : "현재와 비교"}</button><button className="button button-small button-fix" type="button" onClick={() => onApply(plan)}>이 플랜 적용 <FiExternalLink /></button></div></div></article>; })}</div>{comparisonReady && <Suspense fallback={<div className="repair-plan-comparison loading" aria-label="수리 플랜 전체 비교" data-testid="repair-plan-comparison" role="status"><div className="repair-plan-comparison-heading"><div><p className="eyebrow">PLAN COMPARISON</p><h2>비교 화면을 불러오는 중...</h2><p>수리 플랜 적용 후 전체 견적을 준비합니다.</p></div><FiLoader className="spin" /></div></div>}><LazyRepairPlanComparisonPanel plan={comparisonPlan} state={comparisonState} currentBuild={build} currentResult={comparisonState.status === "ready" ? comparisonState.currentResult : currentResult} partMap={partMap} onApply={() => onApply(comparisonPlan)} onSavePlan={onSavePlan} onRetry={() => void comparePlan(comparisonPlan)} onClose={() => { requestSequenceRef.current += 1; setComparisonPlan(null); setComparisonState(null); }} /></Suspense>}</section>;
+  return <section className="repair-plan-panel" data-testid="repair-plan-panel" tabIndex={-1}><div className="repair-plan-heading"><div><p className="eyebrow">AUTO REPAIR PLANS</p><h2>한 번에 해결하는 추천 플랜</h2><p>호환 오류를 가장 많이 줄이면서 성능과 가격 변화를 함께 비교합니다.</p></div><span className="repair-plan-heading-icon"><FiZap /></span></div>{!hasFullyCompatiblePlan && <div className="repair-plan-goal-note" role="status"><FiInfo /><div><strong>완전 호환 플랜을 자동으로 정하지 않았어요.</strong><p>{fullPlanNote}</p></div></div>}<Suspense fallback={<div className="repair-plan-summary loading" data-testid="repair-plan-summary-loading">플랜 요약을 불러오는 중...</div>}><LazyRepairPlanSummaryTable plans={plans} build={build} onFocusPlan={focusPlan} /></Suspense><div className="repair-plan-grid">{plans.map((plan, index) => { const performanceRetention = repairPlanPerformanceRetentionFor(build, plan); return <article id={"repair-plan-card-" + index} className={index === 0 ? "repair-plan-card featured" : "repair-plan-card"} key={`${plan.label}-${plan.changes.map((change) => change.toPart.id).join("-")}`}><div className="repair-plan-top"><span className="repair-plan-label">{index === 0 ? `추천 1순위 · ${plan.label}` : plan.label}</span><span className="repair-plan-similarity">{plan.similarityLabel} {plan.similarityScore}점 · 스펙 유사도{plan.similarityEvidence ? ` · ${similarityEvidenceText(plan.similarityEvidence)}` : ""}</span></div><h3>{plan.title}</h3><p className="repair-plan-reason">{plan.reason}</p><p className="repair-plan-profile"><FiActivity /> {plan.profileSummary}</p><p className={`repair-plan-performance-retention ${performanceRetention.status}`}><FiActivity /> {performanceRetention.summary}</p><div className="repair-plan-resolved"><span>해결 범위</span><div>{plan.resolvedFindingTitles.slice(0, 4).map((title) => <em key={title}>{title}</em>)}{plan.resolvedFindingTitles.length > 4 && <em>외 {plan.resolvedFindingTitles.length - 4}개</em>}</div></div>{plan.remainingFindingTitles && plan.remainingFindingTitles.length > 0 && <div className="repair-plan-remaining"><span>적용 후 남는 문제</span><div>{plan.remainingFindingTitles.slice(0, 3).map((title, index) => remainingFindingChip(plan, title, index))}{plan.remainingFindingTitles.length > 3 && <em>{"외 " + (plan.remainingFindingTitles.length - 3) + "개"}</em>}</div></div>}<div className="repair-plan-stats"><span><strong>{plan.resolvedBlockers}</strong> 차단 오류 해결</span><span><strong>{plan.remainingBlockers}</strong>개 남음</span><span><strong>{plan.remainingWarnings}</strong>개 주의 남음</span><span><strong>{plan.remainingUnknown}</strong>개 확인 필요</span><span><strong>{formatPriceDelta(plan.priceDeltaWon)}</strong> 가격 변화</span>{plan.budgetWon !== undefined && <span><strong>{!plan.priceComplete ? "확인 필요" : plan.withinBudget ? "예산 내" : `${formatPriceDelta(plan.budgetDeltaWon)} 초과`}</strong> 목표 예산</span>}</div><div className="repair-plan-changes">{plan.changes.map((change) => <div className="repair-plan-change" key={`${change.category}-${change.kind}-${change.toPart.id}-${change.toQuantity ?? ""}`}><span className="repair-plan-change-icon"><CategoryIcon category={change.category} /></span><div><small>{change.fromPartName ?? `${CATEGORY_LABELS[change.category]} 미선택`}</small><strong>{change.kind === "change_quantity" ? `수량 ${change.fromQuantity ?? "?"}개 → ${change.toQuantity ?? "?"}개` : `→ ${change.toPart.name}`}</strong>{change.toPart.listingType && change.toPart.listingType !== "retail" && <small>{LISTING_TYPE_LABELS[change.toPart.listingType]}</small>}<small>{change.performanceSummary}</small>{change.similarityEvidence && <small>{similarityEvidenceText(change.similarityEvidence)}</small>}{change.recommendationTrust && <small>추천 점수 {recommendationTrustText(change.recommendationTrust)} · {recommendationTrustDetail(change.recommendationTrust)}</small>}{change.valueScore !== undefined && change.valueLabel && <small>{change.valueLabel} {valueScoreText(change.valueScore)}</small>}</div><em>{formatPriceDelta(change.priceDeltaWon)}</em></div>)}</div><div className="repair-plan-footer"><span>적용 후 {plan.priceComplete ? formatWon(plan.afterTotalPriceWon) : "가격 일부 확인 필요"}</span><div className="repair-plan-footer-actions"><button className="button button-small button-light" type="button" onClick={() => void comparePlan(plan)} disabled={comparisonState?.status === "loading"}><FiActivity /> {comparisonPlan === plan ? "비교 중" : "현재와 비교"}</button><button className="button button-small button-fix" type="button" onClick={() => onApply(plan)}>이 플랜 적용 <FiExternalLink /></button></div></div></article>; })}</div>{comparisonReady && <Suspense fallback={<div className="repair-plan-comparison loading" aria-label="수리 플랜 전체 비교" data-testid="repair-plan-comparison" role="status"><div className="repair-plan-comparison-heading"><div><p className="eyebrow">PLAN COMPARISON</p><h2>비교 화면을 불러오는 중...</h2><p>수리 플랜 적용 후 전체 견적을 준비합니다.</p></div><FiLoader className="spin" /></div></div>}><LazyRepairPlanComparisonPanel plan={comparisonPlan} state={comparisonState} currentBuild={build} currentResult={comparisonState.status === "ready" ? comparisonState.currentResult : currentResult} partMap={partMap} onApply={() => onApply(comparisonPlan)} onSavePlan={onSavePlan} onRetry={() => void comparePlan(comparisonPlan)} onClose={() => { requestSequenceRef.current += 1; setComparisonPlan(null); setComparisonState(null); }} /></Suspense>}</section>;
 }
 
 function SavedBuildMonitorCardState({ item, loading }: { item: SavedBuildMonitorItem | undefined; loading: boolean }) {
@@ -5211,10 +5221,10 @@ function SavedBuildPriorityPanel({ rows, actionStates, openingBuildId, onAnalyze
         <SavedBuildRiskTrend row={row} />
         <div className="saved-build-priority-action"><span>{priorityRiskDeltaText(row)}</span><button className="text-button" type="button" onClick={() => onAnalyzeAction(row.id)} disabled={actionState?.status === "loading"}>{actionState?.status === "loading" ? <><FiLoader className="spin" /> 할 일 계산 중...</> : actionState?.status === "ready" ? <><FiRefreshCw /> 다시 계산</> : <><FiZap /> 다음 할 일 분석</>}</button><button className="text-button" type="button" onClick={() => onOpen(row.id)} disabled={openingBuildId !== null}>{openingBuildId === row.id ? <><FiLoader className="spin" /> 불러오는 중...</> : <><FiExternalLink /> 견적 보기</>}</button></div>
         {actionState?.status === "error" && <div className="saved-build-priority-action-detail error" role="alert"><FiXCircle /><span>{actionState.message}</span><button className="text-button" type="button" onClick={() => onAnalyzeAction(row.id)}>다시 시도</button></div>}
-        {actionValue && <div className="saved-build-priority-action-detail" data-testid={`saved-build-priority-action-${row.id}`}><div className="saved-build-priority-action-heading"><strong>{actionValue.title}</strong><span>{actionValue.kind === "repair_plan" ? "전체 수리 플랜" : actionValue.kind === "analysis" ? "분석 제안" : "추가 후보 없음"}</span></div>{actionValue.nextAction && <p className="saved-build-priority-action-next"><FiZap /> <strong>먼저 확인</strong> {actionValue.nextAction}</p>}{actionValue.changes.length > 0 && <div className="saved-build-priority-action-changes">{actionValue.changes.slice(0, 3).map((change) => <span key={`${change.category}-${change.toPartName}-${change.toQuantity ?? ""}`}><b>{CATEGORY_LABELS[change.category]}</b>{change.kind === "change_quantity" ? `${change.fromQuantity ?? "?"}개 → ${change.toQuantity ?? "?"}개` : `${change.fromPartName ?? "현재 선택"} → ${change.toPartName}`}{change.priceDeltaWon !== undefined ? ` · ${formatPriceDelta(change.priceDeltaWon)}` : ""}</span>)}</div>}<div className="saved-build-priority-action-stats"><span><strong>{actionValue.resolvedBlockers}</strong>개 차단 감소</span><span><strong>{actionValue.remainingBlockers}</strong>개 차단 남음</span><span><strong>{actionValue.remainingWarnings}</strong>개 주의 남음</span><span><strong>{actionValue.remainingUnknown}</strong>개 확인 필요</span>{actionValue.priceDeltaWon !== undefined && <span><strong>{formatPriceDelta(actionValue.priceDeltaWon)}</strong> 총액 변화</span>}{actionValue.afterTotalPriceWon !== undefined && <span><strong>{actionValue.priceComplete ? formatWon(actionValue.afterTotalPriceWon) : "가격 확인 필요"}</strong> 적용 후 금액</span>}</div><p className="saved-build-priority-action-summary">{actionValue.summary}</p></div>}
+        {actionValue && <div className="saved-build-priority-action-detail" data-testid={`saved-build-priority-action-${row.id}`}><div className="saved-build-priority-action-heading"><strong>{actionValue.title}</strong><span>{actionValue.kind === "repair_plan" ? "전체 수리 플랜" : actionValue.kind === "analysis" ? "분석 제안" : "추가 부품 없음"}</span></div>{actionValue.nextAction && <p className="saved-build-priority-action-next"><FiZap /> <strong>먼저 확인</strong> {actionValue.nextAction}</p>}{actionValue.changes.length > 0 && <div className="saved-build-priority-action-changes">{actionValue.changes.slice(0, 3).map((change) => <span key={`${change.category}-${change.toPartName}-${change.toQuantity ?? ""}`}><b>{CATEGORY_LABELS[change.category]}</b>{change.kind === "change_quantity" ? `${change.fromQuantity ?? "?"}개 → ${change.toQuantity ?? "?"}개` : `${change.fromPartName ?? "현재 선택"} → ${change.toPartName}`}{change.priceDeltaWon !== undefined ? ` · ${formatPriceDelta(change.priceDeltaWon)}` : ""}</span>)}</div>}<div className="saved-build-priority-action-stats"><span><strong>{actionValue.resolvedBlockers}</strong>개 차단 감소</span><span><strong>{actionValue.remainingBlockers}</strong>개 차단 남음</span><span><strong>{actionValue.remainingWarnings}</strong>개 주의 남음</span><span><strong>{actionValue.remainingUnknown}</strong>개 확인 필요</span>{actionValue.priceDeltaWon !== undefined && <span><strong>{formatPriceDelta(actionValue.priceDeltaWon)}</strong> 총액 변화</span>}{actionValue.afterTotalPriceWon !== undefined && <span><strong>{actionValue.priceComplete ? formatWon(actionValue.afterTotalPriceWon) : "가격 확인 필요"}</strong> 적용 후 금액</span>}</div><p className="saved-build-priority-action-summary">{actionValue.summary}</p></div>}
       </article>;
     })}</div>}
-    <p className="saved-build-priority-note"><FiInfo /> 위험 점수는 차단 100점·주의 10점·확인 필요 1점으로 계산한 정렬용 신호입니다. 실제 구매 가능 여부를 대신하지 않아요. 각 행의 견적 보기에서 전체 내용과 대체 후보를 확인해 주세요.</p>
+    <p className="saved-build-priority-note"><FiInfo /> 위험 점수는 차단 100점·주의 10점·확인 필요 1점으로 계산한 정렬용 신호입니다. 실제 구매 가능 여부를 대신하지 않아요. 각 행의 견적 보기에서 전체 내용과 대체 부품을 확인해 주세요.</p>
   </section>;
 }
 
@@ -5237,6 +5247,7 @@ function SavedBuildVersionPanel({ groups, openingBuildId, onOpen }: { groups: Sa
 
 function HistoryView({ builds, currentBuild, currentPreferences, partMap, accessoryMap, monitorAlerts, onMonitorAlertsChange, browserNotificationPermission, browserNotificationEnabled, onRequestBrowserNotifications, onBrowserNotificationsEnabledChange, onBack, onOpen, onRefreshSavedBuilds, onStart, onRevoke, onEditMetadata, revokingShare, onRecordCheck, recordingCheckId, openingBuildId, onShareVersionComparison, onToast }: { builds: SavedBuild[]; currentBuild: BuildSelection; currentPreferences: RecommendationPreferences; partMap: ReadonlyMap<string, Part>; accessoryMap: ReadonlyMap<string, AccessoryItem>; monitorAlerts: SavedBuildMonitorAlert[]; onMonitorAlertsChange: (alerts: SavedBuildMonitorAlert[]) => void; browserNotificationPermission: BrowserNotificationPermission; browserNotificationEnabled: boolean; onRequestBrowserNotifications: () => Promise<void>; onBrowserNotificationsEnabledChange: (enabled: boolean) => void; onBack: () => void; onOpen: (saved: SavedBuild, focus?: SavedBuildOpenFocus) => void; onRefreshSavedBuilds: () => Promise<boolean>; onStart: () => void; onRevoke: (id: string) => void; onEditMetadata: (saved: SavedBuild) => void; revokingShare: boolean; onRecordCheck: (id: string) => void; recordingCheckId: string | null; openingBuildId: string | null; onShareVersionComparison: (before: SavedBuild, after: SavedBuild) => void | Promise<void>; onToast: (message: string) => void }) {
   const [compareIds, setCompareIds] = useState<string[]>([]);
+  const [historyDetailsOpen, setHistoryDetailsOpen] = useState(false);
   const [purchaseProgressFilter, setPurchaseProgressFilter] = useState<SavedBuildPurchaseProgressFilter>("all");
   const [purchaseProgressRefreshing, setPurchaseProgressRefreshing] = useState(false);
   const [monitorItems, setMonitorItems] = useState<Record<string, SavedBuildMonitorItem>>({});
@@ -5299,7 +5310,7 @@ function HistoryView({ builds, currentBuild, currentPreferences, partMap, access
     { id: "recorded", label: "서버 기록 있음", count: purchaseProgressRows.filter(({ summary }) => summary.status !== "unrecorded").length },
     { id: "in-progress", label: "구매 진행 중", count: purchaseProgressRows.filter(({ summary }) => summary.status === "in-progress").length },
     { id: "completed", label: "모두 구매 완료", count: purchaseProgressRows.filter(({ summary }) => summary.status === "completed").length },
-    { id: "unrecorded", label: "진행률 미기록", count: purchaseProgressRows.filter(({ summary }) => summary.status === "unrecorded").length }
+    { id: "unrecorded", label: "진행률 기록 없음", count: purchaseProgressRows.filter(({ summary }) => summary.status === "unrecorded").length }
   ];
   const visiblePurchaseBuilds = purchaseProgressRows.filter(({ summary }) => savedBuildPurchaseProgressMatchesFilter(summary, purchaseProgressFilter));
 
@@ -5664,8 +5675,8 @@ function HistoryView({ builds, currentBuild, currentPreferences, partMap, access
     }
   }
 
-  return <div className="history-page">
-    <div className="workspace-heading"><div><button className="back-link" onClick={onBack}><FiArrowLeft /> 홈으로</button><p className="eyebrow">SAVED BUILDS</p><h1>저장된 견적</h1><p>저장 당시 검사 기록과 현재 카탈로그 기준 재검사를 함께 확인할 수 있습니다.</p></div><button className="button button-primary" onClick={onStart}><FiPlus /> 새 견적 만들기</button></div>
+  return <div className={historyDetailsOpen ? "history-page history-details-open" : "history-page"}>
+    <div className="workspace-heading"><div><button className="back-link" onClick={onBack}><FiArrowLeft /> 홈으로</button><p className="eyebrow">SAVED BUILDS</p><h1>저장된 견적</h1><p>저장된 견적을 열고, 필요한 것만 확인해 보세요.</p></div><div className="history-heading-actions"><button className="button button-light history-details-toggle" type="button" aria-expanded={historyDetailsOpen} onClick={() => setHistoryDetailsOpen((current) => !current)}><FiMoreHorizontal /> {historyDetailsOpen ? "핵심 정보만 보기" : "점검·비교 상세"}</button><button className="button button-primary" onClick={onStart}><FiPlus /> 새 견적 만들기</button></div></div>
     {builds.length > 0 && <section className="history-health-panel" aria-label="저장 견적 전체 건강 점검" data-testid="saved-build-health-dashboard">
       <div className="history-health-heading">
         <div><p className="eyebrow">BUILD HEALTH MONITOR</p><h2>전체 견적 건강 점검</h2><p>최대 20개 저장 견적을 같은 현재 카탈로그 기준으로 읽기 전용 검사해, 먼저 볼 견적을 분류합니다.</p></div>
@@ -5712,7 +5723,7 @@ function HistoryView({ builds, currentBuild, currentPreferences, partMap, access
         {saved.decisionNote && <div className="history-card-decision-note" data-testid="saved-build-decision-note"><FiInfo /><div><span>선택 메모</span><strong>{saved.decisionNote}</strong></div></div>}
         <p>{selectedCount}개 카테고리 선택{accessoryCount > 0 ? ` · 주변 부품 ${accessoryCount}종` : ""}{summary ? ` · ${summary.priceComplete && isKnownPrice(summary.totalPriceWon) ? formatWon(summary.totalPriceWon) : "견적 금액 확인 필요"}` : ""}{preferences ? ` · ${RECOMMENDATION_PROFILE_LABELS[preferences.profile]} · ${LISTING_POLICY_LABELS[preferences.listingPolicy ?? "retail_only"]}` : ""} · 공유 가능한 견적 · {saved.expiresAt ? `만료 ${new Date(saved.expiresAt).toLocaleString("ko-KR")}` : "공유 무기한"}</p>
         <div className="history-preview">{PART_CATEGORIES.filter((category) => selectionList(saved.selection, category).length > 0).slice(0, 5).map((category) => <span key={category}><CategoryIcon category={category} /> {CATEGORY_LABELS[category]}</span>)}{accessoryCount > 0 && <span><FiTool /> 주변 {accessoryCount}종</span>}{summary && <span><FiDatabase /> {summary.priceComplete && isKnownPrice(summary.totalPriceWon) ? formatWon(summary.totalPriceWon) : "금액 확인 필요"}</span>}{selectedCount > 5 && <span>+{selectedCount - 5}</span>}</div>
-        <div className={`history-card-purchase-progress ${purchaseProgress.status}`} data-testid={`saved-build-purchase-progress-${saved.id}`}><div className="history-card-purchase-progress-heading"><span>구매 진행률</span><div><strong>{purchaseProgress.status === "unrecorded" ? "미기록" : `${purchaseProgress.checked} / ${purchaseProgress.total}개`}</strong><button className="text-button history-card-purchase-progress-open" type="button" data-testid={`saved-build-purchase-list-${saved.id}`} onClick={() => onOpen(saved, "purchase-list")} disabled={openingBuildId !== null}>{openingBuildId === saved.id ? <><FiLoader className="spin" /> 여는 중...</> : <><FiExternalLink /> 구매 목록 보기</>}</button></div></div>{purchaseProgress.status !== "unrecorded" && <div className="history-card-purchase-progress-bar" role="progressbar" aria-label={`${saved.name} 구매 진행률 ${purchaseProgress.percent}%`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={purchaseProgress.percent}><span style={{ width: `${purchaseProgress.percent}%` }} /></div>}<small>{purchaseProgressLabel}{purchaseProgress.status !== "unrecorded" ? ` · 주문 ${purchaseProgress.stageCounts.ordered} · 수령 ${purchaseProgress.stageCounts.received} · 조립 ${purchaseProgress.stageCounts.installed}` : ""}{purchaseProgress.revision !== undefined ? ` · revision ${purchaseProgress.revision}` : ""}{purchaseProgress.historyCount > 0 ? ` · 이전 이력 ${purchaseProgress.historyCount}개` : ""}{purchaseProgress.updatedAt ? ` · ${new Date(purchaseProgress.updatedAt).toLocaleString("ko-KR", { dateStyle: "short", timeStyle: "short" })}` : ""}</small></div>
+        <div className={`history-card-purchase-progress ${purchaseProgress.status}`} data-testid={`saved-build-purchase-progress-${saved.id}`}><div className="history-card-purchase-progress-heading"><span>구매 진행률</span><div><strong>{purchaseProgress.status === "unrecorded" ? "기록 없음" : `${purchaseProgress.checked} / ${purchaseProgress.total}개`}</strong><button className="text-button history-card-purchase-progress-open" type="button" data-testid={`saved-build-purchase-list-${saved.id}`} onClick={() => onOpen(saved, "purchase-list")} disabled={openingBuildId !== null}>{openingBuildId === saved.id ? <><FiLoader className="spin" /> 여는 중...</> : <><FiExternalLink /> 구매 목록 보기</>}</button></div></div>{purchaseProgress.status !== "unrecorded" && <div className="history-card-purchase-progress-bar" role="progressbar" aria-label={`${saved.name} 구매 진행률 ${purchaseProgress.percent}%`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={purchaseProgress.percent}><span style={{ width: `${purchaseProgress.percent}%` }} /></div>}<small>{purchaseProgressLabel}{purchaseProgress.status !== "unrecorded" ? ` · 주문 ${purchaseProgress.stageCounts.ordered} · 수령 ${purchaseProgress.stageCounts.received} · 조립 ${purchaseProgress.stageCounts.installed}` : ""}{purchaseProgress.revision !== undefined ? ` · revision ${purchaseProgress.revision}` : ""}{purchaseProgress.historyCount > 0 ? ` · 이전 이력 ${purchaseProgress.historyCount}개` : ""}{purchaseProgress.updatedAt ? ` · ${new Date(purchaseProgress.updatedAt).toLocaleString("ko-KR", { dateStyle: "short", timeStyle: "short" })}` : ""}</small></div>
         <SavedBuildMonitorCardState item={monitorItem} loading={monitorLoading} />
         {saved.checkSnapshot && <SavedBuildCheckBadge snapshot={saved.checkSnapshot} />}
         {saved.checkHistory && saved.checkHistory.length > 0 && <SavedBuildCheckTimeline history={saved.checkHistory} partMap={partMap} showDiff={false} />}
@@ -5779,7 +5790,7 @@ function savedCheckPriceText(snapshot: NonNullable<SavedBuild["checkSnapshot"]>)
 }
 
 function savedCheckCatalogRefreshSummary(report: CatalogRefreshReport) {
-  const status = report.status === "success" ? "원문 확인 완료" : report.status === "partial" ? "일부 원문 확인" : "원문 확인 실패";
+  const status = report.status === "success" ? "정보 확인 완료" : report.status === "partial" ? "일부 정보 확인" : "정보 확인 실패";
   return `${status} · 성공 ${report.successCount}개 · 실패 ${report.failureCount}개`;
 }
 
@@ -5795,13 +5806,13 @@ function savedCheckCatalogRefreshPriceText(item: CatalogRefreshReport["items"][n
 }
 
 function SavedBuildCheckRefreshEvidence({ report }: { report: CatalogRefreshReport }) {
-  return <details className={`history-check-refresh-report ${report.status}`} data-testid="saved-build-check-refresh-report"><summary><FiRefreshCw /> 원문 재확인 내용 · {savedCheckCatalogRefreshSummary(report)}</summary><div className="history-check-refresh-report-body">{report.items.slice(0, 6).map((item) => <article key={`${item.target.kind}-${item.target.id}`}><div><strong>{item.name}</strong><small>{item.target.kind === "part" ? "핵심 부품" : "주변 부품"} · {new Date(item.refreshedAt).toLocaleString("ko-KR", { dateStyle: "short", timeStyle: "short" })}</small></div><div className="history-check-refresh-report-facts"><span><b>가격</b>{savedCheckCatalogRefreshPriceText(item)}</span><span><b>데이터</b>{DATA_QUALITY_LABELS[item.previousDataQuality]} → {DATA_QUALITY_LABELS[item.nextDataQuality]}</span><span><b>누락</b>{item.previousMissingCount}개 → {item.nextMissingCount}개</span></div><small>{item.changedFields.length > 0 ? `변경 영역 · ${item.changedFields.join(" · ")}` : "변경된 영역 없음"}</small></article>)}{report.items.length > 6 && <small>그 외 성공 항목 {report.items.length - 6}개</small>}{report.failures.length > 0 && <div className="history-check-refresh-report-failures"><strong>확인 실패</strong>{report.failures.slice(0, 4).map((failure) => <p key={`${failure.target.kind}-${failure.target.id}`}><b>{failure.target.kind === "part" ? "핵심 부품" : "주변 부품"}</b> · {failure.message}</p>)}</div>}<p><FiInfo /> 원문 재확인 내용은 이 검사와 같은 견적에 묶여 저장됩니다.</p></div></details>;
+  return <details className={`history-check-refresh-report ${report.status}`} data-testid="saved-build-check-refresh-report"><summary><FiRefreshCw /> 정보 다시 확인 내용 · {savedCheckCatalogRefreshSummary(report)}</summary><div className="history-check-refresh-report-body">{report.items.slice(0, 6).map((item) => <article key={`${item.target.kind}-${item.target.id}`}><div><strong>{item.name}</strong><small>{item.target.kind === "part" ? "핵심 부품" : "주변 부품"} · {new Date(item.refreshedAt).toLocaleString("ko-KR", { dateStyle: "short", timeStyle: "short" })}</small></div><div className="history-check-refresh-report-facts"><span><b>가격</b>{savedCheckCatalogRefreshPriceText(item)}</span><span><b>데이터</b>{DATA_QUALITY_LABELS[item.previousDataQuality]} → {DATA_QUALITY_LABELS[item.nextDataQuality]}</span><span><b>누락</b>{item.previousMissingCount}개 → {item.nextMissingCount}개</span></div><small>{item.changedFields.length > 0 ? `변경 영역 · ${item.changedFields.map((field) => catalogChangeFieldLabelFor(field)).join(" · ")}` : "변경된 영역 없음"}</small></article>)}{report.items.length > 6 && <small>그 외 성공 항목 {report.items.length - 6}개</small>}{report.failures.length > 0 && <div className="history-check-refresh-report-failures"><strong>확인 실패</strong>{report.failures.slice(0, 4).map((failure) => <p key={`${failure.target.kind}-${failure.target.id}`}><b>{failure.target.kind === "part" ? "핵심 부품" : "주변 부품"}</b> · {failure.message}</p>)}</div>}<p><FiInfo /> 정보 다시 확인 내용은 이 검사와 같은 견적에 묶여 저장됩니다.</p></div></details>;
 }
 
 function SavedBuildCheckRefreshImpactPanel({ report, findingChanges }: { report: CatalogRefreshReport; findingChanges: SavedBuildCheckFindingDiff[] }) {
   const impacts = catalogRefreshFindingImpactsFor(report, findingChanges);
   const linkedCount = impacts.reduce((total, impact) => total + impact.findingChanges.length, 0);
-  return <section className={`history-check-refresh-impact ${report.status}`} aria-label="원문 재확인과 결과 변화 연결" data-testid="saved-build-check-refresh-impact"><div className="history-check-refresh-impact-heading"><div><p className="eyebrow">REFRESH → RESULT IMPACT</p><strong>원문 확인과 결과 변화 연결</strong><small>다시 확인한 부품과 결과가 바뀐 부품이 겹치는 경우만 연결해요.</small></div><span>{linkedCount}개 연결</span></div>{report.failures.length > 0 && <p className="history-check-refresh-impact-failure"><FiAlertTriangle /> 확인에 실패한 {report.failures.length}개는 결과 변화와 연결할 수 없어요.</p>}<div className="history-check-refresh-impact-list">{impacts.map(({ item, findingChanges: linkedChanges }) => <article className={linkedChanges.length > 0 ? "linked" : "unlinked"} key={`${item.target.kind}-${item.target.id}`}><div className="history-check-refresh-impact-item-heading"><strong>{item.name}</strong><span>{linkedChanges.length > 0 ? `연결 변화 ${linkedChanges.length}개` : "연결된 변화 없음"}</span></div><small>원문 변경 · {item.changedFields.length > 0 ? item.changedFields.join(" · ") : "변경된 영역 없음"}</small>{linkedChanges.length > 0 ? <ul>{linkedChanges.slice(0, 4).map((change) => <li key={`${change.key}-${change.change}`}><b>{savedCheckFindingChangeText(change.change)}</b><span>{(change.after ?? change.before)?.title ?? change.key}</span></li>)}</ul> : <p>두 검사 사이에 이 부품과 겹치는 결과 변화가 없어요. 원문 변경이 원인이라고 단정하지 않아요.</p>}</article>)}</div>{impacts.length === 0 && report.failures.length === 0 && <p className="history-check-refresh-impact-empty"><FiInfo /> 확인에 성공한 항목이 없어 결과 변화를 연결할 수 없어요.</p>}<p className="history-check-refresh-impact-note"><FiInfo /> 영향이 있을 만한 연결을 보여주는 참고 정보예요. 원문 변경이 결과 변화의 원인이라고 확정하는 건 아닙니다.</p></section>;
+  return <section className={`history-check-refresh-impact ${report.status}`} aria-label="정보 다시 확인과 결과 변화 연결" data-testid="saved-build-check-refresh-impact"><div className="history-check-refresh-impact-heading"><div><p className="eyebrow">REFRESH → RESULT IMPACT</p><strong>정보 다시 확인과 결과 변화 연결</strong><small>다시 확인한 부품과 결과가 바뀐 부품이 겹치는 경우만 연결해요.</small></div><span>{linkedCount}개 연결</span></div>{report.failures.length > 0 && <p className="history-check-refresh-impact-failure"><FiAlertTriangle /> 확인에 실패한 {report.failures.length}개는 결과 변화와 연결할 수 없어요.</p>}<div className="history-check-refresh-impact-list">{impacts.map(({ item, findingChanges: linkedChanges }) => <article className={linkedChanges.length > 0 ? "linked" : "unlinked"} key={`${item.target.kind}-${item.target.id}`}><div className="history-check-refresh-impact-item-heading"><strong>{item.name}</strong><span>{linkedChanges.length > 0 ? `연결 변화 ${linkedChanges.length}개` : "연결된 변화 없음"}</span></div><small>정보 변경 · {item.changedFields.length > 0 ? item.changedFields.map((field) => catalogChangeFieldLabelFor(field)).join(" · ") : "변경된 영역 없음"}</small>{linkedChanges.length > 0 ? <ul>{linkedChanges.slice(0, 4).map((change) => <li key={`${change.key}-${change.change}`}><b>{savedCheckFindingChangeText(change.change)}</b><span>{(change.after ?? change.before)?.title ?? change.key}</span></li>)}</ul> : <p>두 검사 사이에 이 부품과 겹치는 결과 변화가 없어요. 정보 변경이 원인이라고 단정하지 않아요.</p>}</article>)}</div>{impacts.length === 0 && report.failures.length === 0 && <p className="history-check-refresh-impact-empty"><FiInfo /> 확인에 성공한 항목이 없어 결과 변화를 연결할 수 없어요.</p>}<p className="history-check-refresh-impact-note"><FiInfo /> 영향이 있을 만한 연결을 보여주는 참고 정보예요. 정보 변경이 결과 변화의 원인이라고 단정하는 건 아니에요.</p></section>;
 }
 
 function savedCheckResourceText(snapshot: NonNullable<SavedBuild["checkSnapshot"]>) {
@@ -5826,7 +5837,7 @@ function savedCheckBenchmarkText(snapshot: NonNullable<SavedBuild["checkSnapshot
 function savedAssemblyVerificationText(snapshot: NonNullable<SavedBuild["checkSnapshot"]>) {
   const verification = snapshot.assemblyVerification;
   if (!verification) return undefined;
-  const stateLabel = verification.state === "passed" ? "실측 통과" : verification.state === "failed" ? "실패 항목 있음" : verification.state === "in_progress" ? "실측 진행 중" : "실측 미기록";
+  const stateLabel = verification.state === "passed" ? "실측 통과" : verification.state === "failed" ? "실패 항목 있음" : verification.state === "in_progress" ? "실측 진행 중" : "실측 기록 없음";
   const toolLabel: Record<string, string> = { occt: "OCCT", cinebench: "Cinebench", "3dmark": "3DMark", crystaldiskmark: "CrystalDiskMark", other: "기타" };
   const scenarioLabel: Record<string, string> = { idle: "유휴", cpu: "CPU 부하", gpu: "GPU 부하", mixed: "혼합 부하", storage: "저장장치 부하", custom: "사용자 지정" };
   const conditions = [
@@ -6101,7 +6112,7 @@ function savedCheckDriftText(saved: SavedBuild, check: SavedBuildLiveCheck | und
 function SavedBuildCheckBadge({ snapshot }: { snapshot: NonNullable<SavedBuild["checkSnapshot"]> }) {
   const checkedAt = new Date(snapshot.checkedAt);
   const checkedLabel = Number.isNaN(checkedAt.getTime()) ? snapshot.checkedAt : checkedAt.toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" });
-  return <div className={`history-check-snapshot ${snapshot.status}`} data-testid="saved-build-check-snapshot"><span className="history-check-snapshot-icon"><FiActivity /></span><div><strong>저장 당시 검사 · {savedCheckStatusText(snapshot.status)}</strong><small>{checkedLabel} · {savedCheckRiskText(snapshot)} · 분석 {savedCheckAnalysisText(snapshot)}</small><small>{savedCheckReferenceText(snapshot)} · 합계 {savedCheckPriceText(snapshot)} · 전력·냉각 {savedCheckResourceText(snapshot)}</small><small>{savedCheckBenchmarkText(snapshot)}</small>{snapshot.actionCenterSummary && <small>먼저 할 일 · {snapshot.actionCenterSummary}</small>}{snapshot.catalogRefreshReport && <small>원문 재확인 · {savedCheckCatalogRefreshSummary(snapshot.catalogRefreshReport)}</small>}{savedAssemblyVerificationText(snapshot) && <small>{savedAssemblyVerificationText(snapshot)}</small>}</div></div>;
+  return <div className={`history-check-snapshot ${snapshot.status}`} data-testid="saved-build-check-snapshot"><span className="history-check-snapshot-icon"><FiActivity /></span><div><strong>저장 당시 검사 · {savedCheckStatusText(snapshot.status)}</strong><small>{checkedLabel} · {savedCheckRiskText(snapshot)} · 분석 {savedCheckAnalysisText(snapshot)}</small><small>{savedCheckReferenceText(snapshot)} · 합계 {savedCheckPriceText(snapshot)} · 전력·냉각 {savedCheckResourceText(snapshot)}</small><small>{savedCheckBenchmarkText(snapshot)}</small>{snapshot.actionCenterSummary && <small>먼저 할 일 · {snapshot.actionCenterSummary}</small>}{snapshot.catalogRefreshReport && <small>정보 다시 확인 · {savedCheckCatalogRefreshSummary(snapshot.catalogRefreshReport)}</small>}{savedAssemblyVerificationText(snapshot) && <small>{savedAssemblyVerificationText(snapshot)}</small>}</div></div>;
 }
 
 function SavedCatalogCauseValueDiffs({ record, compact = false, relatedRuleIds = [] }: { record: CatalogChangeRecord; compact?: boolean; relatedRuleIds?: string[] }) {
@@ -6114,12 +6125,12 @@ function SavedCatalogCauseValueDiffs({ record, compact = false, relatedRuleIds =
   const allImpacts = [...new Map(diffs.flatMap((diff) => catalogChangeImpactsFor(record, diff)).map((impact) => [impact.id, impact])).values()];
   const exactImpacts = relatedRuleIds.length > 0 ? allImpacts.filter((impact) => impact.ruleIds.some((ruleId) => relatedRuleIds.includes(ruleId))) : [];
   const impacts = exactImpacts.length > 0 ? exactImpacts : allImpacts;
-  return <details className={compact ? "history-check-cause-values compact" : "history-check-cause-values"}><summary>{groupLabel} · 변경 값 표 ({diffs.length}개)</summary>{specDiffs.length > 0 && <div className="history-check-cause-group"><strong>핵심 규격 변화</strong><SavedCatalogCauseDiffRows record={record} diffs={specDiffs} /></div>}{priceAndDataDiffs.length > 0 && <div className="history-check-cause-group"><strong>가격·데이터 변화</strong><SavedCatalogCauseDiffRows record={record} diffs={priceAndDataDiffs} /></div>}{rawSpecDiffs.length > 0 && <div className="history-check-cause-group"><strong>원문 스펙 변화</strong><SavedCatalogCauseDiffRows record={record} diffs={rawSpecDiffs} /></div>}{impacts.length > 0 && <div className="history-check-cause-impact"><strong>{exactImpacts.length > 0 ? "이 결과에 연결된 영향" : "영향이 있을 수 있는 항목"}</strong>{impacts.map((impact) => <div className="history-check-cause-impact-row" key={impact.id}><span>{savedCatalogCauseImpactKindText(impact.kind)}</span><div><strong>{impact.label}</strong><small>{impact.summary}</small>{impact.ruleIds.length > 0 && <small>규칙 · {impact.ruleIds.join(" · ")}</small>}</div></div>)}<small className="history-check-cause-impact-note"><FiRefreshCw /> 값이 바뀌었으니 현재 기준으로 다시 검사해 주세요.</small></div>}</details>;
+  return <details className={compact ? "history-check-cause-values compact" : "history-check-cause-values"}><summary>{groupLabel} · 변경 값 표 ({diffs.length}개)</summary>{specDiffs.length > 0 && <div className="history-check-cause-group"><strong>핵심 규격 변화</strong><SavedCatalogCauseDiffRows record={record} diffs={specDiffs} /></div>}{priceAndDataDiffs.length > 0 && <div className="history-check-cause-group"><strong>가격·데이터 변화</strong><SavedCatalogCauseDiffRows record={record} diffs={priceAndDataDiffs} /></div>}{rawSpecDiffs.length > 0 && <div className="history-check-cause-group"><strong>수집된 스펙 변화</strong><SavedCatalogCauseDiffRows record={record} diffs={rawSpecDiffs} /></div>}{impacts.length > 0 && <div className="history-check-cause-impact"><strong>{exactImpacts.length > 0 ? "이 결과에 연결된 영향" : "영향이 있을 수 있는 항목"}</strong>{impacts.map((impact) => <div className="history-check-cause-impact-row" key={impact.id}><span>{savedCatalogCauseImpactKindText(impact.kind)}</span><div><strong>{impact.label}</strong><small>{impact.summary}</small>{impact.ruleIds.length > 0 && <small>규칙 · {impact.ruleIds.join(" · ")}</small>}</div></div>)}<small className="history-check-cause-impact-note"><FiRefreshCw /> 값이 바뀌었으니 현재 기준으로 다시 검사해 주세요.</small></div>}</details>;
 }
 
 function SavedCatalogCauseSourceLink({ record, partMap, accessoryMap }: { record: CatalogChangeRecord; partMap?: ReadonlyMap<string, Part>; accessoryMap?: ReadonlyMap<string, AccessoryItem> }) {
   const sourceUrl = savedCheckCatalogCauseSourceUrl(record, partMap, accessoryMap);
-  return sourceUrl ? <a className="history-check-cause-source" href={sourceUrl} target="_blank" rel="noreferrer">원문 보기 <FiExternalLink /></a> : null;
+  return sourceUrl ? <a className="history-check-cause-source" href={sourceUrl} target="_blank" rel="noreferrer">상품 페이지 <FiExternalLink /></a> : null;
 }
 
 function savedCheckFindingFactText(fact: SavedBuildCheckFindingSummary["facts"][number] | undefined) {
@@ -6166,7 +6177,7 @@ function SavedBuildCheckTransitionSummary({ summary, before, after }: { summary:
     lines.push(`CPU·GPU ${buildBenchmarkImpactStatusText(impact.status)} · ${buildBenchmarkDecisionImpactText(impact.decisionImpact)}${detail}`);
   }
   if (summary.priceDeltaWon !== undefined && summary.priceDeltaWon !== 0) lines.push(`전체 금액 ${savedCheckPriceText(before)} → ${savedCheckPriceText(after)} (${formatPriceDelta(summary.priceDeltaWon)})`);
-  else if (summary.priceCompletenessChanged) lines.push(`가격 확정 상태 ${before.priceComplete ? "확정" : "확인 필요"} → ${after.priceComplete ? "확정" : "확인 필요"}`);
+  else if (summary.priceCompletenessChanged) lines.push(`가격 상태 ${before.priceComplete ? "확인됨" : "확인 필요"} → ${after.priceComplete ? "확인됨" : "확인 필요"}`);
   if (summary.catalogChanged) lines.push("카탈로그 기준이 바뀌어 현재 기준으로 다시 확인했습니다.");
   if (summary.engineChanged) lines.push(`검사 버전 ${before.engineVersion} → ${after.engineVersion}`);
   if (lines.length === 0) lines.push("두 시점의 검사 상태·위험 카운트·가격·전력·냉각 예산·벤치마크 변화가 없습니다.");
@@ -6288,7 +6299,7 @@ function SavedBuildCheckTimeline({ history, buildId, partMap, accessoryMap, show
             <div className="history-check-cause-panel" data-testid="saved-build-catalog-causes">
               <div className="history-check-cause-heading"><div><p className="eyebrow">CATALOG CHANGES</p><strong>기록된 카탈로그 변경</strong><small>두 검사 사이에 선택한 부품에서 실제로 기록된 변경만 보여드려요.</small></div><span>{catalogCauseState.items.length}건</span></div>
               <div className="history-check-cause-list">
-                {catalogCauseState.items.slice(0, 8).map((record) => <article className="history-check-cause-item" key={record.id}><div><strong>{record.itemName}</strong><small>{record.kind === "accessory" ? "주변 부품" : "핵심 부품"} · {savedCheckCatalogCauseCategoryText(record)} · {savedCheckCatalogCauseDateText(record)}</small></div><p>{savedCheckCatalogCauseReason(record)}</p><small>변경 영역 · {record.changedFields.length > 0 ? record.changedFields.join(" · ") : "값 변화 없음"}</small><SavedCatalogCauseValueDiffs record={record} /><SavedCatalogCauseSourceLink record={record} partMap={partMap} accessoryMap={accessoryMap} /></article>)}
+                {catalogCauseState.items.slice(0, 8).map((record) => <article className="history-check-cause-item" key={record.id}><div><strong>{record.itemName}</strong><small>{record.kind === "accessory" ? "주변 부품" : "핵심 부품"} · {savedCheckCatalogCauseCategoryText(record)} · {savedCheckCatalogCauseDateText(record)}</small></div><p>{savedCheckCatalogCauseReason(record)}</p><small>변경 영역 · {record.changedFields.length > 0 ? record.changedFields.map((field) => catalogChangeFieldLabelFor(field)).join(" · ") : "값 변화 없음"}</small><SavedCatalogCauseValueDiffs record={record} /><SavedCatalogCauseSourceLink record={record} partMap={partMap} accessoryMap={accessoryMap} /></article>)}
               </div>
               {catalogCauseState.items.length > 8 && <small className="history-check-cause-more">그 외 {catalogCauseState.items.length - 8}건은 카탈로그 변경 로그에서 확인할 수 있습니다.</small>}
             </div>

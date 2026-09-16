@@ -175,7 +175,7 @@ export function CoolingFanLoadOverridePanel({ onToast, onMetaRefresh }: { onToas
   }
 
   async function removeOverride(accessoryId: string) {
-    if (!window.confirm("이 쿨링팬의 소비전류 보강을 삭제할까요? 원문에서 파싱된 값이 있으면 원문 값을 다시 사용합니다.")) return;
+    if (!window.confirm("이 쿨링팬의 소비전류 보강을 삭제할까요? 페이지에서 파싱된 값이 있으면 페이지 값을 다시 사용합니다.")) return;
     const requestVersion = ++mutationRequestVersionRef.current;
     const isCurrent = () => mountedRef.current && mutationRequestVersionRef.current === requestVersion;
     setBusy(true);
@@ -275,7 +275,7 @@ export function CoolingFanLoadOverridePanel({ onToast, onMetaRefresh }: { onToas
   }, [listQuery, overrides]);
 
   return <section className="admin-card cooling-fan-load-card" data-testid="admin-cooling-fan-load">
-    <div className="admin-card-heading"><div><p className="eyebrow">FAN MOTOR EVIDENCE</p><h3>쿨링팬 소비전류 확인</h3><p className="admin-card-description">쿨링팬 모터의 장치당 소비전류를 원문 또는 제조사 정보로 보강합니다. RGB LED 전류와 분리해 저장하며, 허브 포트·커넥터·전류가 모두 확인된 경우에만 추천 후보로 승격합니다.</p></div><FiShield /></div>
+    <div className="admin-card-heading"><div><p className="eyebrow">FAN MOTOR EVIDENCE</p><h3>쿨링팬 소비전류 확인</h3><p className="admin-card-description">쿨링팬 모터의 장치당 소비전류를 페이지 또는 제조사 정보로 보강합니다. RGB LED 전류와 분리해 저장하며, 허브 포트·커넥터·전류가 모두 확인된 경우에만 추천 부품으로 승격합니다.</p></div><FiShield /></div>
     {error && <div className="cooling-fan-load-error" role="alert"><FiXCircle /> {error}</div>}
     <div className="cooling-fan-load-coverage"><div><strong>{coverage?.totalCoolingFans.toLocaleString("ko-KR") ?? "-"}</strong><span>쿨링팬</span></div><div><strong>{coverage?.knownCount.toLocaleString("ko-KR") ?? "-"}</strong><span>전류 확인</span></div><div><strong>{coverage?.registeredCount.toLocaleString("ko-KR") ?? "-"}</strong><span>제조사 보강</span></div><div><strong>{coverage ? `${coverage.coveragePercent}%` : "-"}</strong><span>coverage</span></div></div>
     <div className="cooling-fan-load-grid">
@@ -300,7 +300,7 @@ export function CoolingFanLoadOverridePanel({ onToast, onMetaRefresh }: { onToas
       </div>
     </div>
     <div className="cooling-fan-load-list-heading"><strong>저장된 팬 소비전류 정보</strong><span>{visibleOverrides.length} / {overrides.length}개</span><input aria-label="저장된 팬 소비전류 정보 검색" value={listQuery} onChange={(event) => setListQuery(event.target.value)} placeholder="등록 목록 검색" disabled={busy} /></div>
-    {loading ? <p className="cooling-fan-load-state"><FiLoader className="spin" /> 저장 목록을 불러오는 중...</p> : visibleOverrides.length === 0 ? <p className="cooling-fan-load-state"><FiDatabase /> 저장된 팬 소비전류 정보가 없습니다.</p> : <div className="cooling-fan-load-list">{visibleOverrides.map((item) => <article key={item.accessoryId}><div><strong>{item.accessoryName ?? item.accessoryId}</strong><small>{loadText(item)} · {new Date(item.updatedAt).toLocaleDateString("ko-KR")}</small></div><div>{item.sourceUrl && <a href={item.sourceUrl} target="_blank" rel="noreferrer" aria-label={`${item.accessoryName ?? item.accessoryId} 팬 소비전류 정보 원문`}><FiExternalLink /></a>}<button className="text-button danger-text-button" type="button" onClick={() => void removeOverride(item.accessoryId)} disabled={busy}><FiTrash2 /> 삭제</button></div></article>)}</div>}
-    <p className="cooling-fan-load-note"><FiInfo /> 보강값은 원본 accessories.json과 분리됩니다. 삭제하면 원문에서 자동 파싱된 값만 다시 사용하며, 원문에도 값이 없으면 허브 전류는 확인 필요로 돌아갑니다.</p>
+    {loading ? <p className="cooling-fan-load-state"><FiLoader className="spin" /> 저장 목록을 불러오는 중...</p> : visibleOverrides.length === 0 ? <p className="cooling-fan-load-state"><FiDatabase /> 저장된 팬 소비전류 정보가 없습니다.</p> : <div className="cooling-fan-load-list">{visibleOverrides.map((item) => <article key={item.accessoryId}><div><strong>{item.accessoryName ?? item.accessoryId}</strong><small>{loadText(item)} · {new Date(item.updatedAt).toLocaleDateString("ko-KR")}</small></div><div>{item.sourceUrl && <a href={item.sourceUrl} target="_blank" rel="noreferrer" aria-label={`${item.accessoryName ?? item.accessoryId} 팬 소비전류 정보 페이지`}><FiExternalLink /></a>}<button className="text-button danger-text-button" type="button" onClick={() => void removeOverride(item.accessoryId)} disabled={busy}><FiTrash2 /> 삭제</button></div></article>)}</div>}
+    <p className="cooling-fan-load-note"><FiInfo /> 보강값은 원본 accessories.json과 분리됩니다. 삭제하면 페이지에서 자동 파싱된 값만 다시 사용하며, 페이지에도 값이 없으면 허브 전류는 확인 필요로 돌아갑니다.</p>
   </section>;
 }
