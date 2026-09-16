@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
-import { CdpClient, clickSelector, clickText, firstAvailable, freePort, sleep, waitForJson, waitForValue } from "./browser-smoke.mjs";
+import { CdpClient, clickSelector, clickText, firstAvailable, freePort, openResultDetails, sleep, waitForHomeDemoButtons, waitForJson, waitForValue } from "./browser-smoke.mjs";
 
 const baseUrl = process.env.BROWSER_SMOKE_BASE_URL ?? "http://127.0.0.1:5174";
 function signalProcessGroup(child, signal) { if (!child.pid) return; try { process.kill(-child.pid, signal); } catch { try { child.kill(signal); } catch {} } }
@@ -30,11 +30,12 @@ try {
   await client.send("Page.enable");
   await client.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
   await waitForValue(client, "location.pathname === '/'", "홈 화면");
-  await waitForValue(client, "(document.body?.innerText ?? '').includes('오류 시연 견적')", "홈 컨텐츠");
-  if (!(await clickText(client, "오류 시연 견적"))) throw new Error("오류 시연 견적 버튼을 찾지 못했습니다.");
+  await waitForHomeDemoButtons(client, "홈 컨텐츠");
+  if (!(await clickText(client, "문제 있는 예시 견적"))) throw new Error("문제 있는 예시 견적 버튼을 찾지 못했습니다.");
   await waitForValue(client, "location.pathname === '/build' && (document.body?.innerText ?? '').includes('검사할 준비가 되었습니다.')", "시연 편집기");
   if ((await clickSelector(client, "button.button-primary.full-width", 1)) !== 1) throw new Error("호환성 검사 버튼을 찾지 못했습니다.");
   await waitForValue(client, "location.pathname === '/result' && document.querySelector('.result-page') !== null", "결과 화면");
+  await openResultDetails(client);
   await waitForValue(client, "document.querySelector('.suggestion-card .suggestion-apply:not([disabled])') !== null", "후보 적용 버튼");
 
   const result = await client.evaluate(`(async () => {

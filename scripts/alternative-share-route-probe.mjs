@@ -88,7 +88,7 @@ try {
       await wait(950);
       const stored = localStorage.getItem("pc-supporter-alternative-comparison-shares") ?? "";
       const body = document.body?.innerText ?? "";
-      return { stage: "checked", shareCalls, path: location.pathname, staleStored: stored.includes("alternative-route-share"), staleToast: body.includes("후보 비교 링크가 생성되었습니다") || body.includes("후보 비교 공유 링크를 클립보드") };
+      return { stage: "checked", shareCalls, path: location.pathname, staleStored: stored.includes("alternative-route-share"), staleToast: body.includes("부품 비교 링크가 만들어졌어요") || body.includes("부품 비교 공유 링크를 클립보드") };
     } finally {
       window.fetch = originalFetch;
       if (originalShares === null) localStorage.removeItem("pc-supporter-alternative-comparison-shares");

@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { spawn } from "node:child_process";
-import { CdpClient, assert, clickText, firstAvailable, freePort, sleep, waitForJson, waitForValue } from "./browser-smoke.mjs";
+import { CdpClient, assert, clickText, firstAvailable, freePort, sleep, waitForHomeDemoButtons, waitForJson, waitForValue } from "./browser-smoke.mjs";
 
 const baseUrl = process.env.BROWSER_SMOKE_BASE_URL ?? "http://127.0.0.1:5173";
 const cacheKey = "pc-supporter-catalog-picker-cache-v1";
@@ -57,7 +57,7 @@ try {
   await client.connect();
   await client.send("Runtime.enable");
   await client.send("Page.enable");
-  await waitForValue(client, "location.pathname === '/' && (document.body?.innerText ?? '').includes('오류 시연 견적')", "picker cache smoke home");
+  await waitForHomeDemoButtons(client, "picker cache smoke home");
 
   const originalCache = await client.evaluate(`localStorage.getItem(${JSON.stringify(cacheKey)})`);
   await client.evaluate(`(() => {
@@ -73,7 +73,7 @@ try {
       return original(input, init);
     };
   })()`);
-  assert(await clickText(client, "오류 시연 견적"), "picker cache smoke demo build button not found");
+  assert(await clickText(client, "문제 있는 예시 견적"), "picker cache smoke demo build button not found");
   await waitForValue(client, "location.pathname === '/build'", "picker cache smoke editor");
   const opened = await client.evaluate(`(() => {
     const card = [...document.querySelectorAll('.component-card')].find((candidate) => candidate.querySelector('h3')?.textContent?.trim() === 'CPU');

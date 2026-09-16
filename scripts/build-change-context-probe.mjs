@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
-import { CdpClient, clickSelector, clickText, firstAvailable, freePort, selectLabel, sleep, waitForJson, waitForValue } from "./browser-smoke.mjs";
+import { CdpClient, clickSelector, clickText, firstAvailable, freePort, openResultDetails, selectLabel, sleep, waitForHomeDemoButtons, waitForJson, waitForValue } from "./browser-smoke.mjs";
 
 const baseUrl = process.env.BROWSER_SMOKE_BASE_URL ?? "http://127.0.0.1:5174";
 function signalProcessGroup(child, signal = "SIGTERM") { if (!child.pid) return; try { process.kill(-child.pid, signal); } catch { try { child.kill(signal); } catch {} } }
@@ -29,8 +29,8 @@ try {
   await client.send("Runtime.enable");
   await client.send("Page.enable");
   await client.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
-  await waitForValue(client, "location.pathname === '/' && (document.body?.innerText ?? '').includes('오류 시연 견적')", "홈 화면");
-  if (!(await clickText(client, "오류 시연 견적"))) throw new Error("오류 시연 견적 버튼을 찾지 못했습니다.");
+  await waitForHomeDemoButtons(client, "홈 화면");
+  if (!(await clickText(client, "문제 있는 예시 견적"))) throw new Error("문제 있는 예시 견적 버튼을 찾지 못했습니다.");
   await waitForValue(client, "location.pathname === '/build'", "편집기");
   await selectLabel(client, "사용 목적", "gaming");
   await selectLabel(client, "게임 해상도", "1440p");
@@ -38,6 +38,7 @@ try {
   const checkButton = await client.evaluate("(() => { const button = [...document.querySelectorAll('button')].find((candidate) => !candidate.disabled && (candidate.textContent ?? '').includes('호환성 검사하기')); button?.click(); return button instanceof HTMLButtonElement; })()");
   if (!checkButton) throw new Error("호환성 검사 버튼을 찾지 못했습니다.");
   await waitForValue(client, "location.pathname === '/result' && document.querySelector('.result-page') !== null", "결과 화면");
+  await openResultDetails(client);
   await waitForValue(client, "document.querySelector('[data-testid=\"peripheral-recommendation-panel\"]') !== null && document.querySelector('.accessory-add-button:not([disabled])') !== null", "주변 부품 추천 후보");
   if ((await clickSelector(client, '.accessory-add-button:not([disabled])', 1)) !== 1) throw new Error("주변 부품 추천 후보를 추가하지 못했습니다.");
   await waitForValue(client, "[...document.querySelectorAll('.suggestions')].some((group) => group.querySelectorAll('.suggestion-compare-toggle').length >= 2 && group.querySelector('.suggestion-gpu-target-line'))", "후보 비교 가능 상태");
@@ -48,9 +49,14 @@ try {
     stages.push({ label, module: value });
   };
   await moduleProbe("before-candidate-context");
-  const selected = await client.evaluate(`(async () => { const group = [...document.querySelectorAll('.suggestions')].find((candidate) => candidate.querySelectorAll('.suggestion-compare-toggle').length >= 2 && candidate.querySelector('.suggestion-gpu-target-line')); if (!group) return 0; const buttons = [...group.querySelectorAll('.suggestion-compare-toggle:not(.selected)')].slice(0, 2); for (const button of buttons) { button.click(); await new Promise((resolve) => setTimeout(resolve, 120)); } return buttons.length; })()`);
+  let selected = 0;
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    if ((await client.evaluate("document.querySelector('.suggestion-comparison') !== null")) === true) break;
+    selected = await client.evaluate(`(async () => { const group = [...document.querySelectorAll('.suggestions')].find((candidate) => candidate.querySelectorAll('.suggestion-compare-toggle').length >= 2 && candidate.querySelector('.suggestion-gpu-target-line')); if (!group) return 0; const buttons = [...group.querySelectorAll('.suggestion-compare-toggle:not(.selected)')].slice(0, 2); for (const button of buttons) { button.click(); await new Promise((resolve) => setTimeout(resolve, 120)); } return buttons.length; })()`);
+    if ((await client.evaluate("document.querySelector('.suggestion-comparison') !== null")) === true) break;
+    await new Promise((resolve) => setTimeout(resolve, 300));
+  }
   stages.push({ label: "candidate-selected", selected });
-  if (selected < 2) throw new Error(`candidate compare controls missing shape=${JSON.stringify(suggestionShape)}`);
   await waitForValue(client, "document.querySelector('.suggestion-comparison') !== null", "후보 비교표");
   const virtualCompareClicked = await clickText(client, "전체 미리 비교", ".suggestion-comparison button");
   stages.push({ label: "virtual-compare-click", virtualCompareClicked });
@@ -59,15 +65,16 @@ try {
   const firstDialog = await client.evaluate("({ dialog: Boolean(document.querySelector('.candidate-scenario-dialog')), loading: Boolean(document.querySelector('.candidate-scenario-dialog-loading')), errors: window.__pcSupporterSmokeErrors ?? [], resources: performance.getEntriesByType('resource').filter((entry) => /CandidateScenarioComparison|BuildChangeDecisionDialog/.test(entry.name)).map((entry) => entry.name) })");
   stages.push({ label: "candidate-dialog-first", firstDialog });
   if (firstDialog.dialog) {
-    await clickSelector(client, '[aria-label="후보 미리 비교 닫기"]', 1);
+    await clickSelector(client, '[aria-label="부품 미리 비교 닫기"]', 1);
     await waitForValue(client, "document.querySelector('.candidate-scenario-dialog') === null", "candidate dialog close");
     await clickText(client, "전체 미리 비교");
     await new Promise((resolve) => setTimeout(resolve, 5000));
     stages.push({ label: "candidate-dialog-second", secondDialog: await client.evaluate("({ dialog: Boolean(document.querySelector('.candidate-scenario-dialog')), loading: Boolean(document.querySelector('.candidate-scenario-dialog-loading')) })") });
     await client.evaluate("(() => { history.pushState({}, '', '/'); window.dispatchEvent(new PopStateEvent('popstate')); })()");
-    await waitForValue(client, "location.pathname === '/' && (document.body?.innerText ?? '').includes('오류 시연 견적')", "route home");
+    await waitForHomeDemoButtons(client, "route home");
     await client.evaluate("history.back()");
     await waitForValue(client, "location.pathname === '/result' && document.querySelector('.result-page') !== null", "route back result");
+    await openResultDetails(client);
     await moduleProbe("after-route-back");
     const postBack = await client.evaluate("({ path: location.pathname, candidateDialog: Boolean(document.querySelector('.candidate-scenario-dialog')), applyButtons: document.querySelectorAll('.suggestion-card .suggestion-apply:not([disabled])').length, comparison: Boolean(document.querySelector('[data-testid=\"suggestion-comparison-benchmark\"]')) })");
     stages.push({ label: "after-route-back", postBack });

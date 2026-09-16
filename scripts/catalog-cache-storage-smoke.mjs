@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { spawn } from "node:child_process";
-import { CdpClient, assert, firstAvailable, freePort, sleep, waitForJson, waitForValue } from "./browser-smoke.mjs";
+import { CdpClient, assert, firstAvailable, freePort, sleep, waitForHomeDemoButtons, waitForJson, waitForValue } from "./browser-smoke.mjs";
 
 const baseUrl = process.env.BROWSER_SMOKE_BASE_URL ?? "http://127.0.0.1:4184";
 
@@ -59,9 +59,9 @@ async function main() {
     await client.send("Runtime.enable");
     await client.send("Page.enable");
     await waitForValue(client, `location.href.startsWith(${JSON.stringify(baseUrl)})`, "focused cache smoke page");
-    await waitForValue(client, "(document.body?.innerText ?? '').includes('오류 시연 견적')", "focused cache smoke home");
-    await client.evaluate("(() => { const button = [...document.querySelectorAll('button')].find((candidate) => (candidate.textContent ?? '').includes('오류 시연 견적')); button?.click(); })()");
-    await waitForValue(client, "location.pathname === '/build' && (document.body?.innerText ?? '').includes('나의 PC 견적 구성')", "focused cache smoke build");
+    await waitForHomeDemoButtons(client, "focused cache smoke home");
+    await client.evaluate("(() => { const button = [...document.querySelectorAll('button')].find((candidate) => (candidate.textContent ?? '').includes('문제 있는 예시 견적')); button?.click(); })()");
+    await waitForValue(client, "location.pathname === '/build' && ((document.body?.innerText ?? '').includes('내 견적 구성') || (document.body?.innerText ?? '').includes('견적 구성'))", "focused cache smoke build");
     await client.evaluate("(() => { const card = [...document.querySelectorAll('.component-card')].find((candidate) => candidate.querySelector('h3')?.textContent?.includes('CPU')); const button = card?.querySelector('.empty-selection button, .selected-lines > .text-button, .included-selection button'); button?.click(); })()");
     await waitForValue(client, "document.querySelector('[role=dialog] #picker-title') !== null", "focused cache smoke picker");
     await client.evaluate("document.querySelector('[role=dialog] button[aria-label=\"부품 선택 닫기\"]')?.click()");

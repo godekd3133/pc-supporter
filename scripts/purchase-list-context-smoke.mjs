@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { spawn } from "node:child_process";
-import { CdpClient, assert, clickText, firstAvailable, freePort, sleep, waitForJson, waitForValue } from "./browser-smoke.mjs";
+import { CdpClient, assert, clickText, firstAvailable, freePort, openResultDetails, sleep, waitForHomeDemoButtons, waitForJson, waitForValue } from "./browser-smoke.mjs";
 
 const baseUrl = process.env.BROWSER_SMOKE_BASE_URL ?? "http://127.0.0.1:5173";
 
@@ -56,11 +56,12 @@ try {
   await client.connect();
   await client.send("Runtime.enable");
   await client.send("Page.enable");
-  await waitForValue(client, "location.pathname === '/' && (document.body?.innerText ?? '').includes('오류 시연 견적')", "purchase list context smoke home");
-  assert(await clickText(client, "오류 시연 견적"), "purchase list context smoke demo button not found");
+  await waitForHomeDemoButtons(client, "purchase list context smoke home");
+  assert(await clickText(client, "문제 있는 예시 견적"), "purchase list context smoke demo button not found");
   await waitForValue(client, "location.pathname === '/build' && document.querySelector('button.button-primary.full-width')?.disabled === false", "purchase list context smoke editor");
   assert(await clickText(client, "호환성 검사하기"), "purchase list context smoke check button not found");
   await waitForValue(client, "location.pathname === '/result' && document.querySelector('[data-testid=\"result-findings\"]') !== null", "purchase list context smoke result");
+  await openResultDetails(client);
   await waitForValue(client, "document.querySelector('[data-testid=\"purchase-list-panel\"]') !== null || [...document.querySelectorAll('button')].some((button) => (button.textContent ?? '').includes('구매 목록'))", "purchase list context smoke purchase list mount");
   const mounted = await client.evaluate(`(() => {
     const button = document.querySelector('[data-testid="purchase-list-live-price-refresh"]');
@@ -98,7 +99,7 @@ try {
       for (let index = 0; index < 120; index += 1) {
         const currentButton = document.querySelector('[data-testid="purchase-list-live-price-refresh"]');
         const result = document.querySelector('.result-page');
-        samples.push({ index, delayedCalls, priority: priority.value, buttonDisabled: currentButton instanceof HTMLButtonElement ? currentButton.disabled : null, bodyChecking: (document.body?.innerText ?? "").includes("호환성 검사 중") || (document.body?.innerText ?? "").includes("검사 준비 중"), result: Boolean(result) });
+        samples.push({ index, delayedCalls, priority: priority.value, buttonDisabled: currentButton instanceof HTMLButtonElement ? currentButton.disabled : null, bodyChecking: (document.body?.innerText ?? "").includes("검사 중") || (document.body?.innerText ?? "").includes("검사 준비 중"), result: Boolean(result) });
         if (delayedCalls > 0 && currentButton instanceof HTMLButtonElement && !currentButton.disabled) break;
         await new Promise((resolve) => setTimeout(resolve, 25));
       }

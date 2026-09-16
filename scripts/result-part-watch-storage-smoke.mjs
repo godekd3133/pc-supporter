@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { spawn } from "node:child_process";
-import { CdpClient, assert, firstAvailable, freePort, sleep, waitForJson, waitForValue } from "./browser-smoke.mjs";
+import { CdpClient, assert, firstAvailable, freePort, openResultDetails, sleep, waitForHomeDemoButtons, waitForJson, waitForValue } from "./browser-smoke.mjs";
 
 const baseUrl = process.env.BROWSER_SMOKE_BASE_URL ?? "http://127.0.0.1:4184";
 
@@ -59,12 +59,13 @@ async function main() {
     await client.send("Runtime.enable");
     await client.send("Page.enable");
     await waitForValue(client, `location.href.startsWith(${JSON.stringify(baseUrl)})`, "focused result PartWatch page");
-    await waitForValue(client, "(document.body?.innerText ?? '').includes('오류 시연 견적')", "focused result PartWatch home");
-    await client.evaluate("(() => { const button = [...document.querySelectorAll('button')].find((candidate) => (candidate.textContent ?? '').includes('오류 시연 견적')); button?.click(); })()");
-    await waitForValue(client, "location.pathname === '/build' && (document.body?.innerText ?? '').includes('나의 PC 견적 구성')", "focused result PartWatch build");
+    await waitForHomeDemoButtons(client, "focused result PartWatch home");
+    await client.evaluate("(() => { const button = [...document.querySelectorAll('button')].find((candidate) => (candidate.textContent ?? '').includes('문제 있는 예시 견적')); button?.click(); })()");
+    await waitForValue(client, "location.pathname === '/build' && ((document.body?.innerText ?? '').includes('내 견적 구성') || (document.body?.innerText ?? '').includes('견적 구성'))", "focused result PartWatch build");
     await waitForValue(client, "[...document.querySelectorAll('button')].some((button) => (button.textContent ?? '').includes('호환성 검사하기'))", "focused result PartWatch check button");
     await client.evaluate("(() => { const button = [...document.querySelectorAll('button')].find((candidate) => (candidate.textContent ?? '').includes('호환성 검사하기')); button?.click(); })()");
     await waitForValue(client, "location.pathname === '/result' && document.querySelector('.part-watch-button[data-item-id]') !== null", "focused result PartWatch control");
+    await openResultDetails(client);
 
     const probe = await client.evaluate(`(async () => {
       const watchlistKey = "pc-supporter-catalog-watchlist";

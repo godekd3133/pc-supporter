@@ -37,8 +37,11 @@ const {
   clickText,
   firstAvailable,
   freePort,
+  openHistoryDetails,
+  openResultDetails,
   sleep,
   setTextValue,
+  waitForHomeDemoButtons,
   waitForValue
 } = await import("./browser-smoke.mjs");
 
@@ -234,9 +237,9 @@ async function main() {
     browser = await launchChrome(`${webUrl}/`, dataDir + "-chrome");
     const { client } = browser;
 
-    await waitForValue(client, "(document.body?.innerText ?? '').includes('오류 시연 견적')", "격리 홈 화면");
+    await waitForHomeDemoButtons(client, "격리 홈 화면");
     await navigate(client, `${webUrl}/catalog?category=gpu&partId=${encodeURIComponent(provenancePart.id)}`, "수동 provenance 카탈로그 상세");
-    await waitForValue(client, "document.querySelector('[data-testid=\"catalog-part-detail\"]') !== null && document.querySelector('[data-testid=\"catalog-spec-provenance\"]') !== null && document.querySelector('[data-testid=\"catalog-spec-provenance-source-check\"]') !== null && (document.body?.innerText ?? '').includes('PERSISTENCE-GPU-16') && (document.body?.innerText ?? '').includes('원문·모델 확인됨')", "수동 provenance 표시");
+    await waitForValue(client, "document.querySelector('[data-testid=\"catalog-part-detail\"]') !== null && document.querySelector('[data-testid=\"catalog-spec-provenance\"]') !== null && document.querySelector('[data-testid=\"catalog-spec-provenance-source-check\"]') !== null && (document.body?.innerText ?? '').includes('PERSISTENCE-GPU-16') && (document.body?.innerText ?? '').includes('페이지·모델 확인됨')", "수동 provenance 표시");
     assert((await bodyText(client)).includes("제조사 공식 사양서 4쪽"), "수동 provenance 근거 메모가 표시되지 않았습니다.");
     await navigate(client, `${webUrl}/admin`, "수동 override 관리자 화면");
     await waitForValue(client, "(document.body?.innerText ?? '').includes('부품 데이터 센터')", "수동 override 관리자 화면 확인");
@@ -245,8 +248,8 @@ async function main() {
     await waitForValue(client, "document.querySelector('[data-testid=\"admin-catalog-spec-override\"]')?.textContent?.includes('제조사 정보 수동 스펙 보강') === true && document.querySelector('[data-testid=\"admin-catalog-spec-override\"]')?.textContent?.includes('정보 점검 · URL 접근 가능 · 모델 확인') === true", "수동 override 정보 점검 상태");
     assert(await client.evaluate("[...document.querySelectorAll('[data-testid=\"admin-catalog-spec-override-list\"] button')].some((button) => (button.textContent ?? '').includes('최대 50개 정보 점검'))"), "수동 override 일괄 정보 점검 버튼이 표시되지 않았습니다.");
     await navigate(client, `${webUrl}/`, "격리 홈 화면 복귀");
-    await waitForValue(client, "(document.body?.innerText ?? '').includes('오류 시연 견적')", "격리 홈 화면 복귀 확인");
-    assert(await clickText(client, "오류 시연 견적"), "오류 시연 견적 버튼을 찾지 못했습니다.");
+    await waitForHomeDemoButtons(client, "격리 홈 화면 복귀 확인");
+    assert(await clickText(client, "문제 있는 예시 견적"), "문제 있는 예시 견적 버튼을 찾지 못했습니다.");
     await waitForValue(client, "(document.body?.innerText ?? '').includes('나의 PC 견적 구성') || (document.body?.innerText ?? '').includes('견적 구성')", "격리 견적 편집기");
     await waitForValue(client, "(document.body?.innerText ?? '').includes('검사할 준비가 되었습니다') || (document.body?.innerText ?? '').includes('모든 필수 부품을 선택했습니다')", "격리 검사 준비");
     assert(await clickText(client, "호환성 검사하기"), "격리 호환성 검사 버튼을 찾지 못했습니다.");
@@ -285,6 +288,7 @@ async function main() {
     const refreshCheckPayload = await refreshCheckResponse.json();
     assert(refreshCheckResponse.ok && refreshCheckPayload?.checkHistory?.at(-1)?.catalogRefreshReport?.items?.[0]?.valueDiffs?.length === 2, "원문 재확인 값 근거가 저장 견적 검사 이력에 보존되지 않았습니다. payload=" + JSON.stringify(refreshCheckPayload));
     await navigate(client, `${webUrl}/share/${encodeURIComponent(originalSavedId)}`, "원문 재확인 finding 연결 route");
+    await openResultDetails(client);
     await waitForValue(client, "document.querySelector('[data-testid=\"saved-build-recheck-refresh-impact\"]') !== null", "원문 재확인 finding 연결 패널");
     const refreshImpactText = await bodyText(client);
     assert(refreshImpactText.includes("브라우저 원문 재확인 근거") && refreshImpactText.includes("확인된 실제 값") && refreshImpactText.includes("100,000원") && refreshImpactText.includes("110,000원"), "원문 재확인 실제 값 변화가 결과 화면에 표시되지 않았습니다.");
@@ -305,6 +309,7 @@ async function main() {
     await waitForValue(client, "document.querySelector('[data-testid=\"assembly-verification-panel\"]') === null", "조립 검증 패널 언마운트");
     await client.evaluate("(() => { Object.keys(localStorage).filter((key) => key.startsWith('pc-supporter-assembly-verification:')).forEach((key) => localStorage.removeItem(key)); return true; })()");
     await navigate(client, `${webUrl}/share/${encodeURIComponent(originalSavedId)}`, "조립 검증 서버 compact 복원 route");
+    await openResultDetails(client);
     await waitForValue(client, "document.querySelector('[data-testid=\"assembly-verification-panel\"]') !== null", "조립 검증 서버 compact 복원 패널");
     const assemblyRestoreProbe = await client.evaluate(`(async () => { const saved = await fetch('/api/builds/${encodeURIComponent(originalSavedId)}').then((response) => response.json()); const local = Object.entries(localStorage).filter(([key]) => key.startsWith('pc-supporter-assembly-verification:')).map(([key, value]) => ({ key, value })); return { banner: Boolean(document.querySelector('[data-testid="assembly-verification-server-restored"]')), progress: document.querySelector('[data-testid="assembly-verification-panel"] .assembly-verification-progress')?.textContent ?? '', panel: document.querySelector('[data-testid="assembly-verification-panel"]')?.textContent?.slice(0, 1800) ?? '', local, checkHistory: saved?.checkHistory?.map((snapshot) => ({ checked: snapshot?.assemblyVerification?.checked, historyLength: snapshot?.assemblyVerificationHistory?.length ?? 0 })) ?? [] }; })()`);
     assert(assemblyRestoreProbe.banner && assemblyRestoreProbe.progress.includes('1 / 6개') && assemblyRestoreProbe.panel.includes('실측 회차1 / 12회차'), "조립 검증 서버 compact 복원에 실패했습니다. probe=" + JSON.stringify(assemblyRestoreProbe));
@@ -366,36 +371,36 @@ async function main() {
     assert(candidateReplacementClicked, "후보 전체 비교 테스트용 finding 교체 버튼을 찾지 못했습니다.");
     await waitForValue(client, "document.querySelector('[role=dialog] #picker-title')?.textContent?.includes('선택') === true", "후보 전체 비교용 선택기");
     await waitForValue(client, "document.querySelectorAll('[role=dialog] .picker-item').length > 0", "후보 전체 비교 목록");
-    assert(await client.evaluate("(() => { const label = [...document.querySelectorAll('[role=dialog] label')].find((candidate) => (candidate.textContent ?? '').includes('후보')); const select = label?.querySelector('select'); if (!select) return false; const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set; setter?.call(select, 'no_blocker'); select.dispatchEvent(new Event('change', { bubbles: true })); return select.value === 'no_blocker'; })()"), "후보 전체 비교 모드로 전환하지 못했습니다.");
-    await waitForValue(client, "(document.body?.innerText ?? '').includes('차단 오류 없는 후보') && document.querySelectorAll('[role=dialog] .picker-item').length > 1", "차단 없음 후보 전체 비교 목록");
+    assert(await client.evaluate("(() => { const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set; for (const label of [...document.querySelectorAll('[role=dialog] label')]) { if (!(label.textContent ?? '').includes('부품')) continue; const select = label.querySelector('select'); if (!select || ![...select.options].some((option) => option.value === 'no_blocker')) continue; setter?.call(select, 'no_blocker'); select.dispatchEvent(new Event('change', { bubbles: true })); return select.value === 'no_blocker'; } return false; })()"), "후보 전체 비교 모드로 전환하지 못했습니다.");
+    await waitForValue(client, "(document.body?.innerText ?? '').includes('차단 오류 없는 부품') && document.querySelectorAll('[role=dialog] .picker-item').length > 1", "차단 없음 후보 전체 비교 목록");
     await waitForValue(client, "document.querySelectorAll('[role=dialog] .picker-compare-toggle:not([disabled])').length > 1", "차단 없음 후보 비교 버튼");
     assert((await clickSelector(client, '[role=dialog] .picker-compare-toggle', 2)) === 2, "후보 전체 비교용 후보 2개를 선택하지 못했습니다.");
-    await waitForValue(client, "document.querySelector('[role=dialog] [aria-label=\"후보 비교\"]') !== null", "후보 전체 비교 선택 상태");
+    await waitForValue(client, "document.querySelector('[role=dialog] [aria-label=\"부품 비교\"]') !== null", "후보 전체 비교 선택 상태");
     assert(await clickText(client, "전체 미리 비교"), "전체 미리 비교 버튼을 찾지 못했습니다.");
-    await waitForValue(client, "document.querySelector('#candidate-scenario-title') !== null", "후보 전체 미리 비교 창");
-    await waitForValue(client, "document.querySelectorAll('.candidate-scenario-card.ready').length === 2 && (document.body?.innerText ?? '').includes('2 / 2개 계산')", "후보 전체 미리 비교 완료");
-    await waitForValue(client, "document.querySelectorAll('[data-testid=\"candidate-scenario-analysis\"]').length === 2 && (document.body?.innerText ?? '').includes('후보 적용 후 성능 분석')", "후보별 성능 분석 비교");
+    await waitForValue(client, "document.querySelector('#candidate-scenario-title') !== null", "부품 전체 미리 비교 창");
+    await waitForValue(client, "document.querySelectorAll('.candidate-scenario-card.ready').length === 2 && (document.body?.innerText ?? '').includes('2 / 2개 계산')", "부품 전체 미리 비교 완료");
+    await waitForValue(client, "document.querySelectorAll('[data-testid=\"candidate-scenario-analysis\"]').length === 2 && (document.body?.innerText ?? '').includes('부품 적용 후 성능 분석')", "후보별 성능 분석 비교");
     await waitForValue(client, "document.querySelector('[data-testid=\"candidate-tradeoff-frontier\"]') !== null && (document.body?.innerText ?? '').includes('호환·가격·분석·정보의 비교 우위')", "후보 비교 우위");
-    assert((await bodyText(client)).includes('비교 우위') && (await bodyText(client)).includes('가격 변화'), "후보 비교 비교 우위의 핵심 근거가 표시되지 않았습니다.");
-    assert(await clickText(client, "비교 결과 공유"), "후보 전체 미리 비교 공유 버튼을 찾지 못했습니다.");
-    await waitForValue(client, "document.querySelector('[aria-label=\"미리 비교 공유 링크\"]')?.value?.startsWith(location.origin + '/compare/') === true", "후보 전체 미리 비교 공유 링크");
+    assert((await bodyText(client)).includes('비교 우위') && (await bodyText(client)).includes('가격 변화'), "부품 비교 우위의 핵심 근거가 표시되지 않았습니다.");
+    assert(await clickText(client, "비교 결과 공유"), "부품 전체 미리 비교 공유 버튼을 찾지 못했습니다.");
+    await waitForValue(client, "document.querySelector('[aria-label=\"미리 비교 공유 링크\"]')?.value?.startsWith(location.origin + '/compare/') === true", "부품 전체 미리 비교 공유 링크");
     const comparisonShareUrl = await client.evaluate("document.querySelector('[aria-label=\"미리 비교 공유 링크\"]')?.value ?? ''");
     const comparisonShareId = new URL(comparisonShareUrl).pathname.split("/").filter(Boolean).at(-1);
-    assert(typeof comparisonShareId === "string" && comparisonShareId.length > 0, "후보 전체 미리 비교 공유 ID를 추출하지 못했습니다.");
+    assert(typeof comparisonShareId === "string" && comparisonShareId.length > 0, "부품 전체 미리 비교 공유 ID를 추출하지 못했습니다.");
     const comparisonShares = await client.evaluate("JSON.parse(localStorage.getItem('pc-supporter-alternative-comparison-shares') ?? '[]')");
     const comparisonShareEntry = comparisonShares.find((entry) => entry?.id === comparisonShareId);
-    assert(comparisonShareEntry?.name?.includes("후보 전체 미리 비교") === true, "후보 전체 미리 비교의 설명적인 공유 이름이 저장되지 않았습니다.");
+    assert(comparisonShareEntry?.name?.includes("부품 전체 미리 비교") === true, "부품 전체 미리 비교의 설명적인 공유 이름이 저장되지 않았습니다.");
     assert(typeof comparisonShareEntry?.ownerToken === "string" && comparisonShareEntry.ownerToken.length >= 40, "후보 비교 공유 owner token이 브라우저 이력에 기록되지 않았습니다.");
     assert(!comparisonShareUrl.includes(comparisonShareEntry.ownerToken), "후보 비교 공유 URL에 owner token이 노출되었습니다.");
     const publicComparison = await client.evaluate(`fetch(${JSON.stringify(`${webUrl}/api/comparisons/${comparisonShareId}`)}).then((response) => response.ok ? response.json() : null)`);
-    assert(publicComparison?.name?.includes("후보 전체 미리 비교") === true && publicComparison?.engineVersion === apiHealth?.engineVersion && publicComparison?.currentPartName && publicComparison?.currentPartSummary && publicComparison?.currentPartPrice, `후보 비교 공유 API가 이름·엔진·현재 기준선 메타데이터를 보존하지 않았습니다. expectedEngine=${apiHealth?.engineVersion ?? "unknown"} actualEngine=${publicComparison?.engineVersion ?? "missing"}`);
+    assert(publicComparison?.name?.includes("부품 전체 미리 비교") === true && publicComparison?.engineVersion === apiHealth?.engineVersion && publicComparison?.currentPartName && publicComparison?.currentPartSummary && publicComparison?.currentPartPrice, `후보 비교 공유 API가 이름·엔진·현재 기준선 메타데이터를 보존하지 않았습니다. expectedEngine=${apiHealth?.engineVersion ?? "unknown"} actualEngine=${publicComparison?.engineVersion ?? "missing"}`);
     assert(!Object.prototype.hasOwnProperty.call(publicComparison, "ownerToken") && !Object.prototype.hasOwnProperty.call(publicComparison, "ownerTokenHash"), "후보 비교 공개 응답에 owner credential이 포함되었습니다.");
     await navigate(secondClient, comparisonShareUrl, "두 번째 탭 후보 비교 공유 route");
     await waitForValue(secondClient, "document.querySelector('[data-testid=\"shared-comparison-live-check\"]') !== null && document.querySelector('[data-testid=\"shared-comparison-baseline\"]') !== null && document.querySelector('.shared-comparison-card') !== null", "두 번째 탭 후보 비교 snapshot");
     const sharedComparisonText = await bodyText(secondClient);
-    assert(sharedComparisonText.includes("후보 전체 미리 비교") && sharedComparisonText.includes("공유된 미리 적용·구매 판단") && sharedComparisonText.includes("현재 카탈로그 재확인") && sharedComparisonText.includes("후보 적용 후 성능 분석"), "두 번째 탭에서 후보 가상 비교·성능 분석·현재 카탈로그 재확인이 표시되지 않았습니다.");
-    await waitForValue(secondClient, "document.querySelector('[data-testid=\"shared-comparison-tradeoff\"]') !== null && (document.body?.innerText ?? '').includes('공유된 후보 비교 우위')", "공유 후보 비교 비교 우위");
-    assert((await bodyText(secondClient)).includes('공유된 후보 비교 우위') && (await bodyText(secondClient)).includes('비교 우위'), "공유 후보 비교 비교 우위가 복원되지 않았습니다.");
+    assert(sharedComparisonText.includes("부품 전체 미리 비교") && sharedComparisonText.includes("공유된 미리 적용·구매 판단") && sharedComparisonText.includes("현재 카탈로그 재확인") && sharedComparisonText.includes("부품 적용 후 성능 분석"), "두 번째 탭에서 후보 가상 비교·성능 분석·현재 카탈로그 재확인이 표시되지 않았습니다.");
+    await waitForValue(secondClient, "document.querySelector('[data-testid=\"shared-comparison-tradeoff\"]') !== null && (document.body?.innerText ?? '').includes('공유된 부품 비교 우위')", "공유된 부품 비교 우위");
+    assert((await bodyText(secondClient)).includes('공유된 부품 비교 우위') && (await bodyText(secondClient)).includes('비교 우위'), "공유된 부품 비교 우위가 복원되지 않았습니다.");
     assert(!sharedComparisonText.includes(comparisonShareEntry.ownerToken), "읽기 전용 후보 비교 화면에 owner token이 노출되었습니다.");
     await secondClient.send("Network.enable");
     await secondClient.send("Network.setBlockedURLs", { urls: ["*://*/api/comparisons/*"] });
@@ -406,17 +411,18 @@ async function main() {
     assert(await clickText(secondClient, "다시 시도"), "공유 후보 비교 다시 시도 버튼을 찾지 못했습니다.");
     await waitForValue(secondClient, "document.querySelector('.shared-comparison-card') !== null", "공유 후보 비교 재시도 복구");
     await navigate(secondClient, `${webUrl}/`, "두 번째 탭 후보 비교 이력 route");
-    await waitForValue(secondClient, "document.querySelector('[data-testid=\"home-alternative-comparison-shares\"]')?.textContent?.includes('후보 전체 미리 비교') === true && document.querySelector('[data-testid^=\"home-alternative-comparison-baseline-\"]') !== null", "두 번째 탭 후보 비교 공유 이력");
+    await waitForValue(secondClient, "document.querySelector('[data-testid=\"home-alternative-comparison-shares\"]')?.textContent?.includes('부품 전체 미리 비교') === true && document.querySelector('[data-testid^=\"home-alternative-comparison-baseline-\"]') !== null", "두 번째 탭 후보 비교 공유 이력");
     const alternativeShareHistoryText = await secondClient.evaluate("document.querySelector('[data-testid=\"home-alternative-comparison-shares\"]')?.textContent ?? ''");
     assert(alternativeShareHistoryText.includes(publicComparison.currentPartSummary) && alternativeShareHistoryText.includes(publicComparison.currentPartPrice), "최근 후보 비교 공유 이력에 현재 기준선 사양·가격이 표시되지 않았습니다.");
     await client.evaluate("window.confirm = () => true");
-    assert(await clickText(client, "공유 취소"), "후보 전체 미리 비교 공유 취소 버튼을 찾지 못했습니다.");
-    await waitForValue(client, "document.querySelector('[aria-label=\"미리 비교 공유 링크\"]') === null", "후보 전체 미리 비교 공유 취소 완료");
+    assert(await clickText(client, "공유 취소"), "부품 전체 미리 비교 공유 취소 버튼을 찾지 못했습니다.");
+    await waitForValue(client, "document.querySelector('[aria-label=\"미리 비교 공유 링크\"]') === null", "부품 전체 미리 비교 공유 취소 완료");
     const revokedComparisonStatus = await client.evaluate(`fetch(${JSON.stringify(`${webUrl}/api/comparisons/${comparisonShareId}`)}).then((response) => response.status)`);
     assert(revokedComparisonStatus === 404, "후보 비교 공유 취소 후 서버 링크가 계속 열립니다.");
     await navigate(secondClient, comparisonShareUrl, "취소된 후보 비교 공유 route");
-    await waitForValue(secondClient, "document.querySelector('[role=\"alert\"]') !== null && (document.body?.innerText ?? '').includes('저장된 후보 비교를 찾을 수 없습니다.')", "취소된 후보 비교 차단 안내");
+    await waitForValue(secondClient, "document.querySelector('[role=\"alert\"]') !== null && (document.body?.innerText ?? '').includes('저장된 부품 비교를 찾을 수 없습니다.')", "취소된 후보 비교 차단 안내");
     await navigate(secondClient, `${webUrl}/history`, "두 번째 탭 후보 견적 동기화 route");
+    await openHistoryDetails(secondClient);
     assert(await clickText(client, "새 견적으로 저장"), "후보 구성 새 견적 저장 버튼을 찾지 못했습니다.");
     await waitForValue(client, "document.querySelector('#save-build-dialog-title') !== null", "후보 구성 저장 창");
     assert(await setInputValue(client, "#save-build-name", "브라우저 후보 저장 검증 견적"), "후보 구성 견적 이름을 입력하지 못했습니다.");
@@ -430,18 +436,20 @@ async function main() {
     await waitForValue(secondClient, "(document.body?.innerText ?? '').includes('브라우저 후보 저장 검증 견적') && (document.body?.innerText ?? '').includes('견적 버전 비교')", "두 번째 탭 후보 견적 동기화");
     await waitForValue(secondClient, "document.querySelector('[data-testid=\"saved-build-comparison-tradeoff\"]') !== null && (document.body?.innerText ?? '').includes('호환·비용·분석·확장성의 비교 우위')", "저장 견적 버전 비교 우위");
     assert((await bodyText(secondClient)).includes('비교 우위') && (await bodyText(secondClient)).includes('확장성'), "저장 견적 버전 비교 우위의 근거가 표시되지 않았습니다.");
-    await waitForValue(secondClient, "document.querySelector('[data-testid=\"saved-build-comparison-consensus\"]') !== null && ((document.body?.innerText ?? '').includes('기준별 후보') || (document.body?.innerText ?? '').includes('공통 후보'))", "저장 견적 비교 결정 수렴 맥락");
+    await waitForValue(secondClient, "document.querySelector('[data-testid=\"saved-build-comparison-consensus\"]') !== null && ((document.body?.innerText ?? '').includes('기준별 부품') || (document.body?.innerText ?? '').includes('공통 부품'))", "저장 견적 비교 결정 수렴 맥락");
     assert((await bodyText(secondClient)).includes('선택 이유') && (await bodyText(secondClient)).includes('구매 진행'), "저장 견적 비교 결정 요약에 선택 이유·구매 진행 맥락이 표시되지 않았습니다.");
     assert(await clickSelector(secondClient, '[data-testid="saved-build-comparison-result-open-compatibility"]', 1) === 1, "비교 결정 카드의 결과 열기 버튼을 찾지 못했습니다.");
     await waitForValue(secondClient, "location.pathname === '/result' && (document.body?.innerText ?? '').includes('검사 결과 상세')", "비교 결정 카드 결과 열기");
     await navigate(secondClient, `${webUrl}/history`, "비교 결정 카드 결과 열기 후 이력 복귀");
     await waitForValue(secondClient, "document.querySelector('[data-testid=\"saved-build-comparison-consensus\"]') !== null", "비교 결정 카드 이력 복귀");
+    await waitForValue(secondClient, "document.querySelector('[data-testid=\"saved-build-comparison-purchase-open-compatibility\"]') !== null", "비교 결정 카드 구매 목록 버튼 준비");
     assert(await clickSelector(secondClient, '[data-testid="saved-build-comparison-purchase-open-compatibility"]', 1) === 1, "비교 결정 카드의 구매 목록 버튼을 찾지 못했습니다.");
     await waitForValue(secondClient, "location.pathname === '/result' && location.hash === '#purchase-list' && document.querySelector('[data-testid=\"purchase-list-panel\"]') !== null", "비교 결정 카드 구매 목록 열기");
     await navigate(secondClient, `${webUrl}/history`, "비교 결정 카드 구매 목록 열기 후 이력 복귀");
     await waitForValue(secondClient, "document.querySelector('[data-testid=\"saved-build-comparison-consensus\"]') !== null", "비교 결정 카드 구매 목록 후 이력 복귀");
 
     await navigate(client, `${webUrl}/share/${encodeURIComponent(originalSavedId)}?finding=blocker#findings`, "원본 공유 견적 필터 route");
+    await openResultDetails(client);
     await waitForValue(client, "(document.body?.innerText ?? '').includes('구매 목록') && !(document.body?.innerText ?? '').includes('공유 견적을 열 수 없습니다')", "공유 견적 결과");
     await waitForValue(client, "document.querySelector('[data-testid=\"result-decision-note\"]')?.textContent?.includes('QHD 게이밍과 업그레이드 여유를 우선') === true", "공유 견적 선택 메모");
     await waitForValue(client, "location.search === '?finding=blocker' && location.hash === '#findings' && document.querySelector('.finding-filter-button.selected')?.textContent?.includes('차단 오류') === true", "공유 견적 필터 복원");
@@ -482,6 +490,7 @@ async function main() {
     await waitForValue(client, "document.querySelector('[data-testid=\"saved-build-version-summary\"]') !== null", "버전 비교 기준 복원");
     assert((await clickSelector(client, `[data-testid^="saved-build-purchase-list-"]`, 1)) === 1, "저장 견적 이력의 구매 목록 열기 버튼을 찾지 못했습니다.");
     await waitForValue(client, "location.pathname === '/result' && location.hash === '#purchase-list'", "저장 견적 구매 목록 route");
+    await openResultDetails(client);
     await waitForValue(client, "document.querySelector('[data-testid=\"purchase-list-panel\"]') !== null", "저장 견적 구매 목록");
     await waitForValue(client, "document.querySelector('[data-testid=\"purchase-list-action-center\"]') !== null", "저장 견적 구매 다음 행동 센터");
     const firstPurchaseAction = await client.evaluate("(() => { const node = document.querySelector('.purchase-list-action-center-item'); return node?.getAttribute('data-testid')?.replace('purchase-list-action-', '') ?? null; })()");
@@ -493,6 +502,7 @@ async function main() {
     else assert((await clickSelector(client, '[data-testid="purchase-list-status-filter-all"]', 1)) === 1, "구매 다음 행동 단계 필터 초기화를 클릭하지 못했습니다.");
     await waitForValue(client, "document.querySelector('[data-testid=\"purchase-list-server-sync\"]') !== null && [...document.querySelectorAll('[data-testid=\"purchase-list-server-sync\"] button')].some((button) => !button.disabled && (button.textContent ?? '').includes('현재 상태 서버 저장'))", "이력에서 연 저장 견적의 구매 진행률 서버 저장 버튼");
     await navigate(secondClient, `${webUrl}/share/${encodeURIComponent(candidateSavedId)}`, "두 번째 탭 구매 목록 route");
+    await openResultDetails(secondClient);
     await waitForValue(secondClient, "document.querySelector('[data-testid=\"purchase-list-panel\"]') !== null && (document.body?.innerText ?? '').includes('아직 서버에 저장하지 않음')", "두 번째 탭의 오래된 구매 진행률");
     await waitForValue(client, "document.querySelector('[data-testid=\"purchase-list-status-board\"]') !== null && document.querySelectorAll('.purchase-list-status-select').length > 0", "구매 단계 보드");
     const stagedStatusChanged = await client.evaluate("(() => { const select = document.querySelector('.purchase-list-status-select'); if (!(select instanceof HTMLSelectElement)) return false; const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set; setter?.call(select, 'ordered'); select.dispatchEvent(new Event('change', { bubbles: true })); return select.value === 'ordered'; })()");
@@ -515,6 +525,7 @@ async function main() {
 
     await client.evaluate("Object.keys(localStorage).filter((key) => key.startsWith('pc-supporter-purchase-list:')).forEach((key) => localStorage.removeItem(key))");
     await navigate(client, `${webUrl}/share/${encodeURIComponent(candidateSavedId)}`, "서버 진행률 재조회 route");
+    await openResultDetails(client);
     await waitForValue(client, "document.querySelector('[data-testid=\"purchase-list-panel\"]') !== null", "서버 진행률 구매 목록");
     await waitForValue(client, "(document.body?.innerText ?? '').includes('서버 저장 1 /')", "서버 저장 진행률 표시");
     assert(await clickText(client, "서버 상태 불러오기"), "서버 상태 불러오기 버튼을 찾지 못했습니다.");

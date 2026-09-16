@@ -29,7 +29,7 @@ try {
   await client.send("Runtime.enable");
   await client.send("Page.enable");
   await waitForValue(client, "location.pathname === '/'", "홈 화면");
-  await waitForValue(client, "(document.body?.innerText ?? '').includes('시연용 구성 보기')", "홈 컨텐츠");
+  await waitForValue(client, "(document.body?.innerText ?? '').includes('예시 구성 보기')", "홈 컨텐츠");
   const result = await client.evaluate(`(async () => {
     const originalClipboard = navigator.clipboard;
     const originalShares = localStorage.getItem("pc-supporter-saved-build-version-shares");

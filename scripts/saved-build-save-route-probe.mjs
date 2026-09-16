@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
-import { CdpClient, clickText, firstAvailable, freePort, sleep, waitForJson, waitForValue } from "./browser-smoke.mjs";
+import { CdpClient, clickText, firstAvailable, freePort, openResultDetails, sleep, waitForHomeDemoButtons, waitForJson, waitForValue } from "./browser-smoke.mjs";
 
 const baseUrl = process.env.BROWSER_SMOKE_BASE_URL ?? "http://127.0.0.1:5174";
 function signalProcessGroup(child, signal = "SIGTERM") {
@@ -47,11 +47,12 @@ try {
   await client.send("Runtime.enable");
   await client.send("Page.enable");
   await waitForValue(client, "location.pathname === '/'", "홈 화면");
-  await waitForValue(client, "(document.body?.innerText ?? '').includes('오류 시연 견적')", "홈 컨텐츠");
-  if (!(await clickText(client, "오류 시연 견적"))) throw new Error("오류 시연 견적 버튼을 찾지 못했습니다.");
+  await waitForHomeDemoButtons(client, "홈 컨텐츠");
+  if (!(await clickText(client, "문제 있는 예시 견적"))) throw new Error("문제 있는 예시 견적 버튼을 찾지 못했습니다.");
   await waitForValue(client, "location.pathname === '/build' && (document.body?.innerText ?? '').includes('모든 필수 부품을 선택했습니다')", "편집기 화면");
   if (!(await clickText(client, "호환성 검사하기"))) throw new Error("호환성 검사 버튼을 찾지 못했습니다.");
   await waitForValue(client, "location.pathname === '/result' && document.querySelector('.result-page') !== null", "결과 화면");
+  await openResultDetails(client);
   if (!(await clickText(client, "견적 저장·공유"))) throw new Error("견적 저장·공유 버튼을 찾지 못했습니다.");
   await waitForValue(client, "document.querySelector('#save-build-dialog-title') !== null", "견적 저장 창");
   const result = await client.evaluate(`(async () => {

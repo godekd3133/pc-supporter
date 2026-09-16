@@ -57,7 +57,7 @@ try {
       await wait(900);
       const body = document.body?.innerText ?? "";
       const panelText = document.querySelector('[data-testid="home-alternative-comparison-shares"]')?.textContent ?? "";
-      return { stage: "checked", deleteCalls, newEntry: panelText.includes(newEntry.name), staleToast: body.includes("후보 비교 공유 링크를 취소했습니다"), path: location.pathname };
+      return { stage: "checked", deleteCalls, newEntry: panelText.includes(newEntry.name), staleToast: body.includes("부품 비교 공유 링크를 취소했어요"), path: location.pathname };
     } finally {
       window.fetch = originalFetch;
       window.confirm = originalConfirm;

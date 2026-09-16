@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { spawn } from "node:child_process";
-import { CdpClient, assert, firstAvailable, freePort, sleep, waitForJson, waitForValue } from "./browser-smoke.mjs";
+import { CdpClient, assert, firstAvailable, freePort, openResultDetails, sleep, waitForHomeDemoButtons, waitForJson, waitForValue } from "./browser-smoke.mjs";
 
 const baseUrl = process.env.BROWSER_SMOKE_BASE_URL ?? "http://127.0.0.1:5173";
 
@@ -106,11 +106,12 @@ try {
   assert(generator?.stage === "checked" && generator.copyCalls === 1 && generator.path === "/" && generator.home === true && generator.generator === false && generator.staleToast === false, "generator 조건 링크 copy가 route 이탈 뒤 stale toast를 남겼습니다: " + JSON.stringify(generator));
 
   await client.send("Page.navigate", { url: `${baseUrl}/` });
-  await waitForValue(client, "location.pathname === '/' && (document.body?.innerText ?? '').includes('오류 시연 견적')", "result comparison copy smoke home");
-  assert(await client.evaluate(`(() => { const button = [...document.querySelectorAll('button')].find((candidate) => (candidate.textContent ?? '').includes('오류 시연 견적')); if (!(button instanceof HTMLButtonElement)) return false; button.click(); return true; })()`), "result comparison copy smoke demo button not found");
+  await waitForHomeDemoButtons(client, "result comparison copy smoke home");
+  assert(await client.evaluate(`(() => { const button = [...document.querySelectorAll('button')].find((candidate) => (candidate.textContent ?? '').includes('문제 있는 예시 견적')); if (!(button instanceof HTMLButtonElement)) return false; button.click(); return true; })()`), "result comparison copy smoke demo button not found");
   await waitForValue(client, "location.pathname === '/build' && document.querySelector('button.button-primary.full-width')?.disabled === false", "result comparison copy smoke editor");
   assert(await client.evaluate(`(() => { const button = [...document.querySelectorAll('button')].find((candidate) => !candidate.disabled && (candidate.textContent ?? '').includes('호환성 검사하기')); if (!(button instanceof HTMLButtonElement)) return false; button.click(); return true; })()`), "result comparison copy smoke check button not found");
   await waitForValue(client, "location.pathname === '/result' && document.querySelector('[data-testid=\"result-findings\"]') !== null", "result comparison copy smoke result");
+  await openResultDetails(client);
   await waitForValue(client, "[...document.querySelectorAll('.suggestions')].some((candidate) => candidate.querySelectorAll('.suggestion-compare-toggle').length >= 2)", "result comparison copy smoke suggestions");
   const selected = await client.evaluate(`(() => { const group = [...document.querySelectorAll('.suggestions')].find((candidate) => candidate.querySelectorAll('.suggestion-compare-toggle').length >= 2); if (!group) return 0; const buttons = [...group.querySelectorAll('.suggestion-compare-toggle')].slice(0, 2); buttons.forEach((button) => button.click()); return buttons.length; })()`);
   assert(selected >= 2, "result comparison copy smoke could not select two suggestions");
@@ -130,7 +131,7 @@ try {
       window.dispatchEvent(new PopStateEvent("popstate"));
       await wait(950);
       const body = document.body?.innerText ?? "";
-      return { stage: "checked", copyCalls, path: location.pathname, home: document.querySelector(".home-page") !== null, result: document.querySelector(".result-page") !== null, staleToast: body.includes("대체 후보 비교표를 클립보드에 복사했습니다") || body.includes("대체 후보 비교표 복사에 실패했습니다") };
+      return { stage: "checked", copyCalls, path: location.pathname, home: document.querySelector(".home-page") !== null, result: document.querySelector(".result-page") !== null, staleToast: body.includes("대체 부품 비교표를 클립보드에 복사했어요") || body.includes("대체 부품 비교표 복사에 실패했어요") };
     } finally {
       if (originalClipboard === undefined) { try { delete navigator.clipboard; } catch {} } else Object.defineProperty(navigator, "clipboard", { configurable: true, value: originalClipboard });
     }
@@ -139,6 +140,7 @@ try {
 
   await client.send("Page.navigate", { url: `${baseUrl}/result` });
   await waitForValue(client, "location.pathname === '/result' && document.querySelector('[data-testid=\"purchase-checklist-copy\"]') !== null", "purchase checklist copy smoke panel");
+  await openResultDetails(client);
   const checklist = await client.evaluate(`(async () => {
     const originalClipboard = navigator.clipboard;
     const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
