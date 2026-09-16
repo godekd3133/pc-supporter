@@ -84,9 +84,9 @@ export const RECOMMENDATION_PRIORITY_LABELS: Record<RecommendationPriority, stri
 
 export const RECOMMENDATION_PRIORITY_DESCRIPTIONS: Record<RecommendationPriority, string> = {
   balanced: "호환성·성능·가격을 함께 고려합니다.",
-  budget: "예산 안 후보와 가격 대비 성능을 우선합니다.",
+  budget: "예산 안 부품과 가격 대비 성능을 우선합니다.",
   performance: "성능 유사도와 처리 여유를 우선합니다.",
-  reliability: "호환·장착·카탈로그 정보가 충분히 확인된 후보를 우선합니다."
+  reliability: "호환·장착·카탈로그 정보가 충분히 확인된 부품을 우선합니다."
 };
 
 export function isRecommendationPriority(value: unknown): value is RecommendationPriority {

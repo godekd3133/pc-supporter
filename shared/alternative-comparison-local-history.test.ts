@@ -4,7 +4,7 @@ import { alternativeComparisonLocalShareExpired, alternativeComparisonLocalShare
 const entry = (id: string, overrides: Record<string, unknown> = {}) => ({
   id,
   url: `http://127.0.0.1:5173/compare/${id}`,
-  name: `후보 비교 ${id}`,
+  name: `부품 비교 ${id}`,
   createdAt: "2026-09-01T00:00:00.000Z",
   category: "CPU",
   currentPartName: "현재 CPU",
@@ -26,7 +26,7 @@ describe("alternative comparison local share history", () => {
     expect(parsed).toHaveLength(1);
     expect(parsed[0]).toMatchObject({
       id: "one",
-      name: "후보 비교 one",
+      name: "부품 비교 one",
       category: "CPU",
       currentPartName: "현재 CPU",
       currentPartSummary: "AM5 · 8코어",
@@ -44,7 +44,7 @@ describe("alternative comparison local share history", () => {
     expect(remembered.map((item) => item.id)).toEqual(["two", "one"]);
     expect(alternativeComparisonLocalShareRemove(remembered, "one").map((item) => item.id)).toEqual(["two"]);
     expect(JSON.parse(alternativeComparisonLocalSharesToJson(remembered))).toHaveLength(2);
-    expect(JSON.parse(alternativeComparisonLocalSharesToJson([first, entry("one", { name: "중복 one" })]))[0].name).toBe("후보 비교 one");
+    expect(JSON.parse(alternativeComparisonLocalSharesToJson([first, entry("one", { name: "중복 one" })]))[0].name).toBe("부품 비교 one");
   });
 
   it("classifies expiring links at the exact boundary", () => {
@@ -57,7 +57,7 @@ describe("alternative comparison local share history", () => {
 
   it("rejects empty optional metadata when the field is present and accepts legacy entries without it", () => {
     expect(alternativeComparisonLocalSharesFromJson(JSON.stringify([entry("empty-category", { category: "" })]))).toEqual([]);
-    expect(alternativeComparisonLocalSharesFromJson(JSON.stringify([entry("legacy", { category: undefined, currentPartName: undefined, currentPartSummary: undefined, currentPartPrice: undefined, expiresAt: undefined, ownerToken: undefined })]))[0]).toMatchObject({ id: "legacy", name: "후보 비교 legacy" });
+    expect(alternativeComparisonLocalSharesFromJson(JSON.stringify([entry("legacy", { category: undefined, currentPartName: undefined, currentPartSummary: undefined, currentPartPrice: undefined, expiresAt: undefined, ownerToken: undefined })]))[0]).toMatchObject({ id: "legacy", name: "부품 비교 legacy" });
   });
 
   it("rejects an oversized raw local history before normalizing every entry", () => {

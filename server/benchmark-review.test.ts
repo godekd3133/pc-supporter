@@ -168,7 +168,7 @@ describe("benchmark review queue", () => {
 
     expect(queue.sourceTotals.cpu.sourceCheckNeedsReview).toBe(1);
     expect(queue.sourceItems).toEqual(expect.arrayContaining([
-      expect.objectContaining({ partId: "cpu-url-unchecked", sourceCheckNeedsReview: true, reviewReason: "완전 세트 · 원문 점검 필요" })
+      expect.objectContaining({ partId: "cpu-url-unchecked", sourceCheckNeedsReview: true, reviewReason: "완전 세트 · 출처 확인 필요" })
     ]));
     expect(queue.sourceItems.some((item) => item.partId === "cpu-url-checked")).toBe(false);
   });

@@ -370,7 +370,7 @@ export function rgbControllerConnectionPlanFor(
   const summary = issue === "voltage_mismatch"
     ? "컨트롤러 전압이 케이스 RGB 장치와 달라 직접 연결할 수 없습니다."
     : issue === "output_shortage"
-      ? "컨트롤러 출력 포트가 케이스 RGB 장치보다 적어 전체 연결을 확정할 수 없습니다."
+      ? "컨트롤러 출력 포트가 케이스 RGB 장치보다 적어 전체 연결을 알 수 없어요."
       : issue === "power_unknown"
         ? "RGB 출력과 전압은 맞지만 컨트롤러 외부 전원 입력을 확인해야 합니다."
         : issue === "rgb_load_unknown"

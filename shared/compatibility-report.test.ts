@@ -59,9 +59,9 @@ describe("compatibility report export", () => {
     expect(report).toContain("CPU 소켓: AM5 · 기대값 LGA1700");
     expect(report).toContain("테스트 써멀 ×2");
     expect(report).toContain("대상 SSD ssd-target");
-    expect(report).toContain("대체 CPU · 안전 · 후보 위험 차단 0개/주의 0개/확인 0개");
+    expect(report).toContain("대체 CPU · 안전 · 부품 위험 차단 0개/주의 0개/확인 0개");
     expect(report).toContain("미리 적용 후 차단 0개/주의 0개/확인 0개");
-    expect(report).toContain("후보 확인 정보: 소켓 일치 · 전체 규칙 재검사 통과");
+    expect(report).toContain("부품 확인 정보: 소켓 일치 · 전체 규칙 재검사 통과");
     expect(report).toContain("[주변 부품 호환 점검]");
     expect(report).toContain("방열판 수량이 적습니다.");
     expect(report).toContain("다음 행동: 방열판 수량을 조정하세요.");
@@ -94,7 +94,7 @@ describe("compatibility report export", () => {
       candidateVramGb: 12,
       currentFit: "partial" as const,
       candidateFit: "met" as const,
-      summary: "QHD · 1440p · 144Hz · 권장 VRAM 12GB · 현재 8GB → 후보 12GB · 권장 기준 충족"
+      summary: "QHD · 1440p · 144Hz · 권장 VRAM 12GB · 현재 8GB → 부품 12GB · 권장 기준 충족"
     };
     const gpuPart: Part = { ...cpu, id: "gpu-report", category: "gpu", name: "대체 GPU", specs: { vramGb: 12 } };
     const gpuSuggestion = { ...result.findings[0].suggestions![0], part: gpuPart, gpuTarget };
@@ -246,7 +246,7 @@ describe("compatibility report export", () => {
     expect(report).toContain("케이스 장착 길이: 300mm / 330mm · 30mm 여유");
     expect(report).toContain("GPU 두께: 60mm · 55mm 이상");
     expect(report).toContain("GPU 물리 슬롯·케이블: GPU 물리 슬롯 3 · 케이블 요구 40mm · 케이스 측면 30mm · 차이 -10mm");
-    expect(report).toContain("원문 경로 1 충족");
+    expect(report).toContain("페이지 경로 1 충족");
     expect(report).toContain("구조 풀모듈러 · 12V 싱글레일");
     expect(report).toContain("PCIe 케이블 분배: 독립 런 1개 · 분배·공유 케이블 · 확인 필요");
     expect(report).toContain("장착 정보 출처: GPU · GPU-TEST-1: GPU 설치 가이드 (https://vendor.example/gpu)");
@@ -315,7 +315,7 @@ describe("compatibility report export", () => {
       issue: "none",
       summary: "케이스 RGB 장치를 컨트롤러 출력에 연결할 수 있는 기준을 확인했습니다."
     };
-    const withPlan = { ...result, accessoryCompatibility: { ...result.accessoryCompatibility!, fanHubTargetRecommendations: [{ fanId: "fan-report", fanName: "추가 팬", fanCount: 1, recommendedHubId: "hub-report", candidates: [{ hubId: "hub-report", hubName: "테스트 팬 허브", status: "pass" as const, score: 9, portHeadroom: 3, connectorStatus: "pass" as const, currentStatus: "pass" as const, externalPower: "SATA", reason: "포트 여유 3개 · 커넥터 일치 · 전류 범위 확인 · 외부 전원 SATA" }], summary: "테스트 팬 허브를 우선 연결 후보로 제안합니다." }], connectionPlans: [plan], rgbConnectionPlans: [rgbPlan] } };
+    const withPlan = { ...result, accessoryCompatibility: { ...result.accessoryCompatibility!, fanHubTargetRecommendations: [{ fanId: "fan-report", fanName: "추가 팬", fanCount: 1, recommendedHubId: "hub-report", candidates: [{ hubId: "hub-report", hubName: "테스트 팬 허브", status: "pass" as const, score: 9, portHeadroom: 3, connectorStatus: "pass" as const, currentStatus: "pass" as const, externalPower: "SATA", reason: "포트 여유 3개 · 커넥터 일치 · 전류 범위 확인 · 외부 전원 SATA" }], summary: "테스트 팬 허브를 우선 연결 부품으로 제안합니다." }], connectionPlans: [plan], rgbConnectionPlans: [rgbPlan] } };
     const report = compatibilityReportTextFor(withPlan, build, new Map([[cpu.id, cpu]]), new Map([[accessory.id, accessory]]));
     const payload = JSON.parse(compatibilityReportJsonFor(withPlan, build, result.recommendationPreferences));
 
@@ -351,7 +351,7 @@ describe("compatibility report export", () => {
     };
     const report = compatibilityReportTextFor({ ...result, gpuFit }, build, new Map([[cpu.id, cpu]]), new Map([[accessory.id, accessory]]));
 
-    expect(report).toContain("GPU 물리 슬롯·케이블: 제조사 물리 확인 정보 미등록 · 확인 필요");
+    expect(report).toContain("GPU 물리 슬롯·케이블: 제조사 물리 정보 없음 · 확인 필요");
     expect(report).toContain("PCIe 케이블 분배: 다중 8핀 경로의 독립 케이블 정보 미등록 · 확인 필요");
   });
 

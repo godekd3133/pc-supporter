@@ -69,6 +69,7 @@ export interface CatalogSpecCoverage {
 
 const CATALOG_MISSING_FIELD_LABELS: Record<string, string> = {
   socket: "소켓",
+  tdpW: "TDP",
   memoryType: "메모리 세대",
   maxMemoryGb: "최대 메모리",
   memorySlots: "메모리 슬롯",
@@ -79,6 +80,7 @@ const CATALOG_MISSING_FIELD_LABELS: Record<string, string> = {
   vrmCapacityW: "VRM 용량",
   supportedSockets: "지원 소켓",
   maxCoolingW: "냉각 지원",
+  radiatorSizeMm: "라디에이터 크기",
   maxCoolerHeightMm: "쿨러 허용 높이",
   powerW: "소비전력",
   recommendedPsuW: "권장 PSU",
@@ -92,6 +94,7 @@ const CATALOG_MISSING_FIELD_LABELS: Record<string, string> = {
   wattageW: "정격 출력",
   psuFormFactor: "PSU 폼팩터",
   psuDepthMm: "PSU 깊이",
+  maxPsuLengthMm: "PSU 허용 길이",
   "internal storage device": "저장장치 종류",
   "12V output": "12V 출력",
   connectors: "커넥터",
@@ -99,11 +102,63 @@ const CATALOG_MISSING_FIELD_LABELS: Record<string, string> = {
   pcieX16Slots: "PCIe x16 슬롯",
   pcieX8Slots: "PCIe x8 슬롯",
   pcieX4Slots: "PCIe x4 슬롯",
-  pcieX1Slots: "PCIe x1 슬롯"
+  pcieX1Slots: "PCIe x1 슬롯",
+  "detail page": "상세 페이지",
+  specification: "상세 스펙",
+  "3.5-inch bays": "3.5인치 베이",
+  "CPU power": "CPU 소비전력",
+  "CPU socket": "CPU 소켓",
+  "CPU supported memory speed": "CPU 지원 메모리 속도",
+  "case maximum PSU length": "케이스 PSU 허용 길이",
+  "case radiator support": "케이스 라디에이터 지원",
+  "case supported PSU form factors": "케이스 지원 PSU 규격",
+  "GPU PCIe power connector": "GPU 보조전원 커넥터",
+  "GPU length": "GPU 길이",
+  "GPU power": "GPU 소비전력",
+  "GPU thickness": "GPU 두께",
+  "HDD interface": "HDD 연결 방식",
+  "M.2 SSD interface": "M.2 SSD 인터페이스",
+  "M.2 slots": "M.2 슬롯",
+  "memory speed": "메모리 속도",
+  "Motherboard socket": "메인보드 소켓",
+  "motherboard M.2 interfaces": "메인보드 M.2 인터페이스",
+  "motherboard supported memory speed": "메인보드 지원 메모리 속도",
+  "PSU depth": "PSU 깊이",
+  "PSU form factor": "PSU 폼팩터",
+  "PSU PCIe power connectors": "파워 보조전원 커넥터",
+  "PSU wattage": "파워 정격 출력",
+  "radiator size": "라디에이터 크기",
+  "VRM capacity": "메인보드 전원부 용량",
+  "cooler supported sockets": "쿨러 지원 소켓",
+  "integrated graphics": "내장 그래픽",
+  "maximum GPU length": "GPU 허용 길이",
+  "maximum memory capacity": "최대 메모리 용량",
+  "memory slot form factor": "메모리 슬롯 규격",
+  "memory slots": "메모리 슬롯",
+  "memory type": "메모리 세대",
+  "module capacity": "모듈 용량",
+  "motherboard PCIe x16 slots": "메인보드 PCIe x16 슬롯",
+  "motherboard PCIe x8/x16 slots": "메인보드 PCIe 슬롯",
+  "motherboard RGB header voltage": "메인보드 RGB 전압",
+  "motherboard RGB/ARGB headers": "메인보드 RGB 헤더",
+  "motherboard fan headers": "메인보드 팬 헤더",
+  "motherboard memory profiles": "메인보드 메모리 프로파일",
+  "recommended PSU wattage": "권장 파워 출력",
+  "supported memory speed": "지원 메모리 속도",
+  "supported motherboard form factors": "지원 메인보드 규격"
 };
 
 export function catalogMissingFieldLabelFor(field: string) {
   return CATALOG_MISSING_FIELD_LABELS[field] ?? field;
+}
+
+const CATALOG_CHANGE_SPEC_FIELD_PREFIX = "정규화 스펙 · ";
+
+export function catalogChangeFieldLabelFor(field: string) {
+  if (field === "원문 스펙") return "수집된 스펙";
+  if (field === "정규화 스펙") return "스펙 정보";
+  if (field.startsWith(CATALOG_CHANGE_SPEC_FIELD_PREFIX)) return `스펙 · ${field.slice(CATALOG_CHANGE_SPEC_FIELD_PREFIX.length)}`;
+  return field;
 }
 
 function missingFieldCountsToList(counts: Map<string, number>, limit = 8): CatalogSpecCoverageMissingField[] {

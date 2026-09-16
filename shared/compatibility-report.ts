@@ -99,7 +99,7 @@ function benchmarkEvidenceLines(build: BuildSelection, partMap: ReadonlyMap<stri
     } else {
       lines.push("  - 점수 정보: 출처·출처 메모 확인 필요");
     }
-    lines.push(`  - 원문 점검: ${benchmarkSourceCheckLabelFor(evidence.sourceCheck)}`);
+    lines.push(`  - 출처 확인: ${benchmarkSourceCheckLabelFor(evidence.sourceCheck)}`);
     lines.push(`  - 부품 데이터 갱신: ${new Date(evidence.dataUpdatedAt).toLocaleDateString("ko-KR")}`);
   }
   lines.push("점수는 측정 조건에 따라 달라지는 카탈로그 참고값이며 실제 FPS·프레임타임·작업 시간·절대 성능 순위를 보장하지 않습니다.", "");
@@ -233,18 +233,18 @@ function findingLines(result: CompatibilityResult, partMap: ReadonlyMap<string, 
       lines.push(`- 영향받은 부품: ${names}`);
     }
     if (finding.suggestions && finding.suggestions.length > 0) {
-      lines.push("", "대체 후보:");
+      lines.push("", "대체 부품:");
       for (const suggestion of finding.suggestions) {
-        const candidateStatus = suggestion.candidateRisk ? candidateRiskLabel(suggestion.candidateRisk) : suggestion.fixesCurrentIssue ? "현재 항목 해결 후보" : "현재 항목 미해결";
+        const candidateStatus = suggestion.candidateRisk ? candidateRiskLabel(suggestion.candidateRisk) : suggestion.fixesCurrentIssue ? "현재 항목 해결 부품" : "현재 항목 미해결";
         const candidateRiskCounts = suggestion.candidateBlockerCount !== undefined || suggestion.candidateWarningCount !== undefined || suggestion.candidateUnknownCount !== undefined
-          ? ` · 후보 위험 차단 ${suggestion.candidateBlockerCount ?? "확인 필요"}개/주의 ${suggestion.candidateWarningCount ?? "확인 필요"}개/확인 ${suggestion.candidateUnknownCount ?? "확인 필요"}개`
+          ? ` · 부품 위험 차단 ${suggestion.candidateBlockerCount ?? "확인 필요"}개/주의 ${suggestion.candidateWarningCount ?? "확인 필요"}개/확인 ${suggestion.candidateUnknownCount ?? "확인 필요"}개`
           : "";
         const remainingRisk = ` · 미리 적용 후 차단 ${suggestion.remainingBlockers}개/주의 ${suggestion.remainingWarnings}개/확인 ${suggestion.remainingUnknown}개`;
         const trust = suggestion.recommendationTrust ? ` · 추천 점수 ${suggestion.recommendationTrust.level} ${suggestion.recommendationTrust.score}점` : "";
         const physical = suggestion.physicalEvidence ? ` · 장착 정보 ${suggestion.physicalEvidence.status === "verified" ? "확인됨" : suggestion.physicalEvidence.status === "review" ? "확인 필요" : "해당 없음"}` : "";
         lines.push(`- ${suggestion.part.name}${suggestion.recommendedQuantity ? ` · 추천 수량 ${suggestion.recommendedQuantity}개` : ""} · ${candidateStatus}${candidateRiskCounts}${remainingRisk} · ${suggestion.similarityLabel} ${suggestion.similarityScore}점 · ${suggestion.performanceSummary} · ${priceText(suggestion.part.priceWon)}${suggestion.valueScore !== undefined && suggestion.valueLabel ? ` · ${suggestion.valueLabel} ${valueScoreText(suggestion.valueScore)}` : ""}${trust}${physical}`);
         if (suggestion.gpuTarget) lines.push(`  게이밍 목표 정보: ${suggestion.gpuTarget.summary}`);
-        if (suggestion.candidateReasons && suggestion.candidateReasons.length > 0) lines.push(`  후보 확인 정보: ${suggestion.candidateReasons.slice(0, 3).join(" · ")}`);
+        if (suggestion.candidateReasons && suggestion.candidateReasons.length > 0) lines.push(`  부품 확인 정보: ${suggestion.candidateReasons.slice(0, 3).join(" · ")}`);
       }
     }
     lines.push("");
@@ -299,7 +299,7 @@ function physicalSourceText(fit: NonNullable<CompatibilityResult["gpuFit"]>) {
   const sources = fit.physical.evidenceSources ?? [];
   const cableSources = fit.connector.cableEvidenceSources ?? [];
   const allSources = [...sources, ...cableSources].filter((source, index, list) => list.findIndex((candidate) => candidate.category === source.category && candidate.note === source.note && candidate.url === source.url) === index);
-  if (allSources.length === 0) return "등록된 출처 메모 없음 · 제조사 원문 확인 필요";
+  if (allSources.length === 0) return "등록된 출처 메모 없음 · 제조사 페이지 확인 필요";
   return allSources.map((source) => `${physicalSourceLabel(source.category)}${source.manufacturerModel ? ` · ${source.manufacturerModel}` : ""}${source.manufacturerRevision ? ` · ${source.manufacturerRevision}` : ""}: ${source.note}${safeHttpsUrl(source.url) ? ` (${safeHttpsUrl(source.url)})` : ""}`).join(" · ");
 }
 
@@ -318,13 +318,13 @@ function gpuFitLines(result: CompatibilityResult) {
       fit.physical.caseSidePanelClearanceMm === undefined ? undefined : `케이스 측면 ${fit.physical.caseSidePanelClearanceMm}mm`,
       fit.physical.cableClearanceMm === undefined ? undefined : `차이 ${fit.physical.cableClearanceMm}mm`
     ].filter((value): value is string => Boolean(value));
-    const physicalDetail = physicalParts.length > 0 ? physicalParts.join(" · ") : "제조사 물리 확인 정보 미등록";
+    const physicalDetail = physicalParts.length > 0 ? physicalParts.join(" · ") : "제조사 물리 정보 없음";
     lines.push(`- GPU 물리 슬롯·케이블: ${physicalDetail} · ${gpuFitStatusLabel(purchaseEvidence.physical)}`);
   }
   const connectorPath = fit.connector.matchedOptionIndex === undefined
     ? gpuFitStatusLabel(fit.connector.status)
-    : `${fit.connector.adapterOptionIndices.includes(fit.connector.matchedOptionIndex) ? "어댑터" : "원문"} 경로 ${fit.connector.matchedOptionIndex + 1} 충족`;
-  lines.push(`- 보조전원: ${!fit.connector.requirementsKnown ? "GPU 요구 정보 확인 필요" : fit.connector.options.length > 0 ? fit.connector.options.map((option, index) => `${fit.connector.adapterOptionIndices.includes(index) ? "어댑터" : "원문"} 경로 ${index + 1}: ${option.map((requirement) => `${requirement.kind} ${requirement.count}개`).join(" + ")}`).join(" 또는 ") : "요구 없음"} · PSU ${gpuConnectorText(fit.connector.connectors)} · ${connectorPath} · 구조 ${gpuPsuStructureText(fit)}`);
+    : `${fit.connector.adapterOptionIndices.includes(fit.connector.matchedOptionIndex) ? "어댑터" : "페이지"} 경로 ${fit.connector.matchedOptionIndex + 1} 충족`;
+  lines.push(`- 보조전원: ${!fit.connector.requirementsKnown ? "GPU 요구 정보 확인 필요" : fit.connector.options.length > 0 ? fit.connector.options.map((option, index) => `${fit.connector.adapterOptionIndices.includes(index) ? "어댑터" : "페이지"} 경로 ${index + 1}: ${option.map((requirement) => `${requirement.kind} ${requirement.count}개`).join(" + ")}`).join(" 또는 ") : "요구 없음"} · PSU ${gpuConnectorText(fit.connector.connectors)} · ${connectorPath} · 구조 ${gpuPsuStructureText(fit)}`);
   if (purchaseEvidence.pcieCableTopology !== "not_applicable") {
     const topologyDetail = fit.connector.psuCableTopologyStatus === "not_applicable"
       ? "다중 8핀 경로의 독립 케이블 정보 미등록"
@@ -556,7 +556,7 @@ export function compatibilityReportTextFor(result: CompatibilityResult, build: B
   lines.push(...repairPlanLines(result));
   lines.push(
     "[확인 범위]",
-    "이 리포트의 결과는 검사 시점의 카탈로그와 검사 규칙을 기준으로 합니다. 실제 FPS·벤치마크 순위·BIOS 호환성·제조사 QVL·케이스 내부 간섭·케이블 배선은 제조사 원문과 실제 조립 조건을 별도로 확인해야 합니다. 확인되지 않은 가격과 스펙은 추정하지 않았습니다."
+    "이 리포트의 결과는 검사 시점의 카탈로그와 검사 규칙을 기준으로 합니다. 실제 FPS·벤치마크 순위·BIOS 호환성·제조사 QVL·케이스 내부 간섭·케이블 배선은 제조사 페이지와 실제 조립 조건을 따로 확인해야 합니다. 확인되지 않은 가격과 스펙은 추정하지 않았습니다."
   );
   return lines.join("\n");
 }

@@ -42,7 +42,7 @@ function metricDominates(left: BudgetLadderTradeoffMetric, right: BudgetLadderTr
 
 function dimensionReason(left: BudgetLadderTradeoffMetric, right: BudgetLadderTradeoffMetric) {
   const dimensions: string[] = [];
-  if (left.riskScore !== undefined && right.riskScore !== undefined && left.riskScore < right.riskScore) dimensions.push("잔여 위험");
+  if (left.riskScore !== undefined && right.riskScore !== undefined && left.riskScore < right.riskScore) dimensions.push("남은 위험");
   if (left.totalPriceWon !== undefined && right.totalPriceWon !== undefined && left.totalPriceWon < right.totalPriceWon) dimensions.push("실제 합계");
   if (left.analysisScore !== undefined && right.analysisScore !== undefined && left.analysisScore > right.analysisScore) dimensions.push("분석 점수");
   return dimensions.length > 0 ? dimensions.join("·") : "비교 기준";

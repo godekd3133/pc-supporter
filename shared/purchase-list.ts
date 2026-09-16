@@ -40,7 +40,7 @@ export interface PurchaseListPriceEvidenceSummary {
 
 export function purchaseListPriceEvidenceLabelFor(row: PurchaseListRow) {
   if (row.priceEvidence) return CATALOG_PRICE_EVIDENCE_LABELS[row.priceEvidence];
-  return row.totalPriceWon === undefined ? CATALOG_PRICE_EVIDENCE_LABELS.unknown : "가격 출처 미기록";
+  return row.totalPriceWon === undefined ? CATALOG_PRICE_EVIDENCE_LABELS.unknown : "가격 출처 기록 없음";
 }
 
 export function purchaseListPriceEvidenceNeedsReviewFor(row: PurchaseListRow) {
@@ -103,7 +103,7 @@ export function purchaseListCsvFor(rows: PurchaseListRow[], checkedIds?: Readonl
     const raw = value === undefined ? "" : String(value);
     return /[",\n\r]/.test(raw) ? `"${raw.replace(/"/g, '""')}"` : raw;
   };
-  const header = ["구분", "분류", "부품명", "수량", "단가(원)", "합계(원)", "가격 출처", "유통 조건", "갱신 상태", "연결 대상", "원문 링크", ...(checkedIds ? ["구매 상태"] : [])];
+  const header = ["구분", "분류", "부품명", "수량", "단가(원)", "합계(원)", "가격 출처", "유통 조건", "갱신 상태", "연결 대상", "상품 링크", ...(checkedIds ? ["구매 상태"] : [])];
   const records = rows.map((row, index) => { const rowKey = purchaseListRowKey(row, index); return [row.section, row.categoryLabel, row.name, row.quantity, row.unitPriceWon, row.totalPriceWon, purchaseListPriceEvidenceLabelFor(row), row.listingType, row.dataFreshness ? DATA_FRESHNESS_LABELS[row.dataFreshness] : undefined, row.connectionTarget, row.sourceUrl, ...(checkedIds ? [itemStates.length > 0 ? PURCHASE_ITEM_STATUS_LABELS[purchaseListItemStatusFor(itemStates, rowKey, checkedIds)] : checkedIds.has(rowKey) ? "구매 완료" : "구매 예정"] : [])]; });
   return `\uFEFF${[header, ...records].map((record) => record.map(escape).join(",")).join("\r\n")}`;
 }

@@ -126,8 +126,8 @@ describe("catalog spec review queue", () => {
     });
 
     expect(retryable.items[0]).toMatchObject({ nextAction: "refresh_source", refreshAttemptCount: 1, refreshFailureCount: 1, refreshFailureStreakCount: 1, refreshOutcome: "retryable_failure" });
-    expect(repeated.items[0]).toMatchObject({ nextAction: "review_source", nextActionLabel: "반복 실패 · 수동 확인", refreshAttemptCount: 3, refreshFailureCount: 3, refreshFailureStreakCount: 3, refreshOutcome: "repeated_failure" });
-    expect(repeated.items[0].reviewReason).toContain("수동 전환");
+    expect(repeated.items[0]).toMatchObject({ nextAction: "review_source", nextActionLabel: "반복 실패 · 직접 확인", refreshAttemptCount: 3, refreshFailureCount: 3, refreshFailureStreakCount: 3, refreshOutcome: "repeated_failure" });
+    expect(repeated.items[0].reviewReason).toContain("직접 확인 전환");
     expect(recovered.items[0]).toMatchObject({ nextAction: "refresh_source", refreshAttemptCount: 4, refreshFailureCount: 3, refreshFailureStreakCount: 0, refreshOutcome: "succeeded" });
   });
 

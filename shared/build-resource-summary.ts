@@ -51,7 +51,7 @@ function powerCardFor(metrics: BuildMetrics): BuildResourceCard {
   const detail = metrics.psuWattageW !== undefined && metrics.recommendedPsuW !== undefined
     ? `선택 PSU ${metrics.psuWattageW}W · GPU 권장 PSU ${metrics.recommendedPsuW}W`
     : metrics.gpuPowerW !== undefined
-      ? `GPU 기준 소비전력 ${metrics.gpuPowerW}W · 권장 PSU 원문 확인 필요`
+      ? `GPU 기준 소비전력 ${metrics.gpuPowerW}W · 권장 PSU 정보 확인 필요`
       : "GPU 권장 PSU와 선택 PSU 정격 출력을 함께 확인해야 합니다.";
   return {
     id: "power",
@@ -74,7 +74,7 @@ function coolingCardFor(metrics: BuildMetrics): BuildResourceCard {
   const detail = metrics.coolerCapacityW !== undefined && metrics.cpuPowerW !== undefined
     ? `쿨러 냉각 지원 ${metrics.coolerCapacityW}W · CPU 기준 전력 ${metrics.cpuPowerW}W`
     : metrics.cpuPowerW !== undefined
-      ? `CPU 기준 전력 ${metrics.cpuPowerW}W · 쿨러 냉각 지원 원문 확인 필요`
+      ? `CPU 기준 전력 ${metrics.cpuPowerW}W · 쿨러 냉각 지원 정보 확인 필요`
       : "CPU 기준 전력과 쿨러 냉각 지원 수치를 함께 확인해야 합니다.";
   return {
     id: "cooling",
@@ -106,7 +106,7 @@ export function buildResourceSummaryFor(metrics: BuildMetrics): BuildResourceSum
     : state === "warning"
       ? "호환 규칙은 통과할 수 있지만 전력·냉각 여유가 좁아 구매 전에 정보를 확인하세요."
       : state === "unknown"
-        ? "전력·냉각 비교에 필요한 원문 수치가 부족합니다. 확인되지 않은 값을 안전하다고 가정하지 않습니다."
+        ? "전력·냉각을 비교할 실제 수치가 부족해요. 확인되지 않은 값을 안전하다고 보지 않아요."
         : state === "good"
           ? "등록된 정격·권장 수치 기준으로 전력과 냉각 여유를 계산했습니다."
           : "CPU·GPU·PSU·쿨러 조합이 없어 전력·냉각 여유를 계산하지 않았습니다.";

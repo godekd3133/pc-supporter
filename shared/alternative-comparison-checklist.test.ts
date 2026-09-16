@@ -7,9 +7,9 @@ const check = (id: string, status: AlternativeComparisonScenarioCheck["status"] 
 describe("alternative comparison checklist", () => {
   it("creates stable candidate-scoped keys and entries", () => {
     expect(alternativeComparisonChecklistKey(1, "price")).toBe("1:price");
-    const entries = alternativeComparisonChecklistEntriesFor([{ name: "후보 A", checks: [check("price")] }, { name: "후보 B", checks: [check("price"), check("physical", "review")] }]);
+    const entries = alternativeComparisonChecklistEntriesFor([{ name: "부품 A", checks: [check("price")] }, { name: "부품 B", checks: [check("price"), check("physical", "review")] }]);
     expect(entries.map((entry) => entry.key)).toEqual(["0:price", "1:price", "1:physical"]);
-    expect(entries[2]).toMatchObject({ candidateIndex: 1, candidateName: "후보 B", status: "review" });
+    expect(entries[2]).toMatchObject({ candidateIndex: 1, candidateName: "부품 B", status: "review" });
   });
 
   it("normalizes stored checked IDs and keeps JSON round-trips bounded", () => {
@@ -21,7 +21,7 @@ describe("alternative comparison checklist", () => {
   });
 
   it("counts review and blocked checks without allowing blocked checks to complete", () => {
-    const entries = alternativeComparisonChecklistEntriesFor([{ name: "후보 A", checks: [check("compatibility"), check("price", "review"), check("physical", "blocked")] }]);
+    const entries = alternativeComparisonChecklistEntriesFor([{ name: "부품 A", checks: [check("compatibility"), check("price", "review"), check("physical", "blocked")] }]);
     const blockedAttempt = alternativeComparisonChecklistToggle([], entries[2], true);
     const checked = alternativeComparisonChecklistToggle(blockedAttempt, entries[0], true);
     const progress = alternativeComparisonChecklistProgressFor(entries, new Set(checked));
@@ -30,13 +30,13 @@ describe("alternative comparison checklist", () => {
   });
 
   it("unchecks only the selected candidate check", () => {
-    const entries = alternativeComparisonChecklistEntriesFor([{ name: "후보 A", checks: [check("price"), check("data")] }]);
+    const entries = alternativeComparisonChecklistEntriesFor([{ name: "부품 A", checks: [check("price"), check("data")] }]);
     const checked = alternativeComparisonChecklistToggle([entries[0].key, entries[1].key], entries[0], false);
     expect(checked).toEqual([entries[1].key]);
   });
 
   it("exports and imports progress only for the same comparison and exposes a transfer diff", () => {
-    const entries = alternativeComparisonChecklistEntriesFor([{ name: "후보 A", checks: [check("price"), check("data", "review")] }]);
+    const entries = alternativeComparisonChecklistEntriesFor([{ name: "부품 A", checks: [check("price"), check("data", "review")] }]);
     const json = alternativeComparisonChecklistJsonFor("comparison-1", entries, new Set([entries[0].key]), "2026-09-02T00:00:00.000Z");
     const parsed = parseAlternativeComparisonChecklistJson(json, "comparison-1", entries);
     expect(parsed.errors).toEqual([]);
@@ -46,7 +46,7 @@ describe("alternative comparison checklist", () => {
     expect(alternativeComparisonChecklistTransferMatchesCurrentFor(entries.map((entry) => entry.key), parsed.itemKeys)).toBe(true);
     expect(alternativeComparisonChecklistTransferDiffFor([entries[1].key], parsed.checkedIds)).toMatchObject({ currentCheckedCount: 1, incomingCheckedCount: 1, addedCount: 1, removedCount: 1, unchangedCount: 0 });
 
-    const blockedEntries = alternativeComparisonChecklistEntriesFor([{ name: "후보 B", checks: [check("physical", "blocked")] }]);
+    const blockedEntries = alternativeComparisonChecklistEntriesFor([{ name: "부품 B", checks: [check("physical", "blocked")] }]);
     const blockedEnvelope = JSON.parse(alternativeComparisonChecklistJsonFor("comparison-1", blockedEntries, new Set([blockedEntries[0].key]), "2026-09-02T00:00:00.000Z")) as { checkedIds: string[] };
     blockedEnvelope.checkedIds = [blockedEntries[0].key];
     const blockedParsed = parseAlternativeComparisonChecklistJson(JSON.stringify(blockedEnvelope), "comparison-1", blockedEntries);
@@ -67,6 +67,6 @@ describe("alternative comparison checklist", () => {
 
     expect(parsed.itemKeys).toEqual([]);
     expect(parsed.checkedIds).toEqual([]);
-    expect(parsed.errors).toEqual(["후보 비교 체크리스트 JSON은 최대 200개 항목만 가져올 수 있습니다."]);
+    expect(parsed.errors).toEqual(["부품 비교 체크리스트 JSON은 최대 200개 항목만 가져올 수 있습니다."]);
   });
 });

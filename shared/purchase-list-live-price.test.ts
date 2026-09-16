@@ -34,7 +34,7 @@ describe("purchase list live prices", () => {
 
     const effective = purchaseListRowsWithLivePricesFor([sourceRow, catalogRow], livePrices);
     expect(effective.map((row) => row.priceEvidence)).toEqual(["live", "reference"]);
-    expect(purchaseListLivePriceDisplayFor(sourceRow, livePrices[sourceRow.id!])).toMatchObject({ tone: "increased", source: "source-refresh", sourceLabel: "원문 확인 가격" });
+    expect(purchaseListLivePriceDisplayFor(sourceRow, livePrices[sourceRow.id!])).toMatchObject({ tone: "increased", source: "source-refresh", sourceLabel: "실제 페이지 확인 가격" });
     expect(purchaseListLivePriceDisplayFor(catalogRow, livePrices[catalogRow.id!])).toMatchObject({ tone: "increased", source: "catalog", sourceLabel: "저장 카탈로그 가격" });
     expect(purchaseListLivePriceDisplayFor(catalogRow, livePrices[catalogRow.id!])?.label).toContain("저장 카탈로그 가격");
     expect(purchaseListLivePriceSummaryFor([sourceRow, catalogRow], livePrices)).toMatchObject({ sourceConfirmedCount: 1, catalogConfirmedCount: 1 });
@@ -44,6 +44,6 @@ describe("purchase list live prices", () => {
     const sourceRow = { ...rows[0]!, refreshable: true };
     const live: PurchaseListLivePrice = { status: "unavailable", source: "source-refresh", reason: "source-refresh-blocked", retryAfterSeconds: 7 };
     expect(purchaseListRowsWithLivePricesFor([sourceRow], { [sourceRow.id!]: live })[0]).toEqual(sourceRow);
-    expect(purchaseListLivePriceDisplayFor(sourceRow, live)).toMatchObject({ tone: "unavailable", label: "원문 재확인 대기 중 · 7초 후 다시 시도 · 기존 가격 유지" });
+    expect(purchaseListLivePriceDisplayFor(sourceRow, live)).toMatchObject({ tone: "unavailable", label: "정보 재확인 대기 중 · 7초 후 다시 시도 · 기존 가격 유지" });
   });
 });

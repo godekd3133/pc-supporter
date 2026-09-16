@@ -44,7 +44,7 @@ describe("build resource summary", () => {
       expect.objectContaining({ id: "power", state: "unknown", headline: "확인 필요" }),
       expect.objectContaining({ id: "cooling", state: "unknown", headline: "확인 필요" })
     ]);
-    expect(summary.summary).toContain("안전하다고 가정하지 않습니다");
+    expect(summary.summary).toContain("안전하다고 보지 않아요");
   });
 
   it("keeps an empty build neutral", () => {

@@ -32,7 +32,7 @@ function planDominates(left: RepairPlanTradeoffMetric, right: RepairPlanTradeoff
 
 function dimensionReason(left: RepairPlanTradeoffMetric, right: RepairPlanTradeoffMetric) {
   const dimensions: string[] = [];
-  if (left.riskScore < right.riskScore) dimensions.push("잔여 위험");
+  if (left.riskScore < right.riskScore) dimensions.push("남은 위험");
   if (left.changeCount < right.changeCount) dimensions.push("변경 규모");
   if (left.priceDeltaWon !== undefined && right.priceDeltaWon !== undefined && left.priceDeltaWon < right.priceDeltaWon) dimensions.push("추가 비용");
   return dimensions.length > 0 ? dimensions.join("·") : "비교 기준";
@@ -55,8 +55,8 @@ export function repairPlanTradeoffFor(plans: ReadonlyArray<RecommendationPlan>):
         ...metric,
         frontier: true,
         reason: metric.priceDeltaWon === undefined
-          ? "가격 확인 필요 상태를 유지한 채 잔여 위험·변경 규모 기준의 비교 우위에 있습니다."
-          : "비용·잔여 위험·변경 규모에서 다른 플랜에 일방적으로 대체되지 않는 선택지입니다."
+          ? "가격 확인 필요 상태를 유지한 채 남은 위험·변경 규모 기준의 비교 우위에 있습니다."
+          : "비용·남은 위험·변경 규모에서 다른 플랜에 일방적으로 대체되지 않는 선택지입니다."
       };
     }
     return {

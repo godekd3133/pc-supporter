@@ -41,7 +41,7 @@ export function savedBuildNextActionFor(result: CompatibilityResult): SavedBuild
     const primary = changes[0];
     const nextAction = primary.kind === "change_quantity"
       ? `${CATEGORY_LABELS[primary.category]} 수량 ${primary.fromQuantity ?? "?"}개 → ${primary.toQuantity ?? "?"}개`
-      : `${CATEGORY_LABELS[primary.category]} 후보 ${primary.toPartName} 확인`;
+      : `${CATEGORY_LABELS[primary.category]} 부품 ${primary.toPartName} 확인`;
     return {
       kind: "repair_plan",
       title: "추천 수리 플랜",
@@ -63,7 +63,7 @@ export function savedBuildNextActionFor(result: CompatibilityResult): SavedBuild
     return {
       kind: "analysis",
       title: "분석 기준 다음 행동",
-      summary: "현재 전체 수리 플랜으로 계산된 안전한 후보가 없어, 분석이 제안한 다음 행동을 먼저 확인합니다.",
+      summary: "현재 전체 수리 플랜으로 계산된 안전한 부품이 없어, 분석이 제안한 다음 행동을 먼저 확인합니다.",
       nextAction: analysisAction,
       changes: [],
       resolvedBlockers: 0,

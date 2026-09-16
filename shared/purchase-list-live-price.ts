@@ -38,7 +38,7 @@ export interface PurchaseListLivePriceDisplay {
 }
 
 function sourceLabelFor(live: PurchaseListLivePrice) {
-  if (live.source === "source-refresh") return "원문 확인 가격";
+  if (live.source === "source-refresh") return "실제 페이지 확인 가격";
   if (live.source === "catalog") return "저장 카탈로그 가격";
   return undefined;
 }
@@ -60,12 +60,12 @@ export function purchaseListRowsWithLivePricesFor(rows: ReadonlyArray<PurchaseLi
 export function purchaseListLivePriceDisplayFor(row: PurchaseListRow, live: PurchaseListLivePrice | undefined): PurchaseListLivePriceDisplay | undefined {
   if (!live) return undefined;
   if (live.status === "unavailable") {
-    if (live.reason === "source-refresh-blocked") return { tone: "unavailable", label: `원문 재확인 대기 중${live.retryAfterSeconds && live.retryAfterSeconds > 0 ? ` · ${live.retryAfterSeconds}초 후 다시 시도` : ""} · 기존 가격 유지`, source: live.source, sourceLabel: sourceLabelFor(live) };
-    if (live.reason === "source-not-found") return { tone: "unavailable", label: "원문 상품 없음 · 기존 가격 유지", source: live.source, sourceLabel: sourceLabelFor(live) };
-    if (live.reason === "source-not-priced") return { tone: "unavailable", label: "원문 가격 미확인 · 기존 가격 유지", source: live.source, sourceLabel: sourceLabelFor(live) };
+    if (live.reason === "source-refresh-blocked") return { tone: "unavailable", label: `정보 재확인 대기 중${live.retryAfterSeconds && live.retryAfterSeconds > 0 ? ` · ${live.retryAfterSeconds}초 후 다시 시도` : ""} · 기존 가격 유지`, source: live.source, sourceLabel: sourceLabelFor(live) };
+    if (live.reason === "source-not-found") return { tone: "unavailable", label: "상품 페이지 없음 · 기존 가격 유지", source: live.source, sourceLabel: sourceLabelFor(live) };
+    if (live.reason === "source-not-priced") return { tone: "unavailable", label: "상품 페이지 가격 미확인 · 기존 가격 유지", source: live.source, sourceLabel: sourceLabelFor(live) };
     return { tone: "unavailable", label: live.reason === "not-priced" ? "저장 카탈로그 가격 미확인 · 기존 가격 유지" : "현재 가격 확인 불가 · 기존 가격 유지", source: live.source, sourceLabel: sourceLabelFor(live) };
   }
-  if (live.status === "error") return { tone: "error", label: live.reason === "source-missing" ? "가격 조회 식별자 없음 · 기존 가격 유지" : live.reason === "source-refresh-failed" ? "원문 가격 확인 실패 · 기존 가격 유지" : "현재 가격 확인 실패 · 기존 가격 유지", source: live.source, sourceLabel: sourceLabelFor(live) };
+  if (live.status === "error") return { tone: "error", label: live.reason === "source-missing" ? "가격 조회 식별자 없음 · 기존 가격 유지" : live.reason === "source-refresh-failed" ? "상품 페이지 가격 확인 실패 · 기존 가격 유지" : "현재 가격 확인 실패 · 기존 가격 유지", source: live.source, sourceLabel: sourceLabelFor(live) };
   if (!isKnownPrice(live.currentUnitPriceWon)) return { tone: "unavailable", label: "현재 가격 미확인 · 기존 가격 유지", source: live.source, sourceLabel: sourceLabelFor(live) };
   const currentTotalPriceWon = live.currentUnitPriceWon * row.quantity;
   if (row.totalPriceWon === undefined) return { tone: "discovered", ...withSourceLabel(`현재가 확인됨 · ${currentTotalPriceWon.toLocaleString("ko-KR")}원`, live), currentTotalPriceWon };

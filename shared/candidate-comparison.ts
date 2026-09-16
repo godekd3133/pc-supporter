@@ -136,7 +136,7 @@ function similarityEvidenceSummary(evidence: SimilarityEvidence | undefined) {
 }
 
 function reasonFor(criterion: CandidateComparisonCriterion, item: CandidateComparisonItem, score: number, priceScore: number, compatibility: number, performance: number, evidence: number) {
-  if (criterion === "compatibility") return `호환 ${compatibility}점 · 후보 위험 ${item.candidateRisk === "safe" ? "없음" : "확인 필요"}`;
+  if (criterion === "compatibility") return `호환 ${compatibility}점 · 부품 위험 ${item.candidateRisk === "safe" ? "없음" : "확인 필요"}`;
   if (criterion === "performance") {
     const details = [
       item.similarityScore !== undefined && Number.isFinite(item.similarityScore) ? `부품 유사도 ${clampScore(item.similarityScore)}점` : undefined,
@@ -184,7 +184,7 @@ export function candidateComparisonDecisionFor(items: CandidateComparisonItem[],
   const criterionSummary = criterion === "balanced"
     ? "호환·성능·가격·정보를 함께 반영한 균형 기준"
     : criterion === "performance"
-      ? "부품 유사도와 후보 적용 후 전체 성능을 함께 반영한 성능 기준"
+      ? "부품 유사도와 부품 적용 후 전체 성능을 함께 반영한 성능 기준"
       : `${CRITERION_LABELS[criterion]} 기준`;
   return {
     criterion,
@@ -195,7 +195,7 @@ export function candidateComparisonDecisionFor(items: CandidateComparisonItem[],
     excludedIds,
     summary: top
       ? `${top.name} · ${top.score}점 · ${criterionSummary}${excludedIds.length > 0 ? ` · 적용하지 않음 ${excludedIds.length}개 제외` : ""}`
-      : "적용 가능한 후보가 없습니다. 차단 후보만 남아 있습니다."
+      : "적용 가능한 부품이 없습니다. 차단 부품만 남아 있습니다."
   };
 }
 
@@ -225,7 +225,7 @@ function candidateTradeoffDominates(left: CandidateTradeoffMetric, right: Candid
 
 function candidateTradeoffDimensionReason(left: CandidateTradeoffMetric, right: CandidateTradeoffMetric) {
   const dimensions: string[] = [];
-  if (left.riskScore !== undefined && right.riskScore !== undefined && left.riskScore < right.riskScore) dimensions.push("잔여 위험");
+  if (left.riskScore !== undefined && right.riskScore !== undefined && left.riskScore < right.riskScore) dimensions.push("남은 위험");
   if (left.priceDeltaWon !== undefined && right.priceDeltaWon !== undefined && left.priceDeltaWon < right.priceDeltaWon) dimensions.push("가격 변화");
   if (left.analysisScore !== undefined && right.analysisScore !== undefined && left.analysisScore > right.analysisScore) dimensions.push("적용 후 분석");
   if (left.evidenceScore! > right.evidenceScore!) dimensions.push("정보");
@@ -243,8 +243,8 @@ export function candidateComparisonTradeoffsFor(items: CandidateComparisonItem[]
   }));
   return metrics.map((metric) => {
     const excluded = items.find((item) => item.id === metric.id)?.candidateRisk === "unsafe" || items.find((item) => item.id === metric.id)?.decisionStatus === "avoid";
-    if (excluded) return { ...metric, eligible: false, frontier: false, reason: "후보 자체가 차단 상태여서 효율 비교에서 제외했습니다." };
-    if (metric.riskScore === undefined) return { ...metric, frontier: true, reason: "잔여 위험 카운트가 모두 확인되지 않아 다른 후보와 우위를 확정하지 않았습니다." };
+    if (excluded) return { ...metric, eligible: false, frontier: false, reason: "부품 자체가 차단 상태여서 효율 비교에서 제외했습니다." };
+    if (metric.riskScore === undefined) return { ...metric, frontier: true, reason: "남은 위험 카운트가 모두 확인되지 않아 다른 부품과 우위를 정하지 않았어요." };
     const dominators = metrics
       .filter((candidate) => candidate.id !== metric.id && !items.find((item) => item.id === candidate.id && (item.candidateRisk === "unsafe" || item.decisionStatus === "avoid")) && candidateTradeoffDominates(candidate, metric))
       .sort((left, right) => left.riskScore! - right.riskScore! || (left.priceDeltaWon ?? Number.POSITIVE_INFINITY) - (right.priceDeltaWon ?? Number.POSITIVE_INFINITY) || (right.analysisScore ?? Number.NEGATIVE_INFINITY) - (left.analysisScore ?? Number.NEGATIVE_INFINITY) || right.evidenceScore! - left.evidenceScore!);
@@ -254,8 +254,8 @@ export function candidateComparisonTradeoffsFor(items: CandidateComparisonItem[]
         ...metric,
         frontier: true,
         reason: metric.priceDeltaWon === undefined || metric.analysisScore === undefined
-          ? "가격·분석 정보가 일부 확인되지 않아 우위를 확정하지 않고 비교 우위에 남겼습니다."
-          : "호환 위험·가격 변화·적용 후 분석·정보에서 다른 후보에 일방적으로 대체되지 않는 선택지입니다."
+          ? "가격·분석 정보가 일부 확인되지 않아 우위를 정하지 않고 비교 우위에 남겼습니다."
+          : "호환 위험·가격 변화·적용 후 분석·정보에서 다른 부품에 일방적으로 대체되지 않는 선택지입니다."
       };
     }
     return {

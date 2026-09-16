@@ -40,14 +40,14 @@ export function validateCatalogSeedMappingManualInput(input: unknown, category?:
   const sourceProductCode = nonEmptyString(body.sourceProductCode, MAX_SOURCE_PRODUCT_CODE_LENGTH);
   const sourceUrl = nonEmptyString(body.sourceUrl, MAX_SOURCE_URL_LENGTH);
   if (!sourceProductCode || !/^[0-9A-Za-z_-]{3,64}$/.test(sourceProductCode)) errors.push("다나와 상품 코드는 영문·숫자·하이픈·밑줄 3~64자로 입력해 주세요.");
-  if (!sourceUrl) errors.push("다나와 원문 URL이 필요합니다.");
+  if (!sourceUrl) errors.push("다나와 상품 페이지 URL이 필요합니다.");
   if (!sourceProductCode || !sourceUrl || errors.length > 0) return { valid: false, errors };
 
   let parsed: URL;
   try {
     parsed = new URL(sourceUrl);
   } catch {
-    errors.push("다나와 원문 URL 형식이 올바르지 않습니다.");
+    errors.push("다나와 상품 페이지 URL 형식이 올바르지 않습니다.");
     return { valid: false, errors };
   }
   if (parsed.protocol !== "https:" || parsed.hostname.toLocaleLowerCase("en-US") !== "prod.danawa.com") errors.push("prod.danawa.com의 HTTPS 상품 URL만 등록할 수 있습니다.");
@@ -116,14 +116,14 @@ export function validateCatalogSeedMappingReview(
 
   const starter = normalizedStarterPartId ? starterCatalog.find((part) => part.id === normalizedStarterPartId) : undefined;
   const active = activePartId ? activeCatalog.find((part) => part.id === activePartId) : undefined;
-  if (!starter) errors.push("starter 기준 후보를 찾을 수 없습니다.");
+  if (!starter) errors.push("기본 목록 부품을 찾을 수 없습니다.");
   if (!active) errors.push("현재 카탈로그의 대상을 찾을 수 없습니다.");
-  if (starter && active && starter.category !== active.category) errors.push("starter와 현재 후보의 범주가 다릅니다.");
-  if (active && active.source !== "danawa") errors.push("실제 상품 코드가 있는 다나와 후보만 매핑할 수 있습니다.");
-  if (active && !active.sourceProductCode) errors.push("현재 후보에 source product code가 없습니다.");
+  if (starter && active && starter.category !== active.category) errors.push("starter와 현재 부품의 범주가 다릅니다.");
+  if (active && active.source !== "danawa") errors.push("실제 상품 코드가 있는 다나와 부품만 매핑할 수 있습니다.");
+  if (active && !active.sourceProductCode) errors.push("현재 부품에 source product code가 없습니다.");
   if (starter && active && active.source === "danawa" && active.sourceProductCode) {
     const candidate = catalogSeedMappingCandidatesFor(starter, activeCatalog, { limit: 5 }).find((item) => item.activePartId === active.id && item.activeSourceProductCode === active.sourceProductCode);
-    if (!candidate) errors.push("현재 후보가 자동 매핑 후보에 없습니다. 이름·모델을 다시 확인해 주세요.");
+    if (!candidate) errors.push("현재 부품이 자동 매핑 부품에 없습니다. 이름·모델을 다시 확인해 주세요.");
   }
   if (errors.length > 0 || !starter || !active || !active.sourceProductCode || active.source !== "danawa") return { valid: false, errors };
   return {

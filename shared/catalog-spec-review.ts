@@ -467,8 +467,8 @@ type FieldDefinition = Omit<CatalogSpecReviewField, "category">;
 
 const FIELD_DEFINITIONS: Record<PartCategory, FieldDefinition[]> = {
   cpu: [
-    { field: "socket", label: "소켓", weight: 40, instruction: "제조사 원문에서 CPU 소켓 또는 호환 플랫폼을 확인합니다." },
-    { field: "tdpW", label: "TDP", weight: 35, instruction: "TDP 또는 PPT를 실제 원문 표기와 단위로 확인합니다. 소비전력과 혼동하지 않습니다." },
+    { field: "socket", label: "소켓", weight: 40, instruction: "제조사 페이지에서 CPU 소켓 또는 호환 플랫폼을 확인합니다." },
+    { field: "tdpW", label: "TDP", weight: 35, instruction: "TDP 또는 PPT를 실제 페이지 표기와 단위로 확인합니다. 소비전력과 혼동하지 않습니다." },
     { field: "cores", label: "코어 수", weight: 20, instruction: "제조사 제품 사양의 물리 코어 수를 확인합니다." },
     { field: "threads", label: "스레드 수", weight: 18, instruction: "제조사 제품 사양의 스레드 수를 확인합니다." }
   ],
@@ -479,25 +479,25 @@ const FIELD_DEFINITIONS: Record<PartCategory, FieldDefinition[]> = {
     { field: "radiatorSizeMm", label: "라디에이터 크기", weight: 20, instruction: "수랭 쿨러의 라디에이터 크기와 단위를 확인합니다." }
   ],
   motherboard: [
-    { field: "socket", label: "소켓", weight: 40, instruction: "메인보드 CPU 소켓을 제조사 원문에서 확인합니다." },
+    { field: "socket", label: "소켓", weight: 40, instruction: "메인보드 CPU 소켓을 제조사 페이지에서 확인합니다." },
     { field: "memoryType", label: "메모리 세대", weight: 32, instruction: "지원 메모리 세대(DDR4·DDR5 등)를 확인합니다." },
     { field: "m2Slots", label: "M.2 슬롯", weight: 32, instruction: "사용 가능한 M.2 슬롯 수를 확인합니다. 슬롯별 연결 방식은 별도 매핑에서 확인합니다." },
     { field: "maxMemoryGb", label: "최대 메모리", weight: 25, instruction: "제조사 공식 최대 메모리 용량을 확인합니다." },
     { field: "memorySlots", label: "메모리 슬롯", weight: 24, instruction: "물리 DIMM 슬롯 수를 확인합니다." },
     { field: "sataPorts", label: "SATA 포트", weight: 22, instruction: "사용 가능한 SATA 포트 수를 확인합니다." },
-    { field: "motherboardFormFactors", label: "지원 메인보드 규격", weight: 18, instruction: "메인보드 자체 규격을 원문에서 확인합니다." },
-    { field: "pcieX16Slots", label: "PCIe x16 슬롯", weight: 38, instruction: "확장슬롯 원문에서 PCIe x16 슬롯 수를 확인합니다. 표기가 없으면 0개로 추정하지 않습니다." },
-    { field: "pcieX8Slots", label: "PCIe x8 슬롯", weight: 36, instruction: "확장슬롯 원문에서 PCIe x8 슬롯 수를 확인합니다. 표기가 없으면 0개로 추정하지 않습니다." },
-    { field: "pcieX4Slots", label: "PCIe x4 슬롯", weight: 34, instruction: "확장슬롯 원문에서 PCIe x4 슬롯 수를 확인합니다. 표기가 없으면 0개로 추정하지 않습니다." },
-    { field: "pcieX1Slots", label: "PCIe x1 슬롯", weight: 32, instruction: "확장슬롯 원문에서 PCIe x1 슬롯 수를 확인합니다. 표기가 없으면 0개로 추정하지 않습니다." }
+    { field: "motherboardFormFactors", label: "지원 메인보드 규격", weight: 18, instruction: "메인보드 자체 규격을 실제 페이지에서 확인합니다." },
+    { field: "pcieX16Slots", label: "PCIe x16 슬롯", weight: 38, instruction: "확장 슬롯 페이지에서 PCIe x16 슬롯 수를 확인합니다. 표기가 없으면 0개로 추정하지 않습니다." },
+    { field: "pcieX8Slots", label: "PCIe x8 슬롯", weight: 36, instruction: "확장 슬롯 페이지에서 PCIe x8 슬롯 수를 확인합니다. 표기가 없으면 0개로 추정하지 않습니다." },
+    { field: "pcieX4Slots", label: "PCIe x4 슬롯", weight: 34, instruction: "확장 슬롯 페이지에서 PCIe x4 슬롯 수를 확인합니다. 표기가 없으면 0개로 추정하지 않습니다." },
+    { field: "pcieX1Slots", label: "PCIe x1 슬롯", weight: 32, instruction: "확장 슬롯 페이지에서 PCIe x1 슬롯 수를 확인합니다. 표기가 없으면 0개로 추정하지 않습니다." }
   ],
   memory: [
     { field: "memoryType", label: "메모리 세대", weight: 35, instruction: "DDR 세대를 확인합니다." },
     { field: "capacityGb", label: "용량", weight: 30, instruction: "킷 또는 모듈 1개의 실제 용량을 확인합니다." },
-    { field: "speedMhz", label: "메모리 속도", weight: 28, instruction: "원문 표기 속도를 MT/s 기준으로 정규화해 확인합니다." },
+    { field: "speedMhz", label: "메모리 속도", weight: 28, instruction: "페이지 표기 속도를 MT/s 기준으로 정규화해 확인합니다." },
     { field: "memoryFormFactor", label: "물리 규격", weight: 26, instruction: "DIMM·SO-DIMM 등 물리 규격을 확인합니다." },
     { field: "memoryModuleCountPerKit", label: "킷 모듈 수", weight: 22, instruction: "킷 구성의 실제 모듈 개수를 확인합니다." },
-    { field: "memoryProfiles", label: "XMP·EXPO 프로파일", weight: 16, instruction: "XMP·EXPO 프로파일이 원문에 명시된 경우에만 기록합니다." }
+    { field: "memoryProfiles", label: "XMP·EXPO 프로파일", weight: 16, instruction: "XMP·EXPO 프로파일이 페이지에 명시된 경우에만 기록합니다." }
   ],
   gpu: [
     { field: "powerW", label: "소비전력", weight: 45, instruction: "그래픽카드 보드 전력 또는 제조사 권장 기준을 구분해 확인합니다." },
@@ -509,11 +509,11 @@ const FIELD_DEFINITIONS: Record<PartCategory, FieldDefinition[]> = {
     { field: "pciePowerOptions", label: "보조전원 구성", weight: 42, instruction: "필요한 보조전원 조합을 제조사 사양에서 확인하며 커넥터 수만으로 추정하지 않습니다." }
   ],
   ssd: [
-    { field: "interface", label: "인터페이스", weight: 40, instruction: "NVMe·SATA 신호 방식을 원문에서 확인합니다." },
+    { field: "interface", label: "인터페이스", weight: 40, instruction: "NVMe·SATA 신호 방식을 실제 페이지에서 확인합니다." },
     { field: "capacityGb", label: "용량", weight: 34, instruction: "실제 표기 용량을 확인합니다." },
     { field: "formFactor", label: "폼팩터", weight: 32, instruction: "M.2 2280·2.5인치 등 물리 폼팩터를 확인합니다." },
     { field: "m2PcieGeneration", label: "M.2 PCIe 세대", weight: 28, instruction: "M.2 NVMe 제품의 지원 PCIe 세대를 확인합니다." },
-    { field: "lengthMm", label: "저장장치 길이", weight: 20, instruction: "M.2 길이 등 장착 치수를 원문에서 확인합니다." }
+    { field: "lengthMm", label: "저장장치 길이", weight: 20, instruction: "M.2 길이 등 장착 치수를 실제 페이지에서 확인합니다." }
   ],
   hdd: [
     { field: "interface", label: "인터페이스", weight: 35, instruction: "SATA 등 연결 방식을 확인합니다." },
@@ -551,7 +551,7 @@ function definitionFor(category: PartCategory, field: string): CatalogSpecReview
     field,
     label,
     weight: 12,
-    instruction: `제조사 원문에서 ${label}을 확인하고 추정값 없이 기록합니다.`
+    instruction: `제조사 페이지에서 ${label}을 확인하고 추정값 없이 기록합니다.`
   };
 }
 
@@ -592,9 +592,9 @@ function refreshHistoryForPart(partId: string, history: CatalogSpecRefreshHistor
 }
 
 function nextActionFor(part: Part, refreshOutcome: CatalogSpecRefreshOutcome | undefined): { action: CatalogSpecReviewAction; label: string } {
-  if (refreshOutcome === "repeated_failure" && part.danawaUrl) return { action: "review_source", label: "반복 실패 · 수동 확인" };
-  if (part.source === "danawa" && part.sourceProductCode && part.danawaUrl) return { action: "refresh_source", label: "원문 다시 확인" };
-  if (part.danawaUrl) return { action: "review_source", label: "원문 확인" };
+  if (refreshOutcome === "repeated_failure" && part.danawaUrl) return { action: "review_source", label: "반복 실패 · 직접 확인" };
+  if (part.source === "danawa" && part.sourceProductCode && part.danawaUrl) return { action: "refresh_source", label: "페이지 다시 확인" };
+  if (part.danawaUrl) return { action: "review_source", label: "페이지 확인" };
   return { action: "inspect_catalog", label: "카탈로그 상세 확인" };
 }
 
@@ -628,8 +628,8 @@ function reviewItemFor(part: Part, categoryPriority: CatalogSpecCoveragePriority
     focusFieldNames.length === 0 ? "incomplete 품질" : undefined,
     focusFields.length > 0 ? `핵심 ${focusFields.slice(0, 2).map((field) => field.label).join("·")}` : undefined,
     freshness === "stale" || freshness === "unknown" ? `정보 ${freshness === "stale" ? "오래됨" : "시점 확인 필요"}` : undefined,
-    refreshState?.outcome === "retryable_failure" ? `원문 재확인 실패 ${refreshState.failureStreakCount}회 · 재시도 권장` : undefined,
-    refreshState?.outcome === "repeated_failure" ? `원문 재확인 연속 ${refreshState.failureStreakCount}회 실패 · 수동 전환` : undefined
+    refreshState?.outcome === "retryable_failure" ? `페이지 재확인 실패 ${refreshState.failureStreakCount}회 · 재시도 권장` : undefined,
+    refreshState?.outcome === "repeated_failure" ? `페이지 재확인 연속 ${refreshState.failureStreakCount}회 실패 · 직접 확인 전환` : undefined
   ].filter((value): value is string => Boolean(value));
   const params = new URLSearchParams({ category: part.category, partId: part.id });
   if (focusFields[0]) params.set("missingField", focusFields[0].field);

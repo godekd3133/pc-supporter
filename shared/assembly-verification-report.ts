@@ -58,18 +58,18 @@ function signedMetricText(value: number | undefined, suffix = "") {
 function sourceText(run: AssemblyVerificationReportRun) {
   if (run.measurementSource === "csv") return `CSV${run.measurementSourceLabel ? ` · ${run.measurementSourceLabel}` : ""}${run.measurementSampleCount !== undefined ? ` · 원본 ${run.measurementSampleCount}샘플` : ""}${run.measurementSeriesPointCount !== undefined ? ` · 시계열 ${run.measurementSeriesPointCount}점` : ""}`;
   if (run.measurementSource === "manual") return "직접 입력";
-  return "출처 미기록";
+  return "출처 기록 없음";
 }
 
 function continuityText(run: AssemblyVerificationReportRun) {
   const continuity = run.measurementQuality?.continuity;
-  if (!continuity) return "연속성 미기록";
+  if (!continuity) return "연속성 기록 없음";
   const status = continuity.status === "continuous" ? "연속" : continuity.status === "gapped" ? "공백 있음" : "확인 불가";
   return `시간축 연속성 ${status} · timestamp ${continuity.timestampCount}개 · 해석 실패 ${continuity.unparsedTimestampCount}개 · 공백 ${continuity.gapCount}개 · 예상 누락 ${continuity.estimatedMissingSamples}개`;
 }
 
 function comparisonBlockReasonText(reason: AssemblyVerificationReportRun["comparisonBlockReason"]) {
-  return reason === "condition-changed" ? "조건 변경" : reason === "condition-missing" ? "조건 미기록" : reason === "measurement-quality-review" ? "측정 품질 확인" : reason === "measurement-continuity-gapped" ? "시간축 공백·역순" : undefined;
+  return reason === "condition-changed" ? "조건 변경" : reason === "condition-missing" ? "조건 기록 없음" : reason === "measurement-quality-review" ? "측정 품질 확인" : reason === "measurement-continuity-gapped" ? "시간축 공백·역순" : undefined;
 }
 
 function telemetryTrendLabel(trend: AssemblyVerificationTelemetryMetricAnalysis["trend"]) {
@@ -92,7 +92,7 @@ function telemetryAnalysisTextForMetric(analysis: AssemblyVerificationTelemetryM
 function telemetryAnalysisText(analysis: AssemblyVerificationTelemetryAnalysis) {
   const metrics = [analysis.metrics.cpuTempC, analysis.metrics.gpuTempC].filter((metric): metric is AssemblyVerificationTelemetryMetricAnalysis => Boolean(metric));
   const observed = metrics.length > 0 ? metrics.map((metric) => `${metric.metric === "cpuTempC" ? "CPU" : "GPU"} ${telemetryAnalysisTextForMetric(metric)}`).join(" · ") : "온도 시계열 샘플 부족";
-  return `${observed}${analysis.elapsedSeconds !== undefined ? ` · 관찰 ${analysis.elapsedSeconds}초` : " · 시간축 미기록"}`;
+  return `${observed}${analysis.elapsedSeconds !== undefined ? ` · 관찰 ${analysis.elapsedSeconds}초` : " · 시간축 기록 없음"}`;
 }
 
 function telemetryContextText(analysis: AssemblyVerificationTelemetryAnalysis) {
@@ -101,7 +101,7 @@ function telemetryContextText(analysis: AssemblyVerificationTelemetryAnalysis) {
     const value = analysis.metrics[metric];
     return value ? `${label} 평균 ${value.mean}${telemetrySuffix(value.metric)} · 최고 ${value.max}${telemetrySuffix(value.metric)}` : undefined;
   }).filter((value): value is string => Boolean(value));
-  return values.length > 0 ? values.join(" · ") : "추가 부하 센서 미기록";
+  return values.length > 0 ? values.join(" · ") : "추가 부하 센서 기록 없음";
 }
 
 function telemetryAnalysisTextForCsv(analysis: AssemblyVerificationTelemetryMetricAnalysis) {
@@ -109,7 +109,7 @@ function telemetryAnalysisTextForCsv(analysis: AssemblyVerificationTelemetryMetr
 }
 
 function loadProfileText(profile: AssemblyVerificationLoadProfile) {
-  if (profile.reason === "usage-not-recorded") return "사용률 센서 미기록";
+  if (profile.reason === "usage-not-recorded") return "사용률 센서 기록 없음";
   const segments = profile.segments.map((segment) => `${segment.breakBefore === "gap" ? `공백 ${segment.gapBeforeSeconds ?? "-"}초 후 ` : segment.breakBefore === "non-monotonic" ? "시간 역순 후 " : ""}${segment.label} ${segment.pointCount}점`).join(" → ");
   const stability = profile.segments.flatMap((segment) => [segment.cpuTempStability ? `CPU 안정화 ${segment.cpuTempStability.stabilized ? "확인" : "미확인"}` : undefined, segment.gpuTempStability ? `GPU 안정화 ${segment.gpuTempStability.stabilized ? "확인" : "미확인"}` : undefined]).filter((value): value is string => Boolean(value));
   return `${segments || "구간 없음"} · 커버리지 ${profile.usageCoveragePercent}% · 확인 필요 ${profile.unclassifiedPointCount}점${stability.length > 0 ? ` · ${stability.join(" · ")}` : ""}`;
@@ -192,7 +192,7 @@ export function assemblyVerificationReportTextFor(report: AssemblyVerificationRe
   }
   lines.push("## 회차별 측정", "");
   for (const run of report.runs) {
-    const condition = [toolLabel(run.loadTool), scenarioLabel(run.loadScenario), run.testDurationMinutes !== undefined ? `${run.testDurationMinutes}분` : "시간 미기록"].join(" · ");
+    const condition = [toolLabel(run.loadTool), scenarioLabel(run.loadScenario), run.testDurationMinutes !== undefined ? `${run.testDurationMinutes}분` : "시간 기록 없음"].join(" · ");
     lines.push(
       `### ${run.index}. ${run.runLabel}`,
       `- 상태: ${assemblyVerificationStateLabel(run.state)}`,

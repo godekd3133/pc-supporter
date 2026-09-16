@@ -81,8 +81,8 @@ describe("recommendation trust", () => {
     });
     expect(result.score).toBeGreaterThanOrEqual(80);
     expect(result.reasons).toEqual(expect.arrayContaining([
-      "현재 문제를 해결하는 후보입니다.",
-      "후보 자체를 적용해 새 차단 오류와 확인 필요가 없습니다."
+      "현재 문제를 해결하는 부품입니다.",
+      "부품 자체를 적용해 새 차단 오류와 확인 필요가 없습니다."
     ]));
   });
 
@@ -92,7 +92,7 @@ describe("recommendation trust", () => {
 
     expect(reference).toMatchObject({ priceKnown: true, priceEvidence: "reference" });
     expect(reference.score).toBeLessThan(live.score);
-    expect(reference.reasons).toContain("참고 가격가 있어 총액 비교에 참고할 수 있지만 실제 판매가로 확정하지 않습니다.");
+    expect(reference.reasons).toContain("참고 가격가 있어 총액 비교에 참고할 수 있지만 실제 판매가로 정하지 않아요.");
   });
 
   it("keeps a safe candidate highly rated while reporting unrelated build issues separately", () => {
@@ -118,7 +118,7 @@ describe("recommendation trust", () => {
       remainingWarningCount: 2,
       remainingUnknownCount: 1
     });
-    expect(result.reasons).toContain("전체 견적에는 차단 4개·주의 2개·확인 필요 1개가 남아 이 후보 하나로 전체 해결되지는 않습니다.");
+    expect(result.reasons).toContain("전체 견적에는 차단 4개·주의 2개·확인 필요 1개가 남아 이 부품 하나로 전체 해결되지는 않습니다.");
   });
 
   it("gives structured official benchmark provenance more weight than an unclassified score", () => {
@@ -127,7 +127,7 @@ describe("recommendation trust", () => {
 
     expect(official.score).toBeGreaterThan(unclassified.score);
     expect(official.reasons).toContain("벤치마크 출처: 제조사·공식 측정표");
-    expect(unclassified.reasons).toContain("벤치마크 출처이 분류되지 않았습니다.");
+    expect(unclassified.reasons).toContain("벤치마크 출처가 분류되지 않았습니다.");
   });
 
   it("downgrades trust and exposes stale benchmark freshness", () => {
@@ -168,7 +168,7 @@ describe("recommendation trust", () => {
     });
 
     expect(result).toMatchObject({ level: "medium", benchmarkSourceCheckNeedsReview: true });
-    expect(result.reasons).toContain("벤치마크 원문 URL 접근·모델 식별을 다시 확인해야 합니다.");
+    expect(result.reasons).toContain("벤치마크 출처 페이지 접근·모델 식별을 다시 확인해야 해요.");
   });
 
   it("downgrades trust before a manual catalog-spec source has been checked", () => {
@@ -205,7 +205,7 @@ describe("recommendation trust", () => {
     expect(result).toMatchObject({ level: "medium", catalogSpecSourceCheckNeedsReview: true });
     expect(result.reasons).toEqual(expect.arrayContaining([
       "제조사 정보 수동 보강값",
-      "제조사 정보 원문 URL 접근·모델 식별을 확인하기 전입니다."
+      "제조사 정보 페이지 접근·모델 식별을 확인하기 전이에요."
     ]));
   });
 
@@ -249,7 +249,7 @@ describe("recommendation trust", () => {
     });
 
     expect(result).toMatchObject({ level: "high", catalogSpecSourceCheckNeedsReview: false });
-    expect(result.reasons).toContain("제조사 정보 원문 URL 접근과 모델 식별을 확인했습니다.");
+    expect(result.reasons).toContain("제조사 정보 페이지 접근과 모델 식별을 확인했어요.");
   });
 
   it.each([
@@ -294,7 +294,7 @@ describe("recommendation trust", () => {
     });
 
     expect(result).toMatchObject({ level: "medium", catalogSpecSourceCheckNeedsReview: true });
-    expect(result.reasons).toContain("제조사 정보 원문 URL 접근·모델 식별을 다시 확인해야 합니다.");
+    expect(result.reasons).toContain("제조사 정보 페이지 접근·모델 식별을 다시 확인해야 해요.");
   });
 
   it("downgrades trust when a candidate leaves unknowns or has stale incomplete data", () => {
@@ -319,9 +319,9 @@ describe("recommendation trust", () => {
     expect(result.priceKnown).toBe(false);
     expect(result.sourceAvailable).toBe(false);
     expect(result.reasons).toEqual(expect.arrayContaining([
-      "후보 자체의 차단 오류는 없지만 확인 필요 1개가 남습니다.",
-      "누락 스펙 3개가 있어 원문 확인이 필요합니다.",
-      "현재 가격을 확인할 수 없어 총액 비교는 확정하지 않습니다."
+      "부품 자체의 차단 오류는 없지만 확인 필요 1개가 남습니다.",
+      "누락 스펙 3개가 있어 실제 정보 확인이 필요해요.",
+      "현재 가격을 확인할 수 없어 총액 비교는 정하지 않아요."
     ]));
   });
 

@@ -148,7 +148,7 @@ const IMPACTS_BY_CATEGORY: Record<string, Record<string, ImpactDefinition>> = {
   gpu: {
     pcieSlotWidth: { kind: "compatibility", label: "GPU·PCIe 장착", summary: "그래픽카드 장착 폭과 메인보드 PCIe 슬롯을 다시 검사합니다.", ruleIds: ["gpu-motherboard-pcie"] },
     pciePowerOptions: { kind: "compatibility", label: "GPU 보조전원", summary: "GPU 요구 커넥터와 PSU 제공 커넥터를 다시 검사합니다.", ruleIds: ["gpu-psu-connector"] },
-    pciePowerAdapterOptions: { kind: "compatibility", label: "GPU 어댑터 전원", summary: "GPU 원문에 명시된 보조전원 어댑터 경로와 PSU 커넥터를 다시 대조합니다.", ruleIds: ["gpu-psu-connector"] },
+    pciePowerAdapterOptions: { kind: "compatibility", label: "GPU 어댑터 전원", summary: "GPU 제품 페이지에 명시된 보조전원 어댑터 경로와 PSU 커넥터를 다시 비교합니다.", ruleIds: ["gpu-psu-connector"] },
     gpuSlotOccupancy: { kind: "data", label: "GPU 물리 장착 정보", summary: "GPU가 차지하는 물리 슬롯 정보가 장착·간섭 설명에 반영됩니다. 메인보드 슬롯 배치는 별도 확인이 필요합니다.", ruleIds: [] },
     gpuCableBendClearanceMm: { kind: "compatibility", label: "GPU 케이블 측면 여유", summary: "확인된 GPU 케이블 굽힘 여유와 케이스 측면 공간을 다시 검사합니다.", ruleIds: ["gpu-cable-clearance"] },
     powerW: { kind: "compatibility", label: "GPU·PSU 전력", summary: "GPU 소비전력·권장 파워와 PSU 용량을 다시 검사합니다.", ruleIds: ["gpu-psu-power"] },
@@ -206,7 +206,7 @@ export function catalogChangeImpactsFor(record: CatalogChangeRecord, diff: Catal
     return [{ id: "data-confidence", kind: "data", label: "데이터 상태", summary: "스펙 완성도 변화에 따라 호환성 결과가 확인 필요 상태가 될 수 있습니다.", ruleIds: [] }];
   }
   if (diff.field === "원문 스펙") {
-    return [{ id: `${record.category}-raw-spec-review`, kind: "data", label: "원문 스펙 재확인", summary: "원문 스펙 변경이 감지되어 선택 견적을 다시 검사해야 합니다.", ruleIds: [] }];
+    return [{ id: `${record.category}-raw-spec-review`, kind: "data", label: "수집된 스펙 다시 확인", summary: "수집된 스펙이 바뀌어 선택 견적을 다시 검사해야 합니다.", ruleIds: [] }];
   }
   const key = specKeyForDiff(record, diff);
   if (!key) return [];

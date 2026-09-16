@@ -80,8 +80,8 @@ function skuFor(value: string | undefined) {
 export function benchmark3DMarkIdentityFor(partName: string, partModel: string | undefined, resultGpuName: string | undefined): Pick<Benchmark3DMarkImportPreview, "identityStatus" | "identityDetail"> {
   const partSku = skuFor(`${partModel ?? ""} ${partName}`);
   const resultSku = skuFor(resultGpuName);
-  if (!resultSku) return { identityStatus: "manual_required", identityDetail: "결과 페이지에서 GPU 모델 식별자를 찾지 못했습니다. 원문과 선택 부품을 수동 대조해야 합니다." };
-  if (!partSku) return { identityStatus: "manual_required", identityDetail: "선택 부품의 GPU 모델 식별자를 정규화하지 못했습니다. 원문과 부품을 수동 대조해야 합니다." };
+  if (!resultSku) return { identityStatus: "manual_required", identityDetail: "결과 페이지에서 GPU 모델 식별자를 찾지 못했습니다. 결과 페이지와 선택 부품을 직접 비교해야 합니다." };
+  if (!partSku) return { identityStatus: "manual_required", identityDetail: "선택 부품의 GPU 모델 식별자를 정규화하지 못했습니다. 결과 페이지와 부품을 직접 비교해야 합니다." };
   if (partSku === resultSku) return { identityStatus: "matched", identityDetail: `선택 부품과 결과 페이지의 GPU 식별자(${resultSku})가 일치합니다.` };
   return { identityStatus: "not_found", identityDetail: `선택 부품(${partSku})과 결과 페이지(${resultSku})의 GPU 식별자가 다릅니다.` };
 }

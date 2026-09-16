@@ -1,5 +1,6 @@
 import type { AccessoryItem, BuildSelection, Part, PartCategory, PartSelection } from "./types";
 import { CATEGORY_LABELS, isKnownPrice, PART_CATEGORIES } from "./types";
+import { catalogMissingFieldLabelFor } from "./catalog-spec-coverage";
 import type { RefreshTarget } from "./refresh-targets";
 import { uniqueRefreshTargets } from "./refresh-targets";
 
@@ -82,7 +83,7 @@ export function buildPreflightFor(build: BuildSelection, partMap: ReadonlyMap<st
     const refreshTarget = part.source === "danawa" && part.danawaUrl ? { kind: "part" as const, id: part.id } : undefined;
     if (dataNeedsReview) {
       dataReviewIds.add(part.id);
-      issues.push({ id: `preflight-data-${part.id}`, kind: "data", label: part.name, message: part.missingFields.length > 0 ? `확인되지 않은 스펙 ${part.missingFields.length}개: ${part.missingFields.slice(0, 3).join(", ")}` : "카탈로그 상세 스펙의 완성도를 확인해야 합니다.", ...(refreshTarget ? { target: refreshTarget } : {}) });
+      issues.push({ id: `preflight-data-${part.id}`, kind: "data", label: part.name, message: part.missingFields.length > 0 ? `확인되지 않은 스펙 ${part.missingFields.length}개: ${part.missingFields.slice(0, 3).map((field) => catalogMissingFieldLabelFor(field)).join(", ")}` : "카탈로그 상세 스펙의 완성도를 확인해야 합니다.", ...(refreshTarget ? { target: refreshTarget } : {}) });
     }
     if (!isKnownPrice(part.priceWon)) {
       unpricedIds.add(part.id);
@@ -118,7 +119,7 @@ export function buildPreflightFor(build: BuildSelection, partMap: ReadonlyMap<st
     const refreshTarget = item.source === "danawa" && item.danawaUrl ? { kind: "accessory" as const, id: item.id } : undefined;
     if (dataNeedsReview) {
       dataReviewIds.add(item.id);
-      issues.push({ id: `preflight-accessory-data-${item.id}`, kind: "data", label: item.name, message: item.missingFields.length > 0 ? `확인되지 않은 정보 ${item.missingFields.length}개: ${item.missingFields.slice(0, 3).join(", ")}` : "주변 부품 상세 정보의 완성도를 확인해야 합니다.", ...(refreshTarget ? { target: refreshTarget } : {}) });
+      issues.push({ id: `preflight-accessory-data-${item.id}`, kind: "data", label: item.name, message: item.missingFields.length > 0 ? `확인되지 않은 정보 ${item.missingFields.length}개: ${item.missingFields.slice(0, 3).map((field) => catalogMissingFieldLabelFor(field)).join(", ")}` : "주변 부품 상세 정보의 완성도를 확인해야 합니다.", ...(refreshTarget ? { target: refreshTarget } : {}) });
     }
     if (!isKnownPrice(item.priceWon)) {
       unpricedIds.add(item.id);

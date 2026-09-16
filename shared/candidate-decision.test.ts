@@ -13,7 +13,7 @@ describe("candidate decision summary", () => {
 
     expect(summary).toMatchObject({
       status: "recommended",
-      label: "추천 후보",
+      label: "추천 부품",
       summary: "현재 문제 해결 · 새 차단 없음 · 장착 정보 확인됨 · 최근 확인 · 높음"
     });
   });
@@ -32,20 +32,20 @@ describe("candidate decision summary", () => {
     expect(summary.label).toBe("확인 후 적용");
     expect(summary.summary).toContain("추가 확인 필요");
     expect(summary.reasons).toContain("PCIe 세대가 확인되지 않습니다.");
-    expect(summary.reasons).toContain("장착 정보가 확인 필요 상태라 실제 장착 전에 제조사 원문을 확인해야 합니다.");
+    expect(summary.reasons).toContain("장착 정보가 확인 필요 상태라 실제 장착 전에 제조사 페이지를 확인해야 합니다.");
   });
 
   it("never presents an unsafe candidate as an applicable recommendation", () => {
     const summary = candidateDecisionSummaryFor({
       risk: "unsafe",
-      reasons: ["후보 자체에 차단 오류 1개가 있습니다."],
+      reasons: ["부품 자체에 차단 오류 1개가 있습니다."],
       recommendationTrustLevel: "high",
       freshness: "fresh"
     });
 
     expect(summary).toMatchObject({ status: "avoid", label: "적용하지 않음" });
-    expect(summary.summary).toContain("후보 자체에 차단 위험");
-    expect(summary.reasons).toEqual(["후보 자체에 차단 오류 1개가 있습니다."]);
+    expect(summary.summary).toContain("부품 자체에 차단 위험");
+    expect(summary.reasons).toEqual(["부품 자체에 차단 오류 1개가 있습니다."]);
   });
 
   it("downgrades stale or target-uncertain candidates even without a rule blocker", () => {
@@ -60,7 +60,7 @@ describe("candidate decision summary", () => {
     expect(stale.status).toBe("review");
     expect(stale.summary).toContain("오래된 정보");
     expect(uncertain.status).toBe("review");
-    expect(uncertain.reasons).toContain("현재 문제를 직접 해결하는 후보인지 추가 확인해야 합니다.");
+    expect(uncertain.reasons).toContain("현재 문제를 직접 해결하는 부품인지 추가 확인해야 합니다.");
   });
 
   it("requires a manufacturer source check before applying a manual spec candidate", () => {
@@ -73,7 +73,7 @@ describe("candidate decision summary", () => {
     });
 
     expect(summary).toMatchObject({ status: "review", label: "확인 후 적용" });
-    expect(summary.summary).toContain("제조사 원문 확인 필요");
-    expect(summary.reasons).toContain("수동 보강 스펙의 제조사 원문 URL 접근과 모델 식별을 확인해야 후보를 적용할 수 있습니다.");
+    expect(summary.summary).toContain("제조사 페이지 확인 필요");
+    expect(summary.reasons).toContain("직접 입력된 스펙의 제조사 페이지 접근과 모델 식별을 확인해야 이 부품을 적용할 수 있어요.");
   });
 });

@@ -136,7 +136,7 @@ function loadKindForPoint(point: AssemblyVerificationTelemetryPoint): AssemblyVe
 function reasonFor(points: AssemblyVerificationTelemetryPoint[]) {
   const cpu = metricStats(points, "cpuUsagePercent");
   const gpu = metricStats(points, "gpuUsagePercent");
-  return [cpu ? `CPU 사용률 평균 ${cpu.mean}%` : undefined, gpu ? `GPU 사용률 평균 ${gpu.mean}%` : undefined].filter((value): value is string => Boolean(value)).join(" · ") || "사용률 센서 미기록";
+  return [cpu ? `CPU 사용률 평균 ${cpu.mean}%` : undefined, gpu ? `GPU 사용률 평균 ${gpu.mean}%` : undefined].filter((value): value is string => Boolean(value)).join(" · ") || "사용률 센서 기록 없음";
 }
 
 function temperatureStabilityFor(points: AssemblyVerificationTelemetryPoint[], metric: "cpuTempC" | "gpuTempC"): AssemblyVerificationLoadSegmentStability | undefined {

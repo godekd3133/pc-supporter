@@ -3,7 +3,7 @@ import type { CandidatePurchaseDecisionInput } from "./candidate-purchase-decisi
 import { candidatePurchaseDecisionFor } from "./candidate-purchase-decision";
 
 const base: CandidatePurchaseDecisionInput = {
-  name: "테스트 후보",
+  name: "테스트 부품",
   candidateRisk: "safe",
   decisionStatus: "recommended",
   nextStatus: "compatible",
@@ -57,7 +57,7 @@ describe("candidate purchase decision", () => {
     const result = candidatePurchaseDecisionFor({ ...base, priceEvidence: "reference" });
 
     expect(result).toMatchObject({ state: "review", label: "확인 후 구매" });
-    expect(result.reasons).toContain("참고 가격만 있어 후보 실제 판매 가격을 확정할 수 없습니다.");
+    expect(result.reasons).toContain("참고 가격만 있어 부품 실제 판매 가격을 알 수 없어요.");
   });
 
   it("requires review when a performance change has unknown analysis evidence", () => {
@@ -85,14 +85,14 @@ describe("candidate purchase decision", () => {
     const result = candidatePurchaseDecisionFor({ ...base, similarityScore: 97, similarityConfidence: "high", benchmarkSourceCheckNeedsReview: true, priceDeltaWon: 120000 });
 
     expect(result).toMatchObject({ state: "review", label: "확인 후 구매" });
-    expect(result.reasons.join(" ")).toContain("벤치마크 원문 확인");
+    expect(result.reasons.join(" ")).toContain("성능 비교에 사용된 벤치마크 출처를 다시 확인해야 합니다.");
   });
 
   it("requires review when a manual catalog-spec source check needs review", () => {
     const result = candidatePurchaseDecisionFor({ ...base, catalogSpecSourceCheckNeedsReview: true });
 
     expect(result).toMatchObject({ state: "review", label: "확인 후 구매" });
-    expect(result.reasons.join(" ")).toContain("수동 보강 스펙");
+    expect(result.reasons.join(" ")).toContain("직접 입력된 스펙의 제조사 페이지 접근과 모델 식별을 다시 확인해야 합니다.");
   });
 
   it("suggests waiting when a compatible candidate is more expensive and near its recent high", () => {

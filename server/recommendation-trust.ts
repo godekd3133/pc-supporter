@@ -60,9 +60,9 @@ const freshnessLabels: Record<RecommendationTrustEvidence["freshness"], string> 
 };
 
 const dataQualityLabels: Record<Part["dataQuality"], string> = {
-  manual: "수동 확인 데이터",
+  manual: "직접 확인 데이터",
   live: "다나와 최신 데이터",
-  seed: "프로젝트 기준 데이터",
+  seed: "기본 정보 데이터",
   incomplete: "필수 스펙 누락 데이터"
 };
 
@@ -101,26 +101,26 @@ export function recommendationTrustFor(input: RecommendationTrustInput): Recomme
 
   if (input.resolvesTarget) {
     score += 5;
-    reasons.push("현재 문제를 해결하는 후보입니다.");
+    reasons.push("현재 문제를 해결하는 부품입니다.");
   } else {
     reasons.push("현재 문제 해결 여부를 추가 확인해야 합니다.");
   }
 
   if (input.candidateBlockers === 0 && input.candidateUnknown === 0) {
     score += 30;
-    reasons.push("후보 자체를 적용해 새 차단 오류와 확인 필요가 없습니다.");
+    reasons.push("부품 자체를 적용해 새 차단 오류와 확인 필요가 없습니다.");
   } else if (input.candidateBlockers === 0) {
     score += 18;
-    reasons.push(`후보 자체의 차단 오류는 없지만 확인 필요 ${input.candidateUnknown}개가 남습니다.`);
+    reasons.push(`부품 자체의 차단 오류는 없지만 확인 필요 ${input.candidateUnknown}개가 남습니다.`);
   } else {
-    reasons.push(`후보 자체에 차단 오류 ${input.candidateBlockers}개가 남아 호환을 확정할 수 없습니다.`);
+    reasons.push(`부품 자체에 차단 오류 ${input.candidateBlockers}개가 남아 호환을 알 수 없어요.`);
   }
 
   if (input.candidateWarnings === 0) score += 3;
-  else reasons.push(`후보 자체의 주의 ${input.candidateWarnings}개가 남아 구매 전 확인이 필요합니다.`);
+  else reasons.push(`부품 자체의 주의 ${input.candidateWarnings}개가 남아 구매 전 확인이 필요합니다.`);
 
   if (fullBuildStatus === "remaining_issues") {
-    reasons.push(`전체 견적에는 차단 ${input.remainingBlockers}개·주의 ${input.remainingWarnings}개·확인 필요 ${input.remainingUnknown}개가 남아 이 후보 하나로 전체 해결되지는 않습니다.`);
+    reasons.push(`전체 견적에는 차단 ${input.remainingBlockers}개·주의 ${input.remainingWarnings}개·확인 필요 ${input.remainingUnknown}개가 남아 이 부품 하나로 전체 해결되지는 않습니다.`);
   }
 
   if (similarityEvidence.confidence === "high" && similarityEvidence.comparedDimensions >= 2) {
@@ -139,7 +139,7 @@ export function recommendationTrustFor(input: RecommendationTrustInput): Recomme
     if (input.benchmarkSourceKind === "official") score += 6;
     else if (input.benchmarkSourceKind === "independent_review") score += 4;
     else if (input.benchmarkSourceKind === "community_measurement") score += 2;
-    reasons.push(input.benchmarkSourceKind ? `벤치마크 출처: ${BENCHMARK_SOURCE_KIND_LABELS[input.benchmarkSourceKind]}` : "벤치마크 출처이 분류되지 않았습니다.");
+    reasons.push(input.benchmarkSourceKind ? `벤치마크 출처: ${BENCHMARK_SOURCE_KIND_LABELS[input.benchmarkSourceKind]}` : "벤치마크 출처가 분류되지 않았습니다.");
     if (benchmarkFreshness === "fresh") score += 3;
     else if (benchmarkFreshness === "aging") reasons.push("벤치마크 자료 갱신을 권장합니다.");
     else if (benchmarkFreshness === "stale") {
@@ -151,10 +151,10 @@ export function recommendationTrustFor(input: RecommendationTrustInput): Recomme
     }
     if (benchmarkSourceCheckNeedsReview === false) {
       score += 4;
-      reasons.push("벤치마크 원문 URL 접근과 모델 식별을 확인했습니다.");
+      reasons.push("벤치마크 출처 페이지 접근과 모델 식별을 확인했어요.");
     } else if (benchmarkSourceCheckNeedsReview === true) {
       score -= 8;
-      reasons.push("벤치마크 원문 URL 접근·모델 식별을 다시 확인해야 합니다.");
+      reasons.push("벤치마크 출처 페이지 접근·모델 식별을 다시 확인해야 해요.");
     }
   }
 
@@ -162,12 +162,12 @@ export function recommendationTrustFor(input: RecommendationTrustInput): Recomme
     reasons.push("제조사 정보 수동 보강값");
     if (catalogSpecSourceCheckNeedsReview === false) {
       score += 4;
-      reasons.push("제조사 정보 원문 URL 접근과 모델 식별을 확인했습니다.");
+      reasons.push("제조사 정보 페이지 접근과 모델 식별을 확인했어요.");
     } else {
       score -= 8;
       reasons.push(catalogSpecProvenance.sourceCheck
-        ? "제조사 정보 원문 URL 접근·모델 식별을 다시 확인해야 합니다."
-        : "제조사 정보 원문 URL 접근·모델 식별을 확인하기 전입니다.");
+        ? "제조사 정보 페이지 접근·모델 식별을 다시 확인해야 해요."
+        : "제조사 정보 페이지 접근·모델 식별을 확인하기 전이에요.");
     }
   }
 
@@ -176,7 +176,7 @@ export function recommendationTrustFor(input: RecommendationTrustInput): Recomme
 
   if (candidate.missingFields.length === 0) score += 8;
   else if (candidate.missingFields.length <= 2) score += 4;
-  else reasons.push(`누락 스펙 ${candidate.missingFields.length}개가 있어 원문 확인이 필요합니다.`);
+  else reasons.push(`누락 스펙 ${candidate.missingFields.length}개가 있어 실제 정보 확인이 필요해요.`);
 
   if (freshness === "fresh") score += 5;
   else if (freshness === "aging") score += 2;
@@ -185,15 +185,15 @@ export function recommendationTrustFor(input: RecommendationTrustInput): Recomme
   if (priceEvidence === "live" || priceEvidence === "manual") {
     score += 4;
   } else if (priceEvidence === "reference") {
-    reasons.push("참고 가격가 있어 총액 비교에 참고할 수 있지만 실제 판매가로 확정하지 않습니다.");
+    reasons.push("참고 가격가 있어 총액 비교에 참고할 수 있지만 실제 판매가로 정하지 않아요.");
   } else if (priceEvidence === "recorded") {
-    reasons.push("가격 숫자는 기록되어 있지만 데이터 상태가 완전하지 않아 실제 판매가로 확정하지 않습니다.");
+    reasons.push("가격 숫자는 기록되어 있지만 데이터 상태가 완전하지 않아 실제 판매가로 정하지 않아요.");
   } else {
-    reasons.push("현재 가격을 확인할 수 없어 총액 비교는 확정하지 않습니다.");
+    reasons.push("현재 가격을 확인할 수 없어 총액 비교는 정하지 않아요.");
   }
 
   if (sourceAvailable) score += 3;
-  else reasons.push("원문 링크가 없어 구매 전 출처를 별도로 확인해야 합니다.");
+  else reasons.push("상품 링크가 없어 구매 전 출처를 따로 확인해야 해요.");
 
   const boundedScore = Math.max(0, Math.min(100, Math.round(score)));
   let level: RecommendationTrustEvidence["level"] = boundedScore >= 80 ? "high" : boundedScore >= 55 ? "medium" : "low";

@@ -38,7 +38,7 @@ const benchmarkEvidence = (overrides: Partial<AlternativeComparisonBenchmarkEvid
 });
 
 const candidate = (overrides: Partial<AlternativeComparisonCandidate> = {}): AlternativeComparisonCandidate => ({
-  name: "후보",
+  name: "부품",
   summary: "요약",
   price: "100,000원",
   priceWon: 100000,

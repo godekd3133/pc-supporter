@@ -131,24 +131,24 @@ function identityMatchFor(text: string, manufacturerModel: PhysicalSourceIdentit
   const normalizedText = text.toLocaleLowerCase("en-US").replace(/[^a-z0-9가-힣]+/g, "");
   return identities.some((identity) => normalizedText.includes(identity))
     ? { status: "matched", detail: "응답 본문에서 등록한 제조사 모델/SKU 중 하나를 확인했습니다." }
-    : { status: "not_found", detail: "응답 본문에서 등록한 제조사 모델/SKU를 찾지 못했습니다. URL과 변형을 수동 확인해야 합니다." };
+    : { status: "not_found", detail: "응답 본문에서 등록한 제조사 모델/SKU를 찾지 못했습니다. URL과 변형을 직접 확인해야 합니다." };
 }
 
 async function identityFor(contentType: string | undefined, finalUrl: string, body: Uint8Array, manufacturerModel: PhysicalSourceIdentity, truncated: boolean, pdfTextExtractor: (body: Uint8Array) => Promise<string | undefined>): Promise<{ status: PhysicalSourceIdentityStatus; detail: string }> {
   const isPdf = contentType?.includes("pdf") || /\.pdf(?:[?#]|$)/i.test(finalUrl);
   if (isPdf) {
-    if (truncated) return { status: "manual_required", detail: "PDF 응답이 제한 용량을 넘어 URL 접근만 확인했습니다. 모델/SKU는 문서에서 수동 확인해야 합니다." };
+    if (truncated) return { status: "manual_required", detail: "PDF 응답이 제한 용량을 넘어 URL 접근만 확인했습니다. 모델/SKU는 문서에서 직접 확인해야 합니다." };
     const extractedText = await pdfTextExtractor(body);
-    if (!extractedText) return { status: "manual_required", detail: "PDF 텍스트를 추출하지 못해 URL 접근만 확인했습니다. 모델/SKU는 문서에서 수동 확인해야 합니다." };
+    if (!extractedText) return { status: "manual_required", detail: "PDF 텍스트를 추출하지 못해 URL 접근만 확인했습니다. 모델/SKU는 문서에서 직접 확인해야 합니다." };
     const identity = identityMatchFor(extractedText, manufacturerModel);
     return identity.status === "matched"
       ? { status: "matched", detail: "PDF 본문에서 등록한 제조사 모델/SKU를 확인했습니다." }
       : identity.status === "not_found"
-        ? { status: "not_found", detail: "PDF 본문에서 등록한 제조사 모델/SKU를 찾지 못했습니다. URL과 변형을 수동 확인해야 합니다." }
+        ? { status: "not_found", detail: "PDF 본문에서 등록한 제조사 모델/SKU를 찾지 못했습니다. URL과 변형을 직접 확인해야 합니다." }
         : identity;
   }
   const isText = !contentType || contentType.startsWith("text/") || contentType.includes("json") || contentType.includes("xml");
-  if (!isText || truncated) return { status: "manual_required", detail: "문서가 비텍스트이거나 응답이 커서 URL 접근만 확인했습니다. 모델/SKU는 문서에서 수동 확인해야 합니다." };
+  if (!isText || truncated) return { status: "manual_required", detail: "문서가 비텍스트이거나 응답이 커서 URL 접근만 확인했습니다. 모델/SKU는 문서에서 직접 확인해야 합니다." };
   return identityMatchFor(new TextDecoder().decode(body), manufacturerModel);
 }
 

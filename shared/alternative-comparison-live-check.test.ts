@@ -5,7 +5,7 @@ import { benchmarkEvidenceForPart } from "./benchmark-evidence";
 import { alternativeComparisonLiveCandidateFor, alternativeComparisonLiveSummaryFor } from "./alternative-comparison-live-check";
 import type { Part } from "./types";
 
-const candidate = (overrides: Partial<AlternativeComparisonCandidate> = {}): AlternativeComparisonCandidate => ({ name: "후보", summary: "요약", price: "100,000원", priceWon: 100000, category: "cpu", partId: "cpu-a", similarity: "유사", performance: "성능", compatibility: "호환", dataQuality: "다나와 최신", ...overrides });
+const candidate = (overrides: Partial<AlternativeComparisonCandidate> = {}): AlternativeComparisonCandidate => ({ name: "부품", summary: "요약", price: "100,000원", priceWon: 100000, category: "cpu", partId: "cpu-a", similarity: "유사", performance: "성능", compatibility: "호환", dataQuality: "다나와 최신", ...overrides });
 const part = (overrides: Partial<Part> = {}): Part => ({ id: "cpu-a", category: "cpu", name: "현재 CPU", source: "danawa", priceWon: 110000, specs: {}, dataQuality: "live", missingFields: [], updatedAt: "2026-09-02T00:00:00.000Z", ...overrides });
 
 afterEach(() => {

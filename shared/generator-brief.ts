@@ -226,7 +226,7 @@ export function generatorBriefInterpretationFor(input: string): GeneratorBriefIn
   const matches: GeneratorBriefMatch[] = [];
   const warnings: string[] = [];
   if (!text) {
-    return { config, matches, warnings: ["요구사항을 한 줄로 입력해 주세요. 예: QHD 게이밍 220만원, RAM 32GB, SSD 2TB"], confidence: "low", coverage: { matched: 0, total: 5, missing: ["사용 목적", "목표 예산", "RAM 목표", "SSD 목표", "그래픽카드"] }, guidance: [] };
+    return { config, matches, warnings: ["원하는 조건을 한 줄로 입력해 주세요. 예: QHD 게이밍 220만원, RAM 32GB, SSD 2TB"], confidence: "low", coverage: { matched: 0, total: 5, missing: ["사용 목적", "목표 예산", "RAM 목표", "SSD 목표", "그래픽카드"] }, guidance: [] };
   }
 
   const profiles = allMatchers(text, PROFILE_MATCHERS);

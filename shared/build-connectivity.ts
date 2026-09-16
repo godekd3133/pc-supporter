@@ -54,7 +54,7 @@ export function buildConnectivitySummaryFor(motherboard: PartSpecs | undefined, 
 
   const rgbVoltage = computerCase.rgbDeviceVoltage;
   if (rgbDeviceCount === 0) {
-    items.push({ id: "rgb-voltage", ruleId: "case-rgb-voltage", label: "RGB 전압 연결", status: "pass", detail: "등록된 RGB 장치가 없어 전압 대조 대상이 없습니다." });
+    items.push({ id: "rgb-voltage", ruleId: "case-rgb-voltage", label: "RGB 전압 연결", status: "pass", detail: "등록된 RGB 장치가 없어 비교할 대상이 없어요." });
   } else if (rgbDeviceCount === undefined || !rgbVoltage) {
     items.push({ id: "rgb-voltage", ruleId: "case-rgb-voltage", label: "RGB 전압 연결", status: "unknown", detail: "케이스 RGB 장치 수 또는 5V/12V 전압을 확인할 수 없습니다." });
   } else {

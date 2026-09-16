@@ -241,8 +241,8 @@ export function alternativeComparisonBenchmarkEvidenceTextFor(evidence: Alternat
   if (!evidence) return undefined;
   const scoreText = evidence.rows.map((row) => `${row.label} ${row.value === undefined ? "확인 필요" : `${row.value.toLocaleString("ko-KR")}${row.unit}`}`).join(" · ");
   const sourceText = evidence.provenance
-    ? `${BENCHMARK_SOURCE_KIND_LABELS[evidence.provenance.sourceKind]} · ${evidence.provenance.sourceNote}${evidence.provenance.sourceUrl ? ` · 원문 ${evidence.provenance.sourceUrl}` : ""}`
-    : "출처 미등록";
+    ? `${BENCHMARK_SOURCE_KIND_LABELS[evidence.provenance.sourceKind]} · ${evidence.provenance.sourceNote}${evidence.provenance.sourceUrl ? ` · 출처 ${evidence.provenance.sourceUrl}` : ""}`
+    : "출처 없음";
   const sourceCheckText = `${benchmarkSourceCheckLabelFor(evidence.sourceCheck)}${evidence.sourceCheck?.detail ? ` · ${evidence.sourceCheck.detail}` : ""}`;
   return `${benchmarkEvidenceStatusText(evidence.status)} · ${evidence.presentCount}/${evidence.totalCount}개 · ${scoreText} · 출처 ${sourceText} · 점검 ${sourceCheckText} · 자료 ${benchmarkFreshnessLabelFor(evidence.benchmarkFreshness)} · 데이터 갱신 ${evidence.dataUpdatedAt}`;
 }
@@ -282,14 +282,14 @@ function comparisonRows(candidates: AlternativeComparisonCandidate[], context: A
 }
 
 export function alternativeComparisonTextFor(candidates: AlternativeComparisonCandidate[], context: AlternativeComparisonExportContext = {}) {
-  const lines = ["PC Supporter 후보 비교"];
+  const lines = ["PC Supporter 부품 비교"];
   if (context.category) lines.push(`비교 범주: ${context.category}`);
   if (context.currentPartName) lines.push(`현재 기준선: ${context.currentPartName}`);
   if (context.currentPartSummary) lines.push(`현재 기준선 스펙: ${context.currentPartSummary}`);
   if (context.currentPartPrice) lines.push(`현재 기준선 가격: ${context.currentPartPrice}`);
   lines.push("");
   candidates.forEach((candidate, index) => {
-    lines.push(`[후보 ${index + 1}] ${candidate.name}`);
+    lines.push(`[부품 ${index + 1}] ${candidate.name}`);
     if (candidate.category || candidate.partId) lines.push(`- 카탈로그 식별자: ${candidate.category ?? "범주 확인 필요"}${candidate.partId ? ` · ${candidate.partId}` : ""}`);
     lines.push(`- 핵심 스펙: ${candidate.summary}`);
     lines.push(`- 가격: ${candidate.price}${candidate.recommendedQuantity !== undefined ? ` · 추천 킷 ${candidate.recommendedQuantity}개` : ""}`);
@@ -311,7 +311,7 @@ export function alternativeComparisonTextFor(candidates: AlternativeComparisonCa
     const physicalEvidenceSources = physicalEvidenceSourceTextFor(candidate.physicalEvidenceSources);
     if (physicalEvidenceSources) lines.push(`- 장착 정보 출처: ${physicalEvidenceSources}`);
     lines.push(`- 데이터: ${candidate.dataQuality}${candidate.dataFreshness ? ` · ${DATA_FRESHNESS_LABELS[candidate.dataFreshness]}` : ""}${candidate.updatedAt ? ` · 갱신 ${candidate.updatedAt}` : ""}`);
-    if (candidate.sourceUrl) lines.push(`- 원문: ${candidate.sourceUrl}`);
+    if (candidate.sourceUrl) lines.push(`- 출처: ${candidate.sourceUrl}`);
     const benchmarkEvidence = alternativeComparisonBenchmarkEvidenceTextFor(candidate.benchmarkEvidence);
     if (benchmarkEvidence) lines.push(`- 성능 정보: ${benchmarkEvidence}`);
     lines.push("");
@@ -323,7 +323,7 @@ export function alternativeComparisonCsvFor(candidates: AlternativeComparisonCan
   const contextColumns = context.category || context.currentPartName || context.currentPartSummary || context.currentPartPrice
     ? ["비교 범주", "현재 기준선", "현재 기준선 스펙", "현재 기준선 가격"]
     : [];
-  const header = ["후보명", "범주", "부품 ID", "핵심 스펙", "가격", "공유 당시 가격(원)", "가격 출처", "구매 조건", "추천 킷 수량", "성능 유사도", "성능 비교 정보", "게이밍 목표 정보", "가격 대비 유사도", "추천 점수", "성능 변화", "호환 상태", "판단 요약", "미리 적용 판단", "장착 정보", "장착 정보 출처", "데이터 상태", "갱신 상태", "갱신일", "원문 링크", "성능 정보", ...contextColumns];
+  const header = ["부품명", "범주", "부품 ID", "핵심 스펙", "가격", "공유 당시 가격(원)", "가격 출처", "구매 조건", "추천 킷 수량", "성능 유사도", "성능 비교 정보", "게이밍 목표 정보", "가격 대비 유사도", "추천 점수", "성능 변화", "호환 상태", "판단 요약", "미리 적용 판단", "장착 정보", "장착 정보 출처", "데이터 상태", "갱신 상태", "갱신일", "상품 링크", "성능 정보", ...contextColumns];
   return `\uFEFF${[header, ...comparisonRows(candidates, context)].map((row) => row.map((value) => csvCell(value)).join(",")).join("\r\n")}`;
 }
 

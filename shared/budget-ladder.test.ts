@@ -107,28 +107,28 @@ describe("budget ladder scenarios", () => {
   it("exports successful and failed scenarios with the same observed evidence as the screen", () => {
     const diagnostic: BuildGenerationDiagnostic = {
       id: "gpu-pool",
-      title: "GPU 후보 부족",
-      summary: "조건을 만족하는 후보가 없습니다.",
-      facts: [{ label: "후보 수", value: "0개" }],
+      title: "GPU 부품 부족",
+      summary: "조건을 만족하는 부품이 없습니다.",
+      facts: [{ label: "부품 수", value: "0개" }],
       recommendation: "예산을 상향해 주세요."
     };
     const outcomes: BudgetLadderOutcome[] = [
       { id: "economy", label: "절약형", description: "입력 예산의 약 80%로 구성", budgetWon: 800_000, draft: draft() },
       { id: "target", label: "목표 예산", description: "입력한 목표 예산 그대로", budgetWon: 1_000_000, draft: draft({ totalPriceWon: 980_000, analysis: { profile: "gaming", overallScore: 76, scoreLabel: "균형형", scoreBasis: "test", confidence: "limited", factors: [], strengths: [], focusAreas: [], bottlenecks: [], nextActions: [] }, lines: [{ category: "cpu", partId: "cpu-new", name: "새 CPU", quantity: 1, priceWon: 280_000 }, { category: "gpu", partId: "gpu-same", name: "같은 GPU", quantity: 1, priceWon: 400_000 }] }) },
-      { id: "headroom", label: "여유형", description: "입력 예산의 약 120%로 구성", budgetWon: 1_200_000, error: "조건을 만족하는 후보가 없습니다.", diagnostics: [diagnostic] }
+      { id: "headroom", label: "여유형", description: "입력 예산의 약 120%로 구성", budgetWon: 1_200_000, error: "조건을 만족하는 부품이 없습니다.", diagnostics: [diagnostic] }
     ];
 
     const text = budgetLadderTextFor(outcomes);
     expect(text).toContain("[목표 예산] 입력한 목표 예산 그대로");
     expect(text).toContain("예상 합계: 980,000원");
     expect(text).toContain("변경: CPU · 이전 CPU → 새 CPU");
-    expect(text).toContain("실패 정보: GPU 후보 부족: 조건을 만족하는 후보가 없습니다. · 후보 수 0개 · 권장 예산을 상향해 주세요.");
+    expect(text).toContain("실패 정보: GPU 부품 부족: 조건을 만족하는 부품이 없습니다. · 부품 수 0개 · 권장 예산을 상향해 주세요.");
 
     const csv = budgetLadderCsvFor(outcomes);
     expect(csv.startsWith("\uFEFF구간 ID,구간,설명")).toBe(true);
     expect(csv).toContain("economy,절약형,입력 예산의 약 80%로 구성,800000,호환 가능");
     expect(csv).toContain("headroom,여유형,입력 예산의 약 120%로 구성,1200000,생성 실패");
-    expect(csv).toContain("조건을 만족하는 후보가 없습니다.");
+    expect(csv).toContain("조건을 만족하는 부품이 없습니다.");
 
     const json = JSON.parse(budgetLadderJsonFor(outcomes)) as { type: string; version: number; exportedAt: string; items: Array<Record<string, unknown>>; changes: Array<Record<string, unknown>> };
     expect(json.type).toBe("pc-supporter-budget-ladder");
@@ -137,7 +137,7 @@ describe("budget ladder scenarios", () => {
     expect(json.items[0]).toMatchObject({ id: "economy", status: "호환 가능", totalPriceWon: 900_000 });
     expect(json.items[0].lines).toEqual(expect.arrayContaining([expect.objectContaining({ category: "cpu", text: "이전 CPU" })]));
     expect(json.items[0].selection).toMatchObject({ memory: [], ssd: [], hdd: [], useIntegratedGraphics: true });
-    expect(json.items[2]).toMatchObject({ id: "headroom", status: "생성 실패", error: "조건을 만족하는 후보가 없습니다.", diagnostics: [diagnostic] });
+    expect(json.items[2]).toMatchObject({ id: "headroom", status: "생성 실패", error: "조건을 만족하는 부품이 없습니다.", diagnostics: [diagnostic] });
     expect(json.changes).toHaveLength(1);
     expect(json.changes[0]).toMatchObject({ fromId: "economy", toId: "target", totalPriceDeltaWon: 80_000, analysisScoreDelta: 16 });
   });

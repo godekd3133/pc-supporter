@@ -123,14 +123,14 @@ export function assemblyPlanFor(build: BuildSelection, result: CompatibilityResu
       title: "해결해야 할 충돌 제거",
       status: resolutionStatus,
       summary: blockerCount > 0 ? `차단 오류 ${blockerCount}개를 먼저 해결합니다.` : reviewCount > 0 ? `주의·확인 필요 ${reviewCount}개를 구매 전에 확인합니다.` : "현재 규칙 기준의 충돌이 없습니다.",
-      detail: blockerCount > 0 ? "대체 부품 또는 수리 플랜을 적용한 뒤 같은 구성으로 다시 검사해야 합니다." : reviewCount > 0 ? "호환성 결과는 진행할 수 있지만 확인되지 않은 조건을 해소하기 전에는 구매를 확정하지 않습니다." : "다음 단계의 정보 확인으로 이동할 수 있습니다.",
+      detail: blockerCount > 0 ? "대체 부품 또는 수리 플랜을 적용한 뒤 같은 구성으로 다시 검사해야 합니다." : reviewCount > 0 ? "호환성 결과는 진행할 수 있지만 확인되지 않은 조건을 해소하기 전에는 구매를 정하지 않아요." : "다음 단계의 정보 확인으로 이동할 수 있습니다.",
       dependsOn: [],
       targetId: blockerCount > 0 ? "repair-plan-panel" : "purchase-checklist"
     },
     {
       id: "confirm-evidence",
       order: 2,
-      title: "원문·물리·가격 출처 확정",
+      title: "정보·물리·가격 출처 확인",
       status: evidenceStatus,
       summary: evidenceStatus === "blocked" ? "물리·전력 조건의 차단 항목을 먼저 해결합니다." : evidenceStatus === "review" ? "스펙·장착·가격 출처를 추가로 확인합니다." : "구매에 필요한 데이터 정보가 확인됐습니다.",
       detail: evidenceDetailFor(result),
@@ -140,7 +140,7 @@ export function assemblyPlanFor(build: BuildSelection, result: CompatibilityResu
     {
       id: "confirm-purchase",
       order: 3,
-      title: "구매 목록과 예산 확정",
+      title: "구매 목록과 예산 정리",
       status: purchaseStatus,
       summary: purchaseStatus === "blocked" ? "충돌·물리 차단을 해결하기 전에는 구매하지 않습니다." : purchaseStatus === "review" ? "가격·데이터·확인 필요 항목을 검토한 뒤 구매합니다." : "현재 구매 목록과 검사 상태를 기준으로 구매할 수 있습니다.",
       detail: result.priceComplete ? "핵심 부품과 주변 부품의 수량·가격·유통 조건을 확인하세요." : "가격이 확인되지 않은 항목이 있어 실제 결제 전 판매 페이지를 다시 확인하세요.",
@@ -163,7 +163,7 @@ export function assemblyPlanFor(build: BuildSelection, result: CompatibilityResu
       title: "케이스 장착·케이블·주변부품 연결",
       status: wiringStatus,
       summary: wiringStatus === "blocked" ? "주변 부품 연결 차단을 먼저 수정합니다." : wiringStatus === "review" ? "팬·RGB·전원 케이블 경로를 확인한 뒤 연결합니다." : "케이스 장착과 주변부품 연결을 진행할 수 있습니다.",
-      detail: build.accessories && build.accessories.length > 0 ? "팬 허브 포트·허용전류, RGB 전압·출력, PSU 보조전원 케이블 경로를 연결 계획과 실물 케이블에 대조하세요." : "메인보드·PSU·GPU 케이블을 연결하고 케이스 팬·헤더 위치를 실물과 대조하세요.",
+      detail: build.accessories && build.accessories.length > 0 ? "팬 허브 포트·허용전류, RGB 전압·출력, PSU 보조전원 케이블 경로를 연결 계획과 실물 케이블에 대조하세요." : "메인보드·PSU·GPU 케이블을 연결하고 케이스 팬·헤더 위치를 실물과 비교해 주세요.",
       dependsOn: ["bench-assemble"],
       targetId: accessory ? "accessory-compatibility-panel" : "build-connectivity-panel"
     },
@@ -208,7 +208,7 @@ export function assemblyPlanFor(build: BuildSelection, result: CompatibilityResu
   const state = executionSteps.some((step) => hasBlocked(step.status)) ? "blocked" : executionSteps.some((step) => hasReview(step.status)) ? "review" : "ready";
   return {
     state,
-    summary: state === "blocked" ? "차단 항목을 해결한 뒤 다음 구매·조립 단계로 이동하세요." : !purchaseComplete ? `구매 항목 ${purchase!.total - purchasedCount}개를 수령한 뒤 조립 단계로 이동하세요.` : !checklistComplete ? `구매 전 체크리스트 ${checklist!.remaining}개를 확인한 뒤 다음 단계로 이동하세요.` : assembly?.state === "failed" || (assembly?.recheckSignalCount ?? 0) > 0 ? "실측 결과를 재확인한 뒤 최종 구매·조립 상태를 판단하세요." : state === "review" ? "구매는 가능하지만 원문·가격·연결 정보를 확인한 뒤 조립하세요." : "검사·정보 기준을 통과했습니다. 아래 순서대로 구매와 조립을 진행하세요.",
+    summary: state === "blocked" ? "차단 항목을 해결한 뒤 다음 구매·조립 단계로 이동하세요." : !purchaseComplete ? `구매 항목 ${purchase!.total - purchasedCount}개를 수령한 뒤 조립 단계로 이동하세요.` : !checklistComplete ? `구매 전 체크리스트 ${checklist!.remaining}개를 확인한 뒤 다음 단계로 이동하세요.` : assembly?.state === "failed" || (assembly?.recheckSignalCount ?? 0) > 0 ? "실측 결과를 재확인한 뒤 최종 구매·조립 상태를 판단하세요." : state === "review" ? "구매는 가능하지만 상품 페이지·가격·연결 정보를 확인한 뒤 조립하세요." : "검사·정보 기준을 통과했습니다. 아래 순서대로 구매와 조립을 진행하세요.",
     steps: executionSteps
   };
 }

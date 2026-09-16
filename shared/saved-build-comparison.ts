@@ -182,7 +182,7 @@ export function savedBuildComparisonTradeoffsFor(entries: SavedBuildComparisonEn
         ...metric,
         frontier: true,
         reason: metric.totalPriceWon === undefined || metric.analysisScore === undefined || metric.expansionScore === undefined
-          ? "가격·분석·확장성 정보가 일부 없어 우위를 확정하지 않고 비교 우위에 남겼습니다."
+          ? "가격·분석·확장성 정보가 일부 없어 우위를 정하지 않고 비교 우위에 남겼습니다."
           : "호환 위험·총액·분석 점수·확장성에서 다른 버전에 일방적으로 대체되지 않는 선택지입니다."
       };
     }
@@ -272,5 +272,5 @@ export function savedBuildComparisonConsensusFor(entries: SavedBuildComparisonEn
     const winner = decisions[0].entry;
     return { ...base, status: "converged", winnerId: winner.id, winnerName: winner.name, summary: `${winner.name}이(가) 확정된 ${decisions.length}개 기준에서 모두 1순위입니다.` };
   }
-  return { ...base, status: "split", summary: `기준별 1순위가 ${winnerNames.join(" · ")} 후보로 나뉩니다.` };
+  return { ...base, status: "split", summary: `기준별 1순위가 ${winnerNames.join(" · ")} 부품으로 나뉩니다.` };
 }

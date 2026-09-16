@@ -111,16 +111,16 @@ export function parseAlternativeComparisonChecklistJson(input: string, expectedC
   try {
     parsed = JSON.parse(input);
   } catch {
-    return { checkedIds: [], ignoredIds: [], itemKeys: [], errors: ["후보 비교 체크리스트 JSON 형식이 올바르지 않습니다."] };
+    return { checkedIds: [], ignoredIds: [], itemKeys: [], errors: ["부품 비교 체크리스트 JSON 형식이 올바르지 않습니다."] };
   }
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return { checkedIds: [], ignoredIds: [], itemKeys: [], errors: ["후보 비교 체크리스트 JSON은 객체여야 합니다."] };
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return { checkedIds: [], ignoredIds: [], itemKeys: [], errors: ["부품 비교 체크리스트 JSON은 객체여야 합니다."] };
   const candidate = parsed as Partial<AlternativeComparisonChecklistTransferEnvelope>;
-  if (candidate.type !== "pc-supporter-alternative-comparison-checklist" || candidate.schemaVersion !== 1) return { checkedIds: [], ignoredIds: [], itemKeys: [], errors: ["지원하지 않는 후보 비교 체크리스트 JSON 버전입니다."] };
-  if (typeof candidate.comparisonId !== "string" || candidate.comparisonId !== expectedComparisonId) return { checkedIds: [], ignoredIds: [], itemKeys: [], errors: ["현재 공유 후보 비교와 다른 체크리스트입니다. 같은 공유 링크에서 내보낸 JSON만 가져올 수 있습니다."] };
-  if (typeof candidate.exportedAt !== "string" || candidate.exportedAt.length === 0 || candidate.exportedAt.length > 120 || !Number.isFinite(Date.parse(candidate.exportedAt))) return { checkedIds: [], ignoredIds: [], itemKeys: [], errors: ["후보 비교 체크리스트 JSON의 내보낸 시각이 올바르지 않습니다."] };
-  if (!Array.isArray(candidate.itemKeys) || !Array.isArray(candidate.checkedIds)) return { checkedIds: [], ignoredIds: [], itemKeys: [], errors: ["후보 비교 체크리스트 JSON의 항목 목록 형식이 올바르지 않습니다."] };
-  if (candidate.itemKeys.length > ALTERNATIVE_COMPARISON_CHECKLIST_MAX_ITEMS || candidate.checkedIds.length > ALTERNATIVE_COMPARISON_CHECKLIST_MAX_ITEMS) return { checkedIds: [], ignoredIds: [], itemKeys: [], errors: [`후보 비교 체크리스트 JSON은 최대 ${ALTERNATIVE_COMPARISON_CHECKLIST_MAX_ITEMS}개 항목만 가져올 수 있습니다.`] };
-  if (!candidate.itemKeys.every((key) => typeof key === "string" && key.length > 0 && key.length <= 240) || !candidate.checkedIds.every((id) => typeof id === "string" && id.length > 0 && id.length <= 240)) return { checkedIds: [], ignoredIds: [], itemKeys: [], errors: ["후보 비교 체크리스트 JSON의 항목 목록 형식이 올바르지 않습니다."] };
+  if (candidate.type !== "pc-supporter-alternative-comparison-checklist" || candidate.schemaVersion !== 1) return { checkedIds: [], ignoredIds: [], itemKeys: [], errors: ["지원하지 않는 부품 비교 체크리스트 JSON 버전입니다."] };
+  if (typeof candidate.comparisonId !== "string" || candidate.comparisonId !== expectedComparisonId) return { checkedIds: [], ignoredIds: [], itemKeys: [], errors: ["현재 공유 부품 비교와 다른 체크리스트입니다. 같은 공유 링크에서 내보낸 JSON만 가져올 수 있습니다."] };
+  if (typeof candidate.exportedAt !== "string" || candidate.exportedAt.length === 0 || candidate.exportedAt.length > 120 || !Number.isFinite(Date.parse(candidate.exportedAt))) return { checkedIds: [], ignoredIds: [], itemKeys: [], errors: ["부품 비교 체크리스트 JSON의 내보낸 시각이 올바르지 않습니다."] };
+  if (!Array.isArray(candidate.itemKeys) || !Array.isArray(candidate.checkedIds)) return { checkedIds: [], ignoredIds: [], itemKeys: [], errors: ["부품 비교 체크리스트 JSON의 항목 목록 형식이 올바르지 않습니다."] };
+  if (candidate.itemKeys.length > ALTERNATIVE_COMPARISON_CHECKLIST_MAX_ITEMS || candidate.checkedIds.length > ALTERNATIVE_COMPARISON_CHECKLIST_MAX_ITEMS) return { checkedIds: [], ignoredIds: [], itemKeys: [], errors: [`부품 비교 체크리스트 JSON은 최대 ${ALTERNATIVE_COMPARISON_CHECKLIST_MAX_ITEMS}개 항목만 가져올 수 있습니다.`] };
+  if (!candidate.itemKeys.every((key) => typeof key === "string" && key.length > 0 && key.length <= 240) || !candidate.checkedIds.every((id) => typeof id === "string" && id.length > 0 && id.length <= 240)) return { checkedIds: [], ignoredIds: [], itemKeys: [], errors: ["부품 비교 체크리스트 JSON의 항목 목록 형식이 올바르지 않습니다."] };
   const currentKeys = new Set(entries.map((entry) => entry.key));
   const blockedKeys = new Set(entries.filter((entry) => entry.status === "blocked").map((entry) => entry.key));
   const itemKeys = uniqueIds(candidate.itemKeys as string[]);

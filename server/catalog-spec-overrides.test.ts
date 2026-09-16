@@ -47,7 +47,7 @@ describe("catalog spec overrides", () => {
 
     const nonCore = validateCatalogSpecOverrideBatch({ items: [{ partId: "gpu-non-core", category: "ssd", fields: { interface: "SATA" }, ...provenance }] }, catalog);
     expect(nonCore.validOverrides).toEqual([]);
-    expect(nonCore.errors[0]).toContain("핵심 호환 후보가 아닌 항목");
+    expect(nonCore.errors[0]).toContain("핵심 호환 부품이 아닌 항목");
   });
 
   it("applies an override only to missing fields and restores the original record when stripped", () => {

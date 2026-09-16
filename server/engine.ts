@@ -56,6 +56,7 @@ import { buildBenchmarkSnapshotFor } from "../shared/build-benchmark-snapshot";
 import { VALUE_SCORE_MAX } from "../shared/value-score";
 import { gpuFitSummaryFor, gpuPurchaseEvidenceFor, pcieCableTopologyStatusFor, pciePowerMatchFor } from "../shared/gpu-fit";
 import { physicalSourceCheckNeedsReview } from "../shared/physical-source-check";
+import { catalogMissingFieldLabelFor } from "../shared/catalog-spec-coverage";
 import { isListingAllowed } from "./listing";
 import { classifyDataFreshness } from "./data-health";
 import { compareRecommendationTrust, recommendationTrustFor } from "./recommendation-trust";
@@ -217,7 +218,7 @@ function gpuTargetEvidenceFor(current: Part, candidate: Part | undefined, resolu
   const resolutionLabel = GAMING_RESOLUTION_LABELS[resolution];
   const refreshRateLabel = GAMING_REFRESH_RATE_LABELS[refreshRate];
   const summary = candidate
-    ? `${resolutionLabel} · ${refreshRateLabel} · 권장 VRAM ${targetVramGb}GB · 현재 ${formatTargetVram(currentVramGb)} → 후보 ${formatTargetVram(candidateVramGb)} · ${gpuTargetFitLabel(candidateFit ?? "unknown")}`
+    ? `${resolutionLabel} · ${refreshRateLabel} · 권장 VRAM ${targetVramGb}GB · 현재 ${formatTargetVram(currentVramGb)} → 부품 ${formatTargetVram(candidateVramGb)} · ${gpuTargetFitLabel(candidateFit ?? "unknown")}`
     : `${resolutionLabel} · ${refreshRateLabel} · 권장 VRAM ${targetVramGb}GB · 현재 ${formatTargetVram(currentVramGb)} · ${gpuTargetFitLabel(currentFit)}`;
   return {
     resolution,
@@ -272,36 +273,9 @@ function candidateCompatibilityDeltaFindings(baseline: CompatibilityResult, eval
     });
 }
 
-const CANDIDATE_MISSING_FIELD_LABELS: Record<string, string> = {
-  socket: "소켓",
-  tdpW: "TDP",
-  supportedSockets: "지원 소켓",
-  radiatorSizeMm: "라디에이터 크기",
-  maxCoolingW: "냉각 지원",
-  memoryType: "메모리 세대",
-  maxMemoryGb: "최대 메모리",
-  memorySlots: "RAM 슬롯",
-  m2Slots: "M.2 슬롯",
-  maxMemorySpeedMhz: "최대 메모리 속도",
-  speedMhz: "메모리 속도",
-  capacityGb: "용량",
-  powerW: "소비전력",
-  recommendedPsuW: "권장 PSU",
-  lengthMm: "GPU 길이",
-  interface: "연결 방식",
-  formFactor: "폼팩터",
-  hddBays: "HDD 베이",
-  maxGpuLengthMm: "GPU 허용 길이",
-  maxCoolerHeightMm: "쿨러 허용 높이",
-  maxPsuLengthMm: "PSU 허용 길이",
-  wattageW: "정격 출력",
-  "internal storage device": "저장장치 종류",
-  "detail page": "상세 페이지"
-};
-
 function candidateDataQualityReasonsFor(candidate: Part) {
   if (candidate.dataQuality !== "incomplete" && candidate.missingFields.length === 0) return [];
-  const missingFields = candidate.missingFields.map((field) => CANDIDATE_MISSING_FIELD_LABELS[field] ?? field);
+  const missingFields = candidate.missingFields.map((field) => catalogMissingFieldLabelFor(field));
   return [missingFields.length > 0 ? `필수 스펙 미확인: ${missingFields.join(", ")}` : "필수 스펙 미확인"];
 }
 
@@ -464,7 +438,7 @@ function addUnknown(
     title,
     message,
     ids,
-    missingFields.map((field) => ({ label: "누락된 정보", actual: field })),
+    missingFields.map((field) => ({ label: "누락된 정보", actual: catalogMissingFieldLabelFor(field) })),
     [action("verify_spec", targetCategory ? `${CATEGORY_LABELS[targetCategory]} 스펙 확인` : "제조사 스펙 확인", targetCategory)]
   );
 }
@@ -926,7 +900,7 @@ export function assessAlternativePart(build: BuildSelection, catalog: Part[], ca
     && candidate.specs.m2PcieGeneration === undefined) {
     return {
       risk: "review",
-      reasons: ["후보 NVMe M.2 SSD의 PCIe 세대가 확인되지 않습니다."],
+      reasons: ["부품 NVMe M.2 SSD의 PCIe 세대가 확인되지 않습니다."],
       recommendedQuantity,
       candidateBlockerCount: 0,
       candidateWarningCount: 0,
@@ -2028,7 +2002,7 @@ export function buildUpgradeBundlesWithSummary(
         warningCount: evaluation.warningCount,
         unknownCount: evaluation.unknownCount
       },
-      reason: `${changes.map((recommendation) => CATEGORY_LABELS[recommendation.category]).join("·")}를 함께 바꾸는 조합입니다. 후보별 비교 변화가 합산 ${totalImprovementPercent}%이며, ${changes.length}개 부품을 함께 적용한 최종 구성도 현재 호환 수준을 유지합니다.`
+      reason: `${changes.map((recommendation) => CATEGORY_LABELS[recommendation.category]).join("·")}를 함께 바꾸는 조합입니다. 부품별 비교 변화가 합산 ${totalImprovementPercent}%이며, ${changes.length}개 부품을 함께 적용한 최종 구성도 현재 호환 수준을 유지합니다.`
     };
   }
 
@@ -2273,7 +2247,7 @@ function candidateSuggestions(
           candidateWarningCount,
           candidateUnknownCount,
           reason: fullyCompatible
-            ? `이 후보로 교체하면 전체 구성도 호환됩니다.${candidateReasons.length > 0 ? ` ${candidateReasons.join(" · ")}는 구매 전에 확인해야 합니다.` : ""}`
+            ? `이 부품으로 교체하면 전체 구성도 호환됩니다.${candidateReasons.length > 0 ? ` ${candidateReasons.join(" · ")}는 구매 전에 확인해야 합니다.` : ""}`
             : `이 호환 문제를 해결합니다. ${remainingIssueSummary(evaluation.blockerCount, evaluation.warningCount, evaluation.unknownCount)}는 별도로 남습니다.${candidateReasons.length > 0 ? ` ${candidateReasons.join(" · ")}는 구매 전에 확인해야 합니다.` : ""}`,
           remainingBlockers: evaluation.blockerCount,
           remainingWarnings: evaluation.warningCount,
@@ -3245,7 +3219,7 @@ export function evaluateBuild(
         findings,
         "cpu-motherboard-socket",
         "CPU와 메인보드의 소켓 정보를 확인할 수 없습니다.",
-        "소켓 정보가 부족해 장착 가능 여부를 확정할 수 없습니다.",
+        "소켓 정보가 부족해 장착 가능 여부를 알 수 없어요.",
         partIds(cpu, motherboard),
         [!cpuSocket ? "CPU socket" : "", !motherboardSocket ? "Motherboard socket" : ""].filter(Boolean),
         "motherboard"
@@ -3273,7 +3247,7 @@ export function evaluateBuild(
         findings,
         "cpu-motherboard-power",
         "CPU 전력과 메인보드 전원부 정보를 확인할 수 없습니다.",
-        "전원부 정보가 부족해 고부하 상황의 공급 가능 여부를 확정할 수 없습니다.",
+        "전원부 정보가 부족해 고부하 상황의 공급 가능 여부를 알 수 없어요.",
         partIds(cpu, motherboard),
         [cpuPower === undefined ? "CPU power" : "", vrmCapacity === undefined ? "VRM capacity" : ""].filter(Boolean),
         "motherboard"
@@ -3390,7 +3364,7 @@ export function evaluateBuild(
           "RAM 킷별 속도·CL·전압·프로파일이 달라 가장 낮은 공통 설정으로 동작하거나 안정성 문제가 생길 수 있습니다. 가능한 한 같은 제품·같은 킷으로 구성하세요.",
           affectedMemoryIds,
           mixFacts,
-          [replaceAction("memory", "동일 킷 RAM 후보 찾기")]
+          [replaceAction("memory", "동일 킷 RAM 부품 찾기")]
         );
       } else if (incompleteFields.length > 0) {
         addFinding(
@@ -3398,13 +3372,13 @@ export function evaluateBuild(
           "memory-mixing",
           "unknown",
           "서로 다른 RAM 킷의 혼용 안정성을 확인할 수 없습니다.",
-          "서로 다른 RAM 상품을 함께 선택했지만 일부 속도·CL·전압·프로파일 정보가 없어 혼용 안정성을 확정할 수 없습니다.",
+          "서로 다른 RAM 상품을 함께 선택했지만 일부 속도·CL·전압·프로파일 정보가 없어 혼용 안정성을 알 수 없어요.",
           affectedMemoryIds,
           [
             ...mixFacts,
             { label: "확인되지 않은 비교 항목", actual: incompleteFields.map(({ label }) => label).join(" / ") }
           ],
-          [action("verify_spec", "RAM 킷 원문 확인", "memory")]
+          [action("verify_spec", "RAM 킷 정보 확인", "memory")]
         );
       }
     }
@@ -3451,7 +3425,7 @@ export function evaluateBuild(
         findings,
         "memory-form-factor",
         "RAM과 메인보드 메모리 슬롯 규격을 확인할 수 없습니다.",
-        "DIMM 또는 SO-DIMM 물리 규격 정보가 부족해 RAM을 실제로 장착할 수 있는지 확정할 수 없습니다.",
+        "DIMM 또는 SO-DIMM 물리 규격 정보가 부족해 RAM을 실제로 장착할 수 있는지 알 수 없어요.",
         partIds(motherboard, ...memory.map(({ part }) => part)),
         ["memory slot form factor"],
         "memory"
@@ -3512,7 +3486,7 @@ export function evaluateBuild(
         findings,
         "memory-slots",
         "메인보드 RAM 슬롯 정보를 확인할 수 없습니다.",
-        "RAM 모듈을 몇 개까지 장착할 수 있는지 확정할 수 없습니다.",
+        "RAM 모듈을 몇 개까지 장착할 수 있는지 알 수 없어요.",
         [motherboard.id],
         ["memory slots"],
         "motherboard"
@@ -3601,7 +3575,7 @@ export function evaluateBuild(
         findings,
         "memory-profile",
         "RAM 프로파일과 메인보드 지원 정보를 확인할 수 없습니다.",
-        "EXPO/XMP 프로파일이 있는 RAM을 선택했지만 메인보드의 지원 프로파일 원문이 없어 설정 가능 여부를 확정할 수 없습니다.",
+        "EXPO/XMP 프로파일이 있는 RAM을 선택했지만 메인보드의 지원 프로파일 정보가 없어 설정 가능 여부를 알 수 없어요.",
         partIds(motherboard, ...profileMemory.map(({ part }) => part)),
         ["motherboard memory profiles"],
         "memory"
@@ -3635,7 +3609,7 @@ export function evaluateBuild(
         findings,
         "m2-slots",
         "M.2 SSD 또는 메인보드 슬롯 정보를 확인할 수 없습니다.",
-        "M.2 장착 가능 개수를 확정할 수 없습니다.",
+        "M.2 장착 가능 개수를 알 수 없어요.",
         partIds(motherboard, ...ssds.map(({ part }) => part)),
         ["M.2 slots"],
         "motherboard"
@@ -3677,7 +3651,7 @@ export function evaluateBuild(
         findings,
         "m2-interface",
         "M.2 SSD와 메인보드 M.2 연결 정보를 확인할 수 없습니다.",
-        "선택한 M.2 SSD의 NVMe/SATA 연결 방식 또는 메인보드의 M.2 연결 원문이 부족해 장착 가능 여부를 확정할 수 없습니다.",
+        "선택한 M.2 SSD의 NVMe/SATA 연결 방식 또는 메인보드의 M.2 연결 정보가 부족해 장착 가능 여부를 알 수 없어요.",
         partIds(motherboard, ...m2Parts.map(({ part }) => part)),
         missingM2InterfaceLabels,
         "motherboard"
@@ -3770,8 +3744,8 @@ export function evaluateBuild(
         findings,
         "m2-slot-topology",
         "unknown",
-        "M.2 슬롯별 PCIe 세대 배치를 확정할 수 없습니다.",
-        "메인보드 원문에는 여러 M.2 PCIe 세대가 집계되어 있지만, 각 SSD가 어느 슬롯에 연결되는지 확인되지 않아 다중 M.2 구성의 세대·레인 배치를 자동 확정할 수 없습니다.",
+        "M.2 슬롯별 PCIe 세대 배치를 알 수 없어요.",
+        "메인보드 정보에는 여러 M.2 PCIe 세대가 함께 표기되어 있지만, 각 SSD가 어느 슬롯에 연결되는지 확인되지 않아 다중 M.2 구성의 세대·레인 배치를 자동으로 알 수 없어요.",
         partIds(motherboard, ...m2Parts.map(({ part }) => part)),
         [
           { label: "선택한 M.2 SSD", actual: formatNumber(m2Count, "개") },
@@ -3833,7 +3807,7 @@ export function evaluateBuild(
         "m2-slot-sharing",
         "unknown",
         "M.2 슬롯이 다른 연결과 공유됩니다.",
-        "등록된 제조사 매뉴얼 기준으로 선택한 M.2 슬롯에 공유 대상이 있지만, 해당 대상이 언제 비활성화되거나 링크 폭을 바꾸는지까지는 자동 확정하지 않습니다.",
+        "등록된 제조사 매뉴얼 기준으로 선택한 M.2 슬롯에 공유 대상이 있지만, 해당 대상이 언제 비활성화되거나 링크 폭을 바꾸는지까지는 자동으로 정하지 않아요.",
         [motherboard.id, ...activeM2SharedAssignments.map((assignment) => assignment.partId), ...(gpu ? [gpu.id] : [])],
         [
           { label: "공유 슬롯", actual: activeM2SharedAssignments.map((assignment) => `${assignment.slotId}: ${assignment.sharedWith!.join(", ")}`).join(" / ") },
@@ -3853,13 +3827,13 @@ export function evaluateBuild(
         "m2-pcie-lane-sharing",
         "unknown",
         "M.2 사용이 GPU의 PCIe 연결에 영향을 주는지 확인할 수 없습니다.",
-        "메인보드 원문에 M.2와 PCIe 레인 공유 신호가 있지만, 공유 대상 슬롯·발생 조건·비활성화 여부가 없어 GPU PCIe 영향을 확정할 수 없습니다. 제조사 매뉴얼을 확인하세요.",
+        "메인보드 정보에 M.2와 PCIe 레인 공유 표기가 있지만, 공유 대상 슬롯·발생 조건·비활성화 여부가 없어 GPU PCIe 영향을 알 수 없어요. 제조사 매뉴얼을 확인하세요.",
         partIds(motherboard, gpu, ...ssds.map(({ part }) => part)),
         [
           { label: "선택한 M.2 SSD", actual: formatNumber(m2Count, "개") },
           { label: "GPU PCIe 장착 폭", actual: gpu.specs.pcieSlotWidth === undefined ? "확인 필요" : `x${gpu.specs.pcieSlotWidth}` },
           { label: "M.2 공유 범위", actual: m2LaneSharingScopes?.join(", ") ?? "PCIe" },
-          { label: "메인보드 원문 표기", actual: motherboard.specs.m2LaneSharingNote ?? "레인공유" }
+          { label: "메인보드 페이지 표기", actual: motherboard.specs.m2LaneSharingNote ?? "레인공유" }
         ],
         [action("verify_spec", "M.2·PCIe 슬롯 공유 확인", "motherboard")]
       );
@@ -3873,7 +3847,7 @@ export function evaluateBuild(
           findings,
           "hdd-interface",
           "HDD의 내부 연결 인터페이스를 확인할 수 없습니다.",
-          "HDD 원문에 SATA 연결인지 확정할 수 있는 정보가 없어 메인보드에 직접 연결 가능한지 확인해야 합니다.",
+          "HDD 정보에 SATA 연결인지 확인할 수 있는 표기가 없어 메인보드에 직접 연결 가능한지 확인해야 합니다.",
           partIds(motherboard, ...unknownHddInterfaces.map(({ part }) => part)),
           ["HDD interface"],
           "hdd"
@@ -3929,7 +3903,7 @@ export function evaluateBuild(
         findings,
         "case-hdd-bays",
         "케이스와 HDD 장착 공간 정보를 확인할 수 없습니다.",
-        "HDD를 실제로 장착할 수 있는지 확정할 수 없습니다.",
+        "HDD를 실제로 장착할 수 있는지 알 수 없어요.",
         partIds(computerCase, ...hdds.map(({ part }) => part)),
         ["3.5-inch bays"],
         "case"
@@ -3958,7 +3932,7 @@ export function evaluateBuild(
         findings,
         "case-motherboard-form-factor",
         "케이스의 메인보드 규격 정보를 확인할 수 없습니다.",
-        "선택한 메인보드가 케이스에 들어가는지 확정할 수 없습니다.",
+        "선택한 메인보드가 케이스에 들어가는지 알 수 없어요.",
         partIds(motherboard, computerCase),
         ["supported motherboard form factors"],
         "case"
@@ -3988,7 +3962,7 @@ export function evaluateBuild(
         findings,
         "case-fan-headers",
         "케이스 팬과 메인보드 팬 헤더 정보를 확인할 수 없습니다.",
-        "케이스 기본 팬은 확인됐지만 메인보드 팬 헤더가 없어 직접 연결 가능 여부를 확정할 수 없습니다. 팬 허브 포함 여부도 확인하세요.",
+        "케이스 기본 팬은 확인됐지만 메인보드 팬 헤더가 없어 직접 연결 가능 여부를 알 수 없어요. 팬 허브 포함 여부도 확인하세요.",
         partIds(motherboard, computerCase),
         ["motherboard fan headers"],
         "motherboard"
@@ -4015,7 +3989,7 @@ export function evaluateBuild(
         findings,
         "case-rgb-headers",
         "케이스 RGB 장치와 메인보드 RGB 헤더 정보를 확인할 수 없습니다.",
-        "RGB 장치를 연결할 헤더 또는 기본 RGB 컨트롤러 정보를 확인할 수 없어 연결 가능 여부를 확정할 수 없습니다.",
+        "RGB 장치를 연결할 헤더 또는 기본 RGB 컨트롤러 정보를 확인할 수 없어 연결 가능 여부를 알 수 없어요.",
         partIds(motherboard, computerCase),
         ["motherboard RGB/ARGB headers"],
         "motherboard"
@@ -4049,7 +4023,7 @@ export function evaluateBuild(
           findings,
           "case-rgb-voltage",
           "케이스 RGB 전압과 메인보드 헤더 전압을 확인할 수 없습니다.",
-          "케이스 RGB 장치 타입은 확인됐지만 메인보드의 5V ARGB·12V RGB 헤더별 정보가 부족해 안전한 연결 여부를 확정할 수 없습니다.",
+          "케이스 RGB 장치 타입은 확인됐지만 메인보드의 5V ARGB·12V RGB 헤더별 정보가 부족해 안전한 연결 여부를 알 수 없어요.",
           partIds(motherboard, computerCase),
           ["motherboard RGB header voltage"],
           "motherboard"
@@ -4060,7 +4034,7 @@ export function evaluateBuild(
           "case-rgb-voltage",
           "warning",
           "케이스 RGB 장치와 메인보드 헤더 전압이 맞지 않을 수 있습니다.",
-          "케이스 RGB 장치에 필요한 전압의 메인보드 헤더가 확인되지 않았습니다. 5V ARGB와 12V RGB를 혼용하지 말고 전용 컨트롤러의 전압을 제조사 원문에서 확인하세요.",
+          "케이스 RGB 장치에 필요한 전압의 메인보드 헤더가 확인되지 않았습니다. 5V ARGB와 12V RGB를 혼용하지 말고 전용 컨트롤러의 전압을 제조사 페이지에서 확인해 주세요.",
           partIds(motherboard, computerCase),
           [
             { label: "케이스 RGB 전압", actual: caseRgbVoltage === "mixed" ? "5V + 12V" : caseRgbVoltage },
@@ -4081,7 +4055,7 @@ export function evaluateBuild(
         findings,
         "cpu-cooler-socket",
         "CPU 쿨러의 소켓 호환 정보를 확인할 수 없습니다.",
-        "쿨러 장착 브라켓 정보를 확인할 수 없어 장착 가능 여부를 확정할 수 없습니다.",
+        "쿨러 장착 브라켓 정보를 확인할 수 없어 장착 가능 여부를 알 수 없어요.",
         partIds(cpu, cooler),
         ["cooler supported sockets"],
         "cooler"
@@ -4153,7 +4127,7 @@ export function evaluateBuild(
           findings,
           "case-radiator-support",
           "수랭 쿨러와 케이스의 라디에이터 지원 정보를 확인할 수 없습니다.",
-          "라디에이터 크기 또는 케이스 지원 규격 데이터가 부족해 장착 가능 여부를 확정할 수 없습니다.",
+          "라디에이터 크기 또는 케이스 지원 규격 데이터가 부족해 장착 가능 여부를 알 수 없어요.",
           partIds(cooler, computerCase),
           [radiatorSize === undefined ? "radiator size" : "case radiator support"],
           "case"
@@ -4164,7 +4138,7 @@ export function evaluateBuild(
           "case-radiator-support",
           "unknown",
           "수랭 쿨러의 라디에이터 장착 위치를 확인할 수 없습니다.",
-          "케이스의 위치별 라디에이터 지원 정보는 확인됐지만 쿨러의 장착 위치가 원문에 없어 실제 장착 여부를 확정할 수 없습니다.",
+          "케이스의 위치별 라디에이터 지원 정보는 확인됐지만 쿨러의 장착 위치 정보가 없어 실제 장착 여부를 알 수 없어요.",
           partIds(cooler, computerCase),
           [
             { label: "라디에이터 크기", actual: formatNumber(radiatorSize, "mm") },
@@ -4250,7 +4224,7 @@ export function evaluateBuild(
         findings,
         "gpu-case-length",
         "그래픽카드와 케이스의 길이 정보를 확인할 수 없습니다.",
-        "그래픽카드가 케이스에 들어가는지 확정할 수 없습니다.",
+        "그래픽카드가 케이스에 들어가는지 알 수 없어요.",
         partIds(gpu, computerCase),
         ["GPU length", "maximum GPU length"],
         "case"
@@ -4276,7 +4250,7 @@ export function evaluateBuild(
         findings,
         "gpu-thickness",
         "그래픽카드 두께 정보를 확인할 수 없습니다.",
-        "그래픽카드 두께 원문이 없어 인접 슬롯·케이스 구조물 간섭 여부를 확정할 수 없습니다.",
+        "그래픽카드 두께 정보가 없어 인접 슬롯·케이스 구조물 간섭 여부를 알 수 없어요.",
         partIds(gpu, computerCase, motherboard),
         ["GPU thickness"],
         "case"
@@ -4287,7 +4261,7 @@ export function evaluateBuild(
         "gpu-thickness",
         "warning",
         "그래픽카드 두께가 두꺼워 주변 슬롯 간섭을 확인해야 합니다.",
-        "두꺼운 그래픽카드는 메인보드 인접 슬롯이나 케이스 측면·전면 구조물과 간섭할 수 있습니다. 실제 슬롯 점유 수와 케이스 여유를 제조사 원문에서 확인하세요.",
+        "두꺼운 그래픽카드는 메인보드 인접 슬롯이나 케이스 측면·전면 구조물과 간섭할 수 있습니다. 실제 슬롯 점유 수와 케이스 여유를 제조사 페이지에서 확인해 주세요.",
         partIds(gpu, computerCase, motherboard),
         [
           { label: "그래픽카드 두께", actual: formatNumber(gpuThickness, "mm") },
@@ -4304,8 +4278,8 @@ export function evaluateBuild(
           findings,
           "gpu-cable-clearance",
           "unknown",
-          "GPU 전원 케이블 측면 여유를 확정할 수 없습니다.",
-          "GPU가 요구하는 케이블 굽힘 여유와 케이스 측면 여유 중 하나가 확인되지 않아 전원 케이블 간섭을 확정할 수 없습니다.",
+          "GPU 전원 케이블 측면 여유를 알 수 없어요.",
+          "GPU가 요구하는 케이블 굽힘 여유와 케이스 측면 여유 중 하나가 확인되지 않아 전원 케이블 간섭을 알 수 없어요.",
           partIds(gpu, computerCase),
           [
             { label: "GPU 케이블 굽힘 여유", actual: gpuCableBendClearance === undefined ? "확인 필요" : formatNumber(gpuCableBendClearance, "mm") },
@@ -4340,7 +4314,7 @@ export function evaluateBuild(
         findings,
         "psu-case-length",
         "파워서플라이와 케이스의 장착 길이를 확인할 수 없습니다.",
-        "파워서플라이 깊이 또는 케이스의 허용 파워 장착 길이 원문이 부족해 물리적 장착 여부를 확정할 수 없습니다.",
+        "파워서플라이 깊이 또는 케이스의 허용 파워 장착 길이 정보가 부족해 물리적 장착 여부를 알 수 없어요.",
         partIds(psu, computerCase),
         [psuDepth === undefined ? "PSU depth" : "", maxPsuLength === undefined ? "case maximum PSU length" : ""].filter(Boolean),
         "case"
@@ -4368,7 +4342,7 @@ export function evaluateBuild(
         findings,
         "psu-case-form-factor",
         "파워서플라이와 케이스의 규격 정보를 확인할 수 없습니다.",
-        "파워서플라이 규격 또는 케이스가 지원하는 파워 규격 원문이 부족해 호환 여부를 확정할 수 없습니다.",
+        "파워서플라이 규격 또는 케이스가 지원하는 파워 규격 정보가 부족해 호환 여부를 알 수 없어요.",
         partIds(psu, computerCase),
         [!psuFormFactor ? "PSU form factor" : "", !supportedPsuFormFactors || supportedPsuFormFactors.length === 0 ? "case supported PSU form factors" : ""].filter(Boolean),
         "case"
@@ -4400,7 +4374,7 @@ export function evaluateBuild(
         findings,
         "gpu-psu-power",
         "그래픽카드와 파워서플라이 전력 정보를 확인할 수 없습니다.",
-        "전력 공급 여유를 확정할 수 없습니다.",
+        "전력 공급 여유를 알 수 없어요.",
         partIds(gpu, psu, cpu),
         ["GPU power", "recommended PSU wattage", "PSU wattage"],
         "psu"
@@ -4431,7 +4405,7 @@ export function evaluateBuild(
         findings,
         "gpu-psu-connector",
         "그래픽카드와 파워서플라이 보조전원 정보를 확인할 수 없습니다.",
-        "보조전원 커넥터 원문이 양쪽 모두 부족해 케이블 연결 가능 여부를 확정할 수 없습니다.",
+        "보조전원 커넥터 정보가 양쪽 모두 부족해 케이블 연결 가능 여부를 알 수 없어요.",
         partIds(gpu, psu),
         ["GPU PCIe power connector", "PSU PCIe power connectors"],
         "psu"
@@ -4441,7 +4415,7 @@ export function evaluateBuild(
           findings,
           "gpu-psu-connector",
           "그래픽카드 보조전원 정보를 확인할 수 없습니다.",
-          "파워서플라이 커넥터 정보는 확인됐지만 그래픽카드가 요구하는 PCIe 보조전원 규격 원문이 부족합니다.",
+          "파워서플라이 커넥터 정보는 확인됐지만 그래픽카드가 요구하는 PCIe 보조전원 규격 정보가 부족해요.",
           partIds(gpu, psu),
           ["GPU PCIe power connector"],
           "gpu"
@@ -4451,7 +4425,7 @@ export function evaluateBuild(
           findings,
           "gpu-psu-connector",
           "파워서플라이 보조전원 정보를 확인할 수 없습니다.",
-          "그래픽카드가 요구하는 PCIe 보조전원은 확인됐지만 파워서플라이의 제공 커넥터 원문이 부족합니다.",
+          "그래픽카드가 요구하는 PCIe 보조전원은 확인됐지만 파워서플라이의 제공 커넥터 정보가 부족해요.",
           partIds(gpu, psu),
           ["PSU PCIe power connectors"],
           "psu"
@@ -4463,14 +4437,14 @@ export function evaluateBuild(
             findings,
             "gpu-psu-connector",
             "unknown",
-            "그래픽카드와 파워서플라이 보조전원 연결을 확정할 수 없습니다.",
-            "일부 커넥터 규격 또는 어댑터 경로가 확인되지 않아 실제 연결 가능 여부를 제조사 원문에서 확인해야 합니다.",
+            "그래픽카드와 파워서플라이 보조전원 연결을 알 수 없어요.",
+            "일부 커넥터 규격 또는 어댑터 경로가 확인되지 않아 실제 연결 가능 여부를 제조사 페이지에서 확인해야 합니다.",
             partIds(gpu, psu),
             [
               { label: "GPU 요구 전원", actual: formatPciePowerOptions(gpuPowerOptions) },
               { label: "PSU 확인 커넥터", actual: formatPciePowerConnectors(psuPowerConnectors) }
             ],
-            [action("verify_spec", "보조전원 커넥터 원문 확인", "psu")]
+            [action("verify_spec", "보조전원 커넥터 정보 확인", "psu")]
           );
         } else if (connectorStatus === "blocker") {
           addFinding(
@@ -4525,7 +4499,7 @@ export function evaluateBuild(
       "파워서플라이의 일부 스펙을 확인할 수 없습니다.",
       "현재 데이터만으로는 전력 공급 안정성을 완전히 확인할 수 없습니다. 제조사 공식 스펙을 확인해 주세요.",
       [psu.id],
-      psu.missingFields.map((field) => ({ label: "확인되지 않은 항목", actual: field })),
+      psu.missingFields.map((field) => ({ label: "확인되지 않은 항목", actual: catalogMissingFieldLabelFor(field) })),
       [action("verify_spec", "파워서플라이 스펙 확인", "psu"), replaceAction("psu")]
     );
   }
@@ -4848,7 +4822,7 @@ function analyzeBuild(
       message: "호환성은 별도로 통과했지만 게임 옵션·텍스처 설정에 따라 선택한 해상도에서 VRAM 여유가 부족할 수 있습니다.",
       actual: `현재 ${formatTargetVram(gpuTarget.currentVramGb)}`,
       limit: `${GAMING_RESOLUTION_LABELS[gpuTarget.resolution]} 권장 ${gpuTarget.targetVramGb}GB`,
-      action: "권장 VRAM을 충족하는 GPU 후보 비교"
+      action: "권장 VRAM을 충족하는 GPU 부품 비교"
     });
   }
   if (gpuTarget?.currentFit === "unknown") {
@@ -4857,10 +4831,10 @@ function analyzeBuild(
       severity: "info",
       category: "gpu",
       title: "선택한 해상도의 GPU VRAM을 확인해야 합니다.",
-      message: "카탈로그에 VRAM이 없어 해상도별 권장 기준 충족 여부를 확정하지 않습니다.",
+      message: "카탈로그에 VRAM이 없어 해상도별 권장 기준 충족 여부를 정하지 않아요.",
       actual: "현재 VRAM 확인 불가",
       limit: `${GAMING_RESOLUTION_LABELS[gpuTarget.resolution]} 권장 ${gpuTarget.targetVramGb}GB`,
-      action: "GPU 제조사 원문에서 VRAM 확인"
+      action: "GPU 제조사 페이지에서 VRAM 확인"
     });
   }
 
@@ -4975,8 +4949,8 @@ function analyzeBuild(
 
   const sortedBottlenecks = bottlenecks.sort((a, b) => ({ critical: 0, warning: 1, info: 2 }[a.severity] - { critical: 0, warning: 1, info: 2 }[b.severity]));
   const nextActions = [...sortedBottlenecks.map((item) => item.action).filter((item): item is string => Boolean(item))];
-  if (balance?.status === "cpu_limited") nextActions.push("CPU·GPU 상대 점수 차이를 확인하고 CPU 업그레이드 후보를 먼저 비교해 보세요.");
-  if (balance?.status === "gpu_limited") nextActions.push("CPU·GPU 상대 점수 차이를 확인하고 GPU 업그레이드 후보를 먼저 비교해 보세요.");
+  if (balance?.status === "cpu_limited") nextActions.push("CPU·GPU 상대 점수 차이를 확인하고 CPU 업그레이드 부품을 먼저 비교해 보세요.");
+  if (balance?.status === "gpu_limited") nextActions.push("CPU·GPU 상대 점수 차이를 확인하고 GPU 업그레이드 부품을 먼저 비교해 보세요.");
   for (const factor of factors.filter((item) => item.score !== undefined && item.score < 45)) {
     nextActions.push(`${factor.label}의 카탈로그 상대 점수(${factor.score}점)를 우선 비교해 보세요.`);
   }
@@ -5306,17 +5280,17 @@ export function generateBuildDraft(catalog: Part[], request: BuildGenerationRequ
   if (missingPools.length > 0) {
     throw new BuildGenerationError(`자동 구성에 필요한 확인된 데이터가 부족합니다: ${missingPools.join(", ")}`, [{
       id: "candidate-pools",
-      title: "자동 구성에 필요한 후보 데이터가 부족합니다.",
-      summary: `요청 조건에서 ${missingPools.join(", ")} 후보를 확인된 가격·필수 스펙 기준으로 찾지 못했습니다.`,
+      title: "자동 구성에 필요한 부품 데이터가 부족합니다.",
+      summary: `요청 조건에서 ${missingPools.join(", ")} 부품을 확인된 가격·필수 스펙 기준으로 찾지 못했습니다.`,
       facts: [
-        { label: "CPU 후보", value: `${cpuPool.parts.length}개` },
-        { label: "메인보드 후보", value: `${motherboardPool.parts.length}개` },
-        { label: "RAM 후보", value: `${memoryPool.parts.length}개` },
-        { label: "GPU 후보", value: `${gpuPool?.parts.length ?? 0}개` },
-        { label: "SSD 후보", value: `${ssdPool.parts.length}개` },
-        { label: "PSU 후보", value: `${psuPool.parts.length}개` }
+        { label: "CPU 부품", value: `${cpuPool.parts.length}개` },
+        { label: "메인보드 부품", value: `${motherboardPool.parts.length}개` },
+        { label: "RAM 부품", value: `${memoryPool.parts.length}개` },
+        { label: "GPU 부품", value: `${gpuPool?.parts.length ?? 0}개` },
+        { label: "SSD 부품", value: `${ssdPool.parts.length}개` },
+        { label: "PSU 부품", value: `${psuPool.parts.length}개` }
       ],
-      recommendation: "구매 조건·용량·외장 GPU 포함 여부를 조정하거나 후보 데이터가 보강된 뒤 다시 시도해 주세요."
+      recommendation: "구매 조건·용량·외장 GPU 포함 여부를 조정하거나 부품 데이터가 보강된 뒤 다시 시도해 주세요."
     }]);
   }
 
@@ -5327,19 +5301,19 @@ export function generateBuildDraft(catalog: Part[], request: BuildGenerationRequ
     capabilityScore: 0
   };
   let states = expandGeneratorStates([base], "cpu", () => preferBudgetCandidates(cpuPool.parts.filter((part) => request.includeGpu || part.specs.integratedGraphics === true), request.budgetWon, 0.35), cpuPool.scores, profile, request.budgetWon, undefined, Math.max(160, cpuPool.parts.length));
-  if (states.length === 0) throw new Error("선택한 사용 목적에 맞는 CPU 후보를 찾지 못했습니다.");
+  if (states.length === 0) throw new Error("선택한 사용 목적에 맞는 CPU 부품을 찾지 못했습니다.");
   states = expandGeneratorStates(states, "motherboard", (state) => {
     const cpu = state.parts.cpu;
     return cpu ? preferBudgetCandidates(motherboardPool.parts.filter((part) => generatorCpuCanUseMotherboard(cpu, part)), request.budgetWon, 0.2) : [];
   }, motherboardPool.scores, profile, request.budgetWon);
   const cpuMotherboardPairCount = cpuPool.parts.reduce((total, cpu) => total + motherboardPool.parts.filter((motherboard) => generatorCpuCanUseMotherboard(cpu, motherboard)).length, 0);
-  requireGeneratorStates(states, "CPU와 소켓·전원부가 맞는 메인보드 후보를 찾지 못했습니다.", [{
+  requireGeneratorStates(states, "CPU와 소켓·전원부가 맞는 메인보드 부품을 찾지 못했습니다.", [{
     id: "cpu-motherboard-pair",
     title: "CPU와 메인보드의 호환쌍이 남지 않았습니다.",
-    summary: "현재 후보에서 소켓·메모리 타입·전원부를 동시에 만족하는 연결을 먼저 찾지 못했습니다.",
+    summary: "현재 부품에서 소켓·메모리 타입·전원부를 동시에 만족하는 연결을 먼저 찾지 못했습니다.",
     facts: [
-      { label: "CPU 후보", value: `${cpuPool.parts.length}개` },
-      { label: "메인보드 후보", value: `${motherboardPool.parts.length}개` },
+      { label: "CPU 부품", value: `${cpuPool.parts.length}개` },
+      { label: "메인보드 부품", value: `${motherboardPool.parts.length}개` },
       { label: "호환쌍", value: `${cpuMotherboardPairCount}개` }
     ],
     recommendation: "구매 조건을 넓히거나 다른 CPU·메인보드 조합을 선택해 다시 시도해 주세요."
@@ -5349,39 +5323,39 @@ export function generateBuildDraft(catalog: Part[], request: BuildGenerationRequ
     const cpu = state.parts.cpu;
     return motherboard ? preferBudgetCandidates(memoryPool.parts.filter((part) => generatorMemoryCanUseMotherboard(part, motherboard, cpu)), request.budgetWon, 0.16, 2) : [];
   }, memoryPool.scores, profile, request.budgetWon);
-  requireGeneratorStates(states, `${memoryCapacityGb}GB 이상이며 메인보드와 규격·용량·속도가 맞는 RAM 후보를 찾지 못했습니다.`, [{
+  requireGeneratorStates(states, `${memoryCapacityGb}GB 이상이며 메인보드와 규격·용량·속도가 맞는 RAM 부품을 찾지 못했습니다.`, [{
     id: "memory-motherboard-fit",
     title: "요청 RAM 조건을 만족하는 메인보드 연결이 없습니다.",
-    summary: "RAM 용량·속도·프로파일·물리 모듈 수와 CPU·메인보드 상한을 함께 통과하는 후보가 남지 않았습니다.",
+    summary: "RAM 용량·속도·프로파일·물리 모듈 수와 CPU·메인보드 상한을 함께 통과하는 부품이 남지 않았습니다.",
     facts: [
-      { label: "RAM 후보", value: `${memoryPool.parts.length}개` },
+      { label: "RAM 부품", value: `${memoryPool.parts.length}개` },
       { label: "요청 용량", value: `${memoryCapacityGb}GB 이상` },
       { label: "기본 킷 수량", value: "2개" }
     ],
-    recommendation: "RAM 목표 용량·속도 조건을 낮추거나 메인보드 후보를 바꿔 다시 시도해 주세요."
+    recommendation: "RAM 목표 용량·속도 조건을 낮추거나 메인보드 부품을 바꿔 다시 시도해 주세요."
   }]);
   states = expandGeneratorStates(states, "cooler", (state) => {
     const cpu = state.parts.cpu;
     return cpu ? preferBudgetCandidates(coolerPool.parts.filter((part) => generatorCoolerCanUseCpu(part, cpu)), request.budgetWon, 0.1) : [];
   }, coolerPool.scores, profile, request.budgetWon);
-  requireGeneratorStates(states, "CPU 소켓·발열과 맞는 CPU 쿨러 후보를 찾지 못했습니다.", [{
+  requireGeneratorStates(states, "CPU 소켓·발열과 맞는 CPU 쿨러 부품을 찾지 못했습니다.", [{
     id: "cpu-cooler-fit",
     title: "CPU의 소켓·발열 조건을 만족하는 쿨러가 없습니다.",
-    summary: "현재 CPU 후보와 쿨러 후보의 지원 소켓·최대 냉각 용량을 함께 통과하지 못했습니다.",
+    summary: "현재 CPU 부품과 쿨러 부품의 지원 소켓·최대 냉각 용량을 함께 통과하지 못했습니다.",
     facts: [
-      { label: "CPU 후보 상태", value: `${states.length}개 조합` },
-      { label: "쿨러 후보", value: `${coolerPool.parts.length}개` }
+      { label: "CPU 부품 상태", value: `${states.length}개 조합` },
+      { label: "쿨러 부품", value: `${coolerPool.parts.length}개` }
     ],
-    recommendation: "CPU 쿨러 후보를 확인하거나 사용 목적·예산 조건을 조정해 주세요."
+    recommendation: "CPU 쿨러 부품을 확인하거나 사용 목적·예산 조건을 조정해 주세요."
   }]);
   if (request.includeGpu && gpuPool) {
     states = expandGeneratorStates(states, "gpu", (state) => preferBudgetCandidates(gpuPool.parts, request.budgetWon, 0.6), gpuPool.scores, profile, request.budgetWon);
-    requireGeneratorStates(states, "외장 그래픽카드와 앞선 부품 조건을 함께 만족하는 후보를 찾지 못했습니다.", [{
+    requireGeneratorStates(states, "외장 그래픽카드와 앞선 부품 조건을 함께 만족하는 부품을 찾지 못했습니다.", [{
       id: "gpu-fit",
       title: "앞선 부품과 함께 사용할 그래픽카드가 없습니다.",
-      summary: "GPU 후보를 연결한 뒤 케이스 장착 길이·전력 조건을 적용하기 전에 조합이 남지 않았습니다.",
+      summary: "GPU 부품을 연결한 뒤 케이스 장착 길이·전력 조건을 적용하기 전에 조합이 남지 않았습니다.",
       facts: [
-        { label: "GPU 후보 풀", value: `${gpuPool.parts.length}개` },
+        { label: "GPU 부품 풀", value: `${gpuPool.parts.length}개` },
         { label: "외장 GPU", value: "포함" }
       ],
       recommendation: "외장 GPU를 제외하거나 구매 조건·예산을 조정해 다시 시도해 주세요."
@@ -5393,12 +5367,12 @@ export function generateBuildDraft(catalog: Part[], request: BuildGenerationRequ
     if (!motherboard || !cooler) return [];
     return preferBudgetCandidates(casePool.parts.filter((part) => generatorCaseCanUseParts(part, motherboard, cooler, state.parts.gpu, hddCount)), request.budgetWon, 0.15);
   }, casePool.scores, profile, request.budgetWon);
-  requireGeneratorStates(states, "메인보드·쿨러·저장장치·GPU가 들어가는 케이스 후보를 찾지 못했습니다.", [{
+  requireGeneratorStates(states, "메인보드·쿨러·저장장치·GPU가 들어가는 케이스 부품을 찾지 못했습니다.", [{
     id: "case-fit",
     title: "선택한 부품을 함께 수용하는 케이스가 없습니다.",
     summary: "메인보드 폼팩터·쿨러 높이·GPU 길이·파워 길이와 요청 저장장치 조건을 동시에 만족하는 케이스가 남지 않았습니다.",
     facts: [
-      { label: "케이스 후보", value: `${casePool.parts.length}개` },
+      { label: "케이스 부품", value: `${casePool.parts.length}개` },
       { label: "GPU 포함", value: request.includeGpu ? "예" : "아니오" },
       { label: "HDD 요청", value: `${hddCount}개` }
     ],
@@ -5417,9 +5391,9 @@ export function generateBuildDraft(catalog: Part[], request: BuildGenerationRequ
     summary: "SSD 용량·인터페이스·PCIe 세대와 메인보드 슬롯·SATA 포트, 요청한 HDD 수량을 함께 확인했지만 조합이 남지 않았습니다.",
     facts: [
       { label: "요청 SSD", value: `${storageCapacityGb.toLocaleString("ko-KR")}GB 이상` },
-      { label: "SSD 후보 풀", value: `${ssdPool.parts.length}개` },
+      { label: "SSD 부품 풀", value: `${ssdPool.parts.length}개` },
       { label: "요청 HDD", value: `${hddCount}개` },
-      { label: "후보 메인보드", value: [...new Set(statesBeforeSsd.map((state) => state.parts.motherboard?.id).filter((id): id is string => Boolean(id)))].length + "개" }
+      { label: "부품 메인보드", value: [...new Set(statesBeforeSsd.map((state) => state.parts.motherboard?.id).filter((id): id is string => Boolean(id)))].length + "개" }
     ],
     recommendation: "SSD 목표 용량을 낮추거나 HDD 수량을 줄여 SATA·M.2 연결 여유를 확보해 주세요."
   }]);
@@ -5439,19 +5413,19 @@ export function generateBuildDraft(catalog: Part[], request: BuildGenerationRequ
       facts: [
         { label: "요청 HDD", value: `${hddCount}개` },
         { label: "요청 용량", value: `${hddCapacityGb.toLocaleString("ko-KR")}GB 이상` },
-        { label: "HDD 후보 풀", value: `${hddPool?.parts.length ?? 0}개` },
+        { label: "HDD 부품 풀", value: `${hddPool?.parts.length ?? 0}개` },
         { label: "앞선 조합", value: `${statesBeforeHdd.length}개` }
       ],
       recommendation: "HDD 수량·용량을 낮추거나 SATA 포트와 베이가 더 많은 메인보드·케이스를 선택해 주세요."
     }]);
   }
   states = expandGeneratorStates(states, "psu", (state) => preferBudgetCandidates(psuPool.parts.filter((part) => generatorPsuCanUseGpu(part, state.parts.gpu)), request.budgetWon, 0.25), psuPool.scores, profile, request.budgetWon);
-  requireGeneratorStates(states, "그래픽카드와 시스템 전력에 맞는 파워서플라이 후보를 찾지 못했습니다.", [{
+  requireGeneratorStates(states, "그래픽카드와 시스템 전력에 맞는 파워서플라이 부품을 찾지 못했습니다.", [{
     id: "gpu-psu-fit",
     title: "그래픽카드와 시스템 전력에 맞는 파워가 없습니다.",
     summary: "그래픽카드 권장 파워 용량과 파워서플라이 정격 출력 조건을 함께 만족하지 못했습니다.",
     facts: [
-      { label: "파워 후보", value: `${psuPool.parts.length}개` },
+      { label: "파워 부품", value: `${psuPool.parts.length}개` },
       { label: "외장 GPU", value: request.includeGpu ? "포함" : "미포함" }
     ],
     recommendation: "그래픽카드를 낮추거나 더 높은 정격 출력의 파워서플라이를 선택해 주세요."
@@ -5501,7 +5475,7 @@ export function generateBuildDraft(catalog: Part[], request: BuildGenerationRequ
     .filter((finding) => finding.severity === "warning" || finding.severity === "unknown" || finding.severity === "blocker")
     .map((finding) => finding.title);
   if (gpuTarget?.currentFit === "partial") warnings.unshift(`${gpuTarget.summary}. 목표 해상도에 맞는 VRAM이 부족할 수 있습니다.`);
-  if (gpuTarget?.currentFit === "unknown") warnings.unshift(`${gpuTarget.summary}. GPU VRAM을 원문에서 확인해 주세요.`);
+  if (gpuTarget?.currentFit === "unknown") warnings.unshift(`${gpuTarget.summary}. GPU VRAM을 제조사 페이지에서 확인해 주세요.`);
   if (!withinBudget) warnings.unshift(`목표 예산을 ${formatPrice(Math.abs(budgetDeltaWon))} 초과합니다.`);
   return {
     selection: chosen.state.selection,
@@ -5530,18 +5504,18 @@ export function generateBuildDraft(catalog: Part[], request: BuildGenerationRequ
     rationale: [
       profileSummaryFor(profile),
       priority === "reliability"
-        ? `${RECOMMENDATION_PRIORITY_LABELS[priority]} 기준으로 호환 결과·데이터 상태·갱신 시점·원문 연결이 확인된 후보를 먼저 정렬했습니다.`
-        : `${RECOMMENDATION_PRIORITY_LABELS[priority]} 기준으로 예산·후보 성능 점수를 정렬했습니다.`,
+        ? `${RECOMMENDATION_PRIORITY_LABELS[priority]} 기준으로 호환 결과·데이터 상태·갱신 시점·실제 페이지 연결이 확인된 부품을 먼저 정렬했습니다.`
+        : `${RECOMMENDATION_PRIORITY_LABELS[priority]} 기준으로 예산·부품 성능 점수를 정렬했습니다.`,
       request.includeGpu ? "외장 그래픽카드를 포함한 구성입니다." : "CPU 내장 그래픽을 사용하는 구성입니다.",
       request.includeGpu && profile === "gaming"
         ? `${GAMING_RESOLUTION_LABELS[gamingResolution]} · ${GAMING_REFRESH_RATE_LABELS[gamingRefreshRate]} 기준으로 권장 VRAM ${GAMING_RESOLUTION_VRAM_TARGETS[gamingResolution]}GB와 GPU·CPU 처리 스펙을 더 중요하게 반영했습니다.`
         : "게임 해상도 기준은 게이밍 프로필에서만 GPU 추천 가중치에 반영했습니다.",
-      "후보 부품을 같은 호환성 규칙으로 다시 확인한 뒤 초안으로 제공합니다.",
+      "부품을 같은 호환성 규칙으로 다시 확인한 뒤 초안으로 제공합니다.",
       `RAM ${memoryCapacityGb.toLocaleString("ko-KR")}GB 이상을 충족하는 2개 구성과 ${storageCapacityGb.toLocaleString("ko-KR")}GB 이상 SSD 1개를 기본으로 구성했습니다.`,
       hddCount > 0
         ? `${hddCapacityGb.toLocaleString("ko-KR")}GB 이상 HDD ${hddCount}개를 포함하고 메인보드 SATA 포트와 케이스 베이를 함께 확인했습니다.`
         : "HDD는 요청하지 않아 초안에서 제외했습니다.",
-      `${LISTING_POLICY_LABELS[listingPolicy]} 조건으로 후보를 제한했습니다.${listingPolicy === "retail_only" ? " 중고·해외구매·벌크 상품은 기본적으로 제외했습니다." : " 상품별 유통 조건을 구매 전에 확인해 주세요."}`
+      `${LISTING_POLICY_LABELS[listingPolicy]} 조건으로 부품을 제한했습니다.${listingPolicy === "retail_only" ? " 중고·해외구매·벌크 상품은 기본적으로 제외했습니다." : " 상품별 유통 조건을 구매 전에 확인해 주세요."}`
     ],
     warnings
   };
@@ -5558,7 +5532,7 @@ export function buildGenerationRecoveryOptionsFor(catalog: Part[], request: Buil
     addCandidate({
       id: "include-bulk",
       label: "벌크 포함으로 다시 찾기",
-      summary: "신품·정식 유통만 제한하지 않고 벌크 상품까지 후보에 포함합니다.",
+      summary: "신품·정식 유통만 제한하지 않고 벌크 상품까지 부품에 포함합니다.",
       changedFields: ["구매 조건: 벌크 포함"],
       request: { ...request, listingPolicy: "include_bulk", includeNonRetail: false }
     });
@@ -5585,7 +5559,7 @@ export function buildGenerationRecoveryOptionsFor(catalog: Part[], request: Buil
     addCandidate({
       id: `memory-${lowerMemoryCapacity}`,
       label: `RAM ${lowerMemoryCapacity}GB 기준으로 다시 찾기`,
-      summary: `RAM 목표 용량을 ${lowerMemoryCapacity}GB로 낮춰 호환 후보를 다시 탐색합니다.`,
+      summary: `RAM 목표 용량을 ${lowerMemoryCapacity}GB로 낮춰 호환 부품을 다시 탐색합니다.`,
       changedFields: [`RAM 목표: ${lowerMemoryCapacity}GB`],
       request: { ...request, memoryCapacityGb: lowerMemoryCapacity }
     });
@@ -5596,7 +5570,7 @@ export function buildGenerationRecoveryOptionsFor(catalog: Part[], request: Buil
     addCandidate({
       id: `storage-${lowerStorageCapacity}`,
       label: `SSD ${lowerStorageCapacity >= 1000 ? `${lowerStorageCapacity / 1000}TB` : `${lowerStorageCapacity}GB`} 기준으로 다시 찾기`,
-      summary: `기본 SSD 목표 용량을 ${lowerStorageCapacity.toLocaleString("ko-KR")}GB로 낮춰 호환 후보를 다시 탐색합니다.`,
+      summary: `기본 SSD 목표 용량을 ${lowerStorageCapacity.toLocaleString("ko-KR")}GB로 낮춰 호환 부품을 다시 탐색합니다.`,
       changedFields: [`SSD 목표: ${lowerStorageCapacity.toLocaleString("ko-KR")}GB`],
       request: { ...request, storageCapacityGb: lowerStorageCapacity }
     });
@@ -5627,7 +5601,7 @@ export function buildGenerationRecoveryOptionsFor(catalog: Part[], request: Buil
       addCandidate({
         id: "budget-plus-20",
         label: "예산을 20% 늘려 다시 찾기",
-        summary: `목표 예산을 ${expandedBudget.toLocaleString("ko-KR")}원으로 늘려 후보 조합을 탐색합니다.`,
+        summary: `목표 예산을 ${expandedBudget.toLocaleString("ko-KR")}원으로 늘려 부품 조합을 탐색합니다.`,
         changedFields: [`목표 예산: ${expandedBudget.toLocaleString("ko-KR")}원`],
         request: { ...request, budgetWon: expandedBudget }
       });

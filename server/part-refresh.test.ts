@@ -35,8 +35,8 @@ const danawaAccessory: AccessoryItem = {
 
 describe("part detail refresh", () => {
   it("rejects non-Danawa, malformed, and mismatched source boundaries", () => {
-    expect(partRefreshBlockReason({ ...danawaPart, source: "seed" })).toContain("다나와 원문 재확인 대상");
-    expect(partRefreshBlockReason({ ...danawaPart, danawaUrl: "https://evil.example/info/?pcode=1" })).toContain("허용된 다나와 원문");
+    expect(partRefreshBlockReason({ ...danawaPart, source: "seed" })).toContain("다나와 상품 페이지 재확인 대상");
+    expect(partRefreshBlockReason({ ...danawaPart, danawaUrl: "https://evil.example/info/?pcode=1" })).toContain("허용된 다나와 상품 페이지");
     expect(partRefreshBlockReason({ ...danawaPart, sourceProductCode: "2" })).toContain("상품 코드가 일치");
     expect(partRefreshBlockReason(danawaPart)).toBeUndefined();
   });

@@ -93,7 +93,7 @@ export function purchaseListLivePriceDecisionFor(rows: ReadonlyArray<PurchaseLis
   if (unavailableCount > 0 || errorCount > 0 || checkedCount < rows.length) {
     const unavailableText = unavailableCount + errorCount + Math.max(0, rows.length - checkedCount);
     const changes = changeSummary(base);
-    return { ...base, state: "review", label: "일부 가격 재확인 필요", summary: `가격 ${availableCount}/${rows.length}개 확인 · ${unavailableText}개는 현재 가격을 확정할 수 없습니다.${changes ? ` ${changes}.` : ""}` };
+    return { ...base, state: "review", label: "일부 가격 재확인 필요", summary: `가격 ${availableCount}/${rows.length}개 확인 · ${unavailableText}개는 현재 가격을 알 수 없어요.${changes ? ` ${changes}.` : ""}` };
   }
   if (decreasedRowCount > 0 && increasedRowCount > 0) return { ...base, state: "mixed", label: "가격 변동 혼재", summary: `${changedRowCount}개 행의 단가가 변했습니다. ${changeSummary(base)}.` };
   if (decreasedRowCount > 0) return { ...base, state: "decreased", label: "가격 인하 확인", summary: `${decreasedRowCount}개 행에서 총 ${money(decreasedTotalPriceWon)}의 가격 인하를 확인했습니다.` };

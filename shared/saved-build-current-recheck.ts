@@ -48,7 +48,7 @@ export function savedBuildCurrentRecheckExportFor(payload: SavedBuildVersionShar
       after: { id: payload.after.id, label: payload.after.label, name: payload.after.name }
     },
     entries: entries.map((entry) => ({ ...entry, current: { ...entry.current, findings: entry.current.findings.slice(0, 32), ...(entry.current.benchmark ? { benchmark: { ...entry.current.benchmark, rows: entry.current.benchmark.rows.slice(0, 4) } } : {}) } })),
-    dataBoundary: "현재 catalog 기준으로 다시 검사한 참고 결과입니다. 저장 저장본·공유 링크·원본 견적은 변경하지 않으며, 실제 가격·재고·FPS·제조사 원문·물리 장착은 별도 확인해야 합니다."
+    dataBoundary: "현재 catalog 기준으로 다시 검사한 참고 결과입니다. 저장 저장본·공유 링크·원본 견적은 변경하지 않으며, 실제 가격·재고·FPS·제조사 페이지·물리 장착은 따로 확인해야 합니다."
   };
 }
 

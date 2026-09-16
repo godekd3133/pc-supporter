@@ -36,7 +36,7 @@ function temperatureDimension(id: "cpu-temperature" | "gpu-temperature", title: 
     id,
     title,
     status,
-    summary: latest?.value === undefined ? "최신 회차 값 미기록" : delta === undefined ? `최신 ${latest.value}°C · 기준 비교 불가` : `최신 ${latest.value}°C · 기준 대비 ${delta > 0 ? "+" : ""}${delta}°C`,
+    summary: latest?.value === undefined ? "최신 회차 값 기록 없음" : delta === undefined ? `최신 ${latest.value}°C · 기준 비교 불가` : `최신 ${latest.value}°C · 기준 대비 ${delta > 0 ? "+" : ""}${delta}°C`,
     ...(baseline ? { baseline } : {}),
     ...(latest ? { latest } : {})
   };
@@ -57,7 +57,7 @@ function powerDimension(id: "cpu-power" | "gpu-power", title: string, rows: Asse
   const latest = rows.find((row) => row.runId === latestRunId);
   const delta = metricDeltaFor(latest);
   const status: AssemblyVerificationDecisionDimensionStatus = delta === undefined ? "unknown" : delta < 0 ? "observational-lower" : delta > 0 ? "observational-higher" : "unchanged";
-  return { id, title, status, summary: latest?.value === undefined ? "최신 회차 전력 미기록" : delta === undefined ? `최신 ${latest.value}W · 기준 비교 불가` : `최신 ${latest.value}W · 기준 대비 ${delta > 0 ? "+" : ""}${delta}W · 관찰 순`, ...(baseline ? { baseline } : {}), ...(latest ? { latest } : {}) };
+  return { id, title, status, summary: latest?.value === undefined ? "최신 회차 전력 기록 없음" : delta === undefined ? `최신 ${latest.value}W · 기준 비교 불가` : `최신 ${latest.value}W · 기준 대비 ${delta > 0 ? "+" : ""}${delta}W · 관찰 순`, ...(baseline ? { baseline } : {}), ...(latest ? { latest } : {}) };
 }
 
 export function assemblyVerificationDecisionSummaryFor(summary: AssemblyVerificationComparisonSummary): AssemblyVerificationDecisionSummary {

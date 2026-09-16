@@ -106,7 +106,7 @@ function priorityFor(score: number): PhysicalReviewPriority {
 function reviewReasonFor(part: Part, focusFields: string[], priorityReasons: string[], reviewStatus: PhysicalReviewStatus, freshness: DataFreshness, sourceCheckNeedsReview: boolean) {
   const reason = priorityReasons.length > 0 ? priorityReasons.join(" · ") : "일반 물리 호환 정보";
   const freshnessReason = reviewStatus === "stale" && (freshness === "stale" || freshness === "unknown")
-    ? `정보 ${DATA_FRESHNESS_LABELS[freshness]} · 제조사 원문 재확인 필요`
+    ? `정보 ${DATA_FRESHNESS_LABELS[freshness]} · 제조사 페이지 재확인 필요`
     : undefined;
   const sourceCheckReason = sourceCheckNeedsReview ? "정보 URL 접근·모델 식별 재확인 필요" : undefined;
   return [reason, freshnessReason, sourceCheckReason, `우선 확인: ${focusFields.join(" · ") || "현재 등록값 재확인"}`].filter(Boolean).join(" · ");
@@ -242,7 +242,7 @@ const commonPhysicalReviewWorkFields: PhysicalReviewWorkField[] = [
   { key: "manufacturerModel", label: "제조사 모델/SKU", type: "text", required: true, instruction: "문서가 적용되는 정확한 제조사 모델 또는 SKU를 입력합니다." },
   { key: "manufacturerRevision", label: "문서 revision", type: "text", required: false, instruction: "문서에 revision·개정일이 있을 때만 입력합니다." },
   { key: "sourceNote", label: "확인 정보 메모", type: "text", required: true, instruction: "제조사 매뉴얼 페이지·설치 가이드·케이블 표의 확인 위치를 남깁니다." },
-  { key: "sourceUrl", label: "정보 URL", type: "url", required: false, instruction: "가능하면 제조사 공식 HTTPS 원문 URL을 입력합니다." }
+  { key: "sourceUrl", label: "정보 URL", type: "url", required: false, instruction: "가능하면 제조사 공식 HTTPS 페이지 URL을 입력합니다." }
 ];
 
 const physicalReviewWorkFields: Record<PhysicalOverrideCategory, PhysicalReviewWorkField[]> = {

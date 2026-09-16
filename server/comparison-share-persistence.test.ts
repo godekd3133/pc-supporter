@@ -43,7 +43,7 @@ describe("alternative comparison persistence API", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: "GPU 후보 전체 미리 비교",
+          name: "GPU 부품 전체 미리 비교",
           category: "그래픽카드",
           currentPartName: "기존 GPU",
           currentPartSummary: "PCIe 4.0 · VRAM 8GB",

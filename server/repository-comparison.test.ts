@@ -5,7 +5,7 @@ describe("saved comparison database mapping", () => {
   it("restores snapshot metadata needed for freshness decisions", () => {
     const mapped = savedAlternativeComparisonFromDatabaseRow({
       id: "comparison-db-1",
-      name: "GPU 후보 비교",
+      name: "GPU 부품 비교",
       category: "gpu",
       current_part_name: "기존 GPU",
       current_part_summary: "PCIe 4.0 · VRAM 8GB",

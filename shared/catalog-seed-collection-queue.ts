@@ -104,7 +104,7 @@ function searchUrlFor(query: string, searchBaseUrl: string) {
 function instructionsFor(action: CatalogSeedCollectionQueueAction, categoryLiveCount: number) {
   if (action === "recheck_mapping") return "기존 승인 상품 코드가 현재 catalog에서 사라졌습니다. 새 다나와 상품 코드를 다시 확인하세요.";
   if (action === "collect_category") return "현재 범주에 live 상품이 없습니다. 해당 범주의 목록·상세 수집을 먼저 실행하세요.";
-  return `현재 범주에 live 상품 ${categoryLiveCount.toLocaleString("ko-KR")}개가 있지만 일치 후보가 없습니다. 모델명으로 검색한 뒤 목록·상세 수집을 실행하세요.`;
+  return `현재 범주에 live 상품 ${categoryLiveCount.toLocaleString("ko-KR")}개가 있지만 일치 부품이 없습니다. 모델명으로 검색한 뒤 목록·상세 수집을 실행하세요.`;
 }
 
 function fnv1a(value: string) {

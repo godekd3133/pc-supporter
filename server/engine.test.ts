@@ -384,7 +384,7 @@ describe("compatibility engine", () => {
     expect(result.analysis.focusAreas).toEqual(expect.arrayContaining([
       expect.objectContaining({ category: "cpu", score: expect.any(Number), title: "CPU 보완" })
     ]));
-    expect(result.analysis.nextActions).toContain("CPU·GPU 상대 점수 차이를 확인하고 CPU 업그레이드 후보를 먼저 비교해 보세요.");
+    expect(result.analysis.nextActions).toContain("CPU·GPU 상대 점수 차이를 확인하고 CPU 업그레이드 부품을 먼저 비교해 보세요.");
   });
 
   it("surfaces unknown GPU VRAM as an analysis signal without changing compatibility status", () => {
@@ -397,7 +397,7 @@ describe("compatibility engine", () => {
     expect(result.analysis.bottlenecks).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: "gpu-target-vram-unknown", severity: "info" })
     ]));
-    expect(result.analysis.nextActions).toContain("GPU 제조사 원문에서 VRAM 확인");
+    expect(result.analysis.nextActions).toContain("GPU 제조사 페이지에서 VRAM 확인");
   });
 
   it("skips the presentation analysis on internal candidate evaluations", () => {
@@ -521,7 +521,7 @@ describe("compatibility engine", () => {
     expect(result.analysis.bottlenecks).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: "gpu-target-vram", severity: "warning", category: "gpu" })
     ]));
-    expect(result.analysis.nextActions).toContain("권장 VRAM을 충족하는 GPU 후보 비교");
+    expect(result.analysis.nextActions).toContain("권장 VRAM을 충족하는 GPU 부품 비교");
     expect(recommendation?.gpuTarget).toMatchObject({
       resolution: "1440p",
       targetVramGb: 12,
@@ -861,7 +861,7 @@ describe("compatibility engine", () => {
 
     expect(finding?.severity).toBe("unknown");
     expect(finding?.facts).toEqual(expect.arrayContaining([
-      expect.objectContaining({ label: "메인보드 원문 표기", actual: "PCIe 레인공유" })
+      expect.objectContaining({ label: "메인보드 페이지 표기", actual: "PCIe 레인공유" })
     ]));
     expect(result.links.find((link) => link.id === "motherboard-ssd")?.status).toBe("compatible");
     expect(result.links.find((link) => link.id === "motherboard-gpu")?.status).toBe("unknown");
@@ -1031,7 +1031,7 @@ describe("compatibility engine", () => {
     const candidateWithoutProof: Part = {
       ...basePsu,
       id: "psu-topology-candidate-no-proof",
-      name: "연결 방식 정보 없는 후보 PSU",
+      name: "연결 방식 정보 없는 부품 PSU",
       specs: { ...basePsu.specs, psuIndependentPcieCableRuns: undefined, psuPcieCableTopology: undefined }
     };
     const finding = evaluateBuild(fixture.build, catalog, { includeSuggestions: false }).findings.find((item) => item.ruleId === "gpu-psu-cable-topology");
@@ -1050,7 +1050,7 @@ describe("compatibility engine", () => {
     const verifiedCandidate: Part = {
       ...basePsu,
       id: "psu-topology-candidate-verified",
-      name: "독립 케이블 확인 후보 PSU",
+      name: "독립 케이블 확인 부품 PSU",
       specs: { ...basePsu.specs, psuIndependentPcieCableRuns: 2, psuPcieCableTopology: "independent" as const }
     };
     const finding = evaluateBuild(fixture.build, catalog, { includeSuggestions: false }).findings.find((item) => item.ruleId === "gpu-psu-cable-topology");
@@ -1066,7 +1066,7 @@ describe("compatibility engine", () => {
     const candidate: Part = {
       ...basePsu,
       id: "psu-picker-physical-evidence",
-      name: "장착 정보가 표시되는 후보 PSU",
+      name: "장착 정보가 표시되는 부품 PSU",
       specs: {
         ...basePsu.specs,
         psuIndependentPcieCableRuns: 2,
@@ -1237,7 +1237,7 @@ describe("compatibility engine", () => {
     const finding = result.findings.find((item) => item.ruleId === "case-fan-headers");
 
     expect(finding?.severity).toBe("unknown");
-    expect(finding?.message).toContain("확정할 수 없습니다");
+    expect(finding?.message).toContain("알 수 없어요");
     expect(result.status).toBe("needs_review");
   });
 
@@ -1346,7 +1346,7 @@ describe("compatibility engine", () => {
     };
     expect(assessAlternativePart(matched.build, [...matched.catalog, unknownGenerationSsd], "ssd", unknownGenerationSsd)).toMatchObject({
       risk: "review",
-      reasons: ["후보 NVMe M.2 SSD의 PCIe 세대가 확인되지 않습니다."]
+      reasons: ["부품 NVMe M.2 SSD의 PCIe 세대가 확인되지 않습니다."]
     });
 
     const mixedGenerations = m2PcieGenerationFixture([4, 5], 5);
@@ -1619,7 +1619,7 @@ describe("compatibility engine", () => {
     const finding = result.findings.find((item) => item.ruleId === "case-rgb-headers");
 
     expect(finding?.severity).toBe("unknown");
-    expect(finding?.message).toContain("확정할 수 없습니다");
+    expect(finding?.message).toContain("알 수 없어요");
     expect(result.status).toBe("needs_review");
   });
 
@@ -2374,7 +2374,7 @@ describe("compatibility engine", () => {
     const closeGpu: Part = {
       ...referenceGpu,
       id: "gpu-rtx5090-compact-candidate",
-      name: "RTX 5090 호환 컴팩트 후보",
+      name: "RTX 5090 호환 컴팩트 부품",
       model: "RTX 5090 Compact Candidate",
       sourceProductCode: "candidate-5090",
       specs: { ...referenceGpu.specs, lengthMm: 250 }
@@ -2382,7 +2382,7 @@ describe("compatibility engine", () => {
     const farGpu: Part = {
       ...baseGpu,
       id: "gpu-rtx4060-compact-candidate",
-      name: "RTX 4060 호환 컴팩트 후보",
+      name: "RTX 4060 호환 컴팩트 부품",
       model: "RTX 4060 Compact Candidate",
       specs: {
         ...baseGpu.specs,
@@ -2541,7 +2541,7 @@ describe("compatibility engine", () => {
     const candidateGpu: Part = {
       ...referenceGpu,
       id: "gpu-rtx4060-model-candidate",
-      name: "RTX 4060 모델 공통 스펙 후보",
+      name: "RTX 4060 모델 공통 스펙 부품",
       model: "RTX 4060 Candidate",
       sourceProductCode: "candidate-rtx4060",
       specs: {
@@ -2617,7 +2617,7 @@ describe("compatibility engine", () => {
     const candidateCpu: Part = {
       ...referenceCpu,
       id: "cpu-core-ultra265k-candidate",
-      name: "인텔 코어 울트라7 265K 유사 성능 후보",
+      name: "인텔 코어 울트라7 265K 유사 성능 부품",
       model: "Intel Core Ultra7 265K Candidate",
       sourceProductCode: "candidate-core-ultra265k"
     };
@@ -2706,7 +2706,7 @@ describe("compatibility engine", () => {
     const amdGpu = {
       ...baseGpu,
       id: "gpu-amd-cross-vendor-candidate",
-      name: "AMD 교차 계열 비교 후보 GPU",
+      name: "AMD 교차 계열 비교 부품 GPU",
       specs: {
         ...baseGpu.specs,
         gpuVendor: "amd" as const,
@@ -2749,7 +2749,7 @@ describe("compatibility engine", () => {
     const candidateGpu = {
       ...baseGpu,
       id: "gpu-rtx40-architecture-candidate",
-      name: "RTX 40 아키텍처 후보 GPU",
+      name: "RTX 40 아키텍처 부품 GPU",
       specs: {
         ...baseGpu.specs,
         gpuVendor: "nvidia" as const,
@@ -3020,7 +3020,7 @@ describe("compatibility engine", () => {
       missingPoolError = error;
     }
     expect(missingPoolError).toBeInstanceOf(BuildGenerationError);
-    expect(missingPoolError).toMatchObject({ diagnostics: [{ id: "candidate-pools", facts: expect.arrayContaining([{ label: "메인보드 후보", value: "0개" }]) }] });
+    expect(missingPoolError).toMatchObject({ diagnostics: [{ id: "candidate-pools", facts: expect.arrayContaining([{ label: "메인보드 부품", value: "0개" }]) }] });
     const recoveryOptions = buildGenerationRecoveryOptionsFor(bulkMotherboardCatalog, retailOnlyRequest);
     expect(recoveryOptions.find((option) => option.id === "include-bulk")).toMatchObject({
       changedFields: ["구매 조건: 벌크 포함"],
@@ -3053,7 +3053,7 @@ describe("compatibility engine", () => {
     const incompatibleCheapCpus = Array.from({ length: 121 }, (_value, index) => ({
       ...compatibleExpensiveCpu,
       id: `cpu-generator-beam-incompatible-${index}`,
-      name: `호환 후보에서 제외되는 저가 CPU ${index + 1}`,
+      name: `호환 부품에서 제외되는 저가 CPU ${index + 1}`,
       priceWon: 1000 + index,
       specs: { ...compatibleExpensiveCpu.specs, socket: "NO-SUCH-SOCKET", cores: 32, threads: 64, boostClockGhz: 5.8, cinebenchR23Multi: 50000 }
     }));
@@ -3168,7 +3168,7 @@ describe("compatibility engine", () => {
     const partialCandidates = Array.from({ length: 100 }, (_value, index) => ({
       ...baseCpu,
       id: `cpu-bounded-pool-partial-${String(index).padStart(3, "0")}`,
-      name: `단일 점수만 있는 후보 ${index + 1}`,
+      name: `단일 점수만 있는 부품 ${index + 1}`,
       brand: "PC Supporter",
       model: `Pool Partial ${index + 1}`,
       source: "manual" as const,
@@ -3187,7 +3187,7 @@ describe("compatibility engine", () => {
     const completeCandidate: Part = {
       ...baseCpu,
       id: "cpu-bounded-pool-complete",
-      name: "전체 점수 확인 후보",
+      name: "전체 점수 확인 부품",
       brand: "PC Supporter",
       model: "Pool Complete",
       source: "danawa",
@@ -3320,7 +3320,7 @@ describe("compatibility engine", () => {
     expect(draft.gpuTarget?.resolution).toBe("4k");
     expect(draft.gpuTarget?.currentFit).toBe("unknown");
     expect(draft.rationale.some((item) => item.includes("권장 VRAM 16GB") && item.includes("240Hz"))).toBe(true);
-    expect(draft.warnings.some((item) => item.includes("GPU VRAM을 원문에서 확인해 주세요"))).toBe(true);
+    expect(draft.warnings.some((item) => item.includes("GPU VRAM을 제조사 페이지에서 확인해 주세요"))).toBe(true);
     expect(draft.blockerCount).toBe(0);
     expect(draft.unknownCount).toBe(0);
   });
@@ -3507,7 +3507,7 @@ describe("compatibility engine", () => {
     const sasHdd: Part = {
       ...baseHdd,
       id: "hdd-sas-upgrade-candidate",
-      name: "테스트 SAS 업그레이드 후보",
+      name: "테스트 SAS 업그레이드 부품",
       priceWon: 500000,
       specs: { ...baseHdd.specs, interface: "SAS", capacityGb: 18000 }
     };

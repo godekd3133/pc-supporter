@@ -134,7 +134,7 @@ export function validateCatalogSpecOverrideBatch(input: unknown, catalog: Part[]
     seenPartIds.add(partId);
     const part = catalog.find((item) => item.id === partId);
     if (!part) itemErrors.push("카탈로그에서 부품을 찾을 수 없습니다.");
-    if (part && !isListingAllowed(part, "all")) itemErrors.push("핵심 호환 후보가 아닌 항목은 스펙 override 대상이 아닙니다.");
+    if (part && !isListingAllowed(part, "all")) itemErrors.push("핵심 호환 부품이 아닌 항목은 스펙 override 대상이 아닙니다.");
     const category = candidate.category;
     if (!PART_CATEGORIES.includes(category as Part["category"])) itemErrors.push("category가 올바르지 않습니다.");
     if (part && category !== part.category) itemErrors.push(`category가 실제 부품 범주(${CATEGORY_LABELS[part.category]})와 다릅니다.`);

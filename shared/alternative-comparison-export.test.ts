@@ -4,7 +4,7 @@ import type { AlternativeComparisonCandidate } from "./alternative-comparison-ex
 
 const candidates: AlternativeComparisonCandidate[] = [
   {
-    name: "테스트, 후보",
+    name: "테스트, 부품",
     category: "gpu",
     partId: "gpu-test-1",
     priceWon: 1200000,
@@ -14,11 +14,11 @@ const candidates: AlternativeComparisonCandidate[] = [
     purchaseCondition: "다나와 수집가 · 신품·정식 유통",
     recommendedQuantity: 1,
     similarity: "대안 43점 · 정보 충분",
-    gpuTarget: "QHD · 144Hz · 권장 VRAM 12GB · 현재 8GB → 후보 12GB · 권장 기준 충족",
+    gpuTarget: "QHD · 144Hz · 권장 VRAM 12GB · 현재 8GB → 부품 12GB · 권장 기준 충족",
     recommendationTrust: "높음 92점",
     performance: "VRAM 32GB → 12GB (-62.5%)",
     compatibility: "호환 확인",
-    decisionSummary: "추천 후보 · 현재 문제 해결 · 새 차단 없음",
+    decisionSummary: "추천 부품 · 현재 문제 해결 · 새 차단 없음",
     physicalEvidence: "확인 필요 · GPU·케이스 장착 정보를 구매 전 확인해야 합니다.",
     physicalEvidenceSources: [{ category: "gpu", manufacturerModel: "GPU-TEST-1", manufacturerRevision: "rev-A", updatedAt: "2026-09-01", note: "GPU 제조사 설치 가이드", url: "https://vendor.example/gpu" }],
     dataQuality: "다나와 최신",
@@ -27,7 +27,7 @@ const candidates: AlternativeComparisonCandidate[] = [
     sourceUrl: "https://prod.danawa.com/info/?pcode=123"
   },
   {
-    name: "가격 확인 필요\n후보",
+    name: "가격 확인 필요\n부품",
     summary: "스펙 확인 필요",
     price: "가격 확인 필요",
     similarity: "계산 불가",
@@ -41,15 +41,15 @@ const candidates: AlternativeComparisonCandidate[] = [
 describe("alternative comparison export", () => {
   it("writes a readable text comparison without dropping unknown values", () => {
     const text = alternativeComparisonTextFor(candidates);
-    expect(text).toContain("[후보 1] 테스트, 후보");
+    expect(text).toContain("[부품 1] 테스트, 부품");
     expect(text).toContain("가격: 1,200,000원 · 추천 킷 1개");
     expect(text).toContain("가격 출처: 다나와 가격");
     expect(text).toContain("구매 조건: 다나와 수집가 · 신품·정식 유통");
     expect(text).toContain("가격 확인 필요");
-    expect(text).toContain("게이밍 목표 정보: QHD · 144Hz · 권장 VRAM 12GB · 현재 8GB → 후보 12GB · 권장 기준 충족");
+    expect(text).toContain("게이밍 목표 정보: QHD · 144Hz · 권장 VRAM 12GB · 현재 8GB → 부품 12GB · 권장 기준 충족");
     expect(text).toContain("추천 점수: 높음 92점");
     expect(text).toContain("장착 정보: 확인 필요 · GPU·케이스 장착 정보를 구매 전 확인해야 합니다.");
-    expect(text).toContain("판단 요약: 추천 후보 · 현재 문제 해결 · 새 차단 없음");
+    expect(text).toContain("판단 요약: 추천 부품 · 현재 문제 해결 · 새 차단 없음");
     expect(text).toContain("장착 정보 출처: GPU · GPU-TEST-1 · rev-A · 확인 2026-09-01: GPU 제조사 설치 가이드 (https://vendor.example/gpu)");
     expect(text).toContain("데이터: 다나와 최신 · 확인한 지 오래됨 · 갱신 2026-08-28");
     expect(text).toContain("https://prod.danawa.com/info/?pcode=123");
@@ -57,15 +57,15 @@ describe("alternative comparison export", () => {
 
   it("quotes CSV values with commas and newlines", () => {
     const csv = alternativeComparisonCsvFor(candidates);
-    expect(csv.startsWith("\uFEFF후보명,범주,부품 ID,핵심 스펙,가격,공유 당시 가격(원),가격 출처")).toBe(true);
-    expect(csv).toContain('"테스트, 후보"');
-    expect(csv).toContain('"가격 확인 필요\n후보"');
-    expect(csv).toContain("\"1,200,000원\",1200000,다나와 가격,다나와 수집가 · 신품·정식 유통,1,대안 43점 · 정보 충분,,QHD · 144Hz · 권장 VRAM 12GB · 현재 8GB → 후보 12GB · 권장 기준 충족,,높음 92점,VRAM 32GB → 12GB (-62.5%),호환 확인,추천 후보 · 현재 문제 해결 · 새 차단 없음,,확인 필요 · GPU·케이스 장착 정보를 구매 전 확인해야 합니다.,GPU · GPU-TEST-1 · rev-A · 확인 2026-09-01: GPU 제조사 설치 가이드 (https://vendor.example/gpu),다나와 최신,확인한 지 오래됨,2026-08-28,https://prod.danawa.com/info/?pcode=123");
+    expect(csv.startsWith("\uFEFF부품명,범주,부품 ID,핵심 스펙,가격,공유 당시 가격(원),가격 출처")).toBe(true);
+    expect(csv).toContain('"테스트, 부품"');
+    expect(csv).toContain('"가격 확인 필요\n부품"');
+    expect(csv).toContain("\"1,200,000원\",1200000,다나와 가격,다나와 수집가 · 신품·정식 유통,1,대안 43점 · 정보 충분,,QHD · 144Hz · 권장 VRAM 12GB · 현재 8GB → 부품 12GB · 권장 기준 충족,,높음 92점,VRAM 32GB → 12GB (-62.5%),호환 확인,추천 부품 · 현재 문제 해결 · 새 차단 없음,,확인 필요 · GPU·케이스 장착 정보를 구매 전 확인해야 합니다.,GPU · GPU-TEST-1 · rev-A · 확인 2026-09-01: GPU 제조사 설치 가이드 (https://vendor.example/gpu),다나와 최신,확인한 지 오래됨,2026-08-28,https://prod.danawa.com/info/?pcode=123");
   });
 
   it("returns an empty export envelope for no selected candidates", () => {
-    expect(alternativeComparisonTextFor([])).toBe("PC Supporter 후보 비교\n");
-    expect(alternativeComparisonCsvFor([])).toBe("\uFEFF후보명,범주,부품 ID,핵심 스펙,가격,공유 당시 가격(원),가격 출처,구매 조건,추천 킷 수량,성능 유사도,성능 비교 정보,게이밍 목표 정보,가격 대비 유사도,추천 점수,성능 변화,호환 상태,판단 요약,미리 적용 판단,장착 정보,장착 정보 출처,데이터 상태,갱신 상태,갱신일,원문 링크,성능 정보");
+    expect(alternativeComparisonTextFor([])).toBe("PC Supporter 부품 비교\n");
+    expect(alternativeComparisonCsvFor([])).toBe("\uFEFF부품명,범주,부품 ID,핵심 스펙,가격,공유 당시 가격(원),가격 출처,구매 조건,추천 킷 수량,성능 유사도,성능 비교 정보,게이밍 목표 정보,가격 대비 유사도,추천 점수,성능 변화,호환 상태,판단 요약,미리 적용 판단,장착 정보,장착 정보 출처,데이터 상태,갱신 상태,갱신일,상품 링크,성능 정보");
   });
 
   it("writes a versioned JSON snapshot with unknown values and source links", () => {
@@ -73,7 +73,7 @@ describe("alternative comparison export", () => {
     expect(parsed.type).toBe("pc-supporter-alternative-comparison");
     expect(parsed.version).toBe(1);
     expect(Number.isNaN(Date.parse(parsed.exportedAt))).toBe(false);
-    expect(parsed.items[0]).toMatchObject({ name: "테스트, 후보", category: "gpu", partId: "gpu-test-1", priceWon: 1200000, recommendedQuantity: 1, gpuTarget: "QHD · 144Hz · 권장 VRAM 12GB · 현재 8GB → 후보 12GB · 권장 기준 충족", sourceUrl: "https://prod.danawa.com/info/?pcode=123" });
+    expect(parsed.items[0]).toMatchObject({ name: "테스트, 부품", category: "gpu", partId: "gpu-test-1", priceWon: 1200000, recommendedQuantity: 1, gpuTarget: "QHD · 144Hz · 권장 VRAM 12GB · 현재 8GB → 부품 12GB · 권장 기준 충족", sourceUrl: "https://prod.danawa.com/info/?pcode=123" });
     expect(parsed.items[1].price).toBe("가격 확인 필요");
   });
 
@@ -87,7 +87,7 @@ describe("alternative comparison export", () => {
     expect(text).toContain("현재 기준선: 현재 GPU · 수량 1개");
     expect(text).toContain("현재 기준선 스펙: PCIe 4.0 · VRAM 8GB · 220W");
     expect(text).toContain("현재 기준선 가격: 450,000원");
-    expect(csv.startsWith("\uFEFF후보명,범주,부품 ID,핵심 스펙,가격,공유 당시 가격(원),가격 출처,구매 조건,추천 킷 수량,성능 유사도,성능 비교 정보,게이밍 목표 정보,가격 대비 유사도,추천 점수,성능 변화,호환 상태,판단 요약,미리 적용 판단,장착 정보,장착 정보 출처,데이터 상태,갱신 상태,갱신일,원문 링크,성능 정보,비교 범주,현재 기준선,현재 기준선 스펙,현재 기준선 가격")).toBe(true);
+    expect(csv.startsWith("\uFEFF부품명,범주,부품 ID,핵심 스펙,가격,공유 당시 가격(원),가격 출처,구매 조건,추천 킷 수량,성능 유사도,성능 비교 정보,게이밍 목표 정보,가격 대비 유사도,추천 점수,성능 변화,호환 상태,판단 요약,미리 적용 판단,장착 정보,장착 정보 출처,데이터 상태,갱신 상태,갱신일,상품 링크,성능 정보,비교 범주,현재 기준선,현재 기준선 스펙,현재 기준선 가격")).toBe(true);
     expect(csv).toContain(",그래픽카드,현재 GPU · 수량 1개,PCIe 4.0 · VRAM 8GB · 220W,\"450,000원\"");
     expect(parsed.context).toEqual(context);
     expect(parsed.items).toHaveLength(2);
@@ -132,7 +132,7 @@ describe("alternative comparison export", () => {
     const benchmarkEvidence = {
       partId: "gpu-test-1",
       category: "gpu" as const,
-      name: "테스트, 후보",
+      name: "테스트, 부품",
       rows: [
         { key: "gpu3dmarkTimeSpyScore" as const, label: "3DMark Time Spy", value: 21000, unit: "점" as const },
         { key: "gpu3dmarkPortRoyalScore" as const, label: "3DMark Port Royal", unit: "점" as const }
@@ -150,7 +150,7 @@ describe("alternative comparison export", () => {
     const csv = alternativeComparisonCsvFor([evidencedCandidate]);
     const json = JSON.parse(alternativeComparisonJsonFor([evidencedCandidate])) as { items: AlternativeComparisonCandidate[] };
 
-    expect(text).toContain("성능 정보: 부분 자료 · 1/2개 · 3DMark Time Spy 21,000점 · 3DMark Port Royal 확인 필요 · 출처 독립 리뷰·벤치마크 DB · 독립 리뷰 측정표 · 원문 https://review.example/gpu · 점검 원문 확인됨");
+    expect(text).toContain("성능 정보: 부분 자료 · 1/2개 · 3DMark Time Spy 21,000점 · 3DMark Port Royal 확인 필요 · 출처 독립 리뷰·벤치마크 DB · 독립 리뷰 측정표 · 출처 https://review.example/gpu · 점검 출처 확인됨");
     expect(csv).toContain("성능 정보");
     expect(csv).toContain("3DMark Time Spy 21,000점");
     expect(json.items[0].benchmarkEvidence).toEqual(benchmarkEvidence);
@@ -170,12 +170,12 @@ describe("alternative comparison export", () => {
   });
 
   it("exports the candidate tradeoff status and its evidence", () => {
-    const tradeoff = { frontier: true, eligible: true, riskScore: 1, priceDeltaWon: 20000, analysisScore: 82, evidenceScore: 91, reason: "다른 후보에 일방적으로 대체되지 않습니다." } as const;
+    const tradeoff = { frontier: true, eligible: true, riskScore: 1, priceDeltaWon: 20000, analysisScore: 82, evidenceScore: 91, reason: "다른 부품에 일방적으로 대체되지 않습니다." } as const;
     const candidateWithTradeoff: AlternativeComparisonCandidate = { ...candidates[0], scenario: { status: "compatible", blockerCount: 0, warningCount: 0, unknownCount: 0, tradeoff } };
     const text = alternativeComparisonTextFor([candidateWithTradeoff]);
     const json = JSON.parse(alternativeComparisonJsonFor([candidateWithTradeoff])) as { items: AlternativeComparisonCandidate[] };
 
-    expect(text).toContain("비교 우위 · 위험 1점 · 가격 변화 +20,000원 · 분석 82점 · 정보 91점 · 다른 후보에 일방적으로 대체되지 않습니다.");
+    expect(text).toContain("비교 우위 · 위험 1점 · 가격 변화 +20,000원 · 분석 82점 · 정보 91점 · 다른 부품에 일방적으로 대체되지 않습니다.");
     expect(json.items[0].scenario?.tradeoff).toEqual(tradeoff);
   });
 });

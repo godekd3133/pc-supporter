@@ -1,5 +1,6 @@
 import type { BuildSelection, CompatibilityResult, Finding, FindingSeverity, Part } from "./types";
 import { gpuPurchaseEvidenceFor } from "./gpu-fit";
+import { catalogMissingFieldLabelFor } from "./catalog-spec-coverage";
 import { buildConnectivitySummaryFor } from "./build-connectivity";
 import { buildResourceSummaryFor } from "./build-resource-summary";
 import { CHECKLIST_MAX_CHECKED_IDS } from "./checklist-storage-limits";
@@ -61,11 +62,11 @@ function isActionableFinding(finding: Finding): finding is ActionableFinding {
 }
 
 function findingTitleFor(severity: Exclude<FindingSeverity, "info">, title: string) {
-  return severity === "blocker" ? `해결: ${title}` : severity === "warning" ? `확인: ${title}` : `원문 확인: ${title}`;
+  return severity === "blocker" ? `해결: ${title}` : severity === "warning" ? `확인: ${title}` : `정보 확인: ${title}`;
 }
 
 function findingDetailFor(severity: Exclude<FindingSeverity, "info">, message: string) {
-  return severity === "blocker" ? `${message} 이 항목은 구매 전에 해결해야 합니다.` : severity === "warning" ? `${message} 구매·조립 전에 실제 조건을 확인하세요.` : `${message} 카탈로그만으로 확정할 수 없어 제조사 원문을 확인해야 합니다.`;
+  return severity === "blocker" ? `${message} 이 항목은 구매 전에 해결해야 합니다.` : severity === "warning" ? `${message} 구매·조립 전에 실제 조건을 확인하세요.` : `${message} 카탈로그만으로 알 수 없어 제조사 페이지를 확인해 주세요.`;
 }
 
 export function purchaseChecklistItemsFor(build: BuildSelection, result: CompatibilityResult, partMap?: ReadonlyMap<string, Part>): PurchaseChecklistItem[] {
@@ -96,7 +97,7 @@ export function purchaseChecklistItemsFor(build: BuildSelection, result: Compati
       kind: "manual" as const,
       severity: "manual" as const,
       title: `${item.name} 데이터 다시 확인`,
-      detail: item.freshness === "stale" ? "확인 시점이 오래되어 최신 원문을 다시 확인해야 합니다." : "확인 시점이 없어 최신 원문을 확인해야 합니다.",
+      detail: item.freshness === "stale" ? "확인한 지 오래되어 최신 정보를 다시 확인해야 해요." : "확인 기록이 없어 최신 정보를 확인해야 해요.",
       targetId: "data-health-panel" as const,
       actionLabel: "데이터 보기"
     }] : []),
@@ -105,7 +106,7 @@ export function purchaseChecklistItemsFor(build: BuildSelection, result: Compati
       kind: "manual" as const,
       severity: "manual" as const,
       title: `${item.name} 누락 스펙 보완`,
-      detail: `확인되지 않은 스펙 ${item.missingFields.slice(0, 3).join(", ")}${item.missingFields.length > 3 ? ` 외 ${item.missingFields.length - 3}개` : ""}를 확인해야 합니다.`,
+      detail: `확인되지 않은 스펙 ${item.missingFields.slice(0, 3).map((field) => catalogMissingFieldLabelFor(field)).join(", ")}${item.missingFields.length > 3 ? ` 외 ${item.missingFields.length - 3}개` : ""}를 확인해야 합니다.`,
       targetId: "data-health-panel" as const,
       actionLabel: "데이터 보기"
     }] : []),
@@ -114,7 +115,7 @@ export function purchaseChecklistItemsFor(build: BuildSelection, result: Compati
       kind: "manual" as const,
       severity: "manual" as const,
       title: `${item.name} 가격 확인`,
-      detail: "현재 가격을 확인할 수 없어 전체 구매 금액을 확정할 수 없습니다.",
+      detail: "현재 가격을 확인할 수 없어 전체 구매 금액을 알 수 없어요.",
       targetId: "purchase-list-panel" as const,
       actionLabel: "구매 목록 보기"
     }] : [])
@@ -175,7 +176,7 @@ export function purchaseChecklistItemsFor(build: BuildSelection, result: Compati
       kind: "manual",
       severity: "manual",
       title: "제조사 QVL·BIOS 버전 확인",
-      detail: "CPU·메인보드·RAM 조합의 제조사 지원 목록과 필요한 BIOS 버전을 원문에서 확인하세요."
+      detail: "CPU·메인보드·RAM 조합의 제조사 지원 목록과 필요한 BIOS 버전을 제조사 페이지에서 확인해 주세요."
     },
     ...(hasPhysicalParts ? [{
       id: missingGpuPhysicalEvidence ? "manual:gpu-physical-evidence" : "manual:physical-clearance",
@@ -197,7 +198,7 @@ export function purchaseChecklistItemsFor(build: BuildSelection, result: Compati
       id: "manual:power-thermal-budget",
       kind: "manual" as const,
       severity: resourceSummary.state === "danger" ? "blocker" as const : resourceSummary.state === "warning" ? "warning" as const : "unknown" as const,
-      title: resourceSummary.state === "danger" ? "전력·냉각 예산 기준 미달 확인" : resourceSummary.state === "unknown" ? "전력·냉각 원문 수치 확인" : "전력·냉각 여유 확인",
+      title: resourceSummary.state === "danger" ? "전력·냉각 예산 기준 미달 확인" : resourceSummary.state === "unknown" ? "전력·냉각 실제 수치 확인" : "전력·냉각 여유 확인",
       detail: `${resourceSummary.summary} 실제 소비전력·온도·소음은 조립 후 별도로 측정해야 합니다.`,
       targetId: "build-resource-summary" as const,
       actionLabel: "전력·냉각 보기"
@@ -221,7 +222,7 @@ export function purchaseChecklistItemsFor(build: BuildSelection, result: Compati
       kind: "manual",
       severity: "manual",
       title: "판매자·배송·AS 조건 확인",
-      detail: "가격은 현재 카탈로그 기준이며 재고·배송일·초기 불량 교환·무상 보증 조건은 판매자 원문에서 확인하세요."
+      detail: "가격은 현재 카탈로그 기준이며 재고·배송일·초기 불량 교환·무상 보증 조건은 판매 페이지에서 확인해 주세요."
     }
   ];
 

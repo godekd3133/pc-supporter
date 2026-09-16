@@ -26,25 +26,25 @@ export function candidateDecisionSummaryFor(input: CandidateDecisionInput): Cand
     : input.risk === "review" || input.resolvesTarget === false || input.physicalStatus === "review" || input.recommendationTrustLevel === "low" || input.catalogSpecSourceCheckNeedsReview === true || input.freshness === "stale" || input.freshness === "unknown"
       ? "review"
       : "recommended";
-  const label = status === "recommended" ? "추천 후보" : status === "review" ? "확인 후 적용" : "적용하지 않음";
+  const label = status === "recommended" ? "추천 부품" : status === "review" ? "확인 후 적용" : "적용하지 않음";
   const summaryParts = status === "avoid"
-    ? ["후보 자체에 차단 위험"]
+    ? ["부품 자체에 차단 위험"]
     : status === "review"
       ? [input.resolvesTarget === false ? "현재 문제 해결 여부 확인 필요" : "추가 확인 필요"]
       : ["현재 문제 해결", "새 차단 없음"];
   if (input.physicalStatus === "verified") summaryParts.push("장착 정보 확인됨");
   if (input.physicalStatus === "review") summaryParts.push("장착 정보 확인 필요");
-  if (input.catalogSpecSourceCheckNeedsReview === true) summaryParts.push("제조사 원문 확인 필요");
+  if (input.catalogSpecSourceCheckNeedsReview === true) summaryParts.push("제조사 페이지 확인 필요");
   if (input.freshness) summaryParts.push(DATA_FRESHNESS_LABELS[input.freshness]);
   if (input.recommendationTrustLevel) summaryParts.push(TRUST_LABELS[input.recommendationTrustLevel]);
 
   const reasons = [
     ...(input.reasons ?? []),
-    ...(input.resolvesTarget === false ? ["현재 문제를 직접 해결하는 후보인지 추가 확인해야 합니다."] : []),
-    ...(input.physicalStatus === "review" ? ["장착 정보가 확인 필요 상태라 실제 장착 전에 제조사 원문을 확인해야 합니다."] : []),
-    ...(input.catalogSpecSourceCheckNeedsReview === true ? ["수동 보강 스펙의 제조사 원문 URL 접근과 모델 식별을 확인해야 후보를 적용할 수 있습니다."] : []),
+    ...(input.resolvesTarget === false ? ["현재 문제를 직접 해결하는 부품인지 추가 확인해야 합니다."] : []),
+    ...(input.physicalStatus === "review" ? ["장착 정보가 확인 필요 상태라 실제 장착 전에 제조사 페이지를 확인해야 합니다."] : []),
+    ...(input.catalogSpecSourceCheckNeedsReview === true ? ["직접 입력된 스펙의 제조사 페이지 접근과 모델 식별을 확인해야 이 부품을 적용할 수 있어요."] : []),
     ...(input.freshness === "stale" || input.freshness === "unknown" ? [`데이터가 ${DATA_FRESHNESS_LABELS[input.freshness]} 상태입니다.`] : []),
-    ...(input.recommendationTrustLevel === "low" ? ["추천 점수가 낮아 후보 적용 전에 스펙과 호환 결과를 다시 확인해야 합니다."] : [])
+    ...(input.recommendationTrustLevel === "low" ? ["추천 점수가 낮아 부품 적용 전에 스펙과 호환 결과를 다시 확인해야 합니다."] : [])
   ];
   return {
     status,

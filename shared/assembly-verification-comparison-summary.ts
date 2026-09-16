@@ -103,12 +103,12 @@ export function assemblyVerificationComparisonSummaryFor(history: AssemblyVerifi
     overlay,
     baselineRunId: overlay.runs[0]?.runId,
     latestRunId: overlay.runs.at(-1)?.runId,
-    cpuPeakRows: rowsFor((fact) => fact.overlayRun.cpuTempPeak, (fact, value) => value === undefined ? "CPU 최고 온도 미기록" : `CPU 최고 ${value}°C`),
-    gpuPeakRows: rowsFor((fact) => fact.overlayRun.gpuTempPeak, (fact, value) => value === undefined ? "GPU 최고 온도 미기록" : `GPU 최고 ${value}°C`),
+    cpuPeakRows: rowsFor((fact) => fact.overlayRun.cpuTempPeak, (fact, value) => value === undefined ? "CPU 최고 온도 기록 없음" : `CPU 최고 ${value}°C`),
+    gpuPeakRows: rowsFor((fact) => fact.overlayRun.gpuTempPeak, (fact, value) => value === undefined ? "GPU 최고 온도 기록 없음" : `GPU 최고 ${value}°C`),
     cpuStabilityRows,
     gpuStabilityRows,
-    cpuPowerRows: rowsFor((fact) => fact.cpuPower, (fact, value) => value === undefined ? "CPU 전력 미기록" : `CPU 평균 ${value}W · 관찰 순`, false),
-    gpuPowerRows: rowsFor((fact) => fact.gpuPower, (fact, value) => value === undefined ? "GPU 전력 미기록" : `GPU 평균 ${value}W · 관찰 순`, false),
+    cpuPowerRows: rowsFor((fact) => fact.cpuPower, (fact, value) => value === undefined ? "CPU 전력 기록 없음" : `CPU 평균 ${value}W · 관찰 순`, false),
+    gpuPowerRows: rowsFor((fact) => fact.gpuPower, (fact, value) => value === undefined ? "GPU 전력 기록 없음" : `GPU 평균 ${value}W · 관찰 순`, false),
     ...(overlay.runCount < 2 ? { reason: "insufficient-comparison" as const } : {})
   };
 }

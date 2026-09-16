@@ -9,7 +9,7 @@ function suggestion(id: string, overrides: Partial<Suggestion> = {}): Suggestion
   return {
     part,
     score: 10,
-    reason: "테스트 후보",
+    reason: "테스트 부품",
     candidateRisk: "safe",
     candidateBlockerCount: 0,
     candidateWarningCount: 0,
@@ -39,7 +39,7 @@ describe("saved-build recheck recommendation", () => {
 
     expect(candidates.map((candidate) => candidate.suggestion.part.id)).toEqual(["safe-candidate", "residual-warning", "blocked-candidate"]);
     expect(candidates[0].decision.state).toBe("review");
-    expect(candidates[0].decision.reasons).toContain("참고 가격만 있어 후보 실제 판매 가격을 확정할 수 없습니다.");
+    expect(candidates[0].decision.reasons).toContain("참고 가격만 있어 부품 실제 판매 가격을 알 수 없어요.");
     expect(candidates[1].decision.state).toBe("review");
     expect(candidates[2].decision.state).toBe("hold");
   });

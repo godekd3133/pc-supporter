@@ -9,16 +9,16 @@ function categoryConfig(part: Part) {
 }
 
 export function partRefreshBlockReason(part: Part) {
-  if (part.source !== "danawa") return "프로젝트 또는 수동 확인 부품은 다나와 원문 재확인 대상이 아닙니다.";
+  if (part.source !== "danawa") return "기본·직접 확인 부품은 다나와 상품 페이지 재확인 대상이 아닙니다.";
   if (!categoryConfig(part)) return "지원하지 않는 부품 카테고리입니다.";
-  if (!part.sourceProductCode) return "다나와 상품 코드가 없어 원문을 다시 찾을 수 없습니다.";
-  if (!part.danawaUrl || !isAllowedSourceUrl(part.danawaUrl)) return "허용된 다나와 원문 링크가 없어 재확인할 수 없습니다.";
+  if (!part.sourceProductCode) return "다나와 상품 코드가 없어 상품 페이지를 다시 찾을 수 없습니다.";
+  if (!part.danawaUrl || !isAllowedSourceUrl(part.danawaUrl)) return "허용된 다나와 상품 페이지 링크가 없어 다시 확인할 수 없습니다.";
   try {
     const url = new URL(part.danawaUrl);
-    if (url.hostname.toLowerCase() !== "prod.danawa.com" && url.hostname.toLowerCase() !== "www.danawa.com") return "상품 상세 원문은 다나와 상품 페이지여야 합니다.";
-    if (url.searchParams.get("pcode") !== part.sourceProductCode) return "원문 링크와 저장된 상품 코드가 일치하지 않습니다.";
+    if (url.hostname.toLowerCase() !== "prod.danawa.com" && url.hostname.toLowerCase() !== "www.danawa.com") return "상품 상세 정보는 다나와 상품 페이지여야 합니다.";
+    if (url.searchParams.get("pcode") !== part.sourceProductCode) return "상품 페이지 링크와 저장된 상품 코드가 일치하지 않습니다.";
   } catch {
-    return "다나와 원문 링크 형식이 올바르지 않습니다.";
+    return "다나와 상품 페이지 링크 형식이 올바르지 않습니다.";
   }
   return undefined;
 }
@@ -41,9 +41,9 @@ export function changedPartFields(before: Part, after: Part) {
 }
 
 export function reconcileRefreshedPart(before: Part, parsed: Part) {
-  if (!parsed.rawSpecText?.trim()) throw new Error("다나와 상세 원문에서 스펙을 확인하지 못해 기존 데이터를 보존했습니다.");
+  if (!parsed.rawSpecText?.trim()) throw new Error("다나와 상세 페이지에서 스펙을 확인하지 못해 기존 데이터를 유지했습니다.");
   if (before.dataQuality === "live" && parsed.dataQuality === "incomplete") {
-    throw new Error("새 원문이 기존 데이터보다 부족해 기존 스펙을 보존했습니다.");
+    throw new Error("새 정보가 기존 데이터보다 부족해 기존 스펙을 유지했습니다.");
   }
   return {
     ...parsed,
@@ -97,16 +97,16 @@ function accessoryCategoryConfig(item: AccessoryItem) {
 }
 
 export function accessoryRefreshBlockReason(item: AccessoryItem) {
-  if (item.source !== "danawa") return "수동 확인 주변 부품은 다나와 원문 재확인 대상이 아닙니다.";
+  if (item.source !== "danawa") return "직접 확인 주변 부품은 다나와 상품 페이지 재확인 대상이 아닙니다.";
   if (!accessoryCategoryConfig(item)) return "지원하지 않는 주변 부품 카테고리입니다.";
-  if (!item.sourceProductCode) return "다나와 상품 코드가 없어 원문을 다시 찾을 수 없습니다.";
-  if (!item.danawaUrl || !isAllowedSourceUrl(item.danawaUrl)) return "허용된 다나와 원문 링크가 없어 재확인할 수 없습니다.";
+  if (!item.sourceProductCode) return "다나와 상품 코드가 없어 상품 페이지를 다시 찾을 수 없습니다.";
+  if (!item.danawaUrl || !isAllowedSourceUrl(item.danawaUrl)) return "허용된 다나와 상품 페이지 링크가 없어 다시 확인할 수 없습니다.";
   try {
     const url = new URL(item.danawaUrl);
-    if (url.hostname.toLowerCase() !== "prod.danawa.com" && url.hostname.toLowerCase() !== "www.danawa.com") return "상품 상세 원문은 다나와 상품 페이지여야 합니다.";
-    if (url.searchParams.get("pcode") !== item.sourceProductCode) return "원문 링크와 저장된 상품 코드가 일치하지 않습니다.";
+    if (url.hostname.toLowerCase() !== "prod.danawa.com" && url.hostname.toLowerCase() !== "www.danawa.com") return "상품 상세 정보는 다나와 상품 페이지여야 합니다.";
+    if (url.searchParams.get("pcode") !== item.sourceProductCode) return "상품 페이지 링크와 저장된 상품 코드가 일치하지 않습니다.";
   } catch {
-    return "다나와 원문 링크 형식이 올바르지 않습니다.";
+    return "다나와 상품 페이지 링크 형식이 올바르지 않습니다.";
   }
   return undefined;
 }
@@ -125,9 +125,9 @@ export function changedAccessoryFields(before: AccessoryItem, after: AccessoryIt
 }
 
 export function reconcileRefreshedAccessory(before: AccessoryItem, parsed: AccessoryItem) {
-  if (!parsed.rawSpecText?.trim()) throw new Error("다나와 상세 원문에서 스펙을 확인하지 못해 기존 주변 부품 데이터를 보존했습니다.");
+  if (!parsed.rawSpecText?.trim()) throw new Error("다나와 상세 페이지에서 스펙을 확인하지 못해 기존 주변 부품 데이터를 유지했습니다.");
   if (before.dataQuality === "live" && parsed.dataQuality === "incomplete") {
-    throw new Error("새 주변 부품 원문이 기존 데이터보다 부족해 기존 스펙을 보존했습니다.");
+    throw new Error("새 주변 부품 정보가 기존 데이터보다 부족해 기존 스펙을 유지했습니다.");
   }
   return {
     ...parsed,

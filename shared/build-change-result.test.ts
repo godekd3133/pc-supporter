@@ -36,7 +36,7 @@ describe("build change result export", () => {
   it("exports a compact applied-to-recheck comparison without full compatibility payloads", () => {
     const exported = buildChangeResultExportFor({
       title: "대체 부품 적용",
-      summary: "후보를 적용하고 전체 규칙으로 다시 검사했습니다.",
+      summary: "부품을 적용하고 전체 규칙으로 다시 검사했습니다.",
       rows: [{ id: "gpu", label: "그래픽카드", before: "기존 GPU", after: "대체 GPU" }],
       beforeResult: result(),
       afterResult: result({ status: "compatible", blockerCount: 0, warningCount: 0, totalPriceWon: 1_080_000, analysis: { ...result().analysis, overallScore: 84, scoreLabel: "상위권", confidence: "high" } })
@@ -57,7 +57,7 @@ describe("build change result export", () => {
   it("keeps the text export readable and states the evidence boundary", () => {
     const text = buildChangeResultTextFor({
       title: "대체 부품 적용",
-      summary: "후보를 적용했습니다.",
+      summary: "부품을 적용했습니다.",
       rows: [],
       beforeResult: result(),
       afterResult: result({ status: "compatible", blockerCount: 0, warningCount: 0 })
@@ -72,7 +72,7 @@ describe("build change result export", () => {
   it("creates a compact decision note for an explicit future save", () => {
     const note = buildChangeResultDecisionNoteFor({
       title: "대체 부품 적용",
-      summary: "후보를 적용했습니다.",
+      summary: "부품을 적용했습니다.",
       rows: [],
       beforeResult: result(),
       afterResult: result({ status: "compatible", blockerCount: 0, warningCount: 0 })

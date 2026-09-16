@@ -40,7 +40,7 @@ export function candidateApplicationReviewFor(evidence?: CandidateApplicationEvi
   const status = reviewStatusFor(evidence);
   if (!status) return undefined;
   const label = evidence.decision?.label ?? (status === "avoid" ? "적용하지 않음" : "확인 후 적용");
-  const summary = evidence.decision?.summary ?? (status === "avoid" ? "후보 자체에 차단 위험이 있습니다." : "후보 적용 전에 추가 확인이 필요합니다.");
+  const summary = evidence.decision?.summary ?? (status === "avoid" ? "부품 자체에 차단 위험이 있습니다." : "부품 적용 전에 추가 확인이 필요합니다.");
   const reasons = [...new Set([
     ...(evidence.decision?.reasons ?? []),
     ...(evidence.reasons ?? [])
