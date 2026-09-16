@@ -23,5 +23,11 @@ android/app/build/
 android/app/src/main/assets/public/
 ios/App/Pods/
 ios/App/DerivedData/
+ios/App/DerivedData-device/
 ios/App/build/
 ios/App/CapApp-SPM/build/
+
+# Local QA screenshots, Playwright CLI state, and browser-session output stay local.
+/*.png
+output/
+.playwright-cli/
