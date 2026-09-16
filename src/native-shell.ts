@@ -4,15 +4,17 @@ import { Haptics, ImpactStyle } from "@capacitor/haptics";
 import { Keyboard, KeyboardResize } from "@capacitor/keyboard";
 import { SplashScreen } from "@capacitor/splash-screen";
 import { StatusBar, Style } from "@capacitor/status-bar";
+import { THEME_CHANGE_EVENT, type ThemeMode } from "./theme";
 
-const STATUS_BAR_COLOR = "#f9fafb";
+const LIGHT_STATUS_BAR_COLOR = "#f9fafb";
+const DARK_STATUS_BAR_COLOR = "#0f1218";
 const HAPTIC_SELECTOR = ".button-primary, .mobile-primary-action, .picker-item";
 
-async function configureStatusBar() {
+async function configureStatusBar(mode: ThemeMode) {
   try {
-    await StatusBar.setStyle({ style: Style.Light });
+    await StatusBar.setStyle({ style: mode === "dark" ? Style.Dark : Style.Light });
     if (Capacitor.getPlatform() === "android") {
-      await StatusBar.setBackgroundColor({ color: STATUS_BAR_COLOR });
+      await StatusBar.setBackgroundColor({ color: mode === "dark" ? DARK_STATUS_BAR_COLOR : LIGHT_STATUS_BAR_COLOR });
     }
   } catch (error) {
     console.warn("[PC Supporter] status bar setup failed", error);
@@ -50,7 +52,12 @@ function registerHapticFeedback() {
 
 export async function initNativeShell() {
   if (!Capacitor.isNativePlatform()) return;
-  await configureStatusBar();
+  const currentTheme: ThemeMode = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+  await configureStatusBar(currentTheme);
+  window.addEventListener(THEME_CHANGE_EVENT, (event) => {
+    const mode = (event as CustomEvent<{ mode?: ThemeMode }>).detail?.mode;
+    if (mode === "dark" || mode === "light") void configureStatusBar(mode);
+  });
   await configureKeyboard();
   registerAndroidBackButton();
   registerHapticFeedback();
