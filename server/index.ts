@@ -33,6 +33,7 @@ import { alternativeComparisonExpired, alternativeComparisonExpiresAtFor, parseA
 import { budgetLadderShareExpired, budgetLadderShareExpiresAtFor, parseBudgetLadderShareInput, publicBudgetLadderShare } from "./budget-ladder-share";
 import type { SavedBudgetLadderRecord } from "../shared/budget-ladder-share";
 import { budgetLadderShareLineageEntryFor, type BudgetLadderShareLineageResponse } from "../shared/budget-ladder-share";
+import { budgetLadderScenariosFor } from "../shared/budget-ladder";
 import { savedWatchlistAlertsFor, type SavedWatchlistAlert } from "./watchlist-alerts";
 import { parseSavedWatchlistAlertIds } from "./watchlist-alert-state";
 import { adminAuthEnabled, adminSession, isAdminAuthenticated, loginAdmin, logoutAdmin, requireAdmin } from "./auth";
@@ -219,9 +220,9 @@ function compatibilityResponseFor(result: CompatibilityResult): CompatibilityRes
 function catalogRefreshReportForRequest(value: unknown, build: BuildSelection, preferences: RecommendationPreferences): { report?: CatalogRefreshReport; error?: string } {
   if (value === undefined) return {};
   const report = catalogRefreshReportFromUnknown(value);
-  if (!report) return { error: "원문 재확인 보고서 형식이 올바르지 않습니다." };
+  if (!report) return { error: "정보 다시 확인 보고서 형식이 올바르지 않습니다." };
   const expectedFingerprint = buildCompatibilityInputFingerprint(build, preferences);
-  if (report.inputFingerprint !== expectedFingerprint) return { error: "원문 재확인 보고서가 현재 견적·추천 기준과 일치하지 않습니다." };
+  if (report.inputFingerprint !== expectedFingerprint) return { error: "정보 다시 확인 보고서가 현재 견적·추천 기준과 일치하지 않습니다." };
   const selectedPartIds = PART_CATEGORIES.flatMap((category) => {
     if (category === "memory") return build.memory.map((selection) => selection.partId);
     if (category === "ssd") return build.ssd.map((selection) => selection.partId);
@@ -231,7 +232,7 @@ function catalogRefreshReportForRequest(value: unknown, build: BuildSelection, p
   });
   const selectedAccessoryIds = (build.accessories ?? []).map((selection) => selection.accessoryId);
   const allTargets = [...report.items.map((item) => item.target), ...report.failures.map((failure) => failure.target)];
-  if (allTargets.some((target) => target.kind === "part" ? !selectedPartIds.includes(target.id) : !selectedAccessoryIds.includes(target.id))) return { error: "원문 재확인 보고서의 대상이 현재 견적에 포함되어 있지 않습니다." };
+  if (allTargets.some((target) => target.kind === "part" ? !selectedPartIds.includes(target.id) : !selectedAccessoryIds.includes(target.id))) return { error: "정보 다시 확인 보고서의 대상이 현재 견적에 포함되어 있지 않습니다." };
   return { report };
 }
 
@@ -485,7 +486,7 @@ function m2CoveragePriority(part: Awaited<ReturnType<typeof loadCatalog>>[number
   }
   const reasons: string[] = [];
   let score = status === "stale" ? 65 : status === "incomplete" ? 35 : 25;
-  if (status === "stale") reasons.push("카탈로그 원문이 매핑 이후 갱신됨 · 재확인 필요");
+  if (status === "stale") reasons.push("카탈로그 정보가 매핑 이후 갱신됨 · 재확인 필요");
   else if (status === "incomplete") reasons.push("기존 매핑의 필수 정보 보완");
   else reasons.push("슬롯별 매핑 미등록");
   if (slotCount >= 2) {
@@ -1285,7 +1286,7 @@ async function refreshCatalogPartById(partId: string) {
   if (!current) throw new PartRefreshRouteError(404, "PART_REFRESH_NOT_FOUND", "부품을 찾을 수 없습니다.");
   const blockReason = partRefreshBlockReason(current);
   if (blockReason) throw new PartRefreshRouteError(422, "PART_REFRESH_UNSUPPORTED", blockReason);
-  if (partRefreshJobs.has(partId)) throw new PartRefreshRouteError(409, "PART_REFRESH_RUNNING", "이 부품의 원문 재확인이 이미 실행 중입니다.");
+  if (partRefreshJobs.has(partId)) throw new PartRefreshRouteError(409, "PART_REFRESH_RUNNING", "이 부품의 정보 다시 확인이 이미 실행 중입니다.");
   const lastRunAt = partRefreshLastRunAt.get(partId);
   if (lastRunAt !== undefined) {
     const remainingMs = PART_REFRESH_COOLDOWN_MS - (Date.now() - lastRunAt);
@@ -1308,7 +1309,7 @@ async function refreshCatalogPartById(partId: string) {
       return result;
     } catch (error: unknown) {
       if (error instanceof PartRefreshRouteError) throw error;
-      throw new PartRefreshRouteError(422, "PART_REFRESH_FAILED", error instanceof Error ? error.message : "부품 상세 원문을 다시 확인하지 못했습니다.");
+      throw new PartRefreshRouteError(422, "PART_REFRESH_FAILED", error instanceof Error ? error.message : "부품 상세 정보를 다시 확인하지 못했습니다.");
     }
   })();
   partRefreshJobs.set(partId, job);
@@ -1327,7 +1328,7 @@ function sendPartRefreshError(response: Response, error: unknown) {
     response.status(error.statusCode).json({ error: error.message, code: error.code, ...(error.retryAfterSeconds !== undefined ? { retryAfterSeconds: error.retryAfterSeconds } : {}) });
     return;
   }
-  response.status(422).json({ error: error instanceof Error ? error.message : "부품 상세 원문을 다시 확인하지 못했습니다.", code: "PART_REFRESH_FAILED" });
+  response.status(422).json({ error: error instanceof Error ? error.message : "부품 상세 정보를 다시 확인하지 못했습니다.", code: "PART_REFRESH_FAILED" });
 }
 
 function pcieMissingFieldsForPart(part: Part) {
@@ -1375,7 +1376,7 @@ app.post("/api/admin/catalog-spec/refresh-batch", catalogSpecRefreshBatchRateLim
   }
   const partIds = rawPartIds.map((value: string) => value.trim());
   if (new Set(partIds).size !== partIds.length) {
-    response.status(400).json({ error: "일괄 원문 재확인에는 중복 부품 ID를 넣을 수 없습니다.", code: "PART_REFRESH_BATCH_DUPLICATE_ID" });
+    response.status(400).json({ error: "일괄 정보 다시 확인에는 중복 부품 ID를 넣을 수 없습니다.", code: "PART_REFRESH_BATCH_DUPLICATE_ID" });
     return;
   }
   const catalog = await loadCatalog();
@@ -1388,7 +1389,7 @@ app.post("/api/admin/catalog-spec/refresh-batch", catalogSpecRefreshBatchRateLim
     const chunkResults = await Promise.all(chunk.map(async (partId) => {
       const current = byId.get(partId);
       if (!current) return { partId, partName: partId, status: "skipped" as const, code: "PART_REFRESH_NOT_FOUND", error: "부품을 찾을 수 없습니다." };
-      if (!isListingAllowed(current, "all")) return { partId, partName: current.name, category: current.category, status: "skipped" as const, code: "PART_REFRESH_NON_CORE", error: "핵심 호환 후보가 아닌 항목은 이 작업 패키지에서 제외합니다." };
+      if (!isListingAllowed(current, "all")) return { partId, partName: current.name, category: current.category, status: "skipped" as const, code: "PART_REFRESH_NON_CORE", error: "핵심 호환 부품이 아닌 항목은 이 작업 패키지에서 제외합니다." };
       try {
         const result = await refreshCatalogPartById(partId);
         return {
@@ -1404,7 +1405,7 @@ app.post("/api/admin/catalog-spec/refresh-batch", catalogSpecRefreshBatchRateLim
         };
       } catch (error: unknown) {
         const routeError = error instanceof PartRefreshRouteError ? error : undefined;
-        return { partId, partName: current.name, category: current.category, status: routeError?.code === "PART_REFRESH_UNSUPPORTED" || routeError?.code === "PART_REFRESH_COOLDOWN" || routeError?.code === "PART_REFRESH_RUNNING" ? "skipped" as const : "failed" as const, ...(routeError?.code ? { code: routeError.code } : { code: "PART_REFRESH_FAILED" }), error: routeError?.message ?? (error instanceof Error ? error.message : "원문 재확인 실패"), ...(routeError?.retryAfterSeconds !== undefined ? { retryAfterSeconds: routeError.retryAfterSeconds } : {}) };
+        return { partId, partName: current.name, category: current.category, status: routeError?.code === "PART_REFRESH_UNSUPPORTED" || routeError?.code === "PART_REFRESH_COOLDOWN" || routeError?.code === "PART_REFRESH_RUNNING" ? "skipped" as const : "failed" as const, ...(routeError?.code ? { code: routeError.code } : { code: "PART_REFRESH_FAILED" }), error: routeError?.message ?? (error instanceof Error ? error.message : "정보 다시 확인 실패"), ...(routeError?.retryAfterSeconds !== undefined ? { retryAfterSeconds: routeError.retryAfterSeconds } : {}) };
       }
     }));
     items.push(...chunkResults);
@@ -1447,11 +1448,11 @@ app.post("/api/parts/compatible", publicCandidateRateLimit, async (request, resp
     : undefined;
   const category = isCategory(body?.category) ? body.category : undefined;
   if (!category) {
-    response.status(400).json({ error: "호환 후보를 찾으려면 부품 카테고리가 필요합니다." });
+    response.status(400).json({ error: "호환 부품을 찾으려면 부품 카테고리가 필요합니다." });
     return;
   }
   if (!body || body.build === undefined) {
-    response.status(400).json({ error: "호환 후보를 찾으려면 현재 견적이 필요합니다." });
+    response.status(400).json({ error: "호환 부품을 찾으려면 현재 견적이 필요합니다." });
     return;
   }
   const parsed = parseBuild(body.build);
@@ -1841,7 +1842,7 @@ app.post("/api/accessories/:id/refresh", catalogRefreshRateLimit, requirePartRef
   }
   const running = accessoryRefreshJobs.get(accessoryId);
   if (running) {
-    response.status(409).json({ error: "이 주변 부품의 원문 재확인이 이미 실행 중입니다.", code: "ACCESSORY_REFRESH_RUNNING" });
+    response.status(409).json({ error: "이 주변 부품의 정보 다시 확인이 이미 실행 중입니다.", code: "ACCESSORY_REFRESH_RUNNING" });
     return;
   }
   const lastRunAt = accessoryRefreshLastRunAt.get(accessoryId);
@@ -1872,7 +1873,7 @@ app.post("/api/accessories/:id/refresh", catalogRefreshRateLimit, requirePartRef
     accessoryRefreshLastRunAt.set(accessoryId, Date.now());
     response.json(result);
   } catch (error: unknown) {
-    response.status(422).json({ error: error instanceof Error ? error.message : "주변 부품 상세 원문을 다시 확인하지 못했습니다.", code: "ACCESSORY_REFRESH_FAILED" });
+    response.status(422).json({ error: error instanceof Error ? error.message : "주변 부품 상세 정보를 다시 확인하지 못했습니다.", code: "ACCESSORY_REFRESH_FAILED" });
   } finally {
     if (accessoryRefreshJobs.get(accessoryId) === job) accessoryRefreshJobs.delete(accessoryId);
   }
@@ -1930,6 +1931,34 @@ app.post("/api/builds/recommend", publicRecommendationRateLimit, async (request,
     response.json(generateBuildDraft(catalog, parsed.request));
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "현재 데이터로 자동 견적을 생성하지 못했습니다.";
+    const recoveryOptions = catalog ? buildGenerationRecoveryOptionsFor(catalog, parsed.request) : [];
+    const diagnostics = error instanceof BuildGenerationError ? error.diagnostics : [];
+    response.status(422).json({ error: message, ...(diagnostics.length > 0 ? { diagnostics } : {}), ...(recoveryOptions.length > 0 ? { recoveryOptions } : {}) });
+  }
+});
+
+app.post("/api/builds/recommend/budget-ladder", publicRecommendationRateLimit, async (request, response) => {
+  const parsed = parseBuildGenerationRequest(request.body);
+  if (parsed.errors.length > 0 || !parsed.request) {
+    response.status(400).json({ error: "예산 구간 자동 견적 요청 형식이 올바르지 않습니다.", details: parsed.errors });
+    return;
+  }
+  let catalog: Part[] | undefined;
+  try {
+    catalog = await loadCatalog();
+    const scenarios = budgetLadderScenariosFor(parsed.request);
+    const outcomes = scenarios.map((scenario) => {
+      try {
+        return { ...scenario, draft: generateBuildDraft(catalog!, scenario.request) };
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "이 예산 구간의 자동 구성을 만들지 못했습니다.";
+        const diagnostics = error instanceof BuildGenerationError ? error.diagnostics : [];
+        return { ...scenario, error: message, ...(diagnostics.length > 0 ? { diagnostics } : {}) };
+      }
+    });
+    response.json({ scenarios: outcomes });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "예산 구간 자동 견적을 생성하지 못했습니다.";
     const recoveryOptions = catalog ? buildGenerationRecoveryOptionsFor(catalog, parsed.request) : [];
     const diagnostics = error instanceof BuildGenerationError ? error.diagnostics : [];
     response.status(422).json({ error: message, ...(diagnostics.length > 0 ? { diagnostics } : {}), ...(recoveryOptions.length > 0 ? { recoveryOptions } : {}) });
@@ -2048,7 +2077,7 @@ app.post("/api/watchlists", watchlistCreateRateLimit, async (request, response) 
 app.post("/api/comparisons", comparisonCreateRateLimit, async (request, response) => {
   const parsed = parseAlternativeComparisonInput(request.body);
   if (parsed.errors.length > 0 || !parsed.name || parsed.candidates.length < 2) {
-    response.status(400).json({ error: parsed.errors[0] ?? "후보 비교를 저장할 수 없습니다.", details: parsed.errors });
+    response.status(400).json({ error: parsed.errors[0] ?? "부품 비교를 저장할 수 없습니다.", details: parsed.errors });
     return;
   }
   const now = new Date().toISOString();
@@ -2077,11 +2106,11 @@ app.get("/api/comparisons/:id", comparisonShareRateLimit, async (request, respon
   const id = routeParam(request.params.id);
   const comparison = (await readSavedComparisons()).find((item) => item.id === id);
   if (!comparison) {
-    response.status(404).json({ error: "저장된 후보 비교를 찾을 수 없습니다." });
+    response.status(404).json({ error: "저장된 부품 비교를 찾을 수 없습니다." });
     return;
   }
   if (alternativeComparisonExpired(comparison)) {
-    response.status(404).json({ error: "후보 비교 링크가 만료되었습니다." });
+    response.status(404).json({ error: "부품 비교 링크가 만료되었습니다." });
     return;
   }
   sendJsonWithEtag(request, response, publicAlternativeComparison(comparison), comparison.updatedAt);
@@ -2091,7 +2120,7 @@ app.delete("/api/comparisons/:id", comparisonShareRateLimit, async (request, res
   const id = routeParam(request.params.id);
   const comparison = (await readSavedComparisons()).find((item) => item.id === id);
   if (!comparison) {
-    response.status(404).json({ error: "저장된 후보 비교를 찾을 수 없습니다." });
+    response.status(404).json({ error: "저장된 부품 비교를 찾을 수 없습니다." });
     return;
   }
   const ownerToken = request.header("x-share-owner-token");
@@ -2099,12 +2128,12 @@ app.delete("/api/comparisons/:id", comparisonShareRateLimit, async (request, res
   // authenticated admin session to trust. Keep the owner-token boundary
   // enforced for this public bearer-link endpoint in that mode as well.
   if (!shareOwnerOrEnabledAdminCanManage(comparison, ownerToken, adminAuthEnabled(), isAdminAuthenticated(request))) {
-    response.status(401).json({ error: "이 후보 비교를 취소할 권한이 없습니다.", code: "SHARE_OWNER_AUTH_REQUIRED" });
+    response.status(401).json({ error: "이 부품 비교를 취소할 권한이 없습니다.", code: "SHARE_OWNER_AUTH_REQUIRED" });
     return;
   }
   const deleted = await deleteSavedComparison(id ?? "");
   if (!deleted) {
-    response.status(404).json({ error: "저장된 후보 비교를 찾을 수 없습니다." });
+    response.status(404).json({ error: "저장된 부품 비교를 찾을 수 없습니다." });
     return;
   }
   response.json({ deleted: true });
@@ -3089,22 +3118,22 @@ app.post("/api/admin/catalog-spec-overrides/source-check/batch", catalogSpecSour
 app.post("/api/admin/catalog-spec-overrides/:partId/source-check", catalogSpecSourceCheckRateLimit, requireAdmin, async (request, response) => {
   const partId = routeParam(request.params.partId);
   if (!partId) {
-    response.status(400).json({ error: "스펙 override 원문 점검 대상 식별자가 필요합니다." });
+    response.status(400).json({ error: "스펙 override 페이지 확인 대상 식별자가 필요합니다." });
     return;
   }
   const catalog = await loadCatalog();
   const part = findPart(catalog, partId);
   if (!part || !isListingAllowed(part, "all")) {
-    response.status(404).json({ error: "스펙 override 원문을 점검할 핵심 부품을 찾을 수 없습니다." });
+    response.status(404).json({ error: "스펙 override 페이지를 확인할 핵심 부품을 찾을 수 없습니다." });
     return;
   }
   const override = (await readCatalogSpecOverrides())[partId];
   if (!override) {
-    response.status(404).json({ error: "먼저 수동 스펙 override를 저장해야 원문을 점검할 수 있습니다." });
+    response.status(404).json({ error: "먼저 수동 스펙 override를 저장해야 페이지를 확인할 수 있습니다." });
     return;
   }
   if (catalogSpecSourceCheckJobs.has(partId)) {
-    response.status(409).json({ error: "이 스펙 override의 원문 점검이 이미 실행 중입니다.", code: "CATALOG_SPEC_SOURCE_CHECK_RUNNING" });
+    response.status(409).json({ error: "이 스펙 override의 페이지 확인이 이미 실행 중입니다.", code: "CATALOG_SPEC_SOURCE_CHECK_RUNNING" });
     return;
   }
   const lastRunAt = catalogSpecSourceCheckLastRunAt.get(partId);
@@ -3143,7 +3172,7 @@ app.post("/api/admin/catalog-spec-overrides/:partId/source-check", catalogSpecSo
 app.get("/api/admin/catalog-spec-overrides/:partId/source-check/history", requireAdmin, async (request, response) => {
   const partId = routeParam(request.params.partId);
   if (!partId || !(await readCatalogSpecOverrides())[partId]) {
-    response.status(404).json({ error: "스펙 override 원문 점검 이력을 조회할 항목을 찾을 수 없습니다." });
+    response.status(404).json({ error: "스펙 override 페이지 확인 이력을 조회할 항목을 찾을 수 없습니다." });
     return;
   }
   const requestedLimit = Number(request.query.limit ?? 20);
@@ -3780,7 +3809,7 @@ app.post("/api/admin/gpu-physical-overrides/:partId/source-check", gpuPhysicalSo
   }
   const persist = request.query.persist !== "false";
   if (gpuPhysicalSourceCheckJobs.has(partId)) {
-    response.status(409).json({ error: "이 장착 정보의 원문 점검이 이미 실행 중입니다.", code: "GPU_PHYSICAL_SOURCE_CHECK_RUNNING" });
+    response.status(409).json({ error: "이 장착 정보의 페이지 확인이 이미 실행 중입니다.", code: "GPU_PHYSICAL_SOURCE_CHECK_RUNNING" });
     return;
   }
   const lastRunAt = gpuPhysicalSourceCheckLastRunAt.get(partId);
@@ -4011,17 +4040,17 @@ app.post("/api/admin/benchmark-overrides/:partId/source-check", benchmarkSourceC
   const catalog = await loadCatalog();
   const partId = routeParam(request.params.partId);
   if (!partId) {
-    response.status(400).json({ error: "벤치마크 원문 점검 대상 식별자가 필요합니다." });
+    response.status(400).json({ error: "벤치마크 출처 확인 대상 식별자가 필요합니다." });
     return;
   }
   const part = findPart(catalog, partId);
   if (!part || (part.category !== "cpu" && part.category !== "gpu")) {
-    response.status(404).json({ error: "벤치마크 원문을 점검할 CPU·GPU를 찾을 수 없습니다." });
+    response.status(404).json({ error: "벤치마크 출처를 확인할 CPU·GPU를 찾을 수 없습니다." });
     return;
   }
   const override = (await readBenchmarkOverrides())[partId];
   if (!override) {
-    response.status(404).json({ error: "먼저 벤치마크 보강 데이터를 저장해야 원문을 점검할 수 있습니다." });
+    response.status(404).json({ error: "먼저 벤치마크 보강 데이터를 저장해야 출처를 확인할 수 있습니다." });
     return;
   }
   if (!override.sourceUrl) {
@@ -4030,7 +4059,7 @@ app.post("/api/admin/benchmark-overrides/:partId/source-check", benchmarkSourceC
   }
   const persist = request.query.persist !== "false";
   if (benchmarkSourceCheckJobs.has(partId)) {
-    response.status(409).json({ error: "이 벤치마크 정보의 원문 점검이 이미 실행 중입니다.", code: "BENCHMARK_SOURCE_CHECK_RUNNING" });
+    response.status(409).json({ error: "이 벤치마크 정보의 출처 확인이 이미 실행 중입니다.", code: "BENCHMARK_SOURCE_CHECK_RUNNING" });
     return;
   }
   const lastRunAt = benchmarkSourceCheckLastRunAt.get(partId);
@@ -4068,7 +4097,7 @@ app.get("/api/admin/benchmark-overrides/:partId/source-check/history", requireAd
   const partId = routeParam(request.params.partId);
   const part = partId ? findPart(catalog, partId) : undefined;
   if (!part || (part.category !== "cpu" && part.category !== "gpu")) {
-    response.status(404).json({ error: "벤치마크 원문 점검 이력을 조회할 CPU·GPU를 찾을 수 없습니다." });
+    response.status(404).json({ error: "벤치마크 출처 확인 이력을 조회할 CPU·GPU를 찾을 수 없습니다." });
     return;
   }
   const requestedLimit = Number(request.query.limit ?? 20);
@@ -4178,7 +4207,7 @@ app.post("/api/admin/catalog/seed-mapping-reviews/:starterPartId/manual-verify",
   const starterPartId = routeParam(request.params.starterPartId) ?? "";
   const starter = starterCatalog.find((part) => part.id === starterPartId);
   if (!starter) {
-    response.status(404).json({ error: "starter 기준 후보를 찾을 수 없습니다.", code: "CATALOG_SEED_MAPPING_STARTER_NOT_FOUND" });
+    response.status(404).json({ error: "기본 목록 부품을 찾을 수 없습니다.", code: "CATALOG_SEED_MAPPING_STARTER_NOT_FOUND" });
     return;
   }
   const inputValidation = validateCatalogSeedMappingManualInput(request.body, starter.category);
@@ -4206,11 +4235,11 @@ app.post("/api/admin/catalog/seed-mapping-reviews/:starterPartId/manual-verify",
   try {
     sourceCheck = await checkPhysicalSourceUrl(inputValidation.input.sourceUrl, sourceIdentitiesFor(starter, active, inputValidation.input.sourceProductCode));
   } catch (error: unknown) {
-    response.status(422).json({ error: error instanceof Error ? error.message : "다나와 원문을 점검하지 못했습니다.", code: "CATALOG_SEED_MAPPING_SOURCE_CHECK_FAILED" });
+    response.status(422).json({ error: error instanceof Error ? error.message : "다나와 페이지를 확인하지 못했습니다.", code: "CATALOG_SEED_MAPPING_SOURCE_CHECK_FAILED" });
     return;
   }
   if (sourceCheck.identityStatus !== "matched" || (sourceCheck.status !== "reachable" && sourceCheck.status !== "redirected")) {
-    response.status(422).json({ error: "다나와 원문 접근 또는 상품 식별이 확인되지 않아 매핑을 저장하지 않았습니다.", code: "CATALOG_SEED_MAPPING_SOURCE_CHECK_REVIEW", sourceCheck });
+    response.status(422).json({ error: "다나와 페이지 접근 또는 상품 식별이 확인되지 않아 매핑을 저장하지 않았습니다.", code: "CATALOG_SEED_MAPPING_SOURCE_CHECK_REVIEW", sourceCheck });
     return;
   }
 
