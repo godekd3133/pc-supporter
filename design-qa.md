@@ -427,6 +427,12 @@ No actionable P0, P1, or P2 visual findings remain for the requested redesign. T
 - 기능이나 route는 바꾸지 않고 로비 UI의 제목·설명·상태 라벨·CTA만 조정했으며, CUA 연결 화면에서 실제 hero·preview·알림·이어서 보기 카피 변화를 확인했다.
 - 검증: `npm run test:browser:quote-onboarding` 데스크톱·390px 모바일 통과, `npm run test:browser` 전체 브라우저 smoke 통과, `npm run typecheck` 통과. 전체 테스트와 production build는 이 코드 변경 후 다음 전체 검증에서 다시 확인한다.
 
+## 2026-09-17 lobby-secondary-panel-tone pass
+
+- 메인 로비의 접힌 저장·데이터 영역까지 말투를 통일했다. 예산 비교 공유, 부품 비교 공유, 견적 버전 비교 공유 패널의 제목·설명·상태 확인·열기·복사·취소·이력 제거 문구를 해요체로 정리했다.
+- 공유·취소·이력 제거의 동작 범위는 변경하지 않고, 사용자에게 보이는 안내만 `다시 열거나`, `복사할 수 있어요`, `서버 상태를 확인해요`, `이력에서 지워요`처럼 로비 톤으로 맞췄다.
+- 검증: `npm run typecheck` 통과, `npm run test:browser:quote-onboarding` 통과. 전체 테스트와 production build는 이 코드 변경 후 다음 전체 검증에서 다시 확인한다.
+
 ## 2026-09-17 first-user-secondary-entry pass
 
 - 부품 미선택 첫 사용자 홈의 보조 CTA가 고급 `/recommend` 화면을 바로 여는 `조건으로 자동 구성`에서 `부품을 직접 선택하기`로 바뀌었다.
