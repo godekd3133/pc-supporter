@@ -25,17 +25,17 @@ export type AlertCenterItem = {
 function HomeAlertCenter({ items, unreadCount, hasBuildAlerts, hasWatchlistAlerts, onOpenHistory, onOpenWatchlist }: { items: AlertCenterItem[]; unreadCount: number; hasBuildAlerts: boolean; hasWatchlistAlerts: boolean; onOpenHistory: () => void; onOpenWatchlist: () => void }) {
   if (items.length === 0) return null;
   return <section className="home-alerts" aria-label="알림 센터" data-testid="home-alert-center">
-    <div className="home-alerts-heading"><div><p className="eyebrow">ALERT CENTER</p><h2>알림 센터</h2><p>저장 견적 점검과 가격 추적에서 새로 온 소식을 한곳에 모았습니다.</p></div>{unreadCount > 0 && <span className="home-alerts-badge" data-testid="home-alert-unread-count">{unreadCount}개 미읽음</span>}</div>
+    <div className="home-alerts-heading"><div><p className="eyebrow">ALERT CENTER</p><h2>새 소식이 있어요</h2><p>저장한 견적과 가격 추적에서 온 소식을 모아봤어요.</p></div>{unreadCount > 0 && <span className="home-alerts-badge" data-testid="home-alert-unread-count">{unreadCount}개 안 봄</span>}</div>
     <div className="home-alerts-list" aria-live="polite">{items.map((item) => {
       const ItemIcon = item.source === "build"
         ? (item.kind === "critical" || item.kind === "review" ? FiAlertTriangle : item.kind === "failed" ? FiXCircle : item.kind === "improved" ? FiCheckCircle : item.kind === "alternative" ? FiTrendingUp : FiBell)
         : FiTag;
       return <article className={`home-alerts-item ${item.read ? "" : "unread"}`} data-testid={`home-alert-${item.id}`} key={item.id}>
         <span className={`home-alerts-item-icon ${item.source}`}><ItemIcon /></span>
-        <div className="home-alerts-item-copy"><div className="home-alerts-item-title"><strong>{item.title}</strong><span>{item.source === "build" ? "저장 견적" : "가격 추적"} · {item.sourceLabel}</span></div><p>{item.message}</p><small>{new Date(item.createdAt).toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" })}{item.read ? "" : " · 미읽음"}</small></div>
+        <div className="home-alerts-item-copy"><div className="home-alerts-item-title"><strong>{item.title}</strong><span>{item.source === "build" ? "저장한 견적" : "가격 추적"} · {item.sourceLabel}</span></div><p>{item.message}</p><small>{new Date(item.createdAt).toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" })}{item.read ? "" : " · 아직 안 봄"}</small></div>
       </article>;
     })}</div>
-    <div className="home-alerts-actions">{hasBuildAlerts && <button className="button button-light" type="button" data-testid="home-alert-open-history" onClick={onOpenHistory}><FiBell /> 저장 견적 알림함</button>}{hasWatchlistAlerts && <button className="button button-light" type="button" data-testid="home-alert-open-watchlist" onClick={onOpenWatchlist}><FiTag /> 가격 추적 목록</button>}</div>
+    <div className="home-alerts-actions">{hasBuildAlerts && <button className="button button-light" type="button" data-testid="home-alert-open-history" onClick={onOpenHistory}><FiBell /> 저장한 견적 알림 보기</button>}{hasWatchlistAlerts && <button className="button button-light" type="button" data-testid="home-alert-open-watchlist" onClick={onOpenWatchlist}><FiTag /> 가격 추적 보기</button>}</div>
   </section>;
 }
 
@@ -56,34 +56,34 @@ function accessorySelections(build: BuildSelection) {
 }
 
 function scenarioStatusLabel(status: CompatibilityResult["status"]) {
-  return status === "compatible" ? "호환 가능" : status === "needs_review" ? "확인 필요" : "호환 불가";
+  return status === "compatible" ? "같이 쓸 수 있어요" : status === "needs_review" ? "확인이 필요해요" : "같이 쓰기 어려워요";
 }
 
 function homeCatalogFreshnessLabel(meta: ServiceMeta | null) {
-  if (!meta) return "동기화 중";
+  if (!meta) return "정보를 불러오는 중이에요";
   const freshness = classifyDataFreshness(meta.catalogUpdatedAt);
-  if (freshness === "fresh") return "최근 갱신";
-  if (freshness === "aging") return "갱신 권장";
-  if (freshness === "stale") return "오래된 정보";
-  return "시점 확인 필요";
+  if (freshness === "fresh") return "최근 확인했어요";
+  if (freshness === "aging") return "곧 다시 확인해요";
+  if (freshness === "stale") return "오래된 정보예요";
+  return "시점 확인이 필요해요";
 }
 
 function homeBenchmarkCoveragePercent(complete: number, total: number) {
-  return total > 0 ? `${((complete / total) * 100).toFixed(1)}%` : "확인 필요";
+  return total > 0 ? `${((complete / total) * 100).toFixed(1)}%` : "확인이 필요해요";
 }
 
 function homeCacheFreshnessLabel(item: CatalogCacheStatusItem) {
-  if (item.count === 0) return "저장된 목록 없음";
-  if (item.freshness === "fresh") return "최근 캐시";
-  if (item.freshness === "aging") return "갱신 권장";
-  if (item.freshness === "stale") return "오래된 캐시";
-  return "시각 미확인";
+  if (item.count === 0) return "아직 저장하지 않았어요";
+  if (item.freshness === "fresh") return "최근 저장했어요";
+  if (item.freshness === "aging") return "곧 다시 확인해요";
+  if (item.freshness === "stale") return "오래된 목록이에요";
+  return "저장 시점 확인이 필요해요";
 }
 
 function homeCacheSavedAtLabel(item: CatalogCacheStatusItem) {
-  if (!item.cachedAt) return "캐시 저장 시각 확인 필요";
+  if (!item.cachedAt) return "저장 시점 확인이 필요해요";
   const date = new Date(item.cachedAt);
-  return Number.isNaN(date.getTime()) ? "캐시 저장 시각 확인 필요" : "캐시 저장 " + date.toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" });
+  return Number.isNaN(date.getTime()) ? "저장 시점 확인이 필요해요" : "저장한 시각 · " + date.toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" });
 }
 
 function HomeCatalogCachePanel({ onToast }: { onToast: (message: string) => void }) {
@@ -106,26 +106,26 @@ function HomeCatalogCachePanel({ onToast }: { onToast: (message: string) => void
 
   function clearCache(kind: "parts" | "accessories" | "all") {
     const labels = kind === "parts" ? "핵심 부품" : kind === "accessories" ? "주변 부품" : "핵심·주변 부품";
-    if (!window.confirm(labels + " 탐색 캐시만 지울까요? 견적 초안·저장 견적·가격 추적 목록은 변경되지 않습니다.")) return;
+    if (!window.confirm(labels + " 목록만 비울까요? 견적 초안·저장 견적·가격 추적 목록은 그대로 있어요.")) return;
     try {
       if (kind === "parts" || kind === "all") window.localStorage.removeItem(CATALOG_PICKER_CACHE_STORAGE_KEY);
       if (kind === "accessories" || kind === "all") window.localStorage.removeItem(ACCESSORY_CATALOG_CACHE_STORAGE_KEY);
       window.dispatchEvent(new Event(CATALOG_CACHE_CHANGED_EVENT));
       setStatus(readStatus());
-      setMessage(labels + " 탐색 캐시를 지웠습니다. 다시 목록을 열면 새로 저장됩니다.");
-      onToast(labels + " 탐색 캐시만 초기화했습니다. 견적·가격 추적 데이터는 유지됩니다.");
+      setMessage(labels + " 목록을 비웠어요. 다시 열면 새로 저장돼요.");
+      onToast(labels + " 목록만 비웠어요. 견적·가격 추적 데이터는 그대로예요.");
     } catch {
-      setMessage("브라우저 저장 공간을 변경하지 못했습니다.");
-      onToast("카탈로그 캐시를 초기화하지 못했습니다.");
+      setMessage("브라우저 저장 공간을 바꾸지 못했어요.");
+      onToast("부품 목록을 비우지 못했어요.");
     }
   }
 
   if (!status) return null;
   const cacheItems = [status.parts, status.accessories];
   return <section className={"home-catalog-cache " + (status.hasAny ? "" : "empty")} aria-label="브라우저 카탈로그 캐시 상태" data-testid="home-catalog-cache">
-    <div className="home-catalog-cache-heading"><div><p className="eyebrow">LOCAL CATALOG CACHE</p><h2>이 기기에 저장된 부품 목록</h2><p>서버가 잠시 응답하지 않을 때도 목록을 볼 수 있게 저장해 둔 목록입니다. 검사 결과·실시간 가격·저장 견적과는 별개예요.</p></div><span>{status.totalCount.toLocaleString("ko-KR")}개</span></div>
-    <div className="home-catalog-cache-grid">{cacheItems.map((item) => <article className={"home-catalog-cache-item " + item.freshness} key={item.kind}><div><span>{item.label}</span><strong>{item.count.toLocaleString("ko-KR")}개</strong></div><em>{homeCacheFreshnessLabel(item)}</em><small>{homeCacheSavedAtLabel(item)}</small><button className="text-button" type="button" data-testid={"home-catalog-cache-clear-" + item.kind} onClick={() => clearCache(item.kind)} disabled={item.count === 0}><FiTrash2 /> 이 목록만 지우기</button></article>)}</div>
-    {status.hasAny ? <div className="home-catalog-cache-actions"><button className="button button-light" type="button" data-testid="home-catalog-cache-clear-all" onClick={() => clearCache("all")}><FiTrash2 /> 전체 탐색 캐시 지우기</button><p><FiInfo /> 캐시를 지워도 견적 초안·저장 견적·공유 링크·가격 추적 목록은 삭제되지 않습니다.</p></div> : <p className="home-catalog-cache-empty"><FiInfo /> 아직 보관된 카탈로그 탐색 캐시가 없습니다. 부품 선택기나 주변 부품 목록을 정상적으로 열면 자동으로 저장됩니다.</p>}
+    <div className="home-catalog-cache-heading"><div><p className="eyebrow">LOCAL CATALOG CACHE</p><h2>이 기기에 잠시 저장한 부품 목록</h2><p>서버가 잠시 연결되지 않아도 다시 볼 수 있도록 저장해 둔 목록이에요. 검사 결과·실시간 가격·저장 견적과는 별개예요.</p></div><span>{status.totalCount.toLocaleString("ko-KR")}개</span></div>
+    <div className="home-catalog-cache-grid">{cacheItems.map((item) => <article className={"home-catalog-cache-item " + item.freshness} key={item.kind}><div><span>{item.label}</span><strong>{item.count.toLocaleString("ko-KR")}개</strong></div><em>{homeCacheFreshnessLabel(item)}</em><small>{homeCacheSavedAtLabel(item)}</small><button className="text-button" type="button" data-testid={"home-catalog-cache-clear-" + item.kind} onClick={() => clearCache(item.kind)} disabled={item.count === 0}><FiTrash2 /> 이 목록만 비우기</button></article>)}</div>
+    {status.hasAny ? <div className="home-catalog-cache-actions"><button className="button button-light" type="button" data-testid="home-catalog-cache-clear-all" onClick={() => clearCache("all")}><FiTrash2 /> 저장한 목록 모두 비우기</button><p><FiInfo /> 목록을 비워도 견적 초안·저장 견적·공유 링크·가격 추적 목록은 그대로예요.</p></div> : <p className="home-catalog-cache-empty"><FiInfo /> 아직 저장된 부품 목록이 없어요. 부품 선택기나 주변 부품 목록을 열면 자동으로 저장돼요.</p>}
     {message && <p className="home-catalog-cache-message" role="status"><FiCheckCircle /> {message}</p>}
   </section>;
 }
@@ -135,12 +135,12 @@ function HomeDraftResumePanel({ build, result, resultIsStale, onResume, onOpenRe
   const coreCategoryCount = PART_CATEGORIES.filter((category) => selectionList(build, category).length > 0).length;
   const accessoryCount = accessorySelections(build).length;
   if (coreEntries.length === 0 && accessoryCount === 0) return null;
-  const resultLabel = !result ? "아직 검사하지 않음" : resultIsStale ? "입력 변경 후 재검사 필요" : scenarioStatusLabel(result.status);
+  const resultLabel = !result ? "아직 검사하지 않았어요" : resultIsStale ? "입력이 바뀌어 다시 확인해요" : scenarioStatusLabel(result.status);
   const resultClass = !result || resultIsStale ? "review" : result.status;
   return <section className="home-draft-resume" aria-label="작업 중인 견적">
-    <div className="home-draft-resume-heading"><div><p className="eyebrow">CONTINUE BUILD</p><h2>작업 중인 견적이 있습니다</h2></div><span className={`home-draft-result ${resultClass}`}><span className="status-dot" /> {resultLabel}</span></div>
-    <div className="home-draft-resume-summary"><div><span>선택한 핵심 부품</span><strong>{coreEntries.length}개 · {coreCategoryCount}개 범주</strong></div><div><span>주변 부품</span><strong>{accessoryCount}종</strong></div>{result && !resultIsStale ? <div><span>최근 검사</span><strong>차단 {result.blockerCount} · 주의 {result.warningCount} · 확인 필요 {result.unknownCount}</strong></div> : <div><span>이어서 할 일</span><strong>견적을 열어 검사 준비 확인</strong></div>}</div>
-    <div className="home-draft-resume-actions"><button className="button button-primary" type="button" onClick={onResume}><FiEdit3 /> 견적 이어서 보기</button>{result && !resultIsStale && <button className="button button-light" type="button" onClick={onOpenResult}><FiActivity /> 최근 검사 결과 보기</button>}</div>
+    <div className="home-draft-resume-heading"><div><p className="eyebrow">CONTINUE BUILD</p><h2>이어서 볼 견적이 있어요</h2></div><span className={`home-draft-result ${resultClass}`}><span className="status-dot" /> {resultLabel}</span></div>
+    <div className="home-draft-resume-summary"><div><span>선택한 핵심 부품</span><strong>{coreEntries.length}개 · {coreCategoryCount}개 범주</strong></div><div><span>주변 부품</span><strong>{accessoryCount}종</strong></div>{result && !resultIsStale ? <div><span>최근 확인</span><strong>차단 {result.blockerCount} · 주의 {result.warningCount} · 확인 필요 {result.unknownCount}</strong></div> : <div><span>다음 할 일</span><strong>견적을 열어 지금 상태를 확인해요</strong></div>}</div>
+    <div className="home-draft-resume-actions"><button className="button button-primary" type="button" onClick={onResume}><FiEdit3 /> 견적 이어서 열기</button>{result && !resultIsStale && <button className="button button-light" type="button" onClick={onOpenResult}><FiActivity /> 최근 확인 결과 보기</button>}</div>
   </section>;
 }
 
@@ -157,9 +157,9 @@ function HomeDataTrustPanel({ meta, bootstrapLoading, bootstrapErrorCount }: { m
   const benchmarkGpuIncompleteCount = meta ? Math.max(0, meta.benchmarkCoverage.gpu.total - meta.benchmarkCoverage.gpu.threeDMarkComplete) : 0;
   const freshness = meta ? classifyDataFreshness(meta.catalogUpdatedAt) : "unknown";
   const state = bootstrapErrorCount > 0 ? "degraded" : !meta && bootstrapLoading ? "loading" : freshness === "stale" || freshness === "unknown" ? "review" : "ready";
-  const statusLabel = state === "degraded" ? "일부 정보 확인 필요" : state === "loading" ? "불러오는 중" : state === "review" ? "정보 상태 확인 필요" : "검사 준비 가능";
+  const statusLabel = state === "degraded" ? "일부 정보는 확인이 필요해요" : state === "loading" ? "정보를 불러오고 있어요" : state === "review" ? "정보를 확인해 주세요" : "검사할 준비가 됐어요";
   return <section className={`home-data-trust ${state}`} aria-label="현재 데이터 상태">
-    <div className="home-data-trust-heading"><div><p className="eyebrow">DATA TRUST</p><h2>검사에 쓰는 부품 정보</h2><p>부품을 고르기 전에 어떤 정보를 쓰는지 확인해 보세요.</p></div><span className={`home-data-trust-status ${state}`}><span className="status-dot" /> {statusLabel}</span></div>
+    <div className="home-data-trust-heading"><div><p className="eyebrow">DATA TRUST</p><h2>견적에 쓰는 부품 정보</h2><p>어떤 정보로 견적을 계산하는지 먼저 확인해보세요.</p></div><span className={`home-data-trust-status ${state}`}><span className="status-dot" /> {statusLabel}</span></div>
     {meta ? <>
       <div className="home-data-trust-grid">
         <div><span>핵심 부품</span><strong>{catalogEligibleCount.toLocaleString("ko-KR")}개</strong><small>전체 {meta.catalogCount.toLocaleString("ko-KR")}개 · 부품 아님 {meta.catalogExcludedNonCoreCount ?? 0}개 제외 · 기본 정보 {catalogEligibleQualityCounts?.seed ?? 0}개 · 스펙 부족 {catalogEligibleQualityCounts?.incomplete ?? 0}개</small></div>
@@ -176,7 +176,7 @@ function HomeDataTrustPanel({ meta, bootstrapLoading, bootstrapErrorCount }: { m
         {benchmarkCpuIncompleteCount > 0 && <a className="button button-small button-light" data-testid="home-data-trust-open-cpu-benchmark" href="/catalog?category=cpu&benchmarkStatus=incomplete">CPU 벤치 점수 없음 {benchmarkCpuIncompleteCount.toLocaleString("ko-KR")}개 보기 <FiArrowRight /></a>}
         {benchmarkGpuIncompleteCount > 0 && <a className="button button-small button-light" data-testid="home-data-trust-open-gpu-benchmark" href="/catalog?category=gpu&benchmarkStatus=incomplete">GPU 벤치 점수 없음 {benchmarkGpuIncompleteCount.toLocaleString("ko-KR")}개 보기 <FiArrowRight /></a>}
       </div>
-    </> : <p className="home-data-trust-loading"><FiLoader className="spin" /> 부품 정보를 불러오는 중입니다. 잠시 후 검사 화면에서 상태를 확인할 수 있어요.</p>}
+    </> : <p className="home-data-trust-loading"><FiLoader className="spin" /> 부품 정보를 불러오고 있어요. 잠시 후 검사 화면에서 상태를 확인할 수 있어요.</p>}
   </section>;
 }
 
@@ -226,7 +226,7 @@ function MobileHomeView({ build, result, resultIsStale, partMap, onStart, onGuid
   const overallTone = resultReady ? result!.status : hasBuild ? "review" : "empty";
   return <section className="mobile-home-view" aria-label="PC Supporter 모바일 홈">
     <div className="mobile-home-heading">
-      <div><span className="mobile-kicker">CHECK / HOME</span><h1>내 견적</h1><p>안전한 부품 조합을 찾아볼까요?</p></div>
+      <div><span className="mobile-kicker">CHECK / HOME</span><h1>내 PC</h1><p>{resultReady ? "지금 구성, 같이 확인해볼까요?" : hasBuild ? "고른 부품이 잘 맞는지 확인해볼까요?" : "지금 필요한 PC를 함께 찾아볼까요?"}</p></div>
       <span className={`mobile-home-status ${overallTone}`}><span className="mobile-status-dot" /> {overallState}</span>
     </div>
     {!hasBuild && !resultReady
@@ -257,7 +257,7 @@ export function HomeView({ meta, bootstrapLoading, bootstrapErrorCount, build, r
     <section className="hero-section">
       <div className="hero-copy">
         {hasAnySelection
-          ? <><p className="eyebrow"><FiShield /> PC 조립 전 마지막 체크</p><h1>내가 고른 부품,<br /><span>정말 같이 쓸 수 있을까?</span></h1><p className="hero-description">부품을 고르면 함께 쓸 수 있는지 바로 확인하고, 문제가 있으면 해결 방법까지 알려드려요.</p></>
+          ? <><p className="eyebrow"><FiShield /> 내 PC를 확인하는 첫 단계</p><h1>고른 부품이 서로 잘 맞는지<br /><span>같이 확인해볼까요?</span></h1><p className="hero-description">부품을 고르면 서로 잘 맞는지 확인하고, 문제가 있으면 바꾸는 방법까지 알려드려요.</p></>
           : <><p className="eyebrow"><FiTarget /> 새 PC를 고르는 첫 단계</p><h1>나에게 맞는 PC,<br /><span>몇 가지 질문으로 시작해요.</span></h1><p className="hero-description">게임·작업·예산만 알려주시면 필요한 성능과 예상 가격대를 먼저 정리해드려요.</p></>}
         <div className="hero-actions">
           <button className="button button-primary button-large" onClick={hasAnySelection ? onStart : onGuidedStart}>{hasAnySelection ? "견적 검사 시작하기" : "새 견적 시작하기"} <FiArrowRight /></button>
@@ -266,17 +266,17 @@ export function HomeView({ meta, bootstrapLoading, bootstrapErrorCount, build, r
         <details className="hero-demo-tools"><summary>예시 구성 보기 <FiChevronDown /></summary><div><button type="button" onClick={onDemo}><FiActivity /> 문제 있는 예시 견적</button><button type="button" onClick={onCompatibleDemo}><FiCheckCircle /> 문제 없는 예시 견적</button></div></details>
       </div>
       {hasAnySelection ? <div className="hero-panel">
-        <div className="panel-kicker">CHECK PREVIEW</div>
-      <div className="preview-status"><span className="status-icon danger"><FiXCircle /></span><div><strong>같이 쓸 수 없는 부품이 있어요.</strong><span>차단 오류 3개 · 주의 1개</span></div></div>
-      <div className="preview-rule"><span className="rule-icon danger"><FiXCircle /></span><div><strong>CPU와 메인보드 소켓이 다릅니다.</strong><small>CPU: AM5 · 메인보드: LGA1700</small></div><FiChevronDown /></div>
+        <div className="panel-kicker">검사 결과 미리보기</div>
+      <div className="preview-status"><span className="status-icon danger"><FiXCircle /></span><div><strong>확인이 필요한 부품이 있어요.</strong><span>바로 고칠 문제 3개 · 주의 1개</span></div></div>
+      <div className="preview-rule"><span className="rule-icon danger"><FiXCircle /></span><div><strong>CPU와 메인보드 규격이 달라요.</strong><small>CPU: AM5 · 메인보드: LGA1700</small></div><FiChevronDown /></div>
       <div className="preview-rule"><span className="rule-icon warning"><FiAlertTriangle /></span><div><strong>RAM 속도가 지원 범위를 초과합니다.</strong><small>다운클럭될 수 있어요.</small></div><FiChevronDown /></div>
-      <div className="preview-rule"><span className="rule-icon success"><FiCheckCircle /></span><div><strong>문제 부품을 바로 바꿔볼 수 있어요.</strong><small>바꾼 뒤 다시 검사하기</small></div><FiChevronDown /></div>
+      <div className="preview-rule"><span className="rule-icon success"><FiCheckCircle /></span><div><strong>문제가 있는 부품은 바로 바꿔볼 수 있어요.</strong><small>바꾼 뒤 다시 확인해요</small></div><FiChevronDown /></div>
       </div> : <GuidedHomePreview />}
     </section>
     <HomeAlertCenter items={alertItems} unreadCount={alertUnreadCount} hasBuildAlerts={hasBuildAlerts} hasWatchlistAlerts={hasWatchlistAlerts} onOpenHistory={onOpenHistory} onOpenWatchlist={onOpenWatchlist} />
     <HomeDraftResumePanel build={build} result={result} resultIsStale={resultIsStale} onResume={onResume} onOpenResult={onOpenResult} />
     <details className="home-secondary-details" aria-label="홈 추가 정보">
-      <summary><span><FiInfo /> 저장·데이터 정보</span><small>{localShareCount > 0 ? `${localShareCount}개 저장됨` : "필요할 때 확인하세요"}</small><FiChevronDown /></summary>
+      <summary><span><FiInfo /> 저장한 견적·정보 확인</span><small>{localShareCount > 0 ? `${localShareCount}개 저장됨` : "필요할 때 확인하세요"}</small><FiChevronDown /></summary>
       <div className="home-secondary-details-body">
         {budgetLadderShares.length > 0 && <Suspense fallback={null}><LazyHomeBudgetLadderSharePanel entries={budgetLadderShares} onCopy={onCopyBudgetLadderShare} onRemove={onRemoveBudgetLadderShare} onToast={onToastBudgetLadderShare} /></Suspense>}
         {alternativeComparisonShares.length > 0 && <Suspense fallback={null}><LazyHomeAlternativeComparisonSharePanel entries={alternativeComparisonShares} onCopy={onCopyAlternativeComparisonShare} onRemove={onRemoveAlternativeComparisonShare} onRevoke={onRevokeAlternativeComparisonShare} onToast={onToastAlternativeComparisonShare} /></Suspense>}
@@ -284,14 +284,14 @@ export function HomeView({ meta, bootstrapLoading, bootstrapErrorCount, build, r
         <HomeDataTrustPanel meta={meta} bootstrapLoading={bootstrapLoading} bootstrapErrorCount={bootstrapErrorCount} />
         <HomeCatalogCachePanel onToast={onToast} />
         <section className="feature-grid">
-          <FeatureCard Icon={FiSearch} number="01" title="부품을 검색해 선택" description="모델명을 몰라도 카테고리별 검색과 주요 스펙을 보며 고를 수 있습니다." />
-          <FeatureCard Icon={FiActivity} number="02" title="모든 문제를 한 번에 검사" description="첫 번째 오류에서 멈추지 않고 선택한 견적의 전체 연결 관계를 확인합니다." />
-          <FeatureCard Icon={FiCheckCircle} number="03" title="원인부터 해결까지" description="현재값과 지원값을 비교하고 교체·수량 조정 방법을 바로 안내합니다." />
+          <FeatureCard Icon={FiSearch} number="01" title="부품을 찾아서 선택해요" description="모델명을 몰라도 범주별 검색과 주요 스펙을 보며 고를 수 있어요." />
+          <FeatureCard Icon={FiActivity} number="02" title="문제를 한 번에 확인해요" description="첫 번째 문제에서 멈추지 않고 고른 견적의 연결 관계를 함께 확인해요." />
+          <FeatureCard Icon={FiCheckCircle} number="03" title="왜 그런지부터 해결해요" description="현재값과 지원값을 비교하고 교체·수량 조정 방법을 바로 알려드려요." />
         </section>
         <section className="home-trust-row">
-          <div><span className="trust-icon"><FiDatabase /></span><div><strong>부품 정보 카탈로그</strong><p>다나와에서 모은 정보와 직접 확인한 정보를 함께 보여줍니다.</p></div></div>
-          <div><span className="trust-icon"><FiShield /></span><div><strong>이유를 보여주는 결과</strong><p>왜 안 되는지 규칙과 함께 알려드리고, 같은 입력엔 같은 결과를 드립니다.</p></div></div>
-          <div><span className="trust-icon"><FiRefreshCw /></span><div><strong>수정하고 재검사</strong><p>오류 카드에서 부품을 바꾼 뒤 바로 다시 검사합니다.</p></div></div>
+          <div><span className="trust-icon"><FiDatabase /></span><div><strong>부품 정보를 함께 보여드려요</strong><p>다나와에서 모은 정보와 직접 확인한 정보를 구분해서 보여드려요.</p></div></div>
+          <div><span className="trust-icon"><FiShield /></span><div><strong>이유까지 보여드려요</strong><p>왜 그런지 규칙과 함께 알려드리고, 같은 입력에는 같은 결과를 드려요.</p></div></div>
+          <div><span className="trust-icon"><FiRefreshCw /></span><div><strong>바꾸고 다시 확인해요</strong><p>문제 카드에서 부품을 바꾼 뒤 바로 다시 확인할 수 있어요.</p></div></div>
         </section>
       </div>
     </details>
