@@ -3,6 +3,7 @@ import type { IconType } from "react-icons";
 import { gpuPurchaseEvidenceFor, type GpuFitStatus, type GpuFitSummary, type PciePowerOptionFit } from "../shared/gpu-fit";
 import type { Part, PhysicalEvidenceSource, PciePowerConnectorKind, PciePowerRequirement } from "../shared/types";
 import { safeHttpsUrl } from "./safe-source-url";
+import { gwa } from "../shared/josa";
 
 type FitTone = "good" | "warning" | "danger" | "unknown" | "neutral";
 
@@ -125,7 +126,7 @@ function actionText(fit: GpuFitSummary, computerCase: Part | undefined, psu: Par
   if (purchaseEvidence.pcieCableTopology === "needs_review") actions.push("커넥터 수량과 별도로 PSU PCIe 케이블 런 수·분배 구조가 GPU 연결 요구를 충족하는지 제조사 표에서 확인하세요.");
   if (purchaseEvidence.physical === "incompatible") actions.push("GPU 전원 케이블 요구 여유보다 케이스 측면 공간이 작습니다. 더 여유 있는 케이스 또는 케이블 조건이 맞는 GPU를 비교하세요.");
   else if (purchaseEvidence.physical === "needs_review") actions.push("GPU 물리 슬롯·케이블 굽힘 여유와 케이스 측면 공간을 제조사 매뉴얼에서 확인하세요.");
-  if (actions.length === 0) actions.push(`${computerCase?.name ?? "케이스"}와 ${psu?.name ?? "PSU"}에 대해 현재 등록된 GPU 장착·전원 기준을 통과했습니다.`);
+  if (actions.length === 0) actions.push(`${gwa(computerCase?.name ?? "케이스")} ${gwa(psu?.name ?? "PSU")}에 대해 현재 등록된 GPU 장착·전원 기준을 통과했습니다.`);
   return actions;
 }
 

@@ -249,6 +249,7 @@ describe("build request validation", () => {
     expect(parseRecommendationPreferences({ priority: "budget", profile: "gaming", budgetWon: 2_000_000, listingPolicy: "all" }))
       .toEqual({ priority: "budget", profile: "gaming", budgetWon: 2_000_000, listingPolicy: "all" });
     expect(parseRecommendationPreferences({ priority: "reliability", profile: "general" }).priority).toBe("reliability");
+    expect(parseRecommendationPreferences({ priority: "performance", profile: "general", performanceTier: "top" }).performanceTier).toBe("top");
     expect(parseRecommendationPreferences({ profile: "gaming", gamingResolution: "4k" }).gamingResolution).toBe("4k");
     expect(parseRecommendationPreferences({ profile: "gaming", gamingRefreshRate: 240 }).gamingRefreshRate).toBe(240);
     expect(parseRecommendationPreferences(undefined)).toEqual({ priority: "balanced", profile: "general", listingPolicy: "retail_only" });
@@ -260,6 +261,41 @@ describe("build request validation", () => {
     expect(parsed.errors).toHaveLength(0);
     expect(parsed.request).toEqual({ profile: "gaming", budgetWon: 2_000_000, includeGpu: true, priority: "balanced", gamingResolution: "1440p", gamingRefreshRate: 144, memoryCapacityGb: 32, storageCapacityGb: 1000, hddCapacityGb: 4000, hddCount: 0, includeNonRetail: false, listingPolicy: "retail_only" });
     expect(parseBuildGenerationRequest({ profile: "gaming", budgetWon: 2_000_000, priority: "performance" }).request?.priority).toBe("performance");
+  });
+
+  it("preserves bounded gaming option advisory fields", () => {
+    const parsed = parseBuildGenerationRequest({
+      profile: "gaming",
+      budgetWon: 3_500_000,
+      gamingGameIds: ["cyberpunk", "pubg"],
+      gamingGraphicsPreset: "high",
+      gamingRayTracing: true,
+      gamingUpscaling: "quality"
+    });
+
+    expect(parsed.errors).toHaveLength(0);
+    expect(parsed.request).toMatchObject({ gamingGameIds: ["cyberpunk", "pubg"], gamingGraphicsPreset: "high", gamingRayTracing: true, gamingUpscaling: "quality" });
+  });
+
+  it("rejects unbounded or malformed gaming option advisory fields", () => {
+    const parsed = parseBuildGenerationRequest({ profile: "gaming", budgetWon: 2_000_000, gamingGameIds: ["a", "b", "c", "d", "e", "f"], gamingGraphicsPreset: "ultra", gamingRayTracing: "yes", gamingUpscaling: "native-only" });
+
+    expect(parsed.request).toBeUndefined();
+    expect(parsed.errors).toEqual(expect.arrayContaining([
+      "gamingGameIds는 최대 5개의 비어 있지 않은 160자 이하 게임 ID 배열이어야 합니다.",
+      "gamingGraphicsPreset은 competitive, balanced, high 중 하나여야 합니다.",
+      "gamingRayTracing은 boolean이어야 합니다.",
+      "gamingUpscaling은 native, quality, balanced 중 하나여야 합니다."
+    ]));
+  });
+
+  it("validates and preserves a direct performance tier", () => {
+    const parsed = parseBuildGenerationRequest({ profile: "general", budgetWon: 2_000_000, performanceTier: "top" });
+    expect(parsed.errors).toHaveLength(0);
+    expect(parsed.request?.performanceTier).toBe("top");
+    const invalid = parseBuildGenerationRequest({ profile: "general", budgetWon: 2_000_000, performanceTier: "ultra" });
+    expect(invalid.request).toBeUndefined();
+    expect(invalid.errors).toContain("performanceTier는 entry, high, top 중 하나여야 합니다.");
   });
 
   it("rejects an unsupported RAM target capacity", () => {

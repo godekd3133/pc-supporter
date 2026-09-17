@@ -126,7 +126,7 @@ export function savedBuildMonitorTransitionHasActionableChange(transition: Retur
 
 export function savedBuildMonitorAlertAllowed(policy: SavedBuildServerMonitorAlertPolicy, kind: SavedBuildMonitorAlert["kind"]) {
   if (policy === "all") return true;
-  if (policy === "risk") return kind === "critical" || kind === "review" || kind === "failed";
+  if (policy === "risk") return kind === "critical" || kind === "review" || kind === "failed" || kind === "alternative";
   return kind === "critical" || kind === "failed";
 }
 

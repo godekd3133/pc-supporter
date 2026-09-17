@@ -32,9 +32,11 @@ import { catalogChangeDashboardSummary, catalogChangeMatches, catalogChangeMissi
 import type { CatalogChangeFilter, CatalogChangeKindFilter } from "../shared/catalog-change-filters";
 import { SAVED_BUILD_VERSION_MIGRATION_CONFIRMATION, SAVED_BUILD_VERSION_ROLLBACK_CONFIRMATION } from "../shared/saved-build-version";
 import type { SavedBuildVersionAudit, SavedBuildVersionBackupDetail, SavedBuildVersionBackupSummary, SavedBuildVersionMigrationMutationResult, SavedBuildVersionMigrationPreview, SavedBuildVersionMigrationRollbackResult } from "../shared/saved-build-version";
+import { iGa } from "../shared/josa";
 
 const M2SlotOverridePanel = lazy(() => import("./AdminM2Panels").then((module) => ({ default: module.M2SlotOverridePanel })));
 const BenchmarkOverridePanel = lazy(() => import("./AdminBenchmarkPanel").then((module) => ({ default: module.BenchmarkOverridePanel })));
+const AdminGamingPerformancePanel = lazy(() => import("./AdminGamingPerformancePanel").then((module) => ({ default: module.AdminGamingPerformancePanel })));
 const GpuPhysicalOverridePanel = lazy(() => import("./AdminGpuPhysicalPanel").then((module) => ({ default: module.AdminGpuPhysicalPanel })));
 const CaseRgbLoadOverridePanel = lazy(() => import("./AdminCaseRgbLoadPanel").then((module) => ({ default: module.CaseRgbLoadOverridePanel })));
 const CoolingFanLoadOverridePanel = lazy(() => import("./AdminCoolingFanLoadPanel").then((module) => ({ default: module.CoolingFanLoadOverridePanel })));
@@ -465,7 +467,7 @@ function AdminSecurityNotice({ security }: { security?: AdminSession["security"]
       !security.passwordConfigured ? "ADMIN_PASSWORD" : undefined,
       !security.sessionSecretConfigured ? "ADMIN_SESSION_SECRET" : undefined
     ].filter((value): value is string => value !== undefined);
-    notice = <div className="admin-security-notice production" data-testid="admin-security-notice" role="alert"><FiAlertTriangle /><div><strong>운영 보안 설정 확인 필요</strong><p>{missing.join(", ")}이(가) 설정되지 않았습니다. 운영 데이터 센터를 공개하기 전에 강한 관리자 비밀번호와 기본값이 아닌 세션 비밀키를 설정해 주세요.</p></div></div>;
+    notice = <div className="admin-security-notice production" data-testid="admin-security-notice" role="alert"><FiAlertTriangle /><div><strong>운영 보안 설정 확인 필요</strong><p>{iGa(missing.join(", "))} 설정되지 않았습니다. 운영 데이터 센터를 공개하기 전에 강한 관리자 비밀번호와 기본값이 아닌 세션 비밀키를 설정해 주세요.</p></div></div>;
   }
   if (security.environment === "development" && !security.passwordConfigured) {
     notice = <div className="admin-security-notice development" data-testid="admin-security-notice" role="status"><FiInfo /><div><strong>개발용 관리자 모드</strong><p>현재 <code>ADMIN_PASSWORD</code>가 없어 관리자 API 인증이 비활성화되어 있습니다. 로컬 확인용 상태이며, 운영 배포 전 <code>ADMIN_PASSWORD</code>와 기본값이 아닌 <code>ADMIN_SESSION_SECRET</code>을 설정해야 합니다.</p></div></div>;
@@ -1328,6 +1330,7 @@ export function AdminView({ meta, onMetaRefresh, onToast }: { meta: ServiceMeta 
     <DeferredAdminPanel label="변경 이력" anchorId="admin-catalog-change-log"><Suspense fallback={<AdminPanelLoading label="변경 이력" />}><CatalogChangeHistoryPanel records={catalogChanges} loading={catalogChangesLoading} error={catalogChangesError} historyLimit={catalogChangesLimit} fromDate={catalogChangesFrom} toDate={catalogChangesTo} categoryFilter={catalogChangesCategory} onHistoryLimitChange={setCatalogChangesLimit} onFromDateChange={setCatalogChangesFrom} onToDateChange={setCatalogChangesTo} onCategoryFilterChange={setCatalogChangesCategory} onRefresh={() => setCatalogChangesRefreshKey((current) => current + 1)} onToast={onToast} /></Suspense></DeferredAdminPanel>
     <DeferredAdminPanel label="M.2 매핑" anchorId="admin-m2-mapping"><Suspense fallback={<AdminPanelLoading label="M.2 매핑" />}><M2SlotOverridePanel onToast={onToast} onMetaRefresh={onMetaRefresh} /></Suspense></DeferredAdminPanel>
     <DeferredAdminPanel label="벤치마크 확인" anchorId="admin-benchmark-review"><Suspense fallback={<AdminPanelLoading label="벤치마크 확인" />}><BenchmarkOverridePanel onToast={onToast} onMetaRefresh={onMetaRefresh} storageMode={meta?.storageMode} /></Suspense></DeferredAdminPanel>
+    <DeferredAdminPanel label="게임별 FPS 자료" anchorId="admin-gaming-performance-evidence"><Suspense fallback={<AdminPanelLoading label="게임별 FPS 자료" />}><AdminGamingPerformancePanel onToast={onToast} /></Suspense></DeferredAdminPanel>
     <DeferredAdminPanel label="GPU 물리 확인" anchorId="admin-gpu-physical"><Suspense fallback={<AdminPanelLoading label="GPU 물리 확인" />}><GpuPhysicalOverridePanel onToast={onToast} onMetaRefresh={onMetaRefresh} /></Suspense></DeferredAdminPanel>
     <section className="admin-card accessory-admin-card">
         <DeferredAdminPanel label="케이스 RGB 부하 확인" anchorId="admin-case-rgb-load"><Suspense fallback={<AdminPanelLoading label="케이스 RGB 부하 확인" />}><CaseRgbLoadOverridePanel onToast={onToast} onMetaRefresh={onMetaRefresh} /></Suspense></DeferredAdminPanel>

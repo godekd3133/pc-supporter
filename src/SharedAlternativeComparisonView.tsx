@@ -30,6 +30,7 @@ import { valueScoreText } from "../shared/value-score";
 import { api } from "./api";
 import { safeExternalUrl, safeHttpsUrl } from "./safe-source-url";
 import { LOCAL_IMPORT_MAX_BYTES } from "../shared/file-import-limits";
+import { eul } from "../shared/josa";
 
 function sharedComparisonPhysicalEvidenceSources(sources: PhysicalEvidenceSource[] | undefined) {
   return (sources ?? []).flatMap((source) => {
@@ -203,7 +204,7 @@ function SharedLiveWatchControl({ part, onToast }: { part: Part; onToast: (messa
       const next = addCatalogWatchEntry(current, { itemId: part.id, itemName: part.name, category: part.category, kind: "part", addedAt: new Date().toISOString() });
       window.localStorage.setItem(CATALOG_WATCHLIST_STORAGE_KEY, catalogWatchlistToJson(next));
       setWatching(true);
-      onToast(`${part.name}을(를) 가격 추적에 등록했습니다.`);
+      onToast(`${eul(part.name)} 가격 추적에 등록했습니다.`);
     } catch {
       onToast("가격 추적 목록에 부품을 등록하지 못했습니다.");
     }

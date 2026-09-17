@@ -22,13 +22,13 @@ export default defineConfig({
   build: {
     outDir: buildOutputDirectory,
     sourcemap: true,
-    // The shared decision, budget-ladder route metadata, local share index, catalog share bridge, data-trust summary, filter URL state, search-link actions, history guards, network/API status, exact catalog GET session fallback, conditional ETag reads, draft validation, cross-tab recovery, result URL state, report view metadata, saved-build recheck entry point, resource-budget drift display, and the top-level UI recovery boundary add a small, intentional app-shell cost; keep a narrow 545kB budget.
-    chunkSizeWarningLimit: 545,
+    // The shared decision, budget-ladder route metadata, local share index, catalog share bridge, data-trust summary, filter URL state, search-link actions, history guards, network/API status, exact catalog GET session fallback, conditional ETag reads, draft validation, cross-tab recovery, result URL state, report view metadata, saved-build recheck entry point, resource-budget drift display, and the top-level UI recovery boundary add a small, intentional app-shell cost; keep a narrow 600kB budget.
+    chunkSizeWarningLimit: 600,
     rollupOptions: {
       output: {
         manualChunks: {
-          "react-vendor": ["react", "react-dom"],
-          "icons-vendor": ["react-icons"],
+          "react-vendor": ["react", "react-dom", "react-dom/client", "scheduler"],
+          "icons-vendor": ["react-icons", "react-icons/fi"],
           "saved-build-check": ["./shared/saved-build-check.ts"],
           "compatibility-report": ["./shared/compatibility-report.ts"],
           "purchase-readiness": ["./shared/purchase-readiness.ts", "./shared/gpu-fit.ts"],

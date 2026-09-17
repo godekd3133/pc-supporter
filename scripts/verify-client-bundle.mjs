@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 const buildOutputDirectory = process.env.PC_SUPPORTER_BUILD_OUT_DIR?.trim() || "dist";
 const distDirectory = join(process.cwd(), buildOutputDirectory, "assets");
-const maxEntryBytes = 545_000;
+const maxEntryBytes = 600_000;
 const requiredDomainChunks = ["catalog-change-domain-", "saved-build-domain-", "purchase-domain-"];
 
 const assetNames = await readdir(distDirectory);

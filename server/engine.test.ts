@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { BuildSelection, M2SlotProfile, MemoryProfile, Part, PciePowerConnectorKind, PciePowerRequirement } from "../shared/types";
+import type { GamingPerformanceEvidenceRecord } from "../shared/gaming-performance-evidence";
 import { BuildGenerationError, assessAlternativePart, alternativeRiskForPart, buildGenerationRecoveryOptionsFor, candidateFixesFinding, candidateSimilarityForBuild, compareCandidateSimilarity, compareCandidateValue, evaluateBuild, generateBuildDraft, isSafeAlternativePart } from "./engine";
 import { seedCatalog } from "./seed-catalog";
 
@@ -3323,6 +3324,232 @@ describe("compatibility engine", () => {
     expect(draft.warnings.some((item) => item.includes("GPU VRAM을 제조사 페이지에서 확인해 주세요"))).toBe(true);
     expect(draft.blockerCount).toBe(0);
     expect(draft.unknownCount).toBe(0);
+  });
+
+  it("preserves gaming advisory options and marks them as non-FPS evidence", () => {
+    const draft = generateBuildDraft(seedCatalog, {
+      profile: "gaming",
+      budgetWon: 3_000_000,
+      includeGpu: true,
+      gamingResolution: "4k",
+      gamingRefreshRate: 144,
+      gamingGameIds: ["cyberpunk", "pubg"],
+      gamingGraphicsPreset: "high",
+      gamingRayTracing: true,
+      gamingUpscaling: "quality"
+    });
+
+    expect(draft).toMatchObject({
+      gamingGameIds: ["cyberpunk", "pubg"],
+      gamingGraphicsPreset: "high",
+      gamingRayTracing: true,
+      gamingUpscaling: "quality",
+      gpuTarget: { targetVramGb: 22 }
+    });
+    expect(draft.rationale.some((item) => item.includes("게임별 목표·그래픽 옵션") && item.includes("권장 VRAM 22GB") && item.includes("GPU 후보 점수"))).toBe(true);
+    expect(draft.warnings.some((item) => item.includes("실제 FPS를 보장하지 않습니다"))).toBe(true);
+  });
+
+  it("explains why each generated component was selected from the request constraints", () => {
+    const draft = generateBuildDraft(seedCatalog, {
+      profile: "gaming",
+      priority: "balanced",
+      budgetWon: 3_000_000,
+      includeGpu: true,
+      gamingResolution: "4k",
+      gamingRefreshRate: 144,
+      gamingGameIds: ["cyberpunk"],
+      gamingGraphicsPreset: "high",
+      gamingRayTracing: true,
+      gamingUpscaling: "quality",
+      memoryCapacityGb: 32,
+      storageCapacityGb: 1000
+    });
+    const reasons = new Map(draft.lines.map((line) => [line.category, line.selectionReason ?? ""]));
+    expect(draft.lines.every((line) => (line.selectionReason ?? "").length > 0)).toBe(true);
+    expect(reasons.get("cpu")).toContain("소켓");
+    expect(reasons.get("motherboard")).toContain("M.2");
+    expect(reasons.get("memory")).toContain("RAM 32GB");
+    expect(reasons.get("gpu")).toContain("사이버펑크 2077");
+    expect(reasons.get("gpu")).toContain("권장 VRAM");
+    expect(reasons.get("case")).toContain("메인보드");
+    expect(reasons.get("psu")).toContain("정격");
+  });
+
+  it("reports the selected GPU VRAM fit instead of hiding a gaming target gap", () => {
+    const baseGpu = seedCatalog.find((part) => part.id === "gpu-rtx-4060")!;
+    const knownVramGpu: Part = { ...baseGpu, id: "gpu-generator-known-vram-reason", specs: { ...baseGpu.specs, vramGb: 8 } };
+    const draft = generateBuildDraft(seedCatalog.filter((part) => part.category !== "gpu").concat(knownVramGpu), {
+      profile: "gaming",
+      budgetWon: 3_000_000,
+      includeGpu: true,
+      gamingResolution: "4k",
+      gamingRefreshRate: 144,
+      gamingGameIds: ["cyberpunk"]
+    });
+    expect(draft.lines.find((line) => line.category === "gpu")?.selectionReason).toContain("현재 VRAM 8GB로 권장 VRAM 19GB보다 낮아 확인이 필요합니다");
+  });
+
+  it("promotes a server-sourced matching evidence set without accepting client FPS values", () => {
+    const request = {
+      profile: "gaming" as const,
+      budgetWon: 3_000_000,
+      includeGpu: true,
+      gamingResolution: "4k" as const,
+      gamingRefreshRate: 144 as const,
+      gamingGameIds: ["cyberpunk", "pubg"] as string[],
+      gamingGraphicsPreset: "high" as const,
+      gamingRayTracing: true,
+      gamingUpscaling: "quality" as const
+    };
+    const baseline = generateBuildDraft(seedCatalog, request);
+    const selectedGpuPartId = baseline.selection.gpu?.partId;
+    expect(selectedGpuPartId).toBeTruthy();
+    if (!selectedGpuPartId) throw new Error("테스트용 자동 구성에서 GPU를 선택하지 않았습니다.");
+    const evidence = (["cyberpunk", "pubg"] as const).map((gameId): GamingPerformanceEvidenceRecord => ({
+      id: `evidence-${gameId}`,
+      gameId,
+      gpuPartId: selectedGpuPartId,
+      gpuName: "검증된 테스트 GPU",
+      resolution: "4k",
+      refreshRate: 144,
+      graphicsPreset: "high",
+      rayTracing: true,
+      upscaling: "quality",
+      averageFps: 160,
+      onePercentLowFps: 120,
+      driverVersion: "test-driver",
+      measuredAt: "2026-09-10T00:00:00.000Z",
+      sourceKind: "lab",
+      sourceUrl: "https://example.com/verified-evidence"
+    }));
+    const draft = generateBuildDraft(seedCatalog, request, evidence);
+    expect(draft.gamingPerformanceAssessment).toMatchObject({ status: "verified", gpuPartId: selectedGpuPartId, matchedRecordIds: ["evidence-cyberpunk", "evidence-pubg"], measurements: [{ averageFps: 160 }, { averageFps: 160 }] });
+  });
+
+  it("prefers an exact verified GPU evidence candidate after safety and budget gates pass", () => {
+    const request = {
+      profile: "gaming" as const,
+      budgetWon: 3_000_000,
+      includeGpu: true,
+      gamingResolution: "4k" as const,
+      gamingRefreshRate: 144 as const,
+      gamingGameIds: ["cyberpunk"] as string[],
+      gamingGraphicsPreset: "high" as const,
+      gamingRayTracing: true,
+      gamingUpscaling: "quality" as const
+    };
+    const baseline = generateBuildDraft(seedCatalog, request);
+    const baselineGpu = seedCatalog.find((part) => part.id === baseline.selection.gpu?.partId);
+    if (!baselineGpu) throw new Error("기준 자동 구성에서 GPU 부품을 찾지 못했습니다.");
+    const evidenceGpuId = "gpu-exact-evidence-priority";
+    const evidenceGpu: Part = { ...baselineGpu, id: evidenceGpuId, name: `${baselineGpu.name} · exact evidence candidate` };
+    const evidence: GamingPerformanceEvidenceRecord[] = [{
+      id: "evidence-exact-priority",
+      gameId: "cyberpunk",
+      gpuPartId: evidenceGpuId,
+      gpuName: evidenceGpu.name,
+      resolution: "4k",
+      refreshRate: 144,
+      graphicsPreset: "high",
+      rayTracing: true,
+      upscaling: "quality",
+      averageFps: 160,
+      onePercentLowFps: 120,
+      measuredAt: "2026-09-10T00:00:00.000Z",
+      sourceKind: "lab",
+      sourceUrl: "https://example.com/exact-evidence-priority"
+    }];
+    const draft = generateBuildDraft(seedCatalog.concat(evidenceGpu), request, evidence);
+    expect(draft.selection.gpu?.partId).toBe(evidenceGpuId);
+    expect(draft.gamingPerformanceAssessment).toMatchObject({ status: "verified", gpuPartId: evidenceGpuId, matchedRecordIds: ["evidence-exact-priority"] });
+  });
+
+  it("does not prefer an exact but stale evidence candidate", () => {
+    const request = {
+      profile: "gaming" as const,
+      budgetWon: 3_000_000,
+      includeGpu: true,
+      gamingResolution: "4k" as const,
+      gamingRefreshRate: 144 as const,
+      gamingGameIds: ["cyberpunk"] as string[],
+      gamingGraphicsPreset: "high" as const,
+      gamingRayTracing: true,
+      gamingUpscaling: "quality" as const
+    };
+    const baseline = generateBuildDraft(seedCatalog, request);
+    const baselineGpu = seedCatalog.find((part) => part.id === baseline.selection.gpu?.partId);
+    if (!baselineGpu) throw new Error("기준 자동 구성에서 GPU 부품을 찾지 못했습니다.");
+    const staleGpuId = "gpu-stale-evidence-priority";
+    const staleGpu: Part = { ...baselineGpu, id: staleGpuId, name: `${baselineGpu.name} · stale evidence candidate` };
+    const evidence: GamingPerformanceEvidenceRecord[] = [{
+      id: "evidence-stale-priority",
+      gameId: "cyberpunk",
+      gpuPartId: staleGpuId,
+      gpuName: staleGpu.name,
+      resolution: "4k",
+      refreshRate: 144,
+      graphicsPreset: "high",
+      rayTracing: true,
+      upscaling: "quality",
+      averageFps: 160,
+      onePercentLowFps: 120,
+      measuredAt: "2025-01-01T00:00:00.000Z",
+      sourceKind: "lab",
+      sourceUrl: "https://example.com/stale-evidence-priority"
+    }];
+    const draft = generateBuildDraft(seedCatalog.concat(staleGpu), request, evidence);
+    expect(draft.selection.gpu?.partId).not.toBe(staleGpuId);
+    expect(draft.gamingPerformanceAssessment?.status).not.toBe("verified");
+  });
+
+  it("does not call a matching GPU measurement verified when average FPS misses the target", () => {
+    const request = {
+      profile: "gaming" as const,
+      budgetWon: 3_000_000,
+      includeGpu: true,
+      gamingResolution: "4k" as const,
+      gamingRefreshRate: 144 as const,
+      gamingGameIds: ["cyberpunk"] as string[],
+      gamingGraphicsPreset: "high" as const,
+      gamingRayTracing: true,
+      gamingUpscaling: "quality" as const
+    };
+    const baseline = generateBuildDraft(seedCatalog, request);
+    const selectedGpuPartId = baseline.selection.gpu?.partId;
+    if (!selectedGpuPartId) throw new Error("테스트용 자동 구성에서 GPU를 선택하지 않았습니다.");
+    const evidence: GamingPerformanceEvidenceRecord[] = [{
+      id: "evidence-below-target",
+      gameId: "cyberpunk",
+      gpuPartId: selectedGpuPartId,
+      gpuName: "검증된 테스트 GPU",
+      resolution: "4k",
+      refreshRate: 144,
+      graphicsPreset: "high",
+      rayTracing: true,
+      upscaling: "quality",
+      averageFps: 92,
+      onePercentLowFps: 68,
+      measuredAt: "2026-09-10T00:00:00.000Z",
+      sourceKind: "lab",
+      sourceUrl: "https://example.com/below-target"
+    }];
+    const draft = generateBuildDraft(seedCatalog, request, evidence);
+    expect(draft.gamingPerformanceAssessment).toMatchObject({ status: "target_not_met", belowTargetRecordIds: ["evidence-below-target"] });
+  });
+
+  it("preserves a direct performance tier in the generated draft", () => {
+    const draft = generateBuildDraft(seedCatalog, {
+      profile: "general",
+      priority: "performance",
+      performanceTier: "top",
+      budgetWon: 3_000_000,
+      includeGpu: false,
+      memoryCapacityGb: 64,
+      storageCapacityGb: 1000
+    });
+    expect(draft.performanceTier).toBe("top");
+    expect(draft.rationale.some((item) => item.includes("최상급 성능") && item.includes("GPU 포함 조건"))).toBe(true);
   });
 
   it("marks a compatible automatic gaming draft when its GPU misses the selected VRAM target", () => {

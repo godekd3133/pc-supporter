@@ -76,6 +76,7 @@ describe("compatibility result cache", () => {
     expect(compatibilityResultCacheKey(base)).toBe(compatibilityResultCacheKey(base));
     expect(compatibilityResultCacheKey({ ...base, catalogRevision: 2 })).not.toBe(compatibilityResultCacheKey(base));
     expect(compatibilityResultCacheKey({ ...base, accessoryUpdatedAt: "accessory-b" })).not.toBe(compatibilityResultCacheKey(base));
+    expect(compatibilityResultCacheKey({ ...base, gamingPerformanceEvidenceUpdatedAt: "evidence-b" })).not.toBe(compatibilityResultCacheKey(base));
   });
 
   it("coalesces the whole request pipeline before catalog validation finishes", async () => {
@@ -99,5 +100,6 @@ describe("compatibility result cache", () => {
     expect(compatibilityRequestKey(build, preferences, "2.54.0", dependencies)).not.toBe(compatibilityRequestKey(build, preferences, "2.53.0", dependencies));
     expect(compatibilityRequestKey(build, preferences, "2.53.0", { ...dependencies, catalogRevision: 2 })).not.toBe(compatibilityRequestKey(build, preferences, "2.53.0", dependencies));
     expect(compatibilityRequestKey(build, preferences, "2.53.0", { ...dependencies, accessoryUpdatedAt: "accessory-b" })).not.toBe(compatibilityRequestKey(build, preferences, "2.53.0", dependencies));
+    expect(compatibilityRequestKey(build, preferences, "2.53.0", { ...dependencies, gamingPerformanceEvidenceUpdatedAt: "evidence-b" })).not.toBe(compatibilityRequestKey(build, preferences, "2.53.0", dependencies));
   });
 });

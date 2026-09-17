@@ -1,4 +1,5 @@
 import { isKnownPrice, type CompatibilityResult } from "./types";
+import { iGa } from "./josa";
 
 export type BuildComparisonMetricResult = {
   status: CompatibilityResult["status"];
@@ -190,7 +191,7 @@ export function savedBuildComparisonTradeoffsFor(entries: SavedBuildComparisonEn
       ...metric,
       frontier: false,
       dominatedByBuildId: dominator.id,
-      reason: `${dominator.name}이(가) ${savedBuildTradeoffDimensionReason(dominator, metric)} 기준으로 더 유리해 비교 우위에서 제외했습니다.`
+      reason: `${iGa(dominator.name)} ${savedBuildTradeoffDimensionReason(dominator, metric)} 기준으로 더 유리해 비교 우위에서 제외했습니다.`
     };
   });
 }
@@ -270,7 +271,7 @@ export function savedBuildComparisonConsensusFor(entries: SavedBuildComparisonEn
   if (decisions.length === 0) return { ...base, status: "pending", summary: "재검사 완료 후 확정 기준별 1순위를 계산합니다." };
   if (winnerIds.length === 1) {
     const winner = decisions[0].entry;
-    return { ...base, status: "converged", winnerId: winner.id, winnerName: winner.name, summary: `${winner.name}이(가) 확정된 ${decisions.length}개 기준에서 모두 1순위입니다.` };
+    return { ...base, status: "converged", winnerId: winner.id, winnerName: winner.name, summary: `${iGa(winner.name)} 확정된 ${decisions.length}개 기준에서 모두 1순위입니다.` };
   }
   return { ...base, status: "split", summary: `기준별 1순위가 ${winnerNames.join(" · ")} 부품으로 나뉩니다.` };
 }

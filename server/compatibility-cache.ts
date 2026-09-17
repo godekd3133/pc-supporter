@@ -130,7 +130,7 @@ export function compatibilityRequestKey(
   build: BuildSelection,
   recommendationPreferences: RecommendationPreferences,
   engineVersion: string,
-  dependencies: { catalogSnapshotAt: string; accessoryUpdatedAt: string; catalogRevision: number }
+  dependencies: { catalogSnapshotAt: string; accessoryUpdatedAt: string; catalogRevision: number; gamingPerformanceEvidenceUpdatedAt?: string }
 ) {
   const payload = JSON.stringify({
     version: 2,
@@ -138,18 +138,20 @@ export function compatibilityRequestKey(
     catalogSnapshotAt: dependencies.catalogSnapshotAt,
     accessoryUpdatedAt: dependencies.accessoryUpdatedAt,
     catalogRevision: dependencies.catalogRevision,
+    gamingPerformanceEvidenceUpdatedAt: dependencies.gamingPerformanceEvidenceUpdatedAt ?? "",
     input: buildCompatibilityInputFingerprint(build, recommendationPreferences)
   });
   return `compatibility-request:${createHash("sha256").update(payload).digest("hex")}`;
 }
 
-export function compatibilityResultCacheKey(args: { build: BuildSelection; recommendationPreferences: RecommendationPreferences; catalogSnapshotAt: string; accessoryUpdatedAt: string; catalogRevision: number; engineVersion: string }) {
+export function compatibilityResultCacheKey(args: { build: BuildSelection; recommendationPreferences: RecommendationPreferences; catalogSnapshotAt: string; accessoryUpdatedAt: string; catalogRevision: number; engineVersion: string; gamingPerformanceEvidenceUpdatedAt?: string }) {
   const payload = JSON.stringify({
-    version: 1,
+    version: 2,
     engineVersion: args.engineVersion,
     catalogSnapshotAt: args.catalogSnapshotAt,
     accessoryUpdatedAt: args.accessoryUpdatedAt,
     catalogRevision: args.catalogRevision,
+    gamingPerformanceEvidenceUpdatedAt: args.gamingPerformanceEvidenceUpdatedAt ?? "",
     input: buildCompatibilityInputFingerprint(args.build, args.recommendationPreferences)
   });
   return `compatibility:${createHash("sha256").update(payload).digest("hex")}`;

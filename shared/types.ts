@@ -75,6 +75,8 @@ export type RecommendationPriority = "balanced" | "budget" | "performance" | "re
 
 export const RECOMMENDATION_PRIORITY_VALUES: RecommendationPriority[] = ["balanced", "budget", "performance", "reliability"];
 
+export const RECOMMENDATION_VARIANT_PRIORITIES: RecommendationPriority[] = ["balanced", "budget", "performance"];
+
 export const RECOMMENDATION_PRIORITY_LABELS: Record<RecommendationPriority, string> = {
   balanced: "균형형",
   budget: "가성비 우선",
@@ -103,6 +105,14 @@ export const RECOMMENDATION_PROFILE_LABELS: Record<RecommendationProfile, string
   office: "사무·일반"
 };
 
+export type RecommendationPerformanceTier = "entry" | "high" | "top";
+
+export const RECOMMENDATION_PERFORMANCE_TIER_LABELS: Record<RecommendationPerformanceTier, string> = {
+  entry: "기본 성능",
+  high: "상급 성능",
+  top: "최상급 성능"
+};
+
 export type GamingResolution = "1080p" | "1440p" | "4k";
 
 export const GAMING_RESOLUTION_LABELS: Record<GamingResolution, string> = {
@@ -126,6 +136,22 @@ export const GAMING_REFRESH_RATE_LABELS: Record<GamingRefreshRate, string> = {
   240: "240Hz · 초고주사율"
 };
 
+export type GamingGraphicsPreset = "competitive" | "balanced" | "high";
+
+export const GAMING_GRAPHICS_PRESET_LABELS: Record<GamingGraphicsPreset, string> = {
+  competitive: "경쟁 설정",
+  balanced: "균형 설정",
+  high: "높음"
+};
+
+export type GamingUpscaling = "native" | "quality" | "balanced";
+
+export const GAMING_UPSCALING_LABELS: Record<GamingUpscaling, string> = {
+  native: "업스케일링 없음",
+  quality: "DLSS·품질 참고",
+  balanced: "DLSS·균형 참고"
+};
+
 export type GpuTargetFit = "met" | "partial" | "unknown";
 
 export interface GpuTargetEvidence {
@@ -139,13 +165,51 @@ export interface GpuTargetEvidence {
   summary: string;
 }
 
+export type GamingPerformanceEvidenceStatus = "verified" | "target_not_met" | "partial" | "missing" | "stale" | "not_recorded";
+
+export interface GamingPerformanceMeasurement {
+  recordId: string;
+  gameId: string;
+  gpuName: string;
+  averageFps: number;
+  onePercentLowFps?: number;
+  measuredAt: string;
+  sourceUrl: string;
+}
+
+export interface GamingPerformanceAssessment {
+  status: GamingPerformanceEvidenceStatus;
+  gameIds: string[];
+  resolution: GamingResolution;
+  refreshRate: GamingRefreshRate;
+  graphicsPreset?: GamingGraphicsPreset;
+  rayTracing?: boolean;
+  upscaling?: GamingUpscaling;
+  gpuPartId?: string;
+  gpuName?: string;
+  matchedRecordIds?: string[];
+  matchedGameIds?: string[];
+  missingGameIds?: string[];
+  staleRecordIds?: string[];
+  belowTargetRecordIds?: string[];
+  belowTargetGameIds?: string[];
+  measurements?: GamingPerformanceMeasurement[];
+  sourceUrls?: string[];
+  note: string;
+}
+
 export interface RecommendationPreferences {
   priority: RecommendationPriority;
   profile: RecommendationProfile;
   budgetWon?: number;
   listingPolicy?: ListingPolicy;
+  performanceTier?: RecommendationPerformanceTier;
   gamingResolution?: GamingResolution;
   gamingRefreshRate?: GamingRefreshRate;
+  gamingGameIds?: string[];
+  gamingGraphicsPreset?: GamingGraphicsPreset;
+  gamingRayTracing?: boolean;
+  gamingUpscaling?: GamingUpscaling;
 }
 
 export type PciePowerConnectorKind = "pcie_6pin" | "pcie_8pin_6plus2" | "12vhpwr" | "12v2x6";
@@ -989,8 +1053,13 @@ export interface BuildGenerationRequest {
   budgetWon: number;
   includeGpu: boolean;
   priority?: RecommendationPriority;
+  performanceTier?: RecommendationPerformanceTier;
   gamingResolution?: GamingResolution;
   gamingRefreshRate?: GamingRefreshRate;
+  gamingGameIds?: string[];
+  gamingGraphicsPreset?: GamingGraphicsPreset;
+  gamingRayTracing?: boolean;
+  gamingUpscaling?: GamingUpscaling;
   memoryCapacityGb?: number;
   storageCapacityGb?: number;
   hddCapacityGb?: number;
@@ -1037,14 +1106,21 @@ export interface GeneratedBuildLine {
   quantity: number;
   priceWon: number;
   specSummary?: string;
+  selectionReason?: string;
 }
 
 export interface BuildGenerationResult {
   selection: BuildSelection;
   profile: RecommendationProfile;
   priority: RecommendationPriority;
+  performanceTier?: RecommendationPerformanceTier;
   gamingResolution: GamingResolution;
   gamingRefreshRate: GamingRefreshRate;
+  gamingGameIds?: string[];
+  gamingGraphicsPreset?: GamingGraphicsPreset;
+  gamingRayTracing?: boolean;
+  gamingUpscaling?: GamingUpscaling;
+  gamingPerformanceAssessment?: GamingPerformanceAssessment;
   memoryCapacityGb: number;
   gpuTarget?: GpuTargetEvidence;
   analysis?: BuildAnalysis;
@@ -1065,6 +1141,13 @@ export interface BuildGenerationResult {
   lines: GeneratedBuildLine[];
   rationale: string[];
   warnings: string[];
+}
+
+export interface BuildGenerationVariantResult {
+  priority: RecommendationPriority;
+  draft?: BuildGenerationResult;
+  error?: string;
+  diagnostics?: BuildGenerationDiagnostic[];
 }
 
 export type FindingSeverity = "blocker" | "warning" | "unknown" | "info";
@@ -1615,6 +1698,8 @@ export interface CompatibilityResult {
   gpuFit?: import("./gpu-fit").GpuFitSummary;
   accessoryCompatibility?: AccessoryCompatibilityResult;
   accessoryRecommendations?: AccessoryRecommendation[];
+  /** Exact-condition game FPS evidence evaluated against the selected GPU. */
+  gamingPerformanceAssessment?: GamingPerformanceAssessment;
   upgradeRecommendations?: UpgradeRecommendation[];
   upgradeBundles?: UpgradeBundleRecommendation[];
   upgradeBundlePayload?: UpgradeBundlePayload;
@@ -1718,6 +1803,8 @@ export interface SavedBuild {
   checkHistory?: SavedBuildCheckSnapshot[];
   purchaseProgress?: SavedBuildPurchaseProgress;
   purchasePriceHistory?: SavedBuildPurchasePriceHistory;
+  /** "내 PC"로 승격된 시각 — 소유 사이클의 시작점. */
+  myPcAt?: string;
   createdAt: string;
   updatedAt: string;
   expiresAt?: string;

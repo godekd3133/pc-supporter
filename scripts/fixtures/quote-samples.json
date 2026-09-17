@@ -1,0 +1,226 @@
+{
+  "description": "견적서 텍스트 → 부품 매칭 정밀도 측정용 코퍼스. real=샵다나와 구매후기의 실제 견적 표, synthetic=다른 유입 포맷(커뮤니티 나열, 완본체 스펙표, 수기식)을 재현한 검증용 샘플. expect.model은 카탈로그 부품명/모델의 정규화 문자열에 포함되어야 하는 토큰.",
+  "samples": [
+    {
+      "id": "shopdanawa-118291",
+      "source": "real",
+      "sourceUrl": "https://shop.danawa.com/main/?controller=board&methods=reviewDetail&reviewSeq=118291",
+      "format": "danawa-table",
+      "lines": [
+        { "raw": "CPU | 인텔 코어i7-14세대 14700F (랩터레이크 리프레시) (정품)", "expect": { "category": "cpu", "model": "14700f" } },
+        { "raw": "메인보드 | MSI MAG B760M 박격포 맥스 WIFI", "expect": { "category": "motherboard", "model": "b760m" } },
+        { "raw": "메모리 | [32G / 16Gx2] 마이크론 Crucial DDR5-5600 CL46 대원씨티에스 (32GB)", "expect": { "category": "memory", "model": "ddr55600" } },
+        { "raw": "그래픽카드 | ▶RTX 4060◀ MSI 지포스 RTX 4060 벤투스 2X 블랙 OC D6 8GB", "expect": { "category": "gpu", "model": "4060" } },
+        { "raw": "HDD | 별도구매 (추가선택가능)", "expect": { "skip": true } },
+        { "raw": "케이스 | darkFlash DLX21 RGB MESH 강화유리 (블랙) [미들타워 / 공랭 쿨러 180mm / 수냉 쿨러 2,3열 가능]", "expect": { "category": "case", "model": "dlx21" } },
+        { "raw": "파워 | 맥스엘리트 MAXWELL BARON 700W 80PLUS BRONZE 플랫", "expect": { "category": "psu", "model": "baron" } },
+        { "raw": "조립비 | 기본조립 + 2년 전국 무상 방문 출장AS (1대분)", "expect": { "skip": true } },
+        { "raw": "쿨러 | ▶공랭 / 듀얼타워◀ Thermalright Peerless Assassin 120 SE 서린", "expect": { "category": "cooler", "model": "assassin120" } },
+        { "raw": "SSD | [초고속 NVMe] 마이크론 Crucial P3 Plus M.2 NVMe 대원씨티에스 (1TB)", "expect": { "category": "ssd", "model": "p3" } },
+        { "raw": "운영체제 | ▶윈도우 미설치 상품◀ 별도구매 (추가선택가능)", "expect": { "skip": true } },
+        { "raw": "총 견적 합계 | 1,970,000원", "expect": { "skip": true } }
+      ]
+    },
+    {
+      "id": "pc26-121717",
+      "source": "real",
+      "sourceUrl": "https://pc26.danawa.com/bbs/?controller=boardReview&marketPlaceSeq=16&methods=reviewDetail&reviewSeq=121717",
+      "format": "danawa-table",
+      "lines": [
+        { "raw": "CPU | AMD 라이젠5-5세대 7500F (라파엘) (멀티팩 정품)", "expect": { "category": "cpu", "model": "7500f" } },
+        { "raw": "쿨러/튜닝 | DEEPCOOL AG400 G2 (블랙)", "expect": { "category": "cooler", "model": "ag400" } },
+        { "raw": "메인보드 | GIGABYTE B650M K 피씨디렉트", "expect": { "category": "motherboard", "model": "b650mk" } },
+        { "raw": "메모리 | 마이크론 Crucial DDR5-5600 CL46 대원씨티에스 (8GB)", "expect": { "category": "memory", "model": "ddr55600" } },
+        { "raw": "그래픽카드 | ASUS DUAL 지포스 RTX 5060 TI OC D7 8GB 인텍앤컴퍼니", "expect": { "category": "gpu", "model": "5060ti" } },
+        { "raw": "SSD | ESSENCORE KLEVV CRAS C910G M.2 NVMe (1TB)", "expect": { "category": "ssd", "model": "c910" } },
+        { "raw": "케이스 | darkFlash DLM21 RGB MESH 강화유리 (블랙)", "expect": { "category": "case", "model": "dlm21" } },
+        { "raw": "파워 | 마이크로닉스 Classic II 풀체인지 700W 80PLUS실버 ATX3.1", "expect": { "category": "psu", "model": "700w" } },
+        { "raw": "조립비 | 샵다나와 기본조립 + 1년 전국 무상 방문 출장AS (1대분)", "expect": { "skip": true } },
+        { "raw": "총 견적 합계 | 1,829,090원", "expect": { "skip": true } }
+      ]
+    },
+    {
+      "id": "shopdanawa-118901",
+      "source": "real",
+      "sourceUrl": "http://shop.danawa.com/main/?controller=board&methods=reviewDetail&reviewSeq=118901",
+      "format": "danawa-table",
+      "lines": [
+        { "raw": "CPU | AMD 라이젠5-5세대 7500F (라파엘) (멀티팩 정품)", "expect": { "category": "cpu", "model": "7500f" } },
+        { "raw": "메인보드 | ASUS PRIME B650M-A II 대원씨티에스", "expect": { "category": "motherboard", "model": "b650ma" } },
+        { "raw": "메모리 | TeamGroup DDR5-5600 CL46 Elite 서린 (16GB)", "expect": { "category": "memory", "model": "ddr55600" } },
+        { "raw": "그래픽카드 | ASRock 라데온 RX 6600 CHALLENGER D D6 8GB 대원씨티에스", "expect": { "category": "gpu", "model": "6600" } },
+        { "raw": "SSD | SK하이닉스 Platinum P41 M.2 NVMe (1TB)", "expect": { "category": "ssd", "model": "p41" } },
+        { "raw": "케이스 | DAVEN D6 MESH 강화유리 (블랙)", "expect": { "category": "case", "model": "d6mesh" } },
+        { "raw": "파워 | 마이크로닉스 Classic II 풀체인지 650W 80PLUS스탠다드 ATX3.1", "expect": { "category": "psu", "model": "650w" } },
+        { "raw": "조립비 | 샵다나와 기본조립 + 1년 전국 무상 방문 출장AS (1대분)", "expect": { "skip": true } },
+        { "raw": "총 견적 합계 | 1,063,000원", "expect": { "skip": true } }
+      ]
+    },
+    {
+      "id": "shopdanawa-120982",
+      "source": "real",
+      "sourceUrl": "http://shop.danawa.com/main/?controller=board&methods=reviewDetail&reviewSeq=120982",
+      "format": "danawa-table",
+      "lines": [
+        { "raw": "CPU | AMD 라이젠5-4세대 5600GT (세잔) (멀티팩 정품)", "expect": { "category": "cpu", "model": "5600gt" } },
+        { "raw": "쿨러/튜닝 | PentaWave Z04E SRB ARGB", "expect": { "category": "cooler", "model": "z04" } },
+        { "raw": "메인보드 | ASUS TUF Gaming B550M-PLUS STCOM", "expect": { "category": "motherboard", "model": "b550mplus" } },
+        { "raw": "그래픽카드 | GIGABYTE 라데온 RX 9060 XT Gaming OC ICE D6 16GB 제이씨현", "expect": { "category": "gpu", "model": "9060xt" } },
+        { "raw": "케이스 | 앱코 G50 빅플로우 MESH ARGB BTF (블랙)", "expect": { "category": "case", "model": "g50" } },
+        { "raw": "파워 | 마이크로닉스 Classic II 풀체인지 750W 80PLUS스탠다드 ATX3.1", "expect": { "category": "psu", "model": "750w" } },
+        { "raw": "조립비 | 샵다나와 기본조립 + 1년 전국 무상 방문 출장AS (1대분)", "expect": { "skip": true } },
+        { "raw": "총 견적 합계 | 3,066,640원", "expect": { "skip": true } }
+      ]
+    },
+    {
+      "id": "shopdanawa-121209",
+      "source": "real",
+      "sourceUrl": "http://shop.danawa.com/main/?controller=board&methods=reviewDetail&reviewSeq=121209",
+      "format": "danawa-table",
+      "lines": [
+        { "raw": "CPU | AMD 라이젠7-5세대 7800X3D (라파엘) (멀티팩 정품)", "expect": { "category": "cpu", "model": "7800x3d" } },
+        { "raw": "쿨러/튜닝 | Thermalright Peerless Assassin 120 SE WHITE ARGB 서린", "expect": { "category": "cooler", "model": "assassin120" } },
+        { "raw": "메인보드 | ASRock B650M PG Riptide WiFi White 에즈윈", "expect": { "category": "motherboard", "model": "riptide" } },
+        { "raw": "메모리 | ESSENCORE KLEVV DDR5-6000 CL30 FIT V WHITE 패키지 서린 (32GB(16Gx2))", "expect": { "category": "memory", "model": "ddr56000" } },
+        { "raw": "그래픽카드 | ASRock 라데온 RX 9070 XT 스틸레전드 D6 16GB 대원씨티에스", "expect": { "category": "gpu", "model": "9070xt" } },
+        { "raw": "SSD | SK하이닉스 Gold P31 M.2 NVMe (1TB)", "expect": { "category": "ssd", "model": "p31" } },
+        { "raw": "케이스 | darkFlash DPF70 ARGB (화이트)", "expect": { "category": "case", "model": "dpf70" } },
+        { "raw": "파워 | SuperFlower SF-850F14GE LEADEX III GOLD UP ATX3.1 화이트", "expect": { "category": "psu", "model": "leadex" } },
+        { "raw": "조립비 | 샵다나와 기본조립 + 1년 전국 무상 방문 출장AS (1대분)", "expect": { "skip": true } },
+        { "raw": "총 견적 합계 | 3,266,930원", "expect": { "skip": true } }
+      ]
+    },
+    {
+      "id": "shopdanawa-121231",
+      "source": "real",
+      "sourceUrl": "https://shop.danawa.com/main/?controller=board&methods=reviewDetail&reviewSeq=121231",
+      "format": "danawa-table",
+      "lines": [
+        { "raw": "CPU | AMD 라이젠5-6세대 9600X (그래니트 릿지) (멀티팩 정품)", "expect": { "category": "cpu", "model": "9600x" } },
+        { "raw": "쿨러/튜닝 | 3RSYS Socoool RC1400N Quiet 쌍철봉 (블랙)", "expect": { "category": "cooler", "model": "rc1400" } },
+        { "raw": "메인보드 | ASRock B650M PG Lightning 대원씨티에스", "expect": { "category": "motherboard", "model": "lightning" } },
+        { "raw": "메모리 | PATRIOT DDR5-6000 CL30 SIGNATURE PREMIUM EVO 블랙 (16GB)", "expect": { "category": "memory", "model": "ddr56000" } },
+        { "raw": "그래픽카드 | COLORFUL 지포스 RTX 5060 Ti GAMING DUO D7 8GB 피씨디렉트", "expect": { "category": "gpu", "model": "5060ti" } },
+        { "raw": "SSD | ADATA XPG SX8200 Pro M.2 NVMe 파인인포 (512GB)", "expect": { "category": "ssd", "model": "sx8200" } },
+        { "raw": "케이스 | 잘만 N6 백사십 (블랙)", "expect": { "category": "case", "model": "n6" } },
+        { "raw": "파워 | 맥스엘리트 STARS GEMINI 650W 80PLUS브론즈 ATX3.1 화이트", "expect": { "category": "psu", "model": "gemini" } },
+        { "raw": "조립비 | 기본조립 + 1년 전국 무상 방문 출장AS (1대분)", "expect": { "skip": true } },
+        { "raw": "총 견적 합계 | 2,045,000원", "expect": { "skip": true } }
+      ]
+    },
+    {
+      "id": "shopdanawa-121116",
+      "source": "real",
+      "sourceUrl": "http://shop.danawa.com/main/?controller=board&methods=reviewDetail&reviewSeq=121116",
+      "format": "danawa-table",
+      "lines": [
+        { "raw": "CPU | AMD 라이젠7-6세대 9800X3D (그래니트 릿지) (멀티팩 정품)", "expect": { "category": "cpu", "model": "9800x3d" } },
+        { "raw": "쿨러/튜닝 | 리안리 Hydroshift LCD 360S (블랙)", "expect": { "category": "cooler", "model": "hydroshift" } },
+        { "raw": "쿨러/튜닝 | Phanteks M25-140 G2 DRGB REVERSE (3팩, 블랙)", "expect": { "category": "cooler", "unresolvable": true, "note": "케이스 팬 — CPU 쿨러로 오매칭되면 안 됨" } },
+        { "raw": "메인보드 | GIGABYTE B850 AORUS ELITE WIFI7 제이씨현", "expect": { "category": "motherboard", "model": "b850" } },
+        { "raw": "메모리 | ESSENCORE KLEVV DDR5-6000 CL30 CRAS V RGB 패키지 서린 (32GB(16Gx2))", "expect": { "category": "memory", "model": "ddr56000" } },
+        { "raw": "그래픽카드 | GIGABYTE AORUS 지포스 RTX 5080 MASTER D7 16GB 피씨디렉트", "expect": { "category": "gpu", "model": "5080" } },
+        { "raw": "케이스 | Antec C8 MESH QUAD ARGB (블랙)", "expect": { "category": "case", "model": "c8" } },
+        { "raw": "파워 | 마이크로닉스 Classic II 1050W 80PLUS골드 풀모듈러 ATX3.1", "expect": { "category": "psu", "model": "1050w" } },
+        { "raw": "조립비 | 샵다나와 기본조립 + 1년 전국 무상 방문 출장AS (1대분)", "expect": { "skip": true } },
+        { "raw": "총 견적 합계 | 4,864,440원", "expect": { "skip": true } }
+      ]
+    },
+    {
+      "id": "shopdanawa-120994",
+      "source": "real",
+      "sourceUrl": "http://shop.danawa.com/main/?controller=board&methods=reviewDetail&reviewSeq=120994",
+      "format": "danawa-table",
+      "lines": [
+        { "raw": "메인보드 | GIGABYTE B650M K 피씨디렉트", "expect": { "category": "motherboard", "model": "b650mk" } },
+        { "raw": "메모리 | [DDR5 32G / 16Gx2] ESSENCORE KLEVV DDR5-6000 CL30 URBANE V RGB 패키지 서린 (32GB(16Gx2))", "expect": { "category": "memory", "model": "ddr56000" } },
+        { "raw": "그래픽카드 | [RTX5070 12G] PALIT 지포스 RTX 5070 Infinity 3 D7 12GB 이엠텍", "expect": { "category": "gpu", "model": "5070" } },
+        { "raw": "HDD | 별도구매 (추가선택가능)", "expect": { "skip": true } },
+        { "raw": "케이스 | 싸이번 LIMPID SC-X7 BTF (블랙)", "expect": { "category": "case", "model": "scx7" } },
+        { "raw": "파워 | 마이크로닉스 Classic II 850W 80PLUS골드 풀모듈러 ATX3.1", "expect": { "category": "psu", "model": "850w" } },
+        { "raw": "조립비 | 기본조립 + 1년 전국 무상 방문 출장AS (1대분)", "expect": { "skip": true } },
+        { "raw": "쿨러 | Thermalright Peerless Assassin 120 SE 서린", "expect": { "category": "cooler", "model": "assassin120" } },
+        { "raw": "SSD | [1TB -> 2TB 용량 더블업 이벤트] [초고속 NVMe] 키오시아 EXCERIA PLUS G4 M.2 NVMe (1TB)", "expect": { "category": "ssd", "model": "g4" } },
+        { "raw": "운영체제 | Microsoft Windows 11 Home (처음사용자용 한글/USB제공)", "expect": { "skip": true } },
+        { "raw": "CPU | AMD 라이젠7-6세대 9700X (그래니트 릿지) (멀티팩 정품)", "expect": { "category": "cpu", "model": "9700x" } },
+        { "raw": "총 견적 합계 | 4,170,000원", "expect": { "skip": true } }
+      ]
+    },
+    {
+      "id": "shopdanawa-121020",
+      "source": "real",
+      "sourceUrl": "https://shop.danawa.com/main/?controller=board&methods=reviewDetail&reviewSeq=121020",
+      "format": "danawa-table",
+      "lines": [
+        { "raw": "CPU | AMD 라이젠7-6세대 9800X3D (그래니트 릿지) (멀티팩 정품)", "expect": { "category": "cpu", "model": "9800x3d" } },
+        { "raw": "쿨러/튜닝 | 앱코 H9 120 ARGB PWM 리버스 (화이트)", "expect": { "category": "cooler", "unresolvable": true, "note": "케이스 팬 — CPU 쿨러로 오매칭되면 안 됨" } },
+        { "raw": "쿨러/튜닝 | 발키리 B360-GT LCD ARGB (화이트)", "expect": { "category": "cooler", "model": "b360" } },
+        { "raw": "메인보드 | ASUS TUF Gaming B850M-PLUS WIFI7 W STCOM", "expect": { "category": "motherboard", "model": "b850m" } },
+        { "raw": "SSD | 키오시아 EXCERIA PLUS G4 M.2 NVMe (2TB)", "expect": { "category": "ssd", "model": "g4" } },
+        { "raw": "케이스 | 앱코 UD50C 루시드 앰비언트 풀커브드 ARGB BTF (화이트)", "expect": { "category": "case", "model": "ud50c" } },
+        { "raw": "파워 | 마이크로닉스 Classic II 1050W 80PLUS골드 풀모듈러 ATX3.1 화이트", "expect": { "category": "psu", "model": "1050w" } },
+        { "raw": "케이블 | 라인업시스템 LANSTARplus CAT.6A UTP 랜케이블 (LSP-7UTP, 3m)", "expect": { "skip": true } },
+        { "raw": "케이블 | 리안리 STRIMER WIRELESS 12V-2X6 WIDE 케이블 (PW16-121W, 0.34m)", "expect": { "skip": true } },
+        { "raw": "케이블 | 리안리 STRIMER WIRELESS 24핀 케이블 (PW24-1W, 0.26m)", "expect": { "skip": true } },
+        { "raw": "조립비 | 샵다나와 기본조립 + 1년 전국 무상 방문 출장AS (1대분)", "expect": { "skip": true } },
+        { "raw": "총 견적 합계 | 2,076,560원", "expect": { "skip": true } }
+      ]
+    },
+    {
+      "id": "synthetic-community-list",
+      "source": "synthetic",
+      "format": "community-list",
+      "note": "퀘이사존 답변식 약식 나열 — 모델명 생략이 많은 형태",
+      "lines": [
+        { "raw": "CPU: 라이젠 7500F", "expect": { "category": "cpu", "model": "7500f" } },
+        { "raw": "메인보드: B650M-K", "expect": { "category": "motherboard", "model": "b650mk", "ambiguous": true, "note": "벤더 생략 — GIGABYTE/ASUS 등 여러 제품 가능" } },
+        { "raw": "램: DDR5 32GB (16x2)", "expect": { "category": "memory", "unresolvable": true, "note": "모델명 없음" } },
+        { "raw": "VGA: RTX 5070", "expect": { "category": "gpu", "model": "5070", "ambiguous": true } },
+        { "raw": "SSD: 1TB NVMe", "expect": { "category": "ssd", "unresolvable": true } },
+        { "raw": "파워: 750W 골드", "expect": { "category": "psu", "unresolvable": true } },
+        { "raw": "케이스: 미들타워", "expect": { "category": "case", "unresolvable": true } }
+      ]
+    },
+    {
+      "id": "synthetic-prebuilt-spec",
+      "source": "synthetic",
+      "format": "prebuilt-spec",
+      "note": "완본체 스펙표 — 라벨 없이 나열되는 형태",
+      "lines": [
+        { "raw": "인텔 i5-14400F", "expect": { "category": "cpu", "model": "14400f" } },
+        { "raw": "RAM 16GB DDR4", "expect": { "category": "memory", "unresolvable": true } },
+        { "raw": "SSD NVMe 512GB", "expect": { "category": "ssd", "unresolvable": true } },
+        { "raw": "그래픽 RTX 4060 8GB", "expect": { "category": "gpu", "model": "4060", "ambiguous": true } },
+        { "raw": "파워 600W", "expect": { "category": "psu", "unresolvable": true } }
+      ]
+    },
+    {
+      "id": "synthetic-yongsan-scratch",
+      "source": "synthetic",
+      "format": "scratch",
+      "note": "용산/오프라인 수기식 — 라벨 없음+가격 내포",
+      "lines": [
+        { "raw": "i7-14700K 벌크 55만", "expect": { "category": "cpu", "model": "14700k" } },
+        { "raw": "B760 박격포 22만", "expect": { "category": "motherboard", "model": "b760", "ambiguous": true } },
+        { "raw": "삼성 DDR5 5600 16Gx2 15만", "expect": { "category": "memory", "model": "ddr55600", "ambiguous": true } },
+        { "raw": "RTX4070 슈퍼 95만", "expect": { "category": "gpu", "model": "4070", "ambiguous": true } }
+      ]
+    },
+    {
+      "id": "synthetic-danawa-price-lines",
+      "source": "synthetic",
+      "format": "danawa-text-price",
+      "note": "다나와 텍스트 복사 형식 — 라벨+가격 동행",
+      "lines": [
+        { "raw": "CPU | 인텔 코어i5-14세대 14400F (랩터레이크 리프레시) (정품) | 224,000원", "expect": { "category": "cpu", "model": "14400f" } },
+        { "raw": "메인보드 | ASRock B760M Pro RS | 189,000원", "expect": { "category": "motherboard", "model": "b760m" } },
+        { "raw": "메모리 | 삼성전자 DDR5-5600 (16GB) x2 | 98,000원", "expect": { "category": "memory", "model": "ddr55600" } },
+        { "raw": "그래픽카드 | 이엠텍 지포스 RTX 4060 STORM X Dual OC D6 8GB | 435,000원", "expect": { "category": "gpu", "model": "4060" } },
+        { "raw": "SSD | SK하이닉스 Gold P31 M.2 NVMe (1TB) | 145,000원", "expect": { "category": "ssd", "model": "p31" } },
+        { "raw": "케이스 | darkFlash DLM21 RGB MESH 강화유리 (블랙) | 52,000원", "expect": { "category": "case", "model": "dlm21" } },
+        { "raw": "파워 | 마이크로닉스 Classic II 풀체인지 700W 80PLUS스탠다드 ATX3.1 | 89,000원", "expect": { "category": "psu", "model": "700w" } },
+        { "raw": "쿨러 | Thermalright Peerless Assassin 120 SE 서린 | 39,000원", "expect": { "category": "cooler", "model": "assassin120" } }
+      ]
+    }
+  ]
+}

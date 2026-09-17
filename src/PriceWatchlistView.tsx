@@ -21,6 +21,7 @@ import type { CatalogWatchlistImportDiff, PriceWatchSort, PriceWatchStatusFilter
 import { priceWatchDecisionFor } from "../shared/price-watch-decision";
 import { useModalAccessibility } from "./use-modal-accessibility";
 import { LOCAL_IMPORT_MAX_BYTES } from "../shared/file-import-limits";
+import { eul } from "../shared/josa";
 
 const CATALOG_WATCHLIST_STORAGE_KEY = "pc-supporter-catalog-watchlist";
 const CATALOG_WATCH_THRESHOLD_STORAGE_KEY = "pc-supporter-catalog-watch-threshold";
@@ -588,7 +589,7 @@ export function PriceWatchlistView({ onBack, onToast }: { onBack: () => void; on
     const entry = { itemId: item.id, itemName: item.name, category: item.category, kind } as CatalogWatchEntry;
     const watched = catalogWatchlistContains(watchEntries, entry);
     setWatchEntries((current) => watched ? removeCatalogWatchEntry(current, entry) : addCatalogWatchEntry(current, { ...entry, addedAt: new Date().toISOString() }));
-    onToast(watched ? item.name + "을(를) 가격 추적에서 제거했습니다." : item.name + "을(를) 가격 추적에 추가했습니다.");
+    onToast(watched ? eul(item.name) + " 가격 추적에서 제거했습니다." : eul(item.name) + " 가격 추적에 추가했습니다.");
   }
   function updateTarget(entry: CatalogWatchEntry, rawValue: string) {
     const targetPriceWon = rawValue.trim() === "" ? undefined : Number(rawValue);

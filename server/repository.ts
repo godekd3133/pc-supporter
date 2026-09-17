@@ -81,6 +81,8 @@ CREATE INDEX IF NOT EXISTS saved_builds_updated_idx ON saved_builds(updated_at D
 ALTER TABLE saved_builds ADD COLUMN IF NOT EXISTS recommendation_preferences JSONB;
 ALTER TABLE saved_builds ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
 ALTER TABLE saved_builds ADD COLUMN IF NOT EXISTS owner_token_hash TEXT;
+ALTER TABLE saved_builds ADD COLUMN IF NOT EXISTS recovery_code_hash TEXT;
+ALTER TABLE saved_builds ADD COLUMN IF NOT EXISTS my_pc_at TIMESTAMPTZ;
 ALTER TABLE saved_builds ADD COLUMN IF NOT EXISTS version_group_id TEXT;
 ALTER TABLE saved_builds ADD COLUMN IF NOT EXISTS version_number INTEGER;
 ALTER TABLE saved_builds ADD COLUMN IF NOT EXISTS derived_from_build_id TEXT;
@@ -397,6 +399,8 @@ type SavedBuildDatabaseRow = {
   updated_at: Date;
   expires_at: Date | null;
   owner_token_hash: string | null;
+  recovery_code_hash: string | null;
+  my_pc_at: Date | null;
   version_group_id: string | null;
   version_number: number | null;
   derived_from_build_id: string | null;
@@ -429,6 +433,8 @@ export function savedBuildRecordFromUnknown(value: unknown): SavedBuildRecord | 
   const candidate = value as Partial<SavedBuildRecord>;
   if (typeof candidate.id !== "string" || typeof candidate.name !== "string" || !candidate.selection || typeof candidate.selection !== "object" || typeof candidate.createdAt !== "string" || typeof candidate.updatedAt !== "string") return undefined;
   const ownerTokenHash = typeof candidate.ownerTokenHash === "string" && /^[0-9a-f]{64}$/.test(candidate.ownerTokenHash) ? candidate.ownerTokenHash : undefined;
+  const recoveryCodeHash = typeof candidate.recoveryCodeHash === "string" && /^[0-9a-f]{64}$/.test(candidate.recoveryCodeHash) ? candidate.recoveryCodeHash : undefined;
+  const myPcAt = typeof candidate.myPcAt === "string" && Number.isFinite(Date.parse(candidate.myPcAt)) ? candidate.myPcAt : undefined;
   const explicitSnapshot = savedBuildCheckSnapshotFromUnknown(candidate.checkSnapshot);
   const parsedHistory = savedBuildCheckHistoryFromUnknown(candidate.checkHistory);
   if (candidate.checkHistory !== undefined && !parsedHistory) return undefined;
@@ -447,8 +453,8 @@ export function savedBuildRecordFromUnknown(value: unknown): SavedBuildRecord | 
   const versionGroupId = typeof candidate.versionGroupId === "string" && candidate.versionGroupId.length > 0 && candidate.versionGroupId.length <= 120 ? candidate.versionGroupId : undefined;
   const versionNumber = Number.isInteger(candidate.versionNumber) && (candidate.versionNumber ?? 0) >= 1 && (candidate.versionNumber ?? 0) <= 1_000_000 ? candidate.versionNumber : undefined;
   const derivedFromBuildId = typeof candidate.derivedFromBuildId === "string" && candidate.derivedFromBuildId.length > 0 && candidate.derivedFromBuildId.length <= 120 ? candidate.derivedFromBuildId : undefined;
-  const { ownerTokenHash: _rawOwnerTokenHash, versionGroupId: _rawVersionGroupId, versionNumber: _rawVersionNumber, derivedFromBuildId: _rawDerivedFromBuildId, checkSnapshot: _rawCheckSnapshot, checkHistory: _rawCheckHistory, monitorState: _rawMonitorState, purchaseProgress: _rawPurchaseProgress, purchasePriceHistory: _rawPurchasePriceHistory, decisionNote: _rawDecisionNote, metadataHistory: _rawMetadataHistory, ...build } = candidate as SavedBuildRecord;
-  return { ...build, ...(decisionNote ? { decisionNote } : {}), ...(normalizedMetadataHistory.length > 0 ? { metadataHistory: normalizedMetadataHistory } : {}), ...(ownerTokenHash ? { ownerTokenHash } : {}), ...(versionGroupId ? { versionGroupId } : {}), ...(versionNumber ? { versionNumber } : {}), ...(derivedFromBuildId ? { derivedFromBuildId } : {}), ...(checkSnapshot ? { checkSnapshot } : {}), ...(checkHistory.length > 0 ? { checkHistory } : {}), ...(monitorState ? { monitorState } : {}), ...(purchaseProgress ? { purchaseProgress } : {}), ...(purchasePriceHistory ? { purchasePriceHistory } : {}) };
+  const { ownerTokenHash: _rawOwnerTokenHash, recoveryCodeHash: _rawRecoveryCodeHash, myPcAt: _rawMyPcAt, versionGroupId: _rawVersionGroupId, versionNumber: _rawVersionNumber, derivedFromBuildId: _rawDerivedFromBuildId, checkSnapshot: _rawCheckSnapshot, checkHistory: _rawCheckHistory, monitorState: _rawMonitorState, purchaseProgress: _rawPurchaseProgress, purchasePriceHistory: _rawPurchasePriceHistory, decisionNote: _rawDecisionNote, metadataHistory: _rawMetadataHistory, ...build } = candidate as SavedBuildRecord;
+  return { ...build, ...(decisionNote ? { decisionNote } : {}), ...(normalizedMetadataHistory.length > 0 ? { metadataHistory: normalizedMetadataHistory } : {}), ...(ownerTokenHash ? { ownerTokenHash } : {}), ...(recoveryCodeHash ? { recoveryCodeHash } : {}), ...(myPcAt ? { myPcAt } : {}), ...(versionGroupId ? { versionGroupId } : {}), ...(versionNumber ? { versionNumber } : {}), ...(derivedFromBuildId ? { derivedFromBuildId } : {}), ...(checkSnapshot ? { checkSnapshot } : {}), ...(checkHistory.length > 0 ? { checkHistory } : {}), ...(monitorState ? { monitorState } : {}), ...(purchaseProgress ? { purchaseProgress } : {}), ...(purchasePriceHistory ? { purchasePriceHistory } : {}) };
 }
 
 function savedBuildRecordFromDatabaseRow(row: SavedBuildDatabaseRow) {
@@ -461,6 +467,8 @@ function savedBuildRecordFromDatabaseRow(row: SavedBuildDatabaseRow) {
     updatedAt: new Date(row.updated_at).toISOString(),
     ...(row.expires_at ? { expiresAt: new Date(row.expires_at).toISOString() } : {}),
     ...(row.owner_token_hash ? { ownerTokenHash: row.owner_token_hash } : {}),
+    ...(row.recovery_code_hash ? { recoveryCodeHash: row.recovery_code_hash } : {}),
+    ...(row.my_pc_at ? { myPcAt: new Date(row.my_pc_at).toISOString() } : {}),
     ...(row.version_group_id ? { versionGroupId: row.version_group_id } : {}),
     ...(row.version_number ? { versionNumber: row.version_number } : {}),
     ...(row.derived_from_build_id ? { derivedFromBuildId: row.derived_from_build_id } : {}),
@@ -478,7 +486,7 @@ export async function readSavedBuilds(): Promise<SavedBuildRecord[]> {
   if (await ensureDatabase()) {
     try {
       const result = await pool!.query<SavedBuildDatabaseRow>(
-        "SELECT id, name, selection, recommendation_preferences, created_at, updated_at, expires_at, owner_token_hash, version_group_id, version_number, derived_from_build_id, check_snapshot, check_history, monitor_state, purchase_progress, purchase_price_history, decision_note, metadata_history FROM saved_builds ORDER BY updated_at DESC"
+        "SELECT id, name, selection, recommendation_preferences, created_at, updated_at, expires_at, owner_token_hash, recovery_code_hash, my_pc_at, version_group_id, version_number, derived_from_build_id, check_snapshot, check_history, monitor_state, purchase_progress, purchase_price_history, decision_note, metadata_history FROM saved_builds ORDER BY updated_at DESC"
       );
       return result.rows.map(savedBuildRecordFromDatabaseRow).filter((value): value is SavedBuildRecord => value !== undefined);
     } catch (error) {
@@ -502,8 +510,8 @@ export async function writeSavedBuilds(builds: SavedBuildRecord[]) {
       }
       for (const build of builds) {
         await client.query(
-          `INSERT INTO saved_builds (id, name, decision_note, selection, recommendation_preferences, created_at, updated_at, expires_at, owner_token_hash, version_group_id, version_number, derived_from_build_id, check_snapshot, check_history, monitor_state, purchase_progress, purchase_price_history, metadata_history)
-           VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::timestamptz, $7::timestamptz, $8::timestamptz, $9, $10, $11, $12, $13::jsonb, $14::jsonb, $15::jsonb, $16::jsonb, $17::jsonb, $18::jsonb)
+          `INSERT INTO saved_builds (id, name, decision_note, selection, recommendation_preferences, created_at, updated_at, expires_at, owner_token_hash, recovery_code_hash, my_pc_at, version_group_id, version_number, derived_from_build_id, check_snapshot, check_history, monitor_state, purchase_progress, purchase_price_history, metadata_history)
+           VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::timestamptz, $7::timestamptz, $8::timestamptz, $9, $10, $11::timestamptz, $12, $13, $14, $15::jsonb, $16::jsonb, $17::jsonb, $18::jsonb, $19::jsonb, $20::jsonb)
            ON CONFLICT (id) DO UPDATE SET
              name = EXCLUDED.name,
              decision_note = EXCLUDED.decision_note,
@@ -512,6 +520,8 @@ export async function writeSavedBuilds(builds: SavedBuildRecord[]) {
              updated_at = EXCLUDED.updated_at,
              expires_at = EXCLUDED.expires_at,
              owner_token_hash = EXCLUDED.owner_token_hash,
+             my_pc_at = EXCLUDED.my_pc_at,
+             recovery_code_hash = EXCLUDED.recovery_code_hash,
              version_group_id = EXCLUDED.version_group_id,
              version_number = EXCLUDED.version_number,
              derived_from_build_id = EXCLUDED.derived_from_build_id,
@@ -521,7 +531,7 @@ export async function writeSavedBuilds(builds: SavedBuildRecord[]) {
              purchase_progress = EXCLUDED.purchase_progress,
              purchase_price_history = EXCLUDED.purchase_price_history,
              metadata_history = EXCLUDED.metadata_history`,
-          [build.id, build.name, build.decisionNote ?? null, JSON.stringify(build.selection), build.recommendationPreferences ? JSON.stringify(build.recommendationPreferences) : null, build.createdAt, build.updatedAt, build.expiresAt ?? null, build.ownerTokenHash ?? null, build.versionGroupId ?? null, build.versionNumber ?? null, build.derivedFromBuildId ?? null, build.checkSnapshot ? JSON.stringify(build.checkSnapshot) : null, build.checkHistory ? JSON.stringify(build.checkHistory) : null, build.monitorState ? JSON.stringify(build.monitorState) : null, build.purchaseProgress ? JSON.stringify(build.purchaseProgress) : null, build.purchasePriceHistory ? JSON.stringify(build.purchasePriceHistory) : null, build.metadataHistory ? JSON.stringify(build.metadataHistory) : null]
+          [build.id, build.name, build.decisionNote ?? null, JSON.stringify(build.selection), build.recommendationPreferences ? JSON.stringify(build.recommendationPreferences) : null, build.createdAt, build.updatedAt, build.expiresAt ?? null, build.ownerTokenHash ?? null, build.recoveryCodeHash ?? null, build.myPcAt ?? null, build.versionGroupId ?? null, build.versionNumber ?? null, build.derivedFromBuildId ?? null, build.checkSnapshot ? JSON.stringify(build.checkSnapshot) : null, build.checkHistory ? JSON.stringify(build.checkHistory) : null, build.monitorState ? JSON.stringify(build.monitorState) : null, build.purchaseProgress ? JSON.stringify(build.purchaseProgress) : null, build.purchasePriceHistory ? JSON.stringify(build.purchasePriceHistory) : null, build.metadataHistory ? JSON.stringify(build.metadataHistory) : null]
         );
       }
       await client.query("COMMIT");
@@ -558,9 +568,9 @@ async function appendSavedBuildToDatabase(build: SavedBuildRecord, max: number) 
     const nextVersion = Number(result.rows[0]?.max_version ?? 0) + 1;
     const next = { ...build, versionGroupId, versionNumber: nextVersion } satisfies SavedBuildRecord;
     await client.query(
-      `INSERT INTO saved_builds (id, name, decision_note, selection, recommendation_preferences, created_at, updated_at, expires_at, owner_token_hash, version_group_id, version_number, derived_from_build_id, check_snapshot, check_history, monitor_state, purchase_progress, purchase_price_history, metadata_history)
-       VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::timestamptz, $7::timestamptz, $8::timestamptz, $9, $10, $11, $12, $13::jsonb, $14::jsonb, $15::jsonb, $16::jsonb, $17::jsonb, $18::jsonb)`,
-      [next.id, next.name, next.decisionNote ?? null, JSON.stringify(next.selection), next.recommendationPreferences ? JSON.stringify(next.recommendationPreferences) : null, next.createdAt, next.updatedAt, next.expiresAt ?? null, next.ownerTokenHash ?? null, next.versionGroupId, next.versionNumber, next.derivedFromBuildId ?? null, next.checkSnapshot ? JSON.stringify(next.checkSnapshot) : null, next.checkHistory ? JSON.stringify(next.checkHistory) : null, next.monitorState ? JSON.stringify(next.monitorState) : null, next.purchaseProgress ? JSON.stringify(next.purchaseProgress) : null, next.purchasePriceHistory ? JSON.stringify(next.purchasePriceHistory) : null, next.metadataHistory ? JSON.stringify(next.metadataHistory) : null]
+      `INSERT INTO saved_builds (id, name, decision_note, selection, recommendation_preferences, created_at, updated_at, expires_at, owner_token_hash, recovery_code_hash, my_pc_at, version_group_id, version_number, derived_from_build_id, check_snapshot, check_history, monitor_state, purchase_progress, purchase_price_history, metadata_history)
+       VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::timestamptz, $7::timestamptz, $8::timestamptz, $9, $10, $11::timestamptz, $12, $13, $14, $15::jsonb, $16::jsonb, $17::jsonb, $18::jsonb, $19::jsonb, $20::jsonb)`,
+      [next.id, next.name, next.decisionNote ?? null, JSON.stringify(next.selection), next.recommendationPreferences ? JSON.stringify(next.recommendationPreferences) : null, next.createdAt, next.updatedAt, next.expiresAt ?? null, next.ownerTokenHash ?? null, next.recoveryCodeHash ?? null, next.myPcAt ?? null, next.versionGroupId, next.versionNumber, next.derivedFromBuildId ?? null, next.checkSnapshot ? JSON.stringify(next.checkSnapshot) : null, next.checkHistory ? JSON.stringify(next.checkHistory) : null, next.monitorState ? JSON.stringify(next.monitorState) : null, next.purchaseProgress ? JSON.stringify(next.purchaseProgress) : null, next.purchasePriceHistory ? JSON.stringify(next.purchasePriceHistory) : null, next.metadataHistory ? JSON.stringify(next.metadataHistory) : null]
     );
     const boundedMax = Math.max(1, Math.floor(max));
     const stale = await client.query<{ id: string }>("SELECT id FROM saved_builds ORDER BY updated_at DESC, id DESC OFFSET $1", [boundedMax]);
@@ -762,7 +772,7 @@ export async function readSavedBuildVersionBackupDetail(backupId: string): Promi
 
 async function readSavedBuildsWithDatabaseClient(client: PoolClient) {
   const result = await client.query<SavedBuildDatabaseRow>(
-    "SELECT id, name, selection, recommendation_preferences, created_at, updated_at, expires_at, owner_token_hash, version_group_id, version_number, derived_from_build_id, check_snapshot, check_history, monitor_state, purchase_progress, purchase_price_history, decision_note, metadata_history FROM saved_builds ORDER BY updated_at DESC"
+    "SELECT id, name, selection, recommendation_preferences, created_at, updated_at, expires_at, owner_token_hash, recovery_code_hash, my_pc_at, version_group_id, version_number, derived_from_build_id, check_snapshot, check_history, monitor_state, purchase_progress, purchase_price_history, decision_note, metadata_history FROM saved_builds ORDER BY updated_at DESC"
   );
   const builds = result.rows.map(savedBuildRecordFromDatabaseRow).filter((value): value is SavedBuildRecord => value !== undefined);
   if (builds.length !== result.rows.length) throw new Error("저장 견적 데이터 일부를 안전하게 해석할 수 없어 마이그레이션을 중단했습니다.");
@@ -1151,6 +1161,55 @@ export async function updateSavedBuildMonitorState(id: string, monitorState: Sav
     const current = builds.find((build) => build.id === id);
     if (!current) return undefined;
     const next = { ...current, monitorState };
+    await writeSavedBuilds(builds.map((build) => build.id === id ? next : build));
+    return next;
+  });
+}
+
+export async function updateSavedBuildShareCredentials(id: string, ownerTokenHash: string, recoveryCodeHash: string) {
+  if (await ensureDatabase()) {
+    try {
+      const result = await pool!.query(
+        "UPDATE saved_builds SET owner_token_hash = $2, recovery_code_hash = $3 WHERE id = $1",
+        [id, ownerTokenHash, recoveryCodeHash]
+      );
+      if ((result.rowCount ?? 0) === 0) return undefined;
+      return (await readSavedBuilds()).find((build) => build.id === id);
+    } catch (error) {
+      databaseDisabled = true;
+      console.warn(`PostgreSQL build credential update failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  return withSerializedFileMutation(BUILDS_PATH, async () => {
+    const builds = await readSavedBuilds();
+    const current = builds.find((build) => build.id === id);
+    if (!current) return undefined;
+    const next = { ...current, ownerTokenHash, recoveryCodeHash };
+    await writeSavedBuilds(builds.map((build) => build.id === id ? next : build));
+    return next;
+  });
+}
+
+export async function updateSavedBuildMyPc(id: string, myPcAt: string | null, monitorState?: SavedBuildMonitorSubscription) {
+  if (await ensureDatabase()) {
+    try {
+      const result = await pool!.query(
+        "UPDATE saved_builds SET my_pc_at = $2::timestamptz, monitor_state = COALESCE($3::jsonb, monitor_state) WHERE id = $1",
+        [id, myPcAt, monitorState ? JSON.stringify(monitorState) : null]
+      );
+      if ((result.rowCount ?? 0) === 0) return undefined;
+      return (await readSavedBuilds()).find((build) => build.id === id);
+    } catch (error) {
+      databaseDisabled = true;
+      console.warn(`PostgreSQL build my-pc update failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  return withSerializedFileMutation(BUILDS_PATH, async () => {
+    const builds = await readSavedBuilds();
+    const current = builds.find((build) => build.id === id);
+    if (!current) return undefined;
+    const { myPcAt: _oldMyPcAt, ...rest } = current;
+    const next = { ...rest, ...(myPcAt ? { myPcAt } : {}), ...(monitorState ? { monitorState } : {}) };
     await writeSavedBuilds(builds.map((build) => build.id === id ? next : build));
     return next;
   });

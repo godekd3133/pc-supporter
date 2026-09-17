@@ -34,6 +34,18 @@ describe("generator preset storage", () => {
     expect(generatorPresetConfigFromUnknown({ ...config, priority: "reliability" })).toMatchObject({ priority: "reliability" });
   });
 
+  it("preserves gaming advisory conditions while keeping older presets valid", () => {
+    const gaming = generatorPresetConfigFromUnknown({ ...config, gamingGameIds: ["cyberpunk", "pubg"], gamingGraphicsPreset: "high", gamingRayTracing: true, gamingUpscaling: "native" });
+    expect(gaming).toMatchObject({ gamingGameIds: ["cyberpunk", "pubg"], gamingGraphicsPreset: "high", gamingRayTracing: true, gamingUpscaling: "native" });
+    expect(generatorPresetConfigFromUnknown({ ...config, gamingGameIds: Array(6).fill("pubg") })).toBeNull();
+    expect(generatorPresetConfigFromUnknown(config)).not.toBeNull();
+  });
+
+  it("preserves a direct performance tier in saved generator presets", () => {
+    expect(generatorPresetConfigFromUnknown({ ...config, profile: "general", performanceTier: "top" })).toMatchObject({ profile: "general", performanceTier: "top" });
+    expect(generatorPresetConfigFromUnknown({ ...config, profile: "general", performanceTier: "ultra" })).toBeNull();
+  });
+
   it("keeps the most recent ten presets and supports removal", () => {
     const items = Array.from({ length: 10 }, (_, index) => preset(`p${index}`));
     const added = addSavedGeneratorPreset(items, preset("new", "새 조건"));

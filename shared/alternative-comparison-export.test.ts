@@ -129,6 +129,7 @@ describe("alternative comparison export", () => {
   });
 
   it("preserves original CPU/GPU benchmark evidence across text, CSV, and JSON exports", () => {
+    const sourceCheckCheckedAt = new Date().toISOString();
     const benchmarkEvidence = {
       partId: "gpu-test-1",
       category: "gpu" as const,
@@ -141,7 +142,7 @@ describe("alternative comparison export", () => {
       totalCount: 2,
       status: "partial" as const,
       provenance: { sourceKind: "independent_review" as const, sourceNote: "독립 리뷰 측정표", sourceUrl: "https://review.example/gpu", updatedAt: "2026-09-02T00:00:00.000Z" },
-      sourceCheck: { requestedUrl: "https://review.example/gpu", checkedAt: "2026-09-03T00:00:00.000Z", status: "reachable" as const, identityStatus: "matched" as const, redirectCount: 0, httpStatus: 200 },
+      sourceCheck: { requestedUrl: "https://review.example/gpu", checkedAt: sourceCheckCheckedAt, status: "reachable" as const, identityStatus: "matched" as const, redirectCount: 0, httpStatus: 200 },
       benchmarkFreshness: "fresh" as const,
       dataUpdatedAt: "2026-09-03T00:00:00.000Z"
     };

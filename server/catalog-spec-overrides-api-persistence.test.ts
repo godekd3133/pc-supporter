@@ -59,7 +59,8 @@ describe("catalog spec override API persistence", () => {
       expect(appliedResponse.status).toBe(200);
       expect(applied).toMatchObject({ dataQuality: "manual", missingFields: [], specs: { vramGb: 16, powerW: 320, catalogSpecProvenance: { fields: ["powerW"], manufacturerModel: "API-GPU-16" } } });
 
-      checkPhysicalSourceUrlMock.mockResolvedValue({ requestedUrl: "https://vendor.example/api-gpu", checkedAt: "2026-09-03T00:02:00.000Z", status: "reachable", identityStatus: "matched", redirectCount: 0, finalUrl: "https://vendor.example/api-gpu", httpStatus: 200, contentType: "text/html", detail: "등록한 제조사 모델/SKU를 확인했습니다." });
+      const sourceCheckCheckedAt = new Date().toISOString();
+      checkPhysicalSourceUrlMock.mockResolvedValue({ requestedUrl: "https://vendor.example/api-gpu", checkedAt: sourceCheckCheckedAt, status: "reachable", identityStatus: "matched", redirectCount: 0, finalUrl: "https://vendor.example/api-gpu", httpStatus: 200, contentType: "text/html", detail: "등록한 제조사 모델/SKU를 확인했습니다." });
       const sourceCheckResponse = await fetch(`${baseUrl}/api/admin/catalog-spec-overrides/${basePart.id}/source-check`, { method: "POST" });
       const sourceCheck = await sourceCheckResponse.json() as Record<string, any>;
       expect(sourceCheckResponse.status).toBe(200);

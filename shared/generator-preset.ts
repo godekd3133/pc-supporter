@@ -1,5 +1,5 @@
 import { RECOMMENDATION_PRIORITY_VALUES } from "./types";
-import type { GamingRefreshRate, GamingResolution, ListingPolicy, RecommendationPriority, RecommendationProfile } from "./types";
+import type { GamingGraphicsPreset, GamingRefreshRate, GamingResolution, GamingUpscaling, ListingPolicy, RecommendationPerformanceTier, RecommendationPriority, RecommendationProfile } from "./types";
 
 export const GENERATOR_PRESET_STORAGE_KEY = "pc-supporter-generator-presets";
 export const GENERATOR_PRESET_SCHEMA_VERSION = 1;
@@ -8,8 +8,13 @@ export const GENERATOR_PRESET_LIMIT = 10;
 export type GeneratorPresetConfig = {
   profile: RecommendationProfile;
   priority: RecommendationPriority;
+  performanceTier?: RecommendationPerformanceTier;
   gamingResolution: GamingResolution;
   gamingRefreshRate: GamingRefreshRate;
+  gamingGameIds?: string[];
+  gamingGraphicsPreset?: GamingGraphicsPreset;
+  gamingRayTracing?: boolean;
+  gamingUpscaling?: GamingUpscaling;
   memoryCapacityGb: 16 | 32 | 64 | 128;
   budgetWon: number;
   includeGpu: boolean;
@@ -34,6 +39,20 @@ export function generatorPresetConfigFromUnknown(value: unknown): GeneratorPrese
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const candidate = value as Record<string, unknown>;
   const budgetWon = candidate.budgetWon;
+  const gamingGameIds = candidate.gamingGameIds === undefined
+    ? undefined
+    : Array.isArray(candidate.gamingGameIds) && candidate.gamingGameIds.length <= 5 && candidate.gamingGameIds.every((item) => typeof item === "string" && item.trim().length > 0 && item.trim().length <= 160)
+      ? candidate.gamingGameIds.map((item) => item.trim())
+      : null;
+  const gamingGraphicsPreset = candidate.gamingGraphicsPreset === undefined
+    ? undefined
+    : oneOf(candidate.gamingGraphicsPreset, ["competitive", "balanced", "high"] as const) ? candidate.gamingGraphicsPreset : null;
+  const gamingUpscaling = candidate.gamingUpscaling === undefined
+    ? undefined
+    : oneOf(candidate.gamingUpscaling, ["native", "quality", "balanced"] as const) ? candidate.gamingUpscaling : null;
+  const performanceTier = candidate.performanceTier === undefined
+    ? undefined
+    : oneOf(candidate.performanceTier, ["entry", "high", "top"] as const) ? candidate.performanceTier : null;
   if (!oneOf(candidate.profile, ["general", "gaming", "creator", "development", "office"] as const)
     || !oneOf(candidate.priority, RECOMMENDATION_PRIORITY_VALUES)
     || !oneOf(candidate.gamingResolution, ["1080p", "1440p", "4k"] as const)
@@ -44,12 +63,22 @@ export function generatorPresetConfigFromUnknown(value: unknown): GeneratorPrese
     || !oneOf(candidate.storageCapacityGb, [500, 1000, 2000, 4000] as const)
     || !oneOf(candidate.hddCount, [0, 1, 2, 4] as const)
     || !oneOf(candidate.hddCapacityGb, [2000, 4000, 8000, 16000] as const)
-    || !oneOf(candidate.listingPolicy, ["retail_only", "include_bulk", "all"] as const)) return null;
+    || !oneOf(candidate.listingPolicy, ["retail_only", "include_bulk", "all"] as const)
+    || gamingGameIds === null
+    || performanceTier === null
+    || gamingGraphicsPreset === null
+    || typeof candidate.gamingRayTracing !== "undefined" && typeof candidate.gamingRayTracing !== "boolean"
+    || gamingUpscaling === null) return null;
   return {
     profile: candidate.profile,
     priority: candidate.priority,
+    ...(performanceTier ? { performanceTier } : {}),
     gamingResolution: candidate.gamingResolution,
     gamingRefreshRate: candidate.gamingRefreshRate,
+    ...(gamingGameIds ? { gamingGameIds } : {}),
+    ...(gamingGraphicsPreset ? { gamingGraphicsPreset } : {}),
+    ...(candidate.gamingRayTracing !== undefined ? { gamingRayTracing: candidate.gamingRayTracing as boolean } : {}),
+    ...(gamingUpscaling ? { gamingUpscaling } : {}),
     memoryCapacityGb: candidate.memoryCapacityGb,
     budgetWon,
     includeGpu: candidate.includeGpu,

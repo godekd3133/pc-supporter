@@ -3,9 +3,9 @@ import type { SavedBuildMonitorItem } from "./saved-build-monitor";
 
 export const SAVED_BUILD_MONITOR_ALERT_LIMIT = 50;
 
-export type SavedBuildMonitorAlertKind = "critical" | "review" | "improved" | "changed" | "baseline" | "failed";
+export type SavedBuildMonitorAlertKind = "critical" | "review" | "improved" | "changed" | "baseline" | "failed" | "alternative";
 export type SavedBuildMonitorAlertFilter = "all" | "unread" | "attention" | "changes";
-const SAVED_BUILD_MONITOR_ALERT_KINDS: SavedBuildMonitorAlertKind[] = ["critical", "review", "improved", "changed", "baseline", "failed"];
+const SAVED_BUILD_MONITOR_ALERT_KINDS: SavedBuildMonitorAlertKind[] = ["critical", "review", "improved", "changed", "baseline", "failed", "alternative"];
 
 export interface SavedBuildMonitorAlert {
   id: string;
@@ -212,7 +212,7 @@ export function dismissSavedBuildMonitorAlerts(alerts: SavedBuildMonitorAlert[],
 export function savedBuildMonitorAlertMatches(alert: SavedBuildMonitorAlert, filter: SavedBuildMonitorAlertFilter) {
   if (alert.dismissedAt) return false;
   if (filter === "unread") return !alert.readAt;
-  if (filter === "attention") return alert.kind === "critical" || alert.kind === "review" || alert.kind === "failed";
+  if (filter === "attention") return alert.kind === "critical" || alert.kind === "review" || alert.kind === "failed" || alert.kind === "alternative";
   if (filter === "changes") return alert.kind === "improved" || alert.kind === "changed" || alert.kind === "baseline";
   return true;
 }

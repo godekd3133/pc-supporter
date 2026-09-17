@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PC Supporter · Guided Quote Flow Board</title>
+  <style>
+    :root { color: #191f28; background: #f6f8fa; font-family: -apple-system, BlinkMacSystemFont, "Noto Sans KR", sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 40px; }
+    header { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; max-width: 1520px; margin: 0 auto 28px; }
+    h1 { margin: 0; font-size: clamp(28px, 4vw, 52px); letter-spacing: -.06em; line-height: 1.05; }
+    h1 span { color: #3182f6; }
+    header p { max-width: 420px; margin: 0; color: #6b7684; font-size: 13px; line-height: 1.65; }
+    section { max-width: 1520px; margin: 0 auto 36px; }
+    .section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+    .section-heading h2 { margin: 0; font-size: 20px; letter-spacing: -.04em; }
+    .section-heading span { color: #8b95a1; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+    .board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+    figure { margin: 0; padding: 10px; border: 1px solid #e5e8eb; border-radius: 16px; background: #fff; box-shadow: 0 8px 28px rgba(16, 24, 40, .06); }
+    figure img { display: block; width: 100%; aspect-ratio: 1280 / 900; object-fit: cover; object-position: top center; border: 1px solid #eef1f4; border-radius: 10px; background: #f9fafb; }
+    figcaption { display: flex; align-items: baseline; gap: 8px; padding: 10px 2px 2px; }
+    figcaption b { color: #3182f6; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+    figcaption span { color: #4e5968; font-size: 13px; font-weight: 700; }
+    .mobile-board { grid-template-columns: repeat(3, minmax(150px, 1fr)); max-width: 760px; }
+    .mobile-board figure { padding: 8px; }
+    .mobile-board figure img { aspect-ratio: 390 / 844; object-position: top center; }
+    .mobile-board figcaption { display: block; }
+    .mobile-board figcaption b, .mobile-board figcaption span { display: block; }
+    .mobile-board figcaption span { margin-top: 3px; font-size: 11px; }
+    footer { max-width: 1520px; margin: 10px auto 0; padding-top: 16px; border-top: 1px solid #e5e8eb; color: #8b95a1; font-size: 11px; line-height: 1.6; }
+    @media (max-width: 900px) {
+      body { padding: 24px 16px; }
+      header { display: block; }
+      header p { margin-top: 14px; }
+      .board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .mobile-board { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+    @media (max-width: 520px) {
+      .board { grid-template-columns: 1fr; }
+      .mobile-board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Guided Quote<br><span>Flow Board</span></h1>
+    <p>현재 PC Supporter 구현을 실제 CTA 순서대로 재생한 화면 보드입니다. 데스크톱과 모바일의 정보 위계, 분기, 결과 handoff를 한 장에서 비교합니다.</p>
+  </header>
+
+  <section>
+    <div class="section-heading"><h2>Desktop · 1280 × 900</h2><span>9 screens · implementation-backed</span></div>
+    <div class="board">
+      <figure><img src="../artifacts/quote-onboarding/desktop-01-home-guided.png" alt="Desktop 01 첫 사용자 guided home"><figcaption><b>01</b><span>첫 사용자 홈</span></figcaption></figure>
+      <figure><img src="../artifacts/quote-onboarding/desktop-02-start-intent.png" alt="Desktop 02 시작 선택"><figcaption><b>02</b><span>시작 선택</span></figcaption></figure>
+      <figure><img src="../artifacts/quote-onboarding/desktop-03-new-quote.png" alt="Desktop 03 새 견적 방식"><figcaption><b>03</b><span>새 견적 방식</span></figcaption></figure>
+      <figure><img src="../artifacts/quote-onboarding/desktop-04-usecase.png" alt="Desktop 04 게임 또는 작업"><figcaption><b>04</b><span>게임 / 작업</span></figcaption></figure>
+      <figure><img src="../artifacts/quote-onboarding/desktop-05-game-performance.png" alt="Desktop 05 게임 목표 성능"><figcaption><b>05</b><span>4K · 144 FPS 목표</span></figcaption></figure>
+      <figure><img src="../artifacts/quote-onboarding/desktop-06-graphics-contract.png" alt="Desktop 06 그래픽 옵션과 성능 계약"><figcaption><b>06</b><span>그래픽 옵션 계약</span></figcaption></figure>
+      <figure><img src="../artifacts/quote-onboarding/desktop-07-budget-range.png" alt="Desktop 07 예산과 참고 가격대"><figcaption><b>07</b><span>예산 / 예상 사양</span></figcaption></figure>
+      <figure><img src="../artifacts/quote-onboarding/desktop-08-summary.png" alt="Desktop 08 조건 요약"><figcaption><b>08</b><span>조건 요약</span></figcaption></figure>
+      <figure><img src="../artifacts/quote-onboarding/desktop-09-generator-result.png" alt="Desktop 09 자동 구성 결과"><figcaption><b>09</b><span>자동 구성 결과</span></figcaption></figure>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-heading"><h2>Mobile · 390 × 844</h2><span>9 screens · same decision hierarchy</span></div>
+    <div class="board mobile-board">
+      <figure><img src="../artifacts/quote-onboarding/mobile-01-home-guided.png" alt="Mobile 01 첫 사용자 guided home"><figcaption><b>01</b><span>첫 사용자 홈</span></figcaption></figure>
+      <figure><img src="../artifacts/quote-onboarding/mobile-02-start-intent.png" alt="Mobile 02 시작 선택"><figcaption><b>02</b><span>시작 선택</span></figcaption></figure>
+      <figure><img src="../artifacts/quote-onboarding/mobile-03-new-quote.png" alt="Mobile 03 새 견적 방식"><figcaption><b>03</b><span>새 견적 방식</span></figcaption></figure>
+      <figure><img src="../artifacts/quote-onboarding/mobile-04-usecase.png" alt="Mobile 04 게임 또는 작업"><figcaption><b>04</b><span>게임 / 작업</span></figcaption></figure>
+      <figure><img src="../artifacts/quote-onboarding/mobile-05-game-performance.png" alt="Mobile 05 게임 목표 성능"><figcaption><b>05</b><span>4K · 144 FPS 목표</span></figcaption></figure>
+      <figure><img src="../artifacts/quote-onboarding/mobile-06-graphics-contract.png" alt="Mobile 06 그래픽 옵션과 성능 계약"><figcaption><b>06</b><span>그래픽 옵션 계약</span></figcaption></figure>
+      <figure><img src="../artifacts/quote-onboarding/mobile-07-budget-range.png" alt="Mobile 07 예산과 참고 가격대"><figcaption><b>07</b><span>예산 / 예상 사양</span></figcaption></figure>
+      <figure><img src="../artifacts/quote-onboarding/mobile-08-summary.png" alt="Mobile 08 조건 요약"><figcaption><b>08</b><span>조건 요약</span></figcaption></figure>
+      <figure><img src="../artifacts/quote-onboarding/mobile-09-generator-result.png" alt="Mobile 09 자동 구성 결과"><figcaption><b>09</b><span>자동 구성 결과</span></figcaption></figure>
+    </div>
+  </section>
+
+  <footer>이 보드는 정적 목업이 아니라 현재 코드의 CTA를 순서대로 조작해 생성한 캡처를 사용합니다. 실제 FPS 검증 상태는 exact-condition evidence가 연결된 범위에서만 별도로 판단합니다.</footer>
+</body>
+</html>

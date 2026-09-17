@@ -8,6 +8,8 @@
 
 ## 제품 목표
 
+첫 사용자 견적 생성 화면의 목적 기반 분기와 handoff 기준은 [`quote-onboarding-wireflow.md`](quote-onboarding-wireflow.md)를 함께 참고합니다. 이 문서는 정적인 시안 이름만 정의하지 않고, `/start` 화면 선택·`/recommend` query·work/budget/spec 분기·exact-condition FPS evidence 경계를 현재 구현과 같은 용어로 고정합니다.
+
 PC Supporter는 다음 흐름을 하나의 설명 가능한 웹서비스로 묶습니다.
 
 ```text
@@ -230,7 +232,7 @@ Vite가 브라우저 번들을 만들고 React 화면이 API 계약을 소비합
 | 타입·정적 계약 | `npm run typecheck` | 로컬 통과 |
 | 단위 테스트 | `npm test -- --reporter=dot` | 고정 개수는 기록하지 않고 현재 worktree에서 명령 실행 결과를 authoritative evidence로 사용 |
 | 브라우저 번들 | `npm run build` | 로컬 통과, Vite production bundle 생성 |
-| 브라우저 기능 smoke | `npm run test:browser`·`npm run test:browser:persistence` (Chrome 필요) | 로컬 Chrome CDP 및 CI `browser-smoke` job에서 개발 서버와 production preview(`/api` proxy 포함)의 정상 후보 흐름·결과 바로가기 5개와 lazy 대상 포커스·모달 초기 포커스·Tab 순환·Esc 닫기·API 실패 복구·390px overflow·임시 저장/공유/선택 이유 저장·owner metadata 수정·공유 견적 owner 없는 복제·후보 scenario 공유 링크 두 번째 탭 복원·공개 owner credential 경계·후보 scenario 버전 lineage·다중 탭 이력 sync·구매 단계 selector/itemStates·다음 구매 행동 센터·단계별 revision diff·구매 진행률/가격 이력 동시 저장 충돌·복원·검색/필터 통과 |
+| 브라우저 기능 smoke | `npm run test:browser`·`npm run test:browser:quote-onboarding`·`npm run test:browser:persistence` (Chrome 필요) | 로컬 Chrome CDP 및 CI `browser-smoke` job에서 개발 서버와 production preview(`/api` proxy 포함)의 정상 후보 흐름·결과 바로가기 5개와 lazy 대상 포커스·모달 초기 포커스·Tab 순환·Esc 닫기·API 실패 복구·390px overflow·임시 저장/공유/선택 이유 저장·owner metadata 수정·공유 견적 owner 없는 복제·후보 scenario 공유 링크 두 번째 탭 복원·공개 owner credential 경계·후보 scenario 버전 lineage·다중 탭 이력 sync·구매 단계 selector/itemStates·다음 구매 행동 센터·단계별 revision diff·구매 진행률/가격 이력 동시 저장 충돌·복원·검색/필터 통과·신규 견적 게임/작업 분기·목표 FPS/그래픽 조건·예산 예상 사양·자동 구성 handoff·나중에/업그레이드 진입 통과 |
 | production container | GitHub Actions `container-smoke` job | runner Docker에서 compose build·PostgreSQL healthcheck·production health/meta 응답 확인; 로컬 daemon 미실행으로 이 import에서는 image runtime을 직접 주장하지 않음 |
 | 개발 API | `npm run dev` 또는 `npm run start` 후 `/api/health` | 이 import 단계에서는 별도 장기 실행 근거로 주장하지 않음 |
 | seed-only API·호환성 | `npm run test:seed` (빈 임시 `PC_SUPPORTER_DATA_DIR`에서 서버를 띄움) | 외부 수집·기존 `data/` 없이 starter 핵심/주변 부품 materialize, 메타·목록·호환성 차단·안전 대체 후보·자동 구성 API와 fallback 파일 생성 검증 |

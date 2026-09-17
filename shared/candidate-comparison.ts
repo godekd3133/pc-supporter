@@ -1,5 +1,6 @@
 import type { AlternativeRisk, CandidateDecisionStatus, CatalogPriceEvidence, DataFreshness, PhysicalEvidenceStatus, RecommendationTrustLevel, SimilarityEvidence } from "./types";
 import type { AlternativeComparisonScenarioTradeoff } from "./alternative-comparison-scenario";
+import { iGa } from "./josa";
 
 export const CANDIDATE_COMPARISON_CRITERIA = ["balanced", "compatibility", "performance", "price", "evidence"] as const;
 export type CandidateComparisonCriterion = (typeof CANDIDATE_COMPARISON_CRITERIA)[number];
@@ -262,7 +263,7 @@ export function candidateComparisonTradeoffsFor(items: CandidateComparisonItem[]
       ...metric,
       frontier: false,
       dominatedByCandidateId: dominator.id,
-      reason: `${dominator.name}이(가) ${candidateTradeoffDimensionReason(dominator, metric)} 기준으로 더 유리해 비교 우위에서 제외했습니다.`
+      reason: `${iGa(dominator.name)} ${candidateTradeoffDimensionReason(dominator, metric)} 기준으로 더 유리해 비교 우위에서 제외했습니다.`
     };
   });
 }

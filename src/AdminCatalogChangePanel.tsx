@@ -20,6 +20,7 @@ import type { CatalogWatchlistStatusFilter, CatalogWatchlistSort } from "../shar
 import { LOCAL_IMPORT_MAX_BYTES } from "../shared/file-import-limits";
 import { api } from "./api";
 import { safeExternalUrl } from "./safe-source-url";
+import { eul } from "../shared/josa";
 
 const CATALOG_WATCHLIST_STORAGE_KEY = "pc-supporter-catalog-watchlist";
 const CATALOG_WATCH_THRESHOLD_STORAGE_KEY = "pc-supporter-catalog-watch-threshold";
@@ -222,7 +223,7 @@ export function CatalogChangeHistoryPanel({ records, loading, error, historyLimi
     setSavedWatchlistUrl(null);
     setSavedWatchlistId(null);
     setSavedWatchlistExpiresAt(null);
-    onToast(watched ? `${item.itemName}을(를) 관심 목록에서 제거했습니다.` : `${item.itemName}을(를) 관심 가격에 등록했습니다.`);
+    onToast(watched ? `${eul(item.itemName)} 관심 목록에서 제거했습니다.` : `${eul(item.itemName)}) 관심 가격에 등록했습니다.`);
   }
   function updateWatchTarget(entry: CatalogWatchEntry, rawValue: string) {
     const targetPriceWon = rawValue.trim() === "" ? undefined : Number(rawValue);

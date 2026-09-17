@@ -6,6 +6,10 @@ iPhone·Android 네이티브 빌드와 TestFlight archive 절차는 [`docs/mobil
 
 현재 구현을 의존성 순서와 검증 근거별로 분류한 문서는 [`docs/development-process.md`](docs/development-process.md)에서 확인할 수 있습니다. 공개 저장소에는 코드와 결정적 seed 데이터만 포함하고, 다나와 수집 원본·사용자 저장 상태·로컬 실행 산출물은 [`data/README.md`](data/README.md)의 정책에 따라 제외합니다.
 
+첫 사용자 견적 생성 UX의 화면 순서·분기·URL handoff·FPS 근거 경계는 [`docs/quote-onboarding-wireflow.md`](docs/quote-onboarding-wireflow.md)에 정리되어 있습니다. 이 문서는 `/start` → `/recommend` 구현과 desktop/390px browser smoke의 공통 기준입니다.
+
+실제 CTA를 순서대로 재생한 desktop·390px 모바일 화면 캡처와 manifest는 [`docs/quote-onboarding-capture.md`](docs/quote-onboarding-capture.md)에서 확인할 수 있습니다.
+
 다나와 부품 카탈로그와 설명 가능한 규칙 엔진으로 PC 견적 호환성을 검사하는 웹서비스입니다.
 
 부품 선택기는 성공적으로 확인한 후보를 브라우저의 제한된 로컬 캐시에 보관합니다. 이후 전체 카탈로그 목록 요청이 일시 실패하면 현재 검색·가격·데이터·스펙 조건에 맞는 캐시 후보를 탐색 전용으로 표시하고 선택까지 허용하지만, 정밀 호환성·유사도·실시간 가격을 계산한 것처럼 표시하지 않습니다. 서버가 복구되면 다시 불러오기로 최신 목록과 후보 판정을 다시 확인하며, 캐시는 최대 600개·약 1.8MB 범위로 제한됩니다.
@@ -215,7 +219,7 @@ GPU가 선택되면 결과 화면의 `GPU 실장·전원 요약`에서 GPU 길�
 
 후보 선택기·후보 비교·견적 JSON 가져오기·견적 저장·변경 미리보기·공유 취소 확인 모달은 키보드 포커스를 모달 안에 가두고 `Esc`로 닫을 수 있으며, 닫힌 뒤 열기 버튼으로 포커스를 돌려줍니다. 저장·변경 중인 위험한 작업은 `Esc`와 배경 클릭으로 닫히지 않도록 유지합니다. 이 동작은 마우스 클릭 중심의 원본 시연 흐름을 키보드·스크린리더 사용자도 확인할 수 있는 상태로 확장합니다.
 
-로컬 개발 서버가 실행 중이면 `npm run test:browser`로 별도 Chrome 프로필을 열어 홈·시연 견적·호환성 검사·finding 교체·후보 선택기 초기 포커스·Tab 순환·Esc 닫기·차단 없음 후보·후보 비교·상세 근거·API 실패 복구·390px 모바일 overflow 흐름을 실제 DOM에서 smoke test할 수 있습니다. production build를 preview할 때는 `BROWSER_SMOKE_BASE_URL=http://127.0.0.1:4184 npm run test:browser`로 같은 흐름을 preview `/api` proxy까지 포함해 검증할 수 있습니다. `npm run test:browser:persistence`는 별도 임시 API/Vite 서버와 데이터 디렉터리를 만들어 견적 저장·공유 route 복원·저장 견적 이력·후보 전체 가상 비교·후보 scenario 공유 링크의 두 번째 탭 읽기 전용 복원·공개 owner credential 경계·공유 이력 동기화·후보 전체 가상 비교 후 새 견적 저장·버전 lineage·다중 탭 이력 동기화·동시 저장 충돌 보호·구매 진행률 서버 저장·로컬 상태 삭제 후 서버 복원·현재 가격 확인·가격 이력 서버 저장/복원까지 검증합니다. GitHub Actions의 `browser-smoke` job도 네트워크 수집을 끈 seed-only 서버와 runner Chrome으로 개발 서버·production preview 두 흐름과 persistence 흐름을 실행하며, 실패하면 개발/preview 서버 로그를 artifact로 남깁니다. 이 검사는 기본 단위 테스트와 분리되어 있으며 사용자 프로필·저장 견적을 사용하지 않습니다.
+로컬 개발 서버가 실행 중이면 `npm run test:browser`로 별도 Chrome 프로필을 열어 홈·시연 견적·호환성 검사·finding 교체·후보 선택기 초기 포커스·Tab 순환·Esc 닫기·차단 없음 후보·후보 비교·상세 근거·API 실패 복구·390px 모바일 overflow 흐름을 실제 DOM에서 smoke test할 수 있습니다. `npm run test:browser:quote-onboarding`은 신규 견적 온보딩의 게임 분기(게임·4K·144 FPS·그래픽 조건·예산·자동 구성 결과), 작업 분기(영상 편집·작업 강도·구체적 RAM/SSD 예상), `나중에`, 업그레이드 진입을 데스크톱과 390px 모바일 viewport에서 끝까지 검증하고, 모바일 body/document 폭과 화면 밖 요소도 검사합니다. production build를 preview할 때는 `BROWSER_SMOKE_BASE_URL=http://127.0.0.1:4184 npm run test:browser`와 `BROWSER_SMOKE_BASE_URL=http://127.0.0.1:4184 npm run test:browser:quote-onboarding`으로 같은 흐름을 preview `/api` proxy까지 포함해 검증할 수 있습니다. `npm run test:browser:persistence`는 별도 임시 API/Vite 서버와 데이터 디렉터리를 만들어 견적 저장·공유 route 복원·저장 견적 이력·후보 전체 가상 비교·후보 scenario 공유 링크의 두 번째 탭 읽기 전용 복원·공개 owner credential 경계·공유 이력 동기화·후보 전체 가상 비교 후 새 견적 저장·버전 lineage·다중 탭 이력 동기화·동시 저장 충돌 보호·구매 진행률 서버 저장·로컬 상태 삭제 후 서버 복원·현재 가격 확인·가격 이력 서버 저장/복원까지 검증합니다. GitHub Actions의 `browser-smoke` job도 네트워크 수집을 끈 seed-only 서버와 runner Chrome으로 개발 서버·production preview 두 흐름과 persistence·quote onboarding 흐름을 실행하며, 실패하면 개발/preview 서버 로그를 artifact로 남깁니다. 이 검사는 기본 단위 테스트와 분리되어 있으며 사용자 프로필·저장 견적을 사용하지 않습니다.
 
 후보 scenario 공유 smoke는 생성자가 `공유 취소`를 실행한 뒤 기존 URL이 서버에서 404로 차단되고, 이미 열려 있던 다른 탭에서도 취소된 공유 안내가 표시되는지까지 확인합니다. 공유 snapshot은 생성·조회·취소 lifecycle과 owner credential 공개 경계를 함께 검증합니다.
 

@@ -19,6 +19,7 @@ type HeaderProps = {
   bootstrapLoading: boolean;
   bootstrapErrorCount: number;
   savedBuildUnreadAlertCount: number;
+  watchlistUnreadAlertCount: number;
   catalogRefreshProgress: CatalogRefreshProgress | null;
   onHome: () => void;
   onBuild: () => void;
@@ -29,7 +30,7 @@ type HeaderProps = {
   onHistory: () => void;
 };
 
-export function AppHeader({ view, networkOnline, apiStatus, bootstrapLoading, bootstrapErrorCount, savedBuildUnreadAlertCount, catalogRefreshProgress, onHome, onBuild, onGenerate, onCatalog, onAccessories, onPriceWatchlist, onHistory }: HeaderProps) {
+export function AppHeader({ view, networkOnline, apiStatus, bootstrapLoading, bootstrapErrorCount, savedBuildUnreadAlertCount, watchlistUnreadAlertCount, catalogRefreshProgress, onHome, onBuild, onGenerate, onCatalog, onAccessories, onPriceWatchlist, onHistory }: HeaderProps) {
   const [moreOpen, setMoreOpen] = useState(false);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     try {
@@ -120,10 +121,10 @@ export function AppHeader({ view, networkOnline, apiStatus, bootstrapLoading, bo
           <button className={view === "generator" ? "nav-link active" : "nav-link"} onClick={onGenerate}>자동 구성</button>
           <button className={view === "catalog" ? "nav-link active" : "nav-link"} onClick={onCatalog}>부품 카탈로그</button>
           <button className={view === "accessories" ? "nav-link active" : "nav-link"} onClick={onAccessories}>주변 부품</button>
-          <button className={view === "pricewatchlist" ? "nav-link active" : "nav-link"} onClick={onPriceWatchlist}>가격 추적</button>
+          <button className={view === "pricewatchlist" ? "nav-link nav-link-with-badge active" : "nav-link nav-link-with-badge"} onClick={onPriceWatchlist} aria-label={watchlistUnreadAlertCount > 0 ? `가격 추적, 미읽음 알림 ${watchlistUnreadAlertCount}건` : "가격 추적"}><span>가격 추적</span>{watchlistUnreadAlertCount > 0 && <span className="nav-alert-badge" aria-hidden="true">{watchlistUnreadAlertCount > 99 ? "99+" : watchlistUnreadAlertCount}</span>}</button>
           <button className={view === "history" ? "nav-link nav-link-with-badge active" : "nav-link nav-link-with-badge"} onClick={onHistory} aria-label={savedBuildUnreadAlertCount > 0 ? `저장 견적, 미읽음 알림 ${savedBuildUnreadAlertCount}건` : "저장 견적"}><span>저장 견적</span>{savedBuildUnreadAlertCount > 0 && <span className="nav-alert-badge" aria-hidden="true">{savedBuildUnreadAlertCount > 99 ? "99+" : savedBuildUnreadAlertCount}</span>}</button>
         </nav>
-        <button className="theme-toggle" type="button" onClick={toggleTheme} aria-label={`${nextThemeModeLabel}로 전환`} title={`${nextThemeModeLabel}로 전환`}><ThemeIcon aria-hidden="true" /><span>{nextThemeModeLabel}</span></button>
+        <button className="theme-toggle" type="button" onClick={toggleTheme} aria-pressed={themeMode === "dark"} aria-label={`${nextThemeModeLabel}로 전환`} title={`${nextThemeModeLabel}로 전환`}><ThemeIcon aria-hidden="true" /><span>{nextThemeModeLabel}</span></button>
         {showStatus && <div className={`topbar-status ${statusClass}`} title={statusTitle}><span className={`status-dot ${statusClass}`} /> {statusLabel}{apiStatus.fallbackAt && <small>마지막 확인 {new Date(apiStatus.fallbackAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}</small>}</div>}
       </div>
       {catalogRefreshProgress && <div className="topbar-refresh-progress" data-testid="catalog-refresh-progress" role="status" aria-live="polite">

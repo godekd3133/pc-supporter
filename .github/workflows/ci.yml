@@ -89,6 +89,9 @@ jobs:
       - name: Browser DOM smoke flow
         run: npm run test:browser
 
+      - name: Guided quote onboarding smoke flow
+        run: npm run test:browser:quote-onboarding
+
       - name: Build production preview
         env:
           NODE_ENV: production
@@ -114,6 +117,11 @@ jobs:
         env:
           BROWSER_SMOKE_BASE_URL: http://127.0.0.1:4184
         run: npm run test:browser
+
+      - name: Production preview guided quote onboarding smoke flow
+        env:
+          BROWSER_SMOKE_BASE_URL: http://127.0.0.1:4184
+        run: npm run test:browser:quote-onboarding
 
       - name: Browser persistence smoke flow
         run: npm run test:browser:persistence

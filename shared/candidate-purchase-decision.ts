@@ -1,4 +1,5 @@
 import type { AlternativeRisk, CandidateDecisionStatus, CatalogPriceEvidence, DataFreshness, PhysicalEvidenceStatus, RecommendationTrustLevel } from "./types";
+import { eun } from "./josa";
 
 export type CandidatePurchaseDecisionState = "buy" | "wait" | "performance" | "review" | "hold";
 
@@ -66,7 +67,7 @@ export function candidatePurchaseDecisionFor(input: CandidatePurchaseDecisionInp
   if (input.remainingBlockers > 0) holdReasons.push(`미리 적용 후 차단 오류 ${input.remainingBlockers}개가 남습니다.`);
   if (input.nextStatus === "incompatible") holdReasons.push("미리 적용 후 전체 견적이 호환 불가 상태입니다.");
   if (holdReasons.length > 0) {
-    return { state: "hold", label: "적용 보류", summary: `${input.name}은(는) 현재 견적에 적용하지 말고 차단 원인을 먼저 해결하세요.`, reasons: holdReasons };
+    return { state: "hold", label: "적용 보류", summary: `${eun(input.name)} 현재 견적에 적용하지 말고 차단 원인을 먼저 해결하세요.`, reasons: holdReasons };
   }
 
   const reviewReasons: string[] = [];
@@ -87,7 +88,7 @@ export function candidatePurchaseDecisionFor(input: CandidatePurchaseDecisionInp
   if (input.analysisScoreDelta !== undefined && Number.isFinite(input.analysisScoreDelta) && input.analysisConfidence === "unknown") reviewReasons.push("미리 적용 후 성능 분석 정보가 확인되지 않았습니다.");
   if (input.analysisScoreDelta !== undefined && Number.isFinite(input.analysisScoreDelta) && input.analysisScoreDelta < 0) reviewReasons.push(`${input.analysisConfidence === "limited" ? "일부 스펙 기준으로 " : ""}미리 적용 후 전체 성능 점수가 현재보다 ${Math.abs(Math.round(input.analysisScoreDelta))}점 낮습니다.`);
   if (reviewReasons.length > 0) {
-    return { state: "review", label: "확인 후 구매", summary: `${input.name}은(는) 호환 부품지만 가격·데이터·남은 위험을 확인한 뒤 구매하세요.`, reasons: reviewReasons };
+    return { state: "review", label: "확인 후 구매", summary: `${eun(input.name)} 호환 부품이지만 가격·데이터·남은 위험을 확인한 뒤 구매하세요.`, reasons: reviewReasons };
   }
 
   if (input.similarityScore !== undefined && input.similarityScore >= 95 && (input.similarityConfidence === undefined || input.similarityConfidence === "high") && input.priceDeltaWon !== undefined && input.priceDeltaWon > 0 && (input.analysisScoreDelta === undefined || input.analysisScoreDelta >= 0)) {
@@ -96,7 +97,7 @@ export function candidatePurchaseDecisionFor(input: CandidatePurchaseDecisionInp
     return {
       state: "performance",
       label: "성능 우선",
-      summary: `${input.name}은(는) 성능 유사도 ${input.similarityScore}점으로 높고${input.analysisScoreDelta !== undefined ? ` 전체 성능도 ${input.analysisScoreDelta > 0 ? "+" : ""}${Math.round(input.analysisScoreDelta)}점 변화하지만` : "지만"}, 전체 견적이 ${signedWon(input.priceDeltaWon)} 증가합니다.`,
+      summary: `${eun(input.name)} 성능 유사도 ${input.similarityScore}점으로 높고${input.analysisScoreDelta !== undefined ? ` 전체 성능도 ${input.analysisScoreDelta > 0 ? "+" : ""}${Math.round(input.analysisScoreDelta)}점 변화하지만` : "지만"}, 전체 견적이 ${signedWon(input.priceDeltaWon)} 증가합니다.`,
       reasons: performanceReasons
     };
   }
@@ -116,7 +117,7 @@ export function candidatePurchaseDecisionFor(input: CandidatePurchaseDecisionInp
     return {
       state: "wait",
       label: "가격 하락 대기",
-      summary: `${input.name}은(는) 호환 기준은 통과했지만 ${historyReason}이고 전체 견적이 ${signedWon(input.priceDeltaWon!)} 증가해 가격을 더 관찰하는 편이 좋습니다.`,
+      summary: `${eun(input.name)} 호환 기준은 통과했지만 ${historyReason}이고 전체 견적이 ${signedWon(input.priceDeltaWon!)} 증가해 가격을 더 관찰하는 편이 좋습니다.`,
       reasons: [historyReason, `가격 변화 ${signedWon(input.priceDeltaWon!)}`, ...(history?.hasDropThenRebound ? ["최근 하락 후 재상승 신호"] : [])]
     };
   }
@@ -125,5 +126,5 @@ export function candidatePurchaseDecisionFor(input: CandidatePurchaseDecisionInp
   if (input.similarityScore !== undefined) reasons.push(`성능 유사도 ${input.similarityScore}점`);
   if (input.analysisScoreDelta !== undefined && Number.isFinite(input.analysisScoreDelta)) reasons.push(`전체 성능 변화 ${input.analysisScoreDelta > 0 ? "+" : ""}${Math.round(input.analysisScoreDelta)}점`);
   if (input.priceDeltaWon !== undefined) reasons.push(`가격 변화 ${signedWon(input.priceDeltaWon)}`);
-  return { state: "buy", label: "구매 추천", summary: `${input.name}은(는) 현재 확인된 호환·가격·정보 기준에서 우선 구매 부품입니다.`, reasons };
+  return { state: "buy", label: "구매 추천", summary: `${eun(input.name)} 현재 확인된 호환·가격·정보 기준에서 우선 구매 부품입니다.`, reasons };
 }

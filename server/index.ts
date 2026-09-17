@@ -3,8 +3,8 @@ import express, { type NextFunction, type Request, type RequestHandler, type Res
 import { existsSync } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { resolve } from "node:path";
-import type { AccessoryCategory, AccessoryPriceFilter, AccessoryRefreshResponse, AccessorySelection, AlternativeRisk, AlternativeRiskCounts, BenchmarkAvailabilityFilter, BuildGenerationRequest, BuildSelection, CatalogChangeKind, CatalogChangeRecord, CompatibilityResult, CrawlResumePreview, CrawlStatus, DataFreshness, DataQuality, Finding, GpuPhysicalOverride, ListingPolicy, M2CoverageFilter, M2MappingStatus, M2SlotCoverage, M2SlotCoverageBucket, M2SlotCoverageItem, M2SlotOverride, M2SlotReviewTemplate, M2SlotReviewTemplateItem, Part, PartCategory, PartRefreshResponse, PriceAvailabilityFilter, RecommendationPreferences, RecommendationProfile, SavedBuild, SavedBuildCheckSnapshot } from "../shared/types";
-import { ACCESSORY_CATEGORIES, isRecommendationPriority, PART_CATEGORIES } from "../shared/types";
+import type { AccessoryCategory, AccessoryPriceFilter, AccessoryRefreshResponse, AccessorySelection, AlternativeRisk, AlternativeRiskCounts, BenchmarkAvailabilityFilter, BuildGenerationRequest, BuildGenerationVariantResult, BuildSelection, CatalogChangeKind, CatalogChangeRecord, CompatibilityResult, CrawlResumePreview, CrawlStatus, DataFreshness, DataQuality, Finding, GpuPhysicalOverride, ListingPolicy, M2CoverageFilter, M2MappingStatus, M2SlotCoverage, M2SlotCoverageBucket, M2SlotCoverageItem, M2SlotOverride, M2SlotReviewTemplate, M2SlotReviewTemplateItem, Part, PartCategory, PartRefreshResponse, PriceAvailabilityFilter, RecommendationPerformanceTier, RecommendationPreferences, RecommendationProfile, SavedBuild, SavedBuildCheckSnapshot } from "../shared/types";
+import { ACCESSORY_CATEGORIES, isRecommendationPriority, PART_CATEGORIES, RECOMMENDATION_VARIANT_PRIORITIES } from "../shared/types";
 import { catalogEligibilitySummaryFor, catalogMeta, catalogSearchTotalsFor, catalogUpdatedAtFor, countParts, currentCatalogRuntimeRevision, filterParts, findPart, invalidateCatalogCache, loadCatalog, parseCatalogMissingField, parsePartSpecFilter, partSpecFilterDiagnosticsFor, partSpecFilterMatcherFor, searchParts, upsertCatalog } from "./catalog";
 import { countAccessories, currentAccessoryUpdatedAt, findAccessory, loadAccessories, readAccessoryCoverage, searchAccessories, upsertAccessories } from "./accessories";
 import { loadCatalogSnapshot, loadCatalogSnapshotTimestamp } from "./catalog-snapshot";
@@ -14,16 +14,18 @@ import { prepareCompatibilityRequest } from "./compatibility-request";
 import { recommendAccessories } from "./accessory-recommendations";
 import { summarizeAccessorySelections } from "./accessory-cart";
 import { loadSavedBuildPresentationContext, savedBuildPresentationFor, savedBuildPresentationsFor } from "./saved-build-presentation";
+import { savedBuildAlternativeAlertsFor } from "./saved-build-alternatives";
+import { recordUsageEvent, trackUsageEvent, usageEventSummaryFor } from "./usage-events";
 import { classifyDataFreshness, summarizeBuildDataHealth } from "./data-health";
 import { isAccessoryCrawlRunning, readAccessoryCrawlManifest, readAccessoryCrawlStatus, runAccessoryCrawlJob } from "./accessory-crawler";
 import { BuildGenerationError, ENGINE_VERSION, assessAlternativePart, buildGenerationRecoveryOptionsFor, candidateSimilarityForBuild, compareCandidateSimilarity, compareCandidateValue, evaluateBuild, generateBuildDraft } from "./engine";
 import { cancelCrawlPageRetryBatch, crawlPageRetryBatchPlanFor, crawlPageRetryPlanFor, crawlResumePlanFor, isCrawlPageRetryBatchRunning, isCrawlRunning, readCrawlStatus, runCrawlJob, runCrawlPageRetryBatchJob, runCrawlPageRetryJob } from "./crawler";
 import { CATALOG_PATH, CRAWL_MANIFEST_PATH, ensureDataDirectory, fileUpdatedAt, readJson } from "./storage";
 import type { CrawlManifest } from "../shared/types";
-import { appendSavedBuild, appendSavedBuildCheck, appendSavedBuildVersionComparison, appendSavedBudgetLadder, appendSavedComparison, appendSavedWatchlist, deleteSavedBuild, deleteSavedBuildVersionComparison, deleteSavedBudgetLadder, deleteSavedComparison, deleteSavedWatchlist, deleteSavedWatchlistAlertStates, initializePersistence, migrateSavedBuildVersions, persistenceDiagnostics, readLatestSavedBuildVersionBackup, readSavedBuildVersionBackupDetail, readSavedBuildVersionBackups, readSavedBuilds, readSavedBuildVersionComparisons, readSavedBudgetLadders, readSavedComparisons, readSavedWatchlistAlertStates, readSavedWatchlists, restoreSavedBuildPurchasePriceHistory, restoreSavedBuildPurchaseProgress, rollbackSavedBuildVersions, savedBuildVersionSnapshotFingerprintFor, updateSavedBuildAssemblyVerification, updateSavedBuildMetadata, updateSavedBuildMonitorState, updateSavedBuildPurchasePriceHistory, updateSavedBuildPurchaseProgress, updateSavedWatchlist, updateSavedWatchlistAlertStates, withSavedBuildMonitorLease } from "./repository";
+import { appendSavedBuild, appendSavedBuildCheck, appendSavedBuildVersionComparison, appendSavedBudgetLadder, appendSavedComparison, appendSavedWatchlist, deleteSavedBuild, deleteSavedBuildVersionComparison, deleteSavedBudgetLadder, deleteSavedComparison, deleteSavedWatchlist, deleteSavedWatchlistAlertStates, initializePersistence, migrateSavedBuildVersions, persistenceDiagnostics, readLatestSavedBuildVersionBackup, readSavedBuildVersionBackupDetail, readSavedBuildVersionBackups, readSavedBuilds, readSavedBuildVersionComparisons, readSavedBudgetLadders, readSavedComparisons, readSavedWatchlistAlertStates, readSavedWatchlists, restoreSavedBuildPurchasePriceHistory, restoreSavedBuildPurchaseProgress, rollbackSavedBuildVersions, savedBuildVersionSnapshotFingerprintFor, updateSavedBuildAssemblyVerification, updateSavedBuildMetadata, updateSavedBuildMonitorState, updateSavedBuildMyPc, updateSavedBuildPurchasePriceHistory, updateSavedBuildPurchaseProgress, updateSavedBuildShareCredentials, updateSavedWatchlist, updateSavedWatchlistAlertStates, withSavedBuildMonitorLease } from "./repository";
 import { DEFAULT_SAVED_WATCHLIST_ALERT_PREFERENCES, parseSavedCatalogWatchlistInput, parseSavedCatalogWatchlistUpdateInput, savedCatalogWatchlistExpired, savedWatchlistAlertPreferencesFor } from "./watchlist-store";
 import { shareExpired, shareExpiryDaysFrom, shareExpiryValueProvided, shareExpiresAtFor } from "./share-lifecycle";
-import { createShareOwnerCredential, shareOwnerOrEnabledAdminCanManage, shareOwnerTokenMatches, type SavedBuildRecord } from "./build-share";
+import { createShareOwnerCredential, createShareRecoveryCode, normalizeShareRecoveryCode, shareOwnerOrEnabledAdminCanManage, shareOwnerTokenMatches, shareRecoveryCodeMatches, type SavedBuildRecord } from "./build-share";
 import { createRateLimitMiddleware } from "./rate-limit";
 import { publicSavedCatalogWatchlist, type SavedCatalogWatchlistRecord } from "./watchlist-share";
 import { parsePublicPriceHistoryIds, parsePublicPriceHistoryWindow } from "./public-price-history";
@@ -71,7 +73,8 @@ import { SAVED_BUILD_VERSION_MIGRATION_CONFIRMATION, SAVED_BUILD_VERSION_ROLLBAC
 import type { SavedBuildMonitorItem, SavedBuildMonitorResponse } from "../shared/saved-build-monitor";
 import { savedBuildCatalogChangeCausesFor } from "../shared/saved-build-change-causes";
 import { parseSavedBuildMonitorRequest } from "./build-monitor";
-import { completeSavedBuildMonitorRun, configureSavedBuildMonitorSubscription, defaultSavedBuildMonitorSubscription, failSavedBuildMonitorRun, parseSavedBuildMonitorAlertIds, parseSavedBuildMonitorSettings, SAVED_BUILD_SERVER_MONITOR_SCHEDULER_BATCH_LIMIT, savedBuildMonitorSubscriptionDue, updateSavedBuildMonitorAlertState } from "../shared/saved-build-monitor-subscription";
+import { completeSavedBuildMonitorRun, configureSavedBuildMonitorSubscription, defaultSavedBuildMonitorSubscription, failSavedBuildMonitorRun, parseSavedBuildMonitorAlertIds, parseSavedBuildMonitorSettings, SAVED_BUILD_SERVER_MONITOR_SCHEDULER_BATCH_LIMIT, savedBuildMonitorAlertAllowed, savedBuildMonitorSubscriptionDue, updateSavedBuildMonitorAlertState } from "../shared/saved-build-monitor-subscription";
+import { mergeSavedBuildMonitorAlerts } from "../shared/saved-build-monitor-alerts";
 import type { SavedBuildMonitorSubscriptionResponse } from "../shared/saved-build-monitor-subscription";
 import { compatibilityRequestKey, compatibilityResultCache, compatibilityResultCacheKey, InFlightDeduper, TtlLruInFlightCache, type CompatibilityResponseCacheValue } from "./compatibility-cache";
 import { savedBuildCheckPreviewCache, savedBuildCheckPreviewCacheKey } from "./saved-build-check-cache";
@@ -79,6 +82,8 @@ import { accessoryCompatibilityFor } from "./accessory-compatibility";
 import { parseCatalogBatchIds, parseCatalogBatchQuery } from "./catalog-batch";
 import { entityTagFor, ifNoneMatchMatches } from "./http-cache";
 import { upgradeBundlePayloadFor } from "../shared/upgrade-bundle-transport";
+import { gamingPerformanceEvidencePath, loadGamingPerformanceEvidence, saveGamingPerformanceEvidence } from "./gaming-performance-evidence";
+import { gamingPerformanceAssessmentFor, gamingPerformanceEvidenceBatchValidationFor } from "../shared/gaming-performance-evidence";
 import { candidateDecisionSummaryFor } from "../shared/candidate-decision";
 import { assemblyVerificationSavedHistoryFor, parseAssemblyVerificationHistoryJson } from "../shared/assembly-verification";
 import { buildCompatibilityInputFingerprint } from "../shared/build-fingerprint";
@@ -97,6 +102,7 @@ import { publicCrawlStatusFor } from "../shared/public-crawl-status";
 import { savedBuildVersionComparisonExportFor, savedBuildVersionComparisonTextFor } from "../shared/saved-build-version-export";
 import { publicSavedBuildVersionComparisonShare, parseSavedBuildVersionComparisonShareInput, savedBuildVersionComparisonShareExpired, savedBuildVersionComparisonShareExpiresAtFor, savedBuildVersionComparisonSharePayloadFor, type SavedBuildVersionComparisonShareRecord } from "../shared/saved-build-version-share";
 import { BUILD_INPUT_MAX_ID_LENGTH, BUILD_INPUT_MAX_M2_SLOTS, BUILD_INPUT_MAX_SELECTIONS_PER_LIST } from "../shared/build-input-limits";
+import { eul } from "../shared/josa";
 
 const app = express();
 const port = Number(process.env.PORT ?? 4174);
@@ -187,6 +193,8 @@ function evaluateBuildWithAccessories(
     recommendationPreferences,
     ...(includeSuggestions ? {} : { includeSuggestions: false, includeAnalysis: true })
   });
+  const gamingPerformanceAssessment = compatibilityGamingPerformanceAssessmentFor(build, catalog, recommendationPreferences);
+  if (gamingPerformanceAssessment) result.gamingPerformanceAssessment = gamingPerformanceAssessment;
   result.coreTotalPriceWon = result.totalPriceWon;
   result.corePriceComplete = result.priceComplete;
   result.dataHealth = summarizeBuildDataHealth(build, catalog, accessories);
@@ -209,6 +217,26 @@ function evaluateBuildWithAccessories(
     }
   }
   return result;
+}
+
+function compatibilityGamingPerformanceAssessmentFor(build: BuildSelection, catalog: Part[], recommendationPreferences: RecommendationPreferences) {
+  const hasGamingOptionAdvisory = recommendationPreferences.profile === "gaming" && (
+    (recommendationPreferences.gamingGameIds?.length ?? 0) > 0
+    || recommendationPreferences.gamingGraphicsPreset !== undefined
+    || recommendationPreferences.gamingRayTracing !== undefined
+    || recommendationPreferences.gamingUpscaling !== undefined
+  );
+  if (!hasGamingOptionAdvisory) return undefined;
+  const selectedGpu = build.gpu ? catalog.find((part) => part.id === build.gpu?.partId && part.category === "gpu") : undefined;
+  return gamingPerformanceAssessmentFor(loadGamingPerformanceEvidence(), {
+    gameIds: recommendationPreferences.gamingGameIds ?? [],
+    resolution: recommendationPreferences.gamingResolution ?? "1440p",
+    refreshRate: recommendationPreferences.gamingRefreshRate ?? 144,
+    graphicsPreset: recommendationPreferences.gamingGraphicsPreset,
+    rayTracing: recommendationPreferences.gamingRayTracing,
+    upscaling: recommendationPreferences.gamingUpscaling,
+    ...(selectedGpu ? { gpuPartId: selectedGpu.id, gpuName: selectedGpu.name } : {})
+  });
 }
 
 function compatibilityResponseFor(result: CompatibilityResult): CompatibilityResult {
@@ -289,6 +317,7 @@ const accessoryRefreshJobs = new Map<string, Promise<AccessoryRefreshResponse>>(
 const accessoryRefreshLastRunAt = new Map<string, number>();
 const buildCreateRateLimit = createRateLimitMiddleware("build-create", { limit: 20, windowMs: 60_000 });
 const buildShareRateLimit = createRateLimitMiddleware("build-share", { limit: 120, windowMs: 60_000 });
+const buildRecoverRateLimit = createRateLimitMiddleware("build-recover", { limit: 10, windowMs: 60_000 });
 const buildListRateLimit = createRateLimitMiddleware("build-list", { limit: 120, windowMs: 60_000 });
 const buildMonitorRateLimit = createRateLimitMiddleware("build-monitor", { limit: 20, windowMs: 60_000 });
 const catalogRefreshRateLimit = createRateLimitMiddleware("catalog-refresh", { limit: 30, windowMs: 60_000 });
@@ -312,11 +341,13 @@ const adminCatalogCrawlRetryRateLimit = createRateLimitMiddleware("admin-catalog
 const adminCatalogCrawlRetryBatchRateLimit = createRateLimitMiddleware("admin-catalog-crawl-retry-batch", { limit: 5, windowMs: 60_000 });
 const adminVersionMigrationRateLimit = createRateLimitMiddleware("admin-version-migration", { limit: 5, windowMs: 60_000 });
 const adminVersionRollbackRateLimit = createRateLimitMiddleware("admin-version-rollback", { limit: 5, windowMs: 60_000 });
+const usageEventRateLimit = createRateLimitMiddleware("usage-event", { limit: 60, windowMs: 60_000 });
 const gpuPhysicalSourceCheckBatchRateLimit = createRateLimitMiddleware("gpu-physical-source-check-batch", { limit: 5, windowMs: 60_000 });
 const benchmarkSourceCheckBatchRateLimit = createRateLimitMiddleware("benchmark-source-check-batch", { limit: 5, windowMs: 60_000 });
 const catalogSpecSourceCheckRateLimit = createRateLimitMiddleware("catalog-spec-source-check", { limit: 30, windowMs: 60_000 });
 const gpuPhysicalSourceCheckRateLimit = createRateLimitMiddleware("gpu-physical-source-check", { limit: 30, windowMs: 60_000 });
 const benchmarkSourceCheckRateLimit = createRateLimitMiddleware("benchmark-source-check", { limit: 30, windowMs: 60_000 });
+const adminGamingPerformanceEvidenceRateLimit = createRateLimitMiddleware("admin-gaming-performance-evidence", { limit: 20, windowMs: 60_000 });
 const catalogSpecSourceCheckJobs = new Map<string, Promise<import("../shared/types").PhysicalSourceCheck>>();
 const catalogSpecSourceCheckLastRunAt = new Map<string, number>();
 const gpuPhysicalSourceCheckJobs = new Map<string, Promise<import("../shared/types").PhysicalSourceCheck>>();
@@ -819,15 +850,38 @@ export function parseRecommendationPreferences(value: unknown): RecommendationPr
   const listingPolicy = ["retail_only", "include_bulk", "all"].includes(String(candidate.listingPolicy))
     ? candidate.listingPolicy as ListingPolicy
     : "retail_only";
+  const performanceTier = ["entry", "high", "top"].includes(String(candidate.performanceTier))
+    ? candidate.performanceTier as RecommendationPerformanceTier
+    : undefined;
   const gamingResolution = ["1080p", "1440p", "4k"].includes(String(candidate.gamingResolution))
     ? candidate.gamingResolution as RecommendationPreferences["gamingResolution"]
     : undefined;
   const gamingRefreshRate = [60, 144, 240].includes(Number(candidate.gamingRefreshRate))
     ? Number(candidate.gamingRefreshRate) as RecommendationPreferences["gamingRefreshRate"]
     : undefined;
-  return gamingResolution === undefined && gamingRefreshRate === undefined
-    ? { priority, profile, budgetWon, listingPolicy }
-    : { priority, profile, budgetWon, listingPolicy, ...(gamingResolution ? { gamingResolution } : {}), ...(profile === "gaming" && gamingRefreshRate ? { gamingRefreshRate } : {}) };
+  const gamingGameIds = Array.isArray(candidate.gamingGameIds)
+    ? candidate.gamingGameIds.filter((value): value is string => typeof value === "string" && value.trim().length > 0 && value.trim().length <= 160).slice(0, 5)
+    : undefined;
+  const gamingGraphicsPreset = ["competitive", "balanced", "high"].includes(String(candidate.gamingGraphicsPreset))
+    ? candidate.gamingGraphicsPreset as RecommendationPreferences["gamingGraphicsPreset"]
+    : undefined;
+  const gamingRayTracing = typeof candidate.gamingRayTracing === "boolean" ? candidate.gamingRayTracing : undefined;
+  const gamingUpscaling = ["native", "quality", "balanced"].includes(String(candidate.gamingUpscaling))
+    ? candidate.gamingUpscaling as RecommendationPreferences["gamingUpscaling"]
+    : undefined;
+  return {
+    priority,
+    profile,
+    budgetWon,
+    listingPolicy,
+    ...(performanceTier ? { performanceTier } : {}),
+    ...(gamingResolution ? { gamingResolution } : {}),
+    ...(profile === "gaming" && gamingRefreshRate ? { gamingRefreshRate } : {}),
+    ...(profile === "gaming" && gamingGameIds?.length ? { gamingGameIds } : {}),
+    ...(profile === "gaming" && gamingGraphicsPreset ? { gamingGraphicsPreset } : {}),
+    ...(profile === "gaming" && gamingRayTracing !== undefined ? { gamingRayTracing } : {}),
+    ...(profile === "gaming" && gamingUpscaling ? { gamingUpscaling } : {})
+  };
 }
 
 export function parseBuildGenerationRequest(value: unknown): { request?: BuildGenerationRequest; errors: string[] } {
@@ -852,6 +906,9 @@ export function parseBuildGenerationRequest(value: unknown): { request?: BuildGe
   if (candidate.priority !== undefined && !isRecommendationPriority(candidate.priority)) {
     errors.push("priority는 balanced, budget, performance, reliability 중 하나여야 합니다.");
   }
+  if (candidate.performanceTier !== undefined && !["entry", "high", "top"].includes(String(candidate.performanceTier))) {
+    errors.push("performanceTier는 entry, high, top 중 하나여야 합니다.");
+  }
   if (candidate.includeNonRetail !== undefined && typeof candidate.includeNonRetail !== "boolean") {
     errors.push("includeNonRetail은 boolean이어야 합니다.");
   }
@@ -860,6 +917,18 @@ export function parseBuildGenerationRequest(value: unknown): { request?: BuildGe
   }
   if (candidate.gamingRefreshRate !== undefined && ![60, 144, 240].includes(Number(candidate.gamingRefreshRate))) {
     errors.push("gamingRefreshRate는 60, 144, 240 중 하나여야 합니다.");
+  }
+  if (candidate.gamingGameIds !== undefined && (!Array.isArray(candidate.gamingGameIds) || candidate.gamingGameIds.length > 5 || !candidate.gamingGameIds.every((value) => typeof value === "string" && value.trim().length > 0 && value.trim().length <= 160))) {
+    errors.push("gamingGameIds는 최대 5개의 비어 있지 않은 160자 이하 게임 ID 배열이어야 합니다.");
+  }
+  if (candidate.gamingGraphicsPreset !== undefined && !["competitive", "balanced", "high"].includes(String(candidate.gamingGraphicsPreset))) {
+    errors.push("gamingGraphicsPreset은 competitive, balanced, high 중 하나여야 합니다.");
+  }
+  if (candidate.gamingRayTracing !== undefined && typeof candidate.gamingRayTracing !== "boolean") {
+    errors.push("gamingRayTracing은 boolean이어야 합니다.");
+  }
+  if (candidate.gamingUpscaling !== undefined && !["native", "quality", "balanced"].includes(String(candidate.gamingUpscaling))) {
+    errors.push("gamingUpscaling은 native, quality, balanced 중 하나여야 합니다.");
   }
   const memoryCapacityGb = Number(candidate.memoryCapacityGb ?? 32);
   if (![16, 32, 64, 128].includes(memoryCapacityGb)) {
@@ -890,12 +959,17 @@ export function parseBuildGenerationRequest(value: unknown): { request?: BuildGe
       budgetWon,
       includeGpu: typeof candidate.includeGpu === "boolean" ? candidate.includeGpu : profile === "gaming",
       priority,
+      ...(typeof candidate.performanceTier === "string" ? { performanceTier: candidate.performanceTier as RecommendationPerformanceTier } : {}),
       gamingResolution: ["1080p", "1440p", "4k"].includes(String(candidate.gamingResolution))
         ? candidate.gamingResolution as BuildGenerationRequest["gamingResolution"]
         : "1440p",
       gamingRefreshRate: [60, 144, 240].includes(Number(candidate.gamingRefreshRate))
         ? Number(candidate.gamingRefreshRate) as BuildGenerationRequest["gamingRefreshRate"]
         : 144,
+      ...(Array.isArray(candidate.gamingGameIds) ? { gamingGameIds: candidate.gamingGameIds as string[] } : {}),
+      ...(typeof candidate.gamingGraphicsPreset === "string" ? { gamingGraphicsPreset: candidate.gamingGraphicsPreset as BuildGenerationRequest["gamingGraphicsPreset"] } : {}),
+      ...(typeof candidate.gamingRayTracing === "boolean" ? { gamingRayTracing: candidate.gamingRayTracing } : {}),
+      ...(typeof candidate.gamingUpscaling === "string" ? { gamingUpscaling: candidate.gamingUpscaling as BuildGenerationRequest["gamingUpscaling"] } : {}),
       memoryCapacityGb,
       storageCapacityGb,
       hddCapacityGb,
@@ -958,6 +1032,16 @@ async function performSavedBuildMonitorRun(build: SavedBuildRecord, resources?: 
     const monitorState = completeSavedBuildMonitorRun(build, build.monitorState, snapshot, snapshot.checkedAt, build.checkSnapshot);
     const updated = await updateSavedBuildMonitorState(build.id, monitorState);
     if (!updated) throw new Error("저장 견적이 점검 중 삭제되었습니다.");
+    // "내 PC"로 승격된 견적은 대안 감시도 수행 — 벤치 근거가 있는 cpu/gpu에서 더 좋은 후보가 카탈로그에 들어오면 알림을 남긴다.
+    if (updated.myPcAt && updated.monitorState) {
+      const base = updated.monitorState;
+      const alternatives = savedBuildAlternativeAlertsFor(updated, source.catalog, snapshot.checkedAt)
+        .filter((alert) => savedBuildMonitorAlertAllowed(base.alertPolicy, alert.kind));
+      if (alternatives.length > 0) {
+        const merged = { ...base, alerts: mergeSavedBuildMonitorAlerts(base.alerts, alternatives), updatedAt: snapshot.checkedAt };
+        return await updateSavedBuildMonitorState(build.id, merged) ?? updated;
+      }
+    }
     return updated;
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "저장 견적 자동 점검에 실패했습니다.";
@@ -1038,6 +1122,26 @@ app.get("/api/health", (_request, response) => {
 app.get("/api/meta", async (request, response) => {
   const [meta, crawler, persistence] = await Promise.all([catalogMeta(), readCrawlStatus(), persistenceDiagnostics()]);
   sendJsonWithEtag(request, response, { ...meta, crawler: publicCrawlStatusFor(crawler as CrawlStatus), engineVersion: ENGINE_VERSION, storageMode: persistence.storageMode, persistence, adminAuthEnabled: adminAuthEnabled() });
+});
+
+// 클라이언트는 app_open만 전송할 수 있다 — check/save/share/recommend는
+// 서버 route handler에서 직접 계수해 이중 계수를 막는다.
+app.post("/api/events", usageEventRateLimit, async (request, response) => {
+  const name = typeof request.body?.name === "string" ? request.body.name.trim() : "";
+  if (name !== "app_open") {
+    response.status(400).json({ error: "지원하지 않는 이벤트입니다.", code: "USAGE_EVENT_INVALID" });
+    return;
+  }
+  try {
+    await recordUsageEvent("app_open");
+  } catch {
+    // 카운터 실패는 비컨 응답을 막지 않는다
+  }
+  response.status(204).end();
+});
+
+app.get("/api/admin/usage-events", requireAdmin, async (_request, response) => {
+  response.json(await usageEventSummaryFor());
 });
 
 app.get("/api/admin/monitor/status", requireAdmin, (_request, response) => {
@@ -1898,7 +2002,8 @@ app.post("/api/compatibility/check", publicCompatibilityRateLimit, async (reques
       catalogSnapshotAt,
       accessoryUpdatedAt,
       catalogRevision,
-      engineVersion: ENGINE_VERSION
+      engineVersion: ENGINE_VERSION,
+      gamingPerformanceEvidenceUpdatedAt: preparation.gamingPerformanceEvidenceUpdatedAt
     });
     const cached = await compatibilityResultCache.getOrCompute(cacheKey, () => {
       const fullResult = evaluateBuildWithAccessories(build, catalog, accessories, catalogSnapshotAt, recommendationPreferences);
@@ -1916,6 +2021,7 @@ app.post("/api/compatibility/check", publicCompatibilityRateLimit, async (reques
   response.setHeader("X-PC-Supporter-Compatibility-Checked-At", outcome.value.result.checkedAt);
   response.setHeader("Content-Type", "application/json; charset=utf-8");
   response.setHeader("Content-Length", String(Buffer.byteLength(outcome.value.body)));
+  trackUsageEvent("check");
   response.end(outcome.value.body);
 });
 
@@ -1928,9 +2034,43 @@ app.post("/api/builds/recommend", publicRecommendationRateLimit, async (request,
   let catalog: Part[] | undefined;
   try {
     catalog = await loadCatalog();
-    response.json(generateBuildDraft(catalog, parsed.request));
+    trackUsageEvent("recommend");
+    response.json(generateBuildDraft(catalog, parsed.request, loadGamingPerformanceEvidence()));
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "현재 데이터로 자동 견적을 생성하지 못했습니다.";
+    const recoveryOptions = catalog ? buildGenerationRecoveryOptionsFor(catalog, parsed.request) : [];
+    const diagnostics = error instanceof BuildGenerationError ? error.diagnostics : [];
+    response.status(422).json({ error: message, ...(diagnostics.length > 0 ? { diagnostics } : {}), ...(recoveryOptions.length > 0 ? { recoveryOptions } : {}) });
+  }
+});
+
+function buildGenerationVariantResultsFor(catalog: Part[], request: BuildGenerationRequest): BuildGenerationVariantResult[] {
+  const gamingPerformanceEvidence = loadGamingPerformanceEvidence();
+  return RECOMMENDATION_VARIANT_PRIORITIES.map((priority) => {
+    try {
+      return { priority, draft: generateBuildDraft(catalog, { ...request, priority }, gamingPerformanceEvidence) };
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "이 기준의 자동 구성을 만들지 못했습니다.";
+      const diagnostics = error instanceof BuildGenerationError ? error.diagnostics : [];
+      return { priority, error: message, ...(diagnostics.length > 0 ? { diagnostics } : {}) };
+    }
+  });
+}
+
+app.post("/api/builds/recommend/variants", publicRecommendationRateLimit, async (request, response) => {
+  const parsed = parseBuildGenerationRequest(request.body);
+  if (parsed.errors.length > 0 || !parsed.request) {
+    response.status(400).json({ error: "자동 구성 비교 요청 형식이 올바르지 않습니다.", details: parsed.errors });
+    return;
+  }
+  let catalog: Part[] | undefined;
+  try {
+    catalog = await loadCatalog();
+    const variants = buildGenerationVariantResultsFor(catalog, parsed.request);
+    trackUsageEvent("recommend");
+    response.json({ variants });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "세 가지 자동 구성 결과를 만들지 못했습니다.";
     const recoveryOptions = catalog ? buildGenerationRecoveryOptionsFor(catalog, parsed.request) : [];
     const diagnostics = error instanceof BuildGenerationError ? error.diagnostics : [];
     response.status(422).json({ error: message, ...(diagnostics.length > 0 ? { diagnostics } : {}), ...(recoveryOptions.length > 0 ? { recoveryOptions } : {}) });
@@ -1949,7 +2089,7 @@ app.post("/api/builds/recommend/budget-ladder", publicRecommendationRateLimit, a
     const scenarios = budgetLadderScenariosFor(parsed.request);
     const outcomes = scenarios.map((scenario) => {
       try {
-        return { ...scenario, draft: generateBuildDraft(catalog!, scenario.request) };
+        return { ...scenario, draft: generateBuildDraft(catalog!, scenario.request, loadGamingPerformanceEvidence()) };
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "이 예산 구간의 자동 구성을 만들지 못했습니다.";
         const diagnostics = error instanceof BuildGenerationError ? error.diagnostics : [];
@@ -2032,6 +2172,7 @@ app.post("/api/builds", buildCreateRateLimit, async (request, response) => {
     ...(parentBuild ? { derivedFromBuildId: parentBuild.id } : {})
   };
   const ownerCredential = createShareOwnerCredential();
+  const recoveryCredential = createShareRecoveryCode();
   const recommendationPreferences = parseRecommendationPreferences(request.body?.recommendationPreferences);
   const refreshReportParse = catalogRefreshReportForRequest(request.body?.catalogRefreshReport, build, recommendationPreferences);
   if (refreshReportParse.error) {
@@ -2054,10 +2195,12 @@ app.post("/api/builds", buildCreateRateLimit, async (request, response) => {
     updatedAt: now,
     ...(expiresAt ? { expiresAt } : {}),
     ...versionMetadata,
-    ownerTokenHash: ownerCredential.hash
+    ownerTokenHash: ownerCredential.hash,
+    recoveryCodeHash: recoveryCredential.hash
   };
   const persisted = await appendSavedBuild(saved);
-  response.status(201).json({ ...savedBuildPresentationFor(persisted, { catalog, accessories }), ownerToken: ownerCredential.token });
+  trackUsageEvent("save");
+  response.status(201).json({ ...savedBuildPresentationFor(persisted, { catalog, accessories }), ownerToken: ownerCredential.token, recoveryCode: recoveryCredential.code });
 });
 
 app.post("/api/watchlists", watchlistCreateRateLimit, async (request, response) => {
@@ -2071,6 +2214,7 @@ app.post("/api/watchlists", watchlistCreateRateLimit, async (request, response) 
   const ownerCredential = createShareOwnerCredential();
   const saved: SavedCatalogWatchlistRecord = { id: randomUUID(), name: parsed.name, entries: parsed.entries, nearLowThresholdPercent: parsed.nearLowThresholdPercent, alertPreferences: parsed.alertPreferences ?? DEFAULT_SAVED_WATCHLIST_ALERT_PREFERENCES, createdAt: now, updatedAt: now, ...(expiresAt ? { expiresAt } : {}), ownerTokenHash: ownerCredential.hash };
   await appendSavedWatchlist(saved);
+  trackUsageEvent("share");
   response.status(201).json({ ...publicSavedCatalogWatchlist(saved), ownerToken: ownerCredential.token });
 });
 
@@ -2099,6 +2243,7 @@ app.post("/api/comparisons", comparisonCreateRateLimit, async (request, response
     ownerTokenHash: ownerCredential.hash
   };
   await appendSavedComparison(saved);
+  trackUsageEvent("share");
   response.status(201).json({ ...publicAlternativeComparison(saved), ownerToken: ownerCredential.token });
 });
 
@@ -2187,6 +2332,7 @@ app.post("/api/version-comparisons", versionComparisonCreateRateLimit, async (re
     ownerTokenHash: ownerCredential.hash
   };
   await appendSavedBuildVersionComparison(saved);
+  trackUsageEvent("share");
   response.status(201).json({ ...publicSavedBuildVersionComparisonShare(saved), ownerToken: ownerCredential.token });
 });
 
@@ -2258,6 +2404,7 @@ app.post("/api/budget-ladders", budgetLadderCreateRateLimit, async (request, res
     ownerTokenHash: ownerCredential.hash
   };
   await appendSavedBudgetLadder(saved);
+  trackUsageEvent("share");
   response.status(201).json({ ...publicBudgetLadderShare(saved, catalogSnapshotAt), ownerToken: ownerCredential.token });
 });
 
@@ -2480,7 +2627,7 @@ async function savedBuildForRequest(request: Request, response: Response, option
   if (!options.requireOwner) return build;
   const ownerToken = request.header("x-share-owner-token");
   if (!shareOwnerOrEnabledAdminCanManage(build, ownerToken, adminAuthEnabled(), isAdminAuthenticated(request))) {
-    response.status(401).json({ error: options.unauthorizedMessage ?? `${options.action ?? "서버 백그라운드 점검"}을(를) 관리하려면 견적 소유자 인증이 필요합니다.`, code: "SHARE_OWNER_AUTH_REQUIRED" });
+    response.status(401).json({ error: options.unauthorizedMessage ?? `${eul(options.action ?? "서버 백그라운드 점검")} 관리하려면 견적 소유자 인증이 필요합니다.`, code: "SHARE_OWNER_AUTH_REQUIRED" });
     return undefined;
   }
   return build;
@@ -2537,6 +2684,33 @@ app.patch("/api/builds/:id", buildShareRateLimit, async (request, response) => {
     return;
   }
   response.json(savedBuildPresentationFor(updated.build, await loadSavedBuildPresentationContext()));
+});
+
+app.put("/api/builds/:id/my-pc", buildShareRateLimit, async (request, response) => {
+  const build = await ownedSavedBuildForRequest(request, response, "내 PC 등록", "내 PC로 등록하려면 이 견적의 소유자 인증이 필요합니다.");
+  if (!build) return;
+  const owned = request.body?.owned === true;
+  const now = new Date().toISOString();
+  if (owned === (build.myPcAt !== undefined)) {
+    response.json(savedBuildPresentationFor(build, await loadSavedBuildPresentationContext()));
+    return;
+  }
+  // 승격 시 서버 점검 구독도 함께 켠다 — 대안 알림은 due인 모니터 실행에서만 생성되므로
+  // enabled 없이 승격하면 약속한 알림이 영구히 오지 않는다. 정책은 risk로 맞춰
+  // all의 구매 단계 잡음을 줄이고 critical에서는 빠져 있던 대안 알림이 오게 한다.
+  const current = build.monitorState ?? defaultSavedBuildMonitorSubscription(build.createdAt);
+  const monitorState = owned
+    ? configureSavedBuildMonitorSubscription(current, { enabled: true, intervalMinutes: current.intervalMinutes, alertPolicy: "risk" }, now)
+    : undefined;
+  const updated = await updateSavedBuildMyPc(build.id, owned ? now : null, monitorState);
+  if (!updated) {
+    response.status(404).json({ error: "저장된 견적을 찾을 수 없습니다." });
+    return;
+  }
+  // 승격 직후 첫 점검을 즉시 실행해 등록 시점의 스냅샷과 대안 후보를 채운다.
+  // 실패는 모니터 상태의 lastError로 기록되므로 응답을 막지 않는다.
+  if (owned) void executeSavedBuildMonitorRun(updated).catch(() => undefined);
+  response.json(savedBuildPresentationFor(updated, await loadSavedBuildPresentationContext()));
 });
 
 app.get("/api/builds/:id/metadata-history", buildShareRateLimit, async (request, response) => {
@@ -2902,6 +3076,44 @@ app.delete("/api/builds/:id", buildShareRateLimit, async (request, response) => 
     return;
   }
   response.json({ deleted: true });
+});
+
+// 저장 견적 복구 코드 발급/재발급 — 소유자만 가능하며, 새 코드가 나오면 이전 코드는 폐기된다.
+app.post("/api/builds/:id/recovery-code", buildShareRateLimit, async (request, response) => {
+  const build = await ownedSavedBuildForRequest(request, response, "복구 코드 발급", "복구 코드를 만들려면 이 견적의 소유자 인증이 필요합니다.");
+  if (!build) return;
+  const credential = createShareRecoveryCode();
+  // ownerTokenHash가 없는 레거시 견적에는 누구도 평문을 모르는 해시를 쓴다 —
+  // 이 경우 발급된 복구 코드 자체가 유일한 소유 증명이 된다.
+  const ownerTokenHash = build.ownerTokenHash ?? createShareOwnerCredential().hash;
+  const updated = await updateSavedBuildShareCredentials(build.id, ownerTokenHash, credential.hash);
+  if (!updated) {
+    response.status(404).json({ error: "저장된 견적을 찾을 수 없습니다." });
+    return;
+  }
+  response.status(201).json({ recoveryCode: credential.code });
+});
+
+// 복구 코드로 소유권 되찾기 — 코드가 맞으면 새 owner token을 발급하고 이전 토큰은 폐기한다.
+app.post("/api/builds/:id/recover", buildRecoverRateLimit, async (request, response) => {
+  const build = await savedBuildForRequest(request, response);
+  if (!build) return;
+  const code = typeof request.body?.recoveryCode === "string" ? request.body.recoveryCode : undefined;
+  if (!normalizeShareRecoveryCode(code)) {
+    response.status(400).json({ error: "복구 코드 형식이 올바르지 않습니다.", code: "RECOVERY_CODE_INVALID" });
+    return;
+  }
+  if (!shareRecoveryCodeMatches(build, code)) {
+    response.status(401).json({ error: "복구 코드가 이 견적과 일치하지 않습니다.", code: "RECOVERY_CODE_MISMATCH" });
+    return;
+  }
+  const ownerCredential = createShareOwnerCredential();
+  const updated = await updateSavedBuildShareCredentials(build.id, ownerCredential.hash, build.recoveryCodeHash!);
+  if (!updated) {
+    response.status(404).json({ error: "저장된 견적을 찾을 수 없습니다." });
+    return;
+  }
+  response.json({ ownerToken: ownerCredential.token });
 });
 
 app.get("/api/admin/catalog-changes", requireAdmin, async (request, response) => {
@@ -3868,6 +4080,32 @@ app.delete("/api/admin/gpu-physical-overrides/:partId", requireAdmin, async (req
   }
   invalidateCatalogCache();
   response.json({ deleted: true, partId });
+});
+
+app.get("/api/admin/gaming-performance-evidence", requireAdmin, async (_request, response) => {
+  const path = gamingPerformanceEvidencePath();
+  const items = loadGamingPerformanceEvidence();
+  response.json({
+    items,
+    count: items.length,
+    pathConfigured: Boolean(process.env.GAMING_PERFORMANCE_EVIDENCE_PATH?.trim()),
+    ...(existsSync(path) ? { updatedAt: await fileUpdatedAt(path) } : {})
+  });
+});
+
+app.post("/api/admin/gaming-performance-evidence/validate", adminGamingPerformanceEvidenceRateLimit, requireAdmin, async (request, response) => {
+  const validation = gamingPerformanceEvidenceBatchValidationFor(request.body);
+  response.json(validation);
+});
+
+app.put("/api/admin/gaming-performance-evidence", adminGamingPerformanceEvidenceRateLimit, requireAdmin, async (request, response) => {
+  const validation = gamingPerformanceEvidenceBatchValidationFor(request.body);
+  if (!validation.valid) {
+    response.status(400).json({ saved: false, error: "FPS 자료 저장을 중단했습니다. 오류가 있는 항목은 하나라도 저장하지 않습니다.", ...validation });
+    return;
+  }
+  const items = await saveGamingPerformanceEvidence(validation.records);
+  response.json({ saved: true, count: items.length, items, updatedAt: await fileUpdatedAt(gamingPerformanceEvidencePath()) });
 });
 
 app.get("/api/admin/benchmark-overrides", requireAdmin, async (_request, response) => {

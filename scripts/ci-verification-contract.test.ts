@@ -41,6 +41,35 @@ describe("CI verification contracts", () => {
     expect(browserProbe).toContain("newTokenPreserved");
   });
 
+  it("keeps the dark-mode readability smoke wired", async () => {
+    const [packageJson, readabilitySmoke] = await Promise.all([
+      readFile(resolve(projectRoot, "package.json"), "utf8"),
+      readFile(resolve(projectRoot, "scripts/readability-smoke.mjs"), "utf8")
+    ]);
+
+    expect(packageJson).toContain('"test:browser:readability": "node scripts/readability-smoke.mjs"');
+    expect(readabilitySmoke).toContain("Emulation.setDeviceMetricsOverride");
+    expect(readabilitySmoke).toContain("Page.addScriptToEvaluateOnNewDocument");
+    expect(readabilitySmoke).toContain("contrastRatio");
+    expect(readabilitySmoke).toContain("lightSurfaceLeaks");
+    expect(readabilitySmoke).toContain("picker-modal");
+  });
+
+  it("keeps the guided quote onboarding smoke wired in development and preview lanes", async () => {
+    const [packageJson, workflow, onboardingSmoke] = await Promise.all([
+      readFile(resolve(projectRoot, "package.json"), "utf8"),
+      readFile(resolve(projectRoot, ".github/workflows/ci.yml"), "utf8"),
+      readFile(resolve(projectRoot, "scripts/quote-onboarding-smoke.mjs"), "utf8")
+    ]);
+    expect(packageJson).toContain('"test:browser:quote-onboarding": "node scripts/quote-onboarding-smoke.mjs"');
+    expect(workflow).toContain("Guided quote onboarding smoke flow");
+    expect(workflow).toContain("Production preview guided quote onboarding smoke flow");
+    expect(onboardingSmoke).toContain("사이버펑크 2077");
+    expect(onboardingSmoke).toContain("4K · 144 FPS");
+    expect(onboardingSmoke).toContain("generator-gaming-evidence");
+    expect(onboardingSmoke).toContain('entry") === "upgrade"');
+  });
+
   it("keeps shared version recheck route cancellation wired", async () => {
     const packageJson = await readFile(resolve(projectRoot, "package.json"), "utf8");
     const browserProbe = await readFile(resolve(projectRoot, "scripts/shared-version-recheck-route-probe.mjs"), "utf8");
