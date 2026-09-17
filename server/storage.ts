@@ -34,6 +34,7 @@ export const WATCHLIST_ALERT_STATES_PATH = resolve(DATA_DIR, "watchlist-alert-st
 export const COMPARISONS_PATH = resolve(DATA_DIR, "comparisons.json");
 export const VERSION_COMPARISONS_PATH = resolve(DATA_DIR, "version-comparisons.json");
 export const BUDGET_LADDERS_PATH = resolve(DATA_DIR, "budget-ladders.json");
+export const GENERATOR_VARIANTS_PATH = resolve(DATA_DIR, "generator-variants.json");
 export const USAGE_EVENTS_PATH = resolve(DATA_DIR, "usage-events.json");
 
 export async function ensureDataDirectory() {

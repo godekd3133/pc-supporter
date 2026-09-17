@@ -45,6 +45,14 @@ describe("saved build monitor persistence", () => {
     expect(malformed).not.toHaveProperty("derivedFromBuildId");
   });
 
+  it("preserves generated-build origin metadata and rejects malformed provenance", () => {
+    const origin = { kind: "shared_generator_variants", sourceShareId: "generator-share-1", sourceShareName: "자동 구성 비교", sourcePriority: "balanced", sourceCatalogSnapshotAt: "2026-09-17T00:00:00.000Z", currentRecheckedAt: "2026-09-17T01:00:00.000Z" } as const;
+    expect(savedBuildRecordFromUnknown({ ...build, origin })?.origin).toEqual({ ...origin });
+    expect(savedBuildRecordFromUnknown({ ...build, origin: { ...origin, sourcePriority: "invalid" } })).toBeUndefined();
+    expect(savedBuildRecordFromUnknown({ ...build, origin: { ...origin, sourceShareId: "" } })).toBeUndefined();
+    expect(savedBuildRecordFromUnknown({ ...build, origin: { ...origin, currentRecheckedAt: "invalid" } })).toBeUndefined();
+  });
+
   it("keeps the checked snapshot and monitor columns in the deployable PostgreSQL schema", () => {
     const schema = readFileSync(resolve(process.cwd(), "db/schema.sql"), "utf8");
     expect(schema).toContain("check_snapshot JSONB");
@@ -58,6 +66,8 @@ describe("saved build monitor persistence", () => {
     expect(schema).toContain("version_group_id TEXT");
     expect(schema).toContain("version_number INTEGER");
     expect(schema).toContain("derived_from_build_id TEXT");
+    expect(schema).toContain("origin JSONB");
+    expect(schema).toContain("ADD COLUMN IF NOT EXISTS origin JSONB");
     expect(schema).toContain("saved_build_version_backups");
     expect(schema).toContain("source_fingerprint TEXT");
   });

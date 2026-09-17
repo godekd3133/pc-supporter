@@ -209,6 +209,8 @@ import { savedBuildMonitorAlertsFromJson, savedBuildMonitorAlertsToJson, savedBu
 import { savedWatchlistLinksFromJson } from "./watchlist-link-storage";
 import type { SavedWatchlistLink } from "./watchlist-link-storage";
 import type { GeneratorBudgetResult, GeneratorVariantResult } from "./BuildGeneratorView";
+import { GENERATOR_VARIANTS_DRAFT_TRANSFER_KEY, generatorVariantsDraftTransferFromUnknown, type GeneratorVariantsDraftTransferOrigin } from "../shared/generator-variants-share";
+import type { SavedBuildOrigin } from "../shared/saved-build-origin";
 import type { PickerCandidateMode, PickerPart } from "./PartPicker";
 import type { CatalogPart } from "./CatalogView";
 import type { SavedBuildMetadataHistoryEntry } from "../shared/saved-build-decision-note";
@@ -265,6 +267,7 @@ const LazyAssemblyVerificationPanel = lazy(() => import("./AssemblyVerificationP
 const LazyUpgradeBundleScenarioPreviewPanel = lazy(() => import("./UpgradeBundleScenarioPreview").then((module) => ({ default: module.UpgradeBundleScenarioPreviewPanel })));
 const LazyUpgradeBundlePanel = lazy(() => import("./UpgradeBundlePanel").then((module) => ({ default: module.UpgradeBundlePanel })));
 const LazySharedBudgetLadderView = lazy(() => import("./SharedBudgetLadderView").then((module) => ({ default: module.SharedBudgetLadderView })));
+const LazySharedGeneratorVariantsView = lazy(() => import("./SharedGeneratorVariantsView").then((module) => ({ default: module.SharedGeneratorVariantsView })));
 const LazyHomeView = lazy(() => import("./HomeView").then((module) => ({ default: module.HomeView })));
 const LazySaveBuildDialog = lazy(() => import("./SavedBuildDialogs").then((module) => ({ default: module.SaveBuildDialog })));
 const LazyEditSavedBuildMetadataDialog = lazy(() => import("./SavedBuildDialogs").then((module) => ({ default: module.EditSavedBuildMetadataDialog })));
@@ -283,7 +286,7 @@ const LazyResultView = lazy(() => import("./ResultView").then((module) => ({ def
 const LazySavedBuildRecheckDiffPanel = lazy(() => import("./SavedBuildRecheckDiffPanel").then((module) => ({ default: module.SavedBuildRecheckDiffPanel })));
 const LazySavedBuildMonitorAlertsPanel = lazy(() => import("./SavedBuildMonitorAlertsPanel").then((module) => ({ default: module.SavedBuildMonitorAlertsPanel })));
 
-type View = "home" | "start" | "generator" | "editor" | "result" | "history" | "admin" | "accessories" | "catalog" | "pricewatchlist" | "watchlist" | "budget" | "comparison" | "version-comparison";
+type View = "home" | "start" | "generator" | "editor" | "result" | "history" | "admin" | "accessories" | "catalog" | "pricewatchlist" | "watchlist" | "budget" | "generator-variants" | "comparison" | "version-comparison";
 type BuildChangeDialogProps = { change: PendingBuildChange; checking: boolean; onClose: () => void; onConfirm: () => void; formatPriceDelta: (value: number | undefined) => string };
 
 const CATALOG_WATCH_THRESHOLD_STORAGE_KEY = "pc-supporter-catalog-watch-threshold";
@@ -390,7 +393,19 @@ type SaveBuildTarget = {
   label: string;
   kind?: "repair_plan" | "candidate" | "generated";
   parentBuildId?: string;
+  origin?: SavedBuildOrigin;
 };
+
+function savedBuildOriginForGeneratorVariantsTransfer(origin: GeneratorVariantsDraftTransferOrigin, priority: RecommendationPriority): SavedBuildOrigin {
+  return {
+    kind: "shared_generator_variants",
+    sourceShareId: origin.shareId,
+    ...(origin.shareName ? { sourceShareName: origin.shareName } : {}),
+    sourcePriority: priority,
+    sourceCatalogSnapshotAt: origin.catalogSnapshotAt,
+    ...(origin.currentRecheckedAt ? { currentRecheckedAt: origin.currentRecheckedAt } : {})
+  };
+}
 
 type BootstrapResource = "parts" | "meta" | "savedBuilds";
 
@@ -570,6 +585,7 @@ function currentView() : View {
   if (path.startsWith("/admin")) return "admin";
   if (path.startsWith("/watchlist/")) return "watchlist";
   if (path.startsWith("/budget-ladder/")) return "budget";
+  if (path.startsWith("/generator-variants/")) return "generator-variants";
   if (path.startsWith("/compare/")) return "comparison";
   if (path.startsWith("/version-comparison/")) return "version-comparison";
   if (path === "/watchlist" || path === "/watchlist/") return "pricewatchlist";
@@ -945,6 +961,33 @@ function App() {
   useEffect(() => {
     trackUsageEvent("app_open");
   }, []);
+
+  useEffect(() => {
+    if (view !== "editor" || new URLSearchParams(window.location.search).get("entry") !== "shared-generator") return;
+    let raw: string | null = null;
+    try {
+      raw = window.sessionStorage.getItem(GENERATOR_VARIANTS_DRAFT_TRANSFER_KEY);
+      if (raw) window.sessionStorage.removeItem(GENERATOR_VARIANTS_DRAFT_TRANSFER_KEY);
+    } catch {
+      setToast("공유된 현재 결과를 편집기로 가져오지 못했습니다.");
+      return;
+    }
+    if (!raw) return;
+    try {
+      const transfer = generatorVariantsDraftTransferFromUnknown(JSON.parse(raw));
+      if (!transfer) {
+        setToast("공유된 현재 결과의 draft를 읽지 못했습니다.");
+        return;
+      }
+      if (transfer.mode === "save") {
+        void saveGeneratedDraft(transfer.draft, transfer.origin ? savedBuildOriginForGeneratorVariantsTransfer(transfer.origin, transfer.draft.priority) : undefined);
+      } else {
+        void applyGeneratedDraft(transfer.draft, transfer.mode === "check");
+      }
+    } catch {
+      setToast("공유된 현재 결과를 읽지 못했습니다.");
+    }
+  }, [view, locationKey]);
 
   useEffect(() => {
     currentBuildRef.current = build;
@@ -2284,7 +2327,7 @@ function App() {
     setGeneratorRecoveryOptions([]);
     await rememberBuildSelection(draft.selection, hydrationController.signal);
     if (!isCurrent()) return;
-    const nextPreferences = { ...recommendationPreferences, profile: draft.profile, priority: draft.priority, gamingResolution: draft.gamingResolution, gamingRefreshRate: draft.profile === "gaming" ? draft.gamingRefreshRate : undefined, budgetWon: draft.budgetWon, listingPolicy: draft.listingPolicy };
+    const nextPreferences = { ...recommendationPreferences, profile: draft.profile, priority: draft.priority, performanceTier: draft.performanceTier, gamingResolution: draft.profile === "gaming" ? draft.gamingResolution : undefined, gamingRefreshRate: draft.profile === "gaming" ? draft.gamingRefreshRate : undefined, gamingGameIds: draft.profile === "gaming" ? draft.gamingGameIds : undefined, gamingGraphicsPreset: draft.profile === "gaming" ? draft.gamingGraphicsPreset : undefined, gamingRayTracing: draft.profile === "gaming" ? draft.gamingRayTracing : undefined, gamingUpscaling: draft.profile === "gaming" ? draft.gamingUpscaling : undefined, budgetWon: draft.budgetWon, listingPolicy: draft.listingPolicy };
     setBuild(draft.selection);
     setRecommendationPreferences(nextPreferences);
     if (checkNow) {
@@ -2304,8 +2347,13 @@ function App() {
       priority: request.priority ?? "balanced",
       budgetWon: request.budgetWon,
       listingPolicy: request.listingPolicy ?? (request.includeNonRetail ? "all" : "retail_only"),
+      performanceTier: request.performanceTier,
       gamingResolution: request.profile === "gaming" ? request.gamingResolution ?? "1440p" : undefined,
-      gamingRefreshRate: request.profile === "gaming" ? request.gamingRefreshRate ?? 144 : undefined
+      gamingRefreshRate: request.profile === "gaming" ? request.gamingRefreshRate ?? 144 : undefined,
+      gamingGameIds: request.profile === "gaming" ? request.gamingGameIds : undefined,
+      gamingGraphicsPreset: request.profile === "gaming" ? request.gamingGraphicsPreset : undefined,
+      gamingRayTracing: request.profile === "gaming" ? request.gamingRayTracing : undefined,
+      gamingUpscaling: request.profile === "gaming" ? request.gamingUpscaling : undefined
     };
   }
 
@@ -2340,9 +2388,9 @@ function App() {
     }
   }
 
-  async function saveGeneratedDraft(draft: BuildGenerationResult) {
+  async function saveGeneratedDraft(draft: BuildGenerationResult, origin?: SavedBuildOrigin) {
     const { generatedDraftSaveTargetFor } = await import("./generated-draft-save-target");
-    requestSaveBuild(generatedDraftSaveTargetFor(draft, shareId && shareOwnerToken ? shareId : undefined));
+    requestSaveBuild(generatedDraftSaveTargetFor(draft, shareId && shareOwnerToken ? shareId : undefined, origin));
   }
 
   function exportBuildDraft() {
@@ -2461,7 +2509,7 @@ function App() {
       const saved = await api<SavedBuildCreateResponse>("/api/builds", {
         method: "POST",
         ...(parentOwnerToken ? { headers: { "X-Share-Owner-Token": parentOwnerToken } } : {}),
-        body: JSON.stringify({ name, selection: targetBuild, recommendationPreferences: targetPreferences, expiresInDays: saveExpiryDays === "never" ? undefined : saveExpiryDays, ...(decisionNote ? { decisionNote } : {}), ...(refreshReport ? { catalogRefreshReport: refreshReport } : {}), ...(parentOwnerToken && target?.parentBuildId ? { parentBuildId: target.parentBuildId } : {}) })
+        body: JSON.stringify({ name, selection: targetBuild, recommendationPreferences: targetPreferences, expiresInDays: saveExpiryDays === "never" ? undefined : saveExpiryDays, ...(decisionNote ? { decisionNote } : {}), ...(target?.origin ? { origin: target.origin } : {}), ...(refreshReport ? { catalogRefreshReport: refreshReport } : {}), ...(parentOwnerToken && target?.parentBuildId ? { parentBuildId: target.parentBuildId } : {}) })
       });
       if (!isCurrent()) return;
       invalidateSavedBuildReads();
@@ -3271,6 +3319,8 @@ function App() {
     <Suspense fallback={<div className="shared-build-state"><FiLoader className="spin" /><span>가격 추적 화면을 불러오는 중...</span></div>}><PriceWatchlistView onBack={() => navigate("/", "home")} onToast={setToast} /></Suspense>
   ) : view === "budget" ? (
     <Suspense fallback={<div className="shared-budget-ladder-state"><FiLoader className="spin" /> 공유 예산 비교 화면을 불러오는 중...</div>}><LazySharedBudgetLadderView onBack={() => navigate("/", "home")} onToast={setToast} onApplyDraft={applyGeneratedDraft} onApplyMergedSelection={applyMergedGeneratedSelection} onPreviewMergedSelection={previewMergedGeneratedSelection} onBudgetLadderShareSaved={rememberBudgetLadderShare} onBudgetLadderShareRevoked={forgetBudgetLadderShare} /></Suspense>
+  ) : view === "generator-variants" ? (
+    <Suspense fallback={<div className="shared-generator-variants-state"><FiLoader className="spin" /> 공유 자동 구성 비교 화면을 불러오는 중...</div>}><LazySharedGeneratorVariantsView onBack={() => navigate("/", "home")} onToast={setToast} /></Suspense>
   ) : view === "version-comparison" ? (
     <Suspense fallback={<div className="shared-version-comparison-state"><FiLoader className="spin" /> 공유 견적 버전 비교 화면을 불러오는 중...</div>}><LazySharedSavedBuildVersionView onBack={() => navigate("/", "home")} onToast={setToast} /></Suspense>
   ) : view === "comparison" ? (

@@ -22,7 +22,7 @@ import { BuildGenerationError, ENGINE_VERSION, assessAlternativePart, buildGener
 import { cancelCrawlPageRetryBatch, crawlPageRetryBatchPlanFor, crawlPageRetryPlanFor, crawlResumePlanFor, isCrawlPageRetryBatchRunning, isCrawlRunning, readCrawlStatus, runCrawlJob, runCrawlPageRetryBatchJob, runCrawlPageRetryJob } from "./crawler";
 import { CATALOG_PATH, CRAWL_MANIFEST_PATH, ensureDataDirectory, fileUpdatedAt, readJson } from "./storage";
 import type { CrawlManifest } from "../shared/types";
-import { appendSavedBuild, appendSavedBuildCheck, appendSavedBuildVersionComparison, appendSavedBudgetLadder, appendSavedComparison, appendSavedWatchlist, deleteSavedBuild, deleteSavedBuildVersionComparison, deleteSavedBudgetLadder, deleteSavedComparison, deleteSavedWatchlist, deleteSavedWatchlistAlertStates, initializePersistence, migrateSavedBuildVersions, persistenceDiagnostics, readLatestSavedBuildVersionBackup, readSavedBuildVersionBackupDetail, readSavedBuildVersionBackups, readSavedBuilds, readSavedBuildVersionComparisons, readSavedBudgetLadders, readSavedComparisons, readSavedWatchlistAlertStates, readSavedWatchlists, restoreSavedBuildPurchasePriceHistory, restoreSavedBuildPurchaseProgress, rollbackSavedBuildVersions, savedBuildVersionSnapshotFingerprintFor, updateSavedBuildAssemblyVerification, updateSavedBuildMetadata, updateSavedBuildMonitorState, updateSavedBuildMyPc, updateSavedBuildPurchasePriceHistory, updateSavedBuildPurchaseProgress, updateSavedBuildShareCredentials, updateSavedWatchlist, updateSavedWatchlistAlertStates, withSavedBuildMonitorLease } from "./repository";
+import { appendSavedBuild, appendSavedBuildCheck, appendSavedBuildVersionComparison, appendSavedBudgetLadder, appendSavedGeneratorVariants, appendSavedComparison, appendSavedWatchlist, deleteSavedBuild, deleteSavedBuildVersionComparison, deleteSavedBudgetLadder, deleteSavedGeneratorVariants, deleteSavedComparison, deleteSavedWatchlist, deleteSavedWatchlistAlertStates, initializePersistence, migrateSavedBuildVersions, persistenceDiagnostics, readLatestSavedBuildVersionBackup, readSavedBuildVersionBackupDetail, readSavedBuildVersionBackups, readSavedBuilds, readSavedBuildVersionComparisons, readSavedBudgetLadders, readSavedGeneratorVariants, readSavedComparisons, readSavedWatchlistAlertStates, readSavedWatchlists, restoreSavedBuildPurchasePriceHistory, restoreSavedBuildPurchaseProgress, rollbackSavedBuildVersions, savedBuildVersionSnapshotFingerprintFor, updateSavedBuildAssemblyVerification, updateSavedBuildMetadata, updateSavedBuildMonitorState, updateSavedBuildMyPc, updateSavedBuildPurchasePriceHistory, updateSavedBuildPurchaseProgress, updateSavedBuildShareCredentials, updateSavedWatchlist, updateSavedWatchlistAlertStates, withSavedBuildMonitorLease } from "./repository";
 import { DEFAULT_SAVED_WATCHLIST_ALERT_PREFERENCES, parseSavedCatalogWatchlistInput, parseSavedCatalogWatchlistUpdateInput, savedCatalogWatchlistExpired, savedWatchlistAlertPreferencesFor } from "./watchlist-store";
 import { shareExpired, shareExpiryDaysFrom, shareExpiryValueProvided, shareExpiresAtFor } from "./share-lifecycle";
 import { createShareOwnerCredential, createShareRecoveryCode, normalizeShareRecoveryCode, shareOwnerOrEnabledAdminCanManage, shareOwnerTokenMatches, shareRecoveryCodeMatches, type SavedBuildRecord } from "./build-share";
@@ -36,6 +36,7 @@ import { budgetLadderShareExpired, budgetLadderShareExpiresAtFor, parseBudgetLad
 import type { SavedBudgetLadderRecord } from "../shared/budget-ladder-share";
 import { budgetLadderShareLineageEntryFor, type BudgetLadderShareLineageResponse } from "../shared/budget-ladder-share";
 import { budgetLadderScenariosFor } from "../shared/budget-ladder";
+import { parseGeneratorVariantsShareInput, publicGeneratorVariantsShare } from "./generator-variants-share";
 import { savedWatchlistAlertsFor, type SavedWatchlistAlert } from "./watchlist-alerts";
 import { parseSavedWatchlistAlertIds } from "./watchlist-alert-state";
 import { adminAuthEnabled, adminSession, isAdminAuthenticated, loginAdmin, logoutAdmin, requireAdmin } from "./auth";
@@ -90,6 +91,7 @@ import { buildCompatibilityInputFingerprint } from "../shared/build-fingerprint"
 import { catalogRefreshReportFromUnknown } from "../shared/catalog-refresh-report";
 import type { CatalogRefreshReport } from "../shared/catalog-refresh-report";
 import { savedBuildDecisionNoteFromUnknown, savedBuildNameFromUnknown, SAVED_BUILD_DECISION_NOTE_MAX_LENGTH, SAVED_BUILD_NAME_MAX_LENGTH } from "../shared/saved-build-decision-note";
+import { savedBuildOriginFromUnknown } from "../shared/saved-build-origin";
 import { parseSavedBuildPurchaseProgress, parseSavedBuildPurchaseProgressExpectedRevision, parseSavedBuildPurchaseProgressRevision } from "./purchase-progress";
 import { parseSavedBuildPurchasePriceHistory, parseSavedBuildPurchasePriceHistoryExpectedRevision, parseSavedBuildPurchasePriceHistoryRevision } from "./purchase-price-history";
 import { isListingAllowed } from "./listing";
@@ -387,6 +389,8 @@ const versionComparisonCreateRateLimit = createRateLimitMiddleware("version-comp
 const versionComparisonShareRateLimit = createRateLimitMiddleware("version-comparison-share", { limit: 120, windowMs: 60_000 });
 const budgetLadderCreateRateLimit = createRateLimitMiddleware("budget-ladder-create", { limit: 10, windowMs: 60_000 });
 const budgetLadderShareRateLimit = createRateLimitMiddleware("budget-ladder-share", { limit: 120, windowMs: 60_000 });
+const generatorVariantsCreateRateLimit = createRateLimitMiddleware("generator-variants-create", { limit: 10, windowMs: 60_000 });
+const generatorVariantsShareRateLimit = createRateLimitMiddleware("generator-variants-share", { limit: 120, windowMs: 60_000 });
 const adminLoginRateLimit = createRateLimitMiddleware("admin-login", { limit: 10, windowMs: 60_000 });
 
 const requirePartRefreshAccess: RequestHandler = (request, response, next) => {
@@ -2117,6 +2121,12 @@ app.post("/api/builds", buildCreateRateLimit, async (request, response) => {
     response.status(400).json({ error: "결정 메모는 " + SAVED_BUILD_DECISION_NOTE_MAX_LENGTH + "자 이하의 문자열이어야 합니다.", code: "DECISION_NOTE_INVALID" });
     return;
   }
+  const rawOrigin = request.body?.origin;
+  const origin = savedBuildOriginFromUnknown(rawOrigin);
+  if (rawOrigin !== undefined && !origin) {
+    response.status(400).json({ error: "견적 생성 출처 형식이 올바르지 않습니다.", code: "BUILD_ORIGIN_INVALID" });
+    return;
+  }
   const catalogSnapshot = await loadCatalogSnapshot();
   const { catalog, accessories } = catalogSnapshot;
   const parsed = parseBuild(request.body?.selection ?? request.body);
@@ -2188,6 +2198,7 @@ app.post("/api/builds", buildCreateRateLimit, async (request, response) => {
     id,
     name: typeof request.body?.name === "string" && request.body.name.trim() ? request.body.name.trim() : "나의 PC 견적",
     ...(decisionNote ? { decisionNote } : {}),
+    ...(origin ? { origin } : {}),
     selection: build,
     recommendationPreferences,
     checkSnapshot,
@@ -2459,6 +2470,67 @@ app.delete("/api/budget-ladders/:id", budgetLadderShareRateLimit, async (request
   const deleted = await deleteSavedBudgetLadder(id ?? "");
   if (!deleted) {
     response.status(404).json({ error: "저장된 예산 구간 비교를 찾을 수 없습니다." });
+    return;
+  }
+  response.json({ deleted: true });
+});
+
+app.post("/api/generator-variants", generatorVariantsCreateRateLimit, async (request, response) => {
+  const parsed = parseGeneratorVariantsShareInput(request.body);
+  if (parsed.errors.length > 0 || !parsed.name || !parsed.payload) {
+    response.status(400).json({ error: parsed.errors[0] ?? "자동 구성 비교를 저장할 수 없습니다.", details: parsed.errors });
+    return;
+  }
+  const now = new Date().toISOString();
+  const { catalogUpdatedAt: catalogSnapshotAt } = await loadCatalogSnapshotTimestamp();
+  const ownerCredential = createShareOwnerCredential();
+  const expiresAt = shareExpiresAtFor(parsed.expiresInDays, Date.parse(now));
+  const saved: import("../shared/generator-variants-share").SavedGeneratorVariantsRecord = {
+    id: randomUUID(),
+    name: parsed.name,
+    payload: parsed.payload,
+    ...(parsed.request ? { request: parsed.request } : {}),
+    catalogSnapshotAt,
+    createdAt: now,
+    updatedAt: now,
+    ...(expiresAt ? { expiresAt } : {}),
+    ownerTokenHash: ownerCredential.hash
+  };
+  await appendSavedGeneratorVariants(saved);
+  trackUsageEvent("share");
+  response.status(201).json({ ...publicGeneratorVariantsShare(saved, catalogSnapshotAt), ownerToken: ownerCredential.token });
+});
+
+app.get("/api/generator-variants/:id", generatorVariantsShareRateLimit, async (request, response) => {
+  const id = routeParam(request.params.id);
+  const saved = (await readSavedGeneratorVariants()).find((record) => record.id === id);
+  if (!saved) {
+    response.status(404).json({ error: "저장된 자동 구성 비교를 찾을 수 없습니다." });
+    return;
+  }
+  if (shareExpired(saved.expiresAt)) {
+    response.status(404).json({ error: "자동 구성 비교 링크가 만료되었습니다." });
+    return;
+  }
+  const { catalogUpdatedAt: catalogSnapshotAt } = await loadCatalogSnapshotTimestamp();
+  sendJsonWithEtag(request, response, publicGeneratorVariantsShare(saved, catalogSnapshotAt), saved.updatedAt);
+});
+
+app.delete("/api/generator-variants/:id", generatorVariantsShareRateLimit, async (request, response) => {
+  const id = routeParam(request.params.id);
+  const saved = (await readSavedGeneratorVariants()).find((record) => record.id === id);
+  if (!saved) {
+    response.status(404).json({ error: "저장된 자동 구성 비교를 찾을 수 없습니다." });
+    return;
+  }
+  const ownerToken = request.header("x-share-owner-token");
+  if (!shareOwnerOrEnabledAdminCanManage(saved, ownerToken, adminAuthEnabled(), isAdminAuthenticated(request))) {
+    response.status(401).json({ error: "이 자동 구성 비교를 취소할 권한이 없습니다.", code: "SHARE_OWNER_AUTH_REQUIRED" });
+    return;
+  }
+  const deleted = await deleteSavedGeneratorVariants(id ?? "");
+  if (!deleted) {
+    response.status(404).json({ error: "저장된 자동 구성 비교를 찾을 수 없습니다." });
     return;
   }
   response.json({ deleted: true });

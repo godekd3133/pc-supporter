@@ -1793,6 +1793,7 @@ export interface SavedBuild {
   id: string;
   name: string;
   decisionNote?: string;
+  origin?: import("./saved-build-origin").SavedBuildOrigin;
   selection: BuildSelection;
   recommendationPreferences?: RecommendationPreferences;
   versionGroupId?: string;

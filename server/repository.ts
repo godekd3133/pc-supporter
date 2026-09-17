@@ -14,12 +14,15 @@ import { savedAlternativeComparisonFromUnknown, type SavedAlternativeComparisonR
 import { savedBuildVersionComparisonFromUnknown, type SavedBuildVersionComparisonShareRecord } from "../shared/saved-build-version-share";
 import { savedBudgetLadderFromUnknown } from "./budget-ladder-share";
 import type { SavedBudgetLadderRecord } from "../shared/budget-ladder-share";
+import { savedGeneratorVariantsFromUnknown } from "./generator-variants-share";
+import type { SavedGeneratorVariantsRecord } from "../shared/generator-variants-share";
 import { savedCatalogWatchlistFromUnknown, savedWatchlistAlertPreferencesFromUnknown, type SavedWatchlistAlertPreferences } from "./watchlist-store";
 import type { SavedCatalogWatchlistRecord } from "./watchlist-share";
 import { savedBuildPurchaseProgressFromUnknown, savedBuildPurchaseProgressHistoryTargetFor, savedBuildPurchaseProgressRevisionMatchesFor, savedBuildPurchaseProgressWithNextRevisionFor } from "./purchase-progress";
 import { savedBuildPurchasePriceHistoryFromUnknown, savedBuildPurchasePriceHistoryHistoryTargetFor, savedBuildPurchasePriceHistoryRevisionMatchesFor, savedBuildPurchasePriceHistoryWithNextRevisionFor } from "./purchase-price-history";
 import { savedWatchlistAlertStateFromUnknown, upsertSavedWatchlistAlertStates } from "./watchlist-alert-state";
 import { savedBuildDecisionNoteFromUnknown, savedBuildMetadataHistoryEntryFor, savedBuildMetadataHistoryFromUnknown, savedBuildMetadataHistoryWithNextEntryFor } from "../shared/saved-build-decision-note";
+import { savedBuildOriginFromUnknown } from "../shared/saved-build-origin";
 import type { SavedWatchlistAlertState } from "./watchlist-alert-state";
 import {
   BUILDS_PATH,
@@ -31,6 +34,7 @@ import {
   COMPARISONS_PATH,
   VERSION_COMPARISONS_PATH,
   BUDGET_LADDERS_PATH,
+  GENERATOR_VARIANTS_PATH,
   WATCHLIST_ALERT_STATES_PATH,
   WATCHLISTS_PATH,
   readJson,
@@ -75,6 +79,7 @@ CREATE TABLE IF NOT EXISTS saved_builds (
   purchase_progress JSONB,
   purchase_price_history JSONB,
   decision_note TEXT,
+  origin JSONB,
   metadata_history JSONB
 );
 CREATE INDEX IF NOT EXISTS saved_builds_updated_idx ON saved_builds(updated_at DESC);
@@ -92,6 +97,7 @@ ALTER TABLE saved_builds ADD COLUMN IF NOT EXISTS monitor_state JSONB;
 ALTER TABLE saved_builds ADD COLUMN IF NOT EXISTS purchase_progress JSONB;
 ALTER TABLE saved_builds ADD COLUMN IF NOT EXISTS purchase_price_history JSONB;
 ALTER TABLE saved_builds ADD COLUMN IF NOT EXISTS decision_note TEXT;
+ALTER TABLE saved_builds ADD COLUMN IF NOT EXISTS origin JSONB;
 ALTER TABLE saved_builds ADD COLUMN IF NOT EXISTS metadata_history JSONB;
 CREATE TABLE IF NOT EXISTS saved_build_version_backups (
   id TEXT PRIMARY KEY,
@@ -167,6 +173,19 @@ CREATE INDEX IF NOT EXISTS saved_budget_ladders_updated_idx ON saved_budget_ladd
 ALTER TABLE saved_budget_ladders ADD COLUMN IF NOT EXISTS parent_id TEXT;
 ALTER TABLE saved_budget_ladders ADD COLUMN IF NOT EXISTS lineage_id TEXT;
 ALTER TABLE saved_budget_ladders ADD COLUMN IF NOT EXISTS version_number INTEGER;
+CREATE TABLE IF NOT EXISTS saved_generator_variants (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  payload JSONB NOT NULL,
+  request JSONB,
+  catalog_snapshot_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL,
+  expires_at TIMESTAMPTZ,
+  owner_token_hash TEXT
+);
+CREATE INDEX IF NOT EXISTS saved_generator_variants_updated_idx ON saved_generator_variants(updated_at DESC);
+ALTER TABLE saved_generator_variants ADD COLUMN IF NOT EXISTS request JSONB;
 CREATE TABLE IF NOT EXISTS saved_watchlist_alert_states (
   watchlist_id TEXT NOT NULL,
   alert_id TEXT NOT NULL,
@@ -410,6 +429,7 @@ type SavedBuildDatabaseRow = {
   purchase_progress: SavedBuildPurchaseProgress | null;
   purchase_price_history: SavedBuildPurchasePriceHistory | null;
   decision_note: string | null;
+  origin: SavedBuildRecord["origin"] | null;
   metadata_history: unknown | null;
 };
 
@@ -421,6 +441,18 @@ type SavedBudgetLadderDatabaseRow = {
   parent_id: string | null;
   lineage_id: string | null;
   version_number: number | null;
+  catalog_snapshot_at: Date;
+  created_at: Date;
+  updated_at: Date;
+  expires_at: Date | null;
+  owner_token_hash: string | null;
+};
+
+type SavedGeneratorVariantsDatabaseRow = {
+  id: string;
+  name: string;
+  payload: SavedGeneratorVariantsRecord["payload"];
+  request: SavedGeneratorVariantsRecord["request"] | null;
   catalog_snapshot_at: Date;
   created_at: Date;
   updated_at: Date;
@@ -447,14 +479,16 @@ export function savedBuildRecordFromUnknown(value: unknown): SavedBuildRecord | 
   const purchaseProgress = savedBuildPurchaseProgressFromUnknown(candidate.purchaseProgress);
   const purchasePriceHistory = savedBuildPurchasePriceHistoryFromUnknown(candidate.purchasePriceHistory);
   const decisionNote = savedBuildDecisionNoteFromUnknown(candidate.decisionNote);
+  const origin = savedBuildOriginFromUnknown(candidate.origin);
+  if (candidate.origin !== undefined && !origin) return undefined;
   const metadataHistory = savedBuildMetadataHistoryFromUnknown(candidate.metadataHistory);
   if (candidate.metadataHistory !== undefined && !metadataHistory) return undefined;
   const normalizedMetadataHistory = metadataHistory ?? [];
   const versionGroupId = typeof candidate.versionGroupId === "string" && candidate.versionGroupId.length > 0 && candidate.versionGroupId.length <= 120 ? candidate.versionGroupId : undefined;
   const versionNumber = Number.isInteger(candidate.versionNumber) && (candidate.versionNumber ?? 0) >= 1 && (candidate.versionNumber ?? 0) <= 1_000_000 ? candidate.versionNumber : undefined;
   const derivedFromBuildId = typeof candidate.derivedFromBuildId === "string" && candidate.derivedFromBuildId.length > 0 && candidate.derivedFromBuildId.length <= 120 ? candidate.derivedFromBuildId : undefined;
-  const { ownerTokenHash: _rawOwnerTokenHash, recoveryCodeHash: _rawRecoveryCodeHash, myPcAt: _rawMyPcAt, versionGroupId: _rawVersionGroupId, versionNumber: _rawVersionNumber, derivedFromBuildId: _rawDerivedFromBuildId, checkSnapshot: _rawCheckSnapshot, checkHistory: _rawCheckHistory, monitorState: _rawMonitorState, purchaseProgress: _rawPurchaseProgress, purchasePriceHistory: _rawPurchasePriceHistory, decisionNote: _rawDecisionNote, metadataHistory: _rawMetadataHistory, ...build } = candidate as SavedBuildRecord;
-  return { ...build, ...(decisionNote ? { decisionNote } : {}), ...(normalizedMetadataHistory.length > 0 ? { metadataHistory: normalizedMetadataHistory } : {}), ...(ownerTokenHash ? { ownerTokenHash } : {}), ...(recoveryCodeHash ? { recoveryCodeHash } : {}), ...(myPcAt ? { myPcAt } : {}), ...(versionGroupId ? { versionGroupId } : {}), ...(versionNumber ? { versionNumber } : {}), ...(derivedFromBuildId ? { derivedFromBuildId } : {}), ...(checkSnapshot ? { checkSnapshot } : {}), ...(checkHistory.length > 0 ? { checkHistory } : {}), ...(monitorState ? { monitorState } : {}), ...(purchaseProgress ? { purchaseProgress } : {}), ...(purchasePriceHistory ? { purchasePriceHistory } : {}) };
+  const { ownerTokenHash: _rawOwnerTokenHash, recoveryCodeHash: _rawRecoveryCodeHash, myPcAt: _rawMyPcAt, versionGroupId: _rawVersionGroupId, versionNumber: _rawVersionNumber, derivedFromBuildId: _rawDerivedFromBuildId, checkSnapshot: _rawCheckSnapshot, checkHistory: _rawCheckHistory, monitorState: _rawMonitorState, purchaseProgress: _rawPurchaseProgress, purchasePriceHistory: _rawPurchasePriceHistory, decisionNote: _rawDecisionNote, origin: _rawOrigin, metadataHistory: _rawMetadataHistory, ...build } = candidate as SavedBuildRecord;
+  return { ...build, ...(decisionNote ? { decisionNote } : {}), ...(origin ? { origin } : {}), ...(normalizedMetadataHistory.length > 0 ? { metadataHistory: normalizedMetadataHistory } : {}), ...(ownerTokenHash ? { ownerTokenHash } : {}), ...(recoveryCodeHash ? { recoveryCodeHash } : {}), ...(myPcAt ? { myPcAt } : {}), ...(versionGroupId ? { versionGroupId } : {}), ...(versionNumber ? { versionNumber } : {}), ...(derivedFromBuildId ? { derivedFromBuildId } : {}), ...(checkSnapshot ? { checkSnapshot } : {}), ...(checkHistory.length > 0 ? { checkHistory } : {}), ...(monitorState ? { monitorState } : {}), ...(purchaseProgress ? { purchaseProgress } : {}), ...(purchasePriceHistory ? { purchasePriceHistory } : {}) };
 }
 
 function savedBuildRecordFromDatabaseRow(row: SavedBuildDatabaseRow) {
@@ -478,6 +512,7 @@ function savedBuildRecordFromDatabaseRow(row: SavedBuildDatabaseRow) {
     ...(row.purchase_progress ? { purchaseProgress: row.purchase_progress } : {}),
     ...(row.purchase_price_history ? { purchasePriceHistory: row.purchase_price_history } : {}),
     ...(row.decision_note ? { decisionNote: row.decision_note } : {}),
+    ...(row.origin ? { origin: row.origin } : {}),
     ...(row.metadata_history ? { metadataHistory: row.metadata_history } : {})
   });
 }
@@ -486,7 +521,7 @@ export async function readSavedBuilds(): Promise<SavedBuildRecord[]> {
   if (await ensureDatabase()) {
     try {
       const result = await pool!.query<SavedBuildDatabaseRow>(
-        "SELECT id, name, selection, recommendation_preferences, created_at, updated_at, expires_at, owner_token_hash, recovery_code_hash, my_pc_at, version_group_id, version_number, derived_from_build_id, check_snapshot, check_history, monitor_state, purchase_progress, purchase_price_history, decision_note, metadata_history FROM saved_builds ORDER BY updated_at DESC"
+        "SELECT id, name, selection, recommendation_preferences, created_at, updated_at, expires_at, owner_token_hash, recovery_code_hash, my_pc_at, version_group_id, version_number, derived_from_build_id, check_snapshot, check_history, monitor_state, purchase_progress, purchase_price_history, decision_note, origin, metadata_history FROM saved_builds ORDER BY updated_at DESC"
       );
       return result.rows.map(savedBuildRecordFromDatabaseRow).filter((value): value is SavedBuildRecord => value !== undefined);
     } catch (error) {
@@ -510,11 +545,12 @@ export async function writeSavedBuilds(builds: SavedBuildRecord[]) {
       }
       for (const build of builds) {
         await client.query(
-          `INSERT INTO saved_builds (id, name, decision_note, selection, recommendation_preferences, created_at, updated_at, expires_at, owner_token_hash, recovery_code_hash, my_pc_at, version_group_id, version_number, derived_from_build_id, check_snapshot, check_history, monitor_state, purchase_progress, purchase_price_history, metadata_history)
-           VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::timestamptz, $7::timestamptz, $8::timestamptz, $9, $10, $11::timestamptz, $12, $13, $14, $15::jsonb, $16::jsonb, $17::jsonb, $18::jsonb, $19::jsonb, $20::jsonb)
+          `INSERT INTO saved_builds (id, name, decision_note, origin, selection, recommendation_preferences, created_at, updated_at, expires_at, owner_token_hash, recovery_code_hash, my_pc_at, version_group_id, version_number, derived_from_build_id, check_snapshot, check_history, monitor_state, purchase_progress, purchase_price_history, metadata_history)
+           VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7::timestamptz, $8::timestamptz, $9::timestamptz, $10, $11, $12::timestamptz, $13, $14, $15, $16::jsonb, $17::jsonb, $18::jsonb, $19::jsonb, $20::jsonb, $21::jsonb, $22::jsonb)
            ON CONFLICT (id) DO UPDATE SET
              name = EXCLUDED.name,
              decision_note = EXCLUDED.decision_note,
+             origin = EXCLUDED.origin,
              selection = EXCLUDED.selection,
              recommendation_preferences = EXCLUDED.recommendation_preferences,
              updated_at = EXCLUDED.updated_at,
@@ -531,7 +567,7 @@ export async function writeSavedBuilds(builds: SavedBuildRecord[]) {
              purchase_progress = EXCLUDED.purchase_progress,
              purchase_price_history = EXCLUDED.purchase_price_history,
              metadata_history = EXCLUDED.metadata_history`,
-          [build.id, build.name, build.decisionNote ?? null, JSON.stringify(build.selection), build.recommendationPreferences ? JSON.stringify(build.recommendationPreferences) : null, build.createdAt, build.updatedAt, build.expiresAt ?? null, build.ownerTokenHash ?? null, build.recoveryCodeHash ?? null, build.myPcAt ?? null, build.versionGroupId ?? null, build.versionNumber ?? null, build.derivedFromBuildId ?? null, build.checkSnapshot ? JSON.stringify(build.checkSnapshot) : null, build.checkHistory ? JSON.stringify(build.checkHistory) : null, build.monitorState ? JSON.stringify(build.monitorState) : null, build.purchaseProgress ? JSON.stringify(build.purchaseProgress) : null, build.purchasePriceHistory ? JSON.stringify(build.purchasePriceHistory) : null, build.metadataHistory ? JSON.stringify(build.metadataHistory) : null]
+          [build.id, build.name, build.decisionNote ?? null, build.origin ? JSON.stringify(build.origin) : null, JSON.stringify(build.selection), build.recommendationPreferences ? JSON.stringify(build.recommendationPreferences) : null, build.createdAt, build.updatedAt, build.expiresAt ?? null, build.ownerTokenHash ?? null, build.recoveryCodeHash ?? null, build.myPcAt ?? null, build.versionGroupId ?? null, build.versionNumber ?? null, build.derivedFromBuildId ?? null, build.checkSnapshot ? JSON.stringify(build.checkSnapshot) : null, build.checkHistory ? JSON.stringify(build.checkHistory) : null, build.monitorState ? JSON.stringify(build.monitorState) : null, build.purchaseProgress ? JSON.stringify(build.purchaseProgress) : null, build.purchasePriceHistory ? JSON.stringify(build.purchasePriceHistory) : null, build.metadataHistory ? JSON.stringify(build.metadataHistory) : null]
         );
       }
       await client.query("COMMIT");
@@ -568,9 +604,9 @@ async function appendSavedBuildToDatabase(build: SavedBuildRecord, max: number) 
     const nextVersion = Number(result.rows[0]?.max_version ?? 0) + 1;
     const next = { ...build, versionGroupId, versionNumber: nextVersion } satisfies SavedBuildRecord;
     await client.query(
-      `INSERT INTO saved_builds (id, name, decision_note, selection, recommendation_preferences, created_at, updated_at, expires_at, owner_token_hash, recovery_code_hash, my_pc_at, version_group_id, version_number, derived_from_build_id, check_snapshot, check_history, monitor_state, purchase_progress, purchase_price_history, metadata_history)
-       VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::timestamptz, $7::timestamptz, $8::timestamptz, $9, $10, $11::timestamptz, $12, $13, $14, $15::jsonb, $16::jsonb, $17::jsonb, $18::jsonb, $19::jsonb, $20::jsonb)`,
-      [next.id, next.name, next.decisionNote ?? null, JSON.stringify(next.selection), next.recommendationPreferences ? JSON.stringify(next.recommendationPreferences) : null, next.createdAt, next.updatedAt, next.expiresAt ?? null, next.ownerTokenHash ?? null, next.recoveryCodeHash ?? null, next.myPcAt ?? null, next.versionGroupId, next.versionNumber, next.derivedFromBuildId ?? null, next.checkSnapshot ? JSON.stringify(next.checkSnapshot) : null, next.checkHistory ? JSON.stringify(next.checkHistory) : null, next.monitorState ? JSON.stringify(next.monitorState) : null, next.purchaseProgress ? JSON.stringify(next.purchaseProgress) : null, next.purchasePriceHistory ? JSON.stringify(next.purchasePriceHistory) : null, next.metadataHistory ? JSON.stringify(next.metadataHistory) : null]
+      `INSERT INTO saved_builds (id, name, decision_note, origin, selection, recommendation_preferences, created_at, updated_at, expires_at, owner_token_hash, recovery_code_hash, my_pc_at, version_group_id, version_number, derived_from_build_id, check_snapshot, check_history, monitor_state, purchase_progress, purchase_price_history, metadata_history)
+       VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7::timestamptz, $8::timestamptz, $9::timestamptz, $10, $11, $12::timestamptz, $13, $14, $15, $16::jsonb, $17::jsonb, $18::jsonb, $19::jsonb, $20::jsonb, $21::jsonb, $22::jsonb)`,
+      [next.id, next.name, next.decisionNote ?? null, next.origin ? JSON.stringify(next.origin) : null, JSON.stringify(next.selection), next.recommendationPreferences ? JSON.stringify(next.recommendationPreferences) : null, next.createdAt, next.updatedAt, next.expiresAt ?? null, next.ownerTokenHash ?? null, next.recoveryCodeHash ?? null, next.myPcAt ?? null, next.versionGroupId, next.versionNumber, next.derivedFromBuildId ?? null, next.checkSnapshot ? JSON.stringify(next.checkSnapshot) : null, next.checkHistory ? JSON.stringify(next.checkHistory) : null, next.monitorState ? JSON.stringify(next.monitorState) : null, next.purchaseProgress ? JSON.stringify(next.purchaseProgress) : null, next.purchasePriceHistory ? JSON.stringify(next.purchasePriceHistory) : null, next.metadataHistory ? JSON.stringify(next.metadataHistory) : null]
     );
     const boundedMax = Math.max(1, Math.floor(max));
     const stale = await client.query<{ id: string }>("SELECT id FROM saved_builds ORDER BY updated_at DESC, id DESC OFFSET $1", [boundedMax]);
@@ -772,7 +808,7 @@ export async function readSavedBuildVersionBackupDetail(backupId: string): Promi
 
 async function readSavedBuildsWithDatabaseClient(client: PoolClient) {
   const result = await client.query<SavedBuildDatabaseRow>(
-    "SELECT id, name, selection, recommendation_preferences, created_at, updated_at, expires_at, owner_token_hash, recovery_code_hash, my_pc_at, version_group_id, version_number, derived_from_build_id, check_snapshot, check_history, monitor_state, purchase_progress, purchase_price_history, decision_note, metadata_history FROM saved_builds ORDER BY updated_at DESC"
+    "SELECT id, name, selection, recommendation_preferences, created_at, updated_at, expires_at, owner_token_hash, recovery_code_hash, my_pc_at, version_group_id, version_number, derived_from_build_id, check_snapshot, check_history, monitor_state, purchase_progress, purchase_price_history, decision_note, origin, metadata_history FROM saved_builds ORDER BY updated_at DESC"
   );
   const builds = result.rows.map(savedBuildRecordFromDatabaseRow).filter((value): value is SavedBuildRecord => value !== undefined);
   if (builds.length !== result.rows.length) throw new Error("저장 견적 데이터 일부를 안전하게 해석할 수 없어 마이그레이션을 중단했습니다.");
@@ -1673,6 +1709,100 @@ export async function deleteSavedBudgetLadder(id: string) {
     const next = ladders.filter((ladder) => ladder.id !== id);
     if (next.length === ladders.length) return false;
     await writeJson(BUDGET_LADDERS_PATH, next);
+    return true;
+  });
+}
+
+function savedGeneratorVariantsRecordFromDatabaseRow(row: SavedGeneratorVariantsDatabaseRow) {
+  return savedGeneratorVariantsFromUnknown({
+    id: row.id,
+    name: row.name,
+    payload: row.payload,
+    ...(row.request ? { request: row.request } : {}),
+    catalogSnapshotAt: new Date(row.catalog_snapshot_at).toISOString(),
+    createdAt: new Date(row.created_at).toISOString(),
+    updatedAt: new Date(row.updated_at).toISOString(),
+    ...(row.expires_at ? { expiresAt: new Date(row.expires_at).toISOString() } : {}),
+    ...(row.owner_token_hash ? { ownerTokenHash: row.owner_token_hash } : {})
+  });
+}
+
+export async function readSavedGeneratorVariants(): Promise<SavedGeneratorVariantsRecord[]> {
+  if (await ensureDatabase()) {
+    try {
+      const result = await pool!.query<SavedGeneratorVariantsDatabaseRow>(
+        "SELECT id, name, payload, request, catalog_snapshot_at, created_at, updated_at, expires_at, owner_token_hash FROM saved_generator_variants ORDER BY updated_at DESC"
+      );
+      return result.rows.map(savedGeneratorVariantsRecordFromDatabaseRow).filter((value): value is SavedGeneratorVariantsRecord => value !== undefined);
+    } catch (error) {
+      databaseDisabled = true;
+      console.warn(`PostgreSQL generator variants read failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  const raw = await readJson<unknown[]>(GENERATOR_VARIANTS_PATH, []);
+  return raw.map(savedGeneratorVariantsFromUnknown).filter((value): value is SavedGeneratorVariantsRecord => value !== undefined);
+}
+
+export async function writeSavedGeneratorVariants(records: SavedGeneratorVariantsRecord[]) {
+  if (await ensureDatabase()) {
+    const client = await pool!.connect();
+    try {
+      await client.query("BEGIN");
+      if (records.length === 0) {
+        await client.query("DELETE FROM saved_generator_variants");
+      } else {
+        await client.query("DELETE FROM saved_generator_variants WHERE NOT (id = ANY($1::text[]))", [records.map((record) => record.id)]);
+      }
+      for (const record of records) {
+        await client.query(
+          `INSERT INTO saved_generator_variants (id, name, payload, request, catalog_snapshot_at, created_at, updated_at, expires_at, owner_token_hash)
+           VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::timestamptz, $6::timestamptz, $7::timestamptz, $8::timestamptz, $9)
+           ON CONFLICT (id) DO UPDATE SET
+             name = EXCLUDED.name,
+             payload = EXCLUDED.payload,
+             request = EXCLUDED.request,
+             catalog_snapshot_at = EXCLUDED.catalog_snapshot_at,
+             updated_at = EXCLUDED.updated_at,
+             expires_at = EXCLUDED.expires_at,
+             owner_token_hash = EXCLUDED.owner_token_hash`,
+          [record.id, record.name, JSON.stringify(record.payload), record.request ? JSON.stringify(record.request) : null, record.catalogSnapshotAt, record.createdAt, record.updatedAt, record.expiresAt ?? null, record.ownerTokenHash ?? null]
+        );
+      }
+      await client.query("COMMIT");
+      return;
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      databaseDisabled = true;
+      console.warn(`PostgreSQL generator variants write failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      client.release();
+    }
+  }
+  await writeJson(GENERATOR_VARIANTS_PATH, records);
+}
+
+export async function appendSavedGeneratorVariants(record: SavedGeneratorVariantsRecord, max = 100) {
+  return withSerializedFileMutation(GENERATOR_VARIANTS_PATH, async () => {
+    const records = await readSavedGeneratorVariants();
+    await writeSavedGeneratorVariants([record, ...records].slice(0, Math.max(1, Math.floor(max))));
+  });
+}
+
+export async function deleteSavedGeneratorVariants(id: string) {
+  return withSerializedFileMutation(GENERATOR_VARIANTS_PATH, async () => {
+    if (await ensureDatabase()) {
+      try {
+        const result = await pool!.query("DELETE FROM saved_generator_variants WHERE id = $1", [id]);
+        return (result.rowCount ?? 0) > 0;
+      } catch (error) {
+        databaseDisabled = true;
+        console.warn(`PostgreSQL generator variants delete failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    const records = await readSavedGeneratorVariants();
+    const next = records.filter((record) => record.id !== id);
+    if (next.length === records.length) return false;
+    await writeJson(GENERATOR_VARIANTS_PATH, next);
     return true;
   });
 }

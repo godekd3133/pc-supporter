@@ -2,21 +2,29 @@ import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type { IconType } from "react-icons";
 import { FiActivity, FiAlertTriangle, FiArrowLeft, FiBox, FiCheck, FiChevronDown, FiCopy, FiCpu, FiDatabase, FiDownload, FiEdit3, FiExternalLink, FiHardDrive, FiInfo, FiLayers, FiLoader, FiMessageSquare, FiMonitor, FiSave, FiShare2, FiTool, FiTrash2, FiUpload, FiXCircle, FiZap } from "react-icons/fi";
-import type { BuildAnalysis, BuildGenerationDiagnostic, BuildGenerationRecoveryOption, BuildGenerationRequest, BuildGenerationResult, BuildGenerationVariantResult, GamingGraphicsPreset, GamingPerformanceAssessment, GamingRefreshRate, GamingResolution, GamingUpscaling, PartCategory, RecommendationPerformanceTier, RecommendationPriority, RecommendationProfile, ListingPolicy } from "../shared/types";
+import type { BuildAnalysis, BuildGenerationDiagnostic, BuildGenerationRecoveryOption, BuildGenerationRequest, BuildGenerationResult, BuildGenerationVariantResult, BuildSelection, GamingGraphicsPreset, GamingPerformanceAssessment, GamingRefreshRate, GamingResolution, GamingUpscaling, PartCategory, RecommendationPerformanceTier, RecommendationPriority, RecommendationProfile, ListingPolicy } from "../shared/types";
 import { budgetLadderBaseRequestFor, budgetLadderChangeFor, budgetLadderCsvFor, budgetLadderExportPayloadFor, budgetLadderJsonFor, budgetLadderTextFor } from "../shared/budget-ladder";
 import type { BudgetLadderOutcome } from "../shared/budget-ladder";
 import { budgetLadderTradeoffFor } from "../shared/budget-ladder-tradeoff";
 import type { BudgetLadderShareSnapshot } from "../shared/budget-ladder-share";
 import type { BudgetLadderLocalShareEntry } from "../shared/budget-ladder-local-history";
+import { LOCAL_IMPORT_MAX_BYTES } from "../shared/file-import-limits";
+import { GENERATOR_VARIANTS_LOCAL_HISTORY_KEY, generatorVariantsLocalHistoryFromJson, generatorVariantsLocalHistoryRemember, generatorVariantsLocalHistoryRemove, generatorVariantsLocalHistoryToJson } from "../shared/generator-variants-local-history";
+import type { GeneratorVariantsLocalHistoryEntry } from "../shared/generator-variants-local-history";
+import { GENERATOR_VARIANTS_LOCAL_SHARES_STORAGE_KEY, generatorVariantsLocalShareExpired, generatorVariantsLocalShareRemember, generatorVariantsLocalShareRemove, generatorVariantsLocalSharesFromJson, generatorVariantsLocalSharesToJson } from "../shared/generator-variants-local-share";
+import type { GeneratorVariantsLocalShareEntry } from "../shared/generator-variants-local-share";
+import { GENERATOR_VARIANTS_EXPORT_TYPE, GENERATOR_VARIANTS_EXPORT_VERSION } from "../shared/generator-variants-share";
+import type { GeneratorVariantsExportPayload, GeneratorVariantsShareSnapshot } from "../shared/generator-variants-share";
+import { BUILD_INPUT_MAX_ID_LENGTH, BUILD_INPUT_MAX_M2_SLOTS, BUILD_INPUT_MAX_SELECTIONS_PER_LIST } from "../shared/build-input-limits";
 import { addSavedGeneratorPreset, generatorPresetConfigFromUnknown, GENERATOR_PRESET_STORAGE_KEY, mergeSavedGeneratorPresets, removeSavedGeneratorPreset, savedGeneratorPresetsFromJson, savedGeneratorPresetsToJson } from "../shared/generator-preset";
 import type { GeneratorPresetConfig, SavedGeneratorPreset } from "../shared/generator-preset";
 import { gamingPerformanceEvidenceRequestFor } from "../shared/gaming-performance-evidence";
-import { CATEGORY_LABELS, GAMING_GRAPHICS_PRESET_LABELS, GAMING_REFRESH_RATE_LABELS, GAMING_RESOLUTION_LABELS, GAMING_UPSCALING_LABELS, isKnownPrice, LISTING_POLICY_LABELS, PART_CATEGORIES, RECOMMENDATION_PERFORMANCE_TIER_LABELS, RECOMMENDATION_PRIORITY_DESCRIPTIONS, RECOMMENDATION_PRIORITY_LABELS, RECOMMENDATION_PROFILE_LABELS } from "../shared/types";
+import { CATEGORY_LABELS, GAMING_GRAPHICS_PRESET_LABELS, GAMING_REFRESH_RATE_LABELS, GAMING_RESOLUTION_LABELS, GAMING_UPSCALING_LABELS, isKnownPrice, isRecommendationPriority, LISTING_POLICY_LABELS, PART_CATEGORIES, RECOMMENDATION_PERFORMANCE_TIER_LABELS, RECOMMENDATION_PRIORITY_DESCRIPTIONS, RECOMMENDATION_PRIORITY_LABELS, RECOMMENDATION_PROFILE_LABELS } from "../shared/types";
 import { savedBuildComparisonDecisionFor } from "../shared/saved-build-comparison";
 import type { SavedBuildComparisonDecisionKind, SavedBuildComparisonEntry } from "../shared/saved-build-comparison";
 import { generatorBriefInterpretationFor } from "../shared/generator-brief";
 import type { GeneratorBriefConfig, GeneratorBriefInterpretation } from "../shared/generator-brief";
-import { api } from "./api";
+import { api, ApiError } from "./api";
 import { budgetEstimateFor, gameLabelFor, intensityOptionFor, ONBOARDING_WORKS, workEstimateFor } from "./quote-onboarding";
 import type { OnboardingIntensity, OnboardingWork } from "./quote-onboarding";
 import { safeHttpsUrl } from "./safe-source-url";
@@ -624,6 +632,15 @@ export function BuildGeneratorView({ initialProfile, draft, variants, budgetLadd
     }
   }
 
+  async function copyGeneratorVariants(targetVariants: GeneratorVariantResult[]) {
+    try {
+      await navigator.clipboard.writeText(generatorVariantsTextFor(targetVariants));
+      if (mountedRef.current) onToast("자동 구성 비교 결과를 클립보드에 복사했습니다.");
+    } catch {
+      if (mountedRef.current) onToast("자동 구성 비교 결과 복사에 실패했습니다. 브라우저 클립보드 권한을 확인해 주세요.");
+    }
+  }
+
   async function copyGeneratorConditionsLink() {
     const url = window.location.origin + window.location.pathname + window.location.search;
     try {
@@ -647,6 +664,19 @@ export function BuildGeneratorView({ initialProfile, draft, variants, budgetLadd
     anchor.remove();
     window.URL.revokeObjectURL(url);
     onToast(`예산 구간 비교표 ${format.toUpperCase()}를 저장했습니다.`);
+  }
+
+  function downloadGeneratorVariants(targetVariants: GeneratorVariantResult[]) {
+    const blob = new Blob([generatorVariantsJsonFor(targetVariants)], { type: "application/json;charset=utf-8" });
+    const url = window.URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `pc-supporter-generator-variants-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.URL.revokeObjectURL(url);
+    onToast("자동 구성 비교 결과 JSON을 저장했습니다.");
   }
 
   async function shareBudgetLadder() {
@@ -788,7 +818,7 @@ export function BuildGeneratorView({ initialProfile, draft, variants, budgetLadd
         </details>
         <p className="generator-note"><FiInfo /> 해상도는 권장 VRAM 기준에, 주사율은 CPU·GPU 성능 비교 가중치에 반영합니다. 실제 FPS가 아니라 현재 카탈로그의 가격·스펙·호환 규칙으로 만든 초안입니다.</p>
       </form>
-      {budgetLadder.length > 0 ? <GeneratorBudgetLadderPanel scenarios={budgetLadder} loading={loading} onApply={onApply} onSave={onSave} onCopy={copyBudgetLadder} onDownload={downloadBudgetLadder} share={budgetLadderShare} onShare={() => void shareBudgetLadder()} onRevoke={() => void revokeBudgetLadder()} /> : variants.length > 0 ? <GeneratorVariantsPanel variants={variants} loading={loading} onApply={onApply} onSave={onSave} onAdjustConditions={adjustGeneratorConditions} /> : draft ? <section className="generator-result"><div className="generator-result-top"><div><p className="eyebrow">GENERATED DRAFT</p><h2>{statusLabel}</h2><p>{RECOMMENDATION_PROFILE_LABELS[draft.profile]} · {RECOMMENDATION_PRIORITY_LABELS[draft.priority]}{draft.performanceTier ? ` · ${RECOMMENDATION_PERFORMANCE_TIER_LABELS[draft.performanceTier]}` : ""}{draft.profile === "gaming" ? ` · ${GAMING_RESOLUTION_LABELS[draft.gamingResolution]} · ${GAMING_REFRESH_RATE_LABELS[draft.gamingRefreshRate ?? 144]}` : ""} · RAM {draft.memoryCapacityGb}GB 이상 · {LISTING_POLICY_LABELS[draft.listingPolicy]} · 목표 {formatWon(draft.budgetWon)}</p></div><span className={`generator-status ${draft.withinBudget ? "within" : "over"}`}>{draft.withinBudget ? "예산 내" : "예산 초과"}</span></div><div className="generator-total"><span>예상 부품 합계</span><strong>{formatWon(draft.totalPriceWon)}</strong><small>{draft.withinBudget ? `${Math.abs(draft.budgetDeltaWon).toLocaleString("ko-KR")}원 여유` : `${draft.budgetDeltaWon.toLocaleString("ko-KR")}원 초과`}</small></div>{workType && workIntensity && <GeneratorWorkContext workType={workType} intensity={intensity} draft={draft} />}{!workType && draft.profile === "general" && <GeneratorGeneralContext performanceTier={performanceTier} includeGpu={includeGpu} draft={draft} />}{draft.gpuTarget && <div className={`generator-gpu-target ${draft.gpuTarget.currentFit}`}><span>GPU 목표</span><strong>{draft.gpuTarget.summary}</strong></div>}{draft.gamingPerformanceAssessment && <GeneratorGamingEvidence assessment={draft.gamingPerformanceAssessment} gpuTarget={draft.gpuTarget} />}{draft.analysis && <GeneratedAnalysisSummary analysis={draft.analysis} />}<div className="generator-lines">{draft.lines.map((line) => <div className="generator-line" key={line.category}><span><CategoryIcon category={line.category} /> {CATEGORY_LABELS[line.category]}</span><div><strong>{line.name}</strong><small>{line.specSummary ? `${line.specSummary} · ` : ""}{line.quantity > 1 ? `수량 ${line.quantity}개 · ` : ""}{formatWon(line.priceWon * line.quantity)}</small></div></div>)}</div><GeneratorSelectionReasons draft={draft} /><div className="generator-rationale"><strong>구성 기준</strong>{draft.rationale.map((item) => <p key={item}><FiCheck /> {item}</p>)}</div>{draft.warnings.length > 0 && <div className="generator-warnings"><strong><FiAlertTriangle /> 확인할 항목</strong>{draft.warnings.map((item) => <p key={item}>{item}</p>)}</div>}<div className="generator-actions"><button className="button button-secondary" onClick={() => void onApply(draft, false)} disabled={loading}><FiEdit3 /> 편집기로 가져가기</button><button className="button button-primary" onClick={() => void onApply(draft, true)} disabled={loading}><FiActivity /> 가져와서 바로 검사</button>{onSave && <button className="button button-light generator-save-button" onClick={() => onSave(draft)} disabled={loading}><FiSave /> 새 견적으로 저장</button>}</div></section> : <section className="generator-empty"><FiCpu /><h2>조건만 정하면, 견적을 찾아드려요</h2><p>조건을 입력하면 부품을 하나씩 고르기 전에 호환 가능한 기본 구성을 먼저 보여드려요.</p></section>}
+      {budgetLadder.length > 0 ? <GeneratorBudgetLadderPanel scenarios={budgetLadder} loading={loading} onApply={onApply} onSave={onSave} onCopy={copyBudgetLadder} onDownload={downloadBudgetLadder} share={budgetLadderShare} onShare={() => void shareBudgetLadder()} onRevoke={() => void revokeBudgetLadder()} /> : variants.length > 0 ? <GeneratorVariantsPanel variants={variants} loading={loading} onApply={onApply} onSave={onSave} onAdjustConditions={adjustGeneratorConditions} onCopy={copyGeneratorVariants} onDownload={downloadGeneratorVariants} /> : draft ? <section className="generator-result"><div className="generator-result-top"><div><p className="eyebrow">GENERATED DRAFT</p><h2>{statusLabel}</h2><p>{RECOMMENDATION_PROFILE_LABELS[draft.profile]} · {RECOMMENDATION_PRIORITY_LABELS[draft.priority]}{draft.performanceTier ? ` · ${RECOMMENDATION_PERFORMANCE_TIER_LABELS[draft.performanceTier]}` : ""}{draft.profile === "gaming" ? ` · ${GAMING_RESOLUTION_LABELS[draft.gamingResolution]} · ${GAMING_REFRESH_RATE_LABELS[draft.gamingRefreshRate ?? 144]}` : ""} · RAM {draft.memoryCapacityGb}GB 이상 · {LISTING_POLICY_LABELS[draft.listingPolicy]} · 목표 {formatWon(draft.budgetWon)}</p></div><span className={`generator-status ${draft.withinBudget ? "within" : "over"}`}>{draft.withinBudget ? "예산 내" : "예산 초과"}</span></div><div className="generator-total"><span>예상 부품 합계</span><strong>{formatWon(draft.totalPriceWon)}</strong><small>{draft.withinBudget ? `${Math.abs(draft.budgetDeltaWon).toLocaleString("ko-KR")}원 여유` : `${draft.budgetDeltaWon.toLocaleString("ko-KR")}원 초과`}</small></div>{workType && workIntensity && <GeneratorWorkContext workType={workType} intensity={intensity} draft={draft} />}{!workType && draft.profile === "general" && <GeneratorGeneralContext performanceTier={performanceTier} includeGpu={includeGpu} draft={draft} />}{draft.gpuTarget && <div className={`generator-gpu-target ${draft.gpuTarget.currentFit}`}><span>GPU 목표</span><strong>{draft.gpuTarget.summary}</strong></div>}{draft.gamingPerformanceAssessment && <GeneratorGamingEvidence assessment={draft.gamingPerformanceAssessment} gpuTarget={draft.gpuTarget} />}{draft.analysis && <GeneratedAnalysisSummary analysis={draft.analysis} />}<div className="generator-lines">{draft.lines.map((line) => <div className="generator-line" key={line.category}><span><CategoryIcon category={line.category} /> {CATEGORY_LABELS[line.category]}</span><div><strong>{line.name}</strong><small>{line.specSummary ? `${line.specSummary} · ` : ""}{line.quantity > 1 ? `수량 ${line.quantity}개 · ` : ""}{formatWon(line.priceWon * line.quantity)}</small></div></div>)}</div><GeneratorSelectionReasons draft={draft} /><div className="generator-rationale"><strong>구성 기준</strong>{draft.rationale.map((item) => <p key={item}><FiCheck /> {item}</p>)}</div>{draft.warnings.length > 0 && <div className="generator-warnings"><strong><FiAlertTriangle /> 확인할 항목</strong>{draft.warnings.map((item) => <p key={item}>{item}</p>)}</div>}<div className="generator-actions"><button className="button button-secondary" onClick={() => void onApply(draft, false)} disabled={loading}><FiEdit3 /> 편집기로 가져가기</button><button className="button button-primary" onClick={() => void onApply(draft, true)} disabled={loading}><FiActivity /> 가져와서 바로 검사</button>{onSave && <button className="button button-light generator-save-button" onClick={() => onSave(draft)} disabled={loading}><FiSave /> 새 견적으로 저장</button>}</div></section> : <section className="generator-empty"><FiCpu /><h2>조건만 정하면, 견적을 찾아드려요</h2><p>조건을 입력하면 부품을 하나씩 고르기 전에 호환 가능한 기본 구성을 먼저 보여드려요.</p></section>}
     </div>
   </div>;
 }
@@ -914,6 +944,177 @@ function generatedVariantLineText(draft: BuildGenerationResult, category: PartCa
   return line ? `${line.name}${line.quantity > 1 ? ` ×${line.quantity}` : ""}` : "미포함";
 }
 
+function generatorVariantsTextFor(variants: GeneratorVariantResult[]) {
+  const lines = ["PC Supporter 자동 구성 3안 비교", ""];
+  variants.forEach((variant) => {
+    const label = RECOMMENDATION_PRIORITY_LABELS[variant.priority];
+    lines.push(`[${label}]`);
+    if (!variant.draft) {
+      lines.push(`- 상태: 생성 실패`, `- 오류: ${variant.error ?? "자동 구성을 만들지 못했습니다."}`, "");
+      return;
+    }
+    const analysis = variant.draft.analysis?.overallScore === undefined ? "계산 불가" : `${variant.draft.analysis.overallScore}점`;
+    lines.push(`- 상태: ${generatedVariantStatusLabel(variant.draft.status)}`);
+    lines.push(`- 예상 합계: ${formatWon(variant.draft.totalPriceWon)}`);
+    lines.push(`- 예산: ${generatedVariantBudgetText(variant.draft)}`);
+    lines.push(`- 카탈로그 분석: ${analysis}`);
+    lines.push(`- 위험: 차단 ${variant.draft.blockerCount}개 · 주의 ${variant.draft.warningCount}개 · 확인 필요 ${variant.draft.unknownCount}개`);
+    PART_CATEGORIES.forEach((category) => lines.push(`- ${CATEGORY_LABELS[category]}: ${generatedVariantLineText(variant.draft!, category)}`));
+    lines.push("");
+  });
+  return lines.join("\n");
+}
+
+function generatorVariantsJsonFor(variants: GeneratorVariantResult[]) {
+  const payload: GeneratorVariantsExportPayload = {
+    type: GENERATOR_VARIANTS_EXPORT_TYPE,
+    version: GENERATOR_VARIANTS_EXPORT_VERSION,
+    exportedAt: new Date().toISOString(),
+    items: variants.map((variant) => ({
+      priority: variant.priority,
+      label: RECOMMENDATION_PRIORITY_LABELS[variant.priority],
+      status: variant.draft ? generatedVariantStatusLabel(variant.draft.status) : "생성 실패",
+      ...(variant.error ? { error: variant.error } : {}),
+      ...(variant.draft ? {
+        draft: variant.draft,
+        totalPriceWon: variant.draft.totalPriceWon,
+        budgetDeltaWon: variant.draft.budgetDeltaWon,
+        analysisScore: variant.draft.analysis?.overallScore,
+        blockerCount: variant.draft.blockerCount,
+        warningCount: variant.draft.warningCount,
+        unknownCount: variant.draft.unknownCount,
+        lines: PART_CATEGORIES.map((category) => {
+          const line = variant.draft!.lines.find((item) => item.category === category);
+          return { category, label: CATEGORY_LABELS[category], name: line?.name ?? "미포함", partId: line?.partId, quantity: line?.quantity ?? 0 };
+        })
+      } : {})
+    }))
+  };
+  return JSON.stringify(payload, null, 2);
+}
+
+function generatorVariantsRequestFor(variants: GeneratorVariantResult[]): BuildGenerationRequest | undefined {
+  const draft = variants.find((variant) => variant.draft)?.draft;
+  if (!draft) return undefined;
+  return {
+    profile: draft.profile,
+    priority: draft.priority,
+    ...(draft.performanceTier ? { performanceTier: draft.performanceTier } : {}),
+    budgetWon: draft.budgetWon,
+    includeGpu: Boolean(draft.selection.gpu),
+    gamingResolution: draft.gamingResolution,
+    gamingRefreshRate: draft.gamingRefreshRate,
+    ...(draft.gamingGameIds ? { gamingGameIds: draft.gamingGameIds } : {}),
+    ...(draft.gamingGraphicsPreset ? { gamingGraphicsPreset: draft.gamingGraphicsPreset } : {}),
+    ...(draft.gamingRayTracing !== undefined ? { gamingRayTracing: draft.gamingRayTracing } : {}),
+    ...(draft.gamingUpscaling ? { gamingUpscaling: draft.gamingUpscaling } : {}),
+    memoryCapacityGb: draft.memoryCapacityGb,
+    storageCapacityGb: draft.storageCapacityGb,
+    ...(draft.hddCapacityGb !== undefined ? { hddCapacityGb: draft.hddCapacityGb } : {}),
+    hddCount: draft.hddCount,
+    includeNonRetail: draft.includeNonRetail,
+    listingPolicy: draft.listingPolicy
+  };
+}
+
+type GeneratorVariantImportPreviewItem = {
+  priority: RecommendationPriority;
+  label: string;
+  status: string;
+  totalPriceWon?: number;
+  analysisScore?: number;
+  error?: string;
+};
+
+function usableImportedPartSelection(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const selection = value as Record<string, unknown>;
+  return typeof selection.partId === "string" && selection.partId.trim().length > 0 && selection.partId.length <= BUILD_INPUT_MAX_ID_LENGTH
+    && Number.isInteger(selection.quantity) && (selection.quantity as number) >= 1 && (selection.quantity as number) <= 99;
+}
+
+function usableImportedOptionalId(value: unknown): boolean {
+  return value === undefined || (typeof value === "string" && value.trim().length > 0 && value.length <= BUILD_INPUT_MAX_ID_LENGTH);
+}
+
+// 가져온 draft.selection은 "편집기로 가져가기"가 그대로 setBuild·호환 검사에 쓰는 값이다.
+// apply 버튼을 열기 전에 편집기가 읽을 수 있는 모양인지 여기서 끝내 확인한다.
+// 검사 기준은 shared/build-transfer.ts의 견적 JSON 파서와 같은 필드·한계를 쓴다.
+function usableImportedBuildSelection(value: unknown): value is BuildSelection {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const selection = value as Record<string, unknown>;
+  const singlesOk = ["cpu", "cooler", "motherboard", "gpu", "case", "psu"].every((key) => selection[key] === undefined || usableImportedPartSelection(selection[key]));
+  const listsOk = ["memory", "ssd", "hdd"].every((key) => {
+    const list = selection[key];
+    return Array.isArray(list) && list.length <= BUILD_INPUT_MAX_SELECTIONS_PER_LIST && list.every(usableImportedPartSelection);
+  });
+  const accessories = selection.accessories;
+  const accessoriesOk = accessories === undefined || (Array.isArray(accessories) && accessories.length <= BUILD_INPUT_MAX_SELECTIONS_PER_LIST && accessories.every((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return false;
+    const accessory = item as Record<string, unknown>;
+    return typeof accessory.accessoryId === "string" && accessory.accessoryId.trim().length > 0 && accessory.accessoryId.length <= BUILD_INPUT_MAX_ID_LENGTH
+      && Number.isInteger(accessory.quantity) && (accessory.quantity as number) >= 1 && (accessory.quantity as number) <= 99
+      && usableImportedOptionalId(accessory.targetPartId)
+      && usableImportedOptionalId(accessory.targetAccessoryId);
+  }));
+  const useIntegratedGraphics = selection.useIntegratedGraphics;
+  const m2SlotSelection = selection.m2SlotSelection;
+  const m2SlotSelectionOk = m2SlotSelection === undefined || (Boolean(m2SlotSelection) && typeof m2SlotSelection === "object" && !Array.isArray(m2SlotSelection)
+    && Object.keys(m2SlotSelection as Record<string, unknown>).length <= BUILD_INPUT_MAX_M2_SLOTS
+    && Object.entries(m2SlotSelection as Record<string, unknown>).every(([slotId, partId]) => /^M2_[1-8]$/.test(slotId) && typeof partId === "string" && partId.trim().length > 0 && partId.length <= BUILD_INPUT_MAX_ID_LENGTH));
+  const flagsOk = (useIntegratedGraphics === undefined || typeof useIntegratedGraphics === "boolean")
+    && usableImportedOptionalId(selection.rgbControllerAccessoryId);
+  return singlesOk && listsOk && accessoriesOk && m2SlotSelectionOk && flagsOk;
+}
+
+function usableImportedVariantDraft(value: unknown, expectedPriority?: RecommendationPriority): value is BuildGenerationResult {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const draft = value as Record<string, unknown>;
+  if (!["compatible", "needs_review", "incompatible"].includes(String(draft.status))) return false;
+  if (typeof draft.profile !== "string" || !Object.prototype.hasOwnProperty.call(RECOMMENDATION_PROFILE_LABELS, draft.profile)) return false;
+  if (!isRecommendationPriority(draft.priority) || (expectedPriority !== undefined && draft.priority !== expectedPriority)) return false;
+  if (typeof draft.listingPolicy !== "string" || !Object.prototype.hasOwnProperty.call(LISTING_POLICY_LABELS, draft.listingPolicy)) return false;
+  if (!Number.isFinite(draft.totalPriceWon) || !Number.isFinite(draft.budgetWon) || !Number.isFinite(draft.budgetDeltaWon) || typeof draft.withinBudget !== "boolean" || typeof draft.priceComplete !== "boolean" || typeof draft.includeNonRetail !== "boolean") return false;
+  if (!Number.isInteger(draft.blockerCount) || Number(draft.blockerCount) < 0 || !Number.isInteger(draft.warningCount) || Number(draft.warningCount) < 0 || !Number.isInteger(draft.unknownCount) || Number(draft.unknownCount) < 0 || !Number.isInteger(draft.memoryCapacityGb) || Number(draft.memoryCapacityGb) < 0 || !Number.isInteger(draft.storageCapacityGb) || Number(draft.storageCapacityGb) < 0 || !Number.isInteger(draft.hddCount) || Number(draft.hddCount) < 0) return false;
+  if (!Array.isArray(draft.lines) || draft.lines.length === 0 || !Array.isArray(draft.warnings) || !draft.warnings.every((warning) => typeof warning === "string") || !Array.isArray(draft.rationale) || !draft.rationale.every((item) => typeof item === "string")) return false;
+  const lineCategories = draft.lines.map((line) => line && typeof line === "object" && !Array.isArray(line) ? (line as Record<string, unknown>).category : undefined);
+  if (new Set(lineCategories).size !== lineCategories.length) return false;
+  if (!draft.lines.every((line) => Boolean(line) && typeof line === "object" && !Array.isArray(line) && PART_CATEGORIES.includes((line as Record<string, unknown>).category as PartCategory) && typeof (line as Record<string, unknown>).partId === "string" && typeof (line as Record<string, unknown>).name === "string" && Number.isInteger((line as Record<string, unknown>).quantity) && Number((line as Record<string, unknown>).quantity) >= 0 && Number.isFinite((line as Record<string, unknown>).priceWon) && Number((line as Record<string, unknown>).priceWon) >= 0)) return false;
+  if (typeof draft.gamingResolution !== "string" || !Object.prototype.hasOwnProperty.call(GAMING_RESOLUTION_LABELS, draft.gamingResolution) || typeof draft.gamingRefreshRate !== "number" || !Object.prototype.hasOwnProperty.call(GAMING_REFRESH_RATE_LABELS, draft.gamingRefreshRate)) return false;
+  if (draft.performanceTier !== undefined && (typeof draft.performanceTier !== "string" || !Object.prototype.hasOwnProperty.call(RECOMMENDATION_PERFORMANCE_TIER_LABELS, draft.performanceTier))) return false;
+  if (!usableImportedBuildSelection(draft.selection)) return false;
+  if (draft.analysis !== undefined) {
+    const analysis = draft.analysis as Record<string, unknown>;
+    if (!analysis || typeof analysis !== "object" || !Array.isArray(analysis.focusAreas) || !Array.isArray(analysis.strengths) || !Array.isArray(analysis.bottlenecks) || !Array.isArray(analysis.nextActions) || typeof analysis.scoreLabel !== "string" || typeof analysis.confidence !== "string") return false;
+  }
+  return true;
+}
+
+export function generatorVariantsImportPreviewFor(value: unknown): { items?: GeneratorVariantImportPreviewItem[]; variants?: GeneratorVariantResult[]; error?: string } {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return { error: "JSON 객체 형식이 아닙니다." };
+  const record = value as Record<string, unknown>;
+  if (record.type !== GENERATOR_VARIANTS_EXPORT_TYPE || record.version !== GENERATOR_VARIANTS_EXPORT_VERSION || !Array.isArray(record.items)) return { error: "자동 구성 3안 비교 JSON 형식이 아닙니다." };
+  if (record.items.length < 1 || record.items.length > 3) return { error: "자동 구성 결과는 1개 이상 3개 이하만 가져올 수 있습니다." };
+  const priorities = ["balanced", "budget", "performance"] as const;
+  const items = record.items.flatMap((item): GeneratorVariantImportPreviewItem[] => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+    const candidate = item as Record<string, unknown>;
+    if (!priorities.includes(candidate.priority as typeof priorities[number]) || typeof candidate.label !== "string" || typeof candidate.status !== "string") return [];
+    const totalPriceWon = candidate.totalPriceWon === undefined ? undefined : typeof candidate.totalPriceWon === "number" && Number.isFinite(candidate.totalPriceWon) ? candidate.totalPriceWon : undefined;
+    const analysisScore = candidate.analysisScore === undefined ? undefined : typeof candidate.analysisScore === "number" && Number.isFinite(candidate.analysisScore) ? candidate.analysisScore : undefined;
+    const error = candidate.error === undefined ? undefined : typeof candidate.error === "string" ? candidate.error : undefined;
+    return [{ priority: candidate.priority as RecommendationPriority, label: candidate.label, status: candidate.status, ...(totalPriceWon !== undefined ? { totalPriceWon } : {}), ...(analysisScore !== undefined ? { analysisScore } : {}), ...(error ? { error } : {}) }];
+  });
+  if (items.length !== record.items.length || new Set(items.map((item) => item.priority)).size !== items.length) return { error: "자동 구성 JSON의 우선순위·상태를 확인할 수 없습니다." };
+  const variants = record.items.flatMap((item): GeneratorVariantResult[] => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+    const candidate = item as Record<string, unknown>;
+    const priority = priorities.includes(candidate.priority as typeof priorities[number]) ? candidate.priority as RecommendationPriority : undefined;
+    return priority && usableImportedVariantDraft(candidate.draft, priority) ? [{ priority, draft: candidate.draft }] : [];
+  });
+  return { items, ...(variants.length === record.items.length ? { variants } : {}) };
+}
+
 function generatedVariantConfigurationChangesText(draft: BuildGenerationResult, previousVariants: GeneratorVariantResult[], hasPreviousVariant: boolean) {
   if (!hasPreviousVariant) return "기준 구성";
   const currentSignature = generatedVariantSignature(draft);
@@ -965,7 +1166,62 @@ function GeneratorVariantTradeoffSummary({ variants }: { variants: GeneratorVari
   return <section className="generator-variant-tradeoff-summary" data-testid="generator-variant-tradeoff-summary" aria-label="자동 구성 비교 결과"><div className="generator-variant-tradeoff-heading"><div><p className="eyebrow">COMPARISON SUMMARY</p><strong>비교 결과</strong></div><span>{configurationCount}종 구성</span></div><div className="generator-variant-tradeoff-grid"><article><span>구성</span><strong>{configurationCount}종</strong><small>{configurationCount === 1 ? "세 안이 같은 부품 조합" : `${configurationCount}종 부품 구성을 비교`}</small></article><article><span>총액</span><strong>{priceText}</strong><small>{priceDelta === undefined || priceDelta === 0 ? "총액 차이 없음" : `가격 차이 ${formatWon(priceDelta)}`}</small></article><article><span>카탈로그 분석</span><strong>{analysisText}</strong><small>{analysisDelta === undefined || analysisDelta === 0 ? "분석 점수 차이 없음" : `점수 차이 ${analysisDelta}점${highestAnalysis ? ` · 최고 ${RECOMMENDATION_PRIORITY_LABELS[highestAnalysis.variant.priority]}` : ""}`}</small></article><article><span>부품 변경</span><strong>{changedCategories.length === 0 ? "없음" : `${changedCategories.length}개 항목`}</strong><small>{changedCategories.length === 0 ? "모든 안의 부품 동일" : changedCategories.map((category) => CATEGORY_LABELS[category]).join(" · ")}</small></article></div>{repeatedGroups.length > 0 && <p className="generator-variant-tradeoff-note"><FiInfo /> 같은 구성: {repeatedGroups.map((group) => group.join(" · ")).join(" / ")}</p>}</section>;
 }
 
-function GeneratorVariantsPanel({ variants, loading, onApply, onSave, onAdjustConditions }: { variants: GeneratorVariantResult[]; loading: boolean; onApply: (draft: BuildGenerationResult, checkNow: boolean) => Promise<void>; onSave?: (draft: BuildGenerationResult) => void; onAdjustConditions: () => void }) {
+function GeneratorVariantsPanel({ variants: sourceVariants, loading, onApply, onSave, onAdjustConditions, onCopy, onDownload }: { variants: GeneratorVariantResult[]; loading: boolean; onApply: (draft: BuildGenerationResult, checkNow: boolean) => Promise<void>; onSave?: (draft: BuildGenerationResult) => void; onAdjustConditions: () => void; onCopy: (variants: GeneratorVariantResult[]) => Promise<void>; onDownload: (variants: GeneratorVariantResult[]) => void }) {
+  const variantImportInputRef = useRef<HTMLInputElement | null>(null);
+  const [variantImportPreview, setVariantImportPreview] = useState<GeneratorVariantImportPreviewItem[] | null>(null);
+  const [variantImportCandidate, setVariantImportCandidate] = useState<GeneratorVariantResult[] | null>(null);
+  const [importedVariants, setImportedVariants] = useState<GeneratorVariantResult[] | null>(null);
+  const [variantImportError, setVariantImportError] = useState<string | null>(null);
+  const [localHistory, setLocalHistory] = useState<GeneratorVariantsLocalHistoryEntry[]>(() => typeof window === "undefined" ? [] : generatorVariantsLocalHistoryFromJson(window.localStorage.getItem(GENERATOR_VARIANTS_LOCAL_HISTORY_KEY)));
+  const [shareLink, setShareLink] = useState<GeneratorVariantsLocalShareEntry | null>(null);
+  const [shareError, setShareError] = useState<string | null>(null);
+  const [sharing, setSharing] = useState(false);
+  const [localShares, setLocalShares] = useState<GeneratorVariantsLocalShareEntry[]>(() => typeof window === "undefined" ? [] : generatorVariantsLocalSharesFromJson(window.localStorage.getItem(GENERATOR_VARIANTS_LOCAL_SHARES_STORAGE_KEY)));
+  const importedSourceVariantsRef = useRef<GeneratorVariantResult[] | null>(null);
+  const shareMutationRef = useRef(0);
+  const panelMountedRef = useRef(true);
+  useEffect(() => {
+    importedSourceVariantsRef.current = null;
+    setImportedVariants(null);
+    setVariantImportPreview(null);
+    setVariantImportCandidate(null);
+    setVariantImportError(null);
+    setShareLink(null);
+    setShareError(null);
+  }, [sourceVariants]);
+  useEffect(() => {
+    panelMountedRef.current = true;
+    return () => {
+      panelMountedRef.current = false;
+      shareMutationRef.current += 1;
+    };
+  }, []);
+  useEffect(() => {
+    try {
+      if (localHistory.length > 0) window.localStorage.setItem(GENERATOR_VARIANTS_LOCAL_HISTORY_KEY, generatorVariantsLocalHistoryToJson(localHistory));
+      else window.localStorage.removeItem(GENERATOR_VARIANTS_LOCAL_HISTORY_KEY);
+    } catch {
+      // A full local storage bucket must not block comparison results.
+    }
+  }, [localHistory]);
+  useEffect(() => {
+    try {
+      if (localShares.length > 0) window.localStorage.setItem(GENERATOR_VARIANTS_LOCAL_SHARES_STORAGE_KEY, generatorVariantsLocalSharesToJson(localShares));
+      else window.localStorage.removeItem(GENERATOR_VARIANTS_LOCAL_SHARES_STORAGE_KEY);
+    } catch {
+      // A full local storage bucket must not block comparison results.
+    }
+  }, [localShares]);
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === GENERATOR_VARIANTS_LOCAL_HISTORY_KEY) setLocalHistory(generatorVariantsLocalHistoryFromJson(event.newValue));
+      if (event.key === GENERATOR_VARIANTS_LOCAL_SHARES_STORAGE_KEY) setLocalShares(generatorVariantsLocalSharesFromJson(event.newValue));
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+  const importedViewActive = importedVariants !== null && importedSourceVariantsRef.current === sourceVariants;
+  const variants = importedViewActive && importedVariants ? importedVariants : sourceVariants;
   const readyVariants = variants.filter((variant): variant is GeneratorVariantResult & { draft: BuildGenerationResult } => Boolean(variant.draft));
   const uniqueConfigurationCount = new Set(readyVariants.map((variant) => generatedVariantSignature(variant.draft))).size;
   const sameConfigurationNotice = readyVariants.length > 1 && uniqueConfigurationCount === 1;
@@ -987,12 +1243,140 @@ function GeneratorVariantsPanel({ variants, loading, onApply, onSave, onAdjustCo
     { label: "확인 필요", values: variants.map((variant) => variant.draft ? `${variant.draft.unknownCount}개` : "-") },
     ...PART_CATEGORIES.map((category) => ({ label: CATEGORY_LABELS[category], values: variants.map((variant) => variant.draft ? generatedVariantLineText(variant.draft, category) : "-") }))
   ];
+  async function importVariantJson(file: File | undefined) {
+    if (!file) return;
+    setVariantImportError(null);
+    setVariantImportPreview(null);
+    setVariantImportCandidate(null);
+    if (file.size > LOCAL_IMPORT_MAX_BYTES) {
+      setVariantImportError("JSON 파일은 1MB 이하만 가져올 수 있습니다.");
+      return;
+    }
+    try {
+      const parsed = generatorVariantsImportPreviewFor(JSON.parse(await file.text()));
+      if (parsed.error || !parsed.items) {
+        setVariantImportError(parsed.error ?? "자동 구성 결과를 읽지 못했습니다.");
+        return;
+      }
+      setVariantImportPreview(parsed.items);
+      setVariantImportCandidate(parsed.variants ?? null);
+    } catch {
+      setVariantImportError("JSON 파일을 읽지 못했습니다.");
+    }
+  }
+  function applyImportedVariants() {
+    if (!variantImportCandidate) return;
+    importedSourceVariantsRef.current = sourceVariants;
+    setImportedVariants(variantImportCandidate);
+    setVariantImportPreview(null);
+    setVariantImportCandidate(null);
+    setVariantImportError(null);
+  }
+  function returnToCurrentVariants() {
+    importedSourceVariantsRef.current = null;
+    setImportedVariants(null);
+  }
+  function adjustConditionsFromImportedVariants() {
+    importedSourceVariantsRef.current = null;
+    setImportedVariants(null);
+    setVariantImportPreview(null);
+    setVariantImportCandidate(null);
+    onAdjustConditions();
+  }
+  function saveVariantsToLocalHistory() {
+    const createdAt = new Date().toISOString();
+    const entry: GeneratorVariantsLocalHistoryEntry = {
+      id: `generator-variants-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      name: `자동 구성 3안 · ${new Date(createdAt).toLocaleString("ko-KR", { dateStyle: "short", timeStyle: "short" })}`,
+      createdAt,
+      payload: generatorVariantsJsonFor(variants)
+    };
+    setLocalHistory((current) => generatorVariantsLocalHistoryRemember(current, entry));
+  }
+  function openLocalHistoryEntry(entry: GeneratorVariantsLocalHistoryEntry) {
+    try {
+      const parsed = generatorVariantsImportPreviewFor(JSON.parse(entry.payload));
+      if (parsed.error || !parsed.items) {
+        setVariantImportError(parsed.error ?? "저장한 비교 결과를 읽지 못했습니다.");
+        return;
+      }
+      setVariantImportError(null);
+      setVariantImportPreview(parsed.items);
+      setVariantImportCandidate(parsed.variants ?? null);
+    } catch {
+      setVariantImportError("저장한 비교 결과를 읽지 못했습니다.");
+    }
+  }
+  function removeLocalHistoryEntry(id: string) {
+    setLocalHistory((current) => generatorVariantsLocalHistoryRemove(current, id));
+  }
+  async function shareVariants() {
+    if (sharing) return;
+    if (readyVariants.length === 0) {
+      setShareError("공유할 수 있는 완성된 구성이 없습니다.");
+      return;
+    }
+    const requestVersion = ++shareMutationRef.current;
+    const isCurrent = () => panelMountedRef.current && shareMutationRef.current === requestVersion;
+    setSharing(true);
+    setShareError(null);
+    try {
+      const saved = await api<GeneratorVariantsShareSnapshot & { ownerToken: string }>("/api/generator-variants", {
+        method: "POST",
+        body: JSON.stringify({ name: "PC Supporter 자동 구성 3안 비교", payload: JSON.parse(generatorVariantsJsonFor(variants)), ...(generatorVariantsRequestFor(variants) ? { request: generatorVariantsRequestFor(variants) } : {}), expiresInDays: 30 }),
+        retry: 0
+      });
+      if (!isCurrent()) return;
+      const entry: GeneratorVariantsLocalShareEntry = { id: saved.id, url: `${window.location.origin}/generator-variants/${saved.id}`, name: saved.name, createdAt: saved.createdAt, ...(saved.expiresAt ? { expiresAt: saved.expiresAt } : {}), ownerToken: saved.ownerToken };
+      setLocalShares((current) => generatorVariantsLocalShareRemember(current, entry));
+      setShareLink(entry);
+      try {
+        await navigator.clipboard.writeText(entry.url);
+      } catch {
+        // The visible link remains available when clipboard permission is unavailable.
+      }
+    } catch (error: unknown) {
+      if (isCurrent()) setShareError(error instanceof Error ? error.message : "자동 구성 비교 공유 링크를 만들지 못했습니다.");
+    } finally {
+      if (isCurrent()) setSharing(false);
+    }
+  }
+  async function revokeSharedVariants(entry: GeneratorVariantsLocalShareEntry) {
+    if (sharing || !window.confirm("이 자동 구성 비교 공유 링크를 취소할까요? 전달된 링크도 더 이상 열리지 않습니다.")) return;
+    const requestVersion = ++shareMutationRef.current;
+    const isCurrent = () => panelMountedRef.current && shareMutationRef.current === requestVersion;
+    setSharing(true);
+    setShareError(null);
+    try {
+      await api(`/api/generator-variants/${encodeURIComponent(entry.id)}`, { method: "DELETE", headers: { "X-Share-Owner-Token": entry.ownerToken ?? "" }, retry: 0 });
+      if (!isCurrent()) return;
+      setLocalShares((current) => generatorVariantsLocalShareRemove(current, entry.id));
+      setShareLink((current) => current?.id === entry.id ? null : current);
+    } catch (error: unknown) {
+      if (!isCurrent()) return;
+      if (error instanceof ApiError && error.status === 404) {
+        setLocalShares((current) => generatorVariantsLocalShareRemove(current, entry.id));
+        setShareLink((current) => current?.id === entry.id ? null : current);
+        return;
+      }
+      setShareError(error instanceof Error ? error.message : "자동 구성 비교 공유 링크를 취소하지 못했습니다.");
+    } finally {
+      if (isCurrent()) setSharing(false);
+    }
+  }
   return <section className="generator-variants" aria-label="자동 구성 추천안 비교">
-    <div className="generator-variants-heading"><div><p className="eyebrow">RECOMMENDATION OPTIONS</p><h2>자동 구성 3안 비교</h2><p>같은 사용 목적·예산·저장 조건으로 우선순위만 바꿔 세 가지 구성을 비교합니다.</p></div><span><FiLayers /> {readyVariants.length} / {variants.length}개 생성 · 구성 {uniqueConfigurationCount}종</span></div>
+    <div className="generator-variants-heading"><div><p className="eyebrow">RECOMMENDATION OPTIONS</p><h2>자동 구성 3안 비교</h2><p>같은 사용 목적·예산·저장 조건으로 우선순위만 바꿔 세 가지 구성을 비교합니다.</p></div><div className="generator-variants-heading-actions"><span><FiLayers /> {readyVariants.length} / {variants.length}{importedViewActive ? "개 가져옴" : "개 생성"} · 구성 {uniqueConfigurationCount}종</span><div className="generator-variants-export-actions"><button className="text-button" type="button" data-testid="generator-variants-copy" onClick={() => void onCopy(variants)}><FiCopy /> 비교 복사</button><button className="text-button" type="button" data-testid="generator-variants-json" onClick={() => onDownload(variants)}><FiDownload /> JSON 저장</button><button className="text-button" type="button" data-testid="generator-variants-save-history" onClick={saveVariantsToLocalHistory}><FiSave /> 비교 저장</button><input ref={variantImportInputRef} className="generator-saved-preset-file" type="file" accept=".json,application/json" aria-label="자동 구성 3안 비교 JSON 가져오기" onChange={(event) => { void importVariantJson(event.target.files?.[0]); event.currentTarget.value = ""; }} disabled={loading} /><button className="text-button" type="button" data-testid="generator-variants-import" onClick={() => variantImportInputRef.current?.click()} disabled={loading}><FiUpload /> JSON 가져오기</button></div></div></div>
+    <div className="generator-variants-share-actions"><button className="text-button" type="button" data-testid="generator-variants-share" onClick={() => void shareVariants()} disabled={loading || sharing || readyVariants.length === 0}><FiShare2 /> {sharing ? "공유 처리 중..." : shareLink ? "링크 다시 만들기" : "공유 링크"}</button>{shareError && <span className="generator-variants-share-error" role="status">{shareError}</span>}</div>
+    {shareLink && <div className="generator-variants-share-preview" role="status" data-testid="generator-variants-share-preview"><label><span>공유 링크{shareLink.expiresAt ? ` · ${new Date(shareLink.expiresAt).toLocaleString("ko-KR")} 만료` : ""}</span><input aria-label="자동 구성 3안 비교 공유 링크" type="text" value={shareLink.url} readOnly onFocus={(event) => event.currentTarget.select()} /></label><div><a className="text-button" href={shareLink.url}><FiShare2 /> 열기</a><button className="text-button danger-text-button" type="button" data-testid="generator-variants-share-revoke-current" onClick={() => void revokeSharedVariants(shareLink)} disabled={sharing}><FiTrash2 /> 공유 취소</button></div></div>}
+    {localShares.length > 0 && <details className="generator-variants-local-history" data-testid="generator-variants-local-shares"><summary><span>공유한 비교 링크</span><small>{localShares.length}개</small><FiChevronDown /></summary><div>{localShares.map((entry) => { const expired = generatorVariantsLocalShareExpired(entry); return <article key={entry.id}><div><strong>{entry.name}</strong><small>{new Date(entry.createdAt).toLocaleString("ko-KR")}{entry.expiresAt ? ` · ${expired ? "만료됨" : `${new Date(entry.expiresAt).toLocaleString("ko-KR")} 만료`}` : " · 무기한"}</small></div><div>{!expired && <a className="text-button" href={entry.url} data-testid={`generator-variants-share-open-${entry.id}`}>열기</a>}<button className="text-button danger-text-button" type="button" data-testid={`generator-variants-share-revoke-${entry.id}`} onClick={() => void revokeSharedVariants(entry)} disabled={sharing}><FiTrash2 /> 공유 취소</button></div></article>; })}</div></details>}
+    {localHistory.length > 0 && <details className="generator-variants-local-history" data-testid="generator-variants-local-history"><summary><span>최근 비교 이력</span><small>{localHistory.length}개 저장</small><FiChevronDown /></summary><div>{localHistory.map((entry) => <article key={entry.id}><div><strong>{entry.name}</strong><small>{new Date(entry.createdAt).toLocaleString("ko-KR")}</small></div><div><button className="text-button" type="button" data-testid={`generator-variants-history-open-${entry.id}`} onClick={() => openLocalHistoryEntry(entry)}>불러오기</button><button className="text-button danger-text-button" type="button" data-testid={`generator-variants-history-delete-${entry.id}`} onClick={() => removeLocalHistoryEntry(entry.id)}><FiTrash2 /> 삭제</button></div></article>)}</div></details>}
+    {variantImportError && <div className="generator-variant-errors" data-testid="generator-variant-import-error" role="status"><FiAlertTriangle /><div><strong>가져온 비교 결과를 확인하지 못했습니다.</strong><p>{variantImportError}</p></div></div>}
+    {variantImportPreview && <section className="generator-preset-import-preview" data-testid="generator-variant-import-preview" aria-label="자동 구성 비교 JSON 미리보기"><div><strong>가져온 비교 결과</strong><span>{variantImportPreview.length}개 구성</span></div><ul>{variantImportPreview.map((item) => <li key={item.priority}>{item.label} · {item.status}{item.totalPriceWon !== undefined ? ` · ${formatWon(item.totalPriceWon)}` : ""}{item.analysisScore !== undefined ? ` · 분석 ${item.analysisScore}점` : ""}{item.error ? ` · ${item.error}` : ""}</li>)}</ul><p><FiInfo /> {variantImportCandidate ? "현재 생성 결과는 바꾸지 않았습니다. 적용하면 가져온 결과를 읽기 전용 비교 상태로 엽니다." : "가져온 파일에 편집기로 가져갈 수 있는 구성 데이터가 없어 미리보기만 표시합니다."}</p><div><button className="text-button" type="button" data-testid="generator-variants-close-import" onClick={() => { setVariantImportPreview(null); setVariantImportCandidate(null); }}>닫기</button>{variantImportCandidate && <button className="button button-primary" type="button" data-testid="generator-variants-apply-import" onClick={applyImportedVariants}>가져온 결과로 비교</button>}</div></section>}
+    {importedViewActive && <div className="generator-variant-equivalence" data-testid="generator-variants-imported-state"><FiInfo /><div><strong>가져온 비교 결과를 보고 있습니다.</strong><p>현재 생성 결과는 유지되고, 가져온 JSON의 비교 상태를 읽기 전용으로 표시합니다.</p><button className="text-button generator-variant-equivalence-action" type="button" data-testid="generator-variants-return-current" onClick={returnToCurrentVariants}>현재 생성 결과로 돌아가기</button></div></div>}
     {variants.some((variant) => variant.error) && <div className="generator-variant-errors" role="status"><FiAlertTriangle /><div><strong>일부 기준은 구성을 만들지 못했습니다.</strong>{variants.filter((variant) => variant.error).map((variant) => <p key={variant.priority}>{RECOMMENDATION_PRIORITY_LABELS[variant.priority]} · {variant.error}</p>)}</div></div>}
     {variants.some((variant) => variant.diagnostics && variant.diagnostics.length > 0) && <div className="generator-variant-diagnostics"><strong><FiInfo /> 실패한 기준의 실제 정보</strong>{variants.filter((variant) => variant.diagnostics && variant.diagnostics.length > 0).map((variant) => <article key={variant.priority}><b>{RECOMMENDATION_PRIORITY_LABELS[variant.priority]}</b>{variant.diagnostics!.slice(0, 1).map((diagnostic) => <div key={diagnostic.id}><strong>{diagnostic.title}</strong><p>{diagnostic.summary}</p>{diagnostic.facts.slice(0, 4).map((fact) => <span key={`${diagnostic.id}-${fact.label}`}>{fact.label} {fact.value}</span>)}</div>)}</article>)}</div>}
     {readyVariants.length > 0 && <>
-      {sameConfigurationNotice && <div className="generator-variant-equivalence" data-testid="generator-variant-equivalence-notice"><FiInfo /><div><strong>현재 조건에서는 세 안이 같은 구성입니다.</strong><p>세 안 모두 같은 부품 조합으로 생성됐습니다. 현재 카탈로그에서는 우선순위에 따른 차이가 생기지 않았습니다.</p><small>예산·성능 기준·RAM·저장장치 조건을 바꾸면 다른 구성이 나올 수 있습니다.</small><button className="text-button generator-variant-equivalence-action" type="button" data-testid="generator-variant-adjust-conditions" onClick={onAdjustConditions}>조건 다시 조정</button></div></div>}
+      {sameConfigurationNotice && <div className="generator-variant-equivalence" data-testid="generator-variant-equivalence-notice"><FiInfo /><div><strong>현재 조건에서는 세 안이 같은 구성입니다.</strong><p>세 안 모두 같은 부품 조합으로 생성됐습니다. 현재 카탈로그에서는 우선순위에 따른 차이가 생기지 않았습니다.</p><small>예산·성능 기준·RAM·저장장치 조건을 바꾸면 다른 구성이 나올 수 있습니다.</small><button className="text-button generator-variant-equivalence-action" type="button" data-testid="generator-variant-adjust-conditions" onClick={adjustConditionsFromImportedVariants}>조건 다시 조정</button></div></div>}
       <GeneratorVariantTradeoffSummary variants={variants} />
       <GeneratorDecisionSummary variants={variants} loading={loading} />
       <div className="generator-variants-table-wrap"><table><caption>우선순위별 자동 구성 비교표</caption><thead><tr><th scope="col">비교 항목</th>{variants.map((variant) => <th scope="col" key={variant.priority}>{RECOMMENDATION_PRIORITY_LABELS[variant.priority]}</th>)}</tr></thead><tbody>{rows.map((row) => <tr key={row.label}><th scope="row">{row.label}</th>{row.values.map((value, index) => <td key={`${row.label}-${variants[index].priority}`}>{value}</td>)}</tr>)}</tbody></table></div>

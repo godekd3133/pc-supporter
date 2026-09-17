@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS saved_builds (
   purchase_progress JSONB,
   purchase_price_history JSONB,
   decision_note TEXT,
+  origin JSONB,
   metadata_history JSONB
 );
 
@@ -53,6 +54,7 @@ ALTER TABLE saved_builds ADD COLUMN IF NOT EXISTS monitor_state JSONB;
 ALTER TABLE saved_builds ADD COLUMN IF NOT EXISTS purchase_progress JSONB;
 ALTER TABLE saved_builds ADD COLUMN IF NOT EXISTS purchase_price_history JSONB;
 ALTER TABLE saved_builds ADD COLUMN IF NOT EXISTS decision_note TEXT;
+ALTER TABLE saved_builds ADD COLUMN IF NOT EXISTS origin JSONB;
 ALTER TABLE saved_builds ADD COLUMN IF NOT EXISTS metadata_history JSONB;
 
 CREATE TABLE IF NOT EXISTS saved_build_version_backups (
