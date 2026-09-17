@@ -29,6 +29,7 @@ import type {
   PciePowerConnectorKind,
   PciePowerRequirement,
   RecommendationPlan,
+  RecommendationPerformanceTier,
   RecommendationProfile,
   RecommendationPreferences,
   RecommendationPriority,
@@ -4615,6 +4616,21 @@ const GENERATOR_REQUIRED_FIELDS: Partial<Record<PartCategory, string[]>> = {
   psu: ["wattageW"]
 };
 
+// Direct performance-tier requests narrow the candidate pools first: GPUs use a
+// VRAM floor (the only performance dimension populated across the catalog) and
+// CPUs use a relative capability-score floor. When nothing meets the bar the
+// original pool is kept so generation still succeeds below the requested tier.
+const GENERATOR_PERFORMANCE_TIER_GPU_MIN_VRAM_GB: Record<RecommendationPerformanceTier, number> = {
+  entry: 0,
+  high: 12,
+  top: 20
+};
+const GENERATOR_PERFORMANCE_TIER_CPU_MIN_SCORE: Record<RecommendationPerformanceTier, number> = {
+  entry: 0,
+  high: 35,
+  top: 55
+};
+
 const GENERATOR_CATEGORY_WEIGHTS: Record<RecommendationProfile, Partial<Record<PartCategory, number>>> = {
   general: { cpu: 3, gpu: 4, motherboard: 2, memory: 2, ssd: 2, cooler: 1, case: 1, psu: 1 },
   gaming: { cpu: 4, gpu: 7, motherboard: 1, memory: 3, ssd: 1, cooler: 1, case: 1, psu: 1 },
@@ -5208,6 +5224,18 @@ function preferBudgetCandidates(parts: Part[], budgetWon: number, share: number,
   return budgetCandidates.length > 0 ? budgetCandidates : parts;
 }
 
+function filterGeneratorPoolByMinScore<T extends { parts: Part[]; scores: Map<string, number> }>(pool: T, minScore: number): T {
+  if (minScore <= 0) return pool;
+  const parts = pool.parts.filter((part) => (pool.scores.get(part.id) ?? 0) >= minScore);
+  return parts.length > 0 ? { ...pool, parts } : pool;
+}
+
+function filterGeneratorGpuPoolByMinVram<T extends { parts: Part[] }>(pool: T, minVramGb: number): T {
+  if (minVramGb <= 0) return pool;
+  const parts = pool.parts.filter((part) => typeof part.specs.vramGb === "number" && part.specs.vramGb >= minVramGb);
+  return parts.length > 0 ? { ...pool, parts } : pool;
+}
+
 function preferRequestedCapacity(parts: Part[], requestedCapacityGb: number, maximumMultiplier = 2) {
   const nearCandidates = parts.filter((part) => part.specs.capacityGb !== undefined && part.specs.capacityGb <= requestedCapacityGb * maximumMultiplier);
   return nearCandidates.length > 0 ? nearCandidates : parts;
@@ -5333,7 +5361,11 @@ export function generateBuildDraft(catalog: Part[], request: BuildGenerationRequ
   if (!Number.isInteger(storageCapacityGb) || storageCapacityGb <= 0 || !Number.isInteger(hddCount) || hddCount < 0 || hddCount > 8 || !Number.isInteger(hddCapacityGb) || hddCapacityGb <= 0) {
     throw new Error("저장장치 용량과 HDD 개수는 올바른 정수여야 합니다.");
   }
-  const cpuPool = generatorCandidatePool(catalog, "cpu", profile, request.includeGpu ? undefined : (part) => part.specs.integratedGraphics === true, listingPolicy, gamingResolution, gamingRefreshRate);
+  const performanceTier = request.performanceTier === "entry" || request.performanceTier === "high" || request.performanceTier === "top" ? request.performanceTier : undefined;
+  const cpuPool = filterGeneratorPoolByMinScore(
+    generatorCandidatePool(catalog, "cpu", profile, request.includeGpu ? undefined : (part) => part.specs.integratedGraphics === true, listingPolicy, gamingResolution, gamingRefreshRate),
+    performanceTier ? GENERATOR_PERFORMANCE_TIER_CPU_MIN_SCORE[performanceTier] : 0
+  );
   const motherboardPool = generatorCandidatePool(catalog, "motherboard", profile, undefined, listingPolicy, gamingResolution, gamingRefreshRate);
   const memoryPool = generatorMemoryPool(catalog, profile, memoryCapacityGb, listingPolicy, gamingResolution, gamingRefreshRate);
   const coolerPool = generatorCandidatePool(catalog, "cooler", profile, undefined, listingPolicy, gamingResolution, gamingRefreshRate);
@@ -5341,7 +5373,12 @@ export function generateBuildDraft(catalog: Part[], request: BuildGenerationRequ
   const ssdPool = generatorStoragePool(catalog, "ssd", profile, storageCapacityGb, listingPolicy, gamingResolution, gamingRefreshRate);
   const hddPool = hddCount > 0 ? generatorStoragePool(catalog, "hdd", profile, hddCapacityGb, listingPolicy, gamingResolution, gamingRefreshRate) : undefined;
   const psuPool = generatorCandidatePool(catalog, "psu", profile, undefined, listingPolicy, gamingResolution, gamingRefreshRate);
-  const gpuPool = request.includeGpu ? generatorCandidatePool(catalog, "gpu", profile, undefined, listingPolicy, gamingResolution, gamingRefreshRate, GENERATOR_REQUIRED_FIELDS.gpu ?? [], false, gamingAdvisoryTuning) : undefined;
+  const gpuPool = request.includeGpu
+    ? filterGeneratorGpuPoolByMinVram(
+        generatorCandidatePool(catalog, "gpu", profile, undefined, listingPolicy, gamingResolution, gamingRefreshRate, GENERATOR_REQUIRED_FIELDS.gpu ?? [], false, gamingAdvisoryTuning),
+        performanceTier ? GENERATOR_PERFORMANCE_TIER_GPU_MIN_VRAM_GB[performanceTier] : 0
+      )
+    : undefined;
   const missingPools = [
     ["CPU", cpuPool.parts.length],
     ["메인보드", motherboardPool.parts.length],
@@ -5550,7 +5587,7 @@ export function generateBuildDraft(catalog: Part[], request: BuildGenerationRequ
     recommendationPreferences: {
       profile,
       priority,
-      ...(request.performanceTier ? { performanceTier: request.performanceTier } : {}),
+      ...(performanceTier ? { performanceTier } : {}),
       gamingResolution,
       gamingRefreshRate,
       ...(request.gamingGameIds?.length ? { gamingGameIds: request.gamingGameIds.slice(0, 5) } : {}),
@@ -5562,6 +5599,11 @@ export function generateBuildDraft(catalog: Part[], request: BuildGenerationRequ
     }
   });
   const totalPriceWon = chosen.state.priceWon;
+  const tierMinGpuVramGb = performanceTier ? GENERATOR_PERFORMANCE_TIER_GPU_MIN_VRAM_GB[performanceTier] : 0;
+  const chosenGpuVramGb = chosen.state.parts.gpu?.specs.vramGb;
+  const tierGpuUnmet = performanceTier !== undefined && request.includeGpu && tierMinGpuVramGb > 0 && (chosenGpuVramGb === undefined || chosenGpuVramGb < tierMinGpuVramGb);
+  const tierMinCpuScore = performanceTier ? GENERATOR_PERFORMANCE_TIER_CPU_MIN_SCORE[performanceTier] : 0;
+  const tierCpuUnmet = performanceTier !== undefined && tierMinCpuScore > 0 && chosen.state.parts.cpu !== undefined && (cpuPool.scores.get(chosen.state.parts.cpu.id) ?? 0) < tierMinCpuScore;
   const budgetDeltaWon = totalPriceWon - request.budgetWon;
   const withinBudget = budgetDeltaWon <= 0;
   const gpuTarget = profile === "gaming" && request.includeGpu && chosen.state.parts.gpu
@@ -5596,6 +5638,8 @@ export function generateBuildDraft(catalog: Part[], request: BuildGenerationRequ
   if (gpuTarget?.currentFit === "partial") warnings.unshift(`${gpuTarget.summary}. 목표 해상도에 맞는 VRAM이 부족할 수 있습니다.`);
   if (gpuTarget?.currentFit === "unknown") warnings.unshift(`${gpuTarget.summary}. GPU VRAM을 제조사 페이지에서 확인해 주세요.`);
   if (!withinBudget) warnings.unshift(`목표 예산을 ${formatPrice(Math.abs(budgetDeltaWon))} 초과합니다.`);
+  if (tierGpuUnmet) warnings.push(`선택한 ${RECOMMENDATION_PERFORMANCE_TIER_LABELS[performanceTier]} 조건의 GPU 기준(VRAM ${tierMinGpuVramGb}GB 이상)을 예산·카탈로그 안에서 충족하지 못해 낮은 등급으로 구성했습니다.`);
+  if (tierCpuUnmet) warnings.push(`선택한 ${RECOMMENDATION_PERFORMANCE_TIER_LABELS[performanceTier]} 조건의 CPU 성능 기준을 예산·카탈로그 안에서 충족하지 못해 낮은 등급으로 구성했습니다.`);
   if (hasGamingOptionAdvisory) {
     if (gamingEvidenceStatus === "verified") {
       warnings.unshift("연결된 자료는 선택 GPU·조건의 평균 FPS 기준을 충족하지만, 실제 환경·게임 패치·온도까지 보장하지는 않습니다.");
@@ -5612,7 +5656,7 @@ export function generateBuildDraft(catalog: Part[], request: BuildGenerationRequ
     selection: chosen.state.selection,
     profile,
     priority,
-    ...(request.performanceTier ? { performanceTier: request.performanceTier } : {}),
+    ...(performanceTier ? { performanceTier } : {}),
     gamingResolution,
     gamingRefreshRate,
     ...(request.gamingGameIds?.length ? { gamingGameIds: request.gamingGameIds.slice(0, 5) } : {}),
@@ -5643,7 +5687,9 @@ export function generateBuildDraft(catalog: Part[], request: BuildGenerationRequ
       priority === "reliability"
         ? `${RECOMMENDATION_PRIORITY_LABELS[priority]} 기준으로 호환 결과·데이터 상태·갱신 시점·실제 페이지 연결이 확인된 부품을 먼저 정렬했습니다.`
         : `${RECOMMENDATION_PRIORITY_LABELS[priority]} 기준으로 예산·부품 성능 점수를 정렬했습니다.`,
-      ...(request.performanceTier ? [`${RECOMMENDATION_PERFORMANCE_TIER_LABELS[request.performanceTier]} 조건을 직접 선택한 요청으로, 성능 우선순위와 RAM·저장공간·GPU 포함 조건에 반영했습니다.`] : []),
+      ...(performanceTier ? [GENERATOR_PERFORMANCE_TIER_GPU_MIN_VRAM_GB[performanceTier] > 0 || GENERATOR_PERFORMANCE_TIER_CPU_MIN_SCORE[performanceTier] > 0
+        ? `${RECOMMENDATION_PERFORMANCE_TIER_LABELS[performanceTier]} 조건을 직접 선택한 요청으로, GPU VRAM ${GENERATOR_PERFORMANCE_TIER_GPU_MIN_VRAM_GB[performanceTier]}GB 이상·CPU 상위 성능 점수 기준으로 후보를 먼저 좁힌 뒤 예산·호환성을 적용했습니다.`
+        : `${RECOMMENDATION_PERFORMANCE_TIER_LABELS[performanceTier]} 조건을 직접 선택한 요청으로, 예산 안에서 성능 점수가 높은 부품을 우선 정렬했습니다.`] : []),
       request.includeGpu ? "외장 그래픽카드를 포함한 구성입니다." : "CPU 내장 그래픽을 사용하는 구성입니다.",
       request.includeGpu && profile === "gaming"
         ? `${GAMING_RESOLUTION_LABELS[gamingResolution]} · ${GAMING_REFRESH_RATE_LABELS[gamingRefreshRate]} 기준으로 권장 VRAM ${gamingAdvisoryTuning?.targetVramGb ?? GAMING_RESOLUTION_VRAM_TARGETS[gamingResolution]}GB와 GPU·CPU 처리 스펙을 더 중요하게 반영했습니다.`

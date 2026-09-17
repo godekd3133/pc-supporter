@@ -3549,7 +3549,42 @@ describe("compatibility engine", () => {
       storageCapacityGb: 1000
     });
     expect(draft.performanceTier).toBe("top");
-    expect(draft.rationale.some((item) => item.includes("최상급 성능") && item.includes("GPU 포함 조건"))).toBe(true);
+    expect(draft.rationale.some((item) => item.includes("최상급 성능") && item.includes("후보를 먼저 좁힌"))).toBe(true);
+  });
+
+  it("narrows GPU candidates by the direct performance tier VRAM floor", () => {
+    const baseGpu = seedCatalog.find((part) => part.id === "gpu-rtx-4060")!;
+    const lowVramGpu: Part = { ...baseGpu, id: "gpu-tier-low", name: "테스트 하위 등급 GPU", specs: { ...baseGpu.specs, vramGb: 8 } };
+    const highVramGpu: Part = { ...baseGpu, id: "gpu-tier-high", name: "테스트 최상급 GPU", specs: { ...baseGpu.specs, vramGb: 24 } };
+    const catalog = seedCatalog.filter((part) => part.category !== "gpu").concat(lowVramGpu, highVramGpu);
+    const draft = generateBuildDraft(catalog, {
+      profile: "general",
+      priority: "performance",
+      performanceTier: "top",
+      budgetWon: 6_000_000,
+      includeGpu: true,
+      memoryCapacityGb: 32,
+      storageCapacityGb: 1000
+    });
+    expect(draft.lines.find((line) => line.category === "gpu")?.partId).toBe("gpu-tier-high");
+    expect(draft.warnings.some((warning) => warning.includes("VRAM 20GB 이상"))).toBe(false);
+  });
+
+  it("warns when the requested tier cannot be met inside the catalog", () => {
+    const baseGpu = seedCatalog.find((part) => part.id === "gpu-rtx-4060")!;
+    const lowVramGpu: Part = { ...baseGpu, id: "gpu-tier-low", name: "테스트 하위 등급 GPU", specs: { ...baseGpu.specs, vramGb: 8 } };
+    const catalog = seedCatalog.filter((part) => part.category !== "gpu").concat(lowVramGpu);
+    const draft = generateBuildDraft(catalog, {
+      profile: "general",
+      priority: "performance",
+      performanceTier: "top",
+      budgetWon: 6_000_000,
+      includeGpu: true,
+      memoryCapacityGb: 32,
+      storageCapacityGb: 1000
+    });
+    expect(draft.lines.find((line) => line.category === "gpu")?.partId).toBe("gpu-tier-low");
+    expect(draft.warnings.some((warning) => warning.includes("VRAM 20GB 이상") && warning.includes("낮은 등급으로 구성"))).toBe(true);
   });
 
   it("marks a compatible automatic gaming draft when its GPU misses the selected VRAM target", () => {
