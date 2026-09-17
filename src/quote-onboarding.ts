@@ -557,12 +557,13 @@ export function recommendParamsFor(state: OnboardingState): RecommendParams {
       gamingGraphicsPreset: state.graphicsPreset,
       gamingRayTracing: state.rayTracing,
       gamingUpscaling: state.upscaling,
-      memoryCapacityGb: budgetEstimateFor(state.budgetWon, "gaming").memory === "64GB" ? 64 : 32,
+      // 64GB는 3.8M 최상위 게이밍 티어에서만 나온다 — 표시 라벨을 역산하지 않고 티어 경계를 직접 둔다.
+      memoryCapacityGb: state.budgetWon >= 3_800_000 ? 64 : 32,
       storageCapacityGb: state.budgetWon >= 3_000_000 ? 2000 : 1000
     };
   }
   if (state.usecase === "work") {
-    const work = primaryWorkFor(state.works) ?? ONBOARDING_WORKS[3];
+    const work = primaryWorkFor(state.works) ?? ONBOARDING_WORKS.find((option) => option.id === "office") ?? ONBOARDING_WORKS[0];
     const intensity = intensityOptionFor(state.intensity);
     return {
       profile: work.profile,

@@ -420,6 +420,13 @@ No actionable P0, P1, or P2 visual findings remain for the requested redesign. T
 - lazy 홈 fallback이 실제 화면으로 교체되기 전 성급히 검사하던 smoke 관찰 경계를 guided entry DOM 대기로 고쳤다. 데스크톱과 390px 모바일에서 같은 홈→온보딩 진입 계약을 확인한다.
 - 검증: `npm run test:browser:quote-onboarding` 데스크톱·390px 모바일 통과, `npm run test:browser` 전체 브라우저 smoke 통과, `npm run typecheck` 통과. 전체 테스트도 `252개 파일 / 1,348개 테스트` 통과, production build도 `192,481`바이트 엔트리로 `600,000`바이트 게이트 이내 통과했으며 `git diff --check`도 통과했다.
 
+## 2026-09-17 lobby-tone-and-ui pass
+
+- 기존 견적이 있는 메인 로비의 hero·검사 미리보기·알림·이어서 보기·데이터 신뢰도·로컬 목록·모바일 상태 문구를 온보딩과 같은 해요체·안내형 말투로 정리했다.
+- Desktop hero는 `고른 부품이 서로 잘 맞는지 같이 확인해볼까요?`, preview는 `확인이 필요한 부품이 있어요`, 모바일은 `지금 구성, 같이 확인해볼까요?`처럼 사용자가 다음에 할 일을 바로 이해하도록 바꿨다.
+- 기능이나 route는 바꾸지 않고 로비 UI의 제목·설명·상태 라벨·CTA만 조정했으며, CUA 연결 화면에서 실제 hero·preview·알림·이어서 보기 카피 변화를 확인했다.
+- 검증: `npm run test:browser:quote-onboarding` 데스크톱·390px 모바일 통과, `npm run test:browser` 전체 브라우저 smoke 통과, `npm run typecheck` 통과. 전체 테스트와 production build는 이 코드 변경 후 다음 전체 검증에서 다시 확인한다.
+
 ## 2026-09-17 first-user-secondary-entry pass
 
 - 부품 미선택 첫 사용자 홈의 보조 CTA가 고급 `/recommend` 화면을 바로 여는 `조건으로 자동 구성`에서 `부품을 직접 선택하기`로 바뀌었다.
@@ -468,6 +475,17 @@ No actionable P0, P1, or P2 visual findings remain for the requested redesign. T
 - Added `docs/quote-onboarding-flow-board.html`, a responsive review board that places the 9 desktop and 9 mobile captures in the same numbered order for side-by-side confirmation.
 - The board links the generated PNGs rather than recreating the UI, so the visual handoff stays tied to the implementation-backed capture manifest.
 - Static handoff validation confirmed the board references exactly `9` desktop and `9` mobile capture images; `git diff --check` passed.
+
+## 2026-09-17 review-fix pass
+
+- 코드 리뷰에서 발견한 사용자 노출 결함을 수정했다. `GpuFitSummaryPanel`이 `gwa()`를 두 명사에 모두 적용해 `PSU와에 대해`로 렌더되던 문제를 `gpuFitPassSummaryFor()` 헬퍼로 분리해 `케이스와 PSU에 대해`로 교정하고, `AdminCatalogChangePanel`의 관심 가격 등록 토스트에 남아 있던 `)`를 제거했다.
+- 복구 코드가 한 번 쓰여도 그대로 살아 있던 영구 탈취 경로를 닫았다. `POST /api/builds/:id/recover`가 owner token과 복구 코드를 함께 회전해 새 코드를 응답하고, 복구 다이얼로그가 `RecoveryCodeDialog`로 새 코드를 다시 보여준다.
+- `savedBuildIdFromOwnershipInput`이 붙여넣은 `/share/%ZZ` 같은 잘못된 이스케이프에서 `decodeURIComponent` 예외로 조용히 죽던 경로를 `undefined` 반환으로 정리해 안내 토스트가 뜨게 했다.
+- 내 PC 승격이 모니터 구독을 강제(`enabled`, `risk`)하기 직전의 사용자 설정을 `preMyPcEnabled`·`preMyPcAlertPolicy`에 보관하고, 해제 시 복원해 `all` → `risk` 정책이 영구히 남지 않게 했다.
+- 사용자 노출 카피에서 검증·근거 레지스터를 순화했다. `GAME PERFORMANCE EVIDENCE`/`게임별 FPS 근거`는 `GAME FPS DATA`/`게임별 FPS 자료`, 상태 `근거 없음`은 `자료 없음`, 홈 안내의 `예상 가격 · 근거`는 `예상 가격 · 참고 정보`, 온보딩 계약 문구는 `실측 자료가 있을 때만 결과에 연결해요`로 바꿨다. 어드민의 `저장 전 검증`·`검증된 자료 저장`도 `저장 전 확인`·`자료 저장`으로 정리했다.
+- `recommendParamsFor`가 `"64GB"` 표시 라벨을 역산하던 부분을 3.8M 티어 경계 직접 비교로 바꾸고, 빈 `works`의 임의 폴백(`ONBOARDING_WORKS[3]` = streaming)을 `office`로 교정했다.
+- `scripts/browser-smoke.mjs`에 `/start` 온보딩 → `/recommend?autorun=1` 핸드오프 커버리지를 추가했다(게임 검색·4K·144 FPS·200만원 선택 후 생성 결과와 `게임별 FPS 자료` 패널까지 확인). `quote-onboarding-smoke.mjs`의 contract 카드 문구 단정을 새 카피에 맞게 갱신했다.
+- 검증: `npm run typecheck` 통과, `npx vitest run` `255개 파일 / 1,360개 테스트` 통과, `npm run build` 통과(entry `171,631`바이트, `600,000`바이트 게이트 이내), `git diff --check` 통과, `npm run test:browser` 전체 통과(온보딩 섹션 포함), `npm run test:browser:quote-onboarding` 데스크톱·390px 모바일 통과, `npm run test:browser:readability` 20개 화면·위반 0·라이트 서페이스 누수 0·런타임 오류 0.
 
 ## Final result
 

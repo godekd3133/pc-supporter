@@ -62,7 +62,7 @@ function formatWon(value: number | undefined) {
 }
 
 function gamingEvidenceStatusLabel(status: GamingPerformanceAssessment["status"]) {
-  return status === "verified" ? "평균 FPS 기준 충족" : status === "target_not_met" ? "목표 FPS 미달" : status === "partial" ? "일부 조건 확인" : status === "stale" ? "자료 갱신 필요" : status === "missing" ? "근거 없음" : "확인 필요";
+  return status === "verified" ? "평균 FPS 기준 충족" : status === "target_not_met" ? "목표 FPS 미달" : status === "partial" ? "일부 조건 확인" : status === "stale" ? "자료 갱신 필요" : status === "missing" ? "자료 없음" : "확인 필요";
 }
 
 function gamingEvidenceAdminUrlFor(assessment: GamingPerformanceAssessment) {
@@ -112,7 +112,7 @@ function GeneratorGamingEvidence({ assessment, gpuTarget, onToast }: { assessmen
   const gpuState = gpuTarget?.currentFit === "met" ? "complete" : gpuTarget?.currentFit === "partial" ? "review" : "pending";
   const gpuLabel = gpuTarget?.currentFit === "met" ? "참고 기준 충족" : gpuTarget?.currentFit === "partial" ? "추가 확인" : "확인 필요";
   return <section className={`generator-gaming-evidence status-${assessment.status}`} data-testid="generator-gaming-evidence">
-    <div className="generator-gaming-evidence-heading"><div><p className="eyebrow">GAME PERFORMANCE EVIDENCE</p><strong>게임별 FPS 근거</strong></div><span>{gamingEvidenceStatusLabel(assessment.status)}</span></div>
+    <div className="generator-gaming-evidence-heading"><div><p className="eyebrow">GAME FPS DATA</p><strong>게임별 FPS 자료</strong></div><span>{gamingEvidenceStatusLabel(assessment.status)}</span></div>
     <div className="generator-gaming-target-tags" aria-label="게이밍 목표 조건">
       {gameLabels.length > 0 ? gameLabels.map((label, index) => <span className="generator-gaming-target-tag" key={`${assessment.gameIds[index]}-${label}`}>{label}</span>) : <span className="generator-gaming-target-tag muted">일반 게이밍 기준</span>}
       <span className="generator-gaming-target-tag">{GAMING_RESOLUTION_LABELS[assessment.resolution]} · {assessment.refreshRate} FPS</span>
@@ -120,7 +120,7 @@ function GeneratorGamingEvidence({ assessment, gpuTarget, onToast }: { assessmen
       {assessment.upscaling && <span className="generator-gaming-target-tag">{GAMING_UPSCALING_LABELS[assessment.upscaling]}</span>}
       {assessment.rayTracing && <span className="generator-gaming-target-tag">레이 트레이싱</span>}
     </div>
-    {gameLabels.length > 0 && <div className={`generator-gaming-coverage ${coverageTone}`} data-testid="generator-gaming-coverage" aria-label="게임별 근거 coverage"><div><strong>EXACT-CONDITION COVERAGE</strong><span>{matchedGameIds.length} / {gameLabels.length}개 게임 자료 연결</span></div><p>{coverageMessage}</p><small>{assessment.gpuName ? `선택 GPU · ${assessment.gpuName}` : "선택 GPU 확인 필요"} · 게임·해상도·FPS·그래픽 조건이 모두 일치하는 자료만 연결합니다.</small><div className="generator-gaming-coverage-actions">{adminEvidenceUrl && <a className="generator-gaming-coverage-link" href={adminEvidenceUrl}><FiExternalLink /> 운영 coverage로 확인</a>}<button className="generator-gaming-coverage-copy" type="button" data-testid="generator-gaming-evidence-request-copy" onClick={() => void copyEvidenceRequest()}><FiCopy /> {requestCopied ? "복사됨" : "측정 요청 JSON 복사"}</button></div></div>}
+    {gameLabels.length > 0 && <div className={`generator-gaming-coverage ${coverageTone}`} data-testid="generator-gaming-coverage" aria-label="게임별 자료 연결 상태"><div><strong>GAME DATA COVERAGE</strong><span>{matchedGameIds.length} / {gameLabels.length}개 게임 자료 연결</span></div><p>{coverageMessage}</p><small>{assessment.gpuName ? `선택 GPU · ${assessment.gpuName}` : "선택 GPU 확인 필요"} · 게임·해상도·FPS·그래픽 조건이 모두 일치하는 자료만 연결합니다.</small><div className="generator-gaming-coverage-actions">{adminEvidenceUrl && <a className="generator-gaming-coverage-link" href={adminEvidenceUrl}><FiExternalLink /> 운영 자료로 확인</a>}<button className="generator-gaming-coverage-copy" type="button" data-testid="generator-gaming-evidence-request-copy" onClick={() => void copyEvidenceRequest()}><FiCopy /> {requestCopied ? "복사됨" : "측정 요청 JSON 복사"}</button></div></div>}
     <div className="generator-gaming-checklist" aria-label="성능 확인 단계">
       <div className="generator-gaming-check complete"><FiCheck /><div><strong>선택 조건 보존</strong><small>게임·해상도·목표 FPS·그래픽 조건을 자동 구성에 전달했습니다.</small></div><span>완료</span></div>
       <div className={`generator-gaming-check ${gpuState}`}><FiCheck /><div><strong>카탈로그 GPU 기준</strong><small>{gpuTarget?.summary ?? "GPU 참고 기준을 계산하지 못했습니다."}</small></div><span>{gpuLabel}</span></div>

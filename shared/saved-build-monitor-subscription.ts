@@ -23,6 +23,9 @@ export interface SavedBuildMonitorSubscription {
   lastSnapshot?: SavedBuildCheckSnapshot;
   lastError?: string;
   lastErrorAt?: string;
+  // 내 PC 승격이 모니터 설정을 강제하기 직전의 사용자 설정 — 해제 시 복원한다.
+  preMyPcEnabled?: boolean;
+  preMyPcAlertPolicy?: SavedBuildServerMonitorAlertPolicy;
 }
 
 export interface SavedBuildMonitorSubscriptionResponse {
@@ -56,6 +59,8 @@ export function savedBuildMonitorSubscriptionFromUnknown(value: unknown): SavedB
   const lastSnapshot = savedBuildCheckSnapshotFromUnknown(value.lastSnapshot);
   const lastError = boundedError(value.lastError) ? value.lastError : undefined;
   const lastErrorAt = validTimestamp(value.lastErrorAt) ? value.lastErrorAt : undefined;
+  const preMyPcEnabled = typeof value.preMyPcEnabled === "boolean" ? value.preMyPcEnabled : undefined;
+  const preMyPcAlertPolicy = SAVED_BUILD_SERVER_MONITOR_ALERT_POLICIES.includes(value.preMyPcAlertPolicy as SavedBuildServerMonitorAlertPolicy) ? value.preMyPcAlertPolicy as SavedBuildServerMonitorAlertPolicy : undefined;
   return {
     enabled: value.enabled,
     intervalMinutes: value.intervalMinutes as SavedBuildServerMonitorInterval,
@@ -67,7 +72,9 @@ export function savedBuildMonitorSubscriptionFromUnknown(value: unknown): SavedB
     ...(value.enabled && nextCheckAt ? { nextCheckAt } : {}),
     ...(lastSnapshot ? { lastSnapshot } : {}),
     ...(lastError ? { lastError } : {}),
-    ...(lastErrorAt ? { lastErrorAt } : {})
+    ...(lastErrorAt ? { lastErrorAt } : {}),
+    ...(preMyPcEnabled !== undefined ? { preMyPcEnabled } : {}),
+    ...(preMyPcAlertPolicy ? { preMyPcAlertPolicy } : {})
   };
 }
 

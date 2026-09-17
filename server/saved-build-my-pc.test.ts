@@ -113,6 +113,13 @@ describe("saved build my-pc ownership cycle", () => {
       });
       expect(demoted.status).toBe(200);
       expect((await demoted.json() as { myPcAt?: string }).myPcAt).toBeUndefined();
+
+      // 해제하면 승격이 강제한 risk 정책이 아니라 승격 전의 all 정책으로 돌아간다.
+      const restoredMonitor = await fetch(`${baseUrl}/api/builds/${buildId}/monitor`, { headers: { "X-Share-Owner-Token": ownerCredential.token } });
+      const restoredBody = await restoredMonitor.json() as { subscription: { alertPolicy: string; enabled: boolean; preMyPcAlertPolicy?: string } };
+      expect(restoredBody.subscription.alertPolicy).toBe("all");
+      expect(restoredBody.subscription.enabled).toBe(true);
+      expect(restoredBody.subscription.preMyPcAlertPolicy).toBeUndefined();
     } finally {
       await closeServer(server);
     }

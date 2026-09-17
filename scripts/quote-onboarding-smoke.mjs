@@ -141,7 +141,7 @@ const smokeExpression = `(${async function runQuoteOnboardingSmoke() {
   await chooseOption("높음", "다음 · 예산 정하기");
   await chooseOption("DLSS·품질 참고", "다음 · 예산 정하기");
   assert(bodyText().includes("시각 효과 우선") && bodyText().includes("화질과 프레임을 함께 고려"), "그래픽 품질·업스케일링 선택 의미가 설명되지 않았습니다.");
-  assert(bodyText().includes("평균 FPS 144 이상 목표") && bodyText().includes("이 조건의 참고 가격대") && bodyText().includes("최신 실측 자료가 연결될 때만"), "게임 성능 목표 기준과 참고 가격대가 선택 단계에 표시되지 않았습니다.");
+  assert(bodyText().includes("평균 FPS 144 이상 목표") && bodyText().includes("이 조건의 참고 가격대") && bodyText().includes("실측 자료가 있을 때만"), "게임 성능 목표 기준과 참고 가격대가 선택 단계에 표시되지 않았습니다.");
   clickButton("다음 · 예산 정하기");
   await waitFor(() => text(document.querySelector(".onboarding-title")) === "예산은 어디까지 생각하세요?", "예산 화면");
   assert(text(document.querySelector("[data-testid=onboarding-budget-range-adjust]")) === "권장 최저 예산(450만원)으로 맞추기", "예산이 권장 범위보다 낮을 때 바로 조정하는 CTA가 없습니다.");

@@ -155,7 +155,7 @@ function GamingTargetContract({ state, showBudgetHint = false }: { state: Onboar
       <div className="onboarding-target-contract-heading"><div><span>PERFORMANCE CONTRACT</span><strong>평균 FPS {state.refreshRate} 이상 목표</strong></div><FiTarget aria-hidden="true" /></div>
       <div className="onboarding-target-contract-tags"><span>{resolutionLabelFor(state.resolution)}</span><span>{state.refreshRate} FPS</span><span>{GAMING_GRAPHICS_PRESET_LABELS[state.graphicsPreset]}</span><span>{GAMING_UPSCALING_LABELS[state.upscaling]}</span>{state.rayTracing && <span>레이 트레이싱</span>}</div>
       {range && <div className="onboarding-target-contract-budget"><span>이 조건의 참고 가격대</span><strong>{formatManWon(range.minWon)} ~ {formatManWon(range.maxWon)}</strong></div>}
-      <p>동일한 게임·GPU·해상도·그래픽 조건의 최신 실측 자료가 연결될 때만 결과에서 검증 완료로 표시해요. 자료가 없으면 카탈로그 기준 참고값으로 전달합니다.</p>
+      <p>같은 게임·GPU·해상도·그래픽 조건의 실측 자료가 있을 때만 결과에 연결해요. 자료가 없으면 카탈로그 기준 참고값으로 안내해요.</p>
     </section>
   );
 }

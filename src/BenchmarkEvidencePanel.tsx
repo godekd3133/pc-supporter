@@ -32,7 +32,7 @@ export function BenchmarkEvidencePanel({ cpu, gpu, snapshot }: { cpu?: Part; gpu
       ? "일부 점수만 있어 성능 판단 전 누락된 정보를 확인해야 합니다."
       : "선택된 부품의 벤치마크 점수가 없어 성능 판단 정보가 부족합니다.";
   return <section className="benchmark-evidence-panel" aria-label="원본 벤치마크 정보" data-testid="benchmark-evidence-panel">
-    <div className="benchmark-evidence-heading"><div><p className="eyebrow">BENCHMARK EVIDENCE</p><h2>원본 벤치마크 정보</h2><p>선택한 CPU·GPU에 카탈로그로 저장된 Cinebench R23·3DMark 점수와 정보 상태를 표시합니다.</p></div><span><FiActivity /> {evidences.filter((item) => item.status === "complete").length}/{evidences.length} 완전</span></div>
+    <div className="benchmark-evidence-heading"><div><p className="eyebrow">BENCHMARK DATA</p><h2>원본 벤치마크 정보</h2><p>선택한 CPU·GPU에 카탈로그로 저장된 Cinebench R23·3DMark 점수와 정보 상태를 표시합니다.</p></div><span><FiActivity /> {evidences.filter((item) => item.status === "complete").length}/{evidences.length} 완전</span></div>
     <div className={`benchmark-evidence-build-snapshot ${buildSnapshot.status}`} data-testid="build-benchmark-snapshot"><div><span>견적 성능 정보 상태</span><strong>{buildBenchmarkSnapshotStatusText(buildSnapshot.status)}</strong></div><span>{buildSnapshot.presentScoreCount}/{buildSnapshot.expectedScoreCount}개 점수 · {buildSnapshot.parts.length}개 부품</span><p>{snapshotSummary}</p></div>
     <div className="benchmark-evidence-grid">{evidences.map((evidence) => <BenchmarkEvidenceCard evidence={evidence} key={evidence.partId} />)}</div>
     <p className="benchmark-evidence-note"><FiInfo /> 점수는 측정 설정·드라이버·시스템 조건에 따라 달라지는 카탈로그 참고값이며, 실제 FPS·프레임타임·작업 시간·절대 성능 순위를 보장하지 않습니다. 출처가 없거나 점수가 일부만 있으면 그대로 확인 필요로 표시합니다.</p>

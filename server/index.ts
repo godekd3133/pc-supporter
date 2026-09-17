@@ -2770,10 +2770,13 @@ app.put("/api/builds/:id/my-pc", buildShareRateLimit, async (request, response) 
   // 승격 시 서버 점검 구독도 함께 켠다 — 대안 알림은 due인 모니터 실행에서만 생성되므로
   // enabled 없이 승격하면 약속한 알림이 영구히 오지 않는다. 정책은 risk로 맞춰
   // all의 구매 단계 잡음을 줄이고 critical에서는 빠져 있던 대안 알림이 오게 한다.
+  // 강제하기 전의 enabled·정책은 preMyPc*에 보관해 해제 시 복원한다.
   const current = build.monitorState ?? defaultSavedBuildMonitorSubscription(build.createdAt);
   const monitorState = owned
-    ? configureSavedBuildMonitorSubscription(current, { enabled: true, intervalMinutes: current.intervalMinutes, alertPolicy: "risk" }, now)
-    : undefined;
+    ? { ...configureSavedBuildMonitorSubscription(current, { enabled: true, intervalMinutes: current.intervalMinutes, alertPolicy: "risk" }, now), preMyPcEnabled: current.enabled, preMyPcAlertPolicy: current.alertPolicy }
+    : current.preMyPcEnabled !== undefined || current.preMyPcAlertPolicy !== undefined
+      ? { ...configureSavedBuildMonitorSubscription(current, { enabled: current.preMyPcEnabled ?? current.enabled, intervalMinutes: current.intervalMinutes, alertPolicy: current.preMyPcAlertPolicy ?? current.alertPolicy }, now), preMyPcEnabled: undefined, preMyPcAlertPolicy: undefined }
+      : undefined;
   const updated = await updateSavedBuildMyPc(build.id, owned ? now : null, monitorState);
   if (!updated) {
     response.status(404).json({ error: "저장된 견적을 찾을 수 없습니다." });
@@ -3167,6 +3170,7 @@ app.post("/api/builds/:id/recovery-code", buildShareRateLimit, async (request, r
 });
 
 // 복구 코드로 소유권 되찾기 — 코드가 맞으면 새 owner token을 발급하고 이전 토큰은 폐기한다.
+// 사용한 복구 코드도 함께 회전한다 — 코드를 아는 사람이 영구적인 재탈취 경로를 갖지 않도록.
 app.post("/api/builds/:id/recover", buildRecoverRateLimit, async (request, response) => {
   const build = await savedBuildForRequest(request, response);
   if (!build) return;
@@ -3180,12 +3184,13 @@ app.post("/api/builds/:id/recover", buildRecoverRateLimit, async (request, respo
     return;
   }
   const ownerCredential = createShareOwnerCredential();
-  const updated = await updateSavedBuildShareCredentials(build.id, ownerCredential.hash, build.recoveryCodeHash!);
+  const recoveryCredential = createShareRecoveryCode();
+  const updated = await updateSavedBuildShareCredentials(build.id, ownerCredential.hash, recoveryCredential.hash);
   if (!updated) {
     response.status(404).json({ error: "저장된 견적을 찾을 수 없습니다." });
     return;
   }
-  response.json({ ownerToken: ownerCredential.token });
+  response.json({ ownerToken: ownerCredential.token, recoveryCode: recoveryCredential.code });
 });
 
 app.get("/api/admin/catalog-changes", requireAdmin, async (request, response) => {

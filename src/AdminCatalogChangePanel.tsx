@@ -223,7 +223,7 @@ export function CatalogChangeHistoryPanel({ records, loading, error, historyLimi
     setSavedWatchlistUrl(null);
     setSavedWatchlistId(null);
     setSavedWatchlistExpiresAt(null);
-    onToast(watched ? `${eul(item.itemName)} 관심 목록에서 제거했습니다.` : `${eul(item.itemName)}) 관심 가격에 등록했습니다.`);
+    onToast(watched ? `${eul(item.itemName)} 관심 목록에서 제거했습니다.` : `${eul(item.itemName)} 관심 가격에 등록했습니다.`);
   }
   function updateWatchTarget(entry: CatalogWatchEntry, rawValue: string) {
     const targetPriceWon = rawValue.trim() === "" ? undefined : Number(rawValue);

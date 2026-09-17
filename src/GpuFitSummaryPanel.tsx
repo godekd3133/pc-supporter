@@ -113,6 +113,11 @@ function FitMetric({ icon: Icon, label, value, detail, status }: { icon: IconTyp
   return <article className={`gpu-fit-metric ${tone}`}><span className="gpu-fit-metric-icon"><Icon /></span><div><div className="gpu-fit-metric-heading"><span>{label}</span><strong>{STATUS_LABELS[status]}</strong></div><b>{value}</b><small>{detail}</small></div></article>;
 }
 
+// 접속사 과/와는 앞 명사에만 붙는다 — 뒤 명사에는 에가 직접 붙어야 한다.
+export function gpuFitPassSummaryFor(caseName?: string, psuName?: string) {
+  return `${gwa(caseName ?? "케이스")} ${psuName ?? "PSU"}에 대해 현재 등록된 GPU 장착·전원 기준을 통과했습니다.`;
+}
+
 function actionText(fit: GpuFitSummary, computerCase: Part | undefined, psu: Part | undefined) {
   const purchaseEvidence = gpuPurchaseEvidenceFor(fit);
   const actions: string[] = [];
@@ -126,7 +131,7 @@ function actionText(fit: GpuFitSummary, computerCase: Part | undefined, psu: Par
   if (purchaseEvidence.pcieCableTopology === "needs_review") actions.push("커넥터 수량과 별도로 PSU PCIe 케이블 런 수·분배 구조가 GPU 연결 요구를 충족하는지 제조사 표에서 확인하세요.");
   if (purchaseEvidence.physical === "incompatible") actions.push("GPU 전원 케이블 요구 여유보다 케이스 측면 공간이 작습니다. 더 여유 있는 케이스 또는 케이블 조건이 맞는 GPU를 비교하세요.");
   else if (purchaseEvidence.physical === "needs_review") actions.push("GPU 물리 슬롯·케이블 굽힘 여유와 케이스 측면 공간을 제조사 매뉴얼에서 확인하세요.");
-  if (actions.length === 0) actions.push(`${gwa(computerCase?.name ?? "케이스")} ${gwa(psu?.name ?? "PSU")}에 대해 현재 등록된 GPU 장착·전원 기준을 통과했습니다.`);
+  if (actions.length === 0) actions.push(gpuFitPassSummaryFor(computerCase?.name, psu?.name));
   return actions;
 }
 

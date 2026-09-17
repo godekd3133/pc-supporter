@@ -2574,12 +2574,13 @@ function App() {
     }
   }
 
-  function savedBuildOwnershipRecovered(id: string, ownerToken: string) {
+  function savedBuildOwnershipRecovered(id: string, ownerToken: string, recoveryCode?: string) {
     rememberSavedBuildOwnerToken(id, ownerToken);
     rememberSavedBuildId(id);
     invalidateSavedBuildReads();
     void refreshSavedBuildsForBrowser();
     setToast("이 브라우저에서 견적 소유권을 되찾았습니다.");
+    if (recoveryCode) setRecoveryCodeNotice({ code: recoveryCode, buildName: recoverOwnershipTarget !== "open" && recoverOwnershipTarget?.name ? recoverOwnershipTarget.name : id });
   }
 
   async function toggleMyPcFor(saved: SavedBuild) {

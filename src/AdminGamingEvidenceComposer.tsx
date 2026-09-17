@@ -88,13 +88,13 @@ export function AdminGamingEvidenceComposer({ onAdd, onToast }: { onAdd: (record
     setError(null);
     onAdd(record);
     setForm(emptyComposer());
-    onToast("실측 레코드를 JSON 편집기에 추가했습니다. 저장 전 검증을 실행해 주세요.");
+    onToast("실측 레코드를 JSON 편집기에 추가했습니다. 저장 전 확인을 실행해 주세요.");
   }
 
   return <details className="gaming-performance-evidence-composer" data-testid="gaming-performance-evidence-composer">
     <summary><span><FiPlus /> 실측 레코드 1건 입력</span><small>실제 측정값과 원본 출처가 있을 때만 작성</small></summary>
     <div className="gaming-performance-evidence-composer-body">
-      <p className="gaming-performance-evidence-composer-note"><FiShield /> 이 폼은 측정값을 만들어 주지 않습니다. 실제 측정 자료와 HTTPS 원본을 확인한 뒤 입력하고, 추가 후에도 서버 검증과 저장 단계를 통과해야 합니다.</p>
+      <p className="gaming-performance-evidence-composer-note"><FiShield /> 이 폼은 측정값을 만들어 주지 않습니다. 실제 측정 자료와 HTTPS 원본을 확인한 뒤 입력하고, 추가 후에도 서버 확인과 저장 단계를 통과해야 합니다.</p>
       <div className="gaming-performance-evidence-composer-grid">
         <label><span>자료 ID</span><input value={form.id} onChange={(event) => update({ id: event.target.value })} placeholder="예: cyberpunk-gpu-2026-01" /></label>
         <label><span>게임 ID</span><input value={form.gameId} onChange={(event) => update({ gameId: event.target.value })} placeholder="예: cyberpunk" /></label>

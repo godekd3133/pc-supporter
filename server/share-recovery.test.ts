@@ -69,15 +69,32 @@ describe("saved build share recovery", () => {
         body: JSON.stringify({ recoveryCode: recoveryCredential.code })
       });
       expect(recovered.status).toBe(200);
-      const { ownerToken } = await recovered.json() as { ownerToken: string };
+      const { ownerToken, recoveryCode: rotatedCode } = await recovered.json() as { ownerToken: string; recoveryCode: string };
       expect(ownerToken).toBeTruthy();
       expect(ownerToken).not.toBe(ownerCredential.token);
+      expect(rotatedCode).toMatch(/^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/);
+      expect(rotatedCode).not.toBe(recoveryCredential.code);
 
       const withNewToken = await fetch(`${baseUrl}/api/builds/${buildId}/monitor`, { headers: { "X-Share-Owner-Token": ownerToken } });
       expect(withNewToken.status).toBe(200);
 
       const withOldToken = await fetch(`${baseUrl}/api/builds/${buildId}/monitor`, { headers: { "X-Share-Owner-Token": ownerCredential.token } });
       expect(withOldToken.status).toBe(401);
+
+      // 사용된 복구 코드는 회전된다 — 같은 코드로 다시 소유권을 가져올 수 없다.
+      const reused = await fetch(`${baseUrl}/api/builds/${buildId}/recover`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recoveryCode: recoveryCredential.code })
+      });
+      expect(reused.status).toBe(401);
+
+      const withRotated = await fetch(`${baseUrl}/api/builds/${buildId}/recover`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recoveryCode: rotatedCode })
+      });
+      expect(withRotated.status).toBe(200);
     } finally {
       await closeServer(server);
     }

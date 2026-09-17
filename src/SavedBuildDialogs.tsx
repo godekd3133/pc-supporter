@@ -11,7 +11,13 @@ export function savedBuildIdFromOwnershipInput(input: string) {
   const trimmed = input.trim();
   if (!trimmed) return undefined;
   const shareMatch = trimmed.match(/\/share\/([^/?#]+)/);
-  if (shareMatch) return decodeURIComponent(shareMatch[1]);
+  if (shareMatch) {
+    try {
+      return decodeURIComponent(shareMatch[1]);
+    } catch {
+      return undefined;
+    }
+  }
   if (/^https?:\/\//.test(trimmed)) {
     try {
       const segments = new URL(trimmed).pathname.split("/").filter(Boolean);
@@ -41,7 +47,7 @@ export function RecoveryCodeDialog({ code, buildName, onClose }: { code: string;
   return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="save-build-dialog recovery-code-dialog" role="dialog" aria-modal="true" aria-labelledby="recovery-code-dialog-title" data-testid="recovery-code-dialog"><div className="modal-header"><div><p className="eyebrow">RECOVERY CODE</p><h2 id="recovery-code-dialog-title">견적 소유권 복구 코드</h2><p>{buildName} · 이 코드는 지금만 표시됩니다.</p></div><button className="icon-button" type="button" onClick={onClose} aria-label="복구 코드 창 닫기"><FiXCircle /></button></div><div className="recovery-code-body"><code className="recovery-code-value" data-testid="recovery-code-value">{code}</code><button className="button button-light" type="button" onClick={() => { void navigator.clipboard.writeText(code).then(() => setCopyState("copied")).catch(() => setCopyState("failed")); }}>{copyState === "copied" ? <><FiCheck /> 복사됨</> : <><FiCopy /> 코드 복사</>}</button>{copyState === "failed" && <p className="recovery-code-copy-failed" role="alert">복사에 실패했습니다. 코드를 직접 선택해 복사해 주세요.</p>}<p><FiShield /> 다른 기기나 브라우저에서 이 견적의 owner token이 없을 때, 이 코드로 소유권을 되찾을 수 있습니다. 코드는 서버에 원문이 저장되지 않아 다시 볼 수 없으니 지금 안전한 곳에 보관해 주세요. 새 코드를 만들면 이 코드는 폐기됩니다.</p></div><div className="save-build-actions"><button className="button button-primary" type="button" onClick={onClose}>확인했습니다</button></div></section></div>;
 }
 
-export function RecoverOwnershipDialog({ target, onClose, onToast, onRecovered }: { target: { id: string; name?: string } | null; onClose: () => void; onToast: (message: string) => void; onRecovered: (id: string, ownerToken: string) => void }) {
+export function RecoverOwnershipDialog({ target, onClose, onToast, onRecovered }: { target: { id: string; name?: string } | null; onClose: () => void; onToast: (message: string) => void; onRecovered: (id: string, ownerToken: string, recoveryCode?: string) => void }) {
   const [input, setInput] = useState(target?.id ?? "");
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
@@ -58,8 +64,8 @@ export function RecoverOwnershipDialog({ target, onClose, onToast, onRecovered }
     }
     setBusy(true);
     try {
-      const result = await api<{ ownerToken: string }>(`/api/builds/${encodeURIComponent(id)}/recover`, { method: "POST", body: JSON.stringify({ recoveryCode: code }), retry: 0 });
-      onRecovered(id, result.ownerToken);
+      const result = await api<{ ownerToken: string; recoveryCode?: string }>(`/api/builds/${encodeURIComponent(id)}/recover`, { method: "POST", body: JSON.stringify({ recoveryCode: code }), retry: 0 });
+      onRecovered(id, result.ownerToken, result.recoveryCode);
       onClose();
     } catch (error: unknown) {
       onToast(error instanceof Error ? error.message : "복구 코드로 소유권을 되찾지 못했습니다.");
@@ -67,5 +73,5 @@ export function RecoverOwnershipDialog({ target, onClose, onToast, onRecovered }
       setBusy(false);
     }
   }
-  return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}><section className="save-build-dialog recover-ownership-dialog" role="dialog" aria-modal="true" aria-labelledby="recover-ownership-dialog-title" data-testid="recover-ownership-dialog"><div className="modal-header"><div><p className="eyebrow">RECOVER OWNERSHIP</p><h2 id="recover-ownership-dialog-title">견적 소유권 되찾기</h2><p>{target?.name ? `${target.name} · ` : ""}저장할 때 받은 복구 코드로 이 브라우저의 owner token을 다시 발급받습니다.</p></div><button className="icon-button" type="button" onClick={onClose} disabled={busy} aria-label="소유권 되찾기 창 닫기"><FiXCircle /></button></div><form className="save-build-form" onSubmit={(event) => { event.preventDefault(); void submit(); }}><label htmlFor="recover-ownership-input">견적 링크 또는 견적 ID</label><input id="recover-ownership-input" data-modal-autofocus value={input} onChange={(event) => setInput(event.target.value)} placeholder="예: /share/build-… 또는 견적 ID" disabled={busy || Boolean(target?.id)} /><label htmlFor="recover-ownership-code">복구 코드</label><input id="recover-ownership-code" value={code} onChange={(event) => setCode(event.target.value)} placeholder="예: XXXX-XXXX-XXXX" autoCapitalize="characters" autoComplete="off" disabled={busy} /><p><FiInfo /> 코드가 맞으면 새 owner token이 이 브라우저에 저장되고, 다른 기기의 이전 토큰은 폐기됩니다.</p><div className="save-build-actions"><button className="button button-light" type="button" onClick={onClose} disabled={busy}>취소</button><button className="button button-primary" type="submit" disabled={busy || !input.trim() || !code.trim()}>{busy ? <><FiLoader className="spin" /> 확인 중...</> : <><FiKey /> 소유권 되찾기</>}</button></div></form></section></div>;
+  return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}><section className="save-build-dialog recover-ownership-dialog" role="dialog" aria-modal="true" aria-labelledby="recover-ownership-dialog-title" data-testid="recover-ownership-dialog"><div className="modal-header"><div><p className="eyebrow">RECOVER OWNERSHIP</p><h2 id="recover-ownership-dialog-title">견적 소유권 되찾기</h2><p>{target?.name ? `${target.name} · ` : ""}저장할 때 받은 복구 코드로 이 브라우저의 owner token을 다시 발급받습니다.</p></div><button className="icon-button" type="button" onClick={onClose} disabled={busy} aria-label="소유권 되찾기 창 닫기"><FiXCircle /></button></div><form className="save-build-form" onSubmit={(event) => { event.preventDefault(); void submit(); }}><label htmlFor="recover-ownership-input">견적 링크 또는 견적 ID</label><input id="recover-ownership-input" data-modal-autofocus value={input} onChange={(event) => setInput(event.target.value)} placeholder="예: /share/build-… 또는 견적 ID" disabled={busy || Boolean(target?.id)} /><label htmlFor="recover-ownership-code">복구 코드</label><input id="recover-ownership-code" value={code} onChange={(event) => setCode(event.target.value)} placeholder="예: XXXX-XXXX-XXXX" autoCapitalize="characters" autoComplete="off" disabled={busy} /><p><FiInfo /> 코드가 맞으면 새 owner token이 이 브라우저에 저장되고, 다른 기기의 이전 토큰은 폐기됩니다. 사용한 복구 코드도 폐기되고 새 복구 코드가 표시됩니다.</p><div className="save-build-actions"><button className="button button-light" type="button" onClick={onClose} disabled={busy}>취소</button><button className="button button-primary" type="submit" disabled={busy || !input.trim() || !code.trim()}>{busy ? <><FiLoader className="spin" /> 확인 중...</> : <><FiKey /> 소유권 되찾기</>}</button></div></form></section></div>;
 }

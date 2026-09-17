@@ -50,9 +50,9 @@ export function GamingPerformanceEvidencePanel({ assessment }: { assessment?: Ga
           ? "게임별 실측 자료가 등록되면 선택 GPU와 조건을 다시 대조합니다."
           : "선택한 게임 조건에 연결된 자료를 확인했습니다.";
 
-  return <section className={`result-gaming-evidence ${tone}`} data-testid="result-gaming-performance-evidence" aria-label="게임별 FPS 근거">
+  return <section className={`result-gaming-evidence ${tone}`} data-testid="result-gaming-performance-evidence" aria-label="게임별 FPS 자료">
     <div className="result-gaming-evidence-heading">
-      <div><p className="eyebrow">GAME PERFORMANCE EVIDENCE</p><h2>게임별 FPS 근거</h2><p>자동 추천에 사용한 게임·그래픽 조건과 선택 GPU의 측정 자료를 검사 결과에서도 이어서 확인합니다.</p></div>
+      <div><p className="eyebrow">GAME FPS DATA</p><h2>게임별 FPS 자료</h2><p>자동 추천에 사용한 게임·그래픽 조건과 선택 GPU의 실측 자료를 함께 보여줍니다.</p></div>
       <span className="result-gaming-evidence-status"><StatusIcon /> {statusLabel(assessment.status)}</span>
     </div>
     <div className="result-gaming-evidence-conditions">

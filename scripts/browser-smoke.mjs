@@ -379,6 +379,37 @@ async function main() {
     const shareRouteLatestCancelProbe = await client.evaluate("(async () => { const originalFetch = window.fetch; const headers = { 'Content-Type': 'application/json' }; const response = (payload, status = 200) => new Response(JSON.stringify(payload), { status, headers }); const stamp = '2026-09-08T00:00:00.000Z'; const selection = { memory: [], ssd: [], hdd: [], accessories: [], useIntegratedGraphics: false }; const preferences = { profile: 'gaming', priority: 'balanced', listingPolicy: 'retail_only', gamingResolution: '1080p', gamingRefreshRate: 144 }; const saved = { id: 'share-route-probe', name: 'share route probe', selection, recommendationPreferences: preferences, createdAt: stamp, updatedAt: stamp }; const checked = { status: 'compatible', blockerCount: 0, warningCount: 0, unknownCount: 0, findings: [], metrics: {}, analysis: { profile: 'gaming', scoreLabel: '균형형', scoreBasis: 'probe', confidence: 'high', factors: [], strengths: [], focusAreas: [], bottlenecks: [], nextActions: [] }, links: [], totalPriceWon: 0, priceComplete: true, engineVersion: '2.58.0', catalogSnapshotAt: stamp, checkedAt: stamp }; window.fetch = async (input, init) => { const requestUrl = new URL(typeof input === 'string' ? input : input.url, location.href); if (requestUrl.pathname === '/api/builds/share-route-probe') return response(saved); if (requestUrl.pathname === '/api/compatibility/check' && init?.method === 'POST') { await new Promise((resolve) => setTimeout(resolve, 400)); return response(checked); } return originalFetch(input, init); }; const push = (path) => { history.pushState({}, '', path); window.dispatchEvent(new PopStateEvent('popstate')); }; try { push('/share/share-route-probe'); await new Promise((resolve) => setTimeout(resolve, 25)); push('/'); await new Promise((resolve) => setTimeout(resolve, 500)); const body = document.body?.innerText ?? ''; return { stage: 'checked', path: location.pathname, home: document.querySelector('.home-page') !== null, result: document.querySelector('.result-page') !== null, routeKey: document.querySelector('.app-shell')?.getAttribute('data-route-key') ?? '', bodyTail: body.slice(-1200) }; } finally { window.fetch = originalFetch; } })()");
     assert(shareRouteLatestCancelProbe?.stage === 'checked' && shareRouteLatestCancelProbe.path === '/' && shareRouteLatestCancelProbe.home === true && shareRouteLatestCancelProbe.result === false, "공유 견적 로딩 중 route 이탈 후 늦은 compatibility 응답이 새 화면을 덮었습니다. probe=" + JSON.stringify(shareRouteLatestCancelProbe));
 
+    // 온보딩 위자드 → /recommend autorun 핸드오프 — 선택한 게임·성능·예산이 URL로 전달되고 실제 견적이 생성돼야 한다.
+    await client.send("Page.navigate", { url: `${baseUrl}/start` });
+    await waitForValue(client, "(document.body?.innerText ?? '').includes('어떤 PC가 필요하세요?')", "온보딩 intent 화면");
+    assert(await clickText(client, "새로운 견적을 맞추고 싶어요"), "온보딩 intent 선택을 클릭하지 못했습니다.");
+    assert(await clickText(client, "새 견적 시작하기"), "온보딩 intent CTA를 클릭하지 못했습니다.");
+    await waitForValue(client, "(document.body?.innerText ?? '').includes('새 견적은 어떤 방식으로 맞춰볼까요?')", "온보딩 mode 화면");
+    assert(await clickText(client, "특정 작업이나 게임을 할 거예요"), "온보딩 task 방식을 선택하지 못했습니다.");
+    assert(await clickText(client, "다음"), "온보딩 mode CTA를 클릭하지 못했습니다.");
+    await waitForValue(client, "(document.body?.innerText ?? '').includes('무엇을 주로 할까요?')", "온보딩 usecase 화면");
+    assert(await clickText(client, "게임"), "온보딩 게임 용도를 선택하지 못했습니다.");
+    assert(await clickText(client, "다음"), "온보딩 usecase CTA를 클릭하지 못했습니다.");
+    await waitForValue(client, "(document.body?.innerText ?? '').includes('어떤 게임을 할 건가요?') && document.querySelector('input[aria-label=\"게임 이름 검색\"]') !== null", "온보딩 games 화면");
+    assert(await setInputValue(client, 'input[aria-label="게임 이름 검색"]', "cyber"), "온보딩 게임 검색창을 찾지 못했습니다.");
+    assert(await clickText(client, "사이버펑크 2077"), "온보딩에서 사이버펑크 2077을 선택하지 못했습니다.");
+    await waitForValue(client, "(document.body?.innerText ?? '').includes('1개 선택')", "온보딩 게임 선택 개수 표시");
+    assert(await clickText(client, "다음"), "온보딩 games CTA를 클릭하지 못했습니다.");
+    await waitForValue(client, "(document.body?.innerText ?? '').includes('원하는 성능을 골라주세요')", "온보딩 performance 화면");
+    assert(await clickText(client, "4K"), "온보딩 4K 해상도를 선택하지 못했습니다.");
+    assert(await clickText(client, "144 FPS"), "온보딩 144 FPS를 선택하지 못했습니다.");
+    assert(await clickText(client, "다음"), "온보딩 performance CTA를 클릭하지 못했습니다.");
+    await waitForValue(client, "(document.body?.innerText ?? '').includes('게임 옵션도 정해주세요')", "온보딩 graphics 화면");
+    assert(await clickText(client, "다음 · 예산 정하기"), "온보딩 graphics CTA를 클릭하지 못했습니다.");
+    await waitForValue(client, "(document.body?.innerText ?? '').includes('예산은 어디까지 생각하세요?')", "온보딩 budget 화면");
+    assert(await clickText(client, "200만원"), "온보딩 200만원 빠른 예산을 선택하지 못했습니다.");
+    assert(await clickText(client, "다음 · 조건 확인"), "온보딩 budget CTA를 클릭하지 못했습니다.");
+    await waitForValue(client, "(document.body?.innerText ?? '').includes('이 조건으로 맞춰볼까요?')", "온보딩 summary 화면");
+    assert(await clickText(client, "이 조건으로 견적 생성하기"), "온보딩 견적 생성 CTA를 클릭하지 못했습니다.");
+    await waitForValue(client, "location.pathname === '/recommend' && new URLSearchParams(location.search).get('autorun') === '1' && new URLSearchParams(location.search).get('profile') === 'gaming' && new URLSearchParams(location.search).get('resolution') === '4k' && (new URLSearchParams(location.search).get('games') ?? '').includes('cyberpunk') && new URLSearchParams(location.search).get('budget') === '2000000'", "온보딩 → 자동 구성 URL 핸드오프");
+    await waitForValue(client, "document.querySelector('[data-testid=\"generator-gaming-evidence\"]') !== null && (document.body?.innerText ?? '').includes('게임별 FPS 자료')", "자동 구성 결과의 게임별 FPS 자료 패널");
+    await waitForValue(client, "(document.body?.innerText ?? '').includes('자료 없음') || (document.body?.innerText ?? '').includes('확인 필요') || (document.body?.innerText ?? '').includes('평균 FPS 기준 충족')", "자동 구성 FPS 자료 상태 표시");
+
     await client.send("Page.navigate", { url: `${baseUrl}/admin` });
     if (adminPassword) {
       await waitForValue(client, "document.querySelector('#admin-password') !== null", "관리자 인증 화면");
