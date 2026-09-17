@@ -436,7 +436,7 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome }: { o
       </>
     );
   } else if (state.step === "intensity") {
-    ctaLabel = "이 조건으로 맞춰보기";
+    ctaLabel = "다음 · 예산 정하기";
     body = (
       <>
         <div className="onboarding-options">
@@ -468,7 +468,7 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome }: { o
       </>
     );
   } else if (state.step === "budget") {
-    ctaLabel = "이 금액으로 맞춰보기";
+    ctaLabel = "다음 · 조건 확인";
     body = (
       <>
         {(state.usecase || state.mode === "spec" || state.mode === "budget") && <p className="onboarding-pill"><FiPlay /> 현재 목표 · {state.usecase === "gaming" ? `${resolutionLabelFor(state.resolution)} · ${state.refreshRate} FPS · ${GAMING_GRAPHICS_PRESET_LABELS[state.graphicsPreset]} · ${GAMING_UPSCALING_LABELS[state.upscaling]}${state.rayTracing ? " · 레이 트레이싱" : ""}` : state.usecase === "work" || state.mode === "spec" ? targetSummaryFor(state) : "예산 중심 기본 구성"}</p>}
