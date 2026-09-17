@@ -14,7 +14,8 @@ import { api } from "./api";
 import { safeExternalUrl } from "./safe-source-url";
 import { Fragment, useEffect, useState } from "react";
 import { FiActivity, FiAlertTriangle, FiCheckCircle, FiExternalLink, FiInfo, FiLoader, FiRefreshCw, FiZap } from "react-icons/fi";
-import { accessorySelections, formatPriceDelta, formatRadiatorPosition, formatRadiatorSupports, formatSpecValue, formatWon, purchaseListRowsFor, selectionList } from "./app-shared";
+import { formatPriceDelta, formatRadiatorPosition, formatRadiatorSupports, formatSpecValue, formatWon } from "./app-format";
+import { accessorySelections, purchaseListRowsFor, selectionList } from "./build-edit";
 
 export type SavedBuildCatalogCauseState = {
   key: string;

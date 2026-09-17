@@ -15,8 +15,13 @@ import { api } from "./api";
 import type { BrowserNotificationPermission } from "./browser-notification";
 import { savedBuildMonitorAutoRefreshEnabledFromStorage, savedBuildMonitorAutoRefreshMinutesFromStorage } from "./saved-build-monitor-storage";
 import { Suspense, useEffect, useMemo, useRef, useState, lazy } from "react";
-import { FiActivity, FiAlertTriangle, FiArrowLeft, FiCheckCircle, FiClock, FiCopy, FiCpu, FiDatabase, FiDownload, FiEdit3, FiExternalLink, FiInfo, FiKey, FiLayers, FiLoader, FiMoreHorizontal, FiPlus, FiRefreshCw, FiSave, FiServer, FiShield, FiTrash2, FiTool, FiXCircle, FiZap } from "react-icons/fi";
-import { CategoryIcon, SavedBuildOpenFocus, accessorySelections, currentDraftComparisonFor, formatPriceDelta, formatWon, readSavedBuildOwnerToken, selectionList } from "./app-shared";
+import { FiActivity, FiAlertTriangle, FiArrowLeft, FiCheckCircle, FiClock, FiCopy, FiCpu, FiDatabase, FiDownload, FiEdit3, FiExternalLink, FiGitBranch, FiInfo, FiKey, FiLayers, FiLoader, FiMoreHorizontal, FiPlus, FiRefreshCw, FiSave, FiServer, FiShield, FiTrash2, FiTool, FiXCircle, FiZap } from "react-icons/fi";
+import { formatPriceDelta, formatWon } from "./app-format";
+import { type SavedBuildOpenFocus } from "./app-types";
+import { accessorySelections, selectionList } from "./build-edit";
+import { CategoryIcon } from "./part-visuals";
+import { currentDraftComparisonFor } from "./result-shared";
+import { readSavedBuildOwnerToken } from "./saved-build-storage";
 import { SavedBuildCheckBadge, SavedBuildCheckTimeline, myPcAssetReportFor, savedAccessoryLineText, savedCheckAnalysisText, savedCheckDriftText, savedCheckReferenceText, savedCheckRiskText, savedCheckStatusText, savedCoreLineText, savedPreferenceText, savedPriceText } from "./SavedCheckTimeline";
 
 const LazySavedBuildPriorityPanel = lazy(() => import("./SavedBuildInsights").then((module) => ({ default: module.SavedBuildPriorityPanel })));

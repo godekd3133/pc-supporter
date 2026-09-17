@@ -92,7 +92,7 @@ async function runFlow(client, { prefix, viewport }) {
   await clickButton(client, "500만원");
   await waitForValueWithTimeout(client, "document.querySelector('.onboarding-budget-value')?.textContent?.trim() === '500만원'", "예산 500만원 선택");
   await record("07-budget-range", "예산 · 참고 가격대 · 예상 사양");
-  await clickButton(client, "이 금액으로 맞춰보기");
+  await clickButton(client, "다음 · 조건 확인");
   await waitForTitle(client, "이 조건으로 맞춰볼까요?", "조건 요약 화면");
   await record("08-summary", "조건 요약 · 항목별 변경");
   await clickButton(client, "이 조건으로 견적 생성하기");
@@ -128,11 +128,11 @@ async function runRepresentativeBranches(client, { prefix, viewport }) {
   await waitForTitle(client, "영상 편집을 어느 정도로 할까요?", "작업 강도 화면");
   await record("work", "02-intensity", "영상 편집 강도 · 구체적 예상 사양");
   await clickButton(client, "무겁게");
-  await clickButton(client, "이 조건으로 맞춰보기");
+  await clickButton(client, "다음 · 예산 정하기");
   await waitForTitle(client, "예산은 어디까지 생각하세요?", "작업 예산 화면");
   await clickButton(client, "300만원");
   await record("work", "03-budget", "작업 예산 · 4K·6K · 64GB · 2TB");
-  await clickButton(client, "이 금액으로 맞춰보기");
+  await clickButton(client, "다음 · 조건 확인");
   await waitForTitle(client, "이 조건으로 맞춰볼까요?", "작업 조건 요약");
   await record("work", "04-summary", "작업 조건 요약");
   await clickButton(client, "이 조건으로 견적 생성하기");
@@ -145,7 +145,7 @@ async function runRepresentativeBranches(client, { prefix, viewport }) {
   await waitForTitle(client, "예산은 어디까지 생각하세요?", "예산-only 화면");
   await clickButton(client, "400만원");
   await record("budget", "01-budget", "예산-only · 상급 일반 구성");
-  await clickButton(client, "이 금액으로 맞춰보기");
+  await clickButton(client, "다음 · 조건 확인");
   await waitForTitle(client, "이 조건으로 맞춰볼까요?", "예산-only 요약");
   await record("budget", "02-summary", "예산-only 조건 요약");
   await clickButton(client, "이 조건으로 견적 생성하기");
@@ -163,7 +163,7 @@ async function runRepresentativeBranches(client, { prefix, viewport }) {
   await clickButton(client, "다음");
   await waitForTitle(client, "예산은 어디까지 생각하세요?", "직접 성능 예산 화면");
   await clickButton(client, "300만원");
-  await clickButton(client, "이 금액으로 맞춰보기");
+  await clickButton(client, "다음 · 조건 확인");
   await waitForTitle(client, "이 조건으로 맞춰볼까요?", "직접 성능 요약");
   await record("spec", "02-summary", "직접 성능 조건 요약");
   await clickButton(client, "이 조건으로 견적 생성하기");

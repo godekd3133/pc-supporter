@@ -4,6 +4,9 @@ import { join } from "node:path";
 const buildOutputDirectory = process.env.PC_SUPPORTER_BUILD_OUT_DIR?.trim() || "dist";
 const distDirectory = join(process.cwd(), buildOutputDirectory, "assets");
 const maxEntryBytes = 600_000;
+// Lazy route/feature chunks should stay individually small enough for mobile cold loads;
+// a single chunk ballooning past this budget means a new heavyweight view needs splitting.
+const maxLazyChunkBytes = 160_000;
 const requiredDomainChunks = ["catalog-change-domain-", "saved-build-domain-", "purchase-domain-"];
 
 const assetNames = await readdir(distDirectory);
@@ -23,10 +26,21 @@ if (missingDomainChunks.length > 0) {
   throw new Error(`필수 도메인 chunk가 생성되지 않았습니다: ${missingDomainChunks.join(", ")}`);
 }
 
+const oversizedChunks = [];
+for (const name of assetNames) {
+  if (!name.endsWith(".js") || name === entryName || name.startsWith("react-vendor-")) continue;
+  const bytes = (await stat(join(distDirectory, name))).size;
+  if (bytes > maxLazyChunkBytes) oversizedChunks.push(`${name} = ${bytes}바이트`);
+}
+if (oversizedChunks.length > 0) {
+  throw new Error(`lazy chunk가 ${maxLazyChunkBytes}바이트 예산을 초과했습니다: ${oversizedChunks.join(", ")}`);
+}
+
 console.log(JSON.stringify({
   ok: true,
   entry: entryName,
   entryBytes,
   maxEntryBytes,
-  requiredDomainChunks
+  requiredDomainChunks,
+  maxLazyChunkBytes
 }, null, 2));

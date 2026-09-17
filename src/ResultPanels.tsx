@@ -15,9 +15,14 @@ import { safeExternalUrl } from "./safe-source-url";
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import type { IconType } from "react-icons";
 import { FiActivity, FiArrowLeft, FiBox, FiCheck, FiCheckCircle, FiChevronDown, FiClock, FiCpu, FiDatabase, FiEdit3, FiExternalLink, FiHardDrive, FiInfo, FiLayers, FiLoader, FiMonitor, FiPlus, FiRefreshCw, FiSearch, FiShare2, FiTool, FiXCircle, FiZap } from "react-icons/fi";
-import { AccessoryVisual, BuildScenarioPreviewState, CATEGORY_META, CategoryIcon, ChangeHistoryPanel, PartWatchHandler, RequestErrorNotice, accessorySelections, formatPriceDelta, formatSpecValue, formatWon, partIsWatched, repairPlanKey, scenarioRiskText, scenarioStatusLabel, selectionList, sharedPhysicalEvidenceSourceIdentity, sharedPhysicalEvidenceSources, similarityEvidenceText, suggestionSpecRows, PartVisual, PartWatchButton } from "./app-shared";
+import { formatPriceDelta, formatSpecValue, formatWon, similarityEvidenceText, suggestionSpecRows } from "./app-format";
+import { type BuildScenarioPreviewState } from "./app-types";
+import { accessorySelections, selectionList } from "./build-edit";
+import { ChangeHistoryPanel, RequestErrorNotice } from "./notices";
+import { AccessoryVisual, CATEGORY_META, CategoryIcon, type PartWatchHandler, partIsWatched, PartVisual, PartWatchButton } from "./part-visuals";
+import { repairPlanKey, scenarioRiskText, scenarioStatusLabel, sharedPhysicalEvidenceSourceIdentity, sharedPhysicalEvidenceSources } from "./result-shared";
 
-export { PartVisual, PartWatchButton } from "./app-shared";
+export { PartVisual, PartWatchButton } from "./part-visuals";
 
 const LazyRepairPlanComparisonPanel = lazy(() => import("./RepairPlanComparison").then((module) => ({ default: module.RepairPlanComparisonPanel })));
 const LazyRepairPlanSummaryTable = lazy(() => import("./RepairPlanSummary").then((module) => ({ default: module.RepairPlanSummaryTable })));

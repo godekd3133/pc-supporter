@@ -20,7 +20,7 @@ import { BuildChangeResultSummary } from "./BuildChangeResultSummary";
 import type { UpgradeBundleScenarioPreviewState } from "./UpgradeBundleScenarioPreview";
 import type { ResultSection } from "./result-view-state";
 import type { UnknownPriceItem } from "./BuildPriceSummary";
-import { PartVisual, PartWatchButton } from "./app-shared";
+import { PartVisual, PartWatchButton } from "./part-visuals";
 import { AccessoryRecommendationPanel, BuildAnalysisPanel, BuildHealthPanel, BuildScenarioPreviewPanel, BuildWatchlistPanel, CompatibilityMap, DataHealthPanel, M2SlotAssignmentPanel, RepairPlanPanel, StaleResultView, UpgradeRecommendationDetail, UpgradeRecommendationPanel, upgradeBudgetText, upgradeCompatibilityStatus, upgradeCompatibilityText, upgradeExpansionText, upgradeExpansionTone } from "./ResultPanels";
 import { GamingPerformanceEvidencePanel } from "./GamingPerformanceEvidencePanel";
 import { SavedBuildCheckTimeline } from "./SavedCheckTimeline";

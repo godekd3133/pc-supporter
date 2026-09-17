@@ -168,7 +168,7 @@ const smokeExpression = `(${async function runQuoteOnboardingSmoke() {
   await waitFor(() => text(document.querySelector(".onboarding-budget-value")) === "530만원", "권장 상한 예산 자동 조정");
   clickButton("500만원");
   await waitFor(() => text(document.querySelector(".onboarding-budget-value")) === "500만원", "권장 범위 예산 복귀");
-  clickButton("이 금액으로 맞춰보기");
+  clickButton("다음 · 조건 확인");
   await waitFor(() => text(document.querySelector(".onboarding-title")) === "이 조건으로 맞춰볼까요?", "조건 요약 화면");
   const summaryText = bodyText();
   assert(summaryText.includes("사이버펑크 2077") && summaryText.includes("4K · 144 FPS") && summaryText.includes("500만원"), "조건 요약에 선택한 게임·목표·예산이 모두 보이지 않습니다.");
@@ -176,7 +176,7 @@ const smokeExpression = `(${async function runQuoteOnboardingSmoke() {
   clickButton("예산 변경");
   await waitFor(() => text(document.querySelector(".onboarding-title")) === "예산은 어디까지 생각하세요?", "요약에서 예산 변경 화면");
   assert(text(document.querySelector(".onboarding-budget-value")) === "500만원", "요약에서 예산 변경 시 기존 금액이 보존되지 않았습니다.");
-  clickButton("이 금액으로 맞춰보기");
+  clickButton("다음 · 조건 확인");
   await waitFor(() => text(document.querySelector(".onboarding-title")) === "이 조건으로 맞춰볼까요?", "예산 변경 후 조건 요약 화면");
   assert(bodyText().includes("사이버펑크 2077") && bodyText().includes("4K · 144 FPS") && bodyText().includes("500만원"), "예산 변경 후 기존 게임·목표 조건이 보존되지 않았습니다.");
   clickButton("이 조건으로 견적 생성하기");
@@ -195,13 +195,13 @@ const smokeExpression = `(${async function runQuoteOnboardingSmoke() {
   await waitFor(() => text(document.querySelector(".onboarding-title")).includes("영상 편집을 어느 정도로 할까요?"), "작업 강도 화면");
   const intensityText = bodyText();
   assert(intensityText.includes("FHD·가벼운 컷 편집") && intensityText.includes("4K 편집·일반 효과") && intensityText.includes("4K·6K 편집·고급 효과") && intensityText.includes("64GB") && intensityText.includes("2TB SSD"), "작업 강도별 구체적인 예상 작업·사양이 표시되지 않았습니다.");
-  await chooseOption("무겁게", "이 조건으로 맞춰보기");
-  clickButton("이 조건으로 맞춰보기");
+  await chooseOption("무겁게", "다음 · 예산 정하기");
+  clickButton("다음 · 예산 정하기");
   await waitFor(() => text(document.querySelector(".onboarding-title")) === "예산은 어디까지 생각하세요?", "작업 예산 화면");
   const workEstimateText = text(document.querySelector(".onboarding-estimate"));
   assert(workEstimateText.includes("4K·6K 편집·고급 효과") && workEstimateText.includes("64GB") && workEstimateText.includes("2TB SSD"), "작업 종류·강도에 맞는 구체적인 예상 사양이 없습니다.");
   clickButton("300만원");
-  clickButton("이 금액으로 맞춰보기");
+  clickButton("다음 · 조건 확인");
   await waitFor(() => text(document.querySelector(".onboarding-title")) === "이 조건으로 맞춰볼까요?", "작업 조건 요약 화면");
   assert(bodyText().includes("영상 편집") && bodyText().includes("무겁게") && bodyText().includes("4K·6K 편집·고급 효과"), "작업 조건 요약이 선택값을 보존하지 않았습니다.");
   clickButton("이 조건으로 견적 생성하기");
@@ -218,7 +218,7 @@ const smokeExpression = `(${async function runQuoteOnboardingSmoke() {
   await waitFor(() => text(document.querySelector(".onboarding-budget-value")) === "400만원", "예산 중심 금액 선택 반영");
   const budgetOnlyEstimate = text(document.querySelector(".onboarding-estimate"));
   assert(budgetOnlyEstimate.includes("상급 일반 구성") && budgetOnlyEstimate.includes("64GB") && budgetOnlyEstimate.includes("2TB SSD"), "예산 중심 분기의 예상 사양이 표시되지 않았습니다.");
-  clickButton("이 금액으로 맞춰보기");
+  clickButton("다음 · 조건 확인");
   await waitFor(() => text(document.querySelector(".onboarding-title")) === "이 조건으로 맞춰볼까요?", "예산 중심 요약 화면");
   assert(bodyText().includes("400만원") && bodyText().includes("상급 일반 구성"), "예산 중심 요약에 예산·예상 수준이 보이지 않습니다.");
   clickButton("이 조건으로 견적 생성하기");
@@ -237,7 +237,7 @@ const smokeExpression = `(${async function runQuoteOnboardingSmoke() {
   clickButton("다음");
   await waitFor(() => text(document.querySelector(".onboarding-title")) === "예산은 어디까지 생각하세요?", "직접 성능 예산 화면");
   clickButton("300만원");
-  clickButton("이 금액으로 맞춰보기");
+  clickButton("다음 · 조건 확인");
   await waitFor(() => text(document.querySelector(".onboarding-title")) === "이 조건으로 맞춰볼까요?", "직접 성능 요약 화면");
   assert(bodyText().includes("최상급 성능") && bodyText().includes("외장 GPU 포함") && bodyText().includes("64GB") && bodyText().includes("2TB"), "직접 성능 요약에 선택한 조건이 보이지 않습니다.");
   clickButton("이 조건으로 견적 생성하기");

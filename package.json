@@ -29,6 +29,7 @@
     "test:browser:generator-selection-reasons": "node scripts/generator-selection-reasons-smoke.mjs",
     "test:browser:budget-ladder-summary": "node scripts/budget-ladder-summary-smoke.mjs",
     "test:browser:quote-onboarding": "node scripts/quote-onboarding-smoke.mjs",
+    "test:browser:quote-onboarding-final": "node scripts/verify-onboarding-final.mjs",
     "capture:quote-onboarding": "node scripts/quote-onboarding-capture.mjs",
     "test:browser:readability": "node scripts/readability-smoke.mjs",
     "test:browser:history-priority": "node scripts/history-priority-race-probe.mjs",
