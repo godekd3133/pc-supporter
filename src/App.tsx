@@ -155,7 +155,7 @@ import { savedBuildVersionGroupsFor, savedBuildVersionLabelFor } from "../shared
 import type { SavedBuildVersionGroup } from "../shared/saved-build-version";
 import { savedBuildVersionDeltaFor } from "../shared/saved-build-version-delta";
 import { dismissSavedBuildMonitorAlerts, markSavedBuildMonitorAlertsRead, mergeSavedBuildMonitorAlerts, savedBuildMonitorAlertFor, savedBuildMonitorAlertMatches } from "../shared/saved-build-monitor-alerts";
-import type { SavedBuildMonitorAlert } from "../shared/saved-build-monitor-alerts";
+import type { SavedBuildMonitorAlert, SavedBuildMonitorAlternative } from "../shared/saved-build-monitor-alerts";
 import { SAVED_BUILD_SERVER_MONITOR_ALERT_POLICIES, SAVED_BUILD_SERVER_MONITOR_INTERVALS, savedBuildMonitorAlertAllowed } from "../shared/saved-build-monitor-subscription";
 import type { SavedBuildMonitorSubscriptionResponse, SavedBuildServerMonitorAlertPolicy, SavedBuildServerMonitorInterval } from "../shared/saved-build-monitor-subscription";
 import { savedBuildCatalogChangeValueDiffsFor } from "../shared/saved-build-change-causes";
@@ -691,6 +691,7 @@ type UnifiedAlertItem = {
   kind: string;
   title: string;
   message: string;
+  alternative?: SavedBuildMonitorAlternative;
   createdAt: string;
   read: boolean;
 };
@@ -912,7 +913,7 @@ function App() {
   const savedBuildUnreadAlertCount = useMemo(() => savedBuildMonitorAlerts.filter((alert) => savedBuildMonitorAlertMatches(alert, "unread")).length, [savedBuildMonitorAlerts]);
   const watchlistUnreadAlertCount = useMemo(() => watchlistAlertBundles.reduce((sum, bundle) => sum + bundle.unreadCount, 0), [watchlistAlertBundles]);
   const homeAlertItems = useMemo<UnifiedAlertItem[]>(() => [
-    ...savedBuildMonitorAlerts.filter((alert) => !alert.dismissedAt).map((alert) => ({ id: `build:${alert.id}`, source: "build" as const, sourceLabel: alert.buildName, kind: alert.kind, title: alert.title, message: alert.message, createdAt: alert.createdAt, read: Boolean(alert.readAt) })),
+    ...savedBuildMonitorAlerts.filter((alert) => !alert.dismissedAt).map((alert) => ({ id: `build:${alert.id}`, source: "build" as const, sourceLabel: alert.buildName, kind: alert.kind, title: alert.title, message: alert.message, ...(alert.alternative ? { alternative: alert.alternative } : {}), createdAt: alert.createdAt, read: Boolean(alert.readAt) })),
     ...watchlistAlertBundles.flatMap((bundle) => bundle.items.map((alert) => ({ id: `watchlist:${bundle.watchlistId}:${alert.id}`, source: "watchlist" as const, sourceLabel: bundle.watchlistName ?? "가격 추적", kind: alert.kind, title: WATCHLIST_ALERT_KIND_LABELS[alert.kind] ?? alert.kind, message: alert.message, createdAt: alert.createdAt, read: Boolean(alert.readAt) })))
   ].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).slice(0, 5), [savedBuildMonitorAlerts, watchlistAlertBundles]);
   const homeUnreadAlertCount = savedBuildUnreadAlertCount + watchlistUnreadAlertCount;
@@ -1170,7 +1171,7 @@ function App() {
     for (const alert of newAlerts) {
       try {
         const notification = new window.Notification(`PC Supporter · ${alert.buildName}`, {
-          body: `${alert.title} · ${alert.message}${alert.findingTitles && alert.findingTitles.length > 0 ? ` · 영향받는 항목: ${alert.findingTitles.slice(0, 2).join(", ")}` : ""}`,
+          body: `${alert.title} · ${alert.message}${alert.alternative ? ` · ${alert.alternative.currentPartName} → ${alert.alternative.candidatePartName}` : ""}${alert.findingTitles && alert.findingTitles.length > 0 ? ` · 영향받는 항목: ${alert.findingTitles.slice(0, 2).join(", ")}` : ""}`,
           tag: alert.id
         });
         notification.onclick = () => {

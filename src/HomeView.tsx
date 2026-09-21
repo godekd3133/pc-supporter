@@ -6,6 +6,7 @@ import { DATA_FRESHNESS_LABELS, PART_CATEGORIES } from "../shared/types";
 import type { BudgetLadderLocalShareEntry } from "../shared/budget-ladder-local-history";
 import type { AlternativeComparisonLocalShareEntry } from "../shared/alternative-comparison-local-history";
 import type { SavedBuildVersionLocalShareEntry } from "../shared/saved-build-version-local-history";
+import type { SavedBuildMonitorAlternative } from "../shared/saved-build-monitor-alerts";
 import { classifyDataFreshness } from "../shared/data-freshness";
 import { ACCESSORY_CATALOG_CACHE_STORAGE_KEY } from "../shared/accessory-catalog-cache";
 import { CATALOG_PICKER_CACHE_STORAGE_KEY } from "../shared/catalog-picker-cache";
@@ -18,6 +19,7 @@ export type AlertCenterItem = {
   kind: string;
   title: string;
   message: string;
+  alternative?: SavedBuildMonitorAlternative;
   createdAt: string;
   read: boolean;
 };
@@ -32,7 +34,7 @@ function HomeAlertCenter({ items, unreadCount, hasBuildAlerts, hasWatchlistAlert
         : FiTag;
       return <article className={`home-alerts-item ${item.read ? "" : "unread"}`} data-testid={`home-alert-${item.id}`} key={item.id}>
         <span className={`home-alerts-item-icon ${item.source}`}><ItemIcon /></span>
-        <div className="home-alerts-item-copy"><div className="home-alerts-item-title"><strong>{item.title}</strong><span>{item.source === "build" ? "저장한 견적" : "가격 추적"} · {item.sourceLabel}</span></div><p>{item.message}</p><small>{new Date(item.createdAt).toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" })}{item.read ? "" : " · 아직 안 봄"}</small></div>
+        <div className="home-alerts-item-copy"><div className="home-alerts-item-title"><strong>{item.title}</strong><span>{item.source === "build" ? "저장한 견적" : "가격 추적"} · {item.sourceLabel}</span></div><p>{item.message}</p>{item.alternative && <div className="home-alerts-alternative"><span>{item.alternative.currentPartName}</span><b>→</b><strong>{item.alternative.candidatePartName}</strong>{item.alternative.priceDeltaWon !== undefined && <em>{item.alternative.priceDeltaWon < 0 ? `${Math.abs(item.alternative.priceDeltaWon).toLocaleString("ko-KR")}원 절약` : `가격 ${item.alternative.priceDeltaWon > 0 ? "+" : ""}${item.alternative.priceDeltaWon.toLocaleString("ko-KR")}원`}</em>}</div>}<small>{new Date(item.createdAt).toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" })}{item.read ? "" : " · 아직 안 봄"}</small></div>
       </article>;
     })}</div>
     <div className="home-alerts-actions">{hasBuildAlerts && <button className="button button-light" type="button" data-testid="home-alert-open-history" onClick={onOpenHistory}><FiBell /> 저장한 견적 알림 보기</button>}{hasWatchlistAlerts && <button className="button button-light" type="button" data-testid="home-alert-open-watchlist" onClick={onOpenWatchlist}><FiTag /> 가격 추적 보기</button>}</div>
@@ -216,7 +218,7 @@ function mobileHomeRowState(build: BuildSelection, result: CompatibilityResult |
   return { state: "", tone: "neutral", name: names };
 }
 
-function MobileHomeView({ build, result, resultIsStale, partMap, onStart, onGuidedStart, onGenerate, onDemo, onCompatibleDemo, onOpenResult, onOpenHistory }: { build: BuildSelection; result: CompatibilityResult | null; resultIsStale: boolean; partMap: ReadonlyMap<string, Part>; onStart: () => void; onGuidedStart: () => void; onGenerate: () => void; onDemo: () => void; onCompatibleDemo: () => void; onOpenResult: () => void; onOpenHistory: () => void }) {
+function MobileHomeView({ build, result, resultIsStale, partMap, alertItems, alertUnreadCount, onStart, onGuidedStart, onGenerate, onDemo, onCompatibleDemo, onOpenResult, onOpenHistory, onOpenWatchlist }: { build: BuildSelection; result: CompatibilityResult | null; resultIsStale: boolean; partMap: ReadonlyMap<string, Part>; alertItems: AlertCenterItem[]; alertUnreadCount: number; onStart: () => void; onGuidedStart: () => void; onGenerate: () => void; onDemo: () => void; onCompatibleDemo: () => void; onOpenResult: () => void; onOpenHistory: () => void; onOpenWatchlist: () => void }) {
   const selectedCategoryCount = PART_CATEGORIES.filter((category) => selectionList(build, category).length > 0).length;
   const selectedItemCount = PART_CATEGORIES.reduce((count, category) => count + selectionList(build, category).length, 0);
   const hasBuild = selectedItemCount > 0;
@@ -245,6 +247,7 @@ function MobileHomeView({ build, result, resultIsStale, partMap, onStart, onGuid
         </section>}
     <div className="mobile-primary-actions"><button className="mobile-primary-action" data-testid="mobile-home-primary-action" type="button" onClick={resultReady ? onOpenResult : hasBuild ? onStart : onGuidedStart}><FiSearch /><span>{resultReady ? "최근 검사 결과 보기" : hasBuild ? "견적 검사 준비" : "새 견적 시작하기"}</span><FiArrowRight /></button>{resultReady && <button className="mobile-secondary-action" type="button" onClick={onStart}><FiEdit3 /><span>견적 수정하기</span><FiArrowRight /></button>}</div>
     <section className="mobile-next-steps" aria-label="다음 단계"><div className="mobile-section-heading"><div><span className="mobile-kicker">QUICK START</span><h2>추천 구성</h2></div><button type="button" className="mobile-section-link" onClick={onOpenHistory}>저장한 견적<FiArrowRight /></button></div><button className="mobile-recommend-card" data-testid="mobile-home-recommend" type="button" onClick={hasBuild ? onGenerate : onStart}><span className="mobile-recommend-icon">{hasBuild ? <FiZap /> : <FiEdit3 />}</span><span className="mobile-recommend-copy"><strong>{hasBuild ? "조건으로 자동 구성" : "부품을 직접 선택하기"}</strong></span><FiArrowRight /></button></section>
+    {alertItems.length > 0 && <section className="mobile-alert-preview" aria-label="모바일 알림 센터" data-testid="mobile-home-alert-center"><div className="mobile-section-heading"><div><span className="mobile-kicker">ALERT / OPPORTUNITY</span><h2>좋은 소식이 있어요</h2></div>{alertUnreadCount > 0 && <span className="mobile-alert-badge">{alertUnreadCount}개 안 봄</span>}</div><div className="mobile-alert-preview-list">{alertItems.slice(0, 2).map((item) => { const ItemIcon = item.kind === "alternative" ? FiTrendingUp : item.source === "watchlist" ? FiTag : FiBell; return <article className={`mobile-alert-preview-item ${item.kind}`} key={item.id}><span className="mobile-alert-preview-icon"><ItemIcon /></span><div><strong>{item.title}</strong><p>{item.message}</p>{item.alternative && <small>{item.alternative.currentPartName} → {item.alternative.candidatePartName}{item.alternative.priceDeltaWon !== undefined && item.alternative.priceDeltaWon < 0 ? ` · ${Math.abs(item.alternative.priceDeltaWon).toLocaleString("ko-KR")}원 절약` : ""}</small>}</div></article>; })}</div><button className="mobile-alert-preview-action" type="button" onClick={() => alertItems[0].source === "watchlist" ? onOpenWatchlist() : onOpenHistory()}><FiBell /> 알림 자세히 보기 <FiArrowRight /></button></section>}
     <details className="mobile-demo-tools"><summary>예시 구성 보기</summary><div><button type="button" onClick={onDemo}>문제 있는 예시 견적</button><button type="button" onClick={onCompatibleDemo}>문제 없는 예시 견적</button></div></details>
   </section>;
 }
@@ -253,7 +256,7 @@ export function HomeView({ meta, bootstrapLoading, bootstrapErrorCount, build, r
   const localShareCount = budgetLadderShares.length + alternativeComparisonShares.length + savedBuildVersionShares.length;
   const hasAnySelection = PART_CATEGORIES.some((category) => selectionList(build, category).length > 0) || accessorySelections(build).length > 0;
   return <div className="home-page">
-    <MobileHomeView build={build} result={result} resultIsStale={resultIsStale} partMap={partMap} onStart={onStart} onGuidedStart={onGuidedStart} onGenerate={onGenerate} onDemo={onDemo} onCompatibleDemo={onCompatibleDemo} onOpenResult={onOpenResult} onOpenHistory={onOpenHistory} />
+    <MobileHomeView build={build} result={result} resultIsStale={resultIsStale} partMap={partMap} alertItems={alertItems} alertUnreadCount={alertUnreadCount} onStart={onStart} onGuidedStart={onGuidedStart} onGenerate={onGenerate} onDemo={onDemo} onCompatibleDemo={onCompatibleDemo} onOpenResult={onOpenResult} onOpenHistory={onOpenHistory} onOpenWatchlist={onOpenWatchlist} />
     <section className="hero-section">
       <div className="hero-copy">
         {hasAnySelection

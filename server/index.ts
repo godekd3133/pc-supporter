@@ -1036,8 +1036,8 @@ async function performSavedBuildMonitorRun(build: SavedBuildRecord, resources?: 
     const monitorState = completeSavedBuildMonitorRun(build, build.monitorState, snapshot, snapshot.checkedAt, build.checkSnapshot);
     const updated = await updateSavedBuildMonitorState(build.id, monitorState);
     if (!updated) throw new Error("저장 견적이 점검 중 삭제되었습니다.");
-    // "내 PC"로 승격된 견적은 대안 감시도 수행 — 벤치 근거가 있는 cpu/gpu에서 더 좋은 후보가 카탈로그에 들어오면 알림을 남긴다.
-    if (updated.myPcAt && updated.monitorState) {
+    // 서버 점검을 사용하는 저장 견적은 대안 감시도 수행 — 벤치 근거가 있는 cpu/gpu에서 더 나은 조건의 후보가 카탈로그에 들어오면 알림을 남긴다.
+    if (updated.monitorState) {
       const base = updated.monitorState;
       const alternatives = savedBuildAlternativeAlertsFor(updated, source.catalog, snapshot.checkedAt)
         .filter((alert) => savedBuildMonitorAlertAllowed(base.alertPolicy, alert.kind));

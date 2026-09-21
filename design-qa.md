@@ -499,6 +499,62 @@ No actionable P0, P1, or P2 visual findings remain for the requested redesign. T
 - `scripts/browser-smoke.mjs`에 `/start` 온보딩 → `/recommend?autorun=1` 핸드오프 커버리지를 추가했다(게임 검색·4K·144 FPS·200만원 선택 후 생성 결과와 `게임별 FPS 자료` 패널까지 확인). `quote-onboarding-smoke.mjs`의 contract 카드 문구 단정을 새 카피에 맞게 갱신했다.
 - 검증: `npm run typecheck` 통과, `npx vitest run` `255개 파일 / 1,360개 테스트` 통과, `npm run build` 통과(entry `171,631`바이트, `600,000`바이트 게이트 이내), `git diff --check` 통과, `npm run test:browser` 전체 통과(온보딩 섹션 포함), `npm run test:browser:quote-onboarding` 데스크톱·390px 모바일 통과, `npm run test:browser:readability` 20개 화면·위반 0·라이트 서페이스 누수 0·런타임 오류 0.
 
+## 2026-09-21 price-trend-and-opportunity-alert pass
+
+### Source visual truth
+
+- [Part detail direction](</Users/kimminkyu/.codex/generated_images/01a0c208-1a84-75b1-b659-1897feadac65/exec-25990673-c06c-47aa-b143-aa903997986a.png>): component detail, price trend, price alert, and estimate handoff.
+- [Quote summary direction](</Users/kimminkyu/.codex/generated_images/01a0c208-1a84-75b1-b659-1897feadac65/exec-094fcaa9-c0c6-4b04-b233-73e40d55a78e.png>): quote total trend, component drivers, and notification entry.
+- [Opportunity alert direction](</Users/kimminkyu/.codex/generated_images/01a0c208-1a84-75b1-b659-1897feadac65/exec-c3c46f42-6126-4c25-a048-7e17de1e9ce2.png>): same-condition alternative alert and quote-linked opportunity inbox.
+- Source pixel dimensions: `853 × 1844` each. The source images are the generated `390 × 844` mobile concepts rendered at approximately `2.1875×` density; comparison was normalized conceptually to the implementation CSS viewport.
+
+### Implementation evidence
+
+- Browser: Codex in-app browser, local implementation `http://127.0.0.1:5174/`.
+- Viewport: explicit `390 × 844` CSS pixels for the mobile checks.
+- Captures: CUA inline screenshots from the implementation tab for `/catalog?category=cpu`, `/result`, and `/`; the CUA screenshot surface does not expose a filesystem path, so the evidence is retained in the task trace rather than silently represented as a local PNG path.
+- State A: CPU catalog detail, 30-day price trend, then 7-day selection. The selected control changed to `7일` and the request reloaded the corresponding period. With no recorded price changes, the UI showed the honest empty-history state instead of drawing a fake trend.
+- State B: compatible demo result. The `견적 가격 흐름` panel appears in the main result column below the result quick navigation, exposes `7일 / 30일 / 90일`, and changes the active period to `7일`. The current catalog had no historical change samples, so the panel showed `기록 부족` while keeping the current total and source disclaimer.
+- State C: temporary, isolated browser-local `alternative` alert context was injected only for visual QA, the mobile `ALERT / OPPORTUNITY` card was captured and verified, then the temporary localStorage entry was removed. No persistent user alert data was left behind.
+- Fresh-tab console check: no `error` or `warn` entries after the chart-key fix. The earlier stale-tab duplicate-key warning came from the pre-fix single-value guide-line keys and was not reproduced in the fresh tab.
+
+### Full-view and focused-region comparison
+
+- Full-view comparison: the existing PC Supporter mobile shell, blue action color, dark ink typography, mono section labels, rounded white surfaces, bottom navigation, and compact information hierarchy remain consistent with the three source directions.
+- Focused region — part detail: the implementation now places `PRICE TREND` directly below the price-action decision, with period tabs, chart/empty state, min/current/max summary, and the catalog-price disclaimer. The design target's chart is shown only when the API provides history; the no-history state is intentional and prevents fabricated movement.
+- Focused region — quote summary: the implementation puts the total-price trend in the main result flow rather than hiding it only in the sidebar. The current total, delta state, period tabs, driver list, and source disclaimer are visible as one decision surface.
+- Focused region — opportunity alert: the implementation renders the same-condition current part → candidate part relationship, savings amount, unread count, and a direct path to the alert detail screen on mobile home and saved-build surfaces. Browser notification text uses the same candidate context.
+
+### Required fidelity surfaces
+
+- Fonts and typography: reused the existing Noto Sans KR / Manrope / DM Mono stack, existing eyebrow scale, existing mobile type hierarchy, and current shell spacing; no new font or unverified fallback was introduced.
+- Spacing and layout rhythm: new panels use the existing 12–17px mobile radius family, compact section gaps, 390px-safe wrapping, and the existing fixed bottom navigation boundary. The main quote trend is positioned before the purchase gate on the result route.
+- Colors and visual tokens: reused `--teal`, `--teal-soft`, `--ink`, `--line`, and the existing blue/pale-blue semantic surfaces; price increase/decrease and opportunity states use the existing red/green language rather than a separate palette.
+- Image quality and asset fidelity: no new product raster asset was required. Existing product visuals and react-icons remain the source for icons; the trend line is a data visualization, not a hand-drawn icon or placeholder asset.
+- Copy and content: all new user-facing copy distinguishes catalog change history from actual purchase price, stock, delivery, and checkout guarantees. Alternative alerts name the current part, candidate part, score basis, and price delta.
+
+### Findings
+
+- No actionable P0/P1/P2 visual or interaction findings remain after the final placement and fresh-tab console pass.
+- P3 follow-up: the generated concepts show populated sample charts, while the current catalog snapshot has no recorded changes for the tested demo parts. This is an expected data-state difference, not a UI defect; once real history records exist, the existing chart path renders them.
+
+### Implementation checklist
+
+- [x] Part detail price trend with `7일 / 30일 / 90일` API-backed period switching.
+- [x] Main result quote-total trend with weighted multi-part aggregation and driver rows.
+- [x] Same-condition alternative context stored, parsed, merged, and displayed in app alerts.
+- [x] Browser notification body includes the current → candidate opportunity context.
+- [x] Mobile home alert preview added so the opportunity surface is not desktop-only.
+- [x] Empty/loading/error states and source disclaimers verified.
+- [x] Fresh browser console checked after the final chart-key fix.
+
+### Verification
+
+- `npm test`: `264` files / `1,400` tests passed.
+- `npm run typecheck`: passed.
+- `npm run build`: passed; entry `183,475` bytes against the `600,000` byte gate and client bundle verifier passed.
+- `git diff --check`: passed.
+
 ## Final result
 
 passed

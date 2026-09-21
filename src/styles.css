@@ -23192,3 +23192,101 @@ html[data-theme="dark"] .onboarding-draft { border-color: var(--line); }
 @media print {
   .onboarding-cta-bar, .onboarding-back { display: none !important; }
 }
+
+/* Price-trend surfaces: the same visual language is shared by part detail,
+   quote summary, and the alert opportunity cards. */
+.price-trend-chart { margin-top: 12px; padding: 8px 8px 0; border-radius: 11px; background: #fbfdff; }
+.price-trend-chart-svg { display: block; width: 100%; height: auto; overflow: visible; }
+.price-trend-chart-guide { stroke: #e7eff6; stroke-dasharray: 3 4; stroke-width: 1; }
+.price-trend-chart-area { fill: rgba(49, 130, 246, .09); }
+.price-trend-chart-line { fill: none; stroke: var(--teal); stroke-linecap: round; stroke-linejoin: round; stroke-width: 2.5; }
+.price-trend-chart-point { fill: #fff; stroke: var(--teal); stroke-width: 2; }
+.price-trend-chart-point.current { fill: var(--teal); stroke: #fff; stroke-width: 3; filter: drop-shadow(0 2px 4px rgba(49, 130, 246, .28)); }
+.price-trend-chart-labels { display: flex; justify-content: space-between; gap: 6px; padding: 1px 2px 0; color: #91a5b5; font-family: "DM Mono", monospace; font-size: 8px; }
+
+.catalog-price-history-panel { margin-top: 12px; padding: 13px; border: 1px solid #dce9f4; border-radius: 13px; background: #fbfdff; }
+.catalog-price-history-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.catalog-price-history-heading > div { min-width: 0; }
+.catalog-price-history-heading .eyebrow { margin-bottom: 5px; color: var(--teal); }
+.catalog-price-history-heading h3 { margin: 0; color: var(--ink); font-size: 15px; }
+.catalog-price-history-heading p:not(.eyebrow) { margin: 4px 0 0; color: #8da0ae; font-size: 8px; line-height: 1.45; }
+.catalog-price-history-heading > span { flex: 0 0 auto; padding: 4px 6px; border-radius: 5px; color: #6f8da6; background: #eaf3fb; font-family: "DM Mono", monospace; font-size: 7px; }
+.catalog-price-history-range, .build-price-trend-range { display: flex; gap: 5px; margin-top: 10px; }
+.catalog-price-history-range button, .build-price-trend-range button { min-height: 27px; padding: 0 9px; border: 1px solid #dce7ef; border-radius: 7px; color: #8197a8; background: #fff; font-size: 8px; cursor: pointer; }
+.catalog-price-history-range button:hover, .build-price-trend-range button:hover { border-color: #a7c6df; color: var(--teal-deep); }
+.catalog-price-history-range button.selected, .build-price-trend-range button.selected { border-color: var(--teal); color: #fff; background: var(--teal); font-weight: 700; }
+.catalog-price-history-state, .build-price-trend-state { display: flex; align-items: center; gap: 6px; min-height: 50px; margin-top: 10px; color: #8b9fab; font-size: 8px; line-height: 1.45; }
+.catalog-price-history-state.error, .build-price-trend-state.error { color: #a56565; }
+.catalog-price-history-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; margin-top: 8px; }
+.catalog-price-history-stats > div { min-width: 0; padding: 7px 8px; border: 1px solid #e0ebf3; border-radius: 7px; background: #fff; }
+.catalog-price-history-stats span, .catalog-price-history-stats strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.catalog-price-history-stats span { color: #8fa3b1; font-size: 7px; }
+.catalog-price-history-stats strong { margin-top: 3px; color: #547996; font-family: "DM Mono", monospace; font-size: 8px; }
+.catalog-price-history-note, .build-price-trend-note { display: flex; align-items: flex-start; gap: 5px; margin: 10px 0 0; color: #98a8b3; font-size: 7px; line-height: 1.45; }
+.catalog-price-history-note svg, .build-price-trend-note svg { flex: 0 0 auto; margin-top: 1px; color: #7f9db1; }
+
+.build-price-trend-panel { margin-top: 13px; padding: 14px; border: 1px solid #dce9f4; border-radius: 13px; background: #fbfdff; }
+.build-price-trend-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.build-price-trend-heading > div { min-width: 0; }
+.build-price-trend-heading .eyebrow { margin-bottom: 5px; color: var(--teal); }
+.build-price-trend-heading h2 { margin: 0; color: var(--ink); font-size: 15px; }
+.build-price-trend-heading p:not(.eyebrow) { margin: 4px 0 0; color: #8da0ae; font-size: 8px; line-height: 1.45; }
+.build-price-trend-heading > span { flex: 0 0 auto; padding: 4px 6px; border-radius: 5px; color: #6f8da6; background: #eaf3fb; font-family: "DM Mono", monospace; font-size: 7px; }
+.build-price-trend-total { display: flex; align-items: flex-end; justify-content: space-between; gap: 9px; margin-top: 13px; }
+.build-price-trend-total > div { min-width: 0; }
+.build-price-trend-total span, .build-price-trend-total strong { display: block; }
+.build-price-trend-total span { color: #849aa9; font-size: 8px; }
+.build-price-trend-total strong { margin-top: 3px; color: var(--ink); font-family: "DM Mono", monospace; font-size: 21px; letter-spacing: -.04em; }
+.build-price-trend-total em { flex: 0 0 auto; padding: 5px 7px; border-radius: 999px; color: #718b9e; background: #edf4f9; font-family: "DM Mono", monospace; font-size: 7px; font-style: normal; }
+.build-price-trend-total em.increased { color: #a55e5e; background: #fff0f0; }
+.build-price-trend-total em.decreased { color: #4f8a78; background: #e9f8f1; }
+.build-price-trend-insight { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 9px; border: 1px solid #e5dedd; border-radius: 9px; background: #fffafa; }
+.build-price-trend-insight > span { display: grid; place-items: center; width: 27px; height: 27px; flex: 0 0 auto; border-radius: 8px; color: #c06060; background: #ffe9e9; }
+.build-price-trend-insight > div { min-width: 0; }
+.build-price-trend-insight strong, .build-price-trend-insight small { display: block; }
+.build-price-trend-insight strong { color: #7e6767; font-size: 8px; }
+.build-price-trend-insight small { margin-top: 3px; color: #aa9292; font-size: 7px; }
+.build-price-trend-items { margin-top: 10px; border-top: 1px solid #e8eff4; }
+.build-price-trend-items-heading, .build-price-trend-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.build-price-trend-items-heading { padding: 9px 0 6px; }
+.build-price-trend-items-heading strong { color: #6b8494; font-size: 8px; }
+.build-price-trend-items-heading span { color: #9aabb6; font-size: 7px; }
+.build-price-trend-item { min-width: 0; padding: 7px 0; border-top: 1px solid #eef3f6; }
+.build-price-trend-item span { overflow: hidden; color: #728897; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.build-price-trend-item strong { flex: 0 0 auto; color: #6a8ba4; font-family: "DM Mono", monospace; font-size: 8px; }
+.build-price-trend-item strong::first-letter { color: inherit; }
+
+.home-alerts-alternative { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; margin-top: 7px; padding: 6px 7px; border: 1px solid #d9e8f5; border-radius: 7px; color: #6f879a; background: #f7fbff; font-size: 7px; }
+.home-alerts-alternative span, .home-alerts-alternative strong { overflow: hidden; max-width: 42%; text-overflow: ellipsis; white-space: nowrap; }
+.home-alerts-alternative b { color: var(--teal); }
+.home-alerts-alternative strong { color: #4f7899; }
+.home-alerts-alternative em { margin-left: auto; padding: 3px 5px; border-radius: 4px; color: #4f8a78; background: #e9f8f1; font-family: "DM Mono", monospace; font-size: 6.5px; font-style: normal; }
+.history-monitor-alert-alternative { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 7px; margin-top: 7px; padding: 8px; border: 1px solid rgba(152, 178, 170, .45); border-radius: 7px; background: rgba(255, 255, 255, .72); }
+.history-monitor-alert-alternative > div { min-width: 0; }
+.history-monitor-alert-alternative > div span, .history-monitor-alert-alternative > div strong, .history-monitor-alert-alternative > div small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.history-monitor-alert-alternative > div span { color: #8b9d99; font-size: 6.5px; }
+.history-monitor-alert-alternative > div strong { margin-top: 3px; color: inherit; font-size: 8px; }
+.history-monitor-alert-alternative > div small { margin-top: 2px; color: #8b9d99; font-family: "DM Mono", monospace; font-size: 6.5px; }
+.history-monitor-alert-alternative > b { color: var(--teal); }
+.history-monitor-alert-alternative > em { grid-column: 1 / -1; padding-top: 5px; border-top: 1px dashed rgba(152, 178, 170, .4); color: #4f8871; font-family: "DM Mono", monospace; font-size: 7px; font-style: normal; text-align: right; }
+
+.mobile-alert-preview { margin-top: 14px; padding: 14px; border: 1px solid #dce9f4; border-radius: 17px; background: #fbfdff; box-shadow: var(--mobile-shadow); }
+.mobile-alert-preview .mobile-section-heading { margin-bottom: 10px; }
+.mobile-alert-preview .mobile-section-heading h2 { font-size: 17px; }
+.mobile-alert-badge { flex: 0 0 auto; padding: 5px 7px; border-radius: 999px; color: #a56b1d; background: #fff3d9; font-family: "DM Mono", monospace; font-size: 7px; }
+.mobile-alert-preview-list { display: grid; gap: 7px; }
+.mobile-alert-preview-item { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 8px; padding: 9px; border: 1px solid #e5edf3; border-radius: 10px; background: #fff; }
+.mobile-alert-preview-item.alternative { border-color: #d8e8f5; background: #f7fbff; }
+.mobile-alert-preview-icon { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; color: var(--teal); background: var(--teal-soft); }
+.mobile-alert-preview-item > div { min-width: 0; }
+.mobile-alert-preview-item strong, .mobile-alert-preview-item p, .mobile-alert-preview-item small { display: block; }
+.mobile-alert-preview-item strong { color: var(--mobile-ink, var(--ink)); font-size: 10px; }
+.mobile-alert-preview-item p { margin: 3px 0 0; overflow: hidden; color: var(--mobile-muted, #718497); font-size: 8px; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
+.mobile-alert-preview-item small { margin-top: 4px; overflow: hidden; color: #5a87a8; font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }
+.mobile-alert-preview-action { display: flex; align-items: center; justify-content: center; gap: 5px; width: 100%; min-height: 36px; margin-top: 9px; padding: 0 10px; border: 1px solid #d5e5f1; border-radius: 9px; color: var(--teal-deep); background: #fff; font-size: 9px; font-weight: 700; }
+.mobile-alert-preview-action svg:last-child { margin-left: auto; }
+
+@media (max-width: 760px) {
+  .build-price-trend-total strong { font-size: 20px; }
+  .catalog-price-history-panel, .build-price-trend-panel { border-radius: 12px; }
+}

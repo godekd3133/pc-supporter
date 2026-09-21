@@ -54,8 +54,23 @@ export function savedBuildAlternativeAlertsFor(build: SavedBuildRecord, catalogP
       buildId: build.id,
       buildName: build.name,
       kind: "alternative",
-      title: `${CATEGORY_LABELS[watch.category]} 대안 등장`,
-      message: `현재 ${current.name} 대비 ${best.name} — ${watch.scoreLabel} 약 +${gainPercent}% 빠릅니다.`,
+      title: `${CATEGORY_LABELS[watch.category]} 더 나은 조건 발견`,
+      message: currentPrice !== undefined && partPriceFor(best) !== undefined && partPriceFor(best)! < currentPrice
+        ? `현재 ${current.name}보다 ${ (currentPrice - partPriceFor(best)!).toLocaleString("ko-KR") }원 저렴하고 ${watch.scoreLabel} 약 +${gainPercent}% 높아요.`
+        : `현재 ${current.name} 대비 ${best.name} — ${watch.scoreLabel} 약 +${gainPercent}% 높아요.`,
+      alternative: {
+        category: watch.category,
+        currentPartId: current.id,
+        currentPartName: current.name,
+        candidatePartId: best.id,
+        candidatePartName: best.name,
+        scoreLabel: watch.scoreLabel,
+        currentScore,
+        candidateScore: bestScore,
+        ...(currentPrice !== undefined ? { currentPriceWon: currentPrice } : {}),
+        ...(partPriceFor(best) !== undefined ? { candidatePriceWon: partPriceFor(best) } : {}),
+        ...(currentPrice !== undefined && partPriceFor(best) !== undefined ? { priceDeltaWon: partPriceFor(best)! - currentPrice } : {})
+      },
       createdAt,
       checkedAt: createdAt
     });

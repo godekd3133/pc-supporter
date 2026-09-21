@@ -131,6 +131,33 @@ describe("saved build monitor alerts", () => {
     expect(savedBuildMonitorAlertFromUnknown({ ...base, findingRuleIds: [42] })).toBeUndefined();
   });
 
+  it("preserves bounded same-condition alternative context for in-app and browser alerts", () => {
+    const base = {
+      id: "alternative-context",
+      buildId: "build-1",
+      buildName: "게임 PC",
+      kind: "alternative" as const,
+      title: "그래픽카드 더 나은 조건 발견",
+      message: "현재 부품보다 70,000원 저렴하고 8% 높아요.",
+      createdAt: "2026-08-31T01:00:00.000Z"
+    };
+    const alternative = {
+      category: "gpu" as const,
+      currentPartId: "gpu-current",
+      currentPartName: "현재 그래픽카드",
+      candidatePartId: "gpu-candidate",
+      candidatePartName: "추천 그래픽카드",
+      scoreLabel: "3DMark Time Spy",
+      currentScore: 10_000,
+      candidateScore: 10_800,
+      currentPriceWon: 700_000,
+      candidatePriceWon: 630_000,
+      priceDeltaWon: -70_000
+    };
+    expect(savedBuildMonitorAlertFromUnknown({ ...base, alternative })).toMatchObject({ alternative });
+    expect(savedBuildMonitorAlertFromUnknown({ ...base, alternative: { ...alternative, category: "not-a-category" } })).toBeUndefined();
+  });
+
   it("filters visible alerts by unread, actionable risk, and non-risk changes", () => {
     const base = { id: "alert", buildId: "build", buildName: "견적", title: "변화", message: "변화가 있습니다.", createdAt: "2026-08-31T01:00:00.000Z" };
     const critical = { ...base, id: "critical", kind: "critical" as const };

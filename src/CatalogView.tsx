@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FiActivity, FiArrowLeft, FiBox, FiCheck, FiClock, FiCopy, FiDatabase, FiDownload, FiExternalLink, FiInfo, FiLayers, FiLoader, FiPlus, FiRefreshCw, FiSearch, FiShare2, FiTrash2 } from "react-icons/fi";
+import { FiActivity, FiArrowLeft, FiBox, FiCheck, FiClock, FiCopy, FiDatabase, FiDownload, FiExternalLink, FiInfo, FiLayers, FiLoader, FiPlus, FiRefreshCw, FiSearch, FiShare2, FiTrash2, FiTrendingUp } from "react-icons/fi";
 import type { AlternativeRiskCounts, BenchmarkAvailabilityFilter, BuildSelection, CatalogChangeValueDiff, CompatiblePartCandidate, DataFreshness, DataQuality, GamingRefreshRate, GamingResolution, ListingPolicy, Part, PartCategory, PartRefreshResponse, PriceAvailabilityFilter, RecommendationProfile, ServiceMeta } from "../shared/types";
 import { BENCHMARK_AVAILABILITY_LABELS, BENCHMARK_SOURCE_KIND_LABELS, CATEGORY_LABELS, DATA_FRESHNESS_LABELS, DATA_QUALITY_LABELS, isKnownPrice, LISTING_POLICY_LABELS, LISTING_TYPE_LABELS, PART_CATEGORIES, PRICE_AVAILABILITY_LABELS } from "../shared/types";
 import { CATALOG_WATCHLIST_STORAGE_KEY, catalogWatchlistContains, catalogWatchlistFromJson } from "../shared/catalog-watchlist";
@@ -20,6 +20,7 @@ import { CatalogSpecProvenance } from "./CatalogSpecProvenance";
 import { safeHttpsUrl } from "./safe-source-url";
 import { catalogPriceEvidenceDescriptionFor, catalogPriceEvidenceFor, catalogPriceEvidenceLabelFor } from "../shared/catalog-price-evidence";
 import { CatalogRefreshDiffPanel } from "./CatalogRefreshDiffPanel";
+import { PriceTrendChart } from "./PriceTrendChart";
 
 type CatalogSort = "price_asc" | "price_desc" | "name" | "updated" | "similarity" | "value";
 export type CatalogCandidateScope = "safe" | "no_blocker" | "precision";
@@ -491,6 +492,53 @@ function CatalogPriceActionPanel({ part, history, loading, error }: { part: Part
   return <section className={`catalog-price-action ${decision.state}`} aria-label="가격 행동 상태"><div><span>가격 행동</span><strong>{decision.label}</strong><small>{decision.summary}</small></div>{loading && !history && <small className="catalog-price-action-loading">최근 가격 이력 확인 중...</small>}{error && !history && <small className="catalog-price-action-error">가격 이력을 확인하지 못했습니다.</small>}{historySummary && <small className="catalog-price-action-history">{historySummary}</small>}</section>;
 }
 
+function CatalogPriceHistoryPanel({ part, history, loading, error }: { part: CatalogPart; history?: CatalogPriceHistory; loading: boolean; error: string | null }) {
+  const [days, setDays] = useState<7 | 30 | 90>(30);
+  const [localHistory, setLocalHistory] = useState<CatalogPriceHistory | undefined>(undefined);
+  const [localLoading, setLocalLoading] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
+  useEffect(() => {
+    if (days === 30) {
+      setLocalHistory(undefined);
+      setLocalError(null);
+      setLocalLoading(false);
+      return;
+    }
+    let cancelled = false;
+    const controller = new AbortController();
+    setLocalHistory(undefined);
+    setLocalLoading(true);
+    setLocalError(null);
+    void api<{ items: CatalogPriceHistory[] }>(`/api/price-history?ids=${encodeURIComponent(`part:${part.id}`)}&days=${days}`, { retry: 1, signal: controller.signal })
+      .then((payload) => { if (!cancelled) setLocalHistory(payload.items[0]); })
+      .catch((reason: unknown) => { if (!cancelled) setLocalError(reason instanceof Error ? reason.message : "가격 이력을 확인하지 못했습니다."); })
+      .finally(() => { if (!cancelled) setLocalLoading(false); });
+    return () => { cancelled = true; controller.abort(); };
+  }, [days, part.id]);
+  const activeHistory = days === 30 ? history : localHistory;
+  const activeLoading = days === 30 ? loading : localLoading;
+  const activeError = days === 30 ? error : localError;
+  const historyPoints = activeHistory?.points ?? [];
+  const chartPoints = isKnownPrice(part.priceWon)
+    ? [...historyPoints, { changeId: `${part.id}:current`, changedAt: new Date().toISOString(), priceWon: part.priceWon }]
+    : historyPoints;
+  const prices = chartPoints.map((point) => point.priceWon);
+  const minPriceWon = prices.length > 0 ? Math.min(...prices) : undefined;
+  const maxPriceWon = prices.length > 0 ? Math.max(...prices) : undefined;
+  const currentPriceWon = chartPoints.at(-1)?.priceWon;
+  const hasHistory = (activeHistory?.summary.sampleCount ?? 0) > 0;
+  const windowLabel = `${days}일`;
+  return <section className="catalog-price-history-panel" aria-label={`${part.name} 가격 변동 추이`} data-testid="catalog-price-history-panel">
+    <div className="catalog-price-history-heading"><div><p className="eyebrow"><FiTrendingUp /> PRICE TREND</p><h3>가격 변동 추이</h3><p>최근 {windowLabel} 동안 카탈로그에서 확인된 가격 흐름이에요.</p></div>{activeHistory && <span>{activeHistory.summary.sampleCount}회 기록</span>}</div>
+    <div className="catalog-price-history-range" role="group" aria-label="가격 변동 추이 기간">{([7, 30, 90] as const).map((option) => <button className={days === option ? "selected" : ""} type="button" aria-pressed={days === option} data-testid={`catalog-price-history-days-${option}`} onClick={() => setDays(option)} key={option}>{option}일</button>)}</div>
+    {activeLoading ? <div className="catalog-price-history-state" role="status"><FiLoader className="spin" /> 가격 이력을 확인하는 중...</div> : activeError && !activeHistory ? <div className="catalog-price-history-state error" role="status"><FiInfo /> 가격 이력을 불러오지 못했어요.</div> : !hasHistory ? <div className="catalog-price-history-state"><FiInfo /> 이 기간에 확인된 가격 변동 기록이 아직 없어요.</div> : <>
+      <PriceTrendChart points={chartPoints.map((point) => ({ at: point.changedAt, priceWon: point.priceWon }))} ariaLabel={`${part.name} ${windowLabel} 가격 추이`} testId="catalog-price-history-chart" />
+      <div className="catalog-price-history-stats"><div><span>최저</span><strong>{minPriceWon?.toLocaleString("ko-KR")}원</strong></div><div><span>현재</span><strong>{currentPriceWon?.toLocaleString("ko-KR")}원</strong></div><div><span>최고</span><strong>{maxPriceWon?.toLocaleString("ko-KR")}원</strong></div></div>
+    </>}
+    <p className="catalog-price-history-note"><FiInfo /> 저장된 카탈로그 확인값이며, 실제 결제 가격·재고·배송비와 다를 수 있어요.</p>
+  </section>;
+}
+
 function CatalogPartVisual({ part }: { part: CatalogPart }) {
   const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null);
   const imageUrl = safeExternalUrl(part.imageUrl);
@@ -522,6 +570,7 @@ function CatalogPartDetail({ part, priceHistory, priceHistoryLoading, priceHisto
     <CatalogSpecProvenance part={part} />
     <CatalogBenchmarkEvidence part={part} />
     <CatalogPriceActionPanel part={part} history={priceHistory} loading={priceHistoryLoading} error={priceHistoryError} />
+    <CatalogPriceHistoryPanel part={part} history={priceHistory} loading={priceHistoryLoading} error={priceHistoryError} />
     {part.candidateRisk && <div className={`catalog-candidate-summary ${part.candidateRisk}`}><strong>{candidateRiskLabel(part.candidateRisk)}</strong><small className="catalog-candidate-scope-note">현재 견적 기준 평가</small><span>{candidateDetailSummary(part) || "현재 견적에 넣었을 때의 평가 결과입니다."}</span>{part.candidateReasons && part.candidateReasons.length > 0 && <small>평가 메모 · {part.candidateReasons.slice(0, 2).join(" · ")}</small>}{part.remainingBlockers !== undefined && <small>남은 위험 · 차단 {part.remainingBlockers} · 주의 {part.remainingWarnings ?? 0} · 확인 필요 {part.remainingUnknown ?? 0}</small>}{part.recommendationTrust && <small>추천 점수 · {part.recommendationTrust.level === "high" ? "높음" : part.recommendationTrust.level === "medium" ? "보통" : "낮음"} {part.recommendationTrust.score}점</small>}</div>}
     <CatalogSimilarityEvidencePanel part={part} />
     <div className="catalog-detail-price"><div><span>현재 가격</span><small className={`catalog-detail-price-evidence ${catalogPriceEvidenceFor(part)}`} data-testid="catalog-price-evidence" title={catalogPriceEvidenceDescriptionFor(part)}>{catalogPriceEvidenceLabelFor(part)}</small></div><strong>{priceLabel(part.priceWon)}</strong></div>

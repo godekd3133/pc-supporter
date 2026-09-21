@@ -21,6 +21,7 @@ import type { BuildChangeResultComparison } from "../shared/build-change-result"
 import type { SavedBuildOrigin } from "../shared/saved-build-origin";
 import { savedBuildOriginDetailFor, savedBuildOriginLabelFor } from "../shared/saved-build-origin";
 import { BuildChangeResultSummary } from "./BuildChangeResultSummary";
+import { BuildPriceTrendPanel } from "./BuildPriceTrendPanel";
 import type { UpgradeBundleScenarioPreviewState } from "./UpgradeBundleScenarioPreview";
 import type { ResultSection } from "./result-view-state";
 import type { UnknownPriceItem } from "./BuildPriceSummary";
@@ -439,6 +440,7 @@ return (
     <div className="mobile-result-actions"><button className="mobile-primary-action" type="button" onClick={onEdit}><FiEdit3 /><span>견적 수정하기</span><FiArrowRight className="mobile-result-action-arrow" /></button><div><button className="mobile-secondary-action" type="button" onClick={onSave}><FiSave /><span>견적 저장·공유</span><FiArrowRight className="mobile-result-action-arrow" /></button><button className="mobile-secondary-action" type="button" onClick={onCopyResultLink}><FiShare2 /><span>결과 링크 복사</span><FiArrowRight className="mobile-result-action-arrow" /></button></div></div>
     <details className="mobile-result-tools"><summary>리포트·공유 도구 더 보기</summary><div><button className="button button-light" type="button" onClick={onCopyReport}><FiCopy /> 리포트 복사</button><button className="button button-light" type="button" onClick={onDownloadReport}><FiDownload /> JSON 저장</button><button className="button button-light" type="button" onClick={() => window.print()}><FiPrinter /> 인쇄·PDF</button>{shareId && shareOwnerTokenAvailable && <button className="button button-light" type="button" onClick={onRevokeShare} disabled={revokingShare}>{revokingShare ? "취소 중..." : "공유 링크 취소"}</button>}</div></details>
     <Suspense fallback={null}><LazyResultQuickNav result={result} onFocusSection={focusResultSection} /></Suspense>
+    <BuildPriceTrendPanel build={build} partMap={partMap} accessoryMap={accessoryMap} snapshot={resultPriceSnapshot} />
     {buildChangeResultComparison && <BuildChangeResultSummary comparison={buildChangeResultComparison} onDismiss={onDismissBuildChangeResultComparison ?? (() => undefined)} onCopy={onCopyBuildChangeResultComparison ?? (() => undefined)} onDownloadJson={onDownloadBuildChangeResultComparison ?? (() => undefined)} onSaveWithDecisionNote={onSaveBuildChangeResultAsDecisionNote} onFocusFinding={focusFinding} decisionSaveLabel={shareId && shareOwnerTokenAvailable ? "새 버전으로 저장" : "선택 이유에 첨부해 저장"} />}
     {shareId && savedCheckHistory && savedCheckHistory.length > 0 && <Suspense fallback={null}><LazySavedBuildRecheckDiffPanel snapshot={savedCheckHistory[savedCheckHistory.length - 1]} result={result} partMap={partMap} onFocusFinding={focusFinding} onPreviewSuggestion={onPreviewSuggestion} onFocusRepairPlans={focusRepairPlans} onFocusSection={focusResultSection} /></Suspense>}
     <div className="result-layout">

@@ -1,11 +1,27 @@
 import { savedBuildMonitorAssessmentFor } from "./saved-build-monitor";
 import type { SavedBuildMonitorItem } from "./saved-build-monitor";
+import { PART_CATEGORIES } from "./types";
+import type { PartCategory } from "./types";
 
 export const SAVED_BUILD_MONITOR_ALERT_LIMIT = 50;
 
 export type SavedBuildMonitorAlertKind = "critical" | "review" | "improved" | "changed" | "baseline" | "failed" | "alternative";
 export type SavedBuildMonitorAlertFilter = "all" | "unread" | "attention" | "changes";
 const SAVED_BUILD_MONITOR_ALERT_KINDS: SavedBuildMonitorAlertKind[] = ["critical", "review", "improved", "changed", "baseline", "failed", "alternative"];
+
+export interface SavedBuildMonitorAlternative {
+  category: PartCategory;
+  currentPartId: string;
+  currentPartName: string;
+  candidatePartId: string;
+  candidatePartName: string;
+  scoreLabel: string;
+  currentScore: number;
+  candidateScore: number;
+  currentPriceWon?: number;
+  candidatePriceWon?: number;
+  priceDeltaWon?: number;
+}
 
 export interface SavedBuildMonitorAlert {
   id: string;
@@ -16,6 +32,7 @@ export interface SavedBuildMonitorAlert {
   message: string;
   findingRuleIds?: string[];
   findingTitles?: string[];
+  alternative?: SavedBuildMonitorAlternative;
   createdAt: string;
   checkedAt?: string;
   readAt?: string;
@@ -33,6 +50,25 @@ function boundedTextArray(value: unknown, maxItems: number, maxText: number) {
   return items.length === value.length ? items : undefined;
 }
 
+function alternativeFromUnknown(value: unknown): SavedBuildMonitorAlternative | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const candidate = value as Partial<SavedBuildMonitorAlternative>;
+  if (!PART_CATEGORIES.includes(candidate.category as PartCategory)
+    || !boundedText(candidate.currentPartId, 160)
+    || !boundedText(candidate.currentPartName, 180)
+    || !boundedText(candidate.candidatePartId, 160)
+    || !boundedText(candidate.candidatePartName, 180)
+    || !boundedText(candidate.scoreLabel, 80)
+    || typeof candidate.currentScore !== "number"
+    || !Number.isFinite(candidate.currentScore)
+    || typeof candidate.candidateScore !== "number"
+    || !Number.isFinite(candidate.candidateScore)
+    || (candidate.currentPriceWon !== undefined && (typeof candidate.currentPriceWon !== "number" || !Number.isFinite(candidate.currentPriceWon)))
+    || (candidate.candidatePriceWon !== undefined && (typeof candidate.candidatePriceWon !== "number" || !Number.isFinite(candidate.candidatePriceWon)))
+    || (candidate.priceDeltaWon !== undefined && (typeof candidate.priceDeltaWon !== "number" || !Number.isFinite(candidate.priceDeltaWon)))) return undefined;
+  return candidate as SavedBuildMonitorAlternative;
+}
+
 export function savedBuildMonitorAlertFromUnknown(value: unknown): SavedBuildMonitorAlert | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
   const candidate = value as Partial<SavedBuildMonitorAlert>;
@@ -44,16 +80,19 @@ export function savedBuildMonitorAlertFromUnknown(value: unknown): SavedBuildMon
     || !boundedText(candidate.message, 300)
     || (candidate.findingRuleIds !== undefined && !boundedTextArray(candidate.findingRuleIds, 4, 120))
     || (candidate.findingTitles !== undefined && !boundedTextArray(candidate.findingTitles, 4, 160))
+    || (candidate.alternative !== undefined && !alternativeFromUnknown(candidate.alternative))
     || !boundedText(candidate.createdAt, 120)
     || (candidate.checkedAt !== undefined && !boundedText(candidate.checkedAt, 120))
     || (candidate.readAt !== undefined && !boundedText(candidate.readAt, 120))
     || (candidate.dismissedAt !== undefined && !boundedText(candidate.dismissedAt, 120))) return undefined;
   const findingRuleIds = boundedTextArray(candidate.findingRuleIds, 4, 120);
   const findingTitles = boundedTextArray(candidate.findingTitles, 4, 160);
+  const alternative = alternativeFromUnknown(candidate.alternative);
   return {
     ...candidate,
     ...(findingRuleIds && findingRuleIds.length > 0 ? { findingRuleIds } : {}),
-    ...(findingTitles && findingTitles.length > 0 ? { findingTitles } : {})
+    ...(findingTitles && findingTitles.length > 0 ? { findingTitles } : {}),
+    ...(alternative ? { alternative } : {})
   } as SavedBuildMonitorAlert;
 }
 
@@ -187,6 +226,7 @@ export function mergeSavedBuildMonitorAlerts(existing: SavedBuildMonitorAlert[],
       buildName: alert.buildName,
       ...(alert.findingRuleIds ? { findingRuleIds: alert.findingRuleIds } : {}),
       ...(alert.findingTitles ? { findingTitles: alert.findingTitles } : {}),
+      ...(alert.alternative ? { alternative: alert.alternative } : {}),
       ...(current.readAt || alert.readAt ? { readAt: current.readAt ?? alert.readAt } : {}),
       ...(current.dismissedAt || alert.dismissedAt ? { dismissedAt: current.dismissedAt ?? alert.dismissedAt } : {})
     });
