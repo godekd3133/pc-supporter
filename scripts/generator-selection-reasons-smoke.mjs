@@ -339,9 +339,9 @@ async function main() {
         probe.draftSaveConfirmedProbe = true;
         await client.evaluate("document.querySelector('[aria-label=\"복구 코드 창 닫기\"]')?.click()");
         await client.evaluate("history.pushState({}, '', '/history'); window.dispatchEvent(new PopStateEvent('popstate'));" );
-        await waitForValue(client, `location.pathname === '/history' && document.querySelector('[data-testid="saved-build-origin-${savedDraftProbe.id}"]') !== null`, "저장 견적 생성 출처 표시");
+        await waitForValue(client, `location.pathname === '/history' && (document.querySelector('[data-testid="saved-build-origin-${savedDraftProbe.id}"]')?.textContent ?? '').includes('원본 비교 사용 가능')`, "저장 견적 원본 비교 상태 표시");
         const originUiProbe = await client.evaluate(`(() => { const node = document.querySelector('[data-testid="saved-build-origin-${savedDraftProbe.id}"]'); const text = node?.textContent?.replace(/\\s+/g, ' ').trim() ?? ''; const link = node?.querySelector('a'); return { visible: Boolean(node), text, href: link instanceof HTMLAnchorElement ? link.getAttribute('href') ?? '' : '' }; })()`);
-        if (!originUiProbe.visible || !originUiProbe.text.includes("공유 비교") || !originUiProbe.text.includes("균형형") || !originUiProbe.text.includes("현재 catalog 재생성") || originUiProbe.href !== `/generator-variants/${transferShare.payload.id}`) throw new Error(`저장 견적 생성 출처 표시 검증 실패: ${JSON.stringify(originUiProbe)}`);
+        if (!originUiProbe.visible || !originUiProbe.text.includes("공유 비교") || !originUiProbe.text.includes("균형형") || !originUiProbe.text.includes("현재 catalog 재생성") || !originUiProbe.text.includes("원본 비교 사용 가능") || originUiProbe.href !== `/generator-variants/${transferShare.payload.id}`) throw new Error(`저장 견적 생성 출처 표시 검증 실패: ${JSON.stringify(originUiProbe)}`);
         probe.draftSaveOriginProbe = true;
         const deletedSavedDraft = await client.evaluate(`(async () => { const ids = JSON.parse(localStorage.getItem('pc-supporter-saved-build-ids') || '[]'); const tokens = JSON.parse(localStorage.getItem('pc-supporter-saved-build-owner-tokens') || '{}'); const id = ids[0]; const token = id ? tokens[id] : undefined; if (!id || !token) return 0; const response = await fetch('/api/builds/' + encodeURIComponent(id), { method: 'DELETE', headers: { 'X-Share-Owner-Token': token } }); return response.status; })()`);
         if (deletedSavedDraft !== 200) throw new Error(`현재 draft 테스트 저장 견적 정리 실패: ${deletedSavedDraft}`);
@@ -359,11 +359,28 @@ async function main() {
         await client.evaluate("document.querySelector('[data-testid=\"shared-generator-variants-current-check-balanced\"]')?.click()");
         await waitForValue(client, "location.pathname === '/result' && document.querySelector('.result-page') !== null", "현재 draft 호환성 검사 전달");
         probe.draftCheckTransferProbe = true;
+        const resultSaveButton = await client.evaluate("(() => { const node = [...document.querySelectorAll('button')].find((candidate) => candidate instanceof HTMLButtonElement && !candidate.disabled && (candidate.textContent ?? '').includes('견적 저장·공유')); if (!(node instanceof HTMLButtonElement)) return false; node.click(); return true; })()");
+        if (!resultSaveButton) throw new Error("검사 전달 결과의 저장 버튼을 찾지 못했습니다.");
+        await waitForValue(client, "document.querySelector('#save-build-name') !== null", "검사 전달 결과 저장 다이얼로그");
+        const checkSavedDraftName = "smoke 검사 전달 origin 저장 확인";
+        if (!await setInputValue(client, "#save-build-name", checkSavedDraftName)) throw new Error("검사 전달 결과 저장 이름을 입력하지 못했습니다.");
+        const submittedCheckSave = await client.evaluate("(() => { const form = document.querySelector('.save-build-form'); const submit = form?.querySelector('button[type=\"submit\"]'); if (!(submit instanceof HTMLButtonElement) || submit.disabled) return false; submit.click(); return true; })()");
+        if (!submittedCheckSave) throw new Error("검사 전달 결과 저장 제출 버튼을 찾지 못했습니다.");
+        await waitForValue(client, "document.querySelector('#save-build-name') === null && location.pathname === '/result' && (document.querySelector('[data-testid=\"result-origin\"]')?.textContent ?? '').includes('원본 비교 사용 가능')", "검사 전달 결과 origin 상태 표시");
+        const resultOriginProbe = await client.evaluate("(() => document.querySelector('[data-testid=\"result-origin\"]')?.textContent?.replace(/\\s+/g, ' ').trim() ?? '')()");
+        if (!resultOriginProbe.includes("공유 비교") || !resultOriginProbe.includes("균형형") || !resultOriginProbe.includes("원본 비교 사용 가능")) throw new Error(`검사 결과 origin 표시 검증 실패: ${resultOriginProbe}`);
+        probe.draftResultOriginProbe = true;
+        const checkSavedOriginProbe = await client.evaluate(`(async () => { const ids = JSON.parse(localStorage.getItem('pc-supporter-saved-build-ids') || '[]'); const tokens = JSON.parse(localStorage.getItem('pc-supporter-saved-build-owner-tokens') || '{}'); const id = ids[0]; const token = id ? tokens[id] : undefined; if (!id || !token) return { status: 0, id, token: '', name: '', origin: undefined }; const response = await fetch('/api/builds/' + encodeURIComponent(id)); const payload = await response.json().catch(() => ({})); return { status: response.status, id, token, name: payload.name ?? '', origin: payload.origin }; })()`);
+        if (checkSavedOriginProbe.status !== 200 || !checkSavedOriginProbe.id || !checkSavedOriginProbe.token || checkSavedOriginProbe.name !== checkSavedDraftName || checkSavedOriginProbe.origin?.kind !== "shared_generator_variants" || checkSavedOriginProbe.origin?.sourceShareId !== transferShare.payload.id || checkSavedOriginProbe.origin?.sourcePriority !== "balanced") throw new Error(`검사 전달 후 저장 origin 보존 검증 실패: ${JSON.stringify(checkSavedOriginProbe)}`);
+        probe.draftCheckSaveOriginProbe = true;
+        const deletedCheckSavedDraft = await client.evaluate(`fetch('/api/builds/${checkSavedOriginProbe.id}', { method: 'DELETE', headers: { 'X-Share-Owner-Token': ${JSON.stringify(checkSavedOriginProbe.token)} } }).then((response) => response.status)`);
+        if (deletedCheckSavedDraft !== 200) throw new Error(`검사 전달 결과 테스트 저장 견적 정리 실패: ${deletedCheckSavedDraft}`);
+        await client.evaluate("document.querySelector('[aria-label=\"복구 코드 창 닫기\"]')?.click()");
         const deletedTransferShare = await client.evaluate(`fetch('/api/generator-variants/${transferShare.payload.id}', { method: 'DELETE', headers: { 'X-Share-Owner-Token': ${JSON.stringify(transferShare.payload.ownerToken)} } }).then((response) => response.status)`);
         if (deletedTransferShare !== 200) throw new Error(`현재 draft 전달용 공유 snapshot 취소 실패: ${deletedTransferShare}`);
         probe.draftTransferProbe = true;
       }
-      if (executeExportActions && !screenshotPath && (!probe.draftSaveDialogProbe || !probe.draftSaveConfirmedProbe || !probe.draftSaveOriginProbe || !probe.draftTransferProbe || !probe.draftCheckTransferProbe)) throw new Error("현재 draft 저장·출처·편집기·검사 전달 검증에 실패했습니다.");
+      if (executeExportActions && !screenshotPath && (!probe.draftSaveDialogProbe || !probe.draftSaveConfirmedProbe || !probe.draftSaveOriginProbe || !probe.draftTransferProbe || !probe.draftCheckTransferProbe || !probe.draftCheckSaveOriginProbe || !probe.draftResultOriginProbe)) throw new Error("현재 draft 저장·출처·결과 화면·편집기·검사 전달 검증에 실패했습니다.");
       console.log(JSON.stringify({ ok: true, viewport: mobile ? "mobile" : "desktop", theme: dark ? "dark" : "light", mode: "variants", ...probe, ...(screenshotPath ? { screenshotPath } : {}) }, null, 2));
     } else {
       await waitForValue(client, "document.querySelector('.generator-result') !== null && document.querySelector('[data-testid=\"generator-selection-reasons\"]') !== null", "자동 견적 생성·선택 이유");

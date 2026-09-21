@@ -12,7 +12,11 @@ export function PurchaseDecisionGatePanel({ readiness, checklistProgress, purcha
   const checklist = decision.checklistProgress;
   const checklistText = !checklist ? "불러오는 중" : checklist.total === 0 ? "확인 항목 없음" : `${checklist.checked}/${checklist.total}개 완료`;
   const purchase = decision.purchaseProgress;
-  const purchaseText = !purchase ? "불러오는 중" : purchase.total === 0 ? "항목 없음" : `${purchase.percent}% · ${purchase.checked}/${purchase.total}개`;
+  const purchaseText = !purchase
+    ? "불러오는 중"
+    : purchase.total === 0
+      ? "항목 없음"
+      : `${purchase.percent}% · ${purchase.checked}/${purchase.total}개 · 주문 ${purchase.stageCounts.ordered} · 수령 ${purchase.stageCounts.received} · 조립 ${purchase.stageCounts.installed}`;
   const purchaseActionStatus: PurchaseItemStatus | undefined = !purchase || purchase.total === 0 ? undefined : purchase.stageCounts.planned > 0 ? "planned" : purchase.stageCounts.ordered > 0 ? "ordered" : purchase.stageCounts.received > 0 && purchase.stageCounts.installed < purchase.total ? "received" : "installed";
   const purchaseActionText = purchaseActionStatus === "planned" ? "구매 예정 항목으로 이동" : purchaseActionStatus === "ordered" ? "수령 대기 항목으로 이동" : purchaseActionStatus === "received" ? "조립 대상 항목으로 이동" : "구매 기록 보기";
   const assembly = decision.assemblyVerification;

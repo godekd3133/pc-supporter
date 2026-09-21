@@ -50,4 +50,38 @@ describe("saved build version delta", () => {
     expect(delta.selectionChangedCategoryCount).toBe(0);
     expect(delta.transition).toBeUndefined();
   });
+
+  it("keeps affected part ids for changed finding summaries", () => {
+    const before = build("v1", {
+      checkSnapshot: {
+        ...build("before").checkSnapshot!,
+        findings: [{ id: "gpu-power-before", ruleId: "gpu-power", severity: "warning", title: "파워 용량을 확인해 주세요.", message: "기존 메시지", affectedPartIds: ["gpu-1"], facts: [] }]
+      }
+    });
+    const after = build("v2", {
+      checkSnapshot: {
+        ...build("after").checkSnapshot!,
+        findings: [{ id: "gpu-power-after", ruleId: "gpu-power", severity: "blocker", title: "파워 용량이 부족합니다.", message: "현재 메시지", affectedPartIds: ["gpu-1", "psu-1"], facts: [] }]
+      }
+    });
+    const delta = savedBuildVersionDeltaFor(before, after);
+    expect(delta.findingChanges).toMatchObject([{ change: "severity_changed", title: "파워 용량이 부족합니다.", affectedPartIds: ["gpu-1", "psu-1"] }]);
+  });
+
+  it("keeps accessory finding changes with related parts", () => {
+    const before = build("v1", {
+      checkSnapshot: {
+        ...build("before").checkSnapshot!,
+        accessoryCompatibility: { status: "needs_review", blockerCount: 0, warningCount: 1, unknownCount: 0, findings: [{ id: "fan-power-before", ruleId: "fan-power", severity: "warning", accessoryId: "fan-hub", accessoryName: "팬 허브", relatedPartIds: ["case-1"], title: "팬 허브 연결을 확인해 주세요.", message: "기존 메시지", facts: [] }] }
+      }
+    });
+    const after = build("v2", {
+      checkSnapshot: {
+        ...build("after").checkSnapshot!,
+        accessoryCompatibility: { status: "incompatible", blockerCount: 1, warningCount: 0, unknownCount: 0, findings: [{ id: "fan-power-after", ruleId: "fan-power", severity: "blocker", accessoryId: "fan-hub", accessoryName: "팬 허브", relatedPartIds: ["case-1", "mb-1"], title: "팬 허브 전원 연결이 부족합니다.", message: "현재 메시지", facts: [] }] }
+      }
+    });
+    const delta = savedBuildVersionDeltaFor(before, after);
+    expect(delta.accessoryFindingChanges).toMatchObject([{ change: "severity_changed", accessoryName: "팬 허브", relatedPartIds: ["case-1", "mb-1"], title: "팬 허브 전원 연결이 부족합니다." }]);
+  });
 });

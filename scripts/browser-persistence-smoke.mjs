@@ -172,6 +172,7 @@ async function navigate(client, url, label) {
 
 async function main() {
   const dataDir = await mkdtemp(join(tmpdir(), "pc-supporter-persistence-data-"));
+  const freshProvenanceAt = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const provenancePart = {
     id: "persistence-provenance-gpu",
     category: "gpu",
@@ -180,7 +181,7 @@ async function main() {
     specs: { vramGb: 16 },
     dataQuality: "incomplete",
     missingFields: ["powerW"],
-    updatedAt: "2026-09-01T00:00:00.000Z"
+    updatedAt: freshProvenanceAt
   };
   await writeFile(join(dataDir, "catalog.json"), JSON.stringify([provenancePart]));
   await writeFile(join(dataDir, "catalog-spec-overrides.json"), JSON.stringify({
@@ -193,7 +194,7 @@ async function main() {
       sourceUrl: "https://vendor.example/persistence-gpu",
       sourceCheck: {
         requestedUrl: "https://vendor.example/persistence-gpu",
-        checkedAt: "2026-09-03T00:02:00.000Z",
+        checkedAt: freshProvenanceAt,
         status: "reachable",
         identityStatus: "matched",
         redirectCount: 0,
@@ -202,7 +203,7 @@ async function main() {
         contentType: "text/html",
         detail: "등록한 제조사 모델/SKU를 확인했습니다."
       },
-      updatedAt: "2026-09-03T00:00:00.000Z"
+      updatedAt: freshProvenanceAt
     }
   }));
   await writeFile(join(dataDir, "catalog-change-log.json"), JSON.stringify([
@@ -251,7 +252,7 @@ async function main() {
     await waitForHomeDemoButtons(client, "격리 홈 화면 복귀 확인");
     assert(await clickText(client, "문제 있는 예시 견적"), "문제 있는 예시 견적 버튼을 찾지 못했습니다.");
     await waitForValue(client, "(document.body?.innerText ?? '').includes('나의 PC 견적 구성') || (document.body?.innerText ?? '').includes('견적 구성')", "격리 견적 편집기");
-    await waitForValue(client, "(document.body?.innerText ?? '').includes('검사할 준비가 되었습니다') || (document.body?.innerText ?? '').includes('모든 필수 부품을 선택했습니다')", "격리 검사 준비");
+    await waitForValue(client, "[...document.querySelectorAll('button')].some((button) => !button.disabled && (button.textContent ?? '').includes('호환성 검사하기'))", "격리 검사 준비");
     assert(await clickText(client, "호환성 검사하기"), "격리 호환성 검사 버튼을 찾지 못했습니다.");
     await waitForValue(client, "(document.body?.innerText ?? '').includes('검사 결과 상세')", "격리 검사 결과");
     assert((await clickSelector(client, '.result-metrics button.metric-card.danger', 1)) === 1, "격리 차단 오류 요약 카드를 클릭하지 못했습니다.");
@@ -262,7 +263,7 @@ async function main() {
     assert(await setInputValue(client, "#save-build-name", "브라우저 지속성 검증 견적"), "견적 이름을 입력하지 못했습니다.");
     assert(await setTextValue(client, "#save-build-decision-note", "QHD 게이밍과 업그레이드 여유를 우선"), "견적 선택 이유를 입력하지 못했습니다.");
     assert(await clickText(client, "저장하고 링크 복사"), "견적 저장 버튼을 찾지 못했습니다.");
-    await waitForValue(client, "document.querySelector('.save-build-dialog') === null && document.querySelector('.share-ready') !== null", "견적 저장 완료 상태");
+    await waitForValue(client, "location.pathname === '/result' && document.querySelector('.result-hero') !== null && (() => { try { return JSON.parse(localStorage.getItem('pc-supporter-saved-build-ids') ?? '[]').length >= 1; } catch { return false; } })()", "견적 저장 완료 상태");
 
     const savedIds = await client.evaluate("JSON.parse(localStorage.getItem('pc-supporter-saved-build-ids') ?? '[]')");
     assert(Array.isArray(savedIds) && savedIds.length === 1 && typeof savedIds[0] === "string", "저장 견적 ID가 브라우저에 기록되지 않았습니다.");
@@ -427,7 +428,7 @@ async function main() {
     await waitForValue(client, "document.querySelector('#save-build-dialog-title') !== null", "후보 구성 저장 창");
     assert(await setInputValue(client, "#save-build-name", "브라우저 후보 저장 검증 견적"), "후보 구성 견적 이름을 입력하지 못했습니다.");
     assert(await clickText(client, "저장하고 링크 복사"), "후보 구성 저장 버튼을 찾지 못했습니다.");
-    await waitForValue(client, "document.querySelector('.save-build-dialog') === null && location.pathname === '/result' && document.querySelector('.share-ready') !== null", "후보 구성 새 견적 저장 완료");
+    await waitForValue(client, "location.pathname === '/result' && document.querySelector('.result-hero') !== null && (() => { try { return JSON.parse(localStorage.getItem('pc-supporter-saved-build-ids') ?? '[]').length >= 2; } catch { return false; } })()", "후보 구성 새 견적 저장 완료");
     const savedIdsAfterCandidate = await client.evaluate("JSON.parse(localStorage.getItem('pc-supporter-saved-build-ids') ?? '[]')");
     assert(Array.isArray(savedIdsAfterCandidate) && savedIdsAfterCandidate.length === 2 && savedIdsAfterCandidate[0] !== originalSavedId, "후보 구성이 원본과 분리된 새 저장 견적으로 기록되지 않았습니다.");
     const candidateSavedId = savedIdsAfterCandidate[0];
@@ -488,6 +489,9 @@ async function main() {
     await waitForValue(client, "document.querySelector('[data-testid=\"saved-build-version-summary\"]') === null", "버전 비교 기준 해제");
     assert((await clickSelector(client, '[data-testid^="saved-build-version-compare-toggle-"]', 1)) === 1, "버전 비교 기준 복원 버튼을 클릭하지 못했습니다.");
     await waitForValue(client, "document.querySelector('[data-testid=\"saved-build-version-summary\"]') !== null", "버전 비교 기준 복원");
+    await waitForValue(client, "document.querySelector('[data-testid=\"saved-build-current-comparison\"]') !== null", "버전 현재 catalog 비교표");
+    await waitForValue(client, "document.querySelectorAll('[data-testid^=\"saved-build-version-current-check-\"]').length >= 2 && [...document.querySelectorAll('[data-testid^=\"saved-build-version-current-check-\"]')].every((node) => (node.textContent ?? '').includes('현재'))", "버전 행 현재 catalog 상태");
+    assert(await client.evaluate("[...document.querySelectorAll('[data-testid^=\"saved-build-version-current-check-\"]')].every((node) => /현재 (catalog|기준)/.test(node.textContent ?? ''))"), "버전 행에 현재 catalog 상태가 표시되지 않았습니다.");
     assert((await clickSelector(client, `[data-testid^="saved-build-purchase-list-"]`, 1)) === 1, "저장 견적 이력의 구매 목록 열기 버튼을 찾지 못했습니다.");
     await waitForValue(client, "location.pathname === '/result' && location.hash === '#purchase-list'", "저장 견적 구매 목록 route");
     await openResultDetails(client);
@@ -597,10 +601,122 @@ async function main() {
     await secondClient.evaluate(versionPairStorageScript);
     await navigate(secondClient, `${webUrl}/history?version-pair-smoke=1`, "세 번째 파생 version 이력 route");
     await waitForValue(secondClient, "document.querySelector('[data-testid=\"saved-build-version-panel\"]') !== null && document.querySelectorAll('[data-testid^=\"saved-build-version-compare-toggle-\"]').length >= 3", "세 버전 비교 선택지");
+    await secondClient.evaluate(`(() => {
+      const originalFetch = window.fetch;
+      const changed = { status: "needs_review", blockerCount: 0, warningCount: 1, unknownCount: 0, findings: [], metrics: {}, analysis: { profile: "gaming", scoreLabel: "균형형", scoreBasis: "current-version-save-probe", confidence: "high", factors: [], strengths: [], focusAreas: [], bottlenecks: [], nextActions: [] }, links: [], totalPriceWon: 9999999, priceComplete: true, engineVersion: "2.58.0", catalogSnapshotAt: "2026-09-17T00:00:00.000Z", checkedAt: "2026-09-17T00:00:00.000Z" };
+      window.__pcSupporterVersionProbeOriginalFetch = originalFetch;
+      window.fetch = async (input, init) => {
+        const requestUrl = new URL(typeof input === "string" ? input : input.url, location.href);
+        const method = String(init?.method ?? "GET").toUpperCase();
+        if (requestUrl.pathname === "/api/compatibility/check" && method === "POST") return new Response(JSON.stringify(changed), { status: 200, headers: { "Content-Type": "application/json" } });
+        return originalFetch(input, init);
+      };
+      return true;
+    })()`);
     assert((await clickSelector(secondClient, `[data-testid="saved-build-version-compare-toggle-${candidateSavedId}"]`, 1)) === 1, "v2 비교 기준을 해제하지 못했습니다.");
     await waitForValue(secondClient, "document.querySelector('[data-testid=\"saved-build-version-summary\"]') === null", "세 버전 비교 기준 해제");
     assert((await clickSelector(secondClient, `[data-testid="saved-build-version-compare-toggle-${originalSavedId}"]`, 1)) === 1, "v1 비교 기준을 선택하지 못했습니다.");
     await waitForValue(secondClient, "document.querySelector('[data-testid=\"saved-build-version-summary\"]')?.textContent?.includes('v1 → v3') === true", "v1·v3 임의 version pair 비교");
+    const currentVersionSaveProbe = await secondClient.evaluate(`(async () => {
+      const originalFetch = window.fetch;
+      const originalClipboard = navigator.clipboard;
+      const response = (payload, status = 200) => new Response(JSON.stringify(payload), { status, headers: { "Content-Type": "application/json" } });
+      const changed = {
+        status: "needs_review",
+        blockerCount: 0,
+        warningCount: 1,
+        unknownCount: 0,
+        findings: [],
+        metrics: {},
+        analysis: { profile: "gaming", scoreLabel: "균형형", scoreBasis: "current-version-save-probe", confidence: "high", factors: [], strengths: [], focusAreas: [], bottlenecks: [], nextActions: [] },
+        links: [],
+        totalPriceWon: 9999999,
+        priceComplete: true,
+        engineVersion: "2.58.0",
+        catalogSnapshotAt: "2026-09-17T00:00:00.000Z",
+        checkedAt: "2026-09-17T00:00:00.000Z"
+      };
+      let captured;
+      const pause = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+      try {
+        Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async () => {} } });
+        window.fetch = async (input, init) => {
+          const requestUrl = new URL(typeof input === "string" ? input : input.url, location.href);
+          const method = String(init?.method ?? "GET").toUpperCase();
+          if (requestUrl.pathname === "/api/compatibility/check" && method === "POST") return response(changed);
+          if (requestUrl.pathname === "/api/builds" && method === "POST") {
+            const result = await originalFetch(input, init);
+            let payload;
+            try { payload = await result.clone().json(); } catch {}
+            captured = { status: result.status, payload };
+            return result;
+          }
+          return originalFetch(input, init);
+        };
+        let recheck;
+        for (let index = 0; index < 160; index += 1) {
+          const candidate = [...document.querySelectorAll("button")].find((button) => !button.disabled && (button.textContent ?? "").includes("현재 기준 다시 검사"));
+          if (candidate instanceof HTMLButtonElement) {
+            recheck = candidate;
+            break;
+          }
+          await pause(50);
+        }
+        if (!(recheck instanceof HTMLButtonElement)) return { stage: "missing-recheck", comparison: document.querySelector('[data-testid="saved-build-current-comparison"]')?.textContent?.slice(0, 800) ?? "" };
+        recheck.click();
+        for (let index = 0; index < 160 && !document.querySelector('[data-testid="saved-build-version-current-change-save"]'); index += 1) await pause(50);
+        const saveVersion = document.querySelector('[data-testid="saved-build-version-current-change-save"]');
+        if (!(saveVersion instanceof HTMLButtonElement)) return { stage: "missing-current-version-save", body: (document.body?.innerText ?? "").slice(-1400) };
+        saveVersion.click();
+        for (let index = 0; index < 100 && !document.querySelector("#save-build-name"); index += 1) await pause(50);
+        const nameInput = document.querySelector("#save-build-name");
+        if (!(nameInput instanceof HTMLInputElement)) return { stage: "missing-save-dialog" };
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+        setter?.call(nameInput, "브라우저 현재 기준 새 버전");
+        nameInput.dispatchEvent(new Event("input", { bubbles: true }));
+        nameInput.dispatchEvent(new Event("change", { bubbles: true }));
+        const submit = document.querySelector('.save-build-actions button[type="submit"]');
+        if (!(submit instanceof HTMLButtonElement)) return { stage: "missing-save-submit" };
+        submit.click();
+        for (let index = 0; index < 240 && (!captured || location.pathname !== "/result"); index += 1) await pause(50);
+        let savedIds = [];
+        try { savedIds = JSON.parse(localStorage.getItem("pc-supporter-saved-build-ids") ?? "[]"); } catch {}
+        return {
+          stage: captured && location.pathname === "/result" ? "saved" : "save-incomplete",
+          status: captured?.status,
+          path: location.pathname,
+          savedIds,
+          newId: captured?.payload?.id,
+          parentId: captured?.payload?.derivedFromBuildId,
+          versionNumber: captured?.payload?.versionNumber,
+          name: captured?.payload?.name
+        };
+      } finally {
+        window.fetch = originalFetch;
+        try { Object.defineProperty(navigator, "clipboard", { configurable: true, value: originalClipboard }); } catch {}
+      }
+    })()`);
+    assert(currentVersionSaveProbe.stage === "saved" && currentVersionSaveProbe.status === 201 && currentVersionSaveProbe.versionNumber === 4 && currentVersionSaveProbe.savedIds.length >= 4 && currentVersionSaveProbe.name === "브라우저 현재 기준 새 버전", "현재 기준 새 버전 저장이 새 lineage로 끝나지 않았습니다. probe=" + JSON.stringify(currentVersionSaveProbe));
+    const currentVersionSavedId = currentVersionSaveProbe.newId;
+    await waitForValue(secondClient, "document.querySelector('[data-testid=\"result-version-context\"]')?.textContent?.includes('v4') === true", "저장 직후 결과 버전 context");
+    const resultVersionContextProbe = await secondClient.evaluate("document.querySelector('[data-testid=\"result-version-context\"]')?.textContent ?? ''");
+    assert(resultVersionContextProbe.includes("에서 파생") && resultVersionContextProbe.includes("버전 비교 열기"), "저장 직후 결과 화면에 새 version lineage context가 표시되지 않았습니다. probe=" + JSON.stringify(resultVersionContextProbe));
+    await waitForValue(secondClient, "document.querySelector('[data-testid=\"result-version-delta\"]')?.textContent?.includes('구성') === true", "저장 직후 결과 부모 버전 대비 요약");
+    const resultVersionDeltaProbe = await secondClient.evaluate("document.querySelector('[data-testid=\"result-version-delta\"]')?.textContent ?? ''");
+    assert(resultVersionDeltaProbe.includes("위험") && (resultVersionDeltaProbe.includes("금액") || resultVersionDeltaProbe.includes("금액 확인 필요")) && resultVersionDeltaProbe.includes("분석"), "저장 직후 결과 화면에 부모 버전 대비 요약이 표시되지 않았습니다. probe=" + JSON.stringify(resultVersionDeltaProbe));
+    await waitForValue(secondClient, "document.querySelector('[data-testid=\"result-version-change-details\"]')?.textContent?.includes('변경된 구성') === true", "저장 직후 결과 실제 변경 항목");
+    const resultVersionChangeDetailsProbe = await secondClient.evaluate("document.querySelector('[data-testid=\"result-version-change-details\"]')?.textContent ?? ''");
+    assert(resultVersionChangeDetailsProbe.includes("변경된 호환성 결과") && (resultVersionChangeDetailsProbe.includes("RAM") || resultVersionChangeDetailsProbe.includes("파워") || resultVersionChangeDetailsProbe.includes("구성 변화 없음")), "저장 직후 결과 화면에 실제 변경 부품·finding 또는 변화 없음 상태가 표시되지 않았습니다. probe=" + JSON.stringify(resultVersionChangeDetailsProbe));
+    assert((await clickSelector(secondClient, '[data-testid="result-version-context-open-history"]', 1)) === 1, "저장 직후 결과의 버전 비교 열기 버튼을 클릭하지 못했습니다.");
+    await waitForValue(secondClient, "location.pathname === '/history'", "현재 기준 새 버전 저장 후 이력 재진입");
+    await waitForValue(secondClient, `document.querySelector('[data-testid="saved-build-version-toggle-${currentVersionSavedId}"]') !== null || document.querySelector('[data-testid="saved-build-version-compare-toggle-${currentVersionSavedId}"]') !== null`, "현재 기준 새 버전 lineage 재표시");
+    await waitForValue(secondClient, `document.querySelector('[data-testid="saved-build-priority-row-${currentVersionSavedId}"]') !== null`, "현재 기준 새 버전 우선순위 보드 재표시");
+    const currentVersionHistoryProbe = await secondClient.evaluate(`(() => ({ versionToggle: Boolean(document.querySelector('[data-testid="saved-build-version-compare-toggle-${currentVersionSavedId}"]')), priorityRow: Boolean(document.querySelector('[data-testid="saved-build-priority-row-${currentVersionSavedId}"]')), lineage: document.querySelector('[data-testid="saved-build-version-lineage-${currentVersionSavedId}"]')?.textContent ?? "", versionPanelText: document.querySelector('[data-testid="saved-build-version-panel"]')?.textContent?.slice(-1200) ?? "" }))()`);
+    assert(currentVersionHistoryProbe.versionToggle && currentVersionHistoryProbe.priorityRow && currentVersionHistoryProbe.lineage.includes("파생"), "현재 기준 새 버전 저장 후 히스토리 lineage·우선순위 보드가 갱신되지 않았습니다. probe=" + JSON.stringify(currentVersionHistoryProbe));
+    assert((await clickSelector(secondClient, `[data-testid="saved-build-version-compare-toggle-${currentVersionSavedId}"]`, 1)) === 1, "현재 기준 새 버전 비교 기준을 해제하지 못했습니다.");
+    await waitForValue(secondClient, "document.querySelector('[data-testid=\"saved-build-version-summary\"]') === null", "현재 기준 새 버전 비교 기준 해제");
+    assert((await clickSelector(secondClient, `[data-testid="saved-build-version-compare-toggle-${originalSavedId}"]`, 1)) === 1, "v1 비교 기준을 저장 후 다시 선택하지 못했습니다.");
+    await waitForValue(secondClient, "document.querySelector('[data-testid=\"saved-build-version-summary\"]')?.textContent?.includes('v1 → v3') === true", "저장 후 v1·v3 비교 기준 복원");
     const versionExportProbe = await secondClient.evaluate("(async () => { let copied = ''; let downloaded = ''; const originalClipboard = navigator.clipboard; const originalCreateObjectURL = window.URL.createObjectURL; const originalRevokeObjectURL = window.URL.revokeObjectURL; const originalAnchorClick = HTMLAnchorElement.prototype.click; try { Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (value) => { copied = value; } } }); window.URL.createObjectURL = (blob) => { void blob.text().then((value) => { downloaded = value; }); return 'blob:version-export-smoke'; }; window.URL.revokeObjectURL = () => {}; HTMLAnchorElement.prototype.click = function () {}; document.querySelector('[data-testid=\"saved-build-version-copy\"]')?.click(); for (let index = 0; index < 20 && !copied; index += 1) await new Promise((resolve) => setTimeout(resolve, 25)); document.querySelector('[data-testid=\"saved-build-version-download-json\"]')?.click(); for (let index = 0; index < 20 && !downloaded; index += 1) await new Promise((resolve) => setTimeout(resolve, 25)); return { copied, downloaded, status: document.querySelector('[data-testid=\"saved-build-version-export-status\"]')?.textContent ?? '' }; } finally { try { Object.defineProperty(navigator, 'clipboard', { configurable: true, value: originalClipboard }); } catch {} window.URL.createObjectURL = originalCreateObjectURL; window.URL.revokeObjectURL = originalRevokeObjectURL; HTMLAnchorElement.prototype.click = originalAnchorClick; } })()");
     assert(versionExportProbe.copied.includes("PC Supporter 저장 견적 버전 비교") && versionExportProbe.copied.includes("v1") && versionExportProbe.copied.includes("확인 범위"), "저장 견적 버전 비교 복사 payload가 완성되지 않았습니다. probe=" + JSON.stringify({ ...versionExportProbe, copied: versionExportProbe.copied.slice(0, 500) }));
     assert(versionExportProbe.downloaded.includes('"kind": "pc-supporter.saved-build-version-comparison"') && versionExportProbe.downloaded.includes('"schemaVersion": 1'), "저장 견적 버전 비교 JSON payload가 생성되지 않았습니다. probe=" + JSON.stringify({ ...versionExportProbe, downloaded: versionExportProbe.downloaded.slice(0, 500) }));
@@ -611,7 +727,7 @@ async function main() {
     await navigate(secondClient, `${webUrl}/`, "견적 버전 비교 공유 이력 홈 route");
     await waitForValue(secondClient, "document.querySelector('[data-testid=\"home-saved-build-version-shares\"]')?.textContent?.includes('최근 견적 버전 비교 공유') === true && document.querySelector('[data-testid^=\"home-saved-build-version-catalog-\"]') !== null", "최근 견적 버전 비교 공유 이력");
     const versionShareHistoryText = await secondClient.evaluate("document.querySelector('[data-testid=\"home-saved-build-version-shares\"]')?.textContent ?? ''");
-    assert(versionShareHistoryText.includes(versionShareProbe.response.name) && versionShareHistoryText.includes('사용 가능') && versionShareHistoryText.includes('저장 검사 기준') && versionShareHistoryText.includes('engine'), "홈의 최근 견적 버전 비교 공유 이력이 생성된 링크 상태·catalog 기준을 표시하지 않았습니다.");
+    assert(versionShareHistoryText.includes(versionShareProbe.response.name) && versionShareHistoryText.includes('사용 가능') && (versionShareHistoryText.includes('저장한 검사 기준') || versionShareHistoryText.includes('저장 검사 기준')) && (versionShareHistoryText.includes('검사 버전') || versionShareHistoryText.includes('engine')), "홈의 최근 견적 버전 비교 공유 이력이 생성된 링크 상태·catalog 기준을 표시하지 않았습니다.");
     assert(await secondClient.evaluate("document.querySelectorAll('[data-testid^=\"home-saved-build-version-filter-\"]').length === 4"), "홈의 견적 버전 비교 공유 상태 필터 4종이 모두 표시되지 않았습니다.");
     assert((await clickSelector(secondClient, '[data-testid="home-saved-build-version-filter-active"]', 1)) === 1, "견적 버전 비교 공유 사용 가능 필터를 선택하지 못했습니다.");
     await waitForValue(secondClient, "document.querySelector('[data-testid=\"home-saved-build-version-filter-active\"]')?.getAttribute('aria-pressed') === 'true' && document.querySelector('[data-testid=\"home-saved-build-version-shares\"]')?.textContent?.includes('사용 가능') === true", "견적 버전 비교 공유 사용 가능 필터");
@@ -626,7 +742,65 @@ async function main() {
     const currentRecheckExportProbe = await secondClient.evaluate("(async () => { let copied = ''; let downloaded = ''; const originalClipboard = navigator.clipboard; const originalCreateObjectURL = window.URL.createObjectURL; const originalRevokeObjectURL = window.URL.revokeObjectURL; const originalAnchorClick = HTMLAnchorElement.prototype.click; try { Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (value) => { copied = value; } } }); window.URL.createObjectURL = (blob) => { void blob.text().then((value) => { downloaded = value; }); return 'blob:current-recheck-smoke'; }; window.URL.revokeObjectURL = () => {}; HTMLAnchorElement.prototype.click = function () {}; document.querySelector('[data-testid=\"shared-version-comparison-current-copy\"]')?.click(); for (let index = 0; index < 20 && !copied; index += 1) await new Promise((resolve) => setTimeout(resolve, 25)); document.querySelector('[data-testid=\"shared-version-comparison-current-download\"]')?.click(); for (let index = 0; index < 20 && !downloaded; index += 1) await new Promise((resolve) => setTimeout(resolve, 25)); return { copied, downloaded }; } finally { try { Object.defineProperty(navigator, 'clipboard', { configurable: true, value: originalClipboard }); } catch {} window.URL.createObjectURL = originalCreateObjectURL; window.URL.revokeObjectURL = originalRevokeObjectURL; HTMLAnchorElement.prototype.click = originalAnchorClick; } })()");
     assert(currentRecheckExportProbe.copied.includes("PC Supporter 현재 기준 버전 재검사") && currentRecheckExportProbe.copied.includes("finding:"), "현재 재검사 텍스트 복사 payload가 완성되지 않았습니다. probe=" + JSON.stringify({ copied: currentRecheckExportProbe.copied.slice(0, 700) }));
     assert(currentRecheckExportProbe.downloaded.includes('"kind": "pc-supporter.saved-build-version-current-recheck"') && currentRecheckExportProbe.downloaded.includes('"schemaVersion": 1'), "현재 재검사 JSON payload가 생성되지 않았습니다. probe=" + JSON.stringify({ downloaded: currentRecheckExportProbe.downloaded.slice(0, 700) }));
+    const accessoryActionProbe = await secondClient.evaluate(`(async () => {
+      const originalFetch = window.fetch;
+      const beforeId = ${JSON.stringify(currentVersionSaveProbe.parentId)};
+      const afterId = ${JSON.stringify(currentVersionSavedId)};
+      const response = (payload, status = 200) => new Response(JSON.stringify(payload), { status, headers: { "Content-Type": "application/json" } });
+      const accessoryId = "accessory-seed-fan-120-pwm";
+      const beforeFinding = { id: "smoke-fan-power-before", ruleId: "fan-power", severity: "warning", accessoryId, accessoryName: "120mm PWM 시스템 팬", relatedPartIds: ["case-compact-matx"], title: "팬 허브 연결을 확인해 주세요.", message: "주변 부품 연결을 확인합니다.", facts: [] };
+      const afterFinding = { id: "smoke-fan-power-after", ruleId: "fan-power", severity: "blocker", accessoryId, accessoryName: "120mm PWM 시스템 팬", relatedPartIds: ["case-compact-matx", "mb-a620-small"], title: "팬 허브 전원 연결이 부족합니다.", message: "팬 허브 전원 연결을 확인해야 합니다.", facts: [] };
+      const savedWithAccessoryFinding = (saved, after) => ({ ...saved, selection: { ...saved.selection, accessories: [...(saved.selection.accessories ?? []).filter((selection) => selection.accessoryId !== accessoryId), { accessoryId, quantity: 1, targetPartId: "case-compact-matx" }] }, checkSnapshot: { ...(saved.checkSnapshot ?? {}), accessoryCompatibility: after ? { status: "incompatible", blockerCount: 1, warningCount: 0, unknownCount: 0, findings: [afterFinding] } : { status: "needs_review", blockerCount: 0, warningCount: 1, unknownCount: 0, findings: [beforeFinding] } } });
+      const changedResult = { status: "needs_review", blockerCount: 0, warningCount: 0, unknownCount: 0, findings: [], accessoryCompatibility: { status: "incompatible", blockerCount: 1, warningCount: 0, unknownCount: 0, findings: [afterFinding] }, metrics: {}, analysis: { profile: "gaming", scoreLabel: "균형형", scoreBasis: "accessory-action-probe", confidence: "high", factors: [], strengths: [], focusAreas: [], bottlenecks: [], nextActions: [] }, links: [], totalPriceWon: 9999999, priceComplete: true, engineVersion: "2.58.0", catalogSnapshotAt: "2026-09-17T00:00:00.000Z", checkedAt: "2026-09-17T00:00:00.000Z" };
+      const pause = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+      const waitFor = async (predicate, limit = 120) => { for (let index = 0; index < limit; index += 1) { if (predicate()) return true; await pause(50); } return false; };
+      const navigate = async (path) => { history.pushState({}, "", path); window.dispatchEvent(new PopStateEvent("popstate")); await pause(150); };
+      try {
+        window.fetch = async (input, init) => {
+          const requestUrl = new URL(typeof input === "string" ? input : input.url, location.href);
+          const method = String(init?.method ?? "GET").toUpperCase();
+          if (requestUrl.pathname === "/api/compatibility/check" && method === "POST") return response(changedResult);
+          if (requestUrl.pathname === "/api/builds" && requestUrl.searchParams.has("ids")) {
+            const result = await originalFetch(input, init);
+            const payload = await result.clone().json();
+            return response({ ...payload, items: payload.items.map((saved) => saved.id === beforeId ? savedWithAccessoryFinding(saved, false) : saved.id === afterId ? savedWithAccessoryFinding(saved, true) : saved) }, result.status);
+          }
+          if (requestUrl.pathname === "/api/builds/" + afterId) {
+            const result = await originalFetch(input, init);
+            const payload = await result.clone().json();
+            return response(savedWithAccessoryFinding(payload, true), result.status);
+          }
+          return originalFetch(input, init);
+        };
+        const savedIds = localStorage.getItem("pc-supporter-saved-build-ids");
+        window.dispatchEvent(new StorageEvent("storage", { key: "pc-supporter-saved-build-ids", newValue: savedIds, storageArea: localStorage }));
+        await pause(250);
+        await navigate("/");
+        await navigate("/history?accessory-finding-smoke=1");
+        await waitFor(() => Boolean(document.querySelector('[data-testid="saved-build-version-panel"]')));
+        const versionRow = document.querySelector('[data-testid="saved-build-version-lineage-' + afterId + '"]')?.closest("article");
+        const openVersion = versionRow?.querySelector("button");
+        if (!(openVersion instanceof HTMLButtonElement)) return { stage: "missing-version-open", path: location.pathname };
+        openVersion.click();
+        const detailsReady = await waitFor(() => Boolean(document.querySelector('[data-testid="result-version-change-details"]')));
+        if (!detailsReady) return { stage: "missing-accessory-details", path: location.pathname, context: document.querySelector('[data-testid="result-version-context"]')?.textContent ?? "", body: (document.body?.innerText ?? "").slice(-1800) };
+        const detailsText = document.querySelector('[data-testid="result-version-change-details"]')?.textContent ?? "";
+        const purchaseButton = document.querySelector('[data-testid^="result-version-accessory-purchase-"]');
+        const connectionButton = document.querySelector('[data-testid^="result-version-accessory-connection-"]');
+        if (!(purchaseButton instanceof HTMLButtonElement) || !(connectionButton instanceof HTMLButtonElement)) return { stage: "missing-accessory-actions", detailsText };
+        purchaseButton.click();
+        const purchaseFocused = await waitFor(() => document.activeElement?.getAttribute("data-testid") === "purchase-list-panel");
+        connectionButton.click();
+        const connectionFocused = await waitFor(() => document.activeElement?.getAttribute("data-testid") === "build-connectivity-panel");
+        const purchaseSectionFocused = location.hash === "#purchase-list" || purchaseFocused;
+        return { stage: purchaseSectionFocused && connectionFocused ? "checked" : "focus-incomplete", detailsText, path: location.pathname, hash: location.hash, purchaseFocused, purchaseSectionFocused, connectionFocused, activeElement: document.activeElement?.getAttribute("data-testid") ?? document.activeElement?.tagName ?? "", purchaseRows: [...document.querySelectorAll('[data-testid="purchase-list-row"]')].map((row) => ({ id: row.id, sourceKey: row.getAttribute("data-purchase-row-key"), name: row.querySelector("strong")?.textContent ?? "" })).slice(0, 12) };
+      } finally {
+        window.fetch = originalFetch;
+      }
+    })()`);
+    assert(accessoryActionProbe.stage === "checked" && accessoryActionProbe.detailsText.includes("120mm PWM 시스템 팬") && accessoryActionProbe.detailsText.includes("연결 부품") && accessoryActionProbe.purchaseSectionFocused && accessoryActionProbe.purchaseFocused && accessoryActionProbe.connectionFocused, "주변 부품 finding의 구매·연결 액션 흐름이 완성되지 않았습니다. probe=" + JSON.stringify(accessoryActionProbe));
     assert(!publicVersionShareText.includes(versionShareProbe.response.ownerToken), "공유 버전 비교 화면에 owner token이 노출되었습니다.");
+    await secondClient.evaluate(`(() => { const originalFetch = window.__pcSupporterVersionProbeOriginalFetch; if (typeof originalFetch === "function") window.fetch = originalFetch; delete window.__pcSupporterVersionProbeOriginalFetch; return typeof originalFetch === "function"; })()`);
 
     console.log(JSON.stringify({ ok: true, savedBuildId: candidateSavedId, originalSavedBuildId: originalSavedId, comparisonShareId, sharedWatchlistId, flow: ["isolated-servers", "api-rate-limit-headers", "save-build", "saved-build-decision-note", "saved-build-metadata-edit", "saved-build-recheck-refresh-value-diff", "assembly-verification-server-compact-restore", "saved-build-metadata-history", "saved-share-view-state", "cross-tab-history-sync", "shared-watchlist-snapshot", "shared-watchlist-retry", "shared-watchlist-decision", "shared-watchlist-decision-summary", "shared-watchlist-price-history-chart", "shared-watchlist-history-window", "candidate-scenario-compare", "candidate-scenario-share", "candidate-scenario-shared-route", "candidate-scenario-share-history", "shared-comparison-retry", "candidate-scenario-share-revoke", "candidate-scenario-revoked-route", "candidate-scenario-save", "share-route", "history-route", "saved-build-alerts-lazy-load", "saved-build-alert-finding-focus", "saved-build-finding-deep-link", "saved-build-recheck-analysis-diff", "saved-build-comparison-navigation", "version-pair-selection", "version-comparison-export", "version-comparison-share", "version-comparison-share-history", "cross-tab-purchase-progress-conflict", "purchase-item-status", "purchase-decision-gate-progress", "assembly-plan-execution-progress", "assembly-plan-resume-action", "purchase-list-action-center", "purchase-progress-save", "purchase-progress-server-restore", "cross-tab-price-history-conflict", "price-history-server-save", "price-history-server-restore", "purchase-price-decision-summary", "purchase-list-data-freshness", "purchase-list-price-filters", "purchase-list-search", "shared-build-clone-to-draft"] }, null, 2));
   } finally {

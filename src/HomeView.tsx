@@ -163,18 +163,18 @@ function HomeDataTrustPanel({ meta, bootstrapLoading, bootstrapErrorCount }: { m
     {meta ? <>
       <div className="home-data-trust-grid">
         <div><span>핵심 부품</span><strong>{catalogEligibleCount.toLocaleString("ko-KR")}개</strong><small>전체 {meta.catalogCount.toLocaleString("ko-KR")}개 중 부품이 아닌 항목 {meta.catalogExcludedNonCoreCount ?? 0}개 제외 · 기본 정보 {catalogEligibleQualityCounts?.seed ?? 0}개 · 스펙 부족 {catalogEligibleQualityCounts?.incomplete ?? 0}개</small></div>
-        <div><span>주변 부품 카탈로그</span><strong>{meta.accessoryCount.toLocaleString("ko-KR")}개</strong><small>10개 범주 · 기본 정보 {meta.accessoryQualityCounts.seed.toLocaleString("ko-KR")}개</small></div>
+        <div><span>주변 부품 목록</span><strong>{meta.accessoryCount.toLocaleString("ko-KR")}개</strong><small>10개 범주 · 기본 정보 {meta.accessoryQualityCounts.seed.toLocaleString("ko-KR")}개</small></div>
         <div><span>가격 확인 범위</span><strong>{catalogPriceCoverage === undefined ? "확인이 필요해요" : `${catalogPriceCoverage.toFixed(1)}%`}</strong><small>{catalogEligiblePriceCoverage.priced.toLocaleString("ko-KR")}개 확인 · {catalogEligiblePriceCoverage.unpriced.toLocaleString("ko-KR")}개는 아직 미확인</small></div>
-        <div><span>카탈로그 기준</span><strong>{homeCatalogFreshnessLabel(meta)}</strong><small>{meta.catalogUpdatedAt && Number.isFinite(Date.parse(meta.catalogUpdatedAt)) ? new Date(meta.catalogUpdatedAt).toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" }) : "갱신 시점을 확인해 주세요"}</small></div>
+        <div><span>부품 정보 기준</span><strong>{homeCatalogFreshnessLabel(meta)}</strong><small>{meta.catalogUpdatedAt && Number.isFinite(Date.parse(meta.catalogUpdatedAt)) ? new Date(meta.catalogUpdatedAt).toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" }) : "갱신 시점을 확인해 주세요"}</small></div>
         <div><span>벤치마크 점수</span><strong>CPU {homeBenchmarkCoveragePercent(meta.benchmarkCoverage.cpu.cinebenchR23Complete, meta.benchmarkCoverage.cpu.total)} · GPU {homeBenchmarkCoveragePercent(meta.benchmarkCoverage.gpu.threeDMarkComplete, meta.benchmarkCoverage.gpu.total)}</strong><small>CPU R23 {meta.benchmarkCoverage.cpu.cinebenchR23Complete.toLocaleString("ko-KR")}/{meta.benchmarkCoverage.cpu.total.toLocaleString("ko-KR")}개 · GPU 3DMark {meta.benchmarkCoverage.gpu.threeDMarkComplete.toLocaleString("ko-KR")}/{meta.benchmarkCoverage.gpu.total.toLocaleString("ko-KR")}개 점수 확인됨</small></div>
       </div>
       <div className="home-data-trust-actions" aria-label="데이터 확인 바로가기">
-        {incompleteCount > 0 && <a className="button button-small button-light" data-testid="home-data-trust-open-incomplete" href="/catalog?quality=incomplete">스펙 부족 {incompleteCount.toLocaleString("ko-KR")}개 확인하기 <FiArrowRight /></a>}
-        {unknownPriceCount > 0 && <a className="button button-small button-light" data-testid="home-data-trust-open-unpriced" href="/catalog?priceStatus=unknown">가격 미확인 {unknownPriceCount.toLocaleString("ko-KR")}개 확인하기 <FiArrowRight /></a>}
-        {staleCount > 0 && <a className="button button-small button-light" data-testid="home-data-trust-open-stale" href="/catalog?freshness=stale">오래된 데이터 {staleCount.toLocaleString("ko-KR")}개 확인하기 <FiArrowRight /></a>}
-        {missingPcieCount > 0 && <a className="button button-small button-light" data-testid="home-data-trust-open-pcie" href="/catalog?category=motherboard&pcieSlotInfo=missing">PCIe 정보 부족 {missingPcieCount.toLocaleString("ko-KR")}개 확인하기 <FiArrowRight /></a>}
-        {benchmarkCpuIncompleteCount > 0 && <a className="button button-small button-light" data-testid="home-data-trust-open-cpu-benchmark" href="/catalog?category=cpu&benchmarkStatus=incomplete">CPU 벤치 점수 없음 {benchmarkCpuIncompleteCount.toLocaleString("ko-KR")}개 확인하기 <FiArrowRight /></a>}
-        {benchmarkGpuIncompleteCount > 0 && <a className="button button-small button-light" data-testid="home-data-trust-open-gpu-benchmark" href="/catalog?category=gpu&benchmarkStatus=incomplete">GPU 벤치 점수 없음 {benchmarkGpuIncompleteCount.toLocaleString("ko-KR")}개 확인하기 <FiArrowRight /></a>}
+        {incompleteCount > 0 && <a className="button button-small button-light" data-testid="home-data-trust-open-incomplete" href="/catalog?quality=incomplete">정보가 부족한 부품 {incompleteCount.toLocaleString("ko-KR")}개 보기 <FiArrowRight /></a>}
+        {unknownPriceCount > 0 && <a className="button button-small button-light" data-testid="home-data-trust-open-unpriced" href="/catalog?priceStatus=unknown">가격을 아직 모르는 부품 {unknownPriceCount.toLocaleString("ko-KR")}개 보기 <FiArrowRight /></a>}
+        {staleCount > 0 && <a className="button button-small button-light" data-testid="home-data-trust-open-stale" href="/catalog?freshness=stale">오래된 정보 {staleCount.toLocaleString("ko-KR")}개 보기 <FiArrowRight /></a>}
+        {missingPcieCount > 0 && <a className="button button-small button-light" data-testid="home-data-trust-open-pcie" href="/catalog?category=motherboard&pcieSlotInfo=missing">PCIe 정보가 비어 있는 부품 {missingPcieCount.toLocaleString("ko-KR")}개 보기 <FiArrowRight /></a>}
+        {benchmarkCpuIncompleteCount > 0 && <a className="button button-small button-light" data-testid="home-data-trust-open-cpu-benchmark" href="/catalog?category=cpu&benchmarkStatus=incomplete">CPU 점수가 없는 부품 {benchmarkCpuIncompleteCount.toLocaleString("ko-KR")}개 보기 <FiArrowRight /></a>}
+        {benchmarkGpuIncompleteCount > 0 && <a className="button button-small button-light" data-testid="home-data-trust-open-gpu-benchmark" href="/catalog?category=gpu&benchmarkStatus=incomplete">GPU 점수가 없는 부품 {benchmarkGpuIncompleteCount.toLocaleString("ko-KR")}개 보기 <FiArrowRight /></a>}
       </div>
     </> : <p className="home-data-trust-loading"><FiLoader className="spin" /> 부품 정보를 불러오고 있어요. 잠시 후 검사 화면에서 상태를 확인할 수 있어요.</p>}
   </section>;
@@ -269,7 +269,7 @@ export function HomeView({ meta, bootstrapLoading, bootstrapErrorCount, build, r
         <div className="panel-kicker">검사 결과 미리보기</div>
       <div className="preview-status"><span className="status-icon danger"><FiXCircle /></span><div><strong>확인이 필요한 부품이 있어요.</strong><span>바로 고칠 문제 3개 · 주의 1개</span></div></div>
       <div className="preview-rule"><span className="rule-icon danger"><FiXCircle /></span><div><strong>CPU와 메인보드 규격이 달라요.</strong><small>CPU: AM5 · 메인보드: LGA1700</small></div><FiChevronDown /></div>
-      <div className="preview-rule"><span className="rule-icon warning"><FiAlertTriangle /></span><div><strong>RAM 속도가 지원 범위를 초과합니다.</strong><small>다운클럭될 수 있어요.</small></div><FiChevronDown /></div>
+      <div className="preview-rule"><span className="rule-icon warning"><FiAlertTriangle /></span><div><strong>RAM 속도가 이 메인보드에서 지원하는 범위를 넘었어요.</strong><small>속도가 낮아질 수 있어요.</small></div><FiChevronDown /></div>
       <div className="preview-rule"><span className="rule-icon success"><FiCheckCircle /></span><div><strong>문제가 있는 부품은 바로 바꿔볼 수 있어요.</strong><small>바꾼 뒤 다시 확인해요</small></div><FiChevronDown /></div>
       </div> : <GuidedHomePreview />}
     </section>

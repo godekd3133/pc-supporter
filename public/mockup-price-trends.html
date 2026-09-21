@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>가격 추이·알림 시안</title>
+<link rel="stylesheet" href="/src/styles.css" />
+<style>
+  /* ===== 목업 전용 (새 컴포넌트 제안 스타일) ===== */
+  .mock-page { min-height: 100%; padding: 24px 16px 80px; background: var(--canvas); font-family: "Noto Sans KR", "Manrope", sans-serif; }
+  .mock-device { max-width: 420px; margin: 0 auto 48px; }
+  .mock-device.desktop { max-width: 980px; }
+  .mock-device-label { display: flex; align-items: baseline; justify-content: space-between; margin: 0 4px 12px; }
+  .mock-device-label strong { font-size: 15px; font-weight: 800; color: var(--ink); }
+  .mock-device-label span { font-size: 11px; color: var(--muted); }
+
+  /* --- 부품 상세 가격 추이 카드 --- */
+  .price-trend-card { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+  .price-trend-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+  .price-trend-head strong { display: block; font-size: 13px; font-weight: 800; color: var(--ink); }
+  .price-trend-head small { display: block; margin-top: 3px; color: var(--muted); font-size: 10px; line-height: 1.45; }
+  .price-trend-window { display: inline-flex; gap: 2px; padding: 2px; border-radius: 8px; background: var(--canvas); }
+  .price-trend-window button { border: 0; padding: 4px 9px; border-radius: 6px; background: transparent; color: var(--muted); font-size: 10px; font-weight: 700; cursor: pointer; font-family: inherit; }
+  .price-trend-window button.selected { background: var(--surface); color: var(--ink); box-shadow: var(--small-shadow); }
+  .price-trend-chart { position: relative; }
+  .price-trend-chart svg { display: block; width: 100%; height: auto; }
+  .price-trend-axis { display: flex; justify-content: space-between; margin-top: 4px; color: var(--muted); font-size: 9px; font-family: "DM Mono", monospace; }
+  .price-trend-summary { display: flex; flex-wrap: wrap; gap: 4px; }
+  .price-trend-summary span { padding: 4px 7px; border-radius: 6px; background: var(--canvas); color: var(--muted); font-size: 10px; font-weight: 600; }
+  .price-trend-summary span em { font-style: normal; color: var(--ink); font-family: "DM Mono", monospace; }
+  .price-trend-summary span.low em { color: var(--teal-deep); }
+  .price-trend-summary span.high em { color: var(--red); }
+  .price-trend-note { display: flex; gap: 5px; margin: 0; color: var(--muted); font-size: 9px; line-height: 1.5; }
+  .price-trend-note svg { flex: 0 0 auto; margin-top: 1px; }
+  .price-trend-target { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border-radius: 9px; background: var(--teal-soft); }
+  .price-trend-target div strong { display: block; font-size: 11px; color: var(--ink); }
+  .price-trend-target div small { color: var(--muted); font-size: 9px; }
+
+  /* --- 견적 총액 추이 --- */
+  .build-total-trend { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
+  .build-total-trend-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+  .build-total-trend-head .eyebrow { margin-bottom: 3px; }
+  .build-total-trend-head h3 { margin: 0; font-size: 15px; font-weight: 800; color: var(--ink); }
+  .build-total-trend-head > p { margin: 4px 0 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
+  .build-total-now { text-align: right; }
+  .build-total-now span { display: block; color: var(--muted); font-size: 9px; }
+  .build-total-now strong { font-size: 18px; font-weight: 800; color: var(--ink); font-family: "DM Mono", monospace; }
+  .build-total-now em { display: block; font-style: normal; font-size: 10px; font-weight: 700; color: var(--teal-deep); }
+  .build-total-now em.up { color: var(--red); }
+  .build-total-breakdown { display: grid; gap: 4px; }
+  .build-total-breakdown-row { display: grid; grid-template-columns: 62px 1fr auto; align-items: center; gap: 8px; font-size: 10px; }
+  .build-total-breakdown-row > span { color: var(--muted); font-weight: 700; }
+  .build-total-breakdown-row .bar { height: 6px; border-radius: 3px; background: var(--canvas); overflow: hidden; }
+  .build-total-breakdown-row .bar i { display: block; height: 100%; border-radius: 3px; background: var(--teal); }
+  .build-total-breakdown-row > em { font-style: normal; font-family: "DM Mono", monospace; color: var(--ink); }
+  .build-total-breakdown-row .delta-down { color: var(--teal-deep); font-weight: 700; }
+  .build-total-breakdown-row .delta-up { color: var(--red); font-weight: 700; }
+
+  /* --- 알림 시안 --- */
+  .mock-notification-banner { display: flex; gap: 10px; padding: 12px 14px; border-radius: 16px; background: rgba(255,255,255,.96); box-shadow: 0 12px 32px rgba(16,24,40,.18); border: 1px solid var(--line); backdrop-filter: blur(8px); }
+  .mock-notification-banner .app-icon { flex: 0 0 auto; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; background: var(--teal); color: #fff; font-size: 15px; font-weight: 800; }
+  .mock-notification-banner .noti-copy { min-width: 0; flex: 1; }
+  .mock-notification-banner .noti-head { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 2px; }
+  .mock-notification-banner .noti-head span { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+  .mock-notification-banner .noti-head time { font-size: 10px; color: var(--muted); }
+  .mock-notification-banner strong { display: block; font-size: 12px; color: var(--ink); }
+  .mock-notification-banner p { margin: 2px 0 0; font-size: 11px; line-height: 1.45; color: var(--muted); }
+  .mock-lockscreen { padding: 22px 14px; border-radius: 22px; background: linear-gradient(180deg,#1b2837,#0f1722); }
+  .mock-lockscreen .lockscreen-time { text-align: center; color: #e8edf4; margin-bottom: 18px; }
+  .mock-lockscreen .lockscreen-time strong { display: block; font-size: 34px; font-weight: 300; }
+  .mock-lockscreen .lockscreen-time span { font-size: 11px; color: #93a3b5; }
+
+  .price-alert-inbox { display: grid; gap: 8px; }
+  .price-alert-item { display: flex; gap: 10px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+  .price-alert-item.unread { border-color: #bcd8fd; background: #f5f9ff; }
+  .price-alert-item .icon { flex: 0 0 auto; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; background: var(--teal-soft); color: var(--teal-deep); font-size: 14px; }
+  .price-alert-item .icon.better { background: var(--yellow-soft); color: var(--yellow); }
+  .price-alert-item .copy { min-width: 0; flex: 1; display: grid; gap: 2px; }
+  .price-alert-item .copy .t { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .price-alert-item .copy .t strong { font-size: 11px; color: var(--ink); }
+  .price-alert-item .copy .t span { flex: 0 0 auto; font-size: 9px; color: var(--muted); }
+  .price-alert-item .copy p { margin: 0; font-size: 10px; line-height: 1.45; color: var(--muted); }
+  .price-alert-item .copy small { font-size: 9px; color: var(--muted); }
+  .price-alert-item .copy .actions { display: flex; gap: 6px; margin-top: 5px; }
+  .price-alert-item .copy .actions button { border: 0; padding: 4px 9px; border-radius: 6px; background: var(--canvas); color: var(--ink); font-size: 10px; font-weight: 700; font-family: inherit; cursor: pointer; }
+  .price-alert-item .copy .actions button.primary { background: var(--teal); color: #fff; }
+
+  .mock-frame { border: 1px solid var(--line); border-radius: 18px; background: var(--canvas); padding: 14px; }
+  .mock-section-gap { height: 14px; }
+  .mock-hint { margin: 0 4px 40px; padding: 10px 12px; border-left: 3px solid var(--teal); color: var(--muted); font-size: 10px; line-height: 1.6; background: var(--surface); border-radius: 0 8px 8px 0; }
+</style>
+</head>
+<body>
+<div class="mock-page">
+
+  <!-- ============ 시안 A: 부품 상세 가격 추이 ============ -->
+  <div class="mock-device">
+    <div class="mock-device-label"><strong>A. 부품 상세 — 가격 추이</strong><span>카탈로그 부품 상세 · 모바일</span></div>
+    <div class="mock-frame">
+      <section class="catalog-detail" style="position:static" aria-label="선택한 부품 상세">
+        <div class="catalog-detail-heading">
+          <div><p class="eyebrow">PART DETAIL</p><h2 style="color:var(--ink)">AMD 라이젠7-6세대 9800X3D (그래니트 릿지)</h2><p>CPU · AMD</p></div>
+        </div>
+        <div class="catalog-detail-badges"><span>다나와 최신</span><span>오늘 갱신</span><span>다나와</span></div>
+        <div class="catalog-detail-price"><div><span>현재 가격</span></div><strong>643,650원</strong></div>
+
+        <!-- NEW: 가격 추이 카드 -->
+        <section class="price-trend-card" aria-label="가격 추이">
+          <div class="price-trend-head">
+            <div><strong>가격 추이</strong><small>카탈로그에 기록된 가격 변경만 표시해요. 실제 판매가와 다를 수 있어요.</small></div>
+            <div class="price-trend-window" role="group" aria-label="기간 선택">
+              <button type="button">7일</button><button type="button" class="selected">30일</button><button type="button">90일</button>
+            </div>
+          </div>
+          <div class="price-trend-chart" role="img" aria-label="최근 30일 가격 추이 선 그래프">
+            <svg viewBox="0 0 340 132" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#3182f6" stop-opacity=".18" />
+                  <stop offset="1" stop-color="#3182f6" stop-opacity="0" />
+                </linearGradient>
+              </defs>
+              <!-- gridlines -->
+              <line x1="0" y1="18" x2="340" y2="18" stroke="#e5e8eb" stroke-dasharray="3 4" />
+              <line x1="0" y1="58" x2="340" y2="58" stroke="#e5e8eb" stroke-dasharray="3 4" />
+              <line x1="0" y1="98" x2="340" y2="98" stroke="#e5e8eb" stroke-dasharray="3 4" />
+              <!-- y labels -->
+              <text x="4" y="14" font-size="8" fill="#8b95a1" font-family="DM Mono">668,000</text>
+              <text x="4" y="54" font-size="8" fill="#8b95a1" font-family="DM Mono">655,000</text>
+              <text x="4" y="94" font-size="8" fill="#8b95a1" font-family="DM Mono">643,650</text>
+              <!-- target price dashed line -->
+              <line x1="0" y1="86" x2="340" y2="86" stroke="#d08a00" stroke-dasharray="5 4" stroke-width="1" />
+              <text x="252" y="82" font-size="8" fill="#d08a00" font-family="DM Mono">목표가 645,000</text>
+              <!-- area + line -->
+              <path d="M8,22 L60,30 L112,44 L164,58 L216,62 L268,86 L332,96 L332,120 L8,120 Z" fill="url(#trendFill)" />
+              <polyline points="8,22 60,30 112,44 164,58 216,62 268,86 332,96" fill="none" stroke="#3182f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              <!-- max/min/latest markers -->
+              <circle cx="8" cy="22" r="3.2" fill="#fff" stroke="#f04452" stroke-width="2" />
+              <circle cx="332" cy="96" r="4" fill="#3182f6" stroke="#fff" stroke-width="2" />
+            </svg>
+            <div class="price-trend-axis"><span>8월 24일</span><span>9월 21일</span></div>
+          </div>
+          <div class="price-trend-summary">
+            <span class="low">최저 <em>643,650원</em></span>
+            <span class="high">최고 <em>668,000원</em></span>
+            <span>변동 <em>-24,350원 (-3.6%)</em></span>
+            <span>기록 <em>7회</em></span>
+          </div>
+          <div class="price-trend-target">
+            <div><strong>목표가 645,000원 도달 구간</strong><small>현재가가 목표가 아래로 내려왔어요. 가격 추적 알림이 켜져 있으면 알려드려요.</small></div>
+            <button class="button button-small button-primary" type="button">알림 켜기</button>
+          </div>
+        </section>
+      </section>
+    </div>
+    <p class="mock-hint">기존 "가격 행동" 텍스트 요약 아래에 라인 차트 카드 추가. 최고(빨간 점)·최신(파란 점) 표시, 목표가 등록 시 점선 마커. 데이터는 /api/price-history 그대로 사용.</p>
+  </div>
+
+  <!-- ============ 시안 B: 견적 총액 추이 ============ -->
+  <div class="mock-device desktop">
+    <div class="mock-device-label"><strong>B. 견적 총액 추이</strong><span>결과 화면 · 가격 요약 옆/아래 배치</span></div>
+    <div class="mock-frame">
+      <div style="display:grid;grid-template-columns:1fr 300px;gap:14px;align-items:start">
+        <!-- NEW: 견적 총액 추이 카드 (메인 컬럼) -->
+        <section class="build-total-trend" aria-label="견적 총액 추이">
+          <div class="build-total-trend-head">
+            <div>
+              <p class="eyebrow">BUILD PRICE TREND</p>
+              <h3>견적 총액 추이</h3>
+              <p>선택한 부품의 카탈로그 가격 기록을 합산한 추이예요. 이력이 있는 부품 5/6종 기준.</p>
+            </div>
+            <div class="build-total-now">
+              <span>현재 총액</span>
+              <strong>1,798,500원</strong>
+              <em>30일 전 대비 -43,500원</em>
+            </div>
+          </div>
+          <div class="price-trend-chart" role="img" aria-label="견적 총액 추이 선 그래프">
+            <svg viewBox="0 0 560 140" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="totalFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#3182f6" stop-opacity=".16" />
+                  <stop offset="1" stop-color="#3182f6" stop-opacity="0" />
+                </linearGradient>
+              </defs>
+              <line x1="0" y1="22" x2="560" y2="22" stroke="#e5e8eb" stroke-dasharray="3 4" />
+              <line x1="0" y1="66" x2="560" y2="66" stroke="#e5e8eb" stroke-dasharray="3 4" />
+              <line x1="0" y1="110" x2="560" y2="110" stroke="#e5e8eb" stroke-dasharray="3 4" />
+              <text x="4" y="18" font-size="8" fill="#8b95a1" font-family="DM Mono">1,860,000</text>
+              <text x="4" y="62" font-size="8" fill="#8b95a1" font-family="DM Mono">1,830,000</text>
+              <text x="4" y="106" font-size="8" fill="#8b95a1" font-family="DM Mono">1,798,500</text>
+              <path d="M8,30 L100,44 L190,26 L280,58 L370,84 L460,98 L552,108 L552,130 L8,130 Z" fill="url(#totalFill)" />
+              <polyline points="8,30 100,44 190,26 280,58 370,84 460,98 552,108" fill="none" stroke="#3182f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              <circle cx="190" cy="26" r="3.2" fill="#fff" stroke="#f04452" stroke-width="2" />
+              <circle cx="552" cy="108" r="4" fill="#3182f6" stroke="#fff" stroke-width="2" />
+            </svg>
+            <div class="price-trend-axis"><span>8월 24일</span><span>9월 21일</span></div>
+          </div>
+          <div class="build-total-breakdown" aria-label="부품별 최근 변동">
+            <div class="build-total-breakdown-row"><span>CPU</span><div class="bar"><i style="width:36%"></i></div><em>643,650원 · <b class="delta-down">▼ 24,350</b></em></div>
+            <div class="build-total-breakdown-row"><span>GPU</span><div class="bar"><i style="width:42%"></i></div><em>759,000원 · <b class="delta-up">▲ 12,000</b></em></div>
+            <div class="build-total-breakdown-row"><span>메모리</span><div class="bar"><i style="width:11%"></i></div><em>189,000원 · <b class="delta-down">▼ 31,000</b></em></div>
+            <div class="build-total-breakdown-row"><span>SSD</span><div class="bar"><i style="width:7%"></i></div><em>128,900원 · 변동 없음</em></div>
+            <div class="build-total-breakdown-row"><span>파워</span><div class="bar"><i style="width:4%"></i></div><em>77,950원 · 변동 없음</em></div>
+          </div>
+          <div class="price-trend-summary">
+            <span class="low">기간 최저 <em>1,798,500원</em></span>
+            <span class="high">기간 최고 <em>1,860,000원</em></span>
+            <span>지금이 <em>30일 최저</em></span>
+          </div>
+          <p class="price-trend-note">ⓘ 카탈로그 가격 이력이 있는 부품만 합산한 참고 추이입니다. 부품 교체·수량 변경은 과거 총액에 소급하지 않아요.</p>
+        </section>
+
+        <!-- 기존 가격 요약 (사이드바 맥락) -->
+        <aside>
+          <section class="build-price-summary-panel complete" aria-label="구매 금액 요약">
+            <div class="build-price-summary-heading"><div><p class="eyebrow">PRICE CONFIDENCE</p><h2>구매 금액 요약</h2></div><span class="build-price-summary-status complete">✔ 가격 확인 완료</span></div>
+            <div class="build-price-summary-total"><div><span>카탈로그 기준 전체 합계</span><strong>1,798,500원</strong></div></div>
+            <div class="build-price-summary-breakdown"><div><span>핵심 부품</span><strong>1,798,500원</strong></div><div><span>주변 부품</span><strong>없음</strong></div></div>
+            <div class="build-price-summary-budget within"><span>🏷 목표 예산 2,000,000원</span><strong>201,500원 여유</strong></div>
+          </section>
+        </aside>
+      </div>
+    </div>
+    <p class="mock-hint">결과 화면 메인 컬럼(구매 목록 위)에 총액 추이 카드 배치 — 사이드바는 좁아 차트가 뭉개져서 메인 배치 제안. 우측 기존 "구매 금액 요약"과 자연스럽게 이어짐. 부품별 기여도 바로 "어디서 내렸는지" 표시.</p>
+  </div>
+
+  <!-- ============ 시안 C: 알림 ============ -->
+  <div class="mock-device">
+    <div class="mock-device-label"><strong>C-1. 인앱 알림함 — 가격·더 나은 조건</strong><span>가격 추적 화면 상단</span></div>
+    <div class="mock-frame">
+      <div class="price-alert-inbox" aria-label="가격 알림함">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div><p class="eyebrow" style="margin:0">PRICE ALERTS</p><h3 style="margin:2px 0 0;font-size:14px">가격 알림함 <span style="color:var(--teal-deep)">2</span></h3></div>
+          <button class="text-button" type="button" style="font-size:10px">모두 읽음</button>
+        </div>
+        <article class="price-alert-item unread">
+          <span class="icon">↓</span>
+          <div class="copy">
+            <div class="t"><strong>목표가 도달</strong><span>가격 추적</span></div>
+            <p>AMD 라이젠7 9800X3D이(가) 목표가 645,000원에 도달했어요. 현재 643,650원.</p>
+            <small>오늘 12:46 · 카탈로그 가격 변경 기록 기준</small>
+            <div class="actions"><button class="primary" type="button">부품 상세 보기</button><button type="button">지우기</button></div>
+          </div>
+        </article>
+        <article class="price-alert-item unread">
+          <span class="icon better">⇄</span>
+          <div class="copy">
+            <div class="t"><strong>더 나은 조건 발견</strong><span>저장한 견적 · 게이밍 200만원</span></div>
+            <p>GPU를 RTX 4070 SUPER로 바꾸면 3DMark 약 +8%, 가격 -21,000원이에요.</p>
+            <small>어제 21:10 · 호환 검사 통과한 대안만 표시</small>
+            <div class="actions"><button class="primary" type="button">비교 보기</button><button type="button">지우기</button></div>
+          </div>
+        </article>
+        <article class="price-alert-item">
+          <span class="icon">↓</span>
+          <div class="copy">
+            <div class="t"><strong>가격 하락</strong><span>가격 추적</span></div>
+            <p>삼성 DDR5-6000 32GB 가격이 31,000원 하락했어요.</p>
+            <small>9월 19일 15:02</small>
+          </div>
+        </article>
+      </div>
+    </div>
+    <p class="mock-hint">기존 홈 알림 센터·watchlist 알림을 한곳에. "더 나은 조건"은 기존 저장 견적 alternative 알림 로직(벤치마크 +8%·가격 1.5배 이내) 재사용.</p>
+  </div>
+
+  <div class="mock-device">
+    <div class="mock-device-label"><strong>C-2. 브라우저 푸시 알림</strong><span>잠금화면/데스크톱 배너</span></div>
+    <div class="mock-frame" style="background:linear-gradient(180deg,#22303f,#101a26)">
+      <div class="mock-lockscreen" style="background:transparent;padding:10px 4px">
+        <div class="lockscreen-time"><strong>12:46</strong><span>9월 21일 월요일</span></div>
+        <div class="mock-notification-banner">
+          <span class="app-icon">PC</span>
+          <div class="noti-copy">
+            <div class="noti-head"><span>PC Supporter</span><time>지금</time></div>
+            <strong>목표가 도달 · 가격 추적</strong>
+            <p>AMD 라이젠7 9800X3D — 목표가 645,000원 도달, 현재 643,650원</p>
+          </div>
+        </div>
+        <div class="mock-section-gap"></div>
+        <div class="mock-notification-banner">
+          <span class="app-icon">PC</span>
+          <div class="noti-copy">
+            <div class="noti-head"><span>PC Supporter</span><time>어제</time></div>
+            <strong>더 나은 조건 · 게이밍 200만원</strong>
+            <p>GPU 대안 RTX 4070 SUPER — 성능 +8%, 가격 -21,000원</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="mock-hint">기존 브라우저 Notification 파이프(저장 견적 알림 전용)에 가격 추적 알림을 같은 방식으로 연결. 탭하면 해당 화면으로 이동.</p>
+  </div>
+
+  <!-- ============ 시안 D: 피커 상세 인라인 (compact) ============ -->
+  <div class="mock-device">
+    <div class="mock-device-label"><strong>D. 부품 선택 중 — 피커 상세 미니 추이</strong><span>견적 편집 피커 "상세·이유" 펼침</span></div>
+    <div class="mock-frame">
+      <article class="picker-item-card expanded" style="border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <div><strong style="font-size:12px">AMD 라이젠7-6세대 9800X3D</strong><br><small style="color:var(--muted);font-size:10px">AM5 · 8코어 · 쿨러 미포함</small></div>
+          <strong style="font-size:13px">643,650원</strong>
+        </div>
+        <div class="price-trend-card" style="margin-top:8px;padding:10px">
+          <div class="price-trend-head">
+            <div><strong style="font-size:11px">최근 30일 가격</strong><small>7회 기록 · 최저 근처</small></div>
+          </div>
+          <svg viewBox="0 0 320 44" preserveAspectRatio="none" style="display:block;width:100%">
+            <polyline points="4,8 60,12 116,18 172,24 228,26 280,34 316,38" fill="none" stroke="#3182f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            <circle cx="316" cy="38" r="3" fill="#3182f6" stroke="#fff" stroke-width="1.5" />
+          </svg>
+          <div class="price-trend-summary"><span class="low">최저 <em>643,650원</em></span><span>30일 <em>-3.6%</em></span></div>
+        </div>
+      </article>
+    </div>
+    <p class="mock-hint">피커에서는 스파크라인만 — 상세 차트는 카탈로그 상세(A)로 유도. 선택 중에도 "지금 사도 되는 가격인지" 감을 줌.</p>
+  </div>
+
+</div>
+</body>
+</html>

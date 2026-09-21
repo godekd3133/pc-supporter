@@ -9,7 +9,8 @@ import { type SavedBuildPriorityFilter, type SavedBuildPriorityRow, savedBuildPr
 import { type SavedBuildPriorityAction, savedBuildNextActionFor } from "../shared/saved-build-priority-action";
 import { type SavedBuildPurchaseProgressFilter, savedBuildPurchaseProgressMatchesFilter, savedBuildPurchaseProgressSummaryFor } from "../shared/saved-build-purchase-progress";
 import { type SavedBuildVersionGroup, savedBuildVersionGroupsFor, savedBuildVersionLabelFor } from "../shared/saved-build-version";
-import { savedBuildOriginDetailFor, savedBuildOriginLabelFor } from "../shared/saved-build-origin";
+import { savedBuildOriginAvailabilityLabelFor, savedBuildOriginDetailFor, savedBuildOriginLabelFor, type SavedBuildOriginAvailability } from "../shared/saved-build-origin";
+import { GENERATOR_VARIANTS_LOCAL_SHARES_STORAGE_KEY } from "../shared/generator-variants-local-share";
 import { type AccessoryItem, type BuildSelection, type CompatibilityResult, type Part, type RecommendationPreferences, type SavedBuild, CATEGORY_LABELS, isKnownPrice, LISTING_POLICY_LABELS, PART_CATEGORIES, RECOMMENDATION_PROFILE_LABELS } from "../shared/types";
 import type { SavedBuildLiveCheck } from "./SavedBuildComparisonDecision";
 import { api } from "./api";
@@ -49,7 +50,7 @@ export type SavedBuildMetadataHistoryViewState =
   | { status: "ready"; value: SavedBuildMetadataHistoryResponse }
   | { status: "error"; message: string };
 
-export function BuildComparisonPanel({ builds, onOpenBuild, openingBuildId }: { builds: SavedBuild[]; onOpenBuild?: (build: SavedBuild, focus?: "purchase-list") => void; openingBuildId?: string | null }) {
+export function BuildComparisonPanel({ builds, onOpenBuild, openingBuildId, onLiveChecksChange }: { builds: SavedBuild[]; onOpenBuild?: (build: SavedBuild, focus?: "purchase-list") => void; openingBuildId?: string | null; onLiveChecksChange?: (checks: Record<string, SavedBuildLiveCheck>) => void }) {
   const [liveChecks, setLiveChecks] = useState<Record<string, SavedBuildLiveCheck>>({});
   const [reloadToken, setReloadToken] = useState(0);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
@@ -60,6 +61,7 @@ export function BuildComparisonPanel({ builds, onOpenBuild, openingBuildId }: { 
     let cancelled = false;
     const initialChecks = Object.fromEntries(builds.map((saved) => [saved.id, { status: "loading" as const }])) as Record<string, SavedBuildLiveCheck>;
     setLiveChecks(initialChecks);
+    onLiveChecksChange?.(initialChecks);
     setExportMessage(null);
     void Promise.all(builds.map(async (saved) => {
       try {
@@ -74,12 +76,16 @@ export function BuildComparisonPanel({ builds, onOpenBuild, openingBuildId }: { 
         return [saved.id, { status: "error" as const, message: error instanceof Error ? error.message : "현재 카탈로그 기준 재검사에 실패했습니다." }] as const;
       }
     })).then((entries) => {
-      if (!cancelled) setLiveChecks(Object.fromEntries(entries) as Record<string, SavedBuildLiveCheck>);
+      if (!cancelled) {
+        const nextChecks = Object.fromEntries(entries) as Record<string, SavedBuildLiveCheck>;
+        setLiveChecks(nextChecks);
+        onLiveChecksChange?.(nextChecks);
+      }
     });
     return () => {
       cancelled = true;
     };
-  }, [comparisonKey, reloadToken]);
+  }, [comparisonKey, reloadToken, onLiveChecksChange]);
 
   const rows: Array<{ label: string; values: string[] }> = [
     { label: "저장 시점 전체 금액", values: builds.map((saved) => savedPriceText(saved, "totalPriceWon")) },
@@ -175,7 +181,7 @@ export function BuildComparisonPanel({ builds, onOpenBuild, openingBuildId }: { 
 
   const includesCurrentDraft = builds.some((saved) => saved.id === "current-draft");
   const baselineName = builds[0]?.name ?? "첫 번째 견적";
-  return <section className="history-comparison" aria-label="견적 검사 기록 비교"><div className="history-comparison-heading"><div><p className="eyebrow">BUILD COMPARISON</p><h2>{includesCurrentDraft ? "견적 검사 기록 비교" : "저장 견적 비교"}</h2><p>저장 당시 검사 스냅샷과 현재 카탈로그 기준의 호환·성능·금액을 함께 비교합니다.</p></div><div className="history-comparison-heading-actions"><span>{builds.length}개 선택</span><button className="text-button history-comparison-export-button" type="button" onClick={() => void copyComparison()}><FiCopy /> 비교 복사</button><button className="text-button history-comparison-export-button" type="button" onClick={() => void downloadComparison("csv")}><FiDownload /> CSV 저장</button><button className="text-button history-comparison-export-button" type="button" onClick={() => void downloadComparison("json")}><FiDownload /> JSON 저장</button><button className="button button-light" type="button" onClick={() => setReloadToken((current) => current + 1)} disabled={isReloading}><FiRefreshCw /> {isReloading ? "재검사 중..." : "현재 기준 다시 검사"}</button></div></div>{exportMessage && <p className="history-comparison-export-message" role="status">{exportMessage}</p>}<Suspense fallback={<div className="history-comparison-decision" role="status"><p className="history-comparison-decision-note">결정 요약을 불러오는 중...</p></div>}><LazySavedBuildComparisonDecisionSummary builds={builds} liveChecks={liveChecks} formatWon={formatWon} onOpenBuild={onOpenBuild} openingBuildId={openingBuildId} /></Suspense><div className="history-comparison-diff-toolbar"><div className="history-comparison-diff-summary"><FiLayers /><div><strong>비교 기준 · {baselineName}</strong><small>기준 견적과 다른 값 {changedCellCount}개 셀 · {changedRowCount}개 항목</small></div></div><div className="history-comparison-diff-controls" role="group" aria-label="비교표 표시 방식"><button className={!showDifferencesOnly ? "selected" : ""} type="button" aria-pressed={!showDifferencesOnly} onClick={() => setShowDifferencesOnly(false)}>전체 {allComparisonRows.length}</button><button className={showDifferencesOnly ? "selected" : ""} type="button" aria-pressed={showDifferencesOnly} onClick={() => setShowDifferencesOnly(true)} disabled={changedRowCount === 0}>차이만 {changedRowCount}</button></div></div>{showDifferencesOnly && <p className="history-comparison-diff-status" role="status"><FiInfo /> 첫 번째 견적과 값이 다른 항목만 표시하고 있습니다. 비교표의 기준 열은 강조하지 않습니다.</p>}<div className="history-comparison-table-wrap"><table><caption>{showDifferencesOnly ? "첫 번째 견적과 다른 항목만 표시한 비교 표" : "저장 당시 검사 스냅샷과 현재 카탈로그 재검사 결과 비교 표"}</caption><thead><tr><th scope="col">비교 항목</th>{builds.map((saved, index) => <th scope="col" key={saved.id}><span className="history-comparison-column-name">{saved.name}</span>{index === 0 && <small className="history-comparison-column-baseline">비교 기준</small>}</th>)}</tr></thead><tbody>{visibleSnapshotRows.length > 0 ? visibleSnapshotRows.map((row) => renderRow(row, "snapshot")) : <tr><td className="history-comparison-empty" colSpan={builds.length + 1}>기준 견적과 다른 저장 시점 항목이 없습니다.</td></tr>}</tbody><tbody className="history-comparison-live-body"><tr><th colSpan={builds.length + 1}>CURRENT CATALOG CHECK · 현재 카탈로그 재검사</th></tr>{visibleLiveRows.length > 0 ? visibleLiveRows.map((row) => renderRow(row, "live")) : <tr><td className="history-comparison-empty" colSpan={builds.length + 1}>기준 견적과 다른 현재 재검사 항목이 없습니다.</td></tr>}</tbody></table></div><p className="history-comparison-note"><FiInfo /> 저장 순간 서버가 만든 요약 스냅샷과 현재 카탈로그 재검사를 분리해서 보여줍니다. 재검사는 읽기 전용이며 저장된 견적·현재 편집기·공유 데이터는 변경하지 않습니다. 두 번째 열 이후 기준과 다른 값만 셀 단위로 강조하며, export에는 전체 항목을 포함합니다.</p></section>;
+  return <section className="history-comparison" aria-label="견적 검사 기록 비교" data-testid="saved-build-current-comparison"><div className="history-comparison-heading"><div><p className="eyebrow">BUILD COMPARISON</p><h2>{includesCurrentDraft ? "견적 검사 기록 비교" : "저장 견적 비교"}</h2><p>저장 당시 검사 스냅샷과 현재 카탈로그 기준의 호환·성능·금액을 함께 비교합니다.</p></div><div className="history-comparison-heading-actions"><span>{builds.length}개 선택</span><button className="text-button history-comparison-export-button" type="button" onClick={() => void copyComparison()}><FiCopy /> 비교 복사</button><button className="text-button history-comparison-export-button" type="button" onClick={() => void downloadComparison("csv")}><FiDownload /> CSV 저장</button><button className="text-button history-comparison-export-button" type="button" onClick={() => void downloadComparison("json")}><FiDownload /> JSON 저장</button><button className="button button-light" type="button" onClick={() => setReloadToken((current) => current + 1)} disabled={isReloading}><FiRefreshCw /> {isReloading ? "재검사 중..." : "현재 기준 다시 검사"}</button></div></div>{exportMessage && <p className="history-comparison-export-message" role="status">{exportMessage}</p>}<Suspense fallback={<div className="history-comparison-decision" role="status"><p className="history-comparison-decision-note">결정 요약을 불러오는 중...</p></div>}><LazySavedBuildComparisonDecisionSummary builds={builds} liveChecks={liveChecks} formatWon={formatWon} onOpenBuild={onOpenBuild} openingBuildId={openingBuildId} /></Suspense><div className="history-comparison-diff-toolbar"><div className="history-comparison-diff-summary"><FiLayers /><div><strong>비교 기준 · {baselineName}</strong><small>기준 견적과 다른 값 {changedCellCount}개 셀 · {changedRowCount}개 항목</small></div></div><div className="history-comparison-diff-controls" role="group" aria-label="비교표 표시 방식"><button className={!showDifferencesOnly ? "selected" : ""} type="button" aria-pressed={!showDifferencesOnly} onClick={() => setShowDifferencesOnly(false)}>전체 {allComparisonRows.length}</button><button className={showDifferencesOnly ? "selected" : ""} type="button" aria-pressed={showDifferencesOnly} onClick={() => setShowDifferencesOnly(true)} disabled={changedRowCount === 0}>차이만 {changedRowCount}</button></div></div>{showDifferencesOnly && <p className="history-comparison-diff-status" role="status"><FiInfo /> 첫 번째 견적과 값이 다른 항목만 표시하고 있습니다. 비교표의 기준 열은 강조하지 않습니다.</p>}<div className="history-comparison-table-wrap"><table><caption>{showDifferencesOnly ? "첫 번째 견적과 다른 항목만 표시한 비교 표" : "저장 당시 검사 스냅샷과 현재 카탈로그 재검사 결과 비교 표"}</caption><thead><tr><th scope="col">비교 항목</th>{builds.map((saved, index) => <th scope="col" key={saved.id}><span className="history-comparison-column-name">{saved.name}</span>{index === 0 && <small className="history-comparison-column-baseline">비교 기준</small>}</th>)}</tr></thead><tbody>{visibleSnapshotRows.length > 0 ? visibleSnapshotRows.map((row) => renderRow(row, "snapshot")) : <tr><td className="history-comparison-empty" colSpan={builds.length + 1}>기준 견적과 다른 저장 시점 항목이 없습니다.</td></tr>}</tbody><tbody className="history-comparison-live-body"><tr><th colSpan={builds.length + 1}>CURRENT CATALOG CHECK · 현재 카탈로그 재검사</th></tr>{visibleLiveRows.length > 0 ? visibleLiveRows.map((row) => renderRow(row, "live")) : <tr><td className="history-comparison-empty" colSpan={builds.length + 1}>기준 견적과 다른 현재 재검사 항목이 없습니다.</td></tr>}</tbody></table></div><p className="history-comparison-note"><FiInfo /> 저장 순간 서버가 만든 요약 스냅샷과 현재 카탈로그 재검사를 분리해서 보여줍니다. 재검사는 읽기 전용이며 저장된 견적·현재 편집기·공유 데이터는 변경하지 않습니다. 두 번째 열 이후 기준과 다른 값만 셀 단위로 강조하며, export에는 전체 항목을 포함합니다.</p></section>;
 }
 
 export function SavedBuildMonitorCardState({ item, loading }: { item: SavedBuildMonitorItem | undefined; loading: boolean }) {
@@ -308,7 +314,7 @@ export function SavedBuildVersionPanel({ groups, openingBuildId, onOpen }: { gro
   </section>;
 }
 
-export function HistoryView({ builds, currentBuild, currentPreferences, partMap, accessoryMap, monitorAlerts, onMonitorAlertsChange, browserNotificationPermission, browserNotificationEnabled, onRequestBrowserNotifications, onBrowserNotificationsEnabledChange, onBack, onOpen, onRefreshSavedBuilds, onStart, onRevoke, onEditMetadata, revokingShare, onRecordCheck, recordingCheckId, openingBuildId, onShareVersionComparison, onOpenRecoverOwnership, onIssueRecoveryCode, onToggleMyPc, myPcBusyId, recoveryCodeBusy, onToast }: { builds: SavedBuild[]; currentBuild: BuildSelection; currentPreferences: RecommendationPreferences; partMap: ReadonlyMap<string, Part>; accessoryMap: ReadonlyMap<string, AccessoryItem>; monitorAlerts: SavedBuildMonitorAlert[]; onMonitorAlertsChange: (alerts: SavedBuildMonitorAlert[]) => void; browserNotificationPermission: BrowserNotificationPermission; browserNotificationEnabled: boolean; onRequestBrowserNotifications: () => Promise<void>; onBrowserNotificationsEnabledChange: (enabled: boolean) => void; onBack: () => void; onOpen: (saved: SavedBuild, focus?: SavedBuildOpenFocus) => void; onRefreshSavedBuilds: () => Promise<boolean>; onStart: () => void; onRevoke: (id: string) => void; onEditMetadata: (saved: SavedBuild) => void; revokingShare: boolean; onRecordCheck: (id: string) => void; recordingCheckId: string | null; openingBuildId: string | null; onShareVersionComparison: (before: SavedBuild, after: SavedBuild) => void | Promise<void>; onOpenRecoverOwnership: (saved?: SavedBuild) => void; onIssueRecoveryCode: (saved: SavedBuild) => void; onToggleMyPc: (saved: SavedBuild) => Promise<void>; myPcBusyId: string | null; recoveryCodeBusy: boolean; onToast: (message: string) => void }) {
+export function HistoryView({ builds, currentBuild, currentPreferences, partMap, accessoryMap, monitorAlerts, onMonitorAlertsChange, browserNotificationPermission, browserNotificationEnabled, onRequestBrowserNotifications, onBrowserNotificationsEnabledChange, onBack, onOpen, onRefreshSavedBuilds, onStart, onRevoke, onEditMetadata, revokingShare, onRecordCheck, recordingCheckId, openingBuildId, onShareVersionComparison, onSaveVersion, onOpenRecoverOwnership, onIssueRecoveryCode, onToggleMyPc, myPcBusyId, recoveryCodeBusy, onToast }: { builds: SavedBuild[]; currentBuild: BuildSelection; currentPreferences: RecommendationPreferences; partMap: ReadonlyMap<string, Part>; accessoryMap: ReadonlyMap<string, AccessoryItem>; monitorAlerts: SavedBuildMonitorAlert[]; onMonitorAlertsChange: (alerts: SavedBuildMonitorAlert[]) => void; browserNotificationPermission: BrowserNotificationPermission; browserNotificationEnabled: boolean; onRequestBrowserNotifications: () => Promise<void>; onBrowserNotificationsEnabledChange: (enabled: boolean) => void; onBack: () => void; onOpen: (saved: SavedBuild, focus?: SavedBuildOpenFocus) => void; onRefreshSavedBuilds: () => Promise<boolean>; onStart: () => void; onRevoke: (id: string) => void; onEditMetadata: (saved: SavedBuild) => void; revokingShare: boolean; onRecordCheck: (id: string) => void; recordingCheckId: string | null; openingBuildId: string | null; onShareVersionComparison: (before: SavedBuild, after: SavedBuild) => void | Promise<void>; onSaveVersion?: (saved: SavedBuild) => void; onOpenRecoverOwnership: (saved?: SavedBuild) => void; onIssueRecoveryCode: (saved: SavedBuild) => void; onToggleMyPc: (saved: SavedBuild) => Promise<void>; myPcBusyId: string | null; recoveryCodeBusy: boolean; onToast: (message: string) => void }) {
   const [compareIds, setCompareIds] = useState<string[]>([]);
   const [historyDetailsOpen, setHistoryDetailsOpen] = useState(false);
   const [purchaseProgressFilter, setPurchaseProgressFilter] = useState<SavedBuildPurchaseProgressFilter>("all");
@@ -325,6 +331,8 @@ export function HistoryView({ builds, currentBuild, currentPreferences, partMap,
   const [serverMonitorReloadNonce, setServerMonitorReloadNonce] = useState(0);
   const [priorityActionStates, setPriorityActionStates] = useState<Record<string, SavedBuildPriorityActionViewState>>({});
   const [metadataHistoryStates, setMetadataHistoryStates] = useState<Record<string, SavedBuildMetadataHistoryViewState>>({});
+  const [originAvailability, setOriginAvailability] = useState<Record<string, SavedBuildOriginAvailability>>({});
+  const [originRefreshNonce, setOriginRefreshNonce] = useState(0);
   const monitorAlertsRef = useRef(monitorAlerts);
   const historyMountedRef = useRef(false);
   const priorityActionJobsRef = useRef(new Map<string, number>());
@@ -376,10 +384,47 @@ export function HistoryView({ builds, currentBuild, currentPreferences, partMap,
     { id: "unrecorded", label: "진행률 기록 없음", count: purchaseProgressRows.filter(({ summary }) => summary.status === "unrecorded").length }
   ];
   const visiblePurchaseBuilds = purchaseProgressRows.filter(({ summary }) => savedBuildPurchaseProgressMatchesFilter(summary, purchaseProgressFilter));
+  const originShareIds = useMemo(() => [...new Set(builds.flatMap((saved) => saved.origin?.kind === "shared_generator_variants" && saved.origin.sourceShareId ? [saved.origin.sourceShareId] : []))], [builds]);
+  const originShareKey = originShareIds.join("|");
 
   useEffect(() => {
     monitorAlertsRef.current = monitorAlerts;
   }, [monitorAlerts]);
+
+  useEffect(() => {
+    const refresh = () => setOriginRefreshNonce((current) => current + 1);
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === GENERATOR_VARIANTS_LOCAL_SHARES_STORAGE_KEY) refresh();
+    };
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("focus", refresh);
+    const timer = window.setInterval(refresh, 60_000);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("focus", refresh);
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (originShareIds.length === 0) {
+      setOriginAvailability({});
+      return;
+    }
+    let cancelled = false;
+    setOriginAvailability(Object.fromEntries(originShareIds.map((id) => [id, "checking" as const])));
+    void Promise.all(originShareIds.map(async (id) => {
+      try {
+        await api(`/api/generator-variants/${encodeURIComponent(id)}`, { retry: 0 });
+        return [id, "active" as const] as const;
+      } catch {
+        return [id, "unavailable" as const] as const;
+      }
+    })).then((entries) => {
+      if (!cancelled) setOriginAvailability(Object.fromEntries(entries));
+    });
+    return () => { cancelled = true; };
+  }, [originShareKey, originRefreshNonce]);
 
   useEffect(() => {
     historyMountedRef.current = true;
@@ -766,7 +811,7 @@ export function HistoryView({ builds, currentBuild, currentPreferences, partMap,
       <p className="history-health-note"><FiShield /> 이 점검은 저장 데이터와 공유 링크를 변경하지 않습니다. 검사 이력 추가는 이 브라우저가 소유 토큰을 가진 견적에서만 별도로 실행됩니다.{monitorCheckedAt ? ` · 마지막 전체 점검 ${new Date(monitorCheckedAt).toLocaleString("ko-KR")}` : ""}</p>
     </section>}
     {builds.length > 0 && !monitorLoading && <Suspense fallback={<div className="shared-build-state" data-testid="saved-build-priority-loading"><FiLoader className="spin" /><span>저장 견적 우선순위 보드를 불러오는 중...</span></div>}><LazySavedBuildPriorityPanel rows={priorityRows} actionStates={priorityActionStates} openingBuildId={openingBuildId} onAnalyzeAction={(id) => void analyzePriorityAction(id)} onOpen={(id) => { const saved = builds.find((build) => build.id === id); if (saved) onOpen(saved); }} /></Suspense>}
-    {versionGroups.length > 0 && <Suspense fallback={<div className="shared-build-state" data-testid="saved-build-version-loading"><FiLoader className="spin" /><span>견적 버전 비교를 불러오는 중...</span></div>}><LazySavedBuildVersionPanel groups={versionGroups} openingBuildId={openingBuildId} onOpen={onOpen} onShareVersionComparison={onShareVersionComparison} BuildComparisonPanel={BuildComparisonPanel} partMap={partMap} accessoryMap={accessoryMap} fallbackPreferences={currentPreferences} /></Suspense>}
+    {versionGroups.length > 0 && <Suspense fallback={<div className="shared-build-state" data-testid="saved-build-version-loading"><FiLoader className="spin" /><span>견적 버전 비교를 불러오는 중...</span></div>}><LazySavedBuildVersionPanel groups={versionGroups} openingBuildId={openingBuildId} onOpen={onOpen} onShareVersionComparison={onShareVersionComparison} onSaveVersion={onSaveVersion} BuildComparisonPanel={BuildComparisonPanel} partMap={partMap} accessoryMap={accessoryMap} fallbackPreferences={currentPreferences} originAvailability={originAvailability} /></Suspense>}
     {ownedBuilds.length > 0 && <SavedBuildServerMonitorPanel builds={ownedBuilds} states={serverMonitorStates} busyBuildId={serverMonitorBusyBuildId} onConfigure={(build, enabled, intervalMinutes, alertPolicy) => void configureServerMonitor(build, enabled, intervalMinutes, alertPolicy)} onRun={(build) => void runServerMonitorNow(build)} onReload={() => setServerMonitorReloadNonce((current) => current + 1)} />}
     {ownedBuilds.length === 0 && builds.length > 0 && <section className="history-server-monitor locked" aria-label="서버 백그라운드 점검 사용 안내" data-testid="saved-build-server-monitor-locked"><span className="history-server-monitor-icon"><FiShield /></span><div><p className="eyebrow">SERVER BACKGROUND MONITOR</p><h2>새로 저장한 내 견적부터 서버 점검을 사용할 수 있습니다.</h2><p>이 브라우저에 owner token이 없는 기존·공유 견적은 읽기 전용으로 유지됩니다. 현재 견적을 새 링크로 저장하면 1·6·24시간 구독 설정이 열립니다.</p></div></section>}
     {(builds.length > 0 || visibleMonitorAlerts.length > 0) && <Suspense fallback={<div className="history-monitor-alerts loading" aria-label="저장 견적 알림함 로딩" role="status"><FiLoader className="spin" /> 저장 견적 알림함을 불러오는 중...</div>}><LazySavedBuildMonitorAlertsPanel alerts={visibleMonitorAlerts} availableBuildIds={availableBuildIds} openingBuildId={openingBuildId} browserNotificationPermission={browserNotificationPermission} browserNotificationEnabled={browserNotificationEnabled} onRequestBrowserNotifications={() => void onRequestBrowserNotifications()} onBrowserNotificationsEnabledChange={onBrowserNotificationsEnabledChange} onReadAll={markAllMonitorAlertsRead} onDismissAll={() => dismissMonitorAlerts(visibleMonitorAlerts.map((alert) => alert.id))} onDismiss={(id) => dismissMonitorAlerts([id])} onOpenBuild={openMonitorAlertBuild} /></Suspense>}
@@ -784,12 +829,13 @@ export function HistoryView({ builds, currentBuild, currentPreferences, partMap,
       const monitorItem = monitorItems[saved.id];
       const monitorAssessment = monitorItem?.status === "ready" ? savedBuildMonitorAssessmentFor(monitorItem.snapshot, monitorItem.transition) : undefined;
       const metadataHistory = metadataHistoryStates[saved.id];
+      const originStatus = saved.origin?.sourceShareId ? originAvailability[saved.origin.sourceShareId] : undefined;
       const purchaseProgressLabel = purchaseProgress.status === "completed" ? "모두 구매 완료" : purchaseProgress.status === "in-progress" ? "구매 진행 중" : "서버 기록 없음";
       return <article className="history-card" key={saved.id}>
         <div className="history-card-top"><span className="history-icon"><FiSave /></span><span className="history-date">{new Date(saved.updatedAt).toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" })}</span><button className={selectedForCompare ? "history-compare-toggle selected" : "history-compare-toggle"} type="button" aria-pressed={selectedForCompare} disabled={!selectedForCompare && compareIds.length >= 3} onClick={() => toggleCompare(saved.id)}>{selectedForCompare ? "비교 중" : "비교"}</button></div>
         <h2>{saved.name}</h2>
         {saved.decisionNote && <div className="history-card-decision-note" data-testid="saved-build-decision-note"><FiInfo /><div><span>선택 메모</span><strong>{saved.decisionNote}</strong></div></div>}
-        {saved.origin && <div className="history-card-origin" data-testid={`saved-build-origin-${saved.id}`}><FiGitBranch /><div><span>생성 출처</span><strong>{savedBuildOriginLabelFor(saved.origin)}</strong>{savedBuildOriginDetailFor(saved.origin) && <small>{savedBuildOriginDetailFor(saved.origin)}</small>}{saved.origin.sourceShareId && <a className="history-card-origin-link" href={`/generator-variants/${encodeURIComponent(saved.origin.sourceShareId)}`} data-testid={`saved-build-origin-link-${saved.id}`}>원본 비교 열기 <FiExternalLink /></a>}</div></div>}
+        {saved.origin && <div className="history-card-origin" data-testid={`saved-build-origin-${saved.id}`}><FiGitBranch /><div><span>생성 출처</span><strong>{savedBuildOriginLabelFor(saved.origin)}</strong>{savedBuildOriginDetailFor(saved.origin) && <small>{savedBuildOriginDetailFor(saved.origin)}</small>}{originStatus && <em className={`history-card-origin-status ${originStatus}`}>{originStatus === "active" ? "원본 비교 사용 가능" : originStatus === "unavailable" ? "원본 비교 만료 또는 취소됨" : "원본 비교 상태 확인 중"}</em>}{saved.origin.sourceShareId && <a className="history-card-origin-link" href={`/generator-variants/${encodeURIComponent(saved.origin.sourceShareId)}`} data-testid={`saved-build-origin-link-${saved.id}`}>원본 비교 열기 <FiExternalLink /></a>}</div></div>}
         <p>{selectedCount}개 카테고리 선택{accessoryCount > 0 ? ` · 주변 부품 ${accessoryCount}종` : ""}{summary ? ` · ${summary.priceComplete && isKnownPrice(summary.totalPriceWon) ? formatWon(summary.totalPriceWon) : "견적 금액 확인 필요"}` : ""}{preferences ? ` · ${RECOMMENDATION_PROFILE_LABELS[preferences.profile]} · ${LISTING_POLICY_LABELS[preferences.listingPolicy ?? "retail_only"]}` : ""} · 공유 가능한 견적 · {saved.expiresAt ? `만료 ${new Date(saved.expiresAt).toLocaleString("ko-KR")}` : "공유 무기한"}</p>
         <div className="history-preview">{PART_CATEGORIES.filter((category) => selectionList(saved.selection, category).length > 0).slice(0, 5).map((category) => <span key={category}><CategoryIcon category={category} /> {CATEGORY_LABELS[category]}</span>)}{accessoryCount > 0 && <span><FiTool /> 주변 {accessoryCount}종</span>}{summary && <span><FiDatabase /> {summary.priceComplete && isKnownPrice(summary.totalPriceWon) ? formatWon(summary.totalPriceWon) : "금액 확인 필요"}</span>}{selectedCount > 5 && <span>+{selectedCount - 5}</span>}</div>
         <div className={`history-card-purchase-progress ${purchaseProgress.status}`} data-testid={`saved-build-purchase-progress-${saved.id}`}><div className="history-card-purchase-progress-heading"><span>구매 진행률</span><div><strong>{purchaseProgress.status === "unrecorded" ? "기록 없음" : `${purchaseProgress.checked} / ${purchaseProgress.total}개`}</strong><button className="text-button history-card-purchase-progress-open" type="button" data-testid={`saved-build-purchase-list-${saved.id}`} onClick={() => onOpen(saved, "purchase-list")} disabled={openingBuildId !== null}>{openingBuildId === saved.id ? <><FiLoader className="spin" /> 여는 중...</> : <><FiExternalLink /> 구매 목록 보기</>}</button></div></div>{purchaseProgress.status !== "unrecorded" && <div className="history-card-purchase-progress-bar" role="progressbar" aria-label={`${saved.name} 구매 진행률 ${purchaseProgress.percent}%`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={purchaseProgress.percent}><span style={{ width: `${purchaseProgress.percent}%` }} /></div>}<small>{purchaseProgressLabel}{purchaseProgress.status !== "unrecorded" ? ` · 주문 ${purchaseProgress.stageCounts.ordered} · 수령 ${purchaseProgress.stageCounts.received} · 조립 ${purchaseProgress.stageCounts.installed}` : ""}{purchaseProgress.revision !== undefined ? ` · revision ${purchaseProgress.revision}` : ""}{purchaseProgress.historyCount > 0 ? ` · 이전 이력 ${purchaseProgress.historyCount}개` : ""}{purchaseProgress.updatedAt ? ` · ${new Date(purchaseProgress.updatedAt).toLocaleString("ko-KR", { dateStyle: "short", timeStyle: "short" })}` : ""}</small></div>

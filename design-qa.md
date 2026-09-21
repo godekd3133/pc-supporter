@@ -430,8 +430,14 @@ No actionable P0, P1, or P2 visual findings remain for the requested redesign. T
 ## 2026-09-17 lobby-secondary-panel-tone pass
 
 - 메인 로비의 접힌 저장·데이터 영역까지 말투를 통일했다. 예산 비교 공유, 부품 비교 공유, 견적 버전 비교 공유 패널의 제목·설명·상태 확인·열기·복사·취소·이력 제거 문구를 해요체로 정리했다.
-- 공유·취소·이력 제거의 동작 범위는 변경하지 않고, 사용자에게 보이는 안내만 `다시 열거나`, `복사할 수 있어요`, `서버 상태를 확인해요`, `이력에서 지워요`처럼 로비 톤으로 맞췄다.
+- 공유·취소·이력 제거의 동작 범위는 변경하지 않고, 사용자에게 보이는 안내만 `다시 열거나`, `복사할 수 있어요`, `최신 상태로 다시 확인해요`, `이력에서 지워요`처럼 로비 톤으로 맞췄다.
 - 검증: `npm run typecheck` 통과, `npm run test:browser:quote-onboarding` 통과. 전체 테스트와 production build는 이 코드 변경 후 다음 전체 검증에서 다시 확인한다.
+
+## 2026-09-17 lobby-language-completion pass
+
+- 메인 로비와 접힌 추가 정보에 남아 있던 개발자 중심 표현을 사용자 언어로 바꿨다. `owner token`은 `링크를 만든 브라우저 권한`, `engine`은 `검사 버전`, `카탈로그`는 화면 맥락에 따라 `부품 정보`·`부품 목록`으로 안내한다.
+- 검사 미리보기의 RAM 예시를 `RAM 속도가 이 메인보드에서 지원하는 범위를 넘었어요`·`속도가 낮아질 수 있어요`로, 데이터 확인 바로가기를 `정보가 부족한 부품 보기`·`가격을 아직 모르는 부품 보기`처럼 다음 행동이 보이는 말투로 정리했다.
+- 검증: `npm run typecheck`, `npm run test:browser:quote-onboarding`, `npm run test:browser`, `npm test`(263개 파일·1,393개 테스트), `npm run build`(엔트리 179,338바이트, 600,000바이트 게이트 이내), `git diff --check` 통과.
 
 ## 2026-09-17 first-user-secondary-entry pass
 

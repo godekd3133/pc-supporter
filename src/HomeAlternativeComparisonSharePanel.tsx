@@ -81,7 +81,7 @@ export function HomeAlternativeComparisonSharePanel({ entries, onCopy, onRemove,
 
   async function revoke(entry: AlternativeComparisonLocalShareEntry) {
     if (!entry.ownerToken || revokingId) {
-      if (!entry.ownerToken) onToast("이 링크는 취소용 owner token이 없어 서버에서 취소할 수 없어요. 브라우저 이력에서만 지울 수 있어요.");
+      if (!entry.ownerToken) onToast("이 링크를 만든 브라우저 권한이 없어 공유를 취소할 수 없어요. 브라우저 이력에서만 지울 수 있어요.");
       return;
     }
     if (!window.confirm("이 부품 비교 공유 링크를 취소할까요? 이미 전달된 링크도 더 이상 열리지 않아요.")) return;
@@ -98,7 +98,7 @@ export function HomeAlternativeComparisonSharePanel({ entries, onCopy, onRemove,
   }
 
   return <section className="home-alternative-comparison-shares" aria-label="최근 부품 비교 공유본" data-testid="home-alternative-comparison-shares">
-    <div className="home-alternative-comparison-shares-heading"><div><p className="eyebrow">RECENT SHARES</p><h2><FiShare2 /> 최근 부품 비교 공유본</h2><p>이 브라우저에서 만든 부품 비교 공유본을 다시 열거나 링크를 복사할 수 있어요.</p></div><div className="home-alternative-comparison-shares-heading-actions"><span>{entries.length}개 저장해둠</span><button className="text-button home-alternative-comparison-share-refresh" type="button" onClick={() => setRefreshNonce((current) => current + 1)} disabled={refreshing || visibleEntries.length === 0}><FiRefreshCw className={refreshing ? "spin" : undefined} /> {refreshing ? "상태를 확인하는 중" : "서버 상태를 확인해요"}</button></div></div>
+    <div className="home-alternative-comparison-shares-heading"><div><p className="eyebrow">RECENT SHARES</p><h2><FiShare2 /> 최근 부품 비교 공유본</h2><p>이 브라우저에서 만든 부품 비교 공유본을 다시 열거나 링크를 복사할 수 있어요.</p></div><div className="home-alternative-comparison-shares-heading-actions"><span>{entries.length}개 저장해둠</span><button className="text-button home-alternative-comparison-share-refresh" type="button" onClick={() => setRefreshNonce((current) => current + 1)} disabled={refreshing || visibleEntries.length === 0}><FiRefreshCw className={refreshing ? "spin" : undefined} /> {refreshing ? "상태를 확인하는 중" : "최신 상태로 다시 확인해요"}</button></div></div>
     {(entries.length > 5 || normalizedSearchQuery) && <div className="home-alternative-comparison-share-tools"><label><FiSearch /><span>공유 이력 검색</span><input type="search" aria-label="부품 비교 공유 이력 검색" placeholder="공유 이름·범주·현재 부품·사양·가격·ID 검색" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} /></label>{entries.length > 5 && <button className="text-button home-alternative-comparison-share-history-toggle" type="button" onClick={() => setShowAll((current) => !current)}>{showAll ? "최근 5개만 보기" : `전체 이력 보기 (${entries.length})`}</button>}<small>{normalizedSearchQuery ? `검색 결과 ${matchingEntries.length}개` : showingAll ? `전체 ${matchingEntries.length}개 표시` : `최근 ${Math.min(5, matchingEntries.length)}개 표시`}</small></div>}
     {visibleEntries.length === 0 ? <div className="home-alternative-comparison-share-empty"><FiSearch /><span>검색 조건에 맞는 공유 이력이 없어요.</span></div> : <div className="home-alternative-comparison-share-list">{visibleEntries.map((entry) => {
       const localExpired = alternativeComparisonLocalShareExpired(entry);
@@ -113,6 +113,6 @@ export function HomeAlternativeComparisonSharePanel({ entries, onCopy, onRemove,
         <div className="home-alternative-comparison-share-actions"><a className="button button-light" href={entry.url}>열어보기 <FiExternalLink /></a><button className="button button-light" type="button" onClick={() => onCopy(entry)} disabled={refreshing || revokingId !== null}><FiCopy /> 링크를 복사해요</button>{canRevoke && <button className="text-button danger-text-button" type="button" onClick={() => void revoke(entry)} disabled={refreshing || revokingId !== null}><FiXCircle /> {revokingId === entry.id ? "취소하는 중..." : "공유를 취소해요"}</button>}<button className="text-button danger-text-button" type="button" onClick={() => onRemove(entry.id)} disabled={refreshing || revokingId !== null}><FiTrash2 /> 이력에서 지워요</button></div>
       </article>;
     })}</div>}
-    <p className="home-alternative-comparison-shares-note"><FiInfo /> <strong>서버 상태를 확인해요</strong>는 현재 표시되는 링크를 다시 조회해요. <strong>이력에서 지워요</strong>는 이 브라우저 목록만 정리하고, 링크 자체를 막으려면 <strong>공유를 취소해요</strong>를 사용하세요. 서버 취소는 링크를 만든 브라우저에 owner token이 있을 때만 가능해요.{entries.length > visibleEntries.length && !showingAll ? " 최근 5개만 보여드려요. 전체 이력 보기로 나머지를 확인할 수 있어요." : ""}</p>
+    <p className="home-alternative-comparison-shares-note"><FiInfo /> <strong>최신 상태로 다시 확인해요</strong>는 지금 표시되는 링크를 다시 확인해요. <strong>이력에서 지워요</strong>는 이 브라우저 목록만 정리하고, 링크 자체를 막으려면 <strong>공유를 취소해요</strong>를 사용하세요. 공유 취소는 링크를 만든 브라우저에서만 할 수 있어요.{entries.length > visibleEntries.length && !showingAll ? " 최근 5개만 보여드려요. 전체 이력 보기로 나머지를 확인할 수 있어요." : ""}</p>
   </section>;
 }

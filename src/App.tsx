@@ -153,6 +153,7 @@ import { savedBuildNextActionFor } from "../shared/saved-build-priority-action";
 import type { SavedBuildPriorityAction } from "../shared/saved-build-priority-action";
 import { savedBuildVersionGroupsFor, savedBuildVersionLabelFor } from "../shared/saved-build-version";
 import type { SavedBuildVersionGroup } from "../shared/saved-build-version";
+import { savedBuildVersionDeltaFor } from "../shared/saved-build-version-delta";
 import { dismissSavedBuildMonitorAlerts, markSavedBuildMonitorAlertsRead, mergeSavedBuildMonitorAlerts, savedBuildMonitorAlertFor, savedBuildMonitorAlertMatches } from "../shared/saved-build-monitor-alerts";
 import type { SavedBuildMonitorAlert } from "../shared/saved-build-monitor-alerts";
 import { SAVED_BUILD_SERVER_MONITOR_ALERT_POLICIES, SAVED_BUILD_SERVER_MONITOR_INTERVALS, savedBuildMonitorAlertAllowed } from "../shared/saved-build-monitor-subscription";
@@ -841,6 +842,7 @@ function App() {
   const [shareId, setShareId] = useState<string | null>(null);
   const [shareExpiresAt, setShareExpiresAt] = useState<string | null>(null);
   const [shareOwnerToken, setShareOwnerToken] = useState<string | null>(null);
+  const [currentBuildOrigin, setCurrentBuildOrigin] = useState<SavedBuildOrigin | null>(null);
   const [revokingShare, setRevokingShare] = useState(false);
   const [recordingCheckId, setRecordingCheckId] = useState<string | null>(null);
   const [openingSavedBuildId, setOpeningSavedBuildId] = useState<string | null>(null);
@@ -979,10 +981,11 @@ function App() {
         setToast("공유된 현재 결과의 draft를 읽지 못했습니다.");
         return;
       }
+      const transferOrigin = transfer.origin ? savedBuildOriginForGeneratorVariantsTransfer(transfer.origin, transfer.draft.priority) : undefined;
       if (transfer.mode === "save") {
-        void saveGeneratedDraft(transfer.draft, transfer.origin ? savedBuildOriginForGeneratorVariantsTransfer(transfer.origin, transfer.draft.priority) : undefined);
+        void saveGeneratedDraft(transfer.draft, transferOrigin);
       } else {
-        void applyGeneratedDraft(transfer.draft, transfer.mode === "check");
+        void applyGeneratedDraft(transfer.draft, transfer.mode === "check", transferOrigin);
       }
     } catch {
       setToast("공유된 현재 결과를 읽지 못했습니다.");
@@ -1650,6 +1653,7 @@ function App() {
       generatorRequestRef.current += 1;
       setGenerating(false);
     }
+    if (nextView === "home" || nextView === "start" || nextView === "generator") setCurrentBuildOrigin(null);
     window.history.pushState({}, "", path);
     setView(nextView);
     setLocationKey(path);
@@ -2315,7 +2319,7 @@ function App() {
     }
   }
 
-  async function applyGeneratedDraft(draft: BuildGenerationResult, checkNow: boolean) {
+  async function applyGeneratedDraft(draft: BuildGenerationResult, checkNow: boolean, origin?: SavedBuildOrigin) {
     selectionHydrationAbortControllerRef.current?.abort();
     const hydrationController = new AbortController();
     selectionHydrationAbortControllerRef.current = hydrationController;
@@ -2330,6 +2334,7 @@ function App() {
     const nextPreferences = { ...recommendationPreferences, profile: draft.profile, priority: draft.priority, performanceTier: draft.performanceTier, gamingResolution: draft.profile === "gaming" ? draft.gamingResolution : undefined, gamingRefreshRate: draft.profile === "gaming" ? draft.gamingRefreshRate : undefined, gamingGameIds: draft.profile === "gaming" ? draft.gamingGameIds : undefined, gamingGraphicsPreset: draft.profile === "gaming" ? draft.gamingGraphicsPreset : undefined, gamingRayTracing: draft.profile === "gaming" ? draft.gamingRayTracing : undefined, gamingUpscaling: draft.profile === "gaming" ? draft.gamingUpscaling : undefined, budgetWon: draft.budgetWon, listingPolicy: draft.listingPolicy };
     setBuild(draft.selection);
     setRecommendationPreferences(nextPreferences);
+    setCurrentBuildOrigin(origin ?? null);
     if (checkNow) {
       if (!isCurrent()) return;
       await checkBuild(draft.selection, nextPreferences);
@@ -2425,6 +2430,7 @@ function App() {
     setSavedCheckHistory(null);
     setCheckedInputFingerprint(null);
     setCheckError(null);
+    setCurrentBuildOrigin(null);
     setBuildImportPreview(null);
     void rememberBuildSelection(next.selection);
     navigate("/build", "editor");
@@ -2432,8 +2438,9 @@ function App() {
   }
 
   function requestSaveBuild(target?: SaveBuildTarget) {
-    setSaveBuildTarget(target ?? null);
-    setSaveName(target?.label ?? "나의 PC 견적");
+    const resolvedTarget = target ?? (currentBuildOrigin ? { build, preferences: recommendationPreferences, label: "자동 구성 견적", kind: "generated" as const, origin: currentBuildOrigin } : undefined);
+    setSaveBuildTarget(resolvedTarget ?? null);
+    setSaveName(resolvedTarget?.label ?? "나의 PC 견적");
     setSaveDecisionNote("");
     setSaveExpiryDays("never");
     setSaveDialogOpen(true);
@@ -2496,6 +2503,7 @@ function App() {
     const name = saveName.trim() || "나의 PC 견적";
     const decisionNote = saveDecisionNote.trim();
     const target = saveBuildTarget;
+    const saveOrigin = target?.origin ?? currentBuildOrigin;
     const targetBuild = target?.build ?? build;
     const targetPreferences = target?.preferences ?? recommendationPreferences;
     const refreshReport = catalogRefreshReportForInput(catalogRefreshReport, targetBuild, targetPreferences);
@@ -2509,12 +2517,13 @@ function App() {
       const saved = await api<SavedBuildCreateResponse>("/api/builds", {
         method: "POST",
         ...(parentOwnerToken ? { headers: { "X-Share-Owner-Token": parentOwnerToken } } : {}),
-        body: JSON.stringify({ name, selection: targetBuild, recommendationPreferences: targetPreferences, expiresInDays: saveExpiryDays === "never" ? undefined : saveExpiryDays, ...(decisionNote ? { decisionNote } : {}), ...(target?.origin ? { origin: target.origin } : {}), ...(refreshReport ? { catalogRefreshReport: refreshReport } : {}), ...(parentOwnerToken && target?.parentBuildId ? { parentBuildId: target.parentBuildId } : {}) })
+        body: JSON.stringify({ name, selection: targetBuild, recommendationPreferences: targetPreferences, expiresInDays: saveExpiryDays === "never" ? undefined : saveExpiryDays, ...(decisionNote ? { decisionNote } : {}), ...(saveOrigin ? { origin: saveOrigin } : {}), ...(refreshReport ? { catalogRefreshReport: refreshReport } : {}), ...(parentOwnerToken && target?.parentBuildId ? { parentBuildId: target.parentBuildId } : {}) })
       });
       if (!isCurrent()) return;
       invalidateSavedBuildReads();
       setShareId(saved.id);
       setShareExpiresAt(saved.expiresAt ?? null);
+      setCurrentBuildOrigin(saved.origin ?? null);
       rememberSavedBuildOwnerToken(saved.id, saved.ownerToken);
       setShareOwnerToken(saved.ownerToken);
       if (saved.recoveryCode) setRecoveryCodeNotice({ code: saved.recoveryCode, buildName: name });
@@ -2532,7 +2541,7 @@ function App() {
         const continuationRouteRequestSequence = routeRequestSequenceRef.current;
         const isContinuationCurrent = () => saveBuildRequestRef.current === continuationRequestVersion
           && routeRequestSequenceRef.current === continuationRouteRequestSequence;
-        const savedTargetLabel = target.kind === "candidate" ? "비교 구성" : target.kind === "generated" ? "자동 구성" : "수리 플랜";
+        const savedTargetLabel = target.kind === "candidate" ? "비교 구성" : target.kind === "generated" ? "자동 구성" : target.kind === "repair_plan" ? "수리 플랜" : "새 버전";
         try {
           await navigator.clipboard.writeText(url);
           if (!isContinuationCurrent()) return;
@@ -2967,6 +2976,7 @@ function App() {
     const nextPreferences = saved.recommendationPreferences ?? recommendationPreferences;
     setBuild(saved.selection);
     setRecommendationPreferences(nextPreferences);
+    setCurrentBuildOrigin(saved.origin ?? null);
     setCatalogRefreshReport(null);
     try {
       await rememberBuildSelection(saved.selection, hydrationController.signal);
@@ -3201,6 +3211,26 @@ function App() {
 
   const routeHasUpgradeEntry = new URLSearchParams(window.location.search).get("entry") === "upgrade";
   const upgradeEntry = view === "editor" && routeHasUpgradeEntry;
+  const activeSavedBuild = shareId ? savedBuilds.find((saved) => saved.id === shareId) : undefined;
+  const activeSavedBuildParent = activeSavedBuild?.derivedFromBuildId ? savedBuilds.find((saved) => saved.id === activeSavedBuild.derivedFromBuildId) : undefined;
+  const savedVersionContext = activeSavedBuild?.versionNumber !== undefined
+    ? {
+        versionNumber: activeSavedBuild.versionNumber,
+        ...(activeSavedBuild.derivedFromBuildId ? { derivedFromBuildId: activeSavedBuild.derivedFromBuildId } : {}),
+        ...(activeSavedBuild.versionGroupId ? { versionGroupId: activeSavedBuild.versionGroupId } : {}),
+        ...(activeSavedBuildParent ? {
+          parentName: activeSavedBuildParent.name,
+          delta: savedBuildVersionDeltaFor(activeSavedBuildParent, activeSavedBuild),
+          selectionChanges: buildTransferDiffFor(
+            activeSavedBuildParent.selection,
+            activeSavedBuildParent.recommendationPreferences ?? recommendationPreferences,
+            activeSavedBuild.selection,
+            activeSavedBuild.recommendationPreferences ?? recommendationPreferences,
+            { partName: (partId) => partMap.get(partId)?.name, accessoryName: (accessoryId) => accessoryMap.get(accessoryId)?.name }
+          ).rows.slice(0, 4)
+        } : {})
+      }
+    : undefined;
   const content = view === "home" ? (
     <Suspense fallback={<div className="home-page home-page-loading" role="status"><FiLoader className="spin" /> 홈 화면을 불러오는 중...</div>}>
       <LazyHomeView
@@ -3358,6 +3388,13 @@ function App() {
       recordingCheckId={recordingCheckId}
       openingBuildId={openingSavedBuildId}
       onShareVersionComparison={shareSavedBuildVersionComparison}
+      onSaveVersion={(saved) => {
+        if (!readSavedBuildOwnerToken(saved.id)) {
+          setToast("현재 기준 새 버전을 저장하려면 이 브라우저의 견적 소유권이 필요합니다.");
+          return;
+        }
+        requestSaveBuild({ build: saved.selection, preferences: saved.recommendationPreferences ?? recommendationPreferences, label: `${saved.name} · 현재 기준 새 버전`, parentBuildId: saved.id, ...(saved.origin ? { origin: saved.origin } : {}) });
+      }}
       onOpenRecoverOwnership={(saved) => setRecoverOwnershipTarget(saved ? { id: saved.id, name: saved.name } : "open")}
       onIssueRecoveryCode={(saved) => void issueRecoveryCodeFor(saved)}
       onToggleMyPc={(saved) => toggleMyPcFor(saved)}
@@ -3381,6 +3418,9 @@ function App() {
       shareId={shareId}
       shareExpiresAt={shareExpiresAt}
       decisionNote={shareId ? savedBuilds.find((saved) => saved.id === shareId)?.decisionNote : undefined}
+      origin={shareId ? savedBuilds.find((saved) => saved.id === shareId)?.origin ?? currentBuildOrigin ?? undefined : currentBuildOrigin ?? undefined}
+      savedVersionContext={savedVersionContext}
+      onOpenHistory={() => navigate("/history", "history")}
       shareOwnerToken={shareOwnerToken}
       shareOwnerTokenAvailable={Boolean(shareOwnerToken)}
       recordingSavedCheck={Boolean(shareId && recordingCheckId === shareId)}

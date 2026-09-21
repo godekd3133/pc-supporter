@@ -141,7 +141,7 @@ function watchedRowKeysFor(rows: ReadonlyArray<PurchaseListRow>, isWatchedEntry?
   }).filter((key): key is string => Boolean(key));
 }
 
-export function PurchaseListPanel({ rows, storageKey, inputFingerprint, budgetWon, savedBuildId, savedBuildOwnerToken, onCopy, onDownload, focusStatus, onProgressChange, onServerProgressChange, onServerPriceHistoryChange, onWatchEntry, isWatchedEntry, onOpenCatalogItem, onRefreshAll, refreshingItemId, catalogRefreshReport }: { rows: PurchaseListRow[]; storageKey: string; inputFingerprint: string; budgetWon?: number; savedBuildId?: string; savedBuildOwnerToken?: string; onCopy: (checkedIds?: ReadonlySet<string>, rows?: PurchaseListRow[], itemStates?: ReadonlyArray<PurchaseListItemStatus>) => void; onDownload: (checkedIds?: ReadonlySet<string>, rows?: PurchaseListRow[], itemStates?: ReadonlyArray<PurchaseListItemStatus>) => void; focusStatus?: PurchaseItemStatus; onProgressChange?: (progress: PurchaseListExecutionProgress) => void; onServerProgressChange?: (progress?: SavedBuildPurchaseProgress) => void; onServerPriceHistoryChange?: (history?: SavedBuildPurchasePriceHistory) => void; onWatchEntry?: (target: PurchaseListWatchTarget) => boolean; isWatchedEntry?: (target: Pick<PurchaseListWatchTarget, "kind" | "itemId">) => boolean; onOpenCatalogItem?: (row: PurchaseListRow) => void; onRefreshAll?: (targets: RefreshTarget[]) => void; refreshingItemId?: string | null; catalogRefreshReport?: CatalogRefreshReport | null }) {
+export function PurchaseListPanel({ rows, storageKey, inputFingerprint, budgetWon, savedBuildId, savedBuildOwnerToken, onCopy, onDownload, focusStatus, focusRowKey, onProgressChange, onServerProgressChange, onServerPriceHistoryChange, onWatchEntry, isWatchedEntry, onOpenCatalogItem, onRefreshAll, refreshingItemId, catalogRefreshReport }: { rows: PurchaseListRow[]; storageKey: string; inputFingerprint: string; budgetWon?: number; savedBuildId?: string; savedBuildOwnerToken?: string; onCopy: (checkedIds?: ReadonlySet<string>, rows?: PurchaseListRow[], itemStates?: ReadonlyArray<PurchaseListItemStatus>) => void; onDownload: (checkedIds?: ReadonlySet<string>, rows?: PurchaseListRow[], itemStates?: ReadonlyArray<PurchaseListItemStatus>) => void; focusStatus?: PurchaseItemStatus; focusRowKey?: string; onProgressChange?: (progress: PurchaseListExecutionProgress) => void; onServerProgressChange?: (progress?: SavedBuildPurchaseProgress) => void; onServerPriceHistoryChange?: (history?: SavedBuildPurchasePriceHistory) => void; onWatchEntry?: (target: PurchaseListWatchTarget) => boolean; isWatchedEntry?: (target: Pick<PurchaseListWatchTarget, "kind" | "itemId">) => boolean; onOpenCatalogItem?: (row: PurchaseListRow) => void; onRefreshAll?: (targets: RefreshTarget[]) => void; refreshingItemId?: string | null; catalogRefreshReport?: CatalogRefreshReport | null }) {
   const itemStatusStorageKey = `${storageKey}:item-statuses`;
   const [checkedIds, setCheckedIds] = useState<string[]>(() => purchaseListCheckedIdsFromJson(window.localStorage.getItem(storageKey)));
   const [itemStates, setItemStates] = useState<PurchaseListItemStatus[]>(() => purchaseListItemStatusesFromJson(window.localStorage.getItem(itemStatusStorageKey), storageKey));
@@ -200,6 +200,33 @@ export function PurchaseListPanel({ rows, storageKey, inputFingerprint, budgetWo
   const priceFilterCounts = purchaseListPriceFilterCounts(rows, livePrices, checkedIdSet, purchaseSearchQuery);
   const dataFreshnessCounts = purchaseListDataFreshnessCountsFor(rows);
   const visibleRows = displayRows.map((row, index) => ({ row, index })).filter(({ index }) => purchaseListRowMatchesQuery(rows[index]!, purchaseSearchQuery) && purchaseListPriceFilterMatches(priceFilter, rows[index]!, livePrices[rowKeys[index]!], checkedIdSet.has(rowKeys[index]!)) && purchaseListItemStatusMatchesFilter(statusFilter, purchaseListItemStatusFor(itemStates, rowKeys[index]!, checkedIdSet)));
+  useEffect(() => {
+    const nodes = [...document.querySelectorAll<HTMLElement>('[data-testid="purchase-list-row"]')];
+    visibleRows.forEach(({ index }, visibleIndex) => {
+      const node = nodes[visibleIndex];
+      const rowKey = rowKeys[index];
+      if (node && rowKey) node.dataset.purchaseRowKey = rowKey;
+    });
+  }, [rowKeys.join("|"), visibleRows.length, purchaseSearchQuery, priceFilter, statusFilter]);
+  useEffect(() => {
+    if (!focusRowKey || hydratedStorageKey !== storageKey) return;
+    const index = rowKeys.indexOf(focusRowKey);
+    if (index < 0) return;
+    let attempts = 0;
+    const focusTarget = () => {
+      const target = document.getElementById(`purchase-list-row-${index}`);
+      if (target) {
+        target.scrollIntoView({ behavior: "smooth", block: "center" });
+        target.focus({ preventScroll: true });
+        return;
+      }
+      if (attempts >= 40) return;
+      attempts += 1;
+      window.setTimeout(focusTarget, 50);
+    };
+    const timer = window.setTimeout(focusTarget, 0);
+    return () => window.clearTimeout(timer);
+  }, [focusRowKey, hydratedStorageKey, rowKeys.join("|"), storageKey, visibleRows.length]);
   const priceReviewRows = rows.map((row, index) => ({ row, index })).filter(({ row, index }) => purchaseListPriceFilterMatches("needs_review", row, livePrices[rowKeys[index]!], false));
   const dataReviewRows = rows.map((row, index) => ({ row, index })).filter(({ row }) => row.dataFreshness !== "fresh");
   const nextPurchaseActions = purchaseListActionCenterFor({ total: rows.length, dataReviewCount: dataReviewRows.length, priceReviewCount: priceReviewRows.length, statusCounts: { planned: statusCounts.planned, ordered: statusCounts.ordered, received: statusCounts.received, installed: statusCounts.installed } });
