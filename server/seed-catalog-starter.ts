@@ -158,7 +158,7 @@ export const extendedSeedCatalog: Part[] = [
     brand: "NVIDIA",
     model: "RTX 4070 SUPER",
     priceWon: 899000,
-    specs: { powerW: 220, recommendedPsuW: 650, vramGb: 12, gpuVendor: "nvidia", gpuArchitectureFamily: "Ada Lovelace", lengthMm: 244, thicknessMm: 50, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 1 }], [{ kind: "12v2x6", count: 1 }]] }
+    specs: { powerW: 220, recommendedPsuW: 650, vramGb: 12, gpuVendor: "nvidia", gpuArchitectureFamily: "Ada Lovelace", gpuStreamProcessors: 7168, gpuMemoryBandwidthGbps: 504, gpuBoostClockMhz: 2475, gpu3dmarkTimeSpyScore: 21200, gpu3dmarkPortRoyalScore: 13400, lengthMm: 244, thicknessMm: 50, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 1 }], [{ kind: "12v2x6", count: 1 }]] }
   }),
   seed({
     id: "gpu-rtx-4080-super",
@@ -167,7 +167,7 @@ export const extendedSeedCatalog: Part[] = [
     brand: "NVIDIA",
     model: "RTX 4080 SUPER",
     priceWon: 1390000,
-    specs: { powerW: 320, recommendedPsuW: 750, vramGb: 16, gpuVendor: "nvidia", gpuArchitectureFamily: "Ada Lovelace", lengthMm: 310, thicknessMm: 61, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "12v2x6", count: 1 }], [{ kind: "pcie_8pin_6plus2", count: 3 }]] }
+    specs: { powerW: 320, recommendedPsuW: 750, vramGb: 16, gpuVendor: "nvidia", gpuArchitectureFamily: "Ada Lovelace", gpuStreamProcessors: 10240, gpuMemoryBandwidthGbps: 736, gpuBoostClockMhz: 2550, gpu3dmarkTimeSpyScore: 28500, gpu3dmarkPortRoyalScore: 18200, lengthMm: 310, thicknessMm: 61, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "12v2x6", count: 1 }], [{ kind: "pcie_8pin_6plus2", count: 3 }]] }
   }),
   seed({
     id: "gpu-rx-7900-xtx",
@@ -176,7 +176,7 @@ export const extendedSeedCatalog: Part[] = [
     brand: "AMD",
     model: "RX 7900 XTX",
     priceWon: 1190000,
-    specs: { powerW: 355, recommendedPsuW: 800, vramGb: 24, gpuVendor: "amd", gpuArchitectureFamily: "RDNA 3", lengthMm: 344, thicknessMm: 72, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 3 }]] }
+    specs: { powerW: 355, recommendedPsuW: 800, vramGb: 24, gpuVendor: "amd", gpuArchitectureFamily: "RDNA 3", gpuStreamProcessors: 6144, gpuMemoryBandwidthGbps: 960, gpuBoostClockMhz: 2500, gpu3dmarkTimeSpyScore: 30100, gpu3dmarkPortRoyalScore: 15900, lengthMm: 344, thicknessMm: 72, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 3 }]] }
   }),
   seed({
     id: "gpu-arc-a770",
@@ -185,7 +185,7 @@ export const extendedSeedCatalog: Part[] = [
     brand: "Intel",
     model: "Arc A770",
     priceWon: 429000,
-    specs: { powerW: 225, recommendedPsuW: 600, vramGb: 16, gpuVendor: "intel", gpuArchitectureFamily: "Alchemist", lengthMm: 280, thicknessMm: 53, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 1 }]] }
+    specs: { powerW: 225, recommendedPsuW: 600, vramGb: 16, gpuVendor: "intel", gpuArchitectureFamily: "Alchemist", gpuStreamProcessors: 4096, gpuMemoryBandwidthGbps: 560, gpuBoostClockMhz: 2100, gpu3dmarkTimeSpyScore: 13300, gpu3dmarkPortRoyalScore: 7300, lengthMm: 280, thicknessMm: 53, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 1 }]] }
   }),
   seed({
     id: "ssd-nvme-2tb-gen4",
@@ -455,7 +455,7 @@ export const extendedSeedCatalog: Part[] = [
     brand: "NVIDIA",
     model: "RTX 4060 Ti",
     priceWon: 589000,
-    specs: { powerW: 160, recommendedPsuW: 550, vramGb: 8, gpuVendor: "nvidia", gpuArchitectureFamily: "Ada Lovelace", lengthMm: 240, thicknessMm: 42, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 1 }]] }
+    specs: { powerW: 160, recommendedPsuW: 550, vramGb: 8, gpuVendor: "nvidia", gpuArchitectureFamily: "Ada Lovelace", gpuStreamProcessors: 4352, gpuMemoryBandwidthGbps: 288, gpuBoostClockMhz: 2535, gpu3dmarkTimeSpyScore: 13400, gpu3dmarkPortRoyalScore: 8100, lengthMm: 240, thicknessMm: 42, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 1 }]] }
   }),
   seed({
     id: "gpu-rtx-4070",
@@ -464,7 +464,7 @@ export const extendedSeedCatalog: Part[] = [
     brand: "NVIDIA",
     model: "RTX 4070",
     priceWon: 769000,
-    specs: { powerW: 200, recommendedPsuW: 650, vramGb: 12, gpuVendor: "nvidia", gpuArchitectureFamily: "Ada Lovelace", lengthMm: 244, thicknessMm: 42, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 1 }], [{ kind: "12v2x6", count: 1 }]] }
+    specs: { powerW: 200, recommendedPsuW: 650, vramGb: 12, gpuVendor: "nvidia", gpuArchitectureFamily: "Ada Lovelace", gpuStreamProcessors: 5888, gpuMemoryBandwidthGbps: 504, gpuBoostClockMhz: 2475, gpu3dmarkTimeSpyScore: 17900, gpu3dmarkPortRoyalScore: 11100, lengthMm: 244, thicknessMm: 42, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 1 }], [{ kind: "12v2x6", count: 1 }]] }
   }),
   seed({
     id: "gpu-rtx-4070-ti-super",
@@ -473,7 +473,7 @@ export const extendedSeedCatalog: Part[] = [
     brand: "NVIDIA",
     model: "RTX 4070 Ti SUPER",
     priceWon: 1090000,
-    specs: { powerW: 285, recommendedPsuW: 700, vramGb: 16, gpuVendor: "nvidia", gpuArchitectureFamily: "Ada Lovelace", lengthMm: 305, thicknessMm: 61, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "12v2x6", count: 1 }], [{ kind: "pcie_8pin_6plus2", count: 2 }]] }
+    specs: { powerW: 285, recommendedPsuW: 700, vramGb: 16, gpuVendor: "nvidia", gpuArchitectureFamily: "Ada Lovelace", gpuStreamProcessors: 8448, gpuMemoryBandwidthGbps: 672, gpuBoostClockMhz: 2610, gpu3dmarkTimeSpyScore: 24300, gpu3dmarkPortRoyalScore: 15800, lengthMm: 305, thicknessMm: 61, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "12v2x6", count: 1 }], [{ kind: "pcie_8pin_6plus2", count: 2 }]] }
   }),
   seed({
     id: "gpu-rx-7800-xt",
@@ -482,7 +482,7 @@ export const extendedSeedCatalog: Part[] = [
     brand: "AMD",
     model: "RX 7800 XT",
     priceWon: 699000,
-    specs: { powerW: 263, recommendedPsuW: 700, vramGb: 16, gpuVendor: "amd", gpuArchitectureFamily: "RDNA 3", lengthMm: 302, thicknessMm: 52, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 2 }]] }
+    specs: { powerW: 263, recommendedPsuW: 700, vramGb: 16, gpuVendor: "amd", gpuArchitectureFamily: "RDNA 3", gpuStreamProcessors: 3840, gpuMemoryBandwidthGbps: 624, gpuBoostClockMhz: 2430, gpu3dmarkTimeSpyScore: 19900, gpu3dmarkPortRoyalScore: 10600, lengthMm: 302, thicknessMm: 52, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 2 }]] }
   }),
   seed({
     id: "gpu-rx-7600",
@@ -491,7 +491,7 @@ export const extendedSeedCatalog: Part[] = [
     brand: "AMD",
     model: "RX 7600",
     priceWon: 379000,
-    specs: { powerW: 165, recommendedPsuW: 550, vramGb: 8, gpuVendor: "amd", gpuArchitectureFamily: "RDNA 3", lengthMm: 235, thicknessMm: 43, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 1 }]] }
+    specs: { powerW: 165, recommendedPsuW: 550, vramGb: 8, gpuVendor: "amd", gpuArchitectureFamily: "RDNA 3", gpuStreamProcessors: 2048, gpuMemoryBandwidthGbps: 288, gpuBoostClockMhz: 2655, gpu3dmarkTimeSpyScore: 10700, gpu3dmarkPortRoyalScore: 5500, lengthMm: 235, thicknessMm: 43, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 1 }]] }
   }),
   seed({
     id: "gpu-rtx-4090",
@@ -500,7 +500,7 @@ export const extendedSeedCatalog: Part[] = [
     brand: "NVIDIA",
     model: "RTX 4090",
     priceWon: 2490000,
-    specs: { powerW: 450, recommendedPsuW: 850, vramGb: 24, gpuVendor: "nvidia", gpuArchitectureFamily: "Ada Lovelace", lengthMm: 336, thicknessMm: 75, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "12v2x6", count: 1 }], [{ kind: "pcie_8pin_6plus2", count: 3 }]] }
+    specs: { powerW: 450, recommendedPsuW: 850, vramGb: 24, gpuVendor: "nvidia", gpuArchitectureFamily: "Ada Lovelace", gpuStreamProcessors: 16384, gpuMemoryBandwidthGbps: 1008, gpuBoostClockMhz: 2520, gpu3dmarkTimeSpyScore: 36000, gpu3dmarkPortRoyalScore: 25700, lengthMm: 336, thicknessMm: 75, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "12v2x6", count: 1 }], [{ kind: "pcie_8pin_6plus2", count: 3 }]] }
   }),
   seed({
     id: "ssd-nvme-1tb-gen4-mid",
@@ -734,7 +734,7 @@ export const extendedSeedCatalog: Part[] = [
     brand: "PC Supporter",
     model: "REF-GPU-8GB",
     priceWon: 459000,
-    specs: { powerW: 165, recommendedPsuW: 550, vramGb: 8, gpuVendor: "nvidia", gpuMemoryType: "GDDR6", lengthMm: 270, thicknessMm: 48, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 1 }]] }
+    specs: { powerW: 165, recommendedPsuW: 550, vramGb: 8, gpuVendor: "nvidia", gpuMemoryType: "GDDR6", gpuStreamProcessors: 3072, gpuMemoryBandwidthGbps: 288, gpuBoostClockMhz: 2460, gpu3dmarkTimeSpyScore: 10600, gpu3dmarkPortRoyalScore: 6000, lengthMm: 270, thicknessMm: 48, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 1 }]] }
   }),
   seed({
     id: "gpu-performance-12gb-ref",
@@ -743,7 +743,7 @@ export const extendedSeedCatalog: Part[] = [
     brand: "PC Supporter",
     model: "REF-GPU-12GB",
     priceWon: 799000,
-    specs: { powerW: 285, recommendedPsuW: 750, vramGb: 12, gpuVendor: "amd", gpuMemoryType: "GDDR6", lengthMm: 330, thicknessMm: 62, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 2 }]] }
+    specs: { powerW: 285, recommendedPsuW: 750, vramGb: 12, gpuVendor: "amd", gpuMemoryType: "GDDR6", gpuStreamProcessors: 5888, gpuMemoryBandwidthGbps: 504, gpuBoostClockMhz: 2475, gpu3dmarkTimeSpyScore: 17800, gpu3dmarkPortRoyalScore: 11000, lengthMm: 330, thicknessMm: 62, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 2 }]] }
   }),
   seed({
     id: "gpu-creator-16gb-ref",
@@ -752,7 +752,7 @@ export const extendedSeedCatalog: Part[] = [
     brand: "PC Supporter",
     model: "REF-GPU-16GB",
     priceWon: 1090000,
-    specs: { powerW: 250, recommendedPsuW: 750, vramGb: 16, gpuVendor: "nvidia", gpuMemoryType: "GDDR6", lengthMm: 310, thicknessMm: 55, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 2 }]] }
+    specs: { powerW: 250, recommendedPsuW: 750, vramGb: 16, gpuVendor: "nvidia", gpuMemoryType: "GDDR6", gpuStreamProcessors: 8448, gpuMemoryBandwidthGbps: 672, gpuBoostClockMhz: 2610, gpu3dmarkTimeSpyScore: 24000, gpu3dmarkPortRoyalScore: 15600, lengthMm: 310, thicknessMm: 55, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 2 }]] }
   }),
   seed({
     id: "ssd-nvme-500gb-ref",
