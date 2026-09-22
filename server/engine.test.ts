@@ -106,8 +106,8 @@ function balanceFixture() {
   const weakCpu: Part = {
     ...baseCpu,
     id: "cpu-balance-weak",
-    name: "테스트 CPU 상대 점수 낮음",
-    specs: { ...baseCpu.specs, cores: 4, threads: 8, boostClockGhz: 3.8, cinebenchR23Single: 1100, cinebenchR23Multi: 6500 }
+    name: "테스트 CPU 고정 지수 낮음",
+    specs: { ...baseCpu.specs, cores: 2, threads: 4, boostClockGhz: 3.0, l3CacheMb: 4, cinebenchR23Single: 500, cinebenchR23Multi: 3000 }
   };
   const peerCpu: Part = {
     ...baseCpu,
@@ -359,18 +359,19 @@ describe("compatibility engine", () => {
     });
   });
 
-  it("returns a clearly labeled catalog-relative analysis for the selected profile", () => {
+  it("returns a clearly labeled fixed-anchor analysis for the selected profile", () => {
     const result = evaluateBuild(compatibleBuild(), seedCatalog, {
       recommendationPreferences: { priority: "balanced", profile: "gaming" }
     });
 
     expect(result.analysis.profile).toBe("gaming");
-    expect(result.analysis.scoreBasis).toContain("실제 벤치마크");
+    expect(result.analysis.scoreBasis).toContain("고정 기준");
+    expect(result.analysis.scoreModelVersion).toBe("objective-index-v1");
     expect(result.analysis.factors.some((factor) => factor.category === "gpu")).toBe(true);
     expect(["상위권", "균형형", "보완 권장", "계산 불가"]).toContain(result.analysis.scoreLabel);
   });
 
-  it("reports a CPU-GPU balance signal from catalog-relative scores without claiming FPS", () => {
+  it("reports a CPU-GPU balance signal from fixed-anchor scores without claiming FPS", () => {
     const { build, catalog } = balanceFixture();
     const result = evaluateBuild(build, catalog, {
       recommendationPreferences: { priority: "performance", profile: "gaming", gamingResolution: "1440p" }
@@ -379,13 +380,38 @@ describe("compatibility engine", () => {
     expect(result.analysis.balance).toMatchObject({ status: "cpu_limited" });
     expect(result.analysis.balance?.cpuScore).toBeLessThan(result.analysis.balance?.gpuScore ?? 0);
     expect(result.analysis.balance?.gap).toBeGreaterThanOrEqual(20);
-    expect(result.analysis.balance?.summary).toContain("카탈로그 상대 점수");
+    expect(result.analysis.balance?.summary).toContain("고정 기준 성능 지수");
     expect(result.analysis.strengths).toHaveLength(2);
     expect(result.analysis.strengths.every((insight) => insight.score >= 75)).toBe(true);
     expect(result.analysis.focusAreas).toEqual(expect.arrayContaining([
       expect.objectContaining({ category: "cpu", score: expect.any(Number), title: "CPU 보완" })
     ]));
-    expect(result.analysis.nextActions).toContain("CPU·GPU 상대 점수 차이를 확인하고 CPU 업그레이드 부품을 먼저 비교해 보세요.");
+    expect(result.analysis.nextActions).toContain("CPU·GPU 성능 지수 차이를 확인하고 CPU 업그레이드 부품을 먼저 비교해 보세요.");
+  });
+
+  it("keeps a part's score stable when a stronger peer enters the catalog", () => {
+    const baseCpu = seedCatalog.find((part) => part.id === "cpu-7800x3d")!;
+    const measuredCpu: Part = {
+      ...baseCpu,
+      id: "cpu-objective-measured",
+      name: "테스트 고정 지수 CPU",
+      specs: { ...baseCpu.specs, cores: 8, threads: 16, boostClockGhz: 5.2, cinebenchR23Single: 2000, cinebenchR23Multi: 20000 }
+    };
+    const flagshipCpu: Part = {
+      ...baseCpu,
+      id: "cpu-objective-flagship",
+      name: "테스트 플래그십 CPU",
+      specs: { ...baseCpu.specs, cores: 24, threads: 32, boostClockGhz: 6, cinebenchR23Single: 2300, cinebenchR23Multi: 45000 }
+    };
+    const build = compatibleBuild();
+    build.cpu = { partId: measuredCpu.id, quantity: 1 };
+    const catalogWithout = [...seedCatalog, measuredCpu];
+    const catalogWith = [...catalogWithout, flagshipCpu];
+    const options = { recommendationPreferences: { priority: "balanced", profile: "gaming" } } as const;
+    const before = evaluateBuild(build, catalogWithout, options).analysis.factors.find((factor) => factor.category === "cpu")?.score;
+    const after = evaluateBuild(build, catalogWith, options).analysis.factors.find((factor) => factor.category === "cpu")?.score;
+    expect(before).toBeDefined();
+    expect(after).toBe(before);
   });
 
   it("surfaces unknown GPU VRAM as an analysis signal without changing compatibility status", () => {
@@ -417,7 +443,7 @@ describe("compatibility engine", () => {
 
     expect(analyzed.analysis.profile).toBe("gaming");
     expect(analyzed.analysis.factors.length).toBeGreaterThan(0);
-    expect(analyzed.analysis.scoreBasis).toContain("실제 벤치마크");
+    expect(analyzed.analysis.scoreBasis).toContain("고정 기준");
     expect(analyzed.repairPlans).toBeUndefined();
     expect(analyzed.findings.some((finding) => finding.suggestions)).toBe(false);
   });
@@ -3862,5 +3888,104 @@ describe("compatibility engine", () => {
 
     expect(finding?.severity).toBe("unknown");
     expect(finding?.title).toContain("장착 위치");
+  });
+});
+
+describe("generator quote reliability regressions", () => {
+  const baseCpu = seedCatalog.find((part) => part.id === "cpu-7500f")!;
+  const baseGpu = seedCatalog.find((part) => part.id === "gpu-rtx-4060")!;
+  const baseMemory = seedCatalog.find((part) => part.id === "memory-ddr5-16-5600")!;
+  const baseMotherboard = seedCatalog.find((part) => part.id === "mb-b650-4x3")!;
+  const baseCooler = seedCatalog.find((part) => part.id === "cooler-tower-am5-1700")!;
+  const baseSsd = seedCatalog.find((part) => part.id === "ssd-nvme-1tb")!;
+  const baseCase = seedCatalog.find((part) => part.id === "case-full-airflow")!;
+  const psu650 = seedCatalog.find((part) => part.id === "psu-650w")!;
+  const psu1000 = seedCatalog.find((part) => part.id === "psu-1000w")!;
+
+  const withSpecs = (part: Part, specs: Part["specs"], priceWon?: number): Part => ({
+    ...part,
+    specs: { ...part.specs, ...specs },
+    ...(priceWon !== undefined ? { priceWon } : {})
+  });
+
+  const fixtureCatalog = (parts: { cpus?: Part[]; gpus?: Part[]; memory?: Part[]; motherboards?: Part[]; psus?: Part[] }): Part[] => [
+    ...(parts.cpus ?? [withSpecs(baseCpu, { cores: 8, threads: 16, boostClockGhz: 5.0, integratedGraphics: true })]),
+    ...(parts.motherboards ?? [baseMotherboard]),
+    ...(parts.memory ?? [baseMemory]),
+    baseCooler,
+    ...(parts.gpus ?? [baseGpu]),
+    baseSsd,
+    baseCase,
+    ...(parts.psus ?? [psu650, psu1000])
+  ];
+
+  it("does not let a non-blocking warning veto a much stronger build", () => {
+    const thinGpu: Part = withSpecs(baseGpu, { thicknessMm: 40, gpu3dmarkTimeSpyScore: 8000, vramGb: 8, powerW: 115, recommendedPsuW: 550, lengthMm: 221 }, 300_000);
+    const thickGpu: Part = withSpecs(baseGpu, { thicknessMm: 72, gpu3dmarkTimeSpyScore: 36000, vramGb: 24, powerW: 350, recommendedPsuW: 800, lengthMm: 330 }, 1_200_000);
+    thinGpu.id = "gpu-thin-weak";
+    thickGpu.id = "gpu-thick-strong";
+    const draft = generateBuildDraft(fixtureCatalog({ gpus: [thinGpu, thickGpu] }), {
+      profile: "general",
+      priority: "performance",
+      budgetWon: 3_000_000,
+      includeGpu: true
+    });
+
+    expect(draft.selection.gpu?.partId).toBe("gpu-thick-strong");
+    expect(draft.warnings.some((warning) => warning.includes("두꺼"))).toBe(true);
+  });
+
+  it("never pairs SO-DIMM memory with a desktop motherboard", () => {
+    const sodimm: Part = withSpecs(baseMemory, { formFactor: "SO-DIMM", speedMhz: 5600 });
+    sodimm.id = "memory-sodimm-16";
+    const catalog = fixtureCatalog({ memory: [sodimm] });
+    expect(() => generateBuildDraft(catalog, { profile: "office", budgetWon: 1_500_000, includeGpu: false, memoryCapacityGb: 32 })).toThrow();
+
+    const mixed = generateBuildDraft(fixtureCatalog({ memory: [sodimm, baseMemory] }), {
+      profile: "office",
+      budgetWon: 1_500_000,
+      includeGpu: false,
+      memoryCapacityGb: 32
+    });
+    expect(mixed.lines.filter((line) => line.category === "memory").every((line) => !line.partId.includes("sodimm"))).toBe(true);
+  });
+
+  it("does not overshoot the requested memory capacity", () => {
+    const dimm32: Part = withSpecs(baseMemory, { capacityGb: 32, speedMhz: 5600 });
+    dimm32.id = "memory-ddr5-32-5600";
+    const draft = generateBuildDraft(fixtureCatalog({ memory: [baseMemory, dimm32] }), {
+      profile: "office",
+      budgetWon: 1_500_000,
+      includeGpu: false,
+      memoryCapacityGb: 32
+    });
+    const memoryLine = draft.lines.find((line) => line.category === "memory");
+    expect(memoryLine?.partId).toBe("memory-ddr5-16-5600");
+    expect(memoryLine?.quantity).toBe(2);
+  });
+
+  it("can skip a separate cooler when the CPU ships with one and runs cool", () => {
+    const boxedCpu: Part = withSpecs(baseCpu, { cores: 6, threads: 12, boostClockGhz: 5.0, integratedGraphics: true, coolerIncluded: true, tdpW: 65, pptW: 88 });
+    boxedCpu.id = "cpu-boxed-65w";
+    const draft = generateBuildDraft(fixtureCatalog({ cpus: [boxedCpu] }), {
+      profile: "office",
+      priority: "budget",
+      budgetWon: 1_200_000,
+      includeGpu: false,
+      memoryCapacityGb: 32
+    });
+    expect(draft.lines.some((line) => line.category === "cooler")).toBe(false);
+    expect(draft.blockerCount).toBe(0);
+  });
+
+  it("keeps a premium GPU out of an office iGPU build budget share", () => {
+    const draft = generateBuildDraft(fixtureCatalog({}), {
+      profile: "office",
+      budgetWon: 900_000,
+      includeGpu: false,
+      memoryCapacityGb: 32
+    });
+    const psu = draft.lines.find((line) => line.category === "psu");
+    expect(psu?.priceWon ?? 0).toBeLessThan(150_000);
   });
 });

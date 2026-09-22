@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type { IconType } from "react-icons";
-import { FiActivity, FiAlertTriangle, FiArrowLeft, FiBox, FiCheck, FiChevronDown, FiCopy, FiCpu, FiDatabase, FiDownload, FiEdit3, FiExternalLink, FiHardDrive, FiInfo, FiLayers, FiLoader, FiMessageSquare, FiMonitor, FiSave, FiShare2, FiTool, FiTrash2, FiUpload, FiXCircle, FiZap } from "react-icons/fi";
-import type { BuildAnalysis, BuildGenerationDiagnostic, BuildGenerationRecoveryOption, BuildGenerationRequest, BuildGenerationResult, BuildGenerationVariantResult, BuildSelection, GamingGraphicsPreset, GamingPerformanceAssessment, GamingRefreshRate, GamingResolution, GamingUpscaling, PartCategory, RecommendationPerformanceTier, RecommendationPriority, RecommendationProfile, ListingPolicy } from "../shared/types";
+import { FiActivity, FiAlertTriangle, FiArrowLeft, FiBox, FiCheck, FiChevronDown, FiCopy, FiCpu, FiDatabase, FiDownload, FiEdit3, FiHardDrive, FiInfo, FiLayers, FiLoader, FiMessageSquare, FiMonitor, FiSave, FiShare2, FiTool, FiTrash2, FiUpload, FiXCircle, FiZap } from "react-icons/fi";
+import type { BuildAnalysis, BuildGenerationDiagnostic, BuildGenerationRecoveryOption, BuildGenerationRequest, BuildGenerationResult, BuildGenerationVariantResult, BuildSelection, GamingGraphicsPreset, GamingRefreshRate, GamingResolution, GamingUpscaling, PartCategory, RecommendationPerformanceTier, RecommendationPriority, RecommendationProfile, ListingPolicy } from "../shared/types";
 import { budgetLadderBaseRequestFor, budgetLadderChangeFor, budgetLadderCsvFor, budgetLadderExportPayloadFor, budgetLadderJsonFor, budgetLadderTextFor } from "../shared/budget-ladder";
 import type { BudgetLadderOutcome } from "../shared/budget-ladder";
 import { budgetLadderTradeoffFor } from "../shared/budget-ladder-tradeoff";
@@ -18,7 +18,6 @@ import type { GeneratorVariantsExportPayload, GeneratorVariantsShareSnapshot } f
 import { BUILD_INPUT_MAX_ID_LENGTH, BUILD_INPUT_MAX_M2_SLOTS, BUILD_INPUT_MAX_SELECTIONS_PER_LIST } from "../shared/build-input-limits";
 import { addSavedGeneratorPreset, generatorPresetConfigFromUnknown, GENERATOR_PRESET_STORAGE_KEY, mergeSavedGeneratorPresets, removeSavedGeneratorPreset, savedGeneratorPresetsFromJson, savedGeneratorPresetsToJson } from "../shared/generator-preset";
 import type { GeneratorPresetConfig, SavedGeneratorPreset } from "../shared/generator-preset";
-import { gamingPerformanceEvidenceRequestFor } from "../shared/gaming-performance-evidence";
 import { CATEGORY_LABELS, GAMING_GRAPHICS_PRESET_LABELS, GAMING_REFRESH_RATE_LABELS, GAMING_RESOLUTION_LABELS, GAMING_UPSCALING_LABELS, isKnownPrice, isRecommendationPriority, LISTING_POLICY_LABELS, PART_CATEGORIES, RECOMMENDATION_PERFORMANCE_TIER_LABELS, RECOMMENDATION_PRIORITY_DESCRIPTIONS, RECOMMENDATION_PRIORITY_LABELS, RECOMMENDATION_PROFILE_LABELS } from "../shared/types";
 import { savedBuildComparisonDecisionFor } from "../shared/saved-build-comparison";
 import type { SavedBuildComparisonDecisionKind, SavedBuildComparisonEntry } from "../shared/saved-build-comparison";
@@ -27,7 +26,6 @@ import type { GeneratorBriefConfig, GeneratorBriefInterpretation } from "../shar
 import { api, ApiError } from "./api";
 import { budgetEstimateFor, gameLabelFor, intensityOptionFor, ONBOARDING_WORKS, workEstimateFor } from "./quote-onboarding";
 import type { OnboardingIntensity, OnboardingWork } from "./quote-onboarding";
-import { safeHttpsUrl } from "./safe-source-url";
 
 export type GeneratorVariantResult = BuildGenerationVariantResult;
 
@@ -61,77 +59,6 @@ function formatWon(value: number | undefined) {
   return !isKnownPrice(value) ? "가격 확인 중" : `${value.toLocaleString("ko-KR")}원`;
 }
 
-function gamingEvidenceStatusLabel(status: GamingPerformanceAssessment["status"]) {
-  return status === "verified" ? "평균 FPS 기준 충족" : status === "target_not_met" ? "목표 FPS 미달" : status === "partial" ? "일부 조건 확인" : status === "stale" ? "자료 갱신 필요" : status === "missing" ? "자료 없음" : "확인 필요";
-}
-
-function gamingEvidenceAdminUrlFor(assessment: GamingPerformanceAssessment) {
-  if (typeof window === "undefined" || !["localhost", "127.0.0.1"].includes(window.location.hostname)) return undefined;
-  const url = new URL("/admin", window.location.origin);
-  url.searchParams.set("reviewEvidence", "gaming");
-  if (assessment.gameIds.length === 1) url.searchParams.set("gamingGame", assessment.gameIds[0]!);
-  if (assessment.gpuPartId) url.searchParams.set("gamingGpu", assessment.gpuPartId);
-  url.searchParams.set("gamingResolution", assessment.resolution);
-  url.searchParams.set("gamingRefresh", String(assessment.refreshRate));
-  if (assessment.graphicsPreset) url.searchParams.set("gamingGraphics", assessment.graphicsPreset);
-  if (assessment.upscaling) url.searchParams.set("gamingUpscaling", assessment.upscaling);
-  if (assessment.rayTracing !== undefined) url.searchParams.set("gamingRt", assessment.rayTracing ? "true" : "false");
-  url.hash = "admin-gaming-performance-evidence";
-  return `${url.pathname}${url.search}${url.hash}`;
-}
-
-function GeneratorGamingEvidence({ assessment, gpuTarget, onToast }: { assessment: GamingPerformanceAssessment; gpuTarget?: BuildGenerationResult["gpuTarget"]; onToast?: (message: string) => void }) {
-  const gameLabels = assessment.gameIds.map(gameLabelFor);
-  const matchedGameIds = assessment.matchedGameIds ?? [];
-  const missingGameIds = assessment.missingGameIds ?? assessment.gameIds.filter((gameId) => !matchedGameIds.includes(gameId));
-  const belowTargetGameIds = assessment.belowTargetGameIds ?? [];
-  const staleRecordCount = assessment.staleRecordIds?.length ?? 0;
-  const coverageMessage = missingGameIds.length > 0
-    ? `자료가 없는 게임 · ${missingGameIds.map(gameLabelFor).join(" · ")}`
-    : belowTargetGameIds.length > 0
-      ? `목표 FPS 미달 · ${belowTargetGameIds.map(gameLabelFor).join(" · ")}`
-      : staleRecordCount > 0
-        ? `갱신이 필요한 측정 자료 ${staleRecordCount}개`
-        : "선택한 모든 게임에 exact-condition 자료가 연결되었습니다.";
-  const coverageTone = missingGameIds.length > 0 || belowTargetGameIds.length > 0 || staleRecordCount > 0 ? "review" : "complete";
-  const adminEvidenceUrl = gamingEvidenceAdminUrlFor(assessment);
-  const evidenceRequest = gamingPerformanceEvidenceRequestFor(assessment);
-  const [requestCopied, setRequestCopied] = useState(false);
-  async function copyEvidenceRequest() {
-    try {
-      await navigator.clipboard.writeText(JSON.stringify(evidenceRequest, null, 2));
-      setRequestCopied(true);
-      window.setTimeout(() => setRequestCopied(false), 2_400);
-      onToast?.("exact-condition FPS 측정 요청 JSON을 복사했습니다.");
-    } catch {
-      onToast?.("측정 요청 JSON을 복사하지 못했습니다. 브라우저 클립보드 권한을 확인해 주세요.");
-    }
-  }
-  const measuredState = assessment.status === "verified" ? "complete" : assessment.status === "partial" || assessment.status === "target_not_met" ? "review" : "pending";
-  const measuredLabel = assessment.status === "verified" ? "평균 기준 충족" : assessment.status === "partial" ? "일부 확인" : assessment.status === "target_not_met" ? "목표 미달" : assessment.status === "stale" ? "갱신 필요" : "미연결";
-  const gpuState = gpuTarget?.currentFit === "met" ? "complete" : gpuTarget?.currentFit === "partial" ? "review" : "pending";
-  const gpuLabel = gpuTarget?.currentFit === "met" ? "참고 기준 충족" : gpuTarget?.currentFit === "partial" ? "추가 확인" : "확인 필요";
-  return <section className={`generator-gaming-evidence status-${assessment.status}`} data-testid="generator-gaming-evidence">
-    <div className="generator-gaming-evidence-heading"><div><p className="eyebrow">GAME FPS DATA</p><strong>게임별 FPS 자료</strong></div><span>{gamingEvidenceStatusLabel(assessment.status)}</span></div>
-    <div className="generator-gaming-target-tags" aria-label="게이밍 목표 조건">
-      {gameLabels.length > 0 ? gameLabels.map((label, index) => <span className="generator-gaming-target-tag" key={`${assessment.gameIds[index]}-${label}`}>{label}</span>) : <span className="generator-gaming-target-tag muted">일반 게이밍 기준</span>}
-      <span className="generator-gaming-target-tag">{GAMING_RESOLUTION_LABELS[assessment.resolution]} · {assessment.refreshRate} FPS</span>
-      {assessment.graphicsPreset && <span className="generator-gaming-target-tag">{GAMING_GRAPHICS_PRESET_LABELS[assessment.graphicsPreset]}</span>}
-      {assessment.upscaling && <span className="generator-gaming-target-tag">{GAMING_UPSCALING_LABELS[assessment.upscaling]}</span>}
-      {assessment.rayTracing && <span className="generator-gaming-target-tag">레이 트레이싱</span>}
-    </div>
-    {gameLabels.length > 0 && <div className={`generator-gaming-coverage ${coverageTone}`} data-testid="generator-gaming-coverage" aria-label="게임별 자료 연결 상태"><div><strong>GAME DATA COVERAGE</strong><span>{matchedGameIds.length} / {gameLabels.length}개 게임 자료 연결</span></div><p>{coverageMessage}</p><small>{assessment.gpuName ? `선택 GPU · ${assessment.gpuName}` : "선택 GPU 확인 필요"} · 게임·해상도·FPS·그래픽 조건이 모두 일치하는 자료만 연결합니다.</small><div className="generator-gaming-coverage-actions">{adminEvidenceUrl && <a className="generator-gaming-coverage-link" href={adminEvidenceUrl}><FiExternalLink /> 운영 자료로 확인</a>}<button className="generator-gaming-coverage-copy" type="button" data-testid="generator-gaming-evidence-request-copy" onClick={() => void copyEvidenceRequest()}><FiCopy /> {requestCopied ? "복사됨" : "측정 요청 JSON 복사"}</button></div></div>}
-    <div className="generator-gaming-checklist" aria-label="성능 확인 단계">
-      <div className="generator-gaming-check complete"><FiCheck /><div><strong>선택 조건 보존</strong><small>게임·해상도·목표 FPS·그래픽 조건을 자동 구성에 전달했습니다.</small></div><span>완료</span></div>
-      <div className={`generator-gaming-check ${gpuState}`}><FiCheck /><div><strong>카탈로그 GPU 기준</strong><small>{gpuTarget?.summary ?? "GPU 참고 기준을 계산하지 못했습니다."}</small></div><span>{gpuLabel}</span></div>
-      <div className={`generator-gaming-check ${measuredState}`}><FiAlertTriangle /><div><strong>게임별 실측 FPS</strong><small>{assessment.status === "target_not_met" ? "연결된 측정값 중 목표 프레임보다 낮은 조건이 있습니다." : assessment.status === "verified" ? "선택 GPU와 조건이 일치하고 평균 FPS가 목표 프레임 이상인 자료입니다." : "게임 옵션·드라이버·측정일이 포함된 실측 자료가 연결되어야 합니다."}</small></div><span>{measuredLabel}</span></div>
-      <div className="generator-gaming-check pending"><FiInfo /><div><strong>실제 환경 확인</strong><small>모니터·드라이버·온도·전력·게임 패치까지 구매 전에 확인합니다.</small></div><span>구매 전</span></div>
-    </div>
-    {assessment.measurements && assessment.measurements.length > 0 && <div className="generator-gaming-measurements" aria-label="연결된 실측 FPS"><div className="generator-gaming-measurements-heading"><strong>연결된 실측 결과</strong><span>평균 FPS 기준 · GPU {assessment.gpuName ?? "확인된 모델"}</span></div><div className="generator-gaming-measurement-list">{assessment.measurements.map((measurement) => { const sourceUrl = safeHttpsUrl(measurement.sourceUrl); const meetsTarget = measurement.averageFps >= assessment.refreshRate; return <article className={`generator-gaming-measurement ${meetsTarget ? "meets" : "below"}`} key={measurement.recordId}><div className="generator-gaming-measurement-top"><div><strong>{gameLabelFor(measurement.gameId)}</strong><small>{measurement.gpuName}</small></div><div><strong>{measurement.averageFps.toLocaleString("ko-KR")} FPS</strong><span>목표 {assessment.refreshRate} FPS</span></div></div><div className="generator-gaming-measurement-meta"><span>{measurement.onePercentLowFps !== undefined ? `1% low ${measurement.onePercentLowFps.toLocaleString("ko-KR")} FPS` : "1% low 미기록"}</span><span>측정 {new Date(measurement.measuredAt).toLocaleDateString("ko-KR")}</span>{sourceUrl && <a href={sourceUrl} target="_blank" rel="noreferrer">출처 <FiShare2 /></a>}</div></article>; })}</div></div>}
-    <p>{assessment.note}</p>
-    <small>{gameLabels.length > 0 ? `${gameLabels.length}개 게임 조건을 보존했습니다.` : "특정 게임을 선택하지 않은 일반 게이밍 조건입니다."} 평균 FPS 자료가 있어도 측정 환경이 달라질 수 있으므로 절대적인 FPS 보장으로 해석하지 않습니다.</small>
-  </section>;
-}
 
 function CategoryIcon({ category }: { category: PartCategory }) {
   const Icon = CATEGORY_ICONS[category];
@@ -816,9 +743,9 @@ export function BuildGeneratorView({ initialProfile, draft, variants, budgetLadd
             <button className="button button-light full-width generator-budget-submit" type="button" onClick={() => void generateBudgetLadderFromForm()} disabled={loading}>{loading ? <><FiLoader className="spin" /> 예산 구간을 계산하는 중...</> : <><FiActivity /> 예산 구간 3안 비교</>}</button>
           </div>
         </details>
-        <p className="generator-note"><FiInfo /> 해상도는 권장 VRAM 기준에, 주사율은 CPU·GPU 성능 비교 가중치에 반영합니다. 실제 FPS가 아니라 현재 카탈로그의 가격·스펙·호환 규칙으로 만든 초안입니다.</p>
+        <p className="generator-note"><FiInfo /> 해상도는 권장 VRAM 기준에, 주사율은 CPU·GPU 성능 비교 가중치에 반영합니다. 측정 벤치마크·확인 스펙의 고정 기준 지수와 현재 카탈로그의 가격·호환 규칙으로 만든 초안입니다.</p>
       </form>
-      {budgetLadder.length > 0 ? <GeneratorBudgetLadderPanel scenarios={budgetLadder} loading={loading} onApply={onApply} onSave={onSave} onCopy={copyBudgetLadder} onDownload={downloadBudgetLadder} share={budgetLadderShare} onShare={() => void shareBudgetLadder()} onRevoke={() => void revokeBudgetLadder()} /> : variants.length > 0 ? <GeneratorVariantsPanel variants={variants} loading={loading} onApply={onApply} onSave={onSave} onAdjustConditions={adjustGeneratorConditions} onCopy={copyGeneratorVariants} onDownload={downloadGeneratorVariants} /> : draft ? <section className="generator-result"><div className="generator-result-top"><div><p className="eyebrow">GENERATED DRAFT</p><h2>{statusLabel}</h2><p>{RECOMMENDATION_PROFILE_LABELS[draft.profile]} · {RECOMMENDATION_PRIORITY_LABELS[draft.priority]}{draft.performanceTier ? ` · ${RECOMMENDATION_PERFORMANCE_TIER_LABELS[draft.performanceTier]}` : ""}{draft.profile === "gaming" ? ` · ${GAMING_RESOLUTION_LABELS[draft.gamingResolution]} · ${GAMING_REFRESH_RATE_LABELS[draft.gamingRefreshRate ?? 144]}` : ""} · RAM {draft.memoryCapacityGb}GB 이상 · {LISTING_POLICY_LABELS[draft.listingPolicy]} · 목표 {formatWon(draft.budgetWon)}</p></div><span className={`generator-status ${draft.withinBudget ? "within" : "over"}`}>{draft.withinBudget ? "예산 내" : "예산 초과"}</span></div><div className="generator-total"><span>예상 부품 합계</span><strong>{formatWon(draft.totalPriceWon)}</strong><small>{draft.withinBudget ? `${Math.abs(draft.budgetDeltaWon).toLocaleString("ko-KR")}원 여유` : `${draft.budgetDeltaWon.toLocaleString("ko-KR")}원 초과`}</small></div>{workType && workIntensity && <GeneratorWorkContext workType={workType} intensity={intensity} draft={draft} />}{!workType && draft.profile === "general" && <GeneratorGeneralContext performanceTier={performanceTier} includeGpu={includeGpu} draft={draft} />}{draft.gpuTarget && <div className={`generator-gpu-target ${draft.gpuTarget.currentFit}`}><span>GPU 목표</span><strong>{draft.gpuTarget.summary}</strong></div>}{draft.gamingPerformanceAssessment && <GeneratorGamingEvidence assessment={draft.gamingPerformanceAssessment} gpuTarget={draft.gpuTarget} />}{draft.analysis && <GeneratedAnalysisSummary analysis={draft.analysis} />}<div className="generator-lines">{draft.lines.map((line) => <div className="generator-line" key={line.category}><span><CategoryIcon category={line.category} /> {CATEGORY_LABELS[line.category]}</span><div><strong>{line.name}</strong><small>{line.specSummary ? `${line.specSummary} · ` : ""}{line.quantity > 1 ? `수량 ${line.quantity}개 · ` : ""}{formatWon(line.priceWon * line.quantity)}</small></div></div>)}</div><GeneratorSelectionReasons draft={draft} /><div className="generator-rationale"><strong>구성 기준</strong>{draft.rationale.map((item) => <p key={item}><FiCheck /> {item}</p>)}</div>{draft.warnings.length > 0 && <div className="generator-warnings"><strong><FiAlertTriangle /> 확인할 항목</strong>{draft.warnings.map((item) => <p key={item}>{item}</p>)}</div>}<div className="generator-actions"><button className="button button-secondary" onClick={() => void onApply(draft, false)} disabled={loading}><FiEdit3 /> 편집기로 가져가기</button><button className="button button-primary" onClick={() => void onApply(draft, true)} disabled={loading}><FiActivity /> 가져와서 바로 검사</button>{onSave && <button className="button button-light generator-save-button" onClick={() => onSave(draft)} disabled={loading}><FiSave /> 새 견적으로 저장</button>}</div></section> : <section className="generator-empty"><FiCpu /><h2>조건만 정하면, 견적을 찾아드려요</h2><p>조건을 입력하면 부품을 하나씩 고르기 전에 호환 가능한 기본 구성을 먼저 보여드려요.</p></section>}
+      {budgetLadder.length > 0 ? <GeneratorBudgetLadderPanel scenarios={budgetLadder} loading={loading} onApply={onApply} onSave={onSave} onCopy={copyBudgetLadder} onDownload={downloadBudgetLadder} share={budgetLadderShare} onShare={() => void shareBudgetLadder()} onRevoke={() => void revokeBudgetLadder()} /> : variants.length > 0 ? <GeneratorVariantsPanel variants={variants} loading={loading} onApply={onApply} onSave={onSave} onAdjustConditions={adjustGeneratorConditions} onCopy={copyGeneratorVariants} onDownload={downloadGeneratorVariants} /> : draft ? <section className="generator-result"><div className="generator-result-top"><div><p className="eyebrow">GENERATED DRAFT</p><h2>{statusLabel}</h2><p>{RECOMMENDATION_PROFILE_LABELS[draft.profile]} · {RECOMMENDATION_PRIORITY_LABELS[draft.priority]}{draft.performanceTier ? ` · ${RECOMMENDATION_PERFORMANCE_TIER_LABELS[draft.performanceTier]}` : ""}{draft.profile === "gaming" ? ` · ${GAMING_RESOLUTION_LABELS[draft.gamingResolution]} · ${GAMING_REFRESH_RATE_LABELS[draft.gamingRefreshRate ?? 144]}` : ""} · RAM {draft.memoryCapacityGb}GB 이상 · {LISTING_POLICY_LABELS[draft.listingPolicy]} · 목표 {formatWon(draft.budgetWon)}</p></div><span className={`generator-status ${draft.withinBudget ? "within" : "over"}`}>{draft.withinBudget ? "예산 내" : "예산 초과"}</span></div><div className="generator-total"><span>예상 부품 합계</span><strong>{formatWon(draft.totalPriceWon)}</strong><small>{draft.withinBudget ? `${Math.abs(draft.budgetDeltaWon).toLocaleString("ko-KR")}원 여유` : `${draft.budgetDeltaWon.toLocaleString("ko-KR")}원 초과`}</small></div>{workType && workIntensity && <GeneratorWorkContext workType={workType} intensity={intensity} draft={draft} />}{!workType && draft.profile === "general" && <GeneratorGeneralContext performanceTier={performanceTier} includeGpu={includeGpu} draft={draft} />}<div className="generator-lines">{draft.lines.map((line) => <div className="generator-line" key={line.category}><span><CategoryIcon category={line.category} /> {CATEGORY_LABELS[line.category]}</span><div><strong>{line.name}</strong><small>{line.specSummary ? `${line.specSummary} · ` : ""}{line.quantity > 1 ? `수량 ${line.quantity}개 · ` : ""}{formatWon(line.priceWon * line.quantity)}</small></div></div>)}</div>{draft.warnings.length > 0 && <div className="generator-warnings"><strong><FiAlertTriangle /> 확인할 항목</strong>{draft.warnings.map((item) => <p key={item}>{item}</p>)}</div>}<div className="generator-actions"><button className="button button-secondary" onClick={() => void onApply(draft, false)} disabled={loading}><FiEdit3 /> 편집기로 가져가기</button><button className="button button-primary" onClick={() => void onApply(draft, true)} disabled={loading}><FiActivity /> 가져와서 바로 검사</button>{onSave && <button className="button button-light generator-save-button" onClick={() => onSave(draft)} disabled={loading}><FiSave /> 새 견적으로 저장</button>}</div></section> : <section className="generator-empty"><FiCpu /><h2>조건만 정하면, 견적을 찾아드려요</h2><p>조건을 입력하면 부품을 하나씩 고르기 전에 호환 가능한 기본 구성을 먼저 보여드려요.</p></section>}
     </div>
   </div>;
 }
@@ -921,14 +848,6 @@ function GeneratedAnalysisSummary({ analysis, compact = false }: { analysis: Bui
   </div>;
 }
 
-function GeneratorSelectionReasons({ draft }: { draft: BuildGenerationResult }) {
-  const lines = draft.lines.filter((line) => Boolean(line.selectionReason));
-  if (lines.length === 0) return null;
-  return <details className="generator-selection-reasons" data-testid="generator-selection-reasons">
-    <summary><span><FiInfo /> 부품을 고른 이유</span><small>조건·호환·예산 기준</small><FiChevronDown /></summary>
-    <div>{lines.map((line) => <article key={line.category}><div><span>{CATEGORY_LABELS[line.category]}</span><strong>{line.name}</strong></div><p>{line.selectionReason}</p></article>)}</div>
-  </details>;
-}
 
 function GeneratorVariantReasons({ draft }: { draft: BuildGenerationResult }) {
   const lines = draft.lines.filter((line) => Boolean(line.selectionReason));

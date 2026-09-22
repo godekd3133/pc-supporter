@@ -383,18 +383,27 @@ async function main() {
       if (executeExportActions && !screenshotPath && (!probe.draftSaveDialogProbe || !probe.draftSaveConfirmedProbe || !probe.draftSaveOriginProbe || !probe.draftTransferProbe || !probe.draftCheckTransferProbe || !probe.draftCheckSaveOriginProbe || !probe.draftResultOriginProbe)) throw new Error("현재 draft 저장·출처·결과 화면·편집기·검사 전달 검증에 실패했습니다.");
       console.log(JSON.stringify({ ok: true, viewport: mobile ? "mobile" : "desktop", theme: dark ? "dark" : "light", mode: "variants", ...probe, ...(screenshotPath ? { screenshotPath } : {}) }, null, 2));
     } else {
-      await waitForValue(client, "document.querySelector('.generator-result') !== null && document.querySelector('[data-testid=\"generator-selection-reasons\"]') !== null", "자동 견적 생성·선택 이유");
-      await openDetails(client, "details.generator-selection-reasons", "부품 선택 이유 상세");
-      await client.evaluate("document.querySelector('[data-testid=\"generator-selection-reasons\"]')?.scrollIntoView({ block: 'center', behavior: 'instant' });");
+      await waitForValue(client, "document.querySelector('.generator-result') !== null && document.querySelectorAll('.generator-result .generator-line').length >= 6", "자동 견적 생성·부품 라인");
+      await client.evaluate("document.querySelector('.generator-result')?.scrollIntoView({ block: 'center', behavior: 'instant' });");
       if (dark) await client.evaluate("document.documentElement.dataset.theme = 'dark'; document.documentElement.style.colorScheme = 'dark';");
       await sleep(350);
       const probe = await client.evaluate(`(() => {
-        const panel = document.querySelector('[data-testid="generator-selection-reasons"]');
-        const body = panel?.textContent?.replace(/\\s+/g, " ").trim() ?? "";
-        return { path: location.pathname, panel: Boolean(panel), open: panel instanceof HTMLDetailsElement ? panel.open : false, reasonCount: panel?.querySelectorAll('article').length ?? 0, body };
+        const result = document.querySelector('.generator-result');
+        const lines = [...document.querySelectorAll('.generator-result .generator-line')];
+        const body = result?.textContent?.replace(/\\s+/g, " ").trim() ?? "";
+        const rationalePanel = document.querySelector('.generator-result .generator-rationale, .generator-result .generator-analysis, .generator-result .generator-selection-reasons, .generator-result .generator-gaming-evidence, .generator-result .generator-gpu-target');
+        return {
+          path: location.pathname,
+          result: Boolean(result),
+          lineCount: lines.length,
+          linesWithName: lines.filter((line) => (line.querySelector('strong')?.textContent ?? '').trim().length > 0).length,
+          linesWithPrice: lines.filter((line) => /\\d[\\d,]*원|가격 확인 중/.test(line.textContent ?? '')).length,
+          rationalePanel: Boolean(rationalePanel),
+          body
+        };
       })()`);
-      if (probe.path !== "/recommend" || !probe.panel || !probe.open || probe.reasonCount < 6 || !probe.body.includes("사이버펑크 2077") || !probe.body.includes("권장 VRAM") || !probe.body.includes("메인보드") || !probe.body.includes("정격")) {
-        throw new Error(`부품 선택 이유 화면 검증 실패: ${JSON.stringify(probe)}`);
+      if (probe.path !== "/recommend" || !probe.result || probe.lineCount < 6 || probe.linesWithName !== probe.lineCount || probe.linesWithPrice !== probe.lineCount || probe.rationalePanel || !probe.body.includes("예상 부품 합계")) {
+        throw new Error(`자동 구성 견적 표시 검증 실패: ${JSON.stringify(probe)}`);
       }
       if (screenshotPath) {
         const screenshot = await client.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });

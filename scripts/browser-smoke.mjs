@@ -407,8 +407,8 @@ async function main() {
     await waitForValue(client, "(document.body?.innerText ?? '').includes('이 조건으로 맞춰볼까요?')", "온보딩 summary 화면");
     assert(await clickText(client, "이 조건으로 견적 생성하기"), "온보딩 견적 생성 CTA를 클릭하지 못했습니다.");
     await waitForValue(client, "location.pathname === '/recommend' && new URLSearchParams(location.search).get('autorun') === '1' && new URLSearchParams(location.search).get('profile') === 'gaming' && new URLSearchParams(location.search).get('resolution') === '4k' && (new URLSearchParams(location.search).get('games') ?? '').includes('cyberpunk') && new URLSearchParams(location.search).get('budget') === '2000000'", "온보딩 → 자동 구성 URL 핸드오프");
-    await waitForValue(client, "document.querySelector('[data-testid=\"generator-gaming-evidence\"]') !== null && (document.body?.innerText ?? '').includes('게임별 FPS 자료')", "자동 구성 결과의 게임별 FPS 자료 패널");
-    await waitForValue(client, "(document.body?.innerText ?? '').includes('자료 없음') || (document.body?.innerText ?? '').includes('확인 필요') || (document.body?.innerText ?? '').includes('평균 FPS 기준 충족')", "자동 구성 FPS 자료 상태 표시");
+    await waitForValue(client, "document.querySelectorAll('.generator-result .generator-line').length >= 6 && [...document.querySelectorAll('.generator-result .generator-line')].every((line) => (line.querySelector('strong')?.textContent ?? '').trim().length > 0)", "자동 구성 견적의 부품·가격 라인");
+    assert(await client.evaluate("document.querySelector('.generator-result .generator-rationale, .generator-result .generator-analysis, .generator-result .generator-selection-reasons, .generator-result .generator-gaming-evidence, .generator-result .generator-gpu-target') === null"), "자동 구성 견적에 판정 근거 패널이 노출되고 있습니다.");
 
     await client.send("Page.navigate", { url: `${baseUrl}/admin` });
     if (adminPassword) {

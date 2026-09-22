@@ -184,8 +184,11 @@ const smokeExpression = `(${async function runQuoteOnboardingSmoke() {
   const resultText = bodyText();
   const gamingQuery = new URLSearchParams(location.search);
   assert(gamingQuery.get("profile") === "gaming" && gamingQuery.get("resolution") === "4k" && gamingQuery.get("refresh") === "144" && gamingQuery.get("games")?.includes("cyberpunk") && gamingQuery.get("budget") === "5000000", `온보딩 조건이 자동 구성 URL에 보존되지 않았습니다: ${location.href}`);
-  assert(resultText.includes("4K") && resultText.includes("144 FPS") && document.querySelector("[data-testid=generator-gaming-evidence]") !== null && document.querySelector("[data-testid=generator-gaming-coverage]") !== null && document.querySelector("[data-testid=generator-gaming-evidence-request-copy]") !== null, "자동 구성 결과에 게이밍 목표·근거 coverage·측정 요청 액션이 없습니다.");
-  const gaming = { path: location.pathname + location.search, budgetRange: gamingBudgetText, evidencePanel: true };
+  const gamingLineCount = document.querySelectorAll(".generator-result .generator-line").length;
+  assert(resultText.includes("4K") && resultText.includes("144Hz") && gamingLineCount >= 6, "자동 구성 결과에 게이밍 목표·부품 라인이 없습니다.");
+  assert([...document.querySelectorAll(".generator-result .generator-line")].every((line) => (line.querySelector("strong")?.textContent ?? "").trim().length > 0 && /원|가격 확인 중/.test(line.textContent ?? "")), "자동 구성 부품 라인에 부품명·가격이 없습니다.");
+  assert(document.querySelector(".generator-result .generator-rationale, .generator-result .generator-analysis, .generator-result .generator-selection-reasons, .generator-result .generator-gaming-evidence, .generator-result .generator-gpu-target") === null, "자동 구성 견적에 판정 근거 패널이 노출되고 있습니다.");
+  const gaming = { path: location.pathname + location.search, budgetRange: gamingBudgetText, lineCount: gamingLineCount };
 
   await navigateStart();
   await chooseNewTaskWork();

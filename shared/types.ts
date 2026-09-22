@@ -629,6 +629,7 @@ export interface PartSpecs {
   cores?: number;
   threads?: number;
   boostClockGhz?: number;
+  l3CacheMb?: number;
   cinebenchR23Single?: number;
   cinebenchR23Multi?: number;
   benchmarkProvenance?: BenchmarkProvenance;
@@ -661,6 +662,8 @@ export interface PartSpecs {
   pcieX8Slots?: number;
   pcieX4Slots?: number;
   pcieX1Slots?: number;
+  /** Onboard Wi-Fi module — true/false when the spec sheet states it, absent when unknown. */
+  wifi?: boolean;
   pcieSlotWidth?: number;
   pciePowerOptions?: PciePowerRequirement[][];
   pciePowerAdapterOptions?: PciePowerRequirement[][];
@@ -1651,6 +1654,8 @@ export interface BuildAnalysis {
   overallScore?: number;
   scoreLabel: "상위권" | "균형형" | "보완 권장" | "계산 불가";
   scoreBasis: string;
+  /** Fixed-anchor objective index model that produced factor/balance scores. */
+  scoreModelVersion?: string;
   confidence: BuildAnalysisConfidence;
   factors: BuildAnalysisFactor[];
   balance?: BuildAnalysisBalance;
