@@ -396,7 +396,6 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome }: { o
         <ChipRow label="목표 프레임" options={REFRESH_OPTIONS.map((option) => ({ id: String(option.id), label: option.label }))} value={String(state.refreshRate)} onChange={(id) => update({ refreshRate: Number(id) as GamingRefreshRate })} />
         <p className="onboarding-pill"><FiPlay /> {gamesSummaryFor(state.games)} · {resolutionLabelFor(state.resolution)} · {state.refreshRate} FPS</p>
         <GamingTargetContract state={state} />
-        <p className="onboarding-note">실제 FPS를 측정한 값은 아니에요. 게임 설정·부품 구성·패치에 따라 실제 프레임은 달라질 수 있어요.</p>
       </>
     );
   } else if (state.step === "graphics") {

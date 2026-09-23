@@ -149,7 +149,7 @@ export function HomeView({ meta, build, result, resultIsStale, partMap, budgetLa
     <section className="hero-section">
       <div className="hero-copy">
         {hasAnySelection
-          ? <><p className="eyebrow hero-eyebrow"><FiShield /> 부품 호환성 확인</p><h1>고른 부품이<br /><span>서로 맞는지 확인해 보세요.</span></h1><p className="hero-description">호환 문제와 예산을 확인하고, 바꿔 볼 부품도 보여드려요.</p></>
+          ? <><p className="eyebrow hero-eyebrow"><FiShield /> 부품 호환성 확인</p><h1>고른 부품,<br /><span>서로 맞는지 확인해요.</span></h1><p className="hero-description">호환 문제와 예산을 확인하고, 바꿔 볼 부품도 보여드려요.</p></>
           : <><p className="eyebrow hero-eyebrow"><FiTarget /> 새 PC 맞추기</p><h1>게임·작업에 맞는 PC,<br /><span>예산 안에서 골라봐요.</span></h1><p className="hero-description">주로 하는 게임이나 작업과 예산을 알려주세요. 조건에 맞는 부품 조합과 예상 가격을 보여드릴게요.</p></>}
         <div className="hero-actions">
           <button className="button button-primary button-large" onClick={hasAnySelection ? onStart : onGuidedStart}>{hasAnySelection ? "이 견적 확인하기" : "새 견적 시작하기"} <FiArrowRight /></button>

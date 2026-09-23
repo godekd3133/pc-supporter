@@ -276,7 +276,7 @@ export function CaseRgbLoadOverridePanel({ onToast, onMetaRefresh }: { onToast: 
   }, [listQuery, overrides]);
 
   return <section className="admin-card case-rgb-load-card" data-testid="admin-case-rgb-load">
-    <div className="admin-card-heading"><div><p className="eyebrow">RGB POWER EVIDENCE</p><h3>케이스 RGB 부하 확인</h3><p className="admin-card-description">케이스 페이지에 없는 RGB 장치당 소비전력·소비전류를 제조사 정보로 보강합니다. 저장값은 원본 카탈로그를 덮어쓰지 않고 호환성 검사에만 런타임 적용됩니다.</p></div><FiShield /></div>
+    <div className="admin-card-heading"><div><h3>케이스 RGB 부하 확인</h3><p className="admin-card-description">케이스 페이지에 없는 RGB 장치당 소비전력·소비전류를 제조사 정보로 보강합니다. 저장값은 원본 카탈로그를 덮어쓰지 않고 호환성 검사에만 런타임 적용됩니다.</p></div><FiShield /></div>
     {error && <div className="case-rgb-load-error" role="alert"><FiXCircle /> {error}</div>}
     <div className="case-rgb-load-coverage"><div><strong>{coverage?.totalRgbCases.toLocaleString("ko-KR") ?? "-"}</strong><span>RGB 케이스</span></div><div><strong>{coverage?.registeredCount.toLocaleString("ko-KR") ?? "-"}</strong><span>부하 보강 등록</span></div><div><strong>{coverage?.missingCount.toLocaleString("ko-KR") ?? "-"}</strong><span>정보 미등록</span></div><div><strong>{coverage ? `${coverage.coveragePercent}%` : "-"}</strong><span>coverage</span></div></div>
     <div className="case-rgb-load-grid">

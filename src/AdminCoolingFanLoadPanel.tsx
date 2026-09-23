@@ -275,7 +275,7 @@ export function CoolingFanLoadOverridePanel({ onToast, onMetaRefresh }: { onToas
   }, [listQuery, overrides]);
 
   return <section className="admin-card cooling-fan-load-card" data-testid="admin-cooling-fan-load">
-    <div className="admin-card-heading"><div><p className="eyebrow">FAN MOTOR EVIDENCE</p><h3>쿨링팬 소비전류 확인</h3><p className="admin-card-description">쿨링팬 모터의 장치당 소비전류를 페이지 또는 제조사 정보로 보강합니다. RGB LED 전류와 분리해 저장하며, 허브 포트·커넥터·전류가 모두 확인된 경우에만 추천 부품으로 승격합니다.</p></div><FiShield /></div>
+    <div className="admin-card-heading"><div><h3>쿨링팬 소비전류 확인</h3><p className="admin-card-description">쿨링팬 모터의 장치당 소비전류를 페이지 또는 제조사 정보로 보강합니다. RGB LED 전류와 분리해 저장하며, 허브 포트·커넥터·전류가 모두 확인된 경우에만 추천 부품으로 승격합니다.</p></div><FiShield /></div>
     {error && <div className="cooling-fan-load-error" role="alert"><FiXCircle /> {error}</div>}
     <div className="cooling-fan-load-coverage"><div><strong>{coverage?.totalCoolingFans.toLocaleString("ko-KR") ?? "-"}</strong><span>쿨링팬</span></div><div><strong>{coverage?.knownCount.toLocaleString("ko-KR") ?? "-"}</strong><span>전류 확인</span></div><div><strong>{coverage?.registeredCount.toLocaleString("ko-KR") ?? "-"}</strong><span>제조사 보강</span></div><div><strong>{coverage ? `${coverage.coveragePercent}%` : "-"}</strong><span>coverage</span></div></div>
     <div className="cooling-fan-load-grid">

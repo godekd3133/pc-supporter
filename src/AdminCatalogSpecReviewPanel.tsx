@@ -293,7 +293,7 @@ export function AdminCatalogSpecReviewPanel({ onToast }: { onToast: (message: st
   const refreshProgress = catalogSpecRefreshProgressSummaryFor(refreshHistory);
 
   return <section className="admin-card catalog-spec-review-card" data-testid="admin-catalog-spec-review" aria-label="카탈로그 스펙 보강 작업 목록">
-    <div className="admin-card-heading catalog-spec-review-heading"><div><p className="eyebrow">SPEC ENRICHMENT QUEUE</p><h3>카탈로그 스펙 보강 작업 패키지</h3><p>누락률과 호환 영향도가 높은 필드부터 페이지 확인 작업을 묶어 내보냅니다. 이 목록은 안전 부품 결과를 우회하지 않습니다.</p></div><FiToolIcon /></div>
+    <div className="admin-card-heading catalog-spec-review-heading"><div><h3>카탈로그 스펙 보강 작업 패키지</h3><p>누락률과 호환 영향도가 높은 필드부터 페이지 확인 작업을 묶어 내보냅니다. 이 목록은 안전 부품 결과를 우회하지 않습니다.</p></div><FiToolIcon /></div>
     <form className="catalog-spec-review-controls" onSubmit={submitFilters}>
       <label><span>정보 범위</span><select aria-label="스펙 보강 목록 정보 범위" value={evidence} onChange={(event) => { queueFingerprintRef.current = null; setEvidence(event.target.value as CatalogSpecReviewEvidence); setOffset(0); setSelectedIds([]); setBatchResult(null); }}><option value="all">전체 정보</option><option value="spec">일반 스펙</option><option value="pcie">PCIe 슬롯 evidence</option></select></label>
       <label><span>범주</span><select aria-label="스펙 보강 목록 범주" value={category} onChange={(event) => { queueFingerprintRef.current = null; setCategory(event.target.value as PartCategory | "all"); setOffset(0); setSelectedIds([]); setBatchResult(null); }}><option value="all">전체 카테고리</option>{PART_CATEGORIES.map((item) => <option value={item} key={item}>{CATEGORY_LABELS[item]}</option>)}</select></label>

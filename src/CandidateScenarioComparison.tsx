@@ -176,11 +176,11 @@ function scenarioChecksFor(item: CandidateScenarioCompareItem, result: Compatibi
     status: priceStatus,
     label: priceStatus === "review" ? "가격·가격 이력 확인" : "부품·적용 후 가격 확인",
     detail: priceEvidence === "reference"
-      ? "참고 가격만 기록되어 부품의 실제 판매 가격을 알 수 없어요. 구매 전에 실제 판매 페이지를 확인해 주세요."
+      ? "가격 정보가 부족해 총액을 계산하지 못했어요."
       : priceEvidence === "recorded"
-        ? "부품 가격은 기록되어 있지만 데이터 상태가 완전하지 않습니다. 구매 전에 실제 판매 페이지를 확인해 주세요."
+        ? "이전 가격 정보만 있어 현재 총액을 계산할 수 없어요."
         : priceEvidence === "unknown" || !result.priceComplete
-          ? "부품 또는 전체 견적의 가격이 정해지지 않아 구매 전 실제 판매 가격을 확인해 주세요."
+          ? "가격 정보가 없어 총액을 계산할 수 없어요."
       : `${formatWon(item.part.priceWon)} 부품 · 적용 후 ${formatWon(result.totalPriceWon)} · ${history?.summary.sampleCount ? `최근 ${history.windowDays}일 ${history.summary.sampleCount}회 가격 이력` : "가격 변경 이력 없음"}`
   });
 

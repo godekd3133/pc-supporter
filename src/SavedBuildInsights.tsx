@@ -24,40 +24,40 @@ function formatWon(value: number | undefined) {
 }
 
 function formatPriceDelta(value: number | undefined) {
-  if (value === undefined) return "가격 확인 필요";
+  if (value === undefined) return "가격 정보 없음";
   if (value === 0) return "현재와 같은 가격";
   return `${value > 0 ? "+" : ""}${value.toLocaleString("ko-KR")}원`;
 }
 
 function savedCheckStatusText(status: SavedBuildCheckSnapshot["status"]) {
-  return status === "compatible" ? "호환 가능" : status === "needs_review" ? "확인 필요" : "호환 불가";
+  return status === "compatible" ? "호환 가능" : status === "needs_review" ? "정보 부족" : "호환 불가";
 }
 
 function savedCheckRiskText(snapshot: SavedBuildCheckSnapshot) {
   const accessory = snapshot.accessoryCompatibility;
-  const base = `${snapshot.blockerCount} 차단 · ${snapshot.warningCount} 주의 · ${snapshot.unknownCount} 확인 필요`;
+  const base = `${snapshot.blockerCount} 호환 불가 · ${snapshot.warningCount} 주의 · ${snapshot.unknownCount} 정보 부족`;
   return !accessory || (accessory.blockerCount === 0 && accessory.warningCount === 0 && accessory.unknownCount === 0)
     ? base
-    : `${base} · 주변 ${accessory.blockerCount} 차단 · ${accessory.warningCount} 주의 · ${accessory.unknownCount} 확인 필요`;
+    : `${base} · 주변 ${accessory.blockerCount} 차단 · ${accessory.warningCount} 주의 · ${accessory.unknownCount} 정보 부족`;
 }
 
 function currentCheckStatusText(check: SavedBuildLiveCheck | undefined) {
-  if (!check || check.status === "loading") return "현재 catalog 재검사 중...";
-  if (check.status === "error") return "재검사 실패";
+  if (!check || check.status === "loading") return "현재 호환 정보 불러오는 중...";
+  if (check.status === "error") return "호환 정보를 불러오지 못했어요";
   return savedCheckStatusText(check.result.status);
 }
 
 function currentCheckPriceText(check: SavedBuildLiveCheck | undefined) {
   if (!check || check.status === "loading") return "계산 중...";
-  if (check.status === "error") return "확인 불가";
-  return check.result.priceComplete ? formatWon(check.result.totalPriceWon) : "가격 확인 필요";
+  if (check.status === "error") return "정보 없음";
+  return check.result.priceComplete ? formatWon(check.result.totalPriceWon) : "가격 정보 없음";
 }
 
 function currentCheckChangeFor(build: SavedBuild, check: SavedBuildLiveCheck | undefined, originStatus?: SavedBuildOriginAvailability) {
   const snapshot = build.checkSnapshot;
   const originUnavailable = build.origin?.kind === "shared_generator_variants" && originStatus === "unavailable";
-  if (!snapshot || !check || check.status === "loading") return { changed: originUnavailable, priceChanged: false, compatibilityChanged: false, originUnavailable, reason: "현재 catalog 재검사 중" };
-  if (check.status === "error") return { changed: true, priceChanged: false, compatibilityChanged: true, originUnavailable, reason: "현재 catalog 재검사 실패" };
+  if (!snapshot || !check || check.status === "loading") return { changed: originUnavailable, priceChanged: false, compatibilityChanged: false, originUnavailable, reason: "현재 호환 정보 불러오는 중" };
+  if (check.status === "error") return { changed: true, priceChanged: false, compatibilityChanged: true, originUnavailable, reason: "현재 호환 정보를 불러오지 못했어요" };
   const result = check.result;
   const reasons: string[] = [];
   const statusRank = (status: SavedBuildCheckSnapshot["status"]) => status === "compatible" ? 0 : status === "needs_review" ? 1 : 2;
@@ -65,19 +65,19 @@ function currentCheckChangeFor(build: SavedBuild, check: SavedBuildLiveCheck | u
   const priceChanged = snapshot.priceComplete && result.priceComplete && result.totalPriceWon > snapshot.totalPriceWon;
   if (statusRank(result.status) > statusRank(snapshot.status)) reasons.push(`호환 상태 악화 · ${savedCheckStatusText(result.status)}`);
   if (priceChanged) reasons.push(`금액 +${(result.totalPriceWon - snapshot.totalPriceWon).toLocaleString("ko-KR")}원`);
-  if (result.blockerCount > snapshot.blockerCount || result.warningCount > snapshot.warningCount || result.unknownCount > snapshot.unknownCount) reasons.push("위험 카운트 증가");
-  if (originUnavailable) reasons.push("원본 snapshot unavailable");
+  if (result.blockerCount > snapshot.blockerCount || result.warningCount > snapshot.warningCount || result.unknownCount > snapshot.unknownCount) reasons.push("호환 문제가 늘어남");
+  if (originUnavailable) reasons.push("원본 견적 정보 없음");
   return { changed: reasons.length > 0, priceChanged, compatibilityChanged, originUnavailable, reason: reasons.length > 0 ? reasons.join(" · ") : "저장 시점 대비 주요 악화 없음" };
 }
 
 function priorityRiskDeltaText(row: SavedBuildPriorityRow) {
-  if (row.riskDelta === undefined) return "이전 점검 없음";
-  if (row.riskDelta === 0) return "직전 점검과 동일";
-  return `직전 점검 대비 위험 ${row.riskDelta > 0 ? "+" : ""}${row.riskDelta}`;
+  if (row.riskDelta === undefined) return "이전 결과 없음";
+  if (row.riskDelta === 0) return "호환 상태 변화 없음";
+  return `호환 항목 변화 ${row.riskDelta > 0 ? "+" : ""}${row.riskDelta}`;
 }
 
 function SavedBuildRiskTrend({ row }: { row: SavedBuildPriorityRow }) {
-  if (row.trend.length === 0) return <div className="saved-build-priority-trend empty"><span>검사 추이 없음</span></div>;
+  if (row.trend.length === 0) return <div className="saved-build-priority-trend empty"><span>기록 없음</span></div>;
   const maxRisk = Math.max(1, ...row.trend.map((point) => point.riskScore));
   const points = row.trend.map((point, index) => {
     const x = row.trend.length === 1 ? 60 : (index / (row.trend.length - 1)) * 120;
@@ -85,11 +85,11 @@ function SavedBuildRiskTrend({ row }: { row: SavedBuildPriorityRow }) {
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   }).join(" ");
   const latest = row.trend.at(-1)!;
-  return <div className="saved-build-priority-trend"><svg viewBox="0 0 120 28" role="img" aria-label={`${row.name} 최근 위험 점수 추이`} preserveAspectRatio="none"><polyline points={points} fill="none" vectorEffect="non-scaling-stroke" /></svg><small>{row.trend.length}회 기록 · 위험 점수 {latest.riskScore}</small></div>;
+  return <div className="saved-build-priority-trend"><svg viewBox="0 0 120 28" role="img" aria-label={`${row.name} 최근 호환 변화`} preserveAspectRatio="none"><polyline points={points} fill="none" vectorEffect="non-scaling-stroke" /></svg><small>{row.trend.length}회 기록 · 호환 항목 {latest.riskScore}</small></div>;
 }
 
 function versionDeltaDirectionLabel(direction: NonNullable<ReturnType<typeof savedBuildVersionDeltaFor>["transition"]>["direction"] | undefined) {
-  return direction === "improved" ? "위험 감소" : direction === "regressed" ? "위험 증가" : direction === "changed" ? "일부 변경" : direction === "same" ? "변화 없음" : "비교 기준 없음";
+  return direction === "improved" ? "호환 개선" : direction === "regressed" ? "호환 주의 증가" : direction === "changed" ? "일부 항목 변경" : direction === "same" ? "변화 없음" : "이전 결과 없음";
 }
 
 function signedVersionDelta(value: number) {
@@ -108,23 +108,23 @@ export function SavedBuildPriorityPanel({ rows, actionStates, openingBuildId, on
     { id: "stable", label: "안정·첫 기준", count: stableCount }
   ];
   const visibleRows = rows.filter((row) => savedBuildPriorityMatches(row, filter));
-  return <section className="saved-build-priority-panel" aria-label="저장 견적 우선 확인 보드" data-testid="saved-build-priority-board">
-    <div className="saved-build-priority-heading"><div><h2>먼저 확인할 견적</h2><p>저장 시점·현재 점검·검사 이력을 합쳐 위험이 큰 견적과 변화가 생긴 견적을 먼저 보여줍니다.</p></div><span className="saved-build-priority-icon"><FiActivity /></span></div>
-    <div className="saved-build-priority-stats"><div className="attention"><span>우선 확인</span><strong>{attentionCount}</strong><small>차단·검토·점검 실패</small></div><div className="changed"><span>변화 감지</span><strong>{changedCount}</strong><small>직전 기록과 달라짐</small></div><div className="stable"><span>안정·첫 기준</span><strong>{stableCount}</strong><small>추이 기준 포함</small></div></div>
+  return <section className="saved-build-priority-panel" aria-label="저장 견적 요약" data-testid="saved-build-priority-board">
+    <div className="saved-build-priority-heading"><div><h2>먼저 살펴볼 견적</h2><p>저장한 견적 중 가격이나 호환 상태가 달라진 구성을 보여드려요.</p></div><span className="saved-build-priority-icon"><FiActivity /></span></div>
+    <div className="saved-build-priority-stats"><div className="attention"><span>호환 문제</span><strong>{attentionCount}</strong><small>부품 사양이 부족하거나 맞지 않아요.</small></div><div className="changed"><span>가격·구성 변경</span><strong>{changedCount}</strong><small>이전 구성과 달라짐</small></div><div className="stable"><span>변화 없음</span><strong>{stableCount}</strong><small>부품 구성이 유지돼요.</small></div></div>
     <div className="saved-build-priority-filters" role="group" aria-label="견적 우선순위 필터">{filterOptions.map((option) => <button className={filter === option.id ? "selected" : ""} type="button" aria-pressed={filter === option.id} data-testid={`saved-build-priority-filter-${option.id}`} onClick={() => setFilter(option.id)} key={option.id}>{option.label}<span>{option.count}</span></button>)}</div>
     {visibleRows.length === 0 ? <div className="saved-build-priority-empty"><FiInfo /><span>선택한 조건에 맞는 저장 견적이 없습니다.</span></div> : <div className="saved-build-priority-list">{visibleRows.map((row, index) => {
-      const currentStatus = row.status ? savedCheckStatusText(row.status) : "점검 결과 없음";
-      const riskText = row.snapshot ? savedCheckRiskText(row.snapshot) : "현재 위험 카운트 확인 필요";
+      const currentStatus = row.status ? savedCheckStatusText(row.status) : "호환 결과 없음";
+      const riskText = row.snapshot ? savedCheckRiskText(row.snapshot) : "호환 정보 없음";
       const riskTone = row.level === "critical" || row.level === "failed" ? "attention" : row.level === "review" ? "review" : row.level === "changed" ? "changed" : "stable";
       const actionState = actionStates[row.id];
       const actionValue = actionState?.status === "ready" ? actionState.value : undefined;
       return <article className={`saved-build-priority-row ${riskTone}`} data-testid={`saved-build-priority-row-${row.id}`} key={row.id}>
         <span className="saved-build-priority-rank">{index + 1}</span>
-        <div className="saved-build-priority-main"><div className="saved-build-priority-title"><strong>{row.name}</strong><span className={`saved-build-priority-label ${riskTone}`}>{row.label}</span></div><small>{currentStatus} · {riskText}{row.lastCheckedAt ? ` · ${new Date(row.lastCheckedAt).toLocaleString("ko-KR", { dateStyle: "short", timeStyle: "short" })}` : ""}</small>{row.primaryFinding && <p><FiAlertTriangle /> {row.primaryFinding.title}</p>}{row.priceDeltaWon !== undefined && <em>직전 기록 대비 가격 {formatPriceDelta(row.priceDeltaWon)}</em>}{row.level === "failed" && <p><FiXCircle /> 현재 점검을 완료하지 못했습니다. 다시 확인해 주세요.</p>}</div>
-        <SavedBuildRiskTrend row={row} />
-        <div className="saved-build-priority-action"><span>{priorityRiskDeltaText(row)}</span><button className="text-button" type="button" onClick={() => onAnalyzeAction(row.id)} disabled={actionState?.status === "loading"}>{actionState?.status === "loading" ? <><FiLoader className="spin" /> 할 일 계산 중...</> : actionState?.status === "ready" ? <><FiRefreshCw /> 할 일 다시 계산</> : <><FiZap /> 다음 할 일 분석</>}</button><button className="text-button" type="button" onClick={() => onOpen(row.id)} disabled={openingBuildId !== null}>{openingBuildId === row.id ? <><FiLoader className="spin" /> 불러오는 중...</> : <><FiExternalLink /> 견적 보기</>}</button></div>
+        <div className="saved-build-priority-main"><div className="saved-build-priority-title"><strong>{row.name}</strong><span className={`saved-build-priority-label ${riskTone}`}>{row.label}</span></div><small>{currentStatus} · {riskText}{row.lastCheckedAt ? ` · ${new Date(row.lastCheckedAt).toLocaleString("ko-KR", { dateStyle: "short", timeStyle: "short" })}` : ""}</small>{row.primaryFinding && <p><FiAlertTriangle /> {row.primaryFinding.title}</p>}{row.priceDeltaWon !== undefined && <em>직전 기록 대비 가격 {formatPriceDelta(row.priceDeltaWon)}</em>}{row.level === "failed" && <p><FiXCircle /> 현재 호환 정보를 불러오지 못했어요.</p>}</div>
+
+        <div className="saved-build-priority-action"><span>{priorityRiskDeltaText(row)}</span><button className="text-button" type="button" onClick={() => onAnalyzeAction(row.id)} disabled={actionState?.status === "loading"}>{actionState?.status === "loading" ? <><FiLoader className="spin" /> 부품 찾는 중...</> : actionState?.status === "ready" ? <><FiRefreshCw /> 다시 추천</> : <><FiZap /> 부품 추천</>}</button><button className="text-button" type="button" onClick={() => onOpen(row.id)} disabled={openingBuildId !== null}>{openingBuildId === row.id ? <><FiLoader className="spin" /> 불러오는 중...</> : <><FiExternalLink /> 견적 보기</>}</button></div>
         {actionState?.status === "error" && <div className="saved-build-priority-action-detail error" role="alert"><FiXCircle /><span>{actionState.message}</span><button className="text-button" type="button" onClick={() => onAnalyzeAction(row.id)}>다시 시도</button></div>}
-        {actionValue && <div className="saved-build-priority-action-detail" data-testid={`saved-build-priority-action-${row.id}`}><div className="saved-build-priority-action-heading"><strong>{actionValue.title}</strong><span>{actionValue.kind === "repair_plan" ? "전체 검사 규칙 수리 플랜" : actionValue.kind === "analysis" ? "분석 제안" : "추가 부품 없음"}</span></div>{actionValue.nextAction && <p className="saved-build-priority-action-next"><FiZap /> <strong>먼저 확인</strong> {actionValue.nextAction}</p>}{actionValue.changes.length > 0 && <div className="saved-build-priority-action-changes">{actionValue.changes.slice(0, 3).map((change) => <span key={`${change.category}-${change.toPartName}-${change.toQuantity ?? ""}`}><b>{CATEGORY_LABELS[change.category]}</b>{change.kind === "change_quantity" ? `${change.fromQuantity ?? "?"}개 → ${change.toQuantity ?? "?"}개` : `${change.fromPartName ?? "현재 선택"} → ${change.toPartName}`}{change.priceDeltaWon !== undefined ? ` · ${formatPriceDelta(change.priceDeltaWon)}` : ""}</span>)}</div>}<div className="saved-build-priority-action-stats"><span><strong>{actionValue.resolvedBlockers}</strong>개 차단 감소</span><span><strong>{actionValue.remainingBlockers}</strong>개 차단 남음</span><span><strong>{actionValue.remainingWarnings}</strong>개 주의 남음</span><span><strong>{actionValue.remainingUnknown}</strong>개 확인 필요</span>{actionValue.priceDeltaWon !== undefined && <span><strong>{formatPriceDelta(actionValue.priceDeltaWon)}</strong> 총액 변화</span>}{actionValue.afterTotalPriceWon !== undefined && <span><strong>{actionValue.priceComplete ? formatWon(actionValue.afterTotalPriceWon) : "가격 확인 필요"}</strong> 적용 후 금액</span>}</div><p className="saved-build-priority-action-summary">{actionValue.summary}</p></div>}
+        {actionValue && <div className="saved-build-priority-action-detail" data-testid={`saved-build-priority-action-${row.id}`}><div className="saved-build-priority-action-heading"><strong>{actionValue.title}</strong><span>{actionValue.kind === "repair_plan" ? "전체 검사 규칙 수리 플랜" : actionValue.kind === "analysis" ? "성능 제안" : "추가 부품 없음"}</span></div>{actionValue.nextAction && <p className="saved-build-priority-action-next"><FiZap /> <strong>추천</strong> {actionValue.nextAction}</p>}{actionValue.changes.length > 0 && <div className="saved-build-priority-action-changes">{actionValue.changes.slice(0, 3).map((change) => <span key={`${change.category}-${change.toPartName}-${change.toQuantity ?? ""}`}><b>{CATEGORY_LABELS[change.category]}</b>{change.kind === "change_quantity" ? `${change.fromQuantity ?? "?"}개 → ${change.toQuantity ?? "?"}개` : `${change.fromPartName ?? "현재 선택"} → ${change.toPartName}`}{change.priceDeltaWon !== undefined ? ` · ${formatPriceDelta(change.priceDeltaWon)}` : ""}</span>)}</div>}<div className="saved-build-priority-action-stats"><span><strong>{actionValue.resolvedBlockers}</strong>개 차단 감소</span><span><strong>{actionValue.remainingBlockers}</strong>개 차단 남음</span><span><strong>{actionValue.remainingWarnings}</strong>개 주의 남음</span><span><strong>{actionValue.remainingUnknown}</strong>개 정보 부족</span>{actionValue.priceDeltaWon !== undefined && <span><strong>{formatPriceDelta(actionValue.priceDeltaWon)}</strong> 총액 변화</span>}{actionValue.afterTotalPriceWon !== undefined && <span><strong>{actionValue.priceComplete ? formatWon(actionValue.afterTotalPriceWon) : "가격 정보 없음"}</strong> 적용 후 금액</span>}</div><p className="saved-build-priority-action-summary">{actionValue.summary}</p></div>}
       </article>;
     })}</div>}
     <p className="saved-build-priority-note"><FiInfo /> 먼저 살펴볼 견적을 모아 보여줘요. 견적을 열어 부품과 예상 금액을 비교해 보세요.</p>
@@ -190,13 +190,13 @@ export function SavedBuildVersionPanel({ groups, openingBuildId, onOpen, onShare
     const noteChanged = Boolean(previous) && previous?.decisionNote !== build.decisionNote;
     const transition = versionDelta?.transition;
     const priceDelta = transition?.priceDeltaWon;
-    const analysisDelta = transition?.analysisScoreDelta;
+
     const currentCheck = liveChecks[build.id];
     const currentOriginStatus = build.origin?.sourceShareId ? originAvailability[build.origin.sourceShareId] : undefined;
     const currentChange = currentCheckChangeFor(build, currentCheck, currentOriginStatus);
     const currentCheckTone = !currentCheck || currentCheck.status === "loading" ? "checking" : currentCheck.status === "error" ? "error" : currentChange.originUnavailable ? "unavailable" : currentChange.changed ? "changed" : "stable";
     const currentCheckText = !currentCheck || currentCheck.status === "loading"
-      ? "현재 catalog 재검사 중"
+      ? "현재 호환 정보 불러오는 중"
       : currentCheck.status === "error"
         ? `현재 catalog 재검사 실패${currentCheck.message ? ` · ${currentCheck.message}` : ""}`
         : currentChange.changed
@@ -209,9 +209,9 @@ export function SavedBuildVersionPanel({ groups, openingBuildId, onOpen, onShare
         <strong>{build.name}</strong>
         <small>{build.checkSnapshot ? `${savedCheckStatusText(build.checkSnapshot.status)} · ${savedCheckRiskText(build.checkSnapshot)}` : "검사 기록 없음"} · {new Date(build.updatedAt).toLocaleString("ko-KR", { dateStyle: "short", timeStyle: "short" })}</small>
         {currentCheck && <small className={`saved-build-version-current-check ${currentCheckTone}`} data-testid={`saved-build-version-current-check-${build.id}`}><FiRefreshCw className={currentCheckTone === "checking" ? "spin" : undefined} /> {currentCheckMetric ? `${currentCheckMetric} · ` : ""}{currentCheckText}</small>}
-        <small className="saved-build-version-lineage" data-testid={`saved-build-version-lineage-${build.id}`}><FiGitBranch /> {parent ? `${savedBuildVersionLabelFor(parent)} · ${parent.name}에서 파생` : build.derivedFromBuildId ? "부모 버전 확인 필요" : index === 0 ? "라인리지 원본" : "같은 그룹의 이전 버전"}</small>
+        <small className="saved-build-version-lineage" data-testid={`saved-build-version-lineage-${build.id}`}><FiGitBranch /> {parent ? `${savedBuildVersionLabelFor(parent)} · ${parent.name}에서 파생` : build.derivedFromBuildId ? "이전 버전 정보 없음" : index === 0 ? "첫 저장 견적" : "같은 그룹의 이전 버전"}</small>
 
-        {versionDelta && <small className="saved-build-version-delta" data-testid={`saved-build-version-delta-${build.id}`}><FiActivity /> {versionDelta.selectionChangedCategoryCount > 0 ? `구성 ${versionDelta.selectionChangedCategoryCount}개 범주 변경` : "구성 변화 없음"}{transition ? ` · 차단 ${transition.blockerDelta > 0 ? "+" : ""}${transition.blockerDelta} · 주의 ${transition.warningDelta > 0 ? "+" : ""}${transition.warningDelta} · 확인 ${transition.unknownDelta > 0 ? "+" : ""}${transition.unknownDelta}` : " · 검사 비교 기준 없음"}{versionDelta.resolvedFindingCount !== undefined ? ` · 항목 해결 ${versionDelta.resolvedFindingCount} · 신규 ${versionDelta.newFindingCount} · 변경 ${versionDelta.changedFindingCount}` : ""}{priceDelta !== undefined ? ` · 금액 ${priceDelta > 0 ? "+" : ""}${priceDelta.toLocaleString("ko-KR")}원` : ""}{analysisDelta !== undefined ? ` · 분석 ${analysisDelta > 0 ? "+" : ""}${analysisDelta}점` : ""}</small>}
+        {versionDelta && <small className="saved-build-version-delta" data-testid={`saved-build-version-delta-${build.id}`}><FiActivity /> {versionDelta.selectionChangedCategoryCount > 0 ? `구성 ${versionDelta.selectionChangedCategoryCount}개 범주 변경` : "구성 변화 없음"}{transition ? ` · 차단 ${transition.blockerDelta > 0 ? "+" : ""}${transition.blockerDelta} · 주의 ${transition.warningDelta > 0 ? "+" : ""}${transition.warningDelta} · 정보 부족 ${transition.unknownDelta > 0 ? "+" : ""}${transition.unknownDelta}` : " · 이전 결과 없음"}{versionDelta.resolvedFindingCount !== undefined ? ` · 항목 해결 ${versionDelta.resolvedFindingCount} · 신규 ${versionDelta.newFindingCount} · 변경 ${versionDelta.changedFindingCount}` : ""}{priceDelta !== undefined ? ` · 금액 ${priceDelta > 0 ? "+" : ""}${priceDelta.toLocaleString("ko-KR")}원` : ""}</small>}
         {transferDiff && transferDiff.rows.length > 0 && <small className="saved-build-version-changes" data-testid={`saved-build-version-changes-${build.id}`}><FiLayers /> {transferDiff.rows.slice(0, 2).map((row) => `${row.label}: ${row.before} → ${row.after}`).join(" · ")}{transferDiff.rows.length > 2 ? ` · 외 ${transferDiff.rows.length - 2}개` : ""}</small>}
         {build.decisionNote ? <small className="saved-build-version-decision-note" data-testid={`saved-build-version-decision-note-${build.id}`}><FiInfo /> 선택 이유 · {build.decisionNote}</small> : noteChanged ? <small className="saved-build-version-decision-note removed" data-testid={`saved-build-version-decision-note-${build.id}`}><FiInfo /> 이전 버전의 선택 이유를 삭제함</small> : null}
         {noteChanged && <span className="saved-build-version-change-label">선택 이유 변경</span>}
@@ -261,9 +261,9 @@ export function SavedBuildVersionPanel({ groups, openingBuildId, onOpen, onShare
   return <section className="saved-build-version-panel" aria-label="저장 견적 버전 비교" data-testid="saved-build-version-panel">
     <div className="saved-build-version-heading"><div><h2>견적 버전 비교</h2><p>수리 플랜이나 수정 후 새로 저장한 견적을 원본과 분리해, 최신 두 버전을 같은 기준으로 비교합니다.</p></div><span className="saved-build-version-icon"><FiLayers /></span></div>
     {groups.length > 1 && <div className="saved-build-version-groups" role="group" aria-label="견적 버전 그룹">{groups.map((group) => <button className={group.versionGroupId === selectedGroup.versionGroupId ? "selected" : ""} type="button" aria-pressed={group.versionGroupId === selectedGroup.versionGroupId} data-testid={`saved-build-version-group-${group.versionGroupId}`} onClick={() => setSelectedGroupId(group.versionGroupId)} key={group.versionGroupId}>{group.builds[0]?.name ?? "견적"}<span>{group.builds.length}개 버전</span></button>)}</div>}
-    <div className="saved-build-version-compare-toolbar" role="group" aria-label="비교할 견적 버전 선택" aria-live="polite"><div><span>비교 버전 {comparedVersions.length} / 2</span><small>최신 두 버전이 기본 선택됩니다. 다른 버전을 비교하려면 선택을 해제한 뒤 버전을 선택하세요.</small></div><div className="saved-build-version-compare-actions">{currentChangeCounts.all > 0 && <div className="saved-build-version-change-filters" role="group" aria-label="현재 catalog 변화 필터"><button className={currentChangeFilter === "all" ? "selected" : ""} type="button" data-testid="saved-build-version-change-filter-all" aria-pressed={currentChangeFilter === "all"} onClick={() => setCurrentChangeFilter("all")}>변화 전체 {currentChangeCounts.all}</button><button className={currentChangeFilter === "price" ? "selected" : ""} type="button" data-testid="saved-build-version-change-filter-price" aria-pressed={currentChangeFilter === "price"} onClick={() => setCurrentChangeFilter("price")} disabled={currentChangeCounts.price === 0}>가격 상승 {currentChangeCounts.price}</button><button className={currentChangeFilter === "compatibility" ? "selected" : ""} type="button" data-testid="saved-build-version-change-filter-compatibility" aria-pressed={currentChangeFilter === "compatibility"} onClick={() => setCurrentChangeFilter("compatibility")} disabled={currentChangeCounts.compatibility === 0}>호환·위험 악화 {currentChangeCounts.compatibility}</button></div>}{currentConcernPair?.[0] && currentConcernPair?.[1] && <><button className="text-button" type="button" data-testid="saved-build-version-current-change-select" onClick={() => setComparisonIds([currentConcernPair[0]!.id, currentConcernPair[1]!.id])}><FiRefreshCw /> 현재 변화 버전 비교 ({currentConcernVersions.length})</button><button className="text-button" type="button" data-testid="saved-build-version-current-change-open" onClick={() => onOpen(currentConcernPair[0]!)}><FiExternalLink /> 변화 버전 열기</button>{onSaveVersion && <button className="text-button" type="button" data-testid="saved-build-version-current-change-save" onClick={() => onSaveVersion(currentConcernPair[0]!)}><FiSave /> 현재 기준 새 버전 저장</button>}</>}{versionComparisonInput && <><button className="text-button" type="button" data-testid="saved-build-version-copy" onClick={() => void copyVersionComparison()}><FiCopy /> 비교 복사</button><button className="text-button" type="button" data-testid="saved-build-version-download-json" onClick={downloadVersionComparison}><FiDownload /> JSON 저장</button>{onShareVersionComparison && <button className="text-button" type="button" data-testid="saved-build-version-share" onClick={() => void shareVersionComparison()} disabled={sharingVersion}>{sharingVersion ? <><FiLoader className="spin" /> 공유 중...</> : <><FiShare2 /> 링크 공유</>}</button>}</>}</div></div>
+    <div className="saved-build-version-compare-toolbar" role="group" aria-label="비교할 견적 버전 선택" aria-live="polite"><div><span>비교 버전 {comparedVersions.length} / 2</span><small>최신 두 버전이 기본 선택됩니다. 다른 버전을 비교하려면 선택을 해제한 뒤 버전을 선택하세요.</small></div><div className="saved-build-version-compare-actions">{currentChangeCounts.all > 0 && <div className="saved-build-version-change-filters" role="group" aria-label="저장 견적 변화 필터"><button className={currentChangeFilter === "all" ? "selected" : ""} type="button" data-testid="saved-build-version-change-filter-all" aria-pressed={currentChangeFilter === "all"} onClick={() => setCurrentChangeFilter("all")}>변화 전체 {currentChangeCounts.all}</button><button className={currentChangeFilter === "price" ? "selected" : ""} type="button" data-testid="saved-build-version-change-filter-price" aria-pressed={currentChangeFilter === "price"} onClick={() => setCurrentChangeFilter("price")} disabled={currentChangeCounts.price === 0}>가격 상승 {currentChangeCounts.price}</button><button className={currentChangeFilter === "compatibility" ? "selected" : ""} type="button" data-testid="saved-build-version-change-filter-compatibility" aria-pressed={currentChangeFilter === "compatibility"} onClick={() => setCurrentChangeFilter("compatibility")} disabled={currentChangeCounts.compatibility === 0}>호환 상태 변화 {currentChangeCounts.compatibility}</button></div>}{currentConcernPair?.[0] && currentConcernPair?.[1] && <><button className="text-button" type="button" data-testid="saved-build-version-current-change-select" onClick={() => setComparisonIds([currentConcernPair[0]!.id, currentConcernPair[1]!.id])}><FiRefreshCw /> 현재 변화 버전 비교 ({currentConcernVersions.length})</button><button className="text-button" type="button" data-testid="saved-build-version-current-change-open" onClick={() => onOpen(currentConcernPair[0]!)}><FiExternalLink /> 변화 버전 열기</button>{onSaveVersion && <button className="text-button" type="button" data-testid="saved-build-version-current-change-save" onClick={() => onSaveVersion(currentConcernPair[0]!)}><FiSave /> 현재 기준 새 버전 저장</button>}</>}{versionComparisonInput && <><button className="text-button" type="button" data-testid="saved-build-version-copy" onClick={() => void copyVersionComparison()}><FiCopy /> 비교 복사</button><button className="text-button" type="button" data-testid="saved-build-version-download-json" onClick={downloadVersionComparison}><FiDownload /> JSON 저장</button>{onShareVersionComparison && <button className="text-button" type="button" data-testid="saved-build-version-share" onClick={() => void shareVersionComparison()} disabled={sharingVersion}>{sharingVersion ? <><FiLoader className="spin" /> 공유 중...</> : <><FiShare2 /> 링크 공유</>}</button>}</>}</div></div>
     <div className="saved-build-version-compare-options" role="group" aria-label="버전 비교 선택지">{selectedGroup.builds.map((build) => { const selected = comparisonIds.includes(build.id); const locked = !selected && comparisonIds.length >= 2; return <button className={selected ? "selected" : ""} type="button" data-testid={`saved-build-version-compare-toggle-${build.id}`} aria-pressed={selected} aria-label={`${savedBuildVersionLabelFor(build)} ${build.name} ${selected ? "비교 중" : locked ? "비교 선택 잠김 · 먼저 비교 중인 버전을 해제하세요" : "비교 선택"}`} title={locked ? "비교 버전은 최대 2개입니다. 먼저 비교 중인 버전을 해제하세요." : undefined} onClick={() => toggleComparisonVersion(build.id)} disabled={locked} key={build.id}><span>{savedBuildVersionLabelFor(build)}</span><small>{build.name}</small>{selected && <em>비교 중</em>}</button>; })}</div>
-    {comparedVersions.length === 2 && (() => { const [before, after] = comparedVersions; const delta = savedBuildVersionDeltaFor(before, after); const transition = delta.transition; return <section className={`saved-build-version-summary ${transition?.direction ?? "unknown"}`} data-testid="saved-build-version-summary" aria-label="선택한 두 버전 적용 요약"><div className="saved-build-version-summary-heading"><div><strong>선택한 두 버전 적용 요약</strong><small>{savedBuildVersionLabelFor(before)} → {savedBuildVersionLabelFor(after)} · {versionDeltaDirectionLabel(transition?.direction)}</small></div><FiActivity /></div><div className="saved-build-version-summary-grid"><div><span>구성</span><strong>{delta.selectionChangedCategoryCount > 0 ? `${delta.selectionChangedCategoryCount}개 범주 변경` : "변화 없음"}</strong></div><div><span>위험 변화</span><strong>{transition ? `차단 ${signedVersionDelta(transition.blockerDelta)} · 주의 ${signedVersionDelta(transition.warningDelta)} · 확인 ${signedVersionDelta(transition.unknownDelta)}` : "비교 기준 없음"}</strong></div><div><span>항목 변화</span><strong>{delta.resolvedFindingCount !== undefined ? `해결 ${delta.resolvedFindingCount} · 신규 ${delta.newFindingCount} · 변경 ${delta.changedFindingCount}` : "비교 기준 없음"}</strong></div><div><span>총액</span><strong>{transition?.priceDeltaWon !== undefined ? `${transition.priceDeltaWon > 0 ? "+" : ""}${transition.priceDeltaWon.toLocaleString("ko-KR")}원` : "가격 확인 필요"}</strong></div></div></section>; })()}
+    {comparedVersions.length === 2 && (() => { const [before, after] = comparedVersions; const delta = savedBuildVersionDeltaFor(before, after); const transition = delta.transition; return <section className={`saved-build-version-summary ${transition?.direction ?? "unknown"}`} data-testid="saved-build-version-summary" aria-label="선택한 두 버전 적용 요약"><div className="saved-build-version-summary-heading"><div><strong>선택한 두 버전 적용 요약</strong><small>{savedBuildVersionLabelFor(before)} → {savedBuildVersionLabelFor(after)} · {versionDeltaDirectionLabel(transition?.direction)}</small></div><FiActivity /></div><div className="saved-build-version-summary-grid"><div><span>구성</span><strong>{delta.selectionChangedCategoryCount > 0 ? `${delta.selectionChangedCategoryCount}개 범주 변경` : "변화 없음"}</strong></div><div><span>위험 변화</span><strong>{transition ? `차단 ${signedVersionDelta(transition.blockerDelta)} · 주의 ${signedVersionDelta(transition.warningDelta)} · 확인 ${signedVersionDelta(transition.unknownDelta)}` : "이전 결과 없음"}</strong></div><div><span>항목 변화</span><strong>{delta.resolvedFindingCount !== undefined ? `해결 ${delta.resolvedFindingCount} · 신규 ${delta.newFindingCount} · 변경 ${delta.changedFindingCount}` : "이전 결과 없음"}</strong></div><div><span>총액</span><strong>{transition?.priceDeltaWon !== undefined ? `${transition.priceDeltaWon > 0 ? "+" : ""}${transition.priceDeltaWon.toLocaleString("ko-KR")}원` : "가격 정보 없음"}</strong></div></div></section>; })()}
     <div className="saved-build-version-list">{selectedGroup.builds.map(renderVersionRow)}</div>
 
     {comparedVersions.length === 2 && <div className="saved-build-version-context" data-testid="saved-build-version-decision-note"><div><span>{savedBuildVersionLabelFor(comparedVersions[0])} 선택 이유</span><strong>{comparedVersions[0].decisionNote ?? "메모 없음"}</strong></div><span className="saved-build-version-context-arrow" aria-hidden="true">→</span><div><span>{savedBuildVersionLabelFor(comparedVersions[1])} 선택 이유</span><strong>{comparedVersions[1].decisionNote ?? "메모 없음"}</strong></div></div>}

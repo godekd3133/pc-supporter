@@ -920,7 +920,7 @@ export function BenchmarkOverridePanel({ onToast, onMetaRefresh, storageMode }: 
   const visibleReviewItems = reviewQueue?.items.filter((item) => (reviewQueueCategoryFilter === "all" || item.category === reviewQueueCategoryFilter) && (reviewQueueStatusFilter === "all" || item.status === reviewQueueStatusFilter)) ?? [];
   const visibleSourceReviewItems = reviewQueue?.sourceItems.filter((item) => reviewQueueCategoryFilter === "all" || item.category === reviewQueueCategoryFilter) ?? [];
   return <section className="admin-card benchmark-override-admin-card" aria-label="벤치마크 보강 관리">
-    <div className="admin-card-heading"><div><p className="eyebrow">BENCHMARK OVERRIDES</p><h3>확인된 성능 데이터 보강</h3></div><FiActivity /></div>
+    <div className="admin-card-heading"><div><h3>확인된 성능 데이터 보강</h3></div><FiActivity /></div>
     <p className="admin-card-description">페이지에 없거나 별도로 확인한 Cinebench·3DMark 점수를 부품 ID에 연결합니다. 모든 값은 서버에서 부품 종류·양수 정수·출처 메모·HTTPS URL을 확인한 뒤 원자적으로 저장하며, 저장된 페이지는 실제 접근·모델 식별 점검까지 실행할 수 있습니다.</p>
     <div className="benchmark-override-summary"><span>저장된 보강 <strong>{overrides.length}개</strong></span><span>대상: CPU·GPU</span><span>저장소: {storageMode === "postgres" ? "PostgreSQL" : storageMode === "file" ? "JSON fallback" : "확인 중"}</span>{loading && <span>불러오는 중...</span>}{error && <span className="benchmark-override-error">{error}</span>}</div>
     <Benchmark3DMarkWorkPackagePanel busy={busy} onToast={onToast} onOpenItem={openReviewItemInComposer} onPrepareBatchInput={(items) => { const seed = benchmark3DMarkBatchSeedFor(items); setBenchmark3DMarkBatchSeed(seed); onToast(`${seed.count}개 GPU의 partId를 일괄 입력창에 준비했습니다. 각 행에 3DMark 결과 URL을 입력해 주세요.`); }} refreshToken={reviewQueueRefreshToken} />

@@ -118,7 +118,7 @@ export function AdminSeedCollectionQueuePanel({ refreshKey, onFocusMapping, onSt
   return <section className="admin-seed-collection-queue" data-testid="admin-seed-collection-queue" aria-label="기본 목록 정보 수집 작업 목록" aria-busy={loading}>
     <div className="admin-seed-collection-queue-heading">
       <div>
-        <p className="eyebrow">SOURCE COLLECTION PLAN</p>
+
         <h3>상품 페이지 수집 작업 목록</h3>
         <p>자동 부품이 없는 기본 목록을 범주 수집·검색·재확인 작업으로 나눠 다음 수집 범위를 결정합니다. 목록 계산은 읽기 전용이며, 빠른 수집은 확인 후 해당 범주의 기존 수집기를 실행합니다.</p>
       </div>

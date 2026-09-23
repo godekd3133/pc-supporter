@@ -56,7 +56,7 @@ export function SavedBuildComparisonDecisionSummary({ builds, liveChecks, format
   const partial = entries.length < builds.length;
   const pendingText = entries.length === 0 ? "현재 카탈로그 재검사가 끝나면 계산합니다." : "일부 견적의 재검사가 끝나면 전체 비교 기준으로 갱신합니다.";
   return <section className="history-comparison-decision" aria-label="견적 비교 결정 요약">
-    <div className="history-comparison-decision-heading"><div><p className="eyebrow">DECISION SUMMARY</p><h3>비교 결과 빠른 선택</h3><p>현재 카탈로그 재검사 결과를 기준으로 안전성·가격·분석 점수·확장성 여유를 각각 따로 계산합니다.</p></div><span>{entries.length} / {builds.length}개 재검사 완료</span></div>
+    <div className="history-comparison-decision-heading"><div><h3>비교 결과 빠른 선택</h3><p>현재 카탈로그 재검사 결과를 기준으로 안전성·가격·분석 점수·확장성 여유를 각각 따로 계산합니다.</p></div><span>{entries.length} / {builds.length}개 재검사 완료</span></div>
     <div className={`history-comparison-consensus ${consensus.status}`} data-testid="saved-build-comparison-consensus">
       <span className="history-comparison-consensus-icon">{consensus.status === "converged" ? <FiCheckCircle /> : <FiAlertTriangle />}</span>
       <div className="history-comparison-consensus-copy"><strong>{consensus.status === "converged" ? "기준이 한 견적으로 수렴했습니다." : consensus.status === "split" ? "기준에 따라 추천 견적이 달라집니다." : "결정 요약을 계산하는 중입니다."}</strong><p>{consensus.summary}</p>{consensus.status === "split" && <small>안전성·가격·분석·확장성 중 무엇을 더 중요하게 볼지 선택한 뒤, 아래 기준별 순위를 확인하세요.</small>}</div>

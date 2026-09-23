@@ -52,7 +52,7 @@ export function AdminSeedCatalogPanel() {
   return <section className="admin-seed-preview" data-testid="admin-seed-catalog-preview" aria-label="기본 정보 기준값 비교">
     <div className="admin-seed-preview-heading">
       <div>
-        <p className="eyebrow">BASELINE AUDIT</p>
+
         <h2>기본 정보 기준값 비교</h2>
         <p>새 checkout의 기본 정보 부품과 현재 운영 카탈로그를 ID·범주 기준으로 비교합니다. 이 화면은 병합·삭제·덮어쓰기를 실행하지 않습니다.</p>
       </div>

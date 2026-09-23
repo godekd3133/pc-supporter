@@ -54,7 +54,7 @@ export function savedBuildAlternativeAlertsFor(build: SavedBuildRecord, catalogP
       buildId: build.id,
       buildName: build.name,
       kind: "alternative",
-      title: `${CATEGORY_LABELS[watch.category]} 더 나은 조건 발견`,
+      title: `${CATEGORY_LABELS[watch.category]} 대안 부품`,
       message: currentPrice !== undefined && partPriceFor(best) !== undefined && partPriceFor(best)! < currentPrice
         ? `현재 ${current.name}보다 ${ (currentPrice - partPriceFor(best)!).toLocaleString("ko-KR") }원 저렴하고 ${watch.scoreLabel} 약 +${gainPercent}% 높아요.`
         : `현재 ${current.name} 대비 ${best.name} — ${watch.scoreLabel} 약 +${gainPercent}% 높아요.`,

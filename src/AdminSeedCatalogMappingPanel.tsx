@@ -182,7 +182,7 @@ export function AdminSeedCatalogMappingPanel({ onStartCategory, categoryCrawlRun
   return <section className="admin-seed-mapping" data-testid="admin-seed-catalog-mapping" aria-label="starter 상품 코드 매핑 확인" aria-busy={loading || Boolean(busyKey)}>
     <div className="admin-seed-mapping-heading">
       <div>
-        <p className="eyebrow">PRODUCT ID REVIEW QUEUE</p>
+        <p className="eyebrow">상품 코드 매핑</p>
         <h2>starter 상품 코드 매핑 확인</h2>
         <p>이름·모델·브랜드를 기준으로 실제 다나와 상품 코드 부품을 제안합니다. 자동으로 정하는하지 않으며, 관리자가 부품을 승인한 경우에만 별도 mapping registry에 저장합니다.</p>
       </div>

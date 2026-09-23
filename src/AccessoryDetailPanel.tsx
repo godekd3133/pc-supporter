@@ -6,7 +6,6 @@ import { priceWatchDecisionFor } from "../shared/price-watch-decision";
 import type { PriceWatchDecisionHistory } from "../shared/price-watch-decision";
 import { api } from "./api";
 import { safeExternalUrl } from "./safe-source-url";
-import { catalogPriceEvidenceFor } from "../shared/catalog-price-evidence";
 import { catalogMissingFieldLabelFor } from "../shared/catalog-spec-coverage";
 import { CatalogRefreshDiffPanel } from "./CatalogRefreshDiffPanel";
 
@@ -76,11 +75,7 @@ export function AccessoryDetailPanel({ item, selected, isWatched, isCachedFallba
   const [priceHistoryRetryNonce, setPriceHistoryRetryNonce] = useState(0);
   const sourceUrl = safeExternalUrl(item.danawaUrl);
     const rows = accessorySpecRowsFor(item);
-  const priceEvidence = catalogPriceEvidenceFor(item);
-  const priceKindLabel = priceEvidence === "reference" ? "예상가" : priceEvidence === "recorded" ? "이전 가격" : priceEvidence === "unknown" ? "가격 미확인" : "판매가";
   const decision = priceWatchDecisionFor({ currentStatus: isKnownPrice(item.priceWon) ? "available" : "unavailable", currentPriceWon: item.priceWon, history: priceHistory?.summary });
-  const cachedDate = cachedAt ? new Date(cachedAt) : undefined;
-  const cachedLabel = cachedDate && !Number.isNaN(cachedDate.getTime()) ? cachedDate.toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" }) : "시각 미등록";
 
   useEffect(() => setWatching(isWatched), [isWatched, item.id]);
 
@@ -98,17 +93,16 @@ export function AccessoryDetailPanel({ item, selected, isWatched, isCachedFallba
 
   return <section className="accessory-detail-panel" aria-label="선택한 주변 부품 상세" data-testid="accessory-detail-panel">
     <div className="accessory-detail-heading"><div><p className="eyebrow">주변 부품 상세</p><h2>{item.name}</h2><p>{ACCESSORY_CATEGORY_LABELS[item.category]} · {item.brand ?? item.model ?? "주변 부품"}</p></div><button className="icon-button" type="button" onClick={onClose} aria-label="주변 부품 상세 닫기"><FiXCircle /></button></div>
-    {isCachedFallback && <div className="accessory-detail-cache-state" data-testid="accessory-detail-cache-state" role="status"><span><FiDatabase /></span><div><strong>저장된 정보로 표시 중</strong><p>저장된 상품 정보예요. 가격과 호환성은 최신 내용과 다를 수 있어요.</p><small>최근 저장 {cachedLabel}</small></div>{onRefresh && <button className="button button-small button-light" type="button" data-testid="accessory-detail-refresh" onClick={onRefresh} disabled={refreshing}>{refreshing ? <><FiLoader className="spin" /> 불러오는 중...</> : <><FiRefreshCw /> 새로 불러오기</>}</button>}</div>}
+    {isCachedFallback && <div className="accessory-detail-cache-state" data-testid="accessory-detail-cache-state" role="status"><span><FiDatabase /></span><div><strong>저장된 정보로 표시 중</strong><p>상품 정보가 최신인지 확인할 수 없어요.</p></div>{onRefresh && <button className="button button-small button-light" type="button" data-testid="accessory-detail-refresh" onClick={onRefresh} disabled={refreshing}>{refreshing ? <><FiLoader className="spin" /> 불러오는 중...</> : <><FiRefreshCw /> 새로 불러오기</>}</button>}</div>}
     {!isCachedFallback && onRefresh && <div className="accessory-detail-refresh" data-testid="accessory-detail-refresh-bar"><div><FiRefreshCw /><span><strong>상품 정보와 가격 새로 불러오기</strong><small>최신 상품 정보를 불러와요.</small></span></div><button className="button button-small button-light" type="button" data-testid="accessory-detail-refresh" onClick={onRefresh} disabled={refreshing}>{refreshing ? <><FiLoader className="spin" /> 불러오는 중...</> : <><FiRefreshCw /> 새로 불러오기</>}</button></div>}
     {refreshMessage && <p className="accessory-detail-refresh-feedback success" data-testid="accessory-detail-refresh-success"><FiCheck /> {refreshMessage}</p>}
     {refreshError && <p className="accessory-detail-refresh-feedback error" data-testid="accessory-detail-refresh-error" role="alert"><FiXCircle /> {refreshError}</p>}
     {refreshDiffs !== undefined && <CatalogRefreshDiffPanel diffs={refreshDiffs} kind="accessory" />}
-    <div className="accessory-detail-price"><div><span>예상 가격</span><small className={`accessory-detail-price-evidence ${priceEvidence}`} data-testid="accessory-price-evidence">{priceKindLabel}</small></div><strong>{formatWon(item.priceWon)}</strong></div>
+    <div className="accessory-detail-price"><div><span>예상 가격</span></div><strong>{formatWon(item.priceWon)}</strong></div>
     <section className={`accessory-detail-price-history ${decision.state}`} aria-label="주변 부품 가격 이력" data-testid="accessory-detail-price-history"><div className="accessory-detail-price-history-heading"><div><strong>가격 이력</strong><small>{decision.label}</small></div><label><span>기간</span><select aria-label="주변 부품 가격 이력 기간" value={priceHistoryDays} onChange={(event) => setPriceHistoryDays(Number(event.target.value) as 7 | 30 | 90)}><option value={7}>7일</option><option value={30}>30일</option><option value={90}>90일</option></select></label></div>{priceHistoryLoading ? <p className="accessory-detail-price-history-state"><FiLoader className="spin" /> 가격 이력을 불러오는 중...</p> : priceHistoryError ? <p className="accessory-detail-price-history-state error" role="alert"><FiXCircle /> {priceHistoryError} <button className="text-button" type="button" onClick={() => setPriceHistoryRetryNonce((current) => current + 1)}><FiRefreshCw /> 다시 확인</button></p> : !priceHistory || priceHistory.summary.sampleCount === 0 ? <p className="accessory-detail-price-history-state"><FiInfo /> 선택한 기간에 가격 변동이 없어요.</p> : <><div className="accessory-detail-price-history-summary"><span>최근 {priceHistory.windowDays}일 {priceHistory.summary.sampleCount}회</span>{priceHistory.summary.minPriceWon !== undefined && <span>최저 {formatWon(priceHistory.summary.minPriceWon)}</span>}{priceHistory.summary.maxPriceWon !== undefined && <span>최고 {formatWon(priceHistory.summary.maxPriceWon)}</span>}{priceHistory.summary.currentPositionPercent !== undefined && <span>현재 위치 {priceHistory.summary.currentPositionPercent.toFixed(1)}%</span>}</div>{priceHistory.points.length > 0 && <div className="accessory-detail-price-history-chart" role="img" aria-label={`${item.name} 최근 ${priceHistory.windowDays}일 가격 추세`}>{priceHistory.points.map((point) => <span key={point.changeId} style={{ height: historyBarHeight(priceHistory, point.priceWon) + "%" }} title={`${point.priceWon.toLocaleString("ko-KR")}원 · ${new Date(point.changedAt).toLocaleDateString("ko-KR")}`} />)}</div>}</>}</section>
-    {rows.length > 0 ? <dl className="accessory-detail-specs">{rows.map(([label, value]) => <div key={`${label}-${value}`}><dt>{label}</dt><dd>{value}</dd></div>)}</dl> : <p className="accessory-detail-empty"><FiInfo /> 등록된 상세 규격이 없어요.</p>}
+    {rows.length > 0 ? <dl className="accessory-detail-specs">{rows.map(([label, value]) => <div key={`${label}-${value}`}><dt>{label}</dt><dd>{value}</dd></div>)}</dl> : <p className="accessory-detail-empty"><FiInfo /> 상세 사양이 없어요.</p>}
     {item.missingFields.length > 0 && <p className="accessory-detail-missing"><FiInfo /> 사양 미등록 · {item.missingFields.slice(0, 5).map((field) => catalogMissingFieldLabelFor(field)).join(", ")}{item.missingFields.length > 5 ? ` 외 ${item.missingFields.length - 5}개` : ""}</p>}
-    {item.rawSpecText && <details className="accessory-detail-raw"><summary>상세 규격 보기</summary><p>{item.rawSpecText}</p></details>}
+
     <div className="accessory-detail-actions"><button className={watching ? "text-button accessory-watch-button watched" : "text-button accessory-watch-button"} type="button" onClick={() => { if (onWatch()) setWatching(true); }} disabled={watching} aria-label={`${item.name} 가격 추적 ${watching ? "등록됨" : "등록"}`}><FiClock /> {watching ? "추적 중" : "가격 추적"}</button><button className="button button-light" type="button" onClick={onOpenWatchlist}><FiClock /> 가격 추적 화면</button><button className="button button-primary" type="button" onClick={onAdd} disabled={selected}>{selected ? <><FiCheck /> 견적에 추가됨</> : <><FiPlus /> 견적에 추가</>}</button>{sourceUrl && <a className="button button-light" href={sourceUrl} target="_blank" rel="noreferrer"><FiExternalLink /> 상품 페이지 열기</a>}</div>
-    <p className="accessory-detail-note"><FiTool /> 견적에 추가할 주변 부품이에요. 연결 대상을 지정하면 호환성 결과에 반영돼요.</p>
   </section>;
 }

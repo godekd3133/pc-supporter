@@ -96,9 +96,9 @@ export function accessoryIsWatched(item: AccessoryItem) {
 
 export function PartEvidence({ part }: { part: Part }) {
   return <div className="part-evidence" aria-label={`${part.name} 상세 스펙`}>
-    <div className="part-evidence-price"><span>예상 가격</span><strong>{isKnownPrice(part.priceWon) ? formatWon(part.priceWon) : "가격 미확인"}</strong></div>
+    <div className="part-evidence-price"><span>예상 가격</span><strong>{isKnownPrice(part.priceWon) ? formatWon(part.priceWon) : "가격 정보 없음"}</strong></div>
     <div className="part-evidence-grid">{suggestionSpecRows(part).map(([label, value]) => <div className="part-evidence-row" key={label}><span>{label}</span><strong>{formatSpecValue(value)}</strong></div>)}</div>
-    {part.missingFields.length > 0 && <p className="part-evidence-missing"><FiInfo /> 사양 미확인: {part.missingFields.map((field) => catalogMissingFieldLabelFor(field)).join(", ")}</p>}
+    {part.missingFields.length > 0 && <p className="part-evidence-missing"><FiInfo /> 사양 정보 없음: {part.missingFields.map((field) => catalogMissingFieldLabelFor(field)).join(", ")}</p>}
   </div>;
 }
 

@@ -24,11 +24,10 @@ import { accessorySelections, selectionList } from "./build-edit";
 import { CategoryIcon } from "./part-visuals";
 import { currentDraftComparisonFor } from "./result-shared";
 import { readSavedBuildOwnerToken } from "./saved-build-storage";
-import { SavedBuildCheckBadge, SavedBuildCheckTimeline, myPcAssetReportFor, savedAccessoryLineText, savedCheckAnalysisText, savedCheckDriftText, savedCheckReferenceText, savedCheckRiskText, savedCheckStatusText, savedCoreLineText, savedPreferenceText, savedPriceText } from "./SavedCheckTimeline";
+import { SavedBuildCheckBadge, SavedBuildCheckTimeline, myPcAssetReportFor, savedAccessoryLineText, savedCheckDriftText, savedCheckRiskText, savedCheckStatusText, savedCoreLineText, savedPreferenceText, savedPriceText } from "./SavedCheckTimeline";
 
 const LazySavedBuildPriorityPanel = lazy(() => import("./SavedBuildInsights").then((module) => ({ default: module.SavedBuildPriorityPanel })));
 const LazySavedBuildVersionPanel = lazy(() => import("./SavedBuildInsights").then((module) => ({ default: module.SavedBuildVersionPanel })));
-const LazySavedBuildComparisonDecisionSummary = lazy(() => import("./SavedBuildComparisonDecision").then((module) => ({ default: module.SavedBuildComparisonDecisionSummary })));
 const LazySavedBuildPurchaseProgressComparison = lazy(() => import("./SavedBuildPurchaseProgressComparison").then((module) => ({ default: module.SavedBuildPurchaseProgressComparison })));
 const LazySavedBuildPurchasePriceHistoryComparison = lazy(() => import("./SavedBuildPurchasePriceHistoryComparison").then((module) => ({ default: module.SavedBuildPurchasePriceHistoryComparison })));
 const LazySavedBuildPurchasePriceHistoryPanel = lazy(() => import("./SavedBuildPurchasePriceHistoryPanel").then((module) => ({ default: module.SavedBuildPurchasePriceHistoryPanel })));
@@ -93,16 +92,14 @@ export function BuildComparisonPanel({ builds, onOpenBuild, openingBuildId, onLi
     { label: "주변 부품 금액", values: builds.map((saved) => savedPriceText(saved, "accessoryTotalPriceWon")) },
     { label: "저장 당시 호환 상태", values: builds.map((saved) => saved.checkSnapshot ? savedCheckStatusText(saved.checkSnapshot.status) : saved.id === "current-draft" ? "저장 전 구성" : "검사 기록 없음") },
     { label: "저장 당시 호환 항목", values: builds.map((saved) => saved.checkSnapshot ? savedCheckRiskText(saved.checkSnapshot) : "기록 없음") },
-    { label: "저장 당시 성능 분석", values: builds.map((saved) => saved.checkSnapshot ? savedCheckAnalysisText(saved.checkSnapshot) : "기록 없음") },
-    { label: "저장 당시 검사 버전", values: builds.map((saved) => saved.checkSnapshot ? savedCheckReferenceText(saved.checkSnapshot) : "기록 없음") },
     { label: "추천 기준", values: builds.map(savedPreferenceText) },
     ...PART_CATEGORIES.map((category) => ({ label: CATEGORY_LABELS[category], values: builds.map((saved) => savedCoreLineText(saved, category)) })),
     { label: "주변 부품", values: builds.map(savedAccessoryLineText) }
   ];
 
   function liveStatusFor(check: SavedBuildLiveCheck | undefined) {
-    if (!check || check.status === "loading") return "현재 카탈로그 재검사 중...";
-    if (check.status === "error") return "재검사 실패 · " + check.message;
+    if (!check || check.status === "loading") return "현재 호환 정보를 불러오는 중...";
+    if (check.status === "error") return "호환 정보를 불러오지 못했어요 · " + check.message;
     return check.result.status === "compatible" ? "호환 가능" : check.result.status === "needs_review" ? "확인 필요" : "호환 불가";
   }
 
@@ -113,30 +110,17 @@ export function BuildComparisonPanel({ builds, onOpenBuild, openingBuildId, onLi
   }
 
 
-  function liveAnalysisFor(check: SavedBuildLiveCheck | undefined) {
-    if (!check || check.status === "loading") return "계산 중...";
-    if (check.status === "error") return "확인 불가";
-    const analysis = check.result.analysis;
-    return analysis.overallScore === undefined ? analysis.scoreLabel : analysis.overallScore + "점 · " + analysis.scoreLabel;
-  }
 
   function livePriceFor(check: SavedBuildLiveCheck | undefined) {
     if (!check || check.status === "loading") return "계산 중...";
     if (check.status === "error") return "확인 불가";
-    return check.result.priceComplete ? formatWon(check.result.totalPriceWon) : "가격 확인 필요";
+    return check.result.priceComplete ? formatWon(check.result.totalPriceWon) : "가격 정보 없음";
   }
 
   const liveRows: Array<{ label: string; values: string[] }> = [
     { label: "현재 호환 상태", values: builds.map((saved) => liveStatusFor(liveChecks[saved.id])) },
     { label: "현재 호환 항목", values: builds.map((saved) => liveRiskFor(liveChecks[saved.id])) },
-    { label: "현재 성능 분석", values: builds.map((saved) => liveAnalysisFor(liveChecks[saved.id])) },
     { label: "현재 예상 금액", values: builds.map((saved) => livePriceFor(liveChecks[saved.id])) },
-    { label: "현재 검사 버전", values: builds.map((saved) => {
-      const check = liveChecks[saved.id];
-      if (!check || check.status === "loading") return "확인 중...";
-      if (check.status === "error") return "확인 불가";
-      return check.result.engineVersion + " · " + new Date(check.result.checkedAt).toLocaleString("ko-KR");
-    })},
     { label: "부품·가격 변화", values: builds.map((saved) => savedCheckDriftText(saved, liveChecks[saved.id])) }
   ];
 
@@ -182,7 +166,7 @@ export function BuildComparisonPanel({ builds, onOpenBuild, openingBuildId, onLi
 
   const includesCurrentDraft = builds.some((saved) => saved.id === "current-draft");
   const baselineName = builds[0]?.name ?? "첫 번째 견적";
-  return <section className="history-comparison" aria-label="견적 검사 기록 비교" data-testid="saved-build-current-comparison"><div className="history-comparison-heading"><div><h2>{includesCurrentDraft ? "견적 검사 기록 비교" : "저장 견적 비교"}</h2><p>저장할 때와 지금의 호환 상태·성능·가격을 비교합니다.</p></div><div className="history-comparison-heading-actions"><span>{builds.length}개 선택</span><button className="text-button history-comparison-export-button" type="button" onClick={() => void copyComparison()}><FiCopy /> 비교 복사</button><button className="text-button history-comparison-export-button" type="button" onClick={() => void downloadComparison("csv")}><FiDownload /> CSV 저장</button><button className="text-button history-comparison-export-button" type="button" onClick={() => void downloadComparison("json")}><FiDownload /> JSON 저장</button><button className="button button-light" type="button" onClick={() => setReloadToken((current) => current + 1)} disabled={isReloading}><FiRefreshCw /> {isReloading ? "재검사 중..." : "현재 기준 다시 검사"}</button></div></div>{exportMessage && <p className="history-comparison-export-message" role="status">{exportMessage}</p>}<Suspense fallback={<div className="history-comparison-decision" role="status"><p className="history-comparison-decision-note">결정 요약을 불러오는 중...</p></div>}><LazySavedBuildComparisonDecisionSummary builds={builds} liveChecks={liveChecks} formatWon={formatWon} onOpenBuild={onOpenBuild} openingBuildId={openingBuildId} /></Suspense><div className="history-comparison-diff-toolbar"><div className="history-comparison-diff-summary"><FiLayers /><div><strong>비교 기준 · {baselineName}</strong><small>기준 견적과 다른 값 {changedCellCount}개 셀 · {changedRowCount}개 항목</small></div></div><div className="history-comparison-diff-controls" role="group" aria-label="비교표 표시 방식"><button className={!showDifferencesOnly ? "selected" : ""} type="button" aria-pressed={!showDifferencesOnly} onClick={() => setShowDifferencesOnly(false)}>전체 {allComparisonRows.length}</button><button className={showDifferencesOnly ? "selected" : ""} type="button" aria-pressed={showDifferencesOnly} onClick={() => setShowDifferencesOnly(true)} disabled={changedRowCount === 0}>차이만 {changedRowCount}</button></div></div>{showDifferencesOnly && <p className="history-comparison-diff-status" role="status"><FiInfo /> 첫 번째 견적과 값이 다른 항목만 표시하고 있습니다. 비교표의 기준 열은 강조하지 않습니다.</p>}<div className="history-comparison-table-wrap"><table><caption>{showDifferencesOnly ? "첫 번째 견적과 다른 항목만 표시한 비교 표" : "저장 당시 검사 결과와 현재 기준 재검사 결과 비교 표"}</caption><thead><tr><th scope="col">비교 항목</th>{builds.map((saved, index) => <th scope="col" key={saved.id}><span className="history-comparison-column-name">{saved.name}</span>{index === 0 && <small className="history-comparison-column-baseline">비교 기준</small>}</th>)}</tr></thead><tbody>{visibleSnapshotRows.length > 0 ? visibleSnapshotRows.map((row) => renderRow(row, "snapshot")) : <tr><td className="history-comparison-empty" colSpan={builds.length + 1}>기준 견적과 다른 저장 시점 항목이 없습니다.</td></tr>}</tbody><tbody className="history-comparison-live-body"><tr><th colSpan={builds.length + 1}>현재 부품 정보로 다시 확인</th></tr>{visibleLiveRows.length > 0 ? visibleLiveRows.map((row) => renderRow(row, "live")) : <tr><td className="history-comparison-empty" colSpan={builds.length + 1}>기준 견적과 다른 현재 재검사 항목이 없습니다.</td></tr>}</tbody></table></div><p className="history-comparison-note"><FiInfo /> 저장 당시 결과와 현재 부품 정보로 다시 확인한 결과를 보여줍니다. 현재 기준으로 다시 확인해도 저장된 견적은 바뀌지 않습니다.</p></section>;
+  return <section className="history-comparison" aria-label="견적 검사 기록 비교" data-testid="saved-build-current-comparison"><div className="history-comparison-heading"><div><h2>{includesCurrentDraft ? "견적 검사 기록 비교" : "저장 견적 비교"}</h2><p>저장 당시와 현재의 부품 구성·가격·호환 상태를 비교해요.</p></div><div className="history-comparison-heading-actions"><span>{builds.length}개 선택</span><button className="text-button history-comparison-export-button" type="button" onClick={() => void copyComparison()}><FiCopy /> 비교 복사</button><button className="text-button history-comparison-export-button" type="button" onClick={() => void downloadComparison("csv")}><FiDownload /> CSV 저장</button><button className="text-button history-comparison-export-button" type="button" onClick={() => void downloadComparison("json")}><FiDownload /> JSON 저장</button><button className="button button-light" type="button" onClick={() => setReloadToken((current) => current + 1)} disabled={isReloading}><FiRefreshCw /> {isReloading ? "재검사 중..." : "현재 부품으로 다시 비교"}</button></div></div>{exportMessage && <p className="history-comparison-export-message" role="status">{exportMessage}</p>}<div className="history-comparison-diff-toolbar"><div className="history-comparison-diff-summary"><FiLayers /><div><strong>비교 기준 · {baselineName}</strong><small>기준 견적과 다른 값 {changedCellCount}개 셀 · {changedRowCount}개 항목</small></div></div><div className="history-comparison-diff-controls" role="group" aria-label="비교표 표시 방식"><button className={!showDifferencesOnly ? "selected" : ""} type="button" aria-pressed={!showDifferencesOnly} onClick={() => setShowDifferencesOnly(false)}>전체 {allComparisonRows.length}</button><button className={showDifferencesOnly ? "selected" : ""} type="button" aria-pressed={showDifferencesOnly} onClick={() => setShowDifferencesOnly(true)} disabled={changedRowCount === 0}>차이만 {changedRowCount}</button></div></div>{showDifferencesOnly && <p className="history-comparison-diff-status" role="status"><FiInfo /> 첫 번째 견적과 값이 다른 항목만 표시하고 있습니다. 비교표의 기준 열은 강조하지 않습니다.</p>}<div className="history-comparison-table-wrap"><table><caption>{showDifferencesOnly ? "첫 번째 견적과 다른 항목만 표시한 비교 표" : "저장 당시와 현재의 부품·가격·호환 상태 비교"}</caption><thead><tr><th scope="col">비교 항목</th>{builds.map((saved, index) => <th scope="col" key={saved.id}><span className="history-comparison-column-name">{saved.name}</span>{index === 0 && <small className="history-comparison-column-baseline">비교 기준</small>}</th>)}</tr></thead><tbody>{visibleSnapshotRows.length > 0 ? visibleSnapshotRows.map((row) => renderRow(row, "snapshot")) : <tr><td className="history-comparison-empty" colSpan={builds.length + 1}>기준 견적과 다른 저장 시점 항목이 없습니다.</td></tr>}</tbody><tbody className="history-comparison-live-body"><tr><th colSpan={builds.length + 1}>현재 부품 정보로 다시 확인</th></tr>{visibleLiveRows.length > 0 ? visibleLiveRows.map((row) => renderRow(row, "live")) : <tr><td className="history-comparison-empty" colSpan={builds.length + 1}>기준 견적과 다른 현재 재검사 항목이 없습니다.</td></tr>}</tbody></table></div><p className="history-comparison-note"><FiInfo /> 저장 당시와 현재 부품의 가격·호환 상태를 비교해요.</p></section>;
 }
 
 export function SavedBuildMonitorCardState({ item, loading }: { item: SavedBuildMonitorItem | undefined; loading: boolean }) {
@@ -203,7 +187,7 @@ export function SavedBuildMonitorCardState({ item, loading }: { item: SavedBuild
     <div>
       <div className="history-health-card-heading"><strong>{assessment.label}</strong><span>{savedCheckStatusText(item.snapshot.status)}</span></div>
       <p>{assessment.summary}</p>
-      <small>현재 점검 {new Date(item.snapshot.checkedAt).toLocaleString("ko-KR", { dateStyle: "short", timeStyle: "short" })} · {item.snapshot.priceComplete ? formatWon(item.snapshot.totalPriceWon) : "가격 확인 필요"}</small>
+      <small>현재 점검 {new Date(item.snapshot.checkedAt).toLocaleString("ko-KR", { dateStyle: "short", timeStyle: "short" })} · {item.snapshot.priceComplete ? formatWon(item.snapshot.totalPriceWon) : "가격 정보 없음"}</small>
     </div>
   </div>;
 }
@@ -223,22 +207,22 @@ export function serverMonitorIntervalText(minutes: SavedBuildServerMonitorInterv
 }
 
 export function serverMonitorAlertPolicyText(policy: SavedBuildServerMonitorAlertPolicy) {
-  return policy === "critical" ? "위험 악화만" : policy === "risk" ? "위험 변화" : "모든 변화";
+  return policy === "critical" ? "호환 문제 증가" : policy === "risk" ? "호환 상태 변화" : "모든 변경";
 }
 
 export function SavedBuildServerMonitorPanel({ builds, states, busyBuildId, onConfigure, onRun, onReload }: { builds: SavedBuild[]; states: Record<string, SavedBuildServerMonitorViewState>; busyBuildId: string | null; onConfigure: (build: SavedBuild, enabled: boolean, intervalMinutes: SavedBuildServerMonitorInterval, alertPolicy: SavedBuildServerMonitorAlertPolicy) => void; onRun: (build: SavedBuild) => void; onReload: () => void }) {
-  return <section className="history-server-monitor" aria-label="소유자 서버 백그라운드 점검" data-testid="saved-build-server-monitor">
-    <div className="history-server-monitor-heading"><div><h2><FiServer /> 서버 점검</h2><p>이 브라우저에서 관리할 수 있는 견적을 1·6·24시간 간격으로 점검합니다.</p></div><button className="button button-light" type="button" onClick={onReload} disabled={busyBuildId !== null}><FiRefreshCw /> 상태 새로고침</button></div>
+  return <section className="history-server-monitor" aria-label="저장 견적 자동 업데이트" data-testid="saved-build-server-monitor">
+    <div className="history-server-monitor-heading"><div><h2><FiServer /> 견적 정보 업데이트</h2><p>저장한 견적의 가격과 호환 상태를 1·6·24시간 간격으로 갱신해요.</p></div><button className="button button-light" type="button" onClick={onReload} disabled={busyBuildId !== null}><FiRefreshCw /> 업데이트 상태 갱신</button></div>
     <div className="history-server-monitor-list">{builds.map((build) => {
       const state = states[build.id];
-      if (!state || state.status === "loading") return <article className="history-server-monitor-row loading" key={build.id}><FiLoader className="spin" /><div><strong>{build.name}</strong><span>서버 모니터링 상태를 불러오는 중...</span></div></article>;
+      if (!state || state.status === "loading") return <article className="history-server-monitor-row loading" key={build.id}><FiLoader className="spin" /><div><strong>{build.name}</strong><span>업데이트 설정을 불러오는 중...</span></div></article>;
       if (state.status === "error") return <article className="history-server-monitor-row error" key={build.id}><FiXCircle /><div><strong>{build.name}</strong><span>{state.message}</span></div><button className="text-button" type="button" onClick={onReload}>다시 시도</button></article>;
       const subscription = state.value.subscription;
       const busy = busyBuildId === build.id;
       return <article className={subscription.enabled ? "history-server-monitor-row enabled" : "history-server-monitor-row"} key={build.id}>
         <span className="history-server-monitor-icon"><FiServer /></span>
-        <div className="history-server-monitor-copy"><div><strong>{build.name}</strong><em>{subscription.enabled ? "서버 점검 사용 중" : "서버 점검 꺼짐"}</em></div><small>{subscription.lastCheckedAt ? `마지막 성공 ${new Date(subscription.lastCheckedAt).toLocaleString("ko-KR")}` : "아직 서버 점검 기록 없음"}{subscription.nextCheckAt && subscription.enabled ? ` · 다음 예정 ${new Date(subscription.nextCheckAt).toLocaleString("ko-KR")}` : ""} · 서버 알림 {subscription.alerts.filter((alert) => !alert.dismissedAt).length}건 · 정책 {serverMonitorAlertPolicyText(subscription.alertPolicy)}</small>{subscription.lastError && <p><FiAlertTriangle /> 최근 오류 · {subscription.lastError}</p>}</div>
-        <div className="history-server-monitor-controls"><label><input type="checkbox" aria-label={`${build.name} 서버 백그라운드 점검`} checked={subscription.enabled} onChange={(event) => onConfigure(build, event.target.checked, subscription.intervalMinutes, subscription.alertPolicy)} disabled={busy} /><span>{subscription.enabled ? "사용 중" : "사용"}</span></label><select aria-label={`${build.name} 서버 점검 주기`} value={subscription.intervalMinutes} onChange={(event) => onConfigure(build, subscription.enabled, Number(event.target.value) as SavedBuildServerMonitorInterval, subscription.alertPolicy)} disabled={busy}>{SAVED_BUILD_SERVER_MONITOR_INTERVALS.map((minutes) => <option value={minutes} key={minutes}>{serverMonitorIntervalText(minutes)}</option>)}</select><select aria-label={`${build.name} 서버 알림 정책`} value={subscription.alertPolicy} onChange={(event) => onConfigure(build, subscription.enabled, subscription.intervalMinutes, event.target.value as SavedBuildServerMonitorAlertPolicy)} disabled={busy}>{SAVED_BUILD_SERVER_MONITOR_ALERT_POLICIES.map((policy) => <option value={policy} key={policy}>{serverMonitorAlertPolicyText(policy)}</option>)}</select><button className="button button-small button-light" type="button" onClick={() => onRun(build)} disabled={busy}>{busy ? <><FiLoader className="spin" /> 처리 중...</> : <><FiRefreshCw /> 지금 점검</>}</button></div>
+        <div className="history-server-monitor-copy"><div><strong>{build.name}</strong><em>{subscription.enabled ? "자동 업데이트 중" : "자동 업데이트 꺼짐"}</em></div><small>{subscription.lastCheckedAt ? `마지막 성공 ${new Date(subscription.lastCheckedAt).toLocaleString("ko-KR")}` : "아직 업데이트한 기록이 없어요."}{subscription.nextCheckAt && subscription.enabled ? ` · 다음 예정 ${new Date(subscription.nextCheckAt).toLocaleString("ko-KR")}` : ""} · 알림 {subscription.alerts.filter((alert) => !alert.dismissedAt).length}건 · 정책 {serverMonitorAlertPolicyText(subscription.alertPolicy)}</small>{subscription.lastError && <p><FiAlertTriangle /> 최근 오류 · {subscription.lastError}</p>}</div>
+        <div className="history-server-monitor-controls"><label><input type="checkbox" aria-label={`${build.name} 자동 업데이트`} checked={subscription.enabled} onChange={(event) => onConfigure(build, event.target.checked, subscription.intervalMinutes, subscription.alertPolicy)} disabled={busy} /><span>{subscription.enabled ? "사용 중" : "사용"}</span></label><select aria-label={`${build.name} 업데이트 주기`} value={subscription.intervalMinutes} onChange={(event) => onConfigure(build, subscription.enabled, Number(event.target.value) as SavedBuildServerMonitorInterval, subscription.alertPolicy)} disabled={busy}>{SAVED_BUILD_SERVER_MONITOR_INTERVALS.map((minutes) => <option value={minutes} key={minutes}>{serverMonitorIntervalText(minutes)}</option>)}</select><select aria-label={`${build.name} 알림 정책`} value={subscription.alertPolicy} onChange={(event) => onConfigure(build, subscription.enabled, subscription.intervalMinutes, event.target.value as SavedBuildServerMonitorAlertPolicy)} disabled={busy}>{SAVED_BUILD_SERVER_MONITOR_ALERT_POLICIES.map((policy) => <option value={policy} key={policy}>{serverMonitorAlertPolicyText(policy)}</option>)}</select><button className="button button-small button-light" type="button" onClick={() => onRun(build)} disabled={busy}>{busy ? <><FiLoader className="spin" /> 처리 중...</> : <><FiRefreshCw /> 지금 업데이트</>}</button></div>
       </article>;
     })}</div>
 
@@ -290,7 +274,7 @@ export function SavedBuildPriorityPanel({ rows, actionStates, openingBuildId, on
         
         <div className="saved-build-priority-action"><span>{priorityRiskDeltaText(row)}</span><button className="text-button" type="button" onClick={() => onAnalyzeAction(row.id)} disabled={actionState?.status === "loading"}>{actionState?.status === "loading" ? <><FiLoader className="spin" /> 추천 부품을 찾는 중...</> : actionState?.status === "ready" ? <><FiRefreshCw /> 다시 계산</> : <><FiZap /> 추천 보기</>}</button><button className="text-button" type="button" onClick={() => onOpen(row.id)} disabled={openingBuildId !== null}>{openingBuildId === row.id ? <><FiLoader className="spin" /> 불러오는 중...</> : <><FiExternalLink /> 견적 보기</>}</button></div>
         {actionState?.status === "error" && <div className="saved-build-priority-action-detail error" role="alert"><FiXCircle /><span>{actionState.message}</span><button className="text-button" type="button" onClick={() => onAnalyzeAction(row.id)}>다시 시도</button></div>}
-        {actionValue && <div className="saved-build-priority-action-detail" data-testid={`saved-build-priority-action-${row.id}`}><div className="saved-build-priority-action-heading"><strong>{actionValue.title}</strong><span>{actionValue.kind === "repair_plan" ? "전체 수리 플랜" : actionValue.kind === "analysis" ? "부품 추천" : "추가 부품 없음"}</span></div>{actionValue.nextAction && <p className="saved-build-priority-action-next"><FiZap /> <strong>추천</strong> {actionValue.nextAction}</p>}{actionValue.changes.length > 0 && <div className="saved-build-priority-action-changes">{actionValue.changes.slice(0, 3).map((change) => <span key={`${change.category}-${change.toPartName}-${change.toQuantity ?? ""}`}><b>{CATEGORY_LABELS[change.category]}</b>{change.kind === "change_quantity" ? `${change.fromQuantity ?? "?"}개 → ${change.toQuantity ?? "?"}개` : `${change.fromPartName ?? "현재 선택"} → ${change.toPartName}`}{change.priceDeltaWon !== undefined ? ` · ${formatPriceDelta(change.priceDeltaWon)}` : ""}</span>)}</div>}<div className="saved-build-priority-action-stats"><span><strong>{actionValue.resolvedBlockers}</strong>개 차단 감소</span><span><strong>{actionValue.remainingBlockers}</strong>개 차단 남음</span><span><strong>{actionValue.remainingWarnings}</strong>개 주의 남음</span><span><strong>{actionValue.remainingUnknown}</strong>개 확인 필요</span>{actionValue.priceDeltaWon !== undefined && <span><strong>{formatPriceDelta(actionValue.priceDeltaWon)}</strong> 총액 변화</span>}{actionValue.afterTotalPriceWon !== undefined && <span><strong>{actionValue.priceComplete ? formatWon(actionValue.afterTotalPriceWon) : "가격 확인 필요"}</strong> 적용 후 금액</span>}</div><p className="saved-build-priority-action-summary">{actionValue.summary}</p></div>}
+        {actionValue && <div className="saved-build-priority-action-detail" data-testid={`saved-build-priority-action-${row.id}`}><div className="saved-build-priority-action-heading"><strong>{actionValue.title}</strong><span>{actionValue.kind === "repair_plan" ? "전체 수리 플랜" : actionValue.kind === "analysis" ? "부품 추천" : "추가 부품 없음"}</span></div>{actionValue.nextAction && <p className="saved-build-priority-action-next"><FiZap /> <strong>추천</strong> {actionValue.nextAction}</p>}{actionValue.changes.length > 0 && <div className="saved-build-priority-action-changes">{actionValue.changes.slice(0, 3).map((change) => <span key={`${change.category}-${change.toPartName}-${change.toQuantity ?? ""}`}><b>{CATEGORY_LABELS[change.category]}</b>{change.kind === "change_quantity" ? `${change.fromQuantity ?? "?"}개 → ${change.toQuantity ?? "?"}개` : `${change.fromPartName ?? "현재 선택"} → ${change.toPartName}`}{change.priceDeltaWon !== undefined ? ` · ${formatPriceDelta(change.priceDeltaWon)}` : ""}</span>)}</div>}<div className="saved-build-priority-action-stats"><span><strong>{actionValue.resolvedBlockers}</strong>개 차단 감소</span><span><strong>{actionValue.remainingBlockers}</strong>개 차단 남음</span><span><strong>{actionValue.remainingWarnings}</strong>개 주의 남음</span><span><strong>{actionValue.remainingUnknown}</strong>개 확인 필요</span>{actionValue.priceDeltaWon !== undefined && <span><strong>{formatPriceDelta(actionValue.priceDeltaWon)}</strong> 총액 변화</span>}{actionValue.afterTotalPriceWon !== undefined && <span><strong>{actionValue.priceComplete ? formatWon(actionValue.afterTotalPriceWon) : "가격 정보 없음"}</strong> 적용 후 금액</span>}</div><p className="saved-build-priority-action-summary">{actionValue.summary}</p></div>}
       </article>;
     })}</div>}
     <p className="saved-build-priority-note"><FiInfo /> 가격과 호환 상태가 달라진 견적을 먼저 보여드려요.</p>
@@ -378,7 +362,7 @@ export function HistoryView({ builds, currentBuild, currentPreferences, partMap,
   const purchaseProgressRows = useMemo(() => builds.map((build) => ({ build, summary: savedBuildPurchaseProgressSummaryFor(build.purchaseProgress) })), [builds]);
   const purchaseProgressFilterOptions: Array<{ id: SavedBuildPurchaseProgressFilter; label: string; count: number }> = [
     { id: "all", label: "전체", count: builds.length },
-    { id: "recorded", label: "서버 기록 있음", count: purchaseProgressRows.filter(({ summary }) => summary.status !== "unrecorded").length },
+    { id: "recorded", label: "저장 기록 있음", count: purchaseProgressRows.filter(({ summary }) => summary.status !== "unrecorded").length },
     { id: "in-progress", label: "구매 진행 중", count: purchaseProgressRows.filter(({ summary }) => summary.status === "in-progress").length },
     { id: "completed", label: "모두 구매 완료", count: purchaseProgressRows.filter(({ summary }) => summary.status === "completed").length },
     { id: "unrecorded", label: "진행률 기록 없음", count: purchaseProgressRows.filter(({ summary }) => summary.status === "unrecorded").length }
@@ -448,7 +432,7 @@ export function HistoryView({ builds, currentBuild, currentPreferences, partMap,
         const value = await api<SavedBuildMonitorSubscriptionResponse>(`/api/builds/${encodeURIComponent(build.id)}/monitor`, { headers: { "X-Share-Owner-Token": token }, retry: 1 });
         return [build.id, { status: "ready" as const, value }] as const;
       } catch (error: unknown) {
-        return [build.id, { status: "error" as const, message: error instanceof Error ? error.message : "서버 모니터링 상태를 불러오지 못했습니다." }] as const;
+        return [build.id, { status: "error" as const, message: error instanceof Error ? error.message : "견적 상태를 불러오지 못했어요." }] as const;
       }
     })).then((entries) => {
       if (cancelled) return;
@@ -534,7 +518,7 @@ export function HistoryView({ builds, currentBuild, currentPreferences, partMap,
       }
       if (addedCount > 0) onToast(`저장 견적 변화 알림 ${addedCount}건을 추가했습니다.`);
     }).catch((error: unknown) => {
-      if (!cancelled) setMonitorError(error instanceof Error ? error.message : "저장 견적 전체 점검에 실패했습니다.");
+      if (!cancelled) setMonitorError(error instanceof Error ? error.message : "저장 견적 상태를 불러오지 못했어요.");
     }).finally(() => {
       if (!cancelled) setMonitorLoading(false);
     });
@@ -630,7 +614,7 @@ export function HistoryView({ builds, currentBuild, currentPreferences, partMap,
         if (!isCurrent()) return;
         applyServerMonitorResponse(checked);
       }
-      if (isCurrent()) onToast(enabled ? `${build.name} 서버 점검을 ${serverMonitorIntervalText(intervalMinutes)} · ${serverMonitorAlertPolicyText(alertPolicy)}로 설정했습니다.` : `${build.name} 서버 백그라운드 점검을 껐습니다.`);
+      if (isCurrent()) onToast(enabled ? `${build.name} 자동 업데이트를 ${serverMonitorIntervalText(intervalMinutes)} · ${serverMonitorAlertPolicyText(alertPolicy)}로 설정했어요.` : `${build.name} 자동 업데이트를 껐어요.`);
     } catch (error: unknown) {
       if (isCurrent()) onToast(error instanceof Error ? error.message : "서버 모니터링 설정에 실패했습니다.");
     } finally {
@@ -653,9 +637,9 @@ export function HistoryView({ builds, currentBuild, currentPreferences, partMap,
       const checked = await api<SavedBuildMonitorSubscriptionResponse>(`/api/builds/${encodeURIComponent(build.id)}/monitor/run`, { method: "POST", headers: { "X-Share-Owner-Token": token }, retry: 0 });
       if (!isCurrent()) return;
       applyServerMonitorResponse(checked);
-      if (isCurrent()) onToast(`${build.name} 서버 점검을 완료했습니다.`);
+      if (isCurrent()) onToast(`${build.name} 견적 정보를 업데이트했어요.`);
     } catch (error: unknown) {
-      if (isCurrent()) onToast(error instanceof Error ? error.message : "서버 점검에 실패했습니다.");
+      if (isCurrent()) onToast(error instanceof Error ? error.message : "견적 정보를 업데이트하지 못했어요.");
     } finally {
       if (isCurrent()) setServerMonitorBusyBuildId(null);
     }
@@ -679,7 +663,7 @@ export function HistoryView({ builds, currentBuild, currentPreferences, partMap,
     }));
     if (!isCurrent()) return;
     results.filter((value): value is SavedBuildMonitorSubscriptionResponse & { updated: number } => Boolean(value)).forEach(applyServerMonitorResponse);
-    if (results.some((value) => value === null) && isCurrent()) onToast("일부 서버 모니터 알림 상태를 동기화하지 못했습니다. 로컬 알림 상태는 유지됩니다.");
+    if (results.some((value) => value === null) && isCurrent()) onToast("일부 알림을 불러오지 못했어요.");
   }
 
   function markAllMonitorAlertsRead() {
@@ -813,11 +797,11 @@ export function HistoryView({ builds, currentBuild, currentPreferences, partMap,
     {builds.length > 0 && !monitorLoading && <Suspense fallback={<div className="shared-build-state" data-testid="saved-build-priority-loading"><FiLoader className="spin" /><span>저장 견적 우선순위 보드를 불러오는 중...</span></div>}><LazySavedBuildPriorityPanel rows={priorityRows} actionStates={priorityActionStates} openingBuildId={openingBuildId} onAnalyzeAction={(id) => void analyzePriorityAction(id)} onOpen={(id) => { const saved = builds.find((build) => build.id === id); if (saved) onOpen(saved); }} /></Suspense>}
     {versionGroups.length > 0 && <Suspense fallback={<div className="shared-build-state" data-testid="saved-build-version-loading"><FiLoader className="spin" /><span>견적 버전 비교를 불러오는 중...</span></div>}><LazySavedBuildVersionPanel groups={versionGroups} openingBuildId={openingBuildId} onOpen={onOpen} onShareVersionComparison={onShareVersionComparison} onSaveVersion={onSaveVersion} BuildComparisonPanel={BuildComparisonPanel} partMap={partMap} accessoryMap={accessoryMap} fallbackPreferences={currentPreferences} originAvailability={originAvailability} /></Suspense>}
     {ownedBuilds.length > 0 && <SavedBuildServerMonitorPanel builds={ownedBuilds} states={serverMonitorStates} busyBuildId={serverMonitorBusyBuildId} onConfigure={(build, enabled, intervalMinutes, alertPolicy) => void configureServerMonitor(build, enabled, intervalMinutes, alertPolicy)} onRun={(build) => void runServerMonitorNow(build)} onReload={() => setServerMonitorReloadNonce((current) => current + 1)} />}
-    {ownedBuilds.length === 0 && builds.length > 0 && <section className="history-server-monitor locked" aria-label="서버 점검 사용 안내" data-testid="saved-build-server-monitor-locked"><span className="history-server-monitor-icon"><FiShield /></span><div><h2>내 견적을 새로 저장하면 서버 점검을 사용할 수 있습니다.</h2><p>이 브라우저에서 소유권을 확인하지 못한 기존·공유 견적은 조회만 할 수 있습니다. 내 견적을 새 링크로 저장하면 1·6·24시간 간격의 점검을 설정할 수 있습니다.</p></div></section>}
+    {ownedBuilds.length === 0 && builds.length > 0 && <section className="history-server-monitor locked" aria-label="견적 자동 업데이트 안내" data-testid="saved-build-server-monitor-locked"><span className="history-server-monitor-icon"><FiShield /></span><div><h2>내 견적을 저장하면 자동 업데이트를 설정할 수 있어요.</h2><p>공유 견적은 조회만 할 수 있어요. 내 견적을 저장하면 1·6·24시간 간격으로 가격과 호환 상태를 갱신할 수 있어요.</p></div></section>}
     {(builds.length > 0 || visibleMonitorAlerts.length > 0) && <Suspense fallback={<div className="history-monitor-alerts loading" aria-label="저장 견적 알림함 로딩" role="status"><FiLoader className="spin" /> 저장 견적 알림함을 불러오는 중...</div>}><LazySavedBuildMonitorAlertsPanel alerts={visibleMonitorAlerts} availableBuildIds={availableBuildIds} openingBuildId={openingBuildId} browserNotificationPermission={browserNotificationPermission} browserNotificationEnabled={browserNotificationEnabled} onRequestBrowserNotifications={() => void onRequestBrowserNotifications()} onBrowserNotificationsEnabledChange={onBrowserNotificationsEnabledChange} onReadAll={markAllMonitorAlertsRead} onDismissAll={() => dismissMonitorAlerts(visibleMonitorAlerts.map((alert) => alert.id))} onDismiss={(id) => dismissMonitorAlerts([id])} onOpenBuild={openMonitorAlertBuild} /></Suspense>}
     {hasCurrentSelection && <section className="history-current-compare" aria-label="현재 편집기 견적 비교"><div><h2>현재 편집기 견적</h2><p>아직 저장하지 않은 현재 구성을 저장 견적과 최대 2개까지 비교할 수 있습니다.</p><small>{currentDraft.summary?.priceComplete && isKnownPrice(currentDraft.summary.totalPriceWon) ? `현재 합계 ${formatWon(currentDraft.summary.totalPriceWon)}` : "현재 금액 확인 필요"} · 추천 기준 {savedPreferenceText(currentDraft)}</small></div><button className={compareIds.includes(currentDraft.id) ? "history-compare-toggle selected" : "history-compare-toggle"} type="button" aria-pressed={compareIds.includes(currentDraft.id)} disabled={!compareIds.includes(currentDraft.id) && compareIds.length >= 3} onClick={() => toggleCompare(currentDraft.id)}>{compareIds.includes(currentDraft.id) ? "현재 견적 비교 중" : "현재 견적 비교"}</button></section>}
     {compareIds.length > 0 && <p className="history-compare-selection-note" role="status">{compareIds.length} / 3개 견적을 비교 대상으로 선택했습니다. 현재 편집기 견적과 저장 견적을 합쳐 최대 3개까지 비교할 수 있습니다.</p>}
-    {builds.length > 0 && <section className="history-purchase-progress-filter" aria-label="저장 견적 구매 진행률 필터" data-testid="saved-build-purchase-progress-filter"><div><h2>구매 진행률 보기</h2><p>결과 화면을 열지 않아도 서버에 기록된 구매 상태를 견적별로 확인합니다.</p><button className="text-button history-purchase-progress-filter-refresh" type="button" data-testid="saved-build-purchase-progress-refresh" onClick={() => void refreshPurchaseProgress()} disabled={purchaseProgressRefreshing}>{purchaseProgressRefreshing ? <><FiRefreshCw className="spin" /> 확인 중...</> : <><FiRefreshCw /> 서버 구매 상태 새로고침</>}</button></div><div className="history-purchase-progress-filter-options" role="group" aria-label="구매 진행률 필터">{purchaseProgressFilterOptions.map((option) => <button className={purchaseProgressFilter === option.id ? "selected" : ""} type="button" aria-pressed={purchaseProgressFilter === option.id} data-testid={`saved-build-purchase-progress-filter-${option.id}`} onClick={() => setPurchaseProgressFilter(option.id)} key={option.id}>{option.label}<span>{option.count}</span></button>)}</div></section>}
+    {builds.length > 0 && <section className="history-purchase-progress-filter" aria-label="저장 견적 구매 진행률 필터" data-testid="saved-build-purchase-progress-filter"><div><h2>구매 진행률 보기</h2><p>각 견적에 기록한 구매 진행 상태를 볼 수 있어요.</p><button className="text-button history-purchase-progress-filter-refresh" type="button" data-testid="saved-build-purchase-progress-refresh" onClick={() => void refreshPurchaseProgress()} disabled={purchaseProgressRefreshing}>{purchaseProgressRefreshing ? <><FiRefreshCw className="spin" /> 확인 중...</> : <><FiRefreshCw /> 구매 상태 새로고침</>}</button></div><div className="history-purchase-progress-filter-options" role="group" aria-label="구매 진행률 필터">{purchaseProgressFilterOptions.map((option) => <button className={purchaseProgressFilter === option.id ? "selected" : ""} type="button" aria-pressed={purchaseProgressFilter === option.id} data-testid={`saved-build-purchase-progress-filter-${option.id}`} onClick={() => setPurchaseProgressFilter(option.id)} key={option.id}>{option.label}<span>{option.count}</span></button>)}</div></section>}
     <Suspense fallback={null}><LazySavedBuildPurchasePriceHistoryPanel builds={builds} /></Suspense>
     {builds.length === 0 ? <div className="empty-result"><FiSave /><h2>저장된 견적이 없습니다.</h2><p>견적을 검사한 뒤 저장하면 이곳에서 다시 열 수 있습니다.</p><button className="button button-primary" onClick={onStart}>첫 견적 만들기</button></div> : visiblePurchaseBuilds.length === 0 ? <div className="history-purchase-progress-empty" data-testid="saved-build-purchase-progress-empty"><FiInfo /><div><strong>선택한 구매 진행률 견적이 없습니다.</strong><span>다른 필터를 선택하거나 전체 견적을 확인해 주세요.</span></div><button className="text-button" type="button" onClick={() => setPurchaseProgressFilter("all")}>전체 견적 보기</button></div> : <div className="history-grid">{visiblePurchaseBuilds.map(({ build: saved, summary: purchaseProgress }) => {
       const selectedCount = PART_CATEGORIES.filter((category) => selectionList(saved.selection, category).length > 0).length;
@@ -830,7 +814,7 @@ export function HistoryView({ builds, currentBuild, currentPreferences, partMap,
       const monitorAssessment = monitorItem?.status === "ready" ? savedBuildMonitorAssessmentFor(monitorItem.snapshot, monitorItem.transition) : undefined;
       const metadataHistory = metadataHistoryStates[saved.id];
       const originStatus = saved.origin?.sourceShareId ? originAvailability[saved.origin.sourceShareId] : undefined;
-      const purchaseProgressLabel = purchaseProgress.status === "completed" ? "모두 구매 완료" : purchaseProgress.status === "in-progress" ? "구매 진행 중" : "서버 기록 없음";
+      const purchaseProgressLabel = purchaseProgress.status === "completed" ? "모두 구매 완료" : purchaseProgress.status === "in-progress" ? "구매 진행 중" : "진행 정보 없음";
       return <article className="history-card" key={saved.id}>
         <div className="history-card-top"><span className="history-icon"><FiSave /></span><span className="history-date">{new Date(saved.updatedAt).toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" })}</span><button className={selectedForCompare ? "history-compare-toggle selected" : "history-compare-toggle"} type="button" aria-pressed={selectedForCompare} disabled={!selectedForCompare && compareIds.length >= 3} onClick={() => toggleCompare(saved.id)}>{selectedForCompare ? "비교 중" : "비교"}</button></div>
         <h2>{saved.name}</h2>

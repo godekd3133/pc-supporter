@@ -167,7 +167,7 @@ function UpgradeEntryResultSummary({ result, bundleCount }: { result: Compatibil
     }, 0);
   };
   return <section className="upgrade-entry-result-summary" data-testid="upgrade-entry-result-summary" aria-label="업그레이드 검사 요약">
-    <div className="upgrade-entry-result-summary-heading"><div><p className="eyebrow">UPGRADE PLAN</p><h2>지금 구성에서 바꿔볼 순서</h2><p>현재 부품을 기준으로 문제 원인과 호환을 유지하는 업그레이드 선택지를 정리했어요.</p></div><FiRefreshCw /></div>
+    <div className="upgrade-entry-result-summary-heading"><div><h2>지금 구성에서 바꿔볼 순서</h2><p>현재 부품을 기준으로 문제 원인과 호환을 유지하는 업그레이드 선택지를 정리했어요.</p></div><FiRefreshCw /></div>
     <div className="upgrade-entry-result-summary-steps"><div className={issueCount > 0 ? "review" : "done"}><span><FiAlertTriangle /></span><div><strong>1. 현재 상태 확인</strong><small>{issueText}</small></div><em>{issueCount > 0 ? "확인 필요" : "문제 없음"}</em></div><div className={recommendationCount > 0 ? "ready" : "empty"}><span><FiZap /></span><div><strong>2. 교체 후보 비교</strong><small>{recommendationCount > 0 ? `부품 단위 추천 ${recommendationCount}개${bundleCount > 0 ? ` · 조합 추천 ${bundleCount}개` : ""}` : "현재 데이터로 안전한 교체 후보를 만들지 못했어요."}</small></div><em>{recommendationCount > 0 ? "준비됨" : "확인 필요"}</em></div><div className="next"><span><FiCheckCircle /></span><div><strong>3. 새 구성 적용</strong><small>원하는 부품을 견적에 적용해요.</small></div><em>다음 단계</em></div></div>{recommendationCount > 0 && <button className="button button-secondary upgrade-entry-result-summary-cta" type="button" onClick={focusRecommendations}><FiArrowRight /> 업그레이드 후보 바로 보기</button>}<p className="upgrade-entry-result-summary-note"><FiInfo /> 선택한 부품과 예상 가격을 확인해 주세요.</p>
   </section>;
 }

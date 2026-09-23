@@ -1387,19 +1387,18 @@ html[data-theme="dark"] .guided-home-preview-note svg { color: var(--mobile-succ
 
 .generator-form-icon { display: grid; place-items: center; width: 39px; height: 39px; color: var(--teal-deep); border-radius: 11px; background: var(--teal-soft); font-size: 18px; }
 
-.generator-brief { position: relative; isolation: isolate; overflow: hidden; display: grid; gap: 10px; margin-bottom: 14px; padding: 13px; border: 1px solid #cfe1f8; border-radius: 14px; color: var(--ink); background: linear-gradient(135deg, #f0f7ff 0%, #fff 70%); box-shadow: var(--small-shadow); }
+.generator-brief { display: grid; gap: 10px; margin-bottom: 14px; padding: 13px; border: 1px solid var(--line); border-radius: 10px; color: var(--ink); background: #fff; }
 
-.generator-brief::after { position: absolute; z-index: -1; right: -36px; bottom: -54px; width: 150px; height: 150px; border: 1px solid rgba(49, 130, 246, 0.12); border-radius: 50%; box-shadow: 0 0 0 16px rgba(49, 130, 246, 0.05), 0 0 0 34px rgba(49, 130, 246, 0.03); content: ""; }
 
 .generator-brief-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 
 .generator-brief-heading > div { display: flex; align-items: center; gap: 8px; min-width: 0; }
 
-.generator-brief-heading .eyebrow { margin-bottom: 3px; color: var(--teal); font-size: 7px; }
+.generator-brief-heading .eyebrow { margin-bottom: 3px; color: var(--teal); font-size: 11px; font-weight: 600; letter-spacing: 0; }
 
 .generator-brief-heading h3 { margin: 0; color: var(--ink); font-size: 12px; letter-spacing: -0.03em; }
 
-.generator-brief-heading > span { flex: 0 0 auto; color: var(--muted); font-size: 7px; }
+.generator-brief-heading > span { flex: 0 0 auto; color: var(--muted); font-size: 10px; }
 
 .generator-brief-icon { display: grid; place-items: center; width: 29px; height: 29px; border: 1px solid #cfe1f8; border-radius: 9px; color: var(--teal); background: #fff; font-size: 14px; }
 
@@ -18465,9 +18464,7 @@ button.metric-card:disabled { cursor: not-allowed; }
 @media (min-width: 761px) {
   .route-stage { animation: route-stage-in 260ms cubic-bezier(.22, 1, .36, 1) both; transform-origin: 50% 0; }
 
-  .generator-brief { border-color: #d4e3f2; color: var(--ink); background: #f5f9fd; box-shadow: none; }
-
-  .generator-brief::after { border-color: rgba(49, 130, 246, .12); box-shadow: 0 0 0 16px rgba(49, 130, 246, .035), 0 0 0 34px rgba(49, 130, 246, .025); }
+  .generator-brief { border-color: #e5e8eb; color: var(--ink); background: #fff; box-shadow: none; }
 
   .generator-brief-heading .eyebrow { color: var(--teal); }
 
@@ -23151,4 +23148,26 @@ html[data-theme="dark"] .onboarding-draft { border-color: var(--line); }
 @media (max-width: 760px) {
   .build-price-trend-total strong { font-size: 20px; }
   .catalog-price-history-panel, .build-price-trend-panel { border-radius: 12px; }
+}
+
+/* Price provenance can be longer than the compact price column. Keep the amount
+   on its existing line and let only its supporting label wrap within the card. */
+.catalog-part-card-price > .catalog-detail-price-evidence {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-family: inherit;
+  font-weight: 400;
+}
+
+.picker-item-side > .catalog-detail-price-evidence {
+  max-width: min(34vw, 180px);
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+@media (max-width: 760px) {
+  .catalog-part-card-price > .catalog-detail-price-evidence { line-height: 1.35; }
+  .picker-item-side > .catalog-detail-price-evidence { max-width: min(42vw, 160px); }
 }
