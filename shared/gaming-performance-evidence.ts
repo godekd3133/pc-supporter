@@ -289,19 +289,53 @@ function isStale(record: GamingPerformanceEvidenceRecord, now: string | number):
   return !Number.isFinite(measuredAt) || !Number.isFinite(nowMs) || nowMs - measuredAt > GAMING_PERFORMANCE_EVIDENCE_STALE_DAYS * 24 * 60 * 60 * 1_000;
 }
 
+const SOURCE_CREDIBILITY: Record<GamingPerformanceEvidenceSourceKind, number> = {
+  independent_review: 4,
+  official: 3,
+  lab: 2,
+  user_capture: 1
+};
+
+function compareEvidencePreference(a: GamingPerformanceEvidenceRecord, b: GamingPerformanceEvidenceRecord, now: string | number): number {
+  // Prefer current evidence over stale evidence, then the more independently
+  // reproducible source, then the newest measurement within that source tier.
+  // ID is a final stable tie-breaker.
+  const aStale = isStale(a, now);
+  const bStale = isStale(b, now);
+  if (aStale !== bStale) return aStale ? 1 : -1;
+  const credibilityDelta = SOURCE_CREDIBILITY[b.sourceKind] - SOURCE_CREDIBILITY[a.sourceKind];
+  if (credibilityDelta !== 0) return credibilityDelta;
+  const dateDelta = Date.parse(b.measuredAt) - Date.parse(a.measuredAt);
+  if (Number.isFinite(dateDelta) && dateDelta !== 0) return dateDelta;
+  return a.id.localeCompare(b.id);
+}
+
 export function gamingPerformanceEvidenceSummaryFor(records: readonly GamingPerformanceEvidenceRecord[], conditions: readonly GamingPerformanceCondition[], now: string | number = Date.now()): GamingPerformanceEvidenceSummary {
   const uniqueConditions = [...new Map(conditions.map((condition) => [condition.gameId, condition])).values()];
   if (uniqueConditions.length === 0 || records.length === 0) {
     return { status: "not_recorded", matchedRecords: [], matchedGameIds: [], missingGameIds: uniqueConditions.map((condition) => condition.gameId), staleRecordIds: [], belowTargetRecordIds: [], belowTargetGameIds: [], measurements: [], note: "게임별 실측 FPS 자료가 아직 연결되지 않았습니다." };
   }
-  const matchedRecords = uniqueConditions.flatMap((condition) => records.filter((record) => conditionMatches(record, condition)).slice(0, 1));
+  const recordsByCondition = uniqueConditions.map((condition) => records
+    .filter((record) => conditionMatches(record, condition))
+    .slice()
+    .sort((a, b) => compareEvidencePreference(a, b, now)));
+  const matchedRecords = recordsByCondition.flatMap((matches) => matches.slice(0, 1));
   const matchedGameIds = [...new Set(matchedRecords.map((record) => record.gameId))];
   const missingGameIds = uniqueConditions.map((condition) => condition.gameId).filter((gameId) => !matchedGameIds.includes(gameId));
   const staleRecordIds = matchedRecords.filter((record) => isStale(record, now)).map((record) => record.id);
   const conditionByGameId = new Map(uniqueConditions.map((condition) => [condition.gameId, condition]));
-  const belowTargetRecords = matchedRecords.filter((record) => {
-    const condition = conditionByGameId.get(record.gameId);
-    return condition !== undefined && record.averageFps < condition.refreshRate;
+  // A fresh credible result below target prevents verification despite a passing
+  // result. User captures remain conservative evidence when alone, but cannot
+  // override a passing independent review, official result, or lab measurement.
+  const belowTargetRecords = recordsByCondition.flatMap((matches) => {
+    const freshMatches = matches.filter((record) => !isStale(record, now));
+    const hasPassingCredibleMeasurement = freshMatches.some((record) =>
+      record.sourceKind !== "user_capture" && record.averageFps >= record.refreshRate);
+    return freshMatches.filter((record) => {
+      const condition = conditionByGameId.get(record.gameId);
+      if (condition === undefined || record.averageFps >= condition.refreshRate) return false;
+      return record.sourceKind !== "user_capture" || !hasPassingCredibleMeasurement;
+    });
   });
   const belowTargetRecordIds = belowTargetRecords.map((record) => record.id);
   const belowTargetGameIds = [...new Set(belowTargetRecords.map((record) => record.gameId))];

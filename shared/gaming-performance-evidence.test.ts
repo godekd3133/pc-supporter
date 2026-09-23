@@ -59,6 +59,42 @@ describe("gaming performance evidence contract", () => {
     expect(gamingPerformanceEvidenceSummaryFor([gamingPerformanceEvidenceRecordFromUnknown(record({ averageFps: 160, gpuPartId: "different-gpu" }))!], [condition], "2026-09-10T00:00:00.000Z")).toMatchObject({ status: "missing" });
   });
 
+  it("prefers fresh evidence when stale records arrive first", () => {
+    const stale = gamingPerformanceEvidenceRecordFromUnknown(record({ id: "stale", measuredAt: "2025-01-01T00:00:00.000Z", averageFps: 80 }))!;
+    const fresh = gamingPerformanceEvidenceRecordFromUnknown(record({ id: "fresh", measuredAt: "2026-09-09T00:00:00.000Z", averageFps: 160 }))!;
+    const summary = gamingPerformanceEvidenceSummaryFor([stale, fresh], [condition], "2026-09-10T00:00:00.000Z");
+    expect(summary).toMatchObject({ status: "verified", matchedRecords: [{ id: "fresh" }], staleRecordIds: [], measurements: [{ recordId: "fresh", averageFps: 160 }] });
+  });
+
+  it("does not claim verified when fresh credible records conflict below target", () => {
+    const meetsTarget = gamingPerformanceEvidenceRecordFromUnknown(record({ id: "fresh-pass", measuredAt: "2026-09-09T00:00:00.000Z", averageFps: 160 }))!;
+    const missesTarget = gamingPerformanceEvidenceRecordFromUnknown(record({ id: "fresh-miss", measuredAt: "2026-09-08T00:00:00.000Z", averageFps: 120, sourceKind: "official" }))!;
+    const summary = gamingPerformanceEvidenceSummaryFor([meetsTarget, missesTarget], [condition], "2026-09-10T00:00:00.000Z");
+    expect(summary).toMatchObject({ status: "target_not_met", matchedRecords: [{ id: "fresh-pass" }], belowTargetRecordIds: ["fresh-miss"], belowTargetGameIds: ["cyberpunk"] });
+  });
+
+  it("does not let a fresh user capture veto a passing credible measurement", () => {
+    const independentPass = gamingPerformanceEvidenceRecordFromUnknown(record({ id: "independent-pass", measuredAt: "2026-09-09T00:00:00.000Z", averageFps: 160 }))!;
+    const userCaptureMiss = gamingPerformanceEvidenceRecordFromUnknown(record({ id: "user-miss", measuredAt: "2026-09-09T00:00:00.000Z", averageFps: 120, sourceKind: "user_capture" }))!;
+    const summary = gamingPerformanceEvidenceSummaryFor([userCaptureMiss, independentPass], [condition], "2026-09-10T00:00:00.000Z");
+    expect(summary).toMatchObject({ status: "verified", matchedRecords: [{ id: "independent-pass" }], belowTargetRecordIds: [] });
+
+    const userOnlyMiss = gamingPerformanceEvidenceSummaryFor([userCaptureMiss], [condition], "2026-09-10T00:00:00.000Z");
+    expect(userOnlyMiss).toMatchObject({ status: "target_not_met", belowTargetRecordIds: ["user-miss"] });
+  });
+
+  it("uses the credible passing measurement as representative over a newer user capture", () => {
+    const independentPass = gamingPerformanceEvidenceRecordFromUnknown(record({ id: "independent-pass", measuredAt: "2026-09-08T00:00:00.000Z", averageFps: 160 }))!;
+    const newerUserMiss = gamingPerformanceEvidenceRecordFromUnknown(record({ id: "newer-user-miss", measuredAt: "2026-09-09T00:00:00.000Z", averageFps: 120, sourceKind: "user_capture" }))!;
+    const summary = gamingPerformanceEvidenceSummaryFor([newerUserMiss, independentPass], [condition], "2026-09-10T00:00:00.000Z");
+    expect(summary).toMatchObject({
+      status: "verified",
+      matchedRecords: [{ id: "independent-pass" }],
+      measurements: [{ recordId: "independent-pass", averageFps: 160 }],
+      belowTargetRecordIds: []
+    });
+  });
+
   it("builds the same exact-condition assessment for generation and compatibility results", () => {
     const pubg = gamingPerformanceEvidenceRecordFromUnknown(record({ id: "evidence-pubg-7900xtx", gameId: "pubg", averageFps: 171, onePercentLowFps: 128 }));
     const assessment = gamingPerformanceAssessmentFor([gamingPerformanceEvidenceRecordFromUnknown(record({ averageFps: 160 }))!, pubg!], {

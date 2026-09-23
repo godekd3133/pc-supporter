@@ -1264,6 +1264,25 @@ function performanceDimensions(part: Part) {
   };
 }
 
+function generatorPerformanceDimensions(part: Part) {
+  const dimensions = performanceDimensions(part);
+  if (part.category !== "cpu" && part.category !== "gpu") return dimensions;
+  const provenance = part.specs.benchmarkProvenance;
+  const benchmarkUpdatedAt = provenance?.updatedAt ? Date.parse(provenance.updatedAt) : Number.NaN;
+  const now = Date.now();
+  const benchmarkAgeMs = Number.isFinite(benchmarkUpdatedAt) ? Math.max(0, now - benchmarkUpdatedAt) : Number.POSITIVE_INFINITY;
+  const benchmarkWithinValidityWindow = benchmarkUpdatedAt <= now + 24 * 60 * 60 * 1000
+    && benchmarkAgeMs <= 365 * 24 * 60 * 60 * 1000;
+  const hasCredibleCurrentSource = (provenance?.sourceKind === "official" || provenance?.sourceKind === "independent_review")
+    && Boolean(provenance.sourceUrl?.trim())
+    && benchmarkWithinValidityWindow;
+  if (hasCredibleCurrentSource) return dimensions;
+  if (part.category === "cpu") {
+    return { ...dimensions, cinebenchR23Single: undefined, cinebenchR23Multi: undefined };
+  }
+  return { ...dimensions, gpu3dmarkTimeSpyScore: undefined, gpu3dmarkPortRoyalScore: undefined };
+}
+
 function performanceDataCoverageFor(part: Part) {
   return Object.values(performanceDimensions(part)).filter((value): value is number => typeof value === "number" && Number.isFinite(value)).length;
 }
@@ -4697,7 +4716,7 @@ function generatorObjectiveScores(parts: Part[], profile: RecommendationProfile,
     if (part.category === "gpu" && gpuVendorPreference !== undefined) {
       extras.push({ index: gpuVendorFitIndex(part, gpuVendorPreference), weight: GPU_VENDOR_PREFERENCE_WEIGHT });
     }
-    scores.set(part.id, objectiveScoreForDimensions(part.category, performanceDimensions(part), weights, extras));
+    scores.set(part.id, objectiveScoreForDimensions(part.category, generatorPerformanceDimensions(part), weights, extras));
   }
   return scores;
 }
@@ -5750,6 +5769,19 @@ function preferCoolerHeadroom(parts: Part[], cpu: Part, profile: RecommendationP
   const fitUnknownCountFor = (evaluation: CompatibilityResult) => evaluation.findings.filter((finding) => finding.severity === "unknown" && !GENERATOR_COSMETIC_UNKNOWN_RULES.has(finding.ruleId)).length;
   const evaluated = states.map((state) => ({ state, evaluation: evaluateBuild(state.selection, catalog, { includeSuggestions: false }), gamingEvidence: gamingEvidenceForState(state) }))
     .map((entry) => ({ ...entry, fitUnknownCount: fitUnknownCountFor(entry.evaluation) }));
+  // FPS evidence is an internal ranking signal: complete, current target-met measurements
+  // lead; partial current evidence follows; unsupported candidates remain eligible as
+  // fallbacks; stale or measured-below-target candidates rank last.
+  const gamingEvidenceRank = (status: GamingPerformanceAssessment["status"] | undefined) => {
+    switch (status) {
+      case "verified": return 4;
+      case "partial": return 3;
+      case "missing": return 2;
+      case "target_not_met": return 1;
+      case "stale": return 0;
+      default: return 2;
+    }
+  };
   const ranked = evaluated.sort((a, b) => {
     const aValid = a.evaluation.blockerCount === 0 && a.fitUnknownCount === 0;
     const bValid = b.evaluation.blockerCount === 0 && b.fitUnknownCount === 0;
@@ -5771,7 +5803,7 @@ function preferCoolerHeadroom(parts: Part[], cpu: Part, profile: RecommendationP
       || Number(bWithin) - Number(aWithin)
       || a.evaluation.blockerCount - b.evaluation.blockerCount
       || a.fitUnknownCount - b.fitUnknownCount
-      || Number(b.gamingEvidence?.status === "verified") - Number(a.gamingEvidence?.status === "verified")
+      || gamingEvidenceRank(b.gamingEvidence?.status) - gamingEvidenceRank(a.gamingEvidence?.status)
       || priorityValue(b) - priorityValue(a)
       || a.evaluation.warningCount - b.evaluation.warningCount
       || a.state.priceWon - b.state.priceWon;

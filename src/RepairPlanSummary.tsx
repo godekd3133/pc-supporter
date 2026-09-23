@@ -42,8 +42,6 @@ export function RepairPlanSummaryTable({ plans, build, onFocusPlan }: { plans: R
       <tr><th scope="row">적용 후 합계</th>{plans.map((plan) => <td key={`${plan.label}-total`}>{plan.priceComplete ? formatWon(plan.afterTotalPriceWon) : "가격 일부 확인 필요"}</td>)}</tr>
       <tr><th scope="row">목표 예산</th>{plans.map((plan) => <td key={`${plan.label}-budget`}>{budgetText(plan)}</td>)}</tr>
       <tr><th scope="row">카탈로그 성능 기준</th>{plans.map((plan) => { const retention = repairPlanPerformanceRetentionFor(build, plan); return <td className={`repair-plan-performance-cell ${retention.status}`} key={`${plan.label}-performance-retention`}>{retention.summary}</td>; })}</tr>
-      <tr><th scope="row">성능 정보</th>{plans.map((plan) => <td key={`${plan.label}-similarity`}>{plan.similarityLabel} {plan.similarityScore}점{plan.similarityEvidence ? ` · ${plan.similarityEvidence.confidence === "high" ? "정보 충분" : plan.similarityEvidence.confidence === "limited" ? "정보 제한" : "정보 확인 필요"}` : ""}</td>)}</tr>
     </tbody></table></div>
-    <p className="repair-plan-summary-note">남은 위험이 0이라고 표시되어도 실제 BIOS·QVL·온도·소음·배송 조건까지 자동 보장되는 것은 아닙니다.</p>
   </div>;
 }

@@ -2310,6 +2310,104 @@ describe("compatibility engine", () => {
     ]));
   });
 
+  it("ignores unproven CPU benchmarks in generator ranking but uses documented current measurements", () => {
+    const baseCpu = seedCatalog.find((part) => part.id === "cpu-7800x3d")!;
+    const proxyStrongCpu: Part = {
+      ...baseCpu,
+      id: "cpu-generator-proxy-strong",
+      name: "테스트 스펙 기반 CPU",
+      priceWon: 300000,
+      specs: { ...baseCpu.specs, cores: 8, threads: 16, boostClockGhz: 5.2, l3CacheMb: 64 }
+    };
+    const benchmarkStrongCpu: Part = {
+      ...baseCpu,
+      id: "cpu-generator-unproven-benchmark-strong",
+      name: "테스트 출처 없는 과대 벤치마크 CPU",
+      priceWon: 300000,
+      specs: { ...baseCpu.specs, cores: 8, threads: 16, boostClockGhz: 5.2, l3CacheMb: 64, cinebenchR23Single: 100000, cinebenchR23Multi: 100000 }
+    };
+    const catalogWithUnprovenScore = seedCatalog.filter((part) => part.category !== "cpu").concat(proxyStrongCpu, benchmarkStrongCpu);
+    const request = { profile: "creator" as const, priority: "performance" as const, budgetWon: 3_000_000, includeGpu: true };
+
+    const unprovenDraft = generateBuildDraft(catalogWithUnprovenScore, request);
+    const daysAgo = (days: number) => new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+    const documentedBenchmarkCpu: Part = {
+      ...benchmarkStrongCpu,
+      specs: {
+        ...benchmarkStrongCpu.specs,
+        cinebenchR23Single: 2300,
+        cinebenchR23Multi: 45000,
+        benchmarkProvenance: {
+          sourceKind: "independent_review",
+          sourceNote: "현재 측정 자료",
+          sourceUrl: "https://example.com/current-independent-review",
+          updatedAt: daysAgo(30)
+        }
+      }
+    };
+    const catalogWithDocumentedScore = seedCatalog.filter((part) => part.category !== "cpu").concat(proxyStrongCpu, documentedBenchmarkCpu);
+    const documentedDraft = generateBuildDraft(catalogWithDocumentedScore, request);
+    const staleBenchmarkCpu: Part = {
+      ...documentedBenchmarkCpu,
+      id: "cpu-generator-expired-benchmark",
+      specs: {
+        ...documentedBenchmarkCpu.specs,
+        benchmarkProvenance: { ...documentedBenchmarkCpu.specs.benchmarkProvenance!, updatedAt: daysAgo(366) }
+      }
+    };
+    const catalogWithExpiredScore = seedCatalog.filter((part) => part.category !== "cpu").concat(proxyStrongCpu, staleBenchmarkCpu);
+    const expiredDraft = generateBuildDraft(catalogWithExpiredScore, request);
+    const futureBenchmarkCpu: Part = {
+      ...documentedBenchmarkCpu,
+      id: "cpu-generator-future-dated-benchmark",
+      specs: {
+        ...documentedBenchmarkCpu.specs,
+        benchmarkProvenance: { ...documentedBenchmarkCpu.specs.benchmarkProvenance!, updatedAt: daysAgo(-2) }
+      }
+    };
+    const catalogWithFutureScore = seedCatalog.filter((part) => part.category !== "cpu").concat(proxyStrongCpu, futureBenchmarkCpu);
+    const futureDraft = generateBuildDraft(catalogWithFutureScore, request);
+
+    expect(unprovenDraft.selection.cpu?.partId).toBe(proxyStrongCpu.id);
+    expect(documentedDraft.selection.cpu?.partId).toBe(documentedBenchmarkCpu.id);
+    expect(expiredDraft.selection.cpu?.partId).toBe(proxyStrongCpu.id);
+    expect(futureDraft.selection.cpu?.partId).toBe(proxyStrongCpu.id);
+  });
+
+  it("ignores unproven 3DMark scores in generator ranking but uses documented current measurements", () => {
+    const baseGpu = seedCatalog.find((part) => part.id === "gpu-rtx-4060")!;
+    const proxyGpu: Part = { ...baseGpu, id: "gpu-generator-proxy", name: "테스트 스펙 기반 GPU" };
+    const benchmarkGpu: Part = {
+      ...baseGpu,
+      id: "gpu-generator-unproven-benchmark",
+      name: "테스트 출처 없는 과대 벤치마크 GPU",
+      specs: { ...baseGpu.specs, gpu3dmarkTimeSpyScore: 100000, gpu3dmarkPortRoyalScore: 100000 }
+    };
+    const catalogWithoutProvenance = seedCatalog.filter((part) => part.category !== "gpu").concat(proxyGpu, benchmarkGpu);
+    const request = { profile: "general" as const, priority: "performance" as const, budgetWon: 3_000_000, includeGpu: true };
+
+    const unprovenDraft = generateBuildDraft(catalogWithoutProvenance, request);
+    const documentedBenchmarkGpu: Part = {
+      ...benchmarkGpu,
+      specs: {
+        ...benchmarkGpu.specs,
+        gpu3dmarkTimeSpyScore: 36000,
+        gpu3dmarkPortRoyalScore: 26000,
+        benchmarkProvenance: {
+          sourceKind: "independent_review",
+          sourceNote: "현재 측정 자료",
+          sourceUrl: "https://example.com/current-gpu-independent-review",
+          updatedAt: new Date().toISOString()
+        }
+      }
+    };
+    const catalogWithDocumentedScore = seedCatalog.filter((part) => part.category !== "gpu").concat(proxyGpu, documentedBenchmarkGpu);
+    const documentedDraft = generateBuildDraft(catalogWithDocumentedScore, request);
+
+    expect(unprovenDraft.selection.gpu?.partId).toBe(proxyGpu.id);
+    expect(documentedDraft.selection.gpu?.partId).toBe(documentedBenchmarkGpu.id);
+  });
+
   it("uses parsed GPU performance specs when ranking graphics alternatives", () => {
     const baseGpu = seedCatalog.find((part) => part.id === "gpu-rtx-4060")!;
     const currentGpu = {
@@ -3562,6 +3660,46 @@ describe("compatibility engine", () => {
     }];
     const draft = generateBuildDraft(seedCatalog, request, evidence);
     expect(draft.gamingPerformanceAssessment).toMatchObject({ status: "target_not_met", belowTargetRecordIds: ["evidence-below-target"] });
+  });
+
+  it("ranks an eligible unmeasured gaming GPU ahead of an exact measured GPU that misses the FPS target", () => {
+    const request = {
+      profile: "gaming" as const,
+      budgetWon: 3_000_000,
+      includeGpu: true,
+      gamingResolution: "4k" as const,
+      gamingRefreshRate: 144 as const,
+      gamingGameIds: ["cyberpunk"] as string[],
+      gamingGraphicsPreset: "high" as const,
+      gamingRayTracing: true,
+      gamingUpscaling: "quality" as const
+    };
+    const baseline = generateBuildDraft(seedCatalog, request);
+    const measuredGpu = seedCatalog.find((part) => part.id === baseline.selection.gpu?.partId);
+    if (!measuredGpu) throw new Error("기준 자동 구성에서 GPU 부품을 찾지 못했습니다.");
+    const alternativeGpuId = "gpu-unmeasured-target-fallback";
+    const alternativeGpu: Part = { ...measuredGpu, id: alternativeGpuId, name: `${measuredGpu.name} · unmeasured alternative` };
+    const evidence: GamingPerformanceEvidenceRecord[] = [{
+      id: "evidence-target-miss-ranking",
+      gameId: "cyberpunk",
+      gpuPartId: measuredGpu.id,
+      gpuName: measuredGpu.name,
+      resolution: "4k",
+      refreshRate: 144,
+      graphicsPreset: "high",
+      rayTracing: true,
+      upscaling: "quality",
+      averageFps: 92,
+      onePercentLowFps: 68,
+      measuredAt: "2026-09-10T00:00:00.000Z",
+      sourceKind: "lab",
+      sourceUrl: "https://example.com/target-miss-ranking"
+    }];
+
+    const draft = generateBuildDraft(seedCatalog.concat(alternativeGpu), request, evidence);
+
+    expect(draft.selection.gpu?.partId).not.toBe(measuredGpu.id);
+    expect(draft.gamingPerformanceAssessment?.status).not.toBe("target_not_met");
   });
 
   it("preserves a direct performance tier in the generated draft", () => {

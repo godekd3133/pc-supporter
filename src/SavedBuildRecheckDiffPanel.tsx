@@ -28,21 +28,6 @@ function priceDeltaText(value: number | undefined, complete: boolean) {
   return `${value > 0 ? "+" : ""}${value.toLocaleString("ko-KR")}원`;
 }
 
-function analysisScoreText(score: number | undefined, label: string) {
-  return score === undefined ? label : `${score}점 · ${label}`;
-}
-
-function analysisConfidenceLabel(confidence: "high" | "limited" | "unknown") {
-  return confidence === "high" ? "정보 충분" : confidence === "limited" ? "일부 스펙 기준" : "계산 불가";
-}
-
-function analysisDeltaText(summary: ReturnType<typeof savedBuildCheckTransitionSummaryFor>, changed: boolean) {
-  if (!changed) return "점수·라벨·정보 수준 동일";
-  if (summary.analysisScoreDelta === undefined) return "점수·라벨·정보 수준 변화 확인";
-  if (summary.analysisScoreDelta === 0) return "성능 점수 동일 · 라벨·정보 수준 변화 확인";
-  return `성능 점수 ${summary.analysisScoreDelta > 0 ? "+" : ""}${summary.analysisScoreDelta}점 · 점수 변화 확인`;
-}
-
 function resourceHeadroomText(value: number | undefined) {
   if (value === undefined) return "확인 필요";
   return value >= 0 ? `${value}W 여유` : `${Math.abs(value)}W 부족`;
@@ -68,12 +53,11 @@ function benchmarkSnapshotText(snapshot: SavedBuildCheckSnapshot["benchmarkSnaps
 }
 
 function benchmarkImpactDetail(impact: ReturnType<typeof savedBuildCheckTransitionSummaryFor>["benchmarkImpact"]) {
-  if (impact.status === "not_recorded") return "저장 당시와 현재 모두 벤치마크 저장본이 없습니다.";
-  if (impact.status === "unverified") return "저장 당시 또는 현재 정보가 부족해 성능 판단 영향을 알 수 없어요.";
-  if (impact.changedScoreCount > 0) return `점수 ${impact.changedScoreCount}개 변경 · ${impact.changedPartCount}개 부품 영향`;
-  if (impact.sourceChanged) return "점수 출처 또는 출처 메모가 변경되었습니다.";
-  if (impact.benchmarkDateChanged) return "벤치마크 자료 시점이 변경되었습니다.";
-  return "저장 당시와 현재의 점수·출처·자료 시점이 같습니다.";
+  if (impact.status === "not_recorded") return "성능 점수 없음";
+  if (impact.status === "unverified") return "성능 점수 일부 미등록";
+  if (impact.changedScoreCount > 0) return "점수 " + impact.changedScoreCount + "개 변경";
+  if (impact.sourceChanged || impact.benchmarkDateChanged) return "성능 점수 정보 변경";
+  return "성능 점수 변화 없음";
 }
 
 function refreshPriceTransition(item: CatalogRefreshReportItem) {
@@ -175,14 +159,14 @@ export function SavedBuildRecheckDiffPanel({ snapshot, result, partMap, onFocusF
       <article className={diff.statusChanged ? "changed" : undefined}><span>결과</span><strong>{statusLabel(snapshot.status)} → {statusLabel(result.status)}</strong><small>{diff.statusChanged ? "결과가 달라졌습니다." : "저장 당시와 현재 결과가 같습니다."}</small></article>
       <article className={riskChanged ? "changed" : undefined}><span>위험 카운트</span><strong>차단 {snapshot.blockerCount} → {result.blockerCount} · 주의 {snapshot.warningCount} → {result.warningCount} · 확인 {snapshot.unknownCount} → {result.unknownCount}</strong><small>{riskChanged ? `차단 ${deltaText(summary.blockerDelta)} · 주의 ${deltaText(summary.warningDelta)} · 확인 ${deltaText(summary.unknownDelta)}` : "핵심·주변 부품 위험 카운트 변화 없음"}</small></article>
       <article className={priceChanged ? "changed" : undefined}><span>가격</span><strong>{priceDeltaText(summary.priceDeltaWon, snapshot.priceComplete && result.priceComplete)}</strong><small>{diff.priceCompletenessChanged ? `가격 확정 상태 ${snapshot.priceComplete ? "확정" : "확인 필요"} → ${result.priceComplete ? "확정" : "확인 필요"}` : "저장 당시와 현재 총액 비교"}</small></article>
-      <article className={analysisChanged ? "changed" : undefined}><span>성능 분석</span><strong>{analysisScoreText(snapshot.analysisScore, snapshot.analysisScoreLabel)} → {analysisScoreText(result.analysis.overallScore, result.analysis.scoreLabel)}</strong><small>{analysisDeltaText(summary, analysisChanged)}{analysisChanged ? ` · ${analysisConfidenceLabel(snapshot.analysisConfidence)} → ${analysisConfidenceLabel(result.analysis.confidence)}` : ""}</small></article>
+
       <article className={resourceBudgetChanged ? "changed" : undefined}><span>전력·냉각 예산</span><strong>{resourceBudgetText(snapshot.resourceBudget)} → {resourceBudgetText(currentSnapshot.resourceBudget)}</strong><small>{resourceBudgetDeltaText(summary, resourceBudgetChanged)}</small></article>
       <article className={benchmarkChanged ? "changed" : undefined} data-testid="saved-build-recheck-benchmark"><span>CPU·GPU 정보</span><strong>{buildBenchmarkImpactStatusText(diff.benchmarkImpact.status)} · {buildBenchmarkDecisionImpactText(diff.benchmarkImpact.decisionImpact)}</strong><small>{benchmarkSnapshotText(snapshot.benchmarkSnapshot)} → {benchmarkSnapshotText(result.benchmarkSnapshot)} · {benchmarkImpactDetail(diff.benchmarkImpact)}</small></article>
-      <article className={metadataChanged ? "changed" : undefined}><span>검사 기준</span><strong>{diff.catalogChanged ? "카탈로그 기준 변경" : "카탈로그 기준 동일"}</strong><small>{diff.engineChanged ? `검사 버전 ${snapshot.engineVersion} → ${result.engineVersion}` : `검사 버전 ${result.engineVersion}`}</small></article>
+
     </div>
     <div className="saved-build-recheck-diff-facts"><span>저장 당시 <b>{new Date(snapshot.checkedAt).toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" })}</b></span><span>현재 재검사 <b>{new Date(result.checkedAt).toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" })}</b></span><span>{summary.findingDiffAvailable ? `항목 해결 ${summary.resolvedFindingCount}개 · 신규 ${summary.newFindingCount}개` : "구버전 저장본 · 항목 상세 비교 불가"}</span></div>
-    {(riskChanged || priceChanged || analysisChanged || resourceBudgetChanged || benchmarkChanged || metadataChanged || diff.statusChanged) && <p className="saved-build-recheck-diff-warning"><FiInfo /> 저장 당시 결과와 현재 결과가 달라졌거나 벤치마크 정보를 알 수 없어요. 현재 카탈로그 기준 결과를 우선 참고하되, 구매 전 변경된 항목·성능 분석·전력·냉각 예산·벤치마크 출처를 다시 확인하세요.</p>}
-    {!diff.hasChanges && <p className="saved-build-recheck-diff-same"><FiCheckCircle /> 저장 당시 저장본과 현재 재검사에서 결과·위험·가격·성능 분석·전력·냉각 예산·벤치마크 정보·검사 기준의 변화가 확인되지 않았습니다.</p>}
+    {(riskChanged || priceChanged || resourceBudgetChanged || benchmarkChanged || diff.statusChanged) && <p className="saved-build-recheck-diff-warning"><FiInfo /> 저장 당시와 현재 견적의 호환성 또는 금액이 달라졌어요. 새 결과를 확인해 주세요.</p>}
+    {!(riskChanged || priceChanged || resourceBudgetChanged || benchmarkChanged || diff.statusChanged) && <p className="saved-build-recheck-diff-same"><FiCheckCircle /> 저장 당시와 현재 호환성 결과와 금액이 같아요.</p>}
     {snapshot.catalogRefreshReport && <SavedBuildRecheckRefreshImpactPanel report={snapshot.catalogRefreshReport} findingChanges={findingDiff.changes} result={result} onFocusFinding={onFocusFinding} onFocusSection={onFocusSection} />}
     <div className="saved-build-recheck-diff-findings" data-testid="saved-build-recheck-diff-findings">
       <div className="saved-build-recheck-diff-findings-heading"><strong>변경된 항목</strong><span>{findingDiff.available ? `${changedFindings.length}개` : "비교 불가"}</span></div>

@@ -205,7 +205,6 @@ import { savedBuildShareUrlFor } from "./saved-build-share-url";
 import { browserNotificationEnabledFromStorage, browserNotificationIdsFromJson, browserNotificationIdsToJson, browserNotificationPermissionFromUnknown, browserNotificationPermissionLabel, mergeBrowserNotificationIds } from "./browser-notification";
 import type { BrowserNotificationPermission } from "./browser-notification";
 import { safeExternalUrl, safeHttpsUrl } from "./safe-source-url";
-import { CatalogSpecProvenance } from "./CatalogSpecProvenance";
 import { savedBuildMonitorAlertsFromJson, savedBuildMonitorAlertsToJson, savedBuildMonitorAutoRefreshEnabledFromStorage, savedBuildMonitorAutoRefreshMinutesFromStorage } from "./saved-build-monitor-storage";
 import { savedWatchlistLinksFromJson } from "./watchlist-link-storage";
 import type { SavedWatchlistLink } from "./watchlist-link-storage";
@@ -3236,8 +3235,6 @@ function App() {
     <Suspense fallback={<div className="home-page home-page-loading" role="status"><FiLoader className="spin" /> 홈 화면을 불러오는 중...</div>}>
       <LazyHomeView
       meta={meta}
-      bootstrapLoading={bootstrapLoading}
-      bootstrapErrorCount={bootstrapIssues.length}
       build={build}
       result={result}
       resultIsStale={resultIsStale}

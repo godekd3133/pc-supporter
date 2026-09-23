@@ -1,8 +1,7 @@
-import { FiBox, FiCheckCircle, FiExternalLink, FiInfo, FiLayers, FiMonitor, FiZap } from "react-icons/fi";
+import { FiBox, FiCheckCircle, FiInfo, FiLayers, FiMonitor, FiZap } from "react-icons/fi";
 import type { IconType } from "react-icons";
 import { gpuPurchaseEvidenceFor, type GpuFitStatus, type GpuFitSummary, type PciePowerOptionFit } from "../shared/gpu-fit";
 import type { Part, PhysicalEvidenceSource, PciePowerConnectorKind, PciePowerRequirement } from "../shared/types";
-import { safeHttpsUrl } from "./safe-source-url";
 import { gwa } from "../shared/josa";
 
 type FitTone = "good" | "warning" | "danger" | "unknown" | "neutral";
@@ -72,24 +71,6 @@ function cableTopologyEvidenceDetail(fit: GpuFitSummary["connector"], status: Gp
   return psuCableTopologyDetail(fit);
 }
 
-function evidenceSourceLabel(category: PhysicalEvidenceSource["category"]) {
-  return category === "gpu" ? "GPU" : category === "case" ? "케이스" : "PSU";
-}
-
-function evidenceSourceIdentity(source: PhysicalEvidenceSource) {
-  return `${evidenceSourceLabel(source.category)}${source.manufacturerModel ? ` · ${source.manufacturerModel}` : ""}${source.manufacturerRevision ? ` · ${source.manufacturerRevision}` : ""}`;
-}
-
-function EvidenceSourceList({ sources }: { sources: PhysicalEvidenceSource[] | undefined }) {
-  const safeSources = (sources ?? []).flatMap((source) => {
-    const note = source.note?.trim();
-    if (!note) return [];
-    const url = safeHttpsUrl(source.url);
-    return [{ ...source, note, ...(url ? { url } : {}) }];
-  });
-  return <div className="gpu-fit-evidence-sources" aria-label="장착 정보 출처"><strong>장착 정보 출처</strong>{safeSources.length === 0 ? <small>등록된 출처 메모 없음 · 제조사 매뉴얼 확인 필요</small> : safeSources.map((source) => <small key={`${source.category}-${source.note}-${source.url ?? ""}`}><b>{evidenceSourceIdentity(source)}</b> {source.note}{source.updatedAt ? ` · 확인 갱신 ${new Date(source.updatedAt).toLocaleDateString("ko-KR")}` : ""}{source.url && <a href={source.url} target="_blank" rel="noreferrer">제조사 페이지 <FiExternalLink /></a>}</small>)}</div>;
-}
-
 function mmDetail(actualMm: number | undefined, limitMm: number | undefined, clearanceMm: number | undefined, actualLabel: string, limitLabel: string) {
   if (actualMm === undefined || limitMm === undefined) return `${actualLabel} 또는 ${limitLabel} 페이지 확인 필요`;
   if (clearanceMm === undefined) return `${actualLabel} ${actualMm}mm · ${limitLabel} ${limitMm}mm · 여유 계산 필요`;
@@ -156,7 +137,6 @@ export function GpuFitSummaryPanel({ fit, gpu, computerCase, psu }: { fit: GpuFi
       {purchaseEvidence.pcieCableTopology !== "not_applicable" && <FitMetric icon={FiZap} label="PCIe 케이블 분배" value={fit.connector.psuIndependentPcieCableRuns === undefined ? "확인 필요" : `${fit.connector.psuIndependentPcieCableRuns}개 런`} detail={cableTopologyEvidenceDetail(fit.connector, purchaseEvidence.pcieCableTopology)} status={purchaseEvidence.pcieCableTopology} />}
     </div>
     <div className="gpu-fit-connector-panel"><div><strong>GPU가 요구하는 연결 선택지</strong><small>{optionText(fit.connector.options, fit.connector.requirementsKnown, fit.connector.adapterOptionIndices)}</small></div><div><strong>PSU에서 확인된 커넥터</strong><small>{connectorText(fit.connector.connectors)}</small><small>{psuStructureText(fit.connector.psuCableType, fit.connector.psuRailType)}</small></div>{fit.connector.optionFits.length > 0 && <div className="gpu-fit-connector-options"><strong>선택지별 결과</strong>{fit.connector.optionFits.map((option, index) => <span className={option.status === "compatible" ? "good" : option.status === "blocker" ? "danger" : "unknown"} key={`${index}-${option.status}`}>{optionFitText(option, index, fit.connector.adapterOptionIndices.includes(index))}</span>)}</div>}</div>
-    {purchaseEvidence.status !== "not_applicable" && <EvidenceSourceList sources={purchaseEvidence.sources} />}
     <div className="gpu-fit-actions"><div><strong>다음 행동</strong>{actionText(fit, computerCase, psu).map((action) => <p key={action}><FiCheckCircle /> {action}</p>)}</div></div>
     <p className="gpu-fit-note"><FiInfo /> 수치가 확인된 경우에만 길이·전력 여유를 계산합니다. PSU 커넥터 개수만으로 독립 케이블·레일 구성이나 케이블 굽힘 반경을 추정하지 않으며, 실제 조립 전 제조사 매뉴얼·케이스 전면 구조·측면 여유를 별도로 확인해야 합니다.</p>
   </section>;

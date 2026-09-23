@@ -1,13 +1,11 @@
 // Shared part/accessory visual components and watch predicates.
-import { catalogPriceEvidenceDescriptionFor, catalogPriceEvidenceFor, catalogPriceEvidenceLabelFor } from "../shared/catalog-price-evidence";
 import { catalogMissingFieldLabelFor } from "../shared/catalog-spec-coverage";
 import { CATALOG_WATCHLIST_STORAGE_KEY, catalogWatchlistContains, catalogWatchlistFromJson } from "../shared/catalog-watchlist";
-import { type AccessoryItem, type Part, type PartCategory, DATA_QUALITY_LABELS, isKnownPrice } from "../shared/types";
-import { CatalogSpecProvenance } from "./CatalogSpecProvenance";
+import { type AccessoryItem, type Part, type PartCategory, isKnownPrice } from "../shared/types";
 import { safeExternalUrl } from "./safe-source-url";
 import { useEffect, useState } from "react";
 import type { IconType } from "react-icons";
-import { FiBox, FiChevronDown, FiClock, FiCpu, FiDatabase, FiExternalLink, FiHardDrive, FiInfo, FiMonitor, FiServer, FiTool, FiZap } from "react-icons/fi";
+import { FiBox, FiClock, FiCpu, FiDatabase, FiHardDrive, FiInfo, FiMonitor, FiServer, FiTool, FiZap } from "react-icons/fi";
 import { formatSpecValue, formatWon, suggestionSpecRows } from "./app-format";
 
 export type PartWatchHandler = (part: Part) => boolean;
@@ -97,17 +95,10 @@ export function accessoryIsWatched(item: AccessoryItem) {
 }
 
 export function PartEvidence({ part }: { part: Part }) {
-  const [rawOpen, setRawOpen] = useState(false);
-  const qualityLabel = DATA_QUALITY_LABELS[part.dataQuality];
-  const priceEvidence = catalogPriceEvidenceFor(part);
-  const sourceUrl = safeExternalUrl(part.danawaUrl);
   return <div className="part-evidence" aria-label={`${part.name} 상세 스펙`}>
-    <div className="part-evidence-meta"><span><FiDatabase /> {qualityLabel}</span><span className={`part-evidence-price ${priceEvidence}`} title={catalogPriceEvidenceDescriptionFor(part)}>{isKnownPrice(part.priceWon) ? `가격 ${formatWon(part.priceWon)}` : "가격 확인 필요"} · {catalogPriceEvidenceLabelFor(part)}</span><span>{part.updatedAt ? `갱신 ${new Date(part.updatedAt).toLocaleDateString("ko-KR")}` : "갱신 시점 없음"}</span></div>
-    <CatalogSpecProvenance part={part} compact />
+    <div className="part-evidence-price"><span>예상 가격</span><strong>{isKnownPrice(part.priceWon) ? formatWon(part.priceWon) : "가격 미확인"}</strong></div>
     <div className="part-evidence-grid">{suggestionSpecRows(part).map(([label, value]) => <div className="part-evidence-row" key={label}><span>{label}</span><strong>{formatSpecValue(value)}</strong></div>)}</div>
-    {part.missingFields.length > 0 && <p className="part-evidence-missing"><FiInfo /> 확인되지 않은 항목: {part.missingFields.map((field) => catalogMissingFieldLabelFor(field)).join(", ")}</p>}
-    <div className="part-evidence-actions">{part.rawSpecText && <button className="text-button" type="button" aria-expanded={rawOpen} onClick={() => setRawOpen((current) => !current)}>{rawOpen ? "수집된 스펙 닫기" : "수집된 스펙 보기"} <FiChevronDown /></button>}{sourceUrl && <a href={sourceUrl} target="_blank" rel="noreferrer">다나와 보기 <FiExternalLink /></a>}</div>
-    {rawOpen && part.rawSpecText && <pre className="part-evidence-raw">{part.rawSpecText}</pre>}
+    {part.missingFields.length > 0 && <p className="part-evidence-missing"><FiInfo /> 사양 미확인: {part.missingFields.map((field) => catalogMissingFieldLabelFor(field)).join(", ")}</p>}
   </div>;
 }
 

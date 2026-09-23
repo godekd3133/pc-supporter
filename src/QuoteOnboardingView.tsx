@@ -139,7 +139,6 @@ function BudgetRangeCard({ range, budgetWon, compact = false, gaming = false, on
         <em>{budgetRangeStatusLabel(status)}</em>
       </div>
       <p>{status === "below" ? "선택한 예산으로는 목표에 여유가 적어요. 예산을 올리거나 목표 성능을 낮추면 더 안정적인 조합을 찾을 수 있어요." : status === "above" ? "현재 목표보다 여유 있는 예산이에요. 부품 안정성·저장공간·소음까지 넓혀볼 수 있어요." : "선택한 목표를 현재 카탈로그에서 맞춰볼 수 있는 구간이에요."}</p>
-      <small>{gaming ? "현재 카탈로그·스펙을 기준으로 한 참고 범위이며, 게임별 실측 FPS를 보장하는 값은 아니에요." : "현재 카탈로그·스펙을 기준으로 한 참고 범위이며, 최종 호환성·가격은 부품 확인 단계에서 다시 확인해요."}</small>
       {(onAdjust && adjustment || onEditTarget && status === "below") && <div className="onboarding-budget-range-actions">
         {onAdjust && adjustment && <button type="button" className="onboarding-budget-range-action" data-testid="onboarding-budget-range-adjust" onClick={() => onAdjust(clampBudget(adjustment.budgetWon))}>{adjustment.label}</button>}
         {onEditTarget && status === "below" && <button type="button" className="onboarding-budget-range-edit" data-testid="onboarding-budget-range-edit-target" onClick={onEditTarget}>목표 성능 다시 고르기</button>}
@@ -152,10 +151,9 @@ function GamingTargetContract({ state, showBudgetHint = false }: { state: Onboar
   const range = showBudgetHint ? targetBudgetRangeFor(state) : null;
   return (
     <section className="onboarding-target-contract" aria-label="게이밍 성능 목표 기준">
-      <div className="onboarding-target-contract-heading"><div><span>PERFORMANCE CONTRACT</span><strong>평균 FPS {state.refreshRate} 이상 목표</strong></div><FiTarget aria-hidden="true" /></div>
+      <div className="onboarding-target-contract-heading"><div><span>GAMING TARGET</span><strong>평균 FPS {state.refreshRate} 목표</strong></div><FiTarget aria-hidden="true" /></div>
       <div className="onboarding-target-contract-tags"><span>{resolutionLabelFor(state.resolution)}</span><span>{state.refreshRate} FPS</span><span>{GAMING_GRAPHICS_PRESET_LABELS[state.graphicsPreset]}</span><span>{GAMING_UPSCALING_LABELS[state.upscaling]}</span>{state.rayTracing && <span>레이 트레이싱</span>}</div>
-      {range && <div className="onboarding-target-contract-budget"><span>이 조건의 참고 가격대</span><strong>{formatManWon(range.minWon)} ~ {formatManWon(range.maxWon)}</strong></div>}
-      <p>같은 게임·GPU·해상도·그래픽 조건의 실측 자료가 있을 때만 결과에 연결해요. 자료가 없으면 카탈로그 기준 참고값으로 안내해요.</p>
+      {range && <div className="onboarding-target-contract-budget"><span>예상 PC 가격대</span><strong>{formatManWon(range.minWon)} ~ {formatManWon(range.maxWon)}</strong></div>}
     </section>
   );
 }
@@ -415,7 +413,7 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome }: { o
         />
         {state.rayTracing && <p className="onboarding-warning"><FiAlertTriangle /> 레이 트레이싱은 같은 목표 FPS에서도 더 높은 GPU 등급이 필요할 수 있어요.</p>}
         <GamingTargetContract state={state} showBudgetHint />
-        <p className="onboarding-note">게임별 실측 FPS가 없는 옵션은 실제 성능 보장이 아니라 카탈로그 기준 참고 조건으로 전달됩니다.</p>
+
       </>
     );
   } else if (state.step === "works") {
