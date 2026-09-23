@@ -60,12 +60,12 @@ function importPayload(draftOverrides: Record<string, unknown> | null = {}, extr
 describe("generatedDraftSummaryFor", () => {
   it("shows the gaming target once in a short sentence", () => {
     const draft = importedDraft({ profile: "gaming", priority: "performance", budgetWon: 2_000_000 });
-    expect(generatedDraftSummaryFor(draft)).toBe("QHD 144Hz 게임용으로 골랐어요. 예산은 200만 원이에요.");
+    expect(generatedDraftSummaryFor(draft)).toBe("QHD 144Hz 게임용 견적이에요. 예산은 200만 원으로 설정했어요.");
   });
 
   it("keeps an exact budget when it cannot be written in whole ten-thousands", () => {
     const draft = importedDraft({ profile: "office", budgetWon: 2_000_860, withinBudget: false });
-    expect(generatedDraftSummaryFor(draft)).toBe("사무용으로 골랐어요. 예산은 2,000,860원이에요.");
+    expect(generatedDraftSummaryFor(draft)).toBe("사무용 견적이에요. 예산은 2,000,860원으로 설정했어요.");
   });
 });
 

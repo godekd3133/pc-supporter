@@ -32,7 +32,7 @@ describe("candidate decision summary", () => {
     expect(summary.label).toBe("확인 후 적용");
     expect(summary.summary).toContain("추가 확인 필요");
     expect(summary.reasons).toContain("PCIe 세대가 확인되지 않습니다.");
-    expect(summary.reasons).toContain("장착 정보가 확인 필요 상태라 실제 장착 전에 제조사 페이지를 확인해야 합니다.");
+    expect(summary.reasons).toContain("장착 정보가 부족합니다. 장착 전에 제조사 안내를 확인하세요.");
   });
 
   it("never presents an unsafe candidate as an applicable recommendation", () => {
@@ -74,6 +74,6 @@ describe("candidate decision summary", () => {
 
     expect(summary).toMatchObject({ status: "review", label: "확인 후 적용" });
     expect(summary.summary).toContain("제조사 페이지 확인 필요");
-    expect(summary.reasons).toContain("직접 입력된 스펙의 제조사 페이지 접근과 모델 식별을 확인해야 이 부품을 적용할 수 있어요.");
+    expect(summary.reasons).toContain("직접 입력한 부품은 제조사 안내에서 모델명과 사양을 확인한 뒤 적용하세요.");
   });
 });

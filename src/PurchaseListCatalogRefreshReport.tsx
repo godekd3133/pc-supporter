@@ -28,7 +28,7 @@ function priceTransition(item: CatalogRefreshReportItem) {
 
 function RefreshValueDiffs({ item }: { item: CatalogRefreshReportItem }) {
   if (!item.valueDiffs || item.valueDiffs.length === 0) return null;
-  return <details className="purchase-list-catalog-refresh-report-values" data-testid={`purchase-list-catalog-refresh-values-${item.target.kind}-${item.target.id}`}><summary>사양 변화 {item.valueDiffs.length}건</summary><div>{item.valueDiffs.map((diff) => <div className="purchase-list-catalog-refresh-report-value" key={diff.field}><span>{diff.field}</span><small><em>{catalogRefreshValueText(diff.previous)}</em><b>→</b><em>{catalogRefreshValueText(diff.next)}</em></small></div>)}</div></details>;
+  return <details className="purchase-list-catalog-refresh-report-values" data-testid={`purchase-list-catalog-refresh-values-${item.target.kind}-${item.target.id}`}><summary>사양 변화 {item.valueDiffs.length}건</summary><div>{item.valueDiffs.map((diff) => <div className="purchase-list-catalog-refresh-report-value" key={diff.field}><span>{catalogChangeFieldLabelFor(diff.field)}</span><small><em>{catalogRefreshValueText(diff.previous)}</em><b>→</b><em>{catalogRefreshValueText(diff.next)}</em></small></div>)}</div></details>;
 }
 
 export function PurchaseListCatalogRefreshReport({ report, onRetryFailed, retrying = false }: { report: CatalogRefreshReport; onRetryFailed?: (targets: RefreshTarget[]) => void; retrying?: boolean }) {

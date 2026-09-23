@@ -696,38 +696,48 @@ export const MAX_BUILD_SELECTIONS_PER_LIST = BUILD_INPUT_MAX_SELECTIONS_PER_LIST
 export const MAX_BUILD_ID_LENGTH = BUILD_INPUT_MAX_ID_LENGTH;
 export const MAX_BUILD_M2_SLOTS = BUILD_INPUT_MAX_M2_SLOTS;
 
+function buildSelectionLabel(label: string) {
+  const match = /^(cpu|cooler|motherboard|memory|gpu|ssd|hdd|case|psu|accessories)(?:\[(\d+)\])?$/.exec(label);
+  if (!match) return "부품";
+  const labels: Record<string, string> = { cpu: "CPU", cooler: "CPU 쿨러", motherboard: "메인보드", memory: "메모리", gpu: "그래픽카드", ssd: "SSD", hdd: "하드디스크", case: "케이스", psu: "파워", accessories: "주변 부품" };
+  const base = labels[match[1]] ?? "부품";
+  return match[2] === undefined ? base : `${base} ${Number(match[2]) + 1}번째`;
+}
+
 function parseSelection(value: unknown, label: string, errors: string[]) {
+  const fieldLabel = buildSelectionLabel(label);
   if (value === undefined || value === null) return undefined;
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    errors.push(`${label}은 객체여야 합니다.`);
+    errors.push(`${fieldLabel} 선택 정보가 올바르지 않습니다.`);
     return undefined;
   }
   const candidate = value as Record<string, unknown>;
   if (typeof candidate.partId !== "string" || candidate.partId.trim().length === 0) {
-    errors.push(`${label}.partId가 필요합니다.`);
+    errors.push(`${fieldLabel} 선택을 확인해 주세요.`);
     return undefined;
   }
   if (candidate.partId.trim().length > MAX_BUILD_ID_LENGTH) {
-    errors.push(`${label}.partId는 ${MAX_BUILD_ID_LENGTH}자 이하의 ID여야 합니다.`);
+    errors.push(`${fieldLabel} 정보가 너무 깁니다.`);
     return undefined;
   }
   const rawQuantity = candidate.quantity ?? 1;
   const quantity = Number(rawQuantity);
   if (!Number.isFinite(quantity) || !Number.isInteger(quantity) || quantity < 1 || quantity > 99) {
-    errors.push(`${label}.quantity는 1부터 99 사이의 정수여야 합니다.`);
+    errors.push(`${fieldLabel} 수량은 1~99개로 입력해 주세요.`);
     return undefined;
   }
   return { partId: candidate.partId.trim(), quantity };
 }
 
 function parseSelectionList(value: unknown, label: string, errors: string[]) {
+  const fieldLabel = buildSelectionLabel(label);
   if (value === undefined) return [];
   if (!Array.isArray(value)) {
-    errors.push(`${label}은 배열이어야 합니다.`);
+    errors.push(`${fieldLabel} 목록 형식이 올바르지 않습니다.`);
     return [];
   }
   if (value.length > MAX_BUILD_SELECTIONS_PER_LIST) {
-    errors.push(`${label}은 한 번에 최대 ${MAX_BUILD_SELECTIONS_PER_LIST}개까지 선택할 수 있습니다.`);
+    errors.push(`${fieldLabel} 목록은 한 번에 최대 ${MAX_BUILD_SELECTIONS_PER_LIST}개까지 선택할 수 있습니다.`);
     return [];
   }
   return value
@@ -736,45 +746,47 @@ function parseSelectionList(value: unknown, label: string, errors: string[]) {
 }
 
 function parseAccessorySelection(value: unknown, label: string, errors: string[]): AccessorySelection | undefined {
+  const fieldLabel = buildSelectionLabel(label);
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    errors.push(`${label}은 객체여야 합니다.`);
+    errors.push(`${fieldLabel} 선택 정보가 올바르지 않습니다.`);
     return undefined;
   }
   const candidate = value as Record<string, unknown>;
   if (typeof candidate.accessoryId !== "string" || candidate.accessoryId.trim().length === 0) {
-    errors.push(`${label}.accessoryId가 필요합니다.`);
+    errors.push("주변 부품 선택을 확인해 주세요.");
     return undefined;
   }
   if (candidate.accessoryId.trim().length > MAX_BUILD_ID_LENGTH) {
-    errors.push(`${label}.accessoryId는 ${MAX_BUILD_ID_LENGTH}자 이하의 ID여야 합니다.`);
+    errors.push("주변 부품 정보가 너무 깁니다.");
     return undefined;
   }
   const quantity = Number(candidate.quantity ?? 1);
   if (!Number.isFinite(quantity) || !Number.isInteger(quantity) || quantity < 1 || quantity > 99) {
-    errors.push(`${label}.quantity는 1부터 99 사이의 정수여야 합니다.`);
+    errors.push("주변 부품 수량은 1~99개로 입력해 주세요.");
     return undefined;
   }
   const targetPartId = candidate.targetPartId;
   if (targetPartId !== undefined && (typeof targetPartId !== "string" || targetPartId.trim().length === 0 || targetPartId.trim().length > MAX_BUILD_ID_LENGTH)) {
-    errors.push(`${label}.targetPartId는 비어 있지 않은 ${MAX_BUILD_ID_LENGTH}자 이하 SSD ID여야 합니다.`);
+    errors.push("주변 부품에 연결할 SSD를 확인해 주세요.");
     return undefined;
   }
   const targetAccessoryId = candidate.targetAccessoryId;
   if (targetAccessoryId !== undefined && (typeof targetAccessoryId !== "string" || targetAccessoryId.trim().length === 0 || targetAccessoryId.trim().length > MAX_BUILD_ID_LENGTH)) {
-    errors.push(`${label}.targetAccessoryId는 비어 있지 않은 ${MAX_BUILD_ID_LENGTH}자 이하 팬 허브 ID여야 합니다.`);
+    errors.push("주변 부품에 연결할 팬 허브를 확인해 주세요.");
     return undefined;
   }
   return { accessoryId: candidate.accessoryId.trim(), quantity, ...(typeof targetPartId === "string" ? { targetPartId: targetPartId.trim() } : {}), ...(typeof targetAccessoryId === "string" ? { targetAccessoryId: targetAccessoryId.trim() } : {}) };
 }
 
 function parseAccessorySelectionList(value: unknown, label: string, errors: string[]) {
+  const fieldLabel = buildSelectionLabel(label);
   if (value === undefined) return [];
   if (!Array.isArray(value)) {
-    errors.push(`${label}은 배열이어야 합니다.`);
+    errors.push(`${fieldLabel} 목록 형식이 올바르지 않습니다.`);
     return [];
   }
   if (value.length > MAX_BUILD_SELECTIONS_PER_LIST) {
-    errors.push(`${label}은 한 번에 최대 ${MAX_BUILD_SELECTIONS_PER_LIST}개까지 선택할 수 있습니다.`);
+    errors.push(`${fieldLabel} 목록은 한 번에 최대 ${MAX_BUILD_SELECTIONS_PER_LIST}개까지 선택할 수 있습니다.`);
     return [];
   }
   return value
@@ -785,33 +797,33 @@ function parseAccessorySelectionList(value: unknown, label: string, errors: stri
 function parseM2SlotSelection(value: unknown, errors: string[]) {
   if (value === undefined || value === null) return undefined;
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    errors.push("m2SlotSelection은 슬롯 ID와 SSD ID를 담은 객체여야 합니다.");
+    errors.push("M.2 슬롯별 SSD 선택을 확인해 주세요.");
     return undefined;
   }
   const rawSlotKeys = Object.keys(value as Record<string, unknown>);
   if (rawSlotKeys.length > MAX_BUILD_M2_SLOTS) {
-    errors.push(`m2SlotSelection은 최대 ${MAX_BUILD_M2_SLOTS}개 슬롯까지 지정할 수 있습니다.`);
+    errors.push(`M.2 슬롯은 최대 ${MAX_BUILD_M2_SLOTS}개까지 지정할 수 있습니다.`);
     return undefined;
   }
   const normalized: Record<string, string> = {};
   for (const [rawSlotId, rawPartId] of Object.entries(value as Record<string, unknown>)) {
     const slotId = normalizeM2SlotId(rawSlotId);
     if (!slotId) {
-      errors.push(`m2SlotSelection의 슬롯 ID ${rawSlotId}가 M2_1부터 M2_8 형식이 아닙니다.`);
+      errors.push(`M.2 슬롯 이름 ${rawSlotId}가 올바르지 않습니다. M2_1부터 M2_8까지 사용할 수 있습니다.`);
       continue;
     }
     if (Object.prototype.hasOwnProperty.call(normalized, slotId)) {
-      errors.push(`${slotId} 슬롯이 m2SlotSelection에서 중복되었습니다.`);
+      errors.push(`${slotId} 슬롯을 두 번 지정했습니다.`);
       continue;
     }
     if (typeof rawPartId !== "string" || rawPartId.trim().length === 0 || rawPartId.trim().length > MAX_BUILD_ID_LENGTH) {
-      errors.push(`${slotId}의 SSD ID는 ${MAX_BUILD_ID_LENGTH}자 이하이어야 합니다.`);
+      errors.push(`${slotId} 슬롯에 연결할 SSD를 확인해 주세요.`);
       continue;
     }
     normalized[slotId] = rawPartId.trim();
   }
   if (Object.keys(normalized).length > MAX_BUILD_M2_SLOTS) {
-    errors.push(`m2SlotSelection은 최대 ${MAX_BUILD_M2_SLOTS}개 슬롯까지 지정할 수 있습니다.`);
+    errors.push(`M.2 슬롯은 최대 ${MAX_BUILD_M2_SLOTS}개까지 지정할 수 있습니다.`);
   }
   return Object.keys(normalized).length > 0 ? normalized : undefined;
 }
@@ -823,11 +835,11 @@ export function parseBuild(value: unknown): BuildParseResult {
   const candidate = value as Record<string, unknown>;
   const errors: string[] = [];
   if (candidate.useIntegratedGraphics !== undefined && typeof candidate.useIntegratedGraphics !== "boolean") {
-    errors.push("useIntegratedGraphics는 boolean이어야 합니다.");
+    errors.push("내장 그래픽 설정을 확인해 주세요.");
   }
   const rgbControllerAccessoryId = candidate.rgbControllerAccessoryId;
   if (rgbControllerAccessoryId !== undefined && (typeof rgbControllerAccessoryId !== "string" || rgbControllerAccessoryId.trim().length === 0 || rgbControllerAccessoryId.trim().length > MAX_BUILD_ID_LENGTH)) {
-    errors.push(`rgbControllerAccessoryId는 비어 있지 않은 ${MAX_BUILD_ID_LENGTH}자 이하 팬 허브 ID여야 합니다.`);
+    errors.push("RGB 컨트롤러를 선택해 주세요.");
     }
   return {
     build: {
@@ -2845,7 +2857,7 @@ app.post("/api/builds/check-preview", buildMonitorRateLimit, async (request, res
       return { id, status: "not_found", message: "저장 견적이 없거나 공유 링크가 만료되었습니다." };
     }
     try {
-      if (!resources) throw new Error("현재 카탈로그 기준을 확보하지 못했습니다.");
+      if (!resources) throw new Error("현재 부품 정보를 불러오지 못했습니다.");
       const cached = await savedBuildCheckSnapshotForResources(build, resources);
       cacheLookups.add(cached.lookup);
       const snapshot = cached.value;
@@ -3017,7 +3029,7 @@ app.post("/api/builds/:id/purchase-price-history/restore", buildShareRateLimit, 
   }
   const targetRevision = parseSavedBuildPurchasePriceHistoryRevision(request.body?.revision);
   if (targetRevision.error || targetRevision.revision === undefined) {
-    response.status(400).json({ error: targetRevision.error ?? "복원할 가격 확인 이력 revision이 올바르지 않습니다." });
+    response.status(400).json({ error: targetRevision.error ?? "복원할 가격 이력 버전을 확인해 주세요." });
     return;
   }
   const rowKeys = request.body?.rowKeys;
@@ -3054,7 +3066,7 @@ app.post("/api/builds/:id/purchase-progress/restore", buildShareRateLimit, async
   }
   const targetRevision = parseSavedBuildPurchaseProgressRevision(request.body?.revision);
   if (targetRevision.error || targetRevision.revision === undefined) {
-    response.status(400).json({ error: targetRevision.error ?? "복원할 구매 진행률 revision이 올바르지 않습니다." });
+    response.status(400).json({ error: targetRevision.error ?? "복원할 구매 진행률 버전을 확인해 주세요." });
     return;
   }
   const rowKeys = request.body?.rowKeys;

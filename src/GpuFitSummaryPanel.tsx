@@ -1,4 +1,4 @@
-import { FiBox, FiCheckCircle, FiInfo, FiLayers, FiMonitor, FiZap } from "react-icons/fi";
+import { FiBox, FiCheckCircle, FiLayers, FiMonitor, FiZap } from "react-icons/fi";
 import type { IconType } from "react-icons";
 import { gpuPurchaseEvidenceFor, type GpuFitStatus, type GpuFitSummary, type PciePowerOptionFit } from "../shared/gpu-fit";
 import type { Part, PhysicalEvidenceSource, PciePowerConnectorKind, PciePowerRequirement } from "../shared/types";
@@ -9,7 +9,7 @@ type FitTone = "good" | "warning" | "danger" | "unknown" | "neutral";
 const STATUS_LABELS: Record<GpuFitStatus, string> = {
   compatible: "기준 통과",
   incompatible: "차단",
-  needs_review: "확인 필요",
+  needs_review: "정보 부족",
   not_applicable: "미적용"
 };
 
@@ -28,16 +28,16 @@ function requirementText(requirements: PciePowerRequirement[]) {
 }
 
 function optionText(options: PciePowerRequirement[][], requirementsKnown: boolean, adapterOptionIndices: number[]) {
-  if (!requirementsKnown) return "GPU 보조전원 정보 확인 필요";
+  if (!requirementsKnown) return "GPU 보조전원 정보 없음";
   return options.length > 0 ? options.map((option, index) => `${adapterOptionIndices.includes(index) ? "어댑터" : "제품 페이지"} 경로 ${index + 1}: ${requirementText(option)}`).join(" 또는 ") : "GPU 보조전원 요구 없음";
 }
 
 function connectorText(connectors: Partial<Record<PciePowerConnectorKind, number>> | undefined) {
-  if (!connectors) return "PSU 보조전원 정보 확인 필요";
+  if (!connectors) return "PSU 보조전원 정보 없음";
   const entries = (Object.entries(connectors) as Array<[PciePowerConnectorKind, number | undefined]>)
     .filter(([, count]) => count !== undefined)
     .map(([kind, count]) => `${connectorLabel(kind)} ${count}개`);
-  return entries.length > 0 ? entries.join(" + ") : "확인된 PSU 커넥터 없음";
+  return entries.length > 0 ? entries.join(" + ") : "PSU 커넥터 정보 없음";
 }
 
 function optionFitText(option: PciePowerOptionFit, index: number, isAdapter: boolean) {
@@ -46,18 +46,18 @@ function optionFitText(option: PciePowerOptionFit, index: number, isAdapter: boo
   if (option.status === "blocker") return `${path} ${index + 1} · 부족 ${requirementText(option.missing)}`;
   const unknown = option.unknown.length > 0 ? ` · 미확인 ${requirementText(option.unknown)}` : "";
   const missing = option.missing.length > 0 ? ` · 부족 ${requirementText(option.missing)}` : "";
-  return `${path} ${index + 1} · 확인 필요${missing}${unknown}`;
+  return `${path} ${index + 1} · 정보 부족${missing}${unknown}`;
 }
 
 function psuStructureText(cableType: Part["specs"]["psuCableType"], railType: Part["specs"]["psuRailType"]) {
-  const cable = cableType === "fully_modular" ? "풀모듈러" : cableType === "semi_modular" ? "세미모듈러" : cableType === "fixed" ? "케이블 일체형" : "케이블 구조 확인 필요";
-  const rail = railType === "single" ? "12V 싱글레일" : railType === "multi" ? "12V 다중레일" : "12V 레일 정보 확인 필요";
+  const cable = cableType === "fully_modular" ? "풀모듈러" : cableType === "semi_modular" ? "세미모듈러" : cableType === "fixed" ? "케이블 일체형" : "케이블 구조 정보 없음";
+  const rail = railType === "single" ? "12V 싱글레일" : railType === "multi" ? "12V 다중레일" : "12V 레일 정보 없음";
   return `${cable} · ${rail}`;
 }
 
 function psuCableTopologyDetail(fit: GpuFitSummary["connector"]) {
-  const runs = fit.psuIndependentPcieCableRuns === undefined ? "독립 런 수 확인 필요" : `독립 PCIe 런 ${fit.psuIndependentPcieCableRuns}개`;
-  const topology = fit.psuPcieCableTopology === "independent" ? "분배 없음" : fit.psuPcieCableTopology === "shared" ? "분배·공유 표기" : "분배 구조 확인 필요";
+  const runs = fit.psuIndependentPcieCableRuns === undefined ? "독립 PCIe 런 정보 없음" : `독립 PCIe 런 ${fit.psuIndependentPcieCableRuns}개`;
+  const topology = fit.psuPcieCableTopology === "independent" ? "분배 없음" : fit.psuPcieCableTopology === "shared" ? "분배·공유 표기" : "분배 구조 정보 없음";
   return `${runs} · ${topology}`;
 }
 
@@ -72,7 +72,7 @@ function cableTopologyEvidenceDetail(fit: GpuFitSummary["connector"], status: Gp
 }
 
 function mmDetail(actualMm: number | undefined, limitMm: number | undefined, clearanceMm: number | undefined, actualLabel: string, limitLabel: string) {
-  if (actualMm === undefined || limitMm === undefined) return `${actualLabel} 또는 ${limitLabel} 페이지 확인 필요`;
+  if (actualMm === undefined || limitMm === undefined) return `${actualLabel} 또는 ${limitLabel} 정보 없음`;
   if (clearanceMm === undefined) return `${actualLabel} ${actualMm}mm · ${limitLabel} ${limitMm}mm · 여유 계산 필요`;
   return `${actualLabel} ${actualMm}mm · ${limitLabel} ${limitMm}mm · ${clearanceMm >= 0 ? `${clearanceMm}mm 여유` : `${Math.abs(clearanceMm)}mm 초과`}`;
 }
@@ -84,7 +84,7 @@ function powerDetail(fit: GpuFitSummary["power"]) {
 
 function physicalDetail(fit: GpuFitSummary["physical"]) {
   const slot = fit.gpuSlotOccupancy === undefined ? undefined : `GPU 물리 슬롯 ${fit.gpuSlotOccupancy}`;
-  if (fit.gpuCableBendClearanceMm === undefined || fit.caseSidePanelClearanceMm === undefined) return [slot, "케이블 측면 여유 확인 필요"].filter(Boolean).join(" · ") || "제조사 물리 치수 확인 필요";
+  if (fit.gpuCableBendClearanceMm === undefined || fit.caseSidePanelClearanceMm === undefined) return [slot, "케이블 측면 여유 정보 없음"].filter(Boolean).join(" · ") || "물리 치수 정보 없음";
   const clearance = fit.cableClearanceMm ?? fit.caseSidePanelClearanceMm - fit.gpuCableBendClearanceMm;
   return `${slot ? `${slot} · ` : ""}케이블 요구 ${fit.gpuCableBendClearanceMm}mm · 케이스 ${fit.caseSidePanelClearanceMm}mm · ${clearance >= 0 ? `${clearance}mm 여유` : `${Math.abs(clearance)}mm 부족`}`;
 }
@@ -96,7 +96,7 @@ function FitMetric({ icon: Icon, label, value, detail, status }: { icon: IconTyp
 
 // 접속사 과/와는 앞 명사에만 붙는다 — 뒤 명사에는 에가 직접 붙어야 한다.
 export function gpuFitPassSummaryFor(caseName?: string, psuName?: string) {
-  return `${gwa(caseName ?? "케이스")} ${psuName ?? "PSU"} 조합은 등록된 GPU 장착·전원 기준을 통과했어요.`;
+  return `${gwa(caseName ?? "케이스")} ${psuName ?? "PSU"} 조합은 현재 확인한 사양에서 GPU 장착·전원 문제를 찾지 못했어요.`;
 }
 
 function actionText(fit: GpuFitSummary, computerCase: Part | undefined, psu: Part | undefined) {
@@ -126,11 +126,11 @@ export function GpuFitSummaryPanel({ fit, gpu, computerCase, psu }: { fit: GpuFi
   const powerValue = fit.power.psuWattageW === undefined ? "정보 없음" : `${fit.power.psuWattageW}W PSU`;
   const connectorValue = !fit.connector.requirementsKnown ? "요구 정보 없음" : fit.connector.options.length === 0 ? "보조전원 없음" : fit.connector.matchedOptionIndex !== undefined ? `경로 ${fit.connector.matchedOptionIndex + 1}` : "연결 경로 정보 없음";
   return <section className={`gpu-fit-summary-panel ${toneFor(displayStatus)}`} aria-label="GPU 장착·전원 요약" data-testid="gpu-fit-summary-panel">
-    <div className="gpu-fit-summary-heading"><div><h2>GPU 장착 정보</h2><p>{gpu.name}를 기준으로 케이스 장착 치수와 PSU 전원 경로를 확인합니다.</p></div><div className="gpu-fit-summary-badge"><FiMonitor /><strong>{STATUS_LABELS[displayStatus]}</strong></div></div>
+    <div className="gpu-fit-summary-heading"><div><h2>GPU 장착 정보</h2><p>GPU 길이와 파워 연결 상태를 확인합니다.</p></div><div className="gpu-fit-summary-badge"><FiMonitor /><strong>{STATUS_LABELS[displayStatus]}</strong></div></div>
     <div className="gpu-fit-summary-context"><span><FiMonitor /> GPU · {gpu.name}</span><span><FiBox /> 케이스 · {computerCase?.name ?? "미선택"}</span><span><FiZap /> PSU · {psu?.name ?? "미선택"}</span></div>
     <div className="gpu-fit-metrics">
-      <FitMetric icon={FiBox} label="케이스 장착 길이" value={fit.length.actualMm !== undefined && fit.length.limitMm !== undefined ? `${fit.length.actualMm} / ${fit.length.limitMm}mm` : "확인 필요"} detail={mmDetail(fit.length.actualMm, fit.length.limitMm, fit.length.clearanceMm, "GPU", "케이스 허용")} status={fit.length.status} />
-      <FitMetric icon={FiLayers} label="두께·슬롯 간섭" value={thicknessValue} detail={fit.thickness.actualMm === undefined ? "GPU 두께 페이지 확인 필요" : `${fit.thickness.warningThresholdMm}mm 이상이면 인접 슬롯·측판을 확인합니다.`} status={fit.thickness.status} />
+      <FitMetric icon={FiBox} label="케이스 장착 길이" value={fit.length.actualMm !== undefined && fit.length.limitMm !== undefined ? `${fit.length.actualMm} / ${fit.length.limitMm}mm` : "정보 없음"} detail={mmDetail(fit.length.actualMm, fit.length.limitMm, fit.length.clearanceMm, "GPU", "케이스 허용")} status={fit.length.status} />
+      <FitMetric icon={FiLayers} label="두께·슬롯 간섭" value={thicknessValue} detail={fit.thickness.actualMm === undefined ? "GPU 두께 정보 없음" : `${fit.thickness.warningThresholdMm}mm 이상이면 인접 슬롯·측판에 닿을 수 있어요.`} status={fit.thickness.status} />
       <FitMetric icon={FiZap} label="PSU 전력 여유" value={powerValue} detail={powerDetail(fit.power)} status={fit.power.status} />
       <FitMetric icon={FiMonitor} label="보조전원 연결" value={connectorValue} detail={connectorStatusText} status={fit.connector.status} />
       {purchaseEvidence.physical !== "not_applicable" && <FitMetric icon={FiLayers} label="물리 슬롯·케이블" value={fit.physical.gpuSlotOccupancy === undefined ? "정보 없음" : `${fit.physical.gpuSlotOccupancy} 슬롯`} detail={physicalEvidenceDetail(fit.physical, purchaseEvidence.physical)} status={purchaseEvidence.physical} />}
@@ -138,6 +138,5 @@ export function GpuFitSummaryPanel({ fit, gpu, computerCase, psu }: { fit: GpuFi
     </div>
     <div className="gpu-fit-connector-panel"><div><strong>GPU가 요구하는 연결 선택지</strong><small>{optionText(fit.connector.options, fit.connector.requirementsKnown, fit.connector.adapterOptionIndices)}</small></div><div><strong>PSU 커넥터</strong><small>{connectorText(fit.connector.connectors)}</small><small>{psuStructureText(fit.connector.psuCableType, fit.connector.psuRailType)}</small></div>{fit.connector.optionFits.length > 0 && <div className="gpu-fit-connector-options"><strong>선택지별 결과</strong>{fit.connector.optionFits.map((option, index) => <span className={option.status === "compatible" ? "good" : option.status === "blocker" ? "danger" : "unknown"} key={`${index}-${option.status}`}>{optionFitText(option, index, fit.connector.adapterOptionIndices.includes(index))}</span>)}</div>}</div>
     <div className="gpu-fit-actions"><div><strong>다음 행동</strong>{actionText(fit, computerCase, psu).map((action) => <p key={action}><FiCheckCircle /> {action}</p>)}</div></div>
-    <p className="gpu-fit-note"><FiInfo /> 수치가 확인된 항목만 계산합니다. PCIe 커넥터 수만으로 케이블·레일 구성이나 굽힘 공간은 판단할 수 없어요. 실제 조립 전 GPU·PSU 설명서와 케이스 공간을 확인하세요.</p>
   </section>;
 }

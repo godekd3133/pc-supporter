@@ -82,12 +82,14 @@ describe("budget ladder share", () => {
   });
 
   it("rejects incomplete success items and non-adjacent or malformed diffs", () => {
-    expect(parseBudgetLadderShareInput({ payload: { ...payload, items: [item("economy", 800_000, { totalPriceWon: undefined }), item("target", 1_000_000), item("headroom", 1_200_000)] } }).errors[0]).toContain("성공 결과에 예상 합계");
-    expect(parseBudgetLadderShareInput({ payload: { ...payload, changes: [{ ...payload.changes[0], fromId: "economy", toId: "headroom" }] } }).errors[0]).toContain("인접 구간");
-    expect(parseBudgetLadderShareInput({ payload: { ...payload, changes: [{ ...payload.changes[0], budgetDeltaWon: 200_000.5 }] } }).errors[0]).toContain("변화 값");
-    expect(parseBudgetLadderShareInput({ payload, request: { ...request, gamingRefreshRate: 75 } }).errors[0]).toContain("주사율");
-    expect(parseBudgetLadderShareInput({ payload, parentId: 42 }).errors[0]).toContain("원본 snapshot ID");
-    expect(parseBudgetLadderShareInput({ payload: { ...payload, items: [item("economy", 800_000, { selection: { useIntegratedGraphics: true, memory: "invalid", ssd: [], hdd: [], accessories: [] } }), item("target", 1_000_000), item("headroom", 1_200_000)] } }).errors[0]).toContain("선택 목록");
+    const missingTotal = parseBudgetLadderShareInput({ payload: { ...payload, items: [item("economy", 800_000, { totalPriceWon: undefined }), item("target", 1_000_000), item("headroom", 1_200_000)] } });
+    expect(missingTotal.errors[0]).toBe("예산 비교를 공유하지 못했어요. 다시 만들어 주세요.");
+    expect(missingTotal.errors[1]).toContain("성공 결과에 예상 합계");
+    expect(parseBudgetLadderShareInput({ payload: { ...payload, changes: [{ ...payload.changes[0], fromId: "economy", toId: "headroom" }] } }).errors[1]).toContain("인접 구간");
+    expect(parseBudgetLadderShareInput({ payload: { ...payload, changes: [{ ...payload.changes[0], budgetDeltaWon: 200_000.5 }] } }).errors[1]).toContain("변화 값");
+    expect(parseBudgetLadderShareInput({ payload, request: { ...request, gamingRefreshRate: 75 } }).errors[1]).toContain("주사율");
+    expect(parseBudgetLadderShareInput({ payload, parentId: 42 }).errors[1]).toContain("원본 snapshot ID");
+    expect(parseBudgetLadderShareInput({ payload: { ...payload, items: [item("economy", 800_000, { selection: { useIntegratedGraphics: true, memory: "invalid", ssd: [], hdd: [], accessories: [] } }), item("target", 1_000_000), item("headroom", 1_200_000)] } }).errors[1]).toContain("메모리 목록 형식");
   });
 
   it("rejects more M.2 slot mappings than the physical slot contract allows", () => {
@@ -97,7 +99,7 @@ describe("budget ladder share", () => {
       request
     });
 
-    expect(parsed.errors[0]).toContain("m2SlotSelection");
+    expect(parsed.errors[1]).toContain("M.2 슬롯 선택 정보");
   });
 
   it("normalizes persisted records, hides owner credentials, and detects catalog/share expiry", () => {

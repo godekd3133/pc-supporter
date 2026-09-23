@@ -26,7 +26,6 @@ import type { AlternativeComparisonLiveCandidate } from "../shared/alternative-c
 import { CATALOG_WATCHLIST_STORAGE_KEY, addCatalogWatchEntry, catalogWatchlistContains, catalogWatchlistFromJson, catalogWatchlistToJson } from "../shared/catalog-watchlist";
 import { BENCHMARK_SOURCE_KIND_LABELS, DATA_FRESHNESS_LABELS, isKnownPrice, type Part, type PhysicalEvidenceSource, type ServiceMeta } from "../shared/types";
 import { benchmarkFreshnessLabelFor, benchmarkSourceCheckLabelFor } from "../shared/benchmark-evidence";
-import { valueScoreText } from "../shared/value-score";
 import { api } from "./api";
 import { safeExternalUrl, safeHttpsUrl } from "./safe-source-url";
 import { LOCAL_IMPORT_MAX_BYTES } from "../shared/file-import-limits";
@@ -46,15 +45,15 @@ function SharedComparisonSimilarityEvidence({ evidence }: { evidence: Alternativ
 }
 
 function sharedScenarioStatusLabel(status: NonNullable<AlternativeComparisonCandidate["scenario"]>["status"]) {
-  return status === "compatible" ? "호환 가능" : status === "needs_review" ? "확인 필요" : "호환 불가";
+  return status === "compatible" ? "호환 가능" : status === "needs_review" ? "정보 부족" : "호환 불가";
 }
 
 function sharedScenarioRiskText(scenario: AlternativeComparisonCandidate["scenario"]) {
-  return scenario ? `차단 ${scenario.blockerCount}개 · 주의 ${scenario.warningCount}개 · 확인 필요 ${scenario.unknownCount}개` : "미리 적용 기록 없음";
+  return scenario ? `차단 ${scenario.blockerCount}개 · 주의 ${scenario.warningCount}개 · 정보 부족 ${scenario.unknownCount}개` : "미리 적용 기록 없음";
 }
 
 function sharedScenarioPriceText(scenario: AlternativeComparisonCandidate["scenario"]) {
-  if (!scenario || scenario.priceDeltaWon === undefined) return "가격 변화 확인 필요";
+  if (!scenario || scenario.priceDeltaWon === undefined) return "가격 변화 정보 부족";
   return scenario.priceDeltaWon === 0 ? "현재와 동일" : `${scenario.priceDeltaWon > 0 ? "+" : ""}${scenario.priceDeltaWon.toLocaleString("ko-KR")}원`;
 }
 
@@ -68,23 +67,6 @@ function sharedScenarioTradeoffStatus(tradeoff: NonNullable<NonNullable<Alternat
   return tradeoff.eligible === false ? "비교 제외" : tradeoff.frontier ? "비교 우위" : "밀림";
 }
 
-function sharedScenarioTradeoffFacts(tradeoff: NonNullable<NonNullable<AlternativeComparisonCandidate["scenario"]>["tradeoff"]>) {
-  return [
-    tradeoff.riskScore !== undefined ? `위험 ${tradeoff.riskScore}점` : "위험 확인 필요",
-    tradeoff.priceDeltaWon !== undefined ? `가격 변화 ${tradeoff.priceDeltaWon > 0 ? "+" : ""}${tradeoff.priceDeltaWon.toLocaleString("ko-KR")}원` : "가격 변화 확인 필요",
-    tradeoff.analysisScore !== undefined ? `분석 ${tradeoff.analysisScore}점` : "분석 확인 필요",
-    tradeoff.evidenceScore !== undefined ? `정보 ${tradeoff.evidenceScore}점` : "정보 확인 필요"
-  ].join(" · ");
-}
-
-function sharedComparisonValueScoreText(candidate: AlternativeComparisonCandidate) {
-  return candidate.valueScore !== undefined && candidate.valueLabel ? `${candidate.valueLabel} ${valueScoreText(candidate.valueScore)}` : "산정 불가";
-}
-
-function sharedScenarioCheckStatusLabel(status: AlternativeComparisonChecklistEntry["status"]) {
-  return status === "ready" ? "확인됨" : status === "review" ? "확인 필요" : "차단";
-}
-
 function sharedScenarioChecklistStorageKey(comparisonId: string) {
   return `pc-supporter-alternative-comparison-checklist:${comparisonId}`;
 }
@@ -95,7 +77,7 @@ function sharedCatalogCandidateUrl(candidate: AlternativeComparisonCandidate) {
 }
 
 function sharedLiveCandidateStatusLabel(status: AlternativeComparisonLiveCandidate["status"]) {
-  return status === "loading" ? "현재 기준 확인 중" : status === "available" ? "현재 상품 페이지됨" : status === "missing" ? "현재 카탈로그에서 찾지 못함" : status === "mismatch" ? "범주 불일치" : status === "error" ? "확인 실패" : "부품 정보 확인 필요";
+  return status === "loading" ? "불러오는 중" : status === "available" ? "부품 정보 있음" : status === "missing" ? "현재 목록에 없음" : status === "mismatch" ? "부품 종류가 다름" : status === "error" ? "불러오지 못했어요" : "부품 정보 없음";
 }
 
 function sharedLiveCandidateStatusTone(status: AlternativeComparisonLiveCandidate["status"]) {
@@ -108,9 +90,9 @@ function sharedLivePriceText(row: AlternativeComparisonLiveCandidate) {
   if (isKnownPrice(sharedPrice) && isKnownPrice(currentPrice) && row.priceDeltaWon !== undefined) {
     return `공유 당시 ${sharedPrice.toLocaleString("ko-KR")}원 → 현재 ${currentPrice.toLocaleString("ko-KR")}원${row.priceDeltaWon === 0 ? " · 동일" : ` · ${row.priceDeltaWon > 0 ? "+" : ""}${row.priceDeltaWon.toLocaleString("ko-KR")}원`}`;
   }
-  if (isKnownPrice(currentPrice)) return `현재 카탈로그 ${currentPrice.toLocaleString("ko-KR")}원 · 공유 당시 숫자 가격 없음`;
-  if (isKnownPrice(sharedPrice)) return `공유 당시 ${sharedPrice.toLocaleString("ko-KR")}원 · 현재 가격 미등록`;
-  return "공유·현재 가격 미등록";
+  if (isKnownPrice(currentPrice)) return `현재 가격 ${currentPrice.toLocaleString("ko-KR")}원 · 공유 당시 가격 정보 없음`;
+  if (isKnownPrice(sharedPrice)) return `공유 당시 ${sharedPrice.toLocaleString("ko-KR")}원 · 현재 가격 정보 없음`;
+  return "공유 당시와 현재 가격 정보가 없어요.";
 }
 
 function SharedLiveWatchControl({ part, onToast }: { part: Part; onToast: (message: string) => void }) {
@@ -163,7 +145,7 @@ function SharedComparisonBaseline({ snapshot }: { snapshot: AlternativeCompariso
   const hasBenchmarkEvidence = snapshot.candidates.some((candidate) => candidate.benchmarkEvidence);
   if (!hasBaseline && !hasSimilarityEvidence && !hasBenchmarkEvidence) return null;
   return <>
-    {hasBaseline && <section className="shared-comparison-baseline" data-testid="shared-comparison-baseline" aria-label="공유 부품 비교 현재 기준선"><div><strong>현재 기준선</strong><span>{snapshot.currentPartName ?? "기준 부품 정보 없음"}</span></div><div>{snapshot.currentPartSummary && <small>{snapshot.currentPartSummary}</small>}{snapshot.currentPartPrice && <em>{snapshot.currentPartPrice}</em>}</div></section>}
+    {hasBaseline && <section className="shared-comparison-baseline" data-testid="shared-comparison-baseline" aria-label="공유 부품 비교 기준"><div><strong>비교 기준 부품</strong><span>{snapshot.currentPartName ?? "비교 기준 부품 정보 없음"}</span></div><div>{snapshot.currentPartSummary && <small>{snapshot.currentPartSummary}</small>}{snapshot.currentPartPrice && <em>{snapshot.currentPartPrice}</em>}</div></section>}
     {hasSimilarityEvidence && <section className="shared-comparison-similarity-panel" data-testid="shared-comparison-similarity-evidence" aria-label="공유된 성능 비교 정보"><div className="shared-comparison-similarity-panel-heading"><div><h3>주요 사양 비교</h3><small>공유 당시 비교한 주요 사양이에요.</small></div><span>{snapshot.candidates.filter((candidate) => candidate.similarityEvidence).length}개 부품</span></div><div className="shared-comparison-similarity-panel-grid">{snapshot.candidates.map((candidate) => <article key={`${candidate.name}-similarity-panel`}><strong>{candidate.name}</strong>{candidate.similarityEvidence ? <SharedComparisonSimilarityEvidence evidence={candidate.similarityEvidence} /> : <small>비교 정보 없음</small>}</article>)}</div></section>}
     {hasBenchmarkEvidence && <section className="shared-comparison-benchmark-panel" data-testid="shared-comparison-benchmark-evidence-panel" aria-label="공유된 원본 성능 정보"><div className="shared-comparison-benchmark-panel-heading"><div><h3>CPU·GPU 성능 점수</h3><small>공유 당시 비교한 CPU·GPU 점수예요.</small></div><span>{snapshot.candidates.filter((candidate) => candidate.benchmarkEvidence).length}개 부품</span></div><div className="shared-comparison-benchmark-panel-grid">{snapshot.candidates.map((candidate) => <article key={`${candidate.name}-benchmark-panel`}><strong>{candidate.name}</strong>{candidate.benchmarkEvidence ? <SharedComparisonBenchmarkEvidence evidence={candidate.benchmarkEvidence} /> : <small>성능 점수 기록 없음</small>}</article>)}</div></section>}
   </>;

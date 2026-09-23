@@ -32,7 +32,7 @@ function writeCheckedIdsToStorage(storageKey: string, checkedIds: string[]) {
 }
 
 function severityLabel(severity: "blocker" | "warning" | "unknown" | "manual") {
-  return severity === "blocker" ? "차단" : severity === "warning" ? "주의" : severity === "unknown" ? "확인 필요" : "직접 확인";
+  return severity === "blocker" ? "차단" : severity === "warning" ? "주의" : severity === "unknown" ? "정보 부족" : "직접 확인";
 }
 
 type ChecklistFilter = "all" | "finding" | "manual";
@@ -59,7 +59,7 @@ export function PurchaseChecklistPanel({ build, result, partMap, storageKey, onF
   const resourceBlocked = resourceSummary.state === "danger";
   const resourceNeedsReview = resourceBlocked || resourceSummary.state === "warning" || resourceSummary.state === "unknown";
   const state = result.blockerCount > 0 || resourceBlocked ? "blocked" : result.warningCount > 0 || result.unknownCount > 0 || resourceNeedsReview || !allChecked ? "review" : "complete";
-  const filterOptions: Array<{ id: ChecklistFilter; label: string }> = [{ id: "all", label: "전체" }, { id: "finding", label: "검사 항목" }, { id: "manual", label: "직접 확인" }];
+  const filterOptions: Array<{ id: ChecklistFilter; label: string }> = [{ id: "all", label: "전체" }, { id: "finding", label: "호환 항목" }, { id: "manual", label: "직접 확인" }];
   const filterCounts: Record<ChecklistFilter, number> = { all: items.length, finding: items.filter((item) => item.kind === "finding").length, manual: items.filter((item) => item.kind === "manual").length };
   const visibleItems = filter === "all" ? items : items.filter((item) => item.kind === filter);
 
@@ -172,7 +172,7 @@ export function PurchaseChecklistPanel({ build, result, partMap, storageKey, onF
     if (!transferPreview) return;
     if (!purchaseChecklistTransferMatchesCurrentFor(items.map((item) => item.id), transferPreview.itemIds)) {
       setTransferPreview(null);
-      setActionMessage("검사 결과가 바뀌어 체크리스트 항목이 달라졌습니다. JSON을 다시 가져와 주세요.");
+      setActionMessage("호환 결과가 바뀌어 체크리스트 항목이 달라졌어요. JSON 파일을 다시 불러와 주세요.");
       return;
     }
     setCheckedIds(transferPreview.checkedIds);
@@ -187,25 +187,25 @@ export function PurchaseChecklistPanel({ build, result, partMap, storageKey, onF
       : result.blockerCount > 0 || resourceBlocked
         ? allChecked ? resourceBlocked && result.blockerCount === 0 ? "체크 완료 · 전력·냉각 기준 미달" : `체크 완료 · 차단 ${result.blockerCount}개 남음` : "구매 보류 항목 있음"
       : result.warningCount > 0 || result.unknownCount > 0
-        ? allChecked ? "체크 완료 · 검사 확인 필요" : `${progress.remaining}개 남음`
+        ? allChecked ? "체크 완료 · 호환 결과 정보 부족" : `${progress.remaining}개 남음`
         : resourceNeedsReview
-          ? allChecked ? "체크 완료 · 전력·냉각 확인 필요" : `${progress.remaining}개 남음`
-        : state === "complete" ? "체크·검사 완료" : `${progress.remaining}개 남음`;
+          ? allChecked ? "체크 완료 · 전력·냉각 정보 부족" : `${progress.remaining}개 남음`
+        : state === "complete" ? "모두 체크했어요" : `${progress.remaining}개 남음`;
   return <section className={`purchase-checklist-panel ${state}`} aria-label="구매 전 실행 체크리스트" data-testid="purchase-checklist" tabIndex={-1}>
-    <div className="purchase-checklist-heading"><div><h2>구매 전 실행 체크리스트</h2><p>검사 항목과 직접 확인할 제조사·실물 조립 항목을 나눠서 관리해요.</p></div><strong><FiCheckCircle /> {headingLabel}</strong></div>
+    <div className="purchase-checklist-heading"><div><h2>구매 전 체크리스트</h2><p>부품 정보와 조립 전에 살펴볼 항목을 한곳에서 관리해요.</p></div><strong><FiCheckCircle /> {headingLabel}</strong></div>
     <div className="purchase-checklist-progress-heading"><span>진행률</span><b>{progress.checked} / {progress.total}개</b><em>{progress.percent}%</em></div>
     <div className="purchase-checklist-progress" role="progressbar" aria-label={`구매 전 체크리스트 ${progress.percent}% 완료`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress.percent}><span style={{ width: `${progress.percent}%` }} /></div>
     <div className="purchase-checklist-filters" role="group" aria-label="구매 전 체크리스트 필터">{filterOptions.map((option) => <button className={filter === option.id ? "selected" : ""} type="button" aria-pressed={filter === option.id} onClick={() => setFilter(option.id)} key={option.id}>{option.label}<span>{filterCounts[option.id]}</span></button>)}</div>
     <div className="purchase-checklist-actions"><button className="text-button" type="button" data-testid="purchase-checklist-copy" onClick={() => void copyChecklist()} disabled={progress.total === 0}><FiCopy /> 체크리스트 복사</button><button className="text-button" type="button" onClick={downloadChecklist} disabled={progress.total === 0}><FiDownload /> JSON 저장</button><input ref={transferInputRef} className="purchase-checklist-transfer-input" type="file" accept=".json,application/json" aria-label="체크리스트 JSON 파일 가져오기" onChange={(event) => void importChecklistFile(event)} disabled={progress.total === 0} /><button className="text-button" type="button" onClick={() => transferInputRef.current?.click()} disabled={progress.total === 0}><FiDownload /> JSON 가져오기</button><button className="text-button" type="button" onClick={() => window.print()} disabled={progress.total === 0}><FiPrinter /> 인쇄</button><button className="text-button" type="button" onClick={checkAll} disabled={progress.total === 0 || progress.remaining === 0}><FiCheckCircle /> 모두 완료로 표시</button><button className="text-button" type="button" onClick={clearAll} disabled={progress.checked === 0}><FiRefreshCw /> 체크 초기화</button></div>
     {actionMessage && <p className="purchase-checklist-action-message" role="status">{actionMessage}</p>}
     {transferPreview && transferDiff && <div className="purchase-checklist-transfer-preview" role="region" aria-label="체크리스트 JSON 가져오기 미리보기">
-      <div className="purchase-checklist-transfer-preview-heading"><div><strong>체크리스트 가져오기 미리보기</strong><small>내보낸 시각 {transferPreview.exportedAt ?? "알 수 없음"} · 파일 항목 {transferPreview.itemIds.length}개</small></div><span>확인 필요</span></div>
+      <div className="purchase-checklist-transfer-preview-heading"><div><strong>체크리스트 가져오기 미리보기</strong><small>내보낸 시각 {transferPreview.exportedAt ?? "알 수 없음"} · 파일 항목 {transferPreview.itemIds.length}개</small></div><span>정보 부족</span></div>
       <div className="purchase-checklist-transfer-stats"><span>현재 완료 <b>{transferDiff.currentCheckedCount}개</b></span><span>가져올 완료 <b>{transferDiff.incomingCheckedCount}개</b></span><span>새로 체크 <b>{transferDiff.addedCount}개</b></span><span>해제 <b>{transferDiff.removedCount}개</b></span><span>유지 <b>{transferDiff.unchangedCount}개</b></span>{transferPreview.ignoredIds.length > 0 && <span>현재 없는 항목 <b>{transferPreview.ignoredIds.length}개</b></span>}</div>
       <p>현재 완료 상태를 즉시 바꾸지 않았습니다. 아래 내용을 확인한 뒤 적용하세요.</p>
       <div className="purchase-checklist-transfer-preview-actions"><button className="text-button" type="button" onClick={() => setTransferPreview(null)}>취소</button><button className="button button-primary" type="button" onClick={applyTransferPreview}>이 상태로 가져오기</button></div>
     </div>}
     {items.length === 0 ? <div className="purchase-checklist-empty"><FiInfo /><span>현재 구성에서 생성된 구매 전 확인 항목이 없습니다.</span></div> : visibleItems.length === 0 ? <div className="purchase-checklist-empty"><FiInfo /><span>선택한 필터에 해당하는 항목이 없습니다.</span><button className="text-button" type="button" onClick={() => setFilter("all")}>전체 보기</button></div> : <div className="purchase-checklist-list">{visibleItems.map((item) => { const checked = checkedIdSet.has(item.id); const ruleId = item.ruleId; return <article className={checked ? "purchase-checklist-item checked" : "purchase-checklist-item"} key={item.id}><label className="purchase-checklist-check"><input type="checkbox" aria-label={`${item.title} 완료`} checked={checked} onChange={() => toggleItem(item.id)} /><span className="purchase-checklist-copy"><span className={`purchase-checklist-kind ${item.kind} ${item.severity}`}>{severityLabel(item.severity)}</span><strong>{item.title}</strong><small>{item.detail}</small></span></label>{ruleId && onFocusFinding ? <button className="text-button purchase-checklist-finding-link" type="button" onClick={() => onFocusFinding(ruleId)}>항목 보기</button> : item.targetId && onFocusSection ? <button className="text-button purchase-checklist-finding-link" type="button" onClick={() => onFocusSection(item.targetId!)}>{item.actionLabel ?? "관련 확인"}</button> : null}</article>; })}</div>}
-    <p className="purchase-checklist-note"><FiInfo /> 체크 내용은 이 브라우저에 저장됩니다. 부품이나 수량, 추천 조건, 검사 항목이 바뀌면 체크가 초기화됩니다.</p>
+    <p className="purchase-checklist-note"><FiInfo /> 체크 내용은 이 브라우저에 저장돼요. 부품이나 수량, 추천 조건, 호환 항목이 바뀌면 체크가 초기화됩니다.</p>
   </section>;
 }
 

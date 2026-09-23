@@ -49,10 +49,10 @@ function powerCardFor(metrics: BuildMetrics): BuildResourceCard {
     || metrics.psuWattageW !== undefined;
   const state = stateFor(metrics.powerHeadroomW, POWER_HEADROOM_REVIEW_W, active);
   const detail = metrics.psuWattageW !== undefined && metrics.recommendedPsuW !== undefined
-    ? `선택 PSU ${metrics.psuWattageW}W · GPU 권장 PSU ${metrics.recommendedPsuW}W`
+    ? `선택한 파워 ${metrics.psuWattageW}W · 그래픽카드 권장 파워 ${metrics.recommendedPsuW}W`
     : metrics.gpuPowerW !== undefined
-      ? `GPU 기준 소비전력 ${metrics.gpuPowerW}W · 권장 PSU 정보 확인 필요`
-      : "GPU 권장 PSU와 선택 PSU 정격 출력을 함께 확인해야 합니다.";
+      ? `그래픽카드 기준 소비전력 ${metrics.gpuPowerW}W · 권장 파워 용량 확인 필요`
+      : "그래픽카드 권장 파워 용량과 선택한 파워의 정격 출력을 확인하세요.";
   return {
     id: "power",
     label: "전력 예산",
@@ -60,7 +60,7 @@ function powerCardFor(metrics: BuildMetrics): BuildResourceCard {
     stateLabel: stateLabelFor(state),
     headline: state === "neutral" ? "미적용" : headroomText(metrics.powerHeadroomW),
     detail,
-    basis: "선택 PSU 정격 출력 - GPU 권장 PSU",
+    basis: "선택한 파워 정격 출력 - 그래픽카드 권장 파워 용량",
     reviewThresholdW: POWER_HEADROOM_REVIEW_W,
     ...(metrics.powerHeadroomW !== undefined ? { headroomW: metrics.powerHeadroomW } : {})
   };
@@ -72,10 +72,10 @@ function coolingCardFor(metrics: BuildMetrics): BuildResourceCard {
     || metrics.cpuPowerW !== undefined;
   const state = stateFor(metrics.coolerHeadroomW, COOLER_HEADROOM_REVIEW_W, active);
   const detail = metrics.coolerCapacityW !== undefined && metrics.cpuPowerW !== undefined
-    ? `쿨러 냉각 지원 ${metrics.coolerCapacityW}W · CPU 기준 전력 ${metrics.cpuPowerW}W`
+    ? `쿨러 지원 ${metrics.coolerCapacityW}W · CPU 기준 전력 ${metrics.cpuPowerW}W`
     : metrics.cpuPowerW !== undefined
-      ? `CPU 기준 전력 ${metrics.cpuPowerW}W · 쿨러 냉각 지원 정보 확인 필요`
-      : "CPU 기준 전력과 쿨러 냉각 지원 수치를 함께 확인해야 합니다.";
+      ? `CPU 기준 전력 ${metrics.cpuPowerW}W · 쿨러 지원 수치 확인 필요`
+      : "CPU 기준 전력과 쿨러 지원 수치를 확인하세요.";
   return {
     id: "cooling",
     label: "냉각 예산",
@@ -83,7 +83,7 @@ function coolingCardFor(metrics: BuildMetrics): BuildResourceCard {
     stateLabel: stateLabelFor(state),
     headline: state === "neutral" ? "미적용" : headroomText(metrics.coolerHeadroomW),
     detail,
-    basis: "쿨러 냉각 지원 - CPU TDP/PPT 기준",
+    basis: "쿨러 지원 수치 - CPU TDP/PPT",
     reviewThresholdW: COOLER_HEADROOM_REVIEW_W,
     ...(metrics.coolerHeadroomW !== undefined ? { headroomW: metrics.coolerHeadroomW } : {})
   };
@@ -102,13 +102,13 @@ export function buildResourceSummaryFor(metrics: BuildMetrics): BuildResourceSum
   const state = overallStateFor(cards);
   const stateLabel = stateLabelFor(state);
   const summary = state === "danger"
-    ? "전력 또는 냉각 기준을 충족하지 못합니다. 부품을 바꾸거나 실제 조건을 다시 확인해야 합니다."
+    ? "등록된 수치로는 전력 또는 냉각 여유가 부족합니다. 부품 정보와 조립 조건을 확인하세요."
     : state === "warning"
-      ? "호환 규칙은 통과할 수 있지만 전력·냉각 여유가 좁아 구매 전에 정보를 확인하세요."
+      ? "계산된 전력·냉각 여유가 좁습니다. 구매 전에 실제 구성과 부품 정보를 확인하세요."
       : state === "unknown"
-        ? "전력·냉각을 비교할 실제 수치가 부족해요. 확인되지 않은 값을 안전하다고 보지 않아요."
+        ? "전력·냉각 수치가 없어 여유를 계산하지 못했습니다. 확인 전에는 안전하다고 볼 수 없습니다."
         : state === "good"
-          ? "등록된 정격·권장 수치 기준으로 전력과 냉각 여유를 계산했습니다."
-          : "CPU·GPU·PSU·쿨러 조합이 없어 전력·냉각 여유를 계산하지 않았습니다.";
+          ? "등록된 정격과 권장 수치로 계산한 여유입니다."
+          : "선택한 부품 정보로 전력·냉각 여유를 계산하지 않았습니다.";
   return { state, stateLabel, summary, cards };
 }

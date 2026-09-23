@@ -174,7 +174,7 @@ function scenarioCheckSummaryText(scenario: AlternativeComparisonCandidate["scen
   const ready = checks.filter((check) => check.status === "ready").length;
   const review = checks.filter((check) => check.status === "review").length;
   const blocked = checks.filter((check) => check.status === "blocked").length;
-  return `구매 전 확인 ${checks.length}개 · 확인됨 ${ready} · 확인 필요 ${review} · 차단 ${blocked}`;
+  return `구매 전 체크리스트: ${checks.length}개 · 완료 ${ready} · 추가 확인 ${review} · 차단 ${blocked}`;
 }
 
 function scenarioTradeoffText(scenario: AlternativeComparisonCandidate["scenario"]) {
@@ -201,10 +201,10 @@ function similarityBasisText(basis: SimilarityBasis | undefined) {
 export function alternativeComparisonSimilarityEvidenceTextFor(evidence: AlternativeComparisonSimilarityEvidence | undefined) {
   if (!evidence) return undefined;
   const referenceText = evidence.reference
-    ? `모델 참조 ${evidence.reference.partName} · 보완 ${evidence.reference.transferredDimensions.length > 0 ? evidence.reference.transferredDimensions.join(" · ") : "지표 확인 필요"}`
+    ? `같은 제품군 참고: ${evidence.reference.partName} · 참고한 항목 ${evidence.reference.transferredDimensions.length > 0 ? evidence.reference.transferredDimensions.join(" · ") : "지표 확인 필요"}`
     : undefined;
   const dimensionText = evidence.dimensions && evidence.dimensions.length > 0
-    ? `지표별 ${evidence.dimensions.map((dimension) => `${dimension.label} ${dimension.currentValue} → ${dimension.candidateValue}${dimension.source === "model_reference" ? " (모델 참조)" : ""}`).join(" / ")}`
+    ? `항목별 ${evidence.dimensions.map((dimension) => `${dimension.label} ${dimension.currentValue} → ${dimension.candidateValue}${dimension.source === "model_reference" ? " (같은 제품군 참고)" : ""}`).join(" / ")}`
     : undefined;
   return [
     `${similarityConfidenceText(evidence.confidence)} · ${similarityBasisText(evidence.basis)} · 비교 지표 ${evidence.comparedDimensions}/${evidence.totalDimensions}개`,
@@ -215,17 +215,19 @@ export function alternativeComparisonSimilarityEvidenceTextFor(evidence: Alterna
 
 export function alternativeComparisonScenarioTextFor(scenario: AlternativeComparisonCandidate["scenario"]) {
   if (!scenario) return undefined;
+  const purchaseDecisionText = scenario.purchaseDecision
+    ? `구매 판단: ${scenario.purchaseDecision}${scenario.purchaseDecisionSummary ? ` · 안내: ${scenario.purchaseDecisionSummary}` : ""}`
+    : scenario.purchaseDecisionSummary ? `구매 안내: ${scenario.purchaseDecisionSummary}` : undefined;
   const parts = [
-    scenarioStatusLabel(scenario.status),
-    `차단 ${scenario.blockerCount} · 주의 ${scenario.warningCount} · 확인 필요 ${scenario.unknownCount}`,
+    `호환 검사: ${scenarioStatusLabel(scenario.status)} · 차단 ${scenario.blockerCount} · 주의 ${scenario.warningCount} · 정보 누락 ${scenario.unknownCount}`,
     scenarioAnalysisText(scenario),
     scenario.priceDeltaWon !== undefined ? `가격 변화 ${scenario.priceDeltaWon > 0 ? "+" : ""}${scenario.priceDeltaWon.toLocaleString("ko-KR")}원` : undefined,
     scenarioTradeoffText(scenario),
-    scenario.purchaseDecision,
+    purchaseDecisionText,
     scenario.priceHistory && scenario.priceHistory.sampleCount > 0 ? `가격 이력 ${scenario.priceHistory.windowDays}일 ${scenario.priceHistory.sampleCount}회${scenario.priceHistory.minPriceWon !== undefined ? ` · 최저 ${scenario.priceHistory.minPriceWon.toLocaleString("ko-KR")}원` : ""}` : "가격 이력 없음",
     scenarioCheckSummaryText(scenario)
   ].filter((value): value is string => Boolean(value));
-  return `${parts.join(" · ")}${scenario.purchaseDecisionSummary ? ` · ${scenario.purchaseDecisionSummary}` : ""}`;
+  return parts.join(" · ");
 }
 
 function csvCell(value: string | number | undefined) {

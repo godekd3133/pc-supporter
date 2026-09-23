@@ -3041,10 +3041,10 @@ function buildCompatibilityLinks(findings: Finding[], parts: LinkPartSet): Compa
       id: "motherboard-memory",
       fromCategory: "motherboard",
       toCategory: "memory",
-      label: "메모리 규격 · 프로파일 · 용량 · 슬롯",
+      label: "메인보드 ↔ RAM",
       ruleIds: ["memory-type", "memory-form-factor", "memory-capacity", "memory-slots", "memory-speed", "memory-profile", "memory-mixing"],
       active: Boolean(parts.motherboard && parts.memory.length > 0),
-      compatibleSummary: "규격·프로파일·용량·슬롯·속도 기준을 통과했습니다."
+      compatibleSummary: "RAM 규격과 용량, 장착 조건을 확인했습니다."
     }),
     link({
       id: "motherboard-ssd",
@@ -3250,7 +3250,7 @@ export function evaluateBuild(
         findings,
         "cpu-motherboard-socket",
         "CPU와 메인보드 소켓이 맞는지 확인해 주세요.",
-        "소켓 정보가 부족해 장착 가능 여부를 알 수 없어요.",
+        "CPU 또는 메인보드의 소켓 정보가 없어 서로 맞는지 확인하지 못했어요.",
         partIds(cpu, motherboard),
         [!cpuSocket ? "CPU socket" : "", !motherboardSocket ? "Motherboard socket" : ""].filter(Boolean),
         "motherboard"
@@ -3278,7 +3278,7 @@ export function evaluateBuild(
         findings,
         "cpu-motherboard-power",
         "CPU 전력과 메인보드 전원부 용량을 확인해 주세요.",
-        "전원부 정보가 부족해 고부하 상황의 공급 가능 여부를 알 수 없어요.",
+        "CPU 전력이나 메인보드 전원부 용량 정보가 없어 부하가 클 때 전력을 감당할 수 있는지 확인하지 못했어요.",
         partIds(cpu, motherboard),
         [cpuPower === undefined ? "CPU power" : "", vrmCapacity === undefined ? "VRM capacity" : ""].filter(Boolean),
         "motherboard"
@@ -3309,7 +3309,7 @@ export function evaluateBuild(
         findings,
         "gpu-motherboard-pcie",
         "그래픽카드를 꽂을 PCIe 슬롯이 있는지 확인해 주세요.",
-        "그래픽카드의 PCIe x16 장착 폭과 메인보드의 확장 슬롯 정보를 확인해야 장착 가능 여부를 확정할 수 있습니다.",
+        "그래픽카드의 PCIe x16 연결을 메인보드가 지원하는지 확인하려면 슬롯 정보가 필요해요.",
         partIds(gpu, motherboard),
         ["motherboard PCIe x16 slots"],
         "motherboard"
@@ -3392,7 +3392,7 @@ export function evaluateBuild(
           "memory-mixing",
           "warning",
           "서로 다른 RAM 킷을 혼용하고 있습니다.",
-          "RAM 킷별 속도·CL·전압·프로파일이 달라 가장 낮은 공통 설정으로 동작하거나 안정성 문제가 생길 수 있습니다. 가능한 한 같은 제품·같은 킷으로 구성하세요.",
+          "두 RAM 제품의 설정이 달라 둘 중 낮은 속도로 작동하거나 불안정할 수 있어요. 가능하면 같은 제품으로 맞춰 주세요.",
           affectedMemoryIds,
           mixFacts,
           [replaceAction("memory", "동일 킷 RAM 부품 찾기")]
@@ -3403,7 +3403,7 @@ export function evaluateBuild(
           "memory-mixing",
           "unknown",
           "함께 고른 RAM의 속도와 전압을 확인해 주세요.",
-          "서로 다른 RAM 상품을 함께 선택했지만 일부 속도·CL·전압·프로파일 정보가 없어 혼용 안정성을 알 수 없어요.",
+          "두 RAM 제품의 속도나 전압 정보가 빠져 있어 함께 써도 괜찮은지 확인하지 못했어요. 두 제품의 사양을 비교해 주세요.",
           affectedMemoryIds,
           [
             ...mixFacts,
@@ -3456,7 +3456,7 @@ export function evaluateBuild(
         findings,
         "memory-form-factor",
         "RAM 크기가 메인보드 슬롯에 맞는지 확인해 주세요.",
-        "DIMM 또는 SO-DIMM 물리 규격 정보가 부족해 RAM을 실제로 장착할 수 있는지 알 수 없어요.",
+        "RAM 크기(DIMM/SO-DIMM)나 메인보드 슬롯 정보가 없어 장착할 수 있는지 확인하지 못했어요.",
         partIds(motherboard, ...memory.map(({ part }) => part)),
         ["memory slot form factor"],
         "memory"
@@ -3517,7 +3517,7 @@ export function evaluateBuild(
         findings,
         "memory-slots",
         "메인보드 RAM 슬롯 수를 확인해 주세요.",
-        "RAM 모듈을 몇 개까지 장착할 수 있는지 알 수 없어요.",
+        "메인보드 RAM 슬롯 수 정보가 없어 꽂을 수 있는 모듈 수를 확인하지 못했어요.",
         [motherboard.id],
         ["memory slots"],
         "motherboard"
@@ -3544,7 +3544,7 @@ export function evaluateBuild(
         "memory-dual-channel",
         "warning",
         "RAM은 2개 구성으로 사용하는 것을 권장합니다.",
-        "현재 구성은 듀얼채널 또는 메모리 프로파일 성능을 충분히 활용하지 못할 수 있습니다.",
+        "RAM을 두 개로 구성하면 메모리 대역폭을 더 잘 활용할 수 있어요. 현재 구성에서는 이 이점을 놓칠 수 있습니다.",
         partIds(...memory.map(({ part }) => part)),
         [{ label: "현재 RAM 물리 모듈 수", actual: formatNumber(memoryModuleCount, "개") }],
         [action("change_quantity", "RAM을 2개로 조정", "memory")]
@@ -3606,7 +3606,7 @@ export function evaluateBuild(
         findings,
         "memory-profile",
         "메인보드에서 RAM의 EXPO/XMP 설정을 지원하는지 확인해 주세요.",
-        "메인보드의 EXPO/XMP 지원 정보가 없어 설정 가능 여부를 확인할 수 없어요. RAM과 메인보드 제조사 사양을 비교해 주세요.",
+        "메인보드의 EXPO/XMP 지원 정보가 없어 RAM의 고속 설정을 쓸 수 있는지 확인하지 못했어요. 두 제품 설명서를 비교해 주세요.",
         partIds(motherboard, ...profileMemory.map(({ part }) => part)),
         ["motherboard memory profiles"],
         "memory"
@@ -3640,7 +3640,7 @@ export function evaluateBuild(
         findings,
         "m2-slots",
         "M.2 SSD를 꽂을 메인보드 슬롯 수를 확인해 주세요.",
-        "M.2 장착 가능 개수를 알 수 없어요.",
+        "메인보드에 M.2 SSD를 몇 개까지 꽂을 수 있는지 확인하지 못했어요.",
         partIds(motherboard, ...ssds.map(({ part }) => part)),
         ["M.2 slots"],
         "motherboard"
@@ -3682,7 +3682,7 @@ export function evaluateBuild(
         findings,
         "m2-interface",
         "M.2 SSD와 메인보드의 연결 방식이 맞는지 확인해 주세요.",
-        "선택한 M.2 SSD의 NVMe/SATA 연결 방식 또는 메인보드의 M.2 연결 정보가 부족해 장착 가능 여부를 알 수 없어요.",
+        "SSD 연결 방식(NVMe/SATA)이나 메인보드의 M.2 정보가 빠져 있어 서로 맞는지 확인하지 못했어요.",
         partIds(motherboard, ...m2Parts.map(({ part }) => part)),
         missingM2InterfaceLabels,
         "motherboard"
@@ -3775,8 +3775,8 @@ export function evaluateBuild(
         findings,
         "m2-slot-topology",
         "unknown",
-        "M.2 슬롯별 PCIe 세대 배치를 알 수 없어요.",
-        "메인보드 정보에는 여러 M.2 PCIe 세대가 함께 표기되어 있지만, 각 SSD가 어느 슬롯에 연결되는지 확인되지 않아 다중 M.2 구성의 세대·레인 배치를 자동으로 알 수 없어요.",
+        "M.2 SSD별 PCIe 연결 속도를 확인해 주세요.",
+        "메인보드의 M.2 슬롯마다 PCIe 세대가 다르지만 SSD별 슬롯 배치가 정해지지 않아 속도와 레인 배분을 확인하지 못했어요.",
         partIds(motherboard, ...m2Parts.map(({ part }) => part)),
         [
           { label: "선택한 M.2 SSD", actual: formatNumber(m2Count, "개") },
@@ -3858,7 +3858,7 @@ export function evaluateBuild(
         "m2-pcie-lane-sharing",
         "unknown",
         "M.2 SSD를 쓰면 그래픽카드 연결에 영향이 있는지 확인해 주세요.",
-        "메인보드 정보에 M.2와 PCIe 레인 공유 표기가 있지만, 공유 대상 슬롯·발생 조건·비활성화 여부가 없어 GPU PCIe 영향을 알 수 없어요. 제조사 매뉴얼을 확인하세요.",
+        "메인보드 설명서에서 M.2 SSD 장착 시 그래픽카드 슬롯 속도가 바뀌거나 사용할 수 없게 되는지 확인해 주세요.",
         partIds(motherboard, gpu, ...ssds.map(({ part }) => part)),
         [
           { label: "선택한 M.2 SSD", actual: formatNumber(m2Count, "개") },
@@ -3934,7 +3934,7 @@ export function evaluateBuild(
         findings,
         "case-hdd-bays",
         "케이스에 HDD를 장착할 공간이 있는지 확인해 주세요.",
-        "HDD를 실제로 장착할 수 있는지 알 수 없어요.",
+        "케이스의 HDD 장착 공간 정보가 없어 HDD가 들어가는지 확인하지 못했어요.",
         partIds(computerCase, ...hdds.map(({ part }) => part)),
         ["3.5-inch bays"],
         "case"
@@ -3963,7 +3963,7 @@ export function evaluateBuild(
         findings,
         "case-motherboard-form-factor",
         "메인보드가 케이스에 들어가는지 확인해 주세요.",
-        "선택한 메인보드가 케이스에 들어가는지 알 수 없어요.",
+        "케이스가 지원하는 메인보드 크기 정보가 없어 장착할 수 있는지 확인하지 못했어요.",
         partIds(motherboard, computerCase),
         ["supported motherboard form factors"],
         "case"
@@ -4086,7 +4086,7 @@ export function evaluateBuild(
         findings,
         "cpu-cooler-socket",
         "CPU 쿨러가 CPU 소켓에 맞는지 확인해 주세요.",
-        "쿨러 장착 브라켓 정보를 확인할 수 없어 장착 가능 여부를 알 수 없어요.",
+        "쿨러 브래킷 정보가 없어 CPU에 장착할 수 있는지 확인하지 못했어요.",
         partIds(cpu, cooler),
         ["cooler supported sockets"],
         "cooler"
@@ -4158,7 +4158,7 @@ export function evaluateBuild(
           findings,
           "case-radiator-support",
           "케이스가 수랭 쿨러의 라디에이터 크기를 지원하는지 확인해 주세요.",
-          "라디에이터 크기 또는 케이스 지원 규격 데이터가 부족해 장착 가능 여부를 알 수 없어요.",
+          "라디에이터 크기나 케이스의 지원 정보가 없어 장착할 수 있는지 확인하지 못했어요.",
           partIds(cooler, computerCase),
           [radiatorSize === undefined ? "radiator size" : "case radiator support"],
           "case"
@@ -4169,7 +4169,7 @@ export function evaluateBuild(
           "case-radiator-support",
           "unknown",
           "수랭 쿨러 라디에이터를 케이스 어느 위치에 달 수 있는지 확인해 주세요.",
-          "케이스의 위치별 라디에이터 지원 정보는 확인됐지만 쿨러의 장착 위치 정보가 없어 실제 장착 여부를 알 수 없어요.",
+          "케이스가 지원하는 위치는 확인했지만 쿨러의 장착 위치가 표시되지 않았어요. 제품 설명서를 확인해 주세요.",
           partIds(cooler, computerCase),
           [
             { label: "라디에이터 크기", actual: formatNumber(radiatorSize, "mm") },
@@ -4255,7 +4255,7 @@ export function evaluateBuild(
         findings,
         "gpu-case-length",
         "그래픽카드가 케이스에 들어가는지 확인해 주세요.",
-        "그래픽카드가 케이스에 들어가는지 알 수 없어요.",
+        "그래픽카드 길이나 케이스 안쪽 길이 정보가 없어 들어가는지 확인하지 못했어요.",
         partIds(gpu, computerCase),
         ["GPU length", "maximum GPU length"],
         "case"
@@ -4309,8 +4309,8 @@ export function evaluateBuild(
           findings,
           "gpu-cable-clearance",
           "unknown",
-          "GPU 전원 케이블 측면 여유를 알 수 없어요.",
-          "GPU가 요구하는 케이블 굽힘 여유와 케이스 측면 여유 중 하나가 확인되지 않아 전원 케이블 간섭을 알 수 없어요.",
+          "그래픽카드 전원 케이블을 꽂을 공간을 확인해 주세요.",
+          "전원 케이블이 꺾일 공간이나 케이스 옆면까지의 거리 정보가 없어 간섭 여부를 확인하지 못했어요.",
           partIds(gpu, computerCase),
           [
             { label: "GPU 케이블 굽힘 여유", actual: gpuCableBendClearance === undefined ? "확인 필요" : formatNumber(gpuCableBendClearance, "mm") },
@@ -4345,7 +4345,7 @@ export function evaluateBuild(
         findings,
         "psu-case-length",
         "파워가 케이스에 들어가는지 확인해 주세요.",
-        "파워서플라이 깊이 또는 케이스의 허용 파워 장착 길이 정보가 부족해 물리적 장착 여부를 알 수 없어요.",
+        "파워 깊이나 케이스 안쪽 공간 정보가 빠져 있어 들어가는지 확인하지 못했어요. 두 제품의 길이를 확인해 주세요.",
         partIds(psu, computerCase),
         [psuDepth === undefined ? "PSU depth" : "", maxPsuLength === undefined ? "case maximum PSU length" : ""].filter(Boolean),
         "case"
@@ -4373,7 +4373,7 @@ export function evaluateBuild(
         findings,
         "psu-case-form-factor",
         "파워 규격이 케이스와 맞는지 확인해 주세요.",
-        "파워서플라이 규격 또는 케이스가 지원하는 파워 규격 정보가 부족해 호환 여부를 알 수 없어요.",
+        "파워나 케이스의 크기 규격 정보가 없어 서로 맞는지 확인하지 못했어요.",
         partIds(psu, computerCase),
         [!psuFormFactor ? "PSU form factor" : "", !supportedPsuFormFactors || supportedPsuFormFactors.length === 0 ? "case supported PSU form factors" : ""].filter(Boolean),
         "case"
@@ -4405,7 +4405,7 @@ export function evaluateBuild(
         findings,
         "gpu-psu-power",
         "그래픽카드에 필요한 전력을 파워가 공급할 수 있는지 확인해 주세요.",
-        "전력 공급 여유를 알 수 없어요.",
+        "그래픽카드나 파워의 소비전력 정보가 없어 전력 여유를 확인하지 못했어요.",
         partIds(gpu, psu, cpu),
         ["GPU power", "recommended PSU wattage", "PSU wattage"],
         "psu"
@@ -4436,7 +4436,7 @@ export function evaluateBuild(
         findings,
         "gpu-psu-connector",
         "그래픽카드와 파워의 보조전원 단자를 확인해 주세요.",
-        "보조전원 커넥터 정보가 양쪽 모두 부족해 케이블 연결 가능 여부를 알 수 없어요.",
+        "그래픽카드와 파워의 보조전원 단자 정보가 빠져 케이블을 연결할 수 있는지 확인하지 못했어요.",
         partIds(gpu, psu),
         ["GPU PCIe power connector", "PSU PCIe power connectors"],
         "psu"
@@ -4446,7 +4446,7 @@ export function evaluateBuild(
           findings,
           "gpu-psu-connector",
           "그래픽카드에 필요한 보조전원 단자를 확인해 주세요.",
-          "파워서플라이 커넥터 정보는 확인됐지만 그래픽카드가 요구하는 PCIe 보조전원 규격 정보가 부족해요.",
+          "파워 단자는 확인했지만 그래픽카드에 필요한 PCIe 보조전원 단자 정보가 없어요.",
           partIds(gpu, psu),
           ["GPU PCIe power connector"],
           "gpu"
@@ -4456,7 +4456,7 @@ export function evaluateBuild(
           findings,
           "gpu-psu-connector",
           "파워에서 제공하는 보조전원 단자를 확인해 주세요.",
-          "그래픽카드가 요구하는 PCIe 보조전원은 확인됐지만 파워서플라이의 제공 커넥터 정보가 부족해요.",
+          "그래픽카드에 필요한 PCIe 보조전원은 확인했지만 파워에서 제공하는 단자 정보가 없어요.",
           partIds(gpu, psu),
           ["PSU PCIe power connectors"],
           "psu"
@@ -4468,8 +4468,8 @@ export function evaluateBuild(
             findings,
             "gpu-psu-connector",
             "unknown",
-            "그래픽카드와 파워서플라이 보조전원 연결을 알 수 없어요.",
-            "일부 커넥터 규격 또는 어댑터 경로가 확인되지 않아 실제 연결 가능 여부를 제조사 페이지에서 확인해야 합니다.",
+            "그래픽카드와 파워의 보조전원 단자를 확인해 주세요.",
+            "커넥터나 변환 어댑터 정보가 일부 빠져 있어 연결할 수 있는지 확인하지 못했어요. 필요한 단자와 어댑터를 제품 설명서에서 비교해 주세요.",
             partIds(gpu, psu),
             [
               { label: "GPU 요구 전원", actual: formatPciePowerOptions(gpuPowerOptions) },
@@ -4528,7 +4528,7 @@ export function evaluateBuild(
       "psu-data-quality",
       "warning",
       "파워의 빠진 사양을 확인해 주세요.",
-      "현재 데이터만으로는 전력 공급 안정성을 완전히 확인할 수 없습니다. 제조사 공식 스펙을 확인해 주세요.",
+      "전력 공급을 확인하는 데 필요한 사양이 빠져 있어요. 아래 항목을 제품 설명서에서 확인해 주세요.",
       [psu.id],
       psu.missingFields.map((field) => ({ label: "확인되지 않은 항목", actual: catalogMissingFieldLabelFor(field) })),
       [action("verify_spec", "파워서플라이 스펙 확인", "psu"), replaceAction("psu")]

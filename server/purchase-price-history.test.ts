@@ -28,9 +28,9 @@ describe("saved build purchase price history", () => {
     const current = savedBuildPurchasePriceHistoryFromUnknown(snapshot());
     expect(parseSavedBuildPurchasePriceHistoryExpectedRevision(undefined)).toMatchObject({ revision: null, error: undefined });
     expect(parseSavedBuildPurchasePriceHistoryExpectedRevision(3)).toMatchObject({ revision: 3, error: undefined });
-    expect(parseSavedBuildPurchasePriceHistoryExpectedRevision(0).error).toContain("expectedRevision");
+    expect(parseSavedBuildPurchasePriceHistoryExpectedRevision(0).error).toContain("버전 정보");
     expect(parseSavedBuildPurchasePriceHistoryRevision(4)).toMatchObject({ revision: 4, error: undefined });
-    expect(parseSavedBuildPurchasePriceHistoryRevision(0).error).toContain("revision");
+    expect(parseSavedBuildPurchasePriceHistoryRevision(0).error).toContain("버전");
     expect(savedBuildPurchasePriceHistoryRevisionMatchesFor(current, 3)).toBe(true);
     expect(savedBuildPurchasePriceHistoryRevisionMatchesFor(current, 2)).toBe(false);
     expect(savedBuildPurchasePriceHistoryRevisionMatchesFor(undefined, null)).toBe(true);

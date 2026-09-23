@@ -7,7 +7,7 @@ import type { PurchaseListExecutionProgress } from "../shared/purchase-list-prog
 import type { AssemblyVerificationSurfaceSummary } from "../shared/assembly-verification";
 
 function statusLabel(status: AssemblyPlanStep["status"]) {
-  return status === "blocked" ? "구매 보류" : status === "review" ? "확인 필요" : status === "pending" ? "앞 단계 대기" : "진행 가능";
+  return status === "blocked" ? "구매 보류" : status === "review" ? "정보 부족" : status === "pending" ? "앞 단계 대기" : "진행 가능";
 }
 
 function statusIcon(status: AssemblyPlanStep["status"]) {
@@ -33,10 +33,10 @@ export function AssemblyPlanPanel({ build, result, checklistProgress, purchasePr
     onFocusSection(targetId);
   }
 
-  const resumeLabel = !resumeStep ? "조립 순서 보기" : resumeStep.status === "blocked" ? "차단 해결로 이동" : resumeStep.status === "review" ? "확인 필요로 이동" : resumeStep.status === "pending" ? "선행 단계로 이동" : "조립 기록 보기";
+  const resumeLabel = !resumeStep ? "조립 순서 보기" : resumeStep.status === "blocked" ? "차단 해결로 이동" : resumeStep.status === "review" ? "정보가 부족한 항목으로 이동" : resumeStep.status === "pending" ? "선행 단계로 이동" : "조립 기록 보기";
   return <section className={`assembly-plan-panel ${plan.state}`} aria-label="구매·조립 실행 순서" data-testid="assembly-plan-panel">
     <div className="assembly-plan-heading"><div><h2>구매·조립 실행 순서</h2><p>{plan.summary}</p></div><div className="assembly-plan-heading-actions"><span className={`assembly-plan-state ${plan.state}`}>{plan.state === "blocked" ? <FiXCircle /> : plan.state === "review" ? <FiAlertTriangle /> : <FiCheckCircle />} {plan.state === "blocked" ? "구매 보류" : plan.state === "review" ? "확인 후 진행" : "순서대로 진행"}</span>{resumeStep && <button className="button button-small button-light assembly-plan-resume" type="button" data-testid="assembly-plan-resume" onClick={() => resumeStep.targetId && focusTarget(resumeStep.targetId)}><FiArrowRight /> {resumeLabel}</button>}</div></div>
     <ol className="assembly-plan-list">{plan.steps.map((step) => { const Icon = statusIcon(step.status); const TargetIcon = step.targetId ? targetIcon(step.targetId) : undefined; return <li className={`assembly-plan-step ${step.status}`} data-testid={`assembly-plan-step-${step.id}`} key={step.id}><div className="assembly-plan-step-number">{step.order}</div><div className="assembly-plan-step-body"><div className="assembly-plan-step-top"><strong>{step.title}</strong><span><Icon className={step.status === "pending" ? "spin" : undefined} /> {statusLabel(step.status)}</span></div><p>{step.summary}</p><small>{step.detail}</small>{step.progress && <span className="assembly-plan-step-progress">{step.progress.label} · {step.progress.percent}%</span>}{step.dependsOn.length > 0 && <em>선행 단계: {step.dependsOn.map((id) => plan.steps.find((candidate) => candidate.id === id)?.order).filter((order): order is number => order !== undefined).map((order) => `${order}단계`).join(" · ")}</em>}</div>{step.targetId && <button className="text-button assembly-plan-target" type="button" onClick={() => focusTarget(step.targetId!)}>{TargetIcon && <TargetIcon />} {targetLabel(step.targetId)}</button>}</li>; })}</ol>
-    <p className="assembly-plan-note"><FiInfo /> `진행 가능`은 현재 카탈로그·호환성 기준의 상태입니다. 실제 조립 후 POST·BIOS·온도·소음 테스트는 반드시 마지막 단계에서 직접 확인해야 하며, `앞 단계 대기`는 구매·조립 순서를 자동으로 건너뛰지 않도록 표시합니다.</p>
+    <p className="assembly-plan-note"><FiInfo /> 선택한 부품에 맞춰 구매·조립 순서를 안내해요. 조립 후에는 부팅, BIOS, 온도와 소음도 확인해 주세요. 앞 단계가 끝나지 않으면 다음 단계는 대기합니다.</p>
   </section>;
 }

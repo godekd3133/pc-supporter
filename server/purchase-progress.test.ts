@@ -43,7 +43,7 @@ describe("saved build purchase progress", () => {
     expect(parseSavedBuildPurchaseProgressExpectedRevision(undefined)).toMatchObject({ revision: null, error: undefined });
     expect(parseSavedBuildPurchaseProgressExpectedRevision(null)).toMatchObject({ revision: null, error: undefined });
     expect(parseSavedBuildPurchaseProgressExpectedRevision(3)).toMatchObject({ revision: 3, error: undefined });
-    expect(parseSavedBuildPurchaseProgressExpectedRevision(-1).error).toContain("expectedRevision");
+    expect(parseSavedBuildPurchaseProgressExpectedRevision(-1).error).toContain("버전 정보");
     const current = savedBuildPurchaseProgressFromUnknown(progress());
     const next = savedBuildPurchaseProgressWithNextRevisionFor(parseSavedBuildPurchaseProgress(progress(), "build-fingerprint-1").progress!, current, "2026-09-02T02:00:00.000Z");
     expect(next).toMatchObject({ revision: 4, updatedAt: "2026-09-02T02:00:00.000Z" });
@@ -69,7 +69,7 @@ describe("saved build purchase progress", () => {
     expect(next.revision).toBe(4);
     expect(next.history?.map((entry) => entry.revision)).toEqual([3, 2]);
     expect(parseSavedBuildPurchaseProgressRevision(4)).toMatchObject({ revision: 4, error: undefined });
-    expect(parseSavedBuildPurchaseProgressRevision(0).error).toContain("revision");
+    expect(parseSavedBuildPurchaseProgressRevision(0).error).toContain("버전");
   });
 
   it("rejects persisted histories above the twenty-revision contract before normalizing them", () => {

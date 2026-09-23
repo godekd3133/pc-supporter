@@ -220,7 +220,7 @@ export function savedBuildComparisonRankingsFor(entries: SavedBuildComparisonEnt
           || left.name.localeCompare(right.name)
         )
         .map((entry, index) => ({ entry, rank: index + 1, metric: entry.result.totalPriceWon, eligible: true })),
-      ...unpricedEntries.map((entry) => ({ entry, eligible: false, reason: "현재 총액 확인 필요" }))
+      ...unpricedEntries.map((entry) => ({ entry, eligible: false, reason: "총액 확인 필요" }))
     ];
   }
 
@@ -250,7 +250,7 @@ export function savedBuildComparisonRankingsFor(entries: SavedBuildComparisonEnt
         || left.name.localeCompare(right.name)
       )
       .map((entry, index) => ({ entry, rank: index + 1, metric: entry.result.analysis?.overallScore ?? 0, eligible: true })),
-    ...unscoredEntries.map((entry) => ({ entry, eligible: false, reason: "상대 분석 점수 확인 필요" }))
+    ...unscoredEntries.map((entry) => ({ entry, eligible: false, reason: "성능 점수 정보 부족" }))
   ];
 }
 
@@ -268,10 +268,10 @@ export function savedBuildComparisonConsensusFor(entries: SavedBuildComparisonEn
   const winnerNames = winnerIds.map((id) => entries.find((entry) => entry.id === id)?.name ?? id);
   const winnerKinds = decisions.map((decision) => decision.kind);
   const base = { confirmedCriteria: decisions.length, totalCriteria: kinds.length, winnerIds, winnerNames, winnerKinds };
-  if (decisions.length === 0) return { ...base, status: "pending", summary: "재검사 완료 후 확정 기준별 1순위를 계산합니다." };
+  if (decisions.length === 0) return { ...base, status: "pending", summary: "견적을 다시 확인한 뒤 기준별 추천을 계산합니다." };
   if (winnerIds.length === 1) {
     const winner = decisions[0].entry;
-    return { ...base, status: "converged", winnerId: winner.id, winnerName: winner.name, summary: `${iGa(winner.name)} 확정된 ${decisions.length}개 기준에서 모두 1순위입니다.` };
+    return { ...base, status: "converged", winnerId: winner.id, winnerName: winner.name, summary: `${iGa(winner.name)} 확인할 수 있는 ${decisions.length}개 기준에서 모두 1위입니다.` };
   }
-  return { ...base, status: "split", summary: `기준별 1순위가 ${winnerNames.join(" · ")} 부품으로 나뉩니다.` };
+  return { ...base, status: "split", summary: `기준에 따라 1위 견적이 ${winnerNames.join(" · ")}로 나뉩니다.` };
 }

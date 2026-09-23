@@ -11,8 +11,8 @@ describe("build request validation", () => {
     });
 
     expect(parsed.errors).toEqual(expect.arrayContaining([
-      "cpu.quantity는 1부터 99 사이의 정수여야 합니다.",
-      "memory은 배열이어야 합니다."
+      "CPU 수량은 1~99개로 입력해 주세요.",
+      "메모리 목록 형식이 올바르지 않습니다."
     ]));
   });
 
@@ -45,8 +45,8 @@ describe("build request validation", () => {
     });
 
     expect(parsed.errors).toEqual(expect.arrayContaining([
-      "memory은 한 번에 최대 100개까지 선택할 수 있습니다.",
-      "accessories은 한 번에 최대 100개까지 선택할 수 있습니다."
+      "메모리 목록은 한 번에 최대 100개까지 선택할 수 있습니다.",
+      "주변 부품 목록은 한 번에 최대 100개까지 선택할 수 있습니다."
     ]));
     expect(parsed.build.memory).toEqual([]);
     expect(parsed.build.accessories).toEqual([]);
@@ -61,11 +61,11 @@ describe("build request validation", () => {
     const overlongAccessory = parseBuild({ accessories: [{ accessoryId: "y".repeat(161), quantity: 1 }] });
 
     expect(parsed.errors).toEqual(expect.arrayContaining([
-      "cpu.partId는 160자 이하의 ID여야 합니다.",
-      "accessories[0].targetPartId는 비어 있지 않은 160자 이하 SSD ID여야 합니다.",
-      "rgbControllerAccessoryId는 비어 있지 않은 160자 이하 팬 허브 ID여야 합니다."
+      "CPU 정보가 너무 깁니다.",
+      "주변 부품에 연결할 SSD를 확인해 주세요.",
+      "RGB 컨트롤러를 선택해 주세요."
     ]));
-    expect(overlongAccessory.errors).toContain("accessories[0].accessoryId는 160자 이하의 ID여야 합니다.");
+    expect(overlongAccessory.errors).toContain("주변 부품 정보가 너무 깁니다.");
   });
 
   it("validates accessory target SSD IDs against the selected SSD list", () => {
@@ -79,8 +79,8 @@ describe("build request validation", () => {
     const parsed = parseBuild({ accessories: [{ accessoryId: "", quantity: 1 }, { accessoryId: "accessory-1", quantity: 1.5 }] });
 
     expect(parsed.errors).toEqual(expect.arrayContaining([
-      "accessories[0].accessoryId가 필요합니다.",
-      "accessories[1].quantity는 1부터 99 사이의 정수여야 합니다."
+      "주변 부품 선택을 확인해 주세요.",
+      "주변 부품 수량은 1~99개로 입력해 주세요."
     ]));
   });
 
@@ -95,10 +95,10 @@ describe("build request validation", () => {
 
   it("rejects malformed and duplicate normalized M.2 slot selections", () => {
     const malformed = parseBuild({ m2SlotSelection: "M2_1" });
-    expect(malformed.errors).toContain("m2SlotSelection은 슬롯 ID와 SSD ID를 담은 객체여야 합니다.");
+    expect(malformed.errors).toContain("M.2 슬롯별 SSD 선택을 확인해 주세요.");
 
     const duplicate = parseBuild({ m2SlotSelection: { "M.2_1": "ssd-one", "M2 1": "ssd-two" } });
-    expect(duplicate.errors).toContain("M2_1 슬롯이 m2SlotSelection에서 중복되었습니다.");
+    expect(duplicate.errors).toContain("M2_1 슬롯을 두 번 지정했습니다.");
   });
 
   it("rejects oversized M.2 slot selection objects before expanding every key", () => {
@@ -106,7 +106,7 @@ describe("build request validation", () => {
       m2SlotSelection: Object.fromEntries(Array.from({ length: 9 }, (_, index) => [`invalid-${index}`, `ssd-${index}`]))
     });
 
-    expect(parsed.errors).toEqual(["m2SlotSelection은 최대 8개 슬롯까지 지정할 수 있습니다."]);
+    expect(parsed.errors).toEqual(["M.2 슬롯은 최대 8개까지 지정할 수 있습니다."]);
     expect(parsed.build.m2SlotSelection).toBeUndefined();
   });
 

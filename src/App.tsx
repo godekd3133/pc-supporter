@@ -249,7 +249,6 @@ const LazyCatalogView = lazy(() => import("./CatalogView").then((module) => ({ d
 const LazyCandidateScenarioComparisonPanel = lazy(() => import("./CandidateScenarioComparison").then((module) => ({ default: module.CandidateScenarioComparisonPanel })));
 const LazySavedBuildPriorityPanel = lazy(() => import("./SavedBuildInsights").then((module) => ({ default: module.SavedBuildPriorityPanel })));
 const LazySavedBuildVersionPanel = lazy(() => import("./SavedBuildInsights").then((module) => ({ default: module.SavedBuildVersionPanel })));
-const LazySavedBuildComparisonDecisionSummary = lazy(() => import("./SavedBuildComparisonDecision").then((module) => ({ default: module.SavedBuildComparisonDecisionSummary })));
 const LazyPurchaseChecklistPanel = lazy(() => import("./PurchaseChecklist").then((module) => ({ default: module.PurchaseChecklistPanel })));
 const LazyPurchaseListPanel = lazy(() => import("./PurchaseListPanel").then((module) => ({ default: module.PurchaseListPanel })));
 const LazySavedBuildPurchaseProgressComparison = lazy(() => import("./SavedBuildPurchaseProgressComparison").then((module) => ({ default: module.SavedBuildPurchaseProgressComparison })));
@@ -467,7 +466,7 @@ const RULE_GUIDES: Record<string, string> = {
   "required-case": "부품의 실제 장착 공간을 계산하려면 케이스가 선택되어 있는지 확인합니다.",
   "required-psu": "CPU와 그래픽카드에 전력을 공급할 파워서플라이가 선택되어 있는지 확인합니다.",
   "cpu-motherboard-socket": "CPU 소켓과 메인보드 소켓이 동일한지 비교합니다. 소켓이 다르면 물리적으로 장착할 수 없습니다.",
-  "cpu-motherboard-power": "CPU의 확인된 최대 전력과 메인보드 전원부의 확인된 공급 범위를 비교합니다.",
+  "cpu-motherboard-power": "CPU 최대 전력과 메인보드 전원부가 공급할 수 있는 전력을 비교합니다.",
   "memory-type": "CPU·메인보드가 요구하는 메모리 세대와 선택한 RAM의 규격이 동일한지 비교합니다.",
   "memory-form-factor": "메인보드 메모리 슬롯과 RAM 모듈의 DIMM/SO-DIMM 물리 규격이 같은지 확인합니다.",
   "memory-capacity": "선택한 RAM 모듈 용량의 합이 메인보드의 최대 지원 용량을 넘지 않는지 확인합니다.",
@@ -755,10 +754,11 @@ function writeSavedWatchlistLink(link: SavedWatchlistLinkState | null) {
 function BootstrapNotice({ issues, online, apiStatus, onRetry, onRetryAll, retryingResource, retryingAll }: { issues: BootstrapIssue[]; online: boolean; apiStatus: ApiStatusDetails; onRetry: (resource: BootstrapResource) => void; onRetryAll: () => void; retryingResource: BootstrapResource | null; retryingAll: boolean }) {
   const apiUnavailable = apiStatus.status === "offline";
   const apiDegraded = apiStatus.status === "degraded";
-  const headline = !online ? "네트워크 연결이 끊겼어요." : apiUnavailable ? "견적 정보를 불러오지 못했어요." : apiDegraded ? "일부 정보를 불러오지 못했어요." : "서비스 정보를 불러오지 못했어요.";
-  const description = !online ? "입력한 견적은 유지됩니다. 인터넷 연결 후 다시 불러와 주세요." : apiUnavailable ? "입력한 견적은 유지됩니다. 잠시 후 다시 시도해 주세요." : apiDegraded ? "입력한 견적은 유지됩니다. 실패한 정보만 다시 불러와 주세요." : "입력한 견적은 유지됩니다. 잠시 후 다시 시도해 주세요.";
+  const visibleIssues = issues.filter((issue) => issue.resource !== "meta");
+  const headline = !online ? "인터넷 연결이 끊겼어요." : "견적 정보를 불러오지 못했어요.";
+  const description = !online ? "입력한 견적은 그대로예요. 인터넷 연결 후 다시 불러와 주세요." : "입력한 견적은 그대로예요. 연결이 돌아오면 아래 정보를 다시 불러와 주세요.";
   return <div className={online ? "bootstrap-notice" : "bootstrap-notice offline"} role="alert">
-    <div className="bootstrap-notice-copy"><FiXCircle /><div><strong>{headline}</strong><p>{description}</p>{issues.length > 0 && <ul>{issues.map((issue) => <li key={issue.resource}><span>{issue.label} 정보를 불러오지 못했어요.</span><button className="text-button" type="button" onClick={() => onRetry(issue.resource)} disabled={retryingResource === issue.resource || !online}>{retryingResource === issue.resource ? <><FiLoader className="spin" /> 불러오는 중...</> : <><FiRefreshCw /> 다시 불러오기</>}</button></li>)}</ul>}{(!online || apiUnavailable || apiDegraded || issues.length > 1) && <button className="button button-small button-light bootstrap-retry-all" type="button" onClick={onRetryAll} disabled={!online || retryingAll}>{retryingAll ? <><FiLoader className="spin" /> 전체 불러오는 중...</> : <><FiRefreshCw /> {!online ? "연결 후 다시 불러오기" : apiUnavailable ? "다시 연결" : apiDegraded ? "다시 불러오기" : "전체 다시 불러오기"}</>}</button>}</div></div>
+    <div className="bootstrap-notice-copy"><FiXCircle /><div><strong>{headline}</strong><p>{description}</p>{visibleIssues.length > 0 && <ul>{visibleIssues.map((issue) => <li key={issue.resource}><span>{issue.resource === "parts" ? "부품 정보를" : "저장한 견적을"} 불러오지 못했어요.</span><button className="text-button" type="button" onClick={() => onRetry(issue.resource)} disabled={retryingResource === issue.resource || !online}>{retryingResource === issue.resource ? <><FiLoader className="spin" /> 불러오는 중...</> : <><FiRefreshCw /> 다시 불러오기</>}</button></li>)}</ul>}{(!online || apiUnavailable || apiDegraded || visibleIssues.length > 1 || issues.length > visibleIssues.length) && <button className="button button-small button-light bootstrap-retry-all" type="button" onClick={onRetryAll} disabled={!online || retryingAll}>{retryingAll ? <><FiLoader className="spin" /> 전체 불러오는 중...</> : <><FiRefreshCw /> {!online ? "연결 후 다시 불러오기" : "다시 불러오기"}</>}</button>}</div></div>
   </div>;
 }
 
@@ -770,10 +770,10 @@ function DraftSyncNotice({ build, preferences, onApply, onDismiss }: { build?: B
   const peripheralText = accessoryCount > 0 ? " · 주변 부품 " + accessoryCount + "종" : "";
   const incomingSummary = [
     build ? selectedParts + "개 부품 · " + selectedCategories + "개 범주" + peripheralText : undefined,
-    preferences ? "추천 기준 " + RECOMMENDATION_PROFILE_LABELS[preferences.profile] : undefined
+    preferences ? "사용 목적 " + RECOMMENDATION_PROFILE_LABELS[preferences.profile] : undefined
   ].filter((value): value is string => Boolean(value)).join(" · ");
   const summaryText = incomingSummary || "변경 내용";
-  return <section className="draft-sync-notice" role="status" aria-label="다른 탭 견적 변경 알림"><div className="draft-sync-notice-copy"><FiRefreshCw /><div><strong>다른 탭에서 견적 또는 추천 기준이 변경되었습니다.</strong><p>현재 입력을 자동으로 덮어쓰지 않았습니다. 다른 탭에서 변경된 내용({summaryText})을 확인한 뒤 선택해 주세요.</p></div></div><div className="draft-sync-notice-actions"><button className="button button-small button-primary" type="button" onClick={onApply}>다른 탭 변경 불러오기</button><button className="text-button" type="button" onClick={onDismiss}>현재 입력 유지</button></div></section>;
+  return <section className="draft-sync-notice" role="status" aria-label="다른 탭 견적 변경 알림"><div className="draft-sync-notice-copy"><FiRefreshCw /><div><strong>다른 탭에서 견적이 바뀌었어요.</strong><p>변경된 내용({summaryText})을 불러올까요?</p></div></div><div className="draft-sync-notice-actions"><button className="button button-small button-primary" type="button" onClick={onApply}>변경 내용 불러오기</button><button className="text-button" type="button" onClick={onDismiss}>현재 견적 유지</button></div></section>;
 }
 function AppHeaderLoadingFallback() {
   return <header className="topbar" aria-hidden="true" data-testid="app-header-loading-fallback">
@@ -1376,7 +1376,7 @@ function App() {
     if (routeRequestSequenceRef.current !== routeRequestSequence) return;
     const checked = await checkBuild(pending.nextBuild);
     if (!checked) return;
-    setToast(`${pending.title} 적용 후 다시 검사했습니다.`);
+    setToast(`${pending.title} 적용 후 호환 결과를 새로 확인했어요.`);
     if (checked && pending.beforeResult) {
       setBuildChangeResultComparison({ title: pending.title, summary: pending.summary, rows: pending.rows, beforeResult: pending.beforeResult, afterResult: checked });
     }
@@ -1441,7 +1441,7 @@ function App() {
       tasks.push(loadResource("parts", "부품 목록", api<{ items: Part[] }>("/api/parts?limit=100"), (payload) => rememberParts(payload.items)));
     }
     if (!requestedResource || requestedResource === "meta") {
-      tasks.push(loadResource("meta", "서비스 메타데이터", api<ServiceMeta>("/api/meta"), setMeta));
+      tasks.push(loadResource("meta", "견적 기준", api<ServiceMeta>("/api/meta"), setMeta));
     }
     if (!requestedResource || requestedResource === "savedBuilds") {
       tasks.push(loadResource("savedBuilds", "저장 견적", loadSavedBuildsForBrowser(), (payload) => {
@@ -1912,7 +1912,7 @@ function App() {
           changedFieldCount += refreshed.changedFields.length;
           reportItems.push(refreshed.reportItem);
         } catch (error: unknown) {
-          failures.push({ target, message: error instanceof Error ? error.message : "정보 확인 실패" });
+          failures.push({ target, message: error instanceof Error ? error.message : "정보 불러오기 실패" });
         }
         setCatalogRefreshProgress(progressFor(index + 1, uniqueTargets[index + 1]));
       }
@@ -1976,21 +1976,21 @@ function App() {
     const routeRequestSequence = routeRequestSequenceRef.current;
     const isCurrent = () => routeRequestSequenceRef.current === routeRequestSequence;
     if (!result || resultIsStale) {
-      setToast("현재 구성으로 먼저 다시 검사해 주세요.");
+      setToast("현재 견적의 호환 결과를 먼저 불러와 주세요.");
       return;
     }
     try {
       await navigator.clipboard.writeText(compatibilityReportTextFor(result, build, partMap, accessoryMap, compatibilityReportViewStateForLocation(), savedCheckHistory?.at(-1)));
       if (!isCurrent()) return;
-      setToast("호환성 검사 리포트를 클립보드에 복사했습니다.");
+      setToast("견적 정보를 복사했어요.");
     } catch {
-      if (isCurrent()) setToast("호환성 검사 리포트 복사에 실패했습니다. 브라우저 클립보드 권한을 확인해 주세요.");
+      if (isCurrent()) setToast("견적 정보를 복사하지 못했어요. 브라우저 클립보드 설정을 확인해 주세요.");
     }
   }
 
   function downloadCompatibilityReport() {
     if (!result || resultIsStale) {
-      setToast("현재 구성으로 먼저 다시 검사해 주세요.");
+      setToast("현재 견적의 호환 결과를 먼저 불러와 주세요.");
       return;
     }
     const blob = new Blob([compatibilityReportJsonFor(result, build, recommendationPreferences, partMap, compatibilityReportViewStateForLocation(), savedCheckHistory?.at(-1))], { type: "application/json;charset=utf-8" });
@@ -2000,7 +2000,7 @@ function App() {
     anchor.download = `pc-supporter-compatibility-report-${new Date().toISOString().slice(0, 10)}.json`;
     anchor.click();
     URL.revokeObjectURL(url);
-    setToast("호환성 검사 JSON 리포트를 저장했습니다.");
+    setToast("견적 정보 JSON을 저장했어요.");
   }
 
   async function copyBuildChangeResultComparison() {
@@ -2044,7 +2044,7 @@ function App() {
     const routeRequestSequence = routeRequestSequenceRef.current;
     const isCurrent = () => routeRequestSequenceRef.current === routeRequestSequence;
     if (!result || resultIsStale) {
-      setToast("현재 구성으로 먼저 다시 검사해 주세요.");
+      setToast("현재 견적의 호환 결과를 먼저 불러와 주세요.");
       return;
     }
     const viewState = compatibilityReportViewStateForLocation();
@@ -2140,7 +2140,7 @@ function App() {
     const routeRequestSequence = routeRequestSequenceRef.current;
     const requestContextVersion = localShareMutationContextRef.current;
     if (!entry.ownerToken) {
-      setToast("이 링크에는 취소용 owner token이 없어 서버에서 취소할 수 없습니다.");
+      setToast("이 브라우저에는 이 공유 링크를 취소할 권한이 없습니다.");
       return false;
     }
     if (savedBuildVersionRevokeInFlightRef.current.has(entry.id)) return false;
@@ -2388,7 +2388,7 @@ function App() {
       await checkBuild(selection, nextPreferences);
     } else {
       if (!isCurrent()) return;
-      setToast("버전별 부분 병합 결과를 편집기로 가져왔습니다. 전체 호환성 검사를 실행해 주세요.");
+      setToast("버전별 부분 병합 결과를 편집기로 가져왔습니다. 현재 호환 결과를 새로 확인해 주세요.");
       navigate("/build", "editor");
     }
   }
@@ -2419,7 +2419,7 @@ function App() {
       return;
     }
     setBuildImportPreview(parsed.envelope);
-    setToast("견적 JSON을 확인했습니다. 현재 견적을 교체하기 전에 미리보기를 확인해 주세요.");
+    setToast("견적 파일을 읽었습니다. 적용할 내용을 살펴보고 가져오기를 선택해 주세요.");
   }
 
   function applyImportedBuild(next: BuildTransferEnvelope) {
@@ -2434,7 +2434,7 @@ function App() {
     setBuildImportPreview(null);
     void rememberBuildSelection(next.selection);
     navigate("/build", "editor");
-    setToast("견적 JSON을 가져왔습니다. 카탈로그 상태를 확인한 뒤 다시 검사해 주세요.");
+    setToast("견적 JSON을 가져왔습니다. 부품 정보를 새로 불러온 뒤 호환 결과를 확인해 주세요.");
   }
 
   function requestSaveBuild(target?: SaveBuildTarget) {
@@ -2569,7 +2569,7 @@ function App() {
     if (recoveryCodeBusy) return;
     const token = readSavedBuildOwnerToken(saved.id);
     if (!token) {
-      setToast("이 견적의 owner token이 이 브라우저에 없어 복구 코드를 만들 수 없습니다.");
+      setToast("이 브라우저에서 견적 소유권을 확인할 수 없어 복구 코드를 만들 수 없습니다. 처음 견적을 만든 브라우저에서 다시 시도해 주세요.");
       return;
     }
     setRecoveryCodeBusy(true);
@@ -2596,7 +2596,7 @@ function App() {
     if (myPcBusyId) return;
     const token = readSavedBuildOwnerToken(saved.id);
     if (!token) {
-      setToast("이 견적의 owner token이 이 브라우저에 없어 내 PC로 등록할 수 없습니다.");
+      setToast("이 브라우저에서 견적 소유권을 확인할 수 없어 내 견적으로 복사할 수 없습니다. 처음 만든 브라우저에서 열어 주세요.");
       return;
     }
     const promote = !saved.myPcAt;
@@ -2699,7 +2699,7 @@ function App() {
       return;
     }
     updateBuildPart(part.category, { partId: part.id, quantity: 1 }, part);
-    setToast(`${CATEGORY_LABELS[part.category]} · ${eul(part.name)} 현재 견적에 ${["memory", "ssd", "hdd"].includes(part.category) ? "추가" : "선택"}했습니다. 견적 검사에서 전체 호환성을 확인해 주세요.`);
+      setToast(`${CATEGORY_LABELS[part.category]} · ${eul(part.name)} 현재 견적에 ${["memory", "ssd", "hdd"].includes(part.category) ? "추가" : "선택"}했습니다. 내 견적에서 호환 결과를 확인해 주세요.`);
   }
 
   function selectPickerPart(part: Part) {
@@ -2714,7 +2714,7 @@ function App() {
       ...(pickerPart.remainingUnknown !== undefined ? { remainingUnknown: pickerPart.remainingUnknown } : {})
     };
     if (candidateApplicationBlockedFor(candidateEvidence)) {
-      setToast("차단 오류가 확인된 부품은 자동으로 적용하지 않아요. 다른 부품을 고르거나 이유를 확인해 주세요.");
+      setToast("현재 견적과 호환되지 않는 부품은 추가할 수 없어요. 다른 부품을 골라 주세요.");
       return;
     }
     if (picker.findingRuleId) {
@@ -2722,7 +2722,7 @@ function App() {
       setPicker(null);
       if (view === "result") {
         const quantityText = pickerPart.recommendedQuantity !== undefined && picker.category === "memory" ? ` ${pickerPart.recommendedQuantity}킷` : "";
-        openBuildChangePreview("대체 부품 적용", `${part.name}${quantityText}을 이 문제의 대체 부품으로 적용해요. 확인 후 견적 전체를 다시 검사해요.`, nextBuild, [part], candidateEvidence);
+        openBuildChangePreview("대체 부품 적용", `${part.name}${quantityText}을 대체 부품으로 적용합니다. 견적의 호환 결과도 새로 계산해요.`, nextBuild, [part], candidateEvidence);
       } else {
         rememberParts([part]);
         setCheckError(null);
@@ -2735,14 +2735,14 @@ function App() {
 
   function applySuggestion(category: PartCategory, part: Part, quantity?: number, affectedPartIds: string[] = [], candidateEvidence?: CandidateApplicationEvidence) {
     if (candidateApplicationBlockedFor(candidateEvidence)) {
-      setToast("차단 오류가 확인된 부품은 적용하지 않아요. 다른 부품을 고르거나 이유를 확인해 주세요.");
+      setToast("현재 견적과 호환되지 않는 부품은 추가할 수 없어요. 다른 부품을 골라 주세요.");
       return;
     }
     scenarioRequestSequenceRef.current += 1;
     setScenarioPreview(null);
     const nextBuild = replaceAffectedPartsInBuild(build, category, part.id, affectedPartIds, quantity);
     const quantityText = quantity !== undefined && category === "memory" ? ` ${quantity}킷` : "";
-    openBuildChangePreview("대체 부품 적용", `${part.name}${quantityText}을 적용합니다. 확인 후 전체 호환성 규칙으로 다시 검사합니다.`, nextBuild, [part], candidateEvidence);
+    openBuildChangePreview("대체 부품 적용", `${part.name}${quantityText}을 적용합니다. 적용 후 전체 견적의 호환 결과를 계산합니다.`, nextBuild, [part], candidateEvidence);
   }
 
   async function previewSuggestion(category: PartCategory, part: Part, quantity?: number, affectedPartIds: string[] = [], candidateEvidence?: CandidateApplicationEvidence) {
@@ -2754,7 +2754,7 @@ function App() {
     setScenarioPreview({
       status: "loading",
       title: `${CATEGORY_LABELS[category]} · ${part.name}`,
-      summary: `${eul(`${part.name}${quantityText}`)} 현재 견적에 미리 적용합니다. 현재 선택·검사 결과는 바뀌지 않습니다.`,
+      summary: `${eul(`${part.name}${quantityText}`)} 현재 견적에 미리 적용합니다. 현재 견적과 호환 결과는 바뀌지 않아요.`,
       category,
       part,
       ...(quantity !== undefined ? { quantity } : {}),
@@ -2882,14 +2882,14 @@ function App() {
       return;
     }
     if (item.risk === "unsafe" || (!item.risk && item.result.blockerCount > 0)) {
-      setToast("전체 구성에서 차단 오류가 확인된 부품은 적용하지 않아요.");
+      setToast("현재 견적과 호환되지 않는 부품은 추가할 수 없어요.");
       return;
     }
     scenarioRequestSequenceRef.current += 1;
     setCandidateScenarioComparison(null);
     const quantityText = item.quantity !== undefined && item.category === "memory" ? ` ${item.quantity}킷` : "";
     const candidateRisk = item.risk ?? item.part.candidateRisk;
-    openBuildChangePreview("부품 미리 적용", `${item.part.name}${quantityText}을 전체 미리 비교 결과 기준으로 적용합니다. 확인 후 전체 호환성 규칙으로 다시 검사합니다.`, item.nextBuild, [item.part], {
+    openBuildChangePreview("부품 미리 적용", `${item.part.name}${quantityText}을 전체 미리 비교 결과 기준으로 적용합니다. 적용 후 전체 견적의 호환 결과를 계산합니다.`, item.nextBuild, [item.part], {
       ...(candidateRisk ? { risk: candidateRisk } : {}),
       ...(item.part.decision ? { decision: item.part.decision } : {}),
       ...(item.part.candidateReasons ? { reasons: item.part.candidateReasons } : {}),
@@ -2905,7 +2905,7 @@ function App() {
       return;
     }
     if (item.risk === "unsafe" || (!item.risk && item.result.blockerCount > 0)) {
-      setToast("전체 구성에서 차단 오류가 확인된 부품은 새 견적으로 저장하지 않아요.");
+      setToast("현재 견적과 호환되지 않는 부품은 저장할 수 없어요.");
       return;
     }
     scenarioRequestSequenceRef.current += 1;
@@ -2923,7 +2923,7 @@ function App() {
     scenarioRequestSequenceRef.current += 1;
     setUpgradeBundleScenarioPreview(null);
     const nextBuild = upgradeBundleBuildFor(build, bundle);
-    openBuildChangePreview("업그레이드 조합 적용", `${bundle.changes.length}개 부품 조합을 적용합니다. ${bundle.reason} 확인 후 전체 호환성 규칙으로 다시 검사합니다.`, nextBuild, bundle.changes.map((change) => change.part));
+    openBuildChangePreview("업그레이드 조합 적용", `${bundle.changes.length}개 부품 조합을 적용합니다. ${bundle.reason} 적용 후 전체 견적의 호환 결과를 계산합니다.`, nextBuild, bundle.changes.map((change) => change.part));
   }
 
   async function previewUpgradeBundle(bundle: UpgradeBundleRecommendation) {
@@ -2950,7 +2950,7 @@ function App() {
 
   function applyRepairPlan(plan: RecommendationPlan) {
     const nextBuild = repairPlanBuildFor(build, plan);
-    openBuildChangePreview("수리 플랜 적용", `${plan.changes.length}개 변경으로 차단 오류 ${plan.resolvedBlockers}개를 줄이는 플랜입니다. 확인 후 전체 호환성 규칙으로 다시 검사합니다.`, nextBuild, plan.changes.map((change) => change.toPart));
+    openBuildChangePreview("수리 플랜 적용", `${plan.changes.length}개 변경으로 차단 오류 ${plan.resolvedBlockers}개를 줄이는 플랜입니다. 적용 후 전체 견적의 호환 결과를 계산합니다.`, nextBuild, plan.changes.map((change) => change.toPart));
   }
 
   async function restoreBuildHistory(entry: BuildHistoryEntry) {
@@ -2959,7 +2959,7 @@ function App() {
     setRecommendationPreferences(snapshot.recommendationPreferences);
     const checked = await checkBuild(snapshot.build, snapshot.recommendationPreferences);
     if (!checked) return;
-    setToast(`${entry.label} 전 구성으로 복원하고 다시 검사했습니다.`);
+    setToast(`${entry.label} 전 구성으로 복원하고 호환 결과를 새로 계산했어요.`);
   }
 
   async function openSavedBuild(saved: SavedBuild, focus?: SavedBuildOpenFocus) {
@@ -2972,7 +2972,7 @@ function App() {
     openingSavedBuildIdRef.current = saved.id;
     setOpeningSavedBuildId(saved.id);
     setPendingResultFindingRuleId(focus && typeof focus !== "string" && focus.type === "finding" ? focus.ruleId : null);
-    setToast(`${eul(saved.name)} 현재 부품 정보로 다시 검사하고 있습니다.`);
+    setToast(`${eul(saved.name)} 현재 부품 기준으로 호환 결과를 계산하고 있어요.`);
     const nextPreferences = saved.recommendationPreferences ?? recommendationPreferences;
     setBuild(saved.selection);
     setRecommendationPreferences(nextPreferences);
@@ -3104,7 +3104,7 @@ function App() {
     if (view === "result") {
       const checked = await checkBuild(nextBuild);
       if (!checked) return;
-      setToast(`${eul(item.name)} 견적에 추가하고 다시 검사했습니다.`);
+      setToast(`${eul(item.name)} 견적에 추가하고 호환 결과를 새로 확인했어요.`);
       return;
     }
     setBuild(nextBuild);
@@ -3273,7 +3273,7 @@ function App() {
     <Suspense fallback={<div className="shared-build-state"><FiLoader className="spin" /><span>시작 화면을 불러오는 중...</span></div>}>
       <LazyQuoteOnboardingView
         onFinish={(query) => navigate(`/recommend?${query}`, "generator")}
-        onUpgrade={() => { navigate("/build?entry=upgrade", "editor"); setToast("지금 쓰는 부품을 골라 주세요. 검사 후 바꾸면 좋은 부품을 보여드려요."); }}
+        onUpgrade={() => { navigate("/build?entry=upgrade", "editor"); setToast("현재 부품을 선택하면 호환 문제와 업그레이드 조합을 확인할 수 있어요."); }}
         onSkip={() => navigate("/", "home")}
         onHome={() => navigate("/", "home")}
       />
@@ -3491,7 +3491,7 @@ function App() {
     <div className="app-shell" data-route-key={locationKey}>
       <a className="skip-to-content" href="#main-content">본문으로 건너뛰기</a>
       <Suspense fallback={<AppHeaderLoadingFallback />}><LazyAppHeader view={view} networkOnline={networkOnline} apiStatus={apiStatusDetails} bootstrapLoading={bootstrapLoading} bootstrapErrorCount={bootstrapIssues.length} savedBuildUnreadAlertCount={savedBuildUnreadAlertCount} watchlistUnreadAlertCount={watchlistUnreadAlertCount} catalogRefreshProgress={catalogRefreshProgress} onHome={() => navigate("/", "home")} onBuild={() => navigate("/build", "editor")} onGenerate={() => openGenerator()} onCatalog={() => navigate("/catalog", "catalog")} onAccessories={() => navigate("/accessories", "accessories")} onPriceWatchlist={() => navigate("/watchlist", "pricewatchlist")} onHistory={() => navigate("/history", "history")} /></Suspense>
-      <main className="page-container" id="main-content" tabIndex={-1}>{(incomingDraft || incomingPreferences) && <DraftSyncNotice build={incomingDraft ?? undefined} preferences={incomingPreferences ?? undefined} onApply={() => { skipNextHistoryRef.current = true; if (incomingDraft) setBuild(incomingDraft); if (incomingPreferences) setRecommendationPreferences(incomingPreferences); setResult(null); setCheckedInputFingerprint(null); setChangeHistory([]); setIncomingDraft(null); setIncomingPreferences(null); setToast("다른 탭에서 변경한 견적 또는 추천 기준을 불러왔습니다. 현재 기준으로 다시 검사해 주세요."); }} onDismiss={() => { setIncomingDraft(null); setIncomingPreferences(null); }} />}{(bootstrapIssues.length > 0 || !networkOnline || apiStatusDetails.status === "offline" || apiStatusDetails.status === "degraded") && <BootstrapNotice issues={bootstrapIssues} online={networkOnline} apiStatus={apiStatusDetails} onRetry={(resource) => setBootstrapRetryRequest((current) => ({ resource, nonce: current.nonce + 1 }))} onRetryAll={() => setBootstrapRetryRequest((current) => ({ resource: null, nonce: current.nonce + 1 }))} retryingResource={bootstrapLoading ? bootstrapRetryRequest.resource : null} retryingAll={bootstrapLoading && bootstrapRetryRequest.resource === null} />}<div className={`route-stage route-stage-${view}`} key={view}>{content}</div></main>
+      <main className="page-container" id="main-content" tabIndex={-1}>{(incomingDraft || incomingPreferences) && <DraftSyncNotice build={incomingDraft ?? undefined} preferences={incomingPreferences ?? undefined} onApply={() => { skipNextHistoryRef.current = true; if (incomingDraft) setBuild(incomingDraft); if (incomingPreferences) setRecommendationPreferences(incomingPreferences); setResult(null); setCheckedInputFingerprint(null); setChangeHistory([]); setIncomingDraft(null); setIncomingPreferences(null); setToast("다른 탭에서 바뀐 견적을 불러왔어요. 호환 결과를 새로 확인해 주세요."); }} onDismiss={() => { setIncomingDraft(null); setIncomingPreferences(null); }} />}{(bootstrapIssues.length > 0 || !networkOnline || apiStatusDetails.status === "offline" || apiStatusDetails.status === "degraded") && <BootstrapNotice issues={bootstrapIssues} online={networkOnline} apiStatus={apiStatusDetails} onRetry={(resource) => setBootstrapRetryRequest((current) => ({ resource, nonce: current.nonce + 1 }))} onRetryAll={() => setBootstrapRetryRequest((current) => ({ resource: null, nonce: current.nonce + 1 }))} retryingResource={bootstrapLoading ? bootstrapRetryRequest.resource : null} retryingAll={bootstrapLoading && bootstrapRetryRequest.resource === null} />}<div className={`route-stage route-stage-${view}`} key={view}>{content}</div></main>
       {candidateScenarioComparison && result && <Suspense fallback={<div className="modal-backdrop" role="presentation"><section className="candidate-scenario-dialog candidate-scenario-dialog-loading" role="dialog" aria-modal="true" aria-label="부품 미리 비교 불러오는 중"><FiLoader className="spin" /> 선택한 부품을 전체 구성에 적용하는 중...</section></div>}><LazyCandidateScenarioComparisonPanel state={candidateScenarioComparison} currentResult={result} onApply={applyCandidateScenario} onSave={saveCandidateScenario} onRetry={(itemId) => void retryCandidateScenario(itemId)} onClose={() => { scenarioRequestSequenceRef.current += 1; setCandidateScenarioComparison(null); }} onWatchPart={watchPart} onShareComparison={shareAlternativeComparison} onRevokeComparison={revokeAlternativeComparison} onToast={setToast} formatWon={formatWon} /></Suspense>}
       {picker && (
         <PartPicker
@@ -3546,11 +3546,11 @@ function BuildImportPreviewDialog({ envelope, currentBuild, currentPreferences, 
   useModalAccessibility({ onClose, selector: '[aria-labelledby="build-import-preview-title"]' });
   const preflight = buildPreflightFor(envelope.selection, partMap, accessoryMap);
   const diff = buildTransferDiffFor(currentBuild, currentPreferences, envelope.selection, envelope.recommendationPreferences, { partName: (partId) => partMap.get(partId)?.name, accessoryName: (accessoryId) => accessoryMap.get(accessoryId)?.name });
-  const statusLabel: Record<BuildPreflight["status"], string> = { ready: "검사 준비 완료", needs_selection: "필수 선택 확인 필요", needs_data_review: "데이터 확인 필요" };
+  const statusLabel: Record<BuildPreflight["status"], string> = { ready: "가져올 수 있어요", needs_selection: "필수 부품을 선택해 주세요", needs_data_review: "부품 정보가 부족해요" };
   const selectedCoreCategories = PART_CATEGORIES.filter((category) => selectionList(envelope.selection, category).length > 0).length;
   const m2SlotCount = Object.keys(envelope.selection.m2SlotSelection ?? {}).length;
   const preferenceText = `${RECOMMENDATION_PROFILE_LABELS[envelope.recommendationPreferences.profile]} · ${RECOMMENDATION_PRIORITY_LABELS[envelope.recommendationPreferences.priority]} · ${LISTING_POLICY_LABELS[envelope.recommendationPreferences.listingPolicy ?? "retail_only"]}${envelope.recommendationPreferences.profile === "gaming" ? ` · ${GAMING_RESOLUTION_LABELS[envelope.recommendationPreferences.gamingResolution ?? "1440p"]} · ${GAMING_REFRESH_RATE_LABELS[envelope.recommendationPreferences.gamingRefreshRate ?? 144]}` : ""}`;
-  return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="build-import-dialog" role="dialog" aria-modal="true" aria-labelledby="build-import-preview-title"><div className="modal-header"><div><h2 id="build-import-preview-title">견적 JSON 미리보기</h2><p>현재 편집기 값을 바꾸기 전에 가져올 구성을 확인합니다.</p></div><button className="icon-button" type="button" onClick={onClose} aria-label="견적 JSON 미리보기 닫기"><FiXCircle /></button></div><div className={`build-import-status ${preflight.status}`}><strong>{statusLabel[preflight.status]}</strong><span>schemaVersion {envelope.schemaVersion}</span></div><div className="build-import-stats"><div><span>선택 카테고리</span><strong>{selectedCoreCategories}개</strong></div><div><span>선택 부품</span><strong>{preflight.selectedPartCount}개</strong></div><div><span>주변 부품</span><strong>{preflight.selectedAccessoryCount}개</strong></div><div><span>M.2 수동 배치</span><strong>{m2SlotCount}개</strong></div></div><div className="build-import-preferences"><span>추천 기준</span><strong>{preferenceText}</strong>{envelope.recommendationPreferences.budgetWon !== undefined && <small>목표 예산 {envelope.recommendationPreferences.budgetWon.toLocaleString("ko-KR")}원</small>}</div>{diff.changedCount > 0 ? <div className="build-import-diff"><div className="build-import-diff-heading"><strong>가져오기 변경 예정</strong><span>{diff.changedCount}개 항목</span></div><div className="build-import-diff-list">{diff.rows.map((row) => <div className="build-import-diff-row" key={row.id}><span>{row.label}</span><small>{row.before} → {row.after}</small></div>)}</div></div> : <p className="build-import-diff-clear"><FiCheckCircle /> 현재 편집기와 구성·추천 기준이 같습니다.</p>}{preflight.issues.length > 0 ? <div className="build-import-issues"><strong>가져온 구성에서 확인할 항목</strong>{preflight.issues.slice(0, 5).map((issue) => <p key={issue.id}><b>{issue.label}</b> · {issue.message}</p>)}{preflight.issues.length > 5 && <small>그 외 {preflight.issues.length - 5}개 항목은 편집기 사전 점검에서 확인합니다.</small>}</div> : <p className="build-import-clear"><FiCheckCircle /> 현재 카탈로그에서 선택한 부품 기본 정보를 확인할 수 있습니다.</p>}<p className="build-import-note"><FiInfo /> 확인하면 현재 편집기 구성을 이 파일의 구성으로 교체합니다. 저장된 공유 견적이나 서버 데이터는 삭제·변경하지 않으며, 가져온 뒤 호환성 검사는 자동 실행하지 않습니다.</p><div className="build-import-actions"><button className="button button-light" type="button" onClick={onClose}>취소</button><button className="button button-primary" type="button" onClick={() => onConfirm(envelope)}>이 구성으로 가져오기</button></div></section></div>;
+  return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="build-import-dialog" role="dialog" aria-modal="true" aria-labelledby="build-import-preview-title"><div className="modal-header"><div><h2 id="build-import-preview-title">견적 JSON 미리보기</h2><p>가져올 부품과 금액을 확인해 주세요.</p></div><button className="icon-button" type="button" onClick={onClose} aria-label="견적 JSON 미리보기 닫기"><FiXCircle /></button></div><div className={`build-import-status ${preflight.status}`}><strong>{statusLabel[preflight.status]}</strong></div><div className="build-import-stats"><div><span>선택 카테고리</span><strong>{selectedCoreCategories}개</strong></div><div><span>선택 부품</span><strong>{preflight.selectedPartCount}개</strong></div><div><span>주변 부품</span><strong>{preflight.selectedAccessoryCount}개</strong></div><div><span>M.2 수동 배치</span><strong>{m2SlotCount}개</strong></div></div><div className="build-import-preferences"><span>추천 기준</span><strong>{preferenceText}</strong>{envelope.recommendationPreferences.budgetWon !== undefined && <small>목표 예산 {envelope.recommendationPreferences.budgetWon.toLocaleString("ko-KR")}원</small>}</div>{diff.changedCount > 0 ? <div className="build-import-diff"><div className="build-import-diff-heading"><strong>가져오기 변경 예정</strong><span>{diff.changedCount}개 항목</span></div><div className="build-import-diff-list">{diff.rows.map((row) => <div className="build-import-diff-row" key={row.id}><span>{row.label}</span><small>{row.before} → {row.after}</small></div>)}</div></div> : <p className="build-import-diff-clear"><FiCheckCircle /> 현재 견적과 부품 구성·추천 조건이 같아요.</p>}{preflight.issues.length > 0 ? <div className="build-import-issues"><strong>부품 정보와 호환 항목</strong>{preflight.issues.slice(0, 5).map((issue) => <p key={issue.id}><b>{issue.label}</b> · {issue.message}</p>)}{preflight.issues.length > 5 && <small>그 외 {preflight.issues.length - 5}개 항목이 있어요.</small>}</div> : <p className="build-import-clear"><FiCheckCircle /> 선택한 부품 정보를 불러왔어요.</p>}<p className="build-import-note"><FiInfo /> 이 구성을 가져오면 현재 견적이 바뀝니다. 호환 결과는 견적을 불러온 뒤 확인할 수 있어요.</p><div className="build-import-actions"><button className="button button-light" type="button" onClick={onClose}>취소</button><button className="button button-primary" type="button" onClick={() => onConfirm(envelope)}>이 구성으로 가져오기</button></div></section></div>;
 }
 
 export default App;

@@ -1,6 +1,6 @@
 import { FiAlertTriangle, FiCheckCircle, FiInfo } from "react-icons/fi";
 import { gamingGameOptionFor } from "../shared/gaming-catalog";
-import { GAMING_GRAPHICS_PRESET_LABELS, GAMING_REFRESH_RATE_LABELS, GAMING_RESOLUTION_LABELS, GAMING_UPSCALING_LABELS, type GamingPerformanceAssessment } from "../shared/types";
+import { GAMING_GRAPHICS_PRESET_LABELS, GAMING_RESOLUTION_LABELS, GAMING_UPSCALING_LABELS, type GamingPerformanceAssessment } from "../shared/types";
 
 function gameLabelFor(gameId: string) {
   return gamingGameOptionFor(gameId)?.label ?? gameId;
@@ -31,7 +31,7 @@ export function GamingPerformanceEvidencePanel({ assessment }: { assessment?: Ga
   const measurements = assessment.measurements ?? [];
   const conditionText = [
     GAMING_RESOLUTION_LABELS[assessment.resolution],
-    GAMING_REFRESH_RATE_LABELS[assessment.refreshRate],
+    `${assessment.refreshRate} FPS`,
     assessment.graphicsPreset ? GAMING_GRAPHICS_PRESET_LABELS[assessment.graphicsPreset] : undefined,
     assessment.upscaling ? GAMING_UPSCALING_LABELS[assessment.upscaling] : undefined,
     assessment.rayTracing ? "레이 트레이싱" : undefined

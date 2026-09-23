@@ -122,9 +122,9 @@ describe("alternative comparison export", () => {
     const csv = alternativeComparisonCsvFor([evidencedCandidate]);
     const json = JSON.parse(alternativeComparisonJsonFor([evidencedCandidate])) as { items: AlternativeComparisonCandidate[] };
 
-    expect(text).toContain("성능 비교 정보: 정보 충분 · 부품 정보 · 비교 지표 2/3개 · 모델 참조 RTX 5070 확인 참조 · 보완 gpuMemoryBandwidthGbps · 지표별 VRAM 대역폭 224GB/s → 272GB/s (모델 참조)");
+    expect(text).toContain("성능 비교 정보: 정보 충분 · 부품 정보 · 비교 지표 2/3개 · 같은 제품군 참고: RTX 5070 확인 참조 · 참고한 항목 gpuMemoryBandwidthGbps · 항목별 VRAM 대역폭 224GB/s → 272GB/s (같은 제품군 참고)");
     expect(csv).toContain("성능 비교 정보");
-    expect(csv).toContain("모델 참조 RTX 5070 확인 참조");
+    expect(csv).toContain("같은 제품군 참고: RTX 5070 확인 참조");
     expect(json.items[0].similarityEvidence).toEqual(evidencedCandidate.similarityEvidence);
   });
 
@@ -164,9 +164,9 @@ describe("alternative comparison export", () => {
     const csv = alternativeComparisonCsvFor([valuedCandidate]);
     const json = JSON.parse(alternativeComparisonJsonFor([valuedCandidate])) as { items: AlternativeComparisonCandidate[] };
 
-    expect(text).toContain("미리 적용 판단: 확인 필요 · 차단 0 · 주의 1 · 확인 필요 2 · 성능 분석 74점 · 보완 권장 · 현재 대비 -8점 · 일부 정보로 계산 · 가격 변화 +45,000원 · 확인 후 구매 · 가격 이력 30일 4회 · 최저 100,000원 · 구매 전 확인 2개 · 확인됨 1 · 확인 필요 1 · 차단 0 · 주의·확인 필요를 확인한 뒤 구매하세요.");
+    expect(text).toContain("미리 적용 판단: 호환 검사: 확인 필요 · 차단 0 · 주의 1 · 정보 누락 2 · 성능 분석 74점 · 보완 권장 · 현재 대비 -8점 · 일부 정보로 계산 · 가격 변화 +45,000원 · 구매 판단: 확인 후 구매 · 안내: 주의·확인 필요를 확인한 뒤 구매하세요. · 가격 이력 30일 4회 · 최저 100,000원 · 구매 전 체크리스트: 2개 · 완료 1 · 추가 확인 1 · 차단 0");
     expect(csv).toContain("미리 적용 판단");
-    expect(csv).toContain("확인 필요 · 차단 0 · 주의 1 · 확인 필요 2 · 성능 분석 74점 · 보완 권장 · 현재 대비 -8점 · 일부 정보로 계산 · 가격 변화 +45,000원");
+    expect(csv).toContain("호환 검사: 확인 필요 · 차단 0 · 주의 1 · 정보 누락 2 · 성능 분석 74점 · 보완 권장 · 현재 대비 -8점 · 일부 정보로 계산 · 가격 변화 +45,000원");
     expect(json.items[0].scenario).toEqual(scenario);
   });
 

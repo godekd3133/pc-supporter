@@ -33,7 +33,7 @@ export function candidateDecisionSummaryFor(input: CandidateDecisionInput): Cand
       ? [input.resolvesTarget === false ? "현재 문제 해결 여부 확인 필요" : "추가 확인 필요"]
       : ["현재 문제 해결", "새 차단 없음"];
   if (input.physicalStatus === "verified") summaryParts.push("장착 정보 확인됨");
-  if (input.physicalStatus === "review") summaryParts.push("장착 정보 확인 필요");
+  if (input.physicalStatus === "review") summaryParts.push("장착 정보 미확인");
   if (input.catalogSpecSourceCheckNeedsReview === true) summaryParts.push("제조사 페이지 확인 필요");
   if (input.freshness) summaryParts.push(DATA_FRESHNESS_LABELS[input.freshness]);
   if (input.recommendationTrustLevel) summaryParts.push(TRUST_LABELS[input.recommendationTrustLevel]);
@@ -41,10 +41,10 @@ export function candidateDecisionSummaryFor(input: CandidateDecisionInput): Cand
   const reasons = [
     ...(input.reasons ?? []),
     ...(input.resolvesTarget === false ? ["현재 문제를 직접 해결하는 부품인지 추가 확인해야 합니다."] : []),
-    ...(input.physicalStatus === "review" ? ["장착 정보가 확인 필요 상태라 실제 장착 전에 제조사 페이지를 확인해야 합니다."] : []),
-    ...(input.catalogSpecSourceCheckNeedsReview === true ? ["직접 입력된 스펙의 제조사 페이지 접근과 모델 식별을 확인해야 이 부품을 적용할 수 있어요."] : []),
-    ...(input.freshness === "stale" || input.freshness === "unknown" ? [`데이터가 ${DATA_FRESHNESS_LABELS[input.freshness]} 상태입니다.`] : []),
-    ...(input.recommendationTrustLevel === "low" ? ["추천 점수가 낮아 부품 적용 전에 스펙과 호환 결과를 다시 확인해야 합니다."] : [])
+    ...(input.physicalStatus === "review" ? ["장착 정보가 부족합니다. 장착 전에 제조사 안내를 확인하세요."] : []),
+    ...(input.catalogSpecSourceCheckNeedsReview === true ? ["직접 입력한 부품은 제조사 안내에서 모델명과 사양을 확인한 뒤 적용하세요."] : []),
+    ...(input.freshness === "stale" || input.freshness === "unknown" ? [`부품 정보: ${DATA_FRESHNESS_LABELS[input.freshness]}`] : []),
+    ...(input.recommendationTrustLevel === "low" ? ["추천 점수가 낮습니다. 적용 전에 사양과 호환 결과를 확인하세요."] : [])
   ];
   return {
     status,

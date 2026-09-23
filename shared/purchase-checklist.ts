@@ -61,12 +61,12 @@ function isActionableFinding(finding: Finding): finding is ActionableFinding {
   return finding.severity !== "info";
 }
 
-function findingTitleFor(severity: Exclude<FindingSeverity, "info">, title: string) {
-  return severity === "blocker" ? `해결: ${title}` : severity === "warning" ? `확인: ${title}` : `정보 확인: ${title}`;
+function findingTitleFor(title: string) {
+  return title;
 }
 
 function findingDetailFor(severity: Exclude<FindingSeverity, "info">, message: string) {
-  return severity === "blocker" ? `${message} 먼저 해결하세요.` : severity === "warning" ? `${message} 구매 전에 확인하세요.` : `${message} 등록된 정보가 부족합니다. 제조사 안내에서 확인해 주세요.`;
+  return severity === "blocker" ? `${message} 해결한 뒤 다음 단계로 진행하세요.` : severity === "warning" ? `${message} 구매 전에 확인하세요.` : `${message} 제조사 안내에서 확인해 주세요.`;
 }
 
 export function purchaseChecklistItemsFor(build: BuildSelection, result: CompatibilityResult, partMap?: ReadonlyMap<string, Part>): PurchaseChecklistItem[] {
@@ -76,7 +76,7 @@ export function purchaseChecklistItemsFor(build: BuildSelection, result: Compati
       id: `finding:${finding.ruleId}`,
       kind: "finding",
       severity: finding.severity,
-      title: findingTitleFor(finding.severity, finding.title),
+      title: findingTitleFor(finding.title),
       detail: findingDetailFor(finding.severity, finding.message),
       ruleId: finding.ruleId
     }));
@@ -85,7 +85,7 @@ export function purchaseChecklistItemsFor(build: BuildSelection, result: Compati
     id: `accessory:${finding.id}`,
     kind: "finding",
     severity: finding.severity,
-    title: findingTitleFor(finding.severity, finding.title),
+    title: findingTitleFor(finding.title),
     detail: findingDetailFor(finding.severity, `${finding.accessoryName}: ${finding.message}`),
     targetId: "accessory-compatibility-panel",
     actionLabel: "주변 부품 보기"
@@ -96,26 +96,26 @@ export function purchaseChecklistItemsFor(build: BuildSelection, result: Compati
       id: `data-freshness:${item.id}`,
       kind: "manual" as const,
       severity: "manual" as const,
-      title: `${item.name} 데이터 다시 확인`,
-      detail: item.freshness === "stale" ? "확인한 지 오래됐어요. 최신 정보를 다시 확인해 주세요." : "확인 기록이 없어요. 최신 정보를 확인해 주세요.",
+      title: `${item.name} 정보 최신인지 확인`,
+      detail: item.freshness === "stale" ? "정보를 확인한 지 오래됐어요. 최신 내용을 확인해 주세요." : "최근 확인 기록이 없어요. 최신 내용을 확인해 주세요.",
       targetId: "data-health-panel" as const,
-      actionLabel: "데이터 보기"
+      actionLabel: "부품 정보 보기"
     }] : []),
     ...(item.missingFields.length > 0 ? [{
       id: `data-fields:${item.id}`,
       kind: "manual" as const,
       severity: "manual" as const,
-      title: `${item.name} 빠진 정보 확인`,
-      detail: `정보가 없는 항목: ${item.missingFields.slice(0, 3).map((field) => catalogMissingFieldLabelFor(field)).join(", ")}${item.missingFields.length > 3 ? ` 외 ${item.missingFields.length - 3}개` : ""}`,
+      title: `${item.name} 정보 확인`,
+      detail: `확인할 항목: ${item.missingFields.slice(0, 3).map((field) => catalogMissingFieldLabelFor(field)).join(", ")}${item.missingFields.length > 3 ? ` 외 ${item.missingFields.length - 3}개` : ""}`,
       targetId: "data-health-panel" as const,
-      actionLabel: "데이터 보기"
+      actionLabel: "부품 정보 보기"
     }] : []),
     ...(!item.priceKnown ? [{
       id: `data-price:${item.id}`,
       kind: "manual" as const,
       severity: "manual" as const,
       title: `${item.name} 가격 확인`,
-      detail: "현재 가격을 확인할 수 없어 전체 구매 금액을 알 수 없어요.",
+      detail: "가격을 확인하지 못한 부품이 있어 전체 금액을 계산할 수 없어요.",
       targetId: "purchase-list-panel" as const,
       actionLabel: "구매 목록 보기"
     }] : [])
@@ -152,8 +152,8 @@ export function purchaseChecklistItemsFor(build: BuildSelection, result: Compati
       id: `connectivity:${item.id}`,
       kind: "manual",
       severity: item.status === "review" ? "warning" : "unknown",
-      title: `${item.label} ${item.status === "review" ? "주의 확인" : "정보 확인"}`,
-      detail: `${item.detail} 케이스에 기본으로 달린 팬·RGB 장치가 메인보드에 연결되는지 확인해 주세요.`,
+      title: `${item.label} ${item.status === "review" ? "여유 확인" : "연결 정보 확인"}`,
+      detail: `${item.detail} 케이스 기본 팬·RGB 장치가 메인보드에 연결되는지 확인해 주세요.`,
       targetId: "build-connectivity-panel",
       actionLabel: "연결 확인 보기"
     }));
@@ -184,7 +184,7 @@ export function purchaseChecklistItemsFor(build: BuildSelection, result: Compati
       severity: "manual" as const,
       title: missingGpuPhysicalEvidence ? "그래픽카드와 케이스 크기 확인" : "케이스 안쪽 공간 확인",
       detail: missingGpuPhysicalEvidence ? "그래픽카드가 차지하는 슬롯 수와 전원 케이블 공간, 케이스 안쪽 폭을 제조사 안내에서 확인해 주세요." : "그래픽카드·쿨러·파워와 라디에이터가 케이스 안에 함께 들어가는지, 케이블 공간은 충분한지 확인해 주세요.",
-      ...(gpuPurchaseEvidence ? { targetId: "gpu-fit-summary-panel" as const, actionLabel: "GPU FIT 보기" } : {})
+      ...(gpuPurchaseEvidence ? { targetId: "gpu-fit-summary-panel" as const, actionLabel: "장착 정보 확인" } : {})
     }] : []),
     ...(hasPowerPath ? [{
       id: missingPcieTopologyEvidence ? "manual:pcie-cable-topology" : "manual:power-cabling",
@@ -192,14 +192,14 @@ export function purchaseChecklistItemsFor(build: BuildSelection, result: Compati
       severity: "manual" as const,
       title: missingPcieTopologyEvidence ? "그래픽카드 전원 케이블 연결 확인" : "전원 케이블 연결 확인",
       detail: missingPcieTopologyEvidence ? "그래픽카드에 필요한 8핀 케이블을 각각 파워에 연결할 수 있는지, 케이블을 나눠 쓰는 방식은 아닌지 확인해 주세요." : "그래픽카드와 CPU 전원 케이블이 파워에 맞는지, 케이블이 심하게 꺾이지 않는지 확인해 주세요.",
-      ...(gpuPurchaseEvidence ? { targetId: "gpu-fit-summary-panel" as const, actionLabel: "GPU FIT 보기" } : {})
+      ...(gpuPurchaseEvidence ? { targetId: "gpu-fit-summary-panel" as const, actionLabel: "장착 정보 확인" } : {})
     }] : []),
     ...(resourceNeedsReview ? [{
       id: "manual:power-thermal-budget",
       kind: "manual" as const,
       severity: resourceSummary.state === "danger" ? "blocker" as const : resourceSummary.state === "warning" ? "warning" as const : "unknown" as const,
       title: resourceSummary.state === "danger" ? "전력·냉각 여유 부족" : resourceSummary.state === "unknown" ? "전력·냉각 정보 확인" : "전력·냉각 여유 확인",
-      detail: `${resourceSummary.summary} 실제 전력 사용량과 온도·소음은 조립 후 달라질 수 있어요.`,
+      detail: `${resourceSummary.summary} 조립 후 전력 사용량·온도·소음도 기록해 확인하세요.`,
       targetId: "build-resource-summary" as const,
       actionLabel: "전력·냉각 보기"
     }] : []),

@@ -12,10 +12,10 @@ export function CompatibilityCheckProgress() {
   }, []);
   const phase = elapsedMs < 700 ? 0 : elapsedMs < 1800 ? 1 : elapsedMs < 3200 ? 2 : 3;
   const phases = [
-    { title: "검사 준비 중", detail: "선택한 부품 정보를 확인합니다." },
-    { title: "호환 규칙 계산 중", detail: "소켓·메모리·슬롯·전력·장착 공간을 함께 비교해요." },
-    { title: "대체 부품 비교 중", detail: "호환 가능한 부품의 성능 유사도와 가격 변화를 비교해요." },
-    { title: "추천 플랜 정리 중", detail: "부품 조합을 다시 검사해 남는 문제와 확인 필요 항목을 보여드려요." }
+    { title: "부품 정보 불러오는 중", detail: "선택한 부품의 가격과 사양을 모으고 있어요." },
+    { title: "호환 여부 계산 중", detail: "소켓·메모리·슬롯·전력·크기를 비교해요." },
+    { title: "대체 부품 살펴보는 중", detail: "함께 쓸 수 있는 부품의 성능과 가격을 비교해요." },
+    { title: "추천 조합 준비 중", detail: "호환 문제와 바꿔 볼 부품을 정리하고 있어요." }
   ] as const;
   const current = phases[phase];
   return <div className="compatibility-check-progress" data-testid="compatibility-check-progress" role="status" aria-live="polite">

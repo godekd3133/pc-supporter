@@ -76,8 +76,8 @@ describe("saved build comparison decisions", () => {
     expect(rankings.map((ranking) => ({ id: ranking.entry.id, rank: ranking.rank, eligible: ranking.eligible, reason: ranking.reason }))).toEqual([
       { id: "cheap", rank: 1, eligible: true, reason: undefined },
       { id: "expensive", rank: 2, eligible: true, reason: undefined },
-      { id: "unknown", rank: undefined, eligible: false, reason: "현재 총액 확인 필요" },
-      { id: "zero", rank: undefined, eligible: false, reason: "현재 총액 확인 필요" }
+      { id: "unknown", rank: undefined, eligible: false, reason: "총액 확인 필요" },
+      { id: "zero", rank: undefined, eligible: false, reason: "총액 확인 필요" }
     ]);
   });
 
@@ -114,6 +114,7 @@ describe("saved build comparison decisions", () => {
 
   it("returns no analysis decision when every score is unavailable", () => {
     expect(savedBuildComparisonDecisionFor([entry("a", "A", { analysis: { overallScore: undefined } as CompatibilityResult["analysis"] })], "analysis")).toBeUndefined();
+    expect(savedBuildComparisonRankingsFor([entry("a", "A", { analysis: { overallScore: undefined } as CompatibilityResult["analysis"] })], "analysis")[0]).toMatchObject({ eligible: false, reason: "성능 점수 정보 부족" });
   });
 
   it("detects when confirmed decision criteria converge on one build", () => {
@@ -121,7 +122,7 @@ describe("saved build comparison decisions", () => {
       entry("same", "공통 추천", { blockerCount: 0, warningCount: 0, unknownCount: 0, totalPriceWon: 900_000, priceComplete: true, analysis: { overallScore: 90 } as CompatibilityResult["analysis"], metrics: expansionMetrics() })
     ]);
     expect(consensus).toMatchObject({ status: "converged", confirmedCriteria: 4, totalCriteria: 4, winnerIds: ["same"], winnerName: "공통 추천", winnerKinds: ["compatibility", "price", "analysis", "expansion"] });
-    expect(consensus.summary).toContain("확정된 4개 기준");
+    expect(consensus.summary).toContain("확인할 수 있는 4개 기준");
   });
 
   it("explains a split decision when different criteria choose different builds", () => {
@@ -130,7 +131,7 @@ describe("saved build comparison decisions", () => {
       entry("value", "가성비 우선", { blockerCount: 0, warningCount: 1, unknownCount: 0, totalPriceWon: 800_000, priceComplete: true, analysis: { overallScore: 80 } as CompatibilityResult["analysis"], metrics: expansionMetrics() })
     ]);
     expect(consensus).toMatchObject({ status: "split", confirmedCriteria: 4, totalCriteria: 4, winnerIds: ["safe", "value"], winnerNames: ["안전 우선", "가성비 우선"] });
-    expect(consensus.summary).toContain("기준별 1순위");
+    expect(consensus.summary).toContain("기준에 따라 1위 견적");
   });
 
   it("keeps genuine version tradeoffs and removes a fully dominated version", () => {

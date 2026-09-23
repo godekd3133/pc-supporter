@@ -95,14 +95,14 @@ export function parseSavedBuildPurchasePriceHistoryExpectedRevision(input: unkno
   if (input === undefined || input === null) return { revision: null as number | null, error: undefined as string | undefined };
   const revision = boundedRevision(input);
   return revision === undefined
-    ? { revision: undefined as number | undefined, error: "expectedRevision이 올바르지 않습니다." }
+    ? { revision: undefined as number | undefined, error: "가격 이력 버전 정보가 올바르지 않습니다. 목록을 새로고침해 다시 시도해 주세요." }
     : { revision, error: undefined as string | undefined };
 }
 
 export function parseSavedBuildPurchasePriceHistoryRevision(input: unknown) {
   const revision = boundedRevision(input);
   return revision === undefined
-    ? { revision: undefined as number | undefined, error: "복원할 가격 확인 이력 revision이 올바르지 않습니다." }
+    ? { revision: undefined as number | undefined, error: "복원할 가격 이력 버전을 확인해 주세요." }
     : { revision, error: undefined as string | undefined };
 }
 

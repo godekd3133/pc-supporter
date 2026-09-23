@@ -11,7 +11,7 @@ const REFRESH_RATE_VALUES: GamingRefreshRate[] = [60, 144, 240];
 const LISTING_POLICY_VALUES: ListingPolicy[] = ["retail_only", "include_bulk", "all"];
 const EXPORT_STATUS_VALUES: BudgetLadderExportItem["status"][] = ["호환 가능", "확인 필요", "검토 필요", "생성 실패"];
 const MAX_TEXT_LENGTH = 1_000;
-const SHARE_INPUT_ERROR_MESSAGE = "예산 비교를 공유할 수 없습니다. 입력 내용을 확인해 주세요.";
+const SHARE_INPUT_ERROR_MESSAGE = "예산 비교를 공유하지 못했어요. 다시 만들어 주세요.";
 
 function shareInputErrorsFor(diagnostic: string): string[] {
   // The API uses the first entry as the message shown in the UI and keeps the rest in details.
@@ -66,28 +66,35 @@ function diagnosticsFromUnknown(value: unknown): BuildGenerationDiagnostic[] | u
   return diagnostics.length > 0 ? diagnostics : undefined;
 }
 
+function selectionFieldLabel(field: string) {
+  const labels: Record<string, string> = { cpu: "CPU", cooler: "CPU 쿨러", motherboard: "메인보드", memory: "메모리", gpu: "그래픽카드", ssd: "SSD", hdd: "하드디스크", case: "케이스", psu: "파워" };
+  return labels[field] ?? "부품";
+}
+
 function partSelectionFromUnknown(value: unknown, field: string): { selection?: PartSelection; error?: string } {
+  const label = selectionFieldLabel(field);
   if (value === undefined || value === null) return {};
-  if (!isRecord(value)) return { error: `${field} 선택 형식이 올바르지 않습니다.` };
+  if (!isRecord(value)) return { error: `${label} 선택 정보가 올바르지 않습니다.` };
   const partId = textValue(value.partId, 120);
   const quantity = boundedInteger(value.quantity, 1, 99);
-  if (!partId || quantity === undefined) return { error: `${field} 선택의 부품 ID·수량이 올바르지 않습니다.` };
+  if (!partId || quantity === undefined) return { error: `${label} 선택을 확인해 주세요.` };
   return { selection: { partId, quantity } };
 }
 
 function selectionArrayFromUnknown(value: unknown, field: string): { selections?: PartSelection[]; error?: string } {
+  const label = selectionFieldLabel(field);
   if (value === undefined || value === null) return { selections: [] };
-  if (!Array.isArray(value) || value.length > 99) return { error: `${field} 선택 목록 형식이 올바르지 않습니다.` };
+  if (!Array.isArray(value) || value.length > 99) return { error: `${label} 목록 형식이 올바르지 않습니다.` };
   const parsed = value.map((item) => partSelectionFromUnknown(item, field));
   const errors = parsed.flatMap((result) => result.error ? [result.error] : []);
   const selections = parsed.flatMap((result) => result.selection ? [result.selection] : []);
-  if (errors.length > 0 || selections.length !== value.length) return { error: errors[0] ?? `${field} 선택 목록 형식이 올바르지 않습니다.` };
+  if (errors.length > 0 || selections.length !== value.length) return { error: errors[0] ?? `${label} 목록 형식이 올바르지 않습니다.` };
   return { selections };
 }
 
 function buildSelectionFromUnknown(value: unknown): { selection?: BuildSelection; error?: string } {
   if (value === undefined) return {};
-  if (!isRecord(value) || typeof value.useIntegratedGraphics !== "boolean") return { error: "예산 비교 선택 payload의 기본 형식이 올바르지 않습니다." };
+  if (!isRecord(value) || typeof value.useIntegratedGraphics !== "boolean") return { error: "예산 비교 저장본의 선택 정보가 올바르지 않습니다." };
   const singleFields = ["cpu", "cooler", "motherboard", "gpu", "case", "psu"] as const;
   const singles = Object.fromEntries(singleFields.map((field) => [field, partSelectionFromUnknown(value[field], field)]));
   const singleError = singleFields.map((field) => singles[field].error).find((error): error is string => Boolean(error));
@@ -103,16 +110,16 @@ function buildSelectionFromUnknown(value: unknown): { selection?: BuildSelection
     const targetAccessoryId = item.targetAccessoryId === undefined || item.targetAccessoryId === null || item.targetAccessoryId === "" ? undefined : textValue(item.targetAccessoryId, 120);
     return accessoryId && quantity !== undefined && (item.targetPartId === undefined || item.targetPartId === null || item.targetPartId === "" || targetPartId) && (item.targetAccessoryId === undefined || item.targetAccessoryId === null || item.targetAccessoryId === "" || targetAccessoryId) ? [{ accessoryId, quantity, ...(targetPartId ? { targetPartId } : {}), ...(targetAccessoryId ? { targetAccessoryId } : {}) }] : [];
   }) : undefined;
-  if (accessories === undefined || (Array.isArray(value.accessories) && accessories.length !== value.accessories.length)) return { error: "accessories 선택 payload 형식이 올바르지 않습니다." };
+  if (accessories === undefined || (Array.isArray(value.accessories) && accessories.length !== value.accessories.length)) return { error: "주변 부품 선택 정보가 올바르지 않습니다." };
   let m2SlotSelection: Record<string, string> | undefined;
   if (value.m2SlotSelection !== undefined && value.m2SlotSelection !== null) {
-    if (!isRecord(value.m2SlotSelection) || Object.keys(value.m2SlotSelection).length > 8) return { error: "m2SlotSelection 선택 payload 형식이 올바르지 않습니다." };
+    if (!isRecord(value.m2SlotSelection) || Object.keys(value.m2SlotSelection).length > 8) return { error: "M.2 슬롯 선택 정보가 올바르지 않습니다." };
     const entries = Object.entries(value.m2SlotSelection).flatMap(([slotId, partId]) => typeof partId === "string" && partId.trim() && slotId.trim() ? [[slotId.trim().slice(0, 80), partId.trim().slice(0, 120)] as [string, string]] : []);
-    if (entries.length !== Object.keys(value.m2SlotSelection).length) return { error: "m2SlotSelection 선택 payload 형식이 올바르지 않습니다." };
+    if (entries.length !== Object.keys(value.m2SlotSelection).length) return { error: "M.2 슬롯 선택 정보를 읽을 수 없습니다." };
     m2SlotSelection = Object.fromEntries(entries);
   }
   const rgbControllerAccessoryId = value.rgbControllerAccessoryId === undefined || value.rgbControllerAccessoryId === null || value.rgbControllerAccessoryId === "" ? undefined : textValue(value.rgbControllerAccessoryId, 120);
-  if (value.rgbControllerAccessoryId !== undefined && value.rgbControllerAccessoryId !== null && value.rgbControllerAccessoryId !== "" && !rgbControllerAccessoryId) return { error: "rgbControllerAccessoryId 선택 payload 형식이 올바르지 않습니다." };
+  if (value.rgbControllerAccessoryId !== undefined && value.rgbControllerAccessoryId !== null && value.rgbControllerAccessoryId !== "" && !rgbControllerAccessoryId) return { error: "RGB 컨트롤러 선택 정보가 올바르지 않습니다." };
   return {
     selection: {
       ...(singles.cpu.selection ? { cpu: singles.cpu.selection } : {}),
@@ -208,7 +215,7 @@ function exportItemFromUnknown(value: unknown): { item?: BudgetLadderExportItem;
   const priceComplete = value.priceComplete === undefined ? undefined : typeof value.priceComplete === "boolean" ? value.priceComplete : undefined;
   if (value.totalPriceWon !== undefined && totalPriceWon === undefined) return { error: `${band.label} 구간의 예상 합계가 올바르지 않습니다.` };
   if (value.budgetDeltaWon !== undefined && budgetDeltaWon === undefined) return { error: `${band.label} 구간의 예산 변화가 올바르지 않습니다.` };
-  if (value.blockerCount !== undefined && blockerCount === undefined || value.warningCount !== undefined && warningCount === undefined || value.unknownCount !== undefined && unknownCount === undefined) return { error: `${band.label} 구간의 위험 카운트가 올바르지 않습니다.` };
+  if (value.blockerCount !== undefined && blockerCount === undefined || value.warningCount !== undefined && warningCount === undefined || value.unknownCount !== undefined && unknownCount === undefined) return { error: `${band.label} 구간의 호환 항목 수를 확인해 주세요.` };
   if (value.analysisScore !== undefined && analysisScore === undefined) return { error: `${band.label} 구간의 분석 점수가 올바르지 않습니다.` };
   if (value.withinBudget !== undefined && withinBudget === undefined || value.priceComplete !== undefined && priceComplete === undefined) return { error: `${band.label} 구간의 상태 값이 올바르지 않습니다.` };
   const parsedLines = linesFromUnknown(value.lines);

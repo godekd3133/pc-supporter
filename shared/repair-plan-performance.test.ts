@@ -23,7 +23,7 @@ describe("repair plan performance retention", () => {
       status: "preserved",
       retainedCategories: ["cpu", "gpu", "memory", "ssd"],
       changedCategories: [],
-      summary: "카탈로그 성능 기준 유지 · CPU · GPU · RAM · SSD"
+      summary: "성능 비교 부품 유지 · CPU · GPU · RAM · SSD"
     });
   });
 
@@ -32,7 +32,7 @@ describe("repair plan performance retention", () => {
       status: "mixed",
       retainedCategories: ["cpu", "gpu", "ssd"],
       changedCategories: ["memory"],
-      summary: "성능 기준 유지 · CPU · GPU · SSD · 변경 · RAM"
+      summary: "성능 비교 부품 유지 · CPU · GPU · SSD · 변경 · RAM"
     });
     expect(repairPlanPerformanceRetentionFor(build, plan("gpu"))).toMatchObject({
       status: "mixed",
@@ -48,7 +48,7 @@ describe("repair plan performance retention", () => {
       status: "unknown",
       retainedCategories: [],
       changedCategories: [],
-      summary: "카탈로그 성능 기준 비교 불가"
+      summary: "비교할 성능 관련 부품이 없어요."
     });
   });
 });

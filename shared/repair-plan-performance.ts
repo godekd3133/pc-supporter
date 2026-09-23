@@ -36,18 +36,18 @@ export function repairPlanPerformanceRetentionFor(build: BuildSelection, plan: R
   const retainedCategories = selectedCategories.filter((category) => !changedSet.has(category));
 
   if (selectedCategories.length === 0 && changedCategories.length === 0) {
-    return { status: "unknown", retainedCategories, changedCategories, summary: "카탈로그 성능 기준 비교 불가" };
+    return { status: "unknown", retainedCategories, changedCategories, summary: "비교할 성능 관련 부품이 없어요." };
   }
   if (changedCategories.length === 0) {
-    return { status: "preserved", retainedCategories, changedCategories, summary: `카탈로그 성능 기준 유지 · ${labelsFor(retainedCategories)}` };
+    return { status: "preserved", retainedCategories, changedCategories, summary: `성능 비교 부품 유지 · ${labelsFor(retainedCategories)}` };
   }
   if (retainedCategories.length === 0) {
-    return { status: "changed", retainedCategories, changedCategories, summary: `카탈로그 성능 기준 변경 · ${labelsFor(changedCategories)}` };
+    return { status: "changed", retainedCategories, changedCategories, summary: `성능 비교 부품 변경 · ${labelsFor(changedCategories)}` };
   }
   return {
     status: "mixed",
     retainedCategories,
     changedCategories,
-    summary: `성능 기준 유지 · ${labelsFor(retainedCategories)} · 변경 · ${labelsFor(changedCategories)}`
+    summary: `성능 비교 부품 유지 · ${labelsFor(retainedCategories)} · 변경 · ${labelsFor(changedCategories)}`
   };
 }

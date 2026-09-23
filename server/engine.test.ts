@@ -311,6 +311,10 @@ describe("compatibility engine", () => {
     expect(result.gpuFit).toMatchObject({ status: "compatible", length: { status: "compatible" }, power: { status: "compatible" }, connector: { status: "compatible" } });
     expect(result.links).toHaveLength(11);
     expect(result.links.every((link) => link.status === "compatible")).toBe(true);
+    expect(result.links.find((link) => link.id === "motherboard-memory")).toMatchObject({
+      label: "메인보드 ↔ RAM",
+      summary: "RAM 규격과 용량, 장착 조건을 확인했습니다."
+    });
   });
 
   it("attaches a build-level benchmark snapshot from the selected CPU and GPU", () => {
@@ -559,7 +563,8 @@ describe("compatibility engine", () => {
     expect(recommendation?.compatibilityEvidence).toMatchObject({ blockerCount: 0, warningCount: 0, unknownCount: 0 });
     expect(recommendation?.compatibilityEvidence.powerHeadroomW).toBeGreaterThan(0);
     expect(recommendation?.compatibilityEvidence.gpuClearanceMm).toBeGreaterThan(0);
-    expect(recommendation?.reason).toContain("QHD · 1440p");
+    expect(recommendation?.reason).toContain("QHD");
+    expect(recommendation?.reason).not.toContain("QHD · 1440p");
     expect(recommendation?.similarityEvidence).toMatchObject({ basis: "mixed" });
     expect(recommendation?.performanceSummary).toContain("Time Spy");
     expect(recommendation?.physicalEvidence).toMatchObject({ status: "review" });
@@ -995,7 +1000,7 @@ describe("compatibility engine", () => {
       candidateVramGb: candidateGpu.specs.vramGb,
       currentFit: "partial",
       candidateFit: "partial",
-      summary: expect.stringContaining("QHD · 1440p · 144Hz")
+      summary: expect.stringContaining("QHD · 144Hz")
     });
   });
 
@@ -2142,7 +2147,11 @@ describe("compatibility engine", () => {
     const result = evaluateBuild(build, [...seedCatalog, knownMemory, incompleteMemory], { includeSuggestions: false });
     const finding = result.findings.find((item) => item.ruleId === "memory-mixing");
 
-    expect(finding).toMatchObject({ severity: "unknown", title: "함께 고른 RAM의 속도와 전압을 확인해 주세요." });
+    expect(finding).toMatchObject({
+      severity: "unknown",
+      title: "함께 고른 RAM의 속도와 전압을 확인해 주세요.",
+      message: "두 RAM 제품의 속도나 전압 정보가 빠져 있어 함께 써도 괜찮은지 확인하지 못했어요. 두 제품의 사양을 비교해 주세요."
+    });
     expect(finding?.facts.find((fact) => fact.label === "확인되지 않은 비교 항목")?.actual).toContain("RAM 속도");
   });
 

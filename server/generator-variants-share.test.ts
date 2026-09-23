@@ -22,8 +22,8 @@ describe("generator variants share contract", () => {
   });
 
   it("rejects duplicate priorities, contradictory draft priority, and invalid expiry", () => {
-    expect(parseGeneratorVariantsShareInput({ name: "비교", payload: payload([{ priority: "balanced", label: "균형형", status: "호환 가능", draft }, { priority: "balanced", label: "균형형", status: "호환 가능", draft }]) }).errors).toContain("자동 구성 비교 payload 형식이 올바르지 않습니다.");
-    expect(parseGeneratorVariantsShareInput({ name: "비교", payload: payload([{ priority: "performance", label: "성능 우선", status: "호환 가능", draft }]) }).errors).toContain("자동 구성 비교 payload 형식이 올바르지 않습니다.");
+    expect(parseGeneratorVariantsShareInput({ name: "비교", payload: payload([{ priority: "balanced", label: "균형형", status: "호환 가능", draft }, { priority: "balanced", label: "균형형", status: "호환 가능", draft }]) }).errors).toContain("자동 구성 비교 결과를 읽지 못했어요. 다시 만들어 주세요.");
+    expect(parseGeneratorVariantsShareInput({ name: "비교", payload: payload([{ priority: "performance", label: "성능 우선", status: "호환 가능", draft }]) }).errors).toContain("자동 구성 비교 결과를 읽지 못했어요. 다시 만들어 주세요.");
     expect(parseGeneratorVariantsShareInput({ name: "비교", payload: payload(), expiresInDays: 14 }).errors).toContain("공유 만료 기간은 7일 또는 30일이어야 합니다.");
   });
 

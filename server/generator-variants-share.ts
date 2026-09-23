@@ -60,12 +60,12 @@ export function parseGeneratorVariantsShareInput(input: GeneratorVariantsShareCr
   if (!name) errors.push("자동 구성 비교 이름이 필요합니다.");
   let payload: GeneratorVariantsExportPayload | undefined;
   if (!isRecord(input) || input.payload === undefined) {
-    errors.push("자동 구성 비교 payload가 필요합니다.");
+    errors.push("자동 구성 비교 파일을 확인해 주세요.");
   } else {
     const serialized = JSON.stringify(input.payload);
-    if (new TextEncoder().encode(serialized).length > MAX_PAYLOAD_BYTES) errors.push("자동 구성 비교 payload가 너무 큽니다.");
+    if (new TextEncoder().encode(serialized).length > MAX_PAYLOAD_BYTES) errors.push("자동 구성 비교 파일이 너무 큽니다.");
     payload = generatorVariantsExportPayloadFromUnknown(input.payload);
-    if (!payload) errors.push("자동 구성 비교 payload 형식이 올바르지 않습니다.");
+    if (!payload) errors.push("자동 구성 비교 결과를 읽지 못했어요. 다시 만들어 주세요.");
   }
   const expiresInDays = shareExpiryDaysFrom(input?.expiresInDays);
   if (shareExpiryValueProvided(input?.expiresInDays) && expiresInDays === undefined) errors.push("공유 만료 기간은 7일 또는 30일이어야 합니다.");

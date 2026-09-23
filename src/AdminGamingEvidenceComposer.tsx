@@ -2,7 +2,7 @@ import { useState } from "react";
 import { FiCheckCircle, FiPlus, FiRefreshCw, FiShield } from "react-icons/fi";
 import { gamingPerformanceEvidenceRecordFromUnknown } from "../shared/gaming-performance-evidence";
 import type { GamingPerformanceEvidenceRecord } from "../shared/gaming-performance-evidence";
-import { GAMING_GRAPHICS_PRESET_LABELS, GAMING_REFRESH_RATE_LABELS, GAMING_RESOLUTION_LABELS, GAMING_UPSCALING_LABELS } from "../shared/types";
+import { GAMING_GRAPHICS_PRESET_LABELS, GAMING_RESOLUTION_LABELS, GAMING_UPSCALING_LABELS } from "../shared/types";
 import type { GamingGraphicsPreset, GamingRefreshRate, GamingResolution, GamingUpscaling } from "../shared/types";
 
 type ComposerState = {
@@ -92,16 +92,16 @@ export function AdminGamingEvidenceComposer({ onAdd, onToast }: { onAdd: (record
   }
 
   return <details className="gaming-performance-evidence-composer" data-testid="gaming-performance-evidence-composer">
-    <summary><span><FiPlus /> 실측 레코드 1건 입력</span><small>실제 측정값과 원본 출처가 있을 때만 작성</small></summary>
+    <summary><span><FiPlus /> FPS 측정 1건 추가</span><small>측정값과 출처를 확인한 뒤 입력</small></summary>
     <div className="gaming-performance-evidence-composer-body">
-      <p className="gaming-performance-evidence-composer-note"><FiShield /> 이 폼은 측정값을 만들어 주지 않습니다. 실제 측정 자료와 HTTPS 원본을 확인한 뒤 입력하고, 추가 후에도 서버 확인과 저장 단계를 통과해야 합니다.</p>
+      <p className="gaming-performance-evidence-composer-note"><FiShield /> 실제 측정값과 원본 출처를 입력해 주세요. 저장 전에 내용을 다시 확인합니다.</p>
       <div className="gaming-performance-evidence-composer-grid">
         <label><span>자료 ID</span><input value={form.id} onChange={(event) => update({ id: event.target.value })} placeholder="예: cyberpunk-gpu-2026-01" /></label>
         <label><span>게임 ID</span><input value={form.gameId} onChange={(event) => update({ gameId: event.target.value })} placeholder="예: cyberpunk" /></label>
         <label><span>GPU Part ID</span><input value={form.gpuPartId} onChange={(event) => update({ gpuPartId: event.target.value })} placeholder="예: gpu-rtx-5090" /></label>
         <label><span>GPU 이름</span><input value={form.gpuName} onChange={(event) => update({ gpuName: event.target.value })} placeholder="측정에 사용한 GPU 모델명" /></label>
         <label><span>해상도</span><select value={form.resolution} onChange={(event) => update({ resolution: event.target.value as GamingResolution })}>{Object.entries(GAMING_RESOLUTION_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
-        <label><span>목표 FPS</span><select value={form.refreshRate} onChange={(event) => update({ refreshRate: event.target.value })}>{([60, 144, 240] as const).map((value) => <option value={value} key={value}>{GAMING_REFRESH_RATE_LABELS[value]}</option>)}</select></label>
+        <label><span>목표 FPS</span><select value={form.refreshRate} onChange={(event) => update({ refreshRate: event.target.value })}>{([60, 144, 240] as const).map((value) => <option value={value} key={value}>{value} FPS</option>)}</select></label>
         <label><span>그래픽 프리셋</span><select value={form.graphicsPreset} onChange={(event) => update({ graphicsPreset: event.target.value as GamingGraphicsPreset })}>{Object.entries(GAMING_GRAPHICS_PRESET_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
         <label><span>업스케일링</span><select value={form.upscaling} onChange={(event) => update({ upscaling: event.target.value as GamingUpscaling })}>{Object.entries(GAMING_UPSCALING_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
         <label><span>평균 FPS</span><input type="number" min="0.1" max="1000" step="0.1" value={form.averageFps} onChange={(event) => update({ averageFps: event.target.value })} placeholder="실제 측정 평균" /></label>

@@ -143,7 +143,7 @@ export function AdminSeedCollectionQueuePanel({ refreshKey, onFocusMapping, onSt
       </div>
       {visibleItems.length === 0 ? <p className="admin-seed-collection-queue-empty">현재 조건에 해당하는 수집 작업이 없습니다.</p> : <div className="admin-seed-collection-queue-list">{visibleItems.map((item) => <QueueItem key={item.starter.id} item={item} onFocusMapping={onFocusMapping} onStartCategory={onStartCategory} categoryCrawlRunning={categoryCrawlRunning} />)}</div>}
       {queue.items.length > visibleItems.length && <p className="admin-seed-collection-queue-more">현재 화면에는 최대 12개만 표시합니다. CSV·JSON 전체 작업 패키지에는 {numberText(queue.items.length)}개가 포함됩니다.</p>}
-      <p className="admin-seed-collection-queue-note"><FiInfo /> 작업 목록 fingerprint <code>{queue.queueFingerprint}</code> · 범주 빠른 수집은 최대 16개 상품을 확인하는 샘플 실행이며, 화면에서 시작한 수집은 완료 후 매핑 부품과 목록을 자동으로 다시 계산합니다. 외부 CLI 실행 후에는 `다시 계산`을 눌러 주세요. 수집 전 상품을 이 화면에서 임의로 생성하지 않습니다.</p>
+      <p className="admin-seed-collection-queue-note"><FiInfo /> 작업 목록 확인값 <code>{queue.queueFingerprint}</code> · 범주 빠른 수집은 최대 16개 상품을 확인하는 샘플 실행이며, 화면에서 시작한 수집은 완료 후 매핑 부품과 목록을 자동으로 다시 계산합니다. 외부 CLI 실행 후에는 `다시 계산`을 눌러 주세요. 수집 전 상품을 이 화면에서 임의로 생성하지 않습니다.</p>
     </>}
   </section>;
 }

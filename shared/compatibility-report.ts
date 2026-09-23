@@ -299,7 +299,7 @@ function physicalSourceText(fit: NonNullable<CompatibilityResult["gpuFit"]>) {
   const sources = fit.physical.evidenceSources ?? [];
   const cableSources = fit.connector.cableEvidenceSources ?? [];
   const allSources = [...sources, ...cableSources].filter((source, index, list) => list.findIndex((candidate) => candidate.category === source.category && candidate.note === source.note && candidate.url === source.url) === index);
-  if (allSources.length === 0) return "등록된 출처 메모 없음 · 제조사 페이지 확인 필요";
+  if (allSources.length === 0) return "확인한 출처가 없습니다. 제조사 안내에서 사양을 확인해 주세요.";
   return allSources.map((source) => `${physicalSourceLabel(source.category)}${source.manufacturerModel ? ` · ${source.manufacturerModel}` : ""}${source.manufacturerRevision ? ` · ${source.manufacturerRevision}` : ""}: ${source.note}${safeHttpsUrl(source.url) ? ` (${safeHttpsUrl(source.url)})` : ""}`).join(" · ");
 }
 
@@ -452,13 +452,13 @@ function savedBuildRecheckLines(snapshot: SavedBuildCheckSnapshot, result: Compa
   const lines = [
     "[저장 당시 대비 현재 재검사]",
     `- 결과: ${savedCheckStatusLabel(snapshot.status)} → ${savedCheckStatusLabel(result.status)}`,
-    `- 위험 카운트: 차단 ${snapshot.blockerCount} → ${result.blockerCount} · 주의 ${snapshot.warningCount} → ${result.warningCount} · 확인 필요 ${snapshot.unknownCount} → ${result.unknownCount}`,
+    `- 호환 항목: 차단 ${snapshot.blockerCount} → ${result.blockerCount} · 주의 ${snapshot.warningCount} → ${result.warningCount} · 확인 필요 ${snapshot.unknownCount} → ${result.unknownCount}`,
     `- 가격: ${snapshot.priceComplete && result.priceComplete ? `${priceText(snapshot.totalPriceWon)} → ${priceText(result.totalPriceWon)} · 변화 ${repairPlanPriceText(transition.priceDeltaWon, true)}` : "저장 당시 또는 현재 가격 확인 필요"}`,
-    `- 성능 분석: ${savedCheckAnalysisText(snapshot.analysisScore, snapshot.analysisScoreLabel, snapshot.analysisConfidence)} → ${savedCheckAnalysisText(result.analysis.overallScore, result.analysis.scoreLabel, result.analysis.confidence)}`,
-    `- 전력·냉각 예산: ${savedCheckResourceText(snapshot)} → ${savedCheckResourceText(currentSnapshot)}${transition.resourceBudgetChanged ? ` · 전력 ${transition.powerHeadroomDeltaW === undefined ? "상태 변화" : `${transition.powerHeadroomDeltaW > 0 ? "+" : ""}${transition.powerHeadroomDeltaW}W`} · 냉각 ${transition.coolerHeadroomDeltaW === undefined ? "상태 변화" : `${transition.coolerHeadroomDeltaW > 0 ? "+" : ""}${transition.coolerHeadroomDeltaW}W`}` : ""}`,
+    `- 성능 점수: ${savedCheckAnalysisText(snapshot.analysisScore, snapshot.analysisScoreLabel, snapshot.analysisConfidence)} → ${savedCheckAnalysisText(result.analysis.overallScore, result.analysis.scoreLabel, result.analysis.confidence)}`,
+    `- 전력·냉각 여유: ${savedCheckResourceText(snapshot)} → ${savedCheckResourceText(currentSnapshot)}${transition.resourceBudgetChanged ? ` · 전력 ${transition.powerHeadroomDeltaW === undefined ? "상태 변화" : `${transition.powerHeadroomDeltaW > 0 ? "+" : ""}${transition.powerHeadroomDeltaW}W`} · 냉각 ${transition.coolerHeadroomDeltaW === undefined ? "상태 변화" : `${transition.coolerHeadroomDeltaW > 0 ? "+" : ""}${transition.coolerHeadroomDeltaW}W`}` : ""}`,
     `- 검사 버전: ${snapshot.engineVersion} → ${result.engineVersion} · 부품 정보 확인일 ${snapshot.catalogSnapshotAt} → ${result.catalogSnapshotAt}`,
     `- 변화 방향: ${savedCheckDirectionLabel(transition.direction)}`,
-    `- 주요 변경: 결과 ${diff.statusChanged ? "변경" : "동일"} · 위험 ${diff.riskChanged ? "변경" : "동일"} · 가격 ${diff.priceChanged || diff.priceCompletenessChanged ? "변경" : "동일"} · 성능 분석 ${diff.analysisChanged ? "변경" : "동일"} · 전력·냉각 ${diff.resourceBudgetChanged ? "변경" : "동일"} · 검사 정보 ${diff.engineChanged || diff.catalogChanged ? "변경" : "동일"}`
+    `- 주요 변경: 결과 ${diff.statusChanged ? "변경" : "동일"} · 호환 항목 ${diff.riskChanged ? "변경" : "동일"} · 가격 ${diff.priceChanged || diff.priceCompletenessChanged ? "변경" : "동일"} · 성능 점수 ${diff.analysisChanged ? "변경" : "동일"} · 전력·냉각 ${diff.resourceBudgetChanged ? "변경" : "동일"} · 검사 정보 ${diff.engineChanged || diff.catalogChanged ? "변경" : "동일"}`
   ];
   if (!findingDiff.available) {
     lines.push("- 항목 상세: 구버전 저장본이라 규칙별 비교 불가", "");
@@ -556,7 +556,7 @@ export function compatibilityReportTextFor(result: CompatibilityResult, build: B
   lines.push(...repairPlanLines(result));
   lines.push(
     "[확인 범위]",
-    "성능 점수는 실제 FPS나 작업 속도와 다를 수 있습니다. BIOS 호환성, 제조사 메모리 호환 목록, 케이스 안쪽 간섭, 케이블 연결은 부품을 사기 전에 제조사 안내와 조립 조건을 확인하세요. 가격을 확인할 수 없는 부품은 '가격 확인 필요'로 표시했습니다."
+    "성능 점수는 FPS나 작업 속도를 측정한 값이 아닙니다. 구매 전 메인보드 RAM 지원, 케이스 공간, 케이블 연결을 제품 안내에서 확인하세요. 가격을 확인하지 못한 부품은 따로 표시했습니다."
   );
   return lines.join("\n");
 }

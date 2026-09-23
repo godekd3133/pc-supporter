@@ -24,11 +24,11 @@ type QuoteTrendRow = {
 };
 
 function formatWon(value: number | undefined) {
-  return value === undefined ? "확인 필요" : `${value.toLocaleString("ko-KR")}원`;
+  return value === undefined ? "정보 부족" : `${value.toLocaleString("ko-KR")}원`;
 }
 
 function formatDelta(value: number | undefined) {
-  if (value === undefined) return "변화 확인 필요";
+  if (value === undefined) return "변화 정보 부족";
   if (value === 0) return "변화 없음";
   return `${value > 0 ? "+" : ""}${value.toLocaleString("ko-KR")}원`;
 }

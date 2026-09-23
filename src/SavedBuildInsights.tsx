@@ -76,17 +76,7 @@ function priorityRiskDeltaText(row: SavedBuildPriorityRow) {
   return `호환 항목 변화 ${row.riskDelta > 0 ? "+" : ""}${row.riskDelta}`;
 }
 
-function SavedBuildRiskTrend({ row }: { row: SavedBuildPriorityRow }) {
-  if (row.trend.length === 0) return <div className="saved-build-priority-trend empty"><span>기록 없음</span></div>;
-  const maxRisk = Math.max(1, ...row.trend.map((point) => point.riskScore));
-  const points = row.trend.map((point, index) => {
-    const x = row.trend.length === 1 ? 60 : (index / (row.trend.length - 1)) * 120;
-    const y = 24 - (point.riskScore / maxRisk) * 19;
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(" ");
-  const latest = row.trend.at(-1)!;
-  return <div className="saved-build-priority-trend"><svg viewBox="0 0 120 28" role="img" aria-label={`${row.name} 최근 호환 변화`} preserveAspectRatio="none"><polyline points={points} fill="none" vectorEffect="non-scaling-stroke" /></svg><small>{row.trend.length}회 기록 · 호환 항목 {latest.riskScore}</small></div>;
-}
+
 
 function versionDeltaDirectionLabel(direction: NonNullable<ReturnType<typeof savedBuildVersionDeltaFor>["transition"]>["direction"] | undefined) {
   return direction === "improved" ? "호환 개선" : direction === "regressed" ? "호환 주의 증가" : direction === "changed" ? "일부 항목 변경" : direction === "same" ? "변화 없음" : "이전 결과 없음";
@@ -105,11 +95,11 @@ export function SavedBuildPriorityPanel({ rows, actionStates, openingBuildId, on
     { id: "all", label: "전체", count: rows.length },
     { id: "attention", label: "우선 확인", count: attentionCount },
     { id: "changed", label: "변화 감지", count: changedCount },
-    { id: "stable", label: "안정·첫 기준", count: stableCount }
+    { id: "stable", label: "변화 없음", count: stableCount }
   ];
   const visibleRows = rows.filter((row) => savedBuildPriorityMatches(row, filter));
   return <section className="saved-build-priority-panel" aria-label="저장 견적 요약" data-testid="saved-build-priority-board">
-    <div className="saved-build-priority-heading"><div><h2>먼저 살펴볼 견적</h2><p>저장한 견적 중 가격이나 호환 상태가 달라진 구성을 보여드려요.</p></div><span className="saved-build-priority-icon"><FiActivity /></span></div>
+    <div className="saved-build-priority-heading"><div><h2>먼저 살펴볼 견적</h2><p>가격이나 호환 상태가 달라진 저장 견적입니다.</p></div><span className="saved-build-priority-icon"><FiActivity /></span></div>
     <div className="saved-build-priority-stats"><div className="attention"><span>호환 문제</span><strong>{attentionCount}</strong><small>부품 사양이 부족하거나 맞지 않아요.</small></div><div className="changed"><span>가격·구성 변경</span><strong>{changedCount}</strong><small>이전 구성과 달라짐</small></div><div className="stable"><span>변화 없음</span><strong>{stableCount}</strong><small>부품 구성이 유지돼요.</small></div></div>
     <div className="saved-build-priority-filters" role="group" aria-label="견적 우선순위 필터">{filterOptions.map((option) => <button className={filter === option.id ? "selected" : ""} type="button" aria-pressed={filter === option.id} data-testid={`saved-build-priority-filter-${option.id}`} onClick={() => setFilter(option.id)} key={option.id}>{option.label}<span>{option.count}</span></button>)}</div>
     {visibleRows.length === 0 ? <div className="saved-build-priority-empty"><FiInfo /><span>선택한 조건에 맞는 저장 견적이 없습니다.</span></div> : <div className="saved-build-priority-list">{visibleRows.map((row, index) => {
@@ -259,7 +249,7 @@ export function SavedBuildVersionPanel({ groups, openingBuildId, onOpen, onShare
     setExportStatus("버전 비교 JSON을 저장했습니다.");
   }
   return <section className="saved-build-version-panel" aria-label="저장 견적 버전 비교" data-testid="saved-build-version-panel">
-    <div className="saved-build-version-heading"><div><h2>견적 버전 비교</h2><p>수리 플랜이나 수정 후 새로 저장한 견적을 원본과 분리해, 최신 두 버전을 같은 기준으로 비교합니다.</p></div><span className="saved-build-version-icon"><FiLayers /></span></div>
+    <div className="saved-build-version-heading"><div><h2>견적 버전 비교</h2><p>새로 저장한 견적 버전을 골라 두 개씩 비교합니다.</p></div><span className="saved-build-version-icon"><FiLayers /></span></div>
     {groups.length > 1 && <div className="saved-build-version-groups" role="group" aria-label="견적 버전 그룹">{groups.map((group) => <button className={group.versionGroupId === selectedGroup.versionGroupId ? "selected" : ""} type="button" aria-pressed={group.versionGroupId === selectedGroup.versionGroupId} data-testid={`saved-build-version-group-${group.versionGroupId}`} onClick={() => setSelectedGroupId(group.versionGroupId)} key={group.versionGroupId}>{group.builds[0]?.name ?? "견적"}<span>{group.builds.length}개 버전</span></button>)}</div>}
     <div className="saved-build-version-compare-toolbar" role="group" aria-label="비교할 견적 버전 선택" aria-live="polite"><div><span>비교 버전 {comparedVersions.length} / 2</span><small>최신 두 버전이 기본 선택됩니다. 다른 버전을 비교하려면 선택을 해제한 뒤 버전을 선택하세요.</small></div><div className="saved-build-version-compare-actions">{currentChangeCounts.all > 0 && <div className="saved-build-version-change-filters" role="group" aria-label="저장 견적 변화 필터"><button className={currentChangeFilter === "all" ? "selected" : ""} type="button" data-testid="saved-build-version-change-filter-all" aria-pressed={currentChangeFilter === "all"} onClick={() => setCurrentChangeFilter("all")}>변화 전체 {currentChangeCounts.all}</button><button className={currentChangeFilter === "price" ? "selected" : ""} type="button" data-testid="saved-build-version-change-filter-price" aria-pressed={currentChangeFilter === "price"} onClick={() => setCurrentChangeFilter("price")} disabled={currentChangeCounts.price === 0}>가격 상승 {currentChangeCounts.price}</button><button className={currentChangeFilter === "compatibility" ? "selected" : ""} type="button" data-testid="saved-build-version-change-filter-compatibility" aria-pressed={currentChangeFilter === "compatibility"} onClick={() => setCurrentChangeFilter("compatibility")} disabled={currentChangeCounts.compatibility === 0}>호환 상태 변화 {currentChangeCounts.compatibility}</button></div>}{currentConcernPair?.[0] && currentConcernPair?.[1] && <><button className="text-button" type="button" data-testid="saved-build-version-current-change-select" onClick={() => setComparisonIds([currentConcernPair[0]!.id, currentConcernPair[1]!.id])}><FiRefreshCw /> 현재 변화 버전 비교 ({currentConcernVersions.length})</button><button className="text-button" type="button" data-testid="saved-build-version-current-change-open" onClick={() => onOpen(currentConcernPair[0]!)}><FiExternalLink /> 변화 버전 열기</button>{onSaveVersion && <button className="text-button" type="button" data-testid="saved-build-version-current-change-save" onClick={() => onSaveVersion(currentConcernPair[0]!)}><FiSave /> 현재 기준 새 버전 저장</button>}</>}{versionComparisonInput && <><button className="text-button" type="button" data-testid="saved-build-version-copy" onClick={() => void copyVersionComparison()}><FiCopy /> 비교 복사</button><button className="text-button" type="button" data-testid="saved-build-version-download-json" onClick={downloadVersionComparison}><FiDownload /> JSON 저장</button>{onShareVersionComparison && <button className="text-button" type="button" data-testid="saved-build-version-share" onClick={() => void shareVersionComparison()} disabled={sharingVersion}>{sharingVersion ? <><FiLoader className="spin" /> 공유 중...</> : <><FiShare2 /> 링크 공유</>}</button>}</>}</div></div>
     <div className="saved-build-version-compare-options" role="group" aria-label="버전 비교 선택지">{selectedGroup.builds.map((build) => { const selected = comparisonIds.includes(build.id); const locked = !selected && comparisonIds.length >= 2; return <button className={selected ? "selected" : ""} type="button" data-testid={`saved-build-version-compare-toggle-${build.id}`} aria-pressed={selected} aria-label={`${savedBuildVersionLabelFor(build)} ${build.name} ${selected ? "비교 중" : locked ? "비교 선택 잠김 · 먼저 비교 중인 버전을 해제하세요" : "비교 선택"}`} title={locked ? "비교 버전은 최대 2개입니다. 먼저 비교 중인 버전을 해제하세요." : undefined} onClick={() => toggleComparisonVersion(build.id)} disabled={locked} key={build.id}><span>{savedBuildVersionLabelFor(build)}</span><small>{build.name}</small>{selected && <em>비교 중</em>}</button>; })}</div>
@@ -269,6 +259,6 @@ export function SavedBuildVersionPanel({ groups, openingBuildId, onOpen, onShare
     {comparedVersions.length === 2 && <div className="saved-build-version-context" data-testid="saved-build-version-decision-note"><div><span>{savedBuildVersionLabelFor(comparedVersions[0])} 선택 이유</span><strong>{comparedVersions[0].decisionNote ?? "메모 없음"}</strong></div><span className="saved-build-version-context-arrow" aria-hidden="true">→</span><div><span>{savedBuildVersionLabelFor(comparedVersions[1])} 선택 이유</span><strong>{comparedVersions[1].decisionNote ?? "메모 없음"}</strong></div></div>}
     {versionsForComparison.length === 2 && <BuildComparisonPanel builds={versionsForComparison} onOpenBuild={onOpen} openingBuildId={openingBuildId} onLiveChecksChange={setLiveChecks} />}
     {exportStatus && <p className="saved-build-version-export-status" data-testid="saved-build-version-export-status" role="status"><FiInfo /> {exportStatus}</p>}
-    <p className="saved-build-version-note"><FiInfo /> 버전 비교는 저장된 스냅샷과 현재 카탈로그 재검사를 함께 사용합니다. 비교만으로 기존 버전이나 공유 링크를 변경하지 않습니다.</p>
+    <p className="saved-build-version-note"><FiInfo /> 저장 당시 결과와 현재 부품 정보로 다시 확인한 결과를 비교합니다. 비교해도 저장 견적이나 공유 링크는 바뀌지 않습니다. 실제 조립 전 제조사 안내와 장착 공간을 확인하세요.</p>
   </section>;
 }

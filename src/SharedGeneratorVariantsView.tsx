@@ -12,7 +12,7 @@ function shareIdFromPath() {
 }
 
 function formatWon(value: number | undefined) {
-  return value === undefined ? "확인 필요" : `${value.toLocaleString("ko-KR")}원`;
+  return value === undefined ? "정보 부족" : `${value.toLocaleString("ko-KR")}원`;
 }
 
 function lineText(item: GeneratorVariantsExportItem, category: string) {
@@ -35,14 +35,14 @@ function summaryFor(items: GeneratorVariantsExportItem[]) {
   })).size > 1);
   return {
     configurationCount: signatures.size,
-    priceText: prices.length === 0 ? "확인 필요" : `${formatWon(Math.min(...prices))}${Math.min(...prices) === Math.max(...prices) ? "" : ` ~ ${formatWon(Math.max(...prices))}`}`,
+    priceText: prices.length === 0 ? "정보 부족" : `${formatWon(Math.min(...prices))}${Math.min(...prices) === Math.max(...prices) ? "" : ` ~ ${formatWon(Math.max(...prices))}`}`,
     analysisText: scores.length === 0 ? "계산 불가" : `${Math.min(...scores)}점${Math.min(...scores) === Math.max(...scores) ? "" : ` ~ ${Math.max(...scores)}점`}`,
     changedCategories
   };
 }
 
 function statusLabel(status: NonNullable<BuildGenerationVariantResult["draft"]>["status"]) {
-  return status === "compatible" ? "호환 가능" : status === "needs_review" ? "확인 필요" : "검토 필요";
+  return status === "compatible" ? "호환 가능" : status === "needs_review" ? "정보 부족" : "검토 필요";
 }
 
 function exportItemsFromVariants(variants: BuildGenerationVariantResult[]) {

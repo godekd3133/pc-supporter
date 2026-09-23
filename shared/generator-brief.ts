@@ -195,27 +195,27 @@ function briefGuidanceFor(config: GeneratorBriefConfig): GeneratorBriefGuidance[
   const add = (item: GeneratorBriefGuidance) => guidance.push(item);
 
   if (config.profile === undefined) {
-    add({ id: "profile", label: "주로 할 일 적기", detail: "게임·영상 작업·개발·사무 중 주로 할 일을 적어 주세요." });
+    add({ id: "profile", label: "사용 목적", detail: "게임·영상 작업·개발·사무 중 주로 할 일을 적어 주세요." });
   }
   if (config.budgetWon === undefined) {
-    add({ id: "budget", label: "예산 적기", detail: "예: 200만 원" });
+    add({ id: "budget", label: "예산", detail: "예: 200만 원" });
   }
   if (config.profile === "gaming") {
     if (config.gamingResolution === undefined) {
-      add({ id: "gaming-resolution", label: "게임 해상도 적기", phrase: "QHD", detail: "원하는 해상도를 적어 주세요." });
+      add({ id: "gaming-resolution", label: "게임 해상도", phrase: "QHD", detail: "FHD·QHD·4K 중 골라 주세요." });
     }
     if (config.gamingRefreshRate === undefined) {
-      add({ id: "gaming-refresh", label: "목표 주사율 적기", phrase: "144Hz", detail: "원하는 화면 주사율을 적어 주세요." });
+      add({ id: "gaming-refresh", label: "목표 주사율", phrase: "144Hz", detail: "60·144·240Hz 중 골라 주세요." });
     }
   }
   if (config.memoryCapacityGb === undefined) {
-    add({ id: "memory", label: "RAM 용량 적기", phrase: "RAM 32GB", detail: "필요한 RAM 용량을 적어 주세요." });
+    add({ id: "memory", label: "RAM", phrase: "RAM 32GB", detail: "16·32·64·128GB 중 골라 주세요." });
   }
   if (config.storageCapacityGb === undefined) {
-    add({ id: "storage", label: "SSD 용량 적기", phrase: "SSD 1TB", detail: "필요한 SSD 용량을 적어 주세요." });
+    add({ id: "storage", label: "SSD", phrase: "SSD 1TB", detail: "500GB·1TB·2TB·4TB 중 골라 주세요." });
   }
   if (config.includeGpu === undefined) {
-    add({ id: "gpu", label: "그래픽카드 선택 적기", detail: "외장 그래픽 포함 또는 내장 그래픽만이라고 적어 주세요." });
+    add({ id: "gpu", label: "그래픽카드", detail: "외장 그래픽 포함 또는 내장 그래픽만이라고 적어 주세요." });
   }
   return guidance.slice(0, 6);
 }
@@ -243,15 +243,15 @@ export function generatorBriefInterpretationFor(input: string): GeneratorBriefIn
   if (resolutionMatch) {
     const raw = resolutionMatch[0].toLowerCase();
     const resolution: GamingResolution = raw.includes("4k") || raw.includes("2160") ? "4k" : raw.includes("qhd") || raw.includes("1440") ? "1440p" : "1080p";
-    addMatch(config, matches, "gamingResolution", resolution, "게임 해상도", resolution === "4k" ? "4K · 2160p" : resolution === "1440p" ? "QHD · 1440p" : "FHD · 1080p", resolutionMatch[0]);
-    if (config.profile === undefined) addMatch(config, matches, "profile", "gaming", "사용 목적", "해상도 요구에서 게이밍으로 해석", "게이밍");
+    addMatch(config, matches, "gamingResolution", resolution, "게임 해상도", resolution === "4k" ? "4K" : resolution === "1440p" ? "QHD" : "FHD", resolutionMatch[0]);
+    if (config.profile === undefined) addMatch(config, matches, "profile", "gaming", "사용 목적", "게임용으로 분류", "게이밍");
   }
 
   const refreshMatch = text.match(/(240|144|60)\s*(?:hz|헤르츠|주사율)/i);
   if (refreshMatch) {
     const refreshRate = Number(refreshMatch[1]) as GamingRefreshRate;
     addMatch(config, matches, "gamingRefreshRate", refreshRate, "목표 주사율", `${refreshRate}Hz`, refreshMatch[0]);
-    if (config.profile === undefined) addMatch(config, matches, "profile", "gaming", "사용 목적", "주사율 요구에서 게이밍으로 해석", "게이밍");
+    if (config.profile === undefined) addMatch(config, matches, "profile", "gaming", "사용 목적", "게임용으로 분류", "게이밍");
   }
 
   const budget = budgetFromBrief(text);
@@ -260,25 +260,25 @@ export function generatorBriefInterpretationFor(input: string): GeneratorBriefIn
   const memory = memoryFromBrief(text);
   if (memory) {
     if (supportedCapacity(memory.value, [16, 32, 64, 128])) addMatch(config, matches, "memoryCapacityGb", memory.value as 16 | 32 | 64 | 128, "RAM 목표", `${memory.value}GB 이상`, memory.source);
-    else warnings.push(`RAM ${memory.value}GB는 선택할 수 없어요. 16·32·64·128GB 중 하나를 적어 주세요.`);
+    else warnings.push(`자동 견적에서는 RAM ${memory.value}GB를 고를 수 없어요. 16·32·64·128GB 중 하나를 적어 주세요.`);
   }
 
   const storage = capacityFromBrief(text, "ssd|nvme|스토리지|저장장치|저장공간");
   if (storage) {
     if (supportedCapacity(storage.value, [500, 1000, 2000, 4000])) addMatch(config, matches, "storageCapacityGb", storage.value as 500 | 1000 | 2000 | 4000, "SSD 목표", `${storage.value >= 1000 ? `${storage.value / 1000}TB` : `${storage.value}GB`} 이상`, storage.source);
-    else warnings.push(`SSD ${storage.value >= 1000 ? `${storage.value / 1000}TB` : `${storage.value}GB`}는 선택할 수 없어요. 500GB·1TB·2TB·4TB 중 하나를 적어 주세요.`);
+    else warnings.push(`자동 견적에서는 SSD ${storage.value >= 1000 ? `${storage.value / 1000}TB` : `${storage.value}GB`}를 고를 수 없어요. 500GB·1TB·2TB·4TB 중 하나를 적어 주세요.`);
   }
 
   const hddCount = hddCountFromBrief(text);
   if (hddCount) {
     if (supportedCapacity(hddCount.value, [0, 1, 2, 4])) addMatch(config, matches, "hddCount", hddCount.value as 0 | 1 | 2 | 4, "HDD 개수", `HDD ${hddCount.value}개`, hddCount.source);
-    else warnings.push(`HDD ${hddCount.value}개는 선택할 수 없어요. 0·1·2·4개 중 하나를 적어 주세요.`);
+    else warnings.push(`자동 견적에서는 HDD ${hddCount.value}개를 고를 수 없어요. 0·1·2·4개 중 하나를 적어 주세요.`);
   }
 
   const hddCapacity = hddCapacityFromBrief(text);
   if (hddCapacity) {
     if (supportedCapacity(hddCapacity.value, [2000, 4000, 8000, 16000])) addMatch(config, matches, "hddCapacityGb", hddCapacity.value as 2000 | 4000 | 8000 | 16000, "HDD 용량", `HDD ${hddCapacity.value >= 1000 ? `${hddCapacity.value / 1000}TB` : `${hddCapacity.value}GB`} 이상`, hddCapacity.source);
-    else warnings.push(`HDD ${hddCapacity.value >= 1000 ? `${hddCapacity.value / 1000}TB` : `${hddCapacity.value}GB`}는 선택할 수 없어요. 2·4·8·16TB 중 하나를 적어 주세요.`);
+    else warnings.push(`자동 견적에서는 HDD ${hddCapacity.value >= 1000 ? `${hddCapacity.value / 1000}TB` : `${hddCapacity.value}GB`}를 고를 수 없어요. 2·4·8·16TB 중 하나를 적어 주세요.`);
   }
 
   const noGpu = /내장\s*그래픽|내장만|외장\s*그래픽\s*(?:없|미포함)|그래픽카드\s*(?:없이|미포함)|gpu\s*없/i.test(text);

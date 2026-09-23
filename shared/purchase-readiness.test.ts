@@ -46,7 +46,7 @@ describe("purchase readiness", () => {
     expect(readiness.state).toBe("review");
     expect(readiness.label).toBe("확인 후 구매");
     expect(physical).toMatchObject({ state: "review" });
-    expect(physical?.summary).toContain("장착 공간과 전원 연결 규격");
+    expect(physical?.summary).toContain("부품이 들어가는지, 전원 단자가 맞는지");
   });
 
   it("can become purchase-ready after complete physical evidence is registered", () => {
@@ -77,7 +77,7 @@ describe("purchase readiness", () => {
 
     expect(readiness.state).toBe("review");
     expect(physical).toMatchObject({ state: "review", label: "장착·전력·냉각" });
-    expect(physical?.summary).toContain("전력·냉각 정보를 확인");
+    expect(physical?.summary).toContain("파워·쿨러 정보를 확인");
   });
 
   it("blocks purchase when a resource budget is below zero", () => {

@@ -200,13 +200,13 @@ function specKeyForDiff(record: CatalogChangeRecord, diff: CatalogChangeValueDif
 
 export function catalogChangeImpactsFor(record: CatalogChangeRecord, diff: CatalogChangeValueDiff): CatalogChangeImpact[] {
   if (diff.field === "가격") {
-    return [{ id: "purchase-price", kind: "purchase", label: "구매 금액", summary: "가격 변화가 저장 견적 합계와 구매 준비도에 반영됩니다.", ruleIds: [] }];
+    return [{ id: "purchase-price", kind: "purchase", label: "구매 금액", summary: "부품 가격이 바뀌었어요. 견적 합계를 다시 확인해 주세요.", ruleIds: [] }];
   }
   if (isCatalogDataQualityChangeField(diff.field) || diff.field === "누락 필드") {
-    return [{ id: "data-confidence", kind: "data", label: "데이터 상태", summary: "스펙 완성도 변화에 따라 호환성 결과가 확인 필요 상태가 될 수 있습니다.", ruleIds: [] }];
+    return [{ id: "data-confidence", kind: "data", label: "부품 정보", summary: "부품 정보가 달라져 호환 결과를 다시 확인해야 할 수 있어요.", ruleIds: [] }];
   }
   if (diff.field === "원문 스펙") {
-    return [{ id: `${record.category}-raw-spec-review`, kind: "data", label: "수집된 스펙 다시 확인", summary: "수집된 스펙이 바뀌어 선택 견적을 다시 검사해야 합니다.", ruleIds: [] }];
+    return [{ id: `${record.category}-raw-spec-review`, kind: "data", label: "부품 사양 확인", summary: "부품 사양이 바뀌었어요. 견적을 다시 확인해 주세요.", ruleIds: [] }];
   }
   const key = specKeyForDiff(record, diff);
   if (!key) return [];

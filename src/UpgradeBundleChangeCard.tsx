@@ -8,7 +8,7 @@ import { upgradeBundlePartDetailsCache } from "./upgrade-bundle-part-cache";
 type UpgradeRecommendationDetailProps = { recommendation: UpgradeRecommendation };
 
 function formatPriceDelta(value: number | undefined) {
-  if (value === undefined) return "가격 확인 필요";
+  if (value === undefined) return "가격 정보 없음";
   if (value === 0) return "현재와 같은 가격";
   return `${value > 0 ? "+" : ""}${value.toLocaleString("ko-KR")}원`;
 }

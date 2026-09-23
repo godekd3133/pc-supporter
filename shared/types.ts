@@ -86,9 +86,9 @@ export const RECOMMENDATION_PRIORITY_LABELS: Record<RecommendationPriority, stri
 
 export const RECOMMENDATION_PRIORITY_DESCRIPTIONS: Record<RecommendationPriority, string> = {
   balanced: "호환성·성능·가격을 함께 고려합니다.",
-  budget: "예산 안 부품과 가격 대비 성능을 우선합니다.",
-  performance: "성능 유사도와 처리 여유를 우선합니다.",
-  reliability: "호환·장착·카탈로그 정보가 충분히 확인된 부품을 우선합니다."
+  budget: "예산과 가격 대비 성능을 우선해 골라요.",
+  performance: "성능과 처리 여유를 먼저 살펴봐요.",
+  reliability: "호환·장착 정보가 충분하고 가격과 출처가 최근에 확인된 부품을 우선해 골라요."
 };
 
 export function isRecommendationPriority(value: unknown): value is RecommendationPriority {
@@ -116,9 +116,9 @@ export const RECOMMENDATION_PERFORMANCE_TIER_LABELS: Record<RecommendationPerfor
 export type GamingResolution = "1080p" | "1440p" | "4k";
 
 export const GAMING_RESOLUTION_LABELS: Record<GamingResolution, string> = {
-  "1080p": "FHD · 1080p",
-  "1440p": "QHD · 1440p",
-  "4k": "4K · 2160p"
+  "1080p": "FHD",
+  "1440p": "QHD",
+  "4k": "4K"
 };
 
 // 게임·옵션·업스케일러에 따라 달라지는 실제 FPS가 아닌, 서비스의 보수적인 VRAM 확인 기준입니다.
@@ -131,9 +131,9 @@ export const GAMING_RESOLUTION_VRAM_TARGETS: Record<GamingResolution, number> = 
 export type GamingRefreshRate = 60 | 144 | 240;
 
 export const GAMING_REFRESH_RATE_LABELS: Record<GamingRefreshRate, string> = {
-  60: "60Hz · 기본",
-  144: "144Hz · 고주사율",
-  240: "240Hz · 초고주사율"
+  60: "60Hz",
+  144: "144Hz",
+  240: "240Hz"
 };
 
 export type GamingGraphicsPreset = "competitive" | "balanced" | "high";

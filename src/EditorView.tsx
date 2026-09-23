@@ -59,18 +59,17 @@ export function MobileEditorSurface({ build, partMap, accessoryMap, checking, ch
   return <section className="mobile-editor-surface" aria-label="모바일 견적 편집">
     <div className="mobile-editor-heading"><div><h1>견적 구성</h1></div><span className="mobile-editor-count"><strong>{selectedCount}</strong><small>/ {preflight.requiredTotal} 필수</small></span></div>
     <div className="mobile-editor-tools"><input ref={importInputRef} type="file" accept=".json,application/json" aria-label="견적 JSON 파일 가져오기" onChange={(event) => void importBuildFile(event)} disabled={checking} /><button type="button" onClick={() => importInputRef.current?.click()} disabled={checking}><FiDatabase /> 가져오기</button><button type="button" onClick={onExportBuild} disabled={checking}><FiDownload /> 저장</button><button type="button" onClick={onReset} disabled={checking}><FiRefreshCw /> 초기화</button></div>
-    <div className="mobile-editor-progress"><div><span>검사 준비</span><strong>{selectedCount} / {preflight.requiredTotal}</strong></div><div className="mobile-progress-track"><span style={{ width: `${progress}%` }} /></div></div>
+    <div className="mobile-editor-progress"><div><span>필수 부품</span><strong>{selectedCount} / {preflight.requiredTotal}</strong></div><div className="mobile-progress-track"><span style={{ width: `${progress}%` }} /></div></div>
     <section className="mobile-editor-list" aria-label="부품 선택 목록"><div className="mobile-section-heading"><div><h2>부품 선택</h2></div></div><div className="mobile-editor-rows">{PART_CATEGORIES.map((category) => { const categoryMeta = CATEGORY_META[category]; const selections = selectionList(build, category); const boxedCooler = category === "cooler" && build.cpu ? partMap.get(build.cpu.partId)?.specs.coolerIncluded === true : false; const chosen = selections.length > 0 || boxedCooler; const summary = selections.length === 0 ? boxedCooler ? "선택한 CPU에 기본 포함" : categoryMeta.required ? "필수 부품을 선택해 주세요" : "선택 사항" : selections.map((selection) => `${partMap.get(selection.partId)?.name ?? selection.partId}${selection.quantity > 1 ? ` ×${selection.quantity}` : ""}`).join(", "); const RowIcon = categoryMeta.Icon; return <button className={`mobile-editor-row ${chosen ? "chosen" : ""}`} type="button" key={category} onClick={() => onOpenPicker(category)}><span className="mobile-editor-row-icon"><RowIcon /></span><span className="mobile-editor-row-copy"><strong>{categoryMeta.label}{categoryMeta.required && <em>필수</em>}</strong><small>{summary}</small></span>{!chosen && <span className={`mobile-editor-row-state ${categoryMeta.required ? "required" : "optional"}`}>{categoryMeta.required ? "필수" : "선택"}</span>}<FiArrowRight className="mobile-editor-row-arrow" /></button>; })}</div></section>
-    <details className="mobile-editor-advanced"><summary><span><FiActivity /> 추천 기준·가격·데이터 확인</span></summary><div className="mobile-editor-advanced-content"><RecommendationControls preferences={recommendationPreferences} onChange={onRecommendationPreferencesChange} disabled={checking} /><BuildPriceSummaryPanel snapshot={buildPriceSnapshotFor(build, partMap, accessoryMap)} budgetWon={recommendationPreferences.budgetWon} unknownItems={unknownPriceItemsFor(build, partMap, accessoryMap)} onRefresh={onRefreshCatalogItem} refreshingItemId={refreshingPartId} /><BuildPreflightPanel preflight={preflight} onRefresh={onRefreshCatalogItem} onRefreshAll={onRefreshAllCatalogItems} refreshingPartId={refreshingPartId} /></div></details>
+    <details className="mobile-editor-advanced"><summary><span><FiActivity /> 추천 조건·가격·부품 정보</span></summary><div className="mobile-editor-advanced-content"><RecommendationControls preferences={recommendationPreferences} onChange={onRecommendationPreferencesChange} disabled={checking} /><BuildPriceSummaryPanel snapshot={buildPriceSnapshotFor(build, partMap, accessoryMap)} budgetWon={recommendationPreferences.budgetWon} unknownItems={unknownPriceItemsFor(build, partMap, accessoryMap)} onRefresh={onRefreshCatalogItem} refreshingItemId={refreshingPartId} /><BuildPreflightPanel preflight={preflight} onRefresh={onRefreshCatalogItem} onRefreshAll={onRefreshAllCatalogItems} refreshingPartId={refreshingPartId} /></div></details>
     {checkError && <RequestErrorNotice message={checkError} onRetry={onCheck} retrying={checking} hasLastResult={hasLastResult} />}
-    <div className="mobile-editor-submit"><button className="mobile-primary-action" type="button" onClick={onCheck} disabled={checking || preflight.status !== "ready"}>{checking ? <><FiLoader className="spin" /><span>검사 중...</span></> : <><FiSearch /><span>호환성 검사하기</span><FiArrowRight /></>}</button></div>
+    <div className="mobile-editor-submit"><button className="mobile-primary-action" type="button" onClick={onCheck} disabled={checking || preflight.status !== "ready"}>{checking ? <><FiLoader className="spin" /><span>호환 확인 중...</span></> : <><FiSearch /><span>호환 확인하기</span><FiArrowRight /></>}</button></div>
   </section>;
 }
 
 export function UpgradeEntryBanner() {
   return <section className="upgrade-entry-banner" data-testid="upgrade-entry-banner" aria-label="업그레이드 진입 안내">
-    <div className="upgrade-entry-banner-mark"><FiRefreshCw /></div>
-    <div className="upgrade-entry-banner-copy"><p className="eyebrow">PC 업그레이드</p><h2>지금 쓰는 PC부터 확인해 볼게요</h2><p>현재 CPU·메인보드·메모리·그래픽카드를 골라주시면 호환성 문제와 바꾸면 좋은 업그레이드 조합을 순서대로 보여드려요.</p><div className="upgrade-entry-banner-steps"><span><b>1</b>현재 부품 선택</span><span><b>2</b>호환성 검사</span><span><b>3</b>업그레이드 비교</span></div></div>
+    <div className="upgrade-entry-banner-copy"><h2>현재 PC 업그레이드</h2><p>CPU·메인보드·메모리·그래픽카드를 선택하면 호환 문제와 업그레이드 조합을 확인할 수 있어요.</p><div className="upgrade-entry-banner-steps"><span><b>1</b>현재 부품 선택</span><span><b>2</b>호환 결과</span><span><b>3</b>업그레이드 비교</span></div></div>
   </section>;
 }
 
@@ -161,7 +160,7 @@ export function EditorView({
         <div className="build-editor-actions"><input ref={buildImportInputRef} className="build-transfer-input" type="file" accept=".json,application/json" aria-label="견적 JSON 파일 가져오기" onChange={(event) => void importBuildFile(event)} disabled={checking} /><button className="button button-light" type="button" onClick={() => buildImportInputRef.current?.click()} disabled={checking}><FiDatabase /> 견적 JSON 가져오기</button><button className="button button-light" type="button" onClick={onExportBuild} disabled={checking}><FiDownload /> 견적 JSON 저장</button><button className="button button-ghost" type="button" onClick={onReset} disabled={checking}><FiRefreshCw /> 초기화</button></div>
       </div>
       <div className="progress-strip"><div><span className="progress-label">필수 부품 선택</span><strong>{selectedCount} / {requiredCount}</strong></div><div className="progress-track"><span style={{ width: `${(selectedCount / requiredCount) * 100}%` }} /></div></div>
-      {checking && <Suspense fallback={<div className="compatibility-check-progress" data-testid="compatibility-check-progress" role="status"><FiLoader className="spin" /> 검사 준비 중...</div>}><LazyCompatibilityCheckProgress /></Suspense>}
+      {checking && <Suspense fallback={<div className="compatibility-check-progress" data-testid="compatibility-check-progress" role="status"><FiLoader className="spin" /> 호환 결과를 준비하고 있어요...</div>}><LazyCompatibilityCheckProgress /></Suspense>}
       <div className="editor-layout">
         <section className="component-list">
           <div className="section-title-row"><div><h2>부품 선택</h2></div></div>
@@ -174,19 +173,19 @@ export function EditorView({
         </section>
         <aside className="summary-sidebar">
           <div className="sticky-summary">
-            <div className="summary-header"><div><h2>검사 준비 상태</h2></div><span className="summary-pulse"><FiActivity /></span></div>
+            <div className="summary-header"><div><h2>견적 준비 상태</h2></div><span className="summary-pulse"><FiActivity /></span></div>
             <div className="summary-list">{PART_CATEGORIES.map((category) => { const boxed = category === "cooler" && build.cpu ? partMap.get(build.cpu.partId)?.specs.coolerIncluded === true : false; const chosen = selectionList(build, category).length > 0 || boxed; return <div className={chosen ? "summary-row chosen" : "summary-row"} key={category}><span className="summary-check">{chosen ? <FiCheck /> : <span />}</span><span>{CATEGORY_LABELS[category]}</span></div>; })}</div>
             <div className="summary-divider" />
             <div className="graphics-mode"><div><span className="mini-label">그래픽 출력</span><strong>{build.gpu ? "외장 그래픽카드" : build.useIntegratedGraphics ? "CPU 내장 그래픽" : "선택 필요"}</strong></div><FiMonitor /></div>
             <details className="desktop-summary-details">
-              <summary><span><FiActivity /> 추천·가격·확인 정보</span><FiChevronDown /></summary>
+              <summary><span><FiActivity /> 추천·가격·부품 정보</span><FiChevronDown /></summary>
               <div className="desktop-summary-details-body">
                 <RecommendationControls preferences={recommendationPreferences} onChange={onRecommendationPreferencesChange} disabled={checking} />
                 <BuildPriceSummaryPanel snapshot={buildPriceSnapshotFor(build, partMap, accessoryMap)} budgetWon={recommendationPreferences.budgetWon} unknownItems={unknownPriceItemsFor(build, partMap, accessoryMap)} onRefresh={onRefreshCatalogItem} refreshingItemId={refreshingPartId} />
                 <BuildPreflightPanel preflight={preflight} onRefresh={onRefreshCatalogItem} onRefreshAll={onRefreshAllCatalogItems} refreshingPartId={refreshingPartId} />
               </div>
             </details>
-            <button className="button button-primary full-width" onClick={onCheck} disabled={checking}>{checking ? <><FiLoader className="spin" /> 검사 중...</> : <><FiActivity /> 호환성 검사하기</>}</button>
+            <button className="button button-primary full-width" onClick={onCheck} disabled={checking}>{checking ? <><FiLoader className="spin" /> 호환 확인 중...</> : <><FiActivity /> 호환 확인하기</>}</button>
             {checkError && <RequestErrorNotice message={checkError} onRetry={onCheck} retrying={checking} hasLastResult={hasLastResult} />}
           </div>
         </aside>
@@ -198,9 +197,9 @@ export function EditorView({
 
 export function BuildPreflightPanel({ preflight, onRefresh, onRefreshAll, refreshingPartId }: { preflight: BuildPreflight; onRefresh: (target: RefreshTarget) => void; onRefreshAll: (targets: RefreshTarget[]) => void; refreshingPartId: string | null }) {
   const statusCopy: Record<BuildPreflight["status"], string> = {
-    ready: "검사 준비 완료",
+    ready: "견적 준비 완료",
     needs_selection: "필수 부품 선택 필요",
-    needs_data_review: "선택 데이터 확인 필요"
+    needs_data_review: "부품 정보가 부족해요"
   };
   const issueKindCopy: Record<BuildPreflight["issues"][number]["kind"], string> = {
     selection: "선택",
@@ -208,11 +207,11 @@ export function BuildPreflightPanel({ preflight, onRefresh, onRefreshAll, refres
     data: "스펙",
     price: "가격"
   };
-  return <section className={`build-preflight ${preflight.status}`} aria-label="검사 전 사전 점검">
-    <div className="build-preflight-heading"><div><strong>검사 전 사전 점검</strong></div><div className="build-preflight-heading-actions"><span className="build-preflight-status">{statusCopy[preflight.status]}</span>{preflight.refreshTargets.length > 0 && <button className="text-button build-preflight-refresh-all" type="button" onClick={() => onRefreshAll(preflight.refreshTargets)} disabled={refreshingPartId !== null}>{refreshingPartId !== null ? <><FiLoader className="spin" /> 확인 중...</> : <><FiRefreshCw /> 확인 대상 {preflight.refreshTargets.length}개 모두 확인</>}</button>}</div></div>
-    <div className="build-preflight-stats"><div><span>필수 선택</span><strong>{preflight.requiredSelectedCount} / {preflight.requiredTotal}</strong></div><div><span>선택 부품</span><strong>{preflight.selectedPartCount + preflight.selectedAccessoryCount}개</strong></div><div><span>데이터 확인</span><strong>{preflight.dataReviewCount}개</strong></div><div><span>가격 미확인</span><strong>{preflight.unpricedCount}개</strong></div></div>
-    {preflight.issues.length > 0 ? <div className="build-preflight-issues">{preflight.issues.slice(0, 4).map((issue) => <div className="build-preflight-issue" key={issue.id}><span>{issueKindCopy[issue.kind]}</span><div><strong>{issue.label}</strong><small>{issue.message}</small></div>{issue.target && <button className="text-button build-preflight-refresh" type="button" onClick={() => onRefresh(issue.target!)} disabled={refreshingPartId !== null}>{refreshingPartId === issue.target.id ? <><FiLoader className="spin" /> 확인 중...</> : <><FiRefreshCw /> 정보 다시 확인</>}</button>}</div>)}{preflight.issues.length > 4 && <small className="build-preflight-more">그 외 {preflight.issues.length - 4}개 항목은 검사 결과에서 상세 확인할 수 있습니다.</small>}</div> : <p className="build-preflight-clear"><FiCheckCircle /> 선택된 부품의 기본 데이터가 준비되었습니다.</p>}
-    <p className="build-preflight-note"><FiInfo /> 사전 점검은 입력·정보 준비 상태만 봐요. 실제 부품 호환성은 검사 버튼을 눌러 확인해 주세요.</p>
+  return <section className={`build-preflight ${preflight.status}`} aria-label="견적에 필요한 부품 정보">
+    <div className="build-preflight-heading"><div><strong>부품 정보</strong></div><div className="build-preflight-heading-actions"><span className="build-preflight-status">{statusCopy[preflight.status]}</span>{preflight.refreshTargets.length > 0 && <button className="text-button build-preflight-refresh-all" type="button" onClick={() => onRefreshAll(preflight.refreshTargets)} disabled={refreshingPartId !== null}>{refreshingPartId !== null ? <><FiLoader className="spin" /> 불러오는 중...</> : <><FiRefreshCw /> 가격·사양 새로 불러오기 {preflight.refreshTargets.length}개</>}</button>}</div></div>
+    <div className="build-preflight-stats"><div><span>필수 선택</span><strong>{preflight.requiredSelectedCount} / {preflight.requiredTotal}</strong></div><div><span>선택 부품</span><strong>{preflight.selectedPartCount + preflight.selectedAccessoryCount}개</strong></div><div><span>사양 정보 부족</span><strong>{preflight.dataReviewCount}개</strong></div><div><span>가격 정보 없음</span><strong>{preflight.unpricedCount}개</strong></div></div>
+    {preflight.issues.length > 0 ? <div className="build-preflight-issues">{preflight.issues.slice(0, 4).map((issue) => <div className="build-preflight-issue" key={issue.id}><span>{issueKindCopy[issue.kind]}</span><div><strong>{issue.label}</strong><small>{issue.message}</small></div>{issue.target && <button className="text-button build-preflight-refresh" type="button" onClick={() => onRefresh(issue.target!)} disabled={refreshingPartId !== null}>{refreshingPartId === issue.target.id ? <><FiLoader className="spin" /> 불러오는 중...</> : <><FiRefreshCw /> 가격·사양 업데이트</>}</button>}</div>)}{preflight.issues.length > 4 && <small className="build-preflight-more">그 외 {preflight.issues.length - 4}개 부품 정보는 호환 결과에서 확인할 수 있어요.</small>}</div> : <p className="build-preflight-clear"><FiCheckCircle /> 선택한 부품 정보를 불러왔어요.</p>}
+    <p className="build-preflight-note"><FiInfo /> 필수 부품을 선택한 뒤 호환 결과를 확인해 주세요.</p>
   </section>;
 }
 
@@ -268,10 +267,9 @@ export function M2SlotSelectionEditor({ build, setBuild, partMap }: { build: Bui
     });
   }
   return <section className={assignedSlotCount > 0 ? "m2-selection-editor selected" : "m2-selection-editor"} aria-label="M.2 슬롯 배치 선택">
-    <div className="m2-selection-heading"><div><p className="eyebrow">M.2 슬롯</p><h2>SSD 슬롯 배치</h2><p>{motherboard.name}의 등록된 슬롯 정보를 기준으로 SSD 연결 위치를 직접 지정할 수 있습니다.</p></div><span className="m2-selection-icon"><FiHardDrive /></span></div>
+    <div className="m2-selection-heading"><div><p className="eyebrow">M.2 슬롯</p><h2>SSD 슬롯 배치</h2><p>{motherboard.name}의 M.2 슬롯에 SSD 연결 위치를 지정할 수 있어요.</p></div><span className="m2-selection-icon"><FiHardDrive /></span></div>
     <div className="m2-selection-toolbar"><span className={assignedSlotCount === m2UnitCount ? "m2-selection-count complete" : "m2-selection-count"}>{assignedSlotCount > 0 ? `수동 지정 ${assignedSlotCount} / ${m2UnitCount}개` : "자동 배치"}</span><button className="text-button" type="button" onClick={useAutomaticPlacement} disabled={assignedSlotCount === 0}><FiRefreshCw /> 최적 배치 사용</button></div>
     <div className="m2-selection-list">{profiles.map((profile) => <label className="m2-selection-row" key={profile.slotId}><span className="m2-selection-slot">{profile.slotId}</span><span className="m2-selection-spec">{profile.interfaces?.join(" / ") ?? "인터페이스 확인"}{profile.pcieGeneration !== undefined ? ` · PCIe ${profile.pcieGeneration.toFixed(1)}` : " · 세대 확인"}{profile.connection === "cpu" ? " · CPU 직결" : profile.connection === "chipset" ? " · 칩셋" : " · 연결 확인"}</span><select aria-label={`${profile.slotId} SSD 배치`} value={selection[profile.slotId] ?? ""} onChange={(event) => updateSlot(profile.slotId, event.target.value)}><option value="">자동 배치</option>{selectedM2Parts.map(({ part, quantity }) => <option value={part.id} key={part.id}>{part.name} · {interfaceLabel(part)} · {capacityLabel(part)}{quantity > 1 ? ` ×${quantity}` : ""}</option>)}</select></label>)}</div>
     <p className="m2-selection-note"><FiInfo /> 모든 슬롯을 비워 두면 성능·연결 조건에 맞춰 자동으로 배치해요. 하나라도 직접 지정하면 선택한 M.2 SSD 수량만큼 슬롯을 모두 지정해야 하고, SSD 수량이나 메인보드를 바꾸면 안전을 위해 자동 배치로 돌아갑니다.</p>
   </section>;
 }
-

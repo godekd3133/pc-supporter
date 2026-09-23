@@ -38,6 +38,7 @@ describe("purchase checklist", () => {
   it("keeps engine findings and manual checks separate", () => {
     const items = purchaseChecklistItemsFor(build, result);
     expect(items.filter((item) => item.kind === "finding").map((item) => item.severity)).toEqual(["blocker", "unknown", "warning"]);
+    expect(items.find((item) => item.id === "finding:socket")).toMatchObject({ title: "소켓이 다릅니다.", severity: "blocker" });
     expect(items.some((item) => item.id === "finding:info")).toBe(false);
     expect(items.filter((item) => item.kind === "manual").map((item) => item.id)).toEqual([
       "manual:power-thermal-budget",
@@ -93,9 +94,9 @@ describe("purchase checklist", () => {
     const physical = items.find((item) => item.id === "manual:gpu-physical-evidence");
     const topology = items.find((item) => item.id === "manual:pcie-cable-topology");
 
-    expect(physical).toMatchObject({ targetId: "gpu-fit-summary-panel", actionLabel: "GPU FIT 보기" });
+    expect(physical).toMatchObject({ targetId: "gpu-fit-summary-panel", actionLabel: "장착 정보 확인" });
     expect(physical?.detail).toContain("그래픽카드가 차지하는 슬롯 수");
-    expect(topology).toMatchObject({ targetId: "gpu-fit-summary-panel", actionLabel: "GPU FIT 보기" });
+    expect(topology).toMatchObject({ targetId: "gpu-fit-summary-panel", actionLabel: "장착 정보 확인" });
     expect(topology?.detail).toContain("각각 파워에 연결할 수 있는지");
   });
 

@@ -47,10 +47,10 @@ function dataActionFor(item: BuildDataHealthItem): BuildAction[] {
     actions.push({ id: `data-freshness:${item.id}`, priority: "review", source: "data", title: `${item.name} 데이터 다시 확인`, summary: item.freshness === "stale" ? "확인한 지 오래되어 최신 정보를 다시 확인해야 해요." : "확인 기록이 없어 최신 정보를 확인해야 해요.", targetId: "data-health-panel" });
   }
   if (item.missingFields.length > 0) {
-    actions.push({ id: `data-fields:${item.id}`, priority: "review", source: "data", title: `${item.name} 누락 스펙 보완`, summary: `확인되지 않은 스펙 ${item.missingFields.slice(0, 3).map((field) => catalogMissingFieldLabelFor(field)).join(", ")}${item.missingFields.length > 3 ? ` 외 ${item.missingFields.length - 3}개` : ""}를 확인해야 합니다.`, targetId: "data-health-panel" });
+    actions.push({ id: `data-fields:${item.id}`, priority: "review", source: "data", title: `${item.name} 정보 확인`, summary: `확인할 항목: ${item.missingFields.slice(0, 3).map((field) => catalogMissingFieldLabelFor(field)).join(", ")}${item.missingFields.length > 3 ? ` 외 ${item.missingFields.length - 3}개` : ""}`, targetId: "data-health-panel" });
   }
   if (!item.priceKnown) {
-    actions.push({ id: `data-price:${item.id}`, priority: "review", source: "price", title: `${item.name} 가격 확인`, summary: "현재 가격을 확인할 수 없어 전체 구매 금액을 알 수 없어요.", targetId: "purchase-list-panel" });
+    actions.push({ id: `data-price:${item.id}`, priority: "review", source: "price", title: `${item.name} 가격 확인`, summary: "가격을 확인하지 못한 부품이 있어 전체 금액을 계산할 수 없어요.", targetId: "purchase-list-panel" });
   }
   return actions;
 }
@@ -70,7 +70,7 @@ function connectivityActionsFor(result: CompatibilityResult, build: BuildSelecti
       priority: "review" as const,
       source: "physical" as const,
       title: `${item.label} ${item.status === "review" ? "여유 부족 확인" : "제조사 페이지 확인"}`,
-      summary: `${item.detail} 케이스 기본 장치와 메인보드 헤더·전압을 대조한 보조 점검입니다.`,
+      summary: `${item.detail} 케이스 기본 팬·RGB 장치가 메인보드 단자에 연결되는지 확인하세요.`,
       targetId: "build-connectivity-panel" as const
     }));
 }
@@ -86,7 +86,7 @@ function resourceActionFor(result: CompatibilityResult): BuildAction | undefined
     id: "physical:resource-budget",
     priority: summary.state === "danger" ? "blocker" : "review",
     source: "physical",
-    title: summary.state === "danger" ? "전력·냉각 예산 기준 미달" : summary.state === "unknown" ? "전력·냉각 실제 수치 확인" : "전력·냉각 여유 확인",
+    title: summary.state === "danger" ? "전력·냉각 예산 기준 미달" : summary.state === "unknown" ? "전력·냉각 정보 확인" : "전력·냉각 여유 확인",
     summary: `${affectedCards} · ${summary.summary}`,
     targetId: "build-resource-summary"
   };
@@ -151,7 +151,7 @@ export function buildActionCenterFor(result: CompatibilityResult, build?: BuildS
   const visibleCount = 6;
   return {
     state,
-    summary: state === "blocked" ? `구매 전에 해결해야 할 우선 항목 ${actions.filter((action) => action.priority === "blocker").length}개가 있습니다.` : state === "review" ? `호환성은 진행할 수 있지만 구매·조립 전에 확인할 항목 ${actions.length}개가 있습니다.` : "현재 규칙과 데이터 기준의 차단 항목은 없습니다. 실제 조립 전 최종 확인만 남았습니다.",
+    summary: state === "blocked" ? `구매 전에 해결해야 할 우선 항목 ${actions.filter((action) => action.priority === "blocker").length}개가 있습니다.` : state === "review" ? `호환성은 진행할 수 있지만 구매·조립 전에 확인할 항목 ${actions.length}개가 있습니다.` : "확인된 항목에는 차단 문제가 없습니다. 실제 조립 전에 제조사 안내와 연결 상태를 확인하세요.",
     totalCount: actions.length,
     hiddenCount: Math.max(0, actions.length - visibleCount),
     actions

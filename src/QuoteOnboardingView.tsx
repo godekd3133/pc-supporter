@@ -29,7 +29,6 @@ import {
   primaryWorkFor,
   recommendQueryFor,
   resolutionLabelFor,
-  gamingTargetShortfall,
   SPEC_TIER_LABELS,
   targetBudgetRangeFor,
   stepIndicatorFor,
@@ -119,7 +118,7 @@ function budgetRangeStatusFor(range: RequiredBudgetRange, budgetWon: number): "b
 }
 
 function budgetRangeStatusLabel(status: "below" | "within" | "above") {
-  return status === "below" ? "조금 더 필요해요" : status === "above" ? "여유 있는 예산이에요" : "권장 범위 안이에요";
+  return status === "below" ? "예산이 부족해요" : status === "above" ? "예산에 여유가 있어요" : "예상 가격대 안이에요";
 }
 
 function BudgetRangeCard({ range, budgetWon, compact = false, gaming = false, onAdjust, onEditTarget }: { range: RequiredBudgetRange; budgetWon: number; compact?: boolean; gaming?: boolean; onAdjust?: (budgetWon: number) => void; onEditTarget?: () => void }) {
@@ -133,13 +132,13 @@ function BudgetRangeCard({ range, budgetWon, compact = false, gaming = false, on
     <section className={`onboarding-budget-range ${compact ? "compact" : ""} status-${status}`} aria-label="목표별 예상 가격대">
       <div className="onboarding-budget-range-top">
         <div>
-          <span>목표 성능 기준 예상 가격대</span>
+          <span>예상 PC 가격대</span>
           <strong>{formatManWon(range.minWon)} ~ {formatManWon(range.maxWon)}</strong>
         </div>
         <em>{budgetRangeStatusLabel(status)}</em>
       </div>
-      <p>{status === "below" ? "현재 예산이 권장 범위보다 낮아요. 예산을 올리거나 목표 성능을 낮춰보세요." : status === "above" ? "현재 예산은 목표 성능의 권장 범위보다 높아요." : "현재 예산이 목표 성능의 권장 범위 안에 있어요."}</p>
-      <p className="onboarding-note">목표 성능별 기준표로 계산한 참고 금액대예요. 실시간 부품 가격과 재고는 반영하지 않아요.</p>
+      <p>{status === "below" ? "지금 예산으로는 선택한 성능이 어려울 수 있어요. 예산을 올리거나 성능을 낮춰보세요." : status === "above" ? "선택한 성능에 비해 예산이 넉넉해요." : "설정한 예산이 예상 가격대에 들어요."}</p>
+      <p className="onboarding-note">목표 성능 기준 참고 금액입니다. 실시간 가격·재고는 반영되지 않아요.</p>
       {(onAdjust && adjustment || onEditTarget && status === "below") && <div className="onboarding-budget-range-actions">
         {onAdjust && adjustment && <button type="button" className="onboarding-budget-range-action" data-testid="onboarding-budget-range-adjust" onClick={() => onAdjust(clampBudget(adjustment.budgetWon))}>{adjustment.label}</button>}
         {onEditTarget && status === "below" && <button type="button" className="onboarding-budget-range-edit" data-testid="onboarding-budget-range-edit-target" onClick={onEditTarget}>목표 성능 다시 고르기</button>}
@@ -152,11 +151,11 @@ function GamingTargetContract({ state, showBudgetHint = false }: { state: Onboar
   const range = showBudgetHint ? targetBudgetRangeFor(state) : null;
   return (
     <section className="onboarding-target-contract" aria-label="게이밍 성능 목표 기준">
-      <div className="onboarding-target-contract-heading"><div><span>게임 성능 목표</span><strong>평균 FPS · {state.refreshRate}</strong></div><FiTarget aria-hidden="true" /></div>
-      <div className="onboarding-target-contract-tags"><span>{resolutionLabelFor(state.resolution)}</span><span>{state.refreshRate} FPS</span><span>{GAMING_GRAPHICS_PRESET_LABELS[state.graphicsPreset]}</span><span>{GAMING_UPSCALING_LABELS[state.upscaling]}</span>{state.rayTracing && <span>레이 트레이싱</span>}</div>
+      <div className="onboarding-target-contract-heading"><div><span>게임 성능 목표</span><strong>평균 {state.refreshRate}FPS</strong></div><FiTarget aria-hidden="true" /></div>
+      <div className="onboarding-target-contract-tags"><span>{resolutionLabelFor(state.resolution)}</span><span>{GAMING_GRAPHICS_PRESET_LABELS[state.graphicsPreset]}</span><span>{GAMING_UPSCALING_LABELS[state.upscaling]}</span>{state.rayTracing && <span>레이 트레이싱</span>}</div>
       {range && <>
         <div className="onboarding-target-contract-budget"><span>예상 PC 가격대</span><strong>{formatManWon(range.minWon)} ~ {formatManWon(range.maxWon)}</strong></div>
-        <p className="onboarding-note">목표 성능별 기준표로 계산한 참고 금액대예요. 실시간 부품 가격과 재고는 반영하지 않아요.</p>
+        <p className="onboarding-note">목표 성능 기준 참고 금액입니다. 실시간 가격·재고는 반영되지 않아요.</p>
       </>}
     </section>
   );
@@ -275,7 +274,6 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome }: { o
     : state.usecase === "work"
       ? workEstimateFor(state.works, state.intensity)
     : budgetEstimateFor(state.budgetWon, state.usecase);
-  const shortfall = gamingTargetShortfall(state);
   const targetBudgetRange = targetBudgetRangeFor(state);
   const primaryWork = primaryWorkFor(state.works);
   const estimateRows: [IconType, string, string][] = [
@@ -342,8 +340,8 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome }: { o
       <div className="onboarding-steps-list">
         {[
           "지금 쓰는 CPU·메인보드·그래픽카드 등을 골라주세요.",
-          "호환성 검사를 누르면 현재 구성의 문제를 확인해요.",
-          "결과 화면에서 바꾸면 좋은 부품과 업그레이드 묶음을 보여드려요."
+          "호환 결과에서 현재 구성의 문제를 볼 수 있어요.",
+          "호환 결과에서 교체할 부품과 업그레이드 조합을 볼 수 있어요."
         ].map((line, index) => (
           <div className="onboarding-steps-item" key={line}><span className="onboarding-steps-number">{index + 1}</span><p>{line}</p></div>
         ))}
@@ -473,7 +471,7 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome }: { o
     ctaLabel = "예상 구성 확인";
     body = (
       <>
-        {(state.usecase || state.mode === "spec" || state.mode === "budget") && <p className="onboarding-pill"><FiPlay /> 현재 목표 · {state.usecase === "gaming" ? `${resolutionLabelFor(state.resolution)} · ${state.refreshRate} FPS · ${GAMING_GRAPHICS_PRESET_LABELS[state.graphicsPreset]} · ${GAMING_UPSCALING_LABELS[state.upscaling]}${state.rayTracing ? " · 레이 트레이싱" : ""}` : state.usecase === "work" || state.mode === "spec" ? targetSummaryFor(state) : "예산 중심 기본 구성"}</p>}
+        {(state.usecase || state.mode === "spec" || state.mode === "budget") && <p className="onboarding-pill"><FiPlay /> {state.usecase === "gaming" ? `${resolutionLabelFor(state.resolution)}에서 평균 ${state.refreshRate}FPS를 목표로 해요.` : state.usecase === "work" || state.mode === "spec" ? targetSummaryFor(state) : "예산 중심 기본 구성"}</p>}
         <div className="onboarding-budget-card">
           <div className="onboarding-budget-heading"><strong>예산 선택</strong><span>(만원)</span></div>
           <div className="onboarding-budget-control">
@@ -502,9 +500,6 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome }: { o
             ))}
           </div>
         </div>
-        {shortfall && (
-          <p className="onboarding-warning"><FiAlertTriangle /> 선택한 예산이 목표 성능의 권장 범위보다 낮아요. 예산을 올리거나 목표를 낮춰보세요.</p>
-        )}
       </>
     );
   } else if (state.step === "summary") {
@@ -550,9 +545,6 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome }: { o
           ))}
         </div>
         {targetBudgetRange && <BudgetRangeCard range={targetBudgetRange} budgetWon={state.budgetWon} gaming={state.usecase === "gaming"} compact />}
-        {shortfall && (
-          <p className="onboarding-warning"><FiAlertTriangle /> 선택한 예산이 목표 성능의 권장 범위보다 낮아요. 예산을 올리거나 목표를 낮춰보세요.</p>
-        )}
       </div>
     );
   }
@@ -560,14 +552,14 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome }: { o
   const headings: Record<string, { title: string; description: string }> = {
     intent: { title: "어떤 PC 견적을 볼까요?", description: "게임·작업 용도와 예산을 골라 견적을 만들어요." },
     mode: { title: "어떤 기준으로 부품을 고를까요?", description: "예산, 게임·작업, 원하는 사양 중 편한 기준을 선택하세요." },
-    upgrade: { title: "지금 쓰는 PC 부품을 골라주세요", description: "현재 구성을 입력하고 검사하면, 바꾸면 좋은 부품과 업그레이드 묶음을 보여드려요." },
+    upgrade: { title: "지금 쓰는 PC 부품을 골라주세요", description: "현재 부품을 입력하면 호환 문제와 업그레이드 조합을 확인할 수 있어요." },
     usecase: { title: "어떤 용도로 쓸 PC인가요?", description: "게임과 작업 중 주된 용도를 골라주세요." },
     games: { title: "주로 할 게임을 골라주세요", description: "여러 게임을 선택할 수 있어요. 목표 FPS는 다음 단계에서 정해요." },
     performance: { title: "게임 성능 목표를 정해주세요", description: "해상도와 목표 FPS를 선택하세요. 선택한 값은 실제 측정값이 아니에요." },
     graphics: { title: "게임 옵션도 정해주세요", description: "같은 4K · 144 FPS라도 그래픽 옵션에 따라 필요한 부품이 달라져요." },
     works: { title: "주로 하는 작업을 골라주세요", description: "여러 작업을 선택할 수 있어요. 가장 높은 작업 강도를 기준으로 예상 사양을 계산해요." },
     intensity: { title: primaryWork?.intensityQuestion ?? "작업 규모는 어느 정도인가요?", description: primaryWork?.intensitySummary ?? "작업 강도에 따라 예상 사양이 달라져요." },
-    spec: { title: "생각해둔 성능을 알려주세요", description: "성능 등급·외장 GPU·메모리·저장공간을 골라주세요." },
+    spec: { title: "성능 목표를 정하세요", description: "성능 등급·외장 GPU·메모리·저장공간을 선택하세요." },
     budget: { title: "예산을 정해주세요", description: "금액에 따라 예상 사양이 달라져요. 원하는 금액을 직접 입력할 수 있어요." },
     summary: { title: "견적 내용을 확인하세요", description: "선택한 항목을 확인하고 부품 추천으로 넘어갈 수 있어요." }
   };

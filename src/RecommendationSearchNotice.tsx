@@ -25,7 +25,7 @@ export function RecommendationSearchNotice({ search, findings, onOpenPicker }: {
   const selectedTarget = precisionTargets.find((target) => target.key === selectedTargetKey);
   return <div className="recommendation-search-note" data-testid="recommendation-search-note" role="note">
     <FiInfo />
-    <span>{search.evaluatedCandidateCount.toLocaleString("ko-KR")}개 부품을 전체 호환 규칙으로 확인했어요. 실제 장착 여부와 규격은 부품·케이스 사양에서 확인하세요.</span>
+    <span>{search.evaluatedCandidateCount.toLocaleString("ko-KR")}개 부품을 검사했어요. 실제 장착 여부는 부품과 케이스 설명도 확인해 주세요.</span>
     <div className="recommendation-search-controls">
       <label><span>해결할 항목</span><select aria-label="검사 대상" value={selectedTargetKey} onChange={(event) => setSelectedTargetKey(event.target.value)}>{precisionTargets.map((target) => <option value={target.key} key={target.key}>{target.title} · {CATEGORY_LABELS[target.category]}</option>)}</select></label>
       <button className="text-button" type="button" disabled={!selectedTarget} onClick={() => { if (selectedTarget) onOpenPicker(selectedTarget.category, `precision:${selectedTarget.ruleId}`, selectedTarget.title, selectedTarget.affectedPartIds); }}>부품 찾기</button>

@@ -10,7 +10,7 @@ import { catalogMissingFieldLabelFor } from "../shared/catalog-spec-coverage";
 import { CatalogRefreshDiffPanel } from "./CatalogRefreshDiffPanel";
 
 function formatWon(value: number | undefined) {
-  return isKnownPrice(value) ? `${value.toLocaleString("ko-KR")}원` : "가격 확인 필요";
+  return isKnownPrice(value) ? `${value.toLocaleString("ko-KR")}원` : "가격 정보 없음";
 }
 
 function valueText(value: unknown, suffix = "") {

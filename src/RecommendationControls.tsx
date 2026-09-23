@@ -1,5 +1,5 @@
 // Shared recommendation preference controls used by the editor and result views.
-import { type GamingResolution, type GamingRefreshRate, type ListingPolicy, type RecommendationProfile, type RecommendationPreferences, GAMING_REFRESH_RATE_LABELS, GAMING_RESOLUTION_LABELS, LISTING_POLICY_LABELS, RECOMMENDATION_PRIORITY_DESCRIPTIONS, RECOMMENDATION_PRIORITY_LABELS, RECOMMENDATION_PROFILE_LABELS } from "../shared/types";
+import { type GamingResolution, type GamingRefreshRate, type ListingPolicy, type RecommendationProfile, type RecommendationPreferences, GAMING_REFRESH_RATE_LABELS, GAMING_RESOLUTION_LABELS, LISTING_POLICY_LABELS, RECOMMENDATION_PRIORITY_LABELS, RECOMMENDATION_PROFILE_LABELS } from "../shared/types";
 import { useEffect, useState } from "react";
 import { FiActivity } from "react-icons/fi";
 
@@ -23,6 +23,5 @@ export function RecommendationControls({ preferences, onChange, onCommit, commit
     <label><span>우선순위</span><select data-testid="recommendation-priority" value={preferences.priority} disabled={disabled} onChange={(event) => { const next = { ...preferences, priority: event.target.value as RecommendationPreferences["priority"] }; onChange(next); if (!commitOnChange) onCommit?.(next); }}><option value="balanced">{RECOMMENDATION_PRIORITY_LABELS.balanced}</option><option value="budget">{RECOMMENDATION_PRIORITY_LABELS.budget}</option><option value="performance">{RECOMMENDATION_PRIORITY_LABELS.performance}</option><option value="reliability">{RECOMMENDATION_PRIORITY_LABELS.reliability}</option></select></label>
     <label><span>구매 조건</span><select value={preferences.listingPolicy ?? "retail_only"} disabled={disabled} onChange={(event) => { const next = { ...preferences, listingPolicy: event.target.value as ListingPolicy }; onChange(next); if (!commitOnChange) onCommit?.(next); }}><option value="retail_only">{LISTING_POLICY_LABELS.retail_only}</option><option value="include_bulk">{LISTING_POLICY_LABELS.include_bulk}</option><option value="all">{LISTING_POLICY_LABELS.all}</option></select></label>
     <label><span>목표 예산 <em>선택</em></span><input type="number" inputMode="numeric" min="0" step="10000" disabled={disabled} value={draftBudget} onChange={(event) => { const next = preferencesWithBudget(event.target.value); setDraftBudget(event.target.value); onChange(next); if (commitOnChange) onCommit?.(next); }} onBlur={commitBudget} onKeyDown={(event) => { if (event.key === "Enter") commitBudget(); }} placeholder="예: 1500000" /></label>
-    <p><strong>{RECOMMENDATION_PRIORITY_LABELS[preferences.priority]}</strong> · {RECOMMENDATION_PRIORITY_DESCRIPTIONS[preferences.priority]}</p>
   </section>;
 }

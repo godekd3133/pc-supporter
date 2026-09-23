@@ -77,7 +77,7 @@ export const CATEGORY_META: Record<PartCategory, CategoryMeta> = {
   },
   psu: {
     label: "파워서플라이",
-    helper: "시스템 전력 공급 여유와 데이터 상태를 검사합니다.",
+    helper: "파워 용량과 부품 정보를 확인합니다.",
     required: true,
     multiple: false,
     Icon: FiZap

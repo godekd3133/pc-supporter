@@ -25,11 +25,11 @@ export function sharedPhysicalEvidenceSourceIdentity(source: PhysicalEvidenceSou
 }
 
 export function scenarioStatusLabel(status: CompatibilityResult["status"]) {
-  return status === "compatible" ? "호환 가능" : status === "needs_review" ? "확인 필요" : "호환 불가";
+  return status === "compatible" ? "호환 가능" : status === "needs_review" ? "정보 부족" : "호환 불가";
 }
 
 export function scenarioRiskText(result: CompatibilityResult) {
-  return `차단 ${result.blockerCount}개 · 주의 ${result.warningCount}개 · 확인 필요 ${result.unknownCount}개`;
+  return `호환 불가 ${result.blockerCount}개 · 주의 ${result.warningCount}개 · 정보 부족 ${result.unknownCount}개`;
 }
 
 export function currentDraftComparisonFor(build: BuildSelection, preferences: RecommendationPreferences, partMap: ReadonlyMap<string, Part>, accessoryMap: ReadonlyMap<string, AccessoryItem>): SavedBuild {

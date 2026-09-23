@@ -370,18 +370,18 @@ export function rgbControllerConnectionPlanFor(
   const summary = issue === "voltage_mismatch"
     ? "컨트롤러 전압이 케이스 RGB 장치와 달라 직접 연결할 수 없습니다."
     : issue === "output_shortage"
-      ? "컨트롤러 출력 포트가 케이스 RGB 장치보다 적어 전체 연결을 알 수 없어요."
+      ? "컨트롤러 포트 수가 RGB 장치 수보다 적어 모두 연결할 수 없어요."
       : issue === "power_unknown"
         ? "RGB 출력과 전압은 맞지만 컨트롤러 외부 전원 입력을 확인해야 합니다."
         : issue === "rgb_load_unknown"
-          ? "RGB 장치별 소비전력·전류 정보가 없어 해당 전원 레일의 실제 부하를 계산할 수 없습니다."
+          ? "RGB 장치별 소비전류·전력 정보가 없어 컨트롤러가 감당할 수 있는지 계산하지 못했어요."
           : issue === "rgb_capacity_unknown"
-            ? "RGB 장치 부하는 확인됐지만 컨트롤러의 해당 전원 레일 최대 용량을 확인할 수 없습니다."
+            ? "RGB 장치 부하는 계산했지만 필요한 전압에서 컨트롤러가 낼 수 있는 최대 전류·전력 정보가 없어 여유를 계산하지 못했어요."
             : issue === "rgb_power_over_limit"
               ? "RGB 장치 부하가 컨트롤러의 해당 전원 레일 허용치를 초과해 이 연결을 사용할 수 없습니다."
         : issue === "unknown"
-          ? "컨트롤러의 RGB 출력·전압·케이스 정보를 더 확인해야 합니다."
-          : "케이스 RGB 장치를 컨트롤러 출력에 연결할 수 있는 기준을 확인했습니다.";
+          ? "케이스 RGB 장치 수, 필요한 전압, 컨트롤러 포트 정보를 확인해 주세요."
+          : "케이스 RGB 장치를 컨트롤러에 연결할 수 있습니다.";
   return {
     id: `rgb-controller-plan:${controller.id}`,
     controllerId: controller.id,

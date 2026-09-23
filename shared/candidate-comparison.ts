@@ -245,7 +245,7 @@ export function candidateComparisonTradeoffsFor(items: CandidateComparisonItem[]
   return metrics.map((metric) => {
     const excluded = items.find((item) => item.id === metric.id)?.candidateRisk === "unsafe" || items.find((item) => item.id === metric.id)?.decisionStatus === "avoid";
     if (excluded) return { ...metric, eligible: false, frontier: false, reason: "부품 자체가 차단 상태여서 효율 비교에서 제외했습니다." };
-    if (metric.riskScore === undefined) return { ...metric, frontier: true, reason: "남은 위험 카운트가 모두 확인되지 않아 다른 부품과 우위를 정하지 않았어요." };
+    if (metric.riskScore === undefined) return { ...metric, frontier: true, reason: "호환 결과가 부족해 다른 부품보다 낫다고 판단하지 않았어요." };
     const dominators = metrics
       .filter((candidate) => candidate.id !== metric.id && !items.find((item) => item.id === candidate.id && (item.candidateRisk === "unsafe" || item.decisionStatus === "avoid")) && candidateTradeoffDominates(candidate, metric))
       .sort((left, right) => left.riskScore! - right.riskScore! || (left.priceDeltaWon ?? Number.POSITIVE_INFINITY) - (right.priceDeltaWon ?? Number.POSITIVE_INFINITY) || (right.analysisScore ?? Number.NEGATIVE_INFINITY) - (left.analysisScore ?? Number.NEGATIVE_INFINITY) || right.evidenceScore! - left.evidenceScore!);
@@ -255,7 +255,7 @@ export function candidateComparisonTradeoffsFor(items: CandidateComparisonItem[]
         ...metric,
         frontier: true,
         reason: metric.priceDeltaWon === undefined || metric.analysisScore === undefined
-          ? "가격·분석 정보가 일부 확인되지 않아 우위를 정하지 않고 비교 우위에 남겼습니다."
+          ? "가격이나 성능 정보가 부족해 다른 부품보다 낫다고 판단하지 않았어요."
           : "호환 위험·가격 변화·적용 후 분석·정보에서 다른 부품에 일방적으로 대체되지 않는 선택지입니다."
       };
     }

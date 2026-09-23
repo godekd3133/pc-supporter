@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AccessoryItem } from "../shared/types";
-import { accessoryPowerRailsFor, fanCurrentAFor, fanHubConnectionPlanFor } from "./accessory-connectivity";
+import { accessoryPowerRailsFor, fanCurrentAFor, fanHubConnectionPlanFor, rgbControllerConnectionPlanFor } from "./accessory-connectivity";
 import { rgbFanDeviceCountFor, rgbFanVoltageFor } from "../shared/rgb-connectivity";
 
 function accessory(rawSpecText: string): AccessoryItem {
@@ -74,5 +74,40 @@ describe("accessory power rails", () => {
     expect(fanCurrentAFor(fan)).toBe(0.24);
     const plan = fanHubConnectionPlanFor(hub, [{ selection: { accessoryId: fan.id, quantity: 1 }, item: fan }]);
     expect(plan).toMatchObject({ totalCurrentA: 0.48, currentHeadroomA: 0.52, currentStatus: "pass", fans: [{ currentA: 0.24, currentProvenance: { manufacturerModel: "STRUCTURED-FAN-REV-A" } }] });
+  });
+});
+
+describe("RGB controller connection summaries", () => {
+  it("says all devices cannot be connected when the known port count is too small", () => {
+    const controller = {
+      ...accessory("RGB분배: 2개"),
+      specs: { rgbPortCount: 2, rgbDeviceVoltage: "5V" as const }
+    };
+    const plan = rgbControllerConnectionPlanFor(controller, 3, "5V");
+
+    expect(plan).toMatchObject({ status: "review", issue: "output_shortage", outputCount: 2, deviceCount: 3 });
+    expect(plan.summary).toContain("컨트롤러 포트 수가 RGB 장치 수보다 적어 모두 연결할 수 없어요.");
+  });
+
+  it("asks to check facts when RGB port, voltage, or load data is missing", () => {
+    const noControllerFacts = rgbControllerConnectionPlanFor(accessory("RGB컨트롤러"), 2, undefined);
+    expect(noControllerFacts).toMatchObject({ status: "review", issue: "unknown" });
+    expect(noControllerFacts.summary).toContain("케이스 RGB 장치 수, 필요한 전압, 컨트롤러 포트 정보를 확인해 주세요.");
+
+    const controllerWithoutLoad = {
+      ...accessory("RGB분배: 4개 / ARGB 3핀 / SATA전원 / 최대 허용전력: (5V)22.5W"),
+      specs: { rgbPortCount: 4, rgbDeviceVoltage: "5V" as const }
+    };
+    const missingLoad = rgbControllerConnectionPlanFor(controllerWithoutLoad, 2, "5V");
+    expect(missingLoad).toMatchObject({ status: "review", issue: "rgb_load_unknown" });
+    expect(missingLoad.summary).toContain("RGB 장치별 소비전류·전력 정보가 없어 컨트롤러가 감당할 수 있는지 계산하지 못했어요.");
+
+    const controllerWithoutRailLimit = {
+      ...accessory("RGB분배: 4개 / ARGB 3핀 / SATA전원"),
+      specs: { rgbPortCount: 4, rgbDeviceVoltage: "5V" as const }
+    };
+    const missingLimit = rgbControllerConnectionPlanFor(controllerWithoutRailLimit, 2, "5V", { perDeviceCurrentA: 0.25, perDevicePowerW: 1 });
+    expect(missingLimit).toMatchObject({ status: "review", issue: "rgb_capacity_unknown", rgbTotalCurrentA: 0.5, rgbTotalPowerW: 2 });
+    expect(missingLimit.summary).toContain("RGB 장치 부하는 계산했지만 필요한 전압에서 컨트롤러가 낼 수 있는 최대 전류·전력 정보가 없어 여유를 계산하지 못했어요.");
   });
 });

@@ -15,8 +15,8 @@ describe("build resource summary", () => {
 
     expect(summary).toMatchObject({ state: "good", stateLabel: "여유 있음" });
     expect(summary.cards).toEqual([
-      expect.objectContaining({ id: "power", state: "good", headline: "150W 여유", basis: "선택 PSU 정격 출력 - GPU 권장 PSU" }),
-      expect.objectContaining({ id: "cooling", state: "good", headline: "120W 여유", basis: "쿨러 냉각 지원 - CPU TDP/PPT 기준" })
+      expect.objectContaining({ id: "power", state: "good", headline: "150W 여유", basis: "선택한 파워 정격 출력 - 그래픽카드 권장 파워 용량" }),
+      expect.objectContaining({ id: "cooling", state: "good", headline: "120W 여유", basis: "쿨러 지원 수치 - CPU TDP/PPT" })
     ]);
   });
 
@@ -24,7 +24,7 @@ describe("build resource summary", () => {
     const summary = buildResourceSummaryFor({ powerHeadroomW: 100, coolerHeadroomW: 20, psuWattageW: 850, recommendedPsuW: 750, coolerCapacityW: 160, cpuPowerW: 140 });
 
     expect(summary.state).toBe("warning");
-    expect(summary.summary).toContain("여유가 좁아");
+    expect(summary.summary).toContain("여유가 좁습니다");
     expect(summary.cards.map((card) => card.state)).toEqual(["warning", "warning"]);
   });
 
@@ -44,7 +44,7 @@ describe("build resource summary", () => {
       expect.objectContaining({ id: "power", state: "unknown", headline: "확인 필요" }),
       expect.objectContaining({ id: "cooling", state: "unknown", headline: "확인 필요" })
     ]);
-    expect(summary.summary).toContain("안전하다고 보지 않아요");
+    expect(summary.summary).toContain("안전하다고 볼 수 없습니다");
   });
 
   it("keeps an empty build neutral", () => {
