@@ -244,6 +244,7 @@ describe("accessory compatibility", () => {
 
     expect(result).toMatchObject({ status: "needs_review", unknownCount: 1 });
     expect(result.findings[0]).toMatchObject({ ruleId: "accessory-selection", accessoryId: "missing" });
+    expect(result.findings[0].title).toBe("선택한 주변 부품 정보를 찾을 수 없습니다.");
   });
 
   it("does not mark peripherals compatible when their host parts are not selected yet", () => {
@@ -322,6 +323,7 @@ describe("accessory compatibility", () => {
     const unknownCapacity = accessoryCompatibilityFor({ ...multiTargetBuild, accessories: [{ accessoryId: pcieAdapter.id, quantity: 1 }] }, [casePart, motherboardPart, nvmeSsd], [pcieAdapter]);
     expect(unknownCapacity).toMatchObject({ status: "needs_review", blockerCount: 0, warningCount: 0, unknownCount: 1 });
     expect(unknownCapacity.findings[0]).toMatchObject({ ruleId: "accessory-storage-adapter-capacity", severity: "unknown" });
+    expect(unknownCapacity.findings[0].title).toBe("어댑터에 SSD를 몇 개 연결할 수 있는지 확인 필요");
   });
 
   it("checks PCIe adapter width against the board's available expansion slots", () => {
@@ -350,6 +352,7 @@ describe("accessory compatibility", () => {
     const missingWidth = accessoryCompatibilityFor({ ...build([{ accessoryId: widthUnknown.id, quantity: 1 }]), motherboard: { partId: boardWithRoom.id, quantity: 1 } }, [casePart, boardWithRoom, nvmeSsd], [widthUnknown]);
     expect(missingWidth).toMatchObject({ status: "needs_review", blockerCount: 0, unknownCount: 1 });
     expect(missingWidth.findings[0]).toMatchObject({ ruleId: "accessory-pcie-slot-width", severity: "unknown" });
+    expect(missingWidth.findings[0].title).toBe("어댑터에 필요한 PCIe 슬롯 크기 확인 필요");
   });
 
   it("keeps GPU clearance and M.2-to-PCIe lane sharing reviewable", () => {
@@ -396,6 +399,7 @@ describe("accessory compatibility", () => {
     expect(smallRgbResult.findings[0].ruleId).toBe("accessory-rgb-controller-ports");
     expect(unknownPowerResult).toMatchObject({ status: "needs_review", unknownCount: 1 });
     expect(unknownPowerResult.findings[0].ruleId).toBe("accessory-fan-hub-power");
+    expect(unknownPowerResult.findings[0].title).toBe("팬 허브·RGB 컨트롤러의 전원 연결 확인 필요");
     const connectorMismatchWithFan = accessoryCompatibilityFor(build([{ accessoryId: molexFan.id, quantity: 1 }, { accessoryId: overCurrentHub.id, quantity: 1 }]), [rgbCase, rgbMotherboard, ssdPart], [molexFan, overCurrentHub]);
     expect(connectorMismatchWithFan).toMatchObject({ status: "incompatible", blockerCount: 1 });
     expect(connectorMismatchWithFan.findings[0]).toMatchObject({ ruleId: "accessory-fan-hub-connector", severity: "blocker" });

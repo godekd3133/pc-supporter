@@ -5,18 +5,31 @@ export type PriceRefreshOptions = {
   accessoryLimit?: number;
   delayMs?: number;
   dryRun?: boolean;
+  onStarted?: (status: PriceRefreshStatus) => void;
 };
 
 export type PriceRefreshRunner = (options: PriceRefreshOptions) => Promise<PriceRefreshStatus>;
+export type PriceRefreshStartOutcome =
+  | { kind: "started" }
+  | { kind: "finished" }
+  | { kind: "failed"; error: unknown };
+
+export function waitForPriceRefreshStart(started: Promise<void>, job: Promise<PriceRefreshStatus>): Promise<PriceRefreshStartOutcome> {
+  const finished = job.then(
+    () => ({ kind: "finished" as const }),
+    (error: unknown) => ({ kind: "failed" as const, error })
+  );
+  return Promise.race([started.then(() => ({ kind: "started" as const })), finished]);
+}
 
 export function boundedInteger(value: string | undefined, fallback: number, min: number, max: number) {
-    const parsed = value === undefined || value.trim() === "" ? fallback : Number(value);
+  const parsed = value === undefined || value.trim() === "" ? fallback : Number(value);
   return Number.isFinite(parsed) ? Math.min(max, Math.max(min, Math.floor(parsed))) : fallback;
 }
 
-export function priceRefreshOptionsFromEnv(env: NodeJS.ProcessEnv = process.env): Required<PriceRefreshOptions> {
+export function priceRefreshOptionsFromEnv(env: NodeJS.ProcessEnv = process.env): Required<Pick<PriceRefreshOptions, "coreLimit" | "accessoryLimit" | "delayMs" | "dryRun">> {
   return {
-    coreLimit: boundedInteger(env.PRICE_REFRESH_CORE_LIMIT, 45, 1, 100),
+    coreLimit: boundedInteger(env.PRICE_REFRESH_CORE_LIMIT, 100, 1, 100),
     accessoryLimit: boundedInteger(env.PRICE_REFRESH_ACCESSORY_LIMIT, 500, 1, 1000),
     delayMs: boundedInteger(env.PRICE_REFRESH_DELAY_MS, 1200, 500, 10000),
     dryRun: false
@@ -41,6 +54,10 @@ export function startPriceRefreshScheduler({
     inFlight = current;
     return current;
   };
+  const tryRunOnce = (options: PriceRefreshOptions) => {
+    if (inFlight) return undefined;
+    return runOnce(options);
+  };
   const start = (intervalMs: number) => {
     if (timer) clearInterval(timer);
     timer = intervalMs > 0 ? setInterval(() => {
@@ -50,6 +67,7 @@ export function startPriceRefreshScheduler({
   };
   return {
     runOnce,
+    tryRunOnce,
     start,
     isRunning: () => Boolean(inFlight),
     stop: () => { if (timer) clearInterval(timer); timer = undefined; }

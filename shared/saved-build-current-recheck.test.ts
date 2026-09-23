@@ -46,7 +46,10 @@ describe("saved build current recheck export", () => {
     expect(exported).toMatchObject({ schemaVersion: 1, kind: "pc-supporter.saved-build-version-current-recheck", generatedAt: "2026-09-07T03:00:00.000Z", source: { before: { id: "v1-id" }, after: { id: "v2-id" } } });
     const text = savedBuildCurrentRecheckTextFor(payload, [entry], "2026-09-07T03:00:00.000Z");
     expect(text).toContain("Cinebench R23 멀티 18000");
-    expect(text).toContain("신규 1");
-    expect(text).toContain("engine: 2.58.0");
+    expect(text).toContain("새로 생김 1");
+    expect(text).toContain("검사 버전 2.58.0");
+    expect(exported.dataBoundary).toBe("현재 부품 정보로 다시 검사한 결과입니다. 저장 견적은 바뀌지 않습니다. 가격·재고와 실제 장착 여부는 구매 전에 확인해 주세요. 게임 성능은 PC와 설정에 따라 달라집니다.");
+    expect(text).toContain("부품 정보 확인:");
+    expect(text).not.toContain("현재 catalog");
   });
 });

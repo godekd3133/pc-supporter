@@ -48,13 +48,13 @@ export function savedBuildCurrentRecheckExportFor(payload: SavedBuildVersionShar
       after: { id: payload.after.id, label: payload.after.label, name: payload.after.name }
     },
     entries: entries.map((entry) => ({ ...entry, current: { ...entry.current, findings: entry.current.findings.slice(0, 32), ...(entry.current.benchmark ? { benchmark: { ...entry.current.benchmark, rows: entry.current.benchmark.rows.slice(0, 4) } } : {}) } })),
-    dataBoundary: "현재 catalog 기준으로 다시 검사한 참고 결과입니다. 저장 저장본·공유 링크·원본 견적은 변경하지 않으며, 실제 가격·재고·FPS·제조사 페이지·물리 장착은 따로 확인해야 합니다."
+    dataBoundary: "현재 부품 정보로 다시 검사한 결과입니다. 저장 견적은 바뀌지 않습니다. 가격·재고와 실제 장착 여부는 구매 전에 확인해 주세요. 게임 성능은 PC와 설정에 따라 달라집니다."
   };
 }
 
 function findingDeltaText(entry: SavedBuildVersionCurrentRecheckEntry) {
   const saved = entry.savedCheck;
-  if (!saved?.findings) return "결과 항목: 저장본 없음";
+  if (!saved?.findings) return "저장본과 비교: 저장된 결과 없음";
   const savedByKey = new Map(saved.findings.map((finding) => [finding.key, finding]));
   const currentByKey = new Map(entry.current.findings.map((finding) => [finding.key, finding]));
   const resolved = [...savedByKey.keys()].filter((key) => !currentByKey.has(key));
@@ -64,13 +64,13 @@ function findingDeltaText(entry: SavedBuildVersionCurrentRecheckEntry) {
     const current = currentByKey.get(key);
     return current !== undefined && previous !== undefined && (current.severity !== previous.severity || current.title !== previous.title);
   });
-  return `finding: 해결 ${resolved.length} · 신규 ${added.length} · 변경 ${changed.length}`;
+  return `저장본과 비교: 해결 ${resolved.length} · 새로 생김 ${added.length} · 내용 변경 ${changed.length}`;
 }
 
 export function savedBuildCurrentRecheckTextFor(payload: SavedBuildVersionSharePayload, entries: SavedBuildVersionCurrentRecheckEntry[], generatedAt = new Date().toISOString()) {
   const exported = savedBuildCurrentRecheckExportFor(payload, entries, generatedAt);
   const lines = [
-    "PC Supporter 현재 기준 버전 재검사",
+    "PC Supporter 저장 견적 다시 확인",
     "================================",
     `비교: ${exported.source.before.label} ${exported.source.before.name} → ${exported.source.after.label} ${exported.source.after.name}`,
     `생성 시각: ${generatedAt}`,
@@ -80,9 +80,9 @@ export function savedBuildCurrentRecheckTextFor(payload: SavedBuildVersionShareP
       `현재 결과: ${entry.current.status === "compatible" ? "호환 가능" : entry.current.status === "needs_review" ? "확인 필요" : "호환 불가"} · 차단 ${entry.current.blockerCount} · 주의 ${entry.current.warningCount} · 확인 ${entry.current.unknownCount}`,
       `가격·분석: 가격 ${entry.current.priceComplete ? `${entry.current.totalPriceWon.toLocaleString("ko-KR")}원` : "확인 필요"} · 분석 ${entry.current.analysisScore !== undefined ? `${entry.current.analysisScore}점 · ${entry.current.analysisScoreLabel}` : entry.current.analysisScoreLabel}`,
       `전력·냉각: ${entry.current.resources.power} · ${entry.current.resources.cooling}`,
-      `benchmark: ${entry.current.benchmark ? `${entry.current.benchmark.status} · ${entry.current.benchmark.presentScoreCount}/${entry.current.benchmark.expectedScoreCount}${entry.current.benchmark.rows.length > 0 ? ` · ${entry.current.benchmark.rows.map((row) => `${row.label} ${row.value ?? "-"}`).join(" · ")}` : ""}` : "저장본 없음"}`,
+      `성능 점검: ${entry.current.benchmark ? `${entry.current.benchmark.status} · ${entry.current.benchmark.presentScoreCount}/${entry.current.benchmark.expectedScoreCount}${entry.current.benchmark.rows.length > 0 ? ` · ${entry.current.benchmark.rows.map((row) => `${row.label} ${row.value ?? "-"}`).join(" · ")}` : ""}` : "저장된 결과 없음"}`,
       findingDeltaText(entry),
-      `현재 catalog: ${new Date(entry.current.catalogSnapshotAt).toLocaleString("ko-KR")} · engine: ${entry.current.engineVersion} · 검사: ${new Date(entry.current.checkedAt).toLocaleString("ko-KR")}`,
+      `부품 정보 확인: ${new Date(entry.current.catalogSnapshotAt).toLocaleString("ko-KR")} · 검사 버전 ${entry.current.engineVersion} · 검사 시각 ${new Date(entry.current.checkedAt).toLocaleString("ko-KR")}`,
       ""
     ]),
     "[확인 범위]",

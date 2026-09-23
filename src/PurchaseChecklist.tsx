@@ -192,7 +192,7 @@ export function PurchaseChecklistPanel({ build, result, partMap, storageKey, onF
           ? allChecked ? "체크 완료 · 전력·냉각 확인 필요" : `${progress.remaining}개 남음`
         : state === "complete" ? "체크·검사 완료" : `${progress.remaining}개 남음`;
   return <section className={`purchase-checklist-panel ${state}`} aria-label="구매 전 실행 체크리스트" data-testid="purchase-checklist" tabIndex={-1}>
-    <div className="purchase-checklist-heading"><div><p className="eyebrow">ASSEMBLY CHECKLIST</p><h2>구매 전 실행 체크리스트</h2><p>검사 항목과 직접 확인할 제조사·실물 조립 항목을 나눠서 관리해요.</p></div><strong><FiCheckCircle /> {headingLabel}</strong></div>
+    <div className="purchase-checklist-heading"><div><h2>구매 전 실행 체크리스트</h2><p>검사 항목과 직접 확인할 제조사·실물 조립 항목을 나눠서 관리해요.</p></div><strong><FiCheckCircle /> {headingLabel}</strong></div>
     <div className="purchase-checklist-progress-heading"><span>진행률</span><b>{progress.checked} / {progress.total}개</b><em>{progress.percent}%</em></div>
     <div className="purchase-checklist-progress" role="progressbar" aria-label={`구매 전 체크리스트 ${progress.percent}% 완료`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress.percent}><span style={{ width: `${progress.percent}%` }} /></div>
     <div className="purchase-checklist-filters" role="group" aria-label="구매 전 체크리스트 필터">{filterOptions.map((option) => <button className={filter === option.id ? "selected" : ""} type="button" aria-pressed={filter === option.id} onClick={() => setFilter(option.id)} key={option.id}>{option.label}<span>{filterCounts[option.id]}</span></button>)}</div>

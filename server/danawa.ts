@@ -1150,6 +1150,10 @@ type DanawaFetchRequest = {
 };
 
 export async function fetchDanawaHtml(url: string, options: DanawaCrawlerOptions, request: DanawaFetchRequest = {}) {
+  const parsedRequestUrl = new URL(url);
+  if (parsedRequestUrl.protocol !== "https:" || !["prod.danawa.com", "www.danawa.com"].includes(parsedRequestUrl.hostname.toLowerCase())) {
+    throw new Error(`Danawa request URL is outside the HTTPS source allowlist: ${url}`);
+  }
   const timeoutMs = Math.max(1000, options.timeoutMs ?? Number(process.env.DANAWA_CRAWL_TIMEOUT_MS ?? 20000));
   const retries = Math.max(0, options.retries ?? Number(process.env.DANAWA_CRAWL_RETRIES ?? 2));
   let lastError: unknown;
@@ -1174,8 +1178,12 @@ export async function fetchDanawaHtml(url: string, options: DanawaCrawlerOptions
               }
             : {})
         },
-        body: request.body
+        body: request.body,
+        redirect: "manual"
       });
+      if (response.status >= 300 && response.status < 400) {
+        throw new Error(`Danawa redirect rejected: ${response.status} ${url}`);
+      }
       if (response.status === 429 || response.status >= 500) {
         throw new Error(`Retryable Danawa request failed: ${response.status} ${url}`);
       }
@@ -1183,6 +1191,7 @@ export async function fetchDanawaHtml(url: string, options: DanawaCrawlerOptions
       return await response.text();
     } catch (error) {
       lastError = error;
+      if (error instanceof Error && error.message.startsWith("Danawa redirect rejected:")) break;
       if (attempt >= retries || options.signal?.aborted) break;
       await sleep(Math.min(8000, 350 * (attempt + 1)), options.signal);
     } finally {

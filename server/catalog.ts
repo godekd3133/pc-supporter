@@ -13,9 +13,10 @@ import {
   M2_SLOT_OVERRIDES_PATH,
   fileUpdatedAt,
   readJson,
-  writeJson
+  writeJson,
+  withSerializedFileMutation
 } from "./storage";
-import { persistenceMode, readCatalogRecords, writeCatalogRecords } from "./repository";
+import { patchCatalogPriceRecords, persistenceMode, readCatalogRecords, writeCatalogRecords } from "./repository";
 import { inferListingType, isListingAllowed } from "./listing";
 import { accessoryMeta, loadAccessories, readAccessoryCoverage } from "./accessories";
 import { reparseDanawaPart } from "./danawa";
@@ -211,7 +212,7 @@ export async function saveCatalog(parts: Part[]) {
   return catalogCache;
 }
 
-export async function upsertCatalog(
+async function upsertCatalogUnlocked(
   parts: Part[],
   options: { replaceDanawaCategories?: PartCategory[] } = {}
 ) {
@@ -235,6 +236,51 @@ export async function upsertCatalog(
     catalogSpecOverrideMtime = await fileUpdatedAt(CATALOG_SPEC_OVERRIDES_PATH, "");
   }
   return catalogCache;
+}
+
+export async function upsertCatalog(
+  parts: Part[],
+  options: { replaceDanawaCategories?: PartCategory[] } = {}
+) {
+  return withSerializedFileMutation(CATALOG_PATH, () => upsertCatalogUnlocked(parts, options));
+}
+
+export interface CatalogPricePatch {
+  id: string;
+  sourceProductCode: string;
+  danawaUrl: string;
+  priceWon: number;
+  priceCheckedAt: string;
+}
+
+export async function patchCatalogPrices(patches: CatalogPricePatch[]) {
+  if (patches.length === 0) return [];
+  return withSerializedFileMutation(CATALOG_PATH, async () => {
+    if (await persistenceMode() === "postgres") {
+      const patched = await patchCatalogPriceRecords(patches);
+      if (patched) {
+        invalidateCatalogCache();
+        await loadCatalog();
+        return patched;
+      }
+    }
+    const current = (await loadCatalog()).map((part) => stripCatalogSpecOverride(stripCaseRgbLoadOverride(stripGpuPhysicalOverrides(stripM2SlotOverride(part)))));
+    const beforeById = new Map<string, Part>();
+    const afterParts: Part[] = [];
+    for (const patch of patches) {
+      const before = current.find((part) => part.id === patch.id);
+      if (!before || before.source !== "danawa" || before.sourceProductCode !== patch.sourceProductCode || before.danawaUrl !== patch.danawaUrl) continue;
+      const after = { ...before, priceWon: patch.priceWon, priceCheckedAt: patch.priceCheckedAt };
+      beforeById.set(patch.id, before);
+      afterParts.push(after);
+    }
+    if (afterParts.length === 0) return [];
+    await upsertCatalogUnlocked(afterParts);
+    return afterParts.flatMap((after) => {
+      const before = beforeById.get(after.id);
+      return before ? [{ before, after }] : [];
+    });
+  });
 }
 
 export function findPart(catalog: Part[], partId: string) {

@@ -2,7 +2,7 @@
 
 API 프로세스가 `server/price-refresh.ts`의 원문 가격 갱신 작업을 실행합니다. 운영에서는 `PRICE_REFRESH_SCHEDULER_ENABLED`를 생략하면 켜지고, 프로세스 시작 5초 뒤 첫 작업을 시작한 다음 기본 3시간 간격으로 반복합니다. `false`로 끄거나 개발 환경에서 `true`로 켤 수 있습니다. 작업은 프로세스 내부 중복 실행을 막고 서비스의 파일 lock도 사용합니다.
 
-기본 작업 제한은 핵심 부품 45개, 주변 부품 500개, 요청 간 1,200ms 대기입니다. 현재 서비스 상한은 핵심/주변 부품 각각 1,000개입니다. 로컬 저장소의 4,097개 Danawa 주변 부품은 대략 9회 실행(약 27시간)에 걸쳐 오래 확인한 항목부터 순환합니다. 한 회차는 최대 545건으로 약 11분 이상 걸릴 수 있고 실제 원문 응답 지연에 따라 더 걸립니다. `PRICE_REFRESH_CORE_LIMIT`, `PRICE_REFRESH_ACCESSORY_LIMIT`, `PRICE_REFRESH_DELAY_MS`, `PRICE_REFRESH_INTERVAL_HOURS`로 조절합니다.
+기본 작업 제한은 핵심 부품 100개, 주변 부품 500개, 요청 간 1,200ms 대기입니다. 현재 서비스 상한은 핵심 부품 100개, 주변 부품 1,000개입니다. 로컬 저장소의 4,097개 Danawa 주변 부품은 대략 9회 실행(약 27시간)에 걸쳐 오래 확인한 항목부터 순환합니다. 한 회차는 최대 600건으로 약 12분 이상 걸릴 수 있고 실제 원문 응답 지연에 따라 더 걸립니다. `PRICE_REFRESH_CORE_LIMIT`, `PRICE_REFRESH_ACCESSORY_LIMIT`, `PRICE_REFRESH_DELAY_MS`, `PRICE_REFRESH_INTERVAL_HOURS`로 조절합니다.
 
 관리자 인증이 필요한 API:
 
@@ -28,4 +28,6 @@ docker run --rm -p 4174:4174 \
   pc-supporter-api
 ```
 
-API 이미지에서도 `NODE_ENV=production`이라 가격 스케줄러가 기본 활성화됩니다. 실제 분리는 컨테이너 실행 경계까지 마련된 상태이며, 독립 저장소/패키지, 배포 파이프라인, 운영 인스턴스 이전은 아직 별도 작업입니다.
+API 이미지에서도 `NODE_ENV=production`이라 가격 스케줄러가 기본 활성화됩니다. 이미지 빌드에는 로컬 `data/*.json`이 포함되지 않습니다. 새 빈 `pc-supporter-data` 볼륨은 starter seed 데이터만 만들어지므로 Danawa 원문이 연결된 갱신 대상이 0개일 수 있습니다. 운영에서 가격을 갱신하려면 기존 비공개 데이터 볼륨을 `/app/data`에 연결하거나, 별도 절차로 기존 카탈로그와 주변 부품 데이터를 먼저 import해야 합니다. 시작 후 관리자 상태 API에서 `attempted`가 0인지 확인하고, 0이면 데이터 볼륨 연결/import를 먼저 점검하세요.
+
+실제 분리는 컨테이너 실행 경계까지 마련된 상태이며, 독립 저장소/패키지, 배포 파이프라인, 운영 인스턴스 이전은 아직 별도 작업입니다.

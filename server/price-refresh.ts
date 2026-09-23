@@ -1,8 +1,9 @@
 import type { AccessoryItem, Part } from "../shared/types";
 import { isKnownPrice } from "../shared/types";
+import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { loadCatalog, upsertCatalog } from "./catalog";
-import { loadAccessories, upsertAccessories } from "./accessories";
+import { loadCatalog, patchCatalogPrices } from "./catalog";
+import { loadAccessories, patchAccessoryPrices } from "./accessories";
 import { appendCatalogChangeRecords, catalogChangeRecord } from "./catalog-change-log";
 import { refreshDanawaAccessory, refreshDanawaPart } from "./part-refresh";
 import {
@@ -25,6 +26,8 @@ const DEFAULT_LIMIT = 25;
 const JOB_LOCK_PATHS = [PRICE_REFRESH_LOCK_PATH, CRAWL_LOCK_PATH, ACCESSORY_CRAWL_LOCK_PATH];
 const MAX_CORE_LIMIT = 100;
 const MAX_ACCESSORY_LIMIT = 1000;
+const JOB_INSTANCE_ID = randomUUID();
+const CURRENT_PROCESS_STARTED_AT = Date.now() - process.uptime() * 1000;
 
 export interface PriceRefreshFailure {
   itemId: string;
@@ -50,6 +53,8 @@ export interface PriceRefreshJobOptions {
   accessoryLimit?: number;
   delayMs?: number;
   dryRun?: boolean;
+  /** Called synchronously after the exclusive service and catalog locks are acquired. */
+  onStarted?: (status: PriceRefreshStatus) => void;
 }
 
 const emptyStatus = (): PriceRefreshStatus => ({
@@ -78,7 +83,25 @@ async function lockIsActive(path: string) {
   let raw: string;
   try { raw = await readFile(path, "utf8"); } catch { return false; }
   let pid = 0;
-  try { pid = Number(path === PRICE_REFRESH_LOCK_PATH ? (JSON.parse(raw || "{}") as { pid?: number }).pid : raw.trim()); } catch { /* treat a recent partial lock as active */ }
+  let instanceId: string | undefined;
+  let startedAt: string | undefined;
+  try {
+    if (path === PRICE_REFRESH_LOCK_PATH) {
+      const lock = JSON.parse(raw || "{}") as { pid?: number; instanceId?: string; startedAt?: string };
+      pid = Number(lock.pid);
+      instanceId = lock.instanceId;
+      startedAt = lock.startedAt;
+    } else pid = Number(raw.trim());
+  } catch { /* treat a recent partial lock as active */ }
+  if (pid === process.pid) {
+    if (path === PRICE_REFRESH_LOCK_PATH) {
+      if (instanceId === JOB_INSTANCE_ID) return true;
+      const lockStartedAt = Date.parse(startedAt ?? "");
+      return !Number.isFinite(lockStartedAt) || lockStartedAt >= CURRENT_PROCESS_STARTED_AT;
+    }
+    const mtime = Date.parse(await fileUpdatedAt(path, ""));
+    return !Number.isFinite(mtime) || mtime >= CURRENT_PROCESS_STARTED_AT;
+  }
   if (Number.isInteger(pid) && pid > 0) {
     try { process.kill(pid, 0); return true; } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "EPERM") return true;
@@ -101,7 +124,7 @@ async function acquireJobLocks() {
     for (const path of JOB_LOCK_PATHS) {
       try {
         await createExclusiveFile(path, path === PRICE_REFRESH_LOCK_PATH
-          ? JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() })
+          ? JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString(), instanceId: JOB_INSTANCE_ID })
           : `${process.pid}\n`);
         acquired.push(path);
       } catch (error) {
@@ -109,7 +132,7 @@ async function acquireJobLocks() {
         if (await lockIsActive(path)) throw new Error("가격 갱신 또는 카탈로그 크롤링 작업이 이미 실행 중입니다.");
         await removeGeneratedFile(path);
         await createExclusiveFile(path, path === PRICE_REFRESH_LOCK_PATH
-          ? JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() })
+          ? JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString(), instanceId: JOB_INSTANCE_ID })
           : `${process.pid}\n`);
         acquired.push(path);
       }
@@ -130,8 +153,11 @@ async function acquireJobLocks() {
 async function lockIsOwnedByCurrentProcess(path: string) {
   try {
     const raw = await readFile(path, "utf8");
-    const pid = Number(path === PRICE_REFRESH_LOCK_PATH ? (JSON.parse(raw || "{}") as { pid?: number }).pid : raw.trim());
-    return pid === process.pid;
+    if (path === PRICE_REFRESH_LOCK_PATH) {
+      const lock = JSON.parse(raw || "{}") as { pid?: number; instanceId?: string };
+      return lock.pid === process.pid && lock.instanceId === JOB_INSTANCE_ID;
+    }
+    return Number(raw.trim()) === process.pid;
   } catch { return false; }
 }
 
@@ -183,6 +209,13 @@ export async function runPriceRefreshJob(options: PriceRefreshJobOptions = {}): 
   };
 
   const releaseLocks = await acquireJobLocks();
+  try {
+    await writeJson(PRICE_REFRESH_STATE_PATH, status);
+    options.onStarted?.(status);
+  } catch (error) {
+    await releaseLocks();
+    throw error;
+  }
 
   let coreQueue: CoreQueueItem[] = [];
   let accessoryQueue: AccessoryQueueItem[] = [];
@@ -206,17 +239,17 @@ export async function runPriceRefreshJob(options: PriceRefreshJobOptions = {}): 
       const queue = coreQueue;
       coreQueue = [];
       try {
-        const latest = await loadCatalog();
-        const updates: CoreQueueItem[] = [];
-        for (const entry of queue) {
-          const current = latest.find((item) => item.id === entry.before.id);
-          if (!current || current.source !== "danawa" || current.sourceProductCode !== entry.before.sourceProductCode || current.danawaUrl !== entry.before.danawaUrl) {
-            addFailure(status, { itemId: entry.before.id, itemName: entry.before.name, kind: "part", message: "갱신 중 원본 항목이 바뀌거나 삭제되어 가격 반영을 건너뛰었습니다." });
-            continue;
-          }
-          updates.push({ before: current, after: { ...current, priceWon: entry.after.priceWon, priceCheckedAt: entry.after.priceCheckedAt } });
+        const updates = await patchCatalogPrices(queue.map(({ before, after }) => ({
+          id: before.id,
+          sourceProductCode: before.sourceProductCode!,
+          danawaUrl: before.danawaUrl!,
+          priceWon: after.priceWon!,
+          priceCheckedAt: after.priceCheckedAt!
+        })));
+        const updatedIds = new Set(updates.map(({ after }) => after.id));
+        for (const entry of queue) if (!updatedIds.has(entry.before.id)) {
+          addFailure(status, { itemId: entry.before.id, itemName: entry.before.name, kind: "part", message: "갱신 중 원본 항목이 바뀌거나 삭제되어 가격 반영을 건너뛰었습니다." });
         }
-        await upsertCatalog(updates.map(({ after }) => after));
         status.succeeded += updates.length;
         status.changed += updates.filter(({ before, after }) => before.priceWon !== after.priceWon).length;
         allChanges.push(...updates.filter(({ before, after }) => before.priceWon !== after.priceWon).map(({ before, after }) => catalogChangeRecord("part", before, after, ["가격"])));
@@ -228,17 +261,17 @@ export async function runPriceRefreshJob(options: PriceRefreshJobOptions = {}): 
       const queue = accessoryQueue;
       accessoryQueue = [];
       try {
-        const latest = await loadAccessories();
-        const updates: AccessoryQueueItem[] = [];
-        for (const entry of queue) {
-          const current = latest.find((item) => item.id === entry.before.id);
-          if (!current || current.source !== "danawa" || current.sourceProductCode !== entry.before.sourceProductCode || current.danawaUrl !== entry.before.danawaUrl) {
-            addFailure(status, { itemId: entry.before.id, itemName: entry.before.name, kind: "accessory", message: "갱신 중 원본 항목이 바뀌거나 삭제되어 가격 반영을 건너뛰었습니다." });
-            continue;
-          }
-          updates.push({ before: current, after: { ...current, priceWon: entry.after.priceWon, priceCheckedAt: entry.after.priceCheckedAt } });
+        const updates = await patchAccessoryPrices(queue.map(({ before, after }) => ({
+          id: before.id,
+          sourceProductCode: before.sourceProductCode!,
+          danawaUrl: before.danawaUrl!,
+          priceWon: after.priceWon!,
+          priceCheckedAt: after.priceCheckedAt!
+        })));
+        const updatedIds = new Set(updates.map(({ after }) => after.id));
+        for (const entry of queue) if (!updatedIds.has(entry.before.id)) {
+          addFailure(status, { itemId: entry.before.id, itemName: entry.before.name, kind: "accessory", message: "갱신 중 원본 항목이 바뀌거나 삭제되어 가격 반영을 건너뛰었습니다." });
         }
-        await upsertAccessories(updates.map(({ after }) => after));
         status.succeeded += updates.length;
         status.changed += updates.filter(({ before, after }) => before.priceWon !== after.priceWon).length;
         allChanges.push(...updates.filter(({ before, after }) => before.priceWon !== after.priceWon).map(({ before, after }) => catalogChangeRecord("accessory", before, after, ["가격"])));
@@ -246,7 +279,12 @@ export async function runPriceRefreshJob(options: PriceRefreshJobOptions = {}): 
         for (const { before } of queue) addFailure(status, { itemId: before.id, itemName: before.name, kind: "accessory", message: `저장 실패: ${failureText(error)}` });
       }
     }
-    await appendCatalogChangeRecords(allChanges).catch(() => undefined);
+    try {
+      await appendCatalogChangeRecords(allChanges);
+    } catch (error) {
+      console.warn(`Price refresh saved prices but failed to write catalog change history: ${failureText(error)}`);
+      addFailure(status, { itemId: "change-log", itemName: "가격 변경 이력", kind: "part", message: `이력 저장 실패: ${failureText(error)}` });
+    }
     await checkpoint();
   };
 
@@ -268,6 +306,7 @@ export async function runPriceRefreshJob(options: PriceRefreshJobOptions = {}): 
       ...accessoryCandidates.map((item) => ({ kind: "accessory" as const, item }))
     ].sort((left, right) => lastAttempted(left.item, left.kind, attempts) - lastAttempted(right.item, right.kind, attempts));
     const delayMs = Number.isFinite(options.delayMs) ? Math.max(0, Math.min(10_000, Math.floor(options.delayMs!))) : 750;
+    let attemptsSinceCheckpoint = 0;
 
     for (const [index, entry] of work.entries()) {
       status.attempted += 1;
@@ -296,8 +335,14 @@ export async function runPriceRefreshJob(options: PriceRefreshJobOptions = {}): 
       } catch (error) {
         addFailure(status, { itemId: entry.item.id, itemName: entry.item.name, kind: entry.kind, message: failureText(error) });
       }
-      attempts[refreshAttemptKey(entry.kind, entry.item)] = new Date().toISOString();
-      await writeJson(PRICE_REFRESH_ATTEMPTS_PATH, attempts);
+      if (!status.dryRun) {
+        attempts[refreshAttemptKey(entry.kind, entry.item)] = new Date().toISOString();
+        attemptsSinceCheckpoint += 1;
+        if (attemptsSinceCheckpoint >= CHECKPOINT_SIZE || index === work.length - 1) {
+          await writeJson(PRICE_REFRESH_ATTEMPTS_PATH, attempts);
+          attemptsSinceCheckpoint = 0;
+        }
+      }
       if (coreQueue.length + accessoryQueue.length >= CHECKPOINT_SIZE) await flush();
       else await checkpoint();
       if (delayMs > 0 && index < work.length - 1) await new Promise((resolve) => setTimeout(resolve, delayMs));

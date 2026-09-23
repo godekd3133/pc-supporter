@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AccessoryItem, Part } from "../shared/types";
@@ -11,11 +11,13 @@ const mocks = vi.hoisted(() => ({
   refreshAccessory: vi.fn(),
   upsertCatalog: vi.fn(),
   upsertAccessories: vi.fn(),
+  patchCatalogPrices: vi.fn(),
+  patchAccessoryPrices: vi.fn(),
   appendChanges: vi.fn()
 }));
 
-vi.mock("./catalog", () => ({ loadCatalog: async () => mocks.parts, upsertCatalog: mocks.upsertCatalog }));
-vi.mock("./accessories", () => ({ loadAccessories: async () => mocks.accessories, upsertAccessories: mocks.upsertAccessories }));
+vi.mock("./catalog", () => ({ loadCatalog: async () => mocks.parts, upsertCatalog: mocks.upsertCatalog, patchCatalogPrices: mocks.patchCatalogPrices }));
+vi.mock("./accessories", () => ({ loadAccessories: async () => mocks.accessories, upsertAccessories: mocks.upsertAccessories, patchAccessoryPrices: mocks.patchAccessoryPrices }));
 vi.mock("./part-refresh", () => ({ refreshDanawaPart: mocks.refreshPart, refreshDanawaAccessory: mocks.refreshAccessory }));
 vi.mock("./catalog-change-log", () => ({
   appendCatalogChangeRecords: mocks.appendChanges,
@@ -49,6 +51,14 @@ describe("price refresh service", () => {
     mocks.refreshAccessory.mockReset();
     mocks.upsertCatalog.mockReset().mockResolvedValue([]);
     mocks.upsertAccessories.mockReset().mockResolvedValue([]);
+    mocks.patchCatalogPrices.mockReset().mockImplementation(async (patches: Array<{ id: string; priceWon: number; priceCheckedAt: string }>) => patches.flatMap((patch) => {
+      const before = mocks.parts.find((item) => item.id === patch.id);
+      return before ? [{ before, after: { ...before, priceWon: patch.priceWon, priceCheckedAt: patch.priceCheckedAt } }] : [];
+    }));
+    mocks.patchAccessoryPrices.mockReset().mockImplementation(async (patches: Array<{ id: string; priceWon: number; priceCheckedAt: string }>) => patches.flatMap((patch) => {
+      const before = mocks.accessories.find((item) => item.id === patch.id);
+      return before ? [{ before, after: { ...before, priceWon: patch.priceWon, priceCheckedAt: patch.priceCheckedAt } }] : [];
+    }));
     mocks.appendChanges.mockReset().mockResolvedValue([]);
     service = await import("./price-refresh");
   });
@@ -79,10 +89,10 @@ describe("price refresh service", () => {
 
     expect(mocks.refreshPart).toHaveBeenCalledTimes(1);
     expect(mocks.refreshPart).toHaveBeenCalledWith(expect.objectContaining({ id: "old" }), expect.objectContaining({ onPriceObserved: expect.any(Function) }));
-    expect(mocks.upsertCatalog).toHaveBeenCalledWith([expect.objectContaining({
-      id: "old", priceWon: 120_000, updatedAt: "2026-01-01T00:00:00.000Z", specs: { socket: "AM5" }, priceCheckedAt: expect.any(String)
+    expect(mocks.patchCatalogPrices).toHaveBeenCalledWith([expect.objectContaining({
+      id: "old", priceWon: 120_000, danawaUrl: expect.stringContaining("pcode=old"), sourceProductCode: "old", priceCheckedAt: expect.any(String)
     })]);
-    expect(mocks.upsertAccessories).toHaveBeenCalledWith([expect.objectContaining({ id: "fan", priceWon: 12_000, updatedAt: "2026-01-01T00:00:00.000Z" })]);
+    expect(mocks.patchAccessoryPrices).toHaveBeenCalledWith([expect.objectContaining({ id: "fan", priceWon: 12_000, priceCheckedAt: expect.any(String) })]);
     expect(status).toMatchObject({ attempted: 2, succeeded: 2, changed: 2, failed: 0, running: false });
     expect(await service.readPriceRefreshStatus()).toMatchObject(status);
   });
@@ -101,7 +111,7 @@ describe("price refresh service", () => {
 
     const status = await service.runPriceRefreshJob({ delayMs: 0 });
 
-    expect(mocks.upsertCatalog).not.toHaveBeenCalled();
+    expect(mocks.patchCatalogPrices).not.toHaveBeenCalled();
     expect(status).toMatchObject({ attempted: 3, succeeded: 0, changed: 0, failed: 3 });
     expect(status.failures).toHaveLength(3);
   });
@@ -114,10 +124,36 @@ describe("price refresh service", () => {
     });
     const dry = await service.runPriceRefreshJob({ dryRun: true, delayMs: 0 });
     expect(dry).toMatchObject({ attempted: 1, succeeded: 1, changed: 1 });
-    expect(mocks.upsertCatalog).not.toHaveBeenCalled();
+    expect(mocks.patchCatalogPrices).not.toHaveBeenCalled();
+    const attemptsPath = join(directory, "price-refresh-attempts.json");
+    await expect(import("node:fs/promises").then(({ readFile }) => readFile(attemptsPath, "utf8"))).rejects.toThrow();
 
     await mkdir(directory, { recursive: true });
     await writeFile(join(directory, "price-refresh.lock"), "locked");
     await expect(service.runPriceRefreshJob()).rejects.toThrow("이미 실행 중");
+  });
+
+  it("recovers an old same-PID lock left by a previous container process", async () => {
+    const lockPath = join(directory, "price-refresh.lock");
+    await writeFile(lockPath, JSON.stringify({ pid: process.pid, startedAt: "2020-01-01T00:00:00.000Z", instanceId: "old-container" }));
+    const staleTime = new Date(Date.now() - 60_000);
+    await utimes(lockPath, staleTime, staleTime);
+
+    await expect(service.runPriceRefreshJob({ coreLimit: 0, accessoryLimit: 0 })).resolves.toMatchObject({ running: false, attempted: 0 });
+  });
+
+  it("moves repeatedly failing candidates behind unattempted items across job runs", async () => {
+    mocks.parts = [part("fails-first", { updatedAt: "2026-01-01T00:00:00.000Z" }), part("unattempted", { updatedAt: "2026-02-01T00:00:00.000Z" })];
+    mocks.refreshPart.mockImplementation(async (item: Part, options: { onPriceObserved?: (price: number | undefined) => void }) => {
+      if (item.id === "fails-first") throw new Error("source unavailable");
+      options.onPriceObserved?.(115_000);
+      return { ...item, priceWon: 115_000 };
+    });
+
+    await service.runPriceRefreshJob({ coreLimit: 1, accessoryLimit: 0, delayMs: 0 });
+    expect(mocks.refreshPart).toHaveBeenLastCalledWith(expect.objectContaining({ id: "fails-first" }), expect.any(Object));
+    await service.runPriceRefreshJob({ coreLimit: 1, accessoryLimit: 0, delayMs: 0 });
+
+    expect(mocks.refreshPart).toHaveBeenLastCalledWith(expect.objectContaining({ id: "unattempted" }), expect.any(Object));
   });
 });

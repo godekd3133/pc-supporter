@@ -59,7 +59,7 @@ describe("saved build monitor assessment", () => {
     const before = savedBuildCheckSnapshotFor(result());
     const after = savedBuildCheckSnapshotFor(result());
     expect(savedBuildMonitorAssessmentFor(after, savedBuildCheckTransitionSummaryFor(before, after))).toMatchObject({ level: "stable", recordRecommended: false });
-    expect(savedBuildMonitorAssessmentFor(after, savedBuildCheckTransitionSummaryFor(before, after)).summary).toContain("성능 분석");
+    expect(savedBuildMonitorAssessmentFor(after, savedBuildCheckTransitionSummaryFor(before, after)).summary).toContain("성능 점수");
   });
 
   it("surfaces analysis-only changes as non-risk information changes", () => {

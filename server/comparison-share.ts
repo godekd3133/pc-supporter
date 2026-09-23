@@ -381,7 +381,7 @@ export function parseAlternativeComparisonInput(input: unknown): AlternativeComp
   const catalogSnapshotAt = candidate.catalogSnapshotAt === undefined ? undefined : textValue(candidate.catalogSnapshotAt, 80);
   const engineVersion = candidate.engineVersion === undefined ? undefined : textValue(candidate.engineVersion, 120);
   const context = { name, ...(category ? { category } : {}), ...(currentPartName ? { currentPartName } : {}), ...(currentPartSummary ? { currentPartSummary } : {}), ...(currentPartPrice ? { currentPartPrice } : {}), ...(catalogSnapshotAt ? { catalogSnapshotAt } : {}), ...(engineVersion ? { engineVersion } : {}) };
-  if (candidate.catalogSnapshotAt !== undefined && (!catalogSnapshotAt || !Number.isFinite(Date.parse(catalogSnapshotAt)))) return { ...context, candidates: [], errors: ["비교 저장본의 카탈로그 기준 시점이 올바르지 않습니다."] };
+  if (candidate.catalogSnapshotAt !== undefined && (!catalogSnapshotAt || !Number.isFinite(Date.parse(catalogSnapshotAt)))) return { ...context, candidates: [], errors: ["비교 저장본의 부품 정보 확인 날짜가 올바르지 않습니다."] };
   if (candidate.engineVersion !== undefined && !engineVersion) return { ...context, candidates: [], errors: ["비교 저장본의 검사 버전이 올바르지 않습니다."] };
   const expiresInDays = shareExpiryDaysFrom(candidate.expiresInDays);
   if (shareExpiryValueProvided(candidate.expiresInDays) && expiresInDays === undefined) return { ...context, candidates: [], errors: ["비교 링크 유효기간은 무기한, 7일, 30일 중 하나여야 합니다."] };

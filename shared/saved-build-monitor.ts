@@ -123,7 +123,7 @@ export function savedBuildMonitorAssessmentFor(snapshot: SavedBuildCheckSnapshot
       transition.priceDeltaWon !== undefined && transition.priceDeltaWon !== 0 ? "가격" : undefined,
       transition.priceCompletenessChanged ? "가격 확인 상태" : undefined,
       analysisText,
-      transition.catalogChanged ? "카탈로그 기준" : undefined,
+      transition.catalogChanged ? "부품 정보 확인 시점" : undefined,
       transition.engineChanged ? "검사 기준" : undefined,
       transition.resourceBudgetChanged ? "전력·냉각 예산" : undefined,
       transition.newFindingCount > 0 || transition.resolvedFindingCount > 0 || transition.severityChangedFindingCount > 0 || transition.detailsChangedFindingCount > 0 ? "결과 상세" : undefined
@@ -140,7 +140,7 @@ export function savedBuildMonitorAssessmentFor(snapshot: SavedBuildCheckSnapshot
   return {
     level: "stable",
     label: "현재 상태 안정",
-    summary: "마지막 기록과 현재 호환 결과·가격·성능 분석·전력·냉각 예산·검사 기준이 같습니다.",
+      summary: "마지막 기록과 호환 결과·가격·성능 점수·전력·냉각 상태가 같습니다.",
     requiresAttention: false,
     recordRecommended: false
   };

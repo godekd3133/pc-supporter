@@ -59,7 +59,7 @@ describe("alternative comparison share", () => {
     expect(parseAlternativeComparisonInput({ candidates: [candidate(), { name: "불완전" }] }).errors[0]).toContain("비교 정보가 부족");
     expect(parseAlternativeComparisonInput({ candidates: [candidate(), candidate()], expiresInDays: 14 }).errors[0]).toContain("무기한, 7일, 30일");
     expect(parseAlternativeComparisonInput({ candidates: [candidate({ partId: undefined }), candidate({ partId: "gpu-test-2" })] }).errors[0]).toContain("카탈로그 식별자");
-    expect(parseAlternativeComparisonInput({ candidates: [candidate(), candidate()], catalogSnapshotAt: "not-a-date" }).errors[0]).toContain("카탈로그 기준 시점");
+    expect(parseAlternativeComparisonInput({ candidates: [candidate(), candidate()], catalogSnapshotAt: "not-a-date" }).errors[0]).toBe("비교 저장본의 부품 정보 확인 날짜가 올바르지 않습니다.");
   });
 
   it("keeps a valid value score and rejects an invalid score scale", () => {

@@ -48,6 +48,8 @@ describe("purchase checklist", () => {
       "manual:post-build-test",
       "manual:seller-warranty"
     ]);
+    expect(items.find((item) => item.id === "manual:manufacturer-support")?.detail).toBe("이 CPU와 메모리를 메인보드에서 쓸 수 있는지, 필요한 BIOS 버전은 무엇인지 제조사 안내에서 확인해 주세요.");
+    expect(items.find((item) => item.id === "manual:seller-warranty")?.detail).toBe("판매 가격과 재고, 배송일, 초기 불량 교환·보증 조건은 판매 페이지에서 확인해 주세요.");
   });
 
   it("calculates progress only for current checklist items", () => {
@@ -92,9 +94,9 @@ describe("purchase checklist", () => {
     const topology = items.find((item) => item.id === "manual:pcie-cable-topology");
 
     expect(physical).toMatchObject({ targetId: "gpu-fit-summary-panel", actionLabel: "GPU FIT 보기" });
-    expect(physical?.detail).toContain("GPU 물리 슬롯 점유");
+    expect(physical?.detail).toContain("그래픽카드가 차지하는 슬롯 수");
     expect(topology).toMatchObject({ targetId: "gpu-fit-summary-panel", actionLabel: "GPU FIT 보기" });
-    expect(topology?.detail).toContain("독립된 PCIe 케이블 런");
+    expect(topology?.detail).toContain("각각 파워에 연결할 수 있는지");
   });
 
   it("emits stable checklist IDs for accessory, data, price, and physical action tracking", () => {
@@ -134,7 +136,8 @@ describe("purchase checklist", () => {
     const items = purchaseChecklistItemsFor(build, result, partMap);
 
     expect(items.map((item) => item.id)).toEqual(expect.arrayContaining(["connectivity:fan-headers", "connectivity:rgb-headers", "connectivity:rgb-voltage"]));
-    expect(items.find((item) => item.id === "connectivity:fan-headers")).toMatchObject({ severity: "unknown", targetId: "build-connectivity-panel", actionLabel: "연결 자원 보기" });
+    expect(items.find((item) => item.id === "connectivity:fan-headers")).toMatchObject({ severity: "unknown", targetId: "build-connectivity-panel", actionLabel: "연결 확인 보기" });
+    expect(items.find((item) => item.id === "connectivity:fan-headers")?.detail).toContain("케이스 기본 팬 수와 메인보드 팬 연결 수");
 
     const withExistingFinding = { ...result, findings: [...result.findings, { ...result.findings[0], ruleId: "case-fan-headers" }] };
     expect(purchaseChecklistItemsFor(build, withExistingFinding, partMap).some((item) => item.id === "connectivity:fan-headers")).toBe(false);

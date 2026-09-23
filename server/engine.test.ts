@@ -3471,7 +3471,8 @@ describe("compatibility engine", () => {
       gpuTarget: { targetVramGb: 22 }
     });
     expect(draft.rationale.some((item) => item.includes("게임별 목표와 그래픽 설정") && item.includes("권장 VRAM 22GB") && item.includes("GPU 추천"))).toBe(true);
-    expect(draft.warnings.some((item) => item.includes("게임별 그래픽 설정은 참고용입니다"))).toBe(true);
+    expect(draft.warnings).toContain("이 설정에서 몇 FPS가 나올지는 확인되지 않았어요.");
+    expect(draft.rationale.some((item) => item.includes("같은 설정의 FPS 테스트는 아직 없어요."))).toBe(true);
   });
 
   it("explains why each generated component was selected from the request constraints", () => {

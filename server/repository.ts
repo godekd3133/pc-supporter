@@ -349,6 +349,45 @@ export async function writeCatalogRecords(
   await writeJson(CATALOG_PATH, parts);
 }
 
+export async function patchCatalogPriceRecords(
+  patches: Array<{ id: string; sourceProductCode: string; danawaUrl: string; priceWon: number; priceCheckedAt: string }>
+): Promise<Array<{ before: Part; after: Part }> | undefined> {
+  if (!(await ensureDatabase())) return undefined;
+  const client = await pool!.connect();
+  const changed: Array<{ before: Part; after: Part }> = [];
+  try {
+    await client.query("BEGIN");
+    for (const patch of patches) {
+      const result = await client.query<{ before_payload: Part; after_payload: Part }>(
+        `WITH current AS (
+           SELECT id, payload AS before_payload FROM catalog_parts
+           WHERE id = $1 AND source = 'danawa' AND source_product_code = $2 AND payload->>'danawaUrl' = $3
+           FOR UPDATE
+         ), updated AS (
+           UPDATE catalog_parts AS catalog
+           SET payload = jsonb_set(
+             jsonb_set(current.before_payload, '{priceWon}', to_jsonb($4::numeric), true),
+             '{priceCheckedAt}', to_jsonb($5::text), true
+           )
+           FROM current
+           WHERE catalog.id = current.id
+           RETURNING catalog.id, catalog.payload AS after_payload
+         )
+         SELECT current.before_payload, updated.after_payload FROM current JOIN updated USING (id)`,
+        [patch.id, patch.sourceProductCode, patch.danawaUrl, patch.priceWon, patch.priceCheckedAt]
+      );
+      if (result.rows[0]) changed.push({ before: result.rows[0].before_payload, after: result.rows[0].after_payload });
+    }
+    await client.query("COMMIT");
+    return changed;
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw new Error(`PostgreSQL catalog price patch failed; kept the existing database price: ${error instanceof Error ? error.message : String(error)}`);
+  } finally {
+    client.release();
+  }
+}
+
 async function readFileBenchmarkOverrideRecords(): Promise<Record<string, BenchmarkOverride>> {
   const raw = await readJson<unknown>(BENCHMARK_OVERRIDES_PATH, {});
   return raw && typeof raw === "object" && !Array.isArray(raw) ? raw as Record<string, BenchmarkOverride> : {};

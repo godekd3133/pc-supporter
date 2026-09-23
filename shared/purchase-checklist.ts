@@ -66,7 +66,7 @@ function findingTitleFor(severity: Exclude<FindingSeverity, "info">, title: stri
 }
 
 function findingDetailFor(severity: Exclude<FindingSeverity, "info">, message: string) {
-  return severity === "blocker" ? `${message} 이 항목은 구매 전에 해결해야 합니다.` : severity === "warning" ? `${message} 구매·조립 전에 실제 조건을 확인하세요.` : `${message} 카탈로그만으로 알 수 없어 제조사 페이지를 확인해 주세요.`;
+  return severity === "blocker" ? `${message} 먼저 해결하세요.` : severity === "warning" ? `${message} 구매 전에 확인하세요.` : `${message} 등록된 정보가 부족합니다. 제조사 안내에서 확인해 주세요.`;
 }
 
 export function purchaseChecklistItemsFor(build: BuildSelection, result: CompatibilityResult, partMap?: ReadonlyMap<string, Part>): PurchaseChecklistItem[] {
@@ -97,7 +97,7 @@ export function purchaseChecklistItemsFor(build: BuildSelection, result: Compati
       kind: "manual" as const,
       severity: "manual" as const,
       title: `${item.name} 데이터 다시 확인`,
-      detail: item.freshness === "stale" ? "확인한 지 오래되어 최신 정보를 다시 확인해야 해요." : "확인 기록이 없어 최신 정보를 확인해야 해요.",
+      detail: item.freshness === "stale" ? "확인한 지 오래됐어요. 최신 정보를 다시 확인해 주세요." : "확인 기록이 없어요. 최신 정보를 확인해 주세요.",
       targetId: "data-health-panel" as const,
       actionLabel: "데이터 보기"
     }] : []),
@@ -105,8 +105,8 @@ export function purchaseChecklistItemsFor(build: BuildSelection, result: Compati
       id: `data-fields:${item.id}`,
       kind: "manual" as const,
       severity: "manual" as const,
-      title: `${item.name} 누락 스펙 보완`,
-      detail: `확인되지 않은 스펙 ${item.missingFields.slice(0, 3).map((field) => catalogMissingFieldLabelFor(field)).join(", ")}${item.missingFields.length > 3 ? ` 외 ${item.missingFields.length - 3}개` : ""}를 확인해야 합니다.`,
+      title: `${item.name} 빠진 정보 확인`,
+      detail: `정보가 없는 항목: ${item.missingFields.slice(0, 3).map((field) => catalogMissingFieldLabelFor(field)).join(", ")}${item.missingFields.length > 3 ? ` 외 ${item.missingFields.length - 3}개` : ""}`,
       targetId: "data-health-panel" as const,
       actionLabel: "데이터 보기"
     }] : []),
@@ -136,7 +136,7 @@ export function purchaseChecklistItemsFor(build: BuildSelection, result: Compati
     kind: "manual",
     severity: "manual",
     title: "전체 구매 금액 확인",
-    detail: "가격 미확인 부품이 있어 실제 구매 전에 상품 가격과 유통 조건을 다시 확인해야 합니다.",
+      detail: "가격을 확인하지 못한 부품이 있어요. 구매할 상품의 가격과 판매 조건을 확인해 주세요.",
     targetId: "purchase-list-panel",
     actionLabel: "구매 목록 보기"
   }] : [];
@@ -153,9 +153,9 @@ export function purchaseChecklistItemsFor(build: BuildSelection, result: Compati
       kind: "manual",
       severity: item.status === "review" ? "warning" : "unknown",
       title: `${item.label} ${item.status === "review" ? "주의 확인" : "정보 확인"}`,
-      detail: `${item.detail} 케이스 기본 장치와 메인보드 연결 정보를 확인해야 합니다.`,
+      detail: `${item.detail} 케이스에 기본으로 달린 팬·RGB 장치가 메인보드에 연결되는지 확인해 주세요.`,
       targetId: "build-connectivity-panel",
-      actionLabel: "연결 자원 보기"
+      actionLabel: "연결 확인 보기"
     }));
 
   const hasPhysicalParts = Boolean(build.gpu || build.case || build.cooler || build.psu)
@@ -175,31 +175,31 @@ export function purchaseChecklistItemsFor(build: BuildSelection, result: Compati
       id: "manual:manufacturer-support",
       kind: "manual",
       severity: "manual",
-      title: "제조사 QVL·BIOS 버전 확인",
-      detail: "CPU·메인보드·RAM 조합의 제조사 지원 목록과 필요한 BIOS 버전을 제조사 페이지에서 확인해 주세요."
+      title: "CPU·메인보드·메모리 지원 확인",
+      detail: "이 CPU와 메모리를 메인보드에서 쓸 수 있는지, 필요한 BIOS 버전은 무엇인지 제조사 안내에서 확인해 주세요."
     },
     ...(hasPhysicalParts ? [{
       id: missingGpuPhysicalEvidence ? "manual:gpu-physical-evidence" : "manual:physical-clearance",
       kind: "manual" as const,
       severity: "manual" as const,
-      title: missingGpuPhysicalEvidence ? "GPU·케이스 물리 확인 정보 확인" : "케이스 내부 간섭·케이블 여유 확인",
-      detail: missingGpuPhysicalEvidence ? "GPU 물리 슬롯 점유·케이블 굽힘 최소 여유·케이스 측면 공간 중 등록되지 않은 값을 제조사 매뉴얼 또는 도면에서 확인하세요." : "GPU·쿨러·파워의 실제 길이와 두께, 전면 라디에이터·케이블이 함께 들어가는지 실물 또는 제조사 도면으로 확인하세요.",
+      title: missingGpuPhysicalEvidence ? "그래픽카드와 케이스 크기 확인" : "케이스 안쪽 공간 확인",
+      detail: missingGpuPhysicalEvidence ? "그래픽카드가 차지하는 슬롯 수와 전원 케이블 공간, 케이스 안쪽 폭을 제조사 안내에서 확인해 주세요." : "그래픽카드·쿨러·파워와 라디에이터가 케이스 안에 함께 들어가는지, 케이블 공간은 충분한지 확인해 주세요.",
       ...(gpuPurchaseEvidence ? { targetId: "gpu-fit-summary-panel" as const, actionLabel: "GPU FIT 보기" } : {})
     }] : []),
     ...(hasPowerPath ? [{
       id: missingPcieTopologyEvidence ? "manual:pcie-cable-topology" : "manual:power-cabling",
       kind: "manual" as const,
       severity: "manual" as const,
-      title: missingPcieTopologyEvidence ? "다중 8핀 독립 케이블·분배 구조 확인" : "파워 보조전원 케이블 경로 확인",
-      detail: missingPcieTopologyEvidence ? "커넥터 개수만 보지 말고 다중 8핀 GPU를 서로 독립된 PCIe 케이블 런으로 연결할 수 있는지와 분배·공유 구조를 제조사 케이블 표에서 확인하세요." : "GPU 보조전원·CPU EPS·분배 케이블의 커넥터와 케이블 꺾임 여유를 실제 파워 구성에서 확인하세요.",
+      title: missingPcieTopologyEvidence ? "그래픽카드 전원 케이블 연결 확인" : "전원 케이블 연결 확인",
+      detail: missingPcieTopologyEvidence ? "그래픽카드에 필요한 8핀 케이블을 각각 파워에 연결할 수 있는지, 케이블을 나눠 쓰는 방식은 아닌지 확인해 주세요." : "그래픽카드와 CPU 전원 케이블이 파워에 맞는지, 케이블이 심하게 꺾이지 않는지 확인해 주세요.",
       ...(gpuPurchaseEvidence ? { targetId: "gpu-fit-summary-panel" as const, actionLabel: "GPU FIT 보기" } : {})
     }] : []),
     ...(resourceNeedsReview ? [{
       id: "manual:power-thermal-budget",
       kind: "manual" as const,
       severity: resourceSummary.state === "danger" ? "blocker" as const : resourceSummary.state === "warning" ? "warning" as const : "unknown" as const,
-      title: resourceSummary.state === "danger" ? "전력·냉각 예산 기준 미달 확인" : resourceSummary.state === "unknown" ? "전력·냉각 실제 수치 확인" : "전력·냉각 여유 확인",
-      detail: `${resourceSummary.summary} 실제 소비전력·온도·소음은 조립 후 별도로 측정해야 합니다.`,
+      title: resourceSummary.state === "danger" ? "전력·냉각 여유 부족" : resourceSummary.state === "unknown" ? "전력·냉각 정보 확인" : "전력·냉각 여유 확인",
+      detail: `${resourceSummary.summary} 실제 전력 사용량과 온도·소음은 조립 후 달라질 수 있어요.`,
       targetId: "build-resource-summary" as const,
       actionLabel: "전력·냉각 보기"
     }] : []),
@@ -208,21 +208,21 @@ export function purchaseChecklistItemsFor(build: BuildSelection, result: Compati
       kind: "manual" as const,
       severity: "manual" as const,
       title: "M.2 슬롯 위치·방열판 장착 순서 확인",
-      detail: "메인보드 매뉴얼에서 슬롯 공유·방열판 위치·나사 규격을 확인하고 조립 순서를 정하세요."
+      detail: "메인보드 안내에서 M.2 슬롯 위치와 방열판·나사 규격을 확인한 뒤 조립 순서를 정해 주세요."
     }] : []),
     {
       id: "manual:post-build-test",
       kind: "manual",
       severity: "manual",
-      title: "조립 후 POST·온도·소음 확인",
-      detail: "첫 부팅 후 BIOS에서 메모리·저장장치·팬을 인식하는지 확인하고, 운영체제 진입 뒤 온도와 소음을 점검하세요."
+      title: "조립 후 첫 부팅 확인",
+      detail: "첫 부팅 때 메모리·저장장치·팬이 제대로 작동하는지 확인하고, 온도와 소음도 살펴봐 주세요."
     },
     {
       id: "manual:seller-warranty",
       kind: "manual",
       severity: "manual",
       title: "판매자·배송·AS 조건 확인",
-      detail: "가격은 현재 카탈로그 기준이며 재고·배송일·초기 불량 교환·무상 보증 조건은 판매 페이지에서 확인해 주세요."
+      detail: "판매 가격과 재고, 배송일, 초기 불량 교환·보증 조건은 판매 페이지에서 확인해 주세요."
     }
   ];
 

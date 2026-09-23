@@ -119,7 +119,7 @@ function SavedBuildRecheckRefreshImpactPanel({ report, findingChanges, result, o
   const impacts = catalogRefreshFindingImpactsFor(report, findingChanges);
   const linkedCount = impacts.reduce((total, impact) => total + impact.findingChanges.length, 0);
   return <section className={`saved-build-recheck-refresh-impact ${report.status}`} aria-label="정보 다시 확인과 이번 검사 연결" data-testid="saved-build-recheck-refresh-impact">
-    <div className="saved-build-recheck-refresh-impact-heading"><div><p className="eyebrow">REFRESH → CURRENT CHECK</p><strong>정보 다시 확인과 현재 결과 연결</strong><small>저장 당시 입력에 대해 확인한 부품과 현재 재검사 항목의 부품 ID가 겹치는 관측만 연결합니다.</small></div><span>{linkedCount}개 연결</span></div>
+    <div className="saved-build-recheck-refresh-impact-heading"><div><strong>정보 다시 확인과 현재 결과 연결</strong><small>저장 당시 입력에 대해 확인한 부품과 현재 재검사 항목의 부품 ID가 겹치는 관측만 연결합니다.</small></div><span>{linkedCount}개 연결</span></div>
     {report.failures.length > 0 && <p className="saved-build-recheck-refresh-impact-failure"><FiAlertTriangle /> 정보 확인 실패 {report.failures.length}개는 현재 결과와 연결할 수 없습니다.</p>}
     {impacts.length > 0 ? <div className="saved-build-recheck-refresh-impact-list">{impacts.slice(0, 6).map(({ item, findingChanges: linkedChanges }) => {
       const focusableFinding = linkedChanges.map((change) => change.after ? result.findings.find((finding) => finding.ruleId === change.after?.ruleId || finding.id === change.after?.id) : undefined).find((finding): finding is Finding => Boolean(finding));

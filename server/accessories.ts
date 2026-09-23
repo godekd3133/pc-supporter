@@ -1,6 +1,6 @@
 import type { AccessoryCategory, AccessoryCategoryCoverage, AccessoryCoverageSnapshot, AccessoryCrawlCategoryReport, AccessoryItem, AccessoryPriceFilter, BrandCountOption, DataFreshness, DataQuality } from "../shared/types";
 import { ACCESSORY_CATEGORIES, isKnownPrice } from "../shared/types";
-import { ACCESSORIES_PATH, ACCESSORY_COVERAGE_PATH, COOLING_FAN_LOAD_OVERRIDES_PATH, fileUpdatedAt, readJson, writeJson } from "./storage";
+import { ACCESSORIES_PATH, ACCESSORY_COVERAGE_PATH, COOLING_FAN_LOAD_OVERRIDES_PATH, fileUpdatedAt, readJson, writeJson, withSerializedFileMutation } from "./storage";
 import { parseM2FormFactors } from "./danawa";
 import { classifyDataFreshness } from "./data-health";
 import { applyCoolingFanLoadOverrides, readCoolingFanLoadOverrides, stripCoolingFanLoadOverride } from "./cooling-fan-load-overrides";
@@ -335,7 +335,7 @@ export function mergeDanawaAccessorySnapshot(base: AccessoryItem[], incoming: Ac
   return mergeAccessories(retained, incoming);
 }
 
-export async function upsertAccessories(
+async function upsertAccessoriesUnlocked(
   items: AccessoryItem[],
   options: { replaceDanawaCategories?: AccessoryCategory[] } = {}
 ) {
@@ -355,4 +355,41 @@ export async function upsertAccessories(
   accessoryMtime = await fileUpdatedAt(ACCESSORIES_PATH, "");
   coolingFanOverrideMtime = await fileUpdatedAt(COOLING_FAN_LOAD_OVERRIDES_PATH, "");
   return merged;
+}
+
+export async function upsertAccessories(
+  items: AccessoryItem[],
+  options: { replaceDanawaCategories?: AccessoryCategory[] } = {}
+) {
+  return withSerializedFileMutation(ACCESSORIES_PATH, () => upsertAccessoriesUnlocked(items, options));
+}
+
+export interface AccessoryPricePatch {
+  id: string;
+  sourceProductCode: string;
+  danawaUrl: string;
+  priceWon: number;
+  priceCheckedAt: string;
+}
+
+export async function patchAccessoryPrices(patches: AccessoryPricePatch[]) {
+  if (patches.length === 0) return [];
+  return withSerializedFileMutation(ACCESSORIES_PATH, async () => {
+    const current = await loadBaseAccessoriesFromDisk();
+    const beforeById = new Map<string, AccessoryItem>();
+    const afterItems: AccessoryItem[] = [];
+    for (const patch of patches) {
+      const before = current.find((item) => item.id === patch.id);
+      if (!before || before.source !== "danawa" || before.sourceProductCode !== patch.sourceProductCode || before.danawaUrl !== patch.danawaUrl) continue;
+      const after = { ...before, priceWon: patch.priceWon, priceCheckedAt: patch.priceCheckedAt };
+      beforeById.set(patch.id, before);
+      afterItems.push(after);
+    }
+    if (afterItems.length === 0) return [];
+    await upsertAccessoriesUnlocked(afterItems);
+    return afterItems.flatMap((after) => {
+      const before = beforeById.get(after.id);
+      return before ? [{ before, after }] : [];
+    });
+  });
 }

@@ -11,6 +11,7 @@ import {
   parsePciePowerOptions,
   parseDanawaProductPage,
   parseDanawaPriceFromHtml,
+  fetchDanawaHtml,
   reparseDanawaPart,
   crawlDanawaCategory,
   retryDanawaCategoryPage
@@ -21,6 +22,18 @@ function listPageHtml(productCodes: string[], totalProductCount: number) {
 }
 
 describe("Danawa parser", () => {
+  it("rejects redirects without following them", async () => {
+    const fetchMock = vi.fn(async (..._args: unknown[]) => new Response(null, { status: 302, headers: { location: "https://evil.example/collect" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      await expect(fetchDanawaHtml("https://prod.danawa.com/info/?pcode=123", { retries: 0 })).rejects.toThrow("Danawa redirect rejected");
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ redirect: "manual" });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("accepts observed detail prices only when the canonical product code matches", () => {
     expect(parseDanawaPriceFromHtml(`<link rel="canonical" href="https://prod.danawa.com/info/?pcode=123"><meta property="og:description" content="최저가 45,900원" />`, "123")).toBe(45900);
     expect(parseDanawaPriceFromHtml(`<link rel="canonical" href="https://prod.danawa.com/info/?pcode=456"><meta property="og:description" content="최저가 45,900원" />`, "123")).toBeUndefined();

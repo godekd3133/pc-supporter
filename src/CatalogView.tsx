@@ -526,7 +526,7 @@ function CatalogPriceHistoryPanel({ part, history, loading, error }: { part: Cat
       <PriceTrendChart points={chartPoints.map((point) => ({ at: point.changedAt, priceWon: point.priceWon }))} ariaLabel={`${part.name} ${windowLabel} 가격 추이`} testId="catalog-price-history-chart" />
       <div className="catalog-price-history-stats"><div><span>최저</span><strong>{minPriceWon?.toLocaleString("ko-KR")}원</strong></div><div><span>현재</span><strong>{currentPriceWon?.toLocaleString("ko-KR")}원</strong></div><div><span>최고</span><strong>{maxPriceWon?.toLocaleString("ko-KR")}원</strong></div></div>
     </>}
-    <p className="catalog-price-history-note"><FiInfo /> 판매처에 따라 가격이 달라질 수 있어요.</p>
+    <p className="catalog-price-history-note"><FiInfo /> 저장된 카탈로그 가격이며, 결제 가격·재고·배송비와 다를 수 있어요.</p>
   </section>;
 }
 
@@ -562,13 +562,14 @@ function CatalogPartDetail({ part, priceHistory, priceHistoryLoading, priceHisto
 
 
     <CatalogBenchmarkEvidence part={part} />
-
+    <CatalogPriceActionPanel part={part} history={priceHistory} loading={priceHistoryLoading} error={priceHistoryError} />
     <CatalogPriceHistoryPanel part={part} history={priceHistory} loading={priceHistoryLoading} error={priceHistoryError} />
-    {part.candidateRisk && <div className={`catalog-candidate-summary ${part.candidateRisk}`}><strong>{candidateRiskLabel(part.candidateRisk)}</strong><span>{candidateDetailSummary(part) || "현재 견적에 넣었을 때의 평가 결과입니다."}</span></div>}
+    {part.candidateRisk && <div className={`catalog-candidate-summary ${part.candidateRisk}`}><strong>{candidateRiskLabel(part.candidateRisk)}</strong><small className="catalog-candidate-scope-note">현재 견적 기준</small><span>{candidateDetailSummary(part) || "현재 견적에 넣었을 때의 평가 결과입니다."}</span>{part.candidateReasons && part.candidateReasons.length > 0 && <small>평가 근거 · {part.candidateReasons.slice(0, 2).join(" · ")}</small>}{part.remainingBlockers !== undefined && <small>남은 항목 · 호환 불가 {part.remainingBlockers} · 주의 {part.remainingWarnings ?? 0} · 정보 부족 {part.remainingUnknown ?? 0}</small>}{part.recommendationTrust && <small>추천 근거 점수 · {part.recommendationTrust.level === "high" ? "높음" : part.recommendationTrust.level === "medium" ? "보통" : "낮음"} {part.recommendationTrust.score}점</small>}</div>}
     <CatalogSimilarityEvidencePanel part={part} />
     <div className="catalog-detail-price"><div><span>예상 가격</span><small className={`catalog-detail-price-evidence ${priceProvenance.evidence}`}>{priceProvenance.text}</small></div><strong>{priceLabel(part.priceWon)}</strong></div>
     <dl className="catalog-detail-specs">{specRowsFor(part).map(([label, value]) => <div key={`${label}-${value}`}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
     {part.missingFields.length > 0 && <p className="catalog-detail-missing"><FiInfo /> 정보가 없는 사양 {part.missingFields.slice(0, 5).map((field) => catalogMissingFieldLabelFor(field)).join(", ")}{part.missingFields.length > 5 ? ` 외 ${part.missingFields.length - 5}개` : ""}</p>}
+    {part.rawSpecText && <details className="catalog-detail-raw"><summary>수집된 상세 사양</summary><p>{part.rawSpecText}</p></details>}
 
     <div className="catalog-detail-actions">{onWatchPart && <CatalogWatchButton part={part} onWatch={onWatchPart} isWatched={isPartWatched} />}{onOpenWatchlist && <button className="button button-light" type="button" onClick={onOpenWatchlist}><FiClock /> 가격 추적 화면</button>}{showCompare && <button className={compareSelected ? "button button-light catalog-detail-compare selected" : "button button-light catalog-detail-compare"} type="button" aria-pressed={compareSelected} onClick={onToggleCompare}>{compareSelected ? <><FiCheck /> 비교에서 제외</> : <><FiLayers /> 비교에 추가</>}</button>}<button className="button button-primary" type="button" onClick={onAdd} disabled={selected || blocked}>{blocked ? "차단 위험 · 적용 불가" : selected ? <><FiCheck /> 현재 견적에 선택됨</> : <><FiPlus /> 현재 견적에 추가</>}</button><button className="button button-light" type="button" onClick={onOpenBuild}><FiActivity /> 견적 검사로 이동</button>{part.source === "danawa" && part.sourceProductCode && part.danawaUrl && <button className="button button-light catalog-detail-refresh" type="button" data-testid="catalog-refresh-part" onClick={onRefresh} disabled={!onRefresh || refreshing}>{refreshing ? <><FiLoader className="spin" /> 불러오는 중...</> : <><FiRefreshCw /> 가격·사양 새로 불러오기</>}</button>}{sourceUrl && <a className="button button-light" href={sourceUrl} target="_blank" rel="noreferrer"><FiExternalLink /> 상품 페이지 열기</a>}</div>
     {(refreshMessage || refreshError) && <p className={refreshError ? "catalog-detail-refresh-status error" : "catalog-detail-refresh-status"} role={refreshError ? "alert" : "status"}><FiInfo /> {refreshError ?? refreshMessage}</p>}

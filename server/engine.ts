@@ -5882,11 +5882,11 @@ function preferCoolerHeadroom(parts: Part[], cpu: Part, profile: RecommendationP
     } else if (gamingEvidenceStatus === "target_not_met") {
       warnings.unshift("확인한 테스트 중 목표 FPS에 못 미친 조건이 있어요. 그래픽 설정을 낮추거나 예산을 조정해 보세요.");
     } else {
-      warnings.unshift("게임별 그래픽 설정은 참고용입니다. 실제 FPS는 PC 환경과 게임 설정에 따라 달라질 수 있습니다.");
+      warnings.unshift("이 설정에서 몇 FPS가 나올지는 확인되지 않았어요.");
     }
   }
   const gamingOptionRationale = hasGamingOptionAdvisory
-    ? `게임별 목표와 그래픽 설정을 권장 VRAM ${gamingAdvisoryTuning?.targetVramGb ?? GAMING_RESOLUTION_VRAM_TARGETS[gamingResolution]}GB와 GPU 추천에 반영했습니다.${gamingEvidenceStatus === "verified" ? " 선택한 GPU의 테스트 결과에서 목표 FPS에 도달했습니다." : gamingEvidenceStatus === "target_not_met" ? " 확인한 테스트에서 목표 FPS에 못 미친 조건이 있어요. 그래픽 설정이나 예산을 조정해 보세요." : " 게임별 FPS 테스트 자료가 없어 실제 성능은 PC 환경에 따라 달라질 수 있습니다."}`
+    ? `게임별 목표와 그래픽 설정을 권장 VRAM ${gamingAdvisoryTuning?.targetVramGb ?? GAMING_RESOLUTION_VRAM_TARGETS[gamingResolution]}GB와 GPU 추천에 반영했습니다.${gamingEvidenceStatus === "verified" ? " 선택한 GPU의 테스트 결과에서 목표 FPS에 도달했습니다." : gamingEvidenceStatus === "target_not_met" ? " 확인한 테스트에서 목표 FPS에 못 미친 조건이 있어요. 그래픽 설정이나 예산을 조정해 보세요." : " 같은 설정의 FPS 테스트는 아직 없어요."}`
     : undefined;
   return {
     selection: chosen.state.selection,

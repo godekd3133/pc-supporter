@@ -118,7 +118,7 @@ export function SavedBuildCheckRefreshEvidence({ report }: { report: CatalogRefr
 export function SavedBuildCheckRefreshImpactPanel({ report, findingChanges }: { report: CatalogRefreshReport; findingChanges: SavedBuildCheckFindingDiff[] }) {
   const impacts = catalogRefreshFindingImpactsFor(report, findingChanges);
   const linkedCount = impacts.reduce((total, impact) => total + impact.findingChanges.length, 0);
-  return <section className={`history-check-refresh-impact ${report.status}`} aria-label="정보 다시 확인과 결과 변화 연결" data-testid="saved-build-check-refresh-impact"><div className="history-check-refresh-impact-heading"><div><p className="eyebrow">REFRESH → RESULT IMPACT</p><strong>정보 다시 확인과 결과 변화 연결</strong><small>다시 확인한 부품과 결과가 바뀐 부품이 겹치는 경우만 연결해요.</small></div><span>{linkedCount}개 연결</span></div>{report.failures.length > 0 && <p className="history-check-refresh-impact-failure"><FiAlertTriangle /> 확인에 실패한 {report.failures.length}개는 결과 변화와 연결할 수 없어요.</p>}<div className="history-check-refresh-impact-list">{impacts.map(({ item, findingChanges: linkedChanges }) => <article className={linkedChanges.length > 0 ? "linked" : "unlinked"} key={`${item.target.kind}-${item.target.id}`}><div className="history-check-refresh-impact-item-heading"><strong>{item.name}</strong><span>{linkedChanges.length > 0 ? `연결 변화 ${linkedChanges.length}개` : "연결된 변화 없음"}</span></div><small>정보 변경 · {item.changedFields.length > 0 ? item.changedFields.map((field) => catalogChangeFieldLabelFor(field)).join(" · ") : "변경된 영역 없음"}</small>{linkedChanges.length > 0 ? <ul>{linkedChanges.slice(0, 4).map((change) => <li key={`${change.key}-${change.change}`}><b>{savedCheckFindingChangeText(change.change)}</b><span>{(change.after ?? change.before)?.title ?? change.key}</span></li>)}</ul> : <p>두 검사 사이에 이 부품과 겹치는 결과 변화가 없어요. 정보 변경이 원인이라고 단정하지 않아요.</p>}</article>)}</div>{impacts.length === 0 && report.failures.length === 0 && <p className="history-check-refresh-impact-empty"><FiInfo /> 확인에 성공한 항목이 없어 결과 변화를 연결할 수 없어요.</p>}<p className="history-check-refresh-impact-note"><FiInfo /> 영향이 있을 만한 연결을 보여주는 참고 정보예요. 정보 변경이 결과 변화의 원인이라고 단정하는 건 아니에요.</p></section>;
+  return <section className={`history-check-refresh-impact ${report.status}`} aria-label="정보 다시 확인과 결과 변화 연결" data-testid="saved-build-check-refresh-impact"><div className="history-check-refresh-impact-heading"><div><strong>정보 다시 확인과 결과 변화 연결</strong><small>다시 확인한 부품과 결과가 바뀐 부품이 겹치는 경우만 연결해요.</small></div><span>{linkedCount}개 연결</span></div>{report.failures.length > 0 && <p className="history-check-refresh-impact-failure"><FiAlertTriangle /> 확인에 실패한 {report.failures.length}개는 결과 변화와 연결할 수 없어요.</p>}<div className="history-check-refresh-impact-list">{impacts.map(({ item, findingChanges: linkedChanges }) => <article className={linkedChanges.length > 0 ? "linked" : "unlinked"} key={`${item.target.kind}-${item.target.id}`}><div className="history-check-refresh-impact-item-heading"><strong>{item.name}</strong><span>{linkedChanges.length > 0 ? `연결 변화 ${linkedChanges.length}개` : "연결된 변화 없음"}</span></div><small>정보 변경 · {item.changedFields.length > 0 ? item.changedFields.map((field) => catalogChangeFieldLabelFor(field)).join(" · ") : "변경된 영역 없음"}</small>{linkedChanges.length > 0 ? <ul>{linkedChanges.slice(0, 4).map((change) => <li key={`${change.key}-${change.change}`}><b>{savedCheckFindingChangeText(change.change)}</b><span>{(change.after ?? change.before)?.title ?? change.key}</span></li>)}</ul> : <p>두 검사 사이에 이 부품과 겹치는 결과 변화가 없어요. 정보 변경이 원인이라고 단정하지 않아요.</p>}</article>)}</div>{impacts.length === 0 && report.failures.length === 0 && <p className="history-check-refresh-impact-empty"><FiInfo /> 확인에 성공한 항목이 없어 결과 변화를 연결할 수 없어요.</p>}<p className="history-check-refresh-impact-note"><FiInfo /> 영향이 있을 만한 연결을 보여주는 참고 정보예요. 정보 변경이 결과 변화의 원인이라고 단정하는 건 아니에요.</p></section>;
 }
 
 export function savedCheckResourceText(snapshot: NonNullable<SavedBuild["checkSnapshot"]>) {
@@ -504,7 +504,7 @@ export function SavedBuildCheckTransitionSummary({ summary, before, after }: { s
         : after.resourceBudget?.state === "warning" || after.resourceBudget?.state === "unknown"
           ? "전력·냉각 여유나 스펙 수치를 사기 전에 확인해 주세요."
         : "현재 확인된 정보로는 호환돼요. 구매 전 제조사 안내와 실제 조립 공간도 확인해 주세요.";
-  return <section className={`history-check-transition-summary ${summary.direction}`} aria-label="결과 변화 요약" data-testid="saved-build-check-transition-summary"><div className="history-check-transition-heading"><div><p className="eyebrow">DECISION SUMMARY</p><strong>{headline}</strong></div><span>{directionLabel}</span></div><ul>{lines.map((line) => <li key={line}>{line}</li>)}</ul><p className="history-check-transition-action"><FiZap /> 다음 행동 · {nextAction}</p></section>;
+  return <section className={`history-check-transition-summary ${summary.direction}`} aria-label="결과 변화 요약" data-testid="saved-build-check-transition-summary"><div className="history-check-transition-heading"><div><p className="eyebrow">변화 요약</p><strong>{headline}</strong></div><span>{directionLabel}</span></div><ul>{lines.map((line) => <li key={line}>{line}</li>)}</ul><p className="history-check-transition-action"><FiZap /> 다음 행동 · {nextAction}</p></section>;
 }
 
 export function SavedBuildCheckTimeline({ history, buildId, partMap, accessoryMap, showDiff = true, canRecord = false, recording = false, onRecordCheck }: { history: NonNullable<SavedBuild["checkHistory"]>; buildId?: string; partMap?: ReadonlyMap<string, Part>; accessoryMap?: ReadonlyMap<string, AccessoryItem>; showDiff?: boolean; canRecord?: boolean; recording?: boolean; onRecordCheck?: () => void }) {
@@ -552,7 +552,7 @@ export function SavedBuildCheckTimeline({ history, buildId, partMap, accessoryMa
   return (
     <section className="history-check-timeline" aria-label="검사 타임라인" data-testid="saved-build-check-timeline" tabIndex={-1}>
       <div className="history-check-timeline-heading">
-        <div><p className="eyebrow">CHECK TIMELINE</p><strong>검사 타임라인</strong></div>
+        <div><strong>검사 타임라인</strong></div>
         <div className="history-check-timeline-heading-actions"><span>{history.length}회</span>{canRecord && onRecordCheck && <button className="button button-small button-light" type="button" onClick={onRecordCheck} disabled={recording}>{recording ? <><FiLoader className="spin" /> 재검사 중...</> : <><FiRefreshCw /> 현재 기준 재검사·기록</>}</button>}</div>
       </div>
       <div className="history-check-timeline-list">
@@ -575,7 +575,7 @@ export function SavedBuildCheckTimeline({ history, buildId, partMap, accessoryMa
       {showDiff && history.length > 1 && before && after && (
         <div className="history-check-diff" data-testid="saved-build-check-diff">
           <div className="history-check-diff-heading">
-            <div><p className="eyebrow">CHECK DIFF</p><strong>검사 결과 상세 비교</strong><small>두 검사 시점을 선택해 규칙별 변화 원인과 카탈로그 정보를 확인합니다.</small></div>
+            <div><strong>검사 결과 상세 비교</strong><small>두 검사 시점을 선택해 규칙별 변화 원인과 카탈로그 정보를 확인합니다.</small></div>
           </div>
           <div className="history-check-diff-selects">
             <label>기준 검사
@@ -603,7 +603,7 @@ export function SavedBuildCheckTimeline({ history, buildId, partMap, accessoryMa
           {catalogCauseState.status === "ready" && catalogCauseState.items.length === 0 && <p className="history-check-cause-state"><FiInfo /> 두 검사 사이에 선택한 부품의 카탈로그 변경이 없어요. 변경이 원인이라고 단정하지 않아요.</p>}
           {catalogCauseState.status === "ready" && catalogCauseState.items.length > 0 && (
             <div className="history-check-cause-panel" data-testid="saved-build-catalog-causes">
-              <div className="history-check-cause-heading"><div><p className="eyebrow">CATALOG CHANGES</p><strong>기록된 카탈로그 변경</strong><small>두 검사 사이에 선택한 부품에서 실제로 기록된 변경만 보여드려요.</small></div><span>{catalogCauseState.items.length}건</span></div>
+              <div className="history-check-cause-heading"><div><strong>기록된 카탈로그 변경</strong><small>두 검사 사이에 선택한 부품에서 실제로 기록된 변경만 보여드려요.</small></div><span>{catalogCauseState.items.length}건</span></div>
               <div className="history-check-cause-list">
                 {catalogCauseState.items.slice(0, 8).map((record) => <article className="history-check-cause-item" key={record.id}><div><strong>{record.itemName}</strong><small>{record.kind === "accessory" ? "주변 부품" : "핵심 부품"} · {savedCheckCatalogCauseCategoryText(record)} · {savedCheckCatalogCauseDateText(record)}</small></div><p>{savedCheckCatalogCauseReason(record)}</p><small>변경 영역 · {record.changedFields.length > 0 ? record.changedFields.map((field) => catalogChangeFieldLabelFor(field)).join(" · ") : "값 변화 없음"}</small><SavedCatalogCauseValueDiffs record={record} /><SavedCatalogCauseSourceLink record={record} partMap={partMap} accessoryMap={accessoryMap} /></article>)}
               </div>

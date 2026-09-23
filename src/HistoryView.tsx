@@ -24,7 +24,7 @@ import { accessorySelections, selectionList } from "./build-edit";
 import { CategoryIcon } from "./part-visuals";
 import { currentDraftComparisonFor } from "./result-shared";
 import { readSavedBuildOwnerToken } from "./saved-build-storage";
-import { SavedBuildCheckBadge, SavedBuildCheckTimeline, myPcAssetReportFor, savedAccessoryLineText, savedCheckDriftText, savedCheckRiskText, savedCheckStatusText, savedCoreLineText, savedPreferenceText, savedPriceText } from "./SavedCheckTimeline";
+import { SavedBuildCheckBadge, SavedBuildCheckTimeline, myPcAssetReportFor, savedAccessoryLineText, savedCheckAnalysisText, savedCheckDriftText, savedCheckReferenceText, savedCheckRiskText, savedCheckStatusText, savedCoreLineText, savedPreferenceText, savedPriceText } from "./SavedCheckTimeline";
 
 const LazySavedBuildPriorityPanel = lazy(() => import("./SavedBuildInsights").then((module) => ({ default: module.SavedBuildPriorityPanel })));
 const LazySavedBuildVersionPanel = lazy(() => import("./SavedBuildInsights").then((module) => ({ default: module.SavedBuildVersionPanel })));
@@ -93,6 +93,8 @@ export function BuildComparisonPanel({ builds, onOpenBuild, openingBuildId, onLi
     { label: "주변 부품 금액", values: builds.map((saved) => savedPriceText(saved, "accessoryTotalPriceWon")) },
     { label: "저장 당시 호환 상태", values: builds.map((saved) => saved.checkSnapshot ? savedCheckStatusText(saved.checkSnapshot.status) : saved.id === "current-draft" ? "저장 전 구성" : "검사 기록 없음") },
     { label: "저장 당시 호환 항목", values: builds.map((saved) => saved.checkSnapshot ? savedCheckRiskText(saved.checkSnapshot) : "기록 없음") },
+    { label: "저장 당시 성능 분석", values: builds.map((saved) => saved.checkSnapshot ? savedCheckAnalysisText(saved.checkSnapshot) : "기록 없음") },
+    { label: "저장 당시 검사 버전", values: builds.map((saved) => saved.checkSnapshot ? savedCheckReferenceText(saved.checkSnapshot) : "기록 없음") },
     { label: "추천 기준", values: builds.map(savedPreferenceText) },
     ...PART_CATEGORIES.map((category) => ({ label: CATEGORY_LABELS[category], values: builds.map((saved) => savedCoreLineText(saved, category)) })),
     { label: "주변 부품", values: builds.map(savedAccessoryLineText) }
@@ -111,6 +113,13 @@ export function BuildComparisonPanel({ builds, onOpenBuild, openingBuildId, onLi
   }
 
 
+  function liveAnalysisFor(check: SavedBuildLiveCheck | undefined) {
+    if (!check || check.status === "loading") return "계산 중...";
+    if (check.status === "error") return "확인 불가";
+    const analysis = check.result.analysis;
+    return analysis.overallScore === undefined ? analysis.scoreLabel : analysis.overallScore + "점 · " + analysis.scoreLabel;
+  }
+
   function livePriceFor(check: SavedBuildLiveCheck | undefined) {
     if (!check || check.status === "loading") return "계산 중...";
     if (check.status === "error") return "확인 불가";
@@ -120,7 +129,14 @@ export function BuildComparisonPanel({ builds, onOpenBuild, openingBuildId, onLi
   const liveRows: Array<{ label: string; values: string[] }> = [
     { label: "현재 호환 상태", values: builds.map((saved) => liveStatusFor(liveChecks[saved.id])) },
     { label: "현재 호환 항목", values: builds.map((saved) => liveRiskFor(liveChecks[saved.id])) },
+    { label: "현재 성능 분석", values: builds.map((saved) => liveAnalysisFor(liveChecks[saved.id])) },
     { label: "현재 예상 금액", values: builds.map((saved) => livePriceFor(liveChecks[saved.id])) },
+    { label: "현재 검사 버전", values: builds.map((saved) => {
+      const check = liveChecks[saved.id];
+      if (!check || check.status === "loading") return "확인 중...";
+      if (check.status === "error") return "확인 불가";
+      return check.result.engineVersion + " · " + new Date(check.result.checkedAt).toLocaleString("ko-KR");
+    })},
     { label: "부품·가격 변화", values: builds.map((saved) => savedCheckDriftText(saved, liveChecks[saved.id])) }
   ];
 

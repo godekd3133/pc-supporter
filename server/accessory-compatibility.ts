@@ -259,7 +259,7 @@ export function accessoryCompatibilityFor(build: BuildSelection, catalog: Part[]
         accessoryId: selection.accessoryId,
         accessoryName: selection.accessoryId,
         relatedPartIds: [],
-        title: "선택한 주변 부품 정보를 확인할 수 없습니다.",
+        title: "선택한 주변 부품 정보를 찾을 수 없습니다.",
         message: "저장된 주변 부품 ID가 현재 액세서리 카탈로그에 없어 호환 여부를 알 수 없어요.",
         facts: [{ label: "주변 부품 ID", actual: selection.accessoryId }],
         action: "주변 부품 목록을 다시 확인하세요."
@@ -338,7 +338,7 @@ export function accessoryCompatibilityFor(build: BuildSelection, catalog: Part[]
           addFinding(findings, selection, item, selectedM2.map(({ part }) => part.id), {
             ruleId: "accessory-storage-adapter",
             severity: "unknown",
-            title: "M.2 변환 어댑터의 지원 인터페이스를 확인할 수 없습니다.",
+            title: "어댑터의 NVMe·SATA 지원 정보 확인 필요",
             message: "어댑터 연결 방식은 확인됐지만 NVMe/SATA 지원 여부가 제품 정보에 없어 선택 SSD와의 신호 호환을 알 수 없어요.",
             facts: [
               { label: "선택한 SSD 인터페이스", actual: selectedInterfaceLabels.join(" · ") },
@@ -374,7 +374,7 @@ export function accessoryCompatibilityFor(build: BuildSelection, catalog: Part[]
           addFinding(findings, selection, item, selectedM2.map(({ part }) => part.id), {
             ruleId: "accessory-storage-adapter-capacity",
             severity: "unknown",
-            title: "M.2 변환 어댑터의 동시 장착 수를 확인할 수 없습니다.",
+            title: "어댑터에 SSD를 몇 개 연결할 수 있는지 확인 필요",
             message: "여러 M.2 SSD를 연결 대상으로 지정했지만 어댑터 정보에 동시 장착 수가 없어 전체 연결을 알 수 없어요.",
             facts: [
               { label: "연결 대상 M.2 SSD", actual: `${selectedM2Count}개` },
@@ -391,7 +391,7 @@ export function accessoryCompatibilityFor(build: BuildSelection, catalog: Part[]
             addFinding(findings, selection, item, relatedPartIds, {
               ruleId: "accessory-pcie-slot-width",
               severity: "unknown",
-              title: "PCIe 어댑터가 요구하는 슬롯 폭을 확인할 수 없습니다.",
+              title: "어댑터에 필요한 PCIe 슬롯 크기 확인 필요",
               message: "M.2→PCIe 연결은 확인됐지만 어댑터의 PCIe x1·x4·x8·x16 요구 폭 정보가 없어 메인보드의 수용 슬롯을 대조할 수 없습니다.",
               facts: [
                 { label: "어댑터 연결 방식", actual: storageAdapterConnectionLabel(adapterKind) },
@@ -504,7 +504,7 @@ export function accessoryCompatibilityFor(build: BuildSelection, catalog: Part[]
         addFinding(findings, selection, item, selectedM2.map(({ part }) => part.id), {
           ruleId: "accessory-m2-heatsink-form-factor",
           severity: "unknown",
-          title: "M.2 방열판과 SSD 규격을 확인할 수 없습니다.",
+          title: "SSD와 방열판의 장착 규격 확인 필요",
           message: "선택한 M.2 SSD 또는 방열판의 세부 규격이 부족해 실제 장착 가능 여부를 알 수 없어요.",
           facts: [
             { label: "선택한 M.2 SSD", actual: selectedM2.map(({ part }) => part.specs.formFactor ?? part.name).join(" · ") },
@@ -558,7 +558,7 @@ export function accessoryCompatibilityFor(build: BuildSelection, catalog: Part[]
         addFinding(findings, selection, item, [computerCase.id], {
           ruleId: "accessory-cooling-fan-size",
           severity: "unknown",
-          title: "쿨링팬과 케이스 장착 규격을 확인할 수 없습니다.",
+          title: "팬과 케이스의 장착 크기 확인 필요",
           message: "케이스 또는 선택한 쿨링팬의 장착 크기가 부족해 실제 장착 가능 여부를 알 수 없어요.",
           facts: [
             { label: "케이스 지원 팬 크기", expected: caseFanSizes.length > 0 ? caseFanSizes.map((size) => `${size}mm`).join(" · ") : "확인 필요" },
@@ -686,7 +686,7 @@ export function accessoryCompatibilityFor(build: BuildSelection, catalog: Part[]
           addFinding(findings, selection, item, relatedPartIds, {
             ruleId: "accessory-rgb-controller-power",
             severity: "unknown",
-            title: "RGB 컨트롤러의 해당 전원 레일 용량을 확인할 수 없습니다.",
+            title: "RGB 컨트롤러의 전원 용량 확인 필요",
             message: "RGB 장치 부하는 확인됐지만 필요한 전압의 컨트롤러 최대 W/A가 없어 전원 여유를 알 수 없어요.",
             facts: [
               { label: "필요 전압", actual: rgbPlan.requiredVoltages.join(" + ") },
@@ -714,7 +714,7 @@ export function accessoryCompatibilityFor(build: BuildSelection, catalog: Part[]
         addFinding(findings, selection, item, relatedPartIds, {
           ruleId: "accessory-fan-hub-power",
           severity: "unknown",
-          title: "팬 허브·RGB 컨트롤러 전원 입력을 확인할 수 없습니다.",
+          title: "팬 허브·RGB 컨트롤러의 전원 연결 확인 필요",
           message: "분배 포트·RGB 전압과 별도로 허브가 SATA·IDE/Molex 전원을 받는지 확인할 정보가 부족합니다.",
           facts: [{ label: "외부 전원 입력", expected: "SATA·IDE/Molex 확인 필요" }],
           action: "제품 페이지에서 외부 전원 입력과 연결할 케이블을 확인해 주세요."
@@ -741,7 +741,7 @@ export function accessoryCompatibilityFor(build: BuildSelection, catalog: Part[]
         addFinding(findings, selection, item, relatedPartIds, {
           ruleId: "accessory-ups-capacity",
           severity: "unknown",
-          title: "UPS 출력 여유를 확인할 수 없습니다.",
+          title: "UPS 출력 확인 필요",
           message: "UPS의 출력(W)이 없어 확인된 시스템 전력과 비교할 수 없습니다.",
           facts: [
             { label: "확인된 CPU·GPU 전력", actual: `${knownSystemPowerW}W` },
