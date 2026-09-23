@@ -159,7 +159,8 @@ BUNDLE="$TMP_DIR/pc-supporter-$RELEASE_ID.tar.gz"
     tsconfig.json \
     dist \
     server \
-    shared
+    shared \
+    scripts/import-private-catalog.ts
 )
 
 echo "pc_supporter_bundle=status=ok release=$RELEASE_ID"

@@ -23152,3 +23152,25 @@ html[data-theme="dark"] .onboarding-draft { border-color: var(--line); }
   .build-price-trend-total strong { font-size: 20px; }
   .catalog-price-history-panel, .build-price-trend-panel { border-radius: 12px; }
 }
+
+/* Price provenance can be longer than the compact price column. Keep the amount
+   on its existing line and let only its supporting label wrap within the card. */
+.catalog-part-card-price > .catalog-detail-price-evidence {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-family: inherit;
+  font-weight: 400;
+}
+
+.picker-item-side > .catalog-detail-price-evidence {
+  max-width: min(34vw, 180px);
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+@media (max-width: 760px) {
+  .catalog-part-card-price > .catalog-detail-price-evidence { line-height: 1.35; }
+  .picker-item-side > .catalog-detail-price-evidence { max-width: min(42vw, 160px); }
+}

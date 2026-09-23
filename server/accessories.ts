@@ -375,21 +375,23 @@ export interface AccessoryPricePatch {
 export async function patchAccessoryPrices(patches: AccessoryPricePatch[]) {
   if (patches.length === 0) return [];
   return withSerializedFileMutation(ACCESSORIES_PATH, async () => {
-    const current = await loadBaseAccessoriesFromDisk();
-    const beforeById = new Map<string, AccessoryItem>();
-    const afterItems: AccessoryItem[] = [];
-    for (const patch of patches) {
-      const before = current.find((item) => item.id === patch.id);
-      if (!before || before.source !== "danawa" || before.sourceProductCode !== patch.sourceProductCode || before.danawaUrl !== patch.danawaUrl) continue;
+    const current = await readJson<AccessoryItem[]>(ACCESSORIES_PATH, []);
+    const patchesById = new Map(patches.map((patch) => [patch.id, patch]));
+    const updates: Array<{ before: AccessoryItem; after: AccessoryItem }> = [];
+    const persisted = current.map((before) => {
+      const patch = patchesById.get(before.id);
+      if (!patch || before.source !== "danawa" || before.sourceProductCode !== patch.sourceProductCode || before.danawaUrl !== patch.danawaUrl) return before;
       const after = { ...before, priceWon: patch.priceWon, priceCheckedAt: patch.priceCheckedAt };
-      beforeById.set(patch.id, before);
-      afterItems.push(after);
-    }
-    if (afterItems.length === 0) return [];
-    await upsertAccessoriesUnlocked(afterItems);
-    return afterItems.flatMap((after) => {
-      const before = beforeById.get(after.id);
-      return before ? [{ before, after }] : [];
+      updates.push({ before, after });
+      return after;
     });
+    if (updates.length === 0) return [];
+    await writeJson(ACCESSORIES_PATH, persisted);
+    accessoryLoadInFlight = null;
+    accessoryCache = null;
+    baseAccessoriesCache = null;
+    accessoryMtime = null;
+    coolingFanOverrideMtime = null;
+    return updates;
   });
 }

@@ -24,7 +24,7 @@
     "import:private-catalog": "tsx scripts/import-private-catalog.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --maxWorkers=1 --minWorkers=1 --pool=threads --poolOptions.threads.singleThread=true",
-    "test:price-refresh": "vitest run server/price-refresh.test.ts server/price-refresh-scheduler.test.ts --maxWorkers=1 --minWorkers=1 --pool=threads --poolOptions.threads.singleThread=true",
+    "test:price-refresh": "vitest run server/price-refresh.test.ts server/price-refresh-scheduler.test.ts server/price-patch-persistence.test.ts --maxWorkers=1 --minWorkers=1 --pool=threads --poolOptions.threads.singleThread=true",
     "test:browser": "node scripts/browser-smoke.mjs",
     "test:browser:gaming-performance-result": "node scripts/gaming-performance-result-smoke.mjs",
     "test:browser:generator-selection-reasons": "node scripts/generator-selection-reasons-smoke.mjs",

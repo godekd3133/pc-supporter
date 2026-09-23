@@ -264,22 +264,21 @@ export async function patchCatalogPrices(patches: CatalogPricePatch[]) {
         return patched;
       }
     }
-    const current = (await loadCatalog()).map((part) => stripCatalogSpecOverride(stripCaseRgbLoadOverride(stripGpuPhysicalOverrides(stripM2SlotOverride(part)))));
-    const beforeById = new Map<string, Part>();
-    const afterParts: Part[] = [];
-    for (const patch of patches) {
-      const before = current.find((part) => part.id === patch.id);
-      if (!before || before.source !== "danawa" || before.sourceProductCode !== patch.sourceProductCode || before.danawaUrl !== patch.danawaUrl) continue;
+    const current = await readJson<Part[]>(CATALOG_PATH, []);
+    const patchesById = new Map(patches.map((patch) => [patch.id, patch]));
+    const updates: Array<{ before: Part; after: Part }> = [];
+    const persisted = current.map((before) => {
+      const patch = patchesById.get(before.id);
+      if (!patch || before.source !== "danawa" || before.sourceProductCode !== patch.sourceProductCode || before.danawaUrl !== patch.danawaUrl) return before;
       const after = { ...before, priceWon: patch.priceWon, priceCheckedAt: patch.priceCheckedAt };
-      beforeById.set(patch.id, before);
-      afterParts.push(after);
-    }
-    if (afterParts.length === 0) return [];
-    await upsertCatalogUnlocked(afterParts);
-    return afterParts.flatMap((after) => {
-      const before = beforeById.get(after.id);
-      return before ? [{ before, after }] : [];
+      updates.push({ before, after });
+      return after;
     });
+    if (updates.length === 0) return [];
+    await writeCatalogRecords(persisted);
+    invalidateCatalogCache();
+    await loadCatalog();
+    return updates;
   });
 }
 
