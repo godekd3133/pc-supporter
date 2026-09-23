@@ -70,7 +70,7 @@ export function MobileEditorSurface({ build, partMap, accessoryMap, checking, ch
 export function UpgradeEntryBanner() {
   return <section className="upgrade-entry-banner" data-testid="upgrade-entry-banner" aria-label="업그레이드 진입 안내">
     <div className="upgrade-entry-banner-mark"><FiRefreshCw /></div>
-    <div className="upgrade-entry-banner-copy"><p className="eyebrow">UPGRADE CHECK</p><h2>지금 쓰는 PC부터 확인해 볼게요</h2><p>현재 CPU·메인보드·메모리·그래픽카드를 골라주시면 호환성 문제와 바꾸면 좋은 업그레이드 조합을 순서대로 보여드려요.</p><div className="upgrade-entry-banner-steps"><span><b>1</b>현재 부품 선택</span><span><b>2</b>호환성 검사</span><span><b>3</b>업그레이드 비교</span></div></div>
+    <div className="upgrade-entry-banner-copy"><p className="eyebrow">PC 업그레이드</p><h2>지금 쓰는 PC부터 확인해 볼게요</h2><p>현재 CPU·메인보드·메모리·그래픽카드를 골라주시면 호환성 문제와 바꾸면 좋은 업그레이드 조합을 순서대로 보여드려요.</p><div className="upgrade-entry-banner-steps"><span><b>1</b>현재 부품 선택</span><span><b>2</b>호환성 검사</span><span><b>3</b>업그레이드 비교</span></div></div>
   </section>;
 }
 
@@ -157,14 +157,14 @@ export function EditorView({
       <MobileEditorSurface build={build} partMap={partMap} accessoryMap={accessoryMap} checking={checking} checkError={checkError} hasLastResult={hasLastResult} recommendationPreferences={recommendationPreferences} onRecommendationPreferencesChange={onRecommendationPreferencesChange} onOpenPicker={onOpenPicker} onCheck={onCheck} onExportBuild={onExportBuild} onImportBuild={onImportBuild} onReset={onReset} onRefreshCatalogItem={onRefreshCatalogItem} onRefreshAllCatalogItems={onRefreshAllCatalogItems} refreshingPartId={refreshingPartId} onToast={onToast} />
       <div className="desktop-editor-surface">
       <div className="workspace-heading">
-        <div><button className="back-link" onClick={onBack}><FiArrowLeft /> 홈으로</button><p className="eyebrow">BUILD EDITOR</p><h1>내 견적 구성</h1><p>부품을 고르면, 함께 쓸 수 있는지 바로 확인할 수 있어요.</p></div>
+        <div><button className="back-link" onClick={onBack}><FiArrowLeft /> 홈으로</button><h1>내 견적 구성</h1><p>부품을 고르면, 함께 쓸 수 있는지 바로 확인할 수 있어요.</p></div>
         <div className="build-editor-actions"><input ref={buildImportInputRef} className="build-transfer-input" type="file" accept=".json,application/json" aria-label="견적 JSON 파일 가져오기" onChange={(event) => void importBuildFile(event)} disabled={checking} /><button className="button button-light" type="button" onClick={() => buildImportInputRef.current?.click()} disabled={checking}><FiDatabase /> 견적 JSON 가져오기</button><button className="button button-light" type="button" onClick={onExportBuild} disabled={checking}><FiDownload /> 견적 JSON 저장</button><button className="button button-ghost" type="button" onClick={onReset} disabled={checking}><FiRefreshCw /> 초기화</button></div>
       </div>
       <div className="progress-strip"><div><span className="progress-label">필수 부품 선택</span><strong>{selectedCount} / {requiredCount}</strong></div><div className="progress-track"><span style={{ width: `${(selectedCount / requiredCount) * 100}%` }} /></div></div>
       {checking && <Suspense fallback={<div className="compatibility-check-progress" data-testid="compatibility-check-progress" role="status"><FiLoader className="spin" /> 검사 준비 중...</div>}><LazyCompatibilityCheckProgress /></Suspense>}
       <div className="editor-layout">
         <section className="component-list">
-          <div className="section-title-row"><div><p className="eyebrow">COMPONENTS</p><h2>부품 선택</h2></div></div>
+          <div className="section-title-row"><div><h2>부품 선택</h2></div></div>
           {PART_CATEGORIES.map((category) => (
             <ComponentCard key={category} category={category} build={build} setBuild={setBuild} partMap={partMap} onOpenPicker={onOpenPicker} />
           ))}
@@ -174,7 +174,7 @@ export function EditorView({
         </section>
         <aside className="summary-sidebar">
           <div className="sticky-summary">
-            <div className="summary-header"><div><p className="eyebrow">LIVE SUMMARY</p><h2>검사 준비 상태</h2></div><span className="summary-pulse"><FiActivity /></span></div>
+            <div className="summary-header"><div><h2>검사 준비 상태</h2></div><span className="summary-pulse"><FiActivity /></span></div>
             <div className="summary-list">{PART_CATEGORIES.map((category) => { const boxed = category === "cooler" && build.cpu ? partMap.get(build.cpu.partId)?.specs.coolerIncluded === true : false; const chosen = selectionList(build, category).length > 0 || boxed; return <div className={chosen ? "summary-row chosen" : "summary-row"} key={category}><span className="summary-check">{chosen ? <FiCheck /> : <span />}</span><span>{CATEGORY_LABELS[category]}</span></div>; })}</div>
             <div className="summary-divider" />
             <div className="graphics-mode"><div><span className="mini-label">그래픽 출력</span><strong>{build.gpu ? "외장 그래픽카드" : build.useIntegratedGraphics ? "CPU 내장 그래픽" : "선택 필요"}</strong></div><FiMonitor /></div>
@@ -268,7 +268,7 @@ export function M2SlotSelectionEditor({ build, setBuild, partMap }: { build: Bui
     });
   }
   return <section className={assignedSlotCount > 0 ? "m2-selection-editor selected" : "m2-selection-editor"} aria-label="M.2 슬롯 배치 선택">
-    <div className="m2-selection-heading"><div><p className="eyebrow">M.2 SLOT PLACEMENT</p><h2>SSD 슬롯 배치</h2><p>{motherboard.name}의 등록된 슬롯 정보를 기준으로 SSD 연결 위치를 직접 지정할 수 있습니다.</p></div><span className="m2-selection-icon"><FiHardDrive /></span></div>
+    <div className="m2-selection-heading"><div><p className="eyebrow">M.2 슬롯</p><h2>SSD 슬롯 배치</h2><p>{motherboard.name}의 등록된 슬롯 정보를 기준으로 SSD 연결 위치를 직접 지정할 수 있습니다.</p></div><span className="m2-selection-icon"><FiHardDrive /></span></div>
     <div className="m2-selection-toolbar"><span className={assignedSlotCount === m2UnitCount ? "m2-selection-count complete" : "m2-selection-count"}>{assignedSlotCount > 0 ? `수동 지정 ${assignedSlotCount} / ${m2UnitCount}개` : "자동 배치"}</span><button className="text-button" type="button" onClick={useAutomaticPlacement} disabled={assignedSlotCount === 0}><FiRefreshCw /> 최적 배치 사용</button></div>
     <div className="m2-selection-list">{profiles.map((profile) => <label className="m2-selection-row" key={profile.slotId}><span className="m2-selection-slot">{profile.slotId}</span><span className="m2-selection-spec">{profile.interfaces?.join(" / ") ?? "인터페이스 확인"}{profile.pcieGeneration !== undefined ? ` · PCIe ${profile.pcieGeneration.toFixed(1)}` : " · 세대 확인"}{profile.connection === "cpu" ? " · CPU 직결" : profile.connection === "chipset" ? " · 칩셋" : " · 연결 확인"}</span><select aria-label={`${profile.slotId} SSD 배치`} value={selection[profile.slotId] ?? ""} onChange={(event) => updateSlot(profile.slotId, event.target.value)}><option value="">자동 배치</option>{selectedM2Parts.map(({ part, quantity }) => <option value={part.id} key={part.id}>{part.name} · {interfaceLabel(part)} · {capacityLabel(part)}{quantity > 1 ? ` ×${quantity}` : ""}</option>)}</select></label>)}</div>
     <p className="m2-selection-note"><FiInfo /> 모든 슬롯을 비워 두면 성능·연결 조건에 맞춰 자동으로 배치해요. 하나라도 직접 지정하면 선택한 M.2 SSD 수량만큼 슬롯을 모두 지정해야 하고, SSD 수량이나 메인보드를 바꾸면 안전을 위해 자동 배치로 돌아갑니다.</p>

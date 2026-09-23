@@ -105,7 +105,7 @@ function evidenceScore(item: CandidateComparisonItem) {
 }
 
 function analysisConfidenceLabel(confidence: CandidateComparisonItem["analysisConfidence"]) {
-  return confidence === "high" ? "정보 충분" : confidence === "limited" ? "일부 스펙 기준" : "정보 확인 필요";
+  return confidence === "high" ? "정보 충분" : confidence === "limited" ? "일부 정보로 계산" : "정보 확인 필요";
 }
 
 function analysisWeightFor(item: CandidateComparisonItem) {
@@ -126,13 +126,13 @@ function performanceScore(item: CandidateComparisonItem) {
 function similarityEvidenceSummary(evidence: SimilarityEvidence | undefined) {
   if (!evidence) return "성능 정보 확인 필요";
   const basis = evidence.basis === "benchmark"
-    ? "벤치마크 기준"
+    ? "성능 측정 자료"
     : evidence.basis === "mixed"
-      ? "벤치마크·스펙 혼합"
+      ? "성능 측정·부품 정보"
       : evidence.basis === "spec"
-        ? "확인 스펙 기준"
-        : "기준 확인 필요";
-  const confidence = evidence.confidence === "high" ? "정보 충분" : evidence.confidence === "limited" ? "일부 정보" : "정보 확인 필요";
+        ? "부품 정보"
+        : "비교 정보 확인 필요";
+  const confidence = evidence.confidence === "high" ? "정보 충분" : evidence.confidence === "limited" ? "일부 정보로 비교" : "정보 확인 필요";
   return `비교 ${evidence.comparedDimensions}/${evidence.totalDimensions} · ${basis} · ${confidence}`;
 }
 
@@ -183,10 +183,10 @@ export function candidateComparisonDecisionFor(items: CandidateComparisonItem[],
   const eligibleRanking = ranked.filter((item) => !excludedIds.includes(item.id));
   const top = eligibleRanking[0];
   const criterionSummary = criterion === "balanced"
-    ? "호환·성능·가격·정보를 함께 반영한 균형 기준"
+    ? "호환·성능·가격·정보를 고르게 비교"
     : criterion === "performance"
-      ? "부품 유사도와 부품 적용 후 전체 성능을 함께 반영한 성능 기준"
-      : `${CRITERION_LABELS[criterion]} 기준`;
+      ? "부품 유사도와 교체 후 전체 성능을 함께 비교"
+      : `${CRITERION_LABELS[criterion]} 우선 비교`;
   return {
     criterion,
     label: CRITERION_LABELS[criterion],
@@ -230,7 +230,7 @@ function candidateTradeoffDimensionReason(left: CandidateTradeoffMetric, right: 
   if (left.priceDeltaWon !== undefined && right.priceDeltaWon !== undefined && left.priceDeltaWon < right.priceDeltaWon) dimensions.push("가격 변화");
   if (left.analysisScore !== undefined && right.analysisScore !== undefined && left.analysisScore > right.analysisScore) dimensions.push("적용 후 분석");
   if (left.evidenceScore! > right.evidenceScore!) dimensions.push("정보");
-  return dimensions.length > 0 ? dimensions.join("·") : "비교 기준";
+  return dimensions.length > 0 ? dimensions.join("·") : "비교 항목";
 }
 
 export function candidateComparisonTradeoffsFor(items: CandidateComparisonItem[]): CandidateComparisonTradeoff[] {
@@ -263,7 +263,7 @@ export function candidateComparisonTradeoffsFor(items: CandidateComparisonItem[]
       ...metric,
       frontier: false,
       dominatedByCandidateId: dominator.id,
-      reason: `${iGa(dominator.name)} ${candidateTradeoffDimensionReason(dominator, metric)} 기준으로 더 유리해 비교 우위에서 제외했습니다.`
+      reason: `${iGa(dominator.name)} ${candidateTradeoffDimensionReason(dominator, metric)}에서 더 유리해 순위에서 빠졌습니다.`
     };
   });
 }

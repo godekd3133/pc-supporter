@@ -3249,7 +3249,7 @@ export function evaluateBuild(
       addUnknown(
         findings,
         "cpu-motherboard-socket",
-        "CPU와 메인보드의 소켓 정보를 확인할 수 없습니다.",
+        "CPU와 메인보드 소켓이 맞는지 확인해 주세요.",
         "소켓 정보가 부족해 장착 가능 여부를 알 수 없어요.",
         partIds(cpu, motherboard),
         [!cpuSocket ? "CPU socket" : "", !motherboardSocket ? "Motherboard socket" : ""].filter(Boolean),
@@ -3277,7 +3277,7 @@ export function evaluateBuild(
       addUnknown(
         findings,
         "cpu-motherboard-power",
-        "CPU 전력과 메인보드 전원부 정보를 확인할 수 없습니다.",
+        "CPU 전력과 메인보드 전원부 용량을 확인해 주세요.",
         "전원부 정보가 부족해 고부하 상황의 공급 가능 여부를 알 수 없어요.",
         partIds(cpu, motherboard),
         [cpuPower === undefined ? "CPU power" : "", vrmCapacity === undefined ? "VRM capacity" : ""].filter(Boolean),
@@ -3308,7 +3308,7 @@ export function evaluateBuild(
       addUnknown(
         findings,
         "gpu-motherboard-pcie",
-        "그래픽카드와 메인보드 PCIe 슬롯 정보를 확인할 수 없습니다.",
+        "그래픽카드를 꽂을 PCIe 슬롯이 있는지 확인해 주세요.",
         "그래픽카드의 PCIe x16 장착 폭과 메인보드의 확장 슬롯 정보를 확인해야 장착 가능 여부를 확정할 수 있습니다.",
         partIds(gpu, motherboard),
         ["motherboard PCIe x16 slots"],
@@ -3332,7 +3332,7 @@ export function evaluateBuild(
       addUnknown(
         findings,
         "gpu-motherboard-pcie",
-        "그래픽카드와 메인보드 PCIe 슬롯 정보를 확인할 수 없습니다.",
+        "그래픽카드를 꽂을 PCIe 슬롯이 있는지 확인해 주세요.",
         "그래픽카드의 PCIe x8 장착 폭을 수용할 메인보드 슬롯 정보를 확인해야 합니다.",
         partIds(gpu, motherboard),
         ["motherboard PCIe x8/x16 slots"],
@@ -3402,7 +3402,7 @@ export function evaluateBuild(
           findings,
           "memory-mixing",
           "unknown",
-          "서로 다른 RAM 킷의 혼용 안정성을 확인할 수 없습니다.",
+          "함께 고른 RAM의 속도와 전압을 확인해 주세요.",
           "서로 다른 RAM 상품을 함께 선택했지만 일부 속도·CL·전압·프로파일 정보가 없어 혼용 안정성을 알 수 없어요.",
           affectedMemoryIds,
           [
@@ -3424,7 +3424,7 @@ export function evaluateBuild(
       addUnknown(
         findings,
         "memory-type",
-        "RAM의 메모리 규격을 확인할 수 없습니다.",
+        "CPU·메인보드·RAM의 메모리 규격을 확인해 주세요.",
         "CPU, 메인보드, RAM 중 하나 이상의 메모리 규격 데이터가 부족합니다.",
         partIds(cpu, motherboard, ...memory.map(({ part }) => part)),
         ["memory type"],
@@ -3455,7 +3455,7 @@ export function evaluateBuild(
       addUnknown(
         findings,
         "memory-form-factor",
-        "RAM과 메인보드 메모리 슬롯 규격을 확인할 수 없습니다.",
+        "RAM 크기가 메인보드 슬롯에 맞는지 확인해 주세요.",
         "DIMM 또는 SO-DIMM 물리 규격 정보가 부족해 RAM을 실제로 장착할 수 있는지 알 수 없어요.",
         partIds(motherboard, ...memory.map(({ part }) => part)),
         ["memory slot form factor"],
@@ -3486,7 +3486,7 @@ export function evaluateBuild(
       addUnknown(
         findings,
         "memory-capacity",
-        "RAM 용량 정보를 완전히 확인할 수 없습니다.",
+        "메인보드와 RAM의 최대 용량을 확인해 주세요.",
         "메인보드 최대 용량 또는 RAM 모듈 용량 데이터가 부족합니다.",
         partIds(motherboard, ...memory.map(({ part }) => part)),
         ["maximum memory capacity", "module capacity"].filter(
@@ -3516,7 +3516,7 @@ export function evaluateBuild(
       addUnknown(
         findings,
         "memory-slots",
-        "메인보드 RAM 슬롯 정보를 확인할 수 없습니다.",
+        "메인보드 RAM 슬롯 수를 확인해 주세요.",
         "RAM 모듈을 몇 개까지 장착할 수 있는지 알 수 없어요.",
         [motherboard.id],
         ["memory slots"],
@@ -3572,7 +3572,7 @@ export function evaluateBuild(
       addUnknown(
         findings,
         "memory-speed",
-        "RAM 속도 정보를 완전히 확인할 수 없습니다.",
+        "RAM과 CPU·메인보드가 지원하는 속도를 확인해 주세요.",
         "메모리 속도 또는 CPU·메인보드의 공식 지원 속도 데이터가 부족합니다.",
         partIds(motherboard, ...memory.map(({ part }) => part)),
         missingSpeedFields.length > 0 ? missingSpeedFields : ["supported memory speed"],
@@ -3605,8 +3605,8 @@ export function evaluateBuild(
       addUnknown(
         findings,
         "memory-profile",
-        "RAM 프로파일과 메인보드 지원 정보를 확인할 수 없습니다.",
-        "EXPO/XMP 프로파일이 있는 RAM을 선택했지만 메인보드의 지원 프로파일 정보가 없어 설정 가능 여부를 알 수 없어요.",
+        "메인보드에서 RAM의 EXPO/XMP 설정을 지원하는지 확인해 주세요.",
+        "메인보드의 EXPO/XMP 지원 정보가 없어 설정 가능 여부를 확인할 수 없어요. RAM과 메인보드 제조사 사양을 비교해 주세요.",
         partIds(motherboard, ...profileMemory.map(({ part }) => part)),
         ["motherboard memory profiles"],
         "memory"
@@ -3616,8 +3616,8 @@ export function evaluateBuild(
         findings,
         "memory-profile",
         "warning",
-        "RAM 프로파일과 메인보드 지원 프로파일이 다릅니다.",
-        "선택한 RAM의 EXPO/XMP 프로파일과 메인보드의 지원 프로파일이 일치하지 않아 기본 속도로 동작하거나 수동 설정이 필요할 수 있습니다.",
+        "RAM의 EXPO/XMP 설정과 메인보드 지원 정보가 맞지 않습니다.",
+        "RAM의 EXPO/XMP 설정이 메인보드 지원 정보와 맞지 않아 기본 속도로 동작하거나 직접 설정해야 할 수 있어요.",
         partIds(motherboard, ...profileMemory.map(({ part }) => part)),
         [
           { label: "RAM 프로파일", actual: formatMemoryProfiles([...new Set(profileMemory.flatMap(({ part }) => part.specs.memoryProfiles ?? []))]) },
@@ -3639,7 +3639,7 @@ export function evaluateBuild(
       addUnknown(
         findings,
         "m2-slots",
-        "M.2 SSD 또는 메인보드 슬롯 정보를 확인할 수 없습니다.",
+        "M.2 SSD를 꽂을 메인보드 슬롯 수를 확인해 주세요.",
         "M.2 장착 가능 개수를 알 수 없어요.",
         partIds(motherboard, ...ssds.map(({ part }) => part)),
         ["M.2 slots"],
@@ -3681,7 +3681,7 @@ export function evaluateBuild(
       addUnknown(
         findings,
         "m2-interface",
-        "M.2 SSD와 메인보드 M.2 연결 정보를 확인할 수 없습니다.",
+        "M.2 SSD와 메인보드의 연결 방식이 맞는지 확인해 주세요.",
         "선택한 M.2 SSD의 NVMe/SATA 연결 방식 또는 메인보드의 M.2 연결 정보가 부족해 장착 가능 여부를 알 수 없어요.",
         partIds(motherboard, ...m2Parts.map(({ part }) => part)),
         missingM2InterfaceLabels,
@@ -3857,7 +3857,7 @@ export function evaluateBuild(
         findings,
         "m2-pcie-lane-sharing",
         "unknown",
-        "M.2 사용이 GPU의 PCIe 연결에 영향을 주는지 확인할 수 없습니다.",
+        "M.2 SSD를 쓰면 그래픽카드 연결에 영향이 있는지 확인해 주세요.",
         "메인보드 정보에 M.2와 PCIe 레인 공유 표기가 있지만, 공유 대상 슬롯·발생 조건·비활성화 여부가 없어 GPU PCIe 영향을 알 수 없어요. 제조사 매뉴얼을 확인하세요.",
         partIds(motherboard, gpu, ...ssds.map(({ part }) => part)),
         [
@@ -3877,7 +3877,7 @@ export function evaluateBuild(
         addUnknown(
           findings,
           "hdd-interface",
-          "HDD의 내부 연결 인터페이스를 확인할 수 없습니다.",
+          "HDD가 SATA 방식인지 확인해 주세요.",
           "HDD 정보에 SATA 연결인지 확인할 수 있는 표기가 없어 메인보드에 직접 연결 가능한지 확인해야 합니다.",
           partIds(motherboard, ...unknownHddInterfaces.map(({ part }) => part)),
           ["HDD interface"],
@@ -3933,7 +3933,7 @@ export function evaluateBuild(
       addUnknown(
         findings,
         "case-hdd-bays",
-        "케이스와 HDD 장착 공간 정보를 확인할 수 없습니다.",
+        "케이스에 HDD를 장착할 공간이 있는지 확인해 주세요.",
         "HDD를 실제로 장착할 수 있는지 알 수 없어요.",
         partIds(computerCase, ...hdds.map(({ part }) => part)),
         ["3.5-inch bays"],
@@ -3962,7 +3962,7 @@ export function evaluateBuild(
       addUnknown(
         findings,
         "case-motherboard-form-factor",
-        "케이스의 메인보드 규격 정보를 확인할 수 없습니다.",
+        "메인보드가 케이스에 들어가는지 확인해 주세요.",
         "선택한 메인보드가 케이스에 들어가는지 알 수 없어요.",
         partIds(motherboard, computerCase),
         ["supported motherboard form factors"],
@@ -3992,8 +3992,8 @@ export function evaluateBuild(
       addUnknown(
         findings,
         "case-fan-headers",
-        "케이스 팬과 메인보드 팬 헤더 정보를 확인할 수 없습니다.",
-        "케이스 기본 팬은 확인됐지만 메인보드 팬 헤더가 없어 직접 연결 가능 여부를 알 수 없어요. 팬 허브 포함 여부도 확인하세요.",
+        "케이스 팬을 메인보드에 연결할 수 있는지 확인해 주세요.",
+        "메인보드에 팬을 연결할 수 있는 단자 수가 확인되지 않았어요. 케이스에 팬 허브나 컨트롤러가 포함됐는지도 확인해 주세요.",
         partIds(motherboard, computerCase),
         ["motherboard fan headers"],
         "motherboard"
@@ -4003,8 +4003,8 @@ export function evaluateBuild(
         findings,
         "case-fan-headers",
         "warning",
-        "케이스 기본 팬 수가 메인보드 팬 헤더 수를 초과합니다.",
-        "팬을 메인보드에 직접 연결할 헤더가 부족할 수 있습니다. 케이스 팬 허브 또는 SATA 전원 컨트롤러 포함 여부를 확인하세요.",
+        "케이스 팬을 모두 연결하기 어려울 수 있습니다.",
+        "케이스 팬을 모두 메인보드에 연결하기 어려울 수 있어요. 팬 허브나 별도 컨트롤러가 포함됐는지 확인해 주세요.",
         partIds(motherboard, computerCase),
         [
           { label: "케이스 기본 팬", actual: formatNumber(caseFanCount, "개") },
@@ -4019,8 +4019,8 @@ export function evaluateBuild(
       addUnknown(
         findings,
         "case-rgb-headers",
-        "케이스 RGB 장치와 메인보드 RGB 헤더 정보를 확인할 수 없습니다.",
-        "RGB 장치를 연결할 헤더 또는 기본 RGB 컨트롤러 정보를 확인할 수 없어 연결 가능 여부를 알 수 없어요.",
+        "케이스 조명을 메인보드에 연결할 수 있는지 확인해 주세요.",
+        "케이스 조명을 연결할 단자 수와 기본 컨트롤러 정보가 확인되지 않았어요. 케이스 설명서도 확인해 주세요.",
         partIds(motherboard, computerCase),
         ["motherboard RGB/ARGB headers"],
         "motherboard"
@@ -4030,8 +4030,8 @@ export function evaluateBuild(
         findings,
         "case-rgb-headers",
         "warning",
-        "케이스 RGB 장치 수가 메인보드 RGB 헤더 수를 초과할 수 있습니다.",
-        "RGB 헤더에 장치를 직접 연결하기 부족할 수 있습니다. 5V ARGB·12V RGB 전압과 RGB 허브 포함 여부를 확인하세요.",
+        "케이스 조명을 모두 연결하기 어려울 수 있습니다.",
+        "케이스 조명을 메인보드에 직접 연결하기 어려울 수 있어요. RGB 허브가 있는지와 연결 규격을 확인해 주세요.",
         partIds(motherboard, computerCase),
         [
           { label: "케이스 RGB 장치", actual: formatNumber(caseRgbDevices, "개") },
@@ -4053,8 +4053,8 @@ export function evaluateBuild(
         addUnknown(
           findings,
           "case-rgb-voltage",
-          "케이스 RGB 전압과 메인보드 헤더 전압을 확인할 수 없습니다.",
-          "케이스 RGB 장치 타입은 확인됐지만 메인보드의 5V ARGB·12V RGB 헤더별 정보가 부족해 안전한 연결 여부를 알 수 없어요.",
+          "케이스 조명과 메인보드의 연결 규격을 확인해 주세요.",
+          "메인보드의 조명 연결 규격 정보가 없어 안전하게 연결할 수 있는지 확인하기 어려워요. 케이스와 메인보드 설명서를 비교해 주세요.",
           partIds(motherboard, computerCase),
           ["motherboard RGB header voltage"],
           "motherboard"
@@ -4064,8 +4064,8 @@ export function evaluateBuild(
           findings,
           "case-rgb-voltage",
           "warning",
-          "케이스 RGB 장치와 메인보드 헤더 전압이 맞지 않을 수 있습니다.",
-          "케이스 RGB 장치에 필요한 전압의 메인보드 헤더가 확인되지 않았습니다. 5V ARGB와 12V RGB를 혼용하지 말고 전용 컨트롤러의 전압을 제조사 페이지에서 확인해 주세요.",
+          "케이스 조명과 메인보드의 연결 규격이 맞지 않을 수 있습니다.",
+          "케이스 조명에 맞는 메인보드 단자가 확인되지 않았어요. 5V ARGB와 12V RGB는 서로 연결하면 안 됩니다. 전용 컨트롤러를 쓴다면 제품 설명서에서 전압을 확인해 주세요.",
           partIds(motherboard, computerCase),
           [
             { label: "케이스 RGB 전압", actual: caseRgbVoltage === "mixed" ? "5V + 12V" : caseRgbVoltage },
@@ -4085,7 +4085,7 @@ export function evaluateBuild(
       addUnknown(
         findings,
         "cpu-cooler-socket",
-        "CPU 쿨러의 소켓 호환 정보를 확인할 수 없습니다.",
+        "CPU 쿨러가 CPU 소켓에 맞는지 확인해 주세요.",
         "쿨러 장착 브라켓 정보를 확인할 수 없어 장착 가능 여부를 알 수 없어요.",
         partIds(cpu, cooler),
         ["cooler supported sockets"],
@@ -4157,7 +4157,7 @@ export function evaluateBuild(
         addUnknown(
           findings,
           "case-radiator-support",
-          "수랭 쿨러와 케이스의 라디에이터 지원 정보를 확인할 수 없습니다.",
+          "케이스가 수랭 쿨러의 라디에이터 크기를 지원하는지 확인해 주세요.",
           "라디에이터 크기 또는 케이스 지원 규격 데이터가 부족해 장착 가능 여부를 알 수 없어요.",
           partIds(cooler, computerCase),
           [radiatorSize === undefined ? "radiator size" : "case radiator support"],
@@ -4168,7 +4168,7 @@ export function evaluateBuild(
           findings,
           "case-radiator-support",
           "unknown",
-          "수랭 쿨러의 라디에이터 장착 위치를 확인할 수 없습니다.",
+          "수랭 쿨러 라디에이터를 케이스 어느 위치에 달 수 있는지 확인해 주세요.",
           "케이스의 위치별 라디에이터 지원 정보는 확인됐지만 쿨러의 장착 위치 정보가 없어 실제 장착 여부를 알 수 없어요.",
           partIds(cooler, computerCase),
           [
@@ -4238,7 +4238,7 @@ export function evaluateBuild(
       addUnknown(
         findings,
         "display-output",
-        "CPU의 내장 그래픽 정보를 확인할 수 없습니다.",
+        "CPU에 내장 그래픽이 있는지 확인해 주세요.",
         "외장 그래픽카드가 없는 구성이라 CPU의 화면 출력 지원 여부를 확인해야 합니다.",
         [cpu.id],
         ["integrated graphics"],
@@ -4254,7 +4254,7 @@ export function evaluateBuild(
       addUnknown(
         findings,
         "gpu-case-length",
-        "그래픽카드와 케이스의 길이 정보를 확인할 수 없습니다.",
+        "그래픽카드가 케이스에 들어가는지 확인해 주세요.",
         "그래픽카드가 케이스에 들어가는지 알 수 없어요.",
         partIds(gpu, computerCase),
         ["GPU length", "maximum GPU length"],
@@ -4280,8 +4280,8 @@ export function evaluateBuild(
       addUnknown(
         findings,
         "gpu-thickness",
-        "그래픽카드 두께 정보를 확인할 수 없습니다.",
-        "그래픽카드 두께 정보가 없어 인접 슬롯·케이스 구조물 간섭 여부를 알 수 없어요.",
+        "그래픽카드 주변 공간을 확인해 주세요.",
+        "그래픽카드 두께 정보가 없어 옆 슬롯을 가리는지 확인하기 어려워요. 제품 크기와 케이스 안쪽 공간을 확인해 주세요.",
         partIds(gpu, computerCase, motherboard),
         ["GPU thickness"],
         "case"
@@ -4291,8 +4291,8 @@ export function evaluateBuild(
         findings,
         "gpu-thickness",
         "warning",
-        "그래픽카드 두께가 두꺼워 주변 슬롯 간섭을 확인해야 합니다.",
-        "두꺼운 그래픽카드는 메인보드 인접 슬롯이나 케이스 측면·전면 구조물과 간섭할 수 있습니다. 실제 슬롯 점유 수와 케이스 여유를 제조사 페이지에서 확인해 주세요.",
+        "그래픽카드가 두꺼워 옆 슬롯을 가릴 수 있습니다.",
+        "그래픽카드가 옆 슬롯을 가리거나 케이스 안쪽 구조물에 닿을 수 있어요. 제품 크기와 케이스 안쪽 공간을 확인해 주세요.",
         partIds(gpu, computerCase, motherboard),
         [
           { label: "그래픽카드 두께", actual: formatNumber(gpuThickness, "mm") },
@@ -4344,7 +4344,7 @@ export function evaluateBuild(
       addUnknown(
         findings,
         "psu-case-length",
-        "파워서플라이와 케이스의 장착 길이를 확인할 수 없습니다.",
+        "파워가 케이스에 들어가는지 확인해 주세요.",
         "파워서플라이 깊이 또는 케이스의 허용 파워 장착 길이 정보가 부족해 물리적 장착 여부를 알 수 없어요.",
         partIds(psu, computerCase),
         [psuDepth === undefined ? "PSU depth" : "", maxPsuLength === undefined ? "case maximum PSU length" : ""].filter(Boolean),
@@ -4372,7 +4372,7 @@ export function evaluateBuild(
       addUnknown(
         findings,
         "psu-case-form-factor",
-        "파워서플라이와 케이스의 규격 정보를 확인할 수 없습니다.",
+        "파워 규격이 케이스와 맞는지 확인해 주세요.",
         "파워서플라이 규격 또는 케이스가 지원하는 파워 규격 정보가 부족해 호환 여부를 알 수 없어요.",
         partIds(psu, computerCase),
         [!psuFormFactor ? "PSU form factor" : "", !supportedPsuFormFactors || supportedPsuFormFactors.length === 0 ? "case supported PSU form factors" : ""].filter(Boolean),
@@ -4404,7 +4404,7 @@ export function evaluateBuild(
       addUnknown(
         findings,
         "gpu-psu-power",
-        "그래픽카드와 파워서플라이 전력 정보를 확인할 수 없습니다.",
+        "그래픽카드에 필요한 전력을 파워가 공급할 수 있는지 확인해 주세요.",
         "전력 공급 여유를 알 수 없어요.",
         partIds(gpu, psu, cpu),
         ["GPU power", "recommended PSU wattage", "PSU wattage"],
@@ -4435,7 +4435,7 @@ export function evaluateBuild(
       addUnknown(
         findings,
         "gpu-psu-connector",
-        "그래픽카드와 파워서플라이 보조전원 정보를 확인할 수 없습니다.",
+        "그래픽카드와 파워의 보조전원 단자를 확인해 주세요.",
         "보조전원 커넥터 정보가 양쪽 모두 부족해 케이블 연결 가능 여부를 알 수 없어요.",
         partIds(gpu, psu),
         ["GPU PCIe power connector", "PSU PCIe power connectors"],
@@ -4445,7 +4445,7 @@ export function evaluateBuild(
         addUnknown(
           findings,
           "gpu-psu-connector",
-          "그래픽카드 보조전원 정보를 확인할 수 없습니다.",
+          "그래픽카드에 필요한 보조전원 단자를 확인해 주세요.",
           "파워서플라이 커넥터 정보는 확인됐지만 그래픽카드가 요구하는 PCIe 보조전원 규격 정보가 부족해요.",
           partIds(gpu, psu),
           ["GPU PCIe power connector"],
@@ -4455,7 +4455,7 @@ export function evaluateBuild(
         addUnknown(
           findings,
           "gpu-psu-connector",
-          "파워서플라이 보조전원 정보를 확인할 수 없습니다.",
+          "파워에서 제공하는 보조전원 단자를 확인해 주세요.",
           "그래픽카드가 요구하는 PCIe 보조전원은 확인됐지만 파워서플라이의 제공 커넥터 정보가 부족해요.",
           partIds(gpu, psu),
           ["PSU PCIe power connectors"],
@@ -4527,7 +4527,7 @@ export function evaluateBuild(
       findings,
       "psu-data-quality",
       "warning",
-      "파워서플라이의 일부 스펙을 확인할 수 없습니다.",
+      "파워의 빠진 사양을 확인해 주세요.",
       "현재 데이터만으로는 전력 공급 안정성을 완전히 확인할 수 없습니다. 제조사 공식 스펙을 확인해 주세요.",
       [psu.id],
       psu.missingFields.map((field) => ({ label: "확인되지 않은 항목", actual: catalogMissingFieldLabelFor(field) })),
@@ -5474,8 +5474,8 @@ function generatedPartSelectionReason(category: PartCategory, part: Part, state:
       const evidenceText = gamingPerformanceAssessment?.status === "verified"
         ? `일치하는 실측 FPS 자료 ${gamingPerformanceAssessment.measurements?.length ?? 0}개도 연결했습니다.`
         : gamingPerformanceAssessment?.status === "target_not_met"
-          ? "연결된 실측 자료 중 목표 FPS 미달 조건이 있어 확인 필요입니다."
-          : "일치하는 실측 FPS 자료가 없어 카탈로그 기준으로 표시합니다.";
+          ? "확인한 게임 테스트에서 목표 FPS에 못 미친 조건이 있습니다."
+          : "게임별 FPS 측정 자료는 없습니다.";
       return request.profile === "gaming"
         ? `${games}·${GAMING_RESOLUTION_LABELS[gamingTargetResolution]}·${GAMING_REFRESH_RATE_LABELS[request.gamingRefreshRate ?? DEFAULT_GAMING_REFRESH_RATE]} 기준에서 GPU 스펙을 우선 반영했습니다. ${vramText}. ${evidenceText}`
         : `${profileLabel}·${priorityLabel} 기준에서 그래픽 처리 스펙과 예산을 함께 반영했습니다.`;
@@ -5867,24 +5867,26 @@ function preferCoolerHeadroom(parts: Part[], cpu: Part, profile: RecommendationP
     : undefined;
   const gamingEvidenceStatus = gamingPerformanceAssessment?.status;
   const warnings = chosen.evaluation.findings
-    .filter((finding) => finding.severity === "warning" || finding.severity === "unknown" || finding.severity === "blocker")
+    .filter((finding) =>
+      (finding.severity === "warning" || finding.severity === "unknown" || finding.severity === "blocker") &&
+      !(finding.severity === "unknown" && GENERATOR_COSMETIC_UNKNOWN_RULES.has(finding.ruleId))
+    )
     .map((finding) => finding.title);
   if (gpuTarget?.currentFit === "partial") warnings.unshift(`${gpuTarget.summary}. 목표 해상도에 맞는 VRAM이 부족할 수 있습니다.`);
   if (gpuTarget?.currentFit === "unknown") warnings.unshift(`${gpuTarget.summary}. GPU VRAM을 제조사 페이지에서 확인해 주세요.`);
-  if (!withinBudget) warnings.unshift(`목표 예산을 ${formatPrice(Math.abs(budgetDeltaWon))} 초과합니다.`);
-  if (tierGpuUnmet) warnings.push(`선택한 ${RECOMMENDATION_PERFORMANCE_TIER_LABELS[performanceTier]} 조건의 GPU 기준(VRAM ${tierMinGpuVramGb}GB 이상)을 예산·카탈로그 안에서 충족하지 못해 낮은 등급으로 구성했습니다.`);
-  if (tierCpuUnmet) warnings.push(`선택한 ${RECOMMENDATION_PERFORMANCE_TIER_LABELS[performanceTier]} 조건의 CPU 성능 기준을 예산·카탈로그 안에서 충족하지 못해 낮은 등급으로 구성했습니다.`);
+  if (tierGpuUnmet) warnings.push(`${RECOMMENDATION_PERFORMANCE_TIER_LABELS[performanceTier]}에 맞는 그래픽카드를 예산 안에서 찾지 못해 요청한 성능보다 낮은 부품으로 구성했어요. (VRAM ${tierMinGpuVramGb}GB 이상 필요)`);
+  if (tierCpuUnmet) warnings.push(`${RECOMMENDATION_PERFORMANCE_TIER_LABELS[performanceTier]}에 맞는 CPU를 예산 안에서 찾지 못해 요청한 성능보다 낮은 부품으로 구성했어요.`);
   if (hasGamingOptionAdvisory) {
     if (gamingEvidenceStatus === "verified") {
-      warnings.unshift("연결된 자료는 선택 GPU·조건의 평균 FPS 기준을 충족하지만, 실제 환경·게임 패치·온도까지 보장하지는 않습니다.");
+      warnings.unshift("확인한 테스트에서는 목표 FPS에 도달했어요. 실제 성능은 게임 업데이트와 PC 환경에 따라 달라질 수 있습니다.");
     } else if (gamingEvidenceStatus === "target_not_met") {
-      warnings.unshift("연결된 게임별 실측 자료 중 목표 FPS를 충족하지 못한 조건이 있습니다.");
+      warnings.unshift("확인한 테스트 중 목표 FPS에 못 미친 조건이 있어요. 그래픽 설정을 낮추거나 예산을 조정해 보세요.");
     } else {
-      warnings.unshift("게임별 그래픽 옵션·레이 트레이싱 조건은 현재 catalog/spec 기준 참고값이며 실제 FPS를 보장하지 않습니다.");
+      warnings.unshift("게임별 그래픽 설정은 참고용입니다. 실제 FPS는 PC 환경과 게임 설정에 따라 달라질 수 있습니다.");
     }
   }
   const gamingOptionRationale = hasGamingOptionAdvisory
-    ? `게임별 목표·그래픽 옵션은 권장 VRAM ${gamingAdvisoryTuning?.targetVramGb ?? GAMING_RESOLUTION_VRAM_TARGETS[gamingResolution]}GB와 GPU 후보 점수 가중치에 반영했습니다.${gamingEvidenceStatus === "verified" ? " 선택된 GPU와 일치하는 출처 기반 평균 FPS 자료도 목표 프레임 이상으로 확인되었습니다." : gamingEvidenceStatus === "target_not_met" ? " 연결된 실측 자료 중 목표 프레임 미달 조건이 있어 예산·옵션을 다시 조정해야 합니다." : " 게임별 실측 FPS 자료가 없어 결과는 확인 필요 상태로 해석해야 합니다."}`
+    ? `게임별 목표와 그래픽 설정을 권장 VRAM ${gamingAdvisoryTuning?.targetVramGb ?? GAMING_RESOLUTION_VRAM_TARGETS[gamingResolution]}GB와 GPU 추천에 반영했습니다.${gamingEvidenceStatus === "verified" ? " 선택한 GPU의 테스트 결과에서 목표 FPS에 도달했습니다." : gamingEvidenceStatus === "target_not_met" ? " 확인한 테스트에서 목표 FPS에 못 미친 조건이 있어요. 그래픽 설정이나 예산을 조정해 보세요." : " 게임별 FPS 테스트 자료가 없어 실제 성능은 PC 환경에 따라 달라질 수 있습니다."}`
     : undefined;
   return {
     selection: chosen.state.selection,

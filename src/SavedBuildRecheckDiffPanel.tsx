@@ -154,7 +154,7 @@ export function SavedBuildRecheckDiffPanel({ snapshot, result, partMap, onFocusF
   const benchmarkChanged = diff.benchmarkChanged || diff.benchmarkNeedsReview;
   const metadataChanged = diff.catalogChanged || diff.engineChanged;
   return <section className={`saved-build-recheck-diff-panel ${summary.direction}`} aria-label="저장 당시와 현재 재검사 비교" data-testid="saved-build-recheck-diff" tabIndex={-1}>
-    <div className="saved-build-recheck-diff-heading"><div><p className="eyebrow">SAVED → CURRENT RECHECK</p><h2>저장 당시와 현재 재검사 비교</h2><p>저장 저장본과 현재 카탈로그·검사 규칙으로 다시 계산한 결과를 분리해 보여줍니다.</p></div><strong><DirectionIcon /> {directionLabel(summary.direction)}</strong></div>
+    <div className="saved-build-recheck-diff-heading"><div><p className="eyebrow">저장한 견적 다시 확인</p><h2>저장 당시와 현재 재검사 비교</h2><p>저장한 견적과 현재 부품 정보로 다시 검사한 결과를 비교합니다.</p></div><strong><DirectionIcon /> {directionLabel(summary.direction)}</strong></div>
     <div className="saved-build-recheck-diff-grid">
       <article className={diff.statusChanged ? "changed" : undefined}><span>결과</span><strong>{statusLabel(snapshot.status)} → {statusLabel(result.status)}</strong><small>{diff.statusChanged ? "결과가 달라졌습니다." : "저장 당시와 현재 결과가 같습니다."}</small></article>
       <article className={riskChanged ? "changed" : undefined}><span>위험 카운트</span><strong>차단 {snapshot.blockerCount} → {result.blockerCount} · 주의 {snapshot.warningCount} → {result.warningCount} · 확인 {snapshot.unknownCount} → {result.unknownCount}</strong><small>{riskChanged ? `차단 ${deltaText(summary.blockerDelta)} · 주의 ${deltaText(summary.warningDelta)} · 확인 ${deltaText(summary.unknownDelta)}` : "핵심·주변 부품 위험 카운트 변화 없음"}</small></article>
@@ -211,6 +211,6 @@ export function SavedBuildRecheckDiffPanel({ snapshot, result, partMap, onFocusF
       </article>)}</div>
     </div>}
     {onFocusSection && <div className="saved-build-recheck-diff-actions"><button className="button button-light" type="button" onClick={() => onFocusSection("result-findings")}><FiSearch /> 현재 상세 결과 보기</button><button className="text-button" type="button" onClick={() => onFocusSection("saved-build-check-timeline")}><FiRefreshCw /> 검사 타임라인 보기</button></div>}
-    <p className="saved-build-recheck-diff-note"><FiInfo /> 이 비교는 저장 시점과 현재 카탈로그 기준의 차이를 설명하는 기능입니다. 실제 조립 성공·BIOS·QVL·배송·판매자 조건을 대신하지 않습니다.</p>
+    <p className="saved-build-recheck-diff-note"><FiInfo /> 저장할 때와 지금의 부품 정보 차이를 보여줍니다. 조립 가능 여부와 BIOS·메모리 호환, 배송·판매 조건은 구매 전에 확인해 주세요.</p>
   </section>;
 }

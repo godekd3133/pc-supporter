@@ -125,7 +125,7 @@ describe("accessory recommendations", () => {
 
     expect(recommendations.map((item) => item.item.id)).toEqual(["ram-good"]);
     expect(recommendations[0].reason).toContain("7200MHz");
-    expect(recommendations[0].fitBasis).toContain("DIMM");
+    expect(recommendations[0].fitBasis).toContain("RAM 높이");
   });
 
   it("recommends a storage adapter only when M.2 capacity exceeds verified motherboard slots", () => {
@@ -146,8 +146,8 @@ describe("accessory recommendations", () => {
 
     expect(recommendations.map((item) => item.item.id)).toEqual(["adapter-good", "adapter-over"]);
     expect(recommendations[0].priority).toBe("recommended");
-    expect(recommendations[0].reason).toContain("2개 확장 경로");
-    expect(recommendations[0].fitBasis).toContain("최소 2개");
+    expect(recommendations[0].reason).toContain("2개를 연결할 자리가 부족");
+    expect(recommendations[0].fitBasis).toContain("SSD 2개 이상");
     expect(recommendations[0].item.specs.adapterStorageDeviceCount).toBe(2);
     expect(recommendations.some((item) => item.item.id === "adapter-too-small")).toBe(false);
     expect(recommendAccessories({ ...build, ssd: [{ partId: "ssd-nvme", quantity: 1 }] }, catalog, accessories).some((item) => item.category === "storage_accessory")).toBe(false);
@@ -167,7 +167,7 @@ describe("accessory recommendations", () => {
 
     expect(recommendations.map((item) => item.item.id)).toEqual(["gpu-cooler-good"]);
     expect(recommendations[0].confidence).toBe("medium");
-    expect(recommendations[0].fitBasis).toContain("대체하는 추천이 아니며");
+    expect(recommendations[0].fitBasis).toContain("그래픽카드 쿨러를 바꾸는 제품은 아닙니다.");
   });
 
   it("recommends a fan hub when verified case fans exceed motherboard headers", () => {
@@ -185,7 +185,7 @@ describe("accessory recommendations", () => {
     const recommendation = recommendAccessories(build, catalog, accessories).find((item) => item.item.id === "hub-4");
 
     expect(recommendation).toMatchObject({ category: "fan_hub", priority: "recommended", confidence: "high" });
-    expect(recommendation?.reason).toContain("직접 연결이 2개 부족");
+    expect(recommendation?.reason).toContain("2개는 메인보드에 바로 연결하기 어렵습니다");
     expect(recommendAccessories(build, catalog, accessories).some((item) => item.item.id === "hub-2")).toBe(false);
     expect(recommendAccessories(build, catalog, accessories).some((item) => item.item.id === "hub-no-power")).toBe(false);
   });
@@ -206,6 +206,6 @@ describe("accessory recommendations", () => {
 
     expect(recommendations.map((item) => item.item.id)).toEqual(["rgb-good"]);
     expect(recommendations[0].reason).toContain("5V");
-    expect(recommendations[0].fitBasis).toContain("RGB 분배 포트 3개 이상");
+    expect(recommendations[0].fitBasis).toContain("RGB 장치 3개를 연결할 수 있는 제품");
   });
 });

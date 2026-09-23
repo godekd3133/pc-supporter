@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { BuildGenerationRequest, BuildGenerationResult, GamingPerformanceEvidenceStatus, Part } from "../shared/types";
 import { gamingPerformanceEvidenceRecordFromUnknown, GAMING_PERFORMANCE_EVIDENCE_STALE_DAYS, type GamingPerformanceEvidenceRecord } from "../shared/gaming-performance-evidence";
+import { applyBenchmarkOverrides, type BenchmarkOverrideMap } from "../server/benchmark-overrides";
 import { generateBuildDraft } from "../server/engine";
 
 const BENCHMARK_KEYS = ["cinebenchR23Single", "cinebenchR23Multi"] as const;
@@ -171,12 +172,26 @@ export function recommendationBaselineDiagnosticsFor(catalog: Part[], evidence: 
 
 async function main() {
   const root = resolve(import.meta.dirname, "..");
-  const [catalogRaw, evidenceRaw] = await Promise.all([
+  const [catalogRaw, evidenceRaw, overridesRaw] = await Promise.all([
     readFile(resolve(root, "data/catalog.json"), "utf8"),
-    readFile(resolve(root, "data/gaming-performance-evidence.json"), "utf8")
+    readFile(resolve(root, "data/gaming-performance-evidence.json"), "utf8"),
+    readOptionalFile(resolve(root, "data/benchmark-overrides.json"))
   ]);
-  const report = auditRecommendationEvidence(JSON.parse(catalogRaw) as Part[], JSON.parse(evidenceRaw));
+  const catalog = JSON.parse(catalogRaw) as Part[];
+  const effectiveCatalog = overridesRaw === null
+    ? catalog
+    : applyBenchmarkOverrides(catalog, JSON.parse(overridesRaw) as BenchmarkOverrideMap);
+  const report = auditRecommendationEvidence(effectiveCatalog, JSON.parse(evidenceRaw));
   process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+}
+
+async function readOptionalFile(path: string): Promise<string | null> {
+  try {
+    return await readFile(path, "utf8");
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return null;
+    throw error;
+  }
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename)) {

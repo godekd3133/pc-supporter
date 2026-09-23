@@ -81,7 +81,7 @@ describe("candidate comparison decision", () => {
       candidateRisk: "safe"
     }], "performance");
 
-    expect(result.top?.reason).toContain("비교 3/5 · 벤치마크·스펙 혼합 · 일부 정보");
+    expect(result.top?.reason).toContain("비교 3/5 · 성능 측정·부품 정보 · 일부 정보로 비교");
   });
 
   it("blends component similarity with the full-build result when available", () => {
@@ -93,7 +93,7 @@ describe("candidate comparison decision", () => {
     expect(result.top?.id).toBe("build-balanced");
     expect(result.top?.reason).toContain("성능 종합 84점");
     expect(result.top?.reason).toContain("현재 대비 +10점");
-    expect(result.summary).toContain("적용 후 전체 성능");
+    expect(result.summary).toContain("교체 후 전체 성능");
   });
 
   it("reduces the influence of limited analysis and ignores unknown analysis evidence", () => {
@@ -107,7 +107,7 @@ describe("candidate comparison decision", () => {
     expect(result.ranking[0].score).toBe(85);
     expect(result.ranking[1].score).toBe(82);
     expect(result.ranking[2].score).toBe(80);
-    expect(result.ranking[1].reason).toContain("일부 스펙 기준");
+    expect(result.ranking[1].reason).toContain("일부 정보로 계산");
     expect(result.ranking[2].reason).toContain("정보 확인 필요");
   });
 

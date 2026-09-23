@@ -95,6 +95,44 @@ describe("benchmark overrides", () => {
     expect(applied[0].specs.benchmarkProvenance).toMatchObject({ sourceKind: "official", sourceNote: "확인 표", sourceUrl: "https://example.com/benchmark" });
   });
 
+  it("clears stale same-category scores when an override only sources part of the benchmark set", () => {
+    const gpu = part({
+      id: "gpu-timespy-only",
+      category: "gpu",
+      name: "Time Spy GPU",
+      sourceProductCode: "gpu-timespy-only",
+      specs: { vramGb: 8, gpu3dmarkTimeSpyScore: 14000, gpu3dmarkPortRoyalScore: 9000 }
+    });
+    const cpu = part({
+      id: "cpu-single-only",
+      sourceProductCode: "cpu-single-only",
+      specs: { socket: "AM5", cinebenchR23Single: 1800, cinebenchR23Multi: 16000 }
+    });
+    const completeGpu = part({
+      id: "gpu-complete",
+      category: "gpu",
+      name: "Complete GPU",
+      sourceProductCode: "gpu-complete",
+      specs: { vramGb: 16, gpu3dmarkTimeSpyScore: 14000, gpu3dmarkPortRoyalScore: 9000 }
+    });
+    const provenance = { sourceKind: "independent_review" as const, sourceNote: "검증된 벤치마크", updatedAt: "2026-09-20T00:00:00.000Z" };
+    const applied = applyBenchmarkOverrides([gpu, cpu, completeGpu], {
+      "gpu-timespy-only": { partId: "gpu-timespy-only", scores: { gpu3dmarkTimeSpyScore: 15000 }, ...provenance },
+      "cpu-single-only": { partId: "cpu-single-only", scores: { cinebenchR23Single: 2000 }, ...provenance },
+      "gpu-complete": { partId: "gpu-complete", scores: { gpu3dmarkTimeSpyScore: 15000, gpu3dmarkPortRoyalScore: 10000 }, ...provenance }
+    });
+
+    expect(applied[0].specs).toMatchObject({ vramGb: 8, gpu3dmarkTimeSpyScore: 15000 });
+    expect(applied[0].specs.gpu3dmarkPortRoyalScore).toBeUndefined();
+    expect(applied[1].specs).toMatchObject({ socket: "AM5", cinebenchR23Single: 2000 });
+    expect(applied[1].specs.cinebenchR23Multi).toBeUndefined();
+    expect(applied[2].specs).toMatchObject({ vramGb: 16, gpu3dmarkTimeSpyScore: 15000, gpu3dmarkPortRoyalScore: 10000 });
+
+    const unchanged = applyBenchmarkOverrides([gpu], {});
+    expect(unchanged[0]).toBe(gpu);
+    expect(unchanged[0].specs.gpu3dmarkPortRoyalScore).toBe(9000);
+  });
+
   it("carries a persisted source-check result into benchmark provenance", () => {
     const cpu = part({ id: "cpu-source-checked", sourceProductCode: "cpu-source-checked", specs: { socket: "AM5" } });
     const sourceCheck = { requestedUrl: "https://example.com/benchmark", checkedAt: "2026-09-03T00:00:00.000Z", status: "reachable" as const, identityStatus: "matched" as const, redirectCount: 0, httpStatus: 200, contentType: "text/html", detail: "모델 식별 확인" };

@@ -761,6 +761,8 @@ export interface Part {
   dataQuality: DataQuality;
   missingFields: string[];
   updatedAt: string;
+  /** Last time a live source price was successfully read. */
+  priceCheckedAt?: string;
   /** Runtime-only freshness classification added by catalog API responses. */
   dataFreshness?: DataFreshness;
 }
@@ -932,6 +934,8 @@ export interface AccessoryItem {
   dataQuality: DataQuality;
   missingFields: string[];
   updatedAt: string;
+  /** Last time a live source price was successfully read. */
+  priceCheckedAt?: string;
   /** Runtime-only freshness classification added by accessory API responses. */
   dataFreshness?: DataFreshness;
 }

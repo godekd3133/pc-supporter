@@ -53,11 +53,13 @@ describe("part detail refresh", () => {
   });
 
   it("refreshes through the shared Danawa parser and reports changed fields", async () => {
-    const html = `<title>테스트 케이스 : 다나와 가격비교</title><meta name="description" content="ATX 케이스 / 지원보드규격: ATX / VGA 길이: 410mm / CPU쿨러 높이: 180mm / 3.5인치 베이: 4개 / 지원파워규격: 표준-ATX / 파워 장착 길이: 220mm" />`;
-    const refreshed = await refreshDanawaPart(danawaPart, { fetchHtml: async () => html });
+    const html = `<title>테스트 케이스 : 다나와 가격비교</title><link rel="canonical" href="https://prod.danawa.com/info/?pcode=1"><meta property="og:description" content="최저가 58,900원" /><meta name="description" content="ATX 케이스 / 지원보드규격: ATX / VGA 길이: 410mm / CPU쿨러 높이: 180mm / 3.5인치 베이: 4개 / 지원파워규격: 표준-ATX / 파워 장착 길이: 220mm" />`;
+    let observedPrice: number | undefined;
+    const refreshed = await refreshDanawaPart(danawaPart, { fetchHtml: async () => html, onPriceObserved: (price) => { observedPrice = price; } });
     const response = partRefreshResponse(danawaPart, refreshed, "2026-08-28T01:00:00.000Z");
 
     expect(refreshed.name).toBe("테스트 케이스");
+    expect(observedPrice).toBe(58900);
     expect(refreshed.specs.maxGpuLengthMm).toBe(410);
     expect(refreshed.specs.hddBays).toBe(4);
     expect(changedPartFields(danawaPart, refreshed)).toEqual(expect.arrayContaining(["원문 스펙", "정규화 스펙"]));

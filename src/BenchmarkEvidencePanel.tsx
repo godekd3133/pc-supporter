@@ -15,7 +15,7 @@ export function BenchmarkEvidencePanel({ cpu, gpu, snapshot: _snapshot }: { cpu?
   const scores = [benchmarkEvidenceForPart(cpu), benchmarkEvidenceForPart(gpu)].filter((item): item is BenchmarkEvidencePart => Boolean(item));
   if (scores.length === 0) return null;
   return <section className="benchmark-evidence-panel" aria-label="CPU와 GPU 성능 점수" data-testid="benchmark-evidence-panel">
-    <div className="benchmark-evidence-heading"><div><p className="eyebrow">PERFORMANCE SCORES</p><h2>CPU·GPU 성능 점수</h2><p>선택한 부품의 Cinebench R23·3DMark 점수예요.</p></div><span><FiActivity /> {scores.length}개 부품</span></div>
+    <div className="benchmark-evidence-heading"><div><h2>CPU·GPU 성능 점수</h2><p>선택한 부품의 Cinebench R23·3DMark 점수예요.</p></div><span><FiActivity /> {scores.length}개 부품</span></div>
     <div className="benchmark-evidence-grid">{scores.map((score) => <BenchmarkScoreCard evidence={score} key={score.partId} />)}</div>
   </section>;
 }

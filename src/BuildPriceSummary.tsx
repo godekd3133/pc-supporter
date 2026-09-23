@@ -52,7 +52,7 @@ export function BuildPriceSummaryPanel({ snapshot, budgetWon, compact = false, t
   const totalText = state === "empty" ? "부품을 선택해 주세요" : state === "complete" ? formatWon(snapshot.totalPriceWon) : snapshot.totalPriceWon > 0 ? formatWon(snapshot.totalPriceWon) : "가격 미확인";
 
   return <section className={`build-price-summary-panel ${state}${compact ? " compact" : ""}`} aria-label="구매 금액 요약" data-testid={testId}>
-    <div className="build-price-summary-heading"><div><p className="eyebrow">PRICE SUMMARY</p><h2>견적 금액</h2></div><span className={`build-price-summary-status ${state}`}><StatusIcon /> {statusLabel}</span></div>
+    <div className="build-price-summary-heading"><div><h2>견적 금액</h2></div><span className={`build-price-summary-status ${state}`}><StatusIcon /> {statusLabel}</span></div>
     <div className="build-price-summary-total"><div><span>{totalLabel}</span><strong>{totalText}</strong></div></div>
     <div className="build-price-summary-breakdown"><div><span>핵심 부품</span><strong>{sectionPriceText(snapshot.coreTotalPriceWon, snapshot.corePriceComplete)}</strong></div><div><span>주변 부품</span><strong>{sectionPriceText(snapshot.accessoryTotalPriceWon, snapshot.accessoryPriceComplete)}</strong></div></div>
     {state === "partial" && <div className="build-price-summary-warning"><FiAlertTriangle /><div><strong>가격이 없는 부품은 합계에 포함되지 않았어요.</strong></div></div>}

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Part } from "../shared/types";
 import { gamingPerformanceEvidenceRecordFromUnknown } from "../shared/gaming-performance-evidence";
 import { starterCatalog } from "../server/seed-catalog-starter";
+import { applyBenchmarkOverrides } from "../server/benchmark-overrides";
 import { auditRecommendationEvidence, recommendationBaselineDiagnosticsFor } from "./recommendation-evidence-audit";
 
 function part(id: string, category: "cpu" | "gpu", specs: Part["specs"]): Part {
@@ -25,6 +26,27 @@ describe("internal recommendation evidence audit", () => {
     expect(report.benchmarkCoverage.gpu).toMatchObject({ total: 1, withAnyMeasuredScore: 1, withAllMeasuredScores: 0, staleProvenance: 1 });
     expect(report.gamingPerformance).toMatchObject({ totalRecords: 2, invalidRecords: 1, staleRecords: 1, refreshRateTargetMisses: 1, uniqueGames: 1, uniqueGpus: 1, uniqueConditions: 2, missingCoverageRate: null });
     expect(report.gamingPerformance.recordCountsByGame).toEqual({ cyberpunk: 2 });
+  });
+
+  it("audits saved benchmark overrides and removes an unsourced companion score", () => {
+    const catalog = [part("gpu-overridden", "gpu", { gpu3dmarkTimeSpyScore: 18_000, gpu3dmarkPortRoyalScore: 9_000 })];
+    const before = auditRecommendationEvidence(catalog, [], "2026-09-20T00:00:00.000Z");
+    const effectiveCatalog = applyBenchmarkOverrides(catalog, {
+      "gpu-overridden": {
+        partId: "gpu-overridden",
+        scores: { gpu3dmarkTimeSpyScore: 19_250 },
+        sourceKind: "independent_review",
+        sourceNote: "Measured Time Spy result",
+        sourceUrl: "https://example.com/review/gpu-overridden",
+        updatedAt: "2026-09-01T00:00:00.000Z"
+      }
+    });
+    const after = auditRecommendationEvidence(effectiveCatalog, [], "2026-09-20T00:00:00.000Z");
+
+    expect(effectiveCatalog[0].specs).toMatchObject({ gpu3dmarkTimeSpyScore: 19_250 });
+    expect(effectiveCatalog[0].specs).not.toHaveProperty("gpu3dmarkPortRoyalScore");
+    expect(before.benchmarkCoverage.gpu.withProvenance).toBe(0);
+    expect(after.benchmarkCoverage.gpu).toMatchObject({ withProvenance: 1, withSourceUrl: 1, withAnyMeasuredScore: 1, withAllMeasuredScores: 0 });
   });
 
   it("runs a stable profile matrix as baseline diagnostics without ground-truth labels", () => {

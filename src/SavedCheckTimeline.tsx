@@ -411,7 +411,7 @@ export function savedCheckDriftText(saved: SavedBuild, check: SavedBuildLiveChec
   if (diff.benchmarkChanged) changes.push("벤치마크 변경");
   else if (diff.benchmarkNeedsReview) changes.push("벤치마크 확인 필요");
   if (diff.engineChanged) changes.push("검사 버전 변경");
-  if (diff.catalogChanged) changes.push("카탈로그 기준 변경");
+  if (diff.catalogChanged) changes.push("부품 정보 변경");
   return changes.join(" · ");
 }
 
@@ -484,7 +484,7 @@ export function SavedBuildCheckTransitionSummary({ summary, before, after }: { s
   }
   if (summary.priceDeltaWon !== undefined && summary.priceDeltaWon !== 0) lines.push(`전체 금액 ${savedCheckPriceText(before)} → ${savedCheckPriceText(after)} (${formatPriceDelta(summary.priceDeltaWon)})`);
   else if (summary.priceCompletenessChanged) lines.push(`가격 상태 ${before.priceComplete ? "확인됨" : "확인 필요"} → ${after.priceComplete ? "확인됨" : "확인 필요"}`);
-  if (summary.catalogChanged) lines.push("카탈로그 기준이 바뀌어 현재 기준으로 다시 확인했습니다.");
+  if (summary.catalogChanged) lines.push("부품 정보가 바뀌어 다시 확인했습니다.");
   if (summary.engineChanged) lines.push(`검사 버전 ${before.engineVersion} → ${after.engineVersion}`);
   if (lines.length === 0) lines.push("두 시점의 검사 상태·위험 카운트·가격·전력·냉각 예산·벤치마크 변화가 없습니다.");
   const accessoryBlockerCount = after.accessoryCompatibility?.blockerCount ?? 0;
@@ -503,7 +503,7 @@ export function SavedBuildCheckTransitionSummary({ summary, before, after }: { s
           ? "전력·냉각 여유가 부족해요. 부품이나 냉각·전원 조건을 바꾼 뒤 다시 검사해 주세요."
         : after.resourceBudget?.state === "warning" || after.resourceBudget?.state === "unknown"
           ? "전력·냉각 여유나 스펙 수치를 사기 전에 확인해 주세요."
-        : "현재 카탈로그 기준으로는 호환돼요. 제조사 안내와 실제 조립 조건을 마지막으로 확인해 주세요.";
+        : "현재 확인된 정보로는 호환돼요. 구매 전 제조사 안내와 실제 조립 공간도 확인해 주세요.";
   return <section className={`history-check-transition-summary ${summary.direction}`} aria-label="결과 변화 요약" data-testid="saved-build-check-transition-summary"><div className="history-check-transition-heading"><div><p className="eyebrow">DECISION SUMMARY</p><strong>{headline}</strong></div><span>{directionLabel}</span></div><ul>{lines.map((line) => <li key={line}>{line}</li>)}</ul><p className="history-check-transition-action"><FiZap /> 다음 행동 · {nextAction}</p></section>;
 }
 

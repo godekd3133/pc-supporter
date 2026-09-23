@@ -31,7 +31,7 @@ describe("candidate purchase decision", () => {
     const result = candidatePurchaseDecisionFor({ ...base, remainingUnknown: 1 });
 
     expect(result).toMatchObject({ state: "review", label: "확인 후 구매" });
-    expect(result.reasons.join(" ")).toContain("확인 필요 1개");
+    expect(result.reasons.join(" ")).toContain("확인할 항목 1개");
   });
 
   it("does not claim readiness when the candidate or total price is unknown", () => {
@@ -50,49 +50,49 @@ describe("candidate purchase decision", () => {
     const result = candidatePurchaseDecisionFor({ ...base, similarityScore: 97, priceDeltaWon: 120000, analysisScoreDelta: -8 });
 
     expect(result).toMatchObject({ state: "review", label: "확인 후 구매" });
-    expect(result.reasons.join(" ")).toContain("전체 성능 점수가 현재보다 8점 낮습니다");
+    expect(result.reasons.join(" ")).toContain("전체 성능 점수가 8점 낮아집니다");
   });
 
   it("keeps a project reference price in review instead of treating it as a purchase-ready price", () => {
     const result = candidatePurchaseDecisionFor({ ...base, priceEvidence: "reference" });
 
     expect(result).toMatchObject({ state: "review", label: "확인 후 구매" });
-    expect(result.reasons).toContain("참고 가격만 있어 부품 실제 판매 가격을 알 수 없어요.");
+    expect(result.reasons).toContain("참고 가격입니다. 판매처에서 현재 가격을 확인하세요.");
   });
 
   it("requires review when a performance change has unknown analysis evidence", () => {
     const result = candidatePurchaseDecisionFor({ ...base, similarityScore: 97, priceDeltaWon: 120000, analysisScoreDelta: 8, analysisConfidence: "unknown" });
 
     expect(result).toMatchObject({ state: "review", label: "확인 후 구매" });
-    expect(result.reasons.join(" ")).toContain("성능 분석 정보가 확인되지 않았습니다");
+    expect(result.reasons.join(" ")).toContain("성능 점수를 계산할 정보가 부족합니다");
   });
 
   it("requires review when a high similarity score has limited comparison coverage", () => {
     const result = candidatePurchaseDecisionFor({ ...base, similarityScore: 97, similarityConfidence: "limited", priceDeltaWon: 120000 });
 
     expect(result).toMatchObject({ state: "review", label: "확인 후 구매" });
-    expect(result.reasons.join(" ")).toContain("비교 범위가 제한적입니다");
+    expect(result.reasons.join(" ")).toContain("일부 자료만 사용됐습니다");
   });
 
   it("requires review when a high similarity score relies on stale benchmark data", () => {
     const result = candidatePurchaseDecisionFor({ ...base, similarityScore: 97, similarityConfidence: "high", benchmarkFreshness: "stale", priceDeltaWon: 120000 });
 
     expect(result).toMatchObject({ state: "review", label: "확인 후 구매" });
-    expect(result.reasons.join(" ")).toContain("벤치마크 자료의 갱신 상태");
+    expect(result.reasons.join(" ")).toContain("성능 비교 자료가 오래됐거나 갱신일을 알 수 없습니다");
   });
 
   it("requires review when the benchmark source check needs review", () => {
     const result = candidatePurchaseDecisionFor({ ...base, similarityScore: 97, similarityConfidence: "high", benchmarkSourceCheckNeedsReview: true, priceDeltaWon: 120000 });
 
     expect(result).toMatchObject({ state: "review", label: "확인 후 구매" });
-    expect(result.reasons.join(" ")).toContain("성능 비교에 사용된 벤치마크 출처를 다시 확인해야 합니다.");
+    expect(result.reasons.join(" ")).toContain("성능 비교에 사용한 출처를 확인하세요.");
   });
 
   it("requires review when a manual catalog-spec source check needs review", () => {
     const result = candidatePurchaseDecisionFor({ ...base, catalogSpecSourceCheckNeedsReview: true });
 
     expect(result).toMatchObject({ state: "review", label: "확인 후 구매" });
-    expect(result.reasons.join(" ")).toContain("직접 입력된 스펙의 제조사 페이지 접근과 모델 식별을 다시 확인해야 합니다.");
+    expect(result.reasons.join(" ")).toContain("직접 입력한 스펙과 제조사 모델명이 맞는지 확인하세요.");
   });
 
   it("suggests waiting when a compatible candidate is more expensive and near its recent high", () => {
@@ -104,7 +104,7 @@ describe("candidate purchase decision", () => {
     });
 
     expect(result).toMatchObject({ state: "wait", label: "가격 하락 대기" });
-    expect(result.reasons.join(" ")).toContain("최근 하락 후 재상승");
+    expect(result.reasons.join(" ")).toContain("최근 내린 뒤 다시 올랐습니다.");
   });
 
   it("recommends a clean candidate when the price is known and not at a recent high", () => {

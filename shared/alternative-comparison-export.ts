@@ -163,7 +163,7 @@ function scenarioStatusLabel(status: NonNullable<AlternativeComparisonCandidate[
 
 function scenarioAnalysisText(scenario: AlternativeComparisonCandidate["scenario"]) {
   if (!scenario || (scenario.analysisScore === undefined && !scenario.analysisScoreLabel)) return undefined;
-  const confidence = scenario.analysisConfidence === "high" ? "정보 충분" : scenario.analysisConfidence === "limited" ? "일부 스펙 기준" : scenario.analysisConfidence === "unknown" ? "계산 불가" : undefined;
+  const confidence = scenario.analysisConfidence === "high" ? "정보 충분" : scenario.analysisConfidence === "limited" ? "일부 정보로 계산" : scenario.analysisConfidence === "unknown" ? "계산 정보 부족" : undefined;
   const score = scenario.analysisScore === undefined ? scenario.analysisScoreLabel : `${scenario.analysisScore}점 · ${scenario.analysisScoreLabel ?? "분석"}`;
   return `성능 분석 ${score}${scenario.analysisScoreDelta !== undefined ? ` · 현재 대비 ${scenario.analysisScoreDelta > 0 ? "+" : ""}${scenario.analysisScoreDelta}점` : ""}${confidence ? ` · ${confidence}` : ""}`;
 }
@@ -195,7 +195,7 @@ function similarityConfidenceText(confidence: SimilarityConfidence) {
 }
 
 function similarityBasisText(basis: SimilarityBasis | undefined) {
-  return basis === "benchmark" ? "벤치마크 기반" : basis === "mixed" ? "벤치마크·확인 스펙 기반" : basis === "spec" ? "확인 스펙 기반" : "정보 유형 확인 필요";
+  return basis === "benchmark" ? "성능 측정 자료" : basis === "mixed" ? "성능 측정·부품 정보" : basis === "spec" ? "부품 정보" : "비교 정보 확인 필요";
 }
 
 export function alternativeComparisonSimilarityEvidenceTextFor(evidence: AlternativeComparisonSimilarityEvidence | undefined) {
@@ -284,13 +284,13 @@ function comparisonRows(candidates: AlternativeComparisonCandidate[], context: A
 export function alternativeComparisonTextFor(candidates: AlternativeComparisonCandidate[], context: AlternativeComparisonExportContext = {}) {
   const lines = ["PC Supporter 부품 비교"];
   if (context.category) lines.push(`비교 범주: ${context.category}`);
-  if (context.currentPartName) lines.push(`현재 기준선: ${context.currentPartName}`);
-  if (context.currentPartSummary) lines.push(`현재 기준선 스펙: ${context.currentPartSummary}`);
-  if (context.currentPartPrice) lines.push(`현재 기준선 가격: ${context.currentPartPrice}`);
+  if (context.currentPartName) lines.push(`현재 부품: ${context.currentPartName}`);
+  if (context.currentPartSummary) lines.push(`현재 부품 정보: ${context.currentPartSummary}`);
+  if (context.currentPartPrice) lines.push(`현재 부품 가격: ${context.currentPartPrice}`);
   lines.push("");
   candidates.forEach((candidate, index) => {
     lines.push(`[부품 ${index + 1}] ${candidate.name}`);
-    if (candidate.category || candidate.partId) lines.push(`- 카탈로그 식별자: ${candidate.category ?? "범주 확인 필요"}${candidate.partId ? ` · ${candidate.partId}` : ""}`);
+    if (candidate.category || candidate.partId) lines.push(`- 부품 분류: ${candidate.category ?? "분류 확인 필요"}${candidate.partId ? ` · ${candidate.partId}` : ""}`);
     lines.push(`- 핵심 스펙: ${candidate.summary}`);
     lines.push(`- 가격: ${candidate.price}${candidate.recommendedQuantity !== undefined ? ` · 추천 킷 ${candidate.recommendedQuantity}개` : ""}`);
     if (candidate.priceEvidence) lines.push(`- 가격 출처: ${CATALOG_PRICE_EVIDENCE_LABELS[candidate.priceEvidence]}`);
@@ -321,9 +321,9 @@ export function alternativeComparisonTextFor(candidates: AlternativeComparisonCa
 
 export function alternativeComparisonCsvFor(candidates: AlternativeComparisonCandidate[], context: AlternativeComparisonExportContext = {}) {
   const contextColumns = context.category || context.currentPartName || context.currentPartSummary || context.currentPartPrice
-    ? ["비교 범주", "현재 기준선", "현재 기준선 스펙", "현재 기준선 가격"]
+    ? ["비교 범주", "현재 부품", "현재 부품 정보", "현재 부품 가격"]
     : [];
-  const header = ["부품명", "범주", "부품 ID", "핵심 스펙", "가격", "공유 당시 가격(원)", "가격 출처", "구매 조건", "추천 킷 수량", "성능 유사도", "성능 비교 정보", "게이밍 목표 정보", "가격 대비 유사도", "추천 점수", "성능 변화", "호환 상태", "판단 요약", "미리 적용 판단", "장착 정보", "장착 정보 출처", "데이터 상태", "갱신 상태", "갱신일", "상품 링크", "성능 정보", ...contextColumns];
+  const header = ["부품명", "범주", "부품 ID", "핵심 스펙", "가격", "공유 당시 가격(원)", "가격 출처", "구매 조건", "추천 킷 수량", "성능 유사도", "성능 비교 정보", "게이밍 목표 정보", "가격 대비 유사도", "추천 점수", "성능 변화", "호환 상태", "판단 요약", "미리 적용 판단", "장착 정보", "장착 정보 출처", "부품 정보 상태", "갱신 상태", "갱신일", "상품 링크", "성능 정보", ...contextColumns];
   return `\uFEFF${[header, ...comparisonRows(candidates, context)].map((row) => row.map((value) => csvCell(value)).join(",")).join("\r\n")}`;
 }
 

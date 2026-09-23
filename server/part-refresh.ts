@@ -1,6 +1,6 @@
 import type { AccessoryItem, AccessoryRefreshResponse, Part, PartRefreshResponse } from "../shared/types";
 import { CATALOG_DATA_QUALITY_CHANGE_FIELD_LABEL, isKnownPrice } from "../shared/types";
-import { DANAWA_CATEGORIES, fetchDanawaHtml, isAllowedSourceUrl, parseDanawaProductPage, type DanawaCrawlerOptions, type DanawaListItem } from "./danawa";
+import { DANAWA_CATEGORIES, fetchDanawaHtml, isAllowedSourceUrl, parseDanawaPriceFromHtml, parseDanawaProductPage, type DanawaCrawlerOptions, type DanawaListItem } from "./danawa";
 import { DANAWA_ACCESSORY_CATEGORIES, parseDanawaAccessoryPage } from "./accessory-crawler";
 import { catalogChangeValueDiffsFor } from "./catalog-change-log";
 
@@ -58,6 +58,7 @@ export type PartRefreshOptions = {
   timeoutMs?: number;
   retries?: number;
   fetchHtml?: (url: string, options: DanawaCrawlerOptions) => Promise<string>;
+  onPriceObserved?: (priceWon: number | undefined) => void;
 };
 
 export async function refreshDanawaPart(part: Part, options: PartRefreshOptions = {}) {
@@ -77,7 +78,9 @@ export async function refreshDanawaPart(part: Part, options: PartRefreshOptions 
     rawSpecText: part.rawSpecText,
     sourceProductCode: part.sourceProductCode!
   };
-  return reconcileRefreshedPart(part, parseDanawaProductPage(part.category, item, html, config.categoryId));
+  const parsed = parseDanawaProductPage(part.category, item, html, config.categoryId);
+  options.onPriceObserved?.(parseDanawaPriceFromHtml(html, part.sourceProductCode!));
+  return reconcileRefreshedPart(part, parsed);
 }
 
 export function partRefreshResponse(before: Part, refreshed: Part, refreshedAt = new Date().toISOString()): PartRefreshResponse {
@@ -155,7 +158,9 @@ export async function refreshDanawaAccessory(item: AccessoryItem, options: PartR
     rawSpecText: item.rawSpecText,
     sourceProductCode: item.sourceProductCode!
   };
-  return reconcileRefreshedAccessory(item, parseDanawaAccessoryPage(item.category, listItem, html, config.categoryId));
+  const parsed = parseDanawaAccessoryPage(item.category, listItem, html, config.categoryId);
+  options.onPriceObserved?.(parseDanawaPriceFromHtml(html, item.sourceProductCode!));
+  return reconcileRefreshedAccessory(item, parsed);
 }
 
 export function accessoryRefreshResponse(before: AccessoryItem, refreshed: AccessoryItem, refreshedAt = new Date().toISOString()): AccessoryRefreshResponse {

@@ -272,7 +272,7 @@ export function ResultFindingCard({ finding, partMap, onOpenPicker, onEdit, onAp
   const [ruleOpen, setRuleOpen] = useState(false);
   const severityLabel = finding.severity === "blocker" ? "차단 오류" : finding.severity === "warning" ? "주의" : finding.severity === "unknown" ? "정보 부족" : "정보";
   const SeverityIcon = finding.severity === "blocker" ? FiXCircle : finding.severity === "warning" ? FiAlertTriangle : finding.severity === "unknown" ? FiInfo : FiCheckCircle;
-  const ruleGuide = ruleGuides[finding.ruleId] ?? "카탈로그에 확인된 스펙과 지금 견적이 필요로 하는 조건을 비교합니다.";
+  const ruleGuide = ruleGuides[finding.ruleId] ?? "부품 사양을 현재 견적과 비교합니다.";
   const compareSuggestions = (finding.suggestions ?? []).filter((suggestion) => compareSuggestionIds.includes(suggestion.part.id));
   const suggestionCategories = new Set((finding.suggestions ?? []).map((suggestion) => suggestion.part.category));
   const suggestionCategory = suggestionCategories.size === 1 ? [...suggestionCategories][0] : undefined;

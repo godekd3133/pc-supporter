@@ -421,6 +421,24 @@ function parseLowestPrice(text: string | undefined) {
   return parseNumber(text, /최저가\s*([\d,]+)\s*원/i);
 }
 
+/** Returns only a price explicitly present in the product page's Open Graph description. */
+export function parseDanawaPriceFromHtml(html: string, expectedProductCode: string) {
+  const $ = cheerio.load(html);
+  const canonical = $("link[rel='canonical']").attr("href");
+  const openGraphUrl = $("meta[property='og:url']").attr("content");
+  const identityUrl = canonical || openGraphUrl;
+  if (!identityUrl) return undefined;
+  try {
+    const parsedUrl = new URL(identityUrl, "https://prod.danawa.com");
+    if (parsedUrl.protocol !== "https:" || !["prod.danawa.com", "www.danawa.com"].includes(parsedUrl.hostname.toLowerCase())) return undefined;
+    const actualProductCode = parsedUrl.searchParams.get("pcode");
+    if (!actualProductCode || actualProductCode !== expectedProductCode) return undefined;
+  } catch {
+    return undefined;
+  }
+  return parseLowestPrice(normalizeSpace($("meta[property='og:description']").attr("content")));
+}
+
 function capacityMatches(text: string) {
   return [...text.matchAll(/([\d,.]+)\s*(TB|GB)\b/gi)]
     .map((match) => {

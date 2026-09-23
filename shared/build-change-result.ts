@@ -145,7 +145,7 @@ function directionLabel(direction: BuildChangeResultExport["direction"]) {
 }
 
 function confidenceLabel(confidence: CompatibilityResult["analysis"]["confidence"]) {
-  return confidence === "high" ? "정보 충분" : confidence === "limited" ? "일부 스펙 기준" : "계산 불가";
+  return confidence === "high" ? "정보 충분" : confidence === "limited" ? "일부 정보로 계산" : "계산 정보 부족";
 }
 
 function priceText(snapshot: BuildChangeResultSnapshotExport) {
@@ -189,7 +189,7 @@ export function buildChangeResultTextFor(comparison: BuildChangeResultComparison
     ...(exported.findingChanges.length > 0 ? exported.findingChanges.map((finding) => `- ${findingChangeLabel(finding.change)}: ${(finding.after ?? finding.before)?.title ?? finding.key}`) : ["- 항목 변화 없음"]),
     "",
     "[확인 범위]",
-    "이 비교는 적용 전후 검사 저장본의 차이를 보여주는 읽기 전용 결과입니다. 실제 판매가·재고·FPS·제조사 QVL·실제 장착·케이블 배선은 별도로 확인해야 합니다."
+    "실제 판매가와 재고는 판매처에서 확인하세요. FPS는 게임 설정에 따라 달라질 수 있으며, 메모리 호환성·케이스 장착 공간·케이블 연결은 구매 전에 확인하세요."
   ];
   return lines.join("\n");
 }

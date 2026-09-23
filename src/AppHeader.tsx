@@ -156,7 +156,7 @@ export function AppHeader({ view, networkOnline, apiStatus, bootstrapLoading, bo
         <button className="mobile-more-scrim" type="button" aria-label="더보기 메뉴 닫기" onClick={() => setMoreOpen(false)} />
         <section ref={moreSheetRef} className="mobile-more-sheet" id="mobile-more-sheet" role="dialog" aria-modal="false" aria-labelledby="mobile-more-title" tabIndex={-1}>
           <div className="mobile-more-sheet-handle" aria-hidden="true" />
-          <div className="mobile-more-sheet-heading"><div><p className="mobile-kicker">MORE TOOLS</p><h2 id="mobile-more-title">더 필요한 도구</h2></div><button className="mobile-more-close" type="button" onClick={() => setMoreOpen(false)} aria-label="더보기 메뉴 닫기"><FiX /></button></div>
+          <div className="mobile-more-sheet-heading"><div><h2 id="mobile-more-title">추가 기능</h2></div><button className="mobile-more-close" type="button" onClick={() => setMoreOpen(false)} aria-label="더보기 메뉴 닫기"><FiX /></button></div>
           <div className="mobile-more-grid">
             <button type="button" onClick={() => { setMoreOpen(false); onGenerate(); }}><span><FiZap /></span><strong>자동 구성</strong></button>
             <button type="button" onClick={() => { setMoreOpen(false); onAccessories(); }}><span><FiTool /></span><strong>주변 부품</strong></button>

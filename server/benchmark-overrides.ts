@@ -174,19 +174,25 @@ export function applyBenchmarkOverrides(parts: Part[], overrides: BenchmarkOverr
     const override = overrides[part.id];
     if (!override || !override.scores || typeof override.scores !== "object" || Array.isArray(override.scores) || Object.keys(override.scores).length === 0) return part;
     const specs = { ...part.specs };
-    let appliedScoreCount = 0;
+    const appliedScoreKeys = new Set<BenchmarkScoreKey>();
     for (const [key, value] of Object.entries(override.scores)) {
       const scoreKey = key as BenchmarkScoreKey;
       const allowedKeys = part.category === "cpu" ? CPU_SCORE_KEYS : part.category === "gpu" ? GPU_SCORE_KEYS : new Set<BenchmarkScoreKey>();
       const validatedValue = scoreValue(value);
       if (BENCHMARK_SCORE_KEYS.includes(scoreKey) && allowedKeys.has(scoreKey) && validatedValue !== undefined) {
         specs[scoreKey as keyof PartSpecs] = validatedValue as never;
-        appliedScoreCount += 1;
+        appliedScoreKeys.add(scoreKey);
+      }
+    }
+    if (appliedScoreKeys.size > 0) {
+      const categoryScoreKeys = part.category === "cpu" ? CPU_SCORE_KEYS : part.category === "gpu" ? GPU_SCORE_KEYS : new Set<BenchmarkScoreKey>();
+      for (const scoreKey of categoryScoreKeys) {
+        if (!appliedScoreKeys.has(scoreKey)) delete specs[scoreKey as keyof PartSpecs];
       }
     }
     const sourceUrl = typeof override.sourceUrl === "string" ? override.sourceUrl.trim() : "";
     const safeSourceUrl = sourceUrl && sourceUrlErrors(sourceUrl).length === 0 ? sourceUrl : undefined;
-    if (appliedScoreCount > 0 && typeof override.sourceNote === "string" && override.sourceNote.trim()) {
+    if (appliedScoreKeys.size > 0 && typeof override.sourceNote === "string" && override.sourceNote.trim()) {
       const sourceKind = benchmarkSourceKindFromUnknown(override.sourceKind) ?? "other";
       const sourceCheck = physicalSourceCheckFromUnknown(override.sourceCheck);
       specs.benchmarkProvenance = {

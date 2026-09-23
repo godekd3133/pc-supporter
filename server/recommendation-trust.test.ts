@@ -92,7 +92,7 @@ describe("recommendation trust", () => {
 
     expect(reference).toMatchObject({ priceKnown: true, priceEvidence: "reference" });
     expect(reference.score).toBeLessThan(live.score);
-    expect(reference.reasons).toContain("참고 가격가 있어 총액 비교에 참고할 수 있지만 실제 판매가로 정하지 않아요.");
+    expect(reference.reasons).toContain("참고 가격만 있어 현재 판매 가격은 판매처에서 확인하세요.");
   });
 
   it("keeps a safe candidate highly rated while reporting unrelated build issues separately", () => {
@@ -147,7 +147,7 @@ describe("recommendation trust", () => {
     });
 
     expect(result).toMatchObject({ level: "medium", benchmarkBacked: true, benchmarkFreshness: "stale" });
-    expect(result.reasons).toContain("벤치마크 자료가 오래되어 최신 측정값을 다시 확인해야 합니다.");
+    expect(result.reasons).toContain("성능 측정 자료가 오래됐습니다. 최신 자료를 확인하세요.");
   });
 
   it("downgrades trust when the benchmark source check cannot verify the registered model", () => {
@@ -168,7 +168,7 @@ describe("recommendation trust", () => {
     });
 
     expect(result).toMatchObject({ level: "medium", benchmarkSourceCheckNeedsReview: true });
-    expect(result.reasons).toContain("벤치마크 출처 페이지 접근·모델 식별을 다시 확인해야 해요.");
+    expect(result.reasons).toContain("성능 자료의 출처와 부품 모델을 확인하세요.");
   });
 
   it("downgrades trust before a manual catalog-spec source has been checked", () => {
@@ -205,7 +205,7 @@ describe("recommendation trust", () => {
     expect(result).toMatchObject({ level: "medium", catalogSpecSourceCheckNeedsReview: true });
     expect(result.reasons).toEqual(expect.arrayContaining([
       "제조사 정보 수동 보강값",
-      "제조사 정보 페이지 접근·모델 식별을 확인하기 전이에요."
+      "제조사 정보와 부품 모델을 아직 확인하지 않았습니다."
     ]));
   });
 
@@ -249,7 +249,7 @@ describe("recommendation trust", () => {
     });
 
     expect(result).toMatchObject({ level: "high", catalogSpecSourceCheckNeedsReview: false });
-    expect(result.reasons).toContain("제조사 정보 페이지 접근과 모델 식별을 확인했어요.");
+    expect(result.reasons).toContain("제조사 정보와 부품 모델을 확인했습니다.");
   });
 
   it.each([
@@ -294,7 +294,7 @@ describe("recommendation trust", () => {
     });
 
     expect(result).toMatchObject({ level: "medium", catalogSpecSourceCheckNeedsReview: true });
-    expect(result.reasons).toContain("제조사 정보 페이지 접근·모델 식별을 다시 확인해야 해요.");
+    expect(result.reasons).toContain("제조사 정보와 부품 모델을 확인하세요.");
   });
 
   it("downgrades trust when a candidate leaves unknowns or has stale incomplete data", () => {
@@ -320,8 +320,8 @@ describe("recommendation trust", () => {
     expect(result.sourceAvailable).toBe(false);
     expect(result.reasons).toEqual(expect.arrayContaining([
       "부품 자체의 차단 오류는 없지만 확인 필요 1개가 남습니다.",
-      "누락 스펙 3개가 있어 실제 정보 확인이 필요해요.",
-      "현재 가격을 확인할 수 없어 총액 비교는 정하지 않아요."
+      "확인되지 않은 부품 정보가 3개 있습니다.",
+      "현재 가격을 알 수 없어 총액을 비교하지 않았습니다."
     ]));
   });
 
@@ -339,7 +339,7 @@ describe("recommendation trust", () => {
       now: "2026-08-31T12:00:00.000Z"
     });
 
-    expect(result.reasons).toContain("성능 유사도를 계산할 비교 스펙이 없습니다.");
+    expect(result.reasons).toContain("성능을 비교할 부품 정보가 없습니다.");
     expect(result.comparedDimensions).toBe(0);
     expect(result.totalDimensions).toBe(0);
   });

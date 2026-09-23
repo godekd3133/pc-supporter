@@ -72,7 +72,7 @@ describe("compatibility report export", () => {
     expect(report).toContain("[구매·조립 실행 순서]");
     expect(report).toContain("해결해야 할 충돌 제거");
     expect(report).toContain("소켓이 맞지 않습니다.");
-    expect(report).toContain("실제 FPS·벤치마크 순위");
+    expect(report).toContain("성능 점수는 실제 FPS나 작업 속도와 다를 수 있습니다.");
     expect(report).toContain("결과 경로: /result?finding=blocker#findings");
     expect(report).toContain("상세 필터: 차단 오류");
     expect(report).toContain("열린 위치: 검사 결과 상세");
@@ -264,8 +264,8 @@ describe("compatibility report export", () => {
     ]), new Map([[accessory.id, accessory]]));
 
     expect(report).toContain("[팬·RGB 연결 자원]");
-    expect(report).toContain("케이스 기본 팬 연결: 4개 사용 · 2개 확인 · 2개 부족 · 주의");
-    expect(report).toContain("RGB 전압 연결: 필요 전압 12V · 12V 헤더 없음 · 주의");
+    expect(report).toContain("케이스 팬 연결: 4개 사용 · 2개 확인 · 2개 부족 · 주의");
+    expect(report).toContain("RGB 전압 연결: 필요 전압 12V · 12V 연결 단자 없음 · 주의");
   });
 
   it("includes the calculated accessory connection plan in text and JSON reports", () => {

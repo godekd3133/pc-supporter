@@ -1264,7 +1264,7 @@ describe("compatibility engine", () => {
     const finding = result.findings.find((item) => item.ruleId === "case-fan-headers");
 
     expect(finding?.severity).toBe("unknown");
-    expect(finding?.message).toContain("알 수 없어요");
+    expect(finding?.message).toContain("단자 수가 확인되지 않았어요");
     expect(result.status).toBe("needs_review");
   });
 
@@ -1646,7 +1646,7 @@ describe("compatibility engine", () => {
     const finding = result.findings.find((item) => item.ruleId === "case-rgb-headers");
 
     expect(finding?.severity).toBe("unknown");
-    expect(finding?.message).toContain("알 수 없어요");
+    expect(finding?.message).toContain("단자 수와 기본 컨트롤러 정보가 확인되지 않았어요");
     expect(result.status).toBe("needs_review");
   });
 
@@ -1766,7 +1766,7 @@ describe("compatibility engine", () => {
     const profileReplacement = profileFinding?.suggestions?.find((suggestion) => suggestion.part.id === expoBoard.id);
 
     expect(matching.findings.some((finding) => finding.ruleId === "memory-profile")).toBe(false);
-    expect(mismatch.findings.find((finding) => finding.ruleId === "memory-profile")).toMatchObject({ severity: "warning", title: "RAM 프로파일과 메인보드 지원 프로파일이 다릅니다." });
+    expect(mismatch.findings.find((finding) => finding.ruleId === "memory-profile")).toMatchObject({ severity: "warning", title: "RAM의 EXPO/XMP 설정과 메인보드 지원 정보가 맞지 않습니다.", message: "RAM의 EXPO/XMP 설정이 메인보드 지원 정보와 맞지 않아 기본 속도로 동작하거나 직접 설정해야 할 수 있어요." });
     expect(mismatch.blockerCount).toBe(0);
     expect(unknown.findings.find((finding) => finding.ruleId === "memory-profile")?.severity).toBe("unknown");
     expect(partialMismatch.findings.find((finding) => finding.ruleId === "memory-profile")).toMatchObject({ severity: "warning" });
@@ -2142,7 +2142,7 @@ describe("compatibility engine", () => {
     const result = evaluateBuild(build, [...seedCatalog, knownMemory, incompleteMemory], { includeSuggestions: false });
     const finding = result.findings.find((item) => item.ruleId === "memory-mixing");
 
-    expect(finding).toMatchObject({ severity: "unknown", title: "서로 다른 RAM 킷의 혼용 안정성을 확인할 수 없습니다." });
+    expect(finding).toMatchObject({ severity: "unknown", title: "함께 고른 RAM의 속도와 전압을 확인해 주세요." });
     expect(finding?.facts.find((fact) => fact.label === "확인되지 않은 비교 항목")?.actual).toContain("RAM 속도");
   });
 
@@ -2225,7 +2225,7 @@ describe("compatibility engine", () => {
     expect(suggestions.some((suggestion) => suggestion.part.id === safeMotherboard.id)).toBe(true);
     expect(suggestions.some((suggestion) => suggestion.part.id === riskyMotherboard.id)).toBe(false);
     expect(alternativeRiskForPart(build, catalog, "motherboard", riskyMotherboard)).toBe("review");
-    expect(assessAlternativePart(build, catalog, "motherboard", riskyMotherboard).reasons).toContain("M.2 SSD와 메인보드 M.2 연결 정보를 확인할 수 없습니다.");
+    expect(assessAlternativePart(build, catalog, "motherboard", riskyMotherboard).reasons).toContain("M.2 SSD와 메인보드의 연결 방식이 맞는지 확인해 주세요.");
   });
 
   it("surfaces a review candidate when no safe alternative exists", () => {
@@ -2251,7 +2251,7 @@ describe("compatibility engine", () => {
       fixesCurrentIssue: true,
       candidateRisk: "review",
       candidateUnknownCount: 1,
-      candidateReasons: ["M.2 SSD와 메인보드 M.2 연결 정보를 확인할 수 없습니다."]
+      candidateReasons: ["M.2 SSD와 메인보드의 연결 방식이 맞는지 확인해 주세요."]
     });
     expect(suggestions[0]?.reason).toContain("구매 전에 확인해야 합니다");
   });
@@ -3470,8 +3470,8 @@ describe("compatibility engine", () => {
       gamingUpscaling: "quality",
       gpuTarget: { targetVramGb: 22 }
     });
-    expect(draft.rationale.some((item) => item.includes("게임별 목표·그래픽 옵션") && item.includes("권장 VRAM 22GB") && item.includes("GPU 후보 점수"))).toBe(true);
-    expect(draft.warnings.some((item) => item.includes("실제 FPS를 보장하지 않습니다"))).toBe(true);
+    expect(draft.rationale.some((item) => item.includes("게임별 목표와 그래픽 설정") && item.includes("권장 VRAM 22GB") && item.includes("GPU 추천"))).toBe(true);
+    expect(draft.warnings.some((item) => item.includes("게임별 그래픽 설정은 참고용입니다"))).toBe(true);
   });
 
   it("explains why each generated component was selected from the request constraints", () => {
@@ -3748,7 +3748,7 @@ describe("compatibility engine", () => {
       storageCapacityGb: 1000
     });
     expect(draft.lines.find((line) => line.category === "gpu")?.partId).toBe("gpu-tier-low");
-    expect(draft.warnings.some((warning) => warning.includes("VRAM 20GB 이상") && warning.includes("낮은 등급으로 구성"))).toBe(true);
+    expect(draft.warnings.some((warning) => warning.includes("VRAM 20GB 이상 필요") && warning.includes("요청한 성능보다 낮은 부품으로 구성"))).toBe(true);
   });
 
   it("marks a compatible automatic gaming draft when its GPU misses the selected VRAM target", () => {
@@ -3782,7 +3782,39 @@ describe("compatibility engine", () => {
     expect(draft.status).toBe("compatible");
     expect(draft.withinBudget).toBe(false);
     expect(draft.budgetDeltaWon).toBeGreaterThan(0);
-    expect(draft.warnings[0]).toContain("목표 예산");
+    expect(draft.warnings.join(" ")).not.toContain("예산보다");
+  });
+
+  it("omits missing fan, RGB, and memory-profile details from automatic draft warnings", () => {
+    const catalogWithMissingCosmeticSpecs = seedCatalog.map((part) => {
+      if (part.category === "motherboard") {
+        return {
+          ...part,
+          specs: {
+            ...part.specs,
+            memoryProfiles: undefined,
+            fanPortCount: undefined,
+            rgbPortCount: undefined,
+            rgb5vPortCount: undefined,
+            rgb12vPortCount: undefined
+          }
+        };
+      }
+      if (part.category === "memory") return { ...part, specs: { ...part.specs, speedMhz: 4800, memoryProfiles: ["EXPO"] as MemoryProfile[] } };
+      if (part.category === "case") return { ...part, specs: { ...part.specs, fanCount: 3, rgbDeviceCount: 1, rgbDeviceVoltage: "5V" as const } };
+      return part;
+    });
+    const draft = generateBuildDraft(catalogWithMissingCosmeticSpecs, {
+      profile: "office",
+      budgetWon: 2_000_000,
+      includeGpu: false
+    });
+    const selectedBuild = evaluateBuild(draft.selection, catalogWithMissingCosmeticSpecs, { includeSuggestions: false });
+
+    expect(selectedBuild.findings.filter((finding) => finding.severity === "unknown").map((finding) => finding.ruleId)).toEqual(
+      expect.arrayContaining(["memory-profile", "case-fan-headers", "case-rgb-headers", "case-rgb-voltage"])
+    );
+    expect(draft.warnings.join(" ")).not.toMatch(/팬 헤더|RGB 헤더|RAM 프로파일|EXPO\/XMP 설정을 지원하는지/);
   });
 
   it("honors SSD capacity and HDD quantity requirements in the generated draft", () => {
@@ -4025,7 +4057,7 @@ describe("compatibility engine", () => {
     const finding = result.findings.find((item) => item.ruleId === "case-radiator-support");
 
     expect(finding?.severity).toBe("unknown");
-    expect(finding?.title).toContain("장착 위치");
+    expect(finding?.title).toContain("어느 위치에 달 수 있는지");
   });
 });
 

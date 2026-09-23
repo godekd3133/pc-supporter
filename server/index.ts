@@ -105,12 +105,20 @@ import { savedBuildVersionComparisonExportFor, savedBuildVersionComparisonTextFo
 import { publicSavedBuildVersionComparisonShare, parseSavedBuildVersionComparisonShareInput, savedBuildVersionComparisonShareExpired, savedBuildVersionComparisonShareExpiresAtFor, savedBuildVersionComparisonSharePayloadFor, type SavedBuildVersionComparisonShareRecord } from "../shared/saved-build-version-share";
 import { BUILD_INPUT_MAX_ID_LENGTH, BUILD_INPUT_MAX_M2_SLOTS, BUILD_INPUT_MAX_SELECTIONS_PER_LIST } from "../shared/build-input-limits";
 import { eul } from "../shared/josa";
+import { isPriceRefreshJobRunning, readPriceRefreshStatus, runPriceRefreshJob } from "./price-refresh";
+import { priceRefreshOptionsFromEnv, startPriceRefreshScheduler } from "./price-refresh-scheduler";
 
 const app = express();
 const port = Number(process.env.PORT ?? 4174);
 let catalogSeedMappingPreviewCache: { key: string; value: ReturnType<typeof catalogSeedMappingPreviewFor> } | undefined;
 let catalogSeedMappingPreviewCacheEpoch = 0;
 let catalogSeedMappingPreviewInFlight: { key: string; epoch: number; promise: Promise<ReturnType<typeof catalogSeedMappingPreviewFor>> } | undefined;
+let priceRefreshScheduler: ReturnType<typeof startPriceRefreshScheduler> | undefined;
+
+function priceRefreshSchedulerEnabled() {
+  return process.env.PRICE_REFRESH_SCHEDULER_ENABLED === "true"
+    || process.env.PRICE_REFRESH_SCHEDULER_ENABLED !== "false" && process.env.NODE_ENV === "production";
+}
 
 function isLoopbackProxyAddress(address: string) {
   const normalized = address.replace(/^::ffff:/i, "");
@@ -3473,6 +3481,29 @@ app.get("/api/admin/crawl/status", requireAdmin, async (_request, response) => {
   response.json(await readCrawlStatus());
 });
 
+app.get("/api/admin/prices/refresh/status", requireAdmin, async (_request, response) => {
+  response.json({ enabled: priceRefreshSchedulerEnabled(), ...(await readPriceRefreshStatus()) });
+});
+
+app.post("/api/admin/prices/refresh", requireAdmin, async (request, response) => {
+  const current = await readPriceRefreshStatus();
+  if (priceRefreshScheduler?.isRunning() || await isPriceRefreshJobRunning()) {
+    response.status(409).json({ error: "가격 갱신 작업이 이미 실행 중입니다.", status: current });
+    return;
+  }
+  const limits = priceRefreshOptionsFromEnv();
+  const dryRun = request.body?.dryRun === true;
+  void (async () => {
+    try {
+      await priceRefreshScheduler?.runOnce({ ...limits, dryRun });
+      if (!priceRefreshScheduler) await runPriceRefreshJob({ ...limits, dryRun });
+    } catch (error) {
+      console.error("Admin price refresh failed", error);
+    }
+  })();
+  response.status(202).json({ accepted: true, dryRun, limits });
+});
+
 app.get("/api/admin/crawl/resume-preview", requireAdmin, async (request, response) => {
   const rawCategory = typeof request.query.category === "string" ? request.query.category : undefined;
   if (rawCategory !== undefined && rawCategory !== "all" && !PART_CATEGORIES.includes(rawCategory as PartCategory)) {
@@ -4722,14 +4753,29 @@ async function start() {
     monitorInterval.unref();
   }
 
+  const priceRefreshEnabled = priceRefreshSchedulerEnabled();
+  if (priceRefreshEnabled) {
+    const intervalHours = Number(process.env.PRICE_REFRESH_INTERVAL_HOURS ?? 3);
+    const intervalMs = Number.isFinite(intervalHours) && intervalHours > 0 ? intervalHours * 60 * 60 * 1000 : 0;
+    priceRefreshScheduler = startPriceRefreshScheduler({ run: runPriceRefreshJob, intervalMs });
+    const initialRun = setTimeout(() => {
+      void priceRefreshScheduler?.runOnce(priceRefreshOptionsFromEnv()).catch((error) => console.error("Initial price refresh failed", error));
+    }, 5_000);
+    initialRun.unref();
+  }
+
+  // The older catalog crawl uses broad/sample discovery settings. Keep it opt-in and
+  // mutually exclusive with the source-price refresh scheduler.
+  const legacyCrawlEnabled = process.env.DANAWA_CRAWL_SCHEDULER_ENABLED === "true" && !priceRefreshEnabled;
   const intervalHours = Number(process.env.DANAWA_CRAWL_INTERVAL_HOURS ?? 24);
-  if (process.env.DANAWA_CRAWL_ON_START !== "false") {
+  if (legacyCrawlEnabled && process.env.DANAWA_CRAWL_ON_START === "true") {
     void runCrawlJob({ all: process.env.DANAWA_CRAWL_ALL === "true" });
   }
-  if (Number.isFinite(intervalHours) && intervalHours > 0) {
-    setInterval(() => {
+  if (legacyCrawlEnabled && Number.isFinite(intervalHours) && intervalHours > 0) {
+    const legacyCrawlInterval = setInterval(() => {
       if (!isCrawlRunning()) void runCrawlJob({ all: process.env.DANAWA_CRAWL_ALL === "true" });
     }, intervalHours * 60 * 60 * 1000);
+    legacyCrawlInterval.unref();
   }
 }
 

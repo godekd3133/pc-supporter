@@ -44,7 +44,7 @@ export function GamingPerformanceEvidencePanel({ assessment }: { assessment?: Ga
 
   return <section className={`result-gaming-evidence ${tone}`} data-testid="result-gaming-performance-evidence" aria-label="게임별 예상 FPS">
     <div className="result-gaming-evidence-heading">
-      <div><p className="eyebrow">GAME PERFORMANCE</p><h2>게임별 예상 FPS</h2><p>선택한 게임과 화질 설정에 해당하는 FPS 측정값이에요.</p></div>
+      <div><p className="eyebrow">게임 성능</p><h2>게임별 예상 FPS</h2><p>선택한 게임과 화질 설정에 해당하는 FPS 측정값이에요.</p></div>
       <span className="result-gaming-evidence-status"><StatusIcon /> {statusLabel(assessment.status)}</span>
     </div>
     <div className="result-gaming-evidence-conditions">

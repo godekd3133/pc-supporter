@@ -178,7 +178,7 @@ button:disabled { cursor: not-allowed; opacity: 0.6; }
 
 .button:hover:not(:disabled) { transform: translateY(-1px); }
 
-.eyebrow { display: flex; align-items: center; gap: 7px; margin: 0 0 11px; color: var(--teal-deep); font-family: "DM Mono", monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.13em; text-transform: uppercase; }
+.eyebrow { display: flex; align-items: center; gap: 7px; margin: 0 0 11px; color: var(--teal-deep); font-family: inherit; font-size: 11px; font-weight: 600; letter-spacing: 0; }
 
 h1, h2, h3, p { margin-top: 0; }
 
@@ -266,11 +266,9 @@ p, li { word-break: keep-all; overflow-wrap: break-word; }
 
 .hero-demo-tools button svg { color: var(--teal); font-size: 13px; }
 
-.hero-panel { position: relative; overflow: hidden; padding: 27px 25px 19px; border: 1px solid #dfe9e8; border-radius: 20px; background: #fff; box-shadow: var(--shadow); }
+.hero-panel { position: relative; overflow: hidden; padding: 27px 25px 19px; border: 1px solid #dfe9e8; border-radius: 13px; background: #fff; box-shadow: var(--small-shadow); }
 
-.hero-panel::before { position: absolute; top: -94px; right: -100px; width: 240px; height: 240px; border: 1px solid #e4f1ee; border-radius: 50%; content: ""; }
-
-.panel-kicker { position: relative; margin-bottom: 22px; color: #a7b5b8; font-family: "DM Mono", monospace; font-size: 10px; letter-spacing: 0.13em; }
+.panel-kicker { position: relative; margin-bottom: 22px; color: #71818c; font-family: inherit; font-size: 11px; font-weight: 600; letter-spacing: 0; }
 
 .preview-status { position: relative; display: flex; align-items: center; gap: 12px; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
 
@@ -17037,8 +17035,15 @@ button.metric-card:disabled { cursor: not-allowed; }
   .draft-sync-notice { padding: 13px 14px; }
 
   .eyebrow,
-  .mini-label,
   .mobile-kicker {
+    color: var(--mobile-blue);
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0;
+  }
+
+  .mini-label {
     color: var(--mobile-blue);
     font-family: "DM Mono", monospace;
     font-size: 9px;

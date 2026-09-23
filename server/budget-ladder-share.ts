@@ -11,6 +11,12 @@ const REFRESH_RATE_VALUES: GamingRefreshRate[] = [60, 144, 240];
 const LISTING_POLICY_VALUES: ListingPolicy[] = ["retail_only", "include_bulk", "all"];
 const EXPORT_STATUS_VALUES: BudgetLadderExportItem["status"][] = ["호환 가능", "확인 필요", "검토 필요", "생성 실패"];
 const MAX_TEXT_LENGTH = 1_000;
+const SHARE_INPUT_ERROR_MESSAGE = "예산 비교를 공유할 수 없습니다. 입력 내용을 확인해 주세요.";
+
+function shareInputErrorsFor(diagnostic: string): string[] {
+  // The API uses the first entry as the message shown in the UI and keeps the rest in details.
+  return [SHARE_INPUT_ERROR_MESSAGE, diagnostic];
+}
 
 export interface BudgetLadderShareInputResult {
   name?: string;
@@ -295,17 +301,17 @@ function payloadFromUnknown(value: unknown): { payload?: BudgetLadderExportPaylo
 }
 
 export function parseBudgetLadderShareInput(input: unknown): BudgetLadderShareInputResult {
-  if (!isRecord(input)) return { errors: ["예산 비교 공유 저장 형식이 올바르지 않습니다."] };
+  if (!isRecord(input)) return { errors: shareInputErrorsFor("예산 비교 공유 저장 형식이 올바르지 않습니다.") };
   const source = input as BudgetLadderShareCreateInput;
   const name = textValue(source.name, 80) ?? "PC Supporter 예산 구간 비교";
   const parsedPayload = payloadFromUnknown(source.payload);
-  if (parsedPayload.error) return { name, errors: [parsedPayload.error] };
+  if (parsedPayload.error) return { name, errors: shareInputErrorsFor(parsedPayload.error) };
   const parsedRequest = requestFromUnknown(source.request);
-  if (parsedRequest.error) return { name, errors: [parsedRequest.error] };
+  if (parsedRequest.error) return { name, errors: shareInputErrorsFor(parsedRequest.error) };
   const parentId = source.parentId === undefined || source.parentId === null || source.parentId === "" ? undefined : textValue(source.parentId, 120);
-  if (source.parentId !== undefined && source.parentId !== null && source.parentId !== "" && !parentId) return { name, errors: ["예산 비교 원본 snapshot ID가 올바르지 않습니다."] };
+  if (source.parentId !== undefined && source.parentId !== null && source.parentId !== "" && !parentId) return { name, errors: shareInputErrorsFor("예산 비교 원본 snapshot ID가 올바르지 않습니다.") };
   const expiresInDays = shareExpiryDaysFrom(source.expiresInDays);
-  if (shareExpiryValueProvided(source.expiresInDays) && expiresInDays === undefined) return { name, errors: ["예산 비교 링크 유효기간은 무기한, 7일, 30일 중 하나여야 합니다."] };
+  if (shareExpiryValueProvided(source.expiresInDays) && expiresInDays === undefined) return { name, errors: shareInputErrorsFor("예산 비교 링크 유효기간은 무기한, 7일, 30일 중 하나여야 합니다.") };
   const targetBudgetWon = parsedPayload.payload?.items.find((item) => item.id === "target")?.budgetWon;
   const normalizedRequest = parsedRequest.request && targetBudgetWon !== undefined ? { ...parsedRequest.request, budgetWon: targetBudgetWon } : parsedRequest.request;
   return { name, payload: parsedPayload.payload, ...(normalizedRequest ? { request: normalizedRequest } : {}), ...(parentId ? { parentId } : {}), ...(expiresInDays !== undefined ? { expiresInDays } : {}), errors: [] };

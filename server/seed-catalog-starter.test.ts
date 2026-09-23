@@ -28,4 +28,16 @@ describe("starter catalog", () => {
       expect(starterCatalog.filter((part) => part.category === category).length).toBeGreaterThanOrEqual(minimumPartsByCategory[category]);
     }
   });
+
+  it("does not assign benchmark scores to synthetic GPU reference parts", () => {
+    const referenceGpuIds = ["gpu-mainstream-8gb-ref", "gpu-performance-12gb-ref", "gpu-creator-16gb-ref"];
+    const referenceGpus = referenceGpuIds.map((id) => starterCatalog.find((part) => part.id === id));
+
+    expect(referenceGpus.every(Boolean)).toBe(true);
+    for (const referenceGpu of referenceGpus) {
+      expect(referenceGpu?.specs.gpu3dmarkTimeSpyScore).toBeUndefined();
+      expect(referenceGpu?.specs.gpu3dmarkPortRoyalScore).toBeUndefined();
+    }
+    expect(referenceGpus.map((part) => part?.specs.vramGb)).toEqual([8, 12, 16]);
+  });
 });

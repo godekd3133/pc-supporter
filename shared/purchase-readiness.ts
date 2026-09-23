@@ -44,12 +44,12 @@ export function purchaseReadinessFor(result: CompatibilityResult): PurchaseReadi
       ? "review"
       : "pass";
   const items: PurchaseReadinessItem[] = [
-    { id: "compatibility", label: "호환성", state: compatibilityState, summary: compatibilityState === "blocked" ? `차단 오류 ${result.blockerCount}개를 먼저 해결해야 합니다.` : compatibilityState === "review" ? `주의 ${result.warningCount}개 · 확인 필요 ${result.unknownCount}개를 구매 전에 확인하세요.` : "현재 규칙 기준의 차단 오류·주의·확인 필요가 없습니다." },
-    ...(accessoryCompatibility ? [{ id: "accessory-compatibility", label: "주변 부품", state: accessoryState, summary: accessoryState === "blocked" ? `주변 부품 차단 ${accessoryCompatibility.blockerCount}개를 먼저 수정해야 합니다.` : accessoryState === "review" ? `주변 부품 주의 ${accessoryCompatibility.warningCount}개 · 확인 필요 ${accessoryCompatibility.unknownCount}개를 구매 전에 확인하세요.` : "선택한 주변 부품의 확인 가능한 규격을 통과했습니다." }] : []),
-    { id: "price", label: "가격", state: priceState, summary: priceState === "pass" ? "선택한 핵심·주변 부품의 가격이 모두 확인됐습니다." : "가격 미확인 항목이 있어 전체 구매 금액을 알 수 없어요." },
-    { id: "data", label: "데이터 상태", state: healthState, summary: healthState === "pass" ? "선택 부품의 스펙·갱신 시점·가격 상태가 구매 기준을 충족합니다." : health ? `부분 정보 ${health.incompleteCount}개 · 재확인 ${health.agingCount + health.staleCount + health.unknownFreshnessCount}개 · 가격 미확인 ${health.unpricedCount}개` : "선택 부품의 데이터 상태를 확인해야 합니다." },
-    { id: "physical", label: "장착·전력·냉각", state: physicalState, summary: physicalState === "blocked" ? resourceBlocked ? "전력·냉각 예산이 기준에 미달합니다. 부품을 바꾸거나 조건을 다시 확인해야 합니다." : "케이스·전력·커넥터 관련 차단 오류를 먼저 해결해야 합니다." : physicalState === "review" ? resourceNeedsReview ? "장착 공간·전력·냉각 여유 또는 물리 확인 정보를 구매 전에 확인해야 합니다." : "장착 공간·전력·커넥터 또는 물리 확인 정보를 구매 전에 확인해야 합니다." : "확인된 장착·전력·냉각 기준을 통과했고 추가 장착 정보가 필요한 항목이 없습니다." },
-    { id: "budget", label: "목표 예산", state: budgetState, summary: budgetWon === undefined ? "목표 예산이 설정되지 않았습니다." : !result.priceComplete ? "가격 확인 후 목표 예산 적합 여부를 계산합니다." : result.totalPriceWon > budgetWon ? `현재 전체 합계가 목표보다 ${(result.totalPriceWon - budgetWon).toLocaleString("ko-KR")}원 초과합니다.` : `목표 예산보다 ${(budgetWon - result.totalPriceWon).toLocaleString("ko-KR")}원 여유가 있습니다.` }
+    { id: "compatibility", label: "호환성", state: compatibilityState, summary: compatibilityState === "blocked" ? `호환 차단 오류 ${result.blockerCount}개를 해결하세요.` : compatibilityState === "review" ? `주의 ${result.warningCount}개 · 확인할 항목 ${result.unknownCount}개가 있습니다.` : "검사에서 차단·주의·확인할 항목이 없습니다." },
+    ...(accessoryCompatibility ? [{ id: "accessory-compatibility", label: "주변 부품", state: accessoryState, summary: accessoryState === "blocked" ? `주변 부품 차단 오류 ${accessoryCompatibility.blockerCount}개를 해결하세요.` : accessoryState === "review" ? `주의 ${accessoryCompatibility.warningCount}개 · 확인할 항목 ${accessoryCompatibility.unknownCount}개가 있습니다.` : "주변 부품의 확인된 규격은 맞습니다." }] : []),
+    { id: "price", label: "가격", state: priceState, summary: priceState === "pass" ? "선택한 부품의 가격을 모두 확인했습니다." : "가격 미확인 부품이 있어 전체 금액을 계산할 수 없습니다." },
+    { id: "data", label: "부품 정보", state: healthState, summary: healthState === "pass" ? "선택한 부품의 주요 정보와 가격을 확인했습니다." : health ? `확인되지 않은 부품 정보 ${health.incompleteCount}개 · 오래됐거나 날짜를 모르는 정보 ${health.agingCount + health.staleCount + health.unknownFreshnessCount}개 · 가격 미확인 ${health.unpricedCount}개` : "선택한 부품 정보를 확인할 수 없습니다." },
+    { id: "physical", label: "장착·전력·냉각", state: physicalState, summary: physicalState === "blocked" ? resourceBlocked ? "전력이나 냉각 여유가 부족합니다. 관련 부품을 확인하세요." : "케이스 공간·전원 용량·커넥터 문제를 해결하세요." : physicalState === "review" ? resourceNeedsReview ? "케이스 공간과 전력·냉각 정보를 확인하세요." : "장착 공간과 전원 연결 규격을 확인하세요." : "장착 공간·전력·냉각을 확인했습니다." },
+    { id: "budget", label: "목표 예산", state: budgetState, summary: budgetWon === undefined ? "목표 예산을 입력하면 예산에 맞는지 확인할 수 있습니다." : !result.priceComplete ? "가격을 확인한 뒤 예산에 맞는지 계산합니다." : result.totalPriceWon > budgetWon ? `전체 금액이 목표보다 ${(result.totalPriceWon - budgetWon).toLocaleString("ko-KR")}원 많습니다.` : `목표 예산보다 ${(budgetWon - result.totalPriceWon).toLocaleString("ko-KR")}원 남았습니다.` }
   ];
   const state: PurchaseReadinessState = items.some((item) => item.state === "blocked") ? "blocked" : items.some((item) => item.state === "review") ? "review" : "ready";
   const accessoryBlocked = accessoryCompatibility?.blockerCount ? accessoryCompatibility.blockerCount > 0 : false;
@@ -57,7 +57,7 @@ export function purchaseReadinessFor(result: CompatibilityResult): PurchaseReadi
   return {
     state,
     label: state === "blocked" ? "구매 보류" : state === "review" ? "확인 후 구매" : "구매 준비 완료",
-    summary: state === "blocked" ? accessoryBlocked && result.blockerCount === 0 ? "주변 부품의 장착 규격을 해결한 뒤 다시 검사해야 합니다." : "차단 오류와 장착·전력 문제를 해결한 뒤 다시 검사해야 합니다." : state === "review" ? accessoryNeedsReview && result.warningCount === 0 && result.unknownCount === 0 ? "핵심 부품은 진행할 수 있지만 주변 부품의 규격·수량을 확인한 뒤 구매하세요." : "호환성은 진행할 수 있지만 가격·데이터·장착 정보를 확인한 뒤 구매하세요." : "현재 검사·가격·데이터 기준에서 구매 전 확인할 차단 항목이 없습니다.",
+    summary: state === "blocked" ? accessoryBlocked && result.blockerCount === 0 ? "주변 부품의 수량과 장착 규격을 고친 뒤 다시 검사하세요." : "위에 표시된 차단 항목을 해결한 뒤 다시 검사하세요." : state === "review" ? accessoryNeedsReview && result.warningCount === 0 && result.unknownCount === 0 ? "주변 부품의 수량과 장착 규격도 확인한 뒤 구매하세요." : "위에 표시된 확인 항목을 살펴본 뒤 구매하세요." : "호환성·가격·부품 정보를 확인했습니다. 실제 규격은 판매처에서도 확인하세요.",
     items
   };
 }

@@ -10,6 +10,7 @@ import {
   parsePciePowerConnectors,
   parsePciePowerOptions,
   parseDanawaProductPage,
+  parseDanawaPriceFromHtml,
   reparseDanawaPart,
   crawlDanawaCategory,
   retryDanawaCategoryPage
@@ -20,6 +21,14 @@ function listPageHtml(productCodes: string[], totalProductCount: number) {
 }
 
 describe("Danawa parser", () => {
+  it("accepts observed detail prices only when the canonical product code matches", () => {
+    expect(parseDanawaPriceFromHtml(`<link rel="canonical" href="https://prod.danawa.com/info/?pcode=123"><meta property="og:description" content="최저가 45,900원" />`, "123")).toBe(45900);
+    expect(parseDanawaPriceFromHtml(`<link rel="canonical" href="https://prod.danawa.com/info/?pcode=456"><meta property="og:description" content="최저가 45,900원" />`, "123")).toBeUndefined();
+    expect(parseDanawaPriceFromHtml(`<link rel="canonical" href="https://evil.example/info/?pcode=123"><meta property="og:description" content="최저가 45,900원" />`, "123")).toBeUndefined();
+    expect(parseDanawaPriceFromHtml(`<meta property="og:description" content="최저가 45,900원" />`, "123")).toBeUndefined();
+    expect(parseDanawaPriceFromHtml(`<meta property="og:url" content="https://prod.danawa.com/info/?pcode=123"><meta property="og:description" content="최저가 45,900원" />`, "123")).toBe(45900);
+  });
+
   it("extracts product codes from the structured list markup", () => {
     const html = `
       <script type="application/ld+json">

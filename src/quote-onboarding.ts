@@ -67,8 +67,8 @@ export const ONBOARDING_WORKS: readonly OnboardingWorkOption[] = [
     label: "영상 편집",
     description: "FHD·4K 컷 편집과 효과 작업",
     eyebrow: "VIDEO EDITING",
-    intensityQuestion: "영상 편집을 어느 정도로 할까요?",
-    intensitySummary: "주로 쓰는 영상의 해상도와 길이를 기준으로 맞춰드려요.",
+    intensityQuestion: "영상 편집은 어느 정도 규모인가요?",
+    intensitySummary: "영상 해상도와 편집 효과에 따라 필요한 사양이 달라져요.",
     profile: "creator",
     rank: 2,
     gpuFor: { light: true, balanced: true, heavy: true }
@@ -78,8 +78,8 @@ export const ONBOARDING_WORKS: readonly OnboardingWorkOption[] = [
     label: "3D 모델링·렌더링",
     description: "모델링·씬 구성·반복 렌더링",
     eyebrow: "3D WORK",
-    intensityQuestion: "3D 작업을 어느 정도로 할까요?",
-    intensitySummary: "모델링 규모와 렌더링 빈도를 기준으로 맞춰드려요.",
+    intensityQuestion: "3D 작업은 어느 정도 규모인가요?",
+    intensitySummary: "모델링 규모와 렌더링 빈도에 따라 필요한 사양이 달라져요.",
     profile: "creator",
     rank: 3,
     gpuFor: { light: true, balanced: true, heavy: true }
@@ -89,8 +89,8 @@ export const ONBOARDING_WORKS: readonly OnboardingWorkOption[] = [
     label: "개발·빌드",
     description: "IDE·빌드·컨테이너·가상 머신",
     eyebrow: "DEVELOPMENT",
-    intensityQuestion: "개발·빌드를 어느 정도로 할까요?",
-    intensitySummary: "프로젝트 규모와 병렬 작업량을 기준으로 맞춰드려요.",
+    intensityQuestion: "개발 프로젝트 규모는 어느 정도인가요?",
+    intensitySummary: "프로젝트 규모와 동시에 진행하는 작업에 따라 필요한 사양이 달라져요.",
     profile: "development",
     rank: 1,
     gpuFor: { light: false, balanced: false, heavy: true }
@@ -100,8 +100,8 @@ export const ONBOARDING_WORKS: readonly OnboardingWorkOption[] = [
     label: "방송·스트리밍",
     description: "송출·녹화와 게임 동시 실행",
     eyebrow: "STREAMING",
-    intensityQuestion: "방송·스트리밍을 어느 정도로 할까요?",
-    intensitySummary: "방송 해상도와 송출·게임 동시 실행 여부를 기준으로 맞춰드려요.",
+    intensityQuestion: "방송·스트리밍은 어느 정도 규모인가요?",
+    intensitySummary: "송출 해상도와 게임 동시 실행 여부에 따라 필요한 사양이 달라져요.",
     profile: "creator",
     rank: 2,
     gpuFor: { light: true, balanced: true, heavy: true }
@@ -111,8 +111,8 @@ export const ONBOARDING_WORKS: readonly OnboardingWorkOption[] = [
     label: "AI·머신러닝",
     description: "로컬 추론·모델 개발·학습",
     eyebrow: "AI / MACHINE LEARNING",
-    intensityQuestion: "AI·머신러닝 작업을 어느 정도로 할까요?",
-    intensitySummary: "모델 크기와 로컬 추론·학습 빈도를 기준으로 맞춰드려요.",
+    intensityQuestion: "AI·머신러닝 작업은 어느 정도 규모인가요?",
+    intensitySummary: "모델 크기와 추론·학습 여부에 따라 필요한 메모리와 그래픽 성능이 달라져요.",
     profile: "development",
     rank: 4,
     gpuFor: { light: true, balanced: true, heavy: true }
@@ -122,8 +122,8 @@ export const ONBOARDING_WORKS: readonly OnboardingWorkOption[] = [
     label: "음악·오디오",
     description: "트랙·플러그인·가상악기 작업",
     eyebrow: "AUDIO WORK",
-    intensityQuestion: "음악·오디오 작업을 어느 정도로 할까요?",
-    intensitySummary: "트랙 수와 플러그인·가상악기 사용량을 기준으로 맞춰드려요.",
+    intensityQuestion: "음악·오디오 작업은 어느 정도 규모인가요?",
+    intensitySummary: "트랙 수와 플러그인·가상악기 사용량에 따라 필요한 사양이 달라져요.",
     profile: "creator",
     rank: 1,
     gpuFor: { light: false, balanced: false, heavy: false }
@@ -133,8 +133,8 @@ export const ONBOARDING_WORKS: readonly OnboardingWorkOption[] = [
     label: "사무·문서",
     description: "문서·웹·화상회의·멀티태스킹",
     eyebrow: "OFFICE",
-    intensityQuestion: "사무·문서 작업을 어느 정도로 할까요?",
-    intensitySummary: "동시에 여는 프로그램과 문서량을 기준으로 맞춰드려요.",
+    intensityQuestion: "사무·문서 작업은 어느 정도인가요?",
+    intensitySummary: "함께 사용하는 프로그램 수와 문서 규모에 따라 필요한 사양이 달라져요.",
     profile: "office",
     rank: 0,
     gpuFor: { light: false, balanced: false, heavy: false }
@@ -308,7 +308,7 @@ export interface OnboardingStepIndicator {
 
 const STEP_LABELS: Record<OnboardingStep, string> = {
   intent: "시작 선택",
-  mode: "견적 방식",
+  mode: "견적 기준",
   upgrade: "업그레이드 안내",
   usecase: "용도 선택",
   games: "게임 선택",
@@ -318,7 +318,7 @@ const STEP_LABELS: Record<OnboardingStep, string> = {
   intensity: "작업 강도",
   spec: "성능 입력",
   budget: "예산 선택",
-  summary: "조건 확인"
+  summary: "견적 확인"
 };
 
 export function stepLabelFor(step: OnboardingStep): string {

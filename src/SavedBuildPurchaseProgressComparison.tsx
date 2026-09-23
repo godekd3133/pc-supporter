@@ -6,7 +6,7 @@ export function SavedBuildPurchaseProgressComparison({ builds }: { builds: Saved
   const rows = savedBuildPurchaseProgressComparisonRowsFor(builds);
   if (rows.length < 2) return null;
   return <section className="saved-build-purchase-progress-comparison" aria-label="저장 견적 구매 진행률 비교" data-testid="saved-build-purchase-progress-comparison">
-    <div className="saved-build-purchase-progress-comparison-heading"><div><p className="eyebrow">PROGRESS COMPARE</p><h2>구매 진행률 비교</h2><p>위의 견적 비교 선택과 같은 견적을 기준으로 구매 상태를 나란히 확인합니다.</p></div><span>{rows.length}개 선택</span></div>
+    <div className="saved-build-purchase-progress-comparison-heading"><div><h2>구매 진행률 비교</h2><p>위의 견적 비교 선택과 같은 견적을 기준으로 구매 상태를 나란히 확인합니다.</p></div><span>{rows.length}개 선택</span></div>
     <div className="saved-build-purchase-progress-comparison-grid">{rows.map((row) => {
       const label = row.summary.status === "completed" ? "모두 구매 완료" : row.summary.status === "in-progress" ? "구매 진행 중" : "서버 기록 없음";
       return <article className={`saved-build-purchase-progress-comparison-card ${row.summary.status}`} data-testid={`saved-build-purchase-progress-comparison-${row.id}`} key={row.id}>

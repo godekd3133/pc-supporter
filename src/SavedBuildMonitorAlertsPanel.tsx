@@ -11,7 +11,7 @@ export function SavedBuildMonitorAlertsPanel({ alerts, availableBuildIds, openin
   const filteredAlerts = alerts.filter((alert) => savedBuildMonitorAlertMatches(alert, filter));
   return <section className="history-monitor-alerts" aria-label="저장 견적 위험 변화 알림함" data-testid="saved-build-monitor-alerts">
     <div className="history-monitor-alerts-heading">
-      <div><p className="eyebrow">RISK CHANGE INBOX</p><h2><FiBell /> 저장 견적 알림함{unreadCount > 0 ? ` · 미읽음 ${unreadCount}` : ""}</h2><p>자동·수동 전체 점검에서 새로 감지한 위험과 정보 변화를 이 브라우저에만 보관합니다.</p></div>
+      <div><h2><FiBell /> 저장 견적 알림함{unreadCount > 0 ? ` · 미읽음 ${unreadCount}` : ""}</h2><p>자동·수동 전체 점검에서 새로 감지한 위험과 정보 변화를 이 브라우저에만 보관합니다.</p></div>
       <div><button className="text-button" type="button" onClick={onReadAll} disabled={unreadCount === 0}>모두 읽음</button><button className="text-button danger-text-button" type="button" onClick={onDismissAll} disabled={alerts.length === 0}>알림 지우기</button></div>
     </div>
     <div className="history-monitor-alert-filters" role="group" aria-label="저장 견적 알림 필터">{filterOptions.map((option) => <button className={filter === option.id ? "selected" : ""} type="button" aria-pressed={filter === option.id} data-testid={`saved-build-alert-filter-${option.id}`} onClick={() => setFilter(option.id)} key={option.id}>{option.label}<span>{alerts.filter((alert) => savedBuildMonitorAlertMatches(alert, option.id)).length}</span></button>)}</div>

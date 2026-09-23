@@ -66,7 +66,7 @@ describe("build change result export", () => {
     expect(text).toContain("PC Supporter 적용 후 검사 비교");
     expect(text).toContain("결과 방향: 위험 감소");
     expect(text).toContain("[확인 범위]");
-    expect(text).toContain("실제 판매가·재고·FPS");
+    expect(text).toContain("FPS는 게임 설정에 따라 달라질 수 있으며");
   });
 
   it("creates a compact decision note for an explicit future save", () => {

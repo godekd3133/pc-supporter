@@ -473,9 +473,9 @@ const RULE_GUIDES: Record<string, string> = {
   "memory-capacity": "선택한 RAM 모듈 용량의 합이 메인보드의 최대 지원 용량을 넘지 않는지 확인합니다.",
   "memory-slots": "선택한 RAM 수량과 킷당 물리 모듈 수를 곱한 값이 메인보드의 물리 슬롯 수를 넘지 않는지 확인합니다.",
   "memory-dual-channel": "RAM 수량과 킷당 물리 모듈 수를 계산해 2개 모듈 듀얼채널 구성을 권장합니다. 호환 차단이 아니라 성능 주의 항목입니다.",
-  "memory-speed": "RAM 속도와 메인보드 상한을 비교하고, EXPO/XMP 프로파일이 확인된 고속 RAM은 CPU 공식 지원 상한도 함께 고려해 둘 중 더 낮은 확인값을 유효 상한으로 사용합니다.",
-  "memory-profile": "RAM에 표시된 EXPO/XMP 프로파일과 메인보드 상세 정보에 확인된 지원 프로파일과 겹치는지 확인합니다. 불일치는 물리적 불호환으로 단정하지 않고 기본 속도 동작·수동 설정 가능성을 주의로 표시합니다.",
-  "memory-mixing": "서로 다른 RAM 상품의 용량·속도·CL·전압·프로파일을 비교합니다. 차이가 있거나 정보가 부족하면 혼용 안정성을 보수적으로 표시합니다.",
+  "memory-speed": "RAM 속도와 메인보드·CPU가 지원하는 속도를 살펴봅니다. EXPO/XMP를 켜야 하는 메모리는 기본 속도와 다를 수 있어요.",
+  "memory-profile": "RAM의 EXPO/XMP 설정을 메인보드에서 사용할 수 있는지 확인합니다. 지원 정보가 다르면 기본 속도로 작동하거나 설정이 필요할 수 있어요.",
+  "memory-mixing": "서로 다른 RAM을 함께 쓸 때 용량·속도·전압 등이 맞는지 살펴봅니다. 정보가 다르거나 부족하면 함께 쓸 때 문제가 생길 수 있어요.",
   "m2-slots": "선택한 M.2 SSD 수량과 메인보드의 M.2 슬롯 수를 비교합니다.",
   "m2-interface": "SATA 방식 M.2 SSD를 선택한 경우 메인보드 상세 정보에서 SATA M.2 연결을 지원하는지 확인합니다.",
   "m2-pcie-generation": "NVMe SSD가 요구하는 PCIe 세대와 메인보드 M.2가 확인한 세대를 비교합니다. SSD 세대가 더 높아도 장착 차단이 아니라 메인보드 세대로 링크되는 성능 주의로 표시합니다.",
@@ -488,16 +488,16 @@ const RULE_GUIDES: Record<string, string> = {
   "hdd-interface": "내장 HDD가 일반 SATA인지 확인합니다. SAS 등 별도 HBA·RAID 컨트롤러가 필요한 HDD는 일반 SATA 메인보드에 직접 연결할 수 없습니다.",
   "case-hdd-bays": "HDD 수량과 케이스의 3.5인치 장착 베이 수를 비교합니다.",
   "case-motherboard-form-factor": "메인보드 폼팩터가 케이스가 지원하는 폼팩터 목록에 포함되는지 확인합니다.",
-  "case-fan-headers": "케이스에 기본 장착된 팬 수와 메인보드의 확인된 팬 헤더 수를 비교합니다. 직접 연결이 부족하면 팬 허브가 필요할 수 있습니다.",
-  "case-rgb-headers": "케이스 RGB 장치 수와 메인보드의 RGB/ARGB 헤더 정보를 비교하되, 5V·12V 전압과 허브 연결은 제조사 페이지에서 다시 확인합니다.",
-  "case-rgb-voltage": "케이스 RGB 장치의 5V ARGB·12V RGB 타입과 메인보드의 같은 전압 헤더 정보를 비교합니다. 전압이 다르면 직접 연결하지 말고 컨트롤러 제조사 페이지를 확인해 주세요.",
+  "case-fan-headers": "케이스 기본 팬을 메인보드에 직접 연결할 수 있는지 확인합니다. 연결할 곳이 부족하면 팬 허브가 필요할 수 있어요.",
+  "case-rgb-headers": "케이스 RGB 장치를 메인보드에 연결할 수 있는지 살펴봅니다. 5V·12V 규격과 허브 연결은 제품 설명도 확인해 주세요.",
+  "case-rgb-voltage": "케이스와 메인보드의 RGB 전압이 같은지 확인합니다. 5V와 12V는 서로 연결하면 안 됩니다. 컨트롤러를 쓴다면 제조사 안내를 확인해 주세요.",
   "cpu-cooler-socket": "CPU 소켓이 쿨러의 지원 소켓 목록에 포함되는지 확인합니다.",
   "cpu-cooler-capacity": "CPU 기준 전력과 쿨러의 확인된 냉각 지원 용량을 비교합니다.",
   "case-cooler-height": "쿨러 높이가 케이스의 허용 높이를 넘지 않는지 확인합니다.",
   "case-radiator-support": "수랭 쿨러의 라디에이터 크기가 케이스의 지원 크기 목록에 포함되는지 확인하고, 양쪽 위치 정보가 확인되면 전면·상단 등 장착 위치까지 대조합니다.",
   "display-output": "외장 그래픽카드가 없을 때 CPU가 내장 그래픽을 제공하는지 확인합니다.",
   "gpu-motherboard-pcie": "그래픽카드의 PCIe 장착 폭과 메인보드의 PCIe x16/x8 슬롯 수를 비교합니다. PCIe 세대 차이 자체는 이 규칙에서 불호환으로 판단하지 않습니다.",
-  "gpu-thickness": "그래픽카드 두께가 55mm 이상이면 인접 슬롯·케이스 구조물 간섭을 주의 항목으로 표시합니다. 실제 슬롯 점유 수는 제조사 페이지에서 한 번 더 확인해 주세요.",
+  "gpu-thickness": "그래픽카드 두께가 55mm 이상입니다. 옆 슬롯이나 케이스에 닿을 수 있으니 제품 설명에서 실제 슬롯 점유 폭을 확인해 주세요.",
   "gpu-case-length": "그래픽카드 길이와 케이스의 최대 GPU 허용 길이를 비교합니다.",
   "gpu-cable-clearance": "확인된 GPU 전원 케이블 굽힘 여유와 케이스 측면 공간이 모두 맞을 때만 케이블 간섭 여부를 알려드립니다.",
   "gpu-psu-power": "그래픽카드·CPU의 권장 파워 용량과 선택한 파워의 정격 출력을 비교합니다.",
@@ -2670,7 +2670,7 @@ function App() {
       invalidateSavedBuildReads();
       setSavedBuilds((current) => current.map((item) => item.id === saved.id ? saved : item));
       if (shareId === saved.id) setSavedCheckHistory(saved.checkHistory ?? (saved.checkSnapshot ? [saved.checkSnapshot] : null));
-      setToast(`현재 카탈로그 기준 검사 기록을 추가했습니다. 총 ${saved.checkHistory?.length ?? 1}회 기록입니다.`);
+      setToast(`현재 부품 정보로 검사한 기록을 추가했습니다. 총 ${saved.checkHistory?.length ?? 1}회 기록입니다.`);
     } catch (error: unknown) {
       if (isCurrent()) setToast(error instanceof Error ? error.message : "검사 기록을 추가하지 못했습니다.");
     } finally {
@@ -2972,7 +2972,7 @@ function App() {
     openingSavedBuildIdRef.current = saved.id;
     setOpeningSavedBuildId(saved.id);
     setPendingResultFindingRuleId(focus && typeof focus !== "string" && focus.type === "finding" ? focus.ruleId : null);
-    setToast(`${eul(saved.name)} 현재 카탈로그 기준으로 다시 검사해 불러오는 중입니다.`);
+    setToast(`${eul(saved.name)} 현재 부품 정보로 다시 검사하고 있습니다.`);
     const nextPreferences = saved.recommendationPreferences ?? recommendationPreferences;
     setBuild(saved.selection);
     setRecommendationPreferences(nextPreferences);
@@ -3446,7 +3446,7 @@ function App() {
       initialFindingRuleId={pendingResultFindingRuleId}
       onInitialFindingFocus={() => setPendingResultFindingRuleId(null)}
       onRecordSavedCheck={shareId && shareOwnerToken ? () => void recordSavedBuildCheck(shareId) : undefined}
-      onAssemblyVerificationSynced={(saved) => { setSavedBuilds((current) => current.map((item) => item.id === saved.id ? saved : item)); if (shareId === saved.id) setSavedCheckHistory(saved.checkHistory ?? (saved.checkSnapshot ? [saved.checkSnapshot] : null)); setToast("실측 로그를 저장 견적의 읽기 전용 이력에 기록했습니다."); }}
+      onAssemblyVerificationSynced={(saved) => { setSavedBuilds((current) => current.map((item) => item.id === saved.id ? saved : item)); if (shareId === saved.id) setSavedCheckHistory(saved.checkHistory ?? (saved.checkSnapshot ? [saved.checkSnapshot] : null)); setToast("조립 확인 기록을 저장한 견적에 추가했습니다."); }}
       onPurchaseProgressSynced={updateCurrentSavedBuildPurchaseProgress}
       onPurchasePriceHistorySynced={updateCurrentSavedBuildPurchasePriceHistory}
       onWatchEntry={watchCatalogEntry}
@@ -3539,7 +3539,7 @@ function App() {
 }
 
 function SharedBuildErrorView({ message, onRetry, onBack }: { message: string; onRetry: () => void; onBack: () => void }) {
-  return <div className="shared-build-page"><div className="workspace-heading"><div><button className="back-link" type="button" onClick={onBack}><FiArrowLeft /> 홈으로</button><p className="eyebrow">SHARED BUILD</p><h1>공유 견적을 열 수 없습니다.</h1><p>링크가 만료되었거나 현재 카탈로그 기준으로 공유 견적을 불러오지 못했습니다.</p></div><span className="admin-badge"><FiShare2 /> 공유 링크</span></div><div className="shared-build-state error" role="alert"><FiXCircle /><div><strong>{message}</strong><p>공유 링크의 상태를 다시 확인한 뒤 재시도해 주세요.</p></div><div className="shared-build-actions"><button className="button button-secondary" type="button" onClick={onRetry}><FiRefreshCw /> 다시 시도</button><button className="button button-light" type="button" onClick={onBack}>홈으로</button></div></div></div>;
+  return <div className="shared-build-page"><div className="workspace-heading"><div><button className="back-link" type="button" onClick={onBack}><FiArrowLeft /> 홈으로</button><p className="eyebrow">SHARED BUILD</p><h1>공유 견적을 열 수 없습니다.</h1><p>링크가 만료되었거나 공유 견적을 불러오지 못했습니다.</p></div><span className="admin-badge"><FiShare2 /> 공유 링크</span></div><div className="shared-build-state error" role="alert"><FiXCircle /><div><strong>{message}</strong><p>공유 링크의 상태를 다시 확인한 뒤 재시도해 주세요.</p></div><div className="shared-build-actions"><button className="button button-secondary" type="button" onClick={onRetry}><FiRefreshCw /> 다시 시도</button><button className="button button-light" type="button" onClick={onBack}>홈으로</button></div></div></div>;
 }
 
 function BuildImportPreviewDialog({ envelope, currentBuild, currentPreferences, partMap, accessoryMap, onClose, onConfirm }: { envelope: BuildTransferEnvelope; currentBuild: BuildSelection; currentPreferences: RecommendationPreferences; partMap: Map<string, Part>; accessoryMap: Map<string, AccessoryItem>; onClose: () => void; onConfirm: (envelope: BuildTransferEnvelope) => void }) {

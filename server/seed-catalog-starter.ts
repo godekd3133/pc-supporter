@@ -734,7 +734,7 @@ export const extendedSeedCatalog: Part[] = [
     brand: "PC Supporter",
     model: "REF-GPU-8GB",
     priceWon: 459000,
-    specs: { powerW: 165, recommendedPsuW: 550, vramGb: 8, gpuVendor: "nvidia", gpuMemoryType: "GDDR6", gpuStreamProcessors: 3072, gpuMemoryBandwidthGbps: 288, gpuBoostClockMhz: 2460, gpu3dmarkTimeSpyScore: 10600, gpu3dmarkPortRoyalScore: 6000, lengthMm: 270, thicknessMm: 48, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 1 }]] }
+    specs: { powerW: 165, recommendedPsuW: 550, vramGb: 8, gpuVendor: "nvidia", gpuMemoryType: "GDDR6", gpuStreamProcessors: 3072, gpuMemoryBandwidthGbps: 288, gpuBoostClockMhz: 2460, lengthMm: 270, thicknessMm: 48, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 1 }]] }
   }),
   seed({
     id: "gpu-performance-12gb-ref",
@@ -743,7 +743,7 @@ export const extendedSeedCatalog: Part[] = [
     brand: "PC Supporter",
     model: "REF-GPU-12GB",
     priceWon: 799000,
-    specs: { powerW: 285, recommendedPsuW: 750, vramGb: 12, gpuVendor: "amd", gpuMemoryType: "GDDR6", gpuStreamProcessors: 5888, gpuMemoryBandwidthGbps: 504, gpuBoostClockMhz: 2475, gpu3dmarkTimeSpyScore: 17800, gpu3dmarkPortRoyalScore: 11000, lengthMm: 330, thicknessMm: 62, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 2 }]] }
+    specs: { powerW: 285, recommendedPsuW: 750, vramGb: 12, gpuVendor: "amd", gpuMemoryType: "GDDR6", gpuStreamProcessors: 5888, gpuMemoryBandwidthGbps: 504, gpuBoostClockMhz: 2475, lengthMm: 330, thicknessMm: 62, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 2 }]] }
   }),
   seed({
     id: "gpu-creator-16gb-ref",
@@ -752,7 +752,7 @@ export const extendedSeedCatalog: Part[] = [
     brand: "PC Supporter",
     model: "REF-GPU-16GB",
     priceWon: 1090000,
-    specs: { powerW: 250, recommendedPsuW: 750, vramGb: 16, gpuVendor: "nvidia", gpuMemoryType: "GDDR6", gpuStreamProcessors: 8448, gpuMemoryBandwidthGbps: 672, gpuBoostClockMhz: 2610, gpu3dmarkTimeSpyScore: 24000, gpu3dmarkPortRoyalScore: 15600, lengthMm: 310, thicknessMm: 55, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 2 }]] }
+    specs: { powerW: 250, recommendedPsuW: 750, vramGb: 16, gpuVendor: "nvidia", gpuMemoryType: "GDDR6", gpuStreamProcessors: 8448, gpuMemoryBandwidthGbps: 672, gpuBoostClockMhz: 2610, lengthMm: 310, thicknessMm: 55, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 2 }]] }
   }),
   seed({
     id: "ssd-nvme-500gb-ref",

@@ -15,6 +15,6 @@ export function ChangeHistoryPanel({ entries, onRestore, restoring }: { entries:
   return <section className="change-history-panel" aria-label="견적 변경 이력">
     <div className="change-history-heading"><div><p className="eyebrow">BUILD HISTORY</p><h2>변경 이력</h2><p>부품을 시험하거나 수량을 바꾼 뒤 이전 구성으로 되돌릴 수 있어요.</p></div><span className="change-history-icon"><FiClock /></span></div>
     <div className="change-history-list">{entries.slice(0, 6).map((entry, index) => <article className="change-history-item" key={entry.id}><div className="change-history-item-copy"><span>{index === 0 ? "최근 변경" : `${index + 1}단계 전`}</span><strong>{entry.label}</strong><small>{new Date(entry.changedAt).toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" })}</small></div><button className="button button-small button-light" type="button" onClick={() => onRestore(entry)} disabled={restoring}><FiRefreshCw /> {restoring ? "검사 중..." : "이전 구성 복원"}</button></article>)}</div>
-    <p className="change-history-note"><FiInfo /> 복원은 선택 부품과 추천 기준을 함께 되돌린 뒤 현재 카탈로그 기준으로 자동 재검사합니다.</p>
+    <p className="change-history-note"><FiInfo /> 복원하면 부품과 추천 기준을 되돌리고 현재 부품 정보로 다시 확인합니다.</p>
   </section>;
 }

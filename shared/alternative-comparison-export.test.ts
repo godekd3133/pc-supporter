@@ -65,7 +65,7 @@ describe("alternative comparison export", () => {
 
   it("returns an empty export envelope for no selected candidates", () => {
     expect(alternativeComparisonTextFor([])).toBe("PC Supporter 부품 비교\n");
-    expect(alternativeComparisonCsvFor([])).toBe("\uFEFF부품명,범주,부품 ID,핵심 스펙,가격,공유 당시 가격(원),가격 출처,구매 조건,추천 킷 수량,성능 유사도,성능 비교 정보,게이밍 목표 정보,가격 대비 유사도,추천 점수,성능 변화,호환 상태,판단 요약,미리 적용 판단,장착 정보,장착 정보 출처,데이터 상태,갱신 상태,갱신일,상품 링크,성능 정보");
+    expect(alternativeComparisonCsvFor([])).toBe("\uFEFF부품명,범주,부품 ID,핵심 스펙,가격,공유 당시 가격(원),가격 출처,구매 조건,추천 킷 수량,성능 유사도,성능 비교 정보,게이밍 목표 정보,가격 대비 유사도,추천 점수,성능 변화,호환 상태,판단 요약,미리 적용 판단,장착 정보,장착 정보 출처,부품 정보 상태,갱신 상태,갱신일,상품 링크,성능 정보");
   });
 
   it("writes a versioned JSON snapshot with unknown values and source links", () => {
@@ -84,10 +84,10 @@ describe("alternative comparison export", () => {
     const parsed = JSON.parse(alternativeComparisonJsonFor(candidates, context)) as { context?: typeof context; items: typeof candidates };
 
     expect(text).toContain("비교 범주: 그래픽카드");
-    expect(text).toContain("현재 기준선: 현재 GPU · 수량 1개");
-    expect(text).toContain("현재 기준선 스펙: PCIe 4.0 · VRAM 8GB · 220W");
-    expect(text).toContain("현재 기준선 가격: 450,000원");
-    expect(csv.startsWith("\uFEFF부품명,범주,부품 ID,핵심 스펙,가격,공유 당시 가격(원),가격 출처,구매 조건,추천 킷 수량,성능 유사도,성능 비교 정보,게이밍 목표 정보,가격 대비 유사도,추천 점수,성능 변화,호환 상태,판단 요약,미리 적용 판단,장착 정보,장착 정보 출처,데이터 상태,갱신 상태,갱신일,상품 링크,성능 정보,비교 범주,현재 기준선,현재 기준선 스펙,현재 기준선 가격")).toBe(true);
+    expect(text).toContain("현재 부품: 현재 GPU · 수량 1개");
+    expect(text).toContain("현재 부품 정보: PCIe 4.0 · VRAM 8GB · 220W");
+    expect(text).toContain("현재 부품 가격: 450,000원");
+    expect(csv.startsWith("\uFEFF부품명,범주,부품 ID,핵심 스펙,가격,공유 당시 가격(원),가격 출처,구매 조건,추천 킷 수량,성능 유사도,성능 비교 정보,게이밍 목표 정보,가격 대비 유사도,추천 점수,성능 변화,호환 상태,판단 요약,미리 적용 판단,장착 정보,장착 정보 출처,부품 정보 상태,갱신 상태,갱신일,상품 링크,성능 정보,비교 범주,현재 부품,현재 부품 정보,현재 부품 가격")).toBe(true);
     expect(csv).toContain(",그래픽카드,현재 GPU · 수량 1개,PCIe 4.0 · VRAM 8GB · 220W,\"450,000원\"");
     expect(parsed.context).toEqual(context);
     expect(parsed.items).toHaveLength(2);
@@ -122,7 +122,7 @@ describe("alternative comparison export", () => {
     const csv = alternativeComparisonCsvFor([evidencedCandidate]);
     const json = JSON.parse(alternativeComparisonJsonFor([evidencedCandidate])) as { items: AlternativeComparisonCandidate[] };
 
-    expect(text).toContain("성능 비교 정보: 정보 충분 · 확인 스펙 기반 · 비교 지표 2/3개 · 모델 참조 RTX 5070 확인 참조 · 보완 gpuMemoryBandwidthGbps · 지표별 VRAM 대역폭 224GB/s → 272GB/s (모델 참조)");
+    expect(text).toContain("성능 비교 정보: 정보 충분 · 부품 정보 · 비교 지표 2/3개 · 모델 참조 RTX 5070 확인 참조 · 보완 gpuMemoryBandwidthGbps · 지표별 VRAM 대역폭 224GB/s → 272GB/s (모델 참조)");
     expect(csv).toContain("성능 비교 정보");
     expect(csv).toContain("모델 참조 RTX 5070 확인 참조");
     expect(json.items[0].similarityEvidence).toEqual(evidencedCandidate.similarityEvidence);
@@ -164,9 +164,9 @@ describe("alternative comparison export", () => {
     const csv = alternativeComparisonCsvFor([valuedCandidate]);
     const json = JSON.parse(alternativeComparisonJsonFor([valuedCandidate])) as { items: AlternativeComparisonCandidate[] };
 
-    expect(text).toContain("미리 적용 판단: 확인 필요 · 차단 0 · 주의 1 · 확인 필요 2 · 성능 분석 74점 · 보완 권장 · 현재 대비 -8점 · 일부 스펙 기준 · 가격 변화 +45,000원 · 확인 후 구매 · 가격 이력 30일 4회 · 최저 100,000원 · 구매 전 확인 2개 · 확인됨 1 · 확인 필요 1 · 차단 0 · 주의·확인 필요를 확인한 뒤 구매하세요.");
+    expect(text).toContain("미리 적용 판단: 확인 필요 · 차단 0 · 주의 1 · 확인 필요 2 · 성능 분석 74점 · 보완 권장 · 현재 대비 -8점 · 일부 정보로 계산 · 가격 변화 +45,000원 · 확인 후 구매 · 가격 이력 30일 4회 · 최저 100,000원 · 구매 전 확인 2개 · 확인됨 1 · 확인 필요 1 · 차단 0 · 주의·확인 필요를 확인한 뒤 구매하세요.");
     expect(csv).toContain("미리 적용 판단");
-    expect(csv).toContain("확인 필요 · 차단 0 · 주의 1 · 확인 필요 2 · 성능 분석 74점 · 보완 권장 · 현재 대비 -8점 · 일부 스펙 기준 · 가격 변화 +45,000원");
+    expect(csv).toContain("확인 필요 · 차단 0 · 주의 1 · 확인 필요 2 · 성능 분석 74점 · 보완 권장 · 현재 대비 -8점 · 일부 정보로 계산 · 가격 변화 +45,000원");
     expect(json.items[0].scenario).toEqual(scenario);
   });
 

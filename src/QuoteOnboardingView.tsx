@@ -44,20 +44,20 @@ type ModeId = "budget" | "task" | "spec";
 type UsecaseId = "gaming" | "work";
 
 const INTENT_OPTIONS: { id: IntentId; title: string; description: string; Icon: IconType }[] = [
-  { id: "new", title: "새로운 견적을 맞추고 싶어요", description: "게임·작업·예산을 몇 가지 질문으로 정리해요.", Icon: FiFileText },
-  { id: "upgrade", title: "이미 가지고 있는 컴퓨터를 업그레이드하고 싶어요", description: "현재 부품을 확인하고 바꾸면 좋은 후보를 찾아요.", Icon: FiMonitor },
-  { id: "later", title: "나중에 할래요", description: "홈으로 돌아가고, 준비되면 다시 시작할 수 있어요.", Icon: FiClock }
+  { id: "new", title: "새 PC 견적 보기", description: "게임·작업 용도와 예산을 골라요.", Icon: FiFileText },
+  { id: "upgrade", title: "쓰던 PC 업그레이드하기", description: "현재 부품을 확인하고 교체할 부품을 살펴봐요.", Icon: FiMonitor },
+  { id: "later", title: "나중에 하기", description: "홈으로 돌아가 다시 시작할 수 있어요.", Icon: FiClock }
 ];
 
 const MODE_OPTIONS: { id: ModeId; title: string; description: string; Icon: IconType }[] = [
-  { id: "budget", title: "예산으로 맞출래요", description: "금액을 정하면 예상 성능·RAM·SSD를 바로 보여줘요.", Icon: FiDatabase },
-  { id: "task", title: "특정 작업이나 게임을 할 거예요", description: "게임·작업과 목표 성능을 고르면 필요한 사양을 계산해요.", Icon: FiPlay },
-  { id: "spec", title: "생각해둔 성능이 있어요", description: "성능 등급·외장 GPU·RAM·SSD를 직접 입력해요.", Icon: FiMonitor }
+  { id: "budget", title: "예산을 기준으로 고르기", description: "예산에 맞는 기본 구성을 살펴봐요.", Icon: FiDatabase },
+  { id: "task", title: "게임·작업을 기준으로 고르기", description: "주로 할 게임이나 작업에 맞는 사양을 선택해요.", Icon: FiPlay },
+  { id: "spec", title: "원하는 사양 직접 입력하기", description: "성능 등급과 그래픽·메모리·저장공간을 정해요.", Icon: FiMonitor }
 ];
 
 const USECASE_OPTIONS: { id: UsecaseId; title: string; description: string; Icon: IconType }[] = [
-  { id: "gaming", title: "게임", description: "원하는 게임과 해상도를 골라주세요", Icon: FiPlay },
-  { id: "work", title: "작업", description: "영상 편집·3D·개발 같은 작업을 골라주세요", Icon: FiMonitor }
+  { id: "gaming", title: "게임", description: "주로 할 게임과 목표 성능을 정해요.", Icon: FiPlay },
+  { id: "work", title: "작업", description: "영상 편집·3D·개발 등 주된 작업을 골라요.", Icon: FiMonitor }
 ];
 
 const WORK_ICONS: Record<OnboardingWork, IconType> = {
@@ -98,14 +98,14 @@ const SPEC_TIER_OPTIONS: { id: OnboardingSpecTier; label: string }[] = [
 
 const GAMING_GRAPHICS_GUIDANCE: Record<GamingGraphicsPreset, string> = {
   competitive: "프레임 우선 · 시각 효과를 낮춰 고주사율에 유리해요.",
-  balanced: "품질과 프레임을 균형 있게 맞춰요.",
+  balanced: "화질과 프레임을 함께 고려하는 설정이에요.",
   high: "시각 효과 우선 · 더 높은 GPU 여유가 필요할 수 있어요."
 };
 
 const GAMING_UPSCALING_GUIDANCE: Record<GamingUpscaling, string> = {
   native: "화질 우선 · 업스케일링 없이 렌더링해요.",
-  quality: "화질과 프레임을 함께 고려하는 참고 기준이에요.",
-  balanced: "프레임 여유를 더 확보하는 대신 화질이 달라질 수 있어요."
+  quality: "화질 저하를 줄이면서 프레임 부담을 낮추는 설정이에요.",
+  balanced: "프레임을 더 확보할 수 있지만 화질이 낮아질 수 있어요."
 };
 
 function storageLabel(gb: number) {
@@ -125,20 +125,21 @@ function budgetRangeStatusLabel(status: "below" | "within" | "above") {
 function BudgetRangeCard({ range, budgetWon, compact = false, gaming = false, onAdjust, onEditTarget }: { range: RequiredBudgetRange; budgetWon: number; compact?: boolean; gaming?: boolean; onAdjust?: (budgetWon: number) => void; onEditTarget?: () => void }) {
   const status = budgetRangeStatusFor(range, budgetWon);
   const adjustment = status === "below"
-    ? { label: `권장 최저 예산(${formatManWon(range.minWon)})으로 맞추기`, budgetWon: range.minWon }
+    ? { label: `최저 권장 금액 ${formatManWon(range.minWon)}으로 변경`, budgetWon: range.minWon }
     : status === "above"
-      ? { label: `권장 상한(${formatManWon(range.maxWon)})으로 맞추기`, budgetWon: range.maxWon }
+      ? { label: `권장 상한 ${formatManWon(range.maxWon)}으로 변경`, budgetWon: range.maxWon }
       : null;
   return (
-    <section className={`onboarding-budget-range ${compact ? "compact" : ""} status-${status}`} aria-label="조건별 예상 가격대">
+    <section className={`onboarding-budget-range ${compact ? "compact" : ""} status-${status}`} aria-label="목표별 예상 가격대">
       <div className="onboarding-budget-range-top">
         <div>
-          <span>이 조건의 예상 가격대</span>
+          <span>목표 성능 기준 예상 가격대</span>
           <strong>{formatManWon(range.minWon)} ~ {formatManWon(range.maxWon)}</strong>
         </div>
         <em>{budgetRangeStatusLabel(status)}</em>
       </div>
-      <p>{status === "below" ? "선택한 예산으로는 목표에 여유가 적어요. 예산을 올리거나 목표 성능을 낮추면 더 안정적인 조합을 찾을 수 있어요." : status === "above" ? "현재 목표보다 여유 있는 예산이에요. 부품 안정성·저장공간·소음까지 넓혀볼 수 있어요." : "선택한 목표를 현재 카탈로그에서 맞춰볼 수 있는 구간이에요."}</p>
+      <p>{status === "below" ? "현재 예산이 권장 범위보다 낮아요. 예산을 올리거나 목표 성능을 낮춰보세요." : status === "above" ? "현재 예산은 목표 성능의 권장 범위보다 높아요." : "현재 예산이 목표 성능의 권장 범위 안에 있어요."}</p>
+      <p className="onboarding-note">목표 성능별 기준표로 계산한 참고 금액대예요. 실시간 부품 가격과 재고는 반영하지 않아요.</p>
       {(onAdjust && adjustment || onEditTarget && status === "below") && <div className="onboarding-budget-range-actions">
         {onAdjust && adjustment && <button type="button" className="onboarding-budget-range-action" data-testid="onboarding-budget-range-adjust" onClick={() => onAdjust(clampBudget(adjustment.budgetWon))}>{adjustment.label}</button>}
         {onEditTarget && status === "below" && <button type="button" className="onboarding-budget-range-edit" data-testid="onboarding-budget-range-edit-target" onClick={onEditTarget}>목표 성능 다시 고르기</button>}
@@ -151,9 +152,12 @@ function GamingTargetContract({ state, showBudgetHint = false }: { state: Onboar
   const range = showBudgetHint ? targetBudgetRangeFor(state) : null;
   return (
     <section className="onboarding-target-contract" aria-label="게이밍 성능 목표 기준">
-      <div className="onboarding-target-contract-heading"><div><span>GAMING TARGET</span><strong>평균 FPS {state.refreshRate} 목표</strong></div><FiTarget aria-hidden="true" /></div>
+      <div className="onboarding-target-contract-heading"><div><span>게임 성능 목표</span><strong>평균 FPS · {state.refreshRate}</strong></div><FiTarget aria-hidden="true" /></div>
       <div className="onboarding-target-contract-tags"><span>{resolutionLabelFor(state.resolution)}</span><span>{state.refreshRate} FPS</span><span>{GAMING_GRAPHICS_PRESET_LABELS[state.graphicsPreset]}</span><span>{GAMING_UPSCALING_LABELS[state.upscaling]}</span>{state.rayTracing && <span>레이 트레이싱</span>}</div>
-      {range && <div className="onboarding-target-contract-budget"><span>예상 PC 가격대</span><strong>{formatManWon(range.minWon)} ~ {formatManWon(range.maxWon)}</strong></div>}
+      {range && <>
+        <div className="onboarding-target-contract-budget"><span>예상 PC 가격대</span><strong>{formatManWon(range.minWon)} ~ {formatManWon(range.maxWon)}</strong></div>
+        <p className="onboarding-note">목표 성능별 기준표로 계산한 참고 금액대예요. 실시간 부품 가격과 재고는 반영하지 않아요.</p>
+      </>}
     </section>
   );
 }
@@ -214,7 +218,7 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome }: { o
     }
   }, [state]);
 
-  const indicator = showResume ? { eyebrow: "SAVED DRAFT", index: 1, total: 1 } : stepIndicatorFor(state);
+  const indicator = showResume ? { eyebrow: "작성 중", index: 1, total: 1 } : stepIndicatorFor(state);
   const update = (patch: Partial<OnboardingState>) => setState((current) => ({ ...current, ...patch }));
   const toggleGame = (id: OnboardingGame) => {
     if (state.games.includes(id)) {
@@ -282,7 +286,7 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome }: { o
   ];
 
   let body: ReactNode = null;
-  let ctaLabel = showResume ? "이어서 시작하기" : "다음";
+  let ctaLabel = showResume ? "이어서 작성하기" : "다음";
 
   if (showResume) {
     const resumeGame = state.intent === "upgrade"
@@ -300,18 +304,18 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome }: { o
         ? `${resolutionLabelFor(state.resolution)} · ${state.refreshRate} FPS`
         : state.usecase === "work" || state.mode === "spec"
           ? targetSummaryFor(state)
-          : "조건 확인 전";
+          : "예산 미정";
     body = (
       <div className="onboarding-draft">
-        <h3>저장된 견적 조건</h3>
+        <h3>작성 중인 견적</h3>
         <div className="onboarding-draft-rows">
           <div className="onboarding-draft-row"><span className="onboarding-estimate-icon"><FiPlay /></span><span>게임·작업</span><strong>{resumeGame}</strong></div>
           <div className="onboarding-draft-row"><span className="onboarding-estimate-icon"><FiActivity /></span><span>목표 성능</span><strong>{resumeTarget}</strong></div>
           <div className="onboarding-draft-row"><span className="onboarding-estimate-icon"><FiDatabase /></span><span>예산</span><strong>{formatManWon(state.budgetWon)}</strong></div>
           <div className="onboarding-draft-row"><span className="onboarding-estimate-icon"><FiMonitor /></span><span>현재 단계</span><strong>{stepLabelFor(state.step)}</strong></div>
         </div>
-        <button type="button" className="onboarding-secondary-action" onClick={restartOnboarding}>처음부터 시작하기</button>
-        <p className="onboarding-note">처음부터 시작하면 저장된 조건은 지워지고 새로 진행해요.</p>
+        <button type="button" className="onboarding-secondary-action" onClick={restartOnboarding}>내용을 지우고 새로 시작하기</button>
+        <p className="onboarding-note">새로 시작하면 이 탭에 입력한 내용은 지워져요.</p>
       </div>
     );
   } else if (state.step === "intent") {
@@ -324,6 +328,7 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome }: { o
       </div>
     );
   } else if (state.step === "mode") {
+    ctaLabel = "이 기준으로 계속";
     body = (
       <div className="onboarding-options">
         {MODE_OPTIONS.map((option) => (
@@ -386,12 +391,12 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome }: { o
   } else if (state.step === "performance") {
     body = (
       <>
-        <p className="onboarding-callout"><FiInfo /> 선택한 목표를 만족하는 조합만 추천해요.</p>
+        <p className="onboarding-callout"><FiInfo /> 해상도와 FPS는 성능 추천에 사용하는 목표값이에요.</p>
         <ChipRow label="해상도" options={RESOLUTION_OPTIONS.map((option) => ({ id: option.id, label: option.label }))} value={state.resolution} onChange={(id) => update({ resolution: id as GamingResolution })} />
         <ChipRow label="목표 프레임" options={REFRESH_OPTIONS.map((option) => ({ id: String(option.id), label: option.label }))} value={String(state.refreshRate)} onChange={(id) => update({ refreshRate: Number(id) as GamingRefreshRate })} />
         <p className="onboarding-pill"><FiPlay /> {gamesSummaryFor(state.games)} · {resolutionLabelFor(state.resolution)} · {state.refreshRate} FPS</p>
         <GamingTargetContract state={state} />
-        <p className="onboarding-note">실제 FPS는 게임 옵션·패치·드라이버에 따라 달라질 수 있어요.</p>
+        <p className="onboarding-note">실제 FPS를 측정한 값은 아니에요. 게임 설정·부품 구성·패치에 따라 실제 프레임은 달라질 수 있어요.</p>
       </>
     );
   } else if (state.step === "graphics") {
@@ -405,7 +410,7 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome }: { o
         <p className="onboarding-choice-note"><FiInfo /> {GAMING_UPSCALING_GUIDANCE[state.upscaling]}</p>
         <OptionRow
           title="레이 트레이싱"
-          description="실제 FPS 데이터가 없으면 확인 필요로 표시해요."
+          description="켜면 GPU 부하가 커져요. 목표 FPS에 따라 필요한 그래픽카드가 달라질 수 있어요."
           Icon={FiZap}
           selected={state.rayTracing}
           checkStyle
@@ -462,11 +467,11 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome }: { o
         <OptionRow title="외장 그래픽카드 포함" description="게임·3D·GPU 가속 작업을 함께 고려해요." Icon={FiMonitor} selected={state.specIncludeGpu} checkStyle onClick={() => update({ specIncludeGpu: !state.specIncludeGpu })} />
         <ChipRow label="메모리" options={MEMORY_OPTIONS.map((gb) => ({ id: String(gb), label: `${gb}GB` }))} value={String(state.memoryGb)} onChange={(id) => update({ memoryGb: Number(id) })} />
         <ChipRow label="저장공간" options={STORAGE_OPTIONS.map((gb) => ({ id: String(gb), label: storageLabel(gb) }))} value={String(state.storageGb)} onChange={(id) => update({ storageGb: Number(id) })} />
-        <p className="onboarding-note">선택한 성능 등급·GPU 포함 여부·메모리·저장공간을 추천 조건으로 전달해요.</p>
+        <p className="onboarding-note">선택한 성능 등급과 부품 정보가 추천에 반영돼요.</p>
       </>
     );
   } else if (state.step === "budget") {
-    ctaLabel = "다음 · 조건 확인";
+    ctaLabel = "예상 구성 확인";
     body = (
       <>
         {(state.usecase || state.mode === "spec" || state.mode === "budget") && <p className="onboarding-pill"><FiPlay /> 현재 목표 · {state.usecase === "gaming" ? `${resolutionLabelFor(state.resolution)} · ${state.refreshRate} FPS · ${GAMING_GRAPHICS_PRESET_LABELS[state.graphicsPreset]} · ${GAMING_UPSCALING_LABELS[state.upscaling]}${state.rayTracing ? " · 레이 트레이싱" : ""}` : state.usecase === "work" || state.mode === "spec" ? targetSummaryFor(state) : "예산 중심 기본 구성"}</p>}
@@ -491,7 +496,7 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome }: { o
           onEditTarget={() => editSummaryStep(state.usecase === "gaming" ? "performance" : state.usecase === "work" ? "intensity" : state.mode === "spec" ? "spec" : "mode")}
         />}
         <div className="onboarding-estimate">
-          <h3>이 금액에서 예상되는 수준</h3>
+          <h3>예산 기준 예상 사양</h3>
           <div className="onboarding-estimate-rows">
             {estimateRows.map(([Icon, label, value]) => (
               <div className="onboarding-estimate-row" key={label}><span className="onboarding-estimate-icon"><Icon /></span><span>{label}</span><strong>{value}</strong></div>
@@ -504,7 +509,7 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome }: { o
       </>
     );
   } else if (state.step === "summary") {
-    ctaLabel = "이 조건으로 견적 생성하기";
+    ctaLabel = "견적 만들기";
     const summaryRows: { Icon: IconType; label: string; value: string; editStep?: OnboardingStep }[] = state.usecase === "gaming"
       ? [
           { Icon: FiPlay, label: "게임", value: gamesSummaryFor(state.games), editStep: "games" },
@@ -535,8 +540,7 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome }: { o
     body = (
       <div className="onboarding-estimate">
         <div className="onboarding-summary-heading">
-          <div><h3>선택한 조건</h3><p>바꿀 항목은 바로 수정할 수 있어요.</p></div>
-          <span>최종 확인</span>
+          <div><h3>선택한 내용</h3><p>예산과 예상 성능은 언제든 바꿀 수 있어요.</p></div>
         </div>
         <div className="onboarding-estimate-rows">
           {summaryRows.map(({ Icon, label, value, editStep }) => (
@@ -550,34 +554,33 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome }: { o
         {shortfall && (
           <p className="onboarding-warning"><FiAlertTriangle /> 선택한 예산이 목표 성능의 권장 범위보다 낮아요. 예산을 올리거나 목표를 낮춰보세요.</p>
         )}
-        <p className="onboarding-note">다음 화면에서 실제 부품 조합을 바로 만들어 드려요.</p>
       </div>
     );
   }
 
   const headings: Record<string, { title: string; description: string }> = {
-    intent: { title: "어떤 PC가 필요하세요?", description: "원하는 방식으로 몇 가지만 알려주시면 맞춰드릴게요." },
-    mode: { title: "새 견적은 어떤 방식으로 맞춰볼까요?", description: "아는 만큼만 골라도 괜찮아요. 나중에 기준을 바꿀 수 있어요." },
+    intent: { title: "어떤 PC 견적을 볼까요?", description: "게임·작업 용도와 예산을 골라 견적을 만들어요." },
+    mode: { title: "어떤 기준으로 부품을 고를까요?", description: "예산, 게임·작업, 원하는 사양 중 편한 기준을 선택하세요." },
     upgrade: { title: "지금 쓰는 PC 부품을 골라주세요", description: "현재 구성을 입력하고 검사하면, 바꾸면 좋은 부품과 업그레이드 묶음을 보여드려요." },
-    usecase: { title: "무엇을 주로 할까요?", description: "가장 많이 하는 일을 기준으로 필요한 부품을 계산해요." },
-    games: { title: "어떤 게임을 할 건가요?", description: "자주 하는 게임을 골라주면 그 게임에서 목표 성능이 나오도록 맞춰볼게요." },
-    performance: { title: "원하는 성능을 골라주세요", description: "선택한 게임과 해상도에서 목표 프레임을 확인할게요." },
+    usecase: { title: "어떤 용도로 쓸 PC인가요?", description: "게임과 작업 중 주된 용도를 골라주세요." },
+    games: { title: "주로 할 게임을 골라주세요", description: "여러 게임을 선택할 수 있어요. 목표 FPS는 다음 단계에서 정해요." },
+    performance: { title: "게임 성능 목표를 정해주세요", description: "해상도와 목표 FPS를 선택하세요. 선택한 값은 실제 측정값이 아니에요." },
     graphics: { title: "게임 옵션도 정해주세요", description: "같은 4K · 144 FPS라도 그래픽 옵션에 따라 필요한 부품이 달라져요." },
-    works: { title: "주로 어떤 작업을 할 건가요?", description: "여러 개를 골라도 괜찮아요. 가장 무거운 작업을 기준으로 맞춰드릴게요." },
-    intensity: { title: primaryWork?.intensityQuestion ?? "작업을 어느 정도로 할까요?", description: primaryWork?.intensitySummary ?? "작업 강도를 기준으로 맞춰드려요." },
+    works: { title: "주로 하는 작업을 골라주세요", description: "여러 작업을 선택할 수 있어요. 가장 높은 작업 강도를 기준으로 예상 사양을 계산해요." },
+    intensity: { title: primaryWork?.intensityQuestion ?? "작업 규모는 어느 정도인가요?", description: primaryWork?.intensitySummary ?? "작업 강도에 따라 예상 사양이 달라져요." },
     spec: { title: "생각해둔 성능을 알려주세요", description: "성능 등급·외장 GPU·메모리·저장공간을 골라주세요." },
-    budget: { title: "예산은 어디까지 생각하세요?", description: "금액을 바꾸면 예상 가능한 성능과 부품 구성이 같이 바뀌어요." },
-    summary: { title: "이 조건으로 맞춰볼까요?", description: "선택한 내용을 확인하고 견적 생성으로 넘어가요." }
+    budget: { title: "예산을 정해주세요", description: "금액에 따라 예상 사양이 달라져요. 원하는 금액을 직접 입력할 수 있어요." },
+    summary: { title: "견적 내용을 확인하세요", description: "선택한 항목을 확인하고 부품 추천으로 넘어갈 수 있어요." }
   };
   const heading = showResume
-    ? { title: "전에 고르던 조건이 있어요.", description: "이어서 진행하면 저장해둔 게임·성능·예산 조건을 그대로 불러와요." }
+    ? { title: "작성 중인 견적이 있어요", description: "입력한 게임·성능·예산이 남아 있어요. 이어서 작성할 수 있어요." }
     : headings[state.step];
 
   return (
     <div className="onboarding-page">
       <button type="button" className="onboarding-back" onClick={goBack} aria-label={showResume || state.step === "intent" ? "홈으로" : "이전 단계로"}><FiArrowLeft /></button>
-      <p className="onboarding-eyebrow">{indicator.eyebrow} · {indicator.index} / {indicator.total}</p>
-      <div className="onboarding-progress" role="progressbar" aria-label={`온보딩 진행률 ${indicator.index} / ${indicator.total}`} aria-valuemin={1} aria-valuemax={indicator.total} aria-valuenow={indicator.index} data-testid="onboarding-progress"><span style={{ width: `${Math.round((indicator.index / indicator.total) * 100)}%` }} /></div>
+      <p className="onboarding-eyebrow">견적 설정 · {indicator.index} / {indicator.total}</p>
+      <div className="onboarding-progress" role="progressbar" aria-label={`견적 진행률 ${indicator.index} / ${indicator.total}`} aria-valuemin={1} aria-valuemax={indicator.total} aria-valuenow={indicator.index} data-testid="onboarding-progress"><span style={{ width: `${Math.round((indicator.index / indicator.total) * 100)}%` }} /></div>
       <h1 className="onboarding-title">{heading.title}</h1>
       <p className="onboarding-desc">{heading.description}</p>
       {body}

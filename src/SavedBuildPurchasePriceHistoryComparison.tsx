@@ -6,7 +6,7 @@ export function SavedBuildPurchasePriceHistoryComparison({ builds }: { builds: S
   const rows = savedBuildPurchasePriceHistoryComparisonRowsFor(builds);
   if (rows.length < 2) return null;
   return <section className="saved-build-purchase-price-history-comparison" aria-label="저장 견적 가격 이력 비교" data-testid="saved-build-purchase-price-history-comparison">
-    <div className="saved-build-purchase-price-history-comparison-heading"><div><p className="eyebrow">PRICE HISTORY COMPARE</p><h2>가격 이력 비교</h2><p>선택한 저장 견적의 가격 확인 샘플과 서버 revision을 나란히 확인합니다.</p></div><span><FiClock /> {rows.length}개 선택</span></div>
+    <div className="saved-build-purchase-price-history-comparison-heading"><div><h2>가격 이력 비교</h2><p>선택한 저장 견적의 가격 확인 샘플과 서버 revision을 나란히 확인합니다.</p></div><span><FiClock /> {rows.length}개 선택</span></div>
     <div className="saved-build-purchase-price-history-comparison-grid">{rows.map((row) => {
       const label = row.summary.status === "multi-sample" ? "2회 이상 확인" : row.summary.status === "recorded" ? "가격 이력 있음" : "가격 이력 없음";
       return <article className={`saved-build-purchase-price-history-comparison-card ${row.summary.status}`} data-testid={`saved-build-purchase-price-history-comparison-${row.id}`} key={row.id}>

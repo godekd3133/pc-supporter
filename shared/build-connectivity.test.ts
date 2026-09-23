@@ -13,7 +13,7 @@ describe("build connectivity summary", () => {
     expect(summary.items).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: "fan-headers", status: "pass", used: 3, capacity: 4, headroom: 1 }),
       expect.objectContaining({ id: "rgb-headers", status: "pass", used: 2, capacity: 3, headroom: 1 }),
-      expect.objectContaining({ id: "rgb-voltage", status: "pass", detail: "필요 전압 5V · 전압별 헤더 확인됨" })
+      expect.objectContaining({ id: "rgb-voltage", status: "pass", detail: "필요 전압 5V · 해당 전압 단자 확인됨" })
     ]));
   });
 
@@ -26,7 +26,7 @@ describe("build connectivity summary", () => {
     expect(summary.status).toBe("review");
     expect(summary.items.find((item) => item.id === "fan-headers")).toMatchObject({ status: "review", headroom: -3, detail: "5개 사용 · 2개 확인 · 3개 부족" });
     expect(summary.items.find((item) => item.id === "rgb-headers")).toMatchObject({ status: "review", headroom: -2 });
-    expect(summary.items.find((item) => item.id === "rgb-voltage")).toMatchObject({ status: "review", detail: "필요 전압 12V · 12V 헤더 없음" });
+    expect(summary.items.find((item) => item.id === "rgb-voltage")).toMatchObject({ status: "review", detail: "필요 전압 12V · 12V 연결 단자 없음" });
   });
 
   it("does not guess a connection status when required facts are missing", () => {
@@ -35,7 +35,7 @@ describe("build connectivity summary", () => {
     expect(summary.status).toBe("unknown");
     expect(summary.items.find((item) => item.id === "fan-headers")).toMatchObject({ status: "unknown" });
     expect(summary.items.find((item) => item.id === "rgb-headers")).toMatchObject({ status: "unknown" });
-    expect(summary.items.find((item) => item.id === "rgb-voltage")).toMatchObject({ status: "unknown", detail: "필요 전압 5V + 12V · 메인보드 전압별 헤더 수 확인 필요" });
+    expect(summary.items.find((item) => item.id === "rgb-voltage")).toMatchObject({ status: "unknown", detail: "필요 전압 5V + 12V · 메인보드의 해당 전압 연결 수 확인 필요" });
   });
 
   it("does not render a summary until both case and motherboard are selected", () => {

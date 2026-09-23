@@ -60,20 +60,20 @@ const freshnessLabels: Record<RecommendationTrustEvidence["freshness"], string> 
 };
 
 const dataQualityLabels: Record<Part["dataQuality"], string> = {
-  manual: "직접 확인 데이터",
-  live: "다나와 최신 데이터",
-  seed: "기본 정보 데이터",
-  incomplete: "필수 스펙 누락 데이터"
+  manual: "직접 입력한 정보",
+  live: "다나와에서 확인한 정보",
+  seed: "기본 부품 정보",
+  incomplete: "필수 정보 누락"
 };
 
 function comparisonReason(evidence: SimilarityEvidence) {
-  if (evidence.comparedDimensions <= 0 || evidence.totalDimensions <= 0) return "성능 유사도를 계산할 비교 스펙이 없습니다.";
+  if (evidence.comparedDimensions <= 0 || evidence.totalDimensions <= 0) return "성능을 비교할 부품 정보가 없습니다.";
   const basis = evidence.basis === "benchmark"
-    ? "벤치마크 포함"
+    ? "성능 측정 자료 포함"
     : evidence.basis === "mixed"
-      ? "벤치마크·확인 스펙 혼합"
-      : "확인 스펙 기반";
-  return `비교 가능한 스펙 ${evidence.comparedDimensions}/${evidence.totalDimensions}개 · ${basis}`;
+      ? "성능 측정·부품 정보"
+      : "부품 정보";
+  return `비교 정보 ${evidence.comparedDimensions}/${evidence.totalDimensions}개 · ${basis}`;
 }
 
 function catalogSpecSourceCheckNeedsReviewFor(provenance: Part["specs"]["catalogSpecProvenance"], now: string | number | undefined) {
@@ -144,17 +144,17 @@ export function recommendationTrustFor(input: RecommendationTrustInput): Recomme
     else if (benchmarkFreshness === "aging") reasons.push("벤치마크 자료 갱신을 권장합니다.");
     else if (benchmarkFreshness === "stale") {
       score -= 5;
-      reasons.push("벤치마크 자료가 오래되어 최신 측정값을 다시 확인해야 합니다.");
+      reasons.push("성능 측정 자료가 오래됐습니다. 최신 자료를 확인하세요.");
     } else if (benchmarkFreshness === "unknown") {
       score -= 7;
-      reasons.push("벤치마크 자료의 갱신 시점을 확인할 수 없습니다.");
+      reasons.push("성능 측정 자료의 갱신일을 알 수 없습니다.");
     }
     if (benchmarkSourceCheckNeedsReview === false) {
       score += 4;
-      reasons.push("벤치마크 출처 페이지 접근과 모델 식별을 확인했어요.");
+      reasons.push("성능 자료의 출처와 부품 모델을 확인했습니다.");
     } else if (benchmarkSourceCheckNeedsReview === true) {
       score -= 8;
-      reasons.push("벤치마크 출처 페이지 접근·모델 식별을 다시 확인해야 해요.");
+      reasons.push("성능 자료의 출처와 부품 모델을 확인하세요.");
     }
   }
 
@@ -162,21 +162,21 @@ export function recommendationTrustFor(input: RecommendationTrustInput): Recomme
     reasons.push("제조사 정보 수동 보강값");
     if (catalogSpecSourceCheckNeedsReview === false) {
       score += 4;
-      reasons.push("제조사 정보 페이지 접근과 모델 식별을 확인했어요.");
+      reasons.push("제조사 정보와 부품 모델을 확인했습니다.");
     } else {
       score -= 8;
       reasons.push(catalogSpecProvenance.sourceCheck
-        ? "제조사 정보 페이지 접근·모델 식별을 다시 확인해야 해요."
-        : "제조사 정보 페이지 접근·모델 식별을 확인하기 전이에요.");
+        ? "제조사 정보와 부품 모델을 확인하세요."
+        : "제조사 정보와 부품 모델을 아직 확인하지 않았습니다.");
     }
   }
 
   score += dataQualityPoints[candidate.dataQuality];
-  reasons.push(dataQualityLabels[candidate.dataQuality]);
+    reasons.push(dataQualityLabels[candidate.dataQuality]);
 
   if (candidate.missingFields.length === 0) score += 8;
   else if (candidate.missingFields.length <= 2) score += 4;
-  else reasons.push(`누락 스펙 ${candidate.missingFields.length}개가 있어 실제 정보 확인이 필요해요.`);
+    else reasons.push(`확인되지 않은 부품 정보가 ${candidate.missingFields.length}개 있습니다.`);
 
   if (freshness === "fresh") score += 5;
   else if (freshness === "aging") score += 2;
@@ -185,11 +185,11 @@ export function recommendationTrustFor(input: RecommendationTrustInput): Recomme
   if (priceEvidence === "live" || priceEvidence === "manual") {
     score += 4;
   } else if (priceEvidence === "reference") {
-    reasons.push("참고 가격가 있어 총액 비교에 참고할 수 있지만 실제 판매가로 정하지 않아요.");
+    reasons.push("참고 가격만 있어 현재 판매 가격은 판매처에서 확인하세요.");
   } else if (priceEvidence === "recorded") {
-    reasons.push("가격 숫자는 기록되어 있지만 데이터 상태가 완전하지 않아 실제 판매가로 정하지 않아요.");
+    reasons.push("기록된 가격입니다. 현재 판매 가격은 판매처에서 확인하세요.");
   } else {
-    reasons.push("현재 가격을 확인할 수 없어 총액 비교는 정하지 않아요.");
+    reasons.push("현재 가격을 알 수 없어 총액을 비교하지 않았습니다.");
   }
 
   if (sourceAvailable) score += 3;
