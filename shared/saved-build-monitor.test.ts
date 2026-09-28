@@ -43,7 +43,7 @@ describe("saved build monitor assessment", () => {
     const before = savedBuildCheckSnapshotFor(result());
     const after = savedBuildCheckSnapshotFor(result({ status: "needs_review", unknownCount: 1 }));
     const transition = savedBuildCheckTransitionSummaryFor(before, after);
-    expect(savedBuildMonitorAssessmentFor(after, transition)).toMatchObject({ level: "review", label: "검토 항목 증가", requiresAttention: true });
+    expect(savedBuildMonitorAssessmentFor(after, transition)).toMatchObject({ level: "review", label: "확인할 항목 증가", requiresAttention: true });
   });
 
   it("separates improvements and non-risk information changes", () => {
@@ -69,16 +69,16 @@ describe("saved build monitor assessment", () => {
 
     expect(transition).toMatchObject({ analysisChanged: true, analysisScoreDelta: -6, hasChanges: true });
     expect(savedBuildMonitorAssessmentFor(after, transition)).toMatchObject({ level: "changed", requiresAttention: false, recordRecommended: true });
-    expect(savedBuildMonitorAssessmentFor(after, transition).summary).toContain("성능 분석 -6점");
+    expect(savedBuildMonitorAssessmentFor(after, transition).summary).toContain("성능 비교 결과가 달라졌어요.");
 
     const reviewAfter = savedBuildCheckSnapshotFor(result({ status: "needs_review", warningCount: 1, analysis: { ...result().analysis, overallScore: 74, scoreLabel: "보완 권장", confidence: "limited" } }));
     const reviewTransition = savedBuildCheckTransitionSummaryFor(before, reviewAfter);
-    expect(savedBuildMonitorAssessmentFor(reviewAfter, reviewTransition).summary).toContain("성능 분석 -6점");
+    expect(savedBuildMonitorAssessmentFor(reviewAfter, reviewTransition).summary).toContain("성능 비교 결과가 달라졌어요.");
 
     const labelOnlyAfter = savedBuildCheckSnapshotFor(result({ analysis: { ...result().analysis, scoreLabel: "균형형", confidence: "limited" } }));
     const labelOnlyTransition = savedBuildCheckTransitionSummaryFor(before, labelOnlyAfter);
     expect(labelOnlyTransition).toMatchObject({ analysisChanged: true, analysisScoreDelta: 0 });
-    expect(savedBuildMonitorAssessmentFor(labelOnlyAfter, labelOnlyTransition).summary).toContain("성능 분석 라벨·정보 수준");
+    expect(savedBuildMonitorAssessmentFor(labelOnlyAfter, labelOnlyTransition).summary).toContain("성능 비교 내용 변경");
   });
 
   it("treats a resource-budget regression as monitor attention even when compatibility counts stay clear", () => {
@@ -101,7 +101,7 @@ describe("saved build monitor assessment", () => {
   it("treats peripheral blockers and warnings as saved-build attention signals", () => {
     const blocker = savedBuildCheckSnapshotFor(result({ accessoryCompatibility: { status: "incompatible", blockerCount: 1, warningCount: 0, unknownCount: 0, findings: [] } }));
     expect(savedBuildMonitorAssessmentFor(blocker)).toMatchObject({ level: "critical", requiresAttention: true });
-    expect(savedBuildMonitorAssessmentFor(blocker).summary).toContain("주변 부품 1개 차단");
+    expect(savedBuildMonitorAssessmentFor(blocker).summary).toContain("주변 부품 호환 불가 1개");
 
     const review = savedBuildCheckSnapshotFor(result({ accessoryCompatibility: { status: "needs_review", blockerCount: 0, warningCount: 1, unknownCount: 0, findings: [] } }));
     expect(savedBuildMonitorAssessmentFor(review)).toMatchObject({ level: "review", requiresAttention: true });

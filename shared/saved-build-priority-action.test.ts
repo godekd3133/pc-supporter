@@ -47,7 +47,7 @@ function plan(overrides: Partial<RecommendationPlan> = {}): RecommendationPlan {
 describe("saved build priority action", () => {
   it("extracts the first repair change and remaining risk from the engine plan", () => {
     const action = savedBuildNextActionFor(result({ repairPlans: [plan()] }));
-    expect(action).toMatchObject({ kind: "repair_plan", title: "추천 수리 플랜", nextAction: "메인보드 부품 새 보드 확인", resolvedBlockers: 2, remainingBlockers: 0, priceDeltaWon: 20_000, afterTotalPriceWon: 1_020_000 });
+    expect(action).toMatchObject({ kind: "repair_plan", title: "호환 문제 줄이기", nextAction: "메인보드 부품 새 보드 확인", resolvedBlockers: 2, remainingBlockers: 0, priceDeltaWon: 20_000, afterTotalPriceWon: 1_020_000 });
     expect(action.changes[0]).toMatchObject({ category: "motherboard", fromPartName: "기존 보드", toPartName: "새 보드" });
   });
 
@@ -58,6 +58,6 @@ describe("saved build priority action", () => {
 
   it("reports no action when the analysis has no next action", () => {
     const action = savedBuildNextActionFor(result({ repairPlans: [], analysis: { ...result().analysis, nextActions: [] } }));
-    expect(action).toMatchObject({ kind: "none", title: "추가 할 일 없음", remainingBlockers: 2 });
+    expect(action).toMatchObject({ kind: "none", title: "추가 추천 없음", remainingBlockers: 2 });
   });
 });

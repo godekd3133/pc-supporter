@@ -6,8 +6,7 @@ import { catalogPriceEvidenceFor, catalogPriceEvidenceLabelFor } from "../shared
 import type { BuildScenarioComparison } from "../shared/build-scenario";
 import { partSpecDiffFor } from "../shared/part-spec-diff";
 import { alternativeComparisonBenchmarkEvidenceFor, alternativeComparisonSimilarityEvidenceFor } from "../shared/alternative-comparison-export";
-import { benchmarkComparisonRowsFor, benchmarkEvidenceForPart, benchmarkFreshnessLabelFor, benchmarkSourceCheckLabelFor } from "../shared/benchmark-evidence";
-import { similarityBasisLabelFor, similarityReferenceTextFor } from "../shared/similarity-evidence";
+import { benchmarkEvidenceForPart } from "../shared/benchmark-evidence";
 import type { AlternativeComparisonCandidate } from "../shared/alternative-comparison-export";
 import type { AlternativeComparisonScenario, AlternativeComparisonScenarioCheck } from "../shared/alternative-comparison-scenario";
 import { CATALOG_WATCHLIST_STORAGE_KEY, catalogWatchlistContains, catalogWatchlistFromJson, catalogWatchlistToJson, updateCatalogWatchEntry } from "../shared/catalog-watchlist";
@@ -38,17 +37,11 @@ type CandidatePriceHistory = {
   };
 };
 
-const COMPARISON_CRITERION_LABELS: Record<CandidateComparisonCriterion, string> = {
-  balanced: "균형",
-  compatibility: "호환 우선",
-  performance: "성능 우선",
-  price: "가격 우선",
-  evidence: "정보 우선"
-};
-
 type CandidateScenarioShareResult = { id: string; url: string; ownerToken: string; expiresAt?: string };
 type CandidateScenarioShareHandler = (candidates: AlternativeComparisonCandidate[], context?: { name?: string; category?: string; currentPartName?: string; currentPartSummary?: string; currentPartPrice?: string }) => Promise<CandidateScenarioShareResult | undefined>;
 type CandidateScenarioRevokeHandler = (share: CandidateScenarioShareResult) => Promise<boolean>;
+
+const BENCHMARK_SPEC_KEYS = new Set(["cinebenchR23Single", "cinebenchR23Multi", "gpu3dmarkTimeSpyScore", "gpu3dmarkPortRoyalScore"]);
 
 export type CandidateScenarioCompareItem = {
   id: string;
@@ -84,15 +77,11 @@ function statusLabel(status: CompatibilityResult["status"]) {
 }
 
 function riskLabel(risk: AlternativeRisk | undefined) {
-  return risk === "safe" ? "차단 없음" : risk === "review" ? "부품 정보 부족" : risk === "unsafe" ? "적용하지 않음" : "호환 결과 없음";
+  return risk === "safe" ? "호환 문제 없음" : risk === "review" ? "부품 정보 부족" : risk === "unsafe" ? "적용하지 않음" : "호환 결과 없음";
 }
 
 function directionLabel(direction: BuildScenarioComparison["direction"] | undefined) {
   return direction === "improved" ? "위험 감소" : direction === "worsened" ? "위험 증가" : direction === "changed" ? "일부 변화" : "변화 없음";
-}
-
-function trustLabel(level: NonNullable<CandidateScenarioPart["recommendationTrust"]>["level"]) {
-  return level === "high" ? "높음" : level === "medium" ? "보통" : "낮음";
 }
 
 function currentPartLabel(parts: Part[], quantities?: number[]) {
@@ -118,16 +107,7 @@ function candidatePurchaseDecisionForItem(item: CandidateScenarioCompareItem, cu
     priceEvidence: catalogPriceEvidenceFor(item.part),
     totalPriceKnown: result.priceComplete,
     priceDeltaWon: item.comparison?.priceDeltaWon,
-    similarityScore: item.part.similarityScore,
-    similarityConfidence: item.part.similarityEvidence?.confidence,
-    benchmarkFreshness: item.part.recommendationTrust?.benchmarkFreshness,
-    benchmarkSourceCheckNeedsReview: item.part.recommendationTrust?.benchmarkSourceCheckNeedsReview,
-    catalogSpecSourceCheckNeedsReview: item.part.recommendationTrust?.catalogSpecSourceCheckNeedsReview,
-    ...(currentResult.analysis.overallScore !== undefined && result.analysis.overallScore !== undefined ? { analysisScoreDelta: result.analysis.overallScore - currentResult.analysis.overallScore } : {}),
-    analysisConfidence: result.analysis.confidence,
-    recommendationTrustScore: item.part.recommendationTrust?.score,
-    recommendationTrustLevel: item.part.recommendationTrust?.level,
-    freshness: item.part.dataFreshness ?? item.part.recommendationTrust?.freshness,
+    freshness: item.part.dataFreshness,
     physicalStatus: item.part.physicalEvidence?.status,
     ...(history ? { priceHistory: history.summary satisfies CandidatePurchasePriceHistory } : {})
   });
@@ -161,10 +141,10 @@ function scenarioChecksFor(item: CandidateScenarioCompareItem, result: Compatibi
     id: "compatibility",
     kind: "compatibility",
     status: compatibilityStatus,
-    label: compatibilityStatus === "blocked" ? "미리 적용 차단 원인 해결" : compatibilityStatus === "review" ? "미리 적용 후 남은 위험 확인" : "미리 적용 호환 결과 확인",
+    label: compatibilityStatus === "blocked" ? "미리 적용 후 호환 문제" : compatibilityStatus === "review" ? "미리 적용 후 남은 위험 확인" : "미리 적용 호환 결과 확인",
     detail: result.blockerCount > 0 || result.warningCount > 0 || result.unknownCount > 0
-      ? `차단 ${result.blockerCount}개 · 주의 ${result.warningCount}개 · 정보 부족 ${result.unknownCount}개가 남아 있어요.`
-      : "현재 구성에서 호환 오류·주의·정보 부족이 없어요."
+      ? `호환 불가 ${result.blockerCount}개 · 주의 ${result.warningCount}개 · 확인할 정보 ${result.unknownCount}개가 남아 있어요.`
+      : "현재 구성에 호환 불가나 주의, 확인할 정보가 없어요."
   });
 
   const priceEvidence = catalogPriceEvidenceFor(item.part);
@@ -215,7 +195,7 @@ function scenarioChecksFor(item: CandidateScenarioCompareItem, result: Compatibi
     status: applicationStatus,
     label: applicationStatus === "blocked" ? "부품 적용 보류" : "현재 견적 적용 전 미리보기 확인",
     detail: applicationStatus === "blocked"
-      ? "현재 저장본의 차단 위험 때문에 이 부품은 실제 견적에 적용하지 않습니다."
+      ? "현재 저장본에 호환 문제가 있어 이 부품은 실제 견적에 적용하지 않습니다."
       : "전체 구성의 예상 금액과 호환성을 다시 계산했어요."
   });
   return checks;
@@ -248,7 +228,7 @@ function scenarioShareCandidateFor(item: CandidateScenarioCompareItem, currentRe
     ...(item.part.valueScore !== undefined && item.part.valueLabel ? { valueScore: item.part.valueScore, valueLabel: item.part.valueLabel, valueScoreScale: 200 as const } : {}),
     ...(item.part.recommendationTrust ? { recommendationTrust: `${item.part.recommendationTrust.level === "high" ? "높음" : item.part.recommendationTrust.level === "medium" ? "보통" : "낮음"} ${item.part.recommendationTrust.score}점` } : {}),
     performance: item.part.performanceSummary ?? "성능 정보 없음",
-    compatibility: `${statusLabel(result.status)} · 차단 ${result.blockerCount} · 주의 ${result.warningCount} · 정보 부족 ${result.unknownCount}`,
+    compatibility: `${statusLabel(result.status)} · 호환 불가 ${result.blockerCount} · 주의 ${result.warningCount} · 확인할 정보 ${result.unknownCount}`,
     ...(benchmarkEvidence ? { benchmarkEvidence } : {}),
     ...(alternativeComparisonSimilarityEvidenceFor(item.part.similarityEvidence) ? { similarityEvidence: alternativeComparisonSimilarityEvidenceFor(item.part.similarityEvidence) } : {}),
     ...(item.part.decision ? { decisionSummary: `${item.part.decision.label} · ${item.part.decision.summary}` } : {}),
@@ -276,27 +256,6 @@ function scenarioShareCandidateFor(item: CandidateScenarioCompareItem, currentRe
   };
 }
 
-function benchmarkScoreText(value: number | undefined) {
-  return value === undefined ? "정보 부족" : `${value.toLocaleString("ko-KR")}점`;
-}
-
-function benchmarkDeltaText(delta: number | undefined, deltaPercent: number | undefined) {
-  if (delta === undefined) return "비교 불가";
-  return `${delta > 0 ? "+" : ""}${delta.toLocaleString("ko-KR")}점${deltaPercent === undefined ? "" : ` · ${deltaPercent > 0 ? "+" : ""}${deltaPercent.toFixed(1)}%`}`;
-}
-
-function CandidateBenchmarkEvidence({ currentParts, candidate }: { currentParts: Part[]; candidate: Part }) {
-  if (candidate.category !== "cpu" && candidate.category !== "gpu") return null;
-  const currentEvidence = benchmarkEvidenceForPart(currentParts.find((part) => part.category === candidate.category));
-  const candidateEvidence = benchmarkEvidenceForPart(candidate);
-  if (!candidateEvidence) return null;
-  const comparisonRows = benchmarkComparisonRowsFor(currentEvidence, candidateEvidence);
-  return <div className="candidate-scenario-benchmark" data-testid="candidate-scenario-benchmark">
-    <div className="candidate-scenario-benchmark-heading"><strong>성능 점수 비교</strong></div>
-    <div className="candidate-scenario-benchmark-list">{comparisonRows.map((row) => <div key={row.key}><span>{row.label}</span><em>{benchmarkScoreText(row.currentValue)}</em><b>→</b><em>{benchmarkScoreText(row.candidateValue)}</em><small className={row.delta === undefined ? "review" : row.delta >= 0 ? "positive" : "negative"}>{benchmarkDeltaText(row.delta, row.deltaPercent)}</small></div>)}</div>
-  </div>;
-}
-
 function priceHistoryBarHeight(history: CandidatePriceHistory, priceWon: number) {
   const prices = history.points.map((point) => point.priceWon);
   if (prices.length === 0) return 52;
@@ -316,7 +275,7 @@ function CandidatePriceHistoryPanel({ history, days, loading, error }: { history
 }
 
 function scenarioCheckStatusLabel(status: AlternativeComparisonScenarioCheck["status"]) {
-  return status === "ready" ? "연결 가능" : status === "review" ? "정보 부족" : "차단";
+  return status === "ready" ? "연결 가능" : status === "review" ? "정보 부족" : "호환 불가";
 }
 
 function CandidateScenarioChecks({ checks }: { checks: AlternativeComparisonScenarioCheck[] }) {
@@ -492,7 +451,7 @@ export function CandidateScenarioComparisonPanel({ state, currentResult, onApply
   return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <section ref={modalRef} tabIndex={-1} className="candidate-scenario-dialog" role="dialog" aria-modal="true" aria-labelledby="candidate-scenario-title">
       <div className="modal-header"><div><h2 id="candidate-scenario-title">선택 부품 비교</h2><p>현재 견적은 유지합니다. 선택한 부품을 각각 넣었을 때의 가격과 호환 결과를 비교합니다.</p></div><button className="icon-button" type="button" onClick={onClose} aria-label="부품 미리 비교 닫기"><FiXCircle /></button></div>
-      <div className="candidate-scenario-baseline"><span><FiActivity /> 현재 기준</span><strong>{statusLabel(currentResult.status)}</strong><small>차단 {currentResult.blockerCount}개 · 주의 {currentResult.warningCount}개 · 정보 부족 {currentResult.unknownCount}개 · {currentResult.priceComplete ? formatWon(currentResult.totalPriceWon) : "가격 정보 없음"}</small></div>
+      <div className="candidate-scenario-baseline"><span><FiActivity /> 현재 기준</span><strong>{statusLabel(currentResult.status)}</strong><small>호환 불가 {currentResult.blockerCount}개 · 주의 {currentResult.warningCount}개 · 정보 부족 {currentResult.unknownCount}개 · {currentResult.priceComplete ? formatWon(currentResult.totalPriceWon) : "가격 정보 없음"}</small></div>
       <div className="candidate-scenario-history-toolbar"><div><strong><FiClock /> 부품 가격 이력</strong><small>최근 가격 변화를 살펴보세요. 현재 견적은 바뀌지 않아요.</small></div><label><span>기간</span><select aria-label="부품 비교 가격 이력 기간" value={priceHistoryDays} onChange={(event) => setPriceHistoryDays(Number(event.target.value) as CandidatePriceHistoryDays)}><option value={7}>7일</option><option value={30}>30일</option><option value={90}>90일</option></select></label></div>
 
 
@@ -501,19 +460,17 @@ export function CandidateScenarioComparisonPanel({ state, currentResult, onApply
           const result = item.result;
           const issues = result?.findings.filter((finding) => finding.severity !== "info").slice(0, 3) ?? [];
           const blocked = item.risk === "unsafe" || (!item.risk && result?.blockerCount !== 0);
-          const specDiff = item.status === "ready" ? partSpecDiffFor(item.category, item.currentParts, item.part) : [];
+          const specDiff = item.status === "ready" ? partSpecDiffFor(item.category, item.currentParts, item.part).filter((row) => !BENCHMARK_SPEC_KEYS.has(row.key)) : [];
           const priceHistory = priceHistories[`part:${item.part.id}`];
           const purchaseDecision = item.status === "ready" && result ? candidatePurchaseDecisionForItem(item, currentResult, result, priceHistory) : undefined;
           const purchaseChecks = item.status === "ready" && result && purchaseDecision ? scenarioChecksFor(item, result, purchaseDecision, priceHistory, formatWon) : [];
-          const evidence = item.part.performanceSummary ? [item.part.performanceSummary] : [];
           return <article className={`candidate-scenario-card ${item.status} ${item.comparison?.direction ?? ""}`} key={item.id}>
             <div className="candidate-scenario-card-heading"><div><span className="category-badge">{CATEGORY_LABELS[item.category]}</span><strong>{item.part.name}</strong><small>{riskLabel(item.risk)}{item.quantity && item.quantity > 1 ? ` · 수량 ${item.quantity}개` : ""}</small></div>{item.status === "loading" ? <span className="candidate-scenario-status loading"><FiLoader className="spin" /> 비교 중</span> : item.status === "error" ? <span className="candidate-scenario-status error"><FiXCircle /> 실패</span> : <span className={`candidate-scenario-status ${item.comparison?.direction ?? "unchanged"}`}>{item.comparison ? directionLabel(item.comparison.direction) : "비교 완료"}</span>}</div>
             <div className="candidate-scenario-current-part"><span>교체 전 기준</span><strong>{currentPartLabel(item.currentParts)}</strong></div>
             {item.status === "loading" && <div className="candidate-scenario-loading"><FiClock className="spin" /> 부품을 넣었을 때의 가격과 호환 결과를 계산하고 있어요.</div>}
             {item.status === "error" && <div className="candidate-scenario-error"><FiXCircle /><span>{item.error ?? "미리 비교에 실패했습니다."}</span><button className="text-button" type="button" onClick={() => onRetry(item.id)}><FiRefreshCw /> 다시 비교</button></div>}
 
-            {item.status === "ready" && <CandidateBenchmarkEvidence currentParts={item.currentParts} candidate={item.part} />}
-            {item.status === "ready" && result && <>{purchaseDecision && <div className={`candidate-scenario-purchase-decision ${purchaseDecision.state}`}><strong>{purchaseDecision.label}</strong><span>{purchaseDecision.summary}</span><small>{purchaseDecision.reasons.slice(0, 2).join(" · ")}</small></div>}<div className="candidate-scenario-result"><div><span>전체 결과</span><strong>{statusLabel(result.status)}</strong></div><div><span>호환 불가</span><strong>{result.blockerCount}개</strong></div><div><span>주의</span><strong>{result.warningCount}개</strong></div><div><span>정보 부족</span><strong>{result.unknownCount}개</strong></div><div><span>적용 후 합계</span><strong>{result.priceComplete ? formatWon(result.totalPriceWon) : "가격 정보 없음"}</strong></div><div><span>가격 변화</span><strong>{priceDeltaLabel(currentResult, result)}</strong></div></div><p className="candidate-scenario-delta"><FiActivity /> {item.comparison?.summary ?? "현재 구성과 비교할 변화가 없습니다."}</p>{(specDiff.length > 0 || evidence.length > 0) && <div className="candidate-scenario-evidence">{evidence.length > 0 && <div className="candidate-scenario-evidence-lines"><strong>부품 정보</strong>{evidence.map((line) => <span key={line}>{line}</span>)}</div>}<div className="candidate-scenario-spec-diff"><strong>핵심 스펙 변화</strong>{specDiff.length > 0 ? specDiff.map((row) => <div key={row.key}><span>{row.label}</span><em>{row.before}</em><b>→</b><em>{row.after}</em></div>) : <small>현재 부품이 없거나 비교 가능한 핵심 스펙 변화가 없습니다.</small>}</div></div>}<CandidatePriceHistoryPanel history={priceHistory} days={priceHistoryDays} loading={priceHistoryLoading} error={priceHistoryError} /><CandidateScenarioChecks checks={purchaseChecks} />{issues.length > 0 && <div className="candidate-scenario-findings"><strong>적용 후 남는 항목</strong><ul>{issues.map((finding) => <li key={finding.id}><b>{finding.severity === "blocker" ? "호환 불가" : finding.severity === "warning" ? "주의" : "확인"}</b>{finding.title}</li>)}</ul></div>}{issues.length === 0 && <p className="candidate-scenario-clean"><FiCheckCircle /> 호환 문제나 주의할 항목이 없습니다.</p>}<div className="candidate-scenario-actions">{onWatchPart && <CandidateWatchControl part={item.part} history={priceHistory} onWatch={onWatchPart} onToast={onToast} />}<button className="button button-small button-fix" type="button" disabled={blocked} onClick={() => onApply(item)}>{blocked ? <><FiXCircle /> 적용 불가</> : <><FiZap /> 이 부품 적용 전 미리보기</>}</button>{onSave && <button className="button button-small button-light" type="button" disabled={blocked} onClick={() => onSave(item)}><FiSave /> 새 견적으로 저장</button>}</div></>}
+            {item.status === "ready" && result && <>{purchaseDecision && <div className={`candidate-scenario-purchase-decision ${purchaseDecision.state}`}><strong>{purchaseDecision.label}</strong><span>{purchaseDecision.summary}</span><small>{purchaseDecision.reasons.slice(0, 2).join(" · ")}</small></div>}<div className="candidate-scenario-result"><div><span>전체 결과</span><strong>{statusLabel(result.status)}</strong></div><div><span>호환 불가</span><strong>{result.blockerCount}개</strong></div><div><span>주의</span><strong>{result.warningCount}개</strong></div><div><span>정보 부족</span><strong>{result.unknownCount}개</strong></div><div><span>적용 후 합계</span><strong>{result.priceComplete ? formatWon(result.totalPriceWon) : "가격 정보 없음"}</strong></div><div><span>가격 변화</span><strong>{priceDeltaLabel(currentResult, result)}</strong></div></div><p className="candidate-scenario-delta"><FiActivity /> {item.comparison?.summary ?? "현재 구성과 비교할 변화가 없습니다."}</p>{specDiff.length > 0 && <div className="candidate-scenario-evidence"><div className="candidate-scenario-spec-diff"><strong>핵심 스펙 변화</strong>{specDiff.map((row) => <div key={row.key}><span>{row.label}</span><em>{row.before}</em><b>→</b><em>{row.after}</em></div>)}</div></div>}<CandidatePriceHistoryPanel history={priceHistory} days={priceHistoryDays} loading={priceHistoryLoading} error={priceHistoryError} /><CandidateScenarioChecks checks={purchaseChecks} />{issues.length > 0 && <div className="candidate-scenario-findings"><strong>적용 후 남는 항목</strong><ul>{issues.map((finding) => <li key={finding.id}><b>{finding.severity === "blocker" ? "호환 불가" : finding.severity === "warning" ? "주의" : "확인"}</b>{finding.title}</li>)}</ul></div>}{issues.length === 0 && <p className="candidate-scenario-clean"><FiCheckCircle /> 호환 문제나 주의할 항목이 없습니다.</p>}<div className="candidate-scenario-actions">{onWatchPart && <CandidateWatchControl part={item.part} history={priceHistory} onWatch={onWatchPart} onToast={onToast} />}<button className="button button-small button-fix" type="button" disabled={blocked} onClick={() => onApply(item)}>{blocked ? <><FiXCircle /> 적용 불가</> : <><FiZap /> 이 부품 적용 전 미리보기</>}</button>{onSave && <button className="button button-small button-light" type="button" disabled={blocked} onClick={() => onSave(item)}><FiSave /> 새 견적으로 저장</button>}</div></>}
           </article>;
         })}
       </div>

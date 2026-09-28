@@ -47,7 +47,7 @@ describe("saved build server monitor subscription", () => {
     const completed = completeSavedBuildMonitorRun(build, configured, after, "2026-08-31T02:00:00.000Z");
 
     expect(transition).toMatchObject({ analysisChanged: true, analysisScoreDelta: -6 });
-    expect(completed.alerts[0]).toMatchObject({ kind: "changed", message: expect.stringContaining("성능 분석") });
+    expect(completed.alerts[0]).toMatchObject({ kind: "changed", message: expect.stringContaining("성능 비교 결과가 달라졌어요.") });
   });
 
   it("creates a review alert for a resource-budget regression", () => {

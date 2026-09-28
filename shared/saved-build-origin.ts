@@ -55,7 +55,7 @@ export function savedBuildOriginFromUnknown(value: unknown): SavedBuildOrigin | 
 export function savedBuildOriginLabelFor(origin: SavedBuildOrigin) {
   if (origin.kind === "shared_generator_variants") return origin.sourceShareName ? `공유 비교 · ${origin.sourceShareName}` : "공유 자동 구성 비교";
   if (origin.kind === "generated") return "자동 구성 결과";
-  if (origin.kind === "repair_plan") return "수리 플랜 결과";
+  if (origin.kind === "repair_plan") return "호환 개선안 결과";
   return "비교 구성 결과";
 }
 

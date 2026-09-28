@@ -202,17 +202,52 @@ export function currentAccessoryUpdatedAt() {
     .at(-1) ?? "";
 }
 
-export async function readAccessoryCoverage(): Promise<AccessoryCoverageSnapshot> {
-  const stored = await readJson<AccessoryCoverageSnapshot>(ACCESSORY_COVERAGE_PATH, { updatedAt: "", categories: [] });
-  const items = await loadAccessories();
+export function accessoryCoverageSnapshotFor(stored: AccessoryCoverageSnapshot, items: AccessoryItem[]): AccessoryCoverageSnapshot {
+  const savedByCategory = new Map(stored.categories.map((coverage) => [coverage.category, coverage]));
   return {
     ...stored,
-    categories: stored.categories.map((coverage) => {
-      const categoryItems = items.filter((item) => item.category === coverage.category);
+    categories: ACCESSORY_CATEGORIES.map((category) => {
+      const categoryItems = items.filter((item) => item.category === category);
+      const coverage = savedByCategory.get(category);
+      const storedSpecCoverage: AccessoryCategoryCoverage["storedSpecCoverage"] = categoryItems.every((item) => item.missingFields.length === 0) ? "complete" : "partial";
+      const currentCatalogStatus = {
+        storedProductCount: categoryItems.length,
+        liveProducts: categoryItems.filter((item) => item.dataQuality === "live").length,
+        incompleteProducts: categoryItems.filter((item) => item.dataQuality === "incomplete").length,
+        pricedProducts: categoryItems.filter((item) => isKnownPrice(item.priceWon)).length,
+        incompleteSpecs: categoryItems.filter((item) => item.missingFields.length > 0).length,
+        storedSpecCoverage
+      };
+      if (!coverage) {
+        return {
+          category,
+          categoryId: "crawl-history-unavailable",
+          ...currentCatalogStatus,
+          pagesExpected: 0,
+          pagesVisited: 0,
+          listedProducts: 0,
+          uniqueProducts: 0,
+          detailFetched: 0,
+          detailFailed: 0,
+          missingProducts: 0,
+          listCoverage: "partial" as const,
+          coverage: "partial" as const,
+          specCoverage: storedSpecCoverage,
+          mode: "sample" as const,
+          details: false,
+          onlyIncomplete: false,
+          lastCrawledAt: "",
+          hasCrawlHistory: false
+        };
+      }
+      const hasCrawlHistory = Boolean(coverage.lastCrawledAt || coverage.lastRun);
       return {
         ...coverage,
+        ...currentCatalogStatus,
+        coverage: coverage.listCoverage === "complete" && storedSpecCoverage === "complete" ? "complete" : "partial",
+        specCoverage: storedSpecCoverage,
+        hasCrawlHistory,
         listCoverage: coverage.listCoverage ?? (coverage.missingProducts === 0 && coverage.pagesVisited >= coverage.pagesExpected ? "complete" : "partial"),
-        storedSpecCoverage: coverage.storedSpecCoverage ?? (categoryItems.every((item) => item.missingFields.length === 0) ? "complete" : "partial"),
         onlyIncomplete: coverage.onlyIncomplete ?? false,
         lastRun: coverage.lastRun
           ? { ...coverage.lastRun, onlyIncomplete: coverage.lastRun.onlyIncomplete ?? false }
@@ -220,6 +255,14 @@ export async function readAccessoryCoverage(): Promise<AccessoryCoverageSnapshot
       };
     })
   };
+}
+
+export async function readAccessoryCoverage(): Promise<AccessoryCoverageSnapshot> {
+  const [stored, items] = await Promise.all([
+    readJson<AccessoryCoverageSnapshot>(ACCESSORY_COVERAGE_PATH, { updatedAt: "", categories: [] }),
+    loadAccessories()
+  ]);
+  return accessoryCoverageSnapshotFor(stored, items);
 }
 
 export async function recordAccessoryCoverage(
@@ -232,7 +275,7 @@ export async function recordAccessoryCoverage(
   for (const report of reports) {
     const categoryItems = items.filter((item) => item.category === report.category);
     const previous = byCategory.get(report.category);
-    const listEvidence = context.mode === "sample" && previous
+    const listEvidence = context.mode === "sample" && previous?.hasCrawlHistory
       ? {
           totalProductCount: previous.totalProductCount,
           pagesExpected: previous.pagesExpected,
@@ -266,6 +309,7 @@ export async function recordAccessoryCoverage(
       coverage: listEvidence.listCoverage === "complete" && storedSpecCoverage === "complete" ? "complete" : "partial",
       specCoverage: storedSpecCoverage,
       lastCrawledAt: context.lastCrawledAt,
+      hasCrawlHistory: true,
       lastRun: {
         mode: context.mode,
         details: context.details,

@@ -18,6 +18,7 @@ import {
   requiredSpecBudgetFor,
   stepIndicatorFor,
   targetBudgetRangeFor,
+  targetSummaryFor,
   workEstimateFor
 } from "./quote-onboarding";
 import type { OnboardingState } from "./quote-onboarding";
@@ -133,7 +134,7 @@ describe("quote-onboarding flow", () => {
 describe("quote-onboarding estimates", () => {
   it("maps 200만원 to the mockup's QHD·144 tier", () => {
     const estimate = budgetEstimateFor(2_000_000, "gaming");
-    expect(estimate.performance).toBe("QHD · 144 FPS");
+    expect(estimate.performance).toBe("QHD · 144Hz 주사율 목표");
     expect(estimate.gpu).toBe("상급 GPU");
     expect(estimate.memory).toBe("32GB");
     expect(estimate.storage).toBe("1TB SSD");
@@ -152,8 +153,15 @@ describe("quote-onboarding estimates", () => {
   });
 
   it("raises the gaming tier as budget grows", () => {
-    expect(budgetEstimateFor(4_000_000, "gaming").performance).toBe("4K · 144 FPS");
-    expect(budgetEstimateFor(900_000, "gaming").performance).toBe("FHD · 60 FPS");
+    expect(budgetEstimateFor(4_000_000, "gaming").performance).toBe("4K · 144Hz 주사율 목표");
+    expect(budgetEstimateFor(900_000, "gaming").performance).toBe("FHD · 60Hz 주사율 목표");
+  });
+
+  it("labels the selected refresh rate as a target, not an FPS measurement", () => {
+    const summary = targetSummaryFor(stateWith({ usecase: "gaming", refreshRate: 144 }));
+    expect(summary).toContain("목표 주사율 144Hz");
+    expect(summary).not.toContain("FPS");
+    expect(budgetEstimateFor(2_000_000, "gaming").performance).not.toContain("FPS");
   });
 
   it("requires roughly 320~380만원 for 4K·144 like the mockup warning", () => {

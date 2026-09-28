@@ -196,7 +196,7 @@ export function candidateComparisonDecisionFor(items: CandidateComparisonItem[],
     excludedIds,
     summary: top
       ? `${top.name} · ${top.score}점 · ${criterionSummary}${excludedIds.length > 0 ? ` · 적용하지 않음 ${excludedIds.length}개 제외` : ""}`
-      : "적용 가능한 부품이 없습니다. 차단 부품만 남아 있습니다."
+      : "추가할 수 있는 부품을 찾지 못했어요. 호환되지 않는 부품만 남아 있습니다."
   };
 }
 
@@ -244,7 +244,7 @@ export function candidateComparisonTradeoffsFor(items: CandidateComparisonItem[]
   }));
   return metrics.map((metric) => {
     const excluded = items.find((item) => item.id === metric.id)?.candidateRisk === "unsafe" || items.find((item) => item.id === metric.id)?.decisionStatus === "avoid";
-    if (excluded) return { ...metric, eligible: false, frontier: false, reason: "부품 자체가 차단 상태여서 효율 비교에서 제외했습니다." };
+    if (excluded) return { ...metric, eligible: false, frontier: false, reason: "부품 자체가 현재 구성과 호환되지 않아 비교에서 제외했어요." };
     if (metric.riskScore === undefined) return { ...metric, frontier: true, reason: "호환 결과가 부족해 다른 부품보다 낫다고 판단하지 않았어요." };
     const dominators = metrics
       .filter((candidate) => candidate.id !== metric.id && !items.find((item) => item.id === candidate.id && (item.candidateRisk === "unsafe" || item.decisionStatus === "avoid")) && candidateTradeoffDominates(candidate, metric))

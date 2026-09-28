@@ -66,7 +66,7 @@ function findingTitleFor(title: string) {
 }
 
 function findingDetailFor(severity: Exclude<FindingSeverity, "info">, message: string) {
-  return severity === "blocker" ? `${message} 해결한 뒤 다음 단계로 진행하세요.` : severity === "warning" ? `${message} 구매 전에 확인하세요.` : `${message} 제조사 안내에서 확인해 주세요.`;
+  return severity === "blocker" ? `${message} 해결해 주세요.` : severity === "warning" ? `${message} 구매 전에 확인하세요.` : `${message} 제조사 안내에서 확인해 주세요.`;
 }
 
 export function purchaseChecklistItemsFor(build: BuildSelection, result: CompatibilityResult, partMap?: ReadonlyMap<string, Part>): PurchaseChecklistItem[] {
@@ -125,10 +125,10 @@ export function purchaseChecklistItemsFor(build: BuildSelection, result: Compati
     id: "repair:best-plan",
     kind: "manual",
     severity: result.blockerCount > 0 ? "blocker" : "manual",
-    title: "최소 변경 수리 플랜 검토",
-    detail: `${result.repairPlans[0].label} 플랜의 변경 부품·가격·적용 후 남는 문제를 확인한 뒤 적용 여부를 결정하세요.`,
+    title: "적은 변경으로 호환 문제 줄이기",
+    detail: `${result.repairPlans[0].label} 구성에서 바뀌는 부품·가격과 남는 문제를 살펴본 뒤 적용해 주세요.`,
     targetId: "repair-plan-panel",
-    actionLabel: "수리 플랜 보기"
+    actionLabel: "호환 개선안 보기"
   }] : [];
 
   const priceItems: PurchaseChecklistItem[] = !result.priceComplete ? [{

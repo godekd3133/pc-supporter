@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { FiAlertTriangle, FiArrowLeft, FiCopy, FiDownload, FiInfo, FiLoader, FiRefreshCw, FiZap } from "react-icons/fi";
 import { GENERATOR_VARIANTS_DRAFT_TRANSFER_KEY, generatorVariantsConditionsSearchFor } from "../shared/generator-variants-share";
-import type { GeneratorVariantsExportItem, GeneratorVariantsShareSnapshot } from "../shared/generator-variants-share";
-import type { BuildGenerationVariantResult } from "../shared/types";
+import type { GeneratorVariantsExportItem, GeneratorVariantsExportPayload, GeneratorVariantsShareSnapshot } from "../shared/generator-variants-share";
+import type { BuildGenerationResult, BuildGenerationVariantResult } from "../shared/types";
 import { CATEGORY_LABELS, GAMING_REFRESH_RATE_LABELS, GAMING_RESOLUTION_LABELS, PART_CATEGORIES, RECOMMENDATION_PRIORITY_LABELS, RECOMMENDATION_PROFILE_LABELS } from "../shared/types";
 import { api } from "./api";
 
@@ -24,10 +24,24 @@ function variantSignature(item: GeneratorVariantsExportItem) {
   return item.draft?.lines.map((line) => `${line.category}:${line.partId}:${line.quantity}`).join("|") ?? "";
 }
 
+function customerFacingDraftFor(draft: BuildGenerationResult) {
+  const { analysis: _analysis, ...safeDraft } = draft;
+  return safeDraft;
+}
+
+export function generatorVariantsCustomerExportPayloadFor(payload: GeneratorVariantsExportPayload): GeneratorVariantsExportPayload {
+  return {
+    ...payload,
+    items: payload.items.map((item) => {
+      const { analysisScore: _analysisScore, draft, ...safeItem } = item;
+      return { ...safeItem, ...(draft ? { draft: customerFacingDraftFor(draft) } : {}) };
+    })
+  };
+}
+
 function summaryFor(items: GeneratorVariantsExportItem[]) {
   const drafts = items.filter((item) => item.draft);
   const prices = drafts.map((item) => item.draft!.totalPriceWon).filter(Number.isFinite);
-  const scores = drafts.map((item) => item.draft!.analysis?.overallScore).filter((value): value is number => typeof value === "number" && Number.isFinite(value));
   const signatures = new Set(drafts.map(variantSignature));
   const changedCategories = PART_CATEGORIES.filter((category) => new Set(drafts.map((item) => {
     const line = item.draft!.lines.find((candidate) => candidate.category === category);
@@ -36,7 +50,6 @@ function summaryFor(items: GeneratorVariantsExportItem[]) {
   return {
     configurationCount: signatures.size,
     priceText: prices.length === 0 ? "정보 부족" : `${formatWon(Math.min(...prices))}${Math.min(...prices) === Math.max(...prices) ? "" : ` ~ ${formatWon(Math.max(...prices))}`}`,
-    analysisText: scores.length === 0 ? "계산 불가" : `${Math.min(...scores)}점${Math.min(...scores) === Math.max(...scores) ? "" : ` ~ ${Math.max(...scores)}점`}`,
     changedCategories
   };
 }
@@ -55,10 +68,9 @@ function exportItemsFromVariants(variants: BuildGenerationVariantResult[]) {
       status: draft ? statusLabel(draft.status) : "생성 실패",
       ...(variant?.error ? { error: variant.error } : {}),
       ...(draft ? {
-        draft,
+        draft: customerFacingDraftFor(draft),
         totalPriceWon: draft.totalPriceWon,
         budgetDeltaWon: draft.budgetDeltaWon,
-        analysisScore: draft.analysis?.overallScore,
         blockerCount: draft.blockerCount,
         warningCount: draft.warningCount,
         unknownCount: draft.unknownCount,
@@ -103,7 +115,7 @@ export function SharedGeneratorVariantsView({ onBack, onToast }: { onBack: () =>
 
   function downloadJson() {
     if (!snapshot) return;
-    const blob = new Blob([JSON.stringify(snapshot.payload, null, 2)], { type: "application/json;charset=utf-8" });
+    const blob = new Blob([JSON.stringify(generatorVariantsCustomerExportPayloadFor(snapshot.payload), null, 2)], { type: "application/json;charset=utf-8" });
     const url = window.URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
@@ -129,7 +141,7 @@ export function SharedGeneratorVariantsView({ onBack, onToast }: { onBack: () =>
   function transferCurrentDraft(item: GeneratorVariantsExportItem, mode: "edit" | "check" | "save") {
     if (!item.draft || !snapshot) return;
     try {
-      const payload = refreshState.items ? { ...snapshot.payload, exportedAt: new Date().toISOString(), items: refreshState.items } : snapshot.payload;
+      const payload = generatorVariantsCustomerExportPayloadFor(refreshState.items ? { ...snapshot.payload, exportedAt: new Date().toISOString(), items: refreshState.items } : snapshot.payload);
       window.sessionStorage.setItem(GENERATOR_VARIANTS_DRAFT_TRANSFER_KEY, JSON.stringify({ source: "shared-generator-variants", payload, priority: item.priority, mode, origin: { shareId: snapshot.id, shareName: snapshot.name, catalogSnapshotAt: snapshot.catalogSnapshotAt, currentRecheckedAt: payload.exportedAt } }));
       window.location.href = "/build?entry=shared-generator";
     } catch {

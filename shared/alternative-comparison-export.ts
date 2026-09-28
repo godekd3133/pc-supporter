@@ -1,9 +1,8 @@
-import { DATA_FRESHNESS_LABELS, BENCHMARK_SOURCE_KIND_LABELS, type BenchmarkScoreKey, type BenchmarkSourceKind, type CatalogPriceEvidence, type DataFreshness, type PartCategory, type PhysicalEvidenceSource, type PhysicalSourceCheck, type SimilarityBasis, type SimilarityConfidence, type SimilarityDimensionEvidence, type SimilarityEvidence, type SimilarityReferenceEvidence, type ValueLabel } from "./types";
+import { DATA_FRESHNESS_LABELS, DATA_QUALITY_LABELS, type BenchmarkScoreKey, type BenchmarkSourceKind, type CatalogPriceEvidence, type DataFreshness, type DataQuality, type PartCategory, type PhysicalEvidenceSource, type PhysicalSourceCheck, type SimilarityBasis, type SimilarityConfidence, type SimilarityDimensionEvidence, type SimilarityEvidence, type SimilarityReferenceEvidence, type ValueLabel } from "./types";
 import { CATALOG_PRICE_EVIDENCE_LABELS } from "./catalog-price-evidence";
-import { valueScoreText } from "./value-score";
 import type { AlternativeComparisonScenario } from "./alternative-comparison-scenario";
-import { benchmarkFreshnessLabelFor, benchmarkSourceCheckLabelFor } from "./benchmark-evidence";
 import type { BenchmarkEvidencePart } from "./benchmark-evidence";
+import { OBJECTIVE_BENCHMARK_DIMENSION_KEYS } from "./objective-score";
 import { safeHttpsUrl } from "./safe-source-url";
 
 export interface AlternativeComparisonExportContext {
@@ -13,15 +12,16 @@ export interface AlternativeComparisonExportContext {
   currentPartPrice?: string;
 }
 
-export type AlternativeComparisonSimilarityDimension = Pick<SimilarityDimensionEvidence, "key" | "label" | "currentValue" | "candidateValue" | "score" | "weight" | "source">;
+export type AlternativeComparisonSimilarityDimension = Pick<SimilarityDimensionEvidence, "key" | "label" | "currentValue" | "candidateValue" | "source"> & Partial<Pick<SimilarityDimensionEvidence, "score" | "weight">>;
 
 export type AlternativeComparisonSimilarityReference = Pick<SimilarityReferenceEvidence, "partId" | "partName" | "category" | "dataQuality" | "updatedAt" | "transferredDimensions"> & {
+  /** Accepted on legacy/internal inputs, omitted from all public projections. */
   benchmarkSourceKind?: BenchmarkSourceKind;
 };
 
 export interface AlternativeComparisonSimilarityEvidence {
-  comparedDimensions: number;
-  totalDimensions: number;
+  comparedDimensions?: number;
+  totalDimensions?: number;
   confidence: SimilarityConfidence;
   basis?: SimilarityBasis;
   dimensions?: AlternativeComparisonSimilarityDimension[];
@@ -113,13 +113,11 @@ export function alternativeComparisonBenchmarkEvidenceFor(evidence: BenchmarkEvi
 
 export function alternativeComparisonSimilarityEvidenceFor(evidence: SimilarityEvidence | undefined): AlternativeComparisonSimilarityEvidence | undefined {
   if (!evidence) return undefined;
-  const dimensions = evidence.dimensions?.slice(0, 12).map((dimension) => ({
+  const dimensions = evidence.dimensions?.filter((dimension) => !OBJECTIVE_BENCHMARK_DIMENSION_KEYS.has(dimension.key)).slice(0, 12).map((dimension) => ({
     key: dimension.key,
     label: dimension.label,
     currentValue: dimension.currentValue,
     candidateValue: dimension.candidateValue,
-    score: dimension.score,
-    weight: dimension.weight,
     ...(dimension.source ? { source: dimension.source } : {})
   }));
   const reference = evidence.reference
@@ -129,19 +127,26 @@ export function alternativeComparisonSimilarityEvidenceFor(evidence: SimilarityE
       category: evidence.reference.category,
       dataQuality: evidence.reference.dataQuality,
       updatedAt: evidence.reference.updatedAt,
-      transferredDimensions: evidence.reference.transferredDimensions.slice(0, 12),
-      ...(evidence.reference.benchmarkSourceKind ? { benchmarkSourceKind: evidence.reference.benchmarkSourceKind } : {})
+      transferredDimensions: evidence.reference.transferredDimensions.filter((key) => !OBJECTIVE_BENCHMARK_DIMENSION_KEYS.has(key)).slice(0, 12)
     }
     : undefined;
+  const safeDimensionCount = Math.max(dimensions?.length ?? 0, reference?.transferredDimensions.length ?? 0);
+  if (safeDimensionCount === 0) return undefined;
   return {
-    comparedDimensions: evidence.comparedDimensions,
-    totalDimensions: evidence.totalDimensions,
+    comparedDimensions: safeDimensionCount,
+    totalDimensions: safeDimensionCount,
     confidence: evidence.confidence,
-    ...(evidence.basis ? { basis: evidence.basis } : {}),
+    basis: "spec",
     ...(dimensions && dimensions.length > 0 ? { dimensions } : {}),
     ...(reference ? { reference } : {}),
-    ...(evidence.notes && evidence.notes.length > 0 ? { notes: evidence.notes.slice(0, 8) } : {})
   };
+}
+
+function selectedSpecDifferencesFor(evidence: AlternativeComparisonCandidate["similarityEvidence"]) {
+  return (evidence?.dimensions ?? [])
+    .filter((dimension) => !OBJECTIVE_BENCHMARK_DIMENSION_KEYS.has(dimension.key) && dimension.source !== "model_reference")
+    .slice(0, 12)
+    .map((dimension) => ({ key: dimension.key, label: dimension.label, currentValue: dimension.currentValue, candidateValue: dimension.candidateValue }));
 }
 
 function physicalEvidenceSourceLabel(category: PhysicalEvidenceSource["category"]) {
@@ -152,20 +157,12 @@ export function physicalEvidenceSourceTextFor(sources: PhysicalEvidenceSource[] 
   return (sources ?? []).map((source) => `${physicalEvidenceSourceLabel(source.category)}${source.manufacturerModel ? ` · ${source.manufacturerModel}` : ""}${source.manufacturerRevision ? ` · ${source.manufacturerRevision}` : ""}${source.updatedAt ? ` · 확인 ${source.updatedAt}` : ""}: ${source.note}${source.url ? ` (${source.url})` : ""}`).join(" · ");
 }
 
-function valueScoreTextFor(candidate: AlternativeComparisonCandidate) {
-  if (candidate.valueScore === undefined || !candidate.valueLabel) return undefined;
-  return `${candidate.valueLabel} ${valueScoreText(candidate.valueScore)}`;
-}
-
 function scenarioStatusLabel(status: NonNullable<AlternativeComparisonCandidate["scenario"]>["status"]) {
-  return status === "compatible" ? "호환 가능" : status === "needs_review" ? "확인 필요" : "호환 불가";
+  return status === "compatible" ? "호환 가능" : status === "needs_review" ? "구매 전 확인 필요" : "호환되지 않음";
 }
 
-function scenarioAnalysisText(scenario: AlternativeComparisonCandidate["scenario"]) {
-  if (!scenario || (scenario.analysisScore === undefined && !scenario.analysisScoreLabel)) return undefined;
-  const confidence = scenario.analysisConfidence === "high" ? "정보 충분" : scenario.analysisConfidence === "limited" ? "일부 정보로 계산" : scenario.analysisConfidence === "unknown" ? "계산 정보 부족" : undefined;
-  const score = scenario.analysisScore === undefined ? scenario.analysisScoreLabel : `${scenario.analysisScore}점 · ${scenario.analysisScoreLabel ?? "분석"}`;
-  return `성능 분석 ${score}${scenario.analysisScoreDelta !== undefined ? ` · 현재 대비 ${scenario.analysisScoreDelta > 0 ? "+" : ""}${scenario.analysisScoreDelta}점` : ""}${confidence ? ` · ${confidence}` : ""}`;
+function dataQualityLabel(value: string) {
+  return DATA_QUALITY_LABELS[value as DataQuality] ?? value;
 }
 
 function scenarioCheckSummaryText(scenario: AlternativeComparisonCandidate["scenario"]) {
@@ -174,55 +171,27 @@ function scenarioCheckSummaryText(scenario: AlternativeComparisonCandidate["scen
   const ready = checks.filter((check) => check.status === "ready").length;
   const review = checks.filter((check) => check.status === "review").length;
   const blocked = checks.filter((check) => check.status === "blocked").length;
-  return `구매 전 체크리스트: ${checks.length}개 · 완료 ${ready} · 추가 확인 ${review} · 차단 ${blocked}`;
-}
-
-function scenarioTradeoffText(scenario: AlternativeComparisonCandidate["scenario"]) {
-  const tradeoff = scenario?.tradeoff;
-  if (!tradeoff) return undefined;
-  const status = tradeoff.eligible === false ? "비교 제외" : tradeoff.frontier ? "비교 우위" : "밀림";
-  const facts = [
-    tradeoff.riskScore !== undefined ? `위험 ${tradeoff.riskScore}점` : undefined,
-    tradeoff.priceDeltaWon !== undefined ? `가격 변화 ${tradeoff.priceDeltaWon > 0 ? "+" : ""}${tradeoff.priceDeltaWon.toLocaleString("ko-KR")}원` : "가격 변화 확인 필요",
-    tradeoff.analysisScore !== undefined ? `분석 ${tradeoff.analysisScore}점` : "분석 확인 필요",
-    tradeoff.evidenceScore !== undefined ? `정보 ${tradeoff.evidenceScore}점` : undefined
-  ].filter((value): value is string => Boolean(value));
-  return `${status} · ${facts.join(" · ")} · ${tradeoff.reason}`;
-}
-
-function similarityConfidenceText(confidence: SimilarityConfidence) {
-  return confidence === "high" ? "정보 충분" : confidence === "limited" ? "정보 제한" : "정보 확인 필요";
-}
-
-function similarityBasisText(basis: SimilarityBasis | undefined) {
-  return basis === "benchmark" ? "성능 측정 자료" : basis === "mixed" ? "성능 측정·부품 정보" : basis === "spec" ? "부품 정보" : "비교 정보 확인 필요";
+  return `구매 전 확인 항목 ${checks.length}개 · 완료 ${ready} · 추가 확인 ${review} · 진행 보류 ${blocked}`;
 }
 
 export function alternativeComparisonSimilarityEvidenceTextFor(evidence: AlternativeComparisonSimilarityEvidence | undefined) {
   if (!evidence) return undefined;
-  const referenceText = evidence.reference
-    ? `같은 제품군 참고: ${evidence.reference.partName} · 참고한 항목 ${evidence.reference.transferredDimensions.length > 0 ? evidence.reference.transferredDimensions.join(" · ") : "지표 확인 필요"}`
+  const dimensions = selectedSpecDifferencesFor(evidence);
+  return dimensions.length > 0
+    ? dimensions.map((dimension) => `${dimension.label} ${dimension.currentValue} → ${dimension.candidateValue}`).join(" / ")
     : undefined;
-  const dimensionText = evidence.dimensions && evidence.dimensions.length > 0
-    ? `항목별 ${evidence.dimensions.map((dimension) => `${dimension.label} ${dimension.currentValue} → ${dimension.candidateValue}${dimension.source === "model_reference" ? " (같은 제품군 참고)" : ""}`).join(" / ")}`
-    : undefined;
-  return [
-    `${similarityConfidenceText(evidence.confidence)} · ${similarityBasisText(evidence.basis)} · 비교 지표 ${evidence.comparedDimensions}/${evidence.totalDimensions}개`,
-    referenceText,
-    dimensionText
-  ].filter((value): value is string => Boolean(value)).join(" · ");
 }
 
 export function alternativeComparisonScenarioTextFor(scenario: AlternativeComparisonCandidate["scenario"]) {
   if (!scenario) return undefined;
-  const purchaseDecisionText = scenario.purchaseDecision
-    ? `구매 판단: ${scenario.purchaseDecision}${scenario.purchaseDecisionSummary ? ` · 안내: ${scenario.purchaseDecisionSummary}` : ""}`
-    : scenario.purchaseDecisionSummary ? `구매 안내: ${scenario.purchaseDecisionSummary}` : undefined;
+  const purchaseDecision = publicComparisonCopyText(scenario.purchaseDecision);
+  const purchaseDecisionSummary = publicComparisonCopyText(scenario.purchaseDecisionSummary);
+  const purchaseDecisionText = purchaseDecision
+    ? `구매 안내: ${purchaseDecision}${purchaseDecisionSummary ? ` · ${purchaseDecisionSummary}` : ""}`
+    : purchaseDecisionSummary ? `구매 안내: ${purchaseDecisionSummary}` : undefined;
   const parts = [
-    `호환 검사: ${scenarioStatusLabel(scenario.status)} · 차단 ${scenario.blockerCount} · 주의 ${scenario.warningCount} · 정보 누락 ${scenario.unknownCount}`,
-    scenarioAnalysisText(scenario),
+    `호환 결과: ${scenarioStatusLabel(scenario.status)} · 호환 불가 ${scenario.blockerCount} · 주의 ${scenario.warningCount} · 확인 필요 ${scenario.unknownCount}`,
     scenario.priceDeltaWon !== undefined ? `가격 변화 ${scenario.priceDeltaWon > 0 ? "+" : ""}${scenario.priceDeltaWon.toLocaleString("ko-KR")}원` : undefined,
-    scenarioTradeoffText(scenario),
     purchaseDecisionText,
     scenario.priceHistory && scenario.priceHistory.sampleCount > 0 ? `가격 이력 ${scenario.priceHistory.windowDays}일 ${scenario.priceHistory.sampleCount}회${scenario.priceHistory.minPriceWon !== undefined ? ` · 최저 ${scenario.priceHistory.minPriceWon.toLocaleString("ko-KR")}원` : ""}` : "가격 이력 없음",
     scenarioCheckSummaryText(scenario)
@@ -235,18 +204,52 @@ function csvCell(value: string | number | undefined) {
   return /[",\n\r]/.test(raw) ? `"${raw.replace(/"/g, '""')}"` : raw;
 }
 
-function benchmarkEvidenceStatusText(status: AlternativeComparisonBenchmarkEvidence["status"]) {
-  return status === "complete" ? "완전 자료" : status === "partial" ? "부분 자료" : "점수 없음";
+export function alternativeComparisonBenchmarkEvidenceTextFor(evidence: AlternativeComparisonBenchmarkEvidence | undefined) {
+  void evidence;
+  return undefined;
 }
 
-export function alternativeComparisonBenchmarkEvidenceTextFor(evidence: AlternativeComparisonBenchmarkEvidence | undefined) {
-  if (!evidence) return undefined;
-  const scoreText = evidence.rows.map((row) => `${row.label} ${row.value === undefined ? "확인 필요" : `${row.value.toLocaleString("ko-KR")}${row.unit}`}`).join(" · ");
-  const sourceText = evidence.provenance
-    ? `${BENCHMARK_SOURCE_KIND_LABELS[evidence.provenance.sourceKind]} · ${evidence.provenance.sourceNote}${evidence.provenance.sourceUrl ? ` · 출처 ${evidence.provenance.sourceUrl}` : ""}`
-    : "출처 없음";
-  const sourceCheckText = `${benchmarkSourceCheckLabelFor(evidence.sourceCheck)}${evidence.sourceCheck?.detail ? ` · ${evidence.sourceCheck.detail}` : ""}`;
-  return `${benchmarkEvidenceStatusText(evidence.status)} · ${evidence.presentCount}/${evidence.totalCount}개 · ${scoreText} · 출처 ${sourceText} · 점검 ${sourceCheckText} · 자료 ${benchmarkFreshnessLabelFor(evidence.benchmarkFreshness)} · 데이터 갱신 ${evidence.dataUpdatedAt}`;
+function publicComparisonCopyText(value: string | undefined) {
+  if (!value) return undefined;
+  return /cinebench|time\s*spy|port\s*royal|benchmark|벤치마크|recommendation.?trust|trust\s*score|추천\s*신뢰|신뢰도|(?:카탈로그|성능)\s*(?:추정\s*)?분석(?:\s*점수)?\s*[:：]?\s*\d+|\bfps\b|초당\s*프레임/i.test(value) ? undefined : value;
+}
+
+function publicScenarioFor(scenario: AlternativeComparisonCandidate["scenario"]) {
+  if (!scenario) return undefined;
+  const { analysisScore: _analysisScore, analysisScoreLabel: _analysisScoreLabel, analysisScoreDelta: _analysisScoreDelta, analysisConfidence: _analysisConfidence, tradeoff: _tradeoff, ...safeScenario } = scenario;
+  return publicScenarioValue(safeScenario);
+}
+
+function publicScenarioValue(value: unknown, key = ""): unknown {
+  if (/benchmark|fps|trust|score/i.test(key)) return undefined;
+  if (typeof value === "string") return publicComparisonCopyText(value);
+  if (Array.isArray(value)) return value.map((item) => publicScenarioValue(item)).filter((item) => item !== undefined);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value as Record<string, unknown>).flatMap(([childKey, child]) => {
+      const safeValue = publicScenarioValue(child, childKey);
+      return safeValue === undefined ? [] : [[childKey, safeValue]];
+    }));
+  }
+  return value;
+}
+
+function publicCandidateFor(candidate: AlternativeComparisonCandidate) {
+  const { recommendationTrust: _recommendationTrust, benchmarkEvidence: _benchmarkEvidence, valueScore: _valueScore, valueLabel: _valueLabel, valueScoreScale: _valueScoreScale, scenario, similarityEvidence, performance, similarity: _similarity, gpuTarget: _gpuTarget, decisionSummary, ...safeCandidate } = candidate;
+  const specSummary = publicComparisonCopyText(performance);
+  const specDifferences = selectedSpecDifferencesFor(similarityEvidence);
+  return {
+    ...safeCandidate,
+    ...(specSummary ? { specSummary } : {}),
+    ...(specDifferences.length > 0 ? { specDifferences } : {}),
+    ...(publicComparisonCopyText(decisionSummary) ? { decisionSummary: publicComparisonCopyText(decisionSummary) } : {}),
+    ...(publicScenarioFor(scenario) ? { scenario: publicScenarioFor(scenario) } : {})
+  };
+}
+
+function specComparisonTextFor(candidate: AlternativeComparisonCandidate) {
+  const summary = publicComparisonCopyText(candidate.performance);
+  const dimensions = alternativeComparisonSimilarityEvidenceTextFor(candidate.similarityEvidence);
+  return [summary, dimensions].filter((value): value is string => Boolean(value)).join(" / ") || undefined;
 }
 
 function comparisonRows(candidates: AlternativeComparisonCandidate[], context: AlternativeComparisonExportContext = {}) {
@@ -263,22 +266,16 @@ function comparisonRows(candidates: AlternativeComparisonCandidate[], context: A
     candidate.priceEvidence ? CATALOG_PRICE_EVIDENCE_LABELS[candidate.priceEvidence] : undefined,
     candidate.purchaseCondition,
     candidate.recommendedQuantity,
-    candidate.similarity,
-    alternativeComparisonSimilarityEvidenceTextFor(candidate.similarityEvidence),
-    candidate.gpuTarget,
-    valueScoreTextFor(candidate),
-    candidate.recommendationTrust,
-    candidate.performance,
+    specComparisonTextFor(candidate),
     candidate.compatibility,
-    candidate.decisionSummary,
+    publicComparisonCopyText(candidate.decisionSummary),
     alternativeComparisonScenarioTextFor(candidate.scenario),
     candidate.physicalEvidence,
     physicalEvidenceSourceTextFor(candidate.physicalEvidenceSources),
-    candidate.dataQuality,
+    dataQualityLabel(candidate.dataQuality),
     candidate.dataFreshness ? DATA_FRESHNESS_LABELS[candidate.dataFreshness] : undefined,
     candidate.updatedAt,
     candidate.sourceUrl,
-    alternativeComparisonBenchmarkEvidenceTextFor(candidate.benchmarkEvidence),
     ...contextValues
   ]);
 }
@@ -294,28 +291,23 @@ export function alternativeComparisonTextFor(candidates: AlternativeComparisonCa
     lines.push(`[부품 ${index + 1}] ${candidate.name}`);
     if (candidate.category || candidate.partId) lines.push(`- 부품 분류: ${candidate.category ?? "분류 확인 필요"}${candidate.partId ? ` · ${candidate.partId}` : ""}`);
     lines.push(`- 핵심 스펙: ${candidate.summary}`);
-    lines.push(`- 가격: ${candidate.price}${candidate.recommendedQuantity !== undefined ? ` · 추천 킷 ${candidate.recommendedQuantity}개` : ""}`);
+    lines.push(`- 가격: ${candidate.price}${candidate.recommendedQuantity !== undefined ? ` · 추천 수량 ${candidate.recommendedQuantity}개` : ""}`);
     if (candidate.priceEvidence) lines.push(`- 가격 출처: ${CATALOG_PRICE_EVIDENCE_LABELS[candidate.priceEvidence]}`);
     if (candidate.purchaseCondition) lines.push(`- 구매 조건: ${candidate.purchaseCondition}`);
-    lines.push(`- 성능 유사도: ${candidate.similarity}`);
-    const similarityEvidence = alternativeComparisonSimilarityEvidenceTextFor(candidate.similarityEvidence);
-    if (similarityEvidence) lines.push(`- 성능 비교 정보: ${similarityEvidence}`);
-    if (candidate.gpuTarget) lines.push(`- 게이밍 목표 정보: ${candidate.gpuTarget}`);
-    const valueScore = valueScoreTextFor(candidate);
-    if (valueScore) lines.push(`- 가격 대비 유사도: ${valueScore}`);
-    if (candidate.recommendationTrust) lines.push(`- 추천 점수: ${candidate.recommendationTrust}`);
-    lines.push(`- 성능 변화: ${candidate.performance}`);
+    const performance = publicComparisonCopyText(candidate.performance);
+    const specEvidence = alternativeComparisonSimilarityEvidenceTextFor(candidate.similarityEvidence);
+    const specComparison = [performance, specEvidence].filter((value): value is string => Boolean(value)).join(" / ");
+    if (specComparison) lines.push(`- 사양 차이: ${specComparison}`);
     lines.push(`- 호환 상태: ${candidate.compatibility}`);
-    if (candidate.decisionSummary) lines.push(`- 판단 요약: ${candidate.decisionSummary}`);
+    const decisionSummary = publicComparisonCopyText(candidate.decisionSummary);
+    if (decisionSummary) lines.push(`- 비교 결론: ${decisionSummary}`);
     const scenario = alternativeComparisonScenarioTextFor(candidate.scenario);
-    if (scenario) lines.push(`- 미리 적용 판단: ${scenario}`);
-    if (candidate.physicalEvidence) lines.push(`- 장착 정보: ${candidate.physicalEvidence}`);
+    if (scenario) lines.push(`- 부품을 교체할 경우: ${scenario}`);
+    if (candidate.physicalEvidence) lines.push(`- 설치 공간 확인: ${candidate.physicalEvidence}`);
     const physicalEvidenceSources = physicalEvidenceSourceTextFor(candidate.physicalEvidenceSources);
-    if (physicalEvidenceSources) lines.push(`- 장착 정보 출처: ${physicalEvidenceSources}`);
-    lines.push(`- 데이터: ${candidate.dataQuality}${candidate.dataFreshness ? ` · ${DATA_FRESHNESS_LABELS[candidate.dataFreshness]}` : ""}${candidate.updatedAt ? ` · 갱신 ${candidate.updatedAt}` : ""}`);
-    if (candidate.sourceUrl) lines.push(`- 출처: ${candidate.sourceUrl}`);
-    const benchmarkEvidence = alternativeComparisonBenchmarkEvidenceTextFor(candidate.benchmarkEvidence);
-    if (benchmarkEvidence) lines.push(`- 성능 정보: ${benchmarkEvidence}`);
+    if (physicalEvidenceSources) lines.push(`- 설치 안내: ${physicalEvidenceSources}`);
+    lines.push(`- 부품 정보: ${dataQualityLabel(candidate.dataQuality)}${candidate.dataFreshness ? ` · ${DATA_FRESHNESS_LABELS[candidate.dataFreshness]}` : ""}${candidate.updatedAt ? ` · 갱신 ${candidate.updatedAt}` : ""}`);
+    if (candidate.sourceUrl) lines.push(`- 상품 페이지: ${candidate.sourceUrl}`);
     lines.push("");
   });
   return lines.join("\n");
@@ -325,7 +317,7 @@ export function alternativeComparisonCsvFor(candidates: AlternativeComparisonCan
   const contextColumns = context.category || context.currentPartName || context.currentPartSummary || context.currentPartPrice
     ? ["비교 범주", "현재 부품", "현재 부품 정보", "현재 부품 가격"]
     : [];
-  const header = ["부품명", "범주", "부품 ID", "핵심 스펙", "가격", "공유 당시 가격(원)", "가격 출처", "구매 조건", "추천 킷 수량", "성능 유사도", "성능 비교 정보", "게이밍 목표 정보", "가격 대비 유사도", "추천 점수", "성능 변화", "호환 상태", "판단 요약", "미리 적용 판단", "장착 정보", "장착 정보 출처", "부품 정보 상태", "갱신 상태", "갱신일", "상품 링크", "성능 정보", ...contextColumns];
+  const header = ["부품명", "범주", "부품 ID", "핵심 스펙", "가격", "공유 당시 가격(원)", "가격 출처", "구매 조건", "추천 수량", "사양 차이", "호환 상태", "비교 결론", "부품 교체 시", "설치 공간 확인", "설치 안내", "부품 정보 상태", "갱신 상태", "갱신일", "상품 페이지", ...contextColumns];
   return `\uFEFF${[header, ...comparisonRows(candidates, context)].map((row) => row.map((value) => csvCell(value)).join(",")).join("\r\n")}`;
 }
 
@@ -335,6 +327,6 @@ export function alternativeComparisonJsonFor(candidates: AlternativeComparisonCa
     version: 1,
     exportedAt: new Date().toISOString(),
     ...(context.category || context.currentPartName || context.currentPartSummary || context.currentPartPrice ? { context: { ...(context.category ? { category: context.category } : {}), ...(context.currentPartName ? { currentPartName: context.currentPartName } : {}), ...(context.currentPartSummary ? { currentPartSummary: context.currentPartSummary } : {}), ...(context.currentPartPrice ? { currentPartPrice: context.currentPartPrice } : {}) } } : {}),
-    items: candidates
+    items: candidates.map(publicCandidateFor)
   }, null, 2);
 }

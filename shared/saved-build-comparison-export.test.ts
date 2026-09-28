@@ -11,7 +11,7 @@ describe("saved build comparison export", () => {
   it("keeps snapshot and current catalog sections in text output", () => {
     const text = savedBuildComparisonTextFor(input);
     expect(text).toContain("[저장 시점 스냅샷]");
-    expect(text).toContain("[현재 카탈로그 재검사]");
+    expect(text).toContain("[현재 카탈로그 다시 확인]");
     expect(text).toContain("저장 당시 상태: 호환 가능 | 확인 필요");
   });
 
@@ -30,6 +30,6 @@ describe("saved build comparison export", () => {
   it("adds a third comparison column without changing the row sections", () => {
     const csv = savedBuildComparisonCsvFor({ ...input, buildNames: ["현재 견적", "저장 견적 A", "저장 견적 B"] });
     expect(csv.startsWith("\uFEFF구분,비교 항목,현재 견적,저장 견적 A,저장 견적 B")).toBe(true);
-    expect(csv).toContain("현재 카탈로그 재검사,현재 위험");
+    expect(csv).toContain("현재 카탈로그 다시 확인,현재 위험");
   });
 });

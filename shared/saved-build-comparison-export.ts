@@ -18,14 +18,14 @@ function rowsForExport(input: SavedBuildComparisonExportInput) {
   return [
     ["구분", "비교 항목", ...input.buildNames],
     ...input.snapshotRows.map((row) => ["저장 시점 스냅샷", row.label, ...row.values]),
-    ...input.currentRows.map((row) => ["현재 카탈로그 재검사", row.label, ...row.values])
+    ...input.currentRows.map((row) => ["현재 카탈로그 다시 확인", row.label, ...row.values])
   ];
 }
 
 export function savedBuildComparisonTextFor(input: SavedBuildComparisonExportInput) {
   const lines = ["PC Supporter 저장 견적 비교", `비교 견적: ${input.buildNames.join(" · ")}`, "", "[저장 시점 스냅샷]"];
   input.snapshotRows.forEach((row) => lines.push(`${row.label}: ${row.values.join(" | ")}`));
-  lines.push("", "[현재 카탈로그 재검사]");
+  lines.push("", "[현재 카탈로그 다시 확인]");
   input.currentRows.forEach((row) => lines.push(`${row.label}: ${row.values.join(" | ")}`));
   return lines.join("\n");
 }

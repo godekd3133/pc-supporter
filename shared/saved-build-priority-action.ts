@@ -44,7 +44,7 @@ export function savedBuildNextActionFor(result: CompatibilityResult): SavedBuild
       : `${CATEGORY_LABELS[primary.category]} 부품 ${primary.toPartName} 확인`;
     return {
       kind: "repair_plan",
-      title: "추천 수리 플랜",
+      title: "호환 문제 줄이기",
       summary: plan.reason,
       nextAction,
       changes,
@@ -62,8 +62,8 @@ export function savedBuildNextActionFor(result: CompatibilityResult): SavedBuild
   if (analysisAction) {
     return {
       kind: "analysis",
-      title: "분석 기준 다음 행동",
-      summary: "현재 전체 수리 플랜으로 계산된 안전한 부품이 없어, 분석이 제안한 다음 행동을 먼저 확인합니다.",
+      title: "확인할 항목",
+      summary: "한 번에 호환 문제를 해결할 구성을 찾지 못했어요. 아래 항목을 하나씩 살펴봐 주세요.",
       nextAction: analysisAction,
       changes: [],
       resolvedBlockers: 0,
@@ -76,8 +76,8 @@ export function savedBuildNextActionFor(result: CompatibilityResult): SavedBuild
 
   return {
     kind: "none",
-    title: "추가 할 일 없음",
-    summary: "현재 분석 기준에서 별도로 제안할 다음 할 일이 없습니다.",
+    title: "추가 추천 없음",
+    summary: "현재 부품을 바꾸지 않고 해결할 수 있는 추천 구성이 없습니다.",
     changes: [],
     resolvedBlockers: 0,
     remainingBlockers: result.blockerCount,

@@ -112,7 +112,7 @@ describe("catalog spec coverage", () => {
   it("translates common persisted field keys while preserving unknown keys", () => {
     expect(catalogMissingFieldLabelFor("maxGpuLengthMm")).toBe("GPU 허용 길이");
     expect(catalogMissingFieldLabelFor("pcieX4Slots")).toBe("PCIe x4 슬롯");
-    expect(catalogMissingFieldLabelFor("futureField")).toBe("futureField");
+    expect(catalogMissingFieldLabelFor("futureField")).toBe("기타 사양");
   });
 
   it("ranks missing fields deterministically and respects the result limit", () => {

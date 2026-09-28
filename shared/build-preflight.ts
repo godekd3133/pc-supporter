@@ -65,7 +65,7 @@ export function buildPreflightFor(build: BuildSelection, partMap: ReadonlyMap<st
     id: `preflight-selection-${category}`,
     kind: "selection",
     label: categoryLabel(category),
-    message: `${categoryLabel(category)}${selectionParticles[category]} 선택해야 검사 준비가 완료됩니다.`
+    message: `${categoryLabel(category)}${selectionParticles[category]} 먼저 선택해 주세요.`
   }));
   const coreEntries = PART_CATEGORIES.flatMap((category) => selectionsForCategory(build, category).map((selection) => ({ category, partId: selection.partId })));
   const dataReviewIds = new Set<string>();
@@ -76,18 +76,18 @@ export function buildPreflightFor(build: BuildSelection, partMap: ReadonlyMap<st
     if (!part) {
       unknownCatalogIds.add(entry.partId);
       dataReviewIds.add(entry.partId);
-      issues.push({ id: `preflight-catalog-${entry.partId}`, kind: "catalog", label: categoryLabel(entry.category), message: `${entry.partId}의 카탈로그 상세를 아직 확인하지 못했습니다.` });
+      issues.push({ id: `preflight-catalog-${entry.partId}`, kind: "catalog", label: categoryLabel(entry.category), message: `${categoryLabel(entry.category)} 정보를 찾지 못했어요.` });
       continue;
     }
     const dataNeedsReview = part.dataQuality === "incomplete" || part.missingFields.length > 0;
     const refreshTarget = part.source === "danawa" && part.danawaUrl ? { kind: "part" as const, id: part.id } : undefined;
     if (dataNeedsReview) {
       dataReviewIds.add(part.id);
-      issues.push({ id: `preflight-data-${part.id}`, kind: "data", label: part.name, message: part.missingFields.length > 0 ? `확인되지 않은 스펙 ${part.missingFields.length}개: ${part.missingFields.slice(0, 3).map((field) => catalogMissingFieldLabelFor(field)).join(", ")}` : "카탈로그 상세 스펙의 완성도를 확인해야 합니다.", ...(refreshTarget ? { target: refreshTarget } : {}) });
+      issues.push({ id: `preflight-data-${part.id}`, kind: "data", label: part.name, message: part.missingFields.length > 0 ? `확인할 사양 ${part.missingFields.length}개: ${part.missingFields.slice(0, 3).map((field) => catalogMissingFieldLabelFor(field)).join(", ")}` : "부품 사양 정보가 부족해요.", ...(refreshTarget ? { target: refreshTarget } : {}) });
     }
     if (!isKnownPrice(part.priceWon)) {
       unpricedIds.add(part.id);
-      issues.push({ id: `preflight-price-${part.id}`, kind: "price", label: part.name, message: "현재 가격을 확인할 수 없어 견적 금액이 확정되지 않습니다.", ...(!dataNeedsReview && refreshTarget ? { target: refreshTarget } : {}) });
+      issues.push({ id: `preflight-price-${part.id}`, kind: "price", label: part.name, message: "현재 가격을 알 수 없어 전체 금액을 계산할 수 없어요.", ...(!dataNeedsReview && refreshTarget ? { target: refreshTarget } : {}) });
     }
   }
   const accessoryEntries = build.accessories ?? [];
@@ -96,7 +96,7 @@ export function buildPreflightFor(build: BuildSelection, partMap: ReadonlyMap<st
     .filter((selection) => accessoryMap.get(selection.accessoryId)?.category === "fan_hub")
     .map((selection) => selection.accessoryId));
   if (build.rgbControllerAccessoryId !== undefined && !selectedFanHubIds.has(build.rgbControllerAccessoryId)) {
-    issues.push({ id: `preflight-rgb-controller-${build.rgbControllerAccessoryId}`, kind: "catalog", label: "RGB 연결 컨트롤러", message: `RGB 연결 컨트롤러 ${build.rgbControllerAccessoryId}가 현재 선택한 팬 허브 목록에 없습니다.` });
+    issues.push({ id: `preflight-rgb-controller-${build.rgbControllerAccessoryId}`, kind: "catalog", label: "RGB 연결 컨트롤러", message: "RGB 컨트롤러를 선택한 팬 허브 목록에서 찾지 못했어요." });
   }
   for (const selection of accessoryEntries) {
     const accessoryId = selection.accessoryId;
@@ -104,26 +104,26 @@ export function buildPreflightFor(build: BuildSelection, partMap: ReadonlyMap<st
     if (!item) {
       unknownCatalogIds.add(accessoryId);
       dataReviewIds.add(accessoryId);
-      issues.push({ id: `preflight-accessory-catalog-${accessoryId}`, kind: "catalog", label: "주변 부품", message: `${accessoryId}의 주변 부품 상세를 아직 확인하지 못했습니다.` });
+      issues.push({ id: `preflight-accessory-catalog-${accessoryId}`, kind: "catalog", label: "주변 부품", message: "주변 부품 정보를 찾지 못했어요." });
       continue;
     }
     if (selection.targetPartId !== undefined && (!selectedSsdIds.has(selection.targetPartId) || partMap.get(selection.targetPartId)?.category !== "ssd")) {
       dataReviewIds.add(item.id);
-      issues.push({ id: `preflight-accessory-target-${item.id}-${selection.targetPartId}`, kind: "catalog", label: item.name, message: `연결 대상 SSD ${selection.targetPartId}가 현재 선택한 SSD 목록에 없습니다.` });
+      issues.push({ id: `preflight-accessory-target-${item.id}-${selection.targetPartId}`, kind: "catalog", label: item.name, message: "연결할 SSD를 현재 견적에서 찾지 못했어요." });
     }
     if (selection.targetAccessoryId !== undefined && (!selectedFanHubIds.has(selection.targetAccessoryId) || item.category !== "cooling_fan")) {
       dataReviewIds.add(item.id);
-      issues.push({ id: `preflight-accessory-hub-target-${item.id}-${selection.targetAccessoryId}`, kind: "catalog", label: item.name, message: `연결 대상 팬 허브 ${selection.targetAccessoryId}가 현재 선택한 팬 허브 목록에 없거나 대상 부품이 쿨링팬이 아닙니다.` });
+      issues.push({ id: `preflight-accessory-hub-target-${item.id}-${selection.targetAccessoryId}`, kind: "catalog", label: item.name, message: "연결할 팬 허브를 현재 견적에서 찾지 못했어요." });
     }
     const dataNeedsReview = item.dataQuality === "incomplete" || item.missingFields.length > 0;
     const refreshTarget = item.source === "danawa" && item.danawaUrl ? { kind: "accessory" as const, id: item.id } : undefined;
     if (dataNeedsReview) {
       dataReviewIds.add(item.id);
-      issues.push({ id: `preflight-accessory-data-${item.id}`, kind: "data", label: item.name, message: item.missingFields.length > 0 ? `확인되지 않은 정보 ${item.missingFields.length}개: ${item.missingFields.slice(0, 3).map((field) => catalogMissingFieldLabelFor(field)).join(", ")}` : "주변 부품 상세 정보의 완성도를 확인해야 합니다.", ...(refreshTarget ? { target: refreshTarget } : {}) });
+      issues.push({ id: `preflight-accessory-data-${item.id}`, kind: "data", label: item.name, message: item.missingFields.length > 0 ? `확인할 정보 ${item.missingFields.length}개: ${item.missingFields.slice(0, 3).map((field) => catalogMissingFieldLabelFor(field)).join(", ")}` : "주변 부품 정보가 부족해요.", ...(refreshTarget ? { target: refreshTarget } : {}) });
     }
     if (!isKnownPrice(item.priceWon)) {
       unpricedIds.add(item.id);
-      issues.push({ id: `preflight-accessory-price-${item.id}`, kind: "price", label: item.name, message: "현재 가격을 확인할 수 없어 주변 부품 합계가 확정되지 않습니다.", ...(!dataNeedsReview && refreshTarget ? { target: refreshTarget } : {}) });
+      issues.push({ id: `preflight-accessory-price-${item.id}`, kind: "price", label: item.name, message: "현재 가격을 알 수 없어 주변 부품 합계를 계산할 수 없어요.", ...(!dataNeedsReview && refreshTarget ? { target: refreshTarget } : {}) });
     }
   }
   const status: BuildPreflightStatus = missingRequired.length > 0

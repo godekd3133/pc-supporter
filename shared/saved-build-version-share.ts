@@ -10,9 +10,7 @@ export type SavedBuildVersionShareCheck = {
   unknownCount: number;
   totalPriceWon: number;
   priceComplete: boolean;
-  analysisScore?: number;
-  analysisScoreLabel: SavedBuildVersionExportCheck["analysisScoreLabel"];
-  analysisConfidence: SavedBuildVersionExportCheck["analysisConfidence"];
+  resourceBudget?: SavedBuildVersionExportCheck["resourceBudget"];
   findings?: Array<{ key: string; title: string; severity: string }>;
   engineVersion: string;
   catalogSnapshotAt: string;
@@ -36,11 +34,10 @@ export type SavedBuildVersionShareTransition = {
   warningDelta: number;
   unknownDelta: number;
   priceDeltaWon?: number;
-  analysisScoreDelta?: number;
+  powerHeadroomDeltaW?: number;
+  coolerHeadroomDeltaW?: number;
   priceCompletenessChanged: boolean;
   resourceBudgetChanged: boolean;
-  benchmarkChanged: boolean;
-  benchmarkNeedsReview: boolean;
   engineChanged: boolean;
   catalogChanged: boolean;
   resolvedFindingCount: number;
@@ -53,7 +50,6 @@ export type SavedBuildVersionShareSummary = {
   direction?: SavedBuildVersionShareTransition["direction"];
   selectionChangedCategoryCount: number;
   priceDeltaWon?: number;
-  analysisScoreDelta?: number;
   resolvedFindingCount?: number;
   newFindingCount?: number;
   changedFindingCount?: number;
@@ -161,6 +157,39 @@ function finiteNumberValue(value: unknown, minimum = -1_000_000_000, maximum = 1
   return typeof value === "number" && Number.isFinite(value) && value >= minimum && value <= maximum ? value : undefined;
 }
 
+const RESOURCE_STATES = ["good", "warning", "danger", "unknown", "neutral"] as const;
+
+function resourceBudgetFromUnknown(value: unknown): SavedBuildVersionShareCheck["resourceBudget"] | undefined {
+  if (!isRecord(value)
+    || !RESOURCE_STATES.includes(value.state as typeof RESOURCE_STATES[number])
+    || !RESOURCE_STATES.includes(value.powerState as typeof RESOURCE_STATES[number])
+    || !RESOURCE_STATES.includes(value.coolingState as typeof RESOURCE_STATES[number])
+    || (value.powerHeadroomW !== undefined && finiteNumberValue(value.powerHeadroomW, -100_000, 100_000) === undefined)
+    || (value.coolerHeadroomW !== undefined && finiteNumberValue(value.coolerHeadroomW, -100_000, 100_000) === undefined)) return undefined;
+  return {
+    state: value.state as NonNullable<SavedBuildVersionShareCheck["resourceBudget"]>["state"],
+    powerState: value.powerState as NonNullable<SavedBuildVersionShareCheck["resourceBudget"]>["powerState"],
+    coolingState: value.coolingState as NonNullable<SavedBuildVersionShareCheck["resourceBudget"]>["coolingState"],
+    ...(value.powerHeadroomW !== undefined ? { powerHeadroomW: value.powerHeadroomW as number } : {}),
+    ...(value.coolerHeadroomW !== undefined ? { coolerHeadroomW: value.coolerHeadroomW as number } : {})
+  };
+}
+
+const PRIVATE_SHARE_TEXT_LINE = /analysisScore|analysisConfidence|analysisScoreLabel|analysisScoreDelta|benchmark|cinebench|3dmark|time\s*spy|port\s*royal|recommendation.?trust|trust\s*score|추천\s*신뢰|신뢰도|(?:성능|카탈로그)\s*분석|성능\s*자료|벤치마크|\bfps\b|초당\s*프레임/i;
+const SAFE_DATA_BOUNDARY = "저장된 두 버전의 선택·호환 결과 비교입니다. 실제 판매가·재고·제조사 QVL·물리 장착·케이블 배선은 구매 전에 확인해야 합니다. 게임 성능은 게임과 설정에 따라 달라집니다.";
+
+function publicShareTextFromUnknown(value: unknown) {
+  const text = textValue(value, 12_000);
+  if (!text) return undefined;
+  const publicText = text.split(/\r?\n/).filter((line) => !PRIVATE_SHARE_TEXT_LINE.test(line)).join("\n").trim();
+  return publicText || "PC Supporter 저장 견적 버전 비교";
+}
+
+function publicDataBoundaryFromUnknown(value: unknown) {
+  const boundary = textValue(value, 800);
+  return boundary && PRIVATE_SHARE_TEXT_LINE.test(boundary) ? SAFE_DATA_BOUNDARY : boundary;
+}
+
 function checkFromUnknown(value: unknown): SavedBuildVersionShareCheck | undefined {
   if (!isRecord(value)) return undefined;
   const status = value.status === "compatible" || value.status === "needs_review" || value.status === "incompatible" ? value.status : undefined;
@@ -168,10 +197,8 @@ function checkFromUnknown(value: unknown): SavedBuildVersionShareCheck | undefin
   const warningCount = integerValue(value.warningCount);
   const unknownCount = integerValue(value.unknownCount);
   const totalPriceWon = finiteNumberValue(value.totalPriceWon, 0);
-  const analysisScore = value.analysisScore === undefined ? undefined : finiteNumberValue(value.analysisScore, 0, 100);
   const priceComplete = value.priceComplete;
-  const analysisScoreLabel = value.analysisScoreLabel === "상위권" || value.analysisScoreLabel === "균형형" || value.analysisScoreLabel === "보완 권장" || value.analysisScoreLabel === "계산 불가" ? value.analysisScoreLabel : undefined;
-  const analysisConfidence = value.analysisConfidence === "high" || value.analysisConfidence === "limited" || value.analysisConfidence === "unknown" ? value.analysisConfidence : undefined;
+  const resourceBudget = value.resourceBudget === undefined ? undefined : resourceBudgetFromUnknown(value.resourceBudget);
   const engineVersion = textValue(value.engineVersion, 80);
   const catalogSnapshotAt = dateValue(value.catalogSnapshotAt, 120);
   const checkedAt = dateValue(value.checkedAt, 120);
@@ -183,8 +210,8 @@ function checkFromUnknown(value: unknown): SavedBuildVersionShareCheck | undefin
     const severity = textValue(item.severity, 40);
     return key && title && severity ? [{ key, title, severity }] : [];
   }) : undefined;
-  if (!status || blockerCount === undefined || warningCount === undefined || unknownCount === undefined || totalPriceWon === undefined || typeof priceComplete !== "boolean" || !analysisScoreLabel || !analysisConfidence || !engineVersion || !catalogSnapshotAt || !checkedAt || findingsValue !== undefined && (!findings || !Array.isArray(findingsValue) || findings.length !== findingsValue.length || new Set(findings.map((finding) => finding.key)).size !== findings.length)) return undefined;
-  return { status, blockerCount, warningCount, unknownCount, totalPriceWon, priceComplete, ...(analysisScore !== undefined ? { analysisScore } : {}), analysisScoreLabel, analysisConfidence, ...(findings ? { findings } : {}), engineVersion, catalogSnapshotAt, checkedAt };
+  if (!status || blockerCount === undefined || warningCount === undefined || unknownCount === undefined || totalPriceWon === undefined || typeof priceComplete !== "boolean" || value.resourceBudget !== undefined && !resourceBudget || !engineVersion || !catalogSnapshotAt || !checkedAt || findingsValue !== undefined && (!findings || !Array.isArray(findingsValue) || findings.length !== findingsValue.length || new Set(findings.map((finding) => finding.key)).size !== findings.length)) return undefined;
+  return { status, blockerCount, warningCount, unknownCount, totalPriceWon, priceComplete, ...(resourceBudget ? { resourceBudget } : {}), ...(findings ? { findings } : {}), engineVersion, catalogSnapshotAt, checkedAt };
 }
 
 function buildFromUnknown(value: unknown): SavedBuildVersionShareBuild | undefined {
@@ -205,12 +232,11 @@ function summaryFromUnknown(value: unknown): SavedBuildVersionShareSummary | und
   const direction = value.direction === undefined ? undefined : value.direction === "improved" || value.direction === "regressed" || value.direction === "changed" || value.direction === "same" ? value.direction : undefined;
   const selectionChangedCategoryCount = integerValue(value.selectionChangedCategoryCount);
   const priceDeltaWon = value.priceDeltaWon === undefined ? undefined : finiteNumberValue(value.priceDeltaWon);
-  const analysisScoreDelta = value.analysisScoreDelta === undefined ? undefined : finiteNumberValue(value.analysisScoreDelta, -100, 100);
   const resolvedFindingCount = value.resolvedFindingCount === undefined ? undefined : integerValue(value.resolvedFindingCount);
   const newFindingCount = value.newFindingCount === undefined ? undefined : integerValue(value.newFindingCount);
   const changedFindingCount = value.changedFindingCount === undefined ? undefined : integerValue(value.changedFindingCount);
-  if (value.direction !== undefined && direction === undefined || selectionChangedCategoryCount === undefined || value.priceDeltaWon !== undefined && priceDeltaWon === undefined || value.analysisScoreDelta !== undefined && analysisScoreDelta === undefined || value.resolvedFindingCount !== undefined && resolvedFindingCount === undefined || value.newFindingCount !== undefined && newFindingCount === undefined || value.changedFindingCount !== undefined && changedFindingCount === undefined) return undefined;
-  return { ...(direction ? { direction } : {}), selectionChangedCategoryCount, ...(priceDeltaWon !== undefined ? { priceDeltaWon } : {}), ...(analysisScoreDelta !== undefined ? { analysisScoreDelta } : {}), ...(resolvedFindingCount !== undefined ? { resolvedFindingCount } : {}), ...(newFindingCount !== undefined ? { newFindingCount } : {}), ...(changedFindingCount !== undefined ? { changedFindingCount } : {}) };
+  if (value.direction !== undefined && direction === undefined || selectionChangedCategoryCount === undefined || value.priceDeltaWon !== undefined && priceDeltaWon === undefined || value.resolvedFindingCount !== undefined && resolvedFindingCount === undefined || value.newFindingCount !== undefined && newFindingCount === undefined || value.changedFindingCount !== undefined && changedFindingCount === undefined) return undefined;
+  return { ...(direction ? { direction } : {}), selectionChangedCategoryCount, ...(priceDeltaWon !== undefined ? { priceDeltaWon } : {}), ...(resolvedFindingCount !== undefined ? { resolvedFindingCount } : {}), ...(newFindingCount !== undefined ? { newFindingCount } : {}), ...(changedFindingCount !== undefined ? { changedFindingCount } : {}) };
 }
 
 function transitionFromUnknown(value: unknown): SavedBuildVersionShareTransition | undefined {
@@ -221,15 +247,16 @@ function transitionFromUnknown(value: unknown): SavedBuildVersionShareTransition
   const warningDelta = finiteNumberValue(value.warningDelta, -1_000_000, 1_000_000);
   const unknownDelta = finiteNumberValue(value.unknownDelta, -1_000_000, 1_000_000);
   const priceDeltaWon = value.priceDeltaWon === undefined ? undefined : finiteNumberValue(value.priceDeltaWon);
-  const analysisScoreDelta = value.analysisScoreDelta === undefined ? undefined : finiteNumberValue(value.analysisScoreDelta, -100, 100);
+  const powerHeadroomDeltaW = value.powerHeadroomDeltaW === undefined ? undefined : finiteNumberValue(value.powerHeadroomDeltaW, -100_000, 100_000);
+  const coolerHeadroomDeltaW = value.coolerHeadroomDeltaW === undefined ? undefined : finiteNumberValue(value.coolerHeadroomDeltaW, -100_000, 100_000);
   const resolvedFindingCount = integerValue(value.resolvedFindingCount);
   const newFindingCount = integerValue(value.newFindingCount);
   const severityChangedFindingCount = integerValue(value.severityChangedFindingCount);
   const detailsChangedFindingCount = integerValue(value.detailsChangedFindingCount);
-  const boolKeys = ["statusChanged", "priceCompletenessChanged", "resourceBudgetChanged", "benchmarkChanged", "benchmarkNeedsReview", "engineChanged", "catalogChanged"] as const;
+  const boolKeys = ["statusChanged", "priceCompletenessChanged", "resourceBudgetChanged", "engineChanged", "catalogChanged"] as const;
   const boolValues = Object.fromEntries(boolKeys.map((key) => [key, bool(key)]));
-  if (!direction || blockerDelta === undefined || warningDelta === undefined || unknownDelta === undefined || resolvedFindingCount === undefined || newFindingCount === undefined || severityChangedFindingCount === undefined || detailsChangedFindingCount === undefined || boolKeys.some((key) => boolValues[key] === undefined) || value.priceDeltaWon !== undefined && priceDeltaWon === undefined || value.analysisScoreDelta !== undefined && analysisScoreDelta === undefined) return undefined;
-  return { direction, blockerDelta, warningDelta, unknownDelta, resolvedFindingCount, newFindingCount, severityChangedFindingCount, detailsChangedFindingCount, ...(priceDeltaWon !== undefined ? { priceDeltaWon } : {}), ...(analysisScoreDelta !== undefined ? { analysisScoreDelta } : {}), ...Object.fromEntries(boolKeys.map((key) => [key, boolValues[key]])) as Pick<SavedBuildVersionShareTransition, typeof boolKeys[number]> };
+  if (!direction || blockerDelta === undefined || warningDelta === undefined || unknownDelta === undefined || resolvedFindingCount === undefined || newFindingCount === undefined || severityChangedFindingCount === undefined || detailsChangedFindingCount === undefined || boolKeys.some((key) => boolValues[key] === undefined) || value.priceDeltaWon !== undefined && priceDeltaWon === undefined || value.powerHeadroomDeltaW !== undefined && powerHeadroomDeltaW === undefined || value.coolerHeadroomDeltaW !== undefined && coolerHeadroomDeltaW === undefined) return undefined;
+  return { direction, blockerDelta, warningDelta, unknownDelta, resolvedFindingCount, newFindingCount, severityChangedFindingCount, detailsChangedFindingCount, ...(priceDeltaWon !== undefined ? { priceDeltaWon } : {}), ...(powerHeadroomDeltaW !== undefined ? { powerHeadroomDeltaW } : {}), ...(coolerHeadroomDeltaW !== undefined ? { coolerHeadroomDeltaW } : {}), ...Object.fromEntries(boolKeys.map((key) => [key, boolValues[key]])) as Pick<SavedBuildVersionShareTransition, typeof boolKeys[number]> };
 }
 
 function changesFromUnknown(value: unknown) {
@@ -266,9 +293,7 @@ export function savedBuildVersionComparisonSharePayloadFor(exported: SavedBuildV
     unknownCount: check.unknownCount,
     totalPriceWon: check.totalPriceWon,
     priceComplete: check.priceComplete,
-    ...(check.analysisScore !== undefined ? { analysisScore: check.analysisScore } : {}),
-    analysisScoreLabel: check.analysisScoreLabel,
-    analysisConfidence: check.analysisConfidence,
+    ...(check.resourceBudget ? { resourceBudget: check.resourceBudget } : {}),
     ...(check.findings ? { findings: check.findings.slice(0, 32).map((finding) => ({ key: finding.ruleId || finding.id, title: finding.title, severity: finding.severity })) } : {}),
     engineVersion: check.engineVersion,
     catalogSnapshotAt: check.catalogSnapshotAt,
@@ -282,11 +307,10 @@ export function savedBuildVersionComparisonSharePayloadFor(exported: SavedBuildV
     warningDelta: exported.transition.warningDelta,
     unknownDelta: exported.transition.unknownDelta,
     ...(exported.transition.priceDeltaWon !== undefined ? { priceDeltaWon: exported.transition.priceDeltaWon } : {}),
-    ...(exported.transition.analysisScoreDelta !== undefined ? { analysisScoreDelta: exported.transition.analysisScoreDelta } : {}),
+    ...(exported.transition.powerHeadroomDeltaW !== undefined ? { powerHeadroomDeltaW: exported.transition.powerHeadroomDeltaW } : {}),
+    ...(exported.transition.coolerHeadroomDeltaW !== undefined ? { coolerHeadroomDeltaW: exported.transition.coolerHeadroomDeltaW } : {}),
     priceCompletenessChanged: exported.transition.priceCompletenessChanged,
     resourceBudgetChanged: exported.transition.resourceBudgetChanged,
-    benchmarkChanged: exported.transition.benchmarkChanged,
-    benchmarkNeedsReview: exported.transition.benchmarkNeedsReview,
     engineChanged: exported.transition.engineChanged,
     catalogChanged: exported.transition.catalogChanged,
     resolvedFindingCount: exported.transition.resolvedFindingCount,
@@ -294,18 +318,26 @@ export function savedBuildVersionComparisonSharePayloadFor(exported: SavedBuildV
     severityChangedFindingCount: exported.transition.severityChangedFindingCount,
     detailsChangedFindingCount: exported.transition.detailsChangedFindingCount
   } satisfies SavedBuildVersionShareTransition : undefined;
+  const summary: SavedBuildVersionShareSummary = {
+    ...(exported.summary.direction ? { direction: exported.summary.direction } : {}),
+    selectionChangedCategoryCount: exported.summary.selectionChangedCategoryCount,
+    ...(exported.summary.priceDeltaWon !== undefined ? { priceDeltaWon: exported.summary.priceDeltaWon } : {}),
+    ...(exported.summary.resolvedFindingCount !== undefined ? { resolvedFindingCount: exported.summary.resolvedFindingCount } : {}),
+    ...(exported.summary.newFindingCount !== undefined ? { newFindingCount: exported.summary.newFindingCount } : {}),
+    ...(exported.summary.changedFindingCount !== undefined ? { changedFindingCount: exported.summary.changedFindingCount } : {})
+  };
   return {
     schemaVersion: SAVED_BUILD_VERSION_SHARE_SCHEMA_VERSION,
     kind: SAVED_BUILD_VERSION_SHARE_KIND,
     generatedAt: exported.generatedAt,
     before: compactBuild(exported.before),
     after: compactBuild(exported.after),
-    summary: exported.summary,
+    summary,
     ...(transition ? { transition } : {}),
     changes: exported.changes.slice(0, 32),
     findingChanges: exported.findingChanges.filter((change) => change.change !== "unchanged").slice(0, 32).map((change): SavedBuildVersionShareFindingChange => ({ key: change.key, change: change.change as SavedBuildVersionShareFindingChange["change"], title: (change.after ?? change.before)?.title ?? change.key, ...((change.after ?? change.before)?.severity ? { severity: (change.after ?? change.before)!.severity } : {}) })),
-    dataBoundary: exported.dataBoundary,
-    text: text.slice(0, 12_000)
+    dataBoundary: publicDataBoundaryFromUnknown(exported.dataBoundary) ?? SAFE_DATA_BOUNDARY,
+    text: publicShareTextFromUnknown(text) ?? "PC Supporter 저장 견적 버전 비교"
   };
 }
 
@@ -318,8 +350,8 @@ export function savedBuildVersionComparisonSharePayloadFromUnknown(value: unknow
   const transition = value.transition === undefined ? undefined : transitionFromUnknown(value.transition);
   const changes = changesFromUnknown(value.changes);
   const findingChanges = findingChangesFromUnknown(value.findingChanges);
-  const dataBoundary = textValue(value.dataBoundary, 800);
-  const text = textValue(value.text, 12_000);
+  const dataBoundary = publicDataBoundaryFromUnknown(value.dataBoundary);
+  const text = publicShareTextFromUnknown(value.text);
   if (!generatedAt || !before || !after || !summary || value.transition !== undefined && !transition || !changes || !findingChanges || !dataBoundary || !text) return undefined;
   return { schemaVersion: SAVED_BUILD_VERSION_SHARE_SCHEMA_VERSION, kind: SAVED_BUILD_VERSION_SHARE_KIND, generatedAt, before, after, summary, ...(transition ? { transition } : {}), changes, findingChanges, dataBoundary, text };
 }

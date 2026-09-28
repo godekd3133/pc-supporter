@@ -27,10 +27,10 @@ import type { ResultSection } from "./result-view-state";
 import type { UnknownPriceItem } from "./BuildPriceSummary";
 import { PartVisual, PartWatchButton } from "./part-visuals";
 import { AccessoryRecommendationPanel, BuildHealthPanel, BuildScenarioPreviewPanel, BuildWatchlistPanel, CompatibilityMap, M2SlotAssignmentPanel, RepairPlanPanel, StaleResultView, UpgradeRecommendationDetail, UpgradeRecommendationPanel, upgradeBudgetText, upgradeCompatibilityStatus, upgradeCompatibilityText } from "./ResultPanels";
-import { GamingPerformanceEvidencePanel } from "./GamingPerformanceEvidencePanel";
 import { SavedBuildCheckTimeline } from "./SavedCheckTimeline";
 import { api } from "./api";
 import { GENERATOR_VARIANTS_LOCAL_SHARES_STORAGE_KEY } from "../shared/generator-variants-local-share";
+import { compatibilityDisplayStatusFor } from "../shared/compatibility-display-status";
 
 type BuildScenarioPreviewState = {
   status: "loading" | "ready" | "error";
@@ -84,7 +84,6 @@ export type ResultViewDependencies = {
   LazyBuildConnectivityPanel: ResultViewComponent;
   LazyGpuFitSummaryPanel: ResultViewComponent;
   LazyPurchaseListPanel: ResultViewComponent;
-  LazyBenchmarkEvidencePanel: ResultViewComponent;
   LazyUpgradeBundlePanel: ResultViewComponent;
   LazyAccessoryCartPanel: ResultViewComponent;
   ResultFindingCard: ResultViewComponent;
@@ -156,7 +155,7 @@ function UpgradeEntryResultSummary({ result, bundleCount }: { result: Compatibil
     ? `호환을 막는 문제 ${result.blockerCount}개를 먼저 해결해야 해요.`
     : issueCount > 0
       ? `현재 구성에서 확인할 항목 ${issueCount}개를 찾았어요.`
-      : "현재 구성에서 차단되는 호환 문제는 찾지 못했어요.";
+      : "현재 구성에서 호환 불가 항목을 찾지 못했어요.";
   const focusRecommendations = () => {
     const details = document.querySelector<HTMLDetailsElement>(".result-more-details");
     if (details) details.open = true;
@@ -166,16 +165,16 @@ function UpgradeEntryResultSummary({ result, bundleCount }: { result: Compatibil
       target?.focus({ preventScroll: true });
     }, 0);
   };
-  return <section className="upgrade-entry-result-summary" data-testid="upgrade-entry-result-summary" aria-label="업그레이드 검사 요약">
-    <div className="upgrade-entry-result-summary-heading"><div><h2>지금 구성에서 바꿔볼 순서</h2><p>현재 부품을 기준으로 문제 원인과 호환을 유지하는 업그레이드 선택지를 정리했어요.</p></div><FiRefreshCw /></div>
-    <div className="upgrade-entry-result-summary-steps"><div className={issueCount > 0 ? "review" : "done"}><span><FiAlertTriangle /></span><div><strong>1. 현재 상태 확인</strong><small>{issueText}</small></div><em>{issueCount > 0 ? "정보 부족" : "문제 없음"}</em></div><div className={recommendationCount > 0 ? "ready" : "empty"}><span><FiZap /></span><div><strong>2. 교체 후보 비교</strong><small>{recommendationCount > 0 ? `부품 단위 추천 ${recommendationCount}개${bundleCount > 0 ? ` · 조합 추천 ${bundleCount}개` : ""}` : "현재 데이터로 안전한 교체 후보를 만들지 못했어요."}</small></div><em>{recommendationCount > 0 ? "준비됨" : "정보 부족"}</em></div><div className="next"><span><FiCheckCircle /></span><div><strong>3. 새 구성 적용</strong><small>원하는 부품을 견적에 적용해요.</small></div><em>다음 단계</em></div></div>{recommendationCount > 0 && <button className="button button-secondary upgrade-entry-result-summary-cta" type="button" onClick={focusRecommendations}><FiArrowRight /> 업그레이드 후보 바로 보기</button>}<p className="upgrade-entry-result-summary-note"><FiInfo /> 선택한 부품과 예상 가격을 확인해 주세요.</p>
+  return <section className="upgrade-entry-result-summary" data-testid="upgrade-entry-result-summary" aria-label="업그레이드 안내">
+    <div className="upgrade-entry-result-summary-heading"><div><h2>업그레이드 요약</h2><p>현재 구성의 호환 문제와 교체 후보를 확인하세요.</p></div><FiRefreshCw /></div>
+    <div className="upgrade-entry-result-summary-steps"><div className={issueCount > 0 ? "review" : "done"}><span><FiAlertTriangle /></span><div><strong>현재 상태</strong><small>{issueText}</small></div><em>{issueCount > 0 ? "정보 부족" : "문제 없음"}</em></div><div className={recommendationCount > 0 ? "ready" : "empty"}><span><FiZap /></span><div><strong>교체 후보</strong><small>{recommendationCount > 0 ? `부품 단위 추천 ${recommendationCount}개${bundleCount > 0 ? ` · 조합 추천 ${bundleCount}개` : ""}` : "현재 부품 정보로 교체 후보를 찾지 못했어요."}</small></div><em>{recommendationCount > 0 ? "후보 확인" : "추천 없음"}</em></div><div className="next"><span><FiCheckCircle /></span><div><strong>원하는 부품 적용</strong><small>선택한 부품을 견적에 반영해요.</small></div></div></div>{recommendationCount > 0 && <button className="button button-secondary upgrade-entry-result-summary-cta" type="button" onClick={focusRecommendations}><FiArrowRight /> 업그레이드 후보 바로 보기</button>}<p className="upgrade-entry-result-summary-note"><FiInfo /> 선택한 부품과 예상 가격을 확인해 주세요.</p>
   </section>;
 }
 
 export function ResultView(props: ResultViewProps) {
   const { dependencies, ...view } = props;
   const { build, result, resultIsStale, savedCheckHistory, changeHistory, onRestoreChange, partMap, accessoryMap, shareId, decisionNote, origin, savedVersionContext, onOpenHistory, shareExpiresAt, shareOwnerToken, shareOwnerTokenAvailable, recordingSavedCheck, revokingShare, checking, checkError, scenarioPreview, buildChangeResultComparison, onCopyBuildChangeResultComparison, onDownloadBuildChangeResultComparison, onSaveBuildChangeResultAsDecisionNote, purchaseChecklistKey, upgradeBundleScenarioPreview, onPreviewSuggestion, onCompareSuggestions, onDismissScenarioPreview, onDismissBuildChangeResultComparison, onPreviewUpgradeBundle, onDismissUpgradeBundleScenarioPreview, onEdit, upgradeEntry, onCloneSharedBuild, onBack, onCheck, initialFindingRuleId, onInitialFindingFocus, onRecordSavedCheck, onAssemblyVerificationSynced, onPurchaseProgressSynced, onPurchasePriceHistorySynced, onWatchEntry, isWatchedEntry, onRevokeShare, onSave, onCopyReport, onCopyResultLink, onDownloadReport, catalogRefreshReport, onRefreshCatalogItem, onRefreshAll, refreshingPartId, onOpenPicker, onApplySuggestion, onApplyUpgradeBundle, onCopyPurchaseList, onDownloadPurchaseList, onOpenCatalogItem, onApplyRepairPlan, onSavePlan, onAddAccessory, onChangeAccessoryQuantity, onChangeAccessoryTarget, onChangeAccessoryHubTarget, onChangeRgbController, onRemoveAccessory, onToast, onWatchPart, onShareComparison, onRevokeComparison, recommendationPreferences, onRecommendationPreferencesChange, onRecommendationPreferencesCommit } = view;
-  const { RequestErrorNotice, LazyResultQuickNav, LazySavedBuildRecheckDiffPanel, LazyPurchaseReadinessPanel, LazyBuildActionCenterPanel, LazyAssemblyPlanPanel, LazyUpgradeBundleScenarioPreviewPanel, LazyPurchaseChecklistPanel, LazyAssemblyVerificationPanel, LazyRecommendationSearchNotice, LazyBuildResourceSummaryPanel, LazyBuildConnectivityPanel, LazyGpuFitSummaryPanel, LazyPurchaseListPanel, LazyBenchmarkEvidencePanel, LazyUpgradeBundlePanel, LazyAccessoryCartPanel, ResultFindingCard, BuildPriceSummaryPanel, RecommendationControls, ChangeHistoryPanel, AccessoryVisual, PartEvidence, CategoryIcon, purchaseListRowsFor, selectionList, accessorySelections, unknownPriceItemsFor, buildPriceSnapshotFor, upgradeBundlesFromPayload, formatWon, formatPriceDelta, formatSignedPercent, formatSpecValue, partSummary, similarityEvidenceText, suggestionSpecRows, resultFindingFilterFromSearch, resultSectionFromHash, resultSectionTargetIds, resultViewUrlFor, findingFilterCounts, filteredFindingsFor, FINDING_FILTERS, RULE_GUIDES, CATEGORY_LABELS, LISTING_TYPE_LABELS, PART_CATEGORIES } = dependencies;
+  const { RequestErrorNotice, LazyResultQuickNav, LazySavedBuildRecheckDiffPanel, LazyPurchaseReadinessPanel, LazyBuildActionCenterPanel, LazyAssemblyPlanPanel, LazyUpgradeBundleScenarioPreviewPanel, LazyPurchaseChecklistPanel, LazyAssemblyVerificationPanel, LazyRecommendationSearchNotice, LazyBuildResourceSummaryPanel, LazyBuildConnectivityPanel, LazyGpuFitSummaryPanel, LazyPurchaseListPanel, LazyUpgradeBundlePanel, LazyAccessoryCartPanel, ResultFindingCard, BuildPriceSummaryPanel, RecommendationControls, ChangeHistoryPanel, AccessoryVisual, PartEvidence, CategoryIcon, purchaseListRowsFor, selectionList, accessorySelections, unknownPriceItemsFor, buildPriceSnapshotFor, upgradeBundlesFromPayload, formatWon, formatPriceDelta, formatSignedPercent, formatSpecValue, partSummary, similarityEvidenceText, suggestionSpecRows, resultFindingFilterFromSearch, resultSectionFromHash, resultSectionTargetIds, resultViewUrlFor, findingFilterCounts, filteredFindingsFor, FINDING_FILTERS, RULE_GUIDES, CATEGORY_LABELS, LISTING_TYPE_LABELS, PART_CATEGORIES } = dependencies;
 
 const [findingFilter, setFindingFilter] = useState<FindingFilter>(() => resultFindingFilterFromSearch(window.location.search));
 const [purchaseChecklistProgress, setPurchaseChecklistProgress] = useState<PurchaseChecklistProgress | null>(null);
@@ -368,22 +367,17 @@ function focusRepairPlans() {
 }
 if (!result) return <div className="empty-result"><FiActivity /><h1>호환 결과가 없어요.</h1><p>부품을 선택한 뒤 호환 결과를 확인해 주세요.</p><button className="button button-primary" onClick={onEdit}>견적 작성하기</button></div>;
 if (resultIsStale) return <StaleResultView build={build} partMap={partMap} lastCheckedAt={result.checkedAt} checking={checking} checkError={checkError} entries={changeHistory} onRestore={onRestoreChange} onBack={onBack} onEdit={onEdit} onCheck={onCheck} />;
-const accessoryStatus = result.accessoryCompatibility?.status;
-const displayStatus: CompatibilityResult["status"] = result.status === "incompatible" || accessoryStatus === "incompatible"
-  ? "incompatible"
-  : result.status === "needs_review" || accessoryStatus === "needs_review"
-    ? "needs_review"
-    : "compatible";
+const displayStatus = compatibilityDisplayStatusFor(result);
 const statusCopy = displayStatus === "incompatible"
-  ? result.status === "incompatible" ? "같이 쓸 수 없는 부품이 있어요." : "주변 부품도 확인이 필요해요."
+  ? result.status === "incompatible" ? "호환되지 않는 부품이 있습니다." : "주변 부품의 호환 확인이 필요합니다."
   : displayStatus === "needs_review"
-    ? result.status === "needs_review" ? "호환 여부를 알 수 없는 부품이 있어요." : "주변 부품의 호환 정보가 부족해요."
-    : result.warningCount > 0 ? "같이 쓸 수 있지만 살펴볼 항목이 있어요." : "함께 쓸 수 있어요.";
+    ? result.status === "needs_review" ? "호환 여부를 확인하지 못한 부품이 있습니다." : "주변 부품 정보가 부족합니다."
+    : result.warningCount > 0 ? "호환되지만 추가 확인 항목이 있습니다." : "모든 선택 부품이 호환됩니다.";
 const statusDescription = displayStatus === "incompatible"
-  ? result.status === "incompatible" ? "호환되지 않는 부품을 확인하고 바꿔보세요." : "주변 부품의 장착 규격을 확인해 주세요."
+  ? result.status === "incompatible" ? "호환 불가 항목을 확인하세요." : "주변 부품의 장착 규격을 확인하세요."
   : displayStatus === "needs_review"
     ? result.status === "needs_review" ? "부품 사양이 부족해 호환 여부를 알 수 없어요." : "주변 부품의 규격과 수량을 확인해 주세요."
-    : result.warningCount > 0 ? `구매 전에 살펴볼 항목이 ${result.warningCount}개 있어요.` : "호환 문제가 없어요.";
+    : result.warningCount > 0 ? `구매 전에 확인할 항목이 ${result.warningCount}개 있습니다.` : "선택한 부품은 함께 사용할 수 있습니다.";
 const coreTotalPriceWon = result.coreTotalPriceWon ?? Math.max(0, result.totalPriceWon - (result.accessoryTotalPriceWon ?? 0));
 const corePriceComplete = result.corePriceComplete ?? result.priceComplete;
 const accessoryTotalPriceWon = result.accessoryTotalPriceWon ?? 0;
@@ -402,7 +396,7 @@ const resultPriceSnapshot: BuildPriceSnapshot = {
 const upgradeBundles = upgradeBundlesFromPayload(result.upgradeBundlePayload) ?? result.upgradeBundles;
 const accessoryPurchaseRows = purchaseListRowsFor(build, partMap, accessoryMap).filter((row) => row.sourceKind === "accessory");
   const metricCards: Array<{ filter: Exclude<FindingFilter, "all">; tone: "danger" | "warning" | "unknown"; label: string; count: number }> = [
-  { filter: "blocker", tone: "danger", label: "호환 오류", count: result.blockerCount },
+  { filter: "blocker", tone: "danger", label: "호환 불가", count: result.blockerCount },
   { filter: "warning", tone: "warning", label: "주의", count: result.warningCount },
   { filter: "unknown", tone: "unknown", label: "정보 부족", count: result.unknownCount }
 ];
@@ -434,7 +428,6 @@ return (
     {savedVersionContext?.delta && (() => { const delta = savedVersionContext.delta; const transition = delta.transition; return <section className={`result-version-delta ${transition?.direction ?? "unknown"}`} data-testid="result-version-delta" aria-label="부모 버전 대비 변경 요약"><div><span>부모 버전 대비</span><strong>{delta.selectionChangedCategoryCount > 0 ? `구성 ${delta.selectionChangedCategoryCount}개 범주 변경` : "구성 변화 없음"}{transition ? ` · 호환 불가 ${signedResultDelta(transition.blockerDelta)} · 주의 ${signedResultDelta(transition.warningDelta)} · 정보 부족 ${signedResultDelta(transition.unknownDelta)}` : " · 이전 결과 없음"}</strong><small>{transition?.priceDeltaWon !== undefined ? `금액 ${signedResultDelta(transition.priceDeltaWon)}원` : "금액 정보 없음"}{delta.resolvedFindingCount !== undefined ? ` · 항목 해결 ${delta.resolvedFindingCount} · 신규 ${delta.newFindingCount} · 변경 ${delta.changedFindingCount}` : ""}</small></div><FiActivity /></section>; })()}
     {savedVersionContext?.delta && <ResultVersionChangeDetails context={savedVersionContext} partMap={partMap} accessoryPurchaseRows={accessoryPurchaseRows} onFocusSection={focusResultSection} onFocusAccessoryPurchase={focusAccessoryPurchase} />}
     {upgradeEntry && <UpgradeEntryResultSummary result={result} bundleCount={upgradeBundles?.length ?? 0} />}
-    <GamingPerformanceEvidencePanel assessment={result.gamingPerformanceAssessment} />
     <div className="mobile-result-metric-strip" aria-label="호환 결과 요약">{metricCards.map((metric) => <button className={`mobile-result-metric ${metric.tone}`} type="button" aria-label={`${metric.label} ${metric.count}개. 해당 상세 결과 보기`} aria-pressed={findingFilter === metric.filter} disabled={metric.count === 0} onClick={() => focusFindingFilter(metric.filter)} key={metric.filter}><span>{metric.label}</span><strong>{metric.count}</strong></button>)}</div>
     <div className="mobile-result-actions"><button className="mobile-primary-action" type="button" onClick={onEdit}><FiEdit3 /><span>견적 수정하기</span><FiArrowRight className="mobile-result-action-arrow" /></button><div><button className="mobile-secondary-action" type="button" onClick={onSave}><FiSave /><span>견적 저장·공유</span><FiArrowRight className="mobile-result-action-arrow" /></button><button className="mobile-secondary-action" type="button" onClick={onCopyResultLink}><FiShare2 /><span>견적 링크 복사</span><FiArrowRight className="mobile-result-action-arrow" /></button></div></div>
     <details className="mobile-result-tools"><summary>견적 정보 저장·공유</summary><div><button className="button button-light" type="button" onClick={onCopyReport}><FiCopy /> 견적 정보 복사</button><button className="button button-light" type="button" onClick={onDownloadReport}><FiDownload /> 견적 정보 JSON 저장</button><button className="button button-light result-print-button" type="button" onClick={() => window.print()}><FiPrinter /> 인쇄·PDF</button>{shareId && shareOwnerTokenAvailable && <button className="button button-light" type="button" onClick={onRevokeShare} disabled={revokingShare}>{revokingShare ? "취소 중..." : "공유 링크 취소"}</button>}</div></details>
@@ -456,6 +449,7 @@ return (
         <details className="result-more-details">
           <summary><span><FiInfo /> 세부 정보·구매 도구</span><FiMoreHorizontal /></summary>
           <div className="result-more-details-body">
+        <Suspense fallback={<div className="purchase-readiness-panel loading" aria-label="구매 전 확인 정보 로딩" role="status"><FiLoader className="spin" /> 구매 전 확인 정보를 준비하는 중...</div>}><LazyPurchaseReadinessPanel result={result} onEdit={onEdit} build={build} onChangeAccessoryHubTarget={onChangeAccessoryHubTarget} checklistProgress={purchaseChecklistProgress ?? undefined} purchaseProgress={purchaseListProgress ?? undefined} assemblyVerification={assemblyVerificationSummary ?? undefined} onFocusChecklist={() => focusResultSection("purchase-checklist")} onFocusPurchaseList={(status: PurchaseItemStatus | undefined) => { setPurchaseListFocusStatus(status ?? null); focusResultSection("purchase-list-panel"); }} onFocusAssemblyVerification={() => focusResultSection("assembly-verification-panel")} /></Suspense>
         <Suspense fallback={<div className="purchase-checklist-panel loading" aria-label="구매 전 체크리스트 로딩" role="status"><FiLoader className="spin" /> 구매 전 체크리스트를 준비하는 중...</div>}><LazyPurchaseChecklistPanel build={build} result={result} partMap={partMap} storageKey={`pc-supporter-purchase-checklist:${purchaseChecklistKey}:${result.engineVersion}:${result.catalogSnapshotAt}`} onFocusFinding={focusFinding} onFocusSection={focusResultSection} onProgressChange={setPurchaseChecklistProgress} /></Suspense>
 
         {savedCheckHistory && savedCheckHistory.length > 0 && <SavedBuildCheckTimeline history={savedCheckHistory} partMap={partMap} accessoryMap={accessoryMap} canRecord={shareOwnerTokenAvailable && Boolean(shareId)} recording={recordingSavedCheck} onRecordCheck={onRecordSavedCheck} />}
@@ -470,7 +464,6 @@ return (
         <Suspense fallback={<div className="purchase-list-panel loading" aria-label="구매 목록 로딩" role="status"><FiLoader className="spin" /> 구매 목록을 준비하는 중...</div>}><LazyPurchaseListPanel rows={purchaseListRowsFor(build, partMap, accessoryMap)} storageKey={`pc-supporter-purchase-list:${purchaseChecklistKey}:${result.engineVersion}:${result.catalogSnapshotAt}`} inputFingerprint={purchaseChecklistKey} budgetWon={recommendationPreferences.budgetWon} savedBuildId={shareId ?? undefined} savedBuildOwnerToken={shareOwnerToken ?? undefined} onCopy={onCopyPurchaseList} onDownload={onDownloadPurchaseList} focusStatus={purchaseListFocusStatus ?? undefined} focusRowKey={purchaseFocusRowKey} onProgressChange={onPurchaseListProgressChange} onServerProgressChange={onPurchaseProgressSynced} onServerPriceHistoryChange={onPurchasePriceHistorySynced} onWatchEntry={onWatchEntry} isWatchedEntry={isWatchedEntry} onOpenCatalogItem={onOpenCatalogItem} onRefreshAll={onRefreshAll} refreshingItemId={refreshingPartId} catalogRefreshReport={catalogRefreshReport} /></Suspense>
         <BuildWatchlistPanel build={build} partMap={partMap} accessoryMap={accessoryMap} onToast={onToast} />
         <ChangeHistoryPanel entries={changeHistory} onRestore={onRestoreChange} restoring={checking} />
-        {(build.cpu || build.gpu) && <Suspense fallback={<div className="benchmark-evidence-panel loading" aria-label="성능 점수 로딩" role="status"><FiLoader className="spin" /> CPU·GPU 점수를 불러오는 중...</div>}><LazyBenchmarkEvidencePanel cpu={build.cpu ? partMap.get(build.cpu.partId) : undefined} gpu={build.gpu ? partMap.get(build.gpu.partId) : undefined} snapshot={result.benchmarkSnapshot} /></Suspense>}
         {result.upgradeRecommendations && result.upgradeRecommendations.length > 0 && <UpgradeRecommendationPanel recommendations={result.upgradeRecommendations} onApply={(recommendation: UpgradeRecommendation) => onApplySuggestion(recommendation.category, recommendation.part, undefined, [recommendation.currentPartId])} onPreview={(recommendation: UpgradeRecommendation) => onPreviewSuggestion(recommendation.category, recommendation.part, undefined, [recommendation.currentPartId])} onWatchPart={onWatchPart} />}
         {upgradeBundles && upgradeBundles.length > 0 && <Suspense fallback={<div className="upgrade-bundle-panel loading" aria-label="업그레이드 조합 패널 로딩" role="status"><FiLoader className="spin" /> 업그레이드 조합을 준비하는 중...</div>}><LazyUpgradeBundlePanel bundles={upgradeBundles} searchSummary={result.upgradeBundleSearch} catalogSnapshotAt={result.catalogSnapshotAt} onApply={onApplyUpgradeBundle} onPreview={onPreviewUpgradeBundle} formatPriceDelta={formatPriceDelta} upgradeCompatibilityStatus={upgradeCompatibilityStatus} upgradeCompatibilityText={upgradeCompatibilityText} upgradeBudgetText={upgradeBudgetText} Detail={UpgradeRecommendationDetail} /></Suspense>}
         {result.accessoryRecommendations && result.accessoryRecommendations.length > 0 && <AccessoryRecommendationPanel recommendations={result.accessoryRecommendations} selectedAccessories={accessorySelections(build)} onAddAccessory={addAccessoryAndFocus} onWatchAccessory={(item: AccessoryItem, targetPriceWon?: number) => onWatchEntry({ itemId: item.id, itemName: item.name, category: item.category, kind: "accessory" }, targetPriceWon)} isAccessoryWatched={(item: AccessoryItem) => isWatchedEntry({ itemId: item.id, kind: "accessory" })} />}

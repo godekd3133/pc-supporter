@@ -2,7 +2,7 @@ import { FiAlertTriangle, FiCheckCircle, FiInfo, FiTool, FiXCircle } from "react
 import type { AccessoryCompatibilityFinding, AccessoryCompatibilityResult, AccessoryConnectivityPlan, AccessoryFanHubTargetRecommendation, AccessoryPowerRail, AccessoryRgbConnectionPlan } from "../shared/types";
 
 function severityLabel(severity: AccessoryCompatibilityFinding["severity"]) {
-  return severity === "blocker" ? "차단" : severity === "warning" ? "주의" : "정보 부족";
+  return severity === "blocker" ? "호환 불가" : severity === "warning" ? "주의" : "정보 부족";
 }
 
 function severityIcon(severity: AccessoryCompatibilityFinding["severity"]) {
@@ -64,7 +64,7 @@ function rgbLoadEvidenceText(plan: AccessoryRgbConnectionPlan) {
 }
 
 function targetCandidateStatusLabel(status: AccessoryFanHubTargetRecommendation["candidates"][number]["status"]) {
-  return status === "pass" ? "추천" : status === "blocked" ? "차단" : "정보 부족";
+  return status === "pass" ? "문제 없음" : status === "blocked" ? "호환 불가" : "정보 부족";
 }
 
 function FanHubTargetRecommendationCard({ recommendation, onAssign }: { recommendation: AccessoryFanHubTargetRecommendation; onAssign?: (fanId: string, hubId: string) => void }) {
@@ -90,7 +90,7 @@ export function AccessoryCompatibilityPanel({ result, onEdit, onAssignHubTarget 
   const hasFindings = result.findings.length > 0;
   return <section className={`accessory-compatibility-panel ${result.status}`} aria-label="주변 부품 호환 정보" data-testid="accessory-compatibility-panel">
     <div className="accessory-compatibility-heading"><div><h2>주변 부품 호환 정보</h2><p>쿨링팬·팬 허브·RGB 컨트롤러·M.2 방열판의 연결 규격과 장착 공간을 비교해요.</p></div><strong>{statusLabel(result.status)}</strong></div>
-    <div className="accessory-compatibility-counts"><span><b>{result.blockerCount}</b> 차단</span><span><b>{result.warningCount}</b> 주의</span><span><b>{result.unknownCount}</b> 정보 부족</span></div>
+    <div className="accessory-compatibility-counts"><span><b>{result.blockerCount}</b> 호환 불가</span><span><b>{result.warningCount}</b> 주의</span><span><b>{result.unknownCount}</b> 정보 부족</span></div>
     {result.fanHubTargetRecommendations && result.fanHubTargetRecommendations.length > 0 && <section className="accessory-connection-plans accessory-hub-target-recommendations" aria-label="팬 허브 연결 대상 추천"><div className="accessory-connection-plans-heading"><div><strong>팬 허브 연결 대상 추천</strong><small>연결 규격에 맞는 허브를 추천해요.</small></div><span>{result.fanHubTargetRecommendations.length}개 팬</span></div><div className="accessory-connection-plans-list">{result.fanHubTargetRecommendations.map((recommendation) => <FanHubTargetRecommendationCard key={recommendation.fanId} recommendation={recommendation} onAssign={onAssignHubTarget} />)}</div></section>}
     {result.connectionPlans && result.connectionPlans.length > 0 && <section className="accessory-connection-plans" aria-label="주변 부품 연결 계획"><div className="accessory-connection-plans-heading"><div><strong>연결 계획</strong><small>선택한 팬을 허브 어느 출력에 연결할지와 전류 정보를 요약합니다.</small></div><span>{result.connectionPlans.length}개 허브</span></div><div className="accessory-connection-plans-list">{result.connectionPlans.map((plan) => <AccessoryConnectionPlanCard key={plan.id} plan={plan} />)}</div></section>}
     {result.rgbConnectionPlans && result.rgbConnectionPlans.length > 0 && <section className="accessory-connection-plans accessory-rgb-connection-plans" aria-label="RGB 연결 계획"><div className="accessory-connection-plans-heading"><div><strong>RGB 연결 계획</strong><small>케이스 기본 RGB 장치를 어느 컨트롤러에 연결할지와 전압·출력 정보를 요약합니다.</small></div><span>{result.rgbConnectionPlans.length}개 컨트롤러</span></div><div className="accessory-connection-plans-list">{result.rgbConnectionPlans.map((plan) => <AccessoryRgbConnectionPlanCard key={plan.id} plan={plan} />)}</div></section>}

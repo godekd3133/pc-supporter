@@ -101,8 +101,8 @@ export function buildActionCenterFor(result: CompatibilityResult, build?: BuildS
       id: "repair:best-plan",
       priority: "blocker",
       source: "compatibility",
-      title: "최소 변경 수리 플랜 검토",
-      summary: `${firstRepairPlan.resolvedBlockers}개 차단 오류를 줄이는 ${firstRepairPlan.label} 플랜입니다. 적용 전 전체 구성·가격·남는 문제를 확인하세요.`,
+      title: "호환 문제 줄이기",
+      summary: `${firstRepairPlan.resolvedBlockers}개 호환 문제를 줄이는 ${firstRepairPlan.label} 구성입니다. 적용 전 부품과 예상 금액, 남는 문제를 살펴봐 주세요.`,
       targetId: "repair-plan-panel"
     });
   }
@@ -145,13 +145,13 @@ export function buildActionCenterFor(result: CompatibilityResult, build?: BuildS
   const hasBlocker = result.blockerCount > 0 || result.accessoryCompatibility?.blockerCount !== undefined && result.accessoryCompatibility.blockerCount > 0 || actions.some((action) => action.priority === "blocker");
   const hasReview = result.warningCount > 0 || result.unknownCount > 0 || result.accessoryCompatibility?.warningCount !== undefined && result.accessoryCompatibility.warningCount > 0 || result.accessoryCompatibility?.unknownCount !== undefined && result.accessoryCompatibility.unknownCount > 0 || actions.some((action) => action.priority === "review");
   if (actions.length === 0) {
-    actions.push({ id: "assembly:final-check", priority: "manual", source: "assembly", title: "실제 조립 전 최종 확인", summary: "제조사 QVL·BIOS, 실제 케이스 여유, 첫 부팅 POST·온도·소음은 별도로 확인하세요.", targetId: "purchase-checklist" });
+    actions.push({ id: "assembly:final-check", priority: "manual", source: "assembly", title: "조립 전에 확인할 항목", summary: "제조사 QVL·BIOS, 실제 케이스 여유, 첫 부팅 POST·온도·소음은 별도로 확인하세요.", targetId: "purchase-checklist" });
   }
   const state = hasBlocker ? "blocked" : hasReview ? "review" : "ready";
   const visibleCount = 6;
   return {
     state,
-    summary: state === "blocked" ? `구매 전에 해결해야 할 우선 항목 ${actions.filter((action) => action.priority === "blocker").length}개가 있습니다.` : state === "review" ? `호환성은 진행할 수 있지만 구매·조립 전에 확인할 항목 ${actions.length}개가 있습니다.` : "확인된 항목에는 차단 문제가 없습니다. 실제 조립 전에 제조사 안내와 연결 상태를 확인하세요.",
+    summary: state === "blocked" ? `구매 전에 해결해야 할 항목 ${actions.filter((action) => action.priority === "blocker").length}개가 있어요.` : state === "review" ? `구매·조립 전에 확인할 항목 ${actions.length}개가 있어요.` : "호환 문제는 없어요. 조립 전에 제조사 안내와 연결 상태를 확인해 주세요.",
     totalCount: actions.length,
     hiddenCount: Math.max(0, actions.length - visibleCount),
     actions

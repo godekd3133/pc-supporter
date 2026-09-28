@@ -12,6 +12,7 @@ export interface AccessoryWorkPriority {
   score: number;
   specCoverage: "partial" | "complete";
   details: boolean;
+  needsListVerification: boolean;
 }
 
 function coveragePercent(complete: number, total: number) {
@@ -36,7 +37,8 @@ export function accessoryWorkPriorityFor(snapshot: AccessoryCoverageSnapshot | u
       const incompleteProductCount = Math.min(total, Math.max(0, category.incompleteProducts));
       const incompleteSpecCount = Math.min(total, Math.max(0, category.incompleteSpecs));
       const gapCount = accessoryCoverageGapFor(category);
-      if (total <= 0 || (gapCount <= 0 && category.storedSpecCoverage === "complete")) return undefined;
+      const needsListVerification = !(category.hasCrawlHistory ?? Boolean(category.lastCrawledAt || category.lastRun));
+      if (total <= 0 || (gapCount <= 0 && category.storedSpecCoverage === "complete" && !needsListVerification)) return undefined;
       const complete = total - gapCount;
       const percent = accessoryCoveragePercentFor(category);
       return {
@@ -48,9 +50,10 @@ export function accessoryWorkPriorityFor(snapshot: AccessoryCoverageSnapshot | u
         incompleteProductCount,
         incompleteSpecCount,
         coveragePercent: percent,
-        score: incompleteProductCount / Math.max(total, 1) * 2_000 + incompleteSpecCount / Math.max(total, 1) * 1_000 + (category.details ? 0 : 250) + (category.storedSpecCoverage === "complete" ? 0 : 100),
+        score: (needsListVerification ? 3_000 : 0) + incompleteProductCount / Math.max(total, 1) * 2_000 + incompleteSpecCount / Math.max(total, 1) * 1_000 + (category.details ? 0 : 250) + (category.storedSpecCoverage === "complete" ? 0 : 100),
         specCoverage: category.storedSpecCoverage,
-        details: category.details
+        details: category.details,
+        needsListVerification
       };
     })
     .filter((action): action is AccessoryWorkPriority => Boolean(action));

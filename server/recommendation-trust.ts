@@ -108,19 +108,19 @@ export function recommendationTrustFor(input: RecommendationTrustInput): Recomme
 
   if (input.candidateBlockers === 0 && input.candidateUnknown === 0) {
     score += 30;
-    reasons.push("부품 자체를 적용해 새 차단 오류와 확인 필요가 없습니다.");
+    reasons.push("이 부품을 추가해도 새로운 호환 문제나 확인 필요 항목이 생기지 않아요.");
   } else if (input.candidateBlockers === 0) {
     score += 18;
-    reasons.push(`부품 자체의 차단 오류는 없지만 확인 필요 ${input.candidateUnknown}개가 남습니다.`);
+    reasons.push(`부품 자체에 호환 문제는 없지만 확인할 정보 ${input.candidateUnknown}개가 있어요.`);
   } else {
-    reasons.push(`부품 자체에 차단 오류 ${input.candidateBlockers}개가 남아 호환을 알 수 없어요.`);
+    reasons.push(`부품 자체에 호환 불가 항목 ${input.candidateBlockers}개가 있어요.`);
   }
 
   if (input.candidateWarnings === 0) score += 3;
   else reasons.push(`부품 자체의 주의 ${input.candidateWarnings}개가 남아 구매 전 확인이 필요합니다.`);
 
   if (fullBuildStatus === "remaining_issues") {
-    reasons.push(`전체 견적에는 차단 ${input.remainingBlockers}개·주의 ${input.remainingWarnings}개·확인 필요 ${input.remainingUnknown}개가 남아 이 부품 하나로 전체 해결되지는 않습니다.`);
+    reasons.push(`전체 견적에는 호환 불가 ${input.remainingBlockers}개·주의 ${input.remainingWarnings}개·확인 필요 ${input.remainingUnknown}개가 남아 있어요.`);
   }
 
   if (similarityEvidence.confidence === "high" && similarityEvidence.comparedDimensions >= 2) {

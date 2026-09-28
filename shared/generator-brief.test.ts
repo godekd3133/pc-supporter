@@ -73,7 +73,7 @@ describe("generator brief interpretation", () => {
     const interpretation = generatorBriefInterpretationFor("조용하고 예쁜 컴퓨터");
     expect(interpretation.config).toEqual({});
     expect(interpretation.matches).toEqual([]);
-    expect(interpretation.warnings[0]).toContain("해석할 수 있는 조건");
+    expect(interpretation.warnings[0]).toContain("입력한 내용에서 견적 조건을 찾지 못했어요.");
     expect(interpretation.confidence).toBe("low");
   });
 });

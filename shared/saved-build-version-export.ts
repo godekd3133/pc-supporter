@@ -27,15 +27,16 @@ export type SavedBuildVersionExportCheck = {
   accessoryPriceComplete: boolean;
   accessoryCompatibility?: SavedBuildCheckSnapshot["accessoryCompatibility"];
   findings?: SavedBuildCheckSnapshot["findings"];
-  analysisScore?: number;
-  analysisScoreLabel: SavedBuildCheckSnapshot["analysisScoreLabel"];
-  analysisConfidence: SavedBuildCheckSnapshot["analysisConfidence"];
   resourceBudget?: SavedBuildCheckSnapshot["resourceBudget"];
-  benchmarkSnapshot?: SavedBuildCheckSnapshot["benchmarkSnapshot"];
   engineVersion: string;
   catalogSnapshotAt: string;
   checkedAt: string;
 };
+
+export type SavedBuildVersionExportTransition = Omit<
+  ReturnType<typeof savedBuildCheckTransitionSummaryFor>,
+  "analysisScoreDelta" | "analysisChanged" | "benchmarkChanged" | "benchmarkNeedsReview" | "benchmarkImpact"
+>;
 
 export type SavedBuildVersionExportBuild = {
   id: string;
@@ -57,12 +58,11 @@ export type SavedBuildVersionComparisonExport = {
     direction?: ReturnType<typeof savedBuildCheckTransitionSummaryFor>["direction"];
     selectionChangedCategoryCount: number;
     priceDeltaWon?: number;
-    analysisScoreDelta?: number;
     resolvedFindingCount?: number;
     newFindingCount?: number;
     changedFindingCount?: number;
   };
-  transition?: ReturnType<typeof savedBuildCheckTransitionSummaryFor>;
+  transition?: SavedBuildVersionExportTransition;
   changes: BuildTransferDiffRow[];
   findingChanges: ReturnType<typeof savedBuildCheckFindingDiffFor>["changes"];
   dataBoundary: string;
@@ -86,15 +86,23 @@ function checkExportFor(snapshot: SavedBuildCheckSnapshot): SavedBuildVersionExp
     accessoryPriceComplete: snapshot.accessoryPriceComplete,
     ...(snapshot.accessoryCompatibility ? { accessoryCompatibility: snapshot.accessoryCompatibility } : {}),
     ...(snapshot.findings ? { findings: snapshot.findings } : {}),
-    ...(snapshot.analysisScore !== undefined ? { analysisScore: snapshot.analysisScore } : {}),
-    analysisScoreLabel: snapshot.analysisScoreLabel,
-    analysisConfidence: snapshot.analysisConfidence,
     ...(snapshot.resourceBudget ? { resourceBudget: snapshot.resourceBudget } : {}),
-    ...(snapshot.benchmarkSnapshot ? { benchmarkSnapshot: snapshot.benchmarkSnapshot } : {}),
     engineVersion: snapshot.engineVersion,
     catalogSnapshotAt: snapshot.catalogSnapshotAt,
     checkedAt: snapshot.checkedAt
   };
+}
+
+function transitionForPublicExport(transition: ReturnType<typeof savedBuildCheckTransitionSummaryFor>): SavedBuildVersionExportTransition {
+  const {
+    analysisScoreDelta: _analysisScoreDelta,
+    analysisChanged: _analysisChanged,
+    benchmarkChanged: _benchmarkChanged,
+    benchmarkNeedsReview: _benchmarkNeedsReview,
+    benchmarkImpact: _benchmarkImpact,
+    ...publicTransition
+  } = transition;
+  return publicTransition;
 }
 
 function buildExportFor(build: SavedBuild): SavedBuildVersionExportBuild {
@@ -119,7 +127,7 @@ function statusText(status: SavedBuildCheckSnapshot["status"]) {
 }
 
 function directionText(direction: SavedBuildVersionComparisonExport["summary"]["direction"] | undefined) {
-  return direction === "improved" ? "위험 감소" : direction === "regressed" ? "위험 증가" : direction === "changed" ? "일부 변경" : direction === "same" ? "변화 없음" : "검사 기준 없음";
+  return direction === "improved" ? "호환 상태 개선" : direction === "regressed" ? "호환 문제가 늘었어요" : direction === "changed" ? "일부 변경" : direction === "same" ? "변화 없음" : "비교할 이전 결과 없음";
 }
 
 function signed(value: number) {
@@ -157,13 +165,12 @@ export function savedBuildVersionComparisonExportFor(input: SavedBuildVersionCom
       ...(transition ? { direction: transition.direction } : {}),
       selectionChangedCategoryCount: delta.selectionChangedCategoryCount,
       ...(transition?.priceDeltaWon !== undefined ? { priceDeltaWon: transition.priceDeltaWon } : {}),
-      ...(transition?.analysisScoreDelta !== undefined ? { analysisScoreDelta: transition.analysisScoreDelta } : {}),
       ...(delta.resolvedFindingCount !== undefined ? { resolvedFindingCount: delta.resolvedFindingCount, newFindingCount: delta.newFindingCount, changedFindingCount: delta.changedFindingCount } : {})
     },
-    ...(transition ? { transition } : {}),
+    ...(transition ? { transition: transitionForPublicExport(transition) } : {}),
     changes,
     findingChanges,
-    dataBoundary: "저장된 두 버전의 선택·검사 저장본 비교입니다. 실제 판매가·재고·FPS·제조사 QVL·물리 장착·케이블 배선은 별도로 확인해야 합니다."
+    dataBoundary: "저장된 두 버전의 선택·호환 결과 비교입니다. 실제 판매가·재고·제조사 QVL·물리 장착·케이블 배선은 구매 전에 확인해야 합니다. 게임 성능은 게임과 설정에 따라 달라집니다."
   };
 }
 
@@ -179,30 +186,29 @@ export function savedBuildVersionComparisonTextFor(input: SavedBuildVersionCompa
     "================================",
     `생성 시각: ${generatedAt}`,
     `비교: ${before.label} ${before.name} → ${after.label} ${after.name}`,
-    `결과 방향: ${directionText(exported.summary.direction)}`,
+    `호환 상태 변화: ${directionText(exported.summary.direction)}`,
     "",
     "[구성 변경]",
     `변경 범주: ${exported.summary.selectionChangedCategoryCount}개`,
     ...(exported.changes.length > 0 ? exported.changes.map((row) => `- ${row.label}: ${row.before} → ${row.after}`) : ["- 변경 부품 없음"]),
     "",
-    "[검사 저장본]",
+    "[저장 당시 결과]",
     ...(beforeCheck && afterCheck ? [
       `결과: ${statusText(beforeCheck.status)} → ${statusText(afterCheck.status)}`,
-      `위험: 차단 ${beforeCheck.blockerCount} → ${afterCheck.blockerCount} · 주의 ${beforeCheck.warningCount} → ${afterCheck.warningCount} · 확인 필요 ${beforeCheck.unknownCount} → ${afterCheck.unknownCount}`,
-      `위험 변화: 차단 ${signed(transition?.blockerDelta ?? 0)} · 주의 ${signed(transition?.warningDelta ?? 0)} · 확인 필요 ${signed(transition?.unknownDelta ?? 0)}`,
+      `호환 상태: 호환 불가 ${beforeCheck.blockerCount} → ${afterCheck.blockerCount} · 주의 ${beforeCheck.warningCount} → ${afterCheck.warningCount} · 확인 필요 ${beforeCheck.unknownCount} → ${afterCheck.unknownCount}`,
+      `호환 상태 변화: 호환 불가 ${signed(transition?.blockerDelta ?? 0)} · 주의 ${signed(transition?.warningDelta ?? 0)} · 확인 필요 ${signed(transition?.unknownDelta ?? 0)}`,
       `구매 금액: ${priceText(beforeCheck.totalPriceWon, beforeCheck.priceComplete)} → ${priceText(afterCheck.totalPriceWon, afterCheck.priceComplete)}${transition?.priceDeltaWon !== undefined ? ` · ${transition.priceDeltaWon === 0 ? "변화 없음" : `${transition.priceDeltaWon > 0 ? "+" : ""}${transition.priceDeltaWon.toLocaleString("ko-KR")}원`}` : ""}`,
-      `성능 분석: ${beforeCheck.analysisScore !== undefined ? `${beforeCheck.analysisScore}점 · ` : ""}${beforeCheck.analysisScoreLabel} → ${afterCheck.analysisScore !== undefined ? `${afterCheck.analysisScore}점 · ` : ""}${afterCheck.analysisScoreLabel}`,
       `항목 변화: 해결 ${transition?.resolvedFindingCount ?? 0}개 · 신규 ${transition?.newFindingCount ?? 0}개 · 변경 ${((transition?.severityChangedFindingCount ?? 0) + (transition?.detailsChangedFindingCount ?? 0))}개`
     ] : ["- 저장된 검사 저장본이 한쪽 이상 없어 전체 검사 비교를 계산할 수 없습니다."]),
     "",
     "[변경된 호환성 결과]",
     ...(exported.findingChanges.length > 0 ? exported.findingChanges.map(findingChangeText).map((line) => `- ${line}`) : ["- 항목 변화 없음 또는 저장본 없음"]),
     "",
-    "[선택 이유]",
+    "[선택 메모]",
     `${before.label}: ${before.decisionNote ?? "메모 없음"}`,
     `${after.label}: ${after.decisionNote ?? "메모 없음"}`,
     "",
-    "[확인 범위]",
+    "[구매 전 확인]",
     exported.dataBoundary
   ];
   return lines.join("\n");

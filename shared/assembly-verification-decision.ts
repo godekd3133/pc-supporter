@@ -77,6 +77,6 @@ export function assemblyVerificationDecisionSummaryFor(summary: AssemblyVerifica
   const allKnownUnchanged = thermalOrStability.every((dimension) => dimension.status === "unchanged");
   const hasUnknown = thermalOrStability.some((dimension) => dimension.status === "unknown");
   const status: AssemblyVerificationDecisionStatus = summary.overlay.runCount < 2 || summary.reason === "no-selected-runs" ? "inconclusive" : hasRecheck ? "recheck" : hasImprovement ? "improved" : allKnownUnchanged ? "unchanged" : hasUnknown ? "inconclusive" : "unchanged";
-  const nextAction = status === "recheck" ? "같은 부하 조건으로 재측정하고 케이스·팬·전원 연결을 다시 확인하세요." : status === "improved" ? "기준 회차보다 개선된 관찰이 있습니다. 같은 조건을 한 번 더 기록해 추세를 확인하세요." : status === "unchanged" ? "기준 회차와 큰 변화가 없습니다. 측정 조건을 유지해 다음 회차를 기록하세요." : "비교 회차 또는 측정값이 부족합니다. 같은 조건의 실측 회차를 2개 이상 확보하세요.";
+  const nextAction = status === "recheck" ? "같은 조건에서 온도와 소음을 다시 측정하세요. 케이스 통풍과 팬·전원 연결도 확인하세요." : status === "improved" ? "이전 기록보다 개선됐습니다. 같은 조건으로 한 차례 더 측정해 변화를 확인하세요." : status === "unchanged" ? "이전 기록과 차이가 없습니다. 같은 조건으로 측정을 이어가세요." : "비교할 기록이 부족합니다. 같은 조건에서 두 번 이상 측정하세요.";
   return { type: "pc-supporter-assembly-verification-decision", schemaVersion: 1, status, ...(baselineRunId ? { baselineRunId } : {}), ...(latestRunId ? { latestRunId } : {}), dimensions, nextAction };
 }

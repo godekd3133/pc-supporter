@@ -30,7 +30,7 @@ function statusLabel(status: CompatibilityResult["status"]) {
 }
 
 function riskSummary(current: CompatibilityResult, next: CompatibilityResult) {
-  return `차단 ${current.blockerCount} → ${next.blockerCount} · 주의 ${current.warningCount} → ${next.warningCount} · 확인 필요 ${current.unknownCount} → ${next.unknownCount}`;
+  return `호환 불가 ${current.blockerCount} → ${next.blockerCount} · 주의 ${current.warningCount} → ${next.warningCount} · 확인 필요 ${current.unknownCount} → ${next.unknownCount}`;
 }
 
 export function buildScenarioComparisonFor(current: CompatibilityResult, next: CompatibilityResult): BuildScenarioComparison {
@@ -53,7 +53,7 @@ export function buildScenarioComparisonFor(current: CompatibilityResult, next: C
   }
 
   const changes = [
-    blockerDelta !== 0 ? `차단 ${signedDelta(blockerDelta)}` : undefined,
+    blockerDelta !== 0 ? `호환 불가 ${signedDelta(blockerDelta)}` : undefined,
     warningDelta !== 0 ? `주의 ${signedDelta(warningDelta)}` : undefined,
     unknownDelta !== 0 ? `확인 필요 ${signedDelta(unknownDelta)}` : undefined,
     priceDeltaWon !== undefined ? `총액 ${priceDeltaWon > 0 ? "+" : ""}${priceDeltaWon.toLocaleString("ko-KR")}원` : undefined,

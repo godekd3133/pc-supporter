@@ -97,21 +97,22 @@ async function main() {
     if (!(await clickText(client, "문제 없는 예시 견적"))) throw new Error("문제 없는 예시 견적 버튼을 찾지 못했습니다.");
     await waitForValue(client, "location.pathname === '/build' && document.querySelector('.desktop-editor-surface') !== null", "예시 견적 편집기");
     if (!(await clickText(client, "호환성 검사하기", ".desktop-editor-surface button"))) throw new Error("호환성 검사 버튼을 찾지 못했습니다.");
-    await waitForValue(client, "location.pathname === '/result' && document.querySelector('[data-testid=\"result-gaming-performance-evidence\"]') !== null", "게임별 FPS 결과 패널");
+    await waitForValue(client, "location.pathname === '/result' && document.querySelector('.result-page') !== null", "게임별 성능 데이터가 포함된 결과 화면");
     const probe = await client.evaluate(`(() => {
       const panel = document.querySelector('[data-testid="result-gaming-performance-evidence"]');
       const measurements = [...document.querySelectorAll('[data-testid^="result-gaming-measurement-"]')];
+      const body = document.body?.innerText?.replace(/\\s+/g, " ").trim() ?? "";
       return {
         path: location.pathname,
         panel: Boolean(panel),
-        status: panel?.querySelector('.result-gaming-evidence-status')?.textContent?.trim() ?? "",
-        body: panel?.textContent?.replace(/\\s+/g, " ").trim() ?? "",
+        body,
         measurementCount: measurements.length,
-        sourceCount: measurements.reduce((count, item) => count + item.querySelectorAll('a[href^="https://"]').length, 0)
+        sourceCount: measurements.reduce((count, item) => count + item.querySelectorAll('a[href^="https://"]').length, 0),
+        internalValuesVisible: /사이버펑크 2077|배틀그라운드|158 FPS|171 FPS|평균 FPS|1% low|게임별 FPS 결과/i.test(body)
       };
     })()`);
-    if (probe.path !== "/result" || !probe.panel || probe.measurementCount !== 2 || probe.sourceCount !== 2 || !probe.status.includes("평균 FPS 기준 충족") || !probe.body.includes("사이버펑크 2077") || !probe.body.includes("158 FPS") || !probe.body.includes("배틀그라운드") || !probe.body.includes("171 FPS")) {
-      throw new Error(`게임별 FPS 결과 패널 연결 검증 실패: ${JSON.stringify(probe)}`);
+    if (probe.path !== "/result" || probe.panel || probe.measurementCount !== 0 || probe.internalValuesVisible) {
+      throw new Error(`고객 결과 화면의 FPS 근거 비노출 검증 실패: ${JSON.stringify(probe)}`);
     }
     await sleep(350);
     if (screenshotPath) {

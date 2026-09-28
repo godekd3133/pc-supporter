@@ -61,7 +61,7 @@ describe("saved build check snapshots", () => {
       analysisScoreLabel: "상위권",
       analysisConfidence: "high",
       actionCenterState: "review",
-      actionCenterSummary: "호환성은 진행할 수 있지만 구매·조립 전에 확인할 항목 1개가 있습니다.",
+      actionCenterSummary: "구매·조립 전에 확인할 항목 1개가 있어요.",
       actionCenterTotalCount: 1,
       engineVersion: "2.53.0",
       catalogSnapshotAt: "2026-08-31T00:00:00.000Z",

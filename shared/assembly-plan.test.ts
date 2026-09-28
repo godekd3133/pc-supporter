@@ -70,7 +70,7 @@ describe("assembly plan", () => {
     const plan = assemblyPlanFor(accessoryBuild, result({ accessoryCompatibility: { status: "needs_review", blockerCount: 0, warningCount: 0, unknownCount: 1, findings: [] } }));
 
     expect(plan.steps.find((step) => step.id === "wire-peripherals")).toMatchObject({ status: "pending", targetId: "accessory-compatibility-panel" });
-    expect(plan.summary).toContain("상품 페이지·가격·연결 정보");
+    expect(plan.summary).toContain("구매 전에 상품 페이지와 가격, 연결 정보를 확인해 주세요.");
   });
 
   it("routes a calculated resource-budget review to the resource summary", () => {
@@ -86,7 +86,7 @@ describe("assembly plan", () => {
       purchaseProgress: { total: 3, checked: 0, remaining: 3, percent: 0, stageCounts: { planned: 2, ordered: 1, received: 0, installed: 0 } }
     });
     expect(plan.state).toBe("review");
-    expect(plan.steps.find((step) => step.id === "confirm-evidence")).toMatchObject({ status: "review", progress: { label: "체크리스트 1/4개", percent: 25 } });
+    expect(plan.steps.find((step) => step.id === "confirm-evidence")).toMatchObject({ status: "review", progress: { label: "확인 완료 1/4개", percent: 25 } });
     expect(plan.steps.find((step) => step.id === "confirm-purchase")).toMatchObject({ status: "review", progress: { label: "수령·조립 0/3개", percent: 0 } });
     expect(plan.steps.find((step) => step.id === "bench-assemble")?.status).toBe("pending");
     expect(plan.summary).toContain("구매 항목 3개");
@@ -97,8 +97,8 @@ describe("assembly plan", () => {
       purchaseProgress: { total: 3, checked: 3, remaining: 0, percent: 100, stageCounts: { planned: 0, ordered: 0, received: 0, installed: 3 } },
       assemblyVerification: { state: "in_progress", checked: 2, total: 6, passed: 2, failed: 0, remaining: 4, percent: 33, recheckSignalCount: 0, updatedAt: "2026-09-04T00:00:00.000Z" }
     });
-    expect(plan.steps.find((step) => step.id === "post-build-test")).toMatchObject({ status: "review", progress: { label: "실측 2/6개", percent: 33 } });
-    expect(plan.steps.find((step) => step.id === "post-build-test")?.summary).toContain("실측 기록을 완료");
+    expect(plan.steps.find((step) => step.id === "post-build-test")).toMatchObject({ status: "review", progress: { label: "조립 확인 2/6개", percent: 33 } });
+    expect(plan.steps.find((step) => step.id === "post-build-test")?.summary).toContain("조립 후 확인 기록을 마무리해 주세요.");
   });
 
   it("selects the first non-ready step as the resume target and falls back to the final step", () => {

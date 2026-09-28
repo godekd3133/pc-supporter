@@ -47,9 +47,10 @@ describe("build change result export", () => {
       kind: "pc-supporter.build-change-result",
       direction: "improved",
       generatedAt: "2026-09-07T01:00:00.000Z",
-      deltas: { blockerDelta: -1, warningDelta: -1, priceDeltaWon: 80_000, analysisScoreDelta: 14 },
+      deltas: { blockerDelta: -1, warningDelta: -1, priceDeltaWon: 80_000 },
       changes: [{ label: "그래픽카드", before: "기존 GPU", after: "대체 GPU" }]
     });
+    expect(exported.deltas).not.toHaveProperty("analysisScoreDelta");
     expect("findings" in exported.before).toBe(false);
     expect("metrics" in exported.after).toBe(false);
   });
@@ -63,10 +64,10 @@ describe("build change result export", () => {
       afterResult: result({ status: "compatible", blockerCount: 0, warningCount: 0 })
     }, "2026-09-07T01:00:00.000Z");
 
-    expect(text).toContain("PC Supporter 적용 후 검사 비교");
-    expect(text).toContain("결과 방향: 위험 감소");
-    expect(text).toContain("[확인 범위]");
-    expect(text).toContain("FPS는 게임 설정에 따라 달라질 수 있으며");
+    expect(text).toContain("PC Supporter 부품 변경 결과");
+    expect(text).toContain("변경 내용: 호환 상태 개선");
+    expect(text).toContain("[구매 전 확인]");
+    expect(text).toContain("게임 성능은 게임과 설정에 따라 달라집니다.");
   });
 
   it("creates a compact decision note for an explicit future save", () => {
@@ -78,8 +79,8 @@ describe("build change result export", () => {
       afterResult: result({ status: "compatible", blockerCount: 0, warningCount: 0 })
     });
 
-    expect(note).toContain("적용 후 검사");
-    expect(note).toContain("결과 호환 가능");
+    expect(note).toContain("적용 후 결과");
+    expect(note).toContain("호환 가능");
     expect(note.length).toBeLessThanOrEqual(500);
   });
 });

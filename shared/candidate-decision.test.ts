@@ -14,7 +14,7 @@ describe("candidate decision summary", () => {
     expect(summary).toMatchObject({
       status: "recommended",
       label: "추천 부품",
-      summary: "현재 문제 해결 · 새 차단 없음 · 장착 정보 확인됨 · 최근 확인 · 높음"
+      summary: "현재 문제 해결 · 새 호환 문제 없음 · 장착 정보 확인됨 · 최근 확인 · 높음"
     });
   });
 
@@ -44,7 +44,7 @@ describe("candidate decision summary", () => {
     });
 
     expect(summary).toMatchObject({ status: "avoid", label: "적용하지 않음" });
-    expect(summary.summary).toContain("부품 자체에 차단 위험");
+    expect(summary.summary).toContain("부품 자체가 현재 구성과 호환되지 않습니다.");
     expect(summary.reasons).toEqual(["부품 자체에 차단 오류 1개가 있습니다."]);
   });
 

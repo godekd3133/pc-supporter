@@ -54,6 +54,6 @@ describe("build scenario comparison", () => {
   it("keeps a same-risk, same-price candidate unchanged", () => {
     const comparison = buildScenarioComparisonFor(result(), result());
     expect(comparison).toMatchObject({ direction: "unchanged", statusChanged: false, priceChanged: false });
-    expect(comparison.summary).toContain("차단 2 → 2");
+    expect(comparison.summary).toContain("호환 불가 2 → 2");
   });
 });

@@ -156,6 +156,7 @@ import type { SavedBuildVersionGroup } from "../shared/saved-build-version";
 import { savedBuildVersionDeltaFor } from "../shared/saved-build-version-delta";
 import { dismissSavedBuildMonitorAlerts, markSavedBuildMonitorAlertsRead, mergeSavedBuildMonitorAlerts, savedBuildMonitorAlertFor, savedBuildMonitorAlertMatches } from "../shared/saved-build-monitor-alerts";
 import type { SavedBuildMonitorAlert, SavedBuildMonitorAlternative } from "../shared/saved-build-monitor-alerts";
+import { savedBuildMonitorSummaryForDisplay, savedBuildMonitorTitleForDisplay } from "../shared/saved-build-monitor-copy";
 import { SAVED_BUILD_SERVER_MONITOR_ALERT_POLICIES, SAVED_BUILD_SERVER_MONITOR_INTERVALS, savedBuildMonitorAlertAllowed } from "../shared/saved-build-monitor-subscription";
 import type { SavedBuildMonitorSubscriptionResponse, SavedBuildServerMonitorAlertPolicy, SavedBuildServerMonitorInterval } from "../shared/saved-build-monitor-subscription";
 import { savedBuildCatalogChangeValueDiffsFor } from "../shared/saved-build-change-causes";
@@ -257,7 +258,6 @@ const LazySavedBuildPurchasePriceHistoryPanel = lazy(() => import("./SavedBuildP
 const LazyPurchaseReadinessPanel = lazy(() => import("./PurchaseReadinessPanel").then((module) => ({ default: module.PurchaseReadinessPanel })));
 const LazyAccessoryCartPanel = lazy(() => import("./AccessoryCartPanel").then((module) => ({ default: module.AccessoryCartPanel })));
 const LazyGpuFitSummaryPanel = lazy(() => import("./GpuFitSummaryPanel").then((module) => ({ default: module.GpuFitSummaryPanel })));
-const LazyBenchmarkEvidencePanel = lazy(() => import("./BenchmarkEvidencePanel").then((module) => ({ default: module.BenchmarkEvidencePanel })));
 const LazyBuildConnectivityPanel = lazy(() => import("./BuildConnectivityPanel").then((module) => ({ default: module.BuildConnectivityPanel })));
 const LazyBuildResourceSummaryPanel = lazy(() => import("./BuildResourceSummaryPanel").then((module) => ({ default: module.BuildResourceSummaryPanel })));
 const LazyBuildActionCenterPanel = lazy(() => import("./BuildActionCenter").then((module) => ({ default: module.BuildActionCenterPanel })));
@@ -471,7 +471,7 @@ const RULE_GUIDES: Record<string, string> = {
   "memory-form-factor": "메인보드 메모리 슬롯과 RAM 모듈의 DIMM/SO-DIMM 물리 규격이 같은지 확인합니다.",
   "memory-capacity": "선택한 RAM 모듈 용량의 합이 메인보드의 최대 지원 용량을 넘지 않는지 확인합니다.",
   "memory-slots": "선택한 RAM 수량과 킷당 물리 모듈 수를 곱한 값이 메인보드의 물리 슬롯 수를 넘지 않는지 확인합니다.",
-  "memory-dual-channel": "RAM 수량과 킷당 물리 모듈 수를 계산해 2개 모듈 듀얼채널 구성을 권장합니다. 호환 차단이 아니라 성능 주의 항목입니다.",
+  "memory-dual-channel": "RAM 수량과 킷당 물리 모듈 수를 계산해 2개 모듈 듀얼채널 구성을 권장합니다. 호환 문제는 아니며 성능에 주의가 필요한 항목입니다.",
   "memory-speed": "RAM 속도와 메인보드·CPU가 지원하는 속도를 살펴봅니다. EXPO/XMP를 켜야 하는 메모리는 기본 속도와 다를 수 있어요.",
   "memory-profile": "RAM의 EXPO/XMP 설정을 메인보드에서 사용할 수 있는지 확인합니다. 지원 정보가 다르면 기본 속도로 작동하거나 설정이 필요할 수 있어요.",
   "memory-mixing": "서로 다른 RAM을 함께 쓸 때 용량·속도·전압 등이 맞는지 살펴봅니다. 정보가 다르거나 부족하면 함께 쓸 때 문제가 생길 수 있어요.",
@@ -1170,7 +1170,7 @@ function App() {
     for (const alert of newAlerts) {
       try {
         const notification = new window.Notification(`PC Supporter · ${alert.buildName}`, {
-          body: `${alert.title} · ${alert.message}${alert.alternative ? ` · ${alert.alternative.currentPartName} → ${alert.alternative.candidatePartName}` : ""}${alert.findingTitles && alert.findingTitles.length > 0 ? ` · 영향받는 항목: ${alert.findingTitles.slice(0, 2).join(", ")}` : ""}`,
+          body: `${savedBuildMonitorTitleForDisplay(alert.title)} · ${savedBuildMonitorSummaryForDisplay(alert.message)}${alert.alternative ? ` · ${alert.alternative.currentPartName} → ${alert.alternative.candidatePartName}` : ""}${alert.findingTitles && alert.findingTitles.length > 0 ? ` · 영향받는 항목: ${alert.findingTitles.slice(0, 2).join(", ")}` : ""}`,
           tag: alert.id
         });
         notification.onclick = () => {
@@ -1614,7 +1614,7 @@ function App() {
         setToast("브라우저 데스크톱 알림을 허용했습니다. 새 저장 견적 위험을 알려드립니다.");
       } else if (normalized === "denied") {
         setBrowserNotificationEnabled(false);
-        setToast("브라우저 알림이 차단되었습니다. 브라우저 설정에서 허용할 수 있습니다.");
+        setToast("브라우저 알림 권한이 거부됐어요. 브라우저 설정에서 바꿀 수 있습니다.");
       } else {
         setToast("브라우저 알림 권한을 완료하지 못했습니다.");
       }
@@ -1865,7 +1865,7 @@ function App() {
       setCatalogRefreshProgress(null);
       const checked = await checkBuild(build, recommendationPreferences, { catalogRefreshRequest: refreshRequest });
       if (!isCurrent()) return;
-      if (checked) setToast(`${refreshed.name} 정보 확인 완료 · ${changedSummary} · 현재 구성 재검사했습니다.`);
+      if (checked) setToast(`${refreshed.name} 정보 확인 완료 · ${changedSummary} · 현재 구성의 호환 결과를 다시 확인했습니다.`);
       setCatalogRefreshReport(report);
     } catch (error: unknown) {
       if (!isCurrent()) return;
@@ -1929,7 +1929,7 @@ function App() {
       const failureSummary = failures.length > 0 ? ` · 실패 ${failures.length}개` : "";
       const checked = await checkBuild(build, recommendationPreferences, { catalogRefreshRequest: refreshRequest });
       if (!isCurrent()) return;
-      if (checked) setToast(`${successCount}개 부품 정보 확인 완료 · ${changedFieldCount}개 영역 갱신${failureSummary} · 현재 구성 재검사했습니다.`);
+      if (checked) setToast(`${successCount}개 부품 정보 확인 완료 · ${changedFieldCount}개 영역 갱신${failureSummary} · 현재 구성의 호환 결과를 다시 확인했습니다.`);
       setCatalogRefreshReport({ inputFingerprint, status: failures.length > 0 ? "partial" : "success", requestedCount: uniqueTargets.length, successCount, failureCount: failures.length, items: reportItems, failures, completedAt: new Date().toISOString() });
     } finally {
       if (isCurrent()) {
@@ -2541,7 +2541,7 @@ function App() {
         const continuationRouteRequestSequence = routeRequestSequenceRef.current;
         const isContinuationCurrent = () => saveBuildRequestRef.current === continuationRequestVersion
           && routeRequestSequenceRef.current === continuationRouteRequestSequence;
-        const savedTargetLabel = target.kind === "candidate" ? "비교 구성" : target.kind === "generated" ? "자동 구성" : target.kind === "repair_plan" ? "수리 플랜" : "새 버전";
+        const savedTargetLabel = target.kind === "candidate" ? "비교 구성" : target.kind === "generated" ? "자동 구성" : target.kind === "repair_plan" ? "호환 개선안" : "새 버전";
         try {
           await navigator.clipboard.writeText(url);
           if (!isContinuationCurrent()) return;
@@ -2950,7 +2950,7 @@ function App() {
 
   function applyRepairPlan(plan: RecommendationPlan) {
     const nextBuild = repairPlanBuildFor(build, plan);
-    openBuildChangePreview("수리 플랜 적용", `${plan.changes.length}개 변경으로 차단 오류 ${plan.resolvedBlockers}개를 줄이는 플랜입니다. 적용 후 전체 견적의 호환 결과를 계산합니다.`, nextBuild, plan.changes.map((change) => change.toPart));
+    openBuildChangePreview("추천 구성 적용", `${plan.changes.length}개를 바꿔 호환 불가 항목 ${plan.resolvedBlockers}개를 줄여요. 적용 후 전체 견적의 호환 결과를 다시 확인합니다.`, nextBuild, plan.changes.map((change) => change.toPart));
   }
 
   async function restoreBuildHistory(entry: BuildHistoryEntry) {
@@ -3173,7 +3173,6 @@ function App() {
     LazyBuildConnectivityPanel,
     LazyGpuFitSummaryPanel,
     LazyPurchaseListPanel,
-    LazyBenchmarkEvidencePanel,
     LazyUpgradeBundlePanel,
     LazyAccessoryCartPanel,
     ResultFindingCard,
@@ -3273,7 +3272,7 @@ function App() {
     <Suspense fallback={<div className="shared-build-state"><FiLoader className="spin" /><span>시작 화면을 불러오는 중...</span></div>}>
       <LazyQuoteOnboardingView
         onFinish={(query) => navigate(`/recommend?${query}`, "generator")}
-        onUpgrade={() => { navigate("/build?entry=upgrade", "editor"); setToast("현재 부품을 선택하면 호환 문제와 업그레이드 조합을 확인할 수 있어요."); }}
+        onUpgrade={() => { navigate("/build?entry=upgrade", "editor"); setToast("업그레이드할 부품을 선택한 뒤 호환 결과를 확인하세요."); }}
         onSkip={() => navigate("/", "home")}
         onHome={() => navigate("/", "home")}
       />

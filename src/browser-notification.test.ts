@@ -5,7 +5,7 @@ describe("browser notification preferences", () => {
   it("normalizes permission and enabled state without granting permission", () => {
     expect(browserNotificationPermissionFromUnknown("granted")).toBe("granted");
     expect(browserNotificationPermissionFromUnknown("prompt")).toBe("unsupported");
-    expect(browserNotificationPermissionLabel("denied")).toBe("차단됨");
+    expect(browserNotificationPermissionLabel("denied")).toBe("거부됨");
     expect(browserNotificationEnabledFromStorage("true")).toBe(true);
     expect(browserNotificationEnabledFromStorage(null)).toBe(false);
   });

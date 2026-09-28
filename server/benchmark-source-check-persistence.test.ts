@@ -13,7 +13,7 @@ async function closeServer(server: { close(callback: (error?: Error) => void): v
 }
 
 describe("benchmark source-check persistence API", () => {
-  it("checks, persists, and exposes benchmark source verification history", async () => {
+  it("keeps source verification history on admin routes and hides it from public part responses", async () => {
     const directory = await mkdtemp(join(tmpdir(), "pc-supporter-benchmark-source-check-api-"));
     const previousDataDirectory = process.env.PC_SUPPORTER_DATA_DIR;
     const previousDatabaseUrl = process.env.DATABASE_URL;
@@ -67,7 +67,8 @@ describe("benchmark source-check persistence API", () => {
       const part = await fetch(`${baseUrl}/api/parts/cpu-7600`);
       const partPayload = await part.json() as Record<string, any>;
       expect(part.status).toBe(200);
-      expect(partPayload.specs.benchmarkProvenance.sourceCheck).toMatchObject({ status: "reachable", identityStatus: "matched" });
+      expect(partPayload.specs.benchmarkProvenance).toBeUndefined();
+      expect(partPayload.specs.cinebenchR23Multi).toBeUndefined();
     } finally {
       if (server) await closeServer(server);
       if (previousDataDirectory === undefined) delete process.env.PC_SUPPORTER_DATA_DIR;

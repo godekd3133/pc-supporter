@@ -31,7 +31,7 @@ export function mergeBrowserNotificationIds(existing: string[], incoming: string
 
 export function browserNotificationPermissionLabel(permission: BrowserNotificationPermission) {
   if (permission === "granted") return "허용됨";
-  if (permission === "denied") return "차단됨";
+  if (permission === "denied") return "거부됨";
   if (permission === "default") return "허용 전";
   return "지원 안 함";
 }

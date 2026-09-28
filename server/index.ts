@@ -3,7 +3,7 @@ import express, { type NextFunction, type Request, type RequestHandler, type Res
 import { existsSync } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { resolve } from "node:path";
-import type { AccessoryCategory, AccessoryPriceFilter, AccessoryRefreshResponse, AccessorySelection, AlternativeRisk, AlternativeRiskCounts, BenchmarkAvailabilityFilter, BuildGenerationRequest, BuildGenerationVariantResult, BuildSelection, CatalogChangeKind, CatalogChangeRecord, CompatibilityResult, CrawlResumePreview, CrawlStatus, DataFreshness, DataQuality, Finding, GpuPhysicalOverride, ListingPolicy, M2CoverageFilter, M2MappingStatus, M2SlotCoverage, M2SlotCoverageBucket, M2SlotCoverageItem, M2SlotOverride, M2SlotReviewTemplate, M2SlotReviewTemplateItem, Part, PartCategory, PartRefreshResponse, PriceAvailabilityFilter, RecommendationPerformanceTier, RecommendationPreferences, RecommendationProfile, SavedBuild, SavedBuildCheckSnapshot } from "../shared/types";
+import type { AccessoryCategory, AccessoryPriceFilter, AccessoryRefreshResponse, AccessorySelection, AlternativeRisk, AlternativeRiskCounts, BuildGenerationRequest, BuildGenerationVariantResult, BuildSelection, CatalogChangeKind, CatalogChangeRecord, CompatibilityResult, CrawlResumePreview, CrawlStatus, DataFreshness, DataQuality, Finding, GpuPhysicalOverride, ListingPolicy, M2CoverageFilter, M2MappingStatus, M2SlotCoverage, M2SlotCoverageBucket, M2SlotCoverageItem, M2SlotOverride, M2SlotReviewTemplate, M2SlotReviewTemplateItem, Part, PartCategory, PartRefreshResponse, PriceAvailabilityFilter, RecommendationPerformanceTier, RecommendationPreferences, RecommendationProfile, SavedBuild, SavedBuildCheckSnapshot } from "../shared/types";
 import { ACCESSORY_CATEGORIES, isRecommendationPriority, PART_CATEGORIES, RECOMMENDATION_VARIANT_PRIORITIES } from "../shared/types";
 import { catalogEligibilitySummaryFor, catalogMeta, catalogSearchTotalsFor, catalogUpdatedAtFor, countParts, currentCatalogRuntimeRevision, filterParts, findPart, invalidateCatalogCache, loadCatalog, parseCatalogMissingField, parsePartSpecFilter, partSpecFilterDiagnosticsFor, partSpecFilterMatcherFor, searchParts, upsertCatalog } from "./catalog";
 import { countAccessories, currentAccessoryUpdatedAt, findAccessory, loadAccessories, readAccessoryCoverage, searchAccessories, upsertAccessories } from "./accessories";
@@ -29,6 +29,7 @@ import { createShareOwnerCredential, createShareRecoveryCode, normalizeShareReco
 import { createRateLimitMiddleware } from "./rate-limit";
 import { publicSavedCatalogWatchlist, type SavedCatalogWatchlistRecord } from "./watchlist-share";
 import { parsePublicPriceHistoryIds, parsePublicPriceHistoryWindow } from "./public-price-history";
+import { publicApiPayloadProjection } from "./public-api-projection";
 import { alternativePerformanceFilterFromUnknown, alternativePerformanceMatches } from "./alternative-performance";
 import { physicalEvidenceFilterFromUnknown, physicalEvidenceMatches } from "../shared/physical-evidence-filter";
 import { alternativeComparisonExpired, alternativeComparisonExpiresAtFor, parseAlternativeComparisonInput, publicAlternativeComparison, type SavedAlternativeComparisonRecord } from "./comparison-share";
@@ -162,6 +163,19 @@ app.use((request, response, next) => {
 
 app.use(express.json({ limit: "1mb" }));
 
+// Public responses must not expose internal recommendation scores or evidence.
+// Admin evidence APIs retain their full payloads for authorized review.
+app.use((request, response, next) => {
+  const authenticatedAdminMeta = request.path === "/api/meta" && isAdminAuthenticated(request);
+  if (!isApiPath(request.path) || request.path === "/api/admin" || request.path.startsWith("/api/admin/") || authenticatedAdminMeta) {
+    next();
+    return;
+  }
+  const json = response.json.bind(response) as (body?: unknown) => Response;
+  response.json = ((body?: unknown) => json(publicApiPayloadProjection(body))) as Response["json"];
+  next();
+});
+
 type JsonBodyParserError = Error & {
   type?: string;
   status?: number;
@@ -277,8 +291,9 @@ function catalogRefreshReportForRequest(value: unknown, build: BuildSelection, p
   return { report };
 }
 
-function sendJsonWithEtag(request: Request, response: Response, payload: unknown, lastModified?: string) {
-  const entityTag = entityTagFor(payload);
+function sendJsonWithEtag(request: Request, response: Response, payload: unknown, lastModified?: string, projectPublicPayload = true) {
+  const projectedPayload = projectPublicPayload ? publicApiPayloadProjection(payload) : payload;
+  const entityTag = entityTagFor(projectedPayload);
   response.setHeader("ETag", entityTag);
   response.setHeader("Cache-Control", "private, max-age=0, must-revalidate");
   const lastModifiedMs = lastModified ? Date.parse(lastModified) : Number.NaN;
@@ -290,7 +305,7 @@ function sendJsonWithEtag(request: Request, response: Response, payload: unknown
     response.status(304).end();
     return;
   }
-  response.json(payload);
+  response.json(projectedPayload);
 }
 
 function isCategory(value: unknown): value is PartCategory {
@@ -304,11 +319,6 @@ function dataFreshnessFromUnknown(value: unknown): DataFreshness | "all" {
 
 function priceAvailabilityFromUnknown(value: unknown): PriceAvailabilityFilter {
   return value === "known" || value === "unknown" ? value : "all";
-}
-
-function benchmarkAvailabilityFromUnknown(value: unknown, category: PartCategory | undefined): BenchmarkAvailabilityFilter {
-  if (category !== "cpu" && category !== "gpu") return "all";
-  return value === "complete" || value === "incomplete" ? value : "all";
 }
 
 function routeParam(value: string | string[] | undefined) {
@@ -1148,7 +1158,7 @@ app.get("/api/health", (_request, response) => {
 
 app.get("/api/meta", async (request, response) => {
   const [meta, crawler, persistence] = await Promise.all([catalogMeta(), readCrawlStatus(), persistenceDiagnostics()]);
-  sendJsonWithEtag(request, response, { ...meta, crawler: publicCrawlStatusFor(crawler as CrawlStatus), engineVersion: ENGINE_VERSION, storageMode: persistence.storageMode, persistence, adminAuthEnabled: adminAuthEnabled() });
+  sendJsonWithEtag(request, response, { ...meta, crawler: publicCrawlStatusFor(crawler as CrawlStatus), engineVersion: ENGINE_VERSION, storageMode: persistence.storageMode, persistence, adminAuthEnabled: adminAuthEnabled() }, undefined, !isAdminAuthenticated(request));
 });
 
 // 클라이언트는 app_open만 전송할 수 있다 — check/save/share/recommend는
@@ -1288,7 +1298,9 @@ app.get("/api/parts", publicCatalogReadRateLimit, async (request, response) => {
     : "all";
   const priceAvailability = priceAvailabilityFromUnknown(request.query.priceStatus);
   const freshness = dataFreshnessFromUnknown(request.query.freshness);
-  const benchmarkAvailability = benchmarkAvailabilityFromUnknown(request.query.benchmarkStatus, category);
+  // Benchmark coverage is an internal ranking signal; public listing queries
+  // always use the full catalog regardless of a supplied benchmarkStatus.
+  const benchmarkAvailability = "all" as const;
   const parsedMissingField = parseCatalogMissingField(request.query.missingField);
   if (parsedMissingField.error) {
     response.status(400).json({ error: "누락 필드 형식이 올바르지 않습니다.", details: [parsedMissingField.error] });
@@ -1357,7 +1369,6 @@ app.get("/api/parts", publicCatalogReadRateLimit, async (request, response) => {
     ...(missingField ? { missingField } : {}),
     ...(priceAvailability !== "all" ? { priceStatus: priceAvailability, priceExcludedCount: baseTotal - priceTotal } : {}),
     ...(freshness !== "all" ? { freshness, freshnessExcludedCount: priceTotal - freshnessTotal } : {}),
-    ...(benchmarkAvailability !== "all" ? { benchmarkStatus: benchmarkAvailability, benchmarkExcludedCount: freshnessTotal - benchmarkTotal } : {}),
     ...(unfilteredTotal > coreCandidateTotal ? { nonCoreExcludedCount: unfilteredTotal - coreCandidateTotal } : {}),
     ...(categoryMismatchExcludedCount > 0 ? { categoryMismatchExcludedCount } : {}),
     ...(specFilterApplied ? { specFilter: parsedSpecFilter.filter, specExcludedCount: benchmarkTotal - total, specFilterDiagnostics: partSpecFilterDiagnosticsFor(specInputParts, parsedSpecFilter.filter) } : {}),
@@ -2047,9 +2058,10 @@ app.post("/api/compatibility/check", publicCompatibilityRateLimit, async (reques
   response.setHeader("X-PC-Supporter-Compatibility-Cache", outcome.lookup === "COALESCED" ? "COALESCED" : outcome.value.cacheLookup);
   response.setHeader("X-PC-Supporter-Compatibility-Checked-At", outcome.value.result.checkedAt);
   response.setHeader("Content-Type", "application/json; charset=utf-8");
-  response.setHeader("Content-Length", String(Buffer.byteLength(outcome.value.body)));
+  const publicBody = JSON.stringify(publicApiPayloadProjection(outcome.value.result));
+  response.setHeader("Content-Length", String(Buffer.byteLength(publicBody)));
   trackUsageEvent("check");
-  response.end(outcome.value.body);
+  response.end(publicBody);
 });
 
 app.post("/api/builds/recommend", publicRecommendationRateLimit, async (request, response) => {

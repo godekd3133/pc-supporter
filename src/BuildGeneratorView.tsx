@@ -243,7 +243,7 @@ export function BuildGeneratorView({ initialProfile, draft, variants, budgetLadd
     if (profile === "general" && performanceTier) params.set("tier", performanceTier);
     if (profile === "gaming") {
       // Keep an onboarding handoff's explicit target stable after the generator mounts.
-      // Omitting 144 FPS or the selected default graphics rule here silently changes a
+      // Omitting the selected refresh-rate target or graphics rule here silently changes a
       // shareable requirement URL back into an implicit generator default.
       params.set("resolution", gamingResolution);
       params.set("refresh", String(gamingRefreshRate));
@@ -676,17 +676,16 @@ export function BuildGeneratorView({ initialProfile, draft, variants, budgetLadd
     document.querySelector<HTMLElement>(".generator-form")?.scrollIntoView({ block: "start", behavior: "smooth" });
   };
   return <div className="generator-page">
-    <div className="workspace-heading"><div><button className="back-link" onClick={onBack}><FiArrowLeft /> 홈으로</button><p className="eyebrow">자동 구성</p><h1>PC 견적 만들기</h1><p>용도와 예산을 정하면 부품 조합을 계산합니다.</p></div></div>
+    <div className="workspace-heading"><div><button className="back-link" onClick={onBack}><FiArrowLeft /> 홈으로</button><p className="eyebrow">자동 구성</p><h1>PC 견적 만들기</h1><p>용도와 예산을 선택한 뒤 추천 부품을 확인하세요.</p></div></div>
     <div className="generator-layout">
       <form className="generator-form" onSubmit={submit}>
-        <div className="generator-form-heading"><span className="generator-form-icon"><FiZap /></span><div><p className="eyebrow">견적 설정</p><h2>견적 조건</h2></div><button className="text-button generator-condition-link-button" type="button" data-testid="generator-copy-condition-link" onClick={() => void copyGeneratorConditionsLink()}><FiCopy /> 견적 링크 복사</button></div>
+        <div className="generator-form-heading"><span className="generator-form-icon"><FiZap /></span><div><h2>견적 조건</h2></div><button className="text-button generator-condition-link-button" type="button" data-testid="generator-copy-condition-link" onClick={() => void copyGeneratorConditionsLink()}><FiCopy /> 견적 링크 복사</button></div>
         <section className="generator-brief" aria-label="원하는 PC 구성 입력" data-testid="generator-brief">
-          <div className="generator-brief-heading"><h3>원하는 PC 조건</h3></div>
           <label className="generator-brief-input"><span>예산·용도·부품 조건</span><textarea data-testid="generator-brief-input" rows={2} value={brief} onChange={(event) => { setBrief(event.target.value); setBriefInterpretation(null); setBriefApplied(false); }} placeholder="예: QHD 게이밍 220만원, RAM 32GB, SSD 2TB, 144Hz" disabled={loading} /></label>
           <div className="generator-brief-actions"><button className="button button-brief" type="button" data-testid="generator-interpret-brief" onClick={interpretBrief} disabled={loading || !brief.trim()}><FiEdit3 /> 입력 내용 보기</button><button className="button button-brief-ghost" type="button" onClick={clearBrief} disabled={loading || (!brief && !briefInterpretation)}>지우기</button></div>
           {briefInterpretation && <div className="generator-brief-preview" data-testid="generator-brief-preview" aria-live="polite"><div className="generator-brief-preview-heading"><div><strong>입력한 내용</strong></div></div>{briefInterpretation.matches.length > 0 ? <div className="generator-brief-matches">{briefInterpretation.matches.map((match) => <span key={match.field}><b>{match.label}</b><strong>{match.value}</strong></span>)}</div> : <p className="generator-brief-empty"><FiInfo /> 예산, 게임, 부품 정보를 더 적어 주세요.</p>}{briefInterpretation.warnings.length > 0 && <ul className="generator-brief-warnings">{briefInterpretation.warnings.map((warning) => <li key={warning}><FiAlertTriangle /> {warning}</li>)}</ul>}{briefInterpretation.guidance.length > 0 && <div className="generator-brief-guidance" data-testid="generator-brief-guidance"><div className="generator-brief-guidance-heading"><strong>추가로 정할 조건</strong><small>{briefInterpretation.coverage.missing.slice(0, 3).join(" · ")}{briefInterpretation.coverage.missing.length > 3 ? " · 외 추가 조건" : ""}</small></div><div className="generator-brief-guidance-grid">{briefInterpretation.guidance.map((item) => item.phrase ? <button className="generator-brief-guidance-item actionable" type="button" key={item.id} data-testid={`generator-guidance-${item.id}`} onClick={() => appendBriefPhrase(item.phrase!)} disabled={loading}><strong>{item.label}</strong><small>{item.detail}</small><em>+ {item.phrase}</em></button> : <div className="generator-brief-guidance-item" key={item.id}><strong>{item.label}</strong><small>{item.detail}</small></div>)}</div></div>}<button className="button button-brief-apply" type="button" data-testid="generator-apply-brief" onClick={() => applyBriefConfig(briefInterpretation.config, briefInterpretation.matches.length)} disabled={loading || briefInterpretation.matches.length === 0 || briefApplied}>{briefApplied ? <><FiCheck /> 견적 설정에 반영됨</> : <><FiEdit3 /> 견적 설정에 반영</>}</button></div>}
         </section>
-        <section className="generator-presets" aria-label="자동 구성 빠른 시작"><div className="generator-presets-heading"><strong>빠른 시작</strong><span>구성을 선택한 뒤 예산과 부품을 수정할 수 있어요.</span></div><div className="generator-preset-list">{GENERATOR_PRESETS.map((preset) => <button className="generator-preset" type="button" key={preset.id} data-testid={`generator-preset-${preset.id}`} onClick={() => applyPreset(preset)} disabled={loading}><strong>{preset.label}</strong><small>{preset.summary}</small></button>)}</div><p className="generator-presets-note"><FiInfo /> 선택한 구성과 예산은 직접 바꿀 수 있어요.</p><div className="generator-saved-preset-editor"><label><span>내 프리셋 이름</span><input data-testid="generator-preset-name" type="text" maxLength={60} value={presetName} onChange={(event) => setPresetName(event.target.value)} placeholder="예: 회사 개발용 PC" disabled={loading} /></label><button className="button button-light" type="button" data-testid="generator-save-preset" onClick={saveCurrentPreset} disabled={loading || !presetName.trim()}><FiSave /> 현재 조건 저장</button></div><div className="generator-saved-preset-tools"><input ref={presetImportInputRef} className="generator-saved-preset-file" type="file" accept=".json,application/json" aria-label="내 자동 구성 프리셋 JSON 가져오기" onChange={(event) => { void importSavedPresets(event.target.files?.[0]); event.currentTarget.value = ""; }} disabled={loading} /><button className="button button-light" type="button" data-testid="generator-import-presets" onClick={() => presetImportInputRef.current?.click()} disabled={loading}><FiUpload /> JSON 가져오기</button><button className="button button-light" type="button" data-testid="generator-export-presets" onClick={exportSavedPresets} disabled={loading || savedPresets.length === 0}><FiDownload /> JSON 저장</button></div>{presetImportSummary && presetImportPreview && <section className="generator-preset-import-preview" data-testid="generator-preset-import-preview" aria-label="내 프리셋 가져오기 미리보기"><div><strong>가져올 프리셋</strong><span>{presetImportSummary.importedCount}개 가져옴 · 신규 {presetImportSummary.newCount}개 · 기존 ID 대체 {presetImportSummary.replacementCount}개</span></div><ul>{presetImportPreview.slice(0, 6).map((preset) => <li key={preset.id}>{preset.name} · {RECOMMENDATION_PROFILE_LABELS[preset.profile]} · {preset.budgetWon.toLocaleString("ko-KR")}원</li>)}{presetImportPreview.length > 6 && <li>외 {presetImportPreview.length - 6}개</li>}</ul><p><FiInfo /> 가져오면 기존 목록과 합쳐져요. 최대 10개까지 보관하며 오래된 항목은 목록에서 빠질 수 있어요.</p><div><button className="button button-light" type="button" data-testid="generator-cancel-import-presets" onClick={cancelImportSavedPresets}>취소</button><button className="button button-primary" type="button" data-testid="generator-confirm-import-presets" onClick={confirmImportSavedPresets}>가져오기</button></div></section>}{savedPresets.length > 0 && <div className="generator-saved-preset-list" aria-label="내 자동 구성 프리셋">{savedPresets.map((preset) => <article key={preset.id}><div><strong>{preset.name}</strong><small>{RECOMMENDATION_PROFILE_LABELS[preset.profile]} · {preset.budgetWon.toLocaleString("ko-KR")}원{preset.gamingGameIds?.length ? ` · 게임 ${preset.gamingGameIds.length}개` : ""} · 저장 {new Date(preset.updatedAt).toLocaleDateString("ko-KR")}</small></div><div><button className="text-button" type="button" data-testid={`generator-load-preset-${preset.id}`} onClick={() => applyGeneratorPresetConfig(preset, preset.name)} disabled={loading}><FiEdit3 /> 불러오기</button><button className="text-button danger-text-button" type="button" data-testid={`generator-delete-preset-${preset.id}`} onClick={() => removeSavedPreset(preset)} disabled={loading}><FiTrash2 /> 삭제</button></div></article>)}</div>}</section>
+        <section className="generator-presets" aria-label="예시 구성 선택"><div className="generator-presets-heading"><strong>예시 구성</strong></div><div className="generator-preset-list">{GENERATOR_PRESETS.map((preset) => <button className="generator-preset" type="button" key={preset.id} data-testid={`generator-preset-${preset.id}`} onClick={() => applyPreset(preset)} disabled={loading}><strong>{preset.label}</strong><small>{preset.summary}</small></button>)}</div><div className="generator-saved-preset-editor"><label><span>내 프리셋 이름</span><input data-testid="generator-preset-name" type="text" maxLength={60} value={presetName} onChange={(event) => setPresetName(event.target.value)} placeholder="예: 회사 개발용 PC" disabled={loading} /></label><button className="button button-light" type="button" data-testid="generator-save-preset" onClick={saveCurrentPreset} disabled={loading || !presetName.trim()}><FiSave /> 현재 조건 저장</button></div><div className="generator-saved-preset-tools"><input ref={presetImportInputRef} className="generator-saved-preset-file" type="file" accept=".json,application/json" aria-label="내 자동 구성 프리셋 JSON 가져오기" onChange={(event) => { void importSavedPresets(event.target.files?.[0]); event.currentTarget.value = ""; }} disabled={loading} /><button className="button button-light" type="button" data-testid="generator-import-presets" onClick={() => presetImportInputRef.current?.click()} disabled={loading}><FiUpload /> JSON 가져오기</button><button className="button button-light" type="button" data-testid="generator-export-presets" onClick={exportSavedPresets} disabled={loading || savedPresets.length === 0}><FiDownload /> JSON 저장</button></div>{presetImportSummary && presetImportPreview && <section className="generator-preset-import-preview" data-testid="generator-preset-import-preview" aria-label="내 프리셋 가져오기 미리보기"><div><strong>가져올 프리셋</strong><span>{presetImportSummary.importedCount}개 가져옴 · 신규 {presetImportSummary.newCount}개 · 기존 ID 대체 {presetImportSummary.replacementCount}개</span></div><ul>{presetImportPreview.slice(0, 6).map((preset) => <li key={preset.id}>{preset.name} · {RECOMMENDATION_PROFILE_LABELS[preset.profile]} · {preset.budgetWon.toLocaleString("ko-KR")}원</li>)}{presetImportPreview.length > 6 && <li>외 {presetImportPreview.length - 6}개</li>}</ul><p><FiInfo /> 가져오면 기존 목록과 합쳐져요. 최대 10개까지 보관하며 오래된 항목은 목록에서 빠질 수 있어요.</p><div><button className="button button-light" type="button" data-testid="generator-cancel-import-presets" onClick={cancelImportSavedPresets}>취소</button><button className="button button-primary" type="button" data-testid="generator-confirm-import-presets" onClick={confirmImportSavedPresets}>가져오기</button></div></section>}{savedPresets.length > 0 && <div className="generator-saved-preset-list" aria-label="내 자동 구성 프리셋">{savedPresets.map((preset) => <article key={preset.id}><div><strong>{preset.name}</strong><small>{RECOMMENDATION_PROFILE_LABELS[preset.profile]} · {preset.budgetWon.toLocaleString("ko-KR")}원{preset.gamingGameIds?.length ? ` · 게임 ${preset.gamingGameIds.length}개` : ""} · 저장 {new Date(preset.updatedAt).toLocaleDateString("ko-KR")}</small></div><div><button className="text-button" type="button" data-testid={`generator-load-preset-${preset.id}`} onClick={() => applyGeneratorPresetConfig(preset, preset.name)} disabled={loading}><FiEdit3 /> 불러오기</button><button className="text-button danger-text-button" type="button" data-testid={`generator-delete-preset-${preset.id}`} onClick={() => removeSavedPreset(preset)} disabled={loading}><FiTrash2 /> 삭제</button></div></article>)}</div>}</section>
         <label><span>사용 목적</span><select value={profile} disabled={loading} onChange={(event) => setProfile(event.target.value as RecommendationProfile)}><option value="general">{RECOMMENDATION_PROFILE_LABELS.general}</option><option value="gaming">{RECOMMENDATION_PROFILE_LABELS.gaming}</option><option value="creator">{RECOMMENDATION_PROFILE_LABELS.creator}</option><option value="development">{RECOMMENDATION_PROFILE_LABELS.development}</option><option value="office">{RECOMMENDATION_PROFILE_LABELS.office}</option></select></label>
         <label><span>구성 우선순위</span><select data-testid="generator-priority" value={priority} disabled={loading} onChange={(event) => setPriority(event.target.value as RecommendationPriority)}><option value="balanced">{RECOMMENDATION_PRIORITY_LABELS.balanced}</option><option value="budget">{RECOMMENDATION_PRIORITY_LABELS.budget}</option><option value="performance">{RECOMMENDATION_PRIORITY_LABELS.performance}</option><option value="reliability">{RECOMMENDATION_PRIORITY_LABELS.reliability}</option></select></label>
         <label><span>목표 예산</span><div className="generator-input-with-unit"><input type="number" inputMode="numeric" min="1" step="10000" value={budget} disabled={loading} onChange={(event) => setBudget(event.target.value)} placeholder="예: 1500000" /><em>원</em></div></label>
@@ -740,12 +739,12 @@ function generatedVariantSpecText(draft: BuildGenerationResult) {
   return draft.lines.map((line) => `${CATEGORY_LABELS[line.category]} · ${line.specSummary || "사양 정보 없음"}`).join(" / ");
 }
 
-function generatedVariantGamingConditionText(draft: BuildGenerationResult) {
+export function generatedVariantGamingConditionText(draft: BuildGenerationResult) {
   if (draft.profile !== "gaming") return "게이밍 기준 아님";
   const games = draft.gamingGameIds?.map(gameLabelFor).join(", ") || "일반 게이밍";
   const graphics = draft.gamingGraphicsPreset ? ` · ${GAMING_GRAPHICS_PRESET_LABELS[draft.gamingGraphicsPreset]}` : "";
   const rayTracing = draft.gamingRayTracing ? " · 레이 트레이싱" : "";
-  return `${games} · ${GAMING_RESOLUTION_LABELS[draft.gamingResolution]} · ${draft.gamingRefreshRate} FPS${graphics}${rayTracing}`;
+  return `${games} · ${GAMING_RESOLUTION_LABELS[draft.gamingResolution]} · ${draft.gamingRefreshRate}Hz${graphics}${rayTracing}`;
 }
 
 function recoveryPreviewText(option: BuildGenerationRecoveryOption) {
@@ -782,7 +781,12 @@ function generatorVariantsTextFor(variants: GeneratorVariantResult[]) {
   return lines.join("\n");
 }
 
-function generatorVariantsJsonFor(variants: GeneratorVariantResult[]) {
+function generatorVariantExportDraftFor(draft: BuildGenerationResult) {
+  const { analysis: _analysis, ...exportDraft } = draft;
+  return exportDraft;
+}
+
+export function generatorVariantsJsonFor(variants: GeneratorVariantResult[]) {
   const payload: GeneratorVariantsExportPayload = {
     type: GENERATOR_VARIANTS_EXPORT_TYPE,
     version: GENERATOR_VARIANTS_EXPORT_VERSION,
@@ -793,10 +797,9 @@ function generatorVariantsJsonFor(variants: GeneratorVariantResult[]) {
       status: variant.draft ? generatedVariantStatusLabel(variant.draft.status) : "생성 실패",
       ...(variant.error ? { error: variant.error } : {}),
       ...(variant.draft ? {
-        draft: variant.draft,
+        draft: generatorVariantExportDraftFor(variant.draft),
         totalPriceWon: variant.draft.totalPriceWon,
         budgetDeltaWon: variant.draft.budgetDeltaWon,
-        analysisScore: variant.draft.analysis?.overallScore,
         blockerCount: variant.draft.blockerCount,
         warningCount: variant.draft.warningCount,
         unknownCount: variant.draft.unknownCount,
@@ -839,7 +842,6 @@ type GeneratorVariantImportPreviewItem = {
   label: string;
   status: string;
   totalPriceWon?: number;
-  analysisScore?: number;
   error?: string;
 };
 
@@ -918,9 +920,8 @@ export function generatorVariantsImportPreviewFor(value: unknown): { items?: Gen
     const candidate = item as Record<string, unknown>;
     if (!priorities.includes(candidate.priority as typeof priorities[number]) || typeof candidate.label !== "string" || typeof candidate.status !== "string") return [];
     const totalPriceWon = candidate.totalPriceWon === undefined ? undefined : typeof candidate.totalPriceWon === "number" && Number.isFinite(candidate.totalPriceWon) ? candidate.totalPriceWon : undefined;
-    const analysisScore = candidate.analysisScore === undefined ? undefined : typeof candidate.analysisScore === "number" && Number.isFinite(candidate.analysisScore) ? candidate.analysisScore : undefined;
     const error = candidate.error === undefined ? undefined : typeof candidate.error === "string" ? candidate.error : undefined;
-    return [{ priority: candidate.priority as RecommendationPriority, label: candidate.label, status: candidate.status, ...(totalPriceWon !== undefined ? { totalPriceWon } : {}), ...(analysisScore !== undefined ? { analysisScore } : {}), ...(error ? { error } : {}) }];
+    return [{ priority: candidate.priority as RecommendationPriority, label: candidate.label, status: candidate.status, ...(totalPriceWon !== undefined ? { totalPriceWon } : {}), ...(error ? { error } : {}) }];
   });
   if (items.length !== record.items.length || new Set(items.map((item) => item.priority)).size !== items.length) return { error: "자동 구성 JSON의 우선순위·상태를 확인할 수 없습니다." };
   const variants = record.items.flatMap((item): GeneratorVariantResult[] => {

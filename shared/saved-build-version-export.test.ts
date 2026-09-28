@@ -61,15 +61,20 @@ describe("saved build version export", () => {
       generatedAt: "2026-09-07T02:00:00.000Z",
       before: { id: "build-v1", label: "v1", decisionNote: "기존 호환성을 우선" },
       after: { id: "build-v2", label: "v2", decisionNote: "차단을 줄이고 가격을 확인" },
-      summary: { selectionChangedCategoryCount: 1, direction: "regressed", priceDeltaWon: 80_000, analysisScoreDelta: 12, newFindingCount: 1 },
+      summary: { selectionChangedCategoryCount: 1, direction: "regressed", priceDeltaWon: 80_000, newFindingCount: 1 },
       changes: [{ id: "category-cpu", label: "CPU", before: "cpu-1", after: "cpu-2" }]
     });
     expect(exported.findingChanges).toHaveLength(1);
     expect(JSON.stringify(exported)).not.toContain("ownerToken");
+    expect(JSON.stringify(exported)).not.toContain("analysisScore");
+    expect(JSON.stringify(exported)).not.toContain("analysisChanged");
+    expect(JSON.stringify(exported)).not.toContain("benchmark");
+    expect(JSON.stringify(exported)).toContain("priceDeltaWon");
     const text = savedBuildVersionComparisonTextFor({ before, after, fallbackPreferences: before.recommendationPreferences! }, "2026-09-07T02:00:00.000Z");
     expect(text).toContain("원본 견적");
     expect(text).toContain("새 확인 항목");
-    expect(text).toContain("확인 범위");
+    expect(text).toContain("[구매 전 확인]");
+    expect(text).not.toContain("FPS");
   });
 
   it("keeps selection and snapshot boundaries explicit when checks are missing", () => {

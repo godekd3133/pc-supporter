@@ -1,5 +1,4 @@
 // Extracted from App.tsx to keep the entry chunk lean. Loaded lazily.
-import { buildBenchmarkDecisionImpactText, buildBenchmarkImpactStatusText, buildBenchmarkSnapshotStatusText } from "../shared/build-benchmark-snapshot";
 import { type CatalogChangeImpact, catalogChangeImpactsFor } from "../shared/catalog-change-impact";
 import { catalogRefreshFindingImpactsFor } from "../shared/catalog-refresh-impact";
 import type { CatalogRefreshReport } from "../shared/catalog-refresh-report";
@@ -124,7 +123,6 @@ export function savedCheckCatalogCauseReason(record: CatalogChangeRecord) {
   if (record.changedFields.includes("원문 스펙") || record.changedFields.includes("정규화 스펙")) reasons.push("부품 사양 변경");
   if (record.changedFields.some(isCatalogDataQualityChangeField)) reasons.push(`부품 정보 ${record.previousDataQuality ? DATA_QUALITY_LABELS[record.previousDataQuality] : "기록 없음"} → ${DATA_QUALITY_LABELS[record.nextDataQuality]}`);
   if (record.changedFields.includes("누락 필드")) reasons.push(`빠진 사양 ${record.previousMissingFields.length}개 → ${record.nextMissingFields.length}개`);
-  if (record.changedFields.includes("벤치마크 보강")) reasons.push("성능 자료 추가");
   return reasons.length > 0 ? reasons.join(" · ") : "부품 정보 변경";
 }
 
@@ -226,6 +224,12 @@ export const CATALOG_SPEC_LABELS: Record<string, string> = {
   rgbControllerIncluded: "RGB 컨트롤러"
 };
 
+const INTERNAL_BENCHMARK_SPEC_KEYS = new Set(["cinebenchR23Single", "cinebenchR23Multi", "gpu3dmarkTimeSpyScore", "gpu3dmarkPortRoyalScore"]);
+
+export function isCustomerVisibleCatalogSpecKey(key: string) {
+  return !INTERNAL_BENCHMARK_SPEC_KEYS.has(key);
+}
+
 export function catalogSpecFieldLabel(key: string) {
   if (CATALOG_SPEC_LABELS[key]) return CATALOG_SPEC_LABELS[key];
   return key.replace(/([A-Z])/g, " $1").replace(/^./, (value) => value.toUpperCase());
@@ -274,8 +278,9 @@ export function savedCatalogCauseValueDiffsFor(record: CatalogChangeRecord): Cat
     if (diff.field !== "정규화 스펙") return [diff];
     const previous = parseCatalogSpecObject(diff.previous);
     const next = parseCatalogSpecObject(diff.next);
-    if (!previous || !next) return [diff];
+    if (!previous || !next) return [];
     const keys = [...new Set([...Object.keys(previous), ...Object.keys(next)])]
+      .filter(isCustomerVisibleCatalogSpecKey)
       .filter((key) => JSON.stringify(previous[key]) !== JSON.stringify(next[key]))
       .slice(0, 12);
     return keys.length > 0
@@ -284,12 +289,12 @@ export function savedCatalogCauseValueDiffsFor(record: CatalogChangeRecord): Cat
         previous: catalogSpecValueText(key, previous[key], Object.prototype.hasOwnProperty.call(previous, key)),
         next: catalogSpecValueText(key, next[key], Object.prototype.hasOwnProperty.call(next, key))
       }))
-      : [diff];
+      : [];
   });
 }
 
 export const CATALOG_SPEC_ORDER_BY_CATEGORY: Record<string, string[]> = {
-  cpu: ["socket", "cores", "threads", "boostClockGhz", "tdpW", "pptW", "maxMemorySpeedMhz", "cinebenchR23Single", "cinebenchR23Multi"],
+  cpu: ["socket", "cores", "threads", "boostClockGhz", "tdpW", "pptW", "maxMemorySpeedMhz"],
   cooler: ["supportedSockets", "maxCoolingW", "maxCoolerHeightMm", "radiatorSizeMm", "radiatorPosition", "coolerType"],
   motherboard: ["socket", "memoryType", "memoryFormFactor", "maxMemoryGb", "memorySlots", "maxMemorySpeedMhz", "m2Slots", "m2Interfaces", "m2PcieGenerations", "pcieX16Slots", "pcieX8Slots", "pcieX4Slots", "pcieX1Slots", "sataPorts"],
   memory: ["memoryType", "memoryProfiles", "capacityGb", "memoryModuleCountPerKit", "speedMhz", "memoryCasLatency", "memoryVoltageV"],
@@ -355,15 +360,14 @@ export function SavedBuildCheckBadge({ snapshot }: { snapshot: NonNullable<Saved
 
 export function SavedCatalogCauseValueDiffs({ record, compact = false, relatedRuleIds = [] }: { record: CatalogChangeRecord; compact?: boolean; relatedRuleIds?: string[] }) {
   const diffs = savedCatalogCauseValueDiffsFor(record);
-  if (diffs.length === 0) return <small className="history-check-cause-values-missing">이전·현재 값이 보존되지 않은 구버전 변경 로그입니다.</small>;
+  if (diffs.length === 0) return <small className="history-check-cause-values-missing">표시할 제품 사양 변경 값이 없습니다.</small>;
   const groupLabel = savedCheckCatalogCauseCategoryText(record);
   const specDiffs = diffs.filter((diff) => diff.field.startsWith("정규화 스펙 · "));
   const priceAndDataDiffs = diffs.filter((diff) => !diff.field.startsWith("정규화 스펙 · ") && diff.field !== "원문 스펙");
-  const rawSpecDiffs = diffs.filter((diff) => diff.field === "원문 스펙");
   const allImpacts = [...new Map(diffs.flatMap((diff) => catalogChangeImpactsFor(record, diff)).map((impact) => [impact.id, impact])).values()];
   const exactImpacts = relatedRuleIds.length > 0 ? allImpacts.filter((impact) => impact.ruleIds.some((ruleId) => relatedRuleIds.includes(ruleId))) : [];
   const impacts = exactImpacts.length > 0 ? exactImpacts : allImpacts;
-  return <details className={compact ? "history-check-cause-values compact" : "history-check-cause-values"}><summary>{groupLabel} · 변경 값 표 ({diffs.length}개)</summary>{specDiffs.length > 0 && <div className="history-check-cause-group"><strong>핵심 규격 변화</strong><SavedCatalogCauseDiffRows record={record} diffs={specDiffs} /></div>}{priceAndDataDiffs.length > 0 && <div className="history-check-cause-group"><strong>가격·데이터 변화</strong><SavedCatalogCauseDiffRows record={record} diffs={priceAndDataDiffs} /></div>}{rawSpecDiffs.length > 0 && <div className="history-check-cause-group"><strong>수집된 스펙 변화</strong><SavedCatalogCauseDiffRows record={record} diffs={rawSpecDiffs} /></div>}{impacts.length > 0 && <div className="history-check-cause-impact"><strong>{exactImpacts.length > 0 ? "이 결과에 연결된 영향" : "영향이 있을 수 있는 항목"}</strong>{impacts.map((impact) => <div className="history-check-cause-impact-row" key={impact.id}><span>{savedCatalogCauseImpactKindText(impact.kind)}</span><div><strong>{impact.label}</strong><small>{impact.summary}</small>{impact.ruleIds.length > 0 && <small>규칙 · {impact.ruleIds.join(" · ")}</small>}</div></div>)}<small className="history-check-cause-impact-note"><FiRefreshCw /> 값이 바뀌었으니 현재 기준으로 다시 검사해 주세요.</small></div>}</details>;
+  return <details className={compact ? "history-check-cause-values compact" : "history-check-cause-values"}><summary>{groupLabel} · 변경 값 표 ({diffs.length}개)</summary>{specDiffs.length > 0 && <div className="history-check-cause-group"><strong>핵심 규격 변화</strong><SavedCatalogCauseDiffRows record={record} diffs={specDiffs} /></div>}{priceAndDataDiffs.length > 0 && <div className="history-check-cause-group"><strong>가격·데이터 변화</strong><SavedCatalogCauseDiffRows record={record} diffs={priceAndDataDiffs} /></div>}{impacts.length > 0 && <div className="history-check-cause-impact"><strong>{exactImpacts.length > 0 ? "이 결과에 연결된 영향" : "영향이 있을 수 있는 항목"}</strong>{impacts.map((impact) => <div className="history-check-cause-impact-row" key={impact.id}><span>{savedCatalogCauseImpactKindText(impact.kind)}</span><div><strong>{impact.label}</strong><small>{impact.summary}</small>{impact.ruleIds.length > 0 && <small>규칙 · {impact.ruleIds.join(" · ")}</small>}</div></div>)}<small className="history-check-cause-impact-note"><FiRefreshCw /> 값이 바뀌었으니 현재 기준으로 다시 검사해 주세요.</small></div>}</details>;
 }
 
 export function SavedCatalogCauseSourceLink({ record, partMap, accessoryMap }: { record: CatalogChangeRecord; partMap?: ReadonlyMap<string, Part>; accessoryMap?: ReadonlyMap<string, AccessoryItem> }) {
@@ -430,7 +434,7 @@ export function SavedBuildCheckTransitionSummary({ summary, before, after }: { s
         : after.resourceBudget?.state === "warning" || after.resourceBudget?.state === "unknown"
           ? "전력·냉각 사양 정보가 부족해요."
         : "현재 선택한 부품은 호환돼요. 조립할 때 케이스 내부 공간을 살펴보세요.";
-  return <section className={`history-check-transition-summary ${summary.direction}`} aria-label="결과 변화 요약" data-testid="saved-build-check-transition-summary"><div className="history-check-transition-heading"><div><p className="eyebrow">변화 요약</p><strong>{headline}</strong></div><span>{directionLabel}</span></div><ul>{lines.map((line) => <li key={line}>{line}</li>)}</ul><p className="history-check-transition-action"><FiZap /> 다음 행동 · {nextAction}</p></section>;
+  return <section className={`history-check-transition-summary ${summary.direction}`} aria-label="결과 변화 요약" data-testid="saved-build-check-transition-summary"><div className="history-check-transition-heading"><div><p className="eyebrow">변화 요약</p><strong>{headline}</strong></div><span>{directionLabel}</span></div><ul>{lines.map((line) => <li key={line}>{line}</li>)}</ul><p className="history-check-transition-action"><FiZap /> 살펴볼 점 · {nextAction}</p></section>;
 }
 
 export function SavedBuildCheckTimeline({ history, partMap, accessoryMap, showDiff = true, canRecord = false, recording = false, onRecordCheck }: { history: NonNullable<SavedBuild["checkHistory"]>; partMap?: ReadonlyMap<string, Part>; accessoryMap?: ReadonlyMap<string, AccessoryItem>; showDiff?: boolean; canRecord?: boolean; recording?: boolean; onRecordCheck?: () => void }) {

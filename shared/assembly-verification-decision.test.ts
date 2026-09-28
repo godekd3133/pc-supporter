@@ -27,7 +27,7 @@ describe("assembly verification decision summary", () => {
   it("requests recheck when the latest thermal observation worsens", () => {
     const decision = assemblyVerificationDecisionSummaryFor(summaryFor("recheck"));
 
-    expect(decision).toMatchObject({ status: "recheck", nextAction: "같은 부하 조건으로 재측정하고 케이스·팬·전원 연결을 다시 확인하세요." });
+    expect(decision).toMatchObject({ status: "recheck", nextAction: "같은 조건에서 온도와 소음을 다시 측정하세요. 케이스 통풍과 팬·전원 연결도 확인하세요." });
     expect(decision.dimensions.find((dimension) => dimension.id === "cpu-temperature")).toMatchObject({ status: "recheck", summary: "최신 75°C · 기준 대비 +5°C" });
     expect(decision.dimensions.find((dimension) => dimension.id === "cpu-power")).toMatchObject({ status: "observational-higher" });
   });
@@ -49,7 +49,7 @@ describe("assembly verification decision summary", () => {
   it("keeps a one-run or missing-measurement comparison inconclusive", () => {
     const decision = assemblyVerificationDecisionSummaryFor(summaryFor("inconclusive"));
 
-    expect(decision).toMatchObject({ status: "inconclusive", nextAction: "비교 회차 또는 측정값이 부족합니다. 같은 조건의 실측 회차를 2개 이상 확보하세요." });
+    expect(decision).toMatchObject({ status: "inconclusive", nextAction: "비교할 기록이 부족합니다. 같은 조건에서 두 번 이상 측정하세요." });
     expect(decision.dimensions.find((dimension) => dimension.id === "cpu-temperature")).toMatchObject({ status: "unknown" });
   });
 });

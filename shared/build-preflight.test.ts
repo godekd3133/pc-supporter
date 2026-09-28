@@ -43,7 +43,7 @@ describe("build preflight", () => {
     expect(result.status).toBe("needs_selection");
     expect(result.missingRequired).toEqual(["cpu", "motherboard", "memory", "case", "psu", "cooler", "gpu"]);
     expect(result.requiredSelectedCount).toBe(0);
-    expect(result.issues.find((issue) => issue.label === "CPU")?.message).toBe("CPU를 선택해야 검사 준비가 완료됩니다.");
+    expect(result.issues.find((issue) => issue.label === "CPU")?.message).toBe("CPU를 먼저 선택해 주세요.");
   });
 
   it("does not require a separate cooler for a CPU with a boxed cooler", () => {
@@ -117,7 +117,7 @@ describe("build preflight", () => {
     ]), new Map([["adapter-1", accessory({ id: "adapter-1", category: "storage_accessory", name: "M.2 어댑터" })]]));
 
     expect(result.status).toBe("needs_data_review");
-    expect(result.issues).toContainEqual(expect.objectContaining({ kind: "catalog", label: "M.2 어댑터", message: "연결 대상 SSD missing-ssd가 현재 선택한 SSD 목록에 없습니다." }));
+    expect(result.issues).toContainEqual(expect.objectContaining({ kind: "catalog", label: "M.2 어댑터", message: "연결할 SSD를 현재 견적에서 찾지 못했어요." }));
   });
 
   it("surfaces a fan target hub that is not selected in the build", () => {
@@ -142,7 +142,7 @@ describe("build preflight", () => {
     ]));
 
     expect(result.status).toBe("needs_data_review");
-    expect(result.issues).toContainEqual(expect.objectContaining({ kind: "catalog", label: "쿨링팬", message: "연결 대상 팬 허브 missing-hub가 현재 선택한 팬 허브 목록에 없거나 대상 부품이 쿨링팬이 아닙니다." }));
-    expect(result.issues).toContainEqual(expect.objectContaining({ kind: "catalog", label: "RGB 연결 컨트롤러", message: "RGB 연결 컨트롤러 missing-rgb-hub가 현재 선택한 팬 허브 목록에 없습니다." }));
+    expect(result.issues).toContainEqual(expect.objectContaining({ kind: "catalog", label: "쿨링팬", message: "연결할 팬 허브를 현재 견적에서 찾지 못했어요." }));
+    expect(result.issues).toContainEqual(expect.objectContaining({ kind: "catalog", label: "RGB 연결 컨트롤러", message: "RGB 컨트롤러를 선택한 팬 허브 목록에서 찾지 못했어요." }));
   });
 });

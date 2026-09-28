@@ -19,6 +19,28 @@ function assertRouteHistoryManifest() {
 
 const executedRouteHistoryFlowIds = new Set();
 
+const restrictedPublicApiKeys = new Set([
+  "recommendationTrust", "recommendationTrustCounts", "recommendationTrustScore", "recommendationTrustReasons", "trustExcludedCount",
+  "decision", "decisionSummary", "benchmarkCoverage", "benchmarkStatus", "benchmarkExcludedCount", "benchmarkChanged", "benchmarkNeedsReview", "benchmarkEvidence", "benchmarkSnapshot", "benchmarkProvenance", "benchmarkSourceKind",
+  "benchmarkSourceCheck", "benchmarkSourceCheckNeedsReview", "benchmarkFreshness", "benchmarkBacked", "similarityEvidence",
+  "similarity", "performance", "gamingPerformanceAssessment", "gamingPerformanceEvidence", "cinebenchR23Single",
+  "cinebenchR23Multi", "gpu3dmarkTimeSpyScore", "gpu3dmarkPortRoyalScore", "averageFps", "onePercentLowFps", "targetFps",
+  "targetFPS", "fpsTarget", "targetFrameRate", "matchedRecordIds", "staleRecordIds", "belowTargetRecordIds", "sourceUrls", "gpuTarget", "performanceSummary", "analysis",
+  "analysisScore", "analysisScoreDelta", "analysisScoreLabel", "analysisConfidence", "overallScore", "scoreModelVersion",
+  "scoreBasis", "scoreLabel", "score", "scoreDelta", "candidateScore", "confidence", "similarityScore", "similarityLabel", "valueScore", "valueLabel", "valueEvidence", "valueScoreScale", "upgradeScore", "improvementPercent", "improvedDimensions", "riskScore",
+  "evidenceScore", "fixedAnchorScore", "fixedAnchorAnalysisScore", "cpuScore", "gpuScore", "weight", "gap", "catalogSpecSourceCheckNeedsReview"
+]);
+
+function findRestrictedPublicApiKeys(value, path = "$") {
+  if (Array.isArray(value)) return value.flatMap((item, index) => findRestrictedPublicApiKeys(item, `${path}[${index}]`));
+  if (!value || typeof value !== "object") return [];
+  return Object.entries(value).flatMap(([key, item]) => {
+    const currentPath = `${path}.${key}`;
+    const restricted = restrictedPublicApiKeys.has(key) || key.startsWith("recommendationTrust") ? [currentPath] : [];
+    return [...restricted, ...findRestrictedPublicApiKeys(item, currentPath)];
+  });
+}
+
 function signalProcessGroup(child, signal) {
   if (!child.pid) return;
   if (process.platform !== "win32") {
@@ -284,12 +306,21 @@ async function main() {
   const metaResponse = await fetch(`${baseUrl}/api/meta`).catch(() => undefined);
   const metaPayload = metaResponse?.ok ? await metaResponse.json() : undefined;
   assert(Array.isArray(metaPayload?.catalogSpecCoverage?.categories) && metaPayload.catalogSpecCoverage.categories.length === 9 && typeof metaPayload?.catalogSpecCoverage?.pcieSlotCoverage?.byRequiredWidth?.[4]?.missing === 'number', "카탈로그 스펙 coverage 메타데이터가 없습니다.");
+  assert(findRestrictedPublicApiKeys(metaPayload).length === 0, "공개 메타 API가 내부 벤치마크·추천 점수 자료를 노출합니다. keys=" + JSON.stringify(findRestrictedPublicApiKeys(metaPayload)));
   const catalogProbeResponse = await fetch(`${baseUrl}/api/parts?category=cpu&limit=1`).catch(() => undefined);
   const catalogProbePayload = catalogProbeResponse?.ok ? await catalogProbeResponse.json() : undefined;
   assert(catalogProbeResponse?.ok && Array.isArray(catalogProbePayload?.items) && catalogProbePayload.items.length > 0, "부품 목록 API proxy가 응답하지 않습니다.");
-  const benchmarkProbeResponse = await fetch(`${baseUrl}/api/parts?category=cpu&benchmarkStatus=incomplete&limit=1`).catch(() => undefined);
-  const benchmarkProbePayload = benchmarkProbeResponse?.ok ? await benchmarkProbeResponse.json() : undefined;
-  assert(benchmarkProbeResponse?.ok && benchmarkProbePayload?.benchmarkStatus === "incomplete" && typeof benchmarkProbePayload?.benchmarkExcludedCount === "number", "벤치마크 근거 필터 API가 응답하지 않습니다.");
+  assert(findRestrictedPublicApiKeys(catalogProbePayload).length === 0, "공개 부품 목록 API가 내부 추천·점수 근거를 노출합니다. keys=" + JSON.stringify(findRestrictedPublicApiKeys(catalogProbePayload)));
+  const [benchmarkCompleteResponse, benchmarkPartialResponse] = await Promise.all([
+    fetch(`${baseUrl}/api/parts?category=cpu&benchmarkStatus=complete&limit=20`).catch(() => undefined),
+    fetch(`${baseUrl}/api/parts?category=cpu&benchmarkStatus=partial&limit=20`).catch(() => undefined)
+  ]);
+  const [benchmarkCompletePayload, benchmarkPartialPayload] = await Promise.all([
+    benchmarkCompleteResponse?.ok ? benchmarkCompleteResponse.json() : undefined,
+    benchmarkPartialResponse?.ok ? benchmarkPartialResponse.json() : undefined
+  ]);
+  assert(benchmarkCompleteResponse?.ok && benchmarkPartialResponse?.ok && benchmarkCompletePayload?.total === benchmarkPartialPayload?.total && JSON.stringify(benchmarkCompletePayload?.items?.map((item) => item.id)) === JSON.stringify(benchmarkPartialPayload?.items?.map((item) => item.id)), "공개 카탈로그 API가 벤치마크 query로 내부 자료 완성도를 추론할 수 있습니다.");
+  assert(findRestrictedPublicApiKeys(benchmarkCompletePayload).length === 0 && findRestrictedPublicApiKeys(benchmarkPartialPayload).length === 0, "공개 카탈로그 benchmark query 응답에 내부 coverage 필드가 남았습니다.");
 
   const chromePath = await firstAvailable([
     process.env.CHROME_BIN,
@@ -339,38 +370,32 @@ async function main() {
     })()`);
     await waitForValue(client, `location.href.startsWith(${JSON.stringify(baseUrl)})`, "PC Supporter 페이지");
     await waitForHomeDemoButtons(client, "홈 화면");
-    await waitForValue(client, "document.querySelector('[data-testid=\"home-data-trust-open-incomplete\"]')?.getAttribute('href') === '/catalog?quality=incomplete'", "홈 데이터 신뢰도 스펙 부족 이동");
-    assert((await clickSelector(client, '[data-testid="home-data-trust-open-incomplete"]', 1)) === 1, "홈 데이터 신뢰도 스펙 부족 목록 링크를 클릭하지 못했습니다.");
-    await waitForValue(client, `location.href === ${JSON.stringify(`${baseUrl}/catalog?quality=incomplete`)}`, "홈 데이터 신뢰도 스펙 부족 목록 이동");
+    assert(await client.evaluate("!(/추천 점수 분포|벤치마크 점수|신뢰도 점수/.test(document.body?.innerText ?? ''))"), "홈 공개 화면에 내부 추천 점수나 벤치마크 근거가 노출됩니다.");
+    await client.send("Page.navigate", { url: `${baseUrl}/catalog?quality=incomplete` });
     await waitForValue(client, "document.querySelector('[data-testid=\"catalog-spec-filters\"]') !== null && new URLSearchParams(location.search).get('quality') === 'incomplete'", "홈 데이터 신뢰도 필터 적용");
 
     await client.send("Page.navigate", { url: `${baseUrl}/` });
-    await waitForHomeDemoButtons(client, "홈 데이터 신뢰도 성능 근거 링크 준비");
-    await waitForValue(client, "document.querySelector('[data-testid=\"home-data-trust-open-cpu-benchmark\"]')?.getAttribute('href') === '/catalog?category=cpu&benchmarkStatus=incomplete'", "홈 데이터 신뢰도 CPU 성능 근거 이동");
-    assert((await clickSelector(client, '[data-testid="home-data-trust-open-cpu-benchmark"]', 1)) === 1, "홈 데이터 신뢰도 CPU 성능 근거 링크를 클릭하지 못했습니다.");
-    await waitForValue(client, `location.href === ${JSON.stringify(`${baseUrl}/catalog?category=cpu&benchmarkStatus=incomplete`)}`, "홈 데이터 신뢰도 CPU 성능 근거 목록 이동");
-    await waitForValue(client, "document.querySelector('[aria-label=\"카탈로그 성능 근거 상태\"]')?.value === 'incomplete' && document.querySelector('[data-testid=\"catalog-benchmark-filter-summary\"]') !== null && new URLSearchParams(location.search).get('benchmarkStatus') === 'incomplete'", "홈 데이터 신뢰도 CPU 성능 근거 필터 적용");
+    await waitForHomeDemoButtons(client, "공개 홈 내부 추천 신호 노출 확인");
+    assert(await client.evaluate("document.querySelector('[data-testid=\"home-data-trust-open-cpu-benchmark\"]') === null && !/추천 점수 분포|벤치마크 점수|신뢰도 점수/.test(document.body?.innerText ?? '')"), "홈 공개 화면에 내부 추천 점수나 벤치마크 근거가 노출됩니다.");
 
     await client.send("Page.navigate", { url: `${baseUrl}/recommend` });
-    await waitForValue(client, "(document.body?.innerText ?? '').includes('조건으로 PC 견적 만들기')", "자동 구성 화면");
+    await waitForValue(client, "(document.body?.innerText ?? '').includes('PC 견적 만들기')", "자동 구성 화면");
     assert(await selectLabel(client, "구성 우선순위", "reliability"), "자동 구성의 안심 우선 기준을 선택하지 못했습니다.");
-    await waitForValue(client, "document.querySelector('[data-testid=\"generator-priority\"]')?.value === 'reliability' && document.querySelector('[data-testid=\"generator-priority-note\"]')?.textContent?.includes('안심 우선') === true", "자동 구성 안심 우선 기준 안내");
+    await waitForValue(client, "document.querySelector('[data-testid=\"generator-priority\"]')?.value === 'reliability' && new URLSearchParams(location.search).get('priority') === 'reliability'", "자동 구성 안심 우선 기준 적용");
     assert(await setTextValue(client, '[data-testid="generator-brief-input"]', "게이밍 200만원"), "부분 한 줄 요구사항 입력창을 찾지 못했습니다.");
-    assert(await clickText(client, "조건 분석"), "부분 한 줄 요구사항 해석 버튼을 찾지 못했습니다.");
+    assert(await clickText(client, "입력 내용 보기"), "부분 한 줄 요구사항 입력 내용 보기 버튼을 찾지 못했습니다.");
     await waitForValue(client, "document.querySelector('[data-testid=\"generator-brief-guidance\"]') !== null && document.querySelector('[data-testid=\"generator-guidance-gaming-resolution\"]') !== null", "한 줄 요구사항 보완 안내");
     assert(await clickSelector(client, '[data-testid="generator-guidance-gaming-resolution"]') === 1, "한 줄 요구사항 보완 칩을 누르지 못했습니다.");
     await waitForValue(client, "document.querySelector('[data-testid=\"generator-brief-input\"]')?.value?.includes('QHD') === true && document.querySelector('[data-testid=\"generator-brief-preview\"]')?.textContent?.includes('QHD') === true", "한 줄 요구사항 보완 재해석");
     assert(await setTextValue(client, '[data-testid="generator-brief-input"]', "QHD 게이밍 220만원, RAM 32GB, SSD 2TB, 144Hz"), "한 줄 요구사항 입력창을 찾지 못했습니다.");
-    assert(await clickText(client, "조건 분석"), "한 줄 요구사항 해석 버튼을 찾지 못했습니다.");
-    await waitForValue(client, "document.querySelector('[data-testid=\"generator-brief-preview\"]') !== null && (document.body?.innerText ?? '').includes('해석 미리보기') && (document.body?.innerText ?? '').includes('QHD')", "한 줄 요구사항 해석 미리보기");
-    assert(await clickText(client, "해석한 조건을 폼에 적용"), "해석한 조건 적용 버튼을 찾지 못했습니다.");
-    await waitForValue(client, "document.querySelector('[data-testid=\"generator-brief-preview\"]')?.textContent?.includes('폼에 적용됨') === true && document.querySelector('.generator-form input[type=\"number\"]')?.value === '2200000' && document.querySelectorAll('.generator-form select')[0]?.value === 'gaming'", "한 줄 요구사항 폼 적용");
+    assert(await clickText(client, "입력 내용 보기"), "한 줄 요구사항 입력 내용 보기 버튼을 찾지 못했습니다.");
+    await waitForValue(client, "document.querySelector('[data-testid=\"generator-brief-preview\"]') !== null && document.querySelector('.generator-brief-matches') !== null && (document.body?.innerText ?? '').includes('QHD')", "한 줄 요구사항 입력 내용 미리보기");
+    assert(await clickText(client, "견적 설정에 반영"), "입력한 조건 적용 버튼을 찾지 못했습니다.");
+    await waitForValue(client, "document.querySelector('[data-testid=\"generator-brief-preview\"]')?.textContent?.includes('견적 설정에 반영됨') === true && document.querySelector('.generator-form input[type=\"number\"]')?.value === '2200000' && document.querySelectorAll('.generator-form select')[0]?.value === 'gaming'", "한 줄 요구사항 견적 설정 반영");
     assert(await clickText(client, "예산 구간 3안 비교"), "예산 구간 비교 버튼을 찾지 못했습니다.");
-    await waitForValue(client, "document.querySelector('[data-testid=\"generator-budget-tradeoff\"]') !== null", "예산 구간 비교 결과 패널");
+    await waitForValue(client, "document.querySelector('.generator-budget-ladder') !== null", "예산 구간 비교 결과 패널");
     await waitForValue(client, "document.querySelector('[data-testid=\"generator-budget-comparison-summary\"]') !== null", "예산 구간 비교 핵심 요약");
-    assert(await client.evaluate("(() => { const node = document.querySelector('[data-testid=\"generator-budget-comparison-summary\"]'); const text = node?.textContent ?? ''; return text.includes('구성') && text.includes('실제 합계') && text.includes('카탈로그 분석') && text.includes('부품 변경'); })()"), "예산 구간 비교 핵심 요약이 표시되지 않았습니다.");
-    await waitForValue(client, "document.querySelector('[data-testid=\"generator-budget-tradeoff\"]')?.textContent?.includes('비교 결과') === true", "예산 구간 비교 결과 내용");
-    assert(await client.evaluate("(() => { const node = document.querySelector('[data-testid=\"generator-budget-tradeoff\"]'); const text = node?.textContent ?? ''; return text.includes('남은 위험') && text.includes('실제 합계') && text.includes('분석'); })()"), "예산 구간 비용·위험·분석 tradeoff가 표시되지 않았습니다.");
+    assert(await client.evaluate("(() => { const summary = document.querySelector('[data-testid=\"generator-budget-comparison-summary\"]')?.textContent ?? ''; const ladder = document.querySelector('.generator-budget-ladder')?.textContent ?? ''; return summary.includes('예상 금액') && summary.includes('부품 변경') && ladder.includes('예산 증액으로 바뀐 것') && ladder.includes('실제 합계') && ladder.includes('변경 부품') && !/카탈로그 분석|신뢰도 점수|추천 점수/.test(ladder); })()"), "예산 구간의 예상 금액·구성 변화 또는 공개 신호 경계가 올바르지 않습니다.");
     const generatorRouteHistoryProbe = await client.evaluate("(async () => { const profileSelect = [...document.querySelectorAll('label')].find((label) => (label.textContent ?? '').includes('사용 목적'))?.querySelector('select'); const budgetInput = document.querySelector('.generator-form input[type=\"number\"]'); if (!(profileSelect instanceof HTMLSelectElement) || !(budgetInput instanceof HTMLInputElement)) return { stage: 'missing-controls' }; const before = { url: location.href, profile: profileSelect.value, budget: budgetInput.value }; history.pushState({}, '', '/recommend?profile=office&priority=budget&resolution=1080p&refresh=60&ram=16&budget=800000&includeGpu=false&ssd=500&hdd=0&hddCapacity=4000&listingPolicy=retail_only'); window.dispatchEvent(new PopStateEvent('popstate')); for (let index = 0; index < 60 && !(profileSelect.value === 'office' && budgetInput.value === '800000'); index += 1) await new Promise((resolve) => setTimeout(resolve, 25)); const pushed = { profile: profileSelect.value, budget: budgetInput.value, url: location.href }; history.back(); for (let index = 0; index < 60 && !(profileSelect.value === before.profile && budgetInput.value === before.budget); index += 1) await new Promise((resolve) => setTimeout(resolve, 25)); return { stage: 'checked', before, pushed, restored: { profile: profileSelect.value, budget: budgetInput.value, url: location.href } }; })()" );
     assert(generatorRouteHistoryProbe?.stage === 'checked' && generatorRouteHistoryProbe.pushed.profile === 'office' && generatorRouteHistoryProbe.pushed.budget === '800000' && generatorRouteHistoryProbe.restored.profile === generatorRouteHistoryProbe.before.profile && generatorRouteHistoryProbe.restored.budget === generatorRouteHistoryProbe.before.budget, "자동 구성 route history가 profile·예산을 복원하지 못했습니다. probe=" + JSON.stringify(generatorRouteHistoryProbe));
     const generatorPresetStorageProbe = await client.evaluate(`(async () => { const key = "pc-supporter-generator-presets"; const original = localStorage.getItem(key); const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)); const dispatch = (value) => window.dispatchEvent(new StorageEvent("storage", { key, newValue: value, storageArea: localStorage })); const preset = { id: "generator-storage-probe", name: "cross-tab generator preset", profile: "general", priority: "balanced", gamingResolution: "1440p", gamingRefreshRate: 144, memoryCapacityGb: 32, budgetWon: 1500000, includeGpu: true, storageCapacityGb: 1000, hddCount: 0, hddCapacityGb: 4000, listingPolicy: "retail_only", createdAt: "2026-09-10T00:00:00.000Z", updatedAt: "2026-09-10T00:00:00.000Z" }; try { const serialized = JSON.stringify({ schemaVersion: 1, items: [preset] }); localStorage.setItem(key, serialized); dispatch(serialized); for (let index = 0; index < 80 && !(document.body?.innerText ?? "").includes("cross-tab generator preset"); index += 1) await wait(25); const added = (document.body?.innerText ?? "").includes("cross-tab generator preset"); localStorage.removeItem(key); dispatch(null); for (let index = 0; index < 80 && (document.body?.innerText ?? "").includes("cross-tab generator preset"); index += 1) await wait(25); const removed = !(document.body?.innerText ?? "").includes("cross-tab generator preset"); return { stage: "checked", added, removed, path: location.pathname }; } finally { if (original === null) localStorage.removeItem(key); else localStorage.setItem(key, original); dispatch(original); await wait(100); } })()`);
@@ -381,31 +406,31 @@ async function main() {
 
     // 온보딩 위자드 → /recommend autorun 핸드오프 — 선택한 게임·성능·예산이 URL로 전달되고 실제 견적이 생성돼야 한다.
     await client.send("Page.navigate", { url: `${baseUrl}/start` });
-    await waitForValue(client, "(document.body?.innerText ?? '').includes('어떤 PC가 필요하세요?')", "온보딩 intent 화면");
-    assert(await clickText(client, "새로운 견적을 맞추고 싶어요"), "온보딩 intent 선택을 클릭하지 못했습니다.");
+    await waitForValue(client, "(document.body?.innerText ?? '').includes('어떤 PC 견적을 볼까요?')", "온보딩 intent 화면");
+    assert(await clickText(client, "새 PC 견적 보기"), "온보딩 새 견적 intent 선택을 클릭하지 못했습니다.");
     assert(await clickText(client, "새 견적 시작하기"), "온보딩 intent CTA를 클릭하지 못했습니다.");
-    await waitForValue(client, "(document.body?.innerText ?? '').includes('새 견적은 어떤 방식으로 맞춰볼까요?')", "온보딩 mode 화면");
-    assert(await clickText(client, "특정 작업이나 게임을 할 거예요"), "온보딩 task 방식을 선택하지 못했습니다.");
-    assert(await clickText(client, "다음"), "온보딩 mode CTA를 클릭하지 못했습니다.");
-    await waitForValue(client, "(document.body?.innerText ?? '').includes('무엇을 주로 할까요?')", "온보딩 usecase 화면");
+    await waitForValue(client, "(document.body?.innerText ?? '').includes('어떤 기준으로 부품을 고를까요?')", "온보딩 mode 화면");
+    assert(await clickText(client, "게임·작업을 기준으로 고르기"), "온보딩 task 방식을 선택하지 못했습니다.");
+    assert(await clickText(client, "이 기준으로 계속"), "온보딩 mode CTA를 클릭하지 못했습니다.");
+    await waitForValue(client, "(document.body?.innerText ?? '').includes('어떤 용도로 쓸 PC인가요?')", "온보딩 usecase 화면");
     assert(await clickText(client, "게임"), "온보딩 게임 용도를 선택하지 못했습니다.");
     assert(await clickText(client, "다음"), "온보딩 usecase CTA를 클릭하지 못했습니다.");
-    await waitForValue(client, "(document.body?.innerText ?? '').includes('어떤 게임을 할 건가요?') && document.querySelector('input[aria-label=\"게임 이름 검색\"]') !== null", "온보딩 games 화면");
+    await waitForValue(client, "(document.body?.innerText ?? '').includes('주로 할 게임을 골라주세요') && document.querySelector('input[aria-label=\"게임 이름 검색\"]') !== null", "온보딩 games 화면");
     assert(await setInputValue(client, 'input[aria-label="게임 이름 검색"]', "cyber"), "온보딩 게임 검색창을 찾지 못했습니다.");
     assert(await clickText(client, "사이버펑크 2077"), "온보딩에서 사이버펑크 2077을 선택하지 못했습니다.");
     await waitForValue(client, "(document.body?.innerText ?? '').includes('1개 선택')", "온보딩 게임 선택 개수 표시");
     assert(await clickText(client, "다음"), "온보딩 games CTA를 클릭하지 못했습니다.");
-    await waitForValue(client, "(document.body?.innerText ?? '').includes('원하는 성능을 골라주세요')", "온보딩 performance 화면");
+    await waitForValue(client, "(document.body?.innerText ?? '').includes('게임 성능 목표를 정해주세요')", "온보딩 performance 화면");
     assert(await clickText(client, "4K"), "온보딩 4K 해상도를 선택하지 못했습니다.");
-    assert(await clickText(client, "144 FPS"), "온보딩 144 FPS를 선택하지 못했습니다.");
+    assert(await clickText(client, "144Hz"), "온보딩 144Hz 주사율을 선택하지 못했습니다.");
     assert(await clickText(client, "다음"), "온보딩 performance CTA를 클릭하지 못했습니다.");
     await waitForValue(client, "(document.body?.innerText ?? '').includes('게임 옵션도 정해주세요')", "온보딩 graphics 화면");
     assert(await clickText(client, "다음 · 예산 정하기"), "온보딩 graphics CTA를 클릭하지 못했습니다.");
-    await waitForValue(client, "(document.body?.innerText ?? '').includes('예산은 어디까지 생각하세요?')", "온보딩 budget 화면");
+    await waitForValue(client, "(document.body?.innerText ?? '').includes('예산을 정해주세요')", "온보딩 budget 화면");
     assert(await clickText(client, "200만원"), "온보딩 200만원 빠른 예산을 선택하지 못했습니다.");
-    assert(await clickText(client, "다음 · 조건 확인"), "온보딩 budget CTA를 클릭하지 못했습니다.");
-    await waitForValue(client, "(document.body?.innerText ?? '').includes('이 조건으로 맞춰볼까요?')", "온보딩 summary 화면");
-    assert(await clickText(client, "이 조건으로 견적 생성하기"), "온보딩 견적 생성 CTA를 클릭하지 못했습니다.");
+    assert(await clickText(client, "예상 구성 확인"), "온보딩 budget CTA를 클릭하지 못했습니다.");
+    await waitForValue(client, "(document.body?.innerText ?? '').includes('견적 내용을 확인하세요')", "온보딩 summary 화면");
+    assert(await clickText(client, "견적 만들기"), "온보딩 견적 생성 CTA를 클릭하지 못했습니다.");
     await waitForValue(client, "location.pathname === '/recommend' && new URLSearchParams(location.search).get('autorun') === '1' && new URLSearchParams(location.search).get('profile') === 'gaming' && new URLSearchParams(location.search).get('resolution') === '4k' && (new URLSearchParams(location.search).get('games') ?? '').includes('cyberpunk') && new URLSearchParams(location.search).get('budget') === '2000000'", "온보딩 → 자동 구성 URL 핸드오프");
     await waitForValue(client, "document.querySelectorAll('.generator-result .generator-line').length >= 6 && [...document.querySelectorAll('.generator-result .generator-line')].every((line) => (line.querySelector('strong')?.textContent ?? '').trim().length > 0)", "자동 구성 견적의 부품·가격 라인");
     assert(await client.evaluate("document.querySelector('.generator-result .generator-rationale, .generator-result .generator-analysis, .generator-result .generator-selection-reasons, .generator-result .generator-gaming-evidence, .generator-result .generator-gpu-target') === null"), "자동 구성 견적에 판정 근거 패널이 노출되고 있습니다.");
@@ -760,7 +785,7 @@ async function main() {
     assert(Array.isArray(refreshHistory?.items), "카탈로그 스펙 보강 실행 이력 API 응답이 올바르지 않습니다.");
     const refreshProgress = await client.evaluate("fetch('/api/admin/catalog-spec/refresh-progress').then((response) => response.json())");
     assert(typeof refreshProgress?.runCount === 'number' && typeof refreshProgress?.coverageRunCount === 'number' && typeof refreshProgress?.pcieNewlyCompleteCount === 'number' && typeof refreshProgress?.pcieResolvedFieldCount === 'number' && Array.isArray(refreshProgress?.pcieFieldProgress) && Array.isArray(refreshProgress?.points) && Array.isArray(refreshProgress?.fieldProgress) && Array.isArray(refreshProgress?.categoryProgress), "카탈로그 스펙 보강 품질 추이 API 응답이 올바르지 않습니다.");
-    await waitForValue(client, "document.querySelector('[data-testid=\"catalog-spec-refresh-progress\"]') !== null && document.querySelector('[data-testid=\"catalog-spec-refresh-pcie-progress\"]') !== null && document.querySelector('[data-testid=\"catalog-spec-refresh-field-progress\"]') !== null && document.querySelector('[data-testid=\"catalog-spec-refresh-category-progress\"]') !== null && document.querySelector('[data-testid=\"catalog-spec-refresh-category-coverage\"]') !== null && (document.body?.innerText ?? '').includes('보강 품질 추이') && (document.body?.innerText ?? '').includes('완성 전환 누적') && (document.body?.innerText ?? '').includes('PCIe EVIDENCE LANE')", "카탈로그 스펙 보강 품질 추이");
+    await waitForValue(client, "document.querySelector('[data-testid=\"catalog-spec-refresh-progress\"]') !== null && document.querySelector('[data-testid=\"catalog-spec-refresh-pcie-progress\"]') !== null && document.querySelector('[data-testid=\"catalog-spec-refresh-field-progress\"]') !== null && document.querySelector('[data-testid=\"catalog-spec-refresh-category-progress\"]') !== null && document.querySelector('[data-testid=\"catalog-spec-refresh-category-coverage\"]') !== null && (document.body?.innerText ?? '').includes('보강 품질 추이') && (document.body?.innerText ?? '').includes('완성 전환 누적') && (document.body?.innerText ?? '').includes('PCIe 슬롯 보강 추이')", "카탈로그 스펙 보강 품질 추이");
     const reviewPackage = await client.evaluate("fetch('/api/admin/catalog-spec/review-package?category=gpu&limit=2').then((response) => response.json())");
     assert(reviewPackage?.kind === 'catalog-spec-review-package' && reviewPackage?.schemaVersion === 1 && reviewPackage?.category === 'gpu' && typeof reviewPackage?.queueFingerprint === 'string' && reviewPackage.queueFingerprint.length > 0 && reviewPackage?.excludedNonCoreCount >= 0 && Array.isArray(reviewPackage?.items), "카탈로그 스펙 보강 작업 패키지 API 응답이 올바르지 않습니다.");
     const pcieReviewPackage = await client.evaluate("fetch('/api/admin/catalog-spec/review-package?category=motherboard&evidence=pcie&limit=2').then((response) => response.json())");
@@ -789,7 +814,7 @@ async function main() {
     assert(duplicateBatch?.status === 400 && duplicateBatch?.body?.code === 'PART_REFRESH_BATCH_DUPLICATE_ID', "스펙 보강 일괄 재확인 중복 ID 차단이 동작하지 않습니다.");
     await waitForValue(client, "document.getElementById('admin-catalog-spec-override') !== null", "제조사 정보 수동 스펙 보강 anchor");
     await client.evaluate("(() => { const node = document.getElementById('admin-catalog-spec-override'); node?.scrollIntoView({ block: 'center', behavior: 'auto' }); node?.focus({ preventScroll: true }); return Boolean(node); })()");
-    await waitForValue(client, "document.querySelector('[data-testid=\"admin-catalog-spec-override\"]')?.textContent?.includes('제조사 정보 수동 스펙 보강') === true", "수동 카탈로그 스펙 override 패널");
+    await waitForValue(client, "document.querySelector('[data-testid=\"admin-catalog-spec-override\"]')?.textContent?.includes('제조사 사양 직접 보완') === true", "수동 카탈로그 사양 보완 패널");
     await waitForValue(client, "document.querySelector('[data-testid=\"admin-catalog-spec-override-list\"]') !== null && document.querySelector('[aria-label=\"수동 스펙 보강 부품 검색\"]') !== null", "수동 스펙 override 목록·검색");
     const adminSearchLatestResponseProbe = await client.evaluate("(async () => { const input = document.querySelector('[aria-label=\"수동 스펙 보강 부품 검색\"]'); const category = document.querySelector('[aria-label=\"수동 스펙 보강 부품 범주\"]'); if (!(input instanceof HTMLInputElement) || !(category instanceof HTMLSelectElement)) return { stage: 'missing-controls' }; const originalFetch = window.fetch; window.fetch = async (request, init) => { const url = typeof request === 'string' ? request : request.url; const requestUrl = new URL(url, location.href); if (requestUrl.pathname === '/api/parts' && requestUrl.searchParams.get('category') === 'gpu') { await new Promise((resolve) => setTimeout(resolve, 350)); return new Response(JSON.stringify({ items: [{ id: 'stale-gpu-result', name: 'Stale GPU result', category: 'gpu', dataQuality: 'seed', missingFields: ['powerW'], specs: {} }] }), { status: 200, headers: { 'Content-Type': 'application/json' } }); } return originalFetch(request, init); }; try { const inputSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set; inputSetter?.call(input, 'stale-gpu'); input.dispatchEvent(new Event('input', { bubbles: true })); await new Promise((resolve) => setTimeout(resolve, 25)); const form = input.closest('form'); if (!(form instanceof HTMLFormElement)) return { stage: 'missing-form' }; form.requestSubmit(); await new Promise((resolve) => setTimeout(resolve, 25)); const selectSetter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set; selectSetter?.call(category, 'case'); category.dispatchEvent(new Event('change', { bubbles: true })); await new Promise((resolve) => setTimeout(resolve, 450)); return { stage: 'checked', category: category.value, results: [...document.querySelectorAll('.catalog-spec-override-search-results button')].map((node) => node.textContent ?? '') }; } finally { window.fetch = originalFetch; } })()");
     assert(adminSearchLatestResponseProbe?.stage === 'checked' && adminSearchLatestResponseProbe.category === 'case' && adminSearchLatestResponseProbe.results.length === 0, "관리자 스펙 검색의 이전 범주 응답이 최신 범주 화면을 덮었습니다. probe=" + JSON.stringify(adminSearchLatestResponseProbe));
@@ -826,9 +851,9 @@ async function main() {
       return { present: false, verified: payload ? (payload.incompleteExcludedCount ?? 0) === 0 : false, incompleteExcludedCount: payload?.incompleteExcludedCount, status: response.status };
     })()`);
     if (incompleteNoticeProbe?.present === true) {
-      await waitForValue(client, "document.querySelector('[data-testid=\"catalog-incomplete-notice\"]') !== null && document.querySelectorAll('[data-testid=\"catalog-open-missing-field\"]').length > 0 && (document.body?.innerText ?? '').includes('정보가 부족한 부품')", "호환 후보 데이터 부족 안내");
+      await waitForValue(client, "document.querySelector('[data-testid=\"catalog-incomplete-notice\"]') !== null && document.querySelectorAll('[data-testid=\"catalog-open-missing-field\"]').length > 0 && (document.body?.innerText ?? '').includes('필요한 사양이 없는 부품')", "호환 후보 데이터 부족 안내");
       assert((await clickSelector(client, '[data-testid="catalog-open-incomplete"]', 1)) === 1, "불완전 데이터 목록 링크를 클릭하지 못했습니다.");
-      await waitForValue(client, "location.pathname === '/catalog' && new URLSearchParams(location.search).get('quality') === 'incomplete' && document.querySelector('[aria-label=\"카탈로그 데이터 상태\"]')?.value === 'incomplete'", "불완전 데이터 카탈로그 목록");
+      await waitForValue(client, "location.pathname === '/catalog' && new URLSearchParams(location.search).get('quality') === 'incomplete' && document.querySelector('.catalog-part-list') !== null", "불완전 데이터 카탈로그 목록");
     } else {
       assert(incompleteNoticeProbe?.verified === true, "호환 후보 데이터 부족 안내가 없는데 안전 범위에서 제외된 미완료 후보가 남아 있습니다. probe=" + JSON.stringify(incompleteNoticeProbe));
     }
@@ -842,7 +867,7 @@ async function main() {
     await waitForValue(client, "document.querySelector('button.button-primary.full-width')?.disabled === false || (document.body?.innerText ?? '').includes('검사할 준비가 되었습니다') || (document.body?.innerText ?? '').includes('모든 필수 부품을 선택했습니다')", "검사 준비 상태");
     await client.evaluate("(() => { document.querySelectorAll('.mobile-editor-advanced').forEach((node) => { if (node instanceof HTMLDetailsElement) node.open = true; }); return true; })()");
     await waitForValue(client, "document.querySelector('[data-testid=\"build-price-summary\"]') !== null", "편집기 구매 금액 요약");
-    assert(await client.evaluate("(() => { const node = document.querySelector('[data-testid=\"build-price-summary\"]'); const text = node?.textContent ?? ''; return text.includes('핵심 부품') && text.includes('주변 부품') && (text.includes('가격 확인 완료') || text.includes('가격 일부 확인')); })()"), "편집기 구매 금액 요약에 가격 상태·구성별 소계가 표시되지 않았습니다.");
+    assert(await client.evaluate("(() => { const node = document.querySelector('[data-testid=\"build-price-summary\"]'); const text = node?.textContent ?? ''; return text.includes('핵심 부품') && text.includes('주변 부품') && (text.includes('가격 합산 가능') || text.includes('일부 가격 미등록')); })()"), "편집기 구매 금액 요약에 가격 상태·구성별 소계가 표시되지 않았습니다.");
     const unknownMotherboardPayload = await fetch(`${baseUrl}/api/parts?category=motherboard&priceStatus=unknown&limit=1`).then((response) => response.ok ? response.json() : null).catch(() => null);
     const unknownMotherboard = unknownMotherboardPayload?.items?.[0];
     let unknownPriceHasSourceRefresh = false;
@@ -852,16 +877,16 @@ async function main() {
     await client.send("Page.navigate", { url: `${baseUrl}/build?priceSummaryPartial=1` });
     await client.evaluate("(() => { document.querySelectorAll('.mobile-editor-advanced').forEach((node) => { if (node instanceof HTMLDetailsElement) node.open = true; }); return true; })()");
     await waitForValue(client, "document.querySelector('[data-testid=\"build-price-summary\"]') !== null", "부분 가격 요약 패널");
-    await waitForValue(client, "document.querySelector('[data-testid=\"build-price-summary\"]')?.textContent?.includes('가격 일부 확인') === true", "부분 가격 상태");
+    await waitForValue(client, "document.querySelector('[data-testid=\"build-price-summary\"]')?.textContent?.includes('일부 가격 미등록') === true", "부분 가격 상태");
     await waitForValue(client, `document.querySelector('[data-testid="build-price-summary-unknown-items"]')?.textContent?.includes(${JSON.stringify(unknownMotherboard.name)}) === true`, "부분 가격 미확인 항목");
     unknownPriceHasSourceRefresh = unknownMotherboard.source === "danawa" && Boolean(unknownMotherboard.danawaUrl);
-    assert(await client.evaluate(`(() => { const node = document.querySelector('[data-testid="build-price-summary-unknown-items"]'); const summary = document.querySelector('[data-testid="build-price-summary"]'); const text = node?.textContent ?? ''; return text.includes('가격 확인이 필요한 항목') && (${JSON.stringify(unknownPriceHasSourceRefresh)} === false || text.includes('정보 다시 확인')) && (summary?.textContent ?? '').includes('예산 결과 보류'); })()`), "가격 미확인 항목 목록과 source 조건에 맞는 원문 재확인·예산 보류 상태가 표시되지 않았습니다.");
-    assert(await clickText(client, "호환성 검사하기"), "부분 가격 견적 호환성 검사 버튼을 찾지 못했습니다.");
-    await waitForValue(client, "(document.body?.innerText ?? '').includes('검사 결과 상세') && document.querySelector('[data-testid=\"data-health-panel\"]') !== null", "부분 가격 견적 검사 결과");
+    assert(await client.evaluate(`(() => { const node = document.querySelector('[data-testid="build-price-summary-unknown-items"]'); const summary = document.querySelector('[data-testid="build-price-summary"]'); const text = node?.textContent ?? ''; return text.includes('가격 정보가 없는 부품') && (${JSON.stringify(unknownPriceHasSourceRefresh)} === false || text.includes('상품 페이지')) && (summary?.textContent ?? '').includes('예산과 비교할 가격이 부족해요'); })()`), "가격 미확인 항목 목록과 구매 전 확인 안내가 표시되지 않았습니다.");
+    assert(await clickText(client, "호환 확인하기"), "부분 가격 견적 호환성 검사 버튼을 찾지 못했습니다.");
+    await waitForValue(client, "document.querySelector('.result-page') !== null && document.querySelector('[data-testid=\"data-health-panel\"]') !== null", "부분 가격 견적 검사 결과");
     await openResultDetails(client);
     await waitForValue(client, "document.querySelector('[data-testid=\"purchase-list-panel\"]') !== null", "부분 가격 견적 구매 목록");
     await waitForValue(client, "document.querySelector('[data-testid=\"purchase-list-action-center\"]') !== null && document.querySelectorAll('[data-testid^=\"purchase-list-action-\"]').length > 0", "구매 다음 행동 센터");
-    await waitForValue(client, "document.querySelector('[data-testid=\"purchase-decision-gate\"]')?.textContent?.includes('구매 목록 단계') === true", "최종 구매 판단 구매 단계 요약");
+    await waitForValue(client, "document.querySelector('[data-testid=\"purchase-decision-gate\"]')?.textContent?.includes('구매 전 확인 목록') === true", "최종 구매 판단 구매 단계 요약");
     assert((await clickSelector(client, '[data-testid="purchase-decision-gate-purchase-action"]', 1)) === 1, "최종 구매 판단의 구매 목록 이동 버튼을 클릭하지 못했습니다.");
     await waitForValue(client, "document.activeElement?.getAttribute('data-testid') === 'purchase-list-panel'", "최종 구매 판단 구매 목록 이동");
     await waitForValue(client, "document.querySelector('[data-testid=\"purchase-list-status-filter-planned\"]')?.classList.contains('selected') === true", "최종 구매 판단 구매 단계 필터 이동");
@@ -916,20 +941,20 @@ async function main() {
     const hasPreflightRefreshTarget = await client.evaluate("document.querySelector('.build-preflight-refresh') instanceof HTMLButtonElement");
     if (hasPreflightRefreshTarget === true) {
     await client.evaluate("document.querySelector('.build-preflight-refresh')?.classList.add('data-refresh-button')");
-    const catalogRefreshLatestCancelProbe = await client.evaluate("(async () => { const originalFetch = window.fetch.bind(window); const response = (payload) => new Response(JSON.stringify(payload), { status: 200, headers: { 'Content-Type': 'application/json' } }); let intercepted = 0; window.fetch = async (input, init) => { const url = typeof input === 'string' ? input : input.url; const requestUrl = new URL(url, location.href); const method = String(init?.method ?? 'GET').toUpperCase(); const match = requestUrl.pathname.match(/^\\/api\\/(parts|accessories)\\/([^/]+)\\/refresh$/); if (method === 'POST' && match) { intercepted += 1; const detailPath = requestUrl.pathname.replace(/\\/refresh$/, ''); const detail = await originalFetch(detailPath, { method: 'GET' }).then((result) => result.json()); await new Promise((resolve) => setTimeout(resolve, 900)); const refreshedAt = new Date().toISOString(); const next = { ...detail, updatedAt: refreshedAt }; return match[1] === 'parts' ? response({ part: next, previousDataQuality: detail.dataQuality, previousMissingFields: detail.missingFields ?? [], changedFields: ['stale-refresh-probe'], valueDiffs: [{ field: 'stale-refresh-probe', previous: '기존', next: '지연 응답' }], refreshedAt }) : response({ item: next, previousDataQuality: detail.dataQuality, previousMissingFields: detail.missingFields ?? [], changedFields: ['stale-refresh-probe'], valueDiffs: [{ field: 'stale-refresh-probe', previous: '기존', next: '지연 응답' }], refreshedAt }); } return originalFetch(input, init); }; try { let refreshButton = document.querySelector('.data-refresh-button'); if (!(refreshButton instanceof HTMLButtonElement)) { document.querySelector('.data-health-toggle')?.click(); for (let index = 0; index < 40 && !(document.querySelector('.data-refresh-button') instanceof HTMLButtonElement); index += 1) await new Promise((resolve) => setTimeout(resolve, 25)); refreshButton = document.querySelector('.data-refresh-button'); } if (!(refreshButton instanceof HTMLButtonElement)) return { stage: 'missing-refresh-button', intercepted }; refreshButton.click(); await new Promise((resolve) => setTimeout(resolve, 100)); history.pushState({}, '', '/build'); window.dispatchEvent(new PopStateEvent('popstate')); for (let index = 0; index < 80 && location.pathname !== '/build'; index += 1) await new Promise((resolve) => setTimeout(resolve, 25)); for (let index = 0; index < 160 && ![...document.querySelectorAll('button')].some((button) => !button.disabled && (button.textContent ?? '').includes('호환성 검사하기')); index += 1) await new Promise((resolve) => setTimeout(resolve, 25)); const checkButton = [...document.querySelectorAll('button')].find((button) => !button.disabled && (button.textContent ?? '').includes('호환성 검사하기')); if (!(checkButton instanceof HTMLButtonElement)) return { stage: 'missing-check-button', intercepted, path: location.pathname }; checkButton.click(); for (let index = 0; index < 480 && location.pathname !== '/result'; index += 1) await new Promise((resolve) => setTimeout(resolve, 25)); await new Promise((resolve) => setTimeout(resolve, 1100)); const body = document.body?.innerText ?? ''; return { stage: 'checked', intercepted, path: location.pathname, staleReport: body.includes('stale-refresh-probe'), report: document.querySelector('[data-testid=\"purchase-list-catalog-refresh-report\"]')?.textContent ?? '', progress: Boolean(document.querySelector('[data-testid=\"catalog-refresh-progress\"]')) }; } finally { window.fetch = originalFetch; } })()");
+    const catalogRefreshLatestCancelProbe = await client.evaluate("(async () => { const originalFetch = window.fetch.bind(window); const response = (payload) => new Response(JSON.stringify(payload), { status: 200, headers: { 'Content-Type': 'application/json' } }); let intercepted = 0; window.fetch = async (input, init) => { const url = typeof input === 'string' ? input : input.url; const requestUrl = new URL(url, location.href); const method = String(init?.method ?? 'GET').toUpperCase(); const match = requestUrl.pathname.match(/^\\/api\\/(parts|accessories)\\/([^/]+)\\/refresh$/); if (method === 'POST' && match) { intercepted += 1; const detailPath = requestUrl.pathname.replace(/\\/refresh$/, ''); const detail = await originalFetch(detailPath, { method: 'GET' }).then((result) => result.json()); await new Promise((resolve) => setTimeout(resolve, 900)); const refreshedAt = new Date().toISOString(); const next = { ...detail, updatedAt: refreshedAt }; return match[1] === 'parts' ? response({ part: next, previousDataQuality: detail.dataQuality, previousMissingFields: detail.missingFields ?? [], changedFields: ['stale-refresh-probe'], valueDiffs: [{ field: 'stale-refresh-probe', previous: '기존', next: '지연 응답' }], refreshedAt }) : response({ item: next, previousDataQuality: detail.dataQuality, previousMissingFields: detail.missingFields ?? [], changedFields: ['stale-refresh-probe'], valueDiffs: [{ field: 'stale-refresh-probe', previous: '기존', next: '지연 응답' }], refreshedAt }); } return originalFetch(input, init); }; try { let refreshButton = document.querySelector('.data-refresh-button'); if (!(refreshButton instanceof HTMLButtonElement)) { document.querySelector('.data-health-toggle')?.click(); for (let index = 0; index < 40 && !(document.querySelector('.data-refresh-button') instanceof HTMLButtonElement); index += 1) await new Promise((resolve) => setTimeout(resolve, 25)); refreshButton = document.querySelector('.data-refresh-button'); } if (!(refreshButton instanceof HTMLButtonElement)) return { stage: 'missing-refresh-button', intercepted }; refreshButton.click(); await new Promise((resolve) => setTimeout(resolve, 100)); history.pushState({}, '', '/build'); window.dispatchEvent(new PopStateEvent('popstate')); for (let index = 0; index < 80 && location.pathname !== '/build'; index += 1) await new Promise((resolve) => setTimeout(resolve, 25)); for (let index = 0; index < 160 && ![...document.querySelectorAll('button')].some((button) => !button.disabled && (button.textContent ?? '').includes('호환 확인하기')); index += 1) await new Promise((resolve) => setTimeout(resolve, 25)); const checkButton = [...document.querySelectorAll('button')].find((button) => !button.disabled && (button.textContent ?? '').includes('호환 확인하기')); if (!(checkButton instanceof HTMLButtonElement)) return { stage: 'missing-check-button', intercepted, path: location.pathname }; checkButton.click(); for (let index = 0; index < 480 && location.pathname !== '/result'; index += 1) await new Promise((resolve) => setTimeout(resolve, 25)); await new Promise((resolve) => setTimeout(resolve, 1100)); const body = document.body?.innerText ?? ''; return { stage: 'checked', intercepted, path: location.pathname, staleReport: body.includes('stale-refresh-probe'), report: document.querySelector('[data-testid=\"purchase-list-catalog-refresh-report\"]')?.textContent ?? '', progress: Boolean(document.querySelector('[data-testid=\"catalog-refresh-progress\"]')) }; } finally { window.fetch = originalFetch; } })()");
     assert(catalogRefreshLatestCancelProbe?.stage === 'checked' && catalogRefreshLatestCancelProbe.intercepted > 0 && catalogRefreshLatestCancelProbe.path === '/result' && catalogRefreshLatestCancelProbe.staleReport === false && catalogRefreshLatestCancelProbe.progress === false, "새 호환성 검사 이후 이전 delayed catalog refresh가 report 또는 progress를 덮었습니다. probe=" + JSON.stringify(catalogRefreshLatestCancelProbe));
     }
     }
     await client.evaluate(`(() => { localStorage.setItem('pc-supporter-draft', ${JSON.stringify(JSON.stringify({ cpu: { partId: "cpu-7500f", quantity: 1 }, cooler: { partId: "cooler-small-am5", quantity: 1 }, motherboard: { partId: "mb-a620-small", quantity: 1 }, memory: [{ partId: "memory-ddr5-32-7200", quantity: 4 }], gpu: { partId: "gpu-rtx-5090", quantity: 1 }, ssd: [{ partId: "ssd-nvme-1tb", quantity: 4 }], hdd: [{ partId: "hdd-seagate-4tb", quantity: 4 }], case: { partId: "case-compact-matx", quantity: 1 }, psu: { partId: "psu-650w", quantity: 1 }, accessories: [], useIntegratedGraphics: false }))}); return true; })()`);
     await client.send("Page.navigate", { url: `${baseUrl}/build?priceSummaryComplete=1` });
-    await waitForValue(client, "document.querySelector('[data-testid=\"build-price-summary\"]')?.textContent?.includes('가격 확인 완료') === true", "가격 요약 완전 확인 상태 복원");
+    await waitForValue(client, "document.querySelector('[data-testid=\"build-price-summary\"]')?.textContent?.includes('가격 합산 가능') === true", "가격 요약 완전 확인 상태 복원");
     assert(await selectLabel(client, "사용 목적", "gaming"), "게이밍 추천 프로필을 선택하지 못했습니다.");
     await waitForValue(client, "document.querySelector('label select option[value=gaming]')?.parentElement?.value === 'gaming'", "게이밍 추천 프로필 반영");
     assert(await selectLabel(client, "게임 해상도", "1440p"), "게이밍 목표 해상도를 선택하지 못했습니다.");
-    assert(await selectLabel(client, "목표 주사율", "144"), "게이밍 목표 주사율을 선택하지 못했습니다.");
+    assert(await selectLabel(client, "희망 주사율", "144"), "게이밍 희망 주사율을 선택하지 못했습니다.");
 
-    assert(await clickText(client, "호환성 검사하기"), "호환성 검사 버튼을 찾지 못했습니다.");
-    await waitForValue(client, "(document.body?.innerText ?? '').includes('검사 결과 상세')", "호환성 검사 결과");
+    assert(await clickText(client, "호환 확인하기"), "호환성 검사 버튼을 찾지 못했습니다.");
+    await waitForValue(client, "document.querySelector('.result-page') !== null", "호환성 검사 결과");
     await openResultDetails(client);
     await waitForValue(client, "document.querySelector('[data-testid=\"result-price-summary\"]') !== null && (document.body?.innerText ?? '').includes('가격')", "결과 구매 금액 요약");
     assert(await client.evaluate("(() => { const node = document.querySelector('[data-testid=\"result-price-summary\"]'); const text = node?.textContent ?? ''; return text.includes('카탈로그 기준 전체 합계') || text.includes('현재 확인된 부품 소계'); })()"), "결과 화면 구매 금액 요약에 합계 확정 상태가 표시되지 않았습니다.");
@@ -1036,11 +1061,9 @@ async function main() {
     })()`);
     assert(accessoryRecommendationComparisonStabilityProbe?.priceHistoryCalls === 0, "주변 부품 후보 비교가 안정화된 뒤 가격 이력 API를 반복 호출했습니다. probe=" + JSON.stringify(accessoryRecommendationComparisonStabilityProbe));
     await waitForValue(client, "(document.body?.innerText ?? '').includes('대체 부품') || (document.body?.innerText ?? '').includes('안전한 대체 부품')", "대체 후보 영역");
-    const suggestionComparisonProbe = await client.evaluate("(() => { const group = [...document.querySelectorAll('.suggestions')].find((candidate) => candidate.querySelectorAll('.suggestion-compare-toggle').length >= 2 && candidate.querySelector('.suggestion-gpu-target-line')); if (!group) return { stage: 'missing' }; const buttons = [...group.querySelectorAll('.suggestion-compare-toggle')].slice(0, 2); buttons.forEach((button) => button.click()); return { stage: 'clicked', categories: [...group.querySelectorAll('.suggestion-card .suggestion-category-badge')].slice(0, 2).map((node) => node.textContent ?? '') }; })()");
+    const suggestionComparisonProbe = await client.evaluate("(() => { const group = [...document.querySelectorAll('.suggestions')].find((candidate) => candidate.querySelectorAll('.suggestion-compare-toggle').length >= 2); if (!group) return { stage: 'missing' }; const buttons = [...group.querySelectorAll('.suggestion-compare-toggle')].slice(0, 2); buttons.forEach((button) => button.click()); return { stage: 'clicked', categories: [...group.querySelectorAll('.suggestion-card .suggestion-category-badge')].slice(0, 2).map((node) => node.textContent ?? '') }; })()");
     assert(suggestionComparisonProbe?.stage === 'clicked', "결과 화면에서 비교 가능한 대체 후보 2개를 찾지 못했습니다.");
-    await waitForValue(client, "document.querySelector('[data-testid=\"suggestion-comparison-benchmark\"]') !== null", "결과 대체 후보 원본 성능 근거 비교 행");
-    const suggestionBenchmarkProbe = await client.evaluate("(() => { const row = document.querySelector('[data-testid=\"suggestion-comparison-benchmark\"]'); return { text: row?.textContent ?? '', cells: row?.querySelectorAll('[data-testid=\"comparison-benchmark-cell\"]').length ?? 0 }; })()");
-    assert(suggestionBenchmarkProbe.cells >= 1 && suggestionBenchmarkProbe.text.includes('점') && suggestionBenchmarkProbe.text.includes('출처') && suggestionBenchmarkProbe.text.includes('점검'), "결과 대체 후보 비교표의 원본 성능 점수·출처·점검 상태가 누락되었습니다. probe=" + JSON.stringify(suggestionBenchmarkProbe));
+    assert(await client.evaluate("document.querySelector('[data-testid=\"suggestion-comparison-benchmark\"]') === null && !/Cinebench|3DMark|평균 FPS|1% low/i.test(document.body?.innerText ?? '')"), "결과 대체 후보 비교에 내부 성능 근거가 노출됩니다.");
     assert((await clickText(client, "전체 미리 비교")) === true, "대체 후보 전체 미리 비교 버튼을 클릭하지 못했습니다.");
     await waitForValue(client, "document.querySelector('.candidate-scenario-dialog') !== null", "대체 후보 전체 미리 비교 모달");
     await waitForValue(client, "document.querySelector('.candidate-scenario-watch-control .part-watch-button[data-item-id]') !== null", "대체 후보 watch storage sync probe 준비");
@@ -1077,14 +1100,10 @@ async function main() {
       }
     })()`);
     assert(candidateWatchStorageProbe?.stage === "checked" && candidateWatchStorageProbe.initiallyUnwatched === true && candidateWatchStorageProbe.added === true && candidateWatchStorageProbe.targetSynced === true && candidateWatchStorageProbe.removed === true, "대체 후보 CandidateWatchControl이 다른 탭의 watch-list·목표가 변경을 반영하지 못했습니다. probe=" + JSON.stringify(candidateWatchStorageProbe));
-    await waitForValue(client, "document.querySelector('[data-testid=\"candidate-scenario-benchmark\"]') !== null", "대체 후보 원본 benchmark 변화");
-    const candidateScenarioBenchmarkProbe = await client.evaluate("(() => { const nodes = [...document.querySelectorAll('[data-testid=\"candidate-scenario-benchmark\"]')]; return { count: nodes.length, text: nodes.map((node) => node.textContent ?? '').join(' ') }; })()");
-    assert(candidateScenarioBenchmarkProbe.count >= 1 && candidateScenarioBenchmarkProbe.text.includes('원본 벤치마크 비교') && candidateScenarioBenchmarkProbe.text.includes('점'), "대체 후보 전체 가상 비교에 원본 benchmark 변화가 표시되지 않았습니다. probe=" + JSON.stringify(candidateScenarioBenchmarkProbe));
-    const candidateScenarioRankingProbe = await client.evaluate("(() => { const node = document.querySelector('.candidate-scenario-ranking'); return { text: node?.textContent ?? '', reasons: node?.querySelectorAll('span small').length ?? 0 }; })()");
-    assert(candidateScenarioRankingProbe.reasons > 0 && candidateScenarioRankingProbe.text.includes('성능 정보'), "대체 후보 순위에 성능 비교 범위·정보 설명이 표시되지 않았습니다. probe=" + JSON.stringify(candidateScenarioRankingProbe));
+    assert(await client.evaluate("document.querySelector('[data-testid=\"candidate-scenario-benchmark\"]') === null && !/Cinebench|3DMark|평균 FPS|1% low|추천 점수/i.test(document.querySelector('.candidate-scenario-dialog')?.textContent ?? '')"), "대체 후보 가상 비교에 내부 점수나 측정 성능 근거가 노출됩니다.");
     assert((await clickSelector(client, '[aria-label="부품 미리 비교 닫기"]', 1)) === 1, "대체 후보 전체 미리 비교 모달을 닫지 못했습니다.");
     await waitForValue(client, "document.querySelector('.candidate-scenario-dialog') === null", "대체 후보 전체 미리 비교 모달 닫힘");
-    await waitForValue(client, "document.querySelector('.suggestion-gpu-target-line') !== null", "GPU 대체 후보 게이밍 목표 근거");
+    await waitForValue(client, "document.querySelector('.suggestion-gpu-target-line') === null", "대체 후보 공개 화면의 측정 성능 비노출");
     assert(await clickText(client, "전체 미리 비교"), "route transition reset 검증용 후보 전체 미리 비교 버튼을 클릭하지 못했습니다.");
     await waitForValue(client, "document.querySelector('.candidate-scenario-dialog') !== null && document.querySelector('[aria-label=\"부품 미리 비교 닫기\"]') !== null", "route transition 전 후보 가상 비교");
     await client.evaluate("(() => { history.pushState({}, '', '/'); window.dispatchEvent(new PopStateEvent('popstate')); return true; })()");
@@ -1092,7 +1111,7 @@ async function main() {
     const candidateRouteResetProbe = await client.evaluate("({ path: location.pathname, dialog: Boolean(document.querySelector('.candidate-scenario-dialog')) })");
     assert(candidateRouteResetProbe?.path === '/' && candidateRouteResetProbe.dialog === false, "route transition 뒤 후보 가상 비교 modal이 남아 있습니다. probe=" + JSON.stringify(candidateRouteResetProbe));
     await goBack(client);
-    await waitForValue(client, "location.pathname === '/result' && document.querySelector('.suggestion-gpu-target-line') !== null", "후보 미리 비교 route transition 결과 복귀");
+    await waitForValue(client, "location.pathname === '/result' && document.querySelector('.suggestion-gpu-target-line') === null", "후보 미리 비교 route transition 결과 복귀");
     await openResultDetails(client);
     await waitForValue(client, "performance.getEntriesByType('resource').some((entry) => /BuildChangeDecisionDialog/.test(entry.name))", "대체 후보 변경 dialog preload");
     const suggestionApplyProbe = await client.evaluate("(() => { const currentBuildText = document.querySelector('.build-mini-list')?.textContent ?? ''; const card = [...document.querySelectorAll('.suggestion-card')].find((candidate) => { const button = candidate.querySelector('.suggestion-apply:not([disabled])'); const candidateName = button?.getAttribute('aria-label')?.replace(/ 적용$/, '') ?? ''; return !(candidate.textContent ?? '').includes('적용하지 않음') && candidateName.length > 0 && !currentBuildText.includes(candidateName) && button instanceof HTMLButtonElement; }); const button = card?.querySelector('.suggestion-apply:not([disabled])'); if (!(button instanceof HTMLButtonElement)) return { clicked: false, currentBuildText, candidates: [...document.querySelectorAll('.suggestion-card .suggestion-apply:not([disabled])')].map((candidate) => candidate.getAttribute('aria-label') ?? '') }; button.click(); return { clicked: true, reviewCandidate: (card?.textContent ?? '').includes('확인 후 적용'), candidateName: button.getAttribute('aria-label') ?? '' }; })()");
@@ -1121,7 +1140,7 @@ async function main() {
     const routeResetProbe = await client.evaluate("({ path: location.pathname, dialog: Boolean(document.querySelector('.build-change-dialog')) })");
     assert(routeResetProbe?.path === '/' && routeResetProbe.dialog === false, "route transition 뒤 변경 미리보기 dialog가 남아 있습니다. probe=" + JSON.stringify(routeResetProbe));
     await goBack(client);
-    await waitForValue(client, "location.pathname === '/result' && document.querySelector('.suggestion-gpu-target-line') !== null", "변경 미리보기 route transition 결과 복귀");
+    await waitForValue(client, "location.pathname === '/result' && document.querySelector('.suggestion-gpu-target-line') === null", "변경 미리보기 route transition 결과 복귀");
     await openResultDetails(client);
     const virtualSuggestionProbe = await client.evaluate("(() => { const cards = [...document.querySelectorAll('.suggestion-card')]; const card = cards.find((candidate) => (candidate.textContent ?? '').includes('확인 후 적용') && candidate.querySelector('.suggestion-preview-button:not([disabled])')) ?? cards.find((candidate) => !(candidate.textContent ?? '').includes('적용하지 않음') && candidate.querySelector('.suggestion-preview-button:not([disabled])')); const button = card?.querySelector('.suggestion-preview-button:not([disabled])'); if (!(button instanceof HTMLButtonElement)) return { clicked: false }; button.click(); return { clicked: true, reviewCandidate: (card?.textContent ?? '').includes('확인 후 적용') }; })()");
     assert(virtualSuggestionProbe?.clicked === true, "대체 후보 미리 적용 버튼을 찾지 못했습니다.");
@@ -1136,7 +1155,7 @@ async function main() {
     await waitForValue(client, "document.querySelector('.repair-plan-panel') !== null", "수리 플랜 패널");
     await waitForValue(client, "document.querySelector('[data-testid=\"repair-plan-tradeoff\"]') !== null", "수리 플랜 비교 우위");
     assert(await client.evaluate("(() => { const node = document.querySelector('[data-testid=\"repair-plan-tradeoff\"]'); const text = node?.textContent ?? ''; return text.includes('비교 우위') && text.includes('남은 위험') && text.includes('추가 비용'); })()"), "수리 플랜 비용·위험·변경 규모 tradeoff가 표시되지 않았습니다.");
-    await waitForValue(client, "document.querySelector('[data-testid=\"benchmark-evidence-panel\"]') !== null && [...document.querySelectorAll('.benchmark-evidence-card')].some((card) => (card.textContent ?? '').includes('자료'))", "원본 benchmark 근거 freshness");
+    assert(await client.evaluate("document.querySelector('[data-testid=\"benchmark-evidence-panel\"]') === null && !/Cinebench|3DMark|평균 FPS|1% low/i.test(document.body?.innerText ?? '')"), "검사 결과 화면에 내부 벤치마크/FPS 자료가 노출됩니다.");
     await waitForValue(client, "document.querySelector('[data-testid=\"build-resource-summary\"]') !== null && document.querySelectorAll('[data-testid^=\"build-resource-card-\"]').length === 2 && (document.body?.innerText ?? '').includes('전력·냉각 여유')", "전력·냉각 여유 요약");
     await waitForValue(client, "document.querySelector('[data-testid=\"compatibility-map\"]') !== null && document.querySelectorAll('[data-testid=\"compatibility-map\"] .compatibility-link-action').length > 0", "호환 관계 맵 원인 이동 액션");
     assert((await clickSelector(client, '[data-testid="compatibility-map"] .compatibility-link-action', 1)) === 1, "호환 관계 맵의 관련 판정 이동 버튼을 클릭하지 못했습니다.");
@@ -1151,7 +1170,7 @@ async function main() {
     assert((await clickSelector(client, '.result-link-copy-button', 1)) === 1, "결과 링크 복사 버튼을 클릭하지 못했습니다.");
     await waitForValue(client, "(document.body?.innerText ?? '').includes('현재 결과 링크') || (document.body?.innerText ?? '').includes('결과 링크를 복사하지 못했습니다')", "결과 링크 복사 안내");
     await client.send("Page.reload");
-    await waitForValue(client, "(document.body?.innerText ?? '').includes('검사 결과 상세') && document.querySelector('[data-testid=\"result-quick-nav\"]') !== null", "결과 필터 새로고침 복원");
+    await waitForValue(client, "document.querySelector('.result-page') !== null && document.querySelector('[data-testid=\"result-quick-nav\"]') !== null", "결과 필터 새로고침 복원");
     await openResultDetails(client);
     await waitForValue(client, "document.querySelector('.finding-filter-button.selected')?.textContent?.includes('차단 오류') === true && document.querySelector('.result-metrics button.metric-card.danger')?.getAttribute('aria-pressed') === 'true'", "결과 필터 새로고침 상태");
     assert((await clickSelector(client, '.result-metrics button.metric-card.warning', 1)) === 1, "주의 요약 카드를 클릭하지 못했습니다.");
@@ -1265,7 +1284,7 @@ async function main() {
         for (let index = 0; index < 320; index += 1) {
           const currentButton = document.querySelector('[data-testid="purchase-list-live-price-refresh"]');
           const body = document.body?.innerText ?? '';
-          if (delayedCalls > 0 && currentButton instanceof HTMLButtonElement && !currentButton.disabled && body.includes('검사 결과 상세')) return { stage: 'checked', delayedCalls, enabledBeforeDelayedResponse: true, priority: nextPriority };
+          if (delayedCalls > 0 && currentButton instanceof HTMLButtonElement && !currentButton.disabled && document.querySelector('.result-page') !== null) return { stage: 'checked', delayedCalls, enabledBeforeDelayedResponse: true, priority: nextPriority };
           await new Promise((resolve) => setTimeout(resolve, 25));
         }
         const currentButton = document.querySelector('[data-testid="purchase-list-live-price-refresh"]');
@@ -1304,8 +1323,7 @@ async function main() {
     assert(replacementClicked, "finding의 부품 교체 버튼을 찾지 못했습니다.");
     await waitForValue(client, "document.querySelector('[role=dialog] #picker-title')?.textContent?.includes('선택') === true", "부품 후보 선택기");
     await waitForValue(client, "document.querySelectorAll('[role=dialog] .picker-item').length > 0", "부품 후보 목록");
-    await waitForValue(client, "document.querySelector('[data-testid=\"picker-trust-overview\"]') !== null && (document.body?.innerText ?? '').includes('추천 점수 분포')", "추천 점수 분포 요약");
-    assert(await client.evaluate("(() => { const node = document.querySelector('[data-testid=\"picker-trust-overview\"]'); const bar = node?.querySelector('[role=\"img\"]'); return Boolean(node && bar && (bar.getAttribute('aria-label') ?? '').includes('높음') && (bar.getAttribute('aria-label') ?? '').includes('낮음')); })()"), "추천 점수 분포 요약에 높음·낮음 집계가 없습니다.");
+    assert(await client.evaluate("document.querySelector('[data-testid=\"picker-trust-overview\"]') === null && !/추천 점수 분포|신뢰도 점수/.test(document.querySelector('[role=dialog]')?.textContent ?? '')"), "부품 선택기에 내부 추천 신뢰도 점수가 노출됩니다.");
     assert(await client.evaluate("(() => { try { const value = JSON.parse(localStorage.getItem('pc-supporter-catalog-picker-cache-v1') ?? 'null'); return value?.schemaVersion === 1 && typeof value?.cachedAt === 'string' && Array.isArray(value?.items) && value.items.length > 0; } catch { return false; } })()"), "성공한 부품 후보 응답이 schemaVersion·cachedAt을 포함한 브라우저 캐시에 저장되지 않았습니다.");
     const pickerDataGapVisible = await client.evaluate("document.querySelector('[data-testid=\"picker-incomplete-data-notice\"]') !== null");
     if (pickerDataGapVisible) assert(await client.evaluate("document.querySelectorAll('[data-testid=\"picker-open-missing-field\"]').length > 0"), "선택기 데이터 부족 안내에 누락 필드 링크가 없습니다.");
@@ -1340,7 +1358,7 @@ async function main() {
     const pickerShareProbe = await client.evaluate("(async () => { const button = [...document.querySelectorAll('[role=dialog] .picker-comparison-actions button')].find((candidate) => (candidate.textContent ?? '').includes('공유 링크')); if (!(button instanceof HTMLButtonElement)) return undefined; const originalFetch = window.fetch; let captured; window.fetch = async (input, init) => { const url = typeof input === 'string' ? input : input.url; if (url === '/api/comparisons' && init?.method === 'POST') { captured = typeof init.body === 'string' ? JSON.parse(init.body) : undefined; return new Response(JSON.stringify({ id: 'browser-smoke-comparison', url: '/compare/browser-smoke-comparison', ownerToken: 'browser-smoke-owner' }), { status: 200, headers: { 'Content-Type': 'application/json' } }); } return originalFetch(input, init); }; try { button.click(); for (let index = 0; index < 30 && !captured; index += 1) await new Promise((resolve) => setTimeout(resolve, 50)); return captured; } finally { window.fetch = originalFetch; } })()");
     assert(pickerShareProbe?.currentPartName && pickerShareProbe?.currentPartSummary && pickerShareProbe?.currentPartPrice && pickerShareProbe?.category && Array.isArray(pickerShareProbe?.candidates) && pickerShareProbe.candidates.length === 2, "후보 비교 공유 요청에 현재 기준선 이름·사양·가격 context가 전달되지 않았습니다.");
     assert(pickerShareProbe.candidates.every((candidate) => candidate?.category && candidate?.partId), "부품 선택기 후보 공유 요청에 현재 카탈로그 재확인용 범주·부품 ID가 전달되지 않았습니다.");
-   assert(pickerShareProbe.candidates.some((candidate) => candidate?.similarityEvidence?.comparedDimensions !== undefined), "부품 선택기 후보 공유 요청에 구조화된 성능 비교 정보가 전달되지 않았습니다.");
+    assert(findRestrictedPublicApiKeys(pickerShareProbe).length === 0, "부품 선택기 공유 요청에 내부 추천·점수 근거가 남았습니다. keys=" + JSON.stringify(findRestrictedPublicApiKeys(pickerShareProbe)));
     const pickerShareDuplicateProbe = await client.evaluate(`(async () => {
       const originalFetch = window.fetch;
       const response = (payload) => new Response(JSON.stringify(payload), { status: 200, headers: { "Content-Type": "application/json" } });
@@ -1370,11 +1388,10 @@ async function main() {
       }
     })()`);
     assert(pickerShareDuplicateProbe?.stage === "checked" && pickerShareDuplicateProbe.shareCalls === 1, "부품 선택기 공유 연속 클릭이 중복 snapshot POST를 생성했습니다. probe=" + JSON.stringify(pickerShareDuplicateProbe));
-    assert(pickerShareProbe.candidates.filter((candidate) => ["cpu", "gpu"].includes(candidate?.category)).every((candidate) => candidate?.benchmarkEvidence?.rows?.length === 2 && candidate?.benchmarkEvidence?.category === candidate?.category), "부품 선택기 후보 공유 요청에서 CPU·GPU benchmark 근거가 누락되었습니다. probe=" + JSON.stringify(pickerShareProbe));
 
     assert((await clickSelector(client, "[role=dialog] .picker-item-detail-toggle", 1)) === 1, "후보 상세·근거 버튼을 찾지 못했습니다.");
     await waitForValue(client, "document.querySelector('[role=dialog] .picker-item-detail') !== null", "후보 상세 근거");
-    await waitForValue(client, "document.querySelector('[role=dialog] [data-testid=\"picker-similarity-evidence\"]') !== null && (document.body?.innerText ?? '').includes('현재') && (document.body?.innerText ?? '').includes('비교 부품')", "부품 지표별 성능 근거");
+    assert(await client.evaluate("document.querySelector('[role=dialog] [data-testid=\"picker-similarity-evidence\"]') === null"), "부품 선택기 상세에 내부 유사도·성능 근거가 노출됩니다.");
     const finalText = await bodyText(client);
     assert(!finalText.includes("Failed to fetch"), "후보 선택기 화면에 Failed to fetch가 남아 있습니다.");
 
@@ -1416,7 +1433,7 @@ async function main() {
       }
     })()`);
     assert(catalogWatchStorageProbe?.stage === "checked" && catalogWatchStorageProbe.initiallyUnwatched === true && catalogWatchStorageProbe.added === true && catalogWatchStorageProbe.removed === true, "카탈로그 CatalogWatchButton이 다른 탭의 watch-list 추가·제거를 반영하지 못했습니다. probe=" + JSON.stringify(catalogWatchStorageProbe));
-    await waitForValue(client, "document.querySelector('[data-testid=\"catalog-similarity-evidence\"]') !== null && (document.body?.innerText ?? '').includes('성능 비교 정보')", "카탈로그 성능 비교 정보");
+    assert(await client.evaluate("document.querySelector('[data-testid=\"catalog-similarity-evidence\"]') === null"), "카탈로그 부품 상세에 내부 유사도·성능 근거가 노출됩니다.");
     await client.send("Page.navigate", { url: `${baseUrl}/catalog?category=gpu&minVramGb=12` });
     await waitForValue(client, "document.querySelector('[data-testid=\"catalog-spec-filters\"]') !== null && document.querySelector('[aria-label=\"카탈로그 최소 VRAM 스펙 필터\"]')?.value === '12' && document.querySelector('.catalog-part-list [data-testid^=\"catalog-part-\"]') !== null", "카탈로그 핵심 사양 필터");
     assert((await client.evaluate("location.search.includes('category=gpu') && location.search.includes('minVramGb=12') && document.querySelector('[data-testid=\"catalog-spec-filter-summary\"]')?.textContent?.includes('VRAM 12GB 이상') === true")), "카탈로그 핵심 사양 필터 URL·요약이 보존되지 않았습니다.");
@@ -1424,15 +1441,15 @@ async function main() {
     await waitForValue(client, "document.querySelector('[data-testid=\"catalog-spec-filter-summary\"]') === null && !location.search.includes('minVramGb=')", "카탈로그 핵심 사양 필터 초기화");
 
     await client.send("Page.navigate", { url: `${baseUrl}/catalog?category=cpu&sort=benchmark_desc` });
-    await waitForValue(client, "document.querySelector('[data-testid=\"catalog-benchmark-sort-panel\"]') !== null && document.querySelector('[data-testid=\"catalog-benchmark-sort\"]')?.value === 'benchmark_desc' && new URLSearchParams(location.search).get('sort') === 'benchmark_desc' && document.querySelector('.catalog-part-list [data-testid^=\"catalog-part-\"]') !== null", "CPU 성능 정렬 URL·선택 상태");
+    await waitForValue(client, "document.querySelector('[data-testid=\"catalog-benchmark-sort-panel\"]') === null && document.querySelector('.catalog-part-list [data-testid^=\"catalog-part-\"]') !== null && new URLSearchParams(location.search).get('sort') === null", "CPU 내부 성능 정렬 링크 안전 정규화");
     await client.send("Page.navigate", { url: `${baseUrl}/catalog?category=gpu&sort=benchmark_desc` });
-    await waitForValue(client, "document.querySelector('[data-testid=\"catalog-benchmark-sort-panel\"]') !== null && document.querySelector('[data-testid=\"catalog-benchmark-sort\"]')?.value === 'benchmark_desc' && new URLSearchParams(location.search).get('sort') === 'benchmark_desc' && (document.body?.innerText ?? '').includes('3DMark 점수 높은 순')", "GPU 성능 정렬 URL·선택 상태");
+    await waitForValue(client, "document.querySelector('[data-testid=\"catalog-benchmark-sort-panel\"]') === null && document.querySelector('.catalog-part-list [data-testid^=\"catalog-part-\"]') !== null && new URLSearchParams(location.search).get('sort') === null", "GPU 내부 성능 정렬 링크 안전 정규화");
     await client.send("Page.navigate", { url: `${baseUrl}/catalog?category=memory&sort=benchmark_desc` });
     await waitForValue(client, "document.querySelector('[data-testid=\"catalog-benchmark-sort-panel\"]') === null && new URLSearchParams(location.search).get('sort') === null && document.querySelector('.catalog-part-list [data-testid^=\"catalog-part-\"]') !== null", "비지원 범주 성능 정렬 정규화");
     await client.send("Page.navigate", { url: `${baseUrl}/catalog?category=cpu&sort=similarity` });
     await waitForValue(client, "document.querySelector('[aria-label=\"카탈로그 정렬\"]')?.value === 'price_asc' && new URLSearchParams(location.search).get('sort') === null && document.querySelector('.catalog-part-list [data-testid^=\"catalog-part-\"]') !== null", "전체 카탈로그 호환 전용 정렬 정규화");
     await client.send("Page.navigate", { url: `${baseUrl}/catalog?category=cpu&mode=compatible&sort=benchmark_desc` });
-    await waitForValue(client, "document.querySelector('[data-testid=\"catalog-benchmark-sort-panel\"]') === null && new URLSearchParams(location.search).get('sort') === 'similarity'", "호환 후보 성능 정렬 정규화");
+    await waitForValue(client, "document.querySelector('[data-testid=\"catalog-benchmark-sort-panel\"]') === null && new URLSearchParams(location.search).get('sort') === 'similarity'", "호환 후보 안전 정렬 정규화");
 
     await client.send("Page.navigate", { url: `${baseUrl}/catalog?category=cpu&brand=AMD` });
     await waitForValue(client, "document.querySelector('[data-testid=\"catalog-brand-filter\"] input')?.value === 'AMD' && new URLSearchParams(location.search).get('brand') === 'AMD' && document.querySelectorAll('.catalog-part-card').length > 0", "카탈로그 제조사 필터");
@@ -1463,23 +1480,21 @@ async function main() {
     await waitForValue(client, "location.pathname === '/build' && (document.querySelector('button.button-primary.full-width')?.disabled === false || (document.body?.innerText ?? '').includes('검사할 준비가 되었습니다') || (document.body?.innerText ?? '').includes('모든 필수 부품을 선택했습니다'))", "카탈로그 비교 기준 demo 구성");
     await client.send("Page.navigate", { url: `${baseUrl}/catalog?category=cpu` });
     await waitForValue(client, "document.querySelector('[aria-label=\"카탈로그 부품 범주\"]')?.value === 'cpu' && document.querySelector('[data-testid=\"catalog-spec-preset\"]') !== null && document.querySelector('[data-testid=\"catalog-apply-spec-preset\"]')?.disabled === false && document.querySelectorAll('.catalog-part-compare').length > 1", "전체 CPU 카탈로그 비교 화면");
-    await waitForValue(client, "document.querySelector('[data-testid=\"catalog-benchmark-evidence-summary\"]') !== null && document.querySelector('.catalog-part-card-copy .catalog-benchmark-evidence-points') !== null && document.querySelector('[data-testid=\"catalog-benchmark-evidence\"]') !== null && (document.body?.innerText ?? '').includes('Cinebench R23 싱글')", "카탈로그 CPU 성능 근거 상세");
+    assert(await client.evaluate("document.querySelector('[data-testid=\"catalog-benchmark-evidence-summary\"]') === null && document.querySelector('[data-testid=\"catalog-benchmark-evidence\"]') === null && !/Cinebench|3DMark|벤치마크 점수/i.test(document.body?.innerText ?? '')"), "카탈로그 CPU 상세에 내부 벤치마크 근거가 노출됩니다.");
     assert((await clickSelector(client, '[data-testid="catalog-apply-spec-preset"]', 1)) === 1, "현재 견적 기준 사양 조건 적용 버튼을 클릭하지 못했습니다.");
     await waitForValue(client, "document.querySelector('[data-testid=\"catalog-spec-filter-summary\"]')?.textContent?.includes('소켓') === true && document.querySelector('.catalog-part-list [data-testid^=\"catalog-part-\"]') !== null", "현재 견적 기준 사양 조건 적용");
     assert((await clickSelector(client, '.catalog-part-compare', 2)) === 2, "전체 카탈로그 비교용 CPU 2개를 선택하지 못했습니다.");
     await waitForValue(client, "document.querySelector('[data-testid=\"catalog-comparison-bar\"]')?.textContent?.includes('부품 비교 2 / 3') === true", "전체 카탈로그 비교 선택 상태");
     assert((await clickSelector(client, '[data-testid="catalog-compare-submit"]', 1)) === 1, "전체 카탈로그 부품 비교 버튼을 클릭하지 못했습니다.");
     await waitForValue(client, "document.querySelector('[data-testid=\"catalog-spec-comparison\"]') !== null && document.querySelector('[data-testid=\"catalog-comparison-baseline\"]') !== null", "카탈로그 비교 기준선");
-    await waitForValue(client, "document.querySelector('[data-testid=\"catalog-spec-comparison\"]')?.textContent?.includes('벤치마크') === true && document.querySelector('[data-testid=\"catalog-spec-comparison\"]')?.textContent?.includes('Cinebench R23 싱글') === true && document.querySelector('[data-testid=\"catalog-spec-comparison\"]')?.textContent?.includes('벤치마크 출처') === true", "카탈로그 비교 성능 점수·출처");
+    assert(await client.evaluate("!(/Cinebench|3DMark|벤치마크 점수|벤치마크 출처/i.test(document.querySelector('[data-testid=\"catalog-spec-comparison\"]')?.textContent ?? ''))"), "카탈로그 비교에 내부 점수나 근거 출처가 노출됩니다.");
     const catalogShareProbe = await client.evaluate("(async () => { const button = document.querySelector('[data-testid=\"catalog-comparison-share\"]'); if (!(button instanceof HTMLButtonElement)) return undefined; const originalFetch = window.fetch; let captured; window.fetch = async (input, init) => { const url = typeof input === 'string' ? input : input.url; if (url === '/api/comparisons' && init?.method === 'POST') { captured = typeof init.body === 'string' ? JSON.parse(init.body) : undefined; return new Response(JSON.stringify({ id: 'catalog-browser-smoke-comparison', url: '/compare/catalog-browser-smoke-comparison', ownerToken: 'catalog-browser-smoke-owner' }), { status: 200, headers: { 'Content-Type': 'application/json' } }); } return originalFetch(input, init); }; try { button.click(); for (let index = 0; index < 30 && !captured; index += 1) await new Promise((resolve) => setTimeout(resolve, 50)); return captured; } finally { window.fetch = originalFetch; } })()");
     assert(catalogShareProbe?.currentPartName && catalogShareProbe?.currentPartSummary && catalogShareProbe?.currentPartPrice && catalogShareProbe?.category && Array.isArray(catalogShareProbe?.candidates) && catalogShareProbe.candidates.length === 2, "카탈로그 부품 비교 공유 요청에 현재 기준선 context가 전달되지 않았습니다.");
-    assert(catalogShareProbe.candidates.every((candidate) => candidate?.benchmarkEvidence?.rows?.length === 2 && ["cpu", "gpu"].includes(candidate.benchmarkEvidence.category)), "카탈로그 부품 비교 공유 요청에서 원본 성능 근거가 누락되었습니다. probe=" + JSON.stringify(catalogShareProbe));
+    assert(findRestrictedPublicApiKeys(catalogShareProbe).length === 0, "카탈로그 공유 요청에 내부 추천·점수 근거가 남았습니다. keys=" + JSON.stringify(findRestrictedPublicApiKeys(catalogShareProbe)));
     const sharedComparisonSnapshotPayload = JSON.stringify({ id: "catalog-browser-smoke-comparison", name: "브라우저 스모크 CPU 비교", category: catalogShareProbe.category, currentPartName: catalogShareProbe.currentPartName, currentPartSummary: catalogShareProbe.currentPartSummary, currentPartPrice: catalogShareProbe.currentPartPrice, candidates: catalogShareProbe.candidates, createdAt: "2026-09-05T00:00:00.000Z", updatedAt: "2026-09-05T00:00:00.000Z" });
     await client.evaluate(`(() => { const originalFetch = window.fetch; window.__pcSupporterSharedComparisonOriginalFetch = originalFetch; const payload = ${JSON.stringify(sharedComparisonSnapshotPayload)}; window.fetch = async (input, init) => { const requestUrl = new URL(typeof input === 'string' ? input : input.url, location.href); if (requestUrl.pathname === '/api/comparisons/catalog-browser-smoke-comparison') return new Response(payload, { status: 200, headers: { 'Content-Type': 'application/json' } }); return originalFetch(input, init); }; })()`);
     await client.evaluate("(() => { history.pushState({}, '', '/compare/catalog-browser-smoke-comparison'); window.dispatchEvent(new PopStateEvent('popstate')); })()");
-    await waitForValue(client, "document.querySelector('[data-testid=\"shared-comparison-benchmark-evidence-panel\"]') !== null && document.querySelectorAll('[data-testid=\"shared-comparison-benchmark-evidence\"]').length === 2 && (document.body?.innerText ?? '').includes('Cinebench R23 싱글')", "공유 비교 원본 성능 근거 보존");
-    await waitForValue(client, "document.querySelectorAll('[data-testid=\"shared-comparison-live-benchmark-recheck\"]').length === 2 && (document.body?.innerText ?? '').includes('benchmark ·')", "공유 비교 현재 benchmark 재확인");
-    await waitForValue(client, "(document.body?.innerText ?? '').includes('판단 영향 ·') && (document.body?.innerText ?? '').includes('추천 성능 판단')", "공유 비교 benchmark 판단 영향");
+    assert(await client.evaluate("document.querySelector('[data-testid=\"shared-comparison-benchmark-evidence-panel\"]') === null && document.querySelectorAll('[data-testid=\"shared-comparison-benchmark-evidence\"]').length === 0 && !/Cinebench|3DMark|benchmark ·|추천 성능 판단/i.test(document.body?.innerText ?? '')"), "공유 비교 화면에 내부 벤치마크 근거나 판단 영향이 노출됩니다.");
     await waitForValue(client, "document.querySelector('.shared-comparison-live-watch[data-item-id]') !== null", "공유 비교 watch storage sync probe 준비");
     const sharedLiveWatchStorageProbe = await client.evaluate(`(async () => {
       const watchlistKey = "pc-supporter-catalog-watchlist";
@@ -1520,9 +1535,9 @@ async function main() {
     await client.send("Page.navigate", { url: `${baseUrl}/catalog?category=cpu` });
     await waitForValue(client, "document.querySelector('[aria-label=\"카탈로그 부품 범주\"]')?.value === 'cpu' && document.querySelector('.catalog-part-list [data-testid^=\"catalog-part-\"]') !== null", "카탈로그 route history CPU 기준");
     await client.evaluate("(() => { history.pushState({}, '', '/catalog?category=gpu&sort=benchmark_desc'); window.dispatchEvent(new PopStateEvent('popstate')); })()");
-    await waitForValue(client, "document.querySelector('[aria-label=\"카탈로그 부품 범주\"]')?.value === 'gpu' && document.querySelector('[data-testid=\"catalog-benchmark-sort\"]')?.value === 'benchmark_desc'", "카탈로그 route history GPU 복원");
+    await waitForValue(client, "document.querySelector('[aria-label=\"카탈로그 부품 범주\"]')?.value === 'gpu' && document.querySelector('[data-testid=\"catalog-benchmark-sort\"]') === null && new URLSearchParams(location.search).get('sort') === null", "카탈로그 route history GPU 안전 복원");
     await goBack(client);
-    await waitForValue(client, "document.querySelector('[aria-label=\"카탈로그 부품 범주\"]')?.value === 'cpu' && new URLSearchParams(location.search).get('category') === 'cpu' && document.querySelector('[data-testid=\"catalog-benchmark-sort\"]')?.value === 'off'", "카탈로그 route history 뒤로 가기 CPU 복원");
+    await waitForValue(client, "document.querySelector('[aria-label=\"카탈로그 부품 범주\"]')?.value === 'cpu' && new URLSearchParams(location.search).get('category') === 'cpu' && document.querySelector('[data-testid=\"catalog-benchmark-sort\"]') === null", "카탈로그 route history 뒤로 가기 CPU 복원");
     recordRouteHistoryFlow("catalog-route-history");
     assert(await setInputValue(client, '[aria-label="부품 카탈로그 검색"]', 'AMD'), "카탈로그 query history 첫 검색어를 입력하지 못했습니다.");
     await new Promise((resolve) => setTimeout(resolve, 50));
@@ -1535,22 +1550,15 @@ async function main() {
     await waitForHomeDemoButtons(client, "결과 route 복귀 기준 demo 홈");
     assert(await clickText(client, "문제 있는 예시 견적"), "결과 route 복귀 기준 문제 있는 예시 견적을 불러오지 못했습니다.");
     await waitForValue(client, "location.pathname === '/build' && document.querySelector('button.button-primary.full-width')?.disabled === false", "결과 route 복귀 기준 demo 구성");
-    assert(await clickText(client, "호환성 검사하기"), "결과 route 복귀 기준 호환성 검사를 실행하지 못했습니다.");
+    assert(await clickText(client, "호환 확인하기"), "결과 route 복귀 기준 호환성 검사를 실행하지 못했습니다.");
     await waitForValue(client, "location.pathname === '/result' && document.querySelector('.result-page') !== null && document.querySelector('[data-testid=\"result-findings\"]') !== null", "결과 route 복귀 기준 검사 결과");
     await openResultDetails(client);
     await client.send("Page.navigate", { url: `${baseUrl}/catalog?category=gpu` });
-    const gpuBenchmarkCoverage = await client.evaluate("fetch('/api/parts?category=gpu&benchmarkStatus=complete&limit=1').then((response) => response.json())");
-    if ((gpuBenchmarkCoverage?.total ?? 0) > 0) {
-      await waitForValue(client, "(document.body?.innerText ?? '').includes('그래픽카드 목록') && document.querySelector('[data-testid=\"catalog-benchmark-evidence-summary\"]') !== null && document.querySelector('[data-testid=\"catalog-benchmark-evidence\"]') !== null && (document.body?.innerText ?? '').includes('3DMark Time Spy')", "카탈로그 GPU 성능 근거 상세");
-    } else {
-      await waitForValue(client, "(document.body?.innerText ?? '').includes('그래픽카드 목록') && document.querySelector('[data-testid=\"catalog-benchmark-evidence-summary\"]') !== null && (document.body?.innerText ?? '').includes('점수 없음') && (document.body?.innerText ?? '').includes('출처 확인 필요')", "카탈로그 GPU 성능 근거 없음 안내");
-    }
+    await waitForValue(client, "(document.body?.innerText ?? '').includes('그래픽카드 목록') && document.querySelector('[data-testid=\"catalog-benchmark-evidence-summary\"]') === null && document.querySelector('[data-testid=\"catalog-benchmark-evidence\"]') === null", "카탈로그 GPU 내부 성능 자료 비노출");
     await client.send("Page.navigate", { url: `${baseUrl}/result` });
-    await waitForValue(client, "(document.body?.innerText ?? '').includes('검사 결과 상세')", "검사 결과 route 복귀");
+    await waitForValue(client, "document.querySelector('.result-page') !== null", "검사 결과 route 복귀");
     await openResultDetails(client);
-    await waitForValue(client, "document.querySelector('[data-testid=\"build-benchmark-snapshot\"]') !== null", "전체 견적 benchmark snapshot");
-    const buildBenchmarkSnapshotProbe = await client.evaluate("(() => { const node = document.querySelector('[data-testid=\"build-benchmark-snapshot\"]'); return { text: node?.textContent ?? '', status: node?.className ?? '' }; })()");
-    assert(buildBenchmarkSnapshotProbe.text.includes('견적 성능 정보 상태') && buildBenchmarkSnapshotProbe.text.includes('개 점수'), "전체 견적 benchmark snapshot 상태·커버리지가 표시되지 않았습니다. probe=" + JSON.stringify(buildBenchmarkSnapshotProbe));
+    assert(await client.evaluate("document.querySelector('[data-testid=\"build-benchmark-snapshot\"]') === null && !/견적 성능 정보 상태|개 점수/.test(document.body?.innerText ?? '')"), "전체 견적 결과에 내부 성능 점수 coverage가 노출됩니다.");
     await waitForValue(client, "[...document.querySelectorAll('.finding-actions button')].some((candidate) => !candidate.disabled && (candidate.textContent ?? '').includes('바꾸기'))", "검사 결과 액션 chunk 복원");
     await client.send("Network.enable");
     await client.send("Network.setBlockedURLs", { urls: ["*://*/api/parts/compatible*"] });
@@ -2037,7 +2045,7 @@ async function main() {
     await waitForHomeDemoButtons(client, "적용 후 검사 비교 기준 홈");
     assert(await clickText(client, "문제 있는 예시 견적"), "적용 후 검사 비교용 문제 있는 예시 견적을 불러오지 못했습니다.");
     await waitForValue(client, "document.querySelector('button.button-primary.full-width')?.disabled === false || (document.body?.innerText ?? '').includes('검사할 준비가 되었습니다') || (document.body?.innerText ?? '').includes('모든 필수 부품을 선택했습니다')", "적용 후 검사 비교 기준 편집기");
-    assert(await clickText(client, "호환성 검사하기"), "적용 후 검사 비교 기준 견적을 검사하지 못했습니다.");
+    assert(await clickText(client, "호환 확인하기"), "적용 후 검사 비교 기준 견적을 검사하지 못했습니다.");
     await waitForValue(client, "document.querySelector('[data-testid=\"result-findings\"]') !== null && document.querySelector('.suggestion-card') !== null", "적용 후 검사 비교 기준 결과");
     await openResultDetails(client);
     const appliedSuggestionProbe = await client.evaluate("(() => { const card = [...document.querySelectorAll('.suggestion-card')].find((candidate) => !(candidate.textContent ?? '').includes('적용하지 않음') && candidate.querySelector('.suggestion-apply:not([disabled])')); const button = card?.querySelector('.suggestion-apply:not([disabled])'); if (!(button instanceof HTMLButtonElement)) return { clicked: false }; button.click(); return { clicked: true }; })()");
@@ -2075,15 +2083,15 @@ async function main() {
     const buildWidth = await client.evaluate("({ innerWidth, body: document.body?.scrollWidth ?? 0, document: document.documentElement?.scrollWidth ?? 0 })");
     assert(buildWidth.body <= buildWidth.innerWidth + 1 && buildWidth.document <= buildWidth.innerWidth + 1, `모바일 견적 편집기 가로 overflow가 있습니다. innerWidth=${buildWidth.innerWidth}, body=${buildWidth.body}, document=${buildWidth.document}`);
     await client.send("Page.navigate", { url: `${baseUrl}/catalog?category=cpu&benchmarkStatus=incomplete` });
-    await waitForValue(client, "document.querySelector('[aria-label=\"카탈로그 성능 근거 상태\"]')?.value === 'incomplete' && document.querySelector('[data-testid=\"catalog-benchmark-filter-summary\"]') !== null", "모바일 CPU 성능 근거 카탈로그");
+    await waitForValue(client, "document.querySelector('[aria-label=\"카탈로그 성능 근거 상태\"]') === null && document.querySelector('[data-testid=\"catalog-benchmark-filter-summary\"]') === null && document.querySelector('.catalog-part-list [data-testid^=\"catalog-part-\"]') !== null", "모바일 카탈로그 내부 성능 필터 비노출");
     const catalogWidth = await client.evaluate("({ innerWidth, body: document.body?.scrollWidth ?? 0, document: document.documentElement?.scrollWidth ?? 0 })");
     assert(catalogWidth.body <= catalogWidth.innerWidth + 1 && catalogWidth.document <= catalogWidth.innerWidth + 1, `모바일 카탈로그 가로 overflow가 있습니다. innerWidth=${catalogWidth.innerWidth}, body=${catalogWidth.body}, document=${catalogWidth.document}`);
     await client.send("Page.navigate", { url: `${baseUrl}/recommend?profile=gaming` });
-    await waitForValue(client, "(document.body?.innerText ?? '').includes('조건으로 PC 견적 만들기')", "모바일 자동 구성 화면");
+    await waitForValue(client, "(document.body?.innerText ?? '').includes('PC 견적 만들기')", "모바일 자동 구성 화면");
     const generatorWidth = await client.evaluate("({ innerWidth, body: document.body?.scrollWidth ?? 0, document: document.documentElement?.scrollWidth ?? 0 })");
     assert(generatorWidth.body <= generatorWidth.innerWidth + 1 && generatorWidth.document <= generatorWidth.innerWidth + 1, `모바일 자동 구성 가로 overflow가 있습니다. innerWidth=${generatorWidth.innerWidth}, body=${generatorWidth.body}, document=${generatorWidth.document}`);
     assert(await setTextValue(client, '[data-testid="generator-brief-input"]', "게이밍 200만원"), "모바일 보완 안내 입력창을 찾지 못했습니다.");
-    assert(await clickText(client, "조건 분석"), "모바일 보완 안내 해석 버튼을 찾지 못했습니다.");
+    assert(await clickText(client, "입력 내용 보기"), "모바일 보완 안내 입력 내용 보기 버튼을 찾지 못했습니다.");
     await waitForValue(client, "document.querySelector('[data-testid=\"generator-brief-guidance\"]') !== null", "모바일 요구사항 보완 안내");
     const guidanceWidth = await client.evaluate("({ innerWidth, body: document.body?.scrollWidth ?? 0, document: document.documentElement?.scrollWidth ?? 0 })");
     assert(guidanceWidth.body <= guidanceWidth.innerWidth + 1 && guidanceWidth.document <= guidanceWidth.innerWidth + 1, `모바일 요구사항 보완 안내 가로 overflow가 있습니다. innerWidth=${guidanceWidth.innerWidth}, body=${guidanceWidth.body}, document=${guidanceWidth.document}`);

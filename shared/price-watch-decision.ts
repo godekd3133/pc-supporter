@@ -40,9 +40,9 @@ function nearLowThreshold(value: number | undefined) {
 }
 
 export function priceWatchDecisionFor(input: PriceWatchDecisionInput): PriceWatchDecision {
-  if (input.currentStatus === "error") return { state: "error", label: "일시 확인 오류", summary: "현재 가격을 다시 확인해야 가격 행동을 판단할 수 있습니다." };
+  if (input.currentStatus === "error") return { state: "error", label: "일시 확인 오류", summary: "현재 가격을 다시 불러온 뒤 구매 시기를 살펴볼 수 있어요." };
   if (input.currentStatus === "unavailable" || input.currentStatus === "unknown" || input.currentPriceWon === undefined || !Number.isFinite(input.currentPriceWon)) {
-    return { state: "unavailable", label: "가격 확인 필요", summary: "현재 가격을 확인할 수 없어 목표가·가격 위치를 판단하지 않습니다." };
+    return { state: "unavailable", label: "가격 확인 필요", summary: "현재 가격을 알 수 없어 목표가에 도달했는지 확인할 수 없어요." };
   }
   if (input.targetPriceWon !== undefined && Number.isFinite(input.targetPriceWon) && input.targetPriceWon > 0 && input.currentPriceWon <= input.targetPriceWon) {
     return { state: "target", label: "목표가 도달", summary: `현재가 ${won(input.currentPriceWon)}가 설정한 목표가 ${won(input.targetPriceWon)} 이하입니다.` };

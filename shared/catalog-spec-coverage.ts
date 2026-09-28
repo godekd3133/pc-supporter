@@ -149,7 +149,7 @@ const CATALOG_MISSING_FIELD_LABELS: Record<string, string> = {
 };
 
 export function catalogMissingFieldLabelFor(field: string) {
-  return CATALOG_MISSING_FIELD_LABELS[field] ?? field;
+  return CATALOG_MISSING_FIELD_LABELS[field] ?? "기타 사양";
 }
 
 const CATALOG_CHANGE_SPEC_FIELD_PREFIX = "정규화 스펙 · ";

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { generatedDraftSummaryFor, generatorVariantsImportPreviewFor } from "./BuildGeneratorView";
+import { generatedDraftSummaryFor, generatedVariantGamingConditionText, generatorVariantsImportPreviewFor, generatorVariantsJsonFor } from "./BuildGeneratorView";
 import type { BuildGenerationResult } from "../shared/types";
 
 const draftSelection: BuildGenerationResult["selection"] = {
@@ -66,6 +66,38 @@ describe("generatedDraftSummaryFor", () => {
   it("keeps an exact budget when it cannot be written in whole ten-thousands", () => {
     const draft = importedDraft({ profile: "office", budgetWon: 2_000_860, withinBudget: false });
     expect(generatedDraftSummaryFor(draft)).toBe("사무용 견적이에요. 예산은 2,000,860원으로 설정했어요.");
+  });
+});
+
+describe("generatedVariantGamingConditionText", () => {
+  it("labels the requested display refresh rate in hertz without claiming measured FPS", () => {
+    const text = generatedVariantGamingConditionText(importedDraft({ profile: "gaming" }));
+    expect(text).toContain("144Hz");
+    expect(text).not.toContain("FPS");
+  });
+});
+
+describe("generatorVariantsJsonFor", () => {
+  it("omits fixed-anchor analysis scores and analysis details from customer exports", () => {
+    const draft = importedDraft({
+      analysis: {
+        profile: "general",
+        overallScore: 87,
+        scoreLabel: "상위권",
+        scoreBasis: "고정 기준 점수",
+        confidence: "high",
+        factors: [],
+        strengths: [],
+        focusAreas: [],
+        bottlenecks: [],
+        nextActions: []
+      }
+    });
+    const exported = JSON.parse(generatorVariantsJsonFor([{ priority: "balanced", draft }])) as { items: Array<Record<string, unknown>> };
+
+    expect(exported.items[0]).not.toHaveProperty("analysisScore");
+    expect(exported.items[0].draft).not.toHaveProperty("analysis");
+    expect(exported.items[0].totalPriceWon).toBe(draft.totalPriceWon);
   });
 });
 

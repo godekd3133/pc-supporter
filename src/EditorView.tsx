@@ -57,7 +57,7 @@ export function MobileEditorSurface({ build, partMap, accessoryMap, checking, ch
   }
 
   return <section className="mobile-editor-surface" aria-label="모바일 견적 편집">
-    <div className="mobile-editor-heading"><div><h1>견적 구성</h1></div><span className="mobile-editor-count"><strong>{selectedCount}</strong><small>/ {preflight.requiredTotal} 필수</small></span></div>
+    <div className="mobile-editor-heading"><div><h1>견적 구성</h1></div></div>
     <div className="mobile-editor-tools"><input ref={importInputRef} type="file" accept=".json,application/json" aria-label="견적 JSON 파일 가져오기" onChange={(event) => void importBuildFile(event)} disabled={checking} /><button type="button" onClick={() => importInputRef.current?.click()} disabled={checking}><FiDatabase /> 가져오기</button><button type="button" onClick={onExportBuild} disabled={checking}><FiDownload /> 저장</button><button type="button" onClick={onReset} disabled={checking}><FiRefreshCw /> 초기화</button></div>
     <div className="mobile-editor-progress"><div><span>필수 부품</span><strong>{selectedCount} / {preflight.requiredTotal}</strong></div><div className="mobile-progress-track"><span style={{ width: `${progress}%` }} /></div></div>
     <section className="mobile-editor-list" aria-label="부품 선택 목록"><div className="mobile-section-heading"><div><h2>부품 선택</h2></div></div><div className="mobile-editor-rows">{PART_CATEGORIES.map((category) => { const categoryMeta = CATEGORY_META[category]; const selections = selectionList(build, category); const boxedCooler = category === "cooler" && build.cpu ? partMap.get(build.cpu.partId)?.specs.coolerIncluded === true : false; const chosen = selections.length > 0 || boxedCooler; const summary = selections.length === 0 ? boxedCooler ? "선택한 CPU에 기본 포함" : categoryMeta.required ? "필수 부품을 선택해 주세요" : "선택 사항" : selections.map((selection) => `${partMap.get(selection.partId)?.name ?? selection.partId}${selection.quantity > 1 ? ` ×${selection.quantity}` : ""}`).join(", "); const RowIcon = categoryMeta.Icon; return <button className={`mobile-editor-row ${chosen ? "chosen" : ""}`} type="button" key={category} onClick={() => onOpenPicker(category)}><span className="mobile-editor-row-icon"><RowIcon /></span><span className="mobile-editor-row-copy"><strong>{categoryMeta.label}{categoryMeta.required && <em>필수</em>}</strong><small>{summary}</small></span>{!chosen && <span className={`mobile-editor-row-state ${categoryMeta.required ? "required" : "optional"}`}>{categoryMeta.required ? "필수" : "선택"}</span>}<FiArrowRight className="mobile-editor-row-arrow" /></button>; })}</div></section>
@@ -150,13 +150,18 @@ export function EditorView({
   }
   const requiredCount = preflight.requiredTotal;
   const selectedCount = preflight.requiredSelectedCount;
+  const selectedCategories = PART_CATEGORIES.map((category) => {
+    const selections = selectionList(build, category);
+    const boxedCooler = category === "cooler" && build.cpu ? partMap.get(build.cpu.partId)?.specs.coolerIncluded === true : false;
+    return { category, selections, boxedCooler };
+  }).filter(({ selections, boxedCooler }) => selections.length > 0 || boxedCooler);
   return (
     <div className="workspace-page">
       {upgradeEntry && <UpgradeEntryBanner />}
       <MobileEditorSurface build={build} partMap={partMap} accessoryMap={accessoryMap} checking={checking} checkError={checkError} hasLastResult={hasLastResult} recommendationPreferences={recommendationPreferences} onRecommendationPreferencesChange={onRecommendationPreferencesChange} onOpenPicker={onOpenPicker} onCheck={onCheck} onExportBuild={onExportBuild} onImportBuild={onImportBuild} onReset={onReset} onRefreshCatalogItem={onRefreshCatalogItem} onRefreshAllCatalogItems={onRefreshAllCatalogItems} refreshingPartId={refreshingPartId} onToast={onToast} />
       <div className="desktop-editor-surface">
       <div className="workspace-heading">
-        <div><button className="back-link" onClick={onBack}><FiArrowLeft /> 홈으로</button><h1>내 견적 구성</h1><p>부품을 고르면, 함께 쓸 수 있는지 바로 확인할 수 있어요.</p></div>
+        <div><button className="back-link" onClick={onBack}><FiArrowLeft /> 홈으로</button><h1>내 견적 구성</h1><p>필수 부품을 선택한 뒤 호환 여부를 확인하세요.</p></div>
         <div className="build-editor-actions"><input ref={buildImportInputRef} className="build-transfer-input" type="file" accept=".json,application/json" aria-label="견적 JSON 파일 가져오기" onChange={(event) => void importBuildFile(event)} disabled={checking} /><button className="button button-light" type="button" onClick={() => buildImportInputRef.current?.click()} disabled={checking}><FiDatabase /> 견적 JSON 가져오기</button><button className="button button-light" type="button" onClick={onExportBuild} disabled={checking}><FiDownload /> 견적 JSON 저장</button><button className="button button-ghost" type="button" onClick={onReset} disabled={checking}><FiRefreshCw /> 초기화</button></div>
       </div>
       <div className="progress-strip"><div><span className="progress-label">필수 부품 선택</span><strong>{selectedCount} / {requiredCount}</strong></div><div className="progress-track"><span style={{ width: `${(selectedCount / requiredCount) * 100}%` }} /></div></div>
@@ -172,9 +177,9 @@ export function EditorView({
           <ChangeHistoryPanel entries={changeHistory} onRestore={onRestoreChange} restoring={checking} />
         </section>
         <aside className="summary-sidebar">
-          <div className="sticky-summary">
-            <div className="summary-header"><div><h2>견적 준비 상태</h2></div><span className="summary-pulse"><FiActivity /></span></div>
-            <div className="summary-list">{PART_CATEGORIES.map((category) => { const boxed = category === "cooler" && build.cpu ? partMap.get(build.cpu.partId)?.specs.coolerIncluded === true : false; const chosen = selectionList(build, category).length > 0 || boxed; return <div className={chosen ? "summary-row chosen" : "summary-row"} key={category}><span className="summary-check">{chosen ? <FiCheck /> : <span />}</span><span>{CATEGORY_LABELS[category]}</span></div>; })}</div>
+          <div className="sticky-summary build-editor-summary">
+            <div className="summary-header"><h2>핵심 부품</h2><span className="build-editor-summary-count">{selectedCategories.length}종</span></div>
+            <div className="build-editor-selected-list" aria-label="선택한 핵심 부품 목록">{selectedCategories.length > 0 ? selectedCategories.map(({ category, selections, boxedCooler }) => <div className="build-editor-selected-row" key={category}><span>{CATEGORY_LABELS[category]}</span><strong>{selections.length > 0 ? selections.map((selection) => `${partMap.get(selection.partId)?.name ?? "부품 정보 없음"}${selection.quantity > 1 ? ` ×${selection.quantity}` : ""}`).join(", ") : boxedCooler ? "CPU에 기본 포함" : ""}</strong></div>) : <p>부품을 선택하면 여기에 표시됩니다.</p>}</div>
             <div className="summary-divider" />
             <div className="graphics-mode"><div><span className="mini-label">그래픽 출력</span><strong>{build.gpu ? "외장 그래픽카드" : build.useIntegratedGraphics ? "CPU 내장 그래픽" : "선택 필요"}</strong></div><FiMonitor /></div>
             <details className="desktop-summary-details">

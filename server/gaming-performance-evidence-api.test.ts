@@ -122,7 +122,13 @@ describe("gaming performance evidence admin API", () => {
         })
       });
       expect(compatibility.status).toBe(200);
-      expect(await compatibility.json()).toMatchObject({ gamingPerformanceAssessment: { status: "verified", gameIds: ["cyberpunk"], gpuPartId: "gpu-rtx-4060", matchedRecordIds: [evidence.id], measurements: [{ averageFps: 158 }] } });
+      const compatibilityPayload = await compatibility.json() as Record<string, any>;
+      expect(compatibilityPayload.status).toBeDefined();
+      expect(compatibilityPayload.blockerCount).toEqual(expect.any(Number));
+      expect(compatibilityPayload.findings).toEqual(expect.any(Array));
+      expect(compatibilityPayload.gamingPerformanceAssessment).toBeUndefined();
+      expect(compatibilityPayload.analysis).toBeUndefined();
+      expect(JSON.stringify(compatibilityPayload)).not.toMatch(/averageFps|onePercentLowFps|benchmarkSnapshot|recommendationTrust|analysisScore|overallScore|gpuTarget|performanceSummary/);
 
       const updated = await fetch(`${baseUrl}/api/admin/gaming-performance-evidence`, {
         method: "PUT",
@@ -158,7 +164,11 @@ describe("gaming performance evidence admin API", () => {
         })
       });
       expect(compatibilityAfterEvidenceUpdate.status).toBe(200);
-      expect(await compatibilityAfterEvidenceUpdate.json()).toMatchObject({ gamingPerformanceAssessment: { status: "verified", measurements: [{ averageFps: 170 }] } });
+      const updatedCompatibilityPayload = await compatibilityAfterEvidenceUpdate.json() as Record<string, any>;
+      expect(updatedCompatibilityPayload.status).toBeDefined();
+      expect(updatedCompatibilityPayload.gamingPerformanceAssessment).toBeUndefined();
+      expect(updatedCompatibilityPayload.analysis).toBeUndefined();
+      expect(JSON.stringify(updatedCompatibilityPayload)).not.toMatch(/averageFps|onePercentLowFps|gamingPerformanceAssessment|gpuTarget|performanceSummary/);
       await waitForUsageEventCount(join(directory, "usage-events.json"), 2);
     } finally {
       if (server) await closeServer(server);

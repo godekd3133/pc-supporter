@@ -34,7 +34,7 @@ try {
   await waitForValue(client, "location.pathname === '/build'", "편집기");
   await selectLabel(client, "사용 목적", "gaming");
   await selectLabel(client, "게임 해상도", "1440p");
-  await selectLabel(client, "목표 주사율", "144");
+  await selectLabel(client, "희망 주사율", "144");
   const checkButton = await client.evaluate("(() => { const button = [...document.querySelectorAll('button')].find((candidate) => !candidate.disabled && (candidate.textContent ?? '').includes('호환성 검사하기')); button?.click(); return button instanceof HTMLButtonElement; })()");
   if (!checkButton) throw new Error("호환성 검사 버튼을 찾지 못했습니다.");
   await waitForValue(client, "location.pathname === '/result' && document.querySelector('.result-page') !== null", "결과 화면");

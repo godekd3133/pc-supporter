@@ -244,14 +244,14 @@ export function generatorBriefInterpretationFor(input: string): GeneratorBriefIn
     const raw = resolutionMatch[0].toLowerCase();
     const resolution: GamingResolution = raw.includes("4k") || raw.includes("2160") ? "4k" : raw.includes("qhd") || raw.includes("1440") ? "1440p" : "1080p";
     addMatch(config, matches, "gamingResolution", resolution, "게임 해상도", resolution === "4k" ? "4K" : resolution === "1440p" ? "QHD" : "FHD", resolutionMatch[0]);
-    if (config.profile === undefined) addMatch(config, matches, "profile", "gaming", "사용 목적", "게임용으로 분류", "게이밍");
+    if (config.profile === undefined) addMatch(config, matches, "profile", "gaming", "사용 목적", "게임용", "게이밍");
   }
 
   const refreshMatch = text.match(/(240|144|60)\s*(?:hz|헤르츠|주사율)/i);
   if (refreshMatch) {
     const refreshRate = Number(refreshMatch[1]) as GamingRefreshRate;
     addMatch(config, matches, "gamingRefreshRate", refreshRate, "목표 주사율", `${refreshRate}Hz`, refreshMatch[0]);
-    if (config.profile === undefined) addMatch(config, matches, "profile", "gaming", "사용 목적", "게임용으로 분류", "게이밍");
+    if (config.profile === undefined) addMatch(config, matches, "profile", "gaming", "사용 목적", "게임용", "게이밍");
   }
 
   const budget = budgetFromBrief(text);
@@ -291,7 +291,7 @@ export function generatorBriefInterpretationFor(input: string): GeneratorBriefIn
   else if (/벌크/i.test(text)) addMatch(config, matches, "listingPolicy", "include_bulk", "구매 조건", "벌크 포함", "벌크 포함");
   else if (/신품|정식\s*유통|정품/i.test(text)) addMatch(config, matches, "listingPolicy", "retail_only", "구매 조건", "신품·정식 유통", "신품·정식 유통");
 
-  if (matches.length === 0) warnings.push("해석할 수 있는 조건이 없습니다. 예: QHD 게이밍 220만원, RAM 32GB, SSD 2TB");
+  if (matches.length === 0) warnings.push("입력한 내용에서 견적 조건을 찾지 못했어요. 예: QHD 게임용 220만원, RAM 32GB, SSD 2TB");
   const hasHardConflict = warnings.some((warning) => warning.includes("조건이 함께 감지"));
   const confidence = hasHardConflict ? "low" : matches.length >= 4 && warnings.length === 0 ? "high" : matches.length >= 1 && warnings.length <= 1 ? "medium" : "low";
   return { config, matches, warnings, confidence, coverage: briefCoverageFor(config), guidance: briefGuidanceFor(config) };

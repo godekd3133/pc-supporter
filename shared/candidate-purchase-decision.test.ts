@@ -24,7 +24,7 @@ describe("candidate purchase decision", () => {
     const result = candidatePurchaseDecisionFor({ ...base, candidateRisk: "unsafe", remainingBlockers: 1, nextStatus: "incompatible" });
 
     expect(result).toMatchObject({ state: "hold", label: "적용 보류" });
-    expect(result.reasons.join(" ")).toContain("차단");
+    expect(result.reasons.join(" ")).toContain("현재 구성과 호환되지 않습니다.");
   });
 
   it("requires review when any material uncertainty remains", () => {
@@ -50,7 +50,7 @@ describe("candidate purchase decision", () => {
     const result = candidatePurchaseDecisionFor({ ...base, similarityScore: 97, priceDeltaWon: 120000, analysisScoreDelta: -8 });
 
     expect(result).toMatchObject({ state: "review", label: "확인 후 구매" });
-    expect(result.reasons.join(" ")).toContain("전체 성능 점수가 8점 낮아집니다");
+    expect(result.reasons.join(" ")).toContain("바꾼 뒤 성능이 낮아질 수 있어요.");
   });
 
   it("keeps a project reference price in review instead of treating it as a purchase-ready price", () => {

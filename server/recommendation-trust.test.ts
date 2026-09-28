@@ -82,7 +82,7 @@ describe("recommendation trust", () => {
     expect(result.score).toBeGreaterThanOrEqual(80);
     expect(result.reasons).toEqual(expect.arrayContaining([
       "현재 문제를 해결하는 부품입니다.",
-      "부품 자체를 적용해 새 차단 오류와 확인 필요가 없습니다."
+      "이 부품을 추가해도 새로운 호환 문제나 확인 필요 항목이 생기지 않아요."
     ]));
   });
 
@@ -118,7 +118,7 @@ describe("recommendation trust", () => {
       remainingWarningCount: 2,
       remainingUnknownCount: 1
     });
-    expect(result.reasons).toContain("전체 견적에는 차단 4개·주의 2개·확인 필요 1개가 남아 이 부품 하나로 전체 해결되지는 않습니다.");
+    expect(result.reasons).toContain("전체 견적에는 호환 불가 4개·주의 2개·확인 필요 1개가 남아 있어요.");
   });
 
   it("gives structured official benchmark provenance more weight than an unclassified score", () => {
@@ -319,7 +319,7 @@ describe("recommendation trust", () => {
     expect(result.priceKnown).toBe(false);
     expect(result.sourceAvailable).toBe(false);
     expect(result.reasons).toEqual(expect.arrayContaining([
-      "부품 자체의 차단 오류는 없지만 확인 필요 1개가 남습니다.",
+      "부품 자체에 호환 문제는 없지만 확인할 정보 1개가 있어요.",
       "확인되지 않은 부품 정보가 3개 있습니다.",
       "현재 가격을 알 수 없어 총액을 비교하지 않았습니다."
     ]));

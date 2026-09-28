@@ -32,7 +32,7 @@ function writeCheckedIdsToStorage(storageKey: string, checkedIds: string[]) {
 }
 
 function severityLabel(severity: "blocker" | "warning" | "unknown" | "manual") {
-  return severity === "blocker" ? "차단" : severity === "warning" ? "주의" : severity === "unknown" ? "정보 부족" : "직접 확인";
+  return severity === "blocker" ? "호환 불가" : severity === "warning" ? "주의" : severity === "unknown" ? "정보 부족" : "직접 확인";
 }
 
 type ChecklistFilter = "all" | "finding" | "manual";
@@ -185,7 +185,7 @@ export function PurchaseChecklistPanel({ build, result, partMap, storageKey, onF
   const headingLabel = progress.total === 0
     ? "확인 항목 없음"
       : result.blockerCount > 0 || resourceBlocked
-        ? allChecked ? resourceBlocked && result.blockerCount === 0 ? "체크 완료 · 전력·냉각 기준 미달" : `체크 완료 · 차단 ${result.blockerCount}개 남음` : "구매 보류 항목 있음"
+        ? allChecked ? resourceBlocked && result.blockerCount === 0 ? "체크 완료 · 전력·냉각 기준 미달" : `체크 완료 · 호환 불가 ${result.blockerCount}개 남음` : "구매 보류 항목 있음"
       : result.warningCount > 0 || result.unknownCount > 0
         ? allChecked ? "체크 완료 · 호환 결과 정보 부족" : `${progress.remaining}개 남음`
         : resourceNeedsReview

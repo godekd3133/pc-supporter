@@ -2,11 +2,13 @@ import { Suspense, lazy, useEffect, useState } from "react";
 import type { IconType } from "react-icons";
 import { FiActivity, FiAlertTriangle, FiArrowRight, FiBell, FiCheckCircle, FiChevronDown, FiCpu, FiDatabase, FiEdit3, FiInfo, FiLoader, FiMonitor, FiRefreshCw, FiSearch, FiShield, FiTag, FiTarget, FiTrendingUp, FiXCircle, FiZap } from "react-icons/fi";
 import type { BuildSelection, CompatibilityResult, Part, PartCategory, PartSelection, ServiceMeta } from "../shared/types";
-import { PART_CATEGORIES } from "../shared/types";
+import { CATEGORY_LABELS, PART_CATEGORIES } from "../shared/types";
 import type { BudgetLadderLocalShareEntry } from "../shared/budget-ladder-local-history";
 import type { AlternativeComparisonLocalShareEntry } from "../shared/alternative-comparison-local-history";
 import type { SavedBuildVersionLocalShareEntry } from "../shared/saved-build-version-local-history";
 import type { SavedBuildMonitorAlternative } from "../shared/saved-build-monitor-alerts";
+import { savedBuildMonitorSummaryForDisplay, savedBuildMonitorTitleForDisplay } from "../shared/saved-build-monitor-copy";
+import { compatibilityDisplayStatusFor } from "../shared/compatibility-display-status";
 
 export type AlertCenterItem = {
   id: string;
@@ -30,7 +32,7 @@ function HomeAlertCenter({ items, unreadCount, hasBuildAlerts, hasWatchlistAlert
         : FiTag;
       return <article className={`home-alerts-item ${item.read ? "" : "unread"}`} data-testid={`home-alert-${item.id}`} key={item.id}>
         <span className={`home-alerts-item-icon ${item.source}`}><ItemIcon /></span>
-        <div className="home-alerts-item-copy"><div className="home-alerts-item-title"><strong>{item.title}</strong><span>{item.source === "build" ? "저장한 견적" : "가격 추적"} · {item.sourceLabel}</span></div><p>{item.message}</p>{item.alternative && <div className="home-alerts-alternative"><span>{item.alternative.currentPartName}</span><b>→</b><strong>{item.alternative.candidatePartName}</strong>{item.alternative.priceDeltaWon !== undefined && <em>{item.alternative.priceDeltaWon < 0 ? `${Math.abs(item.alternative.priceDeltaWon).toLocaleString("ko-KR")}원 절약` : `가격 ${item.alternative.priceDeltaWon > 0 ? "+" : ""}${item.alternative.priceDeltaWon.toLocaleString("ko-KR")}원`}</em>}</div>}<small>{new Date(item.createdAt).toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" })}{item.read ? "" : " · 아직 안 봄"}</small></div>
+        <div className="home-alerts-item-copy"><div className="home-alerts-item-title"><strong>{savedBuildMonitorTitleForDisplay(item.title)}</strong><span>{item.source === "build" ? "저장한 견적" : "가격 추적"} · {item.sourceLabel}</span></div><p>{savedBuildMonitorSummaryForDisplay(item.message)}</p>{item.alternative && <div className="home-alerts-alternative"><span>{item.alternative.currentPartName}</span><b>→</b><strong>{item.alternative.candidatePartName}</strong>{item.alternative.priceDeltaWon !== undefined && <em>{item.alternative.priceDeltaWon < 0 ? `${Math.abs(item.alternative.priceDeltaWon).toLocaleString("ko-KR")}원 절약` : `가격 ${item.alternative.priceDeltaWon > 0 ? "+" : ""}${item.alternative.priceDeltaWon.toLocaleString("ko-KR")}원`}</em>}</div>}<small>{new Date(item.createdAt).toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" })}{item.read ? "" : " · 아직 안 봄"}</small></div>
       </article>;
     })}</div>
     <div className="home-alerts-actions">{hasBuildAlerts && <button className="button button-light" type="button" data-testid="home-alert-open-history" onClick={onOpenHistory}><FiBell /> 저장한 견적 알림 보기</button>}{hasWatchlistAlerts && <button className="button button-light" type="button" data-testid="home-alert-open-watchlist" onClick={onOpenWatchlist}><FiTag /> 가격 추적 보기</button>}</div>
@@ -53,38 +55,55 @@ function accessorySelections(build: BuildSelection) {
   return build.accessories ?? [];
 }
 
-function scenarioStatusLabel(status: CompatibilityResult["status"]) {
-  return status === "compatible" ? "같이 쓸 수 있어요" : status === "needs_review" ? "호환 정보 부족" : "같이 쓰기 어려워요";
-}
-
-function HomeDraftResumePanel({ build, result, resultIsStale, onResume, onOpenResult }: { build: BuildSelection; result: CompatibilityResult | null; resultIsStale: boolean; onResume: () => void; onOpenResult: () => void }) {
-  const coreEntries = PART_CATEGORIES.flatMap((category) => selectionList(build, category));
-  const coreCategoryCount = PART_CATEGORIES.filter((category) => selectionList(build, category).length > 0).length;
-  const accessoryCount = accessorySelections(build).length;
-  if (coreEntries.length === 0 && accessoryCount === 0) return null;
-  const resultLabel = !result ? "호환 결과 없음" : resultIsStale ? "견적이 바뀌었어요 · 새 결과 필요" : scenarioStatusLabel(result.status);
-  const resultClass = !result || resultIsStale ? "review" : result.status;
-  return <section className="home-draft-resume" aria-label="작업 중인 견적">
-    <div className="home-draft-resume-heading"><div><h2>이어서 볼 견적</h2></div><span className={`home-draft-result ${resultClass}`}><span className="status-dot" /> {resultLabel}</span></div>
-    <div className="home-draft-resume-summary"><div><span>선택한 핵심 부품</span><strong>{coreEntries.length}개 · {coreCategoryCount}개 범주</strong></div><div><span>주변 부품</span><strong>{accessoryCount}종</strong></div>{result && !resultIsStale ? <div><span>호환성</span><strong>{result.blockerCount > 0 ? "문제 " + result.blockerCount + "개" : "문제 없음"}{result.warningCount > 0 ? " · 주의 " + result.warningCount + "개" : ""}{result.unknownCount > 0 ? " · 사양 정보 부족 " + result.unknownCount + "개" : ""}</strong></div> : <div><span>다음 단계</span><strong>호환 결과를 확인해 보세요</strong></div>}</div>
-    <div className="home-draft-resume-actions"><button className="button button-primary" type="button" onClick={onResume}><FiEdit3 /> 견적 이어서 보기</button>{result && !resultIsStale && <button className="button button-light" type="button" onClick={onOpenResult}><FiActivity /> 호환성 결과 보기</button>}</div>
-  </section>;
-}
-
-function FeatureCard({ Icon, number, title, description }: { Icon: IconType; number: string; title: string; description: string }) {
-  return <article className="feature-card"><span className="feature-number">{number}</span><Icon className="feature-icon" /><h3>{title}</h3><p>{description}</p></article>;
+function FeatureCard({ Icon, title, description }: { Icon: IconType; title: string; description: string }) {
+  return <article className="feature-card"><Icon className="feature-icon" /><h3>{title}</h3><p>{description}</p></article>;
 }
 
 function GuidedHomePreview() {
   return <div className="hero-panel guided-home-preview" data-testid="home-guided-entry">
     <div className="panel-kicker">견적 시작</div>
-    <div className="guided-home-preview-heading"><div><strong>추천 견적 만들기</strong><span>부품 모델명 없이 용도·성능·예산으로 시작할 수 있어요.</span></div></div>
-    <div className="guided-home-preview-steps">
-      <div><b>01</b><span>사용 목적</span><strong>게임 · 작업 · 예산</strong></div>
-      <div><b>02</b><span>목표 성능</span><strong>4K · 144 FPS</strong></div>
-      <div><b>03</b><span>추천 결과</span><strong>부품 조합 · 예상 금액</strong></div>
-    </div>
+    <div className="guided-home-preview-heading"><div><strong>용도와 예산 선택</strong><span>선택한 조건에 맞춰 PC 견적을 구성합니다.</span></div></div>
+    <dl className="guided-home-preview-choices">
+      <div><dt>사용 목적</dt><dd>게임 · 작업</dd></div>
+      <div><dt>화면과 성능</dt><dd>FHD · QHD · 4K</dd></div>
+      <div><dt>예산</dt><dd>원하는 금액</dd></div>
+    </dl>
   </div>;
+}
+
+function HomeCurrentBuildPreview({ build, result, resultIsStale, partMap, onOpenResult }: { build: BuildSelection; result: CompatibilityResult | null; resultIsStale: boolean; partMap: ReadonlyMap<string, Part>; onOpenResult: () => void }) {
+  const selectedCategories = PART_CATEGORIES
+    .map((category) => ({ category, selections: selectionList(build, category) }))
+    .filter((entry) => entry.selections.length > 0);
+  const selectedPartCount = selectedCategories.reduce((total, entry) => total + entry.selections.reduce((count, selection) => count + selection.quantity, 0), 0);
+  const accessoryCount = accessorySelections(build).reduce((total, selection) => total + selection.quantity, 0);
+  const resultIsCurrent = Boolean(result && !resultIsStale);
+  const displayStatus = result ? compatibilityDisplayStatusFor(result) : undefined;
+  const accessoryCompatibility = result?.accessoryCompatibility;
+  const warningCount = (result?.warningCount ?? 0) + (accessoryCompatibility?.warningCount ?? 0);
+  const status = !result ? "호환 확인 전" : resultIsStale ? "구성이 바뀌었어요" : displayStatus === "incompatible" ? result.status === "incompatible" ? "호환되지 않는 부품이 있어요" : "주변 부품의 호환을 확인해 주세요" : displayStatus === "needs_review" ? result.status === "needs_review" ? "확인할 정보가 있어요" : "주변 부품 정보가 부족해요" : warningCount > 0 ? "호환되지만 확인할 항목이 있어요" : "호환에 문제가 없어요";
+  const statusTone = !result || resultIsStale ? "review" : displayStatus ?? "review";
+  const resultCounts = resultIsCurrent
+    ? [
+        result!.blockerCount > 0 ? `호환 불가 ${result!.blockerCount}개` : "",
+        result!.warningCount > 0 ? `주의 ${result!.warningCount}개` : "",
+        result!.unknownCount > 0 ? `확인할 정보 ${result!.unknownCount}개` : "",
+        accessoryCompatibility?.blockerCount ? `주변 부품 호환 불가 ${accessoryCompatibility.blockerCount}개` : "",
+        accessoryCompatibility?.warningCount ? `주변 부품 주의 ${accessoryCompatibility.warningCount}개` : "",
+        accessoryCompatibility?.unknownCount ? `주변 부품 확인 필요 ${accessoryCompatibility.unknownCount}개` : ""
+      ].filter(Boolean).join(" · ") || "부품 간 호환 문제를 찾지 못했어요."
+    : resultIsStale ? "부품 구성이 바뀌어 이전 결과는 현재 견적에 적용되지 않아요." : "부품을 고른 뒤 호환 결과를 확인해 주세요.";
+  return <section className="hero-panel home-current-preview" aria-label="현재 부품 구성" data-testid="home-current-build-preview">
+    <div className="panel-kicker">현재 구성</div>
+    <div className={`home-current-preview-status ${statusTone}`}><span className="status-dot" /><strong>{status}</strong></div>
+    <p className="home-current-preview-summary">{resultCounts}</p>
+    <div className="home-current-preview-parts">
+      {selectedCategories.slice(0, 3).map(({ category, selections }) => <div key={category}><span>{CATEGORY_LABELS[category]}</span><strong>{selections.map((selection) => partMap.get(selection.partId)?.name ?? "부품 정보 없음").join(" · ")}</strong></div>)}
+      {selectedCategories.length > 3 && <small>그 밖의 부품 {selectedCategories.length - 3}종</small>}
+    </div>
+    <p className="home-current-preview-count">부품 {selectedPartCount}개{accessoryCount > 0 ? ` · 주변 부품 ${accessoryCount}개` : ""}</p>
+    {resultIsCurrent && <button className="text-button home-current-preview-link" type="button" onClick={onOpenResult}>호환 결과 보기 <FiArrowRight /></button>}
+  </section>;
 }
 
 type MobileHomeRow = { label: string; category: PartCategory; Icon: IconType };
@@ -100,8 +119,10 @@ function mobileHomeRowState(build: BuildSelection, result: CompatibilityResult |
   const selections = selectionList(build, category);
   if (selections.length === 0) return { state: "아직 안 골랐어요", tone: "empty", name: "부품을 골라 주세요" };
   const names = selections.map((selection) => partMap.get(selection.partId)?.name ?? selection.partId).join(", ");
-  const hasFinding = result && !resultIsStale && result.findings.some((finding) => selections.some((selection) => finding.affectedPartIds.includes(selection.partId)));
-  if (hasFinding) return { state: "호환 정보 부족", tone: "warning", name: names };
+  const findings = result && !resultIsStale ? result.findings.filter((finding) => selections.some((selection) => finding.affectedPartIds.includes(selection.partId))) : [];
+  if (findings.some((finding) => finding.severity === "blocker")) return { state: "호환 불가", tone: "incompatible", name: names };
+  if (findings.some((finding) => finding.severity === "warning")) return { state: "주의", tone: "warning", name: names };
+  if (findings.some((finding) => finding.severity === "unknown")) return { state: "확인 필요", tone: "review", name: names };
   if (result && !resultIsStale) return { state: "괜찮아요", tone: "success", name: names };
   return { state: "", tone: "neutral", name: names };
 }
@@ -110,31 +131,32 @@ function MobileHomeView({ build, result, resultIsStale, partMap, alertItems, ale
   const selectedCategoryCount = PART_CATEGORIES.filter((category) => selectionList(build, category).length > 0).length;
   const selectedItemCount = PART_CATEGORIES.reduce((count, category) => count + selectionList(build, category).length, 0);
   const hasBuild = selectedItemCount > 0;
-  const progress = Math.round((selectedCategoryCount / PART_CATEGORIES.length) * 100);
   const resultReady = Boolean(result && !resultIsStale);
-  const overallState = resultReady ? scenarioStatusLabel(result!.status) : hasBuild ? "견적 준비 완료" : "아직 시작하지 않았어요";
-  const overallTone = resultReady ? result!.status : hasBuild ? "review" : "empty";
+  const displayStatus = result ? compatibilityDisplayStatusFor(result) : undefined;
+  const warningCount = (result?.warningCount ?? 0) + (result?.accessoryCompatibility?.warningCount ?? 0);
+  const statusCopy = !resultReady ? undefined
+    : displayStatus === "incompatible" ? result!.status === "incompatible" ? "호환되지 않는 부품이 있습니다." : "주변 부품의 호환을 확인해 주세요."
+    : displayStatus === "needs_review" ? result!.status === "needs_review" ? "확인이 필요한 부품이 있습니다." : "주변 부품 정보를 더 확인해 주세요."
+    : warningCount > 0 ? "호환되지만 추가 확인 항목이 있습니다."
+    : "모든 부품이 호환됩니다.";
   return <section className="mobile-home-view" aria-label="PC Supporter 모바일 홈">
     <div className="mobile-home-heading">
-      <div><span className="mobile-kicker">내 견적</span><h1>내 PC</h1><p>{resultReady ? "현재 구성의 호환 결과예요." : hasBuild ? "고른 부품의 호환 결과를 확인해 보세요." : "게임이나 작업에 맞는 PC를 골라보세요."}</p></div>
-      <span className={`mobile-home-status ${overallTone}`}><span className="mobile-status-dot" /> {overallState}</span>
+      <div><span className="mobile-kicker">내 견적</span><h1>내 PC</h1><p>{statusCopy ?? (hasBuild ? result ? "부품 구성이 바뀌었습니다. 호환 결과를 다시 확인하세요." : "부품 선택을 마치면 호환 결과를 확인할 수 있습니다." : "예산과 용도를 정해 PC 견적을 구성하세요.")}</p></div>
     </div>
     {!hasBuild && !resultReady
-      ? <section className="mobile-guided-entry" data-testid="mobile-home-guided-entry" aria-label="첫 사용자 guided quote">
+      ? <section className="mobile-guided-entry" data-testid="mobile-home-guided-entry" aria-label="새 견적 안내">
           <span className="mobile-kicker">견적 시작</span>
-          <h2>용도·성능·예산으로<br />PC 견적을 만들어요.</h2>
-          <p>부품 모델명은 몰라도 됩니다.</p>
-          <div className="mobile-guided-steps"><div><b>01</b><span>사용 목적</span><strong>게임 · 작업 · 예산</strong></div><div><b>02</b><span>목표 성능</span><strong>4K · 144 FPS</strong></div><div><b>03</b><span>예상 결과</span><strong>예상 가격 · 부품 구성</strong></div></div>
+          <h2>용도와 예산으로<br />PC 견적을 구성합니다.</h2>
+          <p>부품 이름을 몰라도 시작할 수 있습니다.</p>
         </section>
       : <section className="mobile-current-build" aria-label="현재 견적">
           <div className="mobile-section-heading"><div><span className="mobile-kicker">현재 견적</span><h2>{hasBuild ? resultReady ? "최근 견적" : "현재 구성" : "새 견적"}</h2></div><button type="button" className="mobile-section-link" onClick={resultReady ? onOpenResult : onStart}>{resultReady ? "상세 보기" : "수정하기"}<FiArrowRight /></button></div>
-          <div className="mobile-health-summary"><div className="mobile-health-score"><span className="mobile-health-score-value"><strong>{resultReady ? Math.max(0, PART_CATEGORIES.length - result!.blockerCount) : selectedCategoryCount}</strong><span>/ {PART_CATEGORIES.length}</span></span></div><div className="mobile-health-copy">{resultReady ? <strong>{result!.status === "compatible" ? "같이 쓸 수 있어요" : result!.status === "needs_review" ? "사양 정보가 부족해요" : "바꿔야 할 항목이 있어요"}</strong> : null}</div></div>
-          <div className="mobile-progress-track" aria-label={`필수 부품 ${selectedCategoryCount}개 선택, ${PART_CATEGORIES.length}개 중`} role="progressbar" aria-valuemin={0} aria-valuemax={PART_CATEGORIES.length} aria-valuenow={selectedCategoryCount}><span style={{ width: `${progress}%` }} /></div>
+          <p className="mobile-selection-count">필수 부품 <strong>{selectedCategoryCount}/{PART_CATEGORIES.length}</strong>종 선택</p>
           <div className="mobile-build-list">{MOBILE_HOME_ROWS.map(({ label, category, Icon }) => { const row = mobileHomeRowState(build, result, resultIsStale, category, partMap); return <button className={`mobile-build-row ${row.tone}`} type="button" key={category} onClick={onStart}><span className="mobile-build-icon"><Icon /></span><span className="mobile-build-copy"><strong>{label}</strong><small>{row.name}</small></span>{row.state && <span className={`mobile-row-state ${row.tone}`}>{row.state}</span>}<FiArrowRight className="mobile-build-arrow" /></button>; })}</div>
         </section>}
     <div className="mobile-primary-actions"><button className="mobile-primary-action" data-testid="mobile-home-primary-action" type="button" onClick={resultReady ? onOpenResult : hasBuild ? onStart : onGuidedStart}><FiSearch /><span>{resultReady ? "최근 견적 결과 보기" : hasBuild ? "견적 이어서 만들기" : "새 견적 시작하기"}</span><FiArrowRight /></button>{resultReady && <button className="mobile-secondary-action" type="button" onClick={onStart}><FiEdit3 /><span>견적 수정하기</span><FiArrowRight /></button>}</div>
-    <section className="mobile-next-steps" aria-label="다음 단계"><div className="mobile-section-heading"><div><span className="mobile-kicker">바로 시작</span><h2>추천 구성</h2></div><button type="button" className="mobile-section-link" onClick={onOpenHistory}>저장한 견적<FiArrowRight /></button></div><button className="mobile-recommend-card" data-testid="mobile-home-recommend" type="button" onClick={hasBuild ? onGenerate : onStart}><span className="mobile-recommend-icon">{hasBuild ? <FiZap /> : <FiEdit3 />}</span><span className="mobile-recommend-copy"><strong>{hasBuild ? "용도·예산으로 다시 추천받기" : "부품을 직접 선택하기"}</strong></span><FiArrowRight /></button></section>
-    {alertItems.length > 0 && <section className="mobile-alert-preview" aria-label="모바일 알림 센터" data-testid="mobile-home-alert-center"><div className="mobile-section-heading"><div><h2>알림</h2></div>{alertUnreadCount > 0 && <span className="mobile-alert-badge">읽지 않은 알림 {alertUnreadCount}개</span>}</div><div className="mobile-alert-preview-list">{alertItems.slice(0, 2).map((item) => { const ItemIcon = item.kind === "alternative" ? FiTrendingUp : item.source === "watchlist" ? FiTag : FiBell; return <article className={`mobile-alert-preview-item ${item.kind}`} key={item.id}><span className="mobile-alert-preview-icon"><ItemIcon /></span><div><strong>{item.title}</strong><p>{item.message}</p>{item.alternative && <small>{item.alternative.currentPartName} → {item.alternative.candidatePartName}{item.alternative.priceDeltaWon !== undefined && item.alternative.priceDeltaWon < 0 ? ` · ${Math.abs(item.alternative.priceDeltaWon).toLocaleString("ko-KR")}원 절약` : ""}</small>}</div></article>; })}</div><button className="mobile-alert-preview-action" type="button" onClick={() => alertItems[0].source === "watchlist" ? onOpenWatchlist() : onOpenHistory()}><FiBell /> 알림 자세히 보기 <FiArrowRight /></button></section>}
+    <section className="mobile-next-steps" aria-label="견적 구성"><div className="mobile-section-heading"><div><span className="mobile-kicker">견적 구성</span><h2>다른 구성</h2></div><button type="button" className="mobile-section-link" onClick={onOpenHistory}>저장한 견적<FiArrowRight /></button></div><button className="mobile-recommend-card" data-testid="mobile-home-recommend" type="button" onClick={hasBuild ? onGenerate : onStart}><span className="mobile-recommend-icon">{hasBuild ? <FiZap /> : <FiEdit3 />}</span><span className="mobile-recommend-copy"><strong>{hasBuild ? "용도·예산으로 다시 구성하기" : "부품을 직접 선택하기"}</strong></span><FiArrowRight /></button></section>
+    {alertItems.length > 0 && <section className="mobile-alert-preview" aria-label="모바일 알림 센터" data-testid="mobile-home-alert-center"><div className="mobile-section-heading"><div><h2>알림</h2></div>{alertUnreadCount > 0 && <span className="mobile-alert-badge">읽지 않은 알림 {alertUnreadCount}개</span>}</div><div className="mobile-alert-preview-list">{alertItems.slice(0, 2).map((item) => { const ItemIcon = item.kind === "alternative" ? FiTrendingUp : item.source === "watchlist" ? FiTag : FiBell; return <article className={`mobile-alert-preview-item ${item.kind}`} key={item.id}><span className="mobile-alert-preview-icon"><ItemIcon /></span><div><strong>{savedBuildMonitorTitleForDisplay(item.title)}</strong><p>{savedBuildMonitorSummaryForDisplay(item.message)}</p>{item.alternative && <small>{item.alternative.currentPartName} → {item.alternative.candidatePartName}{item.alternative.priceDeltaWon !== undefined && item.alternative.priceDeltaWon < 0 ? ` · ${Math.abs(item.alternative.priceDeltaWon).toLocaleString("ko-KR")}원 절약` : ""}</small>}</div></article>; })}</div><button className="mobile-alert-preview-action" type="button" onClick={() => alertItems[0].source === "watchlist" ? onOpenWatchlist() : onOpenHistory()}><FiBell /> 알림 자세히 보기 <FiArrowRight /></button></section>}
     <details className="mobile-demo-tools"><summary>예시 구성 보기</summary><div><button type="button" onClick={onDemo}>문제 있는 예시 견적</button><button type="button" onClick={onCompatibleDemo}>문제 없는 예시 견적</button></div></details>
   </section>;
 }
@@ -147,24 +169,17 @@ export function HomeView({ meta, build, result, resultIsStale, partMap, budgetLa
     <section className="hero-section">
       <div className="hero-copy">
         {hasAnySelection
-          ? <><p className="eyebrow hero-eyebrow"><FiShield /> 부품 호환 결과</p><h1>고른 부품,<br /><span>서로 잘 맞는지 살펴봐요.</span></h1><p className="hero-description">호환 결과와 예산을 보고, 필요하면 바꿀 부품을 비교해요.</p></>
-          : <><p className="eyebrow hero-eyebrow"><FiTarget /> 새 PC 맞추기</p><h1>게임·작업에 맞는 PC,<br /><span>예산 안에서 골라봐요.</span></h1><p className="hero-description">게임이나 작업 용도와 예산을 정하면 부품 조합과 예상 금액을 계산합니다.</p></>}
+          ? <><p className="eyebrow hero-eyebrow"><FiShield /> 현재 견적</p><h1>내 PC 견적</h1><p className="hero-description">{resultIsStale ? "부품 구성이 바뀌었습니다. 호환 결과를 다시 확인하세요." : result ? "선택한 부품의 호환 결과와 구매 전 확인 항목입니다." : "선택한 부품의 호환 여부와 예상 금액이 여기에 표시됩니다."}</p></>
+          : <><p className="eyebrow hero-eyebrow"><FiTarget /> 새 견적</p><h1>PC 견적 만들기</h1><p className="hero-description">용도와 예산을 정해 부품을 고르고, 예상 금액과 호환 결과를 확인하세요.</p></>}
         <div className="hero-actions">
-          <button className="button button-primary button-large" onClick={hasAnySelection ? onStart : onGuidedStart}>{hasAnySelection ? "이 견적 보기" : "새 견적 시작하기"} <FiArrowRight /></button>
-          <button className="button button-secondary button-large hero-secondary-action" onClick={hasAnySelection ? onGenerate : onStart}>{hasAnySelection ? "다른 구성 추천받기" : "부품을 직접 선택하기"} {hasAnySelection ? <FiZap /> : <FiEdit3 />}</button>
+          <button className="button button-primary button-large" onClick={hasAnySelection ? onResume : onGuidedStart}>{hasAnySelection ? "견적 수정하기" : "새 견적 시작하기"} <FiArrowRight /></button>
+          <button className="button button-secondary button-large hero-secondary-action" onClick={hasAnySelection ? onGenerate : onStart}>{hasAnySelection ? "다른 구성 보기" : "부품을 직접 선택하기"} {hasAnySelection ? <FiZap /> : <FiEdit3 />}</button>
         </div>
         <details className="hero-demo-tools"><summary>예시 구성 보기 <FiChevronDown /></summary><div><button type="button" onClick={onDemo}><FiActivity /> 문제 있는 예시 견적</button><button type="button" onClick={onCompatibleDemo}><FiCheckCircle /> 문제 없는 예시 견적</button></div></details>
       </div>
-      {hasAnySelection ? <div className="hero-panel">
-        <div className="panel-kicker">호환성 미리보기</div>
-      <div className="preview-status"><span className="status-icon danger"><FiXCircle /></span><div><strong>호환 여부를 알 수 없는 부품이 있어요.</strong><span>바로 고칠 문제 3개 · 주의 1개</span></div></div>
-      <div className="preview-rule"><span className="rule-icon danger"><FiXCircle /></span><div><strong>CPU와 메인보드 규격이 달라요.</strong><small>CPU: AM5 · 메인보드: LGA1700</small></div><FiChevronDown /></div>
-      <div className="preview-rule"><span className="rule-icon warning"><FiAlertTriangle /></span><div><strong>RAM 속도가 이 메인보드에서 지원하는 범위를 넘었어요.</strong><small>속도가 낮아질 수 있어요.</small></div><FiChevronDown /></div>
-      <div className="preview-rule"><span className="rule-icon success"><FiCheckCircle /></span><div><strong>문제가 있는 부품은 바로 바꿔볼 수 있어요.</strong><small>바꾸면 호환 결과가 달라져요.</small></div><FiChevronDown /></div>
-      </div> : <GuidedHomePreview />}
+      {hasAnySelection ? <HomeCurrentBuildPreview build={build} result={result} resultIsStale={resultIsStale} partMap={partMap} onOpenResult={onOpenResult} /> : <GuidedHomePreview />}
     </section>
     <HomeAlertCenter items={alertItems} unreadCount={alertUnreadCount} hasBuildAlerts={hasBuildAlerts} hasWatchlistAlerts={hasWatchlistAlerts} onOpenHistory={onOpenHistory} onOpenWatchlist={onOpenWatchlist} />
-    <HomeDraftResumePanel build={build} result={result} resultIsStale={resultIsStale} onResume={onResume} onOpenResult={onOpenResult} />
     <details className="home-secondary-details" aria-label="홈 추가 정보">
       <summary><span><FiInfo /> 저장한 견적·비교</span><small>{localShareCount > 0 ? `${localShareCount}개 저장해뒀어요` : "필요할 때 열어보세요"}</small><FiChevronDown /></summary>
       <div className="home-secondary-details-body">
@@ -172,9 +187,9 @@ export function HomeView({ meta, build, result, resultIsStale, partMap, budgetLa
         {alternativeComparisonShares.length > 0 && <Suspense fallback={null}><LazyHomeAlternativeComparisonSharePanel entries={alternativeComparisonShares} onCopy={onCopyAlternativeComparisonShare} onRemove={onRemoveAlternativeComparisonShare} onRevoke={onRevokeAlternativeComparisonShare} onToast={onToastAlternativeComparisonShare} /></Suspense>}
         {savedBuildVersionShares.length > 0 && <Suspense fallback={null}><LazyHomeSavedBuildVersionSharePanel entries={savedBuildVersionShares} currentCatalogSnapshotAt={meta?.catalogUpdatedAt} onCopy={onCopySavedBuildVersionShare} onRemove={onRemoveSavedBuildVersionShare} onRevoke={onRevokeSavedBuildVersionShare} onToast={onToastSavedBuildVersionShare} /></Suspense>}
         <section className="feature-grid">
-          <FeatureCard Icon={FiSearch} number="01" title="부품 고르기" description="부품 종류와 주요 사양을 비교해 견적에 담아 보세요." />
-          <FeatureCard Icon={FiActivity} number="02" title="호환 확인" description="선택한 부품이 서로 맞는지 확인할 수 있어요." />
-          <FeatureCard Icon={FiCheckCircle} number="03" title="대안 부품 비교하기" description="가격과 주요 사양을 비교해 바꿔 볼 부품을 보여줘요." />
+          <FeatureCard Icon={FiSearch} title="부품 고르기" description="부품 종류와 주요 사양을 비교해 견적에 담아 보세요." />
+          <FeatureCard Icon={FiActivity} title="호환 확인" description="선택한 부품의 호환 결과를 확인합니다." />
+          <FeatureCard Icon={FiCheckCircle} title="대안 부품 비교" description="가격과 주요 사양을 나란히 비교합니다." />
         </section>
       </div>
     </details>

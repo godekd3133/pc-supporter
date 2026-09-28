@@ -363,11 +363,11 @@ export interface BudgetEstimate {
 }
 
 const GAMING_BUDGET_TIERS: readonly { minWon: number; estimate: BudgetEstimate }[] = [
-  { minWon: 3_800_000, estimate: { performance: "4K · 144 FPS", gpu: "최상급 GPU", memory: "64GB", storage: "2TB SSD" } },
-  { minWon: 3_000_000, estimate: { performance: "QHD · 240 FPS", gpu: "최상급 GPU", memory: "32GB", storage: "2TB SSD" } },
-  { minWon: 2_000_000, estimate: { performance: "QHD · 144 FPS", gpu: "상급 GPU", memory: "32GB", storage: "1TB SSD" } },
-  { minWon: 1_100_000, estimate: { performance: "FHD · 144 FPS", gpu: "표준 GPU", memory: "32GB", storage: "1TB SSD" } },
-  { minWon: 0, estimate: { performance: "FHD · 60 FPS", gpu: "입문 GPU", memory: "16GB", storage: "500GB SSD" } }
+  { minWon: 3_800_000, estimate: { performance: "4K · 144Hz 주사율 목표", gpu: "최상급 GPU", memory: "64GB", storage: "2TB SSD" } },
+  { minWon: 3_000_000, estimate: { performance: "QHD · 240Hz 주사율 목표", gpu: "최상급 GPU", memory: "32GB", storage: "2TB SSD" } },
+  { minWon: 2_000_000, estimate: { performance: "QHD · 144Hz 주사율 목표", gpu: "상급 GPU", memory: "32GB", storage: "1TB SSD" } },
+  { minWon: 1_100_000, estimate: { performance: "FHD · 144Hz 주사율 목표", gpu: "표준 GPU", memory: "32GB", storage: "1TB SSD" } },
+  { minWon: 0, estimate: { performance: "FHD · 60Hz 주사율 목표", gpu: "입문 GPU", memory: "16GB", storage: "500GB SSD" } }
 ];
 
 const WORK_BUDGET_TIERS: readonly { minWon: number; estimate: BudgetEstimate }[] = [
@@ -606,7 +606,7 @@ export function recommendQueryFor(state: OnboardingState): string {
   if (params.profile === "gaming") {
     // Keep the selected target explicit even when it matches the generator default.
     // The onboarding flow is a requirement handoff, so a shared URL must not rely on
-    // a later generator default to reconstruct 144 FPS or the selected graphics rule.
+    // a later generator default to reconstruct the selected refresh-rate target or graphics rule.
     if (params.gamingResolution) search.set("resolution", params.gamingResolution);
     if (params.gamingRefreshRate) search.set("refresh", String(params.gamingRefreshRate));
     if (params.gamingGameIds && params.gamingGameIds.length > 0) search.set("games", params.gamingGameIds.join(","));
@@ -642,7 +642,7 @@ export function gameLabelsFor(ids: readonly string[]): string[] {
 }
 
 export function targetSummaryFor(state: OnboardingState): string {
-  if (state.usecase === "gaming") return `${gamesSummaryFor(state.games)} · ${resolutionLabelFor(state.resolution)} · ${state.refreshRate} FPS · ${GAMING_GRAPHICS_PRESET_LABELS[state.graphicsPreset]} · ${GAMING_UPSCALING_LABELS[state.upscaling]}${state.rayTracing ? " · 레이 트레이싱" : ""}`;
+  if (state.usecase === "gaming") return `${gamesSummaryFor(state.games)} · ${resolutionLabelFor(state.resolution)} · 목표 주사율 ${state.refreshRate}Hz · ${GAMING_GRAPHICS_PRESET_LABELS[state.graphicsPreset]} · ${GAMING_UPSCALING_LABELS[state.upscaling]}${state.rayTracing ? " · 레이 트레이싱" : ""}`;
   if (state.usecase === "work") {
     const work = primaryWorkFor(state.works);
     const intensity = intensityOptionFor(state.intensity);

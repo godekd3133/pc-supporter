@@ -169,7 +169,7 @@ function fanHubTargetRecommendationFor(fan: { selection: AccessorySelection; ite
       : suggestedHubId
         ? `${candidates.find((candidate) => candidate.hubId === suggestedHubId)?.hubName ?? "허브"}가 현재 배치에서 우선 확인할 부품입니다. 전류 정보가 없으면 최종 안전성을 정하지 않아요.`
       : candidates.some((candidate) => candidate.status !== "blocked")
-        ? "차단되지 않은 허브 부품이 있지만 전류·포트·커넥터 정보를 추가로 확인해야 합니다."
+        ? "호환 불가 문제는 없지만 전류·포트·커넥터 정보는 더 확인해 주세요."
         : "현재 선택한 허브 중 추가 팬을 안전하게 배치할 부품을 확인하지 못했습니다."
   };
 }
@@ -838,7 +838,7 @@ export function accessoryCompatibilityFor(build: BuildSelection, catalog: Part[]
         { label: "추가 팬", actual: fan.name },
         { label: "지정한 대상 허브", actual: fanSelection.targetAccessoryId ?? "미지정" },
         { label: "현재 선택한 팬 허브", actual: availableHubs },
-        ...(fanHubTargetRecommendations.find((recommendation) => recommendation.fanId === fan.id)?.candidates.length ? [{ label: "허브 부품", actual: fanHubTargetRecommendations.find((recommendation) => recommendation.fanId === fan.id)!.candidates.slice(0, 3).map((candidate) => `${candidate.hubName} · ${candidate.status === "pass" ? "추천" : candidate.status === "blocked" ? "차단" : "확인 필요"}`).join(" · ") }] : [])
+        ...(fanHubTargetRecommendations.find((recommendation) => recommendation.fanId === fan.id)?.candidates.length ? [{ label: "허브 부품", actual: fanHubTargetRecommendations.find((recommendation) => recommendation.fanId === fan.id)!.candidates.slice(0, 3).map((candidate) => `${candidate.hubName} · ${candidate.status === "pass" ? "추천" : candidate.status === "blocked" ? "호환 불가" : "확인 필요"}`).join(" · ") }] : [])
       ],
       action: "추가한 주변 부품에서 이 팬의 연결 대상 팬 허브를 지정한 뒤 다시 검사하세요."
     });

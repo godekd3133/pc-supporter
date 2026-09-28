@@ -56,14 +56,14 @@ export function repairPlanTradeoffFor(plans: ReadonlyArray<RecommendationPlan>):
         frontier: true,
         reason: metric.priceDeltaWon === undefined
           ? "가격 확인 필요 상태를 유지한 채 남은 위험·변경 규모 기준의 비교 우위에 있습니다."
-          : "비용·남은 위험·변경 규모에서 다른 플랜에 일방적으로 대체되지 않는 선택지입니다."
+          : "비용·남은 문제·변경 수를 함께 살펴볼 수 있는 선택입니다."
       };
     }
     return {
       ...metric,
       frontier: false,
       dominatedByPlanIndex: dominator.planIndex,
-      reason: `${plans[dominator.planIndex]?.label ?? "다른"} 플랜이 ${dimensionReason(dominator, metric)} 기준으로 더 유리해 비교 우위에서 제외했습니다.`
+      reason: `${plans[dominator.planIndex]?.label ?? "다른 구성"}이 ${dimensionReason(dominator, metric)}에서 더 나아 비교 목록에서 제외했습니다.`
     };
   });
 }

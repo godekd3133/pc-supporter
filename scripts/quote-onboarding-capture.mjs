@@ -79,9 +79,9 @@ async function runFlow(client, { prefix, viewport }) {
   await clickButton(client, "사이버펑크 2077");
   await clickButton(client, "다음");
   await waitForTitle(client, "원하는 성능을 골라주세요", "성능 목표 화면");
-  await record("05-game-performance", "게임 · 4K · 144 FPS 목표");
+  await record("05-game-performance", "게임 · 4K · 희망 주사율 144Hz");
   await clickButton(client, "4K");
-  await clickButton(client, "144 FPS");
+  await clickButton(client, "144Hz");
   await clickButton(client, "다음");
   await waitForTitle(client, "게임 옵션도 정해주세요", "그래픽 옵션 화면");
   await clickButton(client, "높음");

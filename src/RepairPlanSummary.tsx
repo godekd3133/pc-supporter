@@ -25,8 +25,8 @@ function budgetText(plan: RecommendationPlan) {
 export function RepairPlanSummaryTable({ plans, onFocusPlan }: { plans: RecommendationPlan[]; onFocusPlan: (index: number) => void }) {
   if (plans.length < 2) return null;
   return <div className="repair-plan-summary" data-testid="repair-plan-summary">
-    <div className="repair-plan-summary-heading"><div><p className="eyebrow">플랜 요약</p><h3>{plans.length}가지 플랜 비교</h3><p>남은 호환 문제와 비용을 확인해 보세요.</p></div><span>{plans.length}안 비교</span></div>
-    <div className="repair-plan-summary-table-wrap"><table><caption>구성별 변경 부품·호환·가격 비교</caption><thead><tr><th scope="col">비교 항목</th>{plans.map((plan, index) => <th scope="col" key={`${plan.label}-${index}`}><span>{plan.label}</span><strong>{plan.title}</strong><button className="text-button" type="button" onClick={() => onFocusPlan(index)}>플랜 보기</button></th>)}</tr></thead><tbody>
+    <div className="repair-plan-summary-heading"><div><p className="eyebrow">추천 조합</p><h3>{plans.length}가지 조합 비교</h3><p>남은 호환 문제와 비용을 확인해 보세요.</p></div><span>{plans.length}안 비교</span></div>
+    <div className="repair-plan-summary-table-wrap"><table><caption>구성별 변경 부품·호환·가격 비교</caption><thead><tr><th scope="col">비교 항목</th>{plans.map((plan, index) => <th scope="col" key={`${plan.label}-${index}`}><span>{plan.label}</span><strong>{plan.title}</strong><button className="text-button" type="button" onClick={() => onFocusPlan(index)}>조합 보기</button></th>)}</tr></thead><tbody>
       <tr><th scope="row">변경 항목</th>{plans.map((plan) => <td key={`${plan.label}-changes`}>{plan.changes.length}개</td>)}</tr>
       <tr><th scope="row">호환 불가</th>{plans.map((plan) => <td className={plan.remainingBlockers > 0 ? "risk" : "clear"} key={`${plan.label}-blockers`}>{plan.remainingBlockers}개</td>)}</tr>
       <tr><th scope="row">남은 주의</th>{plans.map((plan) => <td className={plan.remainingWarnings > 0 ? "risk" : "clear"} key={`${plan.label}-warnings`}>{plan.remainingWarnings}개</td>)}</tr>

@@ -123,12 +123,14 @@ describe("budget ladder scenarios", () => {
     expect(text).toContain("예상 합계: 980,000원");
     expect(text).toContain("변경: CPU · 이전 CPU → 새 CPU");
     expect(text).toContain("실패 정보: GPU 부품 부족: 조건을 만족하는 부품이 없습니다. · 부품 수 0개 · 권장 예산을 상향해 주세요.");
+    expect(text).not.toContain("카탈로그 분석");
 
     const csv = budgetLadderCsvFor(outcomes);
     expect(csv.startsWith("\uFEFF구간 ID,구간,설명")).toBe(true);
     expect(csv).toContain("economy,절약형,입력 예산의 약 80%로 구성,800000,호환 가능");
     expect(csv).toContain("headroom,여유형,입력 예산의 약 120%로 구성,1200000,생성 실패");
     expect(csv).toContain("조건을 만족하는 부품이 없습니다.");
+    expect(csv).not.toContain("카탈로그 분석");
 
     const json = JSON.parse(budgetLadderJsonFor(outcomes)) as { type: string; version: number; exportedAt: string; items: Array<Record<string, unknown>>; changes: Array<Record<string, unknown>> };
     expect(json.type).toBe("pc-supporter-budget-ladder");
@@ -138,8 +140,11 @@ describe("budget ladder scenarios", () => {
     expect(json.items[0].lines).toEqual(expect.arrayContaining([expect.objectContaining({ category: "cpu", text: "이전 CPU" })]));
     expect(json.items[0].selection).toMatchObject({ memory: [], ssd: [], hdd: [], useIntegratedGraphics: true });
     expect(json.items[2]).toMatchObject({ id: "headroom", status: "생성 실패", error: "조건을 만족하는 부품이 없습니다.", diagnostics: [diagnostic] });
+    expect(JSON.stringify(json)).not.toContain("analysisScore");
+    expect(JSON.stringify(json)).not.toContain("overallScore");
     expect(json.changes).toHaveLength(1);
-    expect(json.changes[0]).toMatchObject({ fromId: "economy", toId: "target", totalPriceDeltaWon: 80_000, analysisScoreDelta: 16 });
+    expect(json.changes[0]).toMatchObject({ fromId: "economy", toId: "target", totalPriceDeltaWon: 80_000 });
+    expect(json.changes[0]).not.toHaveProperty("analysisScoreDelta");
   });
 
   it("quotes CSV descriptions and errors without losing newlines or quotes", () => {
@@ -147,5 +152,35 @@ describe("budget ladder scenarios", () => {
 
     expect(csv).toContain('"설명, ""특수""\n줄바꿈"');
     expect(csv).toContain('"오류, ""확인"""');
+  });
+
+  it("omits measured benchmark and FPS copy from each public format while retaining compatibility and price facts", () => {
+    const sensitiveDiagnostic: BuildGenerationDiagnostic = {
+      id: "internal-performance",
+      title: "내부 성능 비교",
+      summary: "3DMark Time Spy 21000 · 평균 144 FPS 측정",
+      facts: [{ label: "Recommendation Trust score", value: "92점" }],
+      recommendation: "Cinebench R23 18000점과 FPS 자료를 내부 신뢰도 근거로 사용"
+    };
+    const outcomes: BudgetLadderOutcome[] = [
+      { id: "economy", label: "절약형", description: "목표 예산 구성", budgetWon: 800_000, draft: draft() },
+      { id: "target", label: "목표 예산", description: "입력 예산", budgetWon: 1_000_000, error: "조건을 만족하지 않는 구성입니다.", diagnostics: [sensitiveDiagnostic] }
+    ];
+    const text = budgetLadderTextFor(outcomes);
+    const csv = budgetLadderCsvFor(outcomes);
+    const json = budgetLadderJsonFor(outcomes);
+
+    for (const content of [text, csv, json]) {
+      expect(content).not.toContain("Time Spy");
+      expect(content).not.toContain("21000");
+      expect(content).not.toContain("144 FPS");
+      expect(content).not.toContain("Cinebench");
+      expect(content).not.toContain("Recommendation Trust");
+      expect(content).not.toContain("92점");
+    }
+    expect(text).toContain("호환 불가 0개");
+    expect(text).toContain("예상 합계: 900,000원");
+    expect(csv).toContain("900000");
+    expect(json).toContain("900000");
   });
 });

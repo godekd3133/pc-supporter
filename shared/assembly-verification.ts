@@ -271,7 +271,11 @@ function emptyChecks(): Record<AssemblyVerificationCheckId, AssemblyVerification
 }
 
 const ASSEMBLY_VERIFICATION_DEFAULT_RUN_LABEL = "조립 확인 1회차";
-const LEGACY_ASSEMBLY_VERIFICATION_DEFAULT_RUN_LABEL = "조립 검증 1회차";
+const EMPTY_PLACEHOLDER_RUN_LABELS = new Set([
+  ASSEMBLY_VERIFICATION_DEFAULT_RUN_LABEL,
+  "조립 후 확인 기록 1",
+  "조립 검증 1회차"
+]);
 
 export function emptyAssemblyVerificationLog(buildFingerprint: string, updatedAt = nowIso()): AssemblyVerificationLog {
   const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -584,7 +588,7 @@ export function assemblyVerificationHistoryHasEvidenceFor(history: AssemblyVerif
 
 function assemblyVerificationRunIsPristinePlaceholderFor(run: AssemblyVerificationLog) {
   const label = run.runLabel ?? ASSEMBLY_VERIFICATION_DEFAULT_RUN_LABEL;
-  return (label === ASSEMBLY_VERIFICATION_DEFAULT_RUN_LABEL || label === LEGACY_ASSEMBLY_VERIFICATION_DEFAULT_RUN_LABEL)
+  return EMPTY_PLACEHOLDER_RUN_LABELS.has(label)
     && Object.values(run.checks).every((entry) => entry.status === "unchecked" && !entry.note?.trim())
     && run.noiseLevel === "not_recorded"
     && run.loadTool === "not_recorded"
@@ -1070,9 +1074,9 @@ export function parseAssemblyVerificationHistoryJson(input: string, expectedBuil
 }
 
 export function assemblyVerificationStatusLabel(status: AssemblyVerificationCheckStatus) {
-  return status === "pass" ? "통과" : status === "fail" ? "실패 확인" : "미확인";
+  return status === "pass" ? "완료" : status === "fail" ? "실패" : "미확인";
 }
 
 export function assemblyVerificationStateLabel(state: AssemblyVerificationState) {
-  return state === "passed" ? "실측 확인 완료" : state === "failed" ? "실패 항목 있음" : state === "in_progress" ? "확인 진행 중" : "아직 기록 없음";
+  return state === "passed" ? "조립 확인 완료" : state === "failed" ? "확인할 항목 있음" : state === "in_progress" ? "확인 중" : "아직 기록하지 않음";
 }

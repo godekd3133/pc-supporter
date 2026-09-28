@@ -16,7 +16,7 @@ function statusLabel(status: CompatibilityResult["status"]) {
 }
 
 function riskText(result: CompatibilityResult) {
-  return `차단 ${result.blockerCount}개 · 주의 ${result.warningCount}개 · 정보 부족 ${result.unknownCount}개`;
+  return `호환 불가 ${result.blockerCount}개 · 주의 ${result.warningCount}개 · 정보 부족 ${result.unknownCount}개`;
 }
 
 function directionLabel(direction: ReturnType<typeof buildScenarioComparisonFor>["direction"]) {
@@ -52,7 +52,7 @@ export function UpgradeBundleScenarioPreviewPanel({ state, currentResult, onAppl
     <div className="upgrade-bundle-scenario-changes">{state.bundle.changes.map((change) => <div className="upgrade-bundle-scenario-change" key={`${change.category}-${change.part.id}`}><span className="category-badge">{CATEGORY_LABELS[change.category]}</span><div><small>{change.currentPartName}</small><strong>→ {change.part.name}</strong><em>{change.improvedDimensions.join(" · ")} · {change.quantity > 1 ? `수량 ${change.quantity}개 · ` : ""}{change.priceDeltaWon !== undefined ? `${change.priceDeltaWon > 0 ? "+" : ""}${change.priceDeltaWon.toLocaleString("ko-KR")}원` : "가격 정보 없음"}</em></div></div>)}</div>
     <div className="upgrade-bundle-scenario-comparison"><div><span>현재 구성</span><strong>{statusLabel(comparison.currentStatus)}</strong><small>{riskText(currentResult)}</small>{currentResult.priceComplete ? <small>총액 {formatWon(currentResult.totalPriceWon)}</small> : <small>총액 가격 정보 없음</small>}</div><b>→</b><div className="next"><span>조합 적용 후</span><strong>{statusLabel(comparison.nextStatus)}</strong><small>{riskText(nextResult)}</small>{nextResult.priceComplete ? <small>총액 {formatWon(nextResult.totalPriceWon)}</small> : <small>총액 가격 정보 없음</small>}</div></div>
     <div className="upgrade-bundle-scenario-summary"><strong>{comparison.summary}</strong><span>{outcomeNote}</span></div>
-    <div className="upgrade-bundle-scenario-findings"><div><strong>남은 호환 항목</strong><span>{nextFindings.length > 0 ? `${nextResult.findings.filter((finding) => finding.severity !== "info").length}개 중 최대 5개 표시` : "추가 항목 없음"}</span></div>{nextFindings.length > 0 && <ul>{nextFindings.map((finding) => <li key={finding.id}><b>{finding.severity === "blocker" ? "차단" : finding.severity === "warning" ? "주의" : "확인"}</b>{finding.title}</li>)}</ul>}</div>
+    <div className="upgrade-bundle-scenario-findings"><div><strong>남은 호환 항목</strong><span>{nextFindings.length > 0 ? `${nextResult.findings.filter((finding) => finding.severity !== "info").length}개 중 최대 5개 표시` : "추가 항목 없음"}</span></div>{nextFindings.length > 0 && <ul>{nextFindings.map((finding) => <li key={finding.id}><b>{finding.severity === "blocker" ? "호환 불가" : finding.severity === "warning" ? "주의" : "확인"}</b>{finding.title}</li>)}</ul>}</div>
     <div className="upgrade-bundle-scenario-actions"><button className="button button-light" type="button" onClick={onClose}>계속 비교</button><button className="button button-primary" type="button" onClick={onApply} disabled={unsafe}><FiZap /> {unsafe ? "적용 불가" : "이 조합 적용 전 미리보기"}</button></div>
     <p className="upgrade-bundle-scenario-note"><FiInfo /> 현재 견적은 그대로예요. 조합을 적용하면 호환성을 다시 계산해요.{unsafe ? " 위험이 늘어난 조합은 적용을 막았습니다." : ""}</p>
   </section>;

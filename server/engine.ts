@@ -404,7 +404,7 @@ function isFullyCompatible(blockerCount: number, warningCount: number, unknownCo
 }
 
 function remainingIssueSummary(blockerCount: number, warningCount: number, unknownCount: number) {
-  return `남은 차단 오류 ${blockerCount}개 · 주의 ${warningCount}개 · 확인 필요 ${unknownCount}개`;
+  return `남은 호환 불가 ${blockerCount}개 · 주의 ${warningCount}개 · 확인 필요 ${unknownCount}개`;
 }
 
 function formatMemoryProfiles(profiles: MemoryProfile[] | undefined) {
@@ -1900,7 +1900,7 @@ export function buildUpgradeRecommendations(
         ...(budgetEvidence ? { budgetEvidence } : {}),
         recommendationTrust,
         ...(physicalEvidence ? { physicalEvidence } : {}),
-        reason: `${assessment.improvedDimensions.join("·")} 기준 비교 가능한 스펙이 약 ${assessment.improvementPercent}% 개선됩니다.${gpuTarget ? ` ${gpuTarget.summary}.` : ""} 교체 후 새로운 차단 오류·확인 필요·주의 항목이 없어 현재 호환 수준을 유지합니다.`
+        reason: `${assessment.improvedDimensions.join("·")} 기준으로 비교한 사양이 약 ${assessment.improvementPercent}% 나아져요.${gpuTarget ? ` ${gpuTarget.summary}.` : ""} 교체 후 새 호환 불가·확인 필요·주의 항목이 없어 현재 호환 상태를 유지합니다.`
       });
     }
   }
@@ -2682,10 +2682,10 @@ function buildRepairPlans(
     const fullyCompatible = isFullyCompatible(after.blockerCount, after.warningCount, after.unknownCount);
     const label: RecommendationPlan["label"] = "최소 변경";
     const reason = fullyCompatible
-      ? "이 플랜을 적용하면 현재 확인 가능한 호환 오류와 주의 항목이 모두 해결됩니다."
-      : `차단 오류 ${result.blockerCount}개를 ${after.blockerCount}개로 줄입니다. ${remainingIssueSummary(after.blockerCount, after.warningCount, after.unknownCount)}는 적용 후 다시 확인할 수 있습니다.`;
+      ? "이 구성을 적용하면 현재 확인된 호환 문제와 주의 항목이 모두 해결됩니다."
+      : `호환 불가 ${result.blockerCount}개를 ${after.blockerCount}개로 줄입니다. ${remainingIssueSummary(after.blockerCount, after.warningCount, after.unknownCount)}는 적용 후 다시 확인할 수 있어요.`;
     return {
-      title: `${changes.length}개 항목으로 해결하는 플랜`,
+      title: `${changes.length}개 항목을 바꾸는 구성`,
       label,
       changes,
       resolvedFindings,
@@ -2793,7 +2793,7 @@ function buildRepairPlans(
         ...candidate,
         label: "완전 호환",
         title: `완전 호환 우선 · ${candidate.changes.length}개 변경`,
-        reason: `완전 호환을 우선해 ${candidate.changes.length}개 항목을 조정합니다. 적용 후 차단 오류·주의·확인 필요 항목이 없습니다.${candidate.priceComplete ? "" : " 가격 일부 확인이 필요합니다."}`
+        reason: `호환 문제를 줄이기 위해 ${candidate.changes.length}개 항목을 바꿔요. 적용 후 호환 불가·주의·확인 필요 항목이 없습니다.${candidate.priceComplete ? "" : " 일부 부품 가격은 확인해 주세요."}`
       };
     }
   }
@@ -2902,7 +2902,7 @@ function buildRepairPlans(
       title: `${strategy.label} · ${candidate.changes.length}개 ${changeLabel}`,
       reason: fullyCompatible
         ? `${strategy.label} 기준으로 현재 확인 가능한 호환 오류와 주의 항목을 모두 해결합니다.${budgetReason}`
-        : `${strategy.label} 기준으로 차단 오류 ${result.blockerCount}개를 ${candidate.remainingBlockers}개로 줄입니다. ${remainingIssueSummary(candidate.remainingBlockers, candidate.remainingWarnings, candidate.remainingUnknown)}는 적용 후 다시 확인할 수 있습니다.${budgetReason}`
+        : `${strategy.label} 기준으로 호환 불가 ${result.blockerCount}개를 ${candidate.remainingBlockers}개로 줄입니다. ${remainingIssueSummary(candidate.remainingBlockers, candidate.remainingWarnings, candidate.remainingUnknown)}는 적용 후 다시 확인할 수 있어요.${budgetReason}`
     }];
   });
   return fullCompatibilityPlan ? [...strategyPlans, fullCompatibilityPlan] : strategyPlans;
@@ -4630,7 +4630,7 @@ export function evaluateBuild(
 
 const GENERATOR_REQUIRED_FIELDS: Partial<Record<PartCategory, string[]>> = {
   cpu: ["socket", "memoryType", "tdpW"],
-  motherboard: ["socket", "memoryType", "maxMemoryGb", "memorySlots", "maxMemorySpeedMhz", "m2Slots", "sataPorts", "formFactor", "vrmCapacityW"],
+  motherboard: ["socket", "memoryType", "maxMemoryGb", "memorySlots", "maxMemorySpeedMhz", "m2Slots", "sataPorts", "formFactor"],
   memory: ["memoryType", "capacityGb", "speedMhz", "formFactor"],
   cooler: ["supportedSockets", "maxCoolingW", "maxCoolerHeightMm"],
   gpu: ["powerW", "recommendedPsuW", "lengthMm"],
@@ -5042,13 +5042,13 @@ function analyzeBuild(
 
   const sortedBottlenecks = bottlenecks.sort((a, b) => ({ critical: 0, warning: 1, info: 2 }[a.severity] - { critical: 0, warning: 1, info: 2 }[b.severity]));
   const nextActions = [...sortedBottlenecks.map((item) => item.action).filter((item): item is string => Boolean(item))];
-  if (balance?.status === "cpu_limited") nextActions.push("CPU·GPU 성능 지수 차이를 확인하고 CPU 업그레이드 부품을 먼저 비교해 보세요.");
-  if (balance?.status === "gpu_limited") nextActions.push("CPU·GPU 성능 지수 차이를 확인하고 GPU 업그레이드 부품을 먼저 비교해 보세요.");
+  if (balance?.status === "cpu_limited") nextActions.push("CPU와 GPU 성능 균형을 보고 CPU 교체 부품을 비교해 보세요.");
+  if (balance?.status === "gpu_limited") nextActions.push("CPU와 GPU 성능 균형을 보고 그래픽카드 교체 부품을 비교해 보세요.");
   for (const factor of factors.filter((item) => item.score !== undefined && item.score < 45)) {
-    nextActions.push(`${factor.label}의 고정 기준 성능 지수(${factor.score}점)를 우선 비교해 보세요.`);
+    nextActions.push(`${factor.label} 성능을 높일 수 있는 부품을 살펴보세요.`);
   }
   const uniqueActions = [...new Set(nextActions)].slice(0, 4);
-  if (uniqueActions.length === 0) uniqueActions.push("현재 확인된 스펙 기준에서 우선 교체할 병목이 없습니다.");
+  if (uniqueActions.length === 0) uniqueActions.push("현재 구성에서 먼저 바꿀 부품을 찾지 못했어요.");
   return {
     profile,
     overallScore,
@@ -5079,7 +5079,7 @@ function generatorCandidatePool(
   gamingAdvisoryTuning?: GamingAdvisoryTuning,
   gpuVendorPreference?: GpuVendor
 ) {
-  const candidates = catalog
+  const catalogCandidates = catalog
     .filter((part) => part.category === category)
     .filter((part) => part.listingType !== "accessory")
     .filter((part) => allowIncomplete || part.dataQuality !== "incomplete")
@@ -5087,6 +5087,11 @@ function generatorCandidatePool(
     .filter((part) => generatorHasFields(part, requiredFields))
     .filter((part) => isListingAllowed(part, listingPolicy))
     .filter(predicate);
+  // Starter rows carry reference prices and may describe products that are no
+  // longer sold. Use them only when this category has no sourced catalog rows;
+  // otherwise a starter score can beat current inventory and look purchasable.
+  const sourcedCandidates = catalogCandidates.filter((part) => part.dataQuality !== "seed");
+  const candidates = sourcedCandidates.length > 0 ? sourcedCandidates : catalogCandidates;
   const scores = generatorCapabilityScores(candidates, profile, gamingResolution, gamingRefreshRate, gamingAdvisoryTuning, gpuVendorPreference);
   const selected = new Map<string, Part>();
   const priceLimit = category === "cpu" ? 500 : category === "memory" || category === "gpu" ? 120 : 60;
@@ -5252,8 +5257,7 @@ function generatorCpuCanUseMotherboard(cpu: Part, motherboard: Part) {
     && motherboard.specs.socket === cpu.specs.socket
     && motherboard.specs.memoryType === cpu.specs.memoryType
     && cpuPower !== undefined
-    && motherboard.specs.vrmCapacityW !== undefined
-    && motherboard.specs.vrmCapacityW >= cpuPower;
+    && (motherboard.specs.vrmCapacityW === undefined || motherboard.specs.vrmCapacityW >= cpuPower);
 }
 
 function generatorMemoryCanUseMotherboard(memory: Part, motherboard: Part, cpu: Part | undefined, requestedCapacityGb: number) {
@@ -5547,7 +5551,10 @@ export function generateBuildDraft(catalog: Part[], request: BuildGenerationRequ
     generatorCandidatePool(catalog, "cpu", profile, request.includeGpu ? undefined : (part) => part.specs.integratedGraphics === true, listingPolicy, gamingResolution, gamingRefreshRate),
     performanceTier ? GENERATOR_PERFORMANCE_TIER_CPU_MIN_SCORE[performanceTier] : 0
   );
-  const motherboardPool = generatorCandidatePool(catalog, "motherboard", profile, undefined, listingPolicy, gamingResolution, gamingRefreshRate);
+  // Unknown VRM capacity must remain visible as a review finding. Filtering it
+  // here made every sourced board in the current catalog disappear, so a
+  // starter reference-price board could be recommended as if it were for sale.
+  const motherboardPool = generatorCandidatePool(catalog, "motherboard", profile, undefined, listingPolicy, gamingResolution, gamingRefreshRate, GENERATOR_REQUIRED_FIELDS.motherboard, true);
   const memoryPool = generatorMemoryPool(catalog, profile, memoryCapacityGb, listingPolicy, gamingResolution, gamingRefreshRate);
   const coolerPool = generatorCandidatePool(catalog, "cooler", profile, undefined, listingPolicy, gamingResolution, gamingRefreshRate);
   const casePool = generatorCandidatePool(catalog, "case", profile, undefined, listingPolicy, gamingResolution, gamingRefreshRate, generatorCaseRequiredFields(request.includeGpu, hddCount), true);

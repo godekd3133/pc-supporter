@@ -42,9 +42,11 @@ describe("part detail refresh", () => {
   });
 
   it("keeps the old known price when the refreshed detail has no price", () => {
-    const refreshed = reconcileRefreshedPart(danawaPart, { ...danawaPart, priceWon: undefined, specs: { ...danawaPart.specs, hddBays: 4 }, missingFields: [] });
+    const before = { ...danawaPart, priceCheckedAt: "2026-08-20T00:00:00.000Z" };
+    const refreshed = reconcileRefreshedPart(before, { ...before, priceWon: undefined, specs: { ...before.specs, hddBays: 4 }, missingFields: [] });
 
     expect(refreshed.priceWon).toBe(50000);
+    expect(refreshed.priceCheckedAt).toBe(before.priceCheckedAt);
     expect(refreshed.specs.hddBays).toBe(4);
   });
 
@@ -62,6 +64,7 @@ describe("part detail refresh", () => {
     expect(observedPrice).toBe(58900);
     expect(refreshed.specs.maxGpuLengthMm).toBe(410);
     expect(refreshed.specs.hddBays).toBe(4);
+    expect(Date.parse(refreshed.priceCheckedAt ?? "")).toBeGreaterThan(Date.now() - 5000);
     expect(changedPartFields(danawaPart, refreshed)).toEqual(expect.arrayContaining(["원문 스펙", "정규화 스펙"]));
     expect(response.previousMissingFields).toEqual([]);
     expect(response.changedFields).toContain("정규화 스펙");
@@ -77,6 +80,7 @@ describe("part detail refresh", () => {
     const response = accessoryRefreshResponse(danawaAccessory, refreshed, "2026-08-28T01:00:00.000Z");
 
     expect(refreshed.priceWon).toBe(650);
+    expect(Date.parse(refreshed.priceCheckedAt ?? "")).toBeGreaterThan(Date.now() - 5000);
     expect(refreshed.specs.capacityG).toBe(2);
     expect(refreshed.specs.thermalConductivityWmK).toBe(8.5);
     expect(changedAccessoryFields(danawaAccessory, refreshed)).toEqual(expect.arrayContaining(["가격", "원문 스펙", "정규화 스펙"]));

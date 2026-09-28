@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ACCESSORY_CATEGORIES } from "../shared/types";
 import type { AccessoryItem } from "../shared/types";
-import { accessoryCategoryQualityCountsFor, countAccessories, findAccessory, mergeAccessories, mergeDanawaAccessorySnapshot, searchAccessories } from "./accessories";
+import { accessoryCategoryQualityCountsFor, accessoryCoverageSnapshotFor, countAccessories, findAccessory, mergeAccessories, mergeDanawaAccessorySnapshot, searchAccessories } from "./accessories";
 import { seedAccessories } from "./seed-accessories";
 
 function accessory(overrides: Partial<AccessoryItem>): AccessoryItem {
@@ -38,6 +38,47 @@ describe("accessory catalog", () => {
     expect(counts.cooling_fan).toEqual({ seed: 1, live: 1, manual: 0, incomplete: 0 });
     expect(counts.ups).toEqual({ seed: 0, live: 0, manual: 0, incomplete: 1 });
     expect(counts.fan_hub).toEqual({ seed: 0, live: 0, manual: 0, incomplete: 0 });
+  });
+
+  it("joins stale crawl history to every category's current saved accessory status", () => {
+    const storedCoverage = {
+      updatedAt: "2026-09-12T00:00:00.000Z",
+      categories: [{
+        category: "cooling_fan" as const,
+        categoryId: "old-fan-list",
+        totalProductCount: 6,
+        storedProductCount: 6,
+        liveProducts: 0,
+        incompleteProducts: 0,
+        pricedProducts: 6,
+        pagesExpected: 1,
+        pagesVisited: 1,
+        listedProducts: 6,
+        uniqueProducts: 6,
+        detailFetched: 6,
+        detailFailed: 0,
+        missingProducts: 0,
+        incompleteSpecs: 1,
+        listCoverage: "complete" as const,
+        coverage: "partial" as const,
+        specCoverage: "partial" as const,
+        storedSpecCoverage: "partial" as const,
+        mode: "sample" as const,
+        details: true,
+        onlyIncomplete: false,
+        lastCrawledAt: "2026-09-12T00:00:00.000Z"
+      }]
+    };
+    const snapshot = accessoryCoverageSnapshotFor(storedCoverage, [
+      accessory({ id: "current-fan", category: "cooling_fan", dataQuality: "live", missingFields: [] }),
+      accessory({ id: "current-ups", category: "ups", dataQuality: "incomplete", missingFields: ["detail page"] })
+    ]);
+    const coolingFan = snapshot.categories.find((entry) => entry.category === "cooling_fan");
+    const ups = snapshot.categories.find((entry) => entry.category === "ups");
+
+    expect(snapshot.categories).toHaveLength(ACCESSORY_CATEGORIES.length);
+    expect(coolingFan).toMatchObject({ storedProductCount: 1, liveProducts: 1, incompleteProducts: 0, incompleteSpecs: 0, pricedProducts: 1, hasCrawlHistory: true, listCoverage: "complete" });
+    expect(ups).toMatchObject({ storedProductCount: 1, liveProducts: 0, incompleteProducts: 1, incompleteSpecs: 1, pricedProducts: 1, hasCrawlHistory: false, pagesVisited: 0, listCoverage: "partial" });
   });
 
   it("searches, sorts, paginates, and finds accessories", () => {

@@ -72,6 +72,7 @@ export interface BudgetLadderExportItem {
   blockerCount?: number;
   warningCount?: number;
   unknownCount?: number;
+  /** Legacy field accepted at the type boundary; public export builders omit it. */
   analysisScore?: number;
   lines?: BudgetLadderExportLine[];
   selection?: BuildSelection;
@@ -84,7 +85,7 @@ export interface BudgetLadderExportPayload {
   version: 1;
   exportedAt: string;
   items: BudgetLadderExportItem[];
-  changes: BudgetLadderChange[];
+  changes: Array<Omit<BudgetLadderChange, "analysisScoreDelta">>;
 }
 
 type BudgetLadderResultLike = Pick<BudgetLadderOutcome, "id" | "label" | "budgetWon"> & {
@@ -174,6 +175,29 @@ function csvCell(value: string | number | boolean | undefined) {
   return /[",\n\r]/.test(raw) ? `"${raw.replace(/"/g, '""')}"` : raw;
 }
 
+function publicExportText(value: string | undefined) {
+  if (!value || /cinebench|time\s*spy|port\s*royal|3dmark|benchmark|벤치마크|recommendation.?trust|trust\s*score|추천\s*신뢰|신뢰도|(?:카탈로그|성능)\s*분석(?:\s*점수)?\s*[:：]?\s*\d+|\bfps\b|초당\s*프레임/i.test(value)) return undefined;
+  return value;
+}
+
+const PRIVATE_EXPORT_FIELD = /benchmark|cinebench|3dmark|time.?spy|port.?royal|fps|trust|score/i;
+
+function publicJsonValue(value: unknown): unknown {
+  if (typeof value === "string") return publicExportText(value);
+  if (Array.isArray(value)) return value.map(publicJsonValue).filter((item) => item !== undefined);
+  if (value && typeof value === "object") {
+    if ("label" in value && typeof (value as { label?: unknown }).label === "string" && /benchmark|fps|trust|score|벤치마크|성능 점수/i.test((value as { label: string }).label)) return undefined;
+    const publicEntries: Array<[string, unknown]> = [];
+    for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+      if (PRIVATE_EXPORT_FIELD.test(key)) continue;
+      const safeValue = publicJsonValue(entry);
+      if (safeValue !== undefined) publicEntries.push([key, safeValue]);
+    }
+    return Object.fromEntries(publicEntries);
+  }
+  return value;
+}
+
 export function budgetLadderExportItemFor(outcome: BudgetLadderOutcome): BudgetLadderExportItem {
   const draft = outcome.draft;
   return {
@@ -190,7 +214,6 @@ export function budgetLadderExportItemFor(outcome: BudgetLadderOutcome): BudgetL
       blockerCount: draft.blockerCount,
       warningCount: draft.warningCount,
       unknownCount: draft.unknownCount,
-      ...(draft.analysis?.overallScore !== undefined ? { analysisScore: draft.analysis.overallScore } : {}),
       lines: PART_CATEGORIES.map((category) => {
         const line = draft.lines.find((item) => item.category === category);
         return { category, text: compactLineText(draft, category), ...(line ? { partId: line.partId, quantity: line.quantity } : {}) };
@@ -203,7 +226,7 @@ export function budgetLadderExportItemFor(outcome: BudgetLadderOutcome): BudgetL
 }
 
 export function budgetLadderExportPayloadFor(outcomes: BudgetLadderOutcome[], exportedAt = new Date().toISOString()): BudgetLadderExportPayload {
-  const changes = outcomes.slice(1).map((outcome, index) => budgetLadderChangeFor(outcomes[index], outcome)).filter((change): change is BudgetLadderChange => Boolean(change));
+  const changes = outcomes.slice(1).map((outcome, index) => budgetLadderChangeFor(outcomes[index], outcome)).filter((change): change is BudgetLadderChange => Boolean(change)).map(({ analysisScoreDelta: _analysisScoreDelta, ...change }) => change);
   return {
     type: "pc-supporter-budget-ladder",
     version: 1,
@@ -221,13 +244,12 @@ export function budgetLadderTextFor(outcomes: BudgetLadderOutcome[]) {
     lines.push(`- 상태: ${statusText(outcome)}`);
     if (outcome.draft) {
       lines.push(`- 예상 합계: ${outcome.draft.totalPriceWon.toLocaleString("ko-KR")}원 · ${budgetResultText(outcome.draft)}`);
-      lines.push(`- 위험: 차단 ${outcome.draft.blockerCount}개 · 주의 ${outcome.draft.warningCount}개 · 확인 필요 ${outcome.draft.unknownCount}개`);
-      lines.push(`- 카탈로그 분석: ${outcome.draft.analysis?.overallScore === undefined ? "계산 불가" : `${outcome.draft.analysis.overallScore}점`}`);
+      lines.push(`- 위험: 호환 불가 ${outcome.draft.blockerCount}개 · 주의 ${outcome.draft.warningCount}개 · 확인 필요 ${outcome.draft.unknownCount}개`);
       for (const category of PART_CATEGORIES) lines.push(`- ${CATEGORY_LABELS[category]}: ${compactLineText(outcome.draft, category)}`);
     } else {
-      lines.push(`- 오류: ${outcome.error ?? "자동 구성을 만들지 못했습니다."}`);
+      lines.push(`- 오류: ${publicExportText(outcome.error) ?? "자동 구성을 만들지 못했습니다."}`);
       const diagnostics = compactDiagnosticsText(outcome);
-      if (diagnostics) lines.push(`- 실패 정보: ${diagnostics}`);
+      if (publicExportText(diagnostics)) lines.push(`- 실패 정보: ${publicExportText(diagnostics)}`);
     }
     lines.push("");
   });
@@ -236,7 +258,7 @@ export function budgetLadderTextFor(outcomes: BudgetLadderOutcome[]) {
     lines.push("[예산 증액 효과]");
     changes.forEach((change) => {
       lines.push(`- ${change.fromLabel} → ${change.toLabel}: 예산 ${change.budgetDeltaWon >= 0 ? "+" : ""}${change.budgetDeltaWon.toLocaleString("ko-KR")}원 · 실제 합계 ${change.totalPriceDeltaWon >= 0 ? "+" : ""}${change.totalPriceDeltaWon.toLocaleString("ko-KR")}원`);
-      lines.push(`  위험 변화: 차단 ${change.blockerDelta >= 0 ? "+" : ""}${change.blockerDelta} · 주의 ${change.warningDelta >= 0 ? "+" : ""}${change.warningDelta} · 확인 필요 ${change.unknownDelta >= 0 ? "+" : ""}${change.unknownDelta}`);
+      lines.push(`  위험 변화: 호환 불가 ${change.blockerDelta >= 0 ? "+" : ""}${change.blockerDelta} · 주의 ${change.warningDelta >= 0 ? "+" : ""}${change.warningDelta} · 확인 필요 ${change.unknownDelta >= 0 ? "+" : ""}${change.unknownDelta}`);
       if (change.sameConfiguration) lines.push("  구성: 부품·수량 동일");
       else change.changedLines.forEach((line) => lines.push(`  변경: ${line.label} · ${line.before} → ${line.after}`));
     });
@@ -245,7 +267,7 @@ export function budgetLadderTextFor(outcomes: BudgetLadderOutcome[]) {
 }
 
 export function budgetLadderCsvFor(outcomes: BudgetLadderOutcome[]) {
-  const header = ["구간 ID", "구간", "설명", "목표 예산", "상태", "예상 합계", "예산 결과", "차단", "주의", "확인 필요", "카탈로그 분석", ...PART_CATEGORIES.map((category) => CATEGORY_LABELS[category]), "오류"];
+  const header = ["구간 ID", "구간", "설명", "목표 예산", "상태", "예상 합계", "예산 결과", "호환 불가", "주의", "확인 필요", ...PART_CATEGORIES.map((category) => CATEGORY_LABELS[category]), "오류"];
   const rows = outcomes.map((outcome) => {
     const draft = outcome.draft;
     return [
@@ -259,9 +281,8 @@ export function budgetLadderCsvFor(outcomes: BudgetLadderOutcome[]) {
       draft?.blockerCount,
       draft?.warningCount,
       draft?.unknownCount,
-      draft?.analysis?.overallScore,
       ...PART_CATEGORIES.map((category) => draft ? compactLineText(draft, category) : undefined),
-      outcome.error ?? (compactDiagnosticsText(outcome) || undefined)
+      publicExportText(outcome.error) ?? publicExportText(compactDiagnosticsText(outcome))
     ];
   });
   return `\uFEFF${[header, ...rows].map((row) => row.map((value) => csvCell(value)).join(",")).join("\r\n")}`;
@@ -280,17 +301,16 @@ export function budgetLadderTextForPayload(payload: BudgetLadderExportPayload) {
           ? `${Math.abs(item.budgetDeltaWon ?? 0).toLocaleString("ko-KR")}원 여유`
           : `${(item.budgetDeltaWon ?? 0).toLocaleString("ko-KR")}원 초과`;
       lines.push(`- 예상 합계: ${item.totalPriceWon.toLocaleString("ko-KR")}원 · ${budgetResult}`);
-      lines.push(`- 위험: 차단 ${item.blockerCount ?? 0}개 · 주의 ${item.warningCount ?? 0}개 · 확인 필요 ${item.unknownCount ?? 0}개`);
-      lines.push(`- 카탈로그 분석: ${item.analysisScore === undefined ? "계산 불가" : `${item.analysisScore}점`}`);
+      lines.push(`- 위험: 호환 불가 ${item.blockerCount ?? 0}개 · 주의 ${item.warningCount ?? 0}개 · 확인 필요 ${item.unknownCount ?? 0}개`);
       for (const line of item.lines ?? []) lines.push(`- ${CATEGORY_LABELS[line.category]}: ${line.text}`);
     } else {
-      lines.push(`- 오류: ${item.error ?? "자동 구성을 만들지 못했습니다."}`);
+      lines.push(`- 오류: ${publicExportText(item.error) ?? "자동 구성을 만들지 못했습니다."}`);
       const diagnostics = (item.diagnostics ?? []).slice(0, 2).flatMap((diagnostic) => [
         `${diagnostic.title}: ${diagnostic.summary}`,
         ...diagnostic.facts.slice(0, 4).map((fact) => `${fact.label} ${fact.value}`),
         ...(diagnostic.recommendation ? [`권장 ${diagnostic.recommendation}`] : [])
       ]).join(" · ");
-      if (diagnostics) lines.push(`- 실패 정보: ${diagnostics}`);
+      if (publicExportText(diagnostics)) lines.push(`- 실패 정보: ${publicExportText(diagnostics)}`);
     }
     lines.push("");
   });
@@ -298,7 +318,7 @@ export function budgetLadderTextForPayload(payload: BudgetLadderExportPayload) {
     lines.push("[예산 증액 효과]");
     payload.changes.forEach((change) => {
       lines.push(`- ${change.fromLabel} → ${change.toLabel}: 예산 ${change.budgetDeltaWon >= 0 ? "+" : ""}${change.budgetDeltaWon.toLocaleString("ko-KR")}원 · 실제 합계 ${change.totalPriceDeltaWon >= 0 ? "+" : ""}${change.totalPriceDeltaWon.toLocaleString("ko-KR")}원`);
-      lines.push(`  위험 변화: 차단 ${change.blockerDelta >= 0 ? "+" : ""}${change.blockerDelta} · 주의 ${change.warningDelta >= 0 ? "+" : ""}${change.warningDelta} · 확인 필요 ${change.unknownDelta >= 0 ? "+" : ""}${change.unknownDelta}`);
+      lines.push(`  위험 변화: 호환 불가 ${change.blockerDelta >= 0 ? "+" : ""}${change.blockerDelta} · 주의 ${change.warningDelta >= 0 ? "+" : ""}${change.warningDelta} · 확인 필요 ${change.unknownDelta >= 0 ? "+" : ""}${change.unknownDelta}`);
       if (change.sameConfiguration) lines.push("  구성: 부품·수량 동일");
       else change.changedLines.forEach((line) => lines.push(`  변경: ${line.label} · ${line.before} → ${line.after}`));
     });
@@ -307,7 +327,7 @@ export function budgetLadderTextForPayload(payload: BudgetLadderExportPayload) {
 }
 
 export function budgetLadderCsvForPayload(payload: BudgetLadderExportPayload) {
-  const header = ["구간 ID", "구간", "설명", "목표 예산", "상태", "예상 합계", "예산 결과", "차단", "주의", "확인 필요", "카탈로그 분석", ...PART_CATEGORIES.map((category) => CATEGORY_LABELS[category]), "오류"];
+  const header = ["구간 ID", "구간", "설명", "목표 예산", "상태", "예상 합계", "예산 결과", "호환 불가", "주의", "확인 필요", ...PART_CATEGORIES.map((category) => CATEGORY_LABELS[category]), "오류"];
   const rows = payload.items.map((item) => {
     const budgetResult = item.totalPriceWon === undefined ? undefined : item.priceComplete === false
       ? "가격 일부 확인 필요"
@@ -326,16 +346,15 @@ export function budgetLadderCsvForPayload(payload: BudgetLadderExportPayload) {
       item.blockerCount,
       item.warningCount,
       item.unknownCount,
-      item.analysisScore,
       ...PART_CATEGORIES.map((category) => lineByCategory.get(category)),
-      item.error ?? ((item.diagnostics ?? []).length > 0 ? (item.diagnostics ?? []).slice(0, 2).map((diagnostic) => `${diagnostic.title}: ${diagnostic.summary}`).join(" · ") : undefined)
+      publicExportText(item.error) ?? publicExportText((item.diagnostics ?? []).length > 0 ? (item.diagnostics ?? []).slice(0, 2).map((diagnostic) => `${diagnostic.title}: ${diagnostic.summary}`).join(" · ") : undefined)
     ];
   });
   return `\uFEFF${[header, ...rows].map((row) => row.map((value) => csvCell(value)).join(",")).join("\r\n")}`;
 }
 
 export function budgetLadderJsonForPayload(payload: BudgetLadderExportPayload) {
-  return JSON.stringify(payload, null, 2);
+  return JSON.stringify(publicJsonValue(payload), null, 2);
 }
 
 export function budgetLadderJsonFor(outcomes: BudgetLadderOutcome[]) {

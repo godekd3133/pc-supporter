@@ -45,12 +45,14 @@ export function reconcileRefreshedPart(before: Part, parsed: Part) {
   if (before.dataQuality === "live" && parsed.dataQuality === "incomplete") {
     throw new Error("새 정보가 기존 데이터보다 부족해 기존 스펙을 유지했습니다.");
   }
+  const refreshedAt = new Date().toISOString();
   return {
     ...parsed,
     priceWon: isKnownPrice(parsed.priceWon) ? parsed.priceWon : before.priceWon,
+    priceCheckedAt: isKnownPrice(parsed.priceWon) ? refreshedAt : before.priceCheckedAt,
     imageUrl: parsed.imageUrl ?? before.imageUrl,
     rawSpecText: parsed.rawSpecText || before.rawSpecText,
-    updatedAt: new Date().toISOString()
+    updatedAt: refreshedAt
   } satisfies Part;
 }
 
@@ -132,12 +134,14 @@ export function reconcileRefreshedAccessory(before: AccessoryItem, parsed: Acces
   if (before.dataQuality === "live" && parsed.dataQuality === "incomplete") {
     throw new Error("새 주변 부품 정보가 기존 데이터보다 부족해 기존 스펙을 유지했습니다.");
   }
+  const refreshedAt = new Date().toISOString();
   return {
     ...parsed,
     priceWon: isKnownPrice(parsed.priceWon) ? parsed.priceWon : before.priceWon,
+    priceCheckedAt: isKnownPrice(parsed.priceWon) ? refreshedAt : before.priceCheckedAt,
     imageUrl: parsed.imageUrl ?? before.imageUrl,
     rawSpecText: parsed.rawSpecText || before.rawSpecText,
-    updatedAt: new Date().toISOString()
+    updatedAt: refreshedAt
   } satisfies AccessoryItem;
 }
 

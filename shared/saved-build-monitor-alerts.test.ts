@@ -46,7 +46,7 @@ describe("saved build monitor alerts", () => {
     const second = readyItem(undefined, result({ status: "incompatible", blockerCount: 2, checkedAt: "2026-08-31T01:05:00.000Z" }));
     const firstAlert = savedBuildMonitorAlertFor(build, first, "2026-08-31T01:00:00.000Z");
     const secondAlert = savedBuildMonitorAlertFor(build, second, "2026-08-31T01:05:00.000Z");
-    expect(firstAlert).toMatchObject({ kind: "critical", title: "구매 전 수정 필요" });
+    expect(firstAlert).toMatchObject({ kind: "critical", title: "구매 전 확인 필요" });
     expect(secondAlert?.id).toBe(firstAlert?.id);
     expect(mergeSavedBuildMonitorAlerts([firstAlert!], [secondAlert!])).toHaveLength(1);
   });
@@ -63,7 +63,7 @@ describe("saved build monitor alerts", () => {
     const after = result({ metrics: { powerHeadroomW: 100, psuWattageW: 950, recommendedPsuW: 850 } });
     const alert = savedBuildMonitorAlertFor(build, readyItem(before, after), "2026-08-31T01:05:00.000Z");
 
-    expect(alert).toMatchObject({ kind: "review", title: "검토 항목 증가", message: expect.stringContaining("전력 여유 -50W") });
+    expect(alert).toMatchObject({ kind: "review", title: "확인할 항목 증가", message: expect.stringContaining("전력 여유 -50W") });
   });
 
   it("carries the highest-risk finding context into actionable alerts", () => {

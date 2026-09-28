@@ -95,18 +95,19 @@ export function BuildPriceTrendPanel({ build, partMap, accessoryMap, snapshot }:
 
   if (rows.length === 0) return null;
   const chartReady = trend.points.length > 0 && trend.historicalSampleCount > 0;
+  const noHistory = !loading && !error && !chartReady;
   const historyLoaded = Object.keys(histories).length > 0;
   const netPercent = trend.latestPriceWon !== undefined && trend.netDeltaWon !== undefined && trend.latestPriceWon - trend.netDeltaWon > 0
     ? (trend.netDeltaWon / (trend.latestPriceWon - trend.netDeltaWon)) * 100
     : undefined;
   const visibleDrivers = trend.drivers.slice(0, 4);
 
-  return <section className="build-price-trend-panel" aria-label="전체 견적 가격 변동 추이" data-testid="build-price-trend-panel">
-    <div className="build-price-trend-heading"><div><p className="eyebrow"><FiTrendingUp /> 견적 금액</p><h2>견적 가격 흐름</h2><p>선택한 부품의 가격 기록을 모아 견적 금액이 어떻게 바뀌었는지 보여줘요.</p></div><span>{days}일</span></div>
-    <div className="build-price-trend-total"><div><span>{snapshot.priceComplete ? "현재 총견적" : "현재 총액"}</span><strong>{formatWon(snapshot.totalPriceWon || trend.latestPriceWon)}</strong></div>{trend.netDeltaWon !== undefined && <em className={trend.netDeltaWon > 0 ? "increased" : trend.netDeltaWon < 0 ? "decreased" : "same"}>{formatDelta(trend.netDeltaWon)}{netPercent !== undefined ? ` · ${netPercent > 0 ? "+" : ""}${netPercent.toFixed(1)}%` : ""}</em>}</div>
-    <div className="build-price-trend-range" role="group" aria-label="전체 견적 가격 변동 추이 기간">{([7, 30, 90] as const).map((option) => <button className={days === option ? "selected" : ""} type="button" aria-pressed={days === option} data-testid={`build-price-trend-days-${option}`} onClick={() => setDays(option)} key={option}>{option}일</button>)}</div>
-    {loading && !historyLoaded ? <div className="build-price-trend-state" role="status"><FiLoader className="spin" /> 가격 이력을 불러오는 중...</div> : error && !historyLoaded ? <div className="build-price-trend-state error" role="status"><FiInfo /> 가격 이력을 불러오지 못했어요. 현재 합계만 표시합니다.</div> : !chartReady ? <div className="build-price-trend-state"><FiInfo /> 이 기간에 가격 변동 기록이 없어요.</div> : <PriceTrendChart points={trend.points} ariaLabel={`전체 견적 ${days}일 가격 추이`} testId="build-price-trend-chart" />}
-    {driver && <div className="build-price-trend-insight"><span><FiTrendingUp /></span><div><strong>{driver.label}이 전체 변화를 주도했어요</strong><small>최근 {days}일 기준 {formatDelta(driver.deltaWon)}</small></div></div>}
+  return <section className={`build-price-trend-panel${noHistory ? " empty" : ""}`} aria-label="전체 견적 가격 변화" data-testid="build-price-trend-panel">
+    <div className="build-price-trend-heading"><div><h2>견적 가격 변화</h2><p>선택한 부품의 가격 기록을 모아 기간별 변화를 보여줍니다.</p></div></div>
+    <div className="build-price-trend-summary-row"><div className="build-price-trend-total"><div><span>{snapshot.priceComplete ? "현재 총견적" : "현재 총액"}</span><strong>{formatWon(snapshot.totalPriceWon || trend.latestPriceWon)}</strong></div>{chartReady && trend.netDeltaWon !== undefined && <em className={trend.netDeltaWon > 0 ? "increased" : trend.netDeltaWon < 0 ? "decreased" : "same"}>{formatDelta(trend.netDeltaWon)}{netPercent !== undefined ? ` · ${netPercent > 0 ? "+" : ""}${netPercent.toFixed(1)}%` : ""}</em>}</div>
+      <div className="build-price-trend-range" role="group" aria-label="가격 확인 기간">{([7, 30, 90] as const).map((option) => <button className={days === option ? "selected" : ""} type="button" aria-pressed={days === option} data-testid={`build-price-trend-days-${option}`} onClick={() => setDays(option)} key={option}>{option}일</button>)}</div></div>
+    {loading && !historyLoaded ? <div className="build-price-trend-state" role="status"><FiLoader className="spin" /> 가격 이력을 불러오는 중...</div> : error && !historyLoaded ? <div className="build-price-trend-state error" role="status"><FiInfo /> 가격 이력을 불러오지 못했습니다. 현재 합계만 표시합니다.</div> : !chartReady ? <div className="build-price-trend-state"><FiInfo /> 이 기간에는 가격 기록이 없습니다.</div> : <PriceTrendChart points={trend.points} ariaLabel={`전체 견적 ${days}일 가격 변화`} testId="build-price-trend-chart" />}
+    {driver && <div className="build-price-trend-insight"><span><FiTrendingUp /></span><div><strong>가격 변화가 가장 큰 부품은 {driver.label}입니다.</strong><small>최근 {days}일 · {formatDelta(driver.deltaWon)}</small></div></div>}
     {visibleDrivers.length > 0 && <div className="build-price-trend-items" aria-label="견적 가격 변화 부품"><div className="build-price-trend-items-heading"><strong>주요 부품별 변화</strong><span>현재 가격 기준</span></div>{visibleDrivers.map((item) => <div className="build-price-trend-item" key={item.key}><span>{item.label}</span><strong>{formatDelta(item.deltaWon)}</strong></div>)}</div>}
   </section>;
 }

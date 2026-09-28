@@ -7,8 +7,8 @@ import { gwa } from "../shared/josa";
 type FitTone = "good" | "warning" | "danger" | "unknown" | "neutral";
 
 const STATUS_LABELS: Record<GpuFitStatus, string> = {
-  compatible: "기준 통과",
-  incompatible: "차단",
+  compatible: "문제 없음",
+  incompatible: "호환 불가",
   needs_review: "정보 부족",
   not_applicable: "미적용"
 };
@@ -137,6 +137,6 @@ export function GpuFitSummaryPanel({ fit, gpu, computerCase, psu }: { fit: GpuFi
       {purchaseEvidence.pcieCableTopology !== "not_applicable" && <FitMetric icon={FiZap} label="PCIe 케이블 분배" value={fit.connector.psuIndependentPcieCableRuns === undefined ? "정보 없음" : `${fit.connector.psuIndependentPcieCableRuns}개 런`} detail={cableTopologyEvidenceDetail(fit.connector, purchaseEvidence.pcieCableTopology)} status={purchaseEvidence.pcieCableTopology} />}
     </div>
     <div className="gpu-fit-connector-panel"><div><strong>GPU가 요구하는 연결 선택지</strong><small>{optionText(fit.connector.options, fit.connector.requirementsKnown, fit.connector.adapterOptionIndices)}</small></div><div><strong>PSU 커넥터</strong><small>{connectorText(fit.connector.connectors)}</small><small>{psuStructureText(fit.connector.psuCableType, fit.connector.psuRailType)}</small></div>{fit.connector.optionFits.length > 0 && <div className="gpu-fit-connector-options"><strong>선택지별 결과</strong>{fit.connector.optionFits.map((option, index) => <span className={option.status === "compatible" ? "good" : option.status === "blocker" ? "danger" : "unknown"} key={`${index}-${option.status}`}>{optionFitText(option, index, fit.connector.adapterOptionIndices.includes(index))}</span>)}</div>}</div>
-    <div className="gpu-fit-actions"><div><strong>다음 행동</strong>{actionText(fit, computerCase, psu).map((action) => <p key={action}><FiCheckCircle /> {action}</p>)}</div></div>
+    <div className="gpu-fit-actions"><div><strong>구매 전에 확인해 주세요</strong>{actionText(fit, computerCase, psu).map((action) => <p key={action}><FiCheckCircle /> {action}</p>)}</div></div>
   </section>;
 }

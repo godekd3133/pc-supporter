@@ -23,4 +23,12 @@ describe("accessory work priority", () => {
     expect(accessoryWorkPriorityFor(snapshot, 1)).toHaveLength(1);
     expect(accessoryWorkPriorityFor(undefined)).toEqual([]);
   });
+
+  it("keeps categories visible when the current catalog has no public-list crawl history", () => {
+    const untracked = { ...snapshot.categories[2], hasCrawlHistory: false, incompleteProducts: 0, incompleteSpecs: 0, storedSpecCoverage: "complete" as const };
+    const actions = accessoryWorkPriorityFor({ updatedAt: "", categories: [untracked] });
+
+    expect(actions).toHaveLength(1);
+    expect(actions[0]).toMatchObject({ category: "thermal_grease", total: 25, gapCount: 0, needsListVerification: true });
+  });
 });

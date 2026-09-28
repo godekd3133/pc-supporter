@@ -28,10 +28,10 @@ export function candidateDecisionSummaryFor(input: CandidateDecisionInput): Cand
       : "recommended";
   const label = status === "recommended" ? "추천 부품" : status === "review" ? "확인 후 적용" : "적용하지 않음";
   const summaryParts = status === "avoid"
-    ? ["부품 자체에 차단 위험"]
+    ? ["부품 자체가 현재 구성과 호환되지 않습니다."]
     : status === "review"
       ? [input.resolvesTarget === false ? "현재 문제 해결 여부 확인 필요" : "추가 확인 필요"]
-      : ["현재 문제 해결", "새 차단 없음"];
+      : ["현재 문제 해결", "새 호환 문제 없음"];
   if (input.physicalStatus === "verified") summaryParts.push("장착 정보 확인됨");
   if (input.physicalStatus === "review") summaryParts.push("장착 정보 미확인");
   if (input.catalogSpecSourceCheckNeedsReview === true) summaryParts.push("제조사 페이지 확인 필요");
@@ -44,7 +44,7 @@ export function candidateDecisionSummaryFor(input: CandidateDecisionInput): Cand
     ...(input.physicalStatus === "review" ? ["장착 정보가 부족합니다. 장착 전에 제조사 안내를 확인하세요."] : []),
     ...(input.catalogSpecSourceCheckNeedsReview === true ? ["직접 입력한 부품은 제조사 안내에서 모델명과 사양을 확인한 뒤 적용하세요."] : []),
     ...(input.freshness === "stale" || input.freshness === "unknown" ? [`부품 정보: ${DATA_FRESHNESS_LABELS[input.freshness]}`] : []),
-    ...(input.recommendationTrustLevel === "low" ? ["추천 점수가 낮습니다. 적용 전에 사양과 호환 결과를 확인하세요."] : [])
+    ...(input.recommendationTrustLevel === "low" ? ["부품 정보가 부족해 추천 이유를 확인하기 어려워요. 사양과 호환 결과를 살펴봐 주세요."] : [])
   ];
   return {
     status,

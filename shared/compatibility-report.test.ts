@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { AccessoryConnectivityPlan, AccessoryItem, AccessoryRgbConnectionPlan, BuildSelection, CompatibilityResult, Part, RecommendationPlan } from "./types";
+import type { AccessoryConnectivityPlan, AccessoryItem, AccessoryRgbConnectionPlan, BuildSelection, CompatibilityResult, Part, RecommendationPlan, SavedBuildCheckSnapshot } from "./types";
 import type { GpuFitSummary } from "./gpu-fit";
 import { compatibilityReportJsonFor, compatibilityReportTextFor } from "./compatibility-report";
 import { savedBuildCheckSnapshotFor } from "./saved-build-check";
@@ -59,23 +59,24 @@ describe("compatibility report export", () => {
     expect(report).toContain("CPU 소켓: AM5 · 기대값 LGA1700");
     expect(report).toContain("테스트 써멀 ×2");
     expect(report).toContain("대상 SSD ssd-target");
-    expect(report).toContain("대체 CPU · 안전 · 부품 위험 차단 0개/주의 0개/확인 0개");
-    expect(report).toContain("미리 적용 후 차단 0개/주의 0개/확인 0개");
-    expect(report).toContain("부품 확인 정보: 소켓 일치 · 전체 규칙 재검사 통과");
-    expect(report).toContain("[주변 부품 호환 점검]");
+    expect(report).toContain("대체 CPU · 호환 가능 · 부품 호환 불가 0개/주의 0개/확인 필요 0개");
+    expect(report).toContain("대체 부품 적용 후 호환 불가 0개/주의 0개/확인 필요 0개");
+    expect(report).toContain("추천 이유: 소켓 일치 · 전체 규칙 재검사 통과");
+    expect(report).toContain("[주변 부품 호환 결과]");
     expect(report).toContain("방열판 수량이 적습니다.");
-    expect(report).toContain("다음 행동: 방열판 수량을 조정하세요.");
+    expect(report).toContain("권장 조치: 방열판 수량을 조정하세요.");
     expect(report).toContain("전체 합계: 110,000원");
-    expect(report).toContain("가성비 균형 120/200점");
+    expect(report).not.toContain("120/200점");
+    expect(report).toContain("대체 CPU");
     expect(report).toContain("게임 주사율: 144Hz");
-    expect(report).toContain("[우선 할 일]");
-    expect(report).toContain("[구매·조립 실행 순서]");
-    expect(report).toContain("해결해야 할 충돌 제거");
+    expect(report).toContain("[구매 전 확인할 일]");
+    expect(report).toContain("[구매·조립 순서]");
+    expect(report).toContain("호환 문제 1개를 먼저 해결하세요.");
     expect(report).toContain("소켓이 맞지 않습니다.");
-    expect(report).toContain("성능 점수는 FPS나 작업 속도를 측정한 값이 아닙니다. 구매 전 메인보드 RAM 지원, 케이스 공간, 케이블 연결을 제품 안내에서 확인하세요. 가격을 확인하지 못한 부품은 따로 표시했습니다.");
+    expect(report).toContain("실제 게임 성능은 게임과 설정에 따라 달라질 수 있습니다. 구매 전 메인보드 RAM 지원, 케이스 공간, 케이블 연결을 제품 안내에서 확인하세요. 가격을 확인하지 못한 부품은 따로 표시했습니다.");
     expect(report).toContain("결과 경로: /result?finding=blocker#findings");
-    expect(report).toContain("상세 필터: 차단 오류");
-    expect(report).toContain("열린 위치: 검사 결과 상세");
+    expect(report).toContain("상세 필터: 호환 불가");
+    expect(report).toContain("열린 위치: 호환 항목 상세");
   });
 
   it("does not turn an unknown price into a numeric zero", () => {
@@ -102,11 +103,11 @@ describe("compatibility report export", () => {
     const report = compatibilityReportTextFor(gpuResult, build, new Map([[cpu.id, cpu], [gpuPart.id, gpuPart]]), new Map([[accessory.id, accessory]]));
     const payload = JSON.parse(compatibilityReportJsonFor(gpuResult, build, gpuResult.recommendationPreferences, new Map([[cpu.id, cpu], [gpuPart.id, gpuPart]])));
 
-    expect(report).toContain("게이밍 목표 정보: QHD · 144Hz");
+    expect(report).toContain("게임 성능 기준: QHD · 144Hz");
     expect(payload.result.findings[0].suggestions[0].gpuTarget).toMatchObject({ candidateFit: "met", targetVramGb: 12 });
   });
 
-  it("exports selected CPU and GPU benchmark evidence without inventing missing scores", () => {
+  it("omits CPU/GPU benchmark and FPS evidence while retaining measured assembly facts and compatibility data", () => {
     const benchmarkCpu: Part = {
       ...cpu,
       id: "benchmark-cpu",
@@ -120,18 +121,67 @@ describe("compatibility report export", () => {
     const benchmarkGpu: Part = { ...cpu, id: "benchmark-gpu", category: "gpu", name: "벤치 GPU", specs: { gpu3dmarkTimeSpyScore: 21000 } };
     const benchmarkBuild = { ...build, cpu: { partId: benchmarkCpu.id, quantity: 1 }, gpu: { partId: benchmarkGpu.id, quantity: 1 } };
     const partMap = new Map([[benchmarkCpu.id, benchmarkCpu], [benchmarkGpu.id, benchmarkGpu]]);
-    const report = compatibilityReportTextFor(result, benchmarkBuild, partMap, new Map([[accessory.id, accessory]]));
-    const payload = JSON.parse(compatibilityReportJsonFor(result, benchmarkBuild, result.recommendationPreferences, partMap));
+    const suggestionWithPrivatePartScores = {
+      ...result.findings[0].suggestions![0],
+      part: {
+        ...result.findings[0].suggestions![0].part,
+        specs: {
+          cinebenchR23Multi: 12000,
+          gpu3dmarkTimeSpyScore: 21000,
+          benchmarkProvenance: { sourceKind: "independent_review", sourceNote: "private benchmark source", sourceUrl: "https://review.example/private" }
+        }
+      }
+    };
+    const resultWithPrivateEvidence = {
+      ...result,
+      findings: [{ ...result.findings[0], suggestions: [suggestionWithPrivatePartScores] }],
+      analysis: { ...result.analysis, overallScore: 79, factors: [{ category: "cpu", label: "CPU", score: 79, weight: 1, basis: "benchmark" }] },
+      benchmarkSnapshot: { schemaVersion: 1, status: "complete", parts: [], expectedScoreCount: 2, presentScoreCount: 2, fingerprint: "private-fingerprint" },
+      gamingPerformanceAssessment: { measuredFps: 144, provenance: "private-fps-source" }
+    } as unknown as CompatibilityResult;
+    const savedSnapshot = {
+      ...savedBuildCheckSnapshotFor(result),
+      assemblyVerification: {
+        type: "pc-supporter-assembly-verification-summary",
+        schemaVersion: 1,
+        state: "passed",
+        total: 1,
+        checked: 1,
+        passed: 1,
+        failed: 0,
+        checks: {},
+        loadTool: "occt",
+        loadScenario: "mixed",
+        cpuMaxTempC: 86,
+        gpuMaxTempC: 82,
+        noiseLevel: "normal",
+        updatedAt: "2026-09-07T00:00:00.000Z"
+      }
+    } as unknown as SavedBuildCheckSnapshot;
+    const report = compatibilityReportTextFor(resultWithPrivateEvidence, benchmarkBuild, partMap, new Map([[accessory.id, accessory]]));
+    const payloadText = compatibilityReportJsonFor(resultWithPrivateEvidence, benchmarkBuild, result.recommendationPreferences, partMap, undefined, savedSnapshot);
+    const payload = JSON.parse(payloadText);
 
-    expect(report).toContain("[원본 벤치마크 정보]");
-    expect(report).toContain("Cinebench R23 싱글: 2,200점");
-    expect(report).toContain("Cinebench R23 멀티: 12,000점");
-    expect(report).toContain("3DMark Time Spy: 21,000점");
-    expect(report).toContain("3DMark Port Royal: 확인 필요");
-    expect(report).toContain("제조사·공식 측정표 · 공식 측정표");
-    expect(payload.benchmarkEvidence).toHaveLength(2);
-    expect(payload.benchmarkEvidence[0]).toMatchObject({ category: "cpu", status: "complete", provenance: { sourceUrl: "https://vendor.example/cpu" } });
-    expect(payload.benchmarkEvidence[1]).toMatchObject({ category: "gpu", status: "partial", presentCount: 1, totalCount: 2 });
+    expect(report).not.toContain("Cinebench");
+    expect(report).not.toContain("3DMark");
+    expect(report).not.toContain("21,000");
+    expect(report).not.toContain("FPS");
+    expect(payloadText).not.toContain("benchmarkSnapshot");
+    expect(payloadText).not.toContain("private-fingerprint");
+    expect(payloadText).not.toContain("cinebenchR23Multi");
+    expect(payloadText).not.toContain("gpu3dmarkTimeSpyScore");
+    expect(payloadText).not.toContain("21000");
+    expect(payloadText).not.toContain("Cinebench R23");
+    expect(payloadText).not.toContain("private benchmark source");
+    expect(payloadText).not.toContain("review.example/private");
+    expect(payloadText).not.toContain("measuredFps");
+    expect(payloadText).not.toContain("overallScore");
+    expect(payloadText).not.toContain("79");
+    expect(payload.result.status).toBe("incompatible");
+    expect(payload.result.blockerCount).toBe(1);
+    expect(payload.result.engineVersion).toBe("2.50.0");
+    expect(payload.result.catalogSnapshotAt).toBe("2026-08-28T00:00:00.000Z");
+    expect(payload.savedCheckSnapshot.assemblyVerification).toMatchObject({ cpuMaxTempC: 86, gpuMaxTempC: 82, noiseLevel: "normal" });
   });
 
   it("includes actionable repair-plan detail in the text report", () => {
@@ -171,9 +221,9 @@ describe("compatibility report export", () => {
     };
     const report = compatibilityReportTextFor({ ...result, repairPlans: [plan] }, build, new Map([[cpu.id, cpu]]), new Map([[accessory.id, accessory]]));
 
-    expect(report).toContain("[자동 해결 플랜]");
+    expect(report).toContain("[호환 문제 해결 방법]");
     expect(report).toContain("### [최소 변경] 소켓 해결 플랜");
-    expect(report).toContain("적용 후 위험: 차단 0개 · 주의 1개 · 확인 필요 1개");
+    expect(report).toContain("대체 부품 적용 후: 호환 불가 0개 · 주의 1개 · 확인 필요 1개");
     expect(report).toContain("적용 후 남는 항목: M.2 슬롯 확인 필요");
     expect(report).toContain("잔여 규칙 ID: m2-slot-generation");
     expect(report).toContain("변경 부품:");
@@ -195,7 +245,7 @@ describe("compatibility report export", () => {
     const report = compatibilityReportTextFor(currentResult, build, new Map([[cpu.id, cpu]]), new Map([[accessory.id, accessory]]), undefined, savedSnapshot);
     const payload = JSON.parse(compatibilityReportJsonFor(currentResult, build, currentResult.recommendationPreferences, undefined, undefined, savedSnapshot));
 
-    expect(report).toContain("[저장 당시 대비 현재 재검사]");
+    expect(report).toContain("[저장 당시 결과와 현재 결과 비교]");
     expect(report).toContain("결과: 호환 불가 → 확인 필요");
     expect(report).toContain("가격: 110,000원 → 120,000원 · 변화 +10,000원");
     expect(report).toContain("변화 방향: 개선");
@@ -242,14 +292,14 @@ describe("compatibility report export", () => {
     };
     const report = compatibilityReportTextFor({ ...result, gpuFit }, build, new Map([[cpu.id, cpu]]), new Map([[accessory.id, accessory]]));
 
-    expect(report).toContain("[GPU 장착·전원 요약]");
-    expect(report).toContain("케이스 장착 길이: 300mm / 330mm · 30mm 여유");
+    expect(report).toContain("[GPU 설치 공간·전원]");
+    expect(report).toContain("GPU 길이·케이스 공간: 300mm / 330mm · 30mm 여유");
     expect(report).toContain("GPU 두께: 60mm · 55mm 이상");
-    expect(report).toContain("GPU 물리 슬롯·케이블: GPU 물리 슬롯 3 · 케이블 요구 40mm · 케이스 측면 30mm · 차이 -10mm");
+    expect(report).toContain("GPU 슬롯·전원 케이블: GPU 물리 슬롯 3 · 케이블 요구 40mm · 케이스 측면 30mm · 차이 -10mm");
     expect(report).toContain("페이지 경로 1 충족");
     expect(report).toContain("구조 풀모듈러 · 12V 싱글레일");
     expect(report).toContain("PCIe 케이블 분배: 독립 런 1개 · 분배·공유 케이블 · 확인 필요");
-    expect(report).toContain("장착 정보 출처: GPU · GPU-TEST-1: GPU 설치 가이드 (https://vendor.example/gpu)");
+    expect(report).toContain("설치 안내: GPU · GPU-TEST-1: GPU 설치 가이드 (https://vendor.example/gpu)");
   });
 
   it("includes fan and RGB connectivity evidence in the text report", () => {
@@ -319,14 +369,14 @@ describe("compatibility report export", () => {
     const report = compatibilityReportTextFor(withPlan, build, new Map([[cpu.id, cpu]]), new Map([[accessory.id, accessory]]));
     const payload = JSON.parse(compatibilityReportJsonFor(withPlan, build, result.recommendationPreferences));
 
-    expect(report).toContain("[주변 부품 연결 계획]");
+    expect(report).toContain("[주변 부품 연결 구성]");
     expect(report).toContain("[팬 허브 연결 대상 추천]");
     expect(report).toContain("테스트 팬 허브: 추천 · 포트 여유 3개 · 커넥터 일치 · 전류 범위 확인 · 외부 전원 SATA");
-    expect(report).toContain("테스트 팬 허브: 확인됨 · 팬 1개 · 허브 출력 4핀 PWM · 팬 입력 4핀 PWM");
+    expect(report).toContain("테스트 팬 허브: 연결 가능 · 팬 1개 · 허브 출력 4핀 PWM · 팬 입력 4핀 PWM");
     expect(report).toContain("포트 배치 P1 테스트 PWM 팬");
     expect(report).toContain("전원 SATA · 0.20A / 1.00A · 여유 0.80A · 레일 12V 팬 · 12.00W · 1.00A");
-    expect(report).toContain("[RGB 연결 계획]");
-    expect(report).toContain("테스트 RGB 컨트롤러: 확인됨 · 케이스 RGB 2개 · 필요한 전압 5V · 컨트롤러 출력 5V RGB · 4포트 · 전원 SATA · 레일 5V RGB · 22.50W · 4.50A · 부하 5.00W · 17.50W 여유");
+    expect(report).toContain("[RGB 연결 구성]");
+    expect(report).toContain("테스트 RGB 컨트롤러: 연결 가능 · 케이스 RGB 2개 · 필요한 전압 5V · 컨트롤러 출력 5V RGB · 4포트 · 전원 SATA · 레일 5V RGB · 22.50W · 4.50A · 부하 5.00W · 17.50W 여유");
     expect(payload.result.accessoryCompatibility.connectionPlans[0]).toMatchObject({ id: plan.id, status: "pass", currentHeadroomA: 0.8 });
     expect(payload.result.accessoryCompatibility.rgbConnectionPlans[0]).toMatchObject({ id: rgbPlan.id, status: "pass", outputCount: 4 });
   });
@@ -351,8 +401,8 @@ describe("compatibility report export", () => {
     };
     const report = compatibilityReportTextFor({ ...result, gpuFit }, build, new Map([[cpu.id, cpu]]), new Map([[accessory.id, accessory]]));
 
-    expect(report).toContain("GPU 물리 슬롯·케이블: 제조사 물리 정보 없음 · 확인 필요");
-    expect(report).toContain("확인한 출처가 없습니다. 제조사 안내에서 사양을 확인해 주세요.");
+    expect(report).toContain("GPU 슬롯·전원 케이블: 제조사 물리 정보 없음 · 확인 필요");
+    expect(report).toContain("설치 안내가 없습니다. 각 부품의 제조사 설명서에서 크기와 연결 방법을 확인해 주세요.");
     expect(report).toContain("PCIe 케이블 분배: 다중 8핀 경로의 독립 케이블 정보 미등록 · 확인 필요");
   });
 

@@ -390,7 +390,7 @@ describe("compatibility engine", () => {
     expect(result.analysis.focusAreas).toEqual(expect.arrayContaining([
       expect.objectContaining({ category: "cpu", score: expect.any(Number), title: "CPU 보완" })
     ]));
-    expect(result.analysis.nextActions).toContain("CPU·GPU 성능 지수 차이를 확인하고 CPU 업그레이드 부품을 먼저 비교해 보세요.");
+    expect(result.analysis.nextActions).toContain("CPU와 GPU 성능 균형을 보고 CPU 교체 부품을 비교해 보세요.");
   });
 
   it("keeps a part's score stable when a stronger peer enters the catalog", () => {
@@ -3412,6 +3412,66 @@ describe("compatibility engine", () => {
     expect(draft.selection.cpu?.partId).toBe(verifiedCpu.id);
     expect(draft.rationale[1]).toContain("안심 우선");
     expect(draft.blockerCount).toBe(0);
+  });
+
+  it("uses sourced catalog rows instead of starter reference rows when both are available", () => {
+    const sourcedCatalog = seedCatalog.map((part, index): Part => ({
+      ...part,
+      id: `${part.id}-live`,
+      source: "danawa",
+      sourceProductCode: String(20_000_000 + index),
+      danawaUrl: `https://prod.danawa.com/info/?pcode=${20_000_000 + index}`,
+      dataQuality: "live",
+      updatedAt: new Date().toISOString()
+    }));
+    const draft = generateBuildDraft([...seedCatalog, ...sourcedCatalog], {
+      profile: "gaming",
+      priority: "balanced",
+      budgetWon: 2_500_000,
+      includeGpu: true,
+      gamingResolution: "1440p",
+      gamingRefreshRate: 144
+    });
+    const selectedIds = [
+      draft.selection.cpu?.partId,
+      draft.selection.cooler?.partId,
+      draft.selection.motherboard?.partId,
+      ...draft.selection.memory.map((part) => part.partId),
+      draft.selection.gpu?.partId,
+      ...draft.selection.ssd.map((part) => part.partId),
+      ...draft.selection.hdd.map((part) => part.partId),
+      draft.selection.case?.partId,
+      draft.selection.psu?.partId
+    ].filter((partId): partId is string => Boolean(partId));
+
+    expect(selectedIds.length).toBeGreaterThan(0);
+    expect(selectedIds.every((partId) => partId.endsWith("-live"))).toBe(true);
+  });
+
+  it("keeps a sourced motherboard with unknown VRM capacity as a review item", () => {
+    const baseBoard = seedCatalog.find((part) => part.id === "mb-b650-4x3")!;
+    const sourcedBoard: Part = {
+      ...baseBoard,
+      id: "mb-b650-vrm-needs-review",
+      name: "판매처 확인 메인보드",
+      source: "danawa",
+      sourceProductCode: "12345678",
+      danawaUrl: "https://prod.danawa.com/info/?pcode=12345678",
+      dataQuality: "incomplete",
+      missingFields: ["vrmCapacityW"],
+      specs: { ...baseBoard.specs, vrmCapacityW: undefined },
+      updatedAt: new Date().toISOString()
+    };
+    const draft = generateBuildDraft([...seedCatalog, sourcedBoard], {
+      profile: "office",
+      budgetWon: 1_500_000,
+      includeGpu: false
+    });
+
+    expect(draft.selection.motherboard?.partId).toBe(sourcedBoard.id);
+    expect(draft.status).toBe("needs_review");
+    expect(draft.unknownCount).toBeGreaterThan(0);
+    expect(draft.warnings.join(" ")).toContain("전원부");
   });
 
   it("honors the requested RAM capacity in an automatic draft", () => {

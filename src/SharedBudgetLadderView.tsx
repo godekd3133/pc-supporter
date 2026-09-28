@@ -47,7 +47,7 @@ function sharedBudgetLadderResultText(item: BudgetLadderExportItem) {
 
 function sharedBudgetLadderRiskText(item: BudgetLadderExportItem) {
   if (item.blockerCount === undefined && item.warningCount === undefined && item.unknownCount === undefined) return "-";
-  return `차단 ${item.blockerCount ?? 0} · 주의 ${item.warningCount ?? 0} · 정보 부족 ${item.unknownCount ?? 0}`;
+  return `호환 불가 ${item.blockerCount ?? 0} · 주의 ${item.warningCount ?? 0} · 확인할 정보 ${item.unknownCount ?? 0}`;
 }
 
 function sharedBudgetLadderLineText(item: BudgetLadderExportItem, category: PartCategory) {
@@ -158,9 +158,8 @@ function SharedBudgetLadderRefreshComparison({ before, after, outcomes, catalogS
         const changedLines = afterItem ? sharedBudgetLadderChangedLines(beforeItem, afterItem) : [];
         const canCompareDetails = Boolean(afterItem && beforeItem.status !== "생성 실패" && afterItem.status !== "생성 실패");
         const totalDelta = canCompareDetails && beforeItem.totalPriceWon !== undefined && afterItem?.totalPriceWon !== undefined ? afterItem.totalPriceWon - beforeItem.totalPriceWon : undefined;
-        const scoreDelta = canCompareDetails && beforeItem.analysisScore !== undefined && afterItem?.analysisScore !== undefined ? afterItem.analysisScore - beforeItem.analysisScore : undefined;
         const riskDelta = canCompareDetails && afterItem
-          ? `차단 ${sharedBudgetLadderSignedCount((afterItem.blockerCount ?? 0) - (beforeItem.blockerCount ?? 0))} · 주의 ${sharedBudgetLadderSignedCount((afterItem.warningCount ?? 0) - (beforeItem.warningCount ?? 0))} · 정보 부족 ${sharedBudgetLadderSignedCount((afterItem.unknownCount ?? 0) - (beforeItem.unknownCount ?? 0))}`
+          ? `호환 불가 ${sharedBudgetLadderSignedCount((afterItem.blockerCount ?? 0) - (beforeItem.blockerCount ?? 0))} · 주의 ${sharedBudgetLadderSignedCount((afterItem.warningCount ?? 0) - (beforeItem.warningCount ?? 0))} · 정보 부족 ${sharedBudgetLadderSignedCount((afterItem.unknownCount ?? 0) - (beforeItem.unknownCount ?? 0))}`
           : "비교 불가";
         return <article className={afterItem?.status === "생성 실패" ? "failed" : ""} key={beforeItem.id}>
           <div className="shared-budget-ladder-refresh-card-top"><strong>{beforeItem.label}</strong><span>{beforeItem.status} → {afterItem?.status ?? "현재 결과 없음"}</span></div>
@@ -194,13 +193,13 @@ function SharedBudgetLadderLineage({ lineage }: { lineage: BudgetLadderShareLine
 
 const BUDGET_LADDER_TREND_COLORS = ["#6f9bbd", "#6f9b87", "#9b7fb0"];
 
-function SharedBudgetLadderVersionTrendGraph({ snapshots, metric, title, description }: { snapshots: BudgetLadderShareSnapshot[]; metric: "total" | "analysis"; title: string; description: string }) {
+function SharedBudgetLadderVersionTrendGraph({ snapshots, title, description }: { snapshots: BudgetLadderShareSnapshot[]; title: string; description: string }) {
   const series = BUDGET_LADDER_BANDS.map((band, seriesIndex) => ({
     band,
     color: BUDGET_LADDER_TREND_COLORS[seriesIndex],
     values: snapshots.map((snapshot) => {
       const item = snapshot.payload.items.find((entry) => entry.id === band.id);
-      return metric === "total" ? item?.totalPriceWon : item?.analysisScore;
+      return item?.totalPriceWon;
     })
   }));
   const knownValues = series.flatMap((entry) => entry.values.filter((value): value is number => value !== undefined));
@@ -211,7 +210,7 @@ function SharedBudgetLadderVersionTrendGraph({ snapshots, metric, title, descrip
   const range = maximum - minimum + padding * 2;
   const xFor = (index: number) => snapshots.length === 1 ? 50 : 10 + (index / (snapshots.length - 1)) * 80;
   const yFor = (value: number) => 37 - ((value - minimum + padding) / range) * 29;
-  const formatValue = (value: number) => metric === "total" ? `${Math.round(value / 1_000).toLocaleString("ko-KR")}k` : `${value}점`;
+  const formatValue = (value: number) => `${Math.round(value / 1_000).toLocaleString("ko-KR")}k`;
   const segmentsFor = (values: Array<number | undefined>) => {
     const segments: string[] = [];
     let current: string[] = [];
@@ -230,7 +229,7 @@ function SharedBudgetLadderVersionTrendGraph({ snapshots, metric, title, descrip
 }
 
 function SharedBudgetLadderVersionTrendCharts({ snapshots }: { snapshots: BudgetLadderShareSnapshot[] }) {
-  return <section className="shared-budget-ladder-version-trends" aria-label="버전별 예산 비교 추이"><div className="shared-budget-ladder-version-trends-heading"><div><p className="eyebrow">저장 버전별 금액</p><h3>버전별 변화 추이</h3><p>저장한 견적의 예산별 예상 금액을 비교해요.</p></div><span>{snapshots.length}개 버전</span></div><div className="shared-budget-ladder-version-trends-grid"><SharedBudgetLadderVersionTrendGraph snapshots={snapshots} metric="total" title="예상 합계 추이" description="단위: 천원 · 저장 당시 합계" /></div></section>;
+  return <section className="shared-budget-ladder-version-trends" aria-label="버전별 예산 비교 추이"><div className="shared-budget-ladder-version-trends-heading"><div><p className="eyebrow">저장 버전별 금액</p><h3>버전별 변화 추이</h3><p>저장한 견적의 예산별 예상 금액을 비교해요.</p></div><span>{snapshots.length}개 버전</span></div><div className="shared-budget-ladder-version-trends-grid"><SharedBudgetLadderVersionTrendGraph snapshots={snapshots} title="예상 합계 추이" description="단위: 천원 · 저장 당시 합계" /></div></section>;
 }
 
 function SharedBudgetLadderVersionComparison({ lineage, currentSnapshot, onApplyVersion, onApplyMergedSelection, onPreviewMergedSelection }: { lineage: BudgetLadderShareLineageResponse; currentSnapshot: BudgetLadderShareSnapshot; onApplyVersion: (snapshot: BudgetLadderShareSnapshot) => Promise<void>; onApplyMergedSelection: (selection: BuildSelection, request: BuildGenerationRequest, checkNow: boolean) => Promise<void>; onPreviewMergedSelection: (selection: BuildSelection, request: BuildGenerationRequest, signal: AbortSignal) => Promise<CompatibilityResult> }) {
@@ -416,7 +415,7 @@ function SharedBudgetLadderPartialMergePanel({ snapshots, onApplyMergedSelection
   };
   const previewResult = previewState.result;
   const previewStatusText = previewResult?.status === "compatible" ? "호환 가능" : previewResult?.status === "needs_review" ? "정보 부족" : previewResult ? "검토 필요" : "";
-  return <section className="shared-budget-ladder-merge" aria-label="예산 비교 부품 선택"><div className="shared-budget-ladder-merge-heading"><div><h3>부품별로 버전 골라 쓰기</h3><p>예: CPU는 v1, GPU는 v3에서 골라 새 견적을 만들어요.</p></div><span>{sourceSnapshots.length}개 버전 사용 가능</span></div><div className="shared-budget-ladder-merge-controls">{PART_CATEGORIES.map((category) => <label key={category}><span>{CATEGORY_LABELS[category]} 적용 버전</span><select aria-label={`${CATEGORY_LABELS[category]} 적용 버전`} value={sourceIds[category]} onChange={(event) => { previewRequestVersionRef.current += 1; applyRequestVersionRef.current += 1; setApplying(false); setPreviewState({ status: "idle" }); setSourceIds((current) => ({ ...current, [category]: event.target.value })); }}>{sourceSnapshots.map((snapshot) => <option value={snapshot.id} key={`${category}-${snapshot.id}`}>v{snapshot.versionNumber ?? 1} · {sharedBudgetLadderLineText(snapshot.payload.items.find((item) => item.id === "target") ?? snapshot.payload.items[0], category)}</option>)}</select><small>{sourceLabelFor(category)}</small></label>)}</div><p className="shared-budget-ladder-merge-note"><FiInfo /> 버전마다 메인보드·SSD·메모리 조합이 다를 수 있어요. 적용 전 호환성을 다시 확인하고, M.2 슬롯은 자동으로 배치합니다.</p><button className="button button-secondary shared-budget-ladder-merge-preview-button" type="button" onClick={() => void previewMerged()} disabled={applying || previewState.status === "loading"}><FiRefreshCw /> {previewState.status === "loading" ? "호환 결과 계산 중..." : "선택 조합 호환 확인"}</button>{previewState.status === "error" && <p className="shared-budget-ladder-merge-preview-error" role="alert"><FiXCircle /> {previewState.error}</p>}{previewResult && <div className={`shared-budget-ladder-merge-preview ${previewResult.status}`} aria-label="선택 조합 호환 확인 결과"><div><strong>미리 보기 · {previewStatusText}</strong><span>{previewResult.priceComplete ? `${previewResult.totalPriceWon.toLocaleString("ko-KR")}원` : "가격 정보 없음"}</span></div><p>차단 {previewResult.blockerCount}개 · 주의 {previewResult.warningCount}개 · 정보 부족 {previewResult.unknownCount}개 · 현재 견적은 아직 바뀌지 않았습니다.</p>{previewResult.findings.filter((finding) => finding.severity !== "info").slice(0, 3).map((finding) => <small key={finding.id}><b>{finding.severity === "blocker" ? "차단" : finding.severity === "warning" ? "주의" : "확인"}</b> {finding.title}</small>)}</div>}<div className="shared-budget-ladder-merge-actions"><button className="button button-light" type="button" onClick={() => void applyMerged(false)} disabled={applying || previewState.status !== "ready"}><FiActivity /> 선택한 구성 편집하기</button><button className="button button-primary" type="button" onClick={() => void applyMerged(true)} disabled={applying || previewState.status !== "ready"}><FiRefreshCw /> 선택 조합 적용 후 결과 보기</button></div></section>;
+  return <section className="shared-budget-ladder-merge" aria-label="예산 비교 부품 선택"><div className="shared-budget-ladder-merge-heading"><div><h3>부품별로 버전 골라 쓰기</h3><p>예: CPU는 v1, GPU는 v3에서 골라 새 견적을 만들어요.</p></div><span>{sourceSnapshots.length}개 버전 사용 가능</span></div><div className="shared-budget-ladder-merge-controls">{PART_CATEGORIES.map((category) => <label key={category}><span>{CATEGORY_LABELS[category]} 적용 버전</span><select aria-label={`${CATEGORY_LABELS[category]} 적용 버전`} value={sourceIds[category]} onChange={(event) => { previewRequestVersionRef.current += 1; applyRequestVersionRef.current += 1; setApplying(false); setPreviewState({ status: "idle" }); setSourceIds((current) => ({ ...current, [category]: event.target.value })); }}>{sourceSnapshots.map((snapshot) => <option value={snapshot.id} key={`${category}-${snapshot.id}`}>v{snapshot.versionNumber ?? 1} · {sharedBudgetLadderLineText(snapshot.payload.items.find((item) => item.id === "target") ?? snapshot.payload.items[0], category)}</option>)}</select><small>{sourceLabelFor(category)}</small></label>)}</div><p className="shared-budget-ladder-merge-note"><FiInfo /> 버전마다 메인보드·SSD·메모리 조합이 다를 수 있어요. 적용 전 호환성을 다시 확인하고, M.2 슬롯은 자동으로 배치합니다.</p><button className="button button-secondary shared-budget-ladder-merge-preview-button" type="button" onClick={() => void previewMerged()} disabled={applying || previewState.status === "loading"}><FiRefreshCw /> {previewState.status === "loading" ? "호환 결과 계산 중..." : "선택 조합 호환 확인"}</button>{previewState.status === "error" && <p className="shared-budget-ladder-merge-preview-error" role="alert"><FiXCircle /> {previewState.error}</p>}{previewResult && <div className={`shared-budget-ladder-merge-preview ${previewResult.status}`} aria-label="선택 조합 호환 확인 결과"><div><strong>미리 보기 · {previewStatusText}</strong><span>{previewResult.priceComplete ? `${previewResult.totalPriceWon.toLocaleString("ko-KR")}원` : "가격 정보 없음"}</span></div><p>호환 불가 {previewResult.blockerCount}개 · 주의 {previewResult.warningCount}개 · 정보 부족 {previewResult.unknownCount}개 · 현재 견적은 아직 바뀌지 않았습니다.</p>{previewResult.findings.filter((finding) => finding.severity !== "info").slice(0, 3).map((finding) => <small key={finding.id}><b>{finding.severity === "blocker" ? "호환 불가" : finding.severity === "warning" ? "주의" : "확인"}</b> {finding.title}</small>)}</div>}<div className="shared-budget-ladder-merge-actions"><button className="button button-light" type="button" onClick={() => void applyMerged(false)} disabled={applying || previewState.status !== "ready"}><FiActivity /> 선택한 구성 편집하기</button><button className="button button-primary" type="button" onClick={() => void applyMerged(true)} disabled={applying || previewState.status !== "ready"}><FiRefreshCw /> 선택 조합 적용 후 결과 보기</button></div></section>;
 }
 
 export function SharedBudgetLadderView({ onBack, onToast, onApplyDraft, onApplyMergedSelection, onPreviewMergedSelection, onBudgetLadderShareSaved, onBudgetLadderShareRevoked }: { onBack: () => void; onToast: (message: string) => void; onApplyDraft: (draft: BuildGenerationResult, checkNow: boolean) => Promise<void>; onApplyMergedSelection: (selection: BuildSelection, request: BuildGenerationRequest, checkNow: boolean) => Promise<void>; onPreviewMergedSelection: (selection: BuildSelection, request: BuildGenerationRequest, signal: AbortSignal) => Promise<CompatibilityResult>; onBudgetLadderShareSaved: (share: BudgetLadderLocalShareEntry) => void; onBudgetLadderShareRevoked: (id: string) => void }) {

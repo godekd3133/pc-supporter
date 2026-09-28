@@ -75,7 +75,7 @@ function evidenceDetailFor(result: CompatibilityResult) {
     .map((item) => item.label);
   const health = result.dataHealth;
   const details = [
-    labels.length > 0 ? `${labels.join("·")} 상태를 확인해야 합니다.` : undefined,
+    labels.length > 0 ? `추가 확인: ${labels.join("·")}` : undefined,
     health && health.incompleteCount > 0 ? `부분 정보 ${health.incompleteCount}개` : undefined,
     health && health.unpricedCount > 0 ? `가격 미확인 ${health.unpricedCount}개` : undefined,
     result.gpuFit && gpuPurchaseEvidenceFor(result.gpuFit).status === "needs_review" ? "GPU·케이스 장착 정보" : undefined
@@ -120,10 +120,10 @@ export function assemblyPlanFor(build: BuildSelection, result: CompatibilityResu
     {
       id: "resolve-conflicts",
       order: 1,
-      title: "해결해야 할 충돌 제거",
+      title: "호환 문제 해결",
       status: resolutionStatus,
-      summary: blockerCount > 0 ? `차단 오류 ${blockerCount}개를 먼저 해결합니다.` : reviewCount > 0 ? `주의·확인 필요 ${reviewCount}개를 구매 전에 확인합니다.` : "확인된 부품 정보에서 충돌을 찾지 못했습니다.",
-      detail: blockerCount > 0 ? "대체 부품 또는 수리 플랜을 적용한 뒤 같은 구성으로 다시 검사해야 합니다." : reviewCount > 0 ? "확인되지 않은 항목을 먼저 확인한 뒤 구매하세요." : "다음 단계에서 부품 정보를 확인하세요.",
+      summary: blockerCount > 0 ? `호환 문제 ${blockerCount}개를 먼저 해결하세요.` : reviewCount > 0 ? `구매 전 확인 항목 ${reviewCount}개를 살펴보세요.` : "선택한 부품에서 호환 문제를 찾지 못했습니다.",
+      detail: blockerCount > 0 ? "부품을 바꾼 뒤 현재 구성으로 호환 결과를 다시 확인해 주세요." : reviewCount > 0 ? "확인하지 못한 사양과 조건을 살펴본 뒤 구매해 주세요." : "부품 사양과 연결 조건을 살펴봐 주세요.",
       dependsOn: [],
       targetId: blockerCount > 0 ? "repair-plan-panel" : "purchase-checklist"
     },
@@ -132,7 +132,7 @@ export function assemblyPlanFor(build: BuildSelection, result: CompatibilityResu
       order: 2,
       title: "부품 정보·장착·가격 확인",
       status: evidenceStatus,
-      summary: evidenceStatus === "blocked" ? "장착·전력 문제를 먼저 해결하세요." : evidenceStatus === "review" ? "부품 사양과 장착 공간, 가격을 확인하세요." : "구매에 필요한 부품 정보를 확인했습니다.",
+      summary: evidenceStatus === "blocked" ? "장착이나 전력 문제를 먼저 해결하세요." : evidenceStatus === "review" ? "부품 사양과 장착 공간, 가격을 확인하세요." : "구매에 필요한 부품 정보가 확인되었습니다.",
       detail: evidenceDetailFor(result),
       dependsOn: ["resolve-conflicts"],
       targetId: targetForEvidence(result)
@@ -142,8 +142,8 @@ export function assemblyPlanFor(build: BuildSelection, result: CompatibilityResu
       order: 3,
       title: "구매 목록과 예산 정리",
       status: purchaseStatus,
-      summary: purchaseStatus === "blocked" ? "충돌·물리 차단을 해결하기 전에는 구매하지 않습니다." : purchaseStatus === "review" ? "가격·데이터·확인 필요 항목을 검토한 뒤 구매합니다." : "현재 확인 결과로는 구매를 진행할 수 있습니다.",
-      detail: result.priceComplete ? "핵심 부품과 주변 부품의 수량·가격·유통 조건을 확인하세요." : "가격을 확인하지 못한 항목은 결제 전에 판매 페이지에서 확인하세요.",
+      summary: purchaseStatus === "blocked" ? "호환이나 장착 문제가 남아 있습니다. 해결한 뒤 구매하세요." : purchaseStatus === "review" ? "가격과 부품 정보를 확인한 뒤 구매하세요." : "현재 부품 정보 기준으로 구매할 수 있습니다.",
+      detail: result.priceComplete ? "부품 수량·가격·판매 조건을 확인해 주세요." : "가격을 모르는 부품은 결제 전에 판매 페이지에서 확인해 주세요.",
       dependsOn: ["resolve-conflicts", "confirm-evidence"],
       targetId: "purchase-list-panel"
     },
@@ -152,7 +152,7 @@ export function assemblyPlanFor(build: BuildSelection, result: CompatibilityResu
       order: 4,
       title: "메인보드 사전 조립",
       status: benchStatus,
-      summary: benchStatus === "ready" ? "케이스에 넣기 전에 CPU·RAM·M.2를 먼저 조립합니다." : "구매 단계가 확인되면 진행합니다.",
+      summary: benchStatus === "ready" ? "케이스에 넣기 전에 CPU·RAM·M.2를 먼저 조립하세요." : "부품 구매 후 진행하세요.",
       detail: "CPU 장착, 쿨러 백플레이트, 메모리 킷, M.2 슬롯 위치·방열판 간섭을 케이스 밖에서 확인하세요.",
       dependsOn: ["confirm-purchase"],
       targetId: "purchase-checklist"
@@ -162,7 +162,7 @@ export function assemblyPlanFor(build: BuildSelection, result: CompatibilityResu
       order: 5,
       title: "케이스 장착·케이블·주변부품 연결",
       status: wiringStatus,
-      summary: wiringStatus === "blocked" ? "주변 부품 연결 차단을 먼저 수정합니다." : wiringStatus === "review" ? "팬·RGB·전원 케이블 경로를 확인한 뒤 연결합니다." : "케이스 장착과 주변부품 연결을 진행할 수 있습니다.",
+      summary: wiringStatus === "blocked" ? "주변 부품 연결 문제를 먼저 해결하세요." : wiringStatus === "review" ? "팬·RGB·전원 케이블 규격을 확인한 뒤 연결하세요." : "케이스 장착과 주변 부품 연결을 진행할 수 있습니다.",
       detail: build.accessories && build.accessories.length > 0 ? "팬 허브 포트·허용전류, RGB 전압·출력, PSU 보조전원 케이블 경로를 연결 계획과 실물 케이블에 대조하세요." : "메인보드·PSU·GPU 케이블을 연결하고 케이스 팬·헤더 위치를 실물과 비교해 주세요.",
       dependsOn: ["bench-assemble"],
       targetId: accessory ? "accessory-compatibility-panel" : "build-connectivity-panel"
@@ -172,7 +172,7 @@ export function assemblyPlanFor(build: BuildSelection, result: CompatibilityResu
       order: 6,
       title: "POST·BIOS·온도·소음 테스트",
       status: postBuildStatus,
-      summary: postBuildStatus === "ready" ? "첫 부팅과 안정성 확인을 진행합니다." : "앞 단계 확인이 끝나면 진행합니다.",
+      summary: postBuildStatus === "ready" ? "첫 부팅과 작동 상태를 확인하세요." : "앞선 조립을 마친 뒤 진행하세요.",
       detail: "POST 성공, BIOS에서 메모리 프로파일·팬 제어를 확인하고, OS 진입 후 온도·팬 회전·소음·부하 테스트를 기록하세요.",
       dependsOn: ["wire-peripherals"],
       targetId: "assembly-verification-panel"
@@ -187,28 +187,28 @@ export function assemblyPlanFor(build: BuildSelection, result: CompatibilityResu
   const checklistComplete = !checklist || checklist.total === 0 || checklist.remaining === 0;
   let executionSteps = steps.map((step) => {
     if (step.id === "confirm-evidence" && checklist && checklist.total > 0 && !checklistComplete) {
-      return { ...step, status: step.status === "blocked" ? step.status : "review" as const, summary: `구매 전 체크리스트 ${checklist.remaining}개를 먼저 확인합니다.`, progress: { label: `체크리스트 ${checklist.checked}/${checklist.total}개`, percent: checklist.percent } };
+      return { ...step, status: step.status === "blocked" ? step.status : "review" as const, summary: "구매 전 확인할 내용이 남았습니다.", progress: { label: `확인 완료 ${checklist.checked}/${checklist.total}개`, percent: checklist.percent } };
     }
     if (step.id === "confirm-purchase" && purchase && purchase.total > 0) {
       return { ...step, status: step.status === "blocked" ? step.status : purchaseComplete ? step.status : "review" as const, summary: purchaseComplete ? step.summary : `구매 목록 ${purchase.total - purchasedCount}개가 아직 수령 전입니다.`, progress: { label: `수령·조립 ${purchasedCount}/${purchase.total}개`, percent: purchase.percent } };
     }
     if (step.id === "confirm-purchase" && checklist && checklist.total > 0 && !checklistComplete && step.status === "ready") {
-      return { ...step, status: "review" as const, summary: `체크리스트 ${checklist.remaining}개 확인 후 구매를 진행합니다.`, progress: { label: `체크리스트 ${checklist.checked}/${checklist.total}개`, percent: checklist.percent } };
+      return { ...step, status: "review" as const, summary: `구매 전에 확인할 항목 ${checklist.remaining}개를 살펴봐 주세요.`, progress: { label: `체크리스트 ${checklist.checked}/${checklist.total}개`, percent: checklist.percent } };
     }
     if (["bench-assemble", "wire-peripherals", "post-build-test"].includes(step.id) && ((purchase && !purchaseComplete) || (checklist && !checklistComplete)) && step.status === "ready") {
-      return { ...step, status: "pending" as const, summary: purchase && !purchaseComplete ? "구매 항목을 모두 수령한 뒤 진행합니다." : "구매 전 체크리스트를 모두 확인한 뒤 진행합니다." };
+      return { ...step, status: "pending" as const, summary: purchase && !purchaseComplete ? "구매한 부품을 모두 받은 뒤 조립해 주세요." : "구매 전에 확인할 목록을 모두 살펴본 뒤 조립해 주세요." };
     }
     if (step.id === "post-build-test" && ((purchase && !purchaseComplete) || (checklist && !checklistComplete))) return step;
     if (step.id === "post-build-test" && assembly && assembly.state !== "not_started") {
       const measurementReview = assembly.state === "failed" || assembly.state === "in_progress" || assembly.recheckSignalCount > 0;
-      return { ...step, status: measurementReview ? "review" as const : step.status, summary: assembly.state === "failed" ? "실측 실패 원인을 확인한 뒤 다시 테스트합니다." : assembly.state === "in_progress" ? "실측 기록을 완료한 뒤 결과를 확인합니다." : assembly.recheckSignalCount > 0 ? `실측 다시 볼 항목 ${assembly.recheckSignalCount}개를 확인한 뒤 진행합니다.` : "실측 확인을 통과했습니다.", progress: { label: `실측 ${assembly.checked}/${assembly.total}개`, percent: assembly.percent } };
+      return { ...step, status: measurementReview ? "review" as const : step.status, summary: assembly.state === "failed" ? "조립 기록에서 실패한 항목의 원인을 살펴본 뒤 다시 확인해 주세요." : assembly.state === "in_progress" ? "조립 후 확인 기록을 마무리해 주세요." : assembly.recheckSignalCount > 0 ? `조립 기록에서 다시 볼 항목 ${assembly.recheckSignalCount}개를 살펴봐 주세요.` : "조립 후 확인 기록을 마쳤어요.", progress: { label: `조립 확인 ${assembly.checked}/${assembly.total}개`, percent: assembly.percent } };
     }
     return step;
   });
   const state = executionSteps.some((step) => hasBlocked(step.status)) ? "blocked" : executionSteps.some((step) => hasReview(step.status)) ? "review" : "ready";
   return {
     state,
-    summary: state === "blocked" ? "차단 항목을 해결한 뒤 다음 구매·조립 단계로 이동하세요." : !purchaseComplete ? `구매 항목 ${purchase!.total - purchasedCount}개를 수령한 뒤 조립 단계로 이동하세요.` : !checklistComplete ? `구매 전 체크리스트 ${checklist!.remaining}개를 확인한 뒤 다음 단계로 이동하세요.` : assembly?.state === "failed" || (assembly?.recheckSignalCount ?? 0) > 0 ? "실측 결과를 재확인한 뒤 최종 구매·조립 상태를 판단하세요." : state === "review" ? "구매는 가능하지만 상품 페이지·가격·연결 정보를 확인한 뒤 조립하세요." : "확인된 항목에는 문제가 없습니다. 제조사 안내와 실제 연결 상태를 확인한 뒤 구매·조립하세요.",
+    summary: state === "blocked" ? "호환 문제를 해결한 뒤 구매와 조립을 진행해 주세요." : !purchaseComplete ? `구매 항목 ${purchase!.total - purchasedCount}개를 받은 뒤 조립해 주세요.` : !checklistComplete ? `구매 전에 확인할 항목 ${checklist!.remaining}개를 살펴봐 주세요.` : assembly?.state === "failed" || (assembly?.recheckSignalCount ?? 0) > 0 ? "조립 기록을 다시 확인한 뒤 구매와 조립을 마무리해 주세요." : state === "review" ? "구매 전에 상품 페이지와 가격, 연결 정보를 확인해 주세요." : "호환 문제는 없어요. 제조사 안내와 실제 연결 상태를 확인한 뒤 구매·조립해 주세요.",
     steps: executionSteps
   };
 }

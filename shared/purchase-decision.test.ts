@@ -14,7 +14,7 @@ describe("purchase decision gate", () => {
 
   it("does not claim final readiness while the checklist is loading or incomplete", () => {
     expect(purchaseDecisionFor(readiness("ready")).state).toBe("pending");
-    expect(purchaseDecisionFor(readiness("ready"), progress(2))).toMatchObject({ state: "review", label: "체크리스트 확인 후 구매" });
+    expect(purchaseDecisionFor(readiness("ready"), progress(2))).toMatchObject({ state: "review", label: "구매 전 확인 필요" });
   });
 
   it("becomes ready when there are no checklist items or all items are complete", () => {
@@ -24,9 +24,9 @@ describe("purchase decision gate", () => {
 
   it("uses recorded build evidence as a conservative follow-up signal without treating an unstarted run as a blocker", () => {
     expect(purchaseDecisionFor(readiness("ready"), progress(0), assembly("not_started")).state).toBe("ready");
-    expect(purchaseDecisionFor(readiness("ready"), progress(0), assembly("in_progress"))).toMatchObject({ state: "review", label: "실측 기록 진행 중" });
-    expect(purchaseDecisionFor(readiness("ready"), progress(0), assembly("failed"))).toMatchObject({ state: "review", label: "실측 확인 후 진행" });
-    expect(purchaseDecisionFor(readiness("ready"), progress(0), assembly("passed", 1))).toMatchObject({ state: "review", label: "실측 재확인 필요" });
+    expect(purchaseDecisionFor(readiness("ready"), progress(0), assembly("in_progress"))).toMatchObject({ state: "review", label: "조립 후 확인 중" });
+    expect(purchaseDecisionFor(readiness("ready"), progress(0), assembly("failed"))).toMatchObject({ state: "review", label: "조립 기록 확인 필요" });
+    expect(purchaseDecisionFor(readiness("ready"), progress(0), assembly("passed", 1))).toMatchObject({ state: "review", label: "조립 상태 다시 확인" });
   });
 
   it("keeps purchase stages as context without letting a partial purchase hide a readiness blocker", () => {

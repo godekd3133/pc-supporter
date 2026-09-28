@@ -86,9 +86,9 @@ export const RECOMMENDATION_PRIORITY_LABELS: Record<RecommendationPriority, stri
 
 export const RECOMMENDATION_PRIORITY_DESCRIPTIONS: Record<RecommendationPriority, string> = {
   balanced: "호환성·성능·가격을 함께 고려합니다.",
-  budget: "예산과 가격 대비 성능을 우선해 골라요.",
-  performance: "성능과 처리 여유를 먼저 살펴봐요.",
-  reliability: "호환·장착 정보가 충분하고 가격과 출처가 최근에 확인된 부품을 우선해 골라요."
+  budget: "예산과 가격 대비 성능을 우선합니다.",
+  performance: "부품 성능과 처리 여유를 우선합니다.",
+  reliability: "호환·장착 정보가 충분하고 최근 가격과 판매처 정보가 확인된 부품을 우선합니다."
 };
 
 export function isRecommendationPriority(value: unknown): value is RecommendationPriority {
@@ -2084,6 +2084,8 @@ export interface AccessoryCoverageLastRun {
 export interface AccessoryCategoryCoverage {
   category: AccessoryCategory;
   categoryId: string;
+  /** False when the stored accessory pool exists but no public-list crawl was recorded for this category. */
+  hasCrawlHistory?: boolean;
   totalProductCount?: number;
   storedProductCount: number;
   liveProducts: number;
