@@ -65,13 +65,15 @@ export interface AlternativeComparisonCandidate {
   price: string;
   purchaseCondition?: string;
   recommendedQuantity?: number;
-  similarity: string;
+  /** Legacy/internal rank label accepted as input, omitted from public projections. */
+  similarity?: string;
   gpuTarget?: string;
   valueScore?: number;
   valueLabel?: ValueLabel;
   valueScoreScale?: 200;
   recommendationTrust?: string;
-  performance: string;
+  /** Legacy/internal performance summary accepted as input, omitted from public projections. */
+  performance?: string;
   compatibility: string;
   similarityEvidence?: AlternativeComparisonSimilarityEvidence;
   benchmarkEvidence?: AlternativeComparisonBenchmarkEvidence;
@@ -211,7 +213,7 @@ export function alternativeComparisonBenchmarkEvidenceTextFor(evidence: Alternat
 
 function publicComparisonCopyText(value: string | undefined) {
   if (!value) return undefined;
-  return /cinebench|time\s*spy|port\s*royal|benchmark|벤치마크|recommendation.?trust|trust\s*score|추천\s*신뢰|신뢰도|(?:카탈로그|성능)\s*(?:추정\s*)?분석(?:\s*점수)?\s*[:：]?\s*\d+|\bfps\b|초당\s*프레임/i.test(value) ? undefined : value;
+  return /cinebench|time\s*spy|port\s*royal|benchmark|벤치마크|recommendation.?trust|trust\s*score|performance.{0,24}score|score.{0,24}performance|추천\s*신뢰|신뢰도|(?:카탈로그|성능)\s*(?:추정\s*)?분석(?:\s*점수)?\s*[:：]?\s*\d+|\bfps\b|초당\s*프레임/i.test(value) ? undefined : value;
 }
 
 function publicScenarioFor(scenario: AlternativeComparisonCandidate["scenario"]) {
@@ -220,8 +222,34 @@ function publicScenarioFor(scenario: AlternativeComparisonCandidate["scenario"])
   return publicScenarioValue(safeScenario);
 }
 
+/** Allowlist the candidate facts sent to the public comparison-share API. */
+export function alternativeComparisonShareCandidatesFor(candidates: AlternativeComparisonCandidate[]): AlternativeComparisonCandidate[] {
+  return candidates.map((candidate) => {
+    const scenario = publicScenarioFor(candidate.scenario) as AlternativeComparisonCandidate["scenario"] | undefined;
+    return {
+      name: candidate.name,
+      ...(candidate.category ? { category: candidate.category } : {}),
+      ...(candidate.partId ? { partId: candidate.partId } : {}),
+      ...(candidate.priceWon !== undefined ? { priceWon: candidate.priceWon } : {}),
+      ...(candidate.priceEvidence ? { priceEvidence: candidate.priceEvidence } : {}),
+      summary: candidate.summary,
+      price: candidate.price,
+      ...(candidate.purchaseCondition ? { purchaseCondition: candidate.purchaseCondition } : {}),
+      ...(candidate.recommendedQuantity !== undefined ? { recommendedQuantity: candidate.recommendedQuantity } : {}),
+      compatibility: candidate.compatibility,
+      ...(candidate.physicalEvidence ? { physicalEvidence: candidate.physicalEvidence } : {}),
+      ...(candidate.physicalEvidenceSources ? { physicalEvidenceSources: candidate.physicalEvidenceSources } : {}),
+      dataQuality: candidate.dataQuality,
+      ...(candidate.dataFreshness ? { dataFreshness: candidate.dataFreshness } : {}),
+      ...(candidate.updatedAt ? { updatedAt: candidate.updatedAt } : {}),
+      ...(candidate.sourceUrl ? { sourceUrl: candidate.sourceUrl } : {}),
+      ...(scenario ? { scenario } : {})
+    };
+  });
+}
+
 function publicScenarioValue(value: unknown, key = ""): unknown {
-  if (/benchmark|fps|trust|score/i.test(key)) return undefined;
+  if (/benchmark|fps|trust|score|similarity|performance|value|rank|analysis|gputarget/i.test(key)) return undefined;
   if (typeof value === "string") return publicComparisonCopyText(value);
   if (Array.isArray(value)) return value.map((item) => publicScenarioValue(item)).filter((item) => item !== undefined);
   if (value && typeof value === "object") {

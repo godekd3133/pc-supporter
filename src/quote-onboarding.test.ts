@@ -9,6 +9,8 @@ import {
   initialOnboardingState,
   ONBOARDING_GAME_CATEGORIES,
   ONBOARDING_GAMES,
+  ONBOARDING_INTENSITIES,
+  ONBOARDING_WORKS,
   onboardingStateFromJson,
   onboardingStateToJson,
   recommendParamsFor,
@@ -251,6 +253,33 @@ describe("quote-onboarding recommend params", () => {
     const audio = recommendParamsFor(stateWith({ usecase: "work", works: ["audio"], intensity: "balanced" }));
     expect(audio.profile).toBe("creator");
     expect(audio.includeGpu).toBe(false);
+  });
+
+  it("keeps every displayed work estimate aligned with the generator request", () => {
+    const capacityGb = (label: string) => {
+      const value = Number(label.match(/\d+/)?.[0] ?? 0);
+      return label.includes("TB") ? value * 1000 : value;
+    };
+
+    for (const work of ONBOARDING_WORKS) {
+      for (const intensity of ONBOARDING_INTENSITIES) {
+        const state = stateWith({ usecase: "work", works: [work.id], intensity: intensity.id });
+        const estimate = workEstimateFor(state.works, state.intensity);
+        const params = recommendParamsFor(state);
+        const query = new URLSearchParams(recommendQueryFor(state));
+        const scenario = `${work.id}/${intensity.id}`;
+        const expectedMemoryGb = capacityGb(estimate.memory);
+        const expectedStorageGb = capacityGb(estimate.storage);
+        const expectedGpu = estimate.gpu !== "내장 그래픽";
+
+        expect(params.memoryCapacityGb, scenario).toBe(expectedMemoryGb);
+        expect(params.storageCapacityGb, scenario).toBe(expectedStorageGb);
+        expect(params.includeGpu, scenario).toBe(expectedGpu);
+        expect(Number(query.get("ram") ?? 32), `${scenario} URL RAM`).toBe(expectedMemoryGb);
+        expect(Number(query.get("ssd") ?? 1000), `${scenario} URL SSD`).toBe(expectedStorageGb);
+        expect(query.get("gpu") !== "0", `${scenario} URL GPU`).toBe(expectedGpu);
+      }
+    }
   });
 
   it("prefers the heaviest work when several are selected", () => {

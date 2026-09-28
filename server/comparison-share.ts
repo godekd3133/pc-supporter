@@ -391,7 +391,7 @@ export function parseAlternativeComparisonInput(input: unknown): AlternativeComp
   if (errors.length > 0) return { ...context, candidates: [], errors };
   return {
     ...context,
-    candidates: parsed.map((value) => value.candidate!).filter((value): value is AlternativeComparisonCandidate => Boolean(value)),
+    candidates: parsed.flatMap((value) => value.candidate ? [value.candidate] : []),
     ...(expiresInDays !== undefined ? { expiresInDays } : {}),
     errors: []
   };

@@ -2277,9 +2277,11 @@ html[data-theme="dark"] .shared-generator-variants-state { color: var(--muted) !
 
 .generator-budget-card-lines strong { overflow: hidden; color: #607a89; font-size: 8px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 
-.generator-budget-card-warning { display: flex; align-items: flex-start; gap: 4px; margin: 9px 0 0; color: #9c7a3b; font-size: 7px; line-height: 1.45; }
+.generator-budget-card-warning { display: flex; align-items: flex-start; gap: 7px; margin: 9px 0 0; color: #9c7a3b; font-size: 11px; line-height: 1.5; }
 
 .generator-budget-card-warning svg { flex: 0 0 auto; margin-top: 1px; }
+
+.generator-budget-card-warning ul { display: grid; gap: 3px; margin: 0; padding-left: 14px; }
 
 .generator-budget-card-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-top: 12px; }
 

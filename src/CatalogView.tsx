@@ -5,11 +5,8 @@ import { CATEGORY_LABELS, DATA_FRESHNESS_LABELS, DATA_QUALITY_LABELS, isKnownPri
 import { CATALOG_WATCHLIST_STORAGE_KEY, catalogWatchlistContains, catalogWatchlistFromJson } from "../shared/catalog-watchlist";
 import { priceWatchDecisionFor } from "../shared/price-watch-decision";
 import type { PriceWatchDecisionHistory } from "../shared/price-watch-decision";
-import { alternativeComparisonBenchmarkEvidenceFor, alternativeComparisonSimilarityEvidenceFor } from "../shared/alternative-comparison-export";
 import type { AlternativeComparisonCandidate, AlternativeComparisonExportContext } from "../shared/alternative-comparison-export";
 import { classifyDataFreshness } from "../shared/data-freshness";
-import { benchmarkEvidenceForPart } from "../shared/benchmark-evidence";
-import { similarityBasisLabelFor, similarityReferenceTextFor } from "../shared/similarity-evidence";
 import { catalogMissingFieldLabelFor } from "../shared/catalog-spec-coverage";
 import type { CatalogSpecCoverageMissingField } from "../shared/catalog-spec-coverage";
 import { compatibilityFilterPresetFor } from "../shared/compatibility-filter-preset";
@@ -100,8 +97,6 @@ function downloadCatalogComparisonFile(content: string, filename: string, mimeTy
 function catalogComparisonCandidatesFor(parts: CatalogPart[]): AlternativeComparisonCandidate[] {
   return parts.map((part) => {
     const sourceUrl = safeExternalUrl(part.danawaUrl);
-    const similarityEvidence = alternativeComparisonSimilarityEvidenceFor(part.similarityEvidence);
-    const benchmarkEvidence = alternativeComparisonBenchmarkEvidenceFor(benchmarkEvidenceForPart(part));
     return {
       name: part.name,
       category: part.category,
@@ -111,10 +106,6 @@ function catalogComparisonCandidatesFor(parts: CatalogPart[]): AlternativeCompar
       summary: compactSummary(part),
       price: priceLabel(part.priceWon),
       purchaseCondition: `${catalogPriceEvidenceLabelFor(part)} · ${part.listingType ? LISTING_TYPE_LABELS[part.listingType] : LISTING_TYPE_LABELS.retail}`,
-      similarity: "등록된 주요 사양 비교",
-      ...(similarityEvidence ? { similarityEvidence } : {}),
-      ...(benchmarkEvidence ? { benchmarkEvidence } : {}),
-      performance: "현재 견적에 추가하기 전 주요 사양 비교",
       compatibility: "견적에 추가한 뒤 호환 결과를 다시 확인하세요.",
       dataQuality: QUALITY_LABELS[part.dataQuality],
       dataFreshness: part.dataFreshness ?? classifyDataFreshness(part.updatedAt),
@@ -741,6 +732,9 @@ export function CatalogView({ meta, build, partMap, profile, gamingResolution, g
       catalogQueryHistoryActiveRef.current = false;
       restoreCatalogUrlRef.current = false;
       if (currentUrl !== nextUrl) window.history.replaceState(window.history.state, "", nextUrl);
+      previousCatalogUrlRef.current = nextUrl;
+      previousCatalogFilterQueryRef.current = catalogTextFilterKey;
+      return;
     } else if (previousCatalogFilterKeyRef.current !== null && previousCatalogFilterKeyRef.current !== filterKey && page > 0) {
       clearQueryHistoryTimer();
       catalogQueryHistoryActiveRef.current = false;

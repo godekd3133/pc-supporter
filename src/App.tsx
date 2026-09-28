@@ -192,6 +192,7 @@ import { alternativeComparisonLocalShareRemember, alternativeComparisonLocalShar
 import type { AlternativeComparisonLocalShareEntry } from "../shared/alternative-comparison-local-history";
 import { savedBuildVersionLocalShareRemember, savedBuildVersionLocalShareRemove, savedBuildVersionLocalSharesFromJson, savedBuildVersionLocalSharesToJson } from "../shared/saved-build-version-local-history";
 import type { SavedBuildVersionLocalShareEntry } from "../shared/saved-build-version-local-history";
+import { alternativeComparisonShareCandidatesFor } from "../shared/alternative-comparison-export";
 import type { AlternativeComparisonCandidate } from "../shared/alternative-comparison-export";
 import type { AlternativeComparisonSnapshot } from "../shared/alternative-comparison-share";
 import type { SavedBuildVersionComparisonShareSnapshot } from "../shared/saved-build-version-share";
@@ -2076,7 +2077,7 @@ function App() {
           name: "PC Supporter 비교",
           ...liveContext,
           ...context,
-          candidates,
+          candidates: alternativeComparisonShareCandidatesFor(candidates),
           expiresInDays: 30
         }),
         retry: 0

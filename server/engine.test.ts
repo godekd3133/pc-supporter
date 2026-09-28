@@ -3519,6 +3519,40 @@ describe("compatibility engine", () => {
     expect(draft.unknownCount).toBe(0);
   });
 
+  it("uses the requested resolution VRAM floor when eligible gaming GPUs are available", () => {
+    const baseGpu = seedCatalog.find((part) => part.id === "gpu-rtx-4060")!;
+    const sourcedGpu = (id: string, name: string, vramGb: number, priceWon: number): Part => ({
+      ...baseGpu,
+      id,
+      name,
+      priceWon,
+      source: "danawa",
+      sourceProductCode: id,
+      danawaUrl: `https://prod.danawa.com/info/?pcode=${id}`,
+      dataQuality: "live",
+      missingFields: [],
+      updatedAt: new Date().toISOString(),
+      specs: { ...baseGpu.specs, vramGb }
+    });
+    const lowVramGpu = sourcedGpu("gpu-generator-low-vram", "테스트 보급형 GPU 2GB", 2, 58_480);
+    const qhdGpu = sourcedGpu("gpu-generator-qhd-vram", "테스트 QHD GPU 12GB", 12, 507_640);
+    const catalog = seedCatalog.filter((part) => part.category !== "gpu").concat(lowVramGpu, qhdGpu);
+
+    const draft = generateBuildDraft(catalog, {
+      profile: "gaming",
+      priority: "balanced",
+      budgetWon: 2_200_000,
+      includeGpu: true,
+      gamingResolution: "1440p",
+      gamingRefreshRate: 144,
+      memoryCapacityGb: 32,
+      storageCapacityGb: 1_000
+    });
+
+    expect(draft.selection.gpu?.partId).toBe(qhdGpu.id);
+    expect(draft.gpuTarget).toMatchObject({ targetVramGb: 12, currentVramGb: 12, currentFit: "met" });
+  });
+
   it("preserves gaming advisory options and marks them as non-FPS evidence", () => {
     const draft = generateBuildDraft(seedCatalog, {
       profile: "gaming",
@@ -3838,7 +3872,7 @@ describe("compatibility engine", () => {
     });
 
     expect(draft.gpuTarget).toMatchObject({ resolution: "4k", targetVramGb: 16, currentVramGb: 8, currentFit: "partial" });
-    expect(draft.warnings.some((item) => item.includes("권장 기준 미달") && item.includes("부족할 수 있습니다"))).toBe(true);
+    expect(draft.warnings.some((item) => item.includes("VRAM 8GB") && item.includes("게임의 권장 사양을 확인해 주세요"))).toBe(true);
     expect(draft.status).toBe("compatible");
   });
 

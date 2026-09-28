@@ -5569,7 +5569,10 @@ export function generateBuildDraft(catalog: Part[], request: BuildGenerationRequ
   const gpuPool = request.includeGpu
     ? filterGeneratorGpuPoolByMinVram(
         generatorCandidatePool(catalog, "gpu", profile, undefined, listingPolicy, gamingResolution, gamingRefreshRate, GENERATOR_REQUIRED_FIELDS.gpu ?? [], false, gamingAdvisoryTuning, gpuVendorPreference),
-        performanceTier ? GENERATOR_PERFORMANCE_TIER_GPU_MIN_VRAM_GB[performanceTier] : 0
+        Math.max(
+          performanceTier ? GENERATOR_PERFORMANCE_TIER_GPU_MIN_VRAM_GB[performanceTier] : 0,
+          profile === "gaming" ? gamingAdvisoryTuning?.targetVramGb ?? GAMING_RESOLUTION_VRAM_TARGETS[gamingResolution] : 0
+        )
       )
     : undefined;
   const missingPools = [
@@ -5879,7 +5882,7 @@ function preferCoolerHeadroom(parts: Part[], cpu: Part, profile: RecommendationP
       !(finding.severity === "unknown" && GENERATOR_COSMETIC_UNKNOWN_RULES.has(finding.ruleId))
     )
     .map((finding) => finding.title);
-  if (gpuTarget?.currentFit === "partial") warnings.unshift(`${gpuTarget.summary}. 목표 해상도에 맞는 VRAM이 부족할 수 있습니다.`);
+  if (gpuTarget?.currentFit === "partial") warnings.unshift(`선택한 그래픽카드 VRAM ${gpuTarget.currentVramGb}GB은 ${GAMING_RESOLUTION_LABELS[gamingResolution]} 게임의 요구 사양보다 낮을 수 있어요. 구매 전에 플레이할 게임의 권장 사양을 확인해 주세요.`);
   if (gpuTarget?.currentFit === "unknown") warnings.unshift(`${gpuTarget.summary}. GPU VRAM을 제조사 페이지에서 확인해 주세요.`);
   if (tierGpuUnmet) warnings.push(`${RECOMMENDATION_PERFORMANCE_TIER_LABELS[performanceTier]}에 맞는 그래픽카드를 예산 안에서 찾지 못해 요청한 성능보다 낮은 부품으로 구성했어요. (VRAM ${tierMinGpuVramGb}GB 이상 필요)`);
   if (tierCpuUnmet) warnings.push(`${RECOMMENDATION_PERFORMANCE_TIER_LABELS[performanceTier]}에 맞는 CPU를 예산 안에서 찾지 못해 요청한 성능보다 낮은 부품으로 구성했어요.`);

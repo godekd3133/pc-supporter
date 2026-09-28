@@ -5,7 +5,9 @@ import { spawn } from "node:child_process";
 const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
 const previewPort = process.env.PREVIEW_PORT ?? "4184";
 const apiPort = process.env.PREVIEW_API_PORT ?? process.env.PORT ?? "4174";
-const apiTarget = process.env.VITE_API_PROXY_TARGET ?? `http://127.0.0.1:${apiPort}`;
+const previewHost = process.env.PREVIEW_HOST ?? "127.0.0.1";
+const apiHost = process.env.PREVIEW_API_HOST ?? "127.0.0.1";
+const apiTarget = process.env.VITE_API_PROXY_TARGET ?? `http://${apiHost}:${apiPort}`;
 const crawlOnStart = process.env.DANAWA_CRAWL_ON_START ?? "false";
 
 try {
@@ -18,10 +20,10 @@ try {
 if (process.exitCode !== 1) {
   const children = [
     spawn(npmCommand, ["run", "start"], {
-      env: { ...process.env, PORT: apiPort, DANAWA_CRAWL_ON_START: crawlOnStart },
+      env: { ...process.env, PORT: apiPort, SERVER_HOST: apiHost, DANAWA_CRAWL_ON_START: crawlOnStart },
       stdio: "inherit"
     }),
-    spawn(npmCommand, ["run", "preview", "--", "--port", previewPort], {
+    spawn(npmCommand, ["run", "preview", "--", "--port", previewPort, "--host", previewHost], {
       env: { ...process.env, VITE_API_PROXY_TARGET: apiTarget },
       stdio: "inherit"
     })

@@ -111,6 +111,7 @@ import { priceRefreshOptionsFromEnv, startPriceRefreshScheduler, waitForPriceRef
 
 const app = express();
 const port = Number(process.env.PORT ?? 4174);
+const serverHost = process.env.SERVER_HOST?.trim() || "0.0.0.0";
 let catalogSeedMappingPreviewCache: { key: string; value: ReturnType<typeof catalogSeedMappingPreviewFor> } | undefined;
 let catalogSeedMappingPreviewCacheEpoch = 0;
 let catalogSeedMappingPreviewInFlight: { key: string; epoch: number; promise: Promise<ReturnType<typeof catalogSeedMappingPreviewFor>> } | undefined;
@@ -4791,7 +4792,7 @@ async function start() {
   await ensureDataDirectory();
   await initializePersistence();
   await loadCatalog();
-  app.listen(port, "0.0.0.0", () => {
+  app.listen(port, serverHost, () => {
     console.log(`PC Supporter API listening on http://127.0.0.1:${port}`);
   });
 

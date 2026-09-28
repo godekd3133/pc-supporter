@@ -7,7 +7,7 @@
     "dev": "concurrently -k \"npm:dev:web\" \"npm:dev:api\"",
     "dev:web": "vite --host 0.0.0.0 --port 5173",
     "dev:api": "tsx watch server/index.ts",
-    "preview": "vite preview --host 0.0.0.0",
+    "preview": "vite preview",
     "preview:full": "node scripts/preview-full.mjs",
     "build": "tsc --noEmit && vite build && node scripts/verify-client-bundle.mjs",
     "build:mobile": "node scripts/build-mobile.mjs",

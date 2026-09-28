@@ -3,8 +3,7 @@ import { FiActivity, FiAlertTriangle, FiCheckCircle, FiChevronDown, FiCopy, FiDa
 import type { Finding, Part, PartCategory, SimilarityEvidence } from "../shared/types";
 import type { CandidateApplicationEvidence } from "../shared/candidate-application";
 import { CATEGORY_LABELS, DATA_QUALITY_LABELS, isKnownPrice, LISTING_TYPE_LABELS } from "../shared/types";
-import { alternativeComparisonBenchmarkEvidenceFor, alternativeComparisonCsvFor, alternativeComparisonJsonFor, alternativeComparisonSimilarityEvidenceFor, alternativeComparisonTextFor } from "../shared/alternative-comparison-export";
-import { benchmarkEvidenceForPart } from "../shared/benchmark-evidence";
+import { alternativeComparisonCsvFor, alternativeComparisonJsonFor, alternativeComparisonTextFor } from "../shared/alternative-comparison-export";
 import type { AlternativeComparisonCandidate } from "../shared/alternative-comparison-export";
 import { candidateDecisionSummaryFor } from "../shared/candidate-decision";
 import { safeExternalUrl } from "./safe-source-url";
@@ -87,10 +86,9 @@ function physicalEvidenceLabel(status: NonNullable<Suggestion["physicalEvidence"
   return status === "verified" ? "규격 일치" : status === "review" ? "정보 부족" : "미적용";
 }
 
-function suggestionComparisonCandidatesFor(suggestions: Suggestion[], props: Pick<ResultFindingCardProps, "partSummary" | "formatWon" | "similarityEvidenceText">): AlternativeComparisonCandidate[] {
+function suggestionComparisonCandidatesFor(suggestions: Suggestion[], props: Pick<ResultFindingCardProps, "partSummary" | "formatWon">): AlternativeComparisonCandidate[] {
   return suggestions.map((suggestion) => {
     const sourceUrl = safeExternalUrl(suggestion.part.danawaUrl);
-    const benchmarkEvidence = alternativeComparisonBenchmarkEvidenceFor(benchmarkEvidenceForPart(suggestion.part));
     return {
       name: suggestion.part.name,
       category: suggestion.part.category,
@@ -100,12 +98,7 @@ function suggestionComparisonCandidatesFor(suggestions: Suggestion[], props: Pic
       ...(isKnownPrice(suggestion.part.priceWon) ? { priceWon: suggestion.part.priceWon } : {}),
       purchaseCondition: suggestion.part.listingType ? LISTING_TYPE_LABELS[suggestion.part.listingType] : LISTING_TYPE_LABELS.retail,
       ...(suggestion.recommendedQuantity !== undefined ? { recommendedQuantity: suggestion.recommendedQuantity } : {}),
-      similarity: suggestion.similarityEvidence ? props.similarityEvidenceText(suggestion.similarityEvidence) : "사양 비교 정보 없음",
-      ...(suggestion.gpuTarget ? { gpuTarget: suggestion.gpuTarget.summary } : {}),
-      performance: suggestion.performanceSummary,
       compatibility: suggestionCompatibilityText(suggestion),
-      ...(benchmarkEvidence ? { benchmarkEvidence } : {}),
-      ...(alternativeComparisonSimilarityEvidenceFor(suggestion.similarityEvidence) ? { similarityEvidence: alternativeComparisonSimilarityEvidenceFor(suggestion.similarityEvidence) } : {}),
       ...(suggestion.physicalEvidence && suggestion.physicalEvidence.status !== "not_applicable" ? { physicalEvidence: suggestion.physicalEvidence.summary } : {}),
       dataQuality: DATA_QUALITY_LABELS[suggestion.part.dataQuality],
       ...(sourceUrl ? { sourceUrl } : {})

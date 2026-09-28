@@ -2,8 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ComponentType } from "react"
 import { FiActivity, FiCheck, FiChevronDown, FiClock, FiCopy, FiDatabase, FiDownload, FiExternalLink, FiInfo, FiLayers, FiLoader, FiRefreshCw, FiSearch, FiShare2, FiTrash2, FiXCircle } from "react-icons/fi";
 import type { AlternativeRiskCounts, BrandCountOption, BuildSelection, CatalogBenchmarkCoverage, CompatiblePartCandidate, DataFreshness, DataQuality, GamingRefreshRate, GamingResolution, Part, PartCategory, PartSelection, PriceAvailabilityFilter, RecommendationProfile, SimilarityEvidence, ListingPolicy } from "../shared/types";
 import { CATEGORY_LABELS, DATA_FRESHNESS_LABELS, DATA_QUALITY_LABELS, isKnownPrice, LISTING_POLICY_LABELS, LISTING_TYPE_LABELS, PRICE_AVAILABILITY_LABELS } from "../shared/types";
-import { alternativeComparisonBenchmarkEvidenceFor, alternativeComparisonCsvFor, alternativeComparisonJsonFor, alternativeComparisonSimilarityEvidenceFor, alternativeComparisonTextFor } from "../shared/alternative-comparison-export";
-import { benchmarkEvidenceForPart } from "../shared/benchmark-evidence";
+import { alternativeComparisonCsvFor, alternativeComparisonJsonFor, alternativeComparisonTextFor } from "../shared/alternative-comparison-export";
 import type { AlternativeComparisonCandidate } from "../shared/alternative-comparison-export";
 import { compatibilityFilterPresetFor } from "../shared/compatibility-filter-preset";
 import { physicalEvidenceFilterLabel, type PhysicalEvidenceFilter } from "../shared/physical-evidence-filter";
@@ -287,10 +286,8 @@ function PickerPhysicalEvidence({ part, compact = false }: { part: PickerPart; c
   </div>;
 }
 
-function pickerComparisonCandidatesFor(parts: PickerPart[], partSummary: PartPickerProps["partSummary"], formatWon: PartPickerProps["formatWon"], similarityEvidenceText: PartPickerProps["similarityEvidenceText"]): AlternativeComparisonCandidate[] {
-  return parts.map((part) => {
-    const benchmarkEvidence = alternativeComparisonBenchmarkEvidenceFor(benchmarkEvidenceForPart(part));
-    return {
+function pickerComparisonCandidatesFor(parts: PickerPart[], partSummary: PartPickerProps["partSummary"], formatWon: PartPickerProps["formatWon"]): AlternativeComparisonCandidate[] {
+  return parts.map((part) => ({
       name: part.name,
       category: part.category,
       partId: part.id,
@@ -299,16 +296,11 @@ function pickerComparisonCandidatesFor(parts: PickerPart[], partSummary: PartPic
       ...(isKnownPrice(part.priceWon) ? { priceWon: part.priceWon } : {}),
       purchaseCondition: pickerPurchaseConditionFor(part),
       ...(part.recommendedQuantity !== undefined ? { recommendedQuantity: part.recommendedQuantity } : {}),
-      similarity: part.similarityEvidence ? similarityEvidenceText(part.similarityEvidence) : "사양 비교 정보 없음",
-      performance: part.performanceSummary ?? "성능 정보 없음",
       compatibility: pickerCandidateRisk(part),
-      ...(benchmarkEvidence ? { benchmarkEvidence } : {}),
-      ...(alternativeComparisonSimilarityEvidenceFor(part.similarityEvidence) ? { similarityEvidence: alternativeComparisonSimilarityEvidenceFor(part.similarityEvidence) } : {}),
       dataQuality: DATA_QUALITY_LABELS[part.dataQuality],
       ...(part.physicalEvidence && part.physicalEvidence.status !== "not_applicable" ? { physicalEvidence: pickerPhysicalEvidenceText(part.physicalEvidence) } : {}),
       ...(safeExternalUrl(part.danawaUrl) ? { sourceUrl: safeExternalUrl(part.danawaUrl)! } : {})
-    };
-  });
+    }));
 }
 
 const BENCHMARK_SIMILARITY_KEYS = new Set(["cinebenchR23Single", "cinebenchR23Multi", "gpu3dmarkTimeSpyScore", "gpu3dmarkPortRoyalScore"]);
@@ -359,7 +351,7 @@ function PickerComparison({ parts, currentSelections, category, affectedPartIds,
     shareRequestRef.current += 1;
     shareInFlightRef.current = false;
   }, []);
-  const exportCandidates = pickerComparisonCandidatesFor(parts, partSummary, formatWon, similarityEvidenceText);
+  const exportCandidates = pickerComparisonCandidatesFor(parts, partSummary, formatWon);
   const currentSelectionNames = currentSelections.length > 0 ? currentSelections.map(({ part, quantity }) => `${part.name}${quantity > 1 ? ` ×${quantity}` : ""}`).join(" · ") : "현재 부품 선택 없음";
   const currentSelectionSummary = currentSelections.length > 0 ? currentSelections.map(({ part }) => partSummary(part)).join(" / ") : "선택한 부품이 없어 기준 정보만 표시합니다.";
   const currentSelectionPriceKnown = currentSelections.length > 0 && currentSelections.every(({ part }) => isKnownPrice(part.priceWon));
@@ -597,17 +589,17 @@ export function PartPicker({ category, build, partMap, profile, recommendationLi
 
   async function copyPickerComparison() {
     try {
-      await navigator.clipboard.writeText(alternativeComparisonTextFor(pickerComparisonCandidatesFor(comparePickerParts, partSummary, formatWon, similarityEvidenceText), pickerComparisonExportContext));
+      await navigator.clipboard.writeText(alternativeComparisonTextFor(pickerComparisonCandidatesFor(comparePickerParts, partSummary, formatWon), pickerComparisonExportContext));
       if (mountedRef.current) onToast("부품 비교표를 클립보드에 복사했어요.");
     } catch {
       if (mountedRef.current) onToast("부품 비교표 복사에 실패했어요. 브라우저 클립보드 권한을 확인해 주세요.");
     }
   }
   function downloadPickerComparison() {
-    const blob = new Blob([alternativeComparisonCsvFor(pickerComparisonCandidatesFor(comparePickerParts, partSummary, formatWon, similarityEvidenceText), pickerComparisonExportContext)], { type: "text/csv;charset=utf-8" }); const url = window.URL.createObjectURL(blob); const anchor = document.createElement("a"); anchor.href = url; anchor.download = `pc-supporter-candidate-comparison-${new Date().toISOString().slice(0, 10)}.csv`; anchor.click(); window.URL.revokeObjectURL(url); onToast("부품 비교표 CSV를 저장했어요.");
+    const blob = new Blob([alternativeComparisonCsvFor(pickerComparisonCandidatesFor(comparePickerParts, partSummary, formatWon), pickerComparisonExportContext)], { type: "text/csv;charset=utf-8" }); const url = window.URL.createObjectURL(blob); const anchor = document.createElement("a"); anchor.href = url; anchor.download = `pc-supporter-candidate-comparison-${new Date().toISOString().slice(0, 10)}.csv`; anchor.click(); window.URL.revokeObjectURL(url); onToast("부품 비교표 CSV를 저장했어요.");
   }
   function downloadPickerComparisonJson() {
-    const blob = new Blob([alternativeComparisonJsonFor(pickerComparisonCandidatesFor(comparePickerParts, partSummary, formatWon, similarityEvidenceText), pickerComparisonExportContext)], { type: "application/json;charset=utf-8" }); const url = window.URL.createObjectURL(blob); const anchor = document.createElement("a"); anchor.href = url; anchor.download = `pc-supporter-candidate-comparison-${new Date().toISOString().slice(0, 10)}.json`; anchor.click(); window.URL.revokeObjectURL(url); onToast("부품 비교표 JSON을 저장했어요.");
+    const blob = new Blob([alternativeComparisonJsonFor(pickerComparisonCandidatesFor(comparePickerParts, partSummary, formatWon), pickerComparisonExportContext)], { type: "application/json;charset=utf-8" }); const url = window.URL.createObjectURL(blob); const anchor = document.createElement("a"); anchor.href = url; anchor.download = `pc-supporter-candidate-comparison-${new Date().toISOString().slice(0, 10)}.json`; anchor.click(); window.URL.revokeObjectURL(url); onToast("부품 비교표 JSON을 저장했어요.");
   }
 
   useEffect(() => { document.body.classList.add("modal-open"); return () => document.body.classList.remove("modal-open"); }, []);

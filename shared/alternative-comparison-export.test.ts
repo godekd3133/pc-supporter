@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { alternativeComparisonCsvFor, alternativeComparisonJsonFor, alternativeComparisonTextFor } from "./alternative-comparison-export";
+import { alternativeComparisonCsvFor, alternativeComparisonJsonFor, alternativeComparisonShareCandidatesFor, alternativeComparisonTextFor } from "./alternative-comparison-export";
 import type { AlternativeComparisonCandidate } from "./alternative-comparison-export";
 
 const candidates: AlternativeComparisonCandidate[] = [
@@ -39,6 +39,34 @@ const candidates: AlternativeComparisonCandidate[] = [
 ];
 
 describe("alternative comparison export", () => {
+  it("allowlists customer-safe fields for comparison share requests", () => {
+    const [candidate] = alternativeComparisonShareCandidatesFor([{
+      ...candidates[0],
+      similarityEvidence: { comparedDimensions: 1, totalDimensions: 1, confidence: "high", basis: "spec", dimensions: [{ key: "memoryType", label: "메모리", currentValue: "DDR4", candidateValue: "DDR5" }] },
+      benchmarkEvidence: { partId: "gpu-test-1", category: "gpu", name: "RTX 5070", rows: [], presentCount: 0, totalCount: 0, status: "missing", benchmarkFreshness: "fresh", dataUpdatedAt: "2026-09-01" },
+      scenario: {
+        status: "compatible",
+        blockerCount: 0,
+        warningCount: 0,
+        unknownCount: 0,
+        analysisScore: 91,
+        tradeoff: { frontier: true, riskScore: 2, reason: "private analysis" },
+        checks: [{ id: "ok", kind: "compatibility", status: "ready", label: "호환", detail: "performance score hidden" }]
+      }
+    }]);
+
+    expect(candidate).toMatchObject({ name: "테스트, 부품", category: "gpu", partId: "gpu-test-1", priceWon: 1200000, summary: "RTX 5070 · 12GB", price: "1,200,000원", compatibility: "호환 확인" });
+    expect(candidate).not.toHaveProperty("similarity");
+    expect(candidate).not.toHaveProperty("performance");
+    expect(candidate).not.toHaveProperty("gpuTarget");
+    expect(candidate).not.toHaveProperty("recommendationTrust");
+    expect(candidate).not.toHaveProperty("benchmarkEvidence");
+    expect(candidate).not.toHaveProperty("similarityEvidence");
+    expect(candidate?.scenario).not.toHaveProperty("analysisScore");
+    expect(candidate?.scenario).not.toHaveProperty("tradeoff");
+    expect(candidate?.scenario?.checks?.[0]).not.toHaveProperty("detail");
+  });
+
   it("writes a readable text comparison without dropping unknown values", () => {
     const text = alternativeComparisonTextFor(candidates);
     expect(text).toContain("[부품 1] 테스트, 부품");

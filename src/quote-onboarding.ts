@@ -58,7 +58,6 @@ export interface OnboardingWorkOption {
   intensitySummary: string;
   profile: RecommendationProfile;
   rank: number;
-  gpuFor: Record<OnboardingIntensity, boolean>;
 }
 
 export const ONBOARDING_WORKS: readonly OnboardingWorkOption[] = [
@@ -70,8 +69,7 @@ export const ONBOARDING_WORKS: readonly OnboardingWorkOption[] = [
     intensityQuestion: "영상 편집은 어느 정도 규모인가요?",
     intensitySummary: "영상 해상도와 편집 효과에 따라 필요한 사양이 달라져요.",
     profile: "creator",
-    rank: 2,
-    gpuFor: { light: true, balanced: true, heavy: true }
+    rank: 2
   },
   {
     id: "threed",
@@ -81,8 +79,7 @@ export const ONBOARDING_WORKS: readonly OnboardingWorkOption[] = [
     intensityQuestion: "3D 작업은 어느 정도 규모인가요?",
     intensitySummary: "모델링 규모와 렌더링 빈도에 따라 필요한 사양이 달라져요.",
     profile: "creator",
-    rank: 3,
-    gpuFor: { light: true, balanced: true, heavy: true }
+    rank: 3
   },
   {
     id: "dev",
@@ -92,8 +89,7 @@ export const ONBOARDING_WORKS: readonly OnboardingWorkOption[] = [
     intensityQuestion: "개발 프로젝트 규모는 어느 정도인가요?",
     intensitySummary: "프로젝트 규모와 동시에 진행하는 작업에 따라 필요한 사양이 달라져요.",
     profile: "development",
-    rank: 1,
-    gpuFor: { light: false, balanced: false, heavy: true }
+    rank: 1
   },
   {
     id: "streaming",
@@ -103,8 +99,7 @@ export const ONBOARDING_WORKS: readonly OnboardingWorkOption[] = [
     intensityQuestion: "방송·스트리밍은 어느 정도 규모인가요?",
     intensitySummary: "송출 해상도와 게임 동시 실행 여부에 따라 필요한 사양이 달라져요.",
     profile: "creator",
-    rank: 2,
-    gpuFor: { light: true, balanced: true, heavy: true }
+    rank: 2
   },
   {
     id: "ai",
@@ -114,8 +109,7 @@ export const ONBOARDING_WORKS: readonly OnboardingWorkOption[] = [
     intensityQuestion: "AI·머신러닝 작업은 어느 정도 규모인가요?",
     intensitySummary: "모델 크기와 추론·학습 여부에 따라 필요한 메모리와 그래픽 성능이 달라져요.",
     profile: "development",
-    rank: 4,
-    gpuFor: { light: true, balanced: true, heavy: true }
+    rank: 4
   },
   {
     id: "audio",
@@ -125,8 +119,7 @@ export const ONBOARDING_WORKS: readonly OnboardingWorkOption[] = [
     intensityQuestion: "음악·오디오 작업은 어느 정도 규모인가요?",
     intensitySummary: "트랙 수와 플러그인·가상악기 사용량에 따라 필요한 사양이 달라져요.",
     profile: "creator",
-    rank: 1,
-    gpuFor: { light: false, balanced: false, heavy: false }
+    rank: 1
   },
   {
     id: "office",
@@ -136,8 +129,7 @@ export const ONBOARDING_WORKS: readonly OnboardingWorkOption[] = [
     intensityQuestion: "사무·문서 작업은 어느 정도인가요?",
     intensitySummary: "함께 사용하는 프로그램 수와 문서 규모에 따라 필요한 사양이 달라져요.",
     profile: "office",
-    rank: 0,
-    gpuFor: { light: false, balanced: false, heavy: false }
+    rank: 0
   }
 ];
 
@@ -565,15 +557,16 @@ export function recommendParamsFor(state: OnboardingState): RecommendParams {
   if (state.usecase === "work") {
     const work = primaryWorkFor(state.works) ?? ONBOARDING_WORKS.find((option) => option.id === "office") ?? ONBOARDING_WORKS[0];
     const intensity = intensityOptionFor(state.intensity);
+    const estimate = workEstimateFor(state.works, intensity.id);
     return {
       profile: work.profile,
       priority: intensity.priority,
       workType: work.id,
       workIntensity: intensity.id,
       budgetWon: state.budgetWon,
-      includeGpu: work.gpuFor[intensity.id],
-      memoryCapacityGb: intensity.memoryGb,
-      storageCapacityGb: intensity.storageGb
+      includeGpu: estimate.gpu !== "내장 그래픽",
+      memoryCapacityGb: capacityGbFromEstimateLabel(estimate.memory),
+      storageCapacityGb: capacityGbFromEstimateLabel(estimate.storage)
     };
   }
   if (state.mode === "spec") {

@@ -5,21 +5,17 @@ import { CATEGORY_LABELS, DATA_QUALITY_LABELS, isKnownPrice, LISTING_TYPE_LABELS
 import { catalogPriceEvidenceFor, catalogPriceEvidenceLabelFor } from "../shared/catalog-price-evidence";
 import type { BuildScenarioComparison } from "../shared/build-scenario";
 import { partSpecDiffFor } from "../shared/part-spec-diff";
-import { alternativeComparisonBenchmarkEvidenceFor, alternativeComparisonSimilarityEvidenceFor } from "../shared/alternative-comparison-export";
-import { benchmarkEvidenceForPart } from "../shared/benchmark-evidence";
 import type { AlternativeComparisonCandidate } from "../shared/alternative-comparison-export";
 import type { AlternativeComparisonScenario, AlternativeComparisonScenarioCheck } from "../shared/alternative-comparison-scenario";
 import { CATALOG_WATCHLIST_STORAGE_KEY, catalogWatchlistContains, catalogWatchlistFromJson, catalogWatchlistToJson, updateCatalogWatchEntry } from "../shared/catalog-watchlist";
 import { candidatePurchaseDecisionFor } from "../shared/candidate-purchase-decision";
 import type { CandidatePurchaseDecision, CandidatePurchasePriceHistory } from "../shared/candidate-purchase-decision";
-import { CANDIDATE_COMPARISON_CRITERIA, candidateComparisonDecisionFor, candidateComparisonTradeoffsFor } from "../shared/candidate-comparison";
-import type { CandidateComparisonCriterion, CandidateComparisonTradeoff } from "../shared/candidate-comparison";
 import { api } from "./api";
 import { recommendedTargetPriceFromHistory } from "./price-target";
 import { safeExternalUrl } from "./safe-source-url";
 import { useModalAccessibility } from "./use-modal-accessibility";
 
-type CandidateScenarioPart = Part & Partial<Pick<CompatiblePartCandidate, "candidateRisk" | "candidateReasons" | "similarityScore" | "similarityLabel" | "similarityEvidence" | "performanceSummary" | "valueScore" | "valueLabel" | "recommendationTrust" | "decision" | "physicalEvidence">>;
+type CandidateScenarioPart = Part & Partial<Pick<CompatiblePartCandidate, "candidateRisk" | "candidateReasons" | "physicalEvidence" | "decision">>;
 type CandidatePriceHistoryDays = 7 | 30 | 90;
 type CandidatePriceHistory = {
   kind: "part";
@@ -201,20 +197,9 @@ function scenarioChecksFor(item: CandidateScenarioCompareItem, result: Compatibi
   return checks;
 }
 
-function scenarioShareCandidateFor(item: CandidateScenarioCompareItem, currentResult: CompatibilityResult, result: CompatibilityResult, decision: CandidatePurchaseDecision, history: CandidatePriceHistory | undefined, formatWon: (value: number | undefined) => string, tradeoff?: CandidateComparisonTradeoff): AlternativeComparisonCandidate {
+function scenarioShareCandidateFor(item: CandidateScenarioCompareItem, result: CompatibilityResult, decision: CandidatePurchaseDecision, history: CandidatePriceHistory | undefined, formatWon: (value: number | undefined) => string): AlternativeComparisonCandidate {
   const sourceUrl = safeExternalUrl(item.part.danawaUrl);
   const priceEvidence = catalogPriceEvidenceFor(item.part);
-  const benchmarkEvidence = alternativeComparisonBenchmarkEvidenceFor(benchmarkEvidenceForPart(item.part));
-  const scenarioTradeoff = tradeoff ? {
-    frontier: tradeoff.frontier,
-    ...(tradeoff.eligible !== undefined ? { eligible: tradeoff.eligible } : {}),
-    ...(tradeoff.riskScore !== undefined ? { riskScore: tradeoff.riskScore } : {}),
-    ...(tradeoff.priceDeltaWon !== undefined ? { priceDeltaWon: tradeoff.priceDeltaWon } : {}),
-    ...(tradeoff.analysisScore !== undefined ? { analysisScore: tradeoff.analysisScore } : {}),
-    ...(tradeoff.evidenceScore !== undefined ? { evidenceScore: tradeoff.evidenceScore } : {}),
-    ...(tradeoff.dominatedByCandidateId ? { dominatedByCandidateId: tradeoff.dominatedByCandidateId } : {}),
-    reason: tradeoff.reason
-  } as const : undefined;
   return {
     name: item.part.name,
     category: item.category,
@@ -224,14 +209,7 @@ function scenarioShareCandidateFor(item: CandidateScenarioCompareItem, currentRe
     ...(isKnownPrice(item.part.priceWon) ? { priceWon: item.part.priceWon } : {}),
     priceEvidence,
     purchaseCondition: `${catalogPriceEvidenceLabelFor(item.part)} · ${item.part.listingType ? LISTING_TYPE_LABELS[item.part.listingType] : LISTING_TYPE_LABELS.retail}`,
-    similarity: item.part.similarityScore !== undefined ? `${item.part.similarityLabel ?? "비교"} ${item.part.similarityScore}점` : "계산 불가",
-    ...(item.part.valueScore !== undefined && item.part.valueLabel ? { valueScore: item.part.valueScore, valueLabel: item.part.valueLabel, valueScoreScale: 200 as const } : {}),
-    ...(item.part.recommendationTrust ? { recommendationTrust: `${item.part.recommendationTrust.level === "high" ? "높음" : item.part.recommendationTrust.level === "medium" ? "보통" : "낮음"} ${item.part.recommendationTrust.score}점` } : {}),
-    performance: item.part.performanceSummary ?? "성능 정보 없음",
     compatibility: `${statusLabel(result.status)} · 호환 불가 ${result.blockerCount} · 주의 ${result.warningCount} · 확인할 정보 ${result.unknownCount}`,
-    ...(benchmarkEvidence ? { benchmarkEvidence } : {}),
-    ...(alternativeComparisonSimilarityEvidenceFor(item.part.similarityEvidence) ? { similarityEvidence: alternativeComparisonSimilarityEvidenceFor(item.part.similarityEvidence) } : {}),
-    ...(item.part.decision ? { decisionSummary: `${item.part.decision.label} · ${item.part.decision.summary}` } : {}),
     ...(item.part.physicalEvidence ? { physicalEvidence: item.part.physicalEvidence.summary } : {}),
     dataQuality: DATA_QUALITY_LABELS[item.part.dataQuality],
     ...(item.part.dataFreshness ? { dataFreshness: item.part.dataFreshness } : {}),
@@ -242,15 +220,10 @@ function scenarioShareCandidateFor(item: CandidateScenarioCompareItem, currentRe
       blockerCount: result.blockerCount,
       warningCount: result.warningCount,
       unknownCount: result.unknownCount,
-      ...(result.analysis.overallScore !== undefined ? { analysisScore: result.analysis.overallScore } : {}),
-      analysisScoreLabel: result.analysis.scoreLabel,
-      analysisConfidence: result.analysis.confidence,
-      ...(currentResult.analysis.overallScore !== undefined && result.analysis.overallScore !== undefined ? { analysisScoreDelta: result.analysis.overallScore - currentResult.analysis.overallScore } : {}),
       ...(item.comparison?.priceDeltaWon !== undefined ? { priceDeltaWon: item.comparison.priceDeltaWon } : {}),
       purchaseDecision: decision.label,
       purchaseDecisionSummary: decision.summary,
       ...(scenarioPriceHistoryFor(history) ? { priceHistory: scenarioPriceHistoryFor(history) } : {}),
-      ...(scenarioTradeoff ? { tradeoff: scenarioTradeoff } : {}),
       checks: scenarioChecksFor(item, result, decision, history, formatWon)
     }
   };
@@ -355,7 +328,6 @@ function CandidateWatchControl({ part, history, onWatch, onToast }: { part: Part
 export function CandidateScenarioComparisonPanel({ state, currentResult, onApply, onSave, onRetry, onClose, onWatchPart, onShareComparison, onRevokeComparison, onToast, formatWon }: { state: CandidateScenarioCompareState; currentResult: CompatibilityResult; onApply: (item: CandidateScenarioCompareItem) => void; onSave?: (item: CandidateScenarioCompareItem) => void; onRetry: (itemId: string) => void; onClose: () => void; onWatchPart?: (part: Part) => boolean; onShareComparison?: CandidateScenarioShareHandler; onRevokeComparison?: CandidateScenarioRevokeHandler; onToast?: (message: string) => void; formatWon: (value: number | undefined) => string }) {
   const modalRef = useModalAccessibility({ onClose });
   const readyCount = state.items.filter((item) => item.status === "ready").length;
-  const [comparisonCriterion, setComparisonCriterion] = useState<CandidateComparisonCriterion>("balanced");
   const [sharedComparison, setSharedComparison] = useState<CandidateScenarioShareResult | null>(null);
   const [sharingComparison, setSharingComparison] = useState(false);
   const [priceHistoryDays, setPriceHistoryDays] = useState<CandidatePriceHistoryDays>(30);
@@ -395,31 +367,7 @@ export function CandidateScenarioComparisonPanel({ state, currentResult, onApply
       decision: candidatePurchaseDecisionForItem(item, currentResult, item.result, priceHistories[`part:${item.part.id}`])
     })), [currentResult, priceHistories, state.items]);
   const decisionCountFor = (state: CandidatePurchaseDecision["state"]) => purchaseDecisions.filter((entry) => entry.decision.state === state).length;
-  const comparisonItems = useMemo(() => purchaseDecisions.map(({ item }) => ({
-    id: item.id,
-    name: item.part.name,
-    priceWon: item.part.priceWon,
-    priceEvidence: catalogPriceEvidenceFor(item.part),
-    priceDeltaWon: item.comparison?.priceDeltaWon,
-    similarityScore: item.part.similarityScore,
-    similarityEvidence: item.part.similarityEvidence,
-    analysisScore: item.result?.analysis.overallScore,
-    ...(item.result?.analysis.overallScore !== undefined && currentResult.analysis.overallScore !== undefined ? { analysisScoreDelta: item.result.analysis.overallScore - currentResult.analysis.overallScore } : {}),
-    analysisConfidence: item.result?.analysis.confidence,
-    recommendationTrustScore: item.part.recommendationTrust?.score,
-    recommendationTrustLevel: item.part.recommendationTrust?.level,
-    candidateRisk: item.risk ?? item.part.candidateRisk,
-    decisionStatus: item.part.decision?.status,
-    freshness: item.part.dataFreshness ?? item.part.recommendationTrust?.freshness,
-    physicalStatus: item.part.physicalEvidence?.status,
-    remainingBlockers: item.result?.blockerCount,
-    remainingWarnings: item.result?.warningCount,
-    remainingUnknown: item.result?.unknownCount
-  })), [currentResult.analysis.overallScore, purchaseDecisions]);
-  const comparisonDecision = useMemo(() => comparisonItems.length === 0 ? null : candidateComparisonDecisionFor(comparisonItems, comparisonCriterion), [comparisonCriterion, comparisonItems]);
-  const tradeoffs = useMemo(() => candidateComparisonTradeoffsFor(comparisonItems), [comparisonItems]);
-
-  const shareCandidates = useMemo(() => purchaseDecisions.map(({ item, decision }) => scenarioShareCandidateFor(item, currentResult, item.result, decision, priceHistories[`part:${item.part.id}`], formatWon, tradeoffs.find((tradeoff) => tradeoff.id === item.id))), [currentResult, formatWon, priceHistories, purchaseDecisions, tradeoffs]);
+  const shareCandidates = useMemo(() => purchaseDecisions.map(({ item, decision }) => scenarioShareCandidateFor(item, item.result, decision, priceHistories[`part:${item.part.id}`], formatWon)), [formatWon, priceHistories, purchaseDecisions]);
 
   async function shareComparison() {
     if (!onShareComparison || shareCandidates.length < 2 || sharingComparison) return;
