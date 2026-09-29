@@ -55,6 +55,7 @@ import {
   writeJson as writeStoredJson
 } from "./storage";
 import { withFileLease as acquireFileLease } from "./lease";
+import { initializePostgresSchemaWithClient, postgresSchemaInitializationModeForNodeEnv } from "./postgres-schema-contract";
 
 export { OWNER_SESSION_RESOURCE_TYPES as OWNER_SHARE_RESOURCE_TYPES };
 export type { OwnerShareResourceType };
@@ -328,6 +329,12 @@ CREATE INDEX IF NOT EXISTS owner_session_grants_resource_idx
 CREATE INDEX IF NOT EXISTS owner_session_grants_expiry_idx
   ON owner_session_grants(expires_at)
   WHERE expires_at IS NOT NULL;
+CREATE TABLE IF NOT EXISTS pc_supporter_schema_revision (
+  singleton_id TEXT PRIMARY KEY CHECK (singleton_id = 'current'),
+  schema_version INTEGER NOT NULL CHECK (schema_version > 0),
+  schema_sha256 TEXT NOT NULL CHECK (schema_sha256 ~ '^[0-9a-f]{64}$'),
+  applied_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp()
+);
 `;
 
 function canonicalJson(value: unknown): string {
@@ -426,33 +433,26 @@ async function ensureDatabase() {
     schemaPromise = (async () => {
       let client: PoolClient | undefined;
       let clientReleased = false;
-      let transactionStarted = false;
       try {
         client = await pool!.connect();
-        await client.query("BEGIN");
-        transactionStarted = true;
-        await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", ["pc-supporter:postgres-schema"]);
-        await client.query(POSTGRES_SCHEMA_SQL);
-        await client.query("COMMIT");
-        transactionStarted = false;
+        await initializePostgresSchemaWithClient(
+          client,
+          postgresSchemaInitializationModeForNodeEnv(process.env.NODE_ENV),
+          POSTGRES_SCHEMA_SQL
+        );
         databaseReady = true;
         nextDatabaseRetryAt = 0;
         lastDatabaseError = undefined;
         return true;
       } catch (error: unknown) {
-        if (client && transactionStarted) {
-          try {
-            await client.query("ROLLBACK");
-            transactionStarted = false;
-          } catch {
-            client.release(true);
-            clientReleased = true;
-          }
+        if (client) {
+          client.release(true);
+          clientReleased = true;
         }
         markDatabaseUnavailable("initialization", error);
         throw error;
       } finally {
-        if (client && !clientReleased) client.release(transactionStarted ? true : undefined);
+        if (client && !clientReleased) client.release();
       }
     })()
   }

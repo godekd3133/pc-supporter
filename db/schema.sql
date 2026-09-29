@@ -302,3 +302,10 @@ CREATE INDEX IF NOT EXISTS owner_session_grants_resource_idx
 CREATE INDEX IF NOT EXISTS owner_session_grants_expiry_idx
   ON owner_session_grants(expires_at)
   WHERE expires_at IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS pc_supporter_schema_revision (
+  singleton_id TEXT PRIMARY KEY CHECK (singleton_id = 'current'),
+  schema_version INTEGER NOT NULL CHECK (schema_version > 0),
+  schema_sha256 TEXT NOT NULL CHECK (schema_sha256 ~ '^[0-9a-f]{64}$'),
+  applied_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp()
+);

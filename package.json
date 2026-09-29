@@ -37,6 +37,7 @@
     "import:catalog-overrides": "tsx scripts/import-catalog-overrides.ts",
     "db:backup:local": "node scripts/pg-operations.mjs backup",
     "db:restore:rehearsal": "node scripts/pg-operations.mjs restore",
+    "db:migrate": "tsx scripts/migrate-postgres.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --maxWorkers=1 --minWorkers=1 --pool=threads --poolOptions.threads.singleThread=true",
     "test:price-refresh": "vitest run server/price-refresh.test.ts server/price-refresh-scheduler.test.ts server/price-refresh-worker.test.ts server/background-job-store.test.ts server/price-patch-persistence.test.ts --maxWorkers=1 --minWorkers=1 --pool=threads --poolOptions.threads.singleThread=true",

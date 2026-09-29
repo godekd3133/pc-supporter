@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import { effectiveSchema, normalizedSql, postgresSchemaContractFromSql } from "./postgres-schema-parser.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -29,165 +30,6 @@ function extractRuntimeSchema(source, resourceTypes) {
   return sql.replace(resourceTypesToken, resourceTypesSql);
 }
 
-function statementsFrom(sql) {
-  const statements = [];
-  let start = 0;
-  let inSingleQuote = false;
-  let inDoubleQuote = false;
-  for (let index = 0; index < sql.length; index += 1) {
-    const char = sql[index];
-    if (inSingleQuote) {
-      if (char === "'" && sql[index + 1] === "'") index += 1;
-      else if (char === "'") inSingleQuote = false;
-      continue;
-    }
-    if (inDoubleQuote) {
-      if (char === '"' && sql[index + 1] === '"') index += 1;
-      else if (char === '"') inDoubleQuote = false;
-      continue;
-    }
-    if (char === "'") inSingleQuote = true;
-    else if (char === '"') inDoubleQuote = true;
-    else if (char === ";") {
-      const statement = sql.slice(start, index).trim();
-      if (statement) statements.push(statement);
-      start = index + 1;
-    }
-  }
-  const trailing = sql.slice(start).trim();
-  if (trailing) statements.push(trailing);
-  assert.equal(inSingleQuote, false, "SQL must not contain an unterminated string literal");
-  assert.equal(inDoubleQuote, false, "SQL must not contain an unterminated quoted identifier");
-  return statements;
-}
-
-function normalizedSql(sql) {
-  let output = "";
-  let pendingSpace = false;
-  let inSingleQuote = false;
-  let inDoubleQuote = false;
-  for (let index = 0; index < sql.length; index += 1) {
-    const char = sql[index];
-    if (inSingleQuote) {
-      output += char;
-      if (char === "'" && sql[index + 1] === "'") output += sql[++index];
-      else if (char === "'") inSingleQuote = false;
-      continue;
-    }
-    if (inDoubleQuote) {
-      output += char;
-      if (char === '"' && sql[index + 1] === '"') output += sql[++index];
-      else if (char === '"') inDoubleQuote = false;
-      continue;
-    }
-    if (/\s/.test(char)) {
-      pendingSpace = true;
-      continue;
-    }
-    if (pendingSpace && output && !/[\s(]/.test(output.at(-1)) && !/[),;]/.test(char)) output += " ";
-    pendingSpace = false;
-    output += char;
-    if (char === "'") inSingleQuote = true;
-    else if (char === '"') inDoubleQuote = true;
-  }
-  return output.trim();
-}
-
-function matchingCloseParen(source, openIndex) {
-  let depth = 0;
-  let inSingleQuote = false;
-  let inDoubleQuote = false;
-  for (let index = openIndex; index < source.length; index += 1) {
-    const char = source[index];
-    if (inSingleQuote) {
-      if (char === "'" && source[index + 1] === "'") index += 1;
-      else if (char === "'") inSingleQuote = false;
-      continue;
-    }
-    if (inDoubleQuote) {
-      if (char === '"' && source[index + 1] === '"') index += 1;
-      else if (char === '"') inDoubleQuote = false;
-      continue;
-    }
-    if (char === "'") inSingleQuote = true;
-    else if (char === '"') inDoubleQuote = true;
-    else if (char === "(") depth += 1;
-    else if (char === ")" && --depth === 0) return index;
-  }
-  assert.fail("CREATE TABLE statement has unbalanced parentheses");
-}
-
-function splitTopLevel(source) {
-  const parts = [];
-  let start = 0;
-  let depth = 0;
-  let inSingleQuote = false;
-  let inDoubleQuote = false;
-  for (let index = 0; index < source.length; index += 1) {
-    const char = source[index];
-    if (inSingleQuote) {
-      if (char === "'" && source[index + 1] === "'") index += 1;
-      else if (char === "'") inSingleQuote = false;
-      continue;
-    }
-    if (inDoubleQuote) {
-      if (char === '"' && source[index + 1] === '"') index += 1;
-      else if (char === '"') inDoubleQuote = false;
-      continue;
-    }
-    if (char === "'") inSingleQuote = true;
-    else if (char === '"') inDoubleQuote = true;
-    else if (char === "(") depth += 1;
-    else if (char === ")") depth -= 1;
-    else if (char === "," && depth === 0) {
-      parts.push(source.slice(start, index).trim());
-      start = index + 1;
-    }
-  }
-  parts.push(source.slice(start).trim());
-  return parts.filter(Boolean);
-}
-
-function effectiveSchema(sql) {
-  const tables = new Map();
-  const indexes = new Set();
-
-  for (const statement of statementsFrom(sql)) {
-    const tableMatch = statement.match(/^CREATE TABLE IF NOT EXISTS\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(/i);
-    if (tableMatch) {
-      const tableName = tableMatch[1].toLowerCase();
-      const openIndex = statement.indexOf("(", tableMatch[0].length - 1);
-      const closeIndex = matchingCloseParen(statement, openIndex);
-      const declarations = splitTopLevel(statement.slice(openIndex + 1, closeIndex));
-      const columns = tables.get(tableName) ?? new Set();
-      for (const declaration of declarations) columns.add(normalizedSql(declaration));
-      tables.set(tableName, columns);
-      continue;
-    }
-
-    const alterMatch = statement.match(/^ALTER TABLE\s+([A-Za-z_][A-Za-z0-9_]*)\s+ADD COLUMN IF NOT EXISTS\s+([\s\S]+)$/i);
-    if (alterMatch) {
-      const tableName = alterMatch[1].toLowerCase();
-      const columns = tables.get(tableName) ?? new Set();
-      columns.add(normalizedSql(alterMatch[2]));
-      tables.set(tableName, columns);
-      continue;
-    }
-
-    if (/^CREATE (?:UNIQUE )?INDEX IF NOT EXISTS\s+/i.test(statement)) {
-      indexes.add(normalizedSql(statement));
-      continue;
-    }
-
-    assert.fail(`Unrecognized PostgreSQL schema statement: ${statement.slice(0, 80)}`);
-  }
-
-  return {
-    tables: new Map([...tables.entries()].map(([name, columns]) => [name, [...columns].sort()])),
-    indexes: [...indexes].sort()
-  };
-}
-
 test("baseline schema matches the effective runtime DDL without importing server code", async () => {
   const [repositorySource, contractSource, baseline] = await Promise.all([
     readFile(resolve(ROOT, "server/repository.ts"), "utf8"),
@@ -198,6 +40,35 @@ test("baseline schema matches the effective runtime DDL without importing server
   const expected = effectiveSchema(runtimeSchema);
   const actual = effectiveSchema(baseline);
   assert.deepEqual(actual, expected, "db/schema.sql must describe the same tables, columns, constraints, and indexes as POSTGRES_SCHEMA_SQL");
+
+  const contract = postgresSchemaContractFromSql(baseline);
+  const declaredColumnNames = [...actual.tables.entries()].flatMap(([tableName, declarations]) => declarations.flatMap((declaration) => {
+    const body = declaration.replace(/^CONSTRAINT\s+(?:"[^"]+"|[A-Za-z_][A-Za-z0-9_]*)\s+/i, "");
+    if (/^(?:PRIMARY KEY|UNIQUE|FOREIGN KEY|CHECK)\b/i.test(body)) return [];
+    const match = body.match(/^([A-Za-z_][A-Za-z0-9_]*)\s+/);
+    assert.ok(match, `schema contract parser must recognize ${tableName} column declaration`);
+    return [`${tableName}\0${match[1].toLowerCase()}`];
+  })).sort();
+  assert.deepEqual(
+    contract.columns.map((column) => `${column.tableName}\0${column.columnName}`).sort(),
+    declaredColumnNames,
+    "runtime schema contract must cover every canonical CREATE/ALTER column"
+  );
+  assert.deepEqual(contract.tables, [...actual.tables.keys()].sort(), "runtime schema contract must cover every canonical table");
+  for (const [tableName, constraintType, columns] of [
+    ["saved_builds", "PRIMARY KEY", ["id"]],
+    ["api_rate_limit_buckets", "PRIMARY KEY", ["scope", "client_key_hash"]],
+    ["owner_session_grants", "PRIMARY KEY", ["session_hash", "resource_type", "resource_id", "owner_token_hash"]]
+  ]) {
+    assert.ok(contract.keyConstraints.some((constraint) => constraint.tableName === tableName && constraint.constraintType === constraintType && JSON.stringify(constraint.columns) === JSON.stringify(columns)), `${tableName} ${constraintType} conflict columns must match the canonical order`);
+  }
+  for (const [tableName, columnName, dataType, nullable] of [
+    ["catalog_spec_overrides", "payload", "jsonb", false],
+    ["m2_slot_overrides", "payload", "jsonb", false],
+    ["saved_builds", "my_pc_at", "timestamp with time zone", true]
+  ]) {
+    assert.ok(contract.columns.some((column) => column.tableName === tableName && column.columnName === columnName && column.dataType === dataType && column.nullable === nullable), `${tableName}.${columnName} type/nullability contract must be present`);
+  }
 
   const requiredTablesAndColumns = [
     ["saved_builds", "my_pc_at TIMESTAMPTZ"],

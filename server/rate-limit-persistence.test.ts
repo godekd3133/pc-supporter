@@ -1,13 +1,24 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createHmac } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import {
+  POSTGRES_SCHEMA_REVISION_TABLE,
+  POSTGRES_SCHEMA_SHA256,
+  POSTGRES_SCHEMA_VERSION
+} from "./postgres-schema-contract";
+import { postgresSchemaContractFromSql } from "./postgres-schema-parser.mjs";
+import type { PostgresSchemaContractManifest } from "./postgres-schema-parser.mjs";
 
 const TEST_RATE_LIMIT_HMAC_SECRET = "rate-limit-test-key-".padEnd(64, "x");
+const runtimeSchemaContract = postgresSchemaContractFromSql(readFileSync(resolve(process.cwd(), "db/schema.sql"), "utf8"));
 
 const fakeDatabase = vi.hoisted(() => ({
   buckets: new Map<string, { startedAt: number; count: number; lastSeenAt: number }>(),
   queries: [] as Array<{ sql: string; values?: unknown[] }>,
   clientQueries: [] as Array<{ sql: string; values?: unknown[] }>,
+  runtimeSchema: null as unknown,
   nowMs: 10_000,
   failRateLimitWrites: false
 }));
@@ -56,6 +67,59 @@ vi.mock("pg", () => ({
             || sql.includes("pg_advisory_xact_lock") || sql.includes("CREATE TABLE IF NOT EXISTS catalog_parts")) {
             return { rows: [], rowCount: 0 };
           }
+          if (sql.includes(`FROM ${POSTGRES_SCHEMA_REVISION_TABLE}`)) {
+            return {
+              rows: [{ schema_version: POSTGRES_SCHEMA_VERSION, schema_sha256: POSTGRES_SCHEMA_SHA256 }],
+              rowCount: 1
+            };
+          }
+          if (sql.includes("FROM information_schema.columns")) {
+            const contract = fakeDatabase.runtimeSchema as PostgresSchemaContractManifest;
+            const tables = new Set(values?.[0] as string[]);
+            const rows = contract.columns
+              .filter((column) => tables.has(column.tableName))
+              .map((column) => ({
+                table_name: column.tableName,
+                column_name: column.columnName,
+                data_type: column.dataType,
+                is_nullable: column.nullable ? "YES" : "NO"
+              }));
+            return { rows, rowCount: rows.length };
+          }
+          if (sql.includes("FROM pg_catalog.pg_index")) {
+            const contract = fakeDatabase.runtimeSchema as PostgresSchemaContractManifest;
+            const tables = new Set(values?.[0] as string[]);
+            const rows = contract.indexes
+              .filter((index) => tables.has(index.tableName))
+              .flatMap((index) => index.keyColumns.map((column_name, indexKey) => ({
+                table_name: index.tableName,
+                index_name: index.indexName,
+                is_unique: index.unique,
+                column_name,
+                key_order: indexKey + 1
+              })));
+            return { rows, rowCount: rows.length };
+          }
+          if (sql.includes("FROM pg_catalog.pg_constraint")) {
+            const contract = fakeDatabase.runtimeSchema as PostgresSchemaContractManifest;
+            const rows = [
+              ...contract.keyConstraints.flatMap((constraint, constraintIndex) => constraint.columns.map((column_name, columnIndex) => ({
+                table_name: constraint.tableName,
+                constraint_name: `key_constraint_${constraintIndex}`,
+                constraint_type: constraint.constraintType,
+                column_name,
+                column_order: columnIndex + 1
+              }))),
+              ...contract.countedConstraints.flatMap((constraint) => Array.from({ length: constraint.count }, (_, index) => ({
+                table_name: constraint.tableName,
+                constraint_name: `${constraint.constraintType}_${constraint.tableName}_${index}`,
+                constraint_type: constraint.constraintType,
+                column_name: null,
+                column_order: null
+              })))
+            ];
+            return { rows, rowCount: rows.length };
+          }
           if (sql.includes("pg_try_advisory_lock")) return { rows: [{ acquired: true }], rowCount: 1 };
           if (sql.includes("pg_advisory_unlock")) return { rows: [{ pg_advisory_unlock: true }], rowCount: 1 };
           throw new Error(`Unexpected fake PostgreSQL client query: ${sql.slice(0, 120)}`);
@@ -75,6 +139,7 @@ describe("PostgreSQL shared rate-limit storage", () => {
     fakeDatabase.buckets.clear();
     fakeDatabase.queries = [];
     fakeDatabase.clientQueries = [];
+    fakeDatabase.runtimeSchema = runtimeSchemaContract;
     fakeDatabase.nowMs = 10_000;
     fakeDatabase.failRateLimitWrites = false;
     process.env.DATABASE_URL = "postgres://synthetic.test/pc_supporter";
