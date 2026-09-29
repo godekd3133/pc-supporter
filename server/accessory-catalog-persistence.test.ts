@@ -305,6 +305,25 @@ describe("PostgreSQL accessory persistence", () => {
     });
   });
 
+  it("reuses a supplied accessory snapshot for metadata and coverage without rereading catalog rows", async () => {
+    await withFakePostgres(async ({ accessories }) => {
+      fakeDatabase.rows = [databaseRow(accessory({ id: "meta-snapshot-fan" }))];
+      const snapshot = await accessories.loadAccessories();
+      fakeDatabase.queries = [];
+      const snapshotUpdatedAt = "2026-09-27T12:00:00.000Z";
+
+      const metadata = await accessories.accessoryMeta(snapshot, snapshotUpdatedAt);
+      const coverage = await accessories.readAccessoryCoverage(snapshot);
+
+      expect(fakeDatabase.queries.filter(({ sql }) => sql.startsWith("SELECT payload, updated_at FROM catalog_accessories"))).toHaveLength(0);
+      expect(metadata.accessoryCount).toBe(snapshot.length);
+      expect(metadata.accessoryUpdatedAt).toBe(snapshotUpdatedAt);
+      expect(coverage.categories.find((entry) => entry.category === "cooling_fan")?.storedProductCount).toBe(
+        snapshot.filter((item) => item.category === "cooling_fan").length
+      );
+    });
+  });
+
   it("shares override writes and deletes through the PostgreSQL singleton", async () => {
     await withFakePostgres(async ({ storage, repository }) => {
       const replicaOne = await import("./cooling-fan-load-overrides");

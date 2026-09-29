@@ -59,7 +59,9 @@ type AlternativeComparisonShareContext = {
 type AlternativeComparisonShareResult = {
   id: string;
   url: string;
-  ownerToken: string;
+  ownerToken?: string;
+  owned?: boolean;
+  ownerManaged?: boolean;
   expiresAt?: string;
 };
 

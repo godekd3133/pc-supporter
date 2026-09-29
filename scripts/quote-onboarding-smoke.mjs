@@ -154,7 +154,7 @@ const smokeExpression = `(${async function runQuoteOnboardingSmoke() {
   const guidedHome = document.querySelector("[data-testid=home-guided-entry]");
   const guidedHomeText = text(guidedHome);
   assert(guidedHome && guidedHomeText.includes("용도와 예산 선택") && guidedHomeText.includes("게임 · 작업") && guidedHomeText.includes("원하는 금액"), `부품을 고르지 않은 첫 사용자가 목적·화면·예산을 선택하는 guided quote 진입 화면을 보지 못했습니다: ${JSON.stringify({ guided: Boolean(guidedHome), guidedHomeText, body: bodyText().slice(0, 900) })}`);
-  assert((document.querySelector(".hero-secondary-action")?.textContent ?? "").includes("부품을 직접 선택하기") && (document.querySelector("[data-testid=mobile-home-recommend]")?.textContent ?? "").includes("부품을 직접 선택하기"), "첫 사용자 홈의 보조 진입이 고급 자동 구성 화면을 우회하지 않습니다.");
+  assert((document.querySelector(".hero-secondary-action")?.textContent ?? "").includes("부품을 직접 선택하기") && (document.querySelector("[data-testid=mobile-home-recommend]")?.textContent ?? "").includes("부품 선택하기"), "첫 사용자 홈의 보조 진입이 고급 자동 구성 화면을 우회하지 않습니다.");
   if (window.innerWidth <= 760) {
     const mobileGuidedHome = document.querySelector("[data-testid=mobile-home-guided-entry]");
     assert(mobileGuidedHome && mobileGuidedHome.querySelectorAll(".mobile-guided-steps li").length === 3 && text(mobileGuidedHome).includes("게임·작업 용도"), "모바일 첫 사용자 홈에 용도·성능·예산 안내가 없습니다.");
@@ -292,11 +292,14 @@ const smokeExpression = `(${async function runQuoteOnboardingSmoke() {
   clickButton("400만원");
   clickCta();
   await waitForStep("summary", "요청 오류 경로 요약 화면");
+  const localOfflineBuild = document.querySelector(".offline-local-mode-banner") !== null;
   const originalFetch = window.fetch;
   let failedRecommendPosts = 0;
+  let attemptedApiFetches = 0;
   window.fetch = async (input, init) => {
     const requestUrl = new URL(typeof input === "string" ? input : input.url, location.href);
     const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
+    if (requestUrl.pathname.startsWith("/api/")) attemptedApiFetches += 1;
     if (method === "POST" && requestUrl.pathname === "/api/builds/recommend") {
       failedRecommendPosts += 1;
       return new Response(JSON.stringify({ error: "controlled smoke failure" }), { status: 503, headers: { "Content-Type": "application/json" } });
@@ -305,14 +308,24 @@ const smokeExpression = `(${async function runQuoteOnboardingSmoke() {
   };
   let recommendationFailure;
   try {
-    clickCta();
-    await waitFor(() => location.pathname === "/recommend" && document.querySelector('.generator-request-error[role="alert"]') !== null, "자동 구성 API 실패 안내", 480);
-    const failureAlert = text(document.querySelector('.generator-request-error[role="alert"]'));
-    const failureQuery = new URLSearchParams(location.search);
-    assert(failedRecommendPosts === 3, `일시적인 503은 첫 요청과 최대 두 번의 제한된 재시도를 거쳐야 합니다: ${failedRecommendPosts}`);
-    assert(failureAlert.includes("자동 구성 요청을 완료하지 못했습니다.") && failureAlert.includes("현재 입력은 유지됩니다."), "추천 API 실패 시 입력 보존·복구 안내가 표시되지 않았습니다.");
-    assert(failureQuery.get("profile") === "general" && failureQuery.get("budget") === "4000000" && failureQuery.get("ram") === "64" && failureQuery.get("ssd") === "2000", `추천 요청 실패 후에도 입력 조건이 URL에 보존되어야 합니다: ${location.href}`);
-    recommendationFailure = { path: location.pathname + location.search, alert: true, postCount: failedRecommendPosts };
+    if (localOfflineBuild) {
+      clickCta();
+      await waitFor(() => location.pathname === "/recommend" && document.querySelector(".generator-result") !== null, "설치 카탈로그를 사용한 자동 구성 결과", 480);
+      const localQuery = new URLSearchParams(location.search);
+      const localLineCount = assertHydratedResult("설치 카탈로그");
+      assert(attemptedApiFetches === 0 && failedRecommendPosts === 0, `로컬 설치 모드는 원격 API 요청 없이 설치 데이터를 사용해야 합니다: ${JSON.stringify({ attemptedApiFetches, failedRecommendPosts })}`);
+      assert(localQuery.get("profile") === "general" && localQuery.get("budget") === "4000000" && localQuery.get("ram") === "64" && localQuery.get("ssd") === "2000" && localLineCount >= 6, `설치 카탈로그 자동 구성 결과가 조건을 보존하지 않았습니다: ${location.href}`);
+      recommendationFailure = { path: location.pathname + location.search, localOffline: true, attemptedApiFetches, lineCount: localLineCount };
+    } else {
+      clickCta();
+      await waitFor(() => location.pathname === "/recommend" && document.querySelector('.generator-request-error[role="alert"]') !== null, "자동 구성 API 실패 안내", 480);
+      const failureAlert = text(document.querySelector('.generator-request-error[role="alert"]'));
+      const failureQuery = new URLSearchParams(location.search);
+      assert(failedRecommendPosts === 3, `일시적인 503은 첫 요청과 최대 두 번의 제한된 재시도를 거쳐야 합니다: ${failedRecommendPosts}`);
+      assert(failureAlert.includes("자동 구성 요청을 완료하지 못했습니다.") && failureAlert.includes("현재 입력은 유지됩니다."), "추천 API 실패 시 입력 보존·복구 안내가 표시되지 않았습니다.");
+      assert(failureQuery.get("profile") === "general" && failureQuery.get("budget") === "4000000" && failureQuery.get("ram") === "64" && failureQuery.get("ssd") === "2000", `추천 요청 실패 후에도 입력 조건이 URL에 보존되어야 합니다: ${location.href}`);
+      recommendationFailure = { path: location.pathname + location.search, alert: true, postCount: failedRecommendPosts };
+    }
   } finally {
     window.fetch = originalFetch;
   }

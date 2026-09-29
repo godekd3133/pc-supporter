@@ -11,6 +11,7 @@ import { catalogWatchlistEntriesFromCsv, catalogWatchlistEntriesFromJson } from 
 import { catalogWatchlistCsvFor, catalogWatchlistJsonFor } from "../shared/catalog-watchlist-export";
 import type { CatalogWatchSnapshot } from "../shared/catalog-watchlist-export";
 import { api } from "./api";
+import { hasOwnerSessionResource, markOwnerSessionResource, ownerCredentialAvailable, ownerRequestOptions, ownerSessionCreateOptions, ownerSessionModeSupported, removeOwnerSessionResource, retryOwnerSessionMigration, SAVED_WATCHLIST_LINK_STORAGE_KEY, SAVED_WATCHLIST_OWNER_TOKENS_STORAGE_KEY } from "./owner-session";
 import { DEFAULT_PRICE_ALERT_POLICY, PRICE_ALERT_DROP_THRESHOLDS, priceAlertPolicyFromUnknown, priceAlertPolicyText, priceAlertsFor } from "./price-alerts";
 import type { PriceAlertPolicy, PriceObservation, PriceWatchAlert } from "./price-alerts";
 import { autoRefreshEnabledFromStorage, autoRefreshMinutesFromStorage, priceAlertsFromJson, priceAlertsToJson, priceBaselineFromJson, priceBaselineToJson } from "./price-monitor-storage";
@@ -27,8 +28,6 @@ import { eul } from "../shared/josa";
 
 const CATALOG_WATCHLIST_STORAGE_KEY = "pc-supporter-catalog-watchlist";
 const CATALOG_WATCH_THRESHOLD_STORAGE_KEY = "pc-supporter-catalog-watch-threshold";
-const SAVED_WATCHLIST_OWNER_TOKENS_STORAGE_KEY = "pc-supporter-saved-watchlist-owner-tokens";
-const SAVED_WATCHLIST_LINK_STORAGE_KEY = "pc-supporter-saved-watchlist-link";
 const PRICE_MONITOR_BASELINE_STORAGE_KEY = "pc-supporter-price-monitor-baseline";
 const PRICE_MONITOR_ALERTS_STORAGE_KEY = "pc-supporter-price-monitor-alerts";
 const PRICE_MONITOR_AUTO_REFRESH_STORAGE_KEY = "pc-supporter-price-monitor-auto-refresh";
@@ -56,7 +55,7 @@ type SavedWatchlist = {
   expiresAt?: string;
   alertPreferences?: PriceAlertPolicy;
 };
-type SavedWatchlistCreateResponse = SavedWatchlist & { ownerToken: string };
+type SavedWatchlistCreateResponse = SavedWatchlist & ({ ownerManaged: true; ownerToken?: never } | { ownerManaged?: false; ownerToken: string });
 type PublicPriceHistoryItem = {
   kind: "part" | "accessory";
   itemId: string;
@@ -248,9 +247,10 @@ export function PriceWatchlistView({ onBack, onToast, offlineMode = false }: { o
   const [editingSavedLinkId, setEditingSavedLinkId] = useState<string | null>(null);
   const savedLink = savedLinks[0] ?? null;
   const savedLinkOwnerToken = savedLink ? readOwnerTokens()[savedLink.id] ?? "" : "";
-  const priceAlertContextKey = `${savedLink?.id ?? "local"}:${savedLink?.updatedAt ?? ""}:${savedLinkOwnerToken}`;
+  const savedLinkOwnerManaged = savedLink ? hasOwnerSessionResource("watchlist", savedLink.id) : false;
+  const priceAlertContextKey = `${savedLink?.id ?? "local"}:${savedLink?.updatedAt ?? ""}:${savedLinkOwnerToken || (savedLinkOwnerManaged ? "session" : "")}`;
   priceAlertContextKeyRef.current = priceAlertContextKey;
-  const savedWatchlistContextKey = `${savedLink?.id ?? ""}:${savedLink?.updatedAt ?? ""}:${savedLinkOwnerToken}|${editingSavedLinkId ?? ""}`;
+  const savedWatchlistContextKey = `${savedLink?.id ?? ""}:${savedLink?.updatedAt ?? ""}:${savedLinkOwnerToken || (savedLinkOwnerManaged ? "session" : "")}|${editingSavedLinkId ?? ""}`;
   savedWatchlistContextKeyRef.current = savedWatchlistContextKey;
   const savedLinksSyncKey = savedLinks.map((link) => JSON.stringify(link)).join("|");
   const previousWatchlistQueryKeyRef = useRef<string | null>(null);
@@ -443,9 +443,10 @@ export function PriceWatchlistView({ onBack, onToast, offlineMode = false }: { o
   useEffect(() => {
     if (!capabilities.alerts || !savedLink) return;
     const token = savedLinkOwnerToken;
-    if (!token) return;
+    const ownerManaged = savedLinkOwnerManaged;
+    if (!ownerCredentialAvailable("watchlist", savedLink.id, { ownerToken: token, owned: ownerManaged })) return;
     let cancelled = false;
-    void api<{ items: PriceWatchAlert[]; alertPreferences?: PriceAlertPolicy }>("/api/watchlists/" + encodeURIComponent(savedLink.id) + "/alerts", { headers: { "X-Share-Owner-Token": token } }).then((payload) => {
+    void api<{ items: PriceWatchAlert[]; alertPreferences?: PriceAlertPolicy }>("/api/watchlists/" + encodeURIComponent(savedLink.id) + "/alerts", ownerRequestOptions("watchlist", savedLink.id, { ownerToken: token, owned: ownerManaged })).then((payload) => {
       if (cancelled) return;
       if (payload.alertPreferences) setAlertPreferences(priceAlertPolicyFromUnknown(payload.alertPreferences));
       setPriceAlerts((current) => {
@@ -698,9 +699,11 @@ export function PriceWatchlistView({ onBack, onToast, offlineMode = false }: { o
     const isCurrent = () => mountedRef.current && savedWatchlistMutationVersionRef.current === mutationVersion && savedWatchlistContextKeyRef.current === contextKey;
     setSavingWatchlist(true);
     try {
-      const saved = await api<SavedWatchlistCreateResponse>("/api/watchlists", { method: "POST", body: JSON.stringify({ name: watchlistName.trim() || "내 가격 추적 목록", entries: watchEntries, nearLowThresholdPercent: watchThreshold, expiresInDays: shareExpiryPayloadFor(watchlistExpiryDays), alertPreferences }) });
+      const saved = await api<SavedWatchlistCreateResponse>("/api/watchlists", { method: "POST", ...ownerSessionCreateOptions(), body: JSON.stringify({ name: watchlistName.trim() || "내 가격 추적 목록", entries: watchEntries, nearLowThresholdPercent: watchThreshold, expiresInDays: shareExpiryPayloadFor(watchlistExpiryDays), alertPreferences }) });
       if (!isCurrent()) return;
-      writeOwnerTokens({ [saved.id]: saved.ownerToken, ...readOwnerTokens() });
+      if (saved.ownerManaged) markOwnerSessionResource("watchlist", saved.id);
+      if (saved.ownerToken) writeOwnerTokens({ [saved.id]: saved.ownerToken, ...readOwnerTokens() });
+      if (saved.ownerToken && ownerSessionModeSupported()) void retryOwnerSessionMigration().catch(() => undefined);
       const nextLink = { id: saved.id, name: saved.name, createdAt: saved.createdAt, updatedAt: saved.updatedAt, ...(saved.expiresAt ? { expiresAt: saved.expiresAt } : {}), ...(saved.alertPreferences ? { alertPreferences: saved.alertPreferences } : {}) };
       const nextLinks = [nextLink, ...savedLinks.filter((link) => link.id !== saved.id)].slice(0, 20);
       setSavedLinks(nextLinks);
@@ -749,7 +752,8 @@ export function PriceWatchlistView({ onBack, onToast, offlineMode = false }: { o
       return;
     }
     const token = readOwnerTokens()[savedLink.id];
-    if (!token) {
+    const ownerManaged = hasOwnerSessionResource("watchlist", savedLink.id);
+    if (!ownerCredentialAvailable("watchlist", savedLink.id, { ownerToken: token, owned: ownerManaged })) {
       onToast("이 가격 추적 목록을 수정할 소유 토큰이 없습니다.");
       return;
     }
@@ -762,7 +766,7 @@ export function PriceWatchlistView({ onBack, onToast, offlineMode = false }: { o
     const isCurrent = () => mountedRef.current && savedWatchlistMutationVersionRef.current === mutationVersion && savedWatchlistContextKeyRef.current === contextKey;
     setUpdatingWatchlist(true);
     try {
-      const saved = await api<SavedWatchlist>("/api/watchlists/" + encodeURIComponent(savedLink.id), { method: "PATCH", headers: { "X-Share-Owner-Token": token }, body: JSON.stringify({ name: watchlistName.trim() || "내 가격 추적 목록", entries: watchEntries, nearLowThresholdPercent: watchThreshold, alertPreferences, ...(watchlistExpiryDays !== "keep" ? { expiresInDays: watchlistExpiryDays === "never" ? null : watchlistExpiryDays } : {}) }) });
+      const saved = await api<SavedWatchlist>("/api/watchlists/" + encodeURIComponent(savedLink.id), { method: "PATCH", ...ownerRequestOptions("watchlist", savedLink.id, { ownerToken: token, owned: ownerManaged }), body: JSON.stringify({ name: watchlistName.trim() || "내 가격 추적 목록", entries: watchEntries, nearLowThresholdPercent: watchThreshold, alertPreferences, ...(watchlistExpiryDays !== "keep" ? { expiresInDays: watchlistExpiryDays === "never" ? null : watchlistExpiryDays } : {}) }) });
       if (!isCurrent()) return;
       const nextLinks = savedLinks.map((link) => {
         if (link.id !== saved.id) return link;
@@ -783,7 +787,8 @@ export function PriceWatchlistView({ onBack, onToast, offlineMode = false }: { o
     if (!capabilities.serverSharing) return;
     if (revokingWatchlist || updatingWatchlist) return;
     const token = readOwnerTokens()[id];
-    if (!token) {
+    const ownerManaged = hasOwnerSessionResource("watchlist", id);
+    if (!ownerCredentialAvailable("watchlist", id, { ownerToken: token, owned: ownerManaged })) {
       onToast("이 가격 추적 목록을 취소할 소유 토큰이 없습니다.");
       return;
     }
@@ -793,11 +798,12 @@ export function PriceWatchlistView({ onBack, onToast, offlineMode = false }: { o
     const isCurrent = () => mountedRef.current && savedWatchlistMutationVersionRef.current === mutationVersion && savedWatchlistContextKeyRef.current === contextKey;
     setRevokingWatchlist(true);
     try {
-      await api("/api/watchlists/" + encodeURIComponent(id), { method: "DELETE", headers: { "X-Share-Owner-Token": token } });
+      await api("/api/watchlists/" + encodeURIComponent(id), { method: "DELETE", ...ownerRequestOptions("watchlist", id, { ownerToken: token, owned: ownerManaged }) });
       if (!isCurrent()) return;
       const tokens = readOwnerTokens();
       delete tokens[id];
       writeOwnerTokens(tokens);
+      removeOwnerSessionResource("watchlist", id);
       const nextLinks = savedLinks.filter((link) => link.id !== id);
       setSavedLinks(nextLinks);
       if (editingSavedLinkId === id) setEditingSavedLinkId(null);
@@ -817,9 +823,10 @@ export function PriceWatchlistView({ onBack, onToast, offlineMode = false }: { o
     const contextKey = priceAlertContextKey;
     const isCurrent = () => mountedRef.current && priceAlertMutationVersionRef.current === mutationVersion && priceAlertContextKeyRef.current === contextKey;
     const token = savedLink ? readOwnerTokens()[savedLink.id] : undefined;
-    if (savedLink && token) {
+    const ownerManaged = savedLink ? hasOwnerSessionResource("watchlist", savedLink.id) : false;
+    if (savedLink && ownerCredentialAvailable("watchlist", savedLink.id, { ownerToken: token, owned: ownerManaged })) {
       try {
-        await api("/api/watchlists/" + encodeURIComponent(savedLink.id) + "/alerts/" + action, { method: "POST", headers: { "X-Share-Owner-Token": token }, body: JSON.stringify({ alertIds }) });
+        await api("/api/watchlists/" + encodeURIComponent(savedLink.id) + "/alerts/" + action, { method: "POST", ...ownerRequestOptions("watchlist", savedLink.id, { ownerToken: token, owned: ownerManaged }), body: JSON.stringify({ alertIds }) });
       } catch (error: unknown) {
         if (isCurrent()) onToast(error instanceof Error ? error.message : "가격 알림 상태를 저장하지 못했습니다.");
         return;

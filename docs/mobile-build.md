@@ -4,7 +4,7 @@ PC Supporter는 Vite로 만든 웹 클라이언트를 Capacitor 8 네이티브 �
 
 ## API 연결 계약
 
-웹 개발에서는 `VITE_API_BASE_URL`을 비워 두면 기존처럼 Vite proxy를 통해 상대 경로 `/api`를 사용합니다. 원격 API 모드 native bundle은 `VITE_API_BASE_URL`에 API 서버 origin을 지정해야 합니다. 설치 데이터 기반 local-offline bundle은 별도 명령으로 빌드하며 API origin을 포함하지 않습니다.
+웹 개발에서는 `VITE_API_BASE_URL`을 비워 두면 기존처럼 Vite proxy를 통해 상대 경로 `/api`를 사용합니다. 원격 API 모드 native bundle은 `VITE_API_BASE_URL`에 API 서버 origin을 지정해야 합니다. 빌드 시 CSP meta의 `connect-src`에는 그 API URL의 origin만 추가합니다. 설치 데이터 기반 local-offline bundle은 별도 명령으로 빌드하며 API origin을 포함하지 않고, CSP에서도 원격 API·font·image 출처를 허용하지 않습니다.
 
 ```text
 VITE_API_BASE_URL=https://api.example.com
@@ -15,6 +15,8 @@ ADMIN_COOKIE_SAMESITE=none
 `VITE_API_BASE_URL`에는 계정·비밀번호를 넣지 않고 origin만 넣습니다. 운영 API는 HTTPS여야 하며, `http://127.0.0.1:4174`와 `http://10.0.2.2:4174`는 각각 iOS Simulator와 Android Emulator 검증에만 사용할 수 있습니다. Android debug 변형에는 이 로컬 HTTP API를 위한 cleartext/mixed-content 설정이 들어가지만, HTTPS 운영 bundle에서는 자동으로 꺼집니다.
 
 API 서버는 Capacitor 기본 origin을 허용하고 `ETag`, `Last-Modified`, `Retry-After` 응답 헤더를 노출합니다. native 관리자 로그인을 사용할 때는 HTTPS API와 `ADMIN_COOKIE_SAMESITE=none`을 함께 설정해야 합니다. `CORS_ALLOWED_ORIGINS`는 실제 웹 운영 origin을 추가할 때 쉼표로 이어 붙입니다.
+
+Express가 웹 앱을 제공할 때 CSP 응답 헤더는 같은 `dist/index.html`의 CSP meta 정책을 재사용하고 `frame-ancestors 'none'`만 헤더에 추가합니다. 웹·Capacitor의 `connect-src`는 빌드 입력 `VITE_API_BASE_URL`에서 나오므로 웹 앱과 API를 다른 origin으로 둘 때도 헤더와 HTML 정책이 어긋나지 않습니다. 같은 출처 웹 배포에서는 이 변수를 비워 상대 경로 `/api`를 사용합니다.
 
 ## 로컬 빌드
 
@@ -44,6 +46,10 @@ npm run mobile:offline -- --snapshot-dir /tmp/pc-supporter-offline-snapshot
 ```
 
 `offline:export`는 선택한 catalog·accessory 범주와 허용된 override만 읽어 revision/hash manifest를 만듭니다. 저장 견적, 공유·소유/복구 토큰, 사용량, crawler/session 상태와 benchmark evidence는 포함하지 않습니다. Export는 URL query allowlist, snapshot 범주, byte budget을 검사하며 output directory를 덮어쓰지 않습니다. `build:offline`은 static web output을 만들고, `mobile:offline`은 Android/iOS Capacitor web assets를 검증·교체합니다. 두 명령 모두 실제 APK/IPA compile이나 install은 수행하지 않습니다.
+
+로컬 오프라인 빌드마다 client build revision을 새로 만들고, client에는 해당 snapshot revision을 함께 넣습니다. 생성된 service worker는 이 두 revision으로 분리한 cache에 HTML shell, 빌드된 JavaScript·CSS·asset 전체, `offline-catalog.json`을 함께 저장합니다. 설치 중 다운로드가 실패하거나 cache 안의 카탈로그·client revision이 worker와 다르면 후보 cache를 지우고 업데이트 설치를 실패시킵니다. 현재 사용 중인 worker와 cache는 유지됩니다. 로컬 오프라인 업데이트는 기존 앱 탭이 닫힐 때까지 기다린 뒤 활성화하고 이전 shell cache를 정리합니다. 활성화된 로컬 worker는 자신의 revision cache만 읽고 누락 asset을 network에서 섞어 가져오지 않으며, `/api/` 요청은 worker cache에서 처리하지 않습니다. 원격 build의 기존 service-worker 동작은 유지합니다.
+
+이 cache 계약은 첫 설치 때 인터넷 연결이 필요 없다는 뜻은 아닙니다. Browser storage는 사용자가 지우거나 브라우저가 회수할 수 있고, 오래 열린 이전 탭이 있으면 업데이트 활성화가 늦어질 수 있습니다. 현재 확인된 Chrome CDP 실행은 온라인에서 synthetic snapshot을 한 번 내려받은 뒤 오프라인 reload에서 CPU 16개 행을 표시한 warm-cache browsing입니다. 이는 새 A/B worker 교체나 cold first install까지 증명하지 않으므로, 실제 배포 전에는 서로 다른 catalog revision A/B 업데이트와 revision mismatch 거부를 브라우저에서 별도로 확인해야 합니다. 집중 회귀 테스트는 `npm test -- scripts/offline-pwa-cache.test.ts src/offline/bundled-catalog.test.ts`로 실행합니다.
 
 Android debug APK는 `mobile:offline` 뒤에 JDK 21과 Android SDK를 지정해 빌드합니다.
 

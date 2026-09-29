@@ -17,10 +17,13 @@ describe("build output contract", () => {
     process.env.CAPACITOR_WEB_DIR = "dist-mobile";
     vi.resetModules();
 
-    const [{ default: viteConfig }, { default: capacitorConfig }] = await Promise.all([
+    const [{ default: viteConfigExport }, { default: capacitorConfig }] = await Promise.all([
       import("../vite.config"),
       import("../capacitor.config")
     ]);
+    const viteConfig = typeof viteConfigExport === "function"
+      ? await viteConfigExport({ command: "build", mode: "production", isSsrBuild: false, isPreview: false })
+      : viteConfigExport;
 
     expect(viteConfig.build?.outDir).toBe("dist-mobile");
     expect(capacitorConfig.webDir).toBe("dist-mobile");

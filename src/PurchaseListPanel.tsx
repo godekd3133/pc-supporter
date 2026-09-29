@@ -29,6 +29,7 @@ import { uniqueRefreshTargets } from "../shared/refresh-targets";
 import type { RefreshTarget } from "../shared/refresh-targets";
 import type { CatalogRefreshReport } from "../shared/catalog-refresh-report";
 import { ApiError, api } from "./api";
+import { ownerRequestOptions } from "./owner-session";
 import { PurchaseListCatalogRefreshReport } from "./PurchaseListCatalogRefreshReport";
 import { PurchaseListActionCenter } from "./PurchaseListActionCenter";
 import { LOCAL_IMPORT_MAX_BYTES } from "../shared/file-import-limits";
@@ -689,7 +690,7 @@ export function PurchaseListPanel({ rows, storageKey, inputFingerprint, budgetWo
       const itemStatesForSync = currentItemStatesForPersistence();
       const saved = await api<{ purchaseProgress?: SavedBuildPurchaseProgress }>(`/api/builds/${encodeURIComponent(savedBuildId)}/purchase-progress`, {
         method: "PUT",
-        headers: { "X-Share-Owner-Token": savedBuildOwnerToken },
+        ...ownerRequestOptions("build", savedBuildId, { ownerToken: savedBuildOwnerToken }),
         body: JSON.stringify({ expectedRevision: serverProgress?.revision ?? null, progress: { inputFingerprint, rowKeys, checkedIds: rowKeys.filter((key) => checkedIdSet.has(key)), ...(itemStatesForSync.length > 0 ? { itemStates: itemStatesForSync.filter((item) => rowKeys.includes(item.rowKey)) } : {}) } }),
         retry: 0
       });
@@ -728,7 +729,7 @@ export function PurchaseListPanel({ rows, storageKey, inputFingerprint, budgetWo
     try {
       const saved = await api<{ purchasePriceHistory?: SavedBuildPurchasePriceHistory }>(`/api/builds/${encodeURIComponent(savedBuildId)}/purchase-price-history`, {
         method: "PUT",
-        headers: { "X-Share-Owner-Token": savedBuildOwnerToken },
+        ...ownerRequestOptions("build", savedBuildId, { ownerToken: savedBuildOwnerToken }),
         body: JSON.stringify({ expectedRevision: serverPriceHistory?.revision ?? null, priceHistory: { inputFingerprint, rowKeys, priceHistory } }),
         retry: 0
       });
@@ -762,7 +763,7 @@ export function PurchaseListPanel({ rows, storageKey, inputFingerprint, budgetWo
     try {
       const saved = await api<{ purchasePriceHistory?: SavedBuildPurchasePriceHistory }>(`/api/builds/${encodeURIComponent(savedBuildId)}/purchase-price-history/restore`, {
         method: "POST",
-        headers: { "X-Share-Owner-Token": savedBuildOwnerToken },
+        ...ownerRequestOptions("build", savedBuildId, { ownerToken: savedBuildOwnerToken }),
         body: JSON.stringify({ expectedRevision: currentServerPriceHistory.revision, revision: targetRevision, rowKeys }),
         retry: 0
       });
@@ -805,7 +806,7 @@ export function PurchaseListPanel({ rows, storageKey, inputFingerprint, budgetWo
     try {
       const saved = await api<{ purchaseProgress?: SavedBuildPurchaseProgress }>(`/api/builds/${encodeURIComponent(savedBuildId)}/purchase-progress/restore`, {
         method: "POST",
-        headers: { "X-Share-Owner-Token": savedBuildOwnerToken },
+        ...ownerRequestOptions("build", savedBuildId, { ownerToken: savedBuildOwnerToken }),
         body: JSON.stringify({ expectedRevision: currentServerProgress.revision, revision: targetRevision, rowKeys }),
         retry: 0
       });

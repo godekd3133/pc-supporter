@@ -9,6 +9,7 @@ export interface AlternativeComparisonLocalShareEntry {
   currentPartPrice?: string;
   expiresAt?: string;
   ownerToken?: string;
+  owned?: boolean;
 }
 
 const MAX_LOCAL_SHARES = 20;
@@ -46,8 +47,9 @@ function normalizeEntry(value: unknown): AlternativeComparisonLocalShareEntry | 
   if (candidate.currentPartPrice !== undefined && !currentPartPrice) return undefined;
   const expiresAt = candidate.expiresAt === undefined ? undefined : textValue(candidate.expiresAt, 80);
   if (expiresAt !== undefined && !Number.isFinite(Date.parse(expiresAt))) return undefined;
-  const ownerToken = candidate.ownerToken === undefined ? undefined : textValue(candidate.ownerToken, 500);
-  if (candidate.ownerToken !== undefined && !ownerToken) return undefined;
+  const owned = candidate.owned === true;
+  const ownerToken = owned || candidate.ownerToken === undefined ? undefined : textValue(candidate.ownerToken, 500);
+  if (!owned && candidate.ownerToken !== undefined && !ownerToken) return undefined;
   return {
     id,
     url,
@@ -58,6 +60,7 @@ function normalizeEntry(value: unknown): AlternativeComparisonLocalShareEntry | 
     ...(currentPartSummary ? { currentPartSummary } : {}),
     ...(currentPartPrice ? { currentPartPrice } : {}),
     ...(expiresAt ? { expiresAt: new Date(expiresAt).toISOString() } : {}),
+    ...(owned ? { owned: true } : {}),
     ...(ownerToken ? { ownerToken } : {})
   };
 }
@@ -84,7 +87,11 @@ export function alternativeComparisonLocalSharesFromJson(raw: string | null | un
 }
 
 export function alternativeComparisonLocalSharesToJson(entries: AlternativeComparisonLocalShareEntry[]) {
-  return JSON.stringify(uniqueEntries(entries).slice(0, MAX_LOCAL_SHARES));
+  return JSON.stringify(uniqueEntries(entries).slice(0, MAX_LOCAL_SHARES).map((entry) => {
+    if (!entry.owned || !entry.ownerToken) return entry;
+    const { ownerToken: _ownerToken, ...metadata } = entry;
+    return metadata;
+  }));
 }
 
 export function alternativeComparisonLocalShareRemember(entries: AlternativeComparisonLocalShareEntry[], entry: AlternativeComparisonLocalShareEntry) {

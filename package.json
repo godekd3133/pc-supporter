@@ -26,6 +26,8 @@
     "crawl:accessories": "tsx server/accessory-crawler.ts",
     "crawl:dry": "tsx server/crawler.ts --dry-run --limit 8",
     "import:private-catalog": "tsx scripts/import-private-catalog.ts",
+    "db:backup:local": "node scripts/pg-operations.mjs backup",
+    "db:restore:rehearsal": "node scripts/pg-operations.mjs restore",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --maxWorkers=1 --minWorkers=1 --pool=threads --poolOptions.threads.singleThread=true",
     "test:price-refresh": "vitest run server/price-refresh.test.ts server/price-refresh-scheduler.test.ts server/price-refresh-worker.test.ts server/background-job-store.test.ts server/price-patch-persistence.test.ts --maxWorkers=1 --minWorkers=1 --pool=threads --poolOptions.threads.singleThread=true",
@@ -83,6 +85,7 @@
     "test:postgres:comparison": "node scripts/postgres-comparison-smoke.mjs",
     "test:postgres:saved-build": "node scripts/postgres-saved-build-smoke.mjs",
     "test:postgres:price-refresh": "tsx scripts/postgres-price-refresh-worker-smoke.ts",
+    "test:pg-operations": "node --test scripts/pg-operations.node-test.mjs server/postgres-schema-parity.node-test.mjs",
     "test:watch": "vitest"
   },
   "dependencies": {

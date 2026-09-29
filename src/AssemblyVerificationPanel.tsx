@@ -17,6 +17,7 @@ import { assemblyVerificationTelemetryOverlayFor } from "../shared/assembly-veri
 import { assemblyVerificationReportCsvFor, assemblyVerificationReportFor, assemblyVerificationReportJsonFor, assemblyVerificationReportTextFor } from "../shared/assembly-verification-report";
 import type { SavedBuild } from "../shared/types";
 import { api } from "./api";
+import { ownerRequestOptions } from "./owner-session";
 
 function readStoredHistory(storageKey: string) {
   try {
@@ -543,7 +544,7 @@ export function AssemblyVerificationPanel({ storageKey, savedBuildId, savedBuild
     try {
       const saved = await api<SavedBuild>(`/api/builds/${encodeURIComponent(savedBuildId)}/assembly-verification`, {
         method: "PUT",
-        headers: { "X-Share-Owner-Token": savedBuildOwnerToken },
+        ...ownerRequestOptions("build", savedBuildId, { ownerToken: savedBuildOwnerToken }),
         body: JSON.stringify({ history }),
         retry: 0
       });

@@ -239,6 +239,7 @@ import { accessorySelections, addAccessoryToBuild, catalogRefreshReportForInput,
 import { ChangeHistoryPanel, RequestErrorNotice } from "./notices";
 import { AccessoryVisual, CATEGORY_META, CategoryIcon, PartEvidence, accessoryIsWatched, partIsWatched, PartVisual, PartWatchButton } from "./part-visuals";
 import { readSavedBuildOwnerTokens, writeSavedBuildOwnerTokens, rememberSavedBuildOwnerToken, readSavedBuildOwnerToken, readSavedBuildIds, writeSavedBuildIds, SAVED_BUILD_OWNER_TOKENS_STORAGE_KEY, SAVED_BUILD_IDS_STORAGE_KEY, LOCAL_SAVED_STATE_LIMIT } from "./saved-build-storage";
+import { ALTERNATIVE_COMPARISON_LOCAL_SHARES_STORAGE_KEY, BUDGET_LADDER_LOCAL_SHARES_STORAGE_KEY, hasStoredOwnerCredentials, initializeOwnerSession, hasOwnerSessionResource, markOwnerSessionResource, ownerCredentialAvailable, ownerRequestOptions, ownerSessionCreateOptions, ownerSessionModeSupported, ownerSessionResourcesSnapshot, OWNER_SESSION_STORAGE_KEYS, removeOwnerSessionResource, retryOwnerSessionMigration, subscribeOwnerSessionResources, SAVED_BUILD_VERSION_LOCAL_SHARES_STORAGE_KEY, SAVED_WATCHLIST_LINK_STORAGE_KEY, SAVED_WATCHLIST_OWNER_TOKENS_STORAGE_KEY } from "./owner-session";
 
 
 const PriceWatchlistView = lazy(() => import("./PriceWatchlistView").then((module) => ({ default: module.PriceWatchlistView })));
@@ -298,19 +299,10 @@ const SAVED_BUILD_MONITOR_ALERTS_STORAGE_KEY = "pc-supporter-saved-build-monitor
 const SAVED_BUILD_SERVER_ALERT_SYNC_INTERVAL_MS = 5 * 60 * 1000;
 const BROWSER_NOTIFICATION_ENABLED_STORAGE_KEY = "pc-supporter-browser-notification-enabled";
 const BROWSER_NOTIFICATION_DELIVERED_STORAGE_KEY = "pc-supporter-browser-notification-delivered";
-const SAVED_WATCHLIST_OWNER_TOKENS_STORAGE_KEY = "pc-supporter-saved-watchlist-owner-tokens";
-const SAVED_WATCHLIST_LINK_STORAGE_KEY = "pc-supporter-saved-watchlist-link";
-const BUDGET_LADDER_LOCAL_SHARES_STORAGE_KEY = "pc-supporter-budget-ladder-shares";
-const ALTERNATIVE_COMPARISON_LOCAL_SHARES_STORAGE_KEY = "pc-supporter-alternative-comparison-shares";
-const SAVED_BUILD_VERSION_LOCAL_SHARES_STORAGE_KEY = "pc-supporter-saved-build-version-shares";
+type OwnerSessionCreateResponse = { ownerManaged: true; ownerToken?: never } | { ownerManaged?: false; ownerToken: string };
 
-type SavedBuildCreateResponse = SavedBuild & {
-  ownerToken: string;
+type SavedBuildCreateResponse = SavedBuild & OwnerSessionCreateResponse & {
   recoveryCode?: string;
-};
-
-type SavedWatchlistCreateResponse = SavedCatalogWatchlist & {
-  ownerToken: string;
 };
 
 type SavedWatchlistLinkState = {
@@ -369,14 +361,14 @@ type AlternativeComparisonShareContext = {
   engineVersion?: string;
 };
 
-type AlternativeComparisonCreateResponse = AlternativeComparisonSnapshot & {
-  ownerToken: string;
-};
+type AlternativeComparisonCreateResponse = AlternativeComparisonSnapshot & OwnerSessionCreateResponse;
 
 type AlternativeComparisonShareResult = {
   id: string;
   url: string;
-  ownerToken: string;
+  ownerToken?: string;
+  ownerManaged?: boolean;
+  owned?: boolean;
   expiresAt?: string;
 };
 
@@ -803,10 +795,12 @@ function forgetSavedBuild(id: string) {
   const tokens = readSavedBuildOwnerTokens();
   delete tokens[id];
   writeSavedBuildOwnerTokens(tokens);
+  removeOwnerSessionResource("build", id);
 }
 
 function App() {
   const localOfflineMode = LOCAL_OFFLINE_BUILD;
+  const ownerSessionResources = useSyncExternalStore(subscribeOwnerSessionResources, ownerSessionResourcesSnapshot, ownerSessionResourcesSnapshot);
   const [initialDraftLoad] = useState(() => parseBuildDraftStorage(readBuildDraftStorageRaw()));
   const localStorageHealth = useSyncExternalStore(subscribeLocalStorageHealth, getLocalStorageHealth, getLocalStorageHealth);
   const [draftOverwriteBlocked, setDraftOverwriteBlocked] = useState(initialDraftLoad.status === "recovered");
@@ -928,11 +922,12 @@ function App() {
   const homeUnreadAlertCount = savedBuildUnreadAlertCount + watchlistUnreadAlertCount;
   const homeHasBuildAlerts = useMemo(() => savedBuildMonitorAlerts.some((alert) => !alert.dismissedAt), [savedBuildMonitorAlerts]);
   const homeHasWatchlistAlerts = useMemo(() => watchlistAlertBundles.some((bundle) => bundle.items.length > 0), [watchlistAlertBundles]);
-  const ownerSavedBuildKey = useMemo(() => savedBuilds.filter((saved) => Boolean(readSavedBuildOwnerToken(saved.id))).map((saved) => saved.id).join(","), [savedBuilds]);
+  const shareOwnerManaged = Boolean(shareId && hasOwnerSessionResource("build", shareId));
+  const ownerSavedBuildKey = useMemo(() => savedBuilds.filter((saved) => Boolean(readSavedBuildOwnerToken(saved.id)) || hasOwnerSessionResource("build", saved.id)).map((saved) => saved.id).join(","), [savedBuilds, ownerSessionResources]);
   const ownerSavedBuildContextKey = useMemo(() => savedBuilds
-    .filter((saved) => Boolean(readSavedBuildOwnerToken(saved.id)))
-    .map((saved) => `${saved.id}:${saved.updatedAt}:${readSavedBuildOwnerToken(saved.id) ?? ""}`)
-    .join("|"), [savedBuilds]);
+    .filter((saved) => Boolean(readSavedBuildOwnerToken(saved.id)) || hasOwnerSessionResource("build", saved.id))
+    .map((saved) => `${saved.id}:${saved.updatedAt}:${readSavedBuildOwnerToken(saved.id) ?? (hasOwnerSessionResource("build", saved.id) ? "session" : "")}`)
+    .join("|"), [savedBuilds, ownerSessionResources]);
   const currentInputFingerprint = useMemo(
     () => buildCompatibilityInputFingerprint(build, recommendationPreferences),
     [build, recommendationPreferences]
@@ -1045,6 +1040,22 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (!ownerSessionModeSupported()) return;
+    void initializeOwnerSession().catch(() => undefined);
+    const onOnline = () => { void initializeOwnerSession().catch(() => undefined); };
+    const onOwnerCredentialStorage = (event: StorageEvent) => {
+      if (!OWNER_SESSION_STORAGE_KEYS.includes(event.key as typeof OWNER_SESSION_STORAGE_KEYS[number])) return;
+      void initializeOwnerSession().catch(() => undefined);
+    };
+    window.addEventListener("online", onOnline);
+    window.addEventListener("storage", onOwnerCredentialStorage);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("storage", onOwnerCredentialStorage);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!draftRecovery) return;
     let backupSaved = false;
     let raw: string | null = null;
@@ -1145,6 +1156,11 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (!ownerSessionModeSupported() || !hasStoredOwnerCredentials()) return;
+    void retryOwnerSessionMigration().catch(() => undefined);
+  }, [budgetLadderShares, alternativeComparisonShares, savedBuildVersionShares]);
+
+  useEffect(() => {
     try {
       safeLocalStorage.setItem(BROWSER_NOTIFICATION_ENABLED_STORAGE_KEY, String(browserNotificationEnabled));
     } catch {
@@ -1230,9 +1246,10 @@ function App() {
         const ownerIds = ownerSavedBuildKey.split(",").filter(Boolean);
         const values = await Promise.all(ownerIds.map(async (id) => {
           const token = readSavedBuildOwnerToken(id);
-          if (!token) return undefined;
+          const owned = hasOwnerSessionResource("build", id);
+          if (!token && !owned) return undefined;
           try {
-            return await api<SavedBuildMonitorSubscriptionResponse>(`/api/builds/${encodeURIComponent(id)}/monitor`, { headers: { "X-Share-Owner-Token": token }, retry: 1 });
+            return await api<SavedBuildMonitorSubscriptionResponse>(`/api/builds/${encodeURIComponent(id)}/monitor`, { ...ownerRequestOptions("build", id, { ownerToken: token, owned }), retry: 1 });
           } catch {
             return undefined;
           }
@@ -1265,12 +1282,13 @@ function App() {
       running = true;
       const syncVersion = ++watchlistAlertSyncVersionRef.current;
       try {
-        const ownedLinks = readLocalSavedWatchlistLinks().filter((link) => Boolean(readSavedWatchlistOwnerToken(link.id)));
+        const ownedLinks = readLocalSavedWatchlistLinks().filter((link) => Boolean(readSavedWatchlistOwnerToken(link.id)) || hasOwnerSessionResource("watchlist", link.id));
         const bundles = await Promise.all(ownedLinks.map(async (link) => {
           const token = readSavedWatchlistOwnerToken(link.id);
-          if (!token) return undefined;
+          const owned = hasOwnerSessionResource("watchlist", link.id);
+          if (!token && !owned) return undefined;
           try {
-            const value = await api<{ items: HomeAlertItem[]; unreadCount: number }>(`/api/watchlists/${encodeURIComponent(link.id)}/alerts`, { headers: { "X-Share-Owner-Token": token }, retry: 1 });
+            const value = await api<{ items: HomeAlertItem[]; unreadCount: number }>(`/api/watchlists/${encodeURIComponent(link.id)}/alerts`, { ...ownerRequestOptions("watchlist", link.id, { ownerToken: token, owned }), retry: 1 });
             return { watchlistId: link.id, ...(link.name ? { watchlistName: link.name } : {}), items: value.items, unreadCount: value.unreadCount } satisfies WatchlistAlertBundle;
           } catch {
             return undefined;
@@ -2061,7 +2079,7 @@ function App() {
 
   function saveBuildChangeResultAsDecisionNote() {
     if (!buildChangeResultComparison) return;
-    const target = shareId && shareOwnerToken
+    const target = shareId && (shareOwnerToken || shareOwnerManaged)
       ? { build, preferences: recommendationPreferences, label: "적용 후 비교 새 버전", kind: "candidate" as const, parentBuildId: shareId }
       : undefined;
     setSaveBuildTarget(target ?? null);
@@ -2103,6 +2121,7 @@ function App() {
       const liveContext = result && !resultIsStale ? { catalogSnapshotAt: result.catalogSnapshotAt, engineVersion: result.engineVersion } : {};
       const saved = await api<AlternativeComparisonCreateResponse>("/api/comparisons", {
         method: "POST",
+        ...ownerSessionCreateOptions(),
         body: JSON.stringify({
           name: "PC Supporter 비교",
           ...liveContext,
@@ -2122,7 +2141,9 @@ function App() {
         if (routeRequestSequenceRef.current !== routeRequestSequence) return undefined;
         setToast(`부품 비교 링크가 만들어졌어요: ${url}`);
       }
-      const share = { id: saved.id, url, ownerToken: saved.ownerToken, ...(saved.expiresAt ? { expiresAt: saved.expiresAt } : {}) };
+      const owned = saved.ownerManaged === true;
+      if (owned) markOwnerSessionResource("comparison", saved.id);
+      const share: AlternativeComparisonShareResult = { id: saved.id, url, ...(saved.ownerToken ? { ownerToken: saved.ownerToken } : {}), ...(owned ? { ownerManaged: true, owned: true } : {}), ...(saved.expiresAt ? { expiresAt: saved.expiresAt } : {}) };
       rememberAlternativeComparisonShare({
         id: saved.id,
         url,
@@ -2133,8 +2154,10 @@ function App() {
         ...(saved.currentPartSummary ? { currentPartSummary: saved.currentPartSummary } : {}),
         ...(saved.currentPartPrice ? { currentPartPrice: saved.currentPartPrice } : {}),
         ...(saved.expiresAt ? { expiresAt: saved.expiresAt } : {}),
-        ownerToken: saved.ownerToken
+        ...(saved.ownerToken ? { ownerToken: saved.ownerToken } : {}),
+        ...(owned ? { owned: true } : {})
       });
+      if (saved.ownerToken && ownerSessionModeSupported()) void retryOwnerSessionMigration().catch(() => undefined);
       return share;
     } catch (error: unknown) {
       if (routeRequestSequenceRef.current === routeRequestSequence) setToast(error instanceof Error ? error.message : "부품 비교 공유 링크를 만들지 못했어요.");
@@ -2154,8 +2177,9 @@ function App() {
       && alternativeComparisonRevokeInFlightRef.current.get(share.id) === routeRequestSequence
       && localShareMutationContextRef.current === requestContextVersion;
     try {
-      await api(`/api/comparisons/${encodeURIComponent(share.id)}`, { method: "DELETE", headers: { "X-Share-Owner-Token": share.ownerToken }, retry: 0 });
+      await api(`/api/comparisons/${encodeURIComponent(share.id)}`, { method: "DELETE", ...ownerRequestOptions("comparison", share.id, share), retry: 0 });
       if (!isCurrent()) return false;
+      removeOwnerSessionResource("comparison", share.id);
       forgetAlternativeComparisonShare(share.id);
       setToast("부품 비교 공유 링크를 취소했어요.");
       return true;
@@ -2170,7 +2194,7 @@ function App() {
   async function revokeSavedBuildVersionShare(entry: SavedBuildVersionLocalShareEntry) {
     const routeRequestSequence = routeRequestSequenceRef.current;
     const requestContextVersion = localShareMutationContextRef.current;
-    if (!entry.ownerToken) {
+    if (!ownerCredentialAvailable("version-comparison", entry.id, entry)) {
       setToast("이 브라우저에는 이 공유 링크를 취소할 권한이 없습니다.");
       return false;
     }
@@ -2180,8 +2204,9 @@ function App() {
       && localShareMutationContextRef.current === requestContextVersion
       && savedBuildVersionRevokeInFlightRef.current.has(entry.id);
     try {
-      await api(`/api/version-comparisons/${encodeURIComponent(entry.id)}`, { method: "DELETE", headers: { "X-Share-Owner-Token": entry.ownerToken }, retry: 0 });
+      await api(`/api/version-comparisons/${encodeURIComponent(entry.id)}`, { method: "DELETE", ...ownerRequestOptions("version-comparison", entry.id, entry), retry: 0 });
       if (!isCurrent()) return false;
+      removeOwnerSessionResource("version-comparison", entry.id);
       forgetSavedBuildVersionShare(entry.id);
       setToast("견적 버전 비교 공유 링크를 취소했습니다.");
       return true;
@@ -2196,16 +2221,17 @@ function App() {
   async function shareSavedBuildVersionComparison(before: SavedBuild, after: SavedBuild): Promise<void> {
     const routeRequestSequence = routeRequestSequenceRef.current;
     const ownerToken = readSavedBuildOwnerToken(after.id);
-    if (!ownerToken) {
+    const ownerManaged = hasOwnerSessionResource("build", after.id);
+    if (!ownerToken && !ownerManaged) {
       setToast("이후 버전 견적의 소유 토큰이 이 브라우저에 없어 버전 비교를 공유할 수 없습니다.");
       return;
     }
     if (savedBuildVersionShareInFlightRef.current) return;
     savedBuildVersionShareInFlightRef.current = true;
     try {
-      const saved = await api<SavedBuildVersionComparisonShareSnapshot & { ownerToken: string }>("/api/version-comparisons", {
+      const saved = await api<SavedBuildVersionComparisonShareSnapshot & OwnerSessionCreateResponse>("/api/version-comparisons", {
         method: "POST",
-        headers: { "X-Share-Owner-Token": ownerToken },
+        ...ownerRequestOptions("build", after.id, { ownerToken, owned: ownerManaged }),
         body: JSON.stringify({
           name: `${savedBuildVersionLabelFor(before)} · ${before.name} → ${savedBuildVersionLabelFor(after)} · ${after.name}`,
           beforeBuildId: before.id,
@@ -2215,6 +2241,8 @@ function App() {
         retry: 0
       });
       if (routeRequestSequenceRef.current !== routeRequestSequence) return;
+      const shareOwnerManaged = saved.ownerManaged === true;
+      if (shareOwnerManaged) markOwnerSessionResource("version-comparison", saved.id);
       const url = `${window.location.origin}/version-comparison/${encodeURIComponent(saved.id)}`;
       let copied = false;
       try {
@@ -2237,8 +2265,10 @@ function App() {
         afterName: saved.payload.after.name,
         afterBuildId: saved.payload.after.id,
         ...(saved.expiresAt ? { expiresAt: saved.expiresAt } : {}),
-        ownerToken: saved.ownerToken
+        ...(saved.ownerToken ? { ownerToken: saved.ownerToken } : {}),
+        ...(shareOwnerManaged ? { owned: true } : {})
       });
+      if (saved.ownerToken && ownerSessionModeSupported()) void retryOwnerSessionMigration().catch(() => undefined);
       return;
     } catch (error: unknown) {
       if (routeRequestSequenceRef.current === routeRequestSequence) setToast(error instanceof Error ? error.message : "견적 버전 비교 공유 링크를 만들지 못했습니다.");
@@ -2432,7 +2462,7 @@ function App() {
 
   async function saveGeneratedDraft(draft: BuildGenerationResult, origin?: SavedBuildOrigin) {
     const { generatedDraftSaveTargetFor } = await import("./generated-draft-save-target");
-    requestSaveBuild(generatedDraftSaveTargetFor(draft, shareId && shareOwnerToken ? shareId : undefined, origin));
+    requestSaveBuild(generatedDraftSaveTargetFor(draft, shareId && (shareOwnerToken || shareOwnerManaged) ? shareId : undefined, origin));
   }
 
   function exportDamagedBuildDraft() {
@@ -2510,7 +2540,7 @@ function App() {
   }
 
   function requestEditSavedBuildMetadata(saved: SavedBuild) {
-    if (!readSavedBuildOwnerToken(saved.id)) {
+    if (!readSavedBuildOwnerToken(saved.id) && !hasOwnerSessionResource("build", saved.id)) {
       setToast("이 견적의 설명을 수정할 수 있는 소유 토큰이 이 브라우저에 없습니다.");
       return;
     }
@@ -2524,7 +2554,8 @@ function App() {
     const target = metadataEditTarget;
     if (!target || metadataSaving) return;
     const token = readSavedBuildOwnerToken(target.id);
-    if (!token) {
+    const ownerManaged = hasOwnerSessionResource("build", target.id);
+    if (!token && !ownerManaged) {
       setToast("이 견적의 설명을 수정할 수 있는 소유 토큰이 이 브라우저에 없습니다.");
       return;
     }
@@ -2541,7 +2572,7 @@ function App() {
     try {
       const updated = await api<SavedBuild>(`/api/builds/${encodeURIComponent(target.id)}`, {
         method: "PATCH",
-        headers: { "X-Share-Owner-Token": token },
+        ...ownerRequestOptions("build", target.id, { ownerToken: token, owned: ownerManaged }),
         body: JSON.stringify({ name, decisionNote: metadataEditDecisionNote.trim() }),
         retry: 0
       });
@@ -2571,19 +2602,26 @@ function App() {
     const targetPreferences = target?.preferences ?? recommendationPreferences;
     const refreshReport = catalogRefreshReportForInput(catalogRefreshReport, targetBuild, targetPreferences);
     const parentOwnerToken = target?.parentBuildId ? readSavedBuildOwnerToken(target.parentBuildId) : undefined;
+    const parentOwnerManaged = target?.parentBuildId ? hasOwnerSessionResource("build", target.parentBuildId) : false;
+    const parentCanManage = Boolean(parentOwnerToken || parentOwnerManaged);
     const requestVersion = ++saveBuildRequestRef.current;
     const routeRequestSequence = routeRequestSequenceRef.current;
     const isCurrent = () => saveBuildRequestRef.current === requestVersion && routeRequestSequenceRef.current === routeRequestSequence;
     invalidateSavedBuildReads();
     setSaving(true);
     try {
+      const parentOwnerOptions = target?.parentBuildId && parentCanManage
+        ? ownerRequestOptions("build", target.parentBuildId, { ownerToken: parentOwnerToken, owned: parentOwnerManaged })
+        : ownerSessionCreateOptions();
       const saved = await api<SavedBuildCreateResponse>("/api/builds", {
         method: "POST",
-        ...(parentOwnerToken ? { headers: { "X-Share-Owner-Token": parentOwnerToken } } : {}),
-        body: JSON.stringify({ name, selection: targetBuild, recommendationPreferences: targetPreferences, expiresInDays: saveExpiryDays === "never" ? undefined : saveExpiryDays, ...(decisionNote ? { decisionNote } : {}), ...(saveOrigin ? { origin: saveOrigin } : {}), ...(refreshReport ? { catalogRefreshReport: refreshReport } : {}), ...(parentOwnerToken && target?.parentBuildId ? { parentBuildId: target.parentBuildId } : {}) })
+        ...parentOwnerOptions,
+        body: JSON.stringify({ name, selection: targetBuild, recommendationPreferences: targetPreferences, expiresInDays: saveExpiryDays === "never" ? undefined : saveExpiryDays, ...(decisionNote ? { decisionNote } : {}), ...(saveOrigin ? { origin: saveOrigin } : {}), ...(refreshReport ? { catalogRefreshReport: refreshReport } : {}), ...(parentCanManage && target?.parentBuildId ? { parentBuildId: target.parentBuildId } : {}) })
       });
       rememberSavedBuildId(saved.id);
-      rememberSavedBuildOwnerToken(saved.id, saved.ownerToken);
+      if (saved.ownerManaged) markOwnerSessionResource("build", saved.id);
+      if (saved.ownerToken) rememberSavedBuildOwnerToken(saved.id, saved.ownerToken);
+      if (saved.ownerToken && ownerSessionModeSupported()) void retryOwnerSessionMigration().catch(() => undefined);
       invalidateSavedBuildReads();
       if (!isCurrent()) {
         if (currentView() === "history") {
@@ -2596,9 +2634,9 @@ function App() {
       setShareId(saved.id);
       setShareExpiresAt(saved.expiresAt ?? null);
       setCurrentBuildOrigin(saved.origin ?? null);
-      setShareOwnerToken(saved.ownerToken);
+      setShareOwnerToken(saved.ownerToken ?? null);
       if (saved.recoveryCode) setRecoveryCodeNotice({ code: saved.recoveryCode, buildName: name });
-      const { ownerToken: _ownerToken, recoveryCode: _recoveryCode, ...publicSaved } = saved;
+      const { ownerToken: _ownerToken, recoveryCode: _recoveryCode, ownerManaged: _ownerManaged, ...publicSaved } = saved;
       setSavedBuilds((current) => [publicSaved, ...current.filter((item) => item.id !== saved.id)].slice(0, 20));
       setSavedCheckHistory(saved.checkHistory ?? (saved.checkSnapshot ? [saved.checkSnapshot] : null));
       setSaveDialogOpen(false);
@@ -2638,13 +2676,14 @@ function App() {
   async function issueRecoveryCodeFor(saved: SavedBuild) {
     if (recoveryCodeBusy) return;
     const token = readSavedBuildOwnerToken(saved.id);
-    if (!token) {
+    const ownerManaged = hasOwnerSessionResource("build", saved.id);
+    if (!token && !ownerManaged) {
       setToast("이 브라우저에서 견적 소유권을 확인할 수 없어 복구 코드를 만들 수 없습니다. 처음 견적을 만든 브라우저에서 다시 시도해 주세요.");
       return;
     }
     setRecoveryCodeBusy(true);
     try {
-      const result = await api<{ recoveryCode: string }>(`/api/builds/${encodeURIComponent(saved.id)}/recovery-code`, { method: "POST", headers: { "X-Share-Owner-Token": token }, retry: 0 });
+      const result = await api<{ recoveryCode: string }>(`/api/builds/${encodeURIComponent(saved.id)}/recovery-code`, { method: "POST", ...ownerRequestOptions("build", saved.id, { ownerToken: token, owned: ownerManaged }), retry: 0 });
       setRecoveryCodeNotice({ code: result.recoveryCode, buildName: saved.name });
     } catch (error: unknown) {
       setToast(error instanceof Error ? error.message : "복구 코드를 만들지 못했습니다.");
@@ -2653,9 +2692,11 @@ function App() {
     }
   }
 
-  function savedBuildOwnershipRecovered(id: string, ownerToken: string, recoveryCode?: string) {
-    rememberSavedBuildOwnerToken(id, ownerToken);
+  function savedBuildOwnershipRecovered(id: string, ownership: { ownerManaged?: boolean; ownerToken?: string }, recoveryCode?: string) {
+    if (ownership.ownerManaged === true) markOwnerSessionResource("build", id);
+    else if (ownership.ownerToken) rememberSavedBuildOwnerToken(id, ownership.ownerToken);
     rememberSavedBuildId(id);
+    if (ownership.ownerToken && ownerSessionModeSupported()) void retryOwnerSessionMigration().catch(() => undefined);
     invalidateSavedBuildReads();
     void refreshSavedBuildsForBrowser();
     setToast("이 브라우저에서 견적 소유권을 되찾았습니다.");
@@ -2665,14 +2706,15 @@ function App() {
   async function toggleMyPcFor(saved: SavedBuild) {
     if (myPcBusyId) return;
     const token = readSavedBuildOwnerToken(saved.id);
-    if (!token) {
+    const ownerManaged = hasOwnerSessionResource("build", saved.id);
+    if (!token && !ownerManaged) {
       setToast("이 브라우저에서 견적 소유권을 확인할 수 없어 내 견적으로 복사할 수 없습니다. 처음 만든 브라우저에서 열어 주세요.");
       return;
     }
     const promote = !saved.myPcAt;
     setMyPcBusyId(saved.id);
     try {
-      const updated = await api<SavedBuild>(`/api/builds/${encodeURIComponent(saved.id)}/my-pc`, { method: "PUT", headers: { "X-Share-Owner-Token": token }, body: JSON.stringify({ owned: promote }), retry: 0 });
+      const updated = await api<SavedBuild>(`/api/builds/${encodeURIComponent(saved.id)}/my-pc`, { method: "PUT", ...ownerRequestOptions("build", saved.id, { ownerToken: token, owned: ownerManaged }), body: JSON.stringify({ owned: promote }), retry: 0 });
       invalidateSavedBuildReads();
       setSavedBuilds((current) => current.map((item) => item.id === updated.id ? updated : item));
       setToast(promote ? `"${saved.name}"을 내 PC로 등록했습니다. 이제 더 좋은 부품이 카탈로그에 들어오면 알려드립니다.` : `"${saved.name}"의 내 PC 등록을 해제했습니다.`);
@@ -2686,7 +2728,8 @@ function App() {
   async function revokeSavedBuildById(id: string, tokenOverride?: string) {
     if (revokingShare) return;
     const token = tokenOverride ?? readSavedBuildOwnerToken(id);
-    if (!token) {
+    const ownerManaged = hasOwnerSessionResource("build", id);
+    if (!token && !ownerManaged) {
       setToast("이 견적을 취소할 수 있는 소유 토큰이 이 브라우저에 없습니다.");
       return;
     }
@@ -2697,7 +2740,7 @@ function App() {
     invalidateSavedBuildReads();
     setRevokingShare(true);
     try {
-      await api(`/api/builds/${encodeURIComponent(id)}`, { method: "DELETE", headers: { "X-Share-Owner-Token": token } });
+      await api(`/api/builds/${encodeURIComponent(id)}`, { method: "DELETE", ...ownerRequestOptions("build", id, { ownerToken: token, owned: ownerManaged }) });
       if (!isCurrent()) return;
       invalidateSavedBuildReads();
       forgetSavedBuild(id);
@@ -2719,7 +2762,8 @@ function App() {
   async function recordSavedBuildCheck(id: string) {
     if (recordingCheckId) return;
     const token = readSavedBuildOwnerToken(id);
-    if (!token) {
+    const ownerManaged = hasOwnerSessionResource("build", id);
+    if (!token && !ownerManaged) {
       setToast("현재 검사 기록을 추가하려면 이 브라우저의 견적 소유 토큰이 필요합니다.");
       return;
     }
@@ -2732,7 +2776,7 @@ function App() {
     try {
       const saved = await api<SavedBuild>(`/api/builds/${encodeURIComponent(id)}/check`, {
         method: "POST",
-        headers: { "X-Share-Owner-Token": token },
+        ...ownerRequestOptions("build", id, { ownerToken: token, owned: ownerManaged }),
         ...(refreshReport ? { body: JSON.stringify({ catalogRefreshReport: refreshReport }) } : {}),
         retry: 0
       });
@@ -2749,8 +2793,8 @@ function App() {
   }
 
   function revokeSharedBuild() {
-    if (!shareId || !shareOwnerToken) return;
-    void revokeSavedBuildById(shareId, shareOwnerToken);
+    if (!shareId || (!shareOwnerToken && !shareOwnerManaged)) return;
+    void revokeSavedBuildById(shareId, shareOwnerToken ?? undefined);
   }
 
   function updateBuildPart(category: PartCategory, selection: PartSelection | undefined, part?: Part) {
@@ -2985,7 +3029,7 @@ function App() {
       preferences: recommendationPreferences,
       label: `${CATEGORY_LABELS[item.category]} 부품 적용 견적`,
       kind: "candidate",
-      ...(shareId && shareOwnerToken ? { parentBuildId: shareId } : {})
+      ...(shareId && (shareOwnerToken || shareOwnerManaged) ? { parentBuildId: shareId } : {})
     });
   }
 
@@ -3330,7 +3374,7 @@ function App() {
       onToastBudgetLadderShare={setToast}
       onCopyAlternativeComparisonShare={copyAlternativeComparisonShare}
       onRemoveAlternativeComparisonShare={forgetAlternativeComparisonShare}
-      onRevokeAlternativeComparisonShare={async (entry) => entry.ownerToken ? revokeAlternativeComparison({ id: entry.id, url: entry.url, ownerToken: entry.ownerToken }) : false}
+      onRevokeAlternativeComparisonShare={async (entry) => ownerCredentialAvailable("comparison", entry.id, entry) ? revokeAlternativeComparison({ id: entry.id, url: entry.url, ...(entry.ownerToken ? { ownerToken: entry.ownerToken } : {}), ...(entry.owned ? { owned: true } : {}) }) : false}
       onToastAlternativeComparisonShare={setToast}
       onCopySavedBuildVersionShare={copySavedBuildVersionShare}
       onRemoveSavedBuildVersionShare={forgetSavedBuildVersionShare}
@@ -3463,7 +3507,7 @@ function App() {
       openingBuildId={openingSavedBuildId}
       onShareVersionComparison={shareSavedBuildVersionComparison}
       onSaveVersion={(saved) => {
-        if (!readSavedBuildOwnerToken(saved.id)) {
+        if (!readSavedBuildOwnerToken(saved.id) && !hasOwnerSessionResource("build", saved.id)) {
           setToast("현재 기준 새 버전을 저장하려면 이 브라우저의 견적 소유권이 필요합니다.");
           return;
         }
@@ -3496,7 +3540,7 @@ function App() {
       savedVersionContext={savedVersionContext}
       onOpenHistory={() => navigate("/history", "history")}
       shareOwnerToken={shareOwnerToken}
-      shareOwnerTokenAvailable={Boolean(shareOwnerToken)}
+      shareOwnerTokenAvailable={Boolean(shareOwnerToken) || shareOwnerManaged}
       recordingSavedCheck={Boolean(shareId && recordingCheckId === shareId)}
       revokingShare={revokingShare}
       checking={checking}
@@ -3521,7 +3565,7 @@ function App() {
       onCheck={() => void checkBuild()}
       initialFindingRuleId={pendingResultFindingRuleId}
       onInitialFindingFocus={() => setPendingResultFindingRuleId(null)}
-      onRecordSavedCheck={shareId && shareOwnerToken ? () => void recordSavedBuildCheck(shareId) : undefined}
+      onRecordSavedCheck={shareId && (shareOwnerToken || shareOwnerManaged) ? () => void recordSavedBuildCheck(shareId) : undefined}
       onAssemblyVerificationSynced={(saved) => { setSavedBuilds((current) => current.map((item) => item.id === saved.id ? saved : item)); if (shareId === saved.id) setSavedCheckHistory(saved.checkHistory ?? (saved.checkSnapshot ? [saved.checkSnapshot] : null)); setToast("조립 확인 기록을 저장한 견적에 추가했습니다."); }}
       onPurchaseProgressSynced={updateCurrentSavedBuildPurchaseProgress}
       onPurchasePriceHistorySynced={updateCurrentSavedBuildPurchasePriceHistory}

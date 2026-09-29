@@ -38,6 +38,8 @@ export interface OfflineCatalogSnapshot {
   accessories: AccessoryItem[];
 }
 
+const normalizedSnapshots = new WeakMap<object, OfflineCatalogSnapshot>();
+
 function record(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -81,13 +83,26 @@ function validItems(value: unknown, categories: readonly string[]): value is Arr
   });
 }
 
+function frozenJsonCopy<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return Object.freeze(value.map((item) => frozenJsonCopy(item))) as unknown as T;
+  }
+  if (!record(value)) return value;
+
+  const copy = Object.fromEntries(Object.entries(value).map(([key, item]) => [key, frozenJsonCopy(item)]));
+  return Object.freeze(copy) as unknown as T;
+}
+
 /**
- * Validate the immutable snapshot embedded by the local-offline build. Source
- * file hashes are checked by the build step; these shape/count checks run again
- * at the browser boundary so a missing or mismatched bundle fails closed.
+ * Validate a raw local-offline snapshot at its trust boundary, then return an
+ * immutable normalized copy. The normalized object is safe to reuse by identity
+ * for later in-process requests; the caller's raw object is never cached.
  */
 export function offlineCatalogSnapshotFromUnknown(value: unknown): OfflineCatalogSnapshot | undefined {
-  if (!record(value) || !record(value.manifest)) return undefined;
+  if (!record(value)) return undefined;
+  const normalized = normalizedSnapshots.get(value);
+  if (normalized) return normalized;
+  if (!record(value.manifest)) return undefined;
   const manifest = value.manifest;
   if (manifest.schemaVersion !== OFFLINE_CATALOG_SCHEMA_VERSION || manifest.kind !== OFFLINE_CATALOG_KIND) return undefined;
   if (typeof manifest.revision !== "string" || !/^catalog-\d+-[a-f0-9]{16}$/.test(manifest.revision)) return undefined;
@@ -102,7 +117,9 @@ export function offlineCatalogSnapshotFromUnknown(value: unknown): OfflineCatalo
   if (!validItems(value.parts, manifest.selectedCategories.parts) || !validItems(value.accessories, manifest.selectedCategories.accessories)) return undefined;
   if (value.parts.length !== manifest.counts.parts || value.accessories.length !== manifest.counts.accessories) return undefined;
   if (!value.accessories.every((item) => item.listingType === "accessory")) return undefined;
-  return value as unknown as OfflineCatalogSnapshot;
+  const snapshot = frozenJsonCopy(value) as unknown as OfflineCatalogSnapshot;
+  normalizedSnapshots.set(snapshot, snapshot);
+  return snapshot;
 }
 
 export function requireOfflineCatalogSnapshot(value: unknown): OfflineCatalogSnapshot {

@@ -1,6 +1,7 @@
 import { Suspense, lazy, useEffect, useState } from "react";
 import type { IconType } from "react-icons";
-import { FiActivity, FiAlertTriangle, FiArrowRight, FiBell, FiCheckCircle, FiChevronDown, FiCpu, FiDatabase, FiEdit3, FiInfo, FiLoader, FiMonitor, FiRefreshCw, FiSearch, FiShield, FiTag, FiTarget, FiTrendingUp, FiXCircle, FiZap } from "react-icons/fi";
+import { FiActivity, FiAlertTriangle, FiArrowRight, FiBell, FiCheckCircle, FiChevronDown, FiCpu, FiDatabase, FiEdit3, FiInfo, FiLoader, FiMonitor, FiRefreshCw, FiSearch, FiShield, FiTag, FiTarget, FiTrash2, FiTrendingUp, FiXCircle, FiZap } from "react-icons/fi";
+import "./home-view.css";
 import { buildPreflightFor } from "../shared/build-preflight";
 import type { AccessoryItem, BuildSelection, CompatibilityResult, Part, PartCategory, PartSelection, ServiceMeta } from "../shared/types";
 import { CATEGORY_LABELS, PART_CATEGORIES } from "../shared/types";
@@ -10,6 +11,9 @@ import type { SavedBuildVersionLocalShareEntry } from "../shared/saved-build-ver
 import type { SavedBuildMonitorAlternative } from "../shared/saved-build-monitor-alerts";
 import { savedBuildMonitorSummaryForDisplay, savedBuildMonitorTitleForDisplay } from "../shared/saved-build-monitor-copy";
 import { compatibilityDisplayStatusFor } from "../shared/compatibility-display-status";
+import { ACCESSORY_CATALOG_CACHE_STORAGE_KEY } from "../shared/accessory-catalog-cache";
+import { CATALOG_PICKER_CACHE_STORAGE_KEY } from "../shared/catalog-picker-cache";
+import { CATALOG_CACHE_CHANGED_EVENT, catalogCacheStatusFromStorage, type CatalogCacheStatus, type CatalogCacheStatusItem } from "../shared/catalog-cache-status";
 
 export type AlertCenterItem = {
   id: string;
@@ -37,6 +41,104 @@ function HomeAlertCenter({ items, unreadCount, hasBuildAlerts, hasWatchlistAlert
       </article>;
     })}</div>
     <div className="home-alerts-actions">{hasBuildAlerts && <button className="button button-light" type="button" data-testid="home-alert-open-history" onClick={onOpenHistory}><FiBell /> 저장한 견적 알림 보기</button>}{hasWatchlistAlerts && <button className="button button-light" type="button" data-testid="home-alert-open-watchlist" onClick={onOpenWatchlist}><FiTag /> 가격 추적 보기</button>}</div>
+  </section>;
+}
+
+type HomeCatalogCacheState = { status: CatalogCacheStatus; hasStoredData: boolean } | null;
+
+function readHomeCatalogCacheState(): HomeCatalogCacheState {
+  try {
+    const parts = window.localStorage.getItem(CATALOG_PICKER_CACHE_STORAGE_KEY);
+    const accessories = window.localStorage.getItem(ACCESSORY_CATALOG_CACHE_STORAGE_KEY);
+    const values = new Map([[CATALOG_PICKER_CACHE_STORAGE_KEY, parts], [ACCESSORY_CATALOG_CACHE_STORAGE_KEY, accessories]]);
+    return {
+      status: catalogCacheStatusFromStorage((key) => values.get(key)),
+      hasStoredData: parts !== null || accessories !== null
+    };
+  } catch {
+    return null;
+  }
+}
+
+function homeCacheFreshnessLabel(item: CatalogCacheStatusItem) {
+  if (item.count === 0) return "저장된 항목 없음";
+  if (item.freshness === "fresh") return "최근 저장";
+  if (item.freshness === "aging") return "확인한 지 오래됐어요";
+  if (item.freshness === "stale") return "오래된 목록";
+  return "저장 시점을 확인할 수 없어요";
+}
+
+function homeCacheSavedAtLabel(item: CatalogCacheStatusItem) {
+  if (!item.cachedAt) return "저장 시점을 확인할 수 없어요";
+  const date = new Date(item.cachedAt);
+  return Number.isNaN(date.getTime())
+    ? "저장 시점을 확인할 수 없어요"
+    : `마지막 저장 · ${date.toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" })}`;
+}
+
+function HomeCatalogCachePanel({ onToast }: { onToast: (message: string) => void }) {
+  const [state, setState] = useState<HomeCatalogCacheState | undefined>(() => typeof window === "undefined" ? undefined : readHomeCatalogCacheState());
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    const refresh = () => setState(readHomeCatalogCacheState());
+    refresh();
+    window.addEventListener("storage", refresh);
+    window.addEventListener(CATALOG_CACHE_CHANGED_EVENT, refresh);
+    window.addEventListener("focus", refresh);
+    return () => {
+      window.removeEventListener("storage", refresh);
+      window.removeEventListener(CATALOG_CACHE_CHANGED_EVENT, refresh);
+      window.removeEventListener("focus", refresh);
+    };
+  }, []);
+
+  function clearCache(kind: "parts" | "accessories" | "all") {
+    const label = kind === "parts" ? "핵심 부품 목록" : kind === "accessories" ? "주변 부품 목록" : "최근 불러온 부품 목록";
+    if (!window.confirm(`${label}을(를) 지울까요? 견적 초안·저장 견적·가격 추적은 그대로 남습니다.`)) return;
+    try {
+      if (kind === "parts" || kind === "all") window.localStorage.removeItem(CATALOG_PICKER_CACHE_STORAGE_KEY);
+      if (kind === "accessories" || kind === "all") window.localStorage.removeItem(ACCESSORY_CATALOG_CACHE_STORAGE_KEY);
+      window.dispatchEvent(new Event(CATALOG_CACHE_CHANGED_EVENT));
+      setState(readHomeCatalogCacheState());
+      setMessage(`${label}을(를) 지웠어요. 견적과 가격 추적은 그대로 남아 있습니다.`);
+      onToast("최근 부품 목록을 지웠어요. 견적과 가격 추적은 그대로예요.");
+    } catch {
+      setState(readHomeCatalogCacheState());
+      setMessage("저장된 부품 목록을 바꾸지 못했어요. 기기의 저장 공간을 확인해 주세요.");
+      onToast("부품 목록을 지우지 못했어요.");
+    }
+  }
+
+  const status = state?.status;
+  const cacheItems = status ? [status.parts, status.accessories] : [];
+  return <section className={`home-catalog-cache${status?.hasAny ? "" : " empty"}`} aria-label="이 기기에 저장된 부품 목록" data-testid="home-catalog-cache">
+    <div className="home-catalog-cache-heading">
+      <div>
+        <h2>최근 불러온 부품</h2>
+        <p>연결이 불안할 때 최근 목록을 다시 볼 수 있어요. 가격과 재고는 저장 시점과 다를 수 있습니다. 설치된 오프라인 카탈로그는 여기서 변경되지 않아요.</p>
+      </div>
+      {status?.hasAny && <span>{status.totalCount.toLocaleString("ko-KR")}개</span>}
+    </div>
+    {status?.hasAny ? <>
+      <div className="home-catalog-cache-grid">
+        {cacheItems.map((item) => <article className={`home-catalog-cache-item ${item.freshness}`} key={item.kind}>
+          <div><span>{item.label}</span><strong>{item.count.toLocaleString("ko-KR")}개</strong></div>
+          <em>{homeCacheFreshnessLabel(item)}</em>
+          <small>{homeCacheSavedAtLabel(item)}</small>
+          <button className="text-button" type="button" data-testid={`home-catalog-cache-clear-${item.kind}`} onClick={() => clearCache(item.kind)} disabled={item.count === 0}><FiTrash2 aria-hidden="true" /> 이 목록 지우기</button>
+        </article>)}
+      </div>
+    </> : state?.hasStoredData
+      ? <p className="home-catalog-cache-empty" role="status"><FiInfo aria-hidden="true" /> 저장된 목록을 읽을 수 없어요. 모두 지우면 다음에 목록을 다시 불러올 수 있습니다.</p>
+      : state === null
+        ? <p className="home-catalog-cache-empty" role="status"><FiInfo aria-hidden="true" /> 이 기기의 저장된 목록을 읽지 못했어요.</p>
+        : <p className="home-catalog-cache-empty"><FiInfo aria-hidden="true" /> 아직 저장된 부품 목록이 없어요. 부품 목록을 열면 최근 항목이 이 기기에 저장됩니다.</p>}
+    {state?.hasStoredData && <div className="home-catalog-cache-actions">
+      <button className="button button-light" type="button" data-testid="home-catalog-cache-clear-all" onClick={() => clearCache("all")}><FiTrash2 aria-hidden="true" /> 최근 부품 목록 모두 지우기</button>
+      <p><FiInfo aria-hidden="true" /> 최근 목록만 지웁니다. 견적 초안·저장 견적·가격 추적은 그대로 남습니다.</p>
+    </div>}
+    {message && <p className="home-catalog-cache-message" role="status"><FiCheckCircle aria-hidden="true" /> {message}</p>}
   </section>;
 }
 
@@ -178,7 +280,7 @@ export function MobileHomeAdditionalSelections({ build, partMap, accessoryMap }:
   </details>;
 }
 
-function MobileHomeView({ build, result, resultIsStale, partMap, accessoryMap, alertItems, alertUnreadCount, onStart, onGuidedStart, onGenerate, onDemo, onCompatibleDemo, onOpenResult, onOpenHistory, onOpenWatchlist }: { build: BuildSelection; result: CompatibilityResult | null; resultIsStale: boolean; partMap: ReadonlyMap<string, Part>; accessoryMap: ReadonlyMap<string, AccessoryItem>; alertItems: AlertCenterItem[]; alertUnreadCount: number; onStart: () => void; onGuidedStart: () => void; onGenerate: () => void; onDemo: () => void; onCompatibleDemo: () => void; onOpenResult: () => void; onOpenHistory: () => void; onOpenWatchlist: () => void }) {
+function MobileHomeView({ build, result, resultIsStale, partMap, accessoryMap, alertItems, alertUnreadCount, onStart, onGuidedStart, onGenerate, onDemo, onCompatibleDemo, onOpenResult, onOpenHistory, onOpenWatchlist, onToast }: { build: BuildSelection; result: CompatibilityResult | null; resultIsStale: boolean; partMap: ReadonlyMap<string, Part>; accessoryMap: ReadonlyMap<string, AccessoryItem>; alertItems: AlertCenterItem[]; alertUnreadCount: number; onStart: () => void; onGuidedStart: () => void; onGenerate: () => void; onDemo: () => void; onCompatibleDemo: () => void; onOpenResult: () => void; onOpenHistory: () => void; onOpenWatchlist: () => void; onToast: (message: string) => void }) {
   const selectedItemCount = PART_CATEGORIES.reduce((count, category) => count + selectionList(build, category).length, 0);
   const hasBuild = selectedItemCount > 0 || accessorySelections(build).length > 0;
   const resultReady = Boolean(result && !resultIsStale);
@@ -193,17 +295,17 @@ function MobileHomeView({ build, result, resultIsStale, partMap, accessoryMap, a
     ? "구성이 바뀌었어요. 호환 결과를 다시 확인해 주세요."
     : hasBuild
       ? "고른 부품을 확인하고, 나머지 구성을 이어가세요."
-      : "예산과 용도를 정하고, 내게 맞는 PC를 구성해요.");
+    : "용도와 예산을 정한 뒤, 부품을 고르고 호환성을 확인해요.");
   return <section className="mobile-home-view" aria-label="PC Supporter 모바일 홈">
     <div className="mobile-home-heading">
       <div><span className="mobile-kicker">내 견적</span><h1>내 PC</h1><p>{headingCopy}</p></div>
     </div>
-    <div className="mobile-primary-actions"><button className="mobile-primary-action" data-testid="mobile-home-primary-action" type="button" onClick={resultReady ? onOpenResult : hasBuild ? onStart : onGuidedStart}><FiSearch /><span>{resultReady ? "최근 견적 결과 보기" : hasBuild ? "견적 이어서 만들기" : "새 견적 시작하기"}</span><FiArrowRight /></button>{resultReady && <button className="mobile-secondary-action" type="button" onClick={onStart}><FiEdit3 /><span>견적 수정하기</span><FiArrowRight /></button>}</div>
+    <div className="mobile-primary-actions"><button className="mobile-primary-action" data-testid="mobile-home-primary-action" type="button" onClick={resultReady ? onOpenResult : hasBuild ? onStart : onGuidedStart}><FiSearch /><span>{resultReady ? "최근 견적 결과 보기" : hasBuild ? "견적 이어서 만들기" : "용도와 예산 정하기"}</span><FiArrowRight /></button>{resultReady && <button className="mobile-secondary-action" type="button" onClick={onStart}><FiEdit3 /><span>견적 수정하기</span><FiArrowRight /></button>}</div>
     {!hasBuild && !resultReady
       ? <section className="mobile-guided-entry" data-testid="mobile-home-guided-entry" aria-label="새 견적 안내">
-          <span className="mobile-kicker">처음부터 차근차근</span>
+          <span className="mobile-kicker">견적 진행 순서</span>
           <h2>용도와 예산부터 정해요.</h2>
-          <p>화면 크기와 게임·작업 용도에 맞춰 부품을 살펴볼 수 있어요.</p>
+          <p>게임·작업 용도와 화면에 맞는 부품을 살펴볼 수 있어요.</p>
           <ol className="mobile-guided-steps" aria-label="견적 진행 순서">
             <li><span>1</span>용도</li>
             <li><span>2</span>성능</li>
@@ -216,8 +318,12 @@ function MobileHomeView({ build, result, resultIsStale, partMap, accessoryMap, a
           <div className="mobile-build-list">{MOBILE_HOME_ROWS.map(({ label, category, Icon }) => { const row = mobileHomeRowState(build, result, resultIsStale, category, partMap); return <button className={`mobile-build-row ${row.tone}`} type="button" key={category} onClick={onStart}><span className="mobile-build-icon" aria-hidden="true"><Icon /></span><span className="mobile-build-copy"><strong>{label}</strong><small>{row.name}</small></span>{row.state && <span className={`mobile-row-state ${row.tone}`}>{row.state}</span>}<FiArrowRight className="mobile-build-arrow" aria-hidden="true" /></button>; })}</div>
           <MobileHomeAdditionalSelections build={build} partMap={partMap} accessoryMap={accessoryMap} />
         </section>}
-    <section className="mobile-next-steps" aria-label="견적 구성"><div className="mobile-section-heading"><div><span className="mobile-kicker">견적 구성</span><h2>다른 구성</h2></div><button type="button" className="mobile-section-link" onClick={onOpenHistory}>저장한 견적<FiArrowRight /></button></div><button className="mobile-recommend-card" data-testid="mobile-home-recommend" type="button" onClick={hasBuild ? onGenerate : onStart}><span className="mobile-recommend-icon">{hasBuild ? <FiZap /> : <FiEdit3 />}</span><span className="mobile-recommend-copy"><strong>{hasBuild ? "용도·예산으로 다시 구성하기" : "부품을 직접 선택하기"}</strong></span><FiArrowRight /></button></section>
+    <section className="mobile-next-steps" aria-label="다른 구성 방법"><div className="mobile-section-heading"><div><span className="mobile-kicker">구성 방법</span><h2>{hasBuild ? "다른 방법으로 구성" : "직접 구성"}</h2></div><button type="button" className="mobile-section-link" onClick={onOpenHistory}>저장한 견적<FiArrowRight /></button></div><button className="mobile-recommend-card" data-testid="mobile-home-recommend" type="button" onClick={hasBuild ? onGenerate : onStart}><span className="mobile-recommend-icon">{hasBuild ? <FiZap /> : <FiEdit3 />}</span><span className="mobile-recommend-copy"><strong>{hasBuild ? "용도·예산으로 다시 구성하기" : "부품 선택하기"}</strong>{!hasBuild && <small>원하는 부품을 선택하고 호환성을 확인해요.</small>}</span><FiArrowRight /></button></section>
     {alertItems.length > 0 && <section className="mobile-alert-preview" aria-label="모바일 알림 센터" data-testid="mobile-home-alert-center"><div className="mobile-section-heading"><div><h2>알림</h2></div>{alertUnreadCount > 0 && <span className="mobile-alert-badge">읽지 않은 알림 {alertUnreadCount}개</span>}</div><div className="mobile-alert-preview-list">{alertItems.slice(0, 2).map((item) => { const ItemIcon = item.kind === "alternative" ? FiTrendingUp : item.source === "watchlist" ? FiTag : FiBell; return <article className={`mobile-alert-preview-item ${item.kind}`} key={item.id}><span className="mobile-alert-preview-icon"><ItemIcon /></span><div><strong>{savedBuildMonitorTitleForDisplay(item.title)}</strong><p>{savedBuildMonitorSummaryForDisplay(item.message)}</p>{item.alternative && <small>{item.alternative.currentPartName} → {item.alternative.candidatePartName}{item.alternative.priceDeltaWon !== undefined && item.alternative.priceDeltaWon < 0 ? ` · ${Math.abs(item.alternative.priceDeltaWon).toLocaleString("ko-KR")}원 절약` : ""}</small>}</div></article>; })}</div><button className="mobile-alert-preview-action" type="button" onClick={() => alertItems[0].source === "watchlist" ? onOpenWatchlist() : onOpenHistory()}><FiBell /> 알림 자세히 보기 <FiArrowRight /></button></section>}
+    <details className="mobile-cache-disclosure" aria-label="이 기기에 저장된 정보">
+      <summary><span><FiDatabase aria-hidden="true" /> 이 기기에 저장된 정보</span><small>최근 부품 목록 관리</small><FiChevronDown aria-hidden="true" /></summary>
+      <HomeCatalogCachePanel onToast={onToast} />
+    </details>
     <details className="mobile-demo-tools"><summary>예시 구성 보기</summary><div><button type="button" onClick={onDemo}>문제 있는 예시 견적</button><button type="button" onClick={onCompatibleDemo}>문제 없는 예시 견적</button></div></details>
   </section>;
 }
@@ -226,7 +332,7 @@ export function HomeView({ meta, build, result, resultIsStale, partMap, accessor
   const localShareCount = budgetLadderShares.length + alternativeComparisonShares.length + savedBuildVersionShares.length;
   const hasAnySelection = PART_CATEGORIES.some((category) => selectionList(build, category).length > 0) || accessorySelections(build).length > 0;
   return <div className="home-page">
-    <MobileHomeView build={build} result={result} resultIsStale={resultIsStale} partMap={partMap} accessoryMap={accessoryMap} alertItems={alertItems} alertUnreadCount={alertUnreadCount} onStart={onStart} onGuidedStart={onGuidedStart} onGenerate={onGenerate} onDemo={onDemo} onCompatibleDemo={onCompatibleDemo} onOpenResult={onOpenResult} onOpenHistory={onOpenHistory} onOpenWatchlist={onOpenWatchlist} />
+    <MobileHomeView build={build} result={result} resultIsStale={resultIsStale} partMap={partMap} accessoryMap={accessoryMap} alertItems={alertItems} alertUnreadCount={alertUnreadCount} onStart={onStart} onGuidedStart={onGuidedStart} onGenerate={onGenerate} onDemo={onDemo} onCompatibleDemo={onCompatibleDemo} onOpenResult={onOpenResult} onOpenHistory={onOpenHistory} onOpenWatchlist={onOpenWatchlist} onToast={onToast} />
     <section className="hero-section">
       <div className="hero-copy">
         {hasAnySelection
@@ -242,11 +348,12 @@ export function HomeView({ meta, build, result, resultIsStale, partMap, accessor
     </section>
     <HomeAlertCenter items={alertItems} unreadCount={alertUnreadCount} hasBuildAlerts={hasBuildAlerts} hasWatchlistAlerts={hasWatchlistAlerts} onOpenHistory={onOpenHistory} onOpenWatchlist={onOpenWatchlist} />
     <details className="home-secondary-details" aria-label="홈 추가 정보">
-      <summary><span><FiInfo /> 저장한 견적·비교</span><small>{localShareCount > 0 ? `${localShareCount}개 저장해뒀어요` : "필요할 때 열어보세요"}</small><FiChevronDown /></summary>
+      <summary><span><FiInfo /> 저장한 견적·비교</span><small>{localShareCount > 0 ? `${localShareCount}개 · 부품 목록 보기` : "견적과 이 기기의 부품 목록"}</small><FiChevronDown /></summary>
       <div className="home-secondary-details-body">
         {budgetLadderShares.length > 0 && <Suspense fallback={null}><LazyHomeBudgetLadderSharePanel entries={budgetLadderShares} onCopy={onCopyBudgetLadderShare} onRemove={onRemoveBudgetLadderShare} onToast={onToastBudgetLadderShare} /></Suspense>}
         {alternativeComparisonShares.length > 0 && <Suspense fallback={null}><LazyHomeAlternativeComparisonSharePanel entries={alternativeComparisonShares} onCopy={onCopyAlternativeComparisonShare} onRemove={onRemoveAlternativeComparisonShare} onRevoke={onRevokeAlternativeComparisonShare} onToast={onToastAlternativeComparisonShare} /></Suspense>}
         {savedBuildVersionShares.length > 0 && <Suspense fallback={null}><LazyHomeSavedBuildVersionSharePanel entries={savedBuildVersionShares} currentCatalogSnapshotAt={meta?.catalogUpdatedAt} onCopy={onCopySavedBuildVersionShare} onRemove={onRemoveSavedBuildVersionShare} onRevoke={onRevokeSavedBuildVersionShare} onToast={onToastSavedBuildVersionShare} /></Suspense>}
+        <HomeCatalogCachePanel onToast={onToast} />
         <section className="feature-grid">
           <FeatureCard Icon={FiSearch} title="부품 고르기" description="부품 종류와 주요 사양을 비교해 견적에 담아 보세요." />
           <FeatureCard Icon={FiActivity} title="호환 확인" description="선택한 부품의 호환 결과를 확인합니다." />

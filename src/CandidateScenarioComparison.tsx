@@ -34,7 +34,7 @@ type CandidatePriceHistory = {
   };
 };
 
-type CandidateScenarioShareResult = { id: string; url: string; ownerToken: string; expiresAt?: string };
+type CandidateScenarioShareResult = { id: string; url: string; ownerToken?: string; owned?: boolean; ownerManaged?: boolean; expiresAt?: string };
 type CandidateScenarioShareHandler = (candidates: AlternativeComparisonCandidate[], context?: { name?: string; category?: string; currentPartName?: string; currentPartSummary?: string; currentPartPrice?: string }) => Promise<CandidateScenarioShareResult | undefined>;
 type CandidateScenarioRevokeHandler = (share: CandidateScenarioShareResult) => Promise<boolean>;
 

@@ -20,6 +20,7 @@ import { catalogWatchSnapshotMatches, sortCatalogWatchSnapshots } from "../share
 import type { CatalogWatchlistStatusFilter, CatalogWatchlistSort } from "../shared/catalog-watchlist-view";
 import { LOCAL_IMPORT_MAX_BYTES } from "../shared/file-import-limits";
 import { api } from "./api";
+import { forgetSavedWatchlistOwnerToken, hasOwnerSessionResource, markOwnerSessionResource, ownerRequestOptions, ownerSessionCreateOptions, ownerSessionModeSupported, readSavedWatchlistOwnerToken, rememberSavedWatchlistOwnerToken, removeOwnerSessionResource, retryOwnerSessionMigration } from "./owner-session";
 import { safeExternalUrl } from "./safe-source-url";
 import { eul } from "../shared/josa";
 
@@ -324,8 +325,13 @@ export function CatalogChangeHistoryPanel({ records, loading, error, historyLimi
     const isCurrent = () => mountedRef.current && serverMutationRequestRef.current === requestVersion && serverMutationContextKeyRef.current === requestContextKey;
     setSavingWatchlist(true);
     try {
-      const saved = await api<SavedCatalogWatchlist>("/api/watchlists", { method: "POST", body: JSON.stringify({ name: watchlistName.trim() || "관심 가격 목록", entries: watchEntries, nearLowThresholdPercent: watchThreshold, expiresInDays: watchlistExpiryDays === "never" ? undefined : watchlistExpiryDays }) });
+      const saved = await api<SavedCatalogWatchlist & ({ ownerManaged: true; ownerToken?: never } | { ownerManaged?: false; ownerToken: string })>("/api/watchlists", { method: "POST", ...ownerSessionCreateOptions(), body: JSON.stringify({ name: watchlistName.trim() || "관심 가격 목록", entries: watchEntries, nearLowThresholdPercent: watchThreshold, expiresInDays: watchlistExpiryDays === "never" ? undefined : watchlistExpiryDays }) });
       if (!isCurrent()) return;
+      if (saved.ownerManaged) markOwnerSessionResource("watchlist", saved.id);
+      if (saved.ownerToken) {
+        rememberSavedWatchlistOwnerToken(saved.id, saved.ownerToken);
+        if (ownerSessionModeSupported()) void retryOwnerSessionMigration().catch(() => undefined);
+      }
       const url = `${window.location.origin}/watchlist/${saved.id}`;
       setSavedWatchlistUrl(url);
       setSavedWatchlistId(saved.id);
@@ -361,8 +367,12 @@ export function CatalogChangeHistoryPanel({ records, loading, error, historyLimi
     const isCurrent = () => mountedRef.current && serverMutationRequestRef.current === requestVersion && serverMutationContextKeyRef.current === requestContextKey;
     setRevokingWatchlist(true);
     try {
-      await api(`/api/watchlists/${encodeURIComponent(savedWatchlistId)}`, { method: "DELETE" });
+      const ownerToken = readSavedWatchlistOwnerToken(savedWatchlistId);
+      const ownerManaged = hasOwnerSessionResource("watchlist", savedWatchlistId);
+      await api(`/api/watchlists/${encodeURIComponent(savedWatchlistId)}`, { method: "DELETE", ...ownerRequestOptions("watchlist", savedWatchlistId, { ownerToken, owned: ownerManaged }) });
       if (!isCurrent()) return;
+      forgetSavedWatchlistOwnerToken(savedWatchlistId);
+      removeOwnerSessionResource("watchlist", savedWatchlistId);
       setSavedWatchlistUrl(null);
       setSavedWatchlistId(null);
       setSavedWatchlistExpiresAt(null);

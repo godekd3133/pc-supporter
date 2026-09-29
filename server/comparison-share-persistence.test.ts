@@ -56,6 +56,7 @@ describe("alternative comparison persistence API", () => {
       });
       const createdPayload = await created.json() as Record<string, any>;
       expect(created.status).toBe(201);
+      expect(created.headers.get("cache-control")).toBe("private, no-store");
       expect(createdPayload.ownerToken).toEqual(expect.any(String));
       expect(createdPayload.ownerToken.length).toBeGreaterThanOrEqual(40);
       expect(createdPayload.catalogSnapshotAt).toBe("2026-09-02T01:02:03.000Z");

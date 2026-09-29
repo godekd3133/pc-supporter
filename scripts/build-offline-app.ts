@@ -206,6 +206,7 @@ async function main() {
   const options = parseArgs(process.argv.slice(2));
   const snapshotDirectory = await canonicalPathWithoutSymlinks(options.sourceDirectory, false);
   const snapshot = await readAllowedOfflineSnapshot(snapshotDirectory);
+  const offlineBuildRevision = randomUUID();
   const snapshotContent = `${JSON.stringify(snapshot)}\n`;
   assertOfflineCatalogAssetBudget(Buffer.byteLength(snapshotContent, "utf8"));
   const outputRelative = options.target === "mobile" ? MOBILE_OUTPUT : WEB_OUTPUT;
@@ -232,6 +233,7 @@ async function main() {
     PC_SUPPORTER_BUILD_MODE: "local-offline",
     PC_SUPPORTER_BUILD_OUT_DIR: relativeWebDirectory,
     PC_SUPPORTER_OFFLINE_BUNDLE_FILE: bundlePath,
+    PC_SUPPORTER_OFFLINE_BUILD_REVISION: offlineBuildRevision,
     PC_SUPPORTER_VITE_ENV_DIR: envDirectory,
     VITE_API_BASE_URL: ""
   };
@@ -251,28 +253,40 @@ async function main() {
         PC_SUPPORTER_BUILD_MODE: "local-offline",
         PC_SUPPORTER_BUILD_OUT_DIR: relativeWebDirectory,
         PC_SUPPORTER_OFFLINE_BUNDLE_FILE: bundlePath,
+        PC_SUPPORTER_OFFLINE_BUILD_REVISION: offlineBuildRevision,
         PC_SUPPORTER_VITE_ENV_DIR: envDirectory,
         CAPACITOR_WEB_DIR: stagingOutput,
         VITE_API_BASE_URL: ""
       };
       const nativeAssets = await syncCapacitorAssetsInTemporaryProject(temporaryRoot, stagingOutput, mobileEnvironment);
-      const [expectedManifest, expectedCatalog, expectedIndex] = await Promise.all([
+      const [expectedManifest, expectedCatalog, expectedIndex, expectedServiceWorker] = await Promise.all([
         readFile(resolve(stagingOutput, "offline-manifest.json")),
         readFile(resolve(stagingOutput, "offline-catalog.json")),
-        readFile(resolve(stagingOutput, "index.html"))
+        readFile(resolve(stagingOutput, "index.html")),
+        readFile(resolve(stagingOutput, "service-worker.js"))
       ]);
       for (const assets of nativeAssets) {
         const nativeManifestPath = resolve(assets.source, "offline-manifest.json");
         const nativeCatalogPath = resolve(assets.source, "offline-catalog.json");
         const nativeIndexPath = resolve(assets.source, "index.html");
+        const nativeServiceWorkerPath = resolve(assets.source, "service-worker.js");
         const nativeManifestInfo = await lstat(nativeManifestPath).catch(() => undefined);
         const nativeCatalogInfo = await lstat(nativeCatalogPath).catch(() => undefined);
         const nativeIndexInfo = await lstat(nativeIndexPath).catch(() => undefined);
-        if (!nativeManifestInfo?.isFile() || !nativeCatalogInfo?.isFile() || !nativeIndexInfo?.isFile()) fail(`Capacitor sync가 로컬 manifest, 카탈로그, 앱 shell을 ${assets.platform} public assets에 복사하지 못했습니다.`);
+        const nativeServiceWorkerInfo = await lstat(nativeServiceWorkerPath).catch(() => undefined);
+        if (!nativeManifestInfo?.isFile() || !nativeCatalogInfo?.isFile() || !nativeIndexInfo?.isFile() || !nativeServiceWorkerInfo?.isFile()) fail(`Capacitor sync가 로컬 manifest, 카탈로그, 앱 shell과 service worker를 ${assets.platform} public assets에 복사하지 못했습니다.`);
         const nativeManifest = JSON.parse(await readFile(nativeManifestPath, "utf8")) as { revision?: string };
         if (nativeManifest.revision !== snapshot.manifest.revision) fail(`${assets.platform} public assets의 snapshot revision이 build manifest와 일치하지 않습니다.`);
-        const [nativeManifestBytes, nativeCatalogBytes, nativeIndexBytes] = await Promise.all([readFile(nativeManifestPath), readFile(nativeCatalogPath), readFile(nativeIndexPath)]);
-        if (!nativeManifestBytes.equals(expectedManifest) || !nativeCatalogBytes.equals(expectedCatalog) || !nativeIndexBytes.equals(expectedIndex)) {
+        const [nativeManifestBytes, nativeCatalogBytes, nativeIndexBytes, nativeServiceWorkerBytes] = await Promise.all([
+          readFile(nativeManifestPath),
+          readFile(nativeCatalogPath),
+          readFile(nativeIndexPath),
+          readFile(nativeServiceWorkerPath)
+        ]);
+        if (!nativeManifestBytes.equals(expectedManifest)
+          || !nativeCatalogBytes.equals(expectedCatalog)
+          || !nativeIndexBytes.equals(expectedIndex)
+          || !nativeServiceWorkerBytes.equals(expectedServiceWorker)) {
           fail(`${assets.platform} public assets가 검사한 web bundle과 byte 단위로 일치하지 않습니다.`);
         }
       }
@@ -286,6 +300,8 @@ async function main() {
       target: options.target,
       artifactKind: options.target === "mobile" ? "capacitor-synced-native-web-assets" : "vite-web-assets",
       snapshotRevision: snapshot.manifest.revision,
+      clientBuildRevision: offlineBuildRevision,
+      offlineCachePolicy: "revisioned-atomic-shell-catalog-v1",
       snapshotAt: snapshot.manifest.snapshotAt,
       privateRecommendationEvidenceIncluded: false,
       remoteApiBaseUrlConfigured: false,

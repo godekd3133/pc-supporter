@@ -1,9 +1,11 @@
+import { readFileSync } from "node:fs";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { gzipSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
-import { assertFirstRouteBudget, measureStaticImportClosure, resolveStaticImportClosure } from "./verify-client-bundle.mjs";
+import { createContentSecurityPolicy } from "../shared/content-security-policy";
+import { assertContentSecurityPolicy, assertFirstRouteBudget, assertNoFirstRouteOnboardingSelectors, measureStaticImportClosure, resolveStaticImportClosure } from "./verify-client-bundle.mjs";
 
 const indexHtml = `<!doctype html><html><head>
   <link rel="stylesheet" href="/assets/root.css">
@@ -45,6 +47,41 @@ function createManifest() {
 }
 
 describe("first-route client asset closure", () => {
+  it("requires a script-hash CSP meta policy and keeps offline policies origin-free", () => {
+    const remotePolicy = createContentSecurityPolicy({ connectOrigins: ["https://api.example.com"] });
+    const sourceHtml = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+    const themeScript = sourceHtml.match(/<script>([\s\S]*?)<\/script>/i)?.[1];
+    expect(themeScript).toBeTruthy();
+    const remoteHtml = `<html><head><meta http-equiv="Content-Security-Policy" content="${remotePolicy}"><script>${themeScript!}</script></head></html>`;
+    expect(assertContentSecurityPolicy(remoteHtml, false)).toBe(remotePolicy);
+
+    const offlinePolicy = createContentSecurityPolicy({ allowRemoteAssets: false });
+    const offlineHtml = `<html><head><meta http-equiv="Content-Security-Policy" content="${offlinePolicy}"><script>${themeScript!}</script></head></html>`;
+    expect(assertContentSecurityPolicy(offlineHtml, true)).toBe(offlinePolicy);
+    expect(() => assertContentSecurityPolicy("<html><head></head></html>", false)).toThrow("exactly one Content-Security-Policy meta tag");
+    expect(() => assertContentSecurityPolicy(`<meta http-equiv="Content-Security-Policy" content="${offlinePolicy}; frame-ancestors 'none'"><script>${themeScript!}</script>`, true))
+      .toThrow("frame-ancestors must be delivered as an HTTP response header");
+    expect(() => assertContentSecurityPolicy(`<script>${themeScript!}</script><meta http-equiv="Content-Security-Policy" content="${offlinePolicy}">`, true))
+      .toThrow("must appear before script and link resources");
+  });
+
+  it("keeps /start-only selectors out of global and first-route CSS", () => {
+    const globalStyles = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+    expect(() => assertNoFirstRouteOnboardingSelectors([{ name: "src/styles.css", contents: globalStyles }])).not.toThrow();
+    expect(() => assertNoFirstRouteOnboardingSelectors([{
+      name: "assets/index.css",
+      contents: ".app-shell { display: flex; } .route-stage { min-width: 0; } .button { cursor: pointer; }"
+    }])).not.toThrow();
+    expect(() => assertNoFirstRouteOnboardingSelectors([{
+      name: "assets/index.css",
+      contents: ".onboarding-page { max-width: 520px; }"
+    }])).toThrow("first-route CSS must not contain /start-only selectors: assets/index.css: .onboarding-page");
+    expect(() => assertNoFirstRouteOnboardingSelectors([{
+      name: "assets/index.css",
+      contents: ".app-shell:has(.route-stage-start) .page-container { padding-bottom: 0; }"
+    }])).toThrow("assets/index.css: .route-stage-start");
+  });
+
   it("deduplicates the entry and first rendered Home route graphs while preserving lazy boundaries", async () => {
     const outputDirectory = await mkdtemp(join(tmpdir(), "pc-supporter-client-closure-"));
     try {

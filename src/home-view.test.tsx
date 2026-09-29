@@ -82,6 +82,11 @@ describe("mobile home build summary", () => {
 
     expect(primaryActionIndex).toBeGreaterThan(-1);
     expect(primaryActionIndex).toBeLessThan(guidedEntryIndex);
+    expect(markup).toContain(">용도와 예산 정하기</span>");
+    expect(markup).toContain('aria-label="다른 구성 방법"');
+    expect(markup).toContain("<h2>직접 구성</h2>");
+    expect(markup).toContain(">부품 선택하기</strong>");
+    expect(markup).toContain("원하는 부품을 선택하고 호환성을 확인해요.");
     expect(markup).toContain('aria-label="견적 진행 순서"');
     expect(markup).toContain("용도와 예산부터 정해요.");
     expect(markup).toContain("1</span>용도");

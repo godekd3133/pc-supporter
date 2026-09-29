@@ -9,6 +9,7 @@ import { seedAccessories } from "../../server/seed-accessories";
 import { seedCatalog } from "../../server/seed-catalog";
 import { projectOfflineAccessory, projectOfflinePart } from "../../scripts/offline-snapshot";
 import { offlineApiRequest } from "./offline-api";
+import { offlineCatalogSnapshotFromUnknown } from "../../shared/offline-catalog";
 import type { OfflineCatalogSnapshot } from "../../shared/offline-catalog";
 
 const snapshotAt = "2026-09-24T00:00:00.000Z";
@@ -53,9 +54,10 @@ afterEach(() => {
 });
 
 describe("local offline API", () => {
-  it("searches and opens bundled parts with the same basic category, query, price, and sort contract", async () => {
+  it("searches and opens parts from a normalized snapshot with the same category, query, price, and sort contract", async () => {
+    const normalizedSnapshot = offlineCatalogSnapshotFromUnknown(fixtureSnapshot)!;
     const query = new URLSearchParams({ category: "cpu", q: "AMD", brand: "AMD", quality: "all", freshness: "all", priceStatus: "all", listingPolicy: "retail_only", sort: "name", limit: "5", offset: "0" });
-    const response = await offlineApiRequest<{ items: Array<{ id: string; dataFreshness: string }>; total: number }>(`/api/parts?${query}`, undefined, fixtureSnapshot, testNow);
+    const response = await offlineApiRequest<{ items: Array<{ id: string; dataFreshness: string }>; total: number }>(`/api/parts?${query}`, undefined, normalizedSnapshot, testNow);
     const expected = seedCatalog.filter((part) => part.category === "cpu"
       && `${part.name} ${part.brand ?? ""} ${part.model ?? ""}`.toLocaleLowerCase("ko-KR").includes("amd")
       && part.brand?.toLocaleLowerCase("ko-KR").includes("amd"))
@@ -64,7 +66,7 @@ describe("local offline API", () => {
     expect(response.items.map((part) => part.id)).toEqual(expected.slice(0, 5).map((part) => part.id));
     expect(response.items[0]?.dataFreshness).toBe(classifyDataFreshness(expected[0]?.updatedAt, testNow));
 
-    const detail = await offlineApiRequest<typeof seedCatalog[number] & { dataFreshness: string }>(`/api/parts/${encodeURIComponent(expected[0]!.id)}`, undefined, fixtureSnapshot, testNow);
+    const detail = await offlineApiRequest<typeof seedCatalog[number] & { dataFreshness: string }>(`/api/parts/${encodeURIComponent(expected[0]!.id)}`, undefined, normalizedSnapshot, testNow);
     expect(detail.id).toBe(expected[0]?.id);
     expect(detail.dataFreshness).toBe(classifyDataFreshness(expected[0]?.updatedAt, testNow));
   });

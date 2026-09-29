@@ -195,8 +195,8 @@ export function countAccessories(items: AccessoryItem[], query: string | undefin
   return filterAccessories(items, query, options).length;
 }
 
-export async function accessoryMeta() {
-  const items = await loadAccessories();
+export async function accessoryMeta(snapshotItems?: AccessoryItem[], snapshotUpdatedAt?: string) {
+  const items = snapshotItems ?? await loadAccessories();
   const itemsByCategory = new Map(ACCESSORY_CATEGORIES.map((category) => [category, [] as AccessoryItem[]]));
   const accessoryCategoryQualityCounts = Object.fromEntries(
     ACCESSORY_CATEGORIES.map((category) => [category, Object.fromEntries(DATA_QUALITY_VALUES.map((quality) => [quality, 0])) as Record<DataQuality, number>])
@@ -223,7 +223,7 @@ export async function accessoryMeta() {
       priced,
       unpriced: items.length - priced
     },
-    accessoryUpdatedAt: currentAccessoryUpdatedAt()
+    accessoryUpdatedAt: snapshotUpdatedAt ?? currentAccessoryUpdatedAt()
   };
 }
 
@@ -289,13 +289,13 @@ export function accessoryCoverageSnapshotFor(stored: AccessoryCoverageSnapshot, 
   };
 }
 
-export async function readAccessoryCoverage(): Promise<AccessoryCoverageSnapshot> {
+export async function readAccessoryCoverage(snapshotItems?: AccessoryItem[]): Promise<AccessoryCoverageSnapshot> {
   const mode = await persistenceMode();
   const [stored, items] = await Promise.all([
     mode === "postgres"
       ? readAccessoryCoverageRecord()
       : readJson<AccessoryCoverageSnapshot>(ACCESSORY_COVERAGE_PATH, { updatedAt: "", categories: [] }),
-    loadAccessories()
+    snapshotItems ? Promise.resolve(snapshotItems) : loadAccessories()
   ]);
   return accessoryCoverageSnapshotFor(stored, items);
 }

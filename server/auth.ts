@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { NextFunction, Request, RequestHandler, Response } from "express";
+import { requireAdminRequestOrigin } from "./origin-policy";
 
 const COOKIE_NAME = "pc_supporter_admin";
 const SESSION_TTL_SECONDS = 60 * 60 * 8;
@@ -124,7 +125,7 @@ export const requireAdmin: RequestHandler = (request, response, next: NextFuncti
     return;
   }
   if (isAdminAuthenticated(request)) {
-    next();
+    requireAdminRequestOrigin(request, response, next);
     return;
   }
   response.status(401).json({ error: "관리자 로그인이 필요합니다.", code: "ADMIN_AUTH_REQUIRED" });

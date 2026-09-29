@@ -18,7 +18,7 @@ import type { SavedBuildLiveCheck } from "./SavedBuildComparisonDecision";
 import { api } from "./api";
 import type { BrowserNotificationPermission } from "./browser-notification";
 import { savedBuildMonitorAutoRefreshEnabledFromStorage, savedBuildMonitorAutoRefreshMinutesFromStorage } from "./saved-build-monitor-storage";
-import { Suspense, useEffect, useMemo, useRef, useState, lazy } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState, useSyncExternalStore, lazy } from "react";
 import { FiActivity, FiAlertTriangle, FiArrowLeft, FiCheckCircle, FiClock, FiCopy, FiCpu, FiDownload, FiEdit3, FiExternalLink, FiGitBranch, FiInfo, FiKey, FiLayers, FiLoader, FiMoreHorizontal, FiPlus, FiRefreshCw, FiSave, FiServer, FiShield, FiTrash2, FiTool, FiXCircle, FiZap } from "react-icons/fi";
 import { formatPriceDelta, formatWon } from "./app-format";
 import { type SavedBuildOpenFocus } from "./app-types";
@@ -26,6 +26,7 @@ import { accessorySelections, selectionList } from "./build-edit";
 import { CategoryIcon } from "./part-visuals";
 import { currentDraftComparisonFor } from "./result-shared";
 import { readSavedBuildOwnerToken } from "./saved-build-storage";
+import { hasOwnerSessionResource, ownerRequestOptions, ownerSessionResourcesSnapshot, subscribeOwnerSessionResources } from "./owner-session";
 import { SavedBuildCheckBadge, SavedBuildCheckTimeline, myPcAssetReportFor, savedAccessoryLineText, savedCheckDriftText, savedCheckRiskText, savedCheckStatusText, savedCoreLineText, savedPreferenceText, savedPriceText } from "./SavedCheckTimeline";
 
 const LazySavedBuildPriorityPanel = lazy(() => import("./SavedBuildInsights").then((module) => ({ default: module.SavedBuildPriorityPanel })));
@@ -295,6 +296,7 @@ export function SavedBuildVersionPanel({ groups, openingBuildId, onOpen }: { gro
 }
 
 export function HistoryView({ builds, currentBuild, currentPreferences, partMap, accessoryMap, monitorAlerts, onMonitorAlertsChange, browserNotificationPermission, browserNotificationEnabled, onRequestBrowserNotifications, onBrowserNotificationsEnabledChange, onBack, onOpen, onRefreshSavedBuilds, onStart, onRevoke, onEditMetadata, revokingShare, onRecordCheck, recordingCheckId, openingBuildId, onShareVersionComparison, onSaveVersion, onOpenRecoverOwnership, onIssueRecoveryCode, onToggleMyPc, myPcBusyId, recoveryCodeBusy, onToast }: { builds: SavedBuild[]; currentBuild: BuildSelection; currentPreferences: RecommendationPreferences; partMap: ReadonlyMap<string, Part>; accessoryMap: ReadonlyMap<string, AccessoryItem>; monitorAlerts: SavedBuildMonitorAlert[]; onMonitorAlertsChange: (alerts: SavedBuildMonitorAlert[]) => void; browserNotificationPermission: BrowserNotificationPermission; browserNotificationEnabled: boolean; onRequestBrowserNotifications: () => Promise<void>; onBrowserNotificationsEnabledChange: (enabled: boolean) => void; onBack: () => void; onOpen: (saved: SavedBuild, focus?: SavedBuildOpenFocus) => void; onRefreshSavedBuilds: () => Promise<boolean>; onStart: () => void; onRevoke: (id: string) => void; onEditMetadata: (saved: SavedBuild) => void; revokingShare: boolean; onRecordCheck: (id: string) => void; recordingCheckId: string | null; openingBuildId: string | null; onShareVersionComparison: (before: SavedBuild, after: SavedBuild) => void | Promise<void>; onSaveVersion?: (saved: SavedBuild) => void; onOpenRecoverOwnership: (saved?: SavedBuild) => void; onIssueRecoveryCode: (saved: SavedBuild) => void; onToggleMyPc: (saved: SavedBuild) => Promise<void>; myPcBusyId: string | null; recoveryCodeBusy: boolean; onToast: (message: string) => void }) {
+  const ownerSessionResources = useSyncExternalStore(subscribeOwnerSessionResources, ownerSessionResourcesSnapshot, ownerSessionResourcesSnapshot);
   const [compareIds, setCompareIds] = useState<string[]>([]);
   const [historyDetailsOpen, setHistoryDetailsOpen] = useState(false);
   const [purchaseProgressFilter, setPurchaseProgressFilter] = useState<SavedBuildPurchaseProgressFilter>("all");
@@ -329,7 +331,7 @@ export function HistoryView({ builds, currentBuild, currentPreferences, partMap,
   priorityActionContextKeyRef.current = priorityActionContextKey;
   const currentDraft = currentDraftComparisonFor(currentBuild, currentPreferences, partMap, accessoryMap);
   const availableBuildIds = useMemo(() => new Set(builds.map((saved) => saved.id)), [builds]);
-  const ownedBuilds = useMemo(() => builds.filter((saved) => Boolean(readSavedBuildOwnerToken(saved.id))), [builds]);
+  const ownedBuilds = useMemo(() => builds.filter((saved) => Boolean(readSavedBuildOwnerToken(saved.id)) || hasOwnerSessionResource("build", saved.id)), [builds, ownerSessionResources]);
   const ownedBuildKey = ownedBuilds.map((saved) => saved.id).join(",");
   const serverMonitorContextKey = ownedBuilds.map((saved) => `${saved.id}:${saved.updatedAt}`).join("|");
   serverMonitorContextKeyRef.current = serverMonitorContextKey;
@@ -423,9 +425,10 @@ export function HistoryView({ builds, currentBuild, currentPreferences, partMap,
     setServerMonitorStates(Object.fromEntries(ownedBuilds.map((build) => [build.id, { status: "loading" as const }])));
     void Promise.all(ownedBuilds.map(async (build) => {
       const token = readSavedBuildOwnerToken(build.id);
-      if (!token) return [build.id, { status: "error" as const, message: "이 브라우저에서 견적 소유권을 확인할 수 없습니다." }] as const;
+      const owned = hasOwnerSessionResource("build", build.id);
+      if (!token && !owned) return [build.id, { status: "error" as const, message: "이 브라우저에서 견적 소유권을 확인할 수 없습니다." }] as const;
       try {
-        const value = await api<SavedBuildMonitorSubscriptionResponse>(`/api/builds/${encodeURIComponent(build.id)}/monitor`, { headers: { "X-Share-Owner-Token": token }, retry: 1 });
+        const value = await api<SavedBuildMonitorSubscriptionResponse>(`/api/builds/${encodeURIComponent(build.id)}/monitor`, { ...ownerRequestOptions("build", build.id, { ownerToken: token, owned }), retry: 1 });
         return [build.id, { status: "ready" as const, value }] as const;
       } catch (error: unknown) {
         return [build.id, { status: "error" as const, message: error instanceof Error ? error.message : "견적 상태를 불러오지 못했어요." }] as const;
@@ -591,7 +594,8 @@ export function HistoryView({ builds, currentBuild, currentPreferences, partMap,
   async function configureServerMonitor(build: SavedBuild, enabled: boolean, intervalMinutes: SavedBuildServerMonitorInterval, alertPolicy: SavedBuildServerMonitorAlertPolicy) {
     if (serverMonitorBusyBuildId) return;
     const token = readSavedBuildOwnerToken(build.id);
-    if (!token) {
+    const ownerManaged = hasOwnerSessionResource("build", build.id);
+    if (!token && !ownerManaged) {
       onToast("이 브라우저에서 견적을 관리할 수 없습니다. 복구 코드를 사용해 주세요.");
       return;
     }
@@ -602,11 +606,11 @@ export function HistoryView({ builds, currentBuild, currentPreferences, partMap,
     const isCurrent = () => serverMonitorMutationVersionRef.current === mutationVersion && serverMonitorContextKeyRef.current === contextKey;
     setServerMonitorBusyBuildId(build.id);
     try {
-      const configured = await api<SavedBuildMonitorSubscriptionResponse>(`/api/builds/${encodeURIComponent(build.id)}/monitor`, { method: "PUT", headers: { "X-Share-Owner-Token": token }, body: JSON.stringify({ enabled, intervalMinutes, alertPolicy }), retry: 0 });
+      const configured = await api<SavedBuildMonitorSubscriptionResponse>(`/api/builds/${encodeURIComponent(build.id)}/monitor`, { method: "PUT", ...ownerRequestOptions("build", build.id, { ownerToken: token, owned: ownerManaged }), body: JSON.stringify({ enabled, intervalMinutes, alertPolicy }), retry: 0 });
       if (!isCurrent()) return;
       applyServerMonitorResponse(configured);
       if (enabled && !wasEnabled) {
-        const checked = await api<SavedBuildMonitorSubscriptionResponse>(`/api/builds/${encodeURIComponent(build.id)}/monitor/run`, { method: "POST", headers: { "X-Share-Owner-Token": token }, retry: 0 });
+        const checked = await api<SavedBuildMonitorSubscriptionResponse>(`/api/builds/${encodeURIComponent(build.id)}/monitor/run`, { method: "POST", ...ownerRequestOptions("build", build.id, { ownerToken: token, owned: ownerManaged }), retry: 0 });
         if (!isCurrent()) return;
         applyServerMonitorResponse(checked);
       }
@@ -621,7 +625,8 @@ export function HistoryView({ builds, currentBuild, currentPreferences, partMap,
   async function runServerMonitorNow(build: SavedBuild) {
     if (serverMonitorBusyBuildId) return;
     const token = readSavedBuildOwnerToken(build.id);
-    if (!token) {
+    const ownerManaged = hasOwnerSessionResource("build", build.id);
+    if (!token && !ownerManaged) {
       onToast("이 브라우저에서 견적을 관리할 수 없습니다. 복구 코드를 사용해 주세요.");
       return;
     }
@@ -630,7 +635,7 @@ export function HistoryView({ builds, currentBuild, currentPreferences, partMap,
     const isCurrent = () => serverMonitorMutationVersionRef.current === mutationVersion && serverMonitorContextKeyRef.current === contextKey;
     setServerMonitorBusyBuildId(build.id);
     try {
-      const checked = await api<SavedBuildMonitorSubscriptionResponse>(`/api/builds/${encodeURIComponent(build.id)}/monitor/run`, { method: "POST", headers: { "X-Share-Owner-Token": token }, retry: 0 });
+      const checked = await api<SavedBuildMonitorSubscriptionResponse>(`/api/builds/${encodeURIComponent(build.id)}/monitor/run`, { method: "POST", ...ownerRequestOptions("build", build.id, { ownerToken: token, owned: ownerManaged }), retry: 0 });
       if (!isCurrent()) return;
       applyServerMonitorResponse(checked);
       if (isCurrent()) onToast(`${build.name} 견적 정보를 업데이트했어요.`);
@@ -649,9 +654,10 @@ export function HistoryView({ builds, currentBuild, currentPreferences, partMap,
     for (const alert of alerts) grouped.set(alert.buildId, [...(grouped.get(alert.buildId) ?? []), alert.id]);
     const results = await Promise.all([...grouped.entries()].map(async ([buildId, alertIds]) => {
       const token = readSavedBuildOwnerToken(buildId);
-      if (!token) return undefined;
+      const ownerManaged = hasOwnerSessionResource("build", buildId);
+      if (!token && !ownerManaged) return undefined;
       try {
-        const value = await api<SavedBuildMonitorSubscriptionResponse & { updated: number }>(`/api/builds/${encodeURIComponent(buildId)}/monitor/alerts/${action}`, { method: "POST", headers: { "X-Share-Owner-Token": token }, body: JSON.stringify({ alertIds }), retry: 0 });
+        const value = await api<SavedBuildMonitorSubscriptionResponse & { updated: number }>(`/api/builds/${encodeURIComponent(buildId)}/monitor/alerts/${action}`, { method: "POST", ...ownerRequestOptions("build", buildId, { ownerToken: token, owned: ownerManaged }), body: JSON.stringify({ alertIds }), retry: 0 });
         return value;
       } catch {
         return null;
@@ -723,7 +729,8 @@ export function HistoryView({ builds, currentBuild, currentPreferences, partMap,
     }
     if (currentState?.status === "loading") return;
     const token = readSavedBuildOwnerToken(saved.id);
-    if (!token) {
+    const ownerManaged = hasOwnerSessionResource("build", saved.id);
+    if (!token && !ownerManaged) {
       onToast("이 견적의 설명 변경 이력을 조회할 수 있는 소유 토큰이 이 브라우저에 없습니다.");
       return;
     }
@@ -732,7 +739,7 @@ export function HistoryView({ builds, currentBuild, currentPreferences, partMap,
     const isCurrent = () => metadataHistoryRequestVersionRef.current[saved.id] === requestVersion;
     setMetadataHistoryStates((current) => ({ ...current, [saved.id]: { status: "loading" } }));
     try {
-      const value = await api<SavedBuildMetadataHistoryResponse>(`/api/builds/${encodeURIComponent(saved.id)}/metadata-history`, { headers: { "X-Share-Owner-Token": token }, retry: 1 });
+      const value = await api<SavedBuildMetadataHistoryResponse>(`/api/builds/${encodeURIComponent(saved.id)}/metadata-history`, { ...ownerRequestOptions("build", saved.id, { ownerToken: token, owned: ownerManaged }), retry: 1 });
       if (!isCurrent()) return;
       setMetadataHistoryStates((current) => ({ ...current, [saved.id]: { status: "ready", value } }));
     } catch (error: unknown) {
@@ -804,7 +811,7 @@ export function HistoryView({ builds, currentBuild, currentPreferences, partMap,
       const accessoryCount = accessorySelections(saved.selection).length;
       const preferences = saved.recommendationPreferences;
       const summary = saved.summary;
-      const owned = Boolean(readSavedBuildOwnerToken(saved.id));
+      const owned = Boolean(readSavedBuildOwnerToken(saved.id)) || hasOwnerSessionResource("build", saved.id);
       const selectedForCompare = compareIds.includes(saved.id);
       const monitorItem = monitorItems[saved.id];
       const monitorAssessment = monitorItem?.status === "ready" ? savedBuildMonitorAssessmentFor(monitorItem.snapshot, monitorItem.transition) : undefined;

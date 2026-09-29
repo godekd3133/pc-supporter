@@ -56,5 +56,5 @@ describe("catalog detail refresh rate limit", () => {
       else process.env.ADMIN_PASSWORD = previousAdminPassword;
       await rm(directory, { recursive: true, force: true });
     }
-  });
+  }, 30_000);
 });

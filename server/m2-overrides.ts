@@ -1,15 +1,13 @@
 import type { M2SlotConnectionType, M2SlotOverride, M2SlotProfile, Part } from "../shared/types";
-import { M2_SLOT_OVERRIDES_PATH, readJson, writeJson } from "./storage";
+import { mutateM2SlotOverrideRecords, readM2SlotOverrideRecords } from "./repository";
 
 export type M2SlotOverrideMap = Record<string, M2SlotOverride>;
-
-let overrideWriteQueue: Promise<void> = Promise.resolve();
 
 const ALLOWED_INTERFACES = new Set(["NVMe", "SATA"]);
 const ALLOWED_CONNECTIONS = new Set<M2SlotConnectionType>(["cpu", "chipset", "unknown"]);
 
 export async function readM2SlotOverrides(): Promise<M2SlotOverrideMap> {
-  return readJson<M2SlotOverrideMap>(M2_SLOT_OVERRIDES_PATH, {});
+  return readM2SlotOverrideRecords();
 }
 
 function normalizedString(value: unknown) {
@@ -167,14 +165,10 @@ export function stripM2SlotOverride(part: Part): Part {
 }
 
 async function withOverrideWriteLock<T>(mutate: (overrides: M2SlotOverrideMap) => { value: T; changed: boolean } | Promise<{ value: T; changed: boolean }>) {
-  const operation = overrideWriteQueue.then(async () => {
-    const overrides = await readM2SlotOverrides();
+  return mutateM2SlotOverrideRecords(async (overrides) => {
     const result = await mutate(overrides);
-    if (result.changed) await writeJson(M2_SLOT_OVERRIDES_PATH, overrides);
-    return result.value;
+    return { value: result.value, overrides, changed: result.changed };
   });
-  overrideWriteQueue = operation.then(() => undefined, () => undefined);
-  return operation;
 }
 
 export async function saveM2SlotOverride(value: M2SlotOverride) {

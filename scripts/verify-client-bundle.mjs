@@ -1,4 +1,5 @@
 import { readFile, readdir, stat } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { gzipSync } from "node:zlib";
 import { pathToFileURL } from "node:url";
@@ -46,7 +47,12 @@ function normalizeAssetPath(value) {
 function readAttributes(tag) {
   const attributes = new Map();
   for (const match of tag.matchAll(/([\w:-]+)\s*=\s*(["'])(.*?)\2/g)) {
-    attributes.set(match[1].toLowerCase(), match[3]);
+    attributes.set(match[1].toLowerCase(), match[3]
+      .replace(/&#39;|&#x27;/gi, "'")
+      .replace(/&quot;/gi, '"')
+      .replace(/&amp;/gi, "&")
+      .replace(/&lt;/gi, "<")
+      .replace(/&gt;/gi, ">"));
   }
   return attributes;
 }
@@ -61,6 +67,53 @@ function getHtmlLocalAssets(indexHtml, tagName, attributeName, predicate = () =>
     }
   }
   return assets;
+}
+
+export function assertContentSecurityPolicy(indexHtml, localOfflineBuild = false) {
+  const cspTags = [...indexHtml.matchAll(/<meta\b[^>]*>/gi)]
+    .map((match) => ({ index: match.index ?? -1, attributes: readAttributes(match[0]) }))
+    .filter(({ attributes }) => attributes.get("http-equiv")?.toLowerCase() === "content-security-policy");
+  if (cspTags.length !== 1) throw new Error(`index.html must contain exactly one Content-Security-Policy meta tag: found ${cspTags.length}`);
+  const { index: cspIndex, attributes: cspAttributes } = cspTags[0];
+  const policy = cspAttributes.get("content") ?? "";
+  const firstResourceTag = [...indexHtml.matchAll(/<(?:script|link)\b[^>]*>/gi)].find((match) => (match.index ?? -1) >= 0);
+  if (firstResourceTag && cspIndex > (firstResourceTag.index ?? -1)) {
+    throw new Error("Content Security Policy meta must appear before script and link resources.");
+  }
+  const inlineScript = indexHtml.match(/<script>([\s\S]*?)<\/script>/i)?.[1];
+  if (inlineScript === undefined) throw new Error("index.html must contain the script whose SHA-256 hash is allowed by its CSP.");
+  const inlineScriptHash = `sha256-${createHash("sha256").update(inlineScript).digest("base64")}`;
+  const directives = new Map(policy.split(";").map((directive) => {
+    const [name, ...sources] = directive.trim().split(/\s+/);
+    return [name, sources];
+  }));
+  const requireDirective = (name, source) => {
+    if (!directives.get(name)?.includes(source)) throw new Error(`Content Security Policy is missing ${name} ${source}.`);
+  };
+
+  requireDirective("default-src", "'none'");
+  requireDirective("script-src", "'self'");
+  requireDirective("script-src", `'${inlineScriptHash}'`);
+  requireDirective("script-src-attr", "'none'");
+  requireDirective("style-src-attr", "'unsafe-inline'");
+  requireDirective("connect-src", "'self'");
+  requireDirective("object-src", "'none'");
+  if (directives.get("script-src")?.includes("'unsafe-inline'")) {
+    throw new Error("Content Security Policy cannot enable inline scripts.");
+  }
+  if (directives.has("frame-ancestors")) {
+    throw new Error("frame-ancestors must be delivered as an HTTP response header, not in a CSP meta tag.");
+  }
+  if (localOfflineBuild && /https?:\/\/|capacitor:/i.test(policy)) {
+    throw new Error("local-offline Content Security Policy cannot contain remote origins.");
+  }
+  if (!localOfflineBuild) {
+    requireDirective("style-src-elem", "https://fonts.googleapis.com");
+    requireDirective("font-src", "https://fonts.gstatic.com");
+    requireDirective("img-src", "https://img.danawa.com");
+    requireDirective("img-src", "https://img.danuri.io");
+  }
+  return policy;
 }
 
 export function resolveStaticImportClosure(manifest, indexHtml) {
@@ -202,6 +255,18 @@ export async function measureStaticImportClosure({ manifest, indexHtml, assetDir
   };
 }
 
+export function assertNoFirstRouteOnboardingSelectors(cssAssets) {
+  const offendingSelectors = new Set();
+  for (const { name, contents } of cssAssets) {
+    for (const match of contents.matchAll(/\.(onboarding(?:-[\w-]+)?|route-stage-start)\b/g)) {
+      offendingSelectors.add(`${name}: .${match[1]}`);
+    }
+  }
+  if (offendingSelectors.size > 0) {
+    throw new Error(`first-route CSS must not contain /start-only selectors: ${[...offendingSelectors].join(", ")}`);
+  }
+}
+
 function assertBudget(label, actual, limit) {
   if (actual > limit) throw new Error(`${label} exceeds ${limit} bytes: ${actual} bytes`);
 }
@@ -220,8 +285,11 @@ async function runBuildVerifier() {
   const buildRootDirectory = resolve(process.cwd(), buildOutputDirectory);
   const distDirectory = join(buildRootDirectory, "assets");
   const localOfflineBuild = process.env.PC_SUPPORTER_BUILD_MODE === "local-offline";
+  const offlineBuildRevision = process.env.PC_SUPPORTER_OFFLINE_BUILD_REVISION?.trim() ?? "";
+  let offlineCatalogRevision = "";
   const indexHtml = await readFile(join(buildRootDirectory, "index.html"), "utf8");
   const manifest = JSON.parse(await readFile(join(buildRootDirectory, ".vite/manifest.json"), "utf8"));
+  assertContentSecurityPolicy(indexHtml, localOfflineBuild);
 
   if (!localOfflineBuild) {
     const fontPreconnect = indexHtml.indexOf('<link rel="preconnect" href="https://fonts.googleapis.com">');
@@ -242,6 +310,59 @@ async function runBuildVerifier() {
     if (!snapshotInfo?.isFile()) throw new Error("local-offline build must contain the installed offline-catalog.json asset.");
     if (snapshotInfo.size > maxOfflineCatalogAssetBytes) {
       throw new Error(`offline-catalog.json exceeds its ${maxOfflineCatalogAssetBytes}-byte installed asset budget: ${snapshotInfo.size} bytes`);
+    }
+    const bundledCatalog = JSON.parse(await readFile(snapshotPath, "utf8"));
+    offlineCatalogRevision = bundledCatalog?.manifest?.revision ?? "";
+    if (!/^catalog-\d+-[a-f0-9]{16}$/.test(offlineCatalogRevision)) {
+      throw new Error("local-offline catalog must expose a valid embedded revision.");
+    }
+    if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(offlineBuildRevision)) {
+      throw new Error("local-offline build must expose a unique client build revision.");
+    }
+    const workerSource = await readFile(join(buildRootDirectory, "service-worker.js"), "utf8");
+    const workerBuildRevision = workerSource.match(/^const LOCAL_OFFLINE_BUILD_REVISION = "([^"]+)";$/m)?.[1];
+    const workerCatalogRevision = workerSource.match(/^const LOCAL_OFFLINE_CATALOG_REVISION = "([^"]+)";$/m)?.[1];
+    const workerShellMatch = workerSource.match(/^const LOCAL_OFFLINE_SHELL_URLS = (\[[^\n]*\]);$/m);
+    if (workerBuildRevision !== offlineBuildRevision || workerCatalogRevision !== offlineCatalogRevision || !workerShellMatch) {
+      throw new Error("local-offline service worker must match its client build and catalog revisions.");
+    }
+    const workerShellUrls = JSON.parse(workerShellMatch[1]);
+    if (!Array.isArray(workerShellUrls) || !workerShellUrls.includes("/index.html") || !workerShellUrls.includes("/offline-catalog.json")) {
+      throw new Error("local-offline service worker must precache the app shell and its catalog.");
+    }
+    const requiredPrecachePaths = new Set(["/index.html", "/offline-catalog.json"]);
+    for (const entry of Object.values(manifest)) {
+      for (const path of [entry?.file, ...(Array.isArray(entry?.css) ? entry.css : []), ...(Array.isArray(entry?.assets) ? entry.assets : [])]) {
+        if (typeof path === "string") requiredPrecachePaths.add(`/${normalizeAssetPath(path)}`);
+      }
+    }
+    const missingPrecachePaths = [...requiredPrecachePaths].filter((path) => !workerShellUrls.includes(path));
+    if (missingPrecachePaths.length > 0) throw new Error(`local-offline service worker omitted built app assets: ${missingPrecachePaths.join(", ")}`);
+    for (const url of workerShellUrls) {
+      if (typeof url !== "string" || !url.startsWith("/") || url.startsWith("//")) {
+        throw new Error("local-offline service worker precache must contain same-origin root-relative URLs only.");
+      }
+      if (url !== "/" && !(await stat(join(buildRootDirectory, normalizeAssetPath(url))).catch(() => undefined))?.isFile()) {
+        throw new Error(`local-offline service worker precache asset is missing: ${url}`);
+      }
+    }
+    const localInstallStart = workerSource.indexOf("async function installLocalOfflineCache");
+    const localInstallEnd = workerSource.indexOf('self.addEventListener("install"', localInstallStart);
+    const localInstallSource = localInstallStart >= 0 && localInstallEnd > localInstallStart
+      ? workerSource.slice(localInstallStart, localInstallEnd)
+      : "";
+    if (!localInstallSource.includes("await cache.addAll(LOCAL_OFFLINE_SHELL_URLS)")
+      || !localInstallSource.includes("catalog?.manifest?.revision !== LOCAL_OFFLINE_CATALOG_REVISION")
+      || localInstallSource.includes("skipWaiting")) {
+      throw new Error("local-offline service worker must verify and atomically stage its revisioned shell and catalog.");
+    }
+    const localFetchStart = workerSource.indexOf("if (LOCAL_OFFLINE_MODE) {");
+    const localFetchEnd = workerSource.indexOf("event.respondWith(\n    fetch(request)", localFetchStart);
+    const localFetchSource = localFetchStart >= 0 && localFetchEnd > localFetchStart
+      ? workerSource.slice(localFetchStart, localFetchEnd)
+      : "";
+    if (!localFetchSource.includes("cache.match(request, { ignoreVary: true })")) {
+      throw new Error("local-offline service worker must ignore host Vary headers for its same-origin precache.");
     }
     const cssAssets = assetNames.filter((name) => name.endsWith(".css"));
     const cssContents = await Promise.all(cssAssets.map((name) => readFile(join(distDirectory, name), "utf8")));
@@ -296,6 +417,10 @@ async function runBuildVerifier() {
   if (oversizedChunks.length > 0) {
     throw new Error(`lazy chunk가 ${maxLazyChunkBytes}바이트 예산을 초과했습니다: ${oversizedChunks.join(", ")}`);
   }
+  if (localOfflineBuild && (!browserJavaScript.some((asset) => asset.includes(offlineBuildRevision))
+    || !browserJavaScript.some((asset) => asset.includes(offlineCatalogRevision)))) {
+    throw new Error("local-offline client JavaScript must embed its build and snapshot revisions.");
+  }
 
   if (!localOfflineBuild) {
     const snapshotInfo = await stat(join(buildRootDirectory, "offline-catalog.json")).catch(() => undefined);
@@ -313,6 +438,11 @@ async function runBuildVerifier() {
     indexHtml,
     assetDirectory: buildRootDirectory
   });
+  const firstRouteCssAssets = await Promise.all(staticClosure.css.assets.map(async ({ name }) => ({
+    name,
+    contents: await readFile(resolveAssetOnDisk(buildRootDirectory, name), "utf8")
+  })));
+  assertNoFirstRouteOnboardingSelectors(firstRouteCssAssets);
   assertFirstRouteBudget(staticClosure);
 
   console.log(JSON.stringify({

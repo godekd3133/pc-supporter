@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { FiCheck, FiCopy, FiEdit3, FiInfo, FiKey, FiLoader, FiSave, FiShield, FiXCircle } from "react-icons/fi";
 import { api } from "./api";
+import { ownerSessionCreateOptions } from "./owner-session";
 import { useModalAccessibility } from "./use-modal-accessibility";
 import { SAVED_BUILD_DECISION_NOTE_MAX_LENGTH, SAVED_BUILD_NAME_MAX_LENGTH } from "../shared/saved-build-decision-note";
 
@@ -47,7 +48,7 @@ export function RecoveryCodeDialog({ code, buildName, onClose }: { code: string;
   return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="save-build-dialog recovery-code-dialog" role="dialog" aria-modal="true" aria-labelledby="recovery-code-dialog-title" data-testid="recovery-code-dialog"><div className="modal-header"><div><h2 id="recovery-code-dialog-title">견적 소유권 복구 코드</h2><p>{buildName} · 이 코드는 지금만 표시됩니다.</p></div><button className="icon-button" type="button" onClick={onClose} aria-label="복구 코드 창 닫기"><FiXCircle /></button></div><div className="recovery-code-body"><code className="recovery-code-value" data-testid="recovery-code-value">{code}</code><button className="button button-light" type="button" onClick={() => { void navigator.clipboard.writeText(code).then(() => setCopyState("copied")).catch(() => setCopyState("failed")); }}>{copyState === "copied" ? <><FiCheck /> 복사됨</> : <><FiCopy /> 코드 복사</>}</button>{copyState === "failed" && <p className="recovery-code-copy-failed" role="alert">복사에 실패했습니다. 코드를 직접 선택해 복사해 주세요.</p>}<p><FiShield /> 다른 기기나 브라우저에서 이 견적을 관리하려면 이 코드로 소유권을 확인하세요. 코드는 다시 볼 수 없으니 지금 안전한 곳에 보관해 주세요. 새 코드를 발급하면 이전 코드는 사용할 수 없습니다.</p></div><div className="save-build-actions"><button className="button button-primary" type="button" onClick={onClose}>확인했습니다</button></div></section></div>;
 }
 
-export function RecoverOwnershipDialog({ target, onClose, onToast, onRecovered }: { target: { id: string; name?: string } | null; onClose: () => void; onToast: (message: string) => void; onRecovered: (id: string, ownerToken: string, recoveryCode?: string) => void }) {
+export function RecoverOwnershipDialog({ target, onClose, onToast, onRecovered }: { target: { id: string; name?: string } | null; onClose: () => void; onToast: (message: string) => void; onRecovered: (id: string, ownership: { ownerManaged?: boolean; ownerToken?: string }, recoveryCode?: string) => void }) {
   const [input, setInput] = useState(target?.id ?? "");
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
@@ -64,8 +65,9 @@ export function RecoverOwnershipDialog({ target, onClose, onToast, onRecovered }
     }
     setBusy(true);
     try {
-      const result = await api<{ ownerToken: string; recoveryCode?: string }>(`/api/builds/${encodeURIComponent(id)}/recover`, { method: "POST", body: JSON.stringify({ recoveryCode: code }), retry: 0 });
-      onRecovered(id, result.ownerToken, result.recoveryCode);
+      const result = await api<{ ownerManaged?: true; ownerToken?: string; recoveryCode?: string }>(`/api/builds/${encodeURIComponent(id)}/recover`, { method: "POST", ...ownerSessionCreateOptions(), body: JSON.stringify({ recoveryCode: code }), retry: 0 });
+      if (result.ownerManaged !== true && !result.ownerToken) throw new Error("복구 응답에 소유권 정보가 없습니다. 다시 시도해 주세요.");
+      onRecovered(id, { ...(result.ownerManaged === true ? { ownerManaged: true } : {}), ...(result.ownerToken ? { ownerToken: result.ownerToken } : {}) }, result.recoveryCode);
       onClose();
     } catch (error: unknown) {
       onToast(error instanceof Error ? error.message : "복구 코드로 소유권을 되찾지 못했습니다.");

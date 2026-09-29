@@ -40,6 +40,9 @@ export const VERSION_COMPARISONS_PATH = resolve(DATA_DIR, "version-comparisons.j
 export const BUDGET_LADDERS_PATH = resolve(DATA_DIR, "budget-ladders.json");
 export const GENERATOR_VARIANTS_PATH = resolve(DATA_DIR, "generator-variants.json");
 export const USAGE_EVENTS_PATH = resolve(DATA_DIR, "usage-events.json");
+// Keep the original pending grant-store path; its versioned JSON now holds both sessions and grants.
+export const OWNER_SESSION_STORE_PATH = resolve(DATA_DIR, "owner-session-grants.json");
+export const OWNER_SESSION_GRANTS_PATH = OWNER_SESSION_STORE_PATH;
 
 const filePersistenceErrors = new Map<string, unknown>();
 

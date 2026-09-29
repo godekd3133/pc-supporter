@@ -23,6 +23,7 @@ import { CATEGORY_LABELS, GAMING_GRAPHICS_PRESET_LABELS, GAMING_REFRESH_RATE_LAB
 import { generatorBriefInterpretationFor } from "../shared/generator-brief";
 import type { GeneratorBriefConfig, GeneratorBriefInterpretation } from "../shared/generator-brief";
 import { api, ApiError } from "./api";
+import { hasStoredOwnerCredentials, markOwnerSessionResource, ownerCredentialAvailable, ownerRequestOptions, ownerSessionCreateOptions, ownerSessionModeSupported, removeOwnerSessionResource, retryOwnerSessionMigration } from "./owner-session";
 import { gameLabelFor, ONBOARDING_WORKS } from "./quote-onboarding";
 import type { OnboardingIntensity, OnboardingWork } from "./quote-onboarding";
 
@@ -33,14 +34,14 @@ export type GeneratorBudgetResult = BudgetLadderOutcome;
 export type GeneratorBudgetShareResult = {
   id: string;
   url: string;
-  ownerToken: string;
+  ownerToken?: string;
+  owned?: boolean;
   expiresAt?: string;
   catalogSnapshotAt?: string;
 };
 
-type GeneratorBudgetShareResponse = BudgetLadderShareSnapshot & {
-  ownerToken: string;
-};
+type SessionOrLegacyOwner = { ownerManaged: true; ownerToken?: never } | { ownerManaged?: false; ownerToken: string };
+type GeneratorBudgetShareResponse = BudgetLadderShareSnapshot & SessionOrLegacyOwner;
 
 const CATEGORY_ICONS: Record<PartCategory, IconType> = {
   cpu: FiCpu,
@@ -601,6 +602,7 @@ export function BuildGeneratorView({ initialProfile, draft, variants, budgetLadd
       const request = budgetLadderBaseRequestFor(budgetLadder);
       const saved = await api<GeneratorBudgetShareResponse>("/api/budget-ladders", {
         method: "POST",
+        ...ownerSessionCreateOptions(),
         body: JSON.stringify({
           name: "PC Supporter 예산 구간 비교",
           payload: budgetLadderExportPayloadFor(budgetLadder),
@@ -620,8 +622,10 @@ export function BuildGeneratorView({ initialProfile, draft, variants, budgetLadd
         onToast(`예산 구간 비교 링크가 생성되었습니다: ${url}`);
       }
       if (!isCurrent()) return;
-      setBudgetLadderShare({ id: saved.id, url, ownerToken: saved.ownerToken, ...(saved.expiresAt ? { expiresAt: saved.expiresAt } : {}), catalogSnapshotAt: saved.catalogSnapshotAt });
-      onBudgetLadderShareSaved({ id: saved.id, url, name: saved.name, createdAt: saved.createdAt, ...(saved.versionNumber !== undefined ? { versionNumber: saved.versionNumber } : {}), ...(saved.expiresAt ? { expiresAt: saved.expiresAt } : {}), ownerToken: saved.ownerToken });
+      const owned = saved.ownerManaged === true;
+      if (owned) markOwnerSessionResource("budget-ladder", saved.id);
+      setBudgetLadderShare({ id: saved.id, url, ...(saved.ownerToken ? { ownerToken: saved.ownerToken } : {}), ...(owned ? { owned: true } : {}), ...(saved.expiresAt ? { expiresAt: saved.expiresAt } : {}), catalogSnapshotAt: saved.catalogSnapshotAt });
+      onBudgetLadderShareSaved({ id: saved.id, url, name: saved.name, createdAt: saved.createdAt, ...(saved.versionNumber !== undefined ? { versionNumber: saved.versionNumber } : {}), ...(saved.expiresAt ? { expiresAt: saved.expiresAt } : {}), ...(saved.ownerToken ? { ownerToken: saved.ownerToken } : {}), ...(owned ? { owned: true } : {}) });
     } catch (error: unknown) {
       if (isCurrent()) onToast(error instanceof Error ? error.message : "예산 구간 비교 공유 링크를 만들지 못했습니다.");
     }
@@ -629,12 +633,17 @@ export function BuildGeneratorView({ initialProfile, draft, variants, budgetLadd
 
   async function revokeBudgetLadder() {
     if (!budgetLadderShare || !window.confirm("이 예산 구간 비교 공유 링크를 취소할까요? 이미 전달된 링크도 더 이상 열리지 않습니다.")) return;
+    if (!ownerCredentialAvailable("budget-ladder", budgetLadderShare.id, budgetLadderShare)) {
+      onToast("이 브라우저에서 공유 소유권을 확인할 수 없어 링크를 취소하지 못했습니다.");
+      return;
+    }
     const requestVersion = ++budgetLadderShareMutationRequestRef.current;
     const isCurrent = () => mountedRef.current && budgetLadderShareMutationRequestRef.current === requestVersion;
     const share = budgetLadderShare;
     try {
-      await api(`/api/budget-ladders/${encodeURIComponent(share.id)}`, { method: "DELETE", headers: { "X-Share-Owner-Token": share.ownerToken }, retry: 0 });
+      await api(`/api/budget-ladders/${encodeURIComponent(share.id)}`, { method: "DELETE", ...ownerRequestOptions("budget-ladder", share.id, share), retry: 0 });
       if (!isCurrent()) return;
+      removeOwnerSessionResource("budget-ladder", share.id);
       setBudgetLadderShare(null);
       onBudgetLadderShareRevoked(share.id);
       onToast("예산 구간 비교 공유 링크를 취소했습니다.");
@@ -1035,6 +1044,10 @@ function GeneratorVariantsPanel({ variants: sourceVariants, loading, onApply, on
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
   }, []);
+  useEffect(() => {
+    if (!ownerSessionModeSupported() || !hasStoredOwnerCredentials()) return;
+    void retryOwnerSessionMigration().catch(() => undefined);
+  }, [localShares]);
   const importedViewActive = importedVariants !== null && importedSourceVariantsRef.current === sourceVariants;
   const variants = importedViewActive && importedVariants ? importedVariants : sourceVariants;
   const readyVariants = variants.filter((variant): variant is GeneratorVariantResult & { draft: BuildGenerationResult } => Boolean(variant.draft));
@@ -1131,13 +1144,16 @@ function GeneratorVariantsPanel({ variants: sourceVariants, loading, onApply, on
     setSharing(true);
     setShareError(null);
     try {
-      const saved = await api<GeneratorVariantsShareSnapshot & { ownerToken: string }>("/api/generator-variants", {
+      const saved = await api<GeneratorVariantsShareSnapshot & SessionOrLegacyOwner>("/api/generator-variants", {
         method: "POST",
+        ...ownerSessionCreateOptions(),
         body: JSON.stringify({ name: "PC Supporter 자동 구성 3안 비교", payload: JSON.parse(generatorVariantsJsonFor(variants)), ...(generatorVariantsRequestFor(variants) ? { request: generatorVariantsRequestFor(variants) } : {}), expiresInDays: 30 }),
         retry: 0
       });
       if (!isCurrent()) return;
-      const entry: GeneratorVariantsLocalShareEntry = { id: saved.id, url: `${window.location.origin}/generator-variants/${saved.id}`, name: saved.name, createdAt: saved.createdAt, ...(saved.expiresAt ? { expiresAt: saved.expiresAt } : {}), ownerToken: saved.ownerToken };
+      const owned = saved.ownerManaged === true;
+      if (owned) markOwnerSessionResource("generator-variants", saved.id);
+      const entry: GeneratorVariantsLocalShareEntry = { id: saved.id, url: `${window.location.origin}/generator-variants/${saved.id}`, name: saved.name, createdAt: saved.createdAt, ...(saved.expiresAt ? { expiresAt: saved.expiresAt } : {}), ...(saved.ownerToken ? { ownerToken: saved.ownerToken } : {}), ...(owned ? { owned: true } : {}) };
       setLocalShares((current) => generatorVariantsLocalShareRemember(current, entry));
       setShareLink(entry);
       try {
@@ -1153,18 +1169,24 @@ function GeneratorVariantsPanel({ variants: sourceVariants, loading, onApply, on
   }
   async function revokeSharedVariants(entry: GeneratorVariantsLocalShareEntry) {
     if (sharing || !window.confirm("이 자동 구성 비교 공유 링크를 취소할까요? 전달된 링크도 더 이상 열리지 않습니다.")) return;
+    if (!ownerCredentialAvailable("generator-variants", entry.id, entry)) {
+      setShareError("이 브라우저에서 공유 소유권을 확인할 수 없어 링크를 취소하지 못했습니다.");
+      return;
+    }
     const requestVersion = ++shareMutationRef.current;
     const isCurrent = () => panelMountedRef.current && shareMutationRef.current === requestVersion;
     setSharing(true);
     setShareError(null);
     try {
-      await api(`/api/generator-variants/${encodeURIComponent(entry.id)}`, { method: "DELETE", headers: { "X-Share-Owner-Token": entry.ownerToken ?? "" }, retry: 0 });
+      await api(`/api/generator-variants/${encodeURIComponent(entry.id)}`, { method: "DELETE", ...ownerRequestOptions("generator-variants", entry.id, entry), retry: 0 });
       if (!isCurrent()) return;
+      removeOwnerSessionResource("generator-variants", entry.id);
       setLocalShares((current) => generatorVariantsLocalShareRemove(current, entry.id));
       setShareLink((current) => current?.id === entry.id ? null : current);
     } catch (error: unknown) {
       if (!isCurrent()) return;
       if (error instanceof ApiError && error.status === 404) {
+        removeOwnerSessionResource("generator-variants", entry.id);
         setLocalShares((current) => generatorVariantsLocalShareRemove(current, entry.id));
         setShareLink((current) => current?.id === entry.id ? null : current);
         return;

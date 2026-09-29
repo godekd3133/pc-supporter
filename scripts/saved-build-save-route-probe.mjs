@@ -117,7 +117,8 @@ try {
       const responseId = typeof saveResponsePayload.id === "string" ? saveResponsePayload.id : "";
       const responseOwnerToken = typeof saveResponsePayload.ownerToken === "string" ? saveResponsePayload.ownerToken : "";
       const responseRecoveryCode = typeof saveResponsePayload.recoveryCode === "string" ? saveResponsePayload.recoveryCode : "";
-      const responseHadCredentials = Boolean(responseId && responseOwnerToken.length >= 40 && responseRecoveryCode);
+      const responseOwnerManaged = saveResponsePayload.ownerManaged === true;
+      const responseHadCredentials = Boolean(responseId && (responseOwnerManaged || responseOwnerToken.length >= 40) && responseRecoveryCode);
       const homeButton = document.querySelector('button[aria-label="PC Supporter 홈"]');
       if (!(homeButton instanceof HTMLButtonElement)) return { stage: "missing-home", savePostCount, saveResponseStatus, responseHadCredentials };
       homeButton.click();
@@ -129,7 +130,16 @@ try {
         let tokens = {};
         try { ids = JSON.parse(localStorage.getItem("pc-supporter-saved-build-ids") ?? "[]"); } catch {}
         try { tokens = JSON.parse(localStorage.getItem("pc-supporter-saved-build-owner-tokens") ?? "{}"); } catch {}
-        if (responseId && ids.includes(responseId) && tokens[responseId] === responseOwnerToken) break;
+        let sessionManaged = false;
+        const localTokenStored = responseOwnerToken.length >= 40 && tokens[responseId] === responseOwnerToken;
+        if (responseId && ids.includes(responseId) && !localTokenStored && (responseOwnerManaged || responseOwnerToken.length >= 40) && (index % 8 === 0 || responseOwnerManaged)) {
+          try {
+            const response = await fetch("/api/owner-sessions/resources", { credentials: "include" });
+            const payload = response.ok ? await response.json() : undefined;
+            sessionManaged = Array.isArray(payload?.resources) && payload.resources.some((resource) => resource?.kind === "build" && resource.id === responseId);
+          } catch {}
+        }
+        if (responseId && ids.includes(responseId) && (localTokenStored || sessionManaged)) break;
         await wait(25);
       }
       await wait(250);
@@ -137,12 +147,20 @@ try {
       let storedTokens = {};
       try { storedIds = JSON.parse(localStorage.getItem("pc-supporter-saved-build-ids") ?? "[]"); } catch {}
       try { storedTokens = JSON.parse(localStorage.getItem("pc-supporter-saved-build-owner-tokens") ?? "{}"); } catch {}
+      let ownerSessionManaged = false;
+      if (responseId) {
+        try {
+          const response = await fetch("/api/owner-sessions/resources", { credentials: "include" });
+          const payload = response.ok ? await response.json() : undefined;
+          ownerSessionManaged = Array.isArray(payload?.resources) && payload.resources.some((resource) => resource?.kind === "build" && resource.id === responseId);
+        } catch {}
+      }
       const recoveryCodePersisted = Object.keys(localStorage).some((key) => key.toLowerCase().includes("recovery") || (responseRecoveryCode && (localStorage.getItem(key) ?? "").includes(responseRecoveryCode)));
       const recoveryDialogOnStaleRoute = document.querySelector('[aria-labelledby="recovery-code-dialog-title"]') !== null || (document.body?.innerText ?? "").includes(responseRecoveryCode);
       const homeStateAfterSave = location.pathname === "/" && document.querySelector(".home-page") !== null;
       const staleToast = Boolean(document.querySelector(".toast"));
       const historyButton = document.querySelector('button[aria-label="저장 견적"]');
-      if (!(historyButton instanceof HTMLButtonElement)) return { stage: "missing-history", savePostCount, saveResponseStatus, responseHadCredentials, pathBeforeResponseRelease, storedId: storedIds.includes(responseId), ownerTokenStored: storedTokens[responseId] === responseOwnerToken, recoveryCodePersisted, recoveryDialogOnStaleRoute, homeStateAfterSave, staleToast };
+      if (!(historyButton instanceof HTMLButtonElement)) return { stage: "missing-history", savePostCount, saveResponseStatus, responseHadCredentials, responseOwnerManaged, pathBeforeResponseRelease, storedId: storedIds.includes(responseId), ownerTokenStored: storedTokens[responseId] === responseOwnerToken, ownerSessionManaged, recoveryCodePersisted, recoveryDialogOnStaleRoute, homeStateAfterSave, staleToast };
       historyButton.click();
       for (let index = 0; index < 240 && !(document.body?.innerText ?? "").includes(buildName); index += 1) await wait(25);
       const body = document.body?.innerText ?? "";
@@ -179,6 +197,7 @@ try {
         homeStateAfterSave,
         storedId: storedIds.includes(responseId),
         ownerTokenStored: storedTokens[responseId] === responseOwnerToken,
+        ownerSessionManaged,
         recoveryCodePersisted,
         recoveryDialogOnStaleRoute,
         staleToast
@@ -206,7 +225,7 @@ try {
     || result.path !== "/history"
     || result.homeStateAfterSave !== true
     || result.storedId !== true
-    || result.ownerTokenStored !== true
+    || (result.ownerTokenStored !== true && result.ownerSessionManaged !== true)
     || result.recoveryCodePersisted !== false
     || result.recoveryDialogOnStaleRoute !== false
     || result.ownerRecoveryControlAvailable !== true

@@ -2,7 +2,10 @@ import "dotenv/config";
 import { createHash, createHmac, randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import { Pool, type PoolClient } from "pg";
-import type { AccessoryCategory, AccessoryCoverageSnapshot, AccessoryItem, BenchmarkOverride, CoolingFanLoadOverride, Part, PartCategory, PersistenceDiagnostics, SavedBuildPurchasePriceHistory, SavedBuildPurchasePriceHistorySnapshot, SavedBuildPurchaseProgress } from "../shared/types";
+import { isOwnerSessionResourceType, OWNER_SESSION_RESOURCE_TYPES } from "../shared/owner-session-contract";
+import type { OwnerSessionResourceType as OwnerShareResourceType } from "../shared/owner-session-contract";
+import type { CatalogSpecOverride } from "../shared/catalog-spec-overrides";
+import type { AccessoryCategory, AccessoryCoverageSnapshot, AccessoryItem, BenchmarkOverride, CoolingFanLoadOverride, M2SlotOverride, Part, PartCategory, PersistenceDiagnostics, SavedBuildPurchasePriceHistory, SavedBuildPurchasePriceHistorySnapshot, SavedBuildPurchaseProgress } from "../shared/types";
 import { RateLimitStoreUnavailableError, type RateLimitDecision, type RateLimitPolicy } from "./rate-limit";
 import { appendSavedBuildCheckHistory, savedBuildCheckHistoryFromUnknown, savedBuildCheckSnapshotFromUnknown, SAVED_BUILD_CHECK_HISTORY_LIMIT } from "../shared/saved-build-check";
 import type { SavedBuildCheckSnapshot } from "../shared/types";
@@ -27,6 +30,7 @@ import { savedBuildDecisionNoteFromUnknown, savedBuildMetadataHistoryEntryFor, s
 import { savedBuildOriginFromUnknown } from "../shared/saved-build-origin";
 import type { SavedWatchlistAlertState } from "./watchlist-alert-state";
 import type { UsageEventName } from "./usage-events";
+
 import {
   DATA_DIR,
   BUILDS_PATH,
@@ -34,11 +38,14 @@ import {
   SAVED_BUILD_VERSION_LEASE_PATH,
   SAVED_BUILD_MONITOR_LEASE_PATH,
   BENCHMARK_OVERRIDES_PATH,
+  CATALOG_SPEC_OVERRIDES_PATH,
   CATALOG_PATH,
   COMPARISONS_PATH,
   VERSION_COMPARISONS_PATH,
   BUDGET_LADDERS_PATH,
   GENERATOR_VARIANTS_PATH,
+  OWNER_SESSION_STORE_PATH,
+  M2_SLOT_OVERRIDES_PATH,
   WATCHLIST_ALERT_STATES_PATH,
   WATCHLISTS_PATH,
   ensureDataDirectory,
@@ -48,6 +55,11 @@ import {
   writeJson as writeStoredJson
 } from "./storage";
 import { withFileLease as acquireFileLease } from "./lease";
+
+export { OWNER_SESSION_RESOURCE_TYPES as OWNER_SHARE_RESOURCE_TYPES };
+export type { OwnerShareResourceType };
+
+const OWNER_SESSION_RESOURCE_TYPES_SQL = OWNER_SESSION_RESOURCE_TYPES.map((resourceType) => "'" + resourceType + "'").join(", ");
 
 export const POSTGRES_SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS catalog_parts (
@@ -79,6 +91,16 @@ CREATE TABLE IF NOT EXISTS accessory_coverage_state (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp()
 );
 CREATE TABLE IF NOT EXISTS cooling_fan_load_overrides (
+  singleton_id TEXT PRIMARY KEY CHECK (singleton_id = 'current'),
+  payload JSONB NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp()
+);
+CREATE TABLE IF NOT EXISTS catalog_spec_overrides (
+  singleton_id TEXT PRIMARY KEY CHECK (singleton_id = 'current'),
+  payload JSONB NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp()
+);
+CREATE TABLE IF NOT EXISTS m2_slot_overrides (
   singleton_id TEXT PRIMARY KEY CHECK (singleton_id = 'current'),
   payload JSONB NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp()
@@ -282,6 +304,30 @@ CREATE TABLE IF NOT EXISTS price_refresh_attempts (
 );
 CREATE INDEX IF NOT EXISTS price_refresh_attempts_attempted_idx
   ON price_refresh_attempts(attempted_at, item_kind, item_id);
+CREATE TABLE IF NOT EXISTS owner_sessions (
+  session_hash TEXT PRIMARY KEY CHECK (session_hash ~ '^[0-9a-f]{64}$'),
+  created_at TIMESTAMPTZ NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL CHECK (expires_at > created_at)
+);
+CREATE INDEX IF NOT EXISTS owner_sessions_expiry_idx
+  ON owner_sessions(expires_at);
+CREATE TABLE IF NOT EXISTS owner_session_grants (
+  session_hash TEXT NOT NULL CHECK (session_hash ~ '^[0-9a-f]{64}$'),
+  resource_type TEXT NOT NULL CHECK (resource_type IN (${OWNER_SESSION_RESOURCE_TYPES_SQL})),
+  resource_id TEXT NOT NULL CHECK (length(resource_id) BETWEEN 1 AND 512),
+  owner_token_hash TEXT NOT NULL CHECK (owner_token_hash ~ '^[0-9a-f]{64}$'),
+  created_at TIMESTAMPTZ NOT NULL,
+  expires_at TIMESTAMPTZ,
+  PRIMARY KEY (session_hash, resource_type, resource_id, owner_token_hash),
+  FOREIGN KEY (session_hash) REFERENCES owner_sessions(session_hash) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS owner_session_grants_session_expiry_idx
+  ON owner_session_grants(session_hash, expires_at);
+CREATE INDEX IF NOT EXISTS owner_session_grants_resource_idx
+  ON owner_session_grants(resource_type, resource_id);
+CREATE INDEX IF NOT EXISTS owner_session_grants_expiry_idx
+  ON owner_session_grants(expires_at)
+  WHERE expires_at IS NOT NULL;
 `;
 
 function canonicalJson(value: unknown): string {
@@ -411,6 +457,480 @@ async function ensureDatabase() {
     })()
   }
   return schemaPromise;
+}
+
+export interface OwnerShareSession {
+  sessionHash: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
+export interface OwnerShareSessionGrant {
+  sessionHash: string;
+  resourceType: OwnerShareResourceType;
+  resourceId: string;
+  ownerTokenHash: string;
+  createdAt: string;
+  expiresAt?: string;
+}
+
+export interface OwnerShareSessionGrantReference {
+  resourceType: OwnerShareResourceType;
+  resourceId: string;
+  ownerTokenHash: string;
+}
+
+const OWNER_SHARE_SESSION_STORE_VERSION = 1 as const;
+export const OWNER_SHARE_SESSION_GRANT_MAX_PRUNE_BATCH = 500;
+export const OWNER_SHARE_SESSION_MAX_PRUNE_BATCH = 500;
+const OWNER_SHARE_SHA256_PATTERN = /^[0-9a-f]{64}$/;
+const OWNER_SHARE_ISO_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
+
+type OwnerShareSessionStore = {
+  schemaVersion: typeof OWNER_SHARE_SESSION_STORE_VERSION;
+  sessions: OwnerShareSession[];
+  grants: OwnerShareSessionGrant[];
+};
+
+function ownerShareRecordFromUnknown(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+}
+
+function ownerShareHash(value: unknown, fieldName: string): string {
+  if (typeof value !== "string" || !OWNER_SHARE_SHA256_PATTERN.test(value)) {
+    throw new Error(`Owner session ${fieldName} must be a lowercase SHA-256 hex digest.`);
+  }
+  return value;
+}
+
+function ownerShareResourceType(value: unknown): OwnerShareResourceType {
+  if (!isOwnerSessionResourceType(value)) {
+    throw new Error("Owner session resource type is invalid.");
+  }
+  return value;
+}
+
+function ownerShareResourceId(value: unknown): string {
+  if (typeof value !== "string" || value.trim() !== value || value.length < 1 || value.length > 512 || value.includes("\u0000")) {
+    throw new Error("Owner session resource ID must be a non-empty string of at most 512 characters.");
+  }
+  return value;
+}
+
+function ownerShareIsoTimestamp(value: unknown, fieldName: string): string {
+  if (typeof value !== "string" || !OWNER_SHARE_ISO_TIMESTAMP_PATTERN.test(value) || !Number.isFinite(Date.parse(value))) {
+    throw new Error(`Owner session ${fieldName} must be an ISO timestamp.`);
+  }
+  return value;
+}
+
+function ownerShareNow(value?: Date | string): { iso: string; time: number } {
+  const iso = value instanceof Date ? value.toISOString() : value === undefined ? new Date().toISOString() : ownerShareIsoTimestamp(value, "current time");
+  const time = Date.parse(iso);
+  if (!Number.isFinite(time)) throw new Error("Owner session current time is invalid.");
+  return { iso, time };
+}
+
+function ownerShareSessionGrantFromUnknown(value: unknown): OwnerShareSessionGrant {
+  const record = ownerShareRecordFromUnknown(value);
+  if (!record) throw new Error("Owner session grant must be an object.");
+  const grant: OwnerShareSessionGrant = {
+    sessionHash: ownerShareHash(record.sessionHash, "session hash"),
+    resourceType: ownerShareResourceType(record.resourceType),
+    resourceId: ownerShareResourceId(record.resourceId),
+    ownerTokenHash: ownerShareHash(record.ownerTokenHash, "owner token hash"),
+    createdAt: ownerShareIsoTimestamp(record.createdAt, "creation time")
+  };
+  if (record.expiresAt !== undefined) grant.expiresAt = ownerShareIsoTimestamp(record.expiresAt, "expiry time");
+  return grant;
+}
+
+function ownerShareSessionFromUnknown(value: unknown): OwnerShareSession {
+  const record = ownerShareRecordFromUnknown(value);
+  if (!record) throw new Error("Owner session record must be an object.");
+  const session: OwnerShareSession = {
+    sessionHash: ownerShareHash(record.sessionHash, "session hash"),
+    createdAt: ownerShareIsoTimestamp(record.createdAt, "creation time"),
+    expiresAt: ownerShareIsoTimestamp(record.expiresAt, "expiry time")
+  };
+  if (Date.parse(session.expiresAt) <= Date.parse(session.createdAt)) {
+    throw new Error("Owner session expiry must be later than its creation time.");
+  }
+  return session;
+}
+
+function ownerShareSessionGrantKey(grant: OwnerShareSessionGrant) {
+  return JSON.stringify([grant.sessionHash, grant.resourceType, grant.resourceId, grant.ownerTokenHash]);
+}
+
+function ownerShareSessionStoreFromUnknown(value: unknown): OwnerShareSessionStore {
+  const record = ownerShareRecordFromUnknown(value);
+  if (!record || record.schemaVersion !== OWNER_SHARE_SESSION_STORE_VERSION || !Array.isArray(record.grants)
+    || (record.sessions !== undefined && !Array.isArray(record.sessions))) {
+    throw new Error("Owner session store has an unsupported or invalid schema; its original content was preserved.");
+  }
+  // Older pending grant-only JSON is retained, but it cannot authorize access without an issued session record.
+  const sessions = (record.sessions ?? []).map(ownerShareSessionFromUnknown);
+  const grants = record.grants.map(ownerShareSessionGrantFromUnknown);
+  const sessionHashes = sessions.map(({ sessionHash }) => sessionHash);
+  const grantKeys = grants.map(ownerShareSessionGrantKey);
+  if (new Set(sessionHashes).size !== sessionHashes.length || new Set(grantKeys).size !== grantKeys.length) {
+    throw new Error("Owner session store contains duplicate records; its original content was preserved.");
+  }
+  return { schemaVersion: OWNER_SHARE_SESSION_STORE_VERSION, sessions, grants };
+}
+
+async function readOwnerShareSessionStore() {
+  const emptyStore: OwnerShareSessionStore = { schemaVersion: OWNER_SHARE_SESSION_STORE_VERSION, sessions: [], grants: [] };
+  return ownerShareSessionStoreFromUnknown(await readFileJson<unknown>(OWNER_SESSION_STORE_PATH, emptyStore));
+}
+
+function ownerShareSessionIsActiveInStore(store: OwnerShareSessionStore, sessionHash: string, now: { iso: string; time: number }) {
+  return store.sessions.some((session) => session.sessionHash === sessionHash && Date.parse(session.expiresAt) > now.time);
+}
+
+function ownerShareGrantIsUnexpired(grant: OwnerShareSessionGrant, now: { iso: string; time: number }) {
+  return grant.expiresAt === undefined || Date.parse(grant.expiresAt) > now.time;
+}
+
+function ownerShareGrantReferenceFromUnknown(value: unknown): OwnerShareSessionGrantReference {
+  const record = ownerShareRecordFromUnknown(value);
+  if (!record) throw new Error("Owner session grant query returned an invalid row.");
+  return {
+    resourceType: ownerShareResourceType(record.resource_type ?? record.resourceType),
+    resourceId: ownerShareResourceId(record.resource_id ?? record.resourceId),
+    ownerTokenHash: ownerShareHash(record.owner_token_hash ?? record.ownerTokenHash, "owner token hash")
+  };
+}
+
+export async function createOwnerShareSession(input: OwnerShareSession): Promise<void> {
+  const session = ownerShareSessionFromUnknown(input);
+  if (await ensureDatabase()) {
+    let created = false;
+    try {
+      const result = await pool!.query(
+        `INSERT INTO owner_sessions (session_hash, created_at, expires_at)
+         SELECT $1, $2::timestamptz, $3::timestamptz
+         WHERE NOT EXISTS (SELECT 1 FROM owner_session_grants WHERE session_hash = $1)
+         ON CONFLICT (session_hash) DO NOTHING
+         RETURNING session_hash`,
+        [session.sessionHash, session.createdAt, session.expiresAt]
+      );
+      created = result.rows.length > 0;
+    } catch (error: unknown) {
+      markDatabaseUnavailable("owner session create", error);
+      throw error;
+    }
+    if (!created) throw new Error("Owner session hash already exists or conflicts with a pending grant.");
+    return;
+  }
+
+  await withSerializedFileMutation(OWNER_SESSION_STORE_PATH, async () => {
+    const store = await readOwnerShareSessionStore();
+    if (store.sessions.some((existing) => existing.sessionHash === session.sessionHash)
+      || store.grants.some((grant) => grant.sessionHash === session.sessionHash)) {
+      throw new Error("Owner session hash already exists or conflicts with a pending grant.");
+    }
+    store.sessions.push(session);
+    await writeFileJson(OWNER_SESSION_STORE_PATH, store);
+  });
+}
+
+export async function ownerShareSessionIsActive(sessionHashValue: string, nowValue?: Date | string): Promise<boolean> {
+  const sessionHash = ownerShareHash(sessionHashValue, "session hash");
+  const now = ownerShareNow(nowValue);
+  if (await ensureDatabase()) {
+    try {
+      const result = await pool!.query(
+        "SELECT 1 AS active FROM owner_sessions WHERE session_hash = $1 AND expires_at > $2::timestamptz LIMIT 1",
+        [sessionHash, now.iso]
+      );
+      return result.rows.length > 0;
+    } catch (error: unknown) {
+      markDatabaseUnavailable("owner session active check", error);
+      throw error;
+    }
+  }
+
+  const store = await readOwnerShareSessionStore();
+  return ownerShareSessionIsActiveInStore(store, sessionHash, now);
+}
+
+export async function deleteOwnerShareSession(sessionHashValue: string): Promise<boolean> {
+  const sessionHash = ownerShareHash(sessionHashValue, "session hash");
+  if (await ensureDatabase()) {
+    return withPostgresTransaction("owner session revoke", async (client) => {
+      const sessionResult = await client.query("DELETE FROM owner_sessions WHERE session_hash = $1 RETURNING session_hash", [sessionHash]);
+      // The FK cascade handles normal rows. This second delete also clears pre-lifecycle orphaned grants.
+      const grantResult = await client.query("DELETE FROM owner_session_grants WHERE session_hash = $1 RETURNING session_hash", [sessionHash]);
+      return (sessionResult.rowCount ?? sessionResult.rows.length) > 0 || (grantResult.rowCount ?? grantResult.rows.length) > 0;
+    });
+  }
+
+  return withSerializedFileMutation(OWNER_SESSION_STORE_PATH, async () => {
+    const store = await readOwnerShareSessionStore();
+    const sessions = store.sessions.filter((session) => session.sessionHash !== sessionHash);
+    const grants = store.grants.filter((grant) => grant.sessionHash !== sessionHash);
+    const changed = sessions.length !== store.sessions.length || grants.length !== store.grants.length;
+    if (changed) await writeFileJson(OWNER_SESSION_STORE_PATH, { ...store, sessions, grants });
+    return changed;
+  });
+}
+
+function ownerShareSessionPruneLimit(limit: number) {
+  if (!Number.isSafeInteger(limit) || limit < 0) throw new Error("Owner session prune limit must be a non-negative integer.");
+  return Math.min(limit, OWNER_SHARE_SESSION_MAX_PRUNE_BATCH);
+}
+
+export async function pruneExpiredOwnerShareSessions(limit = OWNER_SHARE_SESSION_MAX_PRUNE_BATCH, nowValue?: Date | string): Promise<number> {
+  const boundedLimit = ownerShareSessionPruneLimit(limit);
+  if (boundedLimit === 0) return 0;
+  const now = ownerShareNow(nowValue);
+  if (await ensureDatabase()) {
+    try {
+      const result = await pool!.query(
+        `WITH expired_sessions AS (
+           SELECT session_hash
+           FROM owner_sessions
+           WHERE expires_at <= $2::timestamptz
+           ORDER BY expires_at, session_hash
+           LIMIT $1
+         )
+         DELETE FROM owner_sessions
+         WHERE session_hash IN (SELECT session_hash FROM expired_sessions)
+         RETURNING session_hash`,
+        [boundedLimit, now.iso]
+      );
+      return result.rowCount ?? result.rows.length;
+    } catch (error: unknown) {
+      markDatabaseUnavailable("owner session prune", error);
+      throw error;
+    }
+  }
+
+  return withSerializedFileMutation(OWNER_SESSION_STORE_PATH, async () => {
+    const store = await readOwnerShareSessionStore();
+    const expiredSessions = store.sessions
+      .map((session, index) => ({ session, index }))
+      .filter(({ session }) => Date.parse(session.expiresAt) <= now.time)
+      .sort((left, right) => Date.parse(left.session.expiresAt) - Date.parse(right.session.expiresAt) || left.index - right.index)
+      .slice(0, boundedLimit);
+    if (expiredSessions.length === 0) return 0;
+    const expiredHashes = new Set(expiredSessions.map(({ session }) => session.sessionHash));
+    await writeFileJson(OWNER_SESSION_STORE_PATH, {
+      ...store,
+      sessions: store.sessions.filter((session) => !expiredHashes.has(session.sessionHash)),
+      grants: store.grants.filter((grant) => !expiredHashes.has(grant.sessionHash))
+    });
+    return expiredSessions.length;
+  });
+}
+
+export async function upsertOwnerShareSessionGrant(input: OwnerShareSessionGrant, nowValue?: Date | string): Promise<boolean> {
+  const grant = ownerShareSessionGrantFromUnknown(input);
+  const now = ownerShareNow(nowValue);
+  if (await ensureDatabase()) {
+    try {
+      const result = await pool!.query(
+        `INSERT INTO owner_session_grants (session_hash, resource_type, resource_id, owner_token_hash, created_at, expires_at)
+         SELECT $1, $2, $3, $4, $5::timestamptz, $6::timestamptz
+         WHERE EXISTS (SELECT 1 FROM owner_sessions WHERE session_hash = $1 AND expires_at > $7::timestamptz)
+         ON CONFLICT (session_hash, resource_type, resource_id, owner_token_hash)
+         DO UPDATE SET expires_at = COALESCE(EXCLUDED.expires_at, owner_session_grants.expires_at)
+         RETURNING session_hash`,
+        [grant.sessionHash, grant.resourceType, grant.resourceId, grant.ownerTokenHash, grant.createdAt, grant.expiresAt ?? null, now.iso]
+      );
+      return result.rows.length > 0;
+    } catch (error: unknown) {
+      markDatabaseUnavailable("owner session grant upsert", error);
+      throw error;
+    }
+  }
+
+  return withSerializedFileMutation(OWNER_SESSION_STORE_PATH, async () => {
+    const store = await readOwnerShareSessionStore();
+    if (!ownerShareSessionIsActiveInStore(store, grant.sessionHash, now)) return false;
+    const key = ownerShareSessionGrantKey(grant);
+    const existingIndex = store.grants.findIndex((candidate) => ownerShareSessionGrantKey(candidate) === key);
+    if (existingIndex < 0) {
+      store.grants.push(grant);
+    } else {
+      const existing = store.grants[existingIndex];
+      store.grants[existingIndex] = {
+        sessionHash: existing.sessionHash,
+        resourceType: existing.resourceType,
+        resourceId: existing.resourceId,
+        ownerTokenHash: existing.ownerTokenHash,
+        createdAt: existing.createdAt,
+        ...(grant.expiresAt !== undefined
+          ? { expiresAt: grant.expiresAt }
+          : existing.expiresAt === undefined ? {} : { expiresAt: existing.expiresAt })
+      };
+    }
+    await writeFileJson(OWNER_SESSION_STORE_PATH, store);
+    return true;
+  });
+}
+
+export async function ownerShareSessionGrantMatches(input: {
+  sessionHash: string;
+  resourceType: OwnerShareResourceType;
+  resourceId: string;
+  ownerTokenHash: string;
+  now?: Date | string;
+}): Promise<boolean> {
+  const sessionHash = ownerShareHash(input.sessionHash, "session hash");
+  const resourceType = ownerShareResourceType(input.resourceType);
+  const resourceId = ownerShareResourceId(input.resourceId);
+  const ownerTokenHash = ownerShareHash(input.ownerTokenHash, "owner token hash");
+  const now = ownerShareNow(input.now);
+  if (await ensureDatabase()) {
+    try {
+      const result = await pool!.query(
+        `SELECT 1 AS present
+         FROM owner_session_grants AS grants
+         JOIN owner_sessions AS sessions ON sessions.session_hash = grants.session_hash
+         WHERE grants.session_hash = $1
+           AND grants.resource_type = $2
+           AND grants.resource_id = $3
+           AND grants.owner_token_hash = $4
+           AND sessions.expires_at > $5::timestamptz
+           AND (grants.expires_at IS NULL OR grants.expires_at > $5::timestamptz)
+         LIMIT 1`,
+        [sessionHash, resourceType, resourceId, ownerTokenHash, now.iso]
+      );
+      return result.rows.length > 0;
+    } catch (error: unknown) {
+      markDatabaseUnavailable("owner session grant match", error);
+      throw error;
+    }
+  }
+
+  const store = await readOwnerShareSessionStore();
+  if (!ownerShareSessionIsActiveInStore(store, sessionHash, now)) return false;
+  return store.grants.some((grant) => grant.sessionHash === sessionHash
+    && grant.resourceType === resourceType
+    && grant.resourceId === resourceId
+    && grant.ownerTokenHash === ownerTokenHash
+    && ownerShareGrantIsUnexpired(grant, now));
+}
+
+export async function listOwnerShareSessionGrants(sessionHashValue: string, nowValue?: Date | string): Promise<OwnerShareSessionGrantReference[]> {
+  const sessionHash = ownerShareHash(sessionHashValue, "session hash");
+  const now = ownerShareNow(nowValue);
+  if (await ensureDatabase()) {
+    try {
+      const result = await pool!.query(
+        `SELECT grants.resource_type, grants.resource_id, grants.owner_token_hash
+         FROM owner_session_grants AS grants
+         JOIN owner_sessions AS sessions ON sessions.session_hash = grants.session_hash
+         WHERE grants.session_hash = $1
+           AND sessions.expires_at > $2::timestamptz
+           AND (grants.expires_at IS NULL OR grants.expires_at > $2::timestamptz)
+         ORDER BY grants.resource_type, grants.resource_id, grants.owner_token_hash`,
+        [sessionHash, now.iso]
+      );
+      return result.rows.map(ownerShareGrantReferenceFromUnknown);
+    } catch (error: unknown) {
+      markDatabaseUnavailable("owner session grant list", error);
+      throw error;
+    }
+  }
+
+  const store = await readOwnerShareSessionStore();
+  if (!ownerShareSessionIsActiveInStore(store, sessionHash, now)) return [];
+  return store.grants
+    .filter((grant) => grant.sessionHash === sessionHash && ownerShareGrantIsUnexpired(grant, now))
+    .map(({ resourceType, resourceId, ownerTokenHash }) => ({ resourceType, resourceId, ownerTokenHash }))
+    .sort((left, right) => left.resourceType.localeCompare(right.resourceType) || left.resourceId.localeCompare(right.resourceId) || left.ownerTokenHash.localeCompare(right.ownerTokenHash));
+}
+
+export async function deleteOwnerShareSessionGrantsForResource(resourceTypeValue: OwnerShareResourceType, resourceIdValue: string): Promise<number> {
+  const resourceType = ownerShareResourceType(resourceTypeValue);
+  const resourceId = ownerShareResourceId(resourceIdValue);
+  if (await ensureDatabase()) {
+    try {
+      const result = await pool!.query("DELETE FROM owner_session_grants WHERE resource_type = $1 AND resource_id = $2", [resourceType, resourceId]);
+      return result.rowCount ?? 0;
+    } catch (error: unknown) {
+      markDatabaseUnavailable("owner session grant resource delete", error);
+      throw error;
+    }
+  }
+
+  return withSerializedFileMutation(OWNER_SESSION_STORE_PATH, async () => {
+    const store = await readOwnerShareSessionStore();
+    const next = store.grants.filter((grant) => grant.resourceType !== resourceType || grant.resourceId !== resourceId);
+    const deletedCount = store.grants.length - next.length;
+    if (deletedCount > 0) await writeFileJson(OWNER_SESSION_STORE_PATH, { ...store, grants: next });
+    return deletedCount;
+  });
+}
+
+export async function deleteOwnerShareSessionGrantsForSession(sessionHashValue: string): Promise<number> {
+  const sessionHash = ownerShareHash(sessionHashValue, "session hash");
+  if (await ensureDatabase()) {
+    try {
+      const result = await pool!.query("DELETE FROM owner_session_grants WHERE session_hash = $1", [sessionHash]);
+      return result.rowCount ?? 0;
+    } catch (error: unknown) {
+      markDatabaseUnavailable("owner session grant session delete", error);
+      throw error;
+    }
+  }
+
+  return withSerializedFileMutation(OWNER_SESSION_STORE_PATH, async () => {
+    const store = await readOwnerShareSessionStore();
+    const next = store.grants.filter((grant) => grant.sessionHash !== sessionHash);
+    const deletedCount = store.grants.length - next.length;
+    if (deletedCount > 0) await writeFileJson(OWNER_SESSION_STORE_PATH, { ...store, grants: next });
+    return deletedCount;
+  });
+}
+
+function ownerShareGrantPruneLimit(limit: number) {
+  if (!Number.isSafeInteger(limit) || limit < 0) throw new Error("Owner session grant prune limit must be a non-negative integer.");
+  return Math.min(limit, OWNER_SHARE_SESSION_GRANT_MAX_PRUNE_BATCH);
+}
+
+export async function pruneExpiredOwnerShareSessionGrants(limit = OWNER_SHARE_SESSION_GRANT_MAX_PRUNE_BATCH, nowValue?: Date | string): Promise<number> {
+  const boundedLimit = ownerShareGrantPruneLimit(limit);
+  if (boundedLimit === 0) return 0;
+  const now = ownerShareNow(nowValue);
+  if (await ensureDatabase()) {
+    try {
+      const result = await pool!.query(
+        `WITH expired AS (
+           SELECT ctid
+           FROM owner_session_grants
+           WHERE expires_at IS NOT NULL AND expires_at <= $2::timestamptz
+           ORDER BY expires_at, session_hash, resource_type, resource_id, owner_token_hash
+           LIMIT $1
+         )
+         DELETE FROM owner_session_grants
+         WHERE ctid IN (SELECT ctid FROM expired)
+         RETURNING session_hash`,
+        [boundedLimit, now.iso]
+      );
+      return result.rowCount ?? result.rows.length;
+    } catch (error: unknown) {
+      markDatabaseUnavailable("owner session grant prune", error);
+      throw error;
+    }
+  }
+
+  return withSerializedFileMutation(OWNER_SESSION_STORE_PATH, async () => {
+    const store = await readOwnerShareSessionStore();
+    const expired = store.grants
+      .map((grant, index) => ({ grant, index }))
+      .filter(({ grant }) => grant.expiresAt !== undefined && Date.parse(grant.expiresAt) <= now.time)
+      .sort((left, right) => Date.parse(left.grant.expiresAt!) - Date.parse(right.grant.expiresAt!) || left.index - right.index)
+      .slice(0, boundedLimit);
+    if (expired.length === 0) return 0;
+    const expiredKeys = new Set(expired.map(({ grant }) => ownerShareSessionGrantKey(grant)));
+    await writeFileJson(OWNER_SESSION_STORE_PATH, { ...store, grants: store.grants.filter((grant) => !expiredKeys.has(ownerShareSessionGrantKey(grant))) });
+    return expired.length;
+  });
 }
 
 export async function initializePersistence() {
@@ -1056,6 +1576,151 @@ export async function mutateCoolingFanLoadOverrideRecords(
     throw error;
   } finally {
     client.release(discardClient);
+  }
+}
+
+export type CatalogSpecOverrideMapRecord = Record<string, CatalogSpecOverride>;
+export type M2SlotOverrideMapRecord = Record<string, M2SlotOverride>;
+
+type SingletonOverrideTable = "catalog_spec_overrides" | "m2_slot_overrides";
+type SingletonOverrideMutation<T, V> = {
+  value: V;
+  overrides: Record<string, T>;
+  changed: boolean;
+};
+
+function singletonOverrideMapFromUnknown<T>(value: unknown, label: string): Record<string, T> {
+  if (value === undefined || value === null) return {};
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`PostgreSQL ${label} snapshot is not an object.`);
+  }
+  return value as Record<string, T>;
+}
+
+async function readPostgresSingletonOverrideMap<T>(table: SingletonOverrideTable, label: string): Promise<Record<string, T>> {
+  if (!await ensureDatabase()) throw new Error(`PostgreSQL ${label} persistence is not configured.`);
+  try {
+    const result = await pool!.query<{ payload: unknown }>(
+      `SELECT payload FROM ${table} WHERE singleton_id = 'current'`
+    );
+    return singletonOverrideMapFromUnknown<T>(result.rows[0]?.payload, label);
+  } catch (error: unknown) {
+    markDatabaseUnavailable(`${label} read`, error);
+    throw error;
+  }
+}
+
+async function mutatePostgresSingletonOverrideMap<T, V>(
+  table: SingletonOverrideTable,
+  lockScope: string,
+  label: string,
+  mutation: (current: Record<string, T>) => SingletonOverrideMutation<T, V> | Promise<SingletonOverrideMutation<T, V>>
+): Promise<V> {
+  if (!await ensureDatabase()) throw new Error(`PostgreSQL ${label} persistence is not configured.`);
+
+  let client: PoolClient;
+  try {
+    client = await pool!.connect();
+  } catch (error: unknown) {
+    markDatabaseUnavailable(`${label} connection`, error);
+    throw error;
+  }
+
+  let discardClient = false;
+  try {
+    await client.query("BEGIN");
+    await client.query(`SELECT pg_advisory_xact_lock(hashtextextended('pc-supporter:${lockScope}', 0))`);
+    const currentResult = await client.query<{ payload: unknown }>(
+      `SELECT payload FROM ${table} WHERE singleton_id = 'current' FOR UPDATE`
+    );
+    const current = singletonOverrideMapFromUnknown<T>(currentResult.rows[0]?.payload, label);
+    const result = await mutation(current);
+    if (result.changed) {
+      await client.query(
+        `INSERT INTO ${table} (singleton_id, payload, updated_at)
+         VALUES ('current', $1::jsonb, statement_timestamp())
+         ON CONFLICT (singleton_id) DO UPDATE SET
+           payload = EXCLUDED.payload,
+           updated_at = statement_timestamp()`,
+        [JSON.stringify(result.overrides)]
+      );
+    }
+    await client.query("COMMIT");
+    return result.value;
+  } catch (error: unknown) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      discardClient = true;
+    }
+    markDatabaseUnavailable(`${label} write`, error);
+    throw error;
+  } finally {
+    client.release(discardClient);
+  }
+}
+
+export async function readCatalogSpecOverrideRecords(): Promise<CatalogSpecOverrideMapRecord> {
+  if (!await ensureDatabase()) return readFileJson<CatalogSpecOverrideMapRecord>(CATALOG_SPEC_OVERRIDES_PATH, {});
+  return readPostgresSingletonOverrideMap<CatalogSpecOverride>("catalog_spec_overrides", "catalog-spec override");
+}
+
+export async function mutateCatalogSpecOverrideRecords<V>(
+  mutation: (current: CatalogSpecOverrideMapRecord) => SingletonOverrideMutation<CatalogSpecOverride, V> | Promise<SingletonOverrideMutation<CatalogSpecOverride, V>>
+): Promise<V> {
+  if (!await ensureDatabase()) {
+    return withSerializedFileMutation(CATALOG_SPEC_OVERRIDES_PATH, async () => {
+      const current = await readFileJson<CatalogSpecOverrideMapRecord>(CATALOG_SPEC_OVERRIDES_PATH, {});
+      const result = await mutation(current);
+      if (result.changed) await writeFileJson(CATALOG_SPEC_OVERRIDES_PATH, result.overrides);
+      return result.value;
+    });
+  }
+  return mutatePostgresSingletonOverrideMap("catalog_spec_overrides", "catalog-spec-overrides", "catalog-spec override", mutation);
+}
+
+export async function readM2SlotOverrideRecords(): Promise<M2SlotOverrideMapRecord> {
+  if (!await ensureDatabase()) return readFileJson<M2SlotOverrideMapRecord>(M2_SLOT_OVERRIDES_PATH, {});
+  return readPostgresSingletonOverrideMap<M2SlotOverride>("m2_slot_overrides", "M.2 slot override");
+}
+
+export async function mutateM2SlotOverrideRecords<V>(
+  mutation: (current: M2SlotOverrideMapRecord) => SingletonOverrideMutation<M2SlotOverride, V> | Promise<SingletonOverrideMutation<M2SlotOverride, V>>
+): Promise<V> {
+  if (!await ensureDatabase()) {
+    return withSerializedFileMutation(M2_SLOT_OVERRIDES_PATH, async () => {
+      const current = await readFileJson<M2SlotOverrideMapRecord>(M2_SLOT_OVERRIDES_PATH, {});
+      const result = await mutation(current);
+      if (result.changed) await writeFileJson(M2_SLOT_OVERRIDES_PATH, result.overrides);
+      return result.value;
+    });
+  }
+  return mutatePostgresSingletonOverrideMap("m2_slot_overrides", "m2-slot-overrides", "M.2 slot override", mutation);
+}
+
+export type CatalogOverrideMapUpdatedAtRecord = {
+  catalogSpecUpdatedAt: string;
+  m2SlotUpdatedAt: string;
+};
+
+export async function readCatalogOverrideMapUpdatedAtRecords(): Promise<CatalogOverrideMapUpdatedAtRecord> {
+  if (!await ensureDatabase()) throw new Error("PostgreSQL catalog override timestamp persistence is not configured.");
+  try {
+    const result = await pool!.query<{
+      catalog_spec_updated_at: Date | string | null;
+      m2_slot_updated_at: Date | string | null;
+    }>(
+      `SELECT
+         (SELECT updated_at FROM catalog_spec_overrides WHERE singleton_id = 'current') AS catalog_spec_updated_at,
+         (SELECT updated_at FROM m2_slot_overrides WHERE singleton_id = 'current') AS m2_slot_updated_at`
+    );
+    return {
+      catalogSpecUpdatedAt: accessoryCatalogTimestamp(result.rows[0]?.catalog_spec_updated_at),
+      m2SlotUpdatedAt: accessoryCatalogTimestamp(result.rows[0]?.m2_slot_updated_at)
+    };
+  } catch (error: unknown) {
+    markDatabaseUnavailable("catalog override timestamp read", error);
+    throw error;
   }
 }
 

@@ -37,7 +37,7 @@ type CatalogSpecFilter = {
   interface: "all" | "NVMe" | "SATA";
 };
 type CatalogResponse = { items: CatalogPart[]; total: number; offset: number; limit: number; priceExcludedCount?: number; freshnessExcludedCount?: number; nonCoreExcludedCount?: number; categoryMismatchExcludedCount?: number; missingField?: string; incompleteExcludedCount?: number; incompleteMissingFields?: CatalogSpecCoverageMissingField[]; specFilter?: Partial<CatalogSpecFilter>; specExcludedCount?: number; specFilterDiagnostics?: Array<{ key: string; label: string; excludedCount: number; missingCount: number }>; riskExcludedCount?: number; riskCounts?: AlternativeRiskCounts; mode?: CatalogCandidateScope };
-type CatalogComparisonShare = { id: string; url: string; ownerToken: string; expiresAt?: string };
+type CatalogComparisonShare = { id: string; url: string; ownerToken?: string; owned?: boolean; ownerManaged?: boolean; expiresAt?: string };
 type CatalogComparisonContext = AlternativeComparisonExportContext;
 type CatalogComparisonShareHandler = (candidates: AlternativeComparisonCandidate[], context?: { name?: string; category?: string; currentPartName?: string; currentPartSummary?: string; currentPartPrice?: string }) => Promise<CatalogComparisonShare | undefined>;
 type CatalogComparisonRevokeHandler = (share: CatalogComparisonShare) => Promise<boolean>;

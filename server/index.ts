@@ -25,11 +25,11 @@ import { BuildGenerationError, ENGINE_VERSION, assessAlternativePart, buildGener
 import { cancelCrawlPageRetryBatch, crawlPageRetryBatchPlanFor, crawlPageRetryPlanFor, crawlResumePlanFor, isCrawlPageRetryBatchRunning, isCrawlRunning, readCrawlStatus, runCrawlJob, runCrawlPageRetryBatchJob, runCrawlPageRetryJob } from "./crawler";
 import { CATALOG_PATH, CRAWL_MANIFEST_PATH, ensureDataDirectory, fileUpdatedAt, readJson } from "./storage";
 import type { CrawlManifest } from "../shared/types";
-import { appendSavedBuild, appendSavedBuildCheck, appendSavedBuildVersionComparison, appendSavedBudgetLadder, appendSavedGeneratorVariants, appendSavedComparison, appendSavedWatchlist, closePersistence, consumeRateLimitWindow, deleteSavedBuild, deleteSavedBuildVersionComparison, deleteSavedBudgetLadder, deleteSavedGeneratorVariants, deleteSavedComparison, deleteSavedWatchlist, deleteSavedWatchlistAlertStates, initializePersistence, migrateSavedBuildVersions, persistenceDiagnostics, pruneRateLimitWindows, RATE_LIMIT_BUCKET_CLEANUP_INTERVAL_MS, readLatestSavedBuildVersionBackup, readSavedBuildVersionBackupDetail, readSavedBuildVersionBackups, readSavedBuilds, readSavedBuildVersionComparisons, readSavedBudgetLadders, readSavedGeneratorVariants, readSavedComparisons, readSavedWatchlistAlertStates, readSavedWatchlists, restoreSavedBuildPurchasePriceHistory, restoreSavedBuildPurchaseProgress, rollbackSavedBuildVersions, savedBuildVersionSnapshotFingerprintFor, updateSavedBuildAssemblyVerification, updateSavedBuildMetadata, updateSavedBuildMonitorState, updateSavedBuildMyPc, updateSavedBuildPurchasePriceHistory, updateSavedBuildPurchaseProgress, updateSavedBuildShareCredentials, updateSavedWatchlist, updateSavedWatchlistAlertStates, withSavedBuildMonitorLease } from "./repository";
+import { appendSavedBuild, appendSavedBuildCheck, appendSavedBuildVersionComparison, appendSavedBudgetLadder, appendSavedGeneratorVariants, appendSavedComparison, appendSavedWatchlist, closePersistence, consumeRateLimitWindow, createOwnerShareSession, deleteOwnerShareSession, deleteOwnerShareSessionGrantsForResource, deleteSavedBuild, deleteSavedBuildVersionComparison, deleteSavedBudgetLadder, deleteSavedGeneratorVariants, deleteSavedComparison, deleteSavedWatchlist, deleteSavedWatchlistAlertStates, initializePersistence, listOwnerShareSessionGrants, migrateSavedBuildVersions, ownerShareSessionGrantMatches, ownerShareSessionIsActive, persistenceDiagnostics, pruneExpiredOwnerShareSessionGrants, pruneExpiredOwnerShareSessions, pruneRateLimitWindows, RATE_LIMIT_BUCKET_CLEANUP_INTERVAL_MS, readLatestSavedBuildVersionBackup, readSavedBuildVersionBackupDetail, readSavedBuildVersionBackups, readSavedBuilds, readSavedBuildVersionComparisons, readSavedBudgetLadders, readSavedGeneratorVariants, readSavedComparisons, readSavedWatchlistAlertStates, readSavedWatchlists, restoreSavedBuildPurchasePriceHistory, restoreSavedBuildPurchaseProgress, rollbackSavedBuildVersions, savedBuildVersionSnapshotFingerprintFor, updateSavedBuildAssemblyVerification, updateSavedBuildMetadata, updateSavedBuildMonitorState, updateSavedBuildMyPc, updateSavedBuildPurchasePriceHistory, updateSavedBuildPurchaseProgress, updateSavedBuildShareCredentials, updateSavedWatchlist, updateSavedWatchlistAlertStates, upsertOwnerShareSessionGrant, withSavedBuildMonitorLease } from "./repository";
 import { CATALOG_INGESTION_BUSY_MESSAGE, CatalogIngestionBusyError, startCatalogIngestionJob, withCatalogIngestionLease as executeCatalogIngestionJob } from "./catalog-ingestion-coordinator";
 import { DEFAULT_SAVED_WATCHLIST_ALERT_PREFERENCES, parseSavedCatalogWatchlistInput, parseSavedCatalogWatchlistUpdateInput, savedCatalogWatchlistExpired, savedWatchlistAlertPreferencesFor } from "./watchlist-store";
 import { shareExpired, shareExpiryDaysFrom, shareExpiryValueProvided, shareExpiresAtFor } from "./share-lifecycle";
-import { createShareOwnerCredential, createShareRecoveryCode, normalizeShareRecoveryCode, shareOwnerOrEnabledAdminCanManage, shareOwnerTokenMatches, shareRecoveryCodeMatches, type SavedBuildRecord } from "./build-share";
+import { createShareOwnerCredential, createShareRecoveryCode, normalizeShareRecoveryCode, shareRecoveryCodeMatches, type SavedBuildRecord } from "./build-share";
 import { createRateLimitMiddleware as createBaseRateLimitMiddleware } from "./rate-limit";
 import type { RateLimitPolicy } from "./rate-limit";
 import { publicSavedCatalogWatchlist, type SavedCatalogWatchlistRecord } from "./watchlist-share";
@@ -46,6 +46,9 @@ import { parseGeneratorVariantsShareInput, publicGeneratorVariantsShare } from "
 import { savedWatchlistAlertsFor, type SavedWatchlistAlert } from "./watchlist-alerts";
 import { parseSavedWatchlistAlertIds } from "./watchlist-alert-state";
 import { adminAuthEnabled, adminSecurityStatus, adminSession, isAdminAuthenticated, loginAdmin, logoutAdmin, requireAdmin } from "./auth";
+import { corsOriginIsAllowed, requireAdminRequestOrigin } from "./origin-policy";
+import type { OwnerSessionResourceType } from "../shared/owner-session-contract";
+import { attachOwnerSessionGrant, createOwnerSessionRouter, ownerManagedShareResponse, ownerSessionModeRequested, ownerSessionOrLegacyTokenOrAdminCanManage, requireOwnerSessionCreationContext, requireOwnerSessionUnsafeOrigin, type OwnerSessionResource } from "./owner-session-routes";
 import { deleteM2SlotOverride, m2SlotOverrideCompleteness, normalizeM2SlotId, readM2SlotOverrides, saveM2SlotOverride, saveM2SlotOverrides, validateM2SlotOverride } from "./m2-overrides";
 import { deleteGpuPhysicalOverride, readGpuPhysicalOverrides, saveGpuPhysicalOverride, saveGpuPhysicalOverrides, saveGpuPhysicalSourceCheck, validateGpuPhysicalOverride, validateGpuPhysicalOverrideBatch } from "./gpu-physical-overrides";
 import { physicalReviewCoverageFor, physicalReviewQueueFor, physicalReviewWorkPackageFor } from "./gpu-physical-review";
@@ -202,20 +205,41 @@ function isApiPath(path: string) {
   return path === "/api" || path.startsWith("/api/");
 }
 
-const defaultCorsOrigins = new Set(["capacitor://localhost", "https://localhost", "http://localhost"]);
-const configuredCorsOrigins = new Set((process.env.CORS_ALLOWED_ORIGINS ?? "")
-  .split(",")
-  .map((origin) => origin.trim())
-  .filter(Boolean));
-const allowedCorsOrigins = new Set([...defaultCorsOrigins, ...configuredCorsOrigins]);
+function requestCanViewAdminMeta(request: Request) {
+  return adminAuthEnabled() && isAdminAuthenticated(request);
+}
+
+function isOwnerSessionUnsafePath(path: string, method: string) {
+  const upperMethod = method.toUpperCase();
+  if (!["POST", "PUT", "PATCH", "DELETE"].includes(upperMethod)) return false;
+  if (path === "/api/owner-sessions" || path.startsWith("/api/owner-sessions/")) return true;
+  if (path === "/api/builds" || path === "/api/watchlists" || path === "/api/comparisons"
+    || path === "/api/version-comparisons" || path === "/api/budget-ladders" || path === "/api/generator-variants") {
+    return upperMethod === "POST";
+  }
+  if (["/api/builds/recommend", "/api/builds/recommend/variants", "/api/builds/recommend/budget-ladder", "/api/builds/check-preview"].includes(path)) return false;
+  if (/^\/api\/builds\/[^/]+(?:\/.*)?$/.test(path)) return true;
+  if (/^\/api\/watchlists\/[^/]+$/.test(path)) return upperMethod === "PATCH" || upperMethod === "DELETE";
+  if (/^\/api\/watchlists\/[^/]+\/alerts\/(?:read|dismiss)$/.test(path)) return upperMethod === "POST";
+  return /^\/api\/(?:comparisons|version-comparisons|budget-ladders|generator-variants)\/[^/]+$/.test(path) && upperMethod === "DELETE";
+}
+
+const ownerSessionShareCreationPaths = new Set([
+  "/api/builds",
+  "/api/watchlists",
+  "/api/comparisons",
+  "/api/version-comparisons",
+  "/api/budget-ladders",
+  "/api/generator-variants"
+]);
 
 app.use((request, response, next) => {
   const origin = request.header("Origin");
-  if (origin && allowedCorsOrigins.has(origin)) {
+  if (origin && corsOriginIsAllowed(origin)) {
     response.setHeader("Access-Control-Allow-Origin", origin);
     response.setHeader("Access-Control-Allow-Credentials", "true");
     response.setHeader("Access-Control-Allow-Methods", "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS");
-    response.setHeader("Access-Control-Allow-Headers", "Accept, Content-Type, If-Modified-Since, If-None-Match, Idempotency-Key, X-Share-Owner-Token");
+    response.setHeader("Access-Control-Allow-Headers", "Accept, Content-Type, If-Modified-Since, If-None-Match, Idempotency-Key, X-Share-Owner-Token, X-PC-Owner-Mode");
     response.setHeader("Access-Control-Expose-Headers", "ETag, Last-Modified, Retry-After, X-Request-Id");
     response.setHeader("Access-Control-Max-Age", "600");
     response.vary("Origin");
@@ -229,10 +253,26 @@ app.use((request, response, next) => {
 
 app.use(express.json({ limit: "1mb" }));
 
+app.use((request, response, next) => {
+  if (isOwnerSessionUnsafePath(request.path, request.method)) {
+    requireOwnerSessionUnsafeOrigin(request, response, next);
+    return;
+  }
+  next();
+});
+
+app.use((request, response, next) => {
+  if (request.method.toUpperCase() === "POST" && ownerSessionShareCreationPaths.has(request.path)) {
+    requireOwnerSessionCreationContext(request, response, next);
+    return;
+  }
+  next();
+});
+
 // Public responses must not expose internal recommendation scores or evidence.
 // Admin evidence APIs retain their full payloads for authorized review.
 app.use((request, response, next) => {
-  const authenticatedAdminMeta = request.path === "/api/meta" && isAdminAuthenticated(request);
+  const authenticatedAdminMeta = request.path === "/api/meta" && requestCanViewAdminMeta(request);
   if (!isApiPath(request.path) || request.path === "/api/admin" || request.path.startsWith("/api/admin/") || authenticatedAdminMeta) {
     next();
     return;
@@ -349,6 +389,10 @@ const partRefreshLastRunAt = new Map<string, number>();
 const accessoryRefreshJobs = new Map<string, Promise<AccessoryRefreshResponse>>();
 const accessoryRefreshLastRunAt = new Map<string, number>();
 const createRateLimitMiddleware = (name: string, policy: RateLimitPolicy) => createBaseRateLimitMiddleware(name, policy, { consume: consumeRateLimitWindow });
+const privateNoStore: RequestHandler = (_request, response, next) => {
+  response.setHeader("Cache-Control", "private, no-store");
+  next();
+};
 const buildCreateRateLimit = createRateLimitMiddleware("build-create", { limit: 20, windowMs: 60_000 });
 const buildShareRateLimit = createRateLimitMiddleware("build-share", { limit: 120, windowMs: 60_000 });
 const buildRecoverRateLimit = createRateLimitMiddleware("build-recover", { limit: 10, windowMs: 60_000 });
@@ -411,6 +455,7 @@ type CompatiblePartAssessmentCacheValue = {
 };
 const compatiblePartAssessmentCache = new TtlLruInFlightCache<CompatiblePartAssessmentCacheValue>({ ttlMs: 2 * 60 * 1000, maxEntries: 40 });
 const watchlistCreateRateLimit = createRateLimitMiddleware("watchlist-create", { limit: 10, windowMs: 60_000 });
+const ownerSessionMigrationRateLimit = createRateLimitMiddleware("owner-session-migrate", { limit: 10, windowMs: 60_000 });
 const watchlistShareRateLimit = createRateLimitMiddleware("watchlist-share", { limit: 120, windowMs: 60_000 });
 const watchlistUpdateRateLimit = createRateLimitMiddleware("watchlist-update", { limit: 30, windowMs: 60_000 });
 const watchlistAlertRateLimit = createRateLimitMiddleware("watchlist-alert", { limit: 60, windowMs: 60_000 });
@@ -854,8 +899,12 @@ app.get("/api/health", async (_request, response) => {
 });
 
 app.get("/api/meta", async (request, response) => {
-  const [meta, crawler, persistence] = await Promise.all([catalogMeta(), readCrawlStatus(), persistenceDiagnostics()]);
-  sendJsonWithEtag(request, response, { ...meta, crawler: publicCrawlStatusFor(crawler as CrawlStatus), engineVersion: ENGINE_VERSION, storageMode: persistence.storageMode, persistence, adminAuthEnabled: adminAuthEnabled() }, undefined, !isAdminAuthenticated(request));
+  const [meta, crawler, persistence] = await Promise.all([
+    loadCatalogSnapshot().then((snapshot) => catalogMeta(snapshot)),
+    readCrawlStatus(),
+    persistenceDiagnostics()
+  ]);
+  sendJsonWithEtag(request, response, { ...meta, crawler: publicCrawlStatusFor(crawler as CrawlStatus), engineVersion: ENGINE_VERSION, storageMode: persistence.storageMode, persistence, adminAuthEnabled: adminAuthEnabled() }, undefined, !requestCanViewAdminMeta(request));
 });
 
 // 클라이언트는 app_open만 전송할 수 있다 — check/save/share/recommend는
@@ -1846,7 +1895,7 @@ app.post("/api/builds/recommend/budget-ladder", publicRecommendationRateLimit, a
   }
 });
 
-app.post("/api/builds", buildCreateRateLimit, async (request, response) => {
+app.post("/api/builds", buildCreateRateLimit, privateNoStore, async (request, response) => {
   const expiresInDays = shareExpiryDaysFrom(request.body?.expiresInDays);
   if (shareExpiryValueProvided(request.body?.expiresInDays) && expiresInDays === undefined) {
     response.status(400).json({ error: "공유 링크 유효기간은 무기한, 7일, 30일 중 하나여야 합니다." });
@@ -1906,7 +1955,7 @@ app.post("/api/builds", buildCreateRateLimit, async (request, response) => {
   }
   if (parentBuild) {
     const parentOwnerToken = request.header("x-share-owner-token");
-    if (!shareOwnerTokenMatches(parentBuild, parentOwnerToken)) {
+    if (!await ownerShareCanManageRequest(request, "build", parentBuild, parentOwnerToken, false)) {
       response.status(401).json({ error: "견적 버전을 연결하려면 원본 견적 소유자 인증이 필요합니다.", code: "SHARE_OWNER_AUTH_REQUIRED" });
       return;
     }
@@ -1946,12 +1995,16 @@ app.post("/api/builds", buildCreateRateLimit, async (request, response) => {
     ownerTokenHash: ownerCredential.hash,
     recoveryCodeHash: recoveryCredential.hash
   };
-  const persisted = await appendSavedBuild(saved);
+  const created = await persistOwnerShareResource(request, response, "build", saved, () => appendSavedBuild(saved), () => deleteSavedBuild(id));
+  if (!created) return;
   trackUsageEvent("save");
-  response.status(201).json({ ...savedBuildPresentationFor(persisted, { catalog, accessories }), ownerToken: ownerCredential.token, recoveryCode: recoveryCredential.code });
+  response.status(201).json({
+    ...ownerManagedShareResponse(savedBuildPresentationFor(created.persisted, { catalog, accessories }), ownerCredential.token, created.ownerManaged),
+    recoveryCode: recoveryCredential.code
+  });
 });
 
-app.post("/api/watchlists", watchlistCreateRateLimit, async (request, response) => {
+app.post("/api/watchlists", watchlistCreateRateLimit, privateNoStore, async (request, response) => {
   const parsed = parseSavedCatalogWatchlistInput(request.body);
   if (parsed.errors.length > 0 || !parsed.name || parsed.nearLowThresholdPercent === undefined) {
     response.status(400).json({ error: parsed.errors[0] ?? "관심 가격 목록을 저장할 수 없습니다.", details: parsed.errors });
@@ -1961,12 +2014,16 @@ app.post("/api/watchlists", watchlistCreateRateLimit, async (request, response) 
   const expiresAt = parsed.expiresInDays === undefined ? undefined : new Date(Date.now() + parsed.expiresInDays * 24 * 60 * 60 * 1000).toISOString();
   const ownerCredential = createShareOwnerCredential();
   const saved: SavedCatalogWatchlistRecord = { id: randomUUID(), name: parsed.name, entries: parsed.entries, nearLowThresholdPercent: parsed.nearLowThresholdPercent, alertPreferences: parsed.alertPreferences ?? DEFAULT_SAVED_WATCHLIST_ALERT_PREFERENCES, createdAt: now, updatedAt: now, ...(expiresAt ? { expiresAt } : {}), ownerTokenHash: ownerCredential.hash };
-  await appendSavedWatchlist(saved);
+  const created = await persistOwnerShareResource(request, response, "watchlist", saved, async () => {
+    await appendSavedWatchlist(saved);
+    return saved;
+  }, () => deleteSavedWatchlist(saved.id));
+  if (!created) return;
   trackUsageEvent("share");
-  response.status(201).json({ ...publicSavedCatalogWatchlist(saved), ownerToken: ownerCredential.token });
+  response.status(201).json(ownerManagedShareResponse(publicSavedCatalogWatchlist(created.persisted), ownerCredential.token, created.ownerManaged));
 });
 
-app.post("/api/comparisons", comparisonCreateRateLimit, async (request, response) => {
+app.post("/api/comparisons", comparisonCreateRateLimit, privateNoStore, async (request, response) => {
   const parsed = parseAlternativeComparisonInput(request.body);
   if (parsed.errors.length > 0 || !parsed.name || parsed.candidates.length < 2) {
     response.status(400).json({ error: parsed.errors[0] ?? "부품 비교를 저장할 수 없습니다.", details: parsed.errors });
@@ -1990,9 +2047,13 @@ app.post("/api/comparisons", comparisonCreateRateLimit, async (request, response
     ...(expiresAt ? { expiresAt } : {}),
     ownerTokenHash: ownerCredential.hash
   };
-  await appendSavedComparison(saved);
+  const created = await persistOwnerShareResource(request, response, "comparison", saved, async () => {
+    await appendSavedComparison(saved);
+    return saved;
+  }, () => deleteSavedComparison(saved.id));
+  if (!created) return;
   trackUsageEvent("share");
-  response.status(201).json({ ...publicAlternativeComparison(saved), ownerToken: ownerCredential.token });
+  response.status(201).json(ownerManagedShareResponse(publicAlternativeComparison(created.persisted), ownerCredential.token, created.ownerManaged));
 });
 
 app.get("/api/comparisons/:id", comparisonShareRateLimit, async (request, response) => {
@@ -2020,7 +2081,7 @@ app.delete("/api/comparisons/:id", comparisonShareRateLimit, async (request, res
   // When admin authentication is disabled for local development there is no
   // authenticated admin session to trust. Keep the owner-token boundary
   // enforced for this public bearer-link endpoint in that mode as well.
-  if (!shareOwnerOrEnabledAdminCanManage(comparison, ownerToken, adminAuthEnabled(), isAdminAuthenticated(request))) {
+  if (!await ownerShareCanManageRequest(request, "comparison", comparison, ownerToken)) {
     response.status(401).json({ error: "이 부품 비교를 취소할 권한이 없습니다.", code: "SHARE_OWNER_AUTH_REQUIRED" });
     return;
   }
@@ -2029,10 +2090,11 @@ app.delete("/api/comparisons/:id", comparisonShareRateLimit, async (request, res
     response.status(404).json({ error: "저장된 부품 비교를 찾을 수 없습니다." });
     return;
   }
+  await deleteOwnerShareSessionGrantsForResource("comparison", id ?? "");
   response.json({ deleted: true });
 });
 
-app.post("/api/version-comparisons", versionComparisonCreateRateLimit, async (request, response) => {
+app.post("/api/version-comparisons", versionComparisonCreateRateLimit, privateNoStore, async (request, response) => {
   const parsed = parseSavedBuildVersionComparisonShareInput(request.body ?? {});
   if (parsed.errors.length > 0 || !parsed.beforeBuildId || !parsed.afterBuildId) {
     response.status(400).json({ error: parsed.errors[0] ?? "저장 견적 버전 비교를 만들 수 없습니다.", details: parsed.errors });
@@ -2050,7 +2112,7 @@ app.post("/api/version-comparisons", versionComparisonCreateRateLimit, async (re
     return;
   }
   const ownerToken = request.header("x-share-owner-token");
-  if (!shareOwnerOrEnabledAdminCanManage(after, ownerToken, adminAuthEnabled(), isAdminAuthenticated(request))) {
+  if (!await ownerShareCanManageRequest(request, "build", after, ownerToken)) {
     response.status(401).json({ error: "버전 비교를 공유하려면 이후 버전 견적의 소유자 인증이 필요합니다.", code: "SHARE_OWNER_AUTH_REQUIRED" });
     return;
   }
@@ -2079,9 +2141,13 @@ app.post("/api/version-comparisons", versionComparisonCreateRateLimit, async (re
     ...(expiresAt ? { expiresAt } : {}),
     ownerTokenHash: ownerCredential.hash
   };
-  await appendSavedBuildVersionComparison(saved);
+  const created = await persistOwnerShareResource(request, response, "version-comparison", saved, async () => {
+    await appendSavedBuildVersionComparison(saved);
+    return saved;
+  }, () => deleteSavedBuildVersionComparison(saved.id));
+  if (!created) return;
   trackUsageEvent("share");
-  response.status(201).json({ ...publicSavedBuildVersionComparisonShare(saved), ownerToken: ownerCredential.token });
+  response.status(201).json(ownerManagedShareResponse(publicSavedBuildVersionComparisonShare(created.persisted), ownerCredential.token, created.ownerManaged));
 });
 
 app.get("/api/version-comparisons/:id", versionComparisonShareRateLimit, async (request, response) => {
@@ -2106,7 +2172,7 @@ app.delete("/api/version-comparisons/:id", versionComparisonShareRateLimit, asyn
     return;
   }
   const ownerToken = request.header("x-share-owner-token");
-  if (!shareOwnerOrEnabledAdminCanManage(comparison, ownerToken, adminAuthEnabled(), isAdminAuthenticated(request))) {
+  if (!await ownerShareCanManageRequest(request, "version-comparison", comparison, ownerToken)) {
     response.status(401).json({ error: "이 견적 버전 비교를 취소할 권한이 없습니다.", code: "SHARE_OWNER_AUTH_REQUIRED" });
     return;
   }
@@ -2115,10 +2181,11 @@ app.delete("/api/version-comparisons/:id", versionComparisonShareRateLimit, asyn
     response.status(404).json({ error: "저장된 견적 버전 비교를 찾을 수 없습니다." });
     return;
   }
+  await deleteOwnerShareSessionGrantsForResource("version-comparison", id ?? "");
   response.json({ deleted: true });
 });
 
-app.post("/api/budget-ladders", budgetLadderCreateRateLimit, async (request, response) => {
+app.post("/api/budget-ladders", budgetLadderCreateRateLimit, privateNoStore, async (request, response) => {
   const parsed = parseBudgetLadderShareInput(request.body);
   if (parsed.errors.length > 0 || !parsed.name || !parsed.payload) {
     response.status(400).json({ error: parsed.errors[0] ?? "예산 구간 비교를 저장할 수 없습니다.", details: parsed.errors });
@@ -2151,9 +2218,13 @@ app.post("/api/budget-ladders", budgetLadderCreateRateLimit, async (request, res
     ...(expiresAt ? { expiresAt } : {}),
     ownerTokenHash: ownerCredential.hash
   };
-  await appendSavedBudgetLadder(saved);
+  const created = await persistOwnerShareResource(request, response, "budget-ladder", saved, async () => {
+    await appendSavedBudgetLadder(saved);
+    return saved;
+  }, () => deleteSavedBudgetLadder(saved.id));
+  if (!created) return;
   trackUsageEvent("share");
-  response.status(201).json({ ...publicBudgetLadderShare(saved, catalogSnapshotAt), ownerToken: ownerCredential.token });
+  response.status(201).json(ownerManagedShareResponse(publicBudgetLadderShare(created.persisted, catalogSnapshotAt), ownerCredential.token, created.ownerManaged));
 });
 
 app.get("/api/budget-ladders/:id", budgetLadderShareRateLimit, async (request, response) => {
@@ -2200,7 +2271,7 @@ app.delete("/api/budget-ladders/:id", budgetLadderShareRateLimit, async (request
     return;
   }
   const ownerToken = request.header("x-share-owner-token");
-  if (!shareOwnerOrEnabledAdminCanManage(ladder, ownerToken, adminAuthEnabled(), isAdminAuthenticated(request))) {
+  if (!await ownerShareCanManageRequest(request, "budget-ladder", ladder, ownerToken)) {
     response.status(401).json({ error: "이 예산 구간 비교를 취소할 권한이 없습니다.", code: "SHARE_OWNER_AUTH_REQUIRED" });
     return;
   }
@@ -2209,10 +2280,11 @@ app.delete("/api/budget-ladders/:id", budgetLadderShareRateLimit, async (request
     response.status(404).json({ error: "저장된 예산 구간 비교를 찾을 수 없습니다." });
     return;
   }
+  await deleteOwnerShareSessionGrantsForResource("budget-ladder", id ?? "");
   response.json({ deleted: true });
 });
 
-app.post("/api/generator-variants", generatorVariantsCreateRateLimit, async (request, response) => {
+app.post("/api/generator-variants", generatorVariantsCreateRateLimit, privateNoStore, async (request, response) => {
   const parsed = parseGeneratorVariantsShareInput(request.body);
   if (parsed.errors.length > 0 || !parsed.name || !parsed.payload) {
     response.status(400).json({ error: parsed.errors[0] ?? "자동 구성 비교를 저장할 수 없습니다.", details: parsed.errors });
@@ -2233,9 +2305,13 @@ app.post("/api/generator-variants", generatorVariantsCreateRateLimit, async (req
     ...(expiresAt ? { expiresAt } : {}),
     ownerTokenHash: ownerCredential.hash
   };
-  await appendSavedGeneratorVariants(saved);
+  const created = await persistOwnerShareResource(request, response, "generator-variants", saved, async () => {
+    await appendSavedGeneratorVariants(saved);
+    return saved;
+  }, () => deleteSavedGeneratorVariants(saved.id));
+  if (!created) return;
   trackUsageEvent("share");
-  response.status(201).json({ ...publicGeneratorVariantsShare(saved, catalogSnapshotAt), ownerToken: ownerCredential.token });
+  response.status(201).json(ownerManagedShareResponse(publicGeneratorVariantsShare(created.persisted, catalogSnapshotAt), ownerCredential.token, created.ownerManaged));
 });
 
 app.get("/api/generator-variants/:id", generatorVariantsShareRateLimit, async (request, response) => {
@@ -2261,7 +2337,7 @@ app.delete("/api/generator-variants/:id", generatorVariantsShareRateLimit, async
     return;
   }
   const ownerToken = request.header("x-share-owner-token");
-  if (!shareOwnerOrEnabledAdminCanManage(saved, ownerToken, adminAuthEnabled(), isAdminAuthenticated(request))) {
+  if (!await ownerShareCanManageRequest(request, "generator-variants", saved, ownerToken)) {
     response.status(401).json({ error: "이 자동 구성 비교를 취소할 권한이 없습니다.", code: "SHARE_OWNER_AUTH_REQUIRED" });
     return;
   }
@@ -2270,6 +2346,7 @@ app.delete("/api/generator-variants/:id", generatorVariantsShareRateLimit, async
     response.status(404).json({ error: "저장된 자동 구성 비교를 찾을 수 없습니다." });
     return;
   }
+  await deleteOwnerShareSessionGrantsForResource("generator-variants", id ?? "");
   response.json({ deleted: true });
 });
 
@@ -2299,7 +2376,7 @@ app.patch("/api/watchlists/:id", watchlistUpdateRateLimit, async (request, respo
     return;
   }
   const ownerToken = request.header("x-share-owner-token");
-  if (!shareOwnerOrEnabledAdminCanManage(watchlist, ownerToken, adminAuthEnabled(), isAdminAuthenticated(request))) {
+  if (!await ownerShareCanManageRequest(request, "watchlist", watchlist, ownerToken)) {
     response.status(401).json({ error: "이 관심 가격 목록을 수정할 권한이 없습니다.", code: "SHARE_OWNER_AUTH_REQUIRED" });
     return;
   }
@@ -2331,7 +2408,7 @@ app.patch("/api/watchlists/:id", watchlistUpdateRateLimit, async (request, respo
   response.json(publicSavedCatalogWatchlist(next));
 });
 
-app.get("/api/watchlists/:id/alerts", watchlistAlertRateLimit, async (request, response) => {
+app.get("/api/watchlists/:id/alerts", watchlistAlertRateLimit, privateNoStore, async (request, response) => {
   const id = routeParam(request.params.id);
   const watchlist = (await readSavedWatchlists()).find((item) => item.id === id);
   if (!watchlist) {
@@ -2343,7 +2420,7 @@ app.get("/api/watchlists/:id/alerts", watchlistAlertRateLimit, async (request, r
     return;
   }
   const ownerToken = request.header("x-share-owner-token");
-  if (!shareOwnerOrEnabledAdminCanManage(watchlist, ownerToken, adminAuthEnabled(), isAdminAuthenticated(request))) {
+  if (!await ownerShareCanManageRequest(request, "watchlist", watchlist, ownerToken)) {
     response.status(401).json({ error: "이 관심 가격 목록의 알림을 조회할 권한이 없습니다.", code: "SHARE_OWNER_AUTH_REQUIRED" });
     return;
   }
@@ -2371,7 +2448,7 @@ async function updateWatchlistAlertAction(request: import("express").Request, re
     return;
   }
   const ownerToken = request.header("x-share-owner-token");
-  if (!shareOwnerOrEnabledAdminCanManage(watchlist, ownerToken, adminAuthEnabled(), isAdminAuthenticated(request))) {
+  if (!await ownerShareCanManageRequest(request, "watchlist", watchlist, ownerToken)) {
     response.status(401).json({ error: "이 관심 가격 목록의 알림을 변경할 권한이 없습니다.", code: "SHARE_OWNER_AUTH_REQUIRED" });
     return;
   }
@@ -2402,7 +2479,7 @@ app.delete("/api/watchlists/:id", watchlistShareRateLimit, async (request, respo
     return;
   }
   const ownerToken = request.header("x-share-owner-token");
-  if (!shareOwnerOrEnabledAdminCanManage(watchlist, ownerToken, adminAuthEnabled(), isAdminAuthenticated(request))) {
+  if (!await ownerShareCanManageRequest(request, "watchlist", watchlist, ownerToken)) {
     response.status(401).json({ error: "이 관심 가격 목록을 취소할 권한이 없습니다.", code: "SHARE_OWNER_AUTH_REQUIRED" });
     return;
   }
@@ -2411,6 +2488,7 @@ app.delete("/api/watchlists/:id", watchlistShareRateLimit, async (request, respo
     response.status(404).json({ error: "저장된 관심 가격 목록을 찾을 수 없습니다." });
     return;
   }
+  await deleteOwnerShareSessionGrantsForResource("watchlist", id ?? "");
   await deleteSavedWatchlistAlertStates(id ?? "");
   response.json({ deleted: true });
 });
@@ -2435,7 +2513,7 @@ async function savedBuildForRequest(request: Request, response: Response, option
   }
   if (!options.requireOwner) return build;
   const ownerToken = request.header("x-share-owner-token");
-  if (!shareOwnerOrEnabledAdminCanManage(build, ownerToken, adminAuthEnabled(), isAdminAuthenticated(request))) {
+  if (!await ownerShareCanManageRequest(request, "build", build, ownerToken)) {
     response.status(401).json({ error: options.unauthorizedMessage ?? `${eul(options.action ?? "서버 백그라운드 점검")} 관리하려면 견적 소유자 인증이 필요합니다.`, code: "SHARE_OWNER_AUTH_REQUIRED" });
     return undefined;
   }
@@ -2445,6 +2523,67 @@ async function savedBuildForRequest(request: Request, response: Response, option
 async function ownedSavedBuildForRequest(request: Request, response: Response, action = "서버 백그라운드 점검", unauthorizedMessage?: string) {
   return savedBuildForRequest(request, response, { requireOwner: true, action, unauthorizedMessage });
 }
+
+async function ownerShareCanManageRequest(
+  request: Request,
+  resourceType: OwnerSessionResourceType,
+  resource: OwnerSessionResource,
+  ownerToken: string | undefined,
+  allowAdmin = true
+) {
+  return ownerSessionOrLegacyTokenOrAdminCanManage(
+    request,
+    resourceType,
+    resource,
+    ownerToken,
+    adminAuthEnabled(),
+    isAdminAuthenticated(request),
+    ownerSessionStoreApi,
+    allowAdmin
+  );
+}
+
+const ownerSessionStoreApi = {
+  createOwnerShareSession,
+  ownerShareSessionIsActive,
+  deleteOwnerShareSession,
+  pruneExpiredOwnerShareSessions,
+  pruneExpiredOwnerShareSessionGrants,
+  upsertOwnerShareSessionGrant,
+  ownerShareSessionGrantMatches,
+  listOwnerShareSessionGrants
+};
+
+async function readOwnerSessionResources(resourceType: OwnerSessionResourceType): Promise<OwnerSessionResource[]> {
+  switch (resourceType) {
+    case "build": return loadBuilds();
+    case "watchlist": return readSavedWatchlists();
+    case "comparison": return readSavedComparisons();
+    case "version-comparison": return readSavedBuildVersionComparisons();
+    case "budget-ladder": return readSavedBudgetLadders();
+    case "generator-variants": return readSavedGeneratorVariants();
+  }
+}
+
+async function persistOwnerShareResource<T extends OwnerSessionResource>(
+  request: Request,
+  response: Response,
+  resourceType: OwnerSessionResourceType,
+  resource: T,
+  persist: () => Promise<T>,
+  rollback: () => Promise<unknown>
+) {
+  const persisted = await persist();
+  const ownerManaged = await attachOwnerSessionGrant(request, response, resourceType, resource, ownerSessionStoreApi, rollback);
+  if (ownerManaged === undefined) return undefined;
+  return { persisted, ownerManaged };
+}
+
+app.use("/api/owner-sessions", createOwnerSessionRouter({
+  ...ownerSessionStoreApi,
+  migrationRateLimit: ownerSessionMigrationRateLimit,
+  readResources: readOwnerSessionResources
+}));
 
 app.patch("/api/builds/:id", buildShareRateLimit, async (request, response) => {
   const body = request.body && typeof request.body === "object" && !Array.isArray(request.body)
@@ -2525,10 +2664,9 @@ app.put("/api/builds/:id/my-pc", buildShareRateLimit, async (request, response) 
   response.json(savedBuildPresentationFor(updated, await loadSavedBuildPresentationContext()));
 });
 
-app.get("/api/builds/:id/metadata-history", buildShareRateLimit, async (request, response) => {
+app.get("/api/builds/:id/metadata-history", buildShareRateLimit, privateNoStore, async (request, response) => {
   const build = await ownedSavedBuildForRequest(request, response, "저장 견적 설명 이력");
   if (!build) return;
-  response.setHeader("Cache-Control", "no-store");
   response.json({
     buildId: build.id,
     current: { name: build.name, ...(build.decisionNote ? { decisionNote: build.decisionNote } : {}) },
@@ -2596,7 +2734,7 @@ app.post("/api/builds/check-preview", buildMonitorRateLimit, async (request, res
   response.json(payload);
 });
 
-app.get("/api/builds/:id/monitor", buildShareRateLimit, async (request, response) => {
+app.get("/api/builds/:id/monitor", buildShareRateLimit, privateNoStore, async (request, response) => {
   const build = await ownedSavedBuildForRequest(request, response);
   if (!build) return;
   response.json(savedBuildMonitorResponseFor(build));
@@ -2887,11 +3025,12 @@ app.delete("/api/builds/:id", buildShareRateLimit, async (request, response) => 
     response.status(404).json({ error: "저장된 견적을 찾을 수 없습니다." });
     return;
   }
+  await deleteOwnerShareSessionGrantsForResource("build", id ?? "");
   response.json({ deleted: true });
 });
 
 // 저장 견적 복구 코드 발급/재발급 — 소유자만 가능하며, 새 코드가 나오면 이전 코드는 폐기된다.
-app.post("/api/builds/:id/recovery-code", buildShareRateLimit, async (request, response) => {
+app.post("/api/builds/:id/recovery-code", buildShareRateLimit, privateNoStore, async (request, response) => {
   const build = await ownedSavedBuildForRequest(request, response, "복구 코드 발급", "복구 코드를 만들려면 이 견적의 소유자 인증이 필요합니다.");
   if (!build) return;
   const credential = createShareRecoveryCode();
@@ -2908,7 +3047,7 @@ app.post("/api/builds/:id/recovery-code", buildShareRateLimit, async (request, r
 
 // 복구 코드로 소유권 되찾기 — 코드가 맞으면 새 owner token을 발급하고 이전 토큰은 폐기한다.
 // 사용한 복구 코드도 함께 회전한다 — 코드를 아는 사람이 영구적인 재탈취 경로를 갖지 않도록.
-app.post("/api/builds/:id/recover", buildRecoverRateLimit, async (request, response) => {
+app.post("/api/builds/:id/recover", buildRecoverRateLimit, privateNoStore, async (request, response) => {
   const build = await savedBuildForRequest(request, response);
   if (!build) return;
   const code = typeof request.body?.recoveryCode === "string" ? request.body.recoveryCode : undefined;
@@ -2922,9 +3061,29 @@ app.post("/api/builds/:id/recover", buildRecoverRateLimit, async (request, respo
   }
   const ownerCredential = createShareOwnerCredential();
   const recoveryCredential = createShareRecoveryCode();
+  const rollbackOwnerTokenHash = build.ownerTokenHash ?? createShareOwnerCredential().hash;
   const updated = await updateSavedBuildShareCredentials(build.id, ownerCredential.hash, recoveryCredential.hash, build.recoveryCodeHash);
   if (!updated) {
     response.status(401).json({ error: "복구 코드가 이 견적과 일치하지 않습니다.", code: "RECOVERY_CODE_MISMATCH" });
+    return;
+  }
+  const rollbackCredentialRotation = async () => updateSavedBuildShareCredentials(
+    build.id,
+    rollbackOwnerTokenHash,
+    build.recoveryCodeHash ?? "",
+    recoveryCredential.hash
+  );
+  if (ownerSessionModeRequested(request)) {
+    const ownerManaged = await attachOwnerSessionGrant(
+      request,
+      response,
+      "build",
+      { id: build.id, ownerTokenHash: ownerCredential.hash, ...(build.expiresAt ? { expiresAt: build.expiresAt } : {}) },
+      ownerSessionStoreApi,
+      rollbackCredentialRotation
+    );
+    if (ownerManaged === undefined) return;
+    response.json(ownerManagedShareResponse({ recoveryCode: recoveryCredential.code }, ownerCredential.token, ownerManaged));
     return;
   }
   response.json({ ownerToken: ownerCredential.token, recoveryCode: recoveryCredential.code });
@@ -4308,15 +4467,15 @@ app.delete("/api/admin/benchmark-overrides/:partId", requireAdmin, async (reques
   response.json({ deleted: true, partId });
 });
 
-app.get("/api/admin/session", (request, response) => {
+app.get("/api/admin/session", privateNoStore, (request, response) => {
   response.json(adminSession(request));
 });
 
-app.post("/api/admin/login", adminLoginRateLimit, (request, response) => {
+app.post("/api/admin/login", privateNoStore, requireAdminRequestOrigin, adminLoginRateLimit, (request, response) => {
   loginAdmin(request, response);
 });
 
-app.post("/api/admin/logout", (request, response) => {
+app.post("/api/admin/logout", privateNoStore, requireAdminRequestOrigin, (request, response) => {
   logoutAdmin(request, response);
 });
 

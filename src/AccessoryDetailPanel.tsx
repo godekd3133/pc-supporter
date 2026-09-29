@@ -75,7 +75,11 @@ export function AccessoryDetailPanel({ item, selected, isWatched, isCachedFallba
   const [priceHistoryError, setPriceHistoryError] = useState<string | null>(null);
   const [priceHistoryRetryNonce, setPriceHistoryRetryNonce] = useState(0);
   const sourceUrl = safeExternalUrl(item.danawaUrl);
-    const rows = accessorySpecRowsFor(item);
+  const rows = accessorySpecRowsFor(item);
+  const parsedCachedAt = cachedAt ? new Date(cachedAt) : undefined;
+  const cachedAtText = parsedCachedAt && Number.isFinite(parsedCachedAt.getTime())
+    ? parsedCachedAt.toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" })
+    : "저장 시각을 확인할 수 없어요.";
   const decision = priceWatchDecisionFor({ currentStatus: isKnownPrice(item.priceWon) ? "available" : "unavailable", currentPriceWon: item.priceWon, history: priceHistory?.summary });
 
   useEffect(() => setWatching(isWatched), [isWatched, item.id]);
@@ -94,7 +98,7 @@ export function AccessoryDetailPanel({ item, selected, isWatched, isCachedFallba
 
   return <section className="accessory-detail-panel" aria-label="선택한 주변 부품 상세" data-testid="accessory-detail-panel">
     <div className="accessory-detail-heading"><div><p className="eyebrow">주변 부품 상세</p><h2>{item.name}</h2><p>{ACCESSORY_CATEGORY_LABELS[item.category]} · {item.brand ?? item.model ?? "주변 부품"}</p></div><button className="icon-button" type="button" onClick={onClose} aria-label="주변 부품 상세 닫기"><FiXCircle /></button></div>
-    {isCachedFallback && <div className="accessory-detail-cache-state" data-testid="accessory-detail-cache-state" role="status"><span><FiDatabase /></span><div><strong>저장된 정보로 표시 중</strong><p>상품 정보가 최신인지 확인할 수 없어요.</p></div>{onRefresh && <button className="button button-small button-light" type="button" data-testid="accessory-detail-refresh" onClick={onRefresh} disabled={refreshing}>{refreshing ? <><FiLoader className="spin" /> 불러오는 중...</> : <><FiRefreshCw /> 새로 불러오기</>}</button>}</div>}
+    {isCachedFallback && <div className="accessory-detail-cache-state" data-testid="accessory-detail-cache-state" role="status"><span><FiDatabase /></span><div><strong>저장된 정보로 표시 중</strong><p>상품 정보가 최신인지 확인할 수 없어요.</p><small data-testid="accessory-detail-cache-time">마지막 저장 · {cachedAtText}</small></div>{onRefresh && <button className="button button-small button-light" type="button" data-testid="accessory-detail-refresh" onClick={onRefresh} disabled={refreshing}>{refreshing ? <><FiLoader className="spin" /> 불러오는 중...</> : <><FiRefreshCw /> 새로 불러오기</>}</button>}</div>}
     {!isCachedFallback && onRefresh && <div className="accessory-detail-refresh" data-testid="accessory-detail-refresh-bar"><div><FiRefreshCw /><span><strong>상품 정보와 가격 새로 불러오기</strong><small>최신 상품 정보를 불러와요.</small></span></div><button className="button button-small button-light" type="button" data-testid="accessory-detail-refresh" onClick={onRefresh} disabled={refreshing}>{refreshing ? <><FiLoader className="spin" /> 불러오는 중...</> : <><FiRefreshCw /> 새로 불러오기</>}</button></div>}
     {refreshMessage && <p className="accessory-detail-refresh-feedback success" data-testid="accessory-detail-refresh-success"><FiCheck /> {refreshMessage}</p>}
     {refreshError && <p className="accessory-detail-refresh-feedback error" data-testid="accessory-detail-refresh-error" role="alert"><FiXCircle /> {refreshError}</p>}

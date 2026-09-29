@@ -26,6 +26,15 @@ describe("generator variants local shares", () => {
     expect(generatorVariantsLocalSharesFromJson(JSON.stringify([entry("ok")]))[0].ownerToken).toBe("token-ok");
   });
 
+  it("persists session ownership without retaining the bearer token", () => {
+    const raw = generatorVariantsLocalSharesToJson([entry("session-owned", { ownerToken: "legacy-secret", owned: true })]);
+    const parsed = generatorVariantsLocalSharesFromJson(raw);
+
+    expect(raw).not.toContain("ownerToken");
+    expect(raw).not.toContain("legacy-secret");
+    expect(parsed[0]).toMatchObject({ id: "session-owned", owned: true, name: "공유 session-owned" });
+  });
+
   it("detects expired links", () => {
     expect(generatorVariantsLocalShareExpired(entry("live", { expiresAt: "2026-09-18T00:00:00.000Z" }), Date.parse("2026-09-17T00:00:00.000Z"))).toBe(false);
     expect(generatorVariantsLocalShareExpired(entry("dead", { expiresAt: "2026-09-18T00:00:00.000Z" }), Date.parse("2026-09-18T00:00:00.000Z"))).toBe(true);

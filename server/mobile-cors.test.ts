@@ -58,4 +58,22 @@ describe("mobile API CORS boundary", () => {
     expect(response.headers.get("set-cookie")).toContain("SameSite=None");
     expect(response.headers.get("set-cookie")).toContain("Secure");
   });
+
+  it("allows a Capacitor-origin admin mutation after native login", async () => {
+    const login = await fetch(`${baseUrl}/api/admin/login`, {
+      method: "POST",
+      headers: { Origin: "capacitor://localhost", "Content-Type": "application/json" },
+      body: JSON.stringify({ password: "mobile-cors-test-password" })
+    });
+    expect(login.status).toBe(200);
+    const cookie = login.headers.get("set-cookie")?.split(";", 1)[0];
+
+    const validation = await fetch(`${baseUrl}/api/admin/benchmark-overrides/validate`, {
+      method: "POST",
+      headers: { Cookie: cookie!, Origin: "capacitor://localhost", "Content-Type": "application/json" },
+      body: JSON.stringify({})
+    });
+
+    expect(validation.status).toBe(400);
+  });
 });

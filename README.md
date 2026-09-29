@@ -598,7 +598,7 @@ npm run dev
 - 웹: `http://127.0.0.1:5173`
 - API: `http://127.0.0.1:4174`
 
-`npm run preview -- --port 4184`로 production build를 preview할 때도 `/api` 요청은 `VITE_API_PROXY_TARGET`(기본 `http://127.0.0.1:4174`)으로 전달됩니다. 따라서 preview 포트에서 화면만 열리고 API가 끊기는 `Failed to fetch` 상황을 피할 수 있습니다. 외부 정적 호스팅을 사용할 때는 호스팅 레이어에서 `/api` reverse proxy를 같은 target으로 구성해야 합니다.
+`npm run preview -- --port 4184`로 production build를 preview할 때도 `/api` 요청은 `VITE_API_PROXY_TARGET`(기본 `http://127.0.0.1:4174`)으로 전달됩니다. 따라서 preview 포트에서 화면만 열리고 API가 끊기는 `Failed to fetch` 상황을 피할 수 있습니다. 외부 정적 호스팅을 사용할 때는 호스팅 레이어에서 `/api` reverse proxy를 같은 target으로 구성하고, `dist/index.html`의 CSP meta와 같은 CSP를 HTTP response header에도 설정해야 합니다. 그 헤더에는 `frame-ancestors 'none'`을 포함해야 합니다. CSP meta는 `frame-ancestors`를 적용하지 않습니다.
 
 API와 production preview를 한 번에 실행하려면 `npm run build && npm run preview:full`을 사용합니다. 기본값은 웹 `http://127.0.0.1:4184`, API `http://127.0.0.1:4174`이며, `PREVIEW_PORT`·`PREVIEW_API_PORT`·`VITE_API_PROXY_TARGET`로 변경할 수 있습니다. preview 전용 실행은 외부 다나와 수집을 기본적으로 시작하지 않으므로 테스트 중 catalog가 자동 변경되지 않습니다. 실제 수집이 필요한 경우에만 `DANAWA_CRAWL_ON_START=true`를 명시하세요.
 

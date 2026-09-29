@@ -26,6 +26,7 @@ export interface BuildActionCenter {
 }
 
 const priorityRank: Record<BuildActionPriority, number> = { blocker: 0, review: 1, manual: 2 };
+type BuildActionCenterResult = Omit<CompatibilityResult, "analysis">;
 
 function priorityForFinding(severity: Exclude<FindingSeverity, "info">): BuildActionPriority {
   return severity === "blocker" ? "blocker" : "review";
@@ -55,7 +56,7 @@ function dataActionFor(item: BuildDataHealthItem): BuildAction[] {
   return actions;
 }
 
-function connectivityActionsFor(result: CompatibilityResult, build: BuildSelection | undefined, partMap: ReadonlyMap<string, Part> | undefined): BuildAction[] {
+function connectivityActionsFor(result: BuildActionCenterResult, build: BuildSelection | undefined, partMap: ReadonlyMap<string, Part> | undefined): BuildAction[] {
   if (!build || !partMap) return [];
   const summary = buildConnectivitySummaryFor(
     build.motherboard ? partMap.get(build.motherboard.partId)?.specs : undefined,
@@ -75,7 +76,7 @@ function connectivityActionsFor(result: CompatibilityResult, build: BuildSelecti
     }));
 }
 
-function resourceActionFor(result: CompatibilityResult): BuildAction | undefined {
+function resourceActionFor(result: Pick<CompatibilityResult, "metrics">): BuildAction | undefined {
   const summary = buildResourceSummaryFor(result.metrics);
   if (summary.state !== "danger" && summary.state !== "warning" && summary.state !== "unknown") return undefined;
   const affectedCards = summary.cards
@@ -92,7 +93,7 @@ function resourceActionFor(result: CompatibilityResult): BuildAction | undefined
   };
 }
 
-export function buildActionCenterFor(result: CompatibilityResult, build?: BuildSelection, partMap?: ReadonlyMap<string, Part>): BuildActionCenter {
+export function buildActionCenterFor(result: BuildActionCenterResult, build?: BuildSelection, partMap?: ReadonlyMap<string, Part>): BuildActionCenter {
   const actions: BuildAction[] = [];
   const seen = new Set<string>();
   const firstRepairPlan = result.repairPlans?.[0];

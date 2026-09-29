@@ -406,7 +406,39 @@ describe("public API evidence projection", () => {
       }
       await rm(directory, { recursive: true, force: true });
     }
-  });
+  }, 30_000);
+
+  it("keeps development meta projected while admin authentication is disabled", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "pc-supporter-public-meta-development-"));
+    const envKeys = ["PC_SUPPORTER_DATA_DIR", "DATABASE_URL", "ADMIN_PASSWORD", "PC_SUPPORTER_PROCESS_ROLE"] as const;
+    const previousEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]])) as Record<typeof envKeys[number], string | undefined>;
+    process.env.PC_SUPPORTER_DATA_DIR = directory;
+    process.env.DATABASE_URL = "";
+    process.env.PC_SUPPORTER_PROCESS_ROLE = "combined";
+    delete process.env.ADMIN_PASSWORD;
+    vi.resetModules();
+
+    let server: Server | undefined;
+    try {
+      const [{ app }] = await Promise.all([import("./index")]);
+      server = app.listen(0, "127.0.0.1");
+      await new Promise<void>((resolve, reject) => { server?.once("listening", resolve); server?.once("error", reject); });
+      const address = server.address();
+      if (!address || typeof address === "string") throw new Error("development public meta test server did not expose a TCP port");
+
+      const response = await fetch(`http://127.0.0.1:${address.port}/api/meta`);
+      expect(response.status).toBe(200);
+      expect(await response.json()).not.toHaveProperty("benchmarkCoverage");
+    } finally {
+      if (server) await closeServer(server);
+      vi.resetModules();
+      for (const key of envKeys) {
+        if (previousEnv[key] === undefined) delete process.env[key];
+        else process.env[key] = previousEnv[key];
+      }
+      await rm(directory, { recursive: true, force: true });
+    }
+  }, 30_000);
 });
 
 afterAll(() => vi.resetModules());

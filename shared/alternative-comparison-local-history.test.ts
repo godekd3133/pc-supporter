@@ -60,6 +60,14 @@ describe("alternative comparison local share history", () => {
     expect(alternativeComparisonLocalSharesFromJson(JSON.stringify([entry("legacy", { category: undefined, currentPartName: undefined, currentPartSummary: undefined, currentPartPrice: undefined, expiresAt: undefined, ownerToken: undefined })]))[0]).toMatchObject({ id: "legacy", name: "부품 비교 legacy" });
   });
 
+  it("persists session ownership without retaining a bearer token or losing share metadata", () => {
+    const raw = alternativeComparisonLocalSharesToJson([entry("session-owned", { owned: true })]);
+    const parsed = alternativeComparisonLocalSharesFromJson(raw);
+
+    expect(raw).not.toContain("ownerToken");
+    expect(parsed[0]).toMatchObject({ id: "session-owned", owned: true, category: "CPU", currentPartName: "현재 CPU", currentPartSummary: "AM5 · 8코어", currentPartPrice: "420,000원" });
+  });
+
   it("rejects an oversized raw local history before normalizing every entry", () => {
     const oversized = Array.from({ length: 21 }, (_, index) => entry(`share-${index}`));
     expect(alternativeComparisonLocalSharesFromJson(JSON.stringify(oversized))).toEqual([]);
