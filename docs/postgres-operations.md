@@ -79,8 +79,44 @@ The tests use temporary mock `pg_dump`, `pg_restore`, and `psql` executables. Th
 
 The schema parity test reads the `POSTGRES_SCHEMA_SQL` template from `server/repository.ts` as text without importing or executing server code. It combines `CREATE TABLE` declarations with additive `ALTER TABLE ... ADD COLUMN` declarations, compares effective table declarations and indexes with `db/schema.sql`, and explicitly checks the previously missing `saved_builds.my_pc_at`, `saved_budget_ladders`, `saved_generator_variants`, and owner-session tables/indexes.
 
+## Import existing catalog override maps
+
+The explicit `import:catalog-overrides` command imports the raw stored `catalog-spec-overrides.json` and `m2-slot-overrides.json` full maps. Do not use the admin review/export payloads. The command preserves record timestamps and source-check metadata.
+
+Provide both exact source paths. The default is dry-run: it validates both maps and prints only record counts and source SHA-256 digests. It does not read `DATABASE_URL`, create a connection pool, contact PostgreSQL, or modify either source file:
+
+```bash
+npm run import:catalog-overrides -- \
+  --catalog-spec-file /private/path/catalog-spec-overrides.json \
+  --m2-slot-file /private/path/m2-slot-overrides.json
+```
+
+Review both dry-run digests before explicitly applying. Supply those exact digests and a `DATABASE_URL` through the operator's protected environment:
+
+```bash
+# Set these from the reviewed dry-run output in the protected shell environment.
+npm run import:catalog-overrides -- \
+  --catalog-spec-file /private/path/catalog-spec-overrides.json \
+  --m2-slot-file /private/path/m2-slot-overrides.json \
+  --apply \
+  --catalog-spec-sha256 "$CATALOG_SPEC_SHA256" \
+  --m2-slot-sha256 "$M2_SLOT_SHA256"
+```
+
+Apply uses one PostgreSQL client and one transaction. It acquires the existing `pc-supporter:catalog-spec-overrides` then `pc-supporter:m2-slot-overrides` transaction advisory locks before reading either singleton. Both target tables must already exist; the command never executes schema DDL or falls back to JSON-file persistence. An absent row or empty object map may be initialized, an exact canonical map is an idempotent no-op, and any different nonempty target rejects the whole transaction without per-key merging. The original files remain untouched.
+
+Validation covers the stored record shape and values, including metadata, but does not re-check part existence, current catalog missing fields, or motherboard M.2 slot-count agreement. Those catalog-dependent checks and any real PostgreSQL import/cutover require separate review and verification. This command is an explicit data import tool; it is not run at application startup and does not replace a schema migration runner.
+
+The focused importer regression command is:
+
+```bash
+npm test -- scripts/import-catalog-overrides.test.ts
+```
+
+These tests use a fake PostgreSQL client. They cover dry-run without dotenv or pool creation, explicit source/hash checks, strict map parsing, lossless maps above 500 records and long part IDs, lock order, empty/exact/conflicting destinations, and transaction rollback after a partial write failure. They do not connect to PostgreSQL or apply a production data cutover.
+
 ## Evidence boundary and remaining work
 
-Passing the focused mock tests proves the local CLI’s guard behavior around mocked binaries. It does not prove that a real PostgreSQL server accepts the commands, that a real dump can be restored, or that the restored application reads equivalent production state. No real dump or restore is claimed here.
+The backup/restore CLI's focused tests check its guards using mocked `pg_dump`, `pg_restore`, and `psql` binaries; the override importer has separate fake-client tests for map validation and atomic writes. Neither test group connects to real PostgreSQL or proves real backup/restore/import readback.
 
-Before production use, a separate approved operating procedure still needs off-device backup storage, encryption/key ownership, schedule and retention, integrity monitoring, restore access control, RPO/RTO targets, file-volume coverage, real PostgreSQL dump-and-restore rehearsal, application readback, migration/rollback rehearsal, and a policy for writes created after cutover. The CLI is not a file→PostgreSQL state migration tool; the deployment confirmation flag must not be treated as proof that user state was imported.
+Before production use, a separate approved operating procedure still needs off-device backup storage, encryption/key ownership, schedule and retention, integrity monitoring, restore access control, RPO/RTO targets, file-volume coverage, real PostgreSQL dump-and-restore rehearsal, application readback, migration/rollback rehearsal, and a policy for writes created after cutover. The backup/restore CLI moves PostgreSQL data only; it does not migrate file-backed application state. The override importer covers only the two named maps and does not perform a broader file→PostgreSQL state cutover. The deployment confirmation flag must not be treated as proof that user state was imported.

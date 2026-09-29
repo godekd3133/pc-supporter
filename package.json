@@ -34,6 +34,7 @@
     "catalog:case:backfill-pop-xl-seed": "tsx scripts/backfill-seed-case-pop-xl-hdd-bays.ts",
     "crawl:dry": "tsx server/crawler.ts --dry-run --limit 8",
     "import:private-catalog": "tsx scripts/import-private-catalog.ts",
+    "import:catalog-overrides": "tsx scripts/import-catalog-overrides.ts",
     "db:backup:local": "node scripts/pg-operations.mjs backup",
     "db:restore:rehearsal": "node scripts/pg-operations.mjs restore",
     "typecheck": "tsc --noEmit",
