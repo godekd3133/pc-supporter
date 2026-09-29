@@ -893,6 +893,50 @@ export const ACCESSORY_CATEGORIES = [
 
 export type AccessoryCategory = (typeof ACCESSORY_CATEGORIES)[number];
 
+export type AccessorySpecProfile =
+  | "m2_pcie_adapter_fit"
+  | "m2_sata_adapter_fit"
+  | "storage_other_not_assessed"
+  | "cooling_fan_mount_size"
+  | "m2_heatsink_form_factor"
+  | "fan_hub_fan_connectivity"
+  | "fan_hub_rgb_connectivity"
+  | "ups_output_w"
+  | "thermal_grease_capacity_conductivity"
+  | "fit_not_assessed";
+
+export const ACCESSORY_SPEC_PROFILE_LABELS: Record<AccessorySpecProfile, string> = {
+  m2_pcie_adapter_fit: "M.2 PCIe 어댑터 장착 규격",
+  m2_sata_adapter_fit: "M.2 SATA 어댑터 장착 규격",
+  storage_other_not_assessed: "기타 저장장치 주변기기",
+  cooling_fan_mount_size: "쿨링팬 장착 크기",
+  m2_heatsink_form_factor: "M.2 방열판 지원 길이",
+  fan_hub_fan_connectivity: "팬 연결 정보",
+  fan_hub_rgb_connectivity: "RGB 연결 정보",
+  ups_output_w: "UPS 출력(W)",
+  thermal_grease_capacity_conductivity: "써멀그리스 용량·열전도율",
+  fit_not_assessed: "장착 적합성 기준 미평가"
+};
+
+export type AccessorySpecProfileStatus = "complete" | "partial" | "not_assessed";
+
+export interface AccessorySpecProfileAssessment {
+  profile: AccessorySpecProfile;
+  status: AccessorySpecProfileStatus;
+  /** Profile inputs still needed; these do not replace the item's crawl `missingFields`. */
+  missingFields?: string[];
+}
+
+export interface AccessorySpecProfileCount {
+  profile: AccessorySpecProfile;
+  /** Number of items routed to this profile. A fan hub can be counted in both connectivity profiles. */
+  total: number;
+  assessed: number;
+  complete: number;
+  partial: number;
+  notAssessed: number;
+}
+
 export const ACCESSORY_CATEGORY_LABELS: Record<AccessoryCategory, string> = {
   storage_accessory: "저장장치 주변기기",
   cooling_fan: "쿨링팬",
@@ -2105,6 +2149,8 @@ export interface AccessoryCategoryCoverage {
   coverage: "partial" | "complete";
   specCoverage: "partial" | "complete";
   storedSpecCoverage: "partial" | "complete";
+  /** Runtime profile counts; separate from crawl detail quality and stored missingFields. */
+  specProfileCounts?: AccessorySpecProfileCount[];
   mode: "sample" | "all";
   details: boolean;
   onlyIncomplete: boolean;

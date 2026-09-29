@@ -3,6 +3,7 @@ import {
   advanceOnboarding,
   backOnboarding,
   budgetEstimateFor,
+  budgetEstimateForSelectedTarget,
   canAdvance,
   clampBudget,
   gamingTargetShortfall,
@@ -144,7 +145,7 @@ describe("quote-onboarding estimates", () => {
 
   it("uses a general PC tier when the user chooses budget without a use case", () => {
     const estimate = budgetEstimateFor(2_000_000, undefined);
-    expect(estimate).toMatchObject({ performance: "균형형 일반 구성", gpu: "표준 GPU", memory: "32GB", storage: "1TB SSD" });
+    expect(estimate).toMatchObject({ performance: "균형형 일반 구성", gpu: "외장 GPU 포함", memory: "32GB", storage: "1TB SSD" });
     expect(estimate.performance).not.toContain("작업");
   });
 
@@ -157,6 +158,16 @@ describe("quote-onboarding estimates", () => {
   it("raises the gaming tier as budget grows", () => {
     expect(budgetEstimateFor(4_000_000, "gaming").performance).toBe("4K · 144Hz 주사율 목표");
     expect(budgetEstimateFor(900_000, "gaming").performance).toBe("FHD · 60Hz 주사율 목표");
+  });
+
+  it("keeps the selected gaming target in the budget estimate when the budget reaches a higher tier", () => {
+    const state = stateWith({ usecase: "gaming", resolution: "1440p", refreshRate: 144, budgetWon: 3_000_000 });
+    expect(budgetEstimateForSelectedTarget(state)).toMatchObject({
+      performance: "QHD · 144Hz 주사율 목표",
+      gpu: "최상급 GPU",
+      memory: "32GB",
+      storage: "2TB SSD"
+    });
   });
 
   it("labels the selected refresh rate as a target, not an FPS measurement", () => {

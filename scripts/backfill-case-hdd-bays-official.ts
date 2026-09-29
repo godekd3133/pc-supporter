@@ -92,16 +92,16 @@ const OFFICIAL_CASE_SPECS: OfficialCaseSpec[] = [
   {
     productCode: "79556882",
     hddBays: 1,
-    manufacturerModel: "CC-H61FW-01",
-    sourceUrl: "https://support.nzxt.com/hc/ko/articles/40183529624347-H6-%ED%94%8C%EB%A1%9C%EC%9A%B0-2023-%EC%82%AC%EC%96%91",
-    sourceNote: "NZXT H6 Flow 공식 2023 사양에서 흰색 모델 CC-H61FW-01과 3.5형 드라이브 베이 1개를 확인했습니다."
+    manufacturerModel: "H6 Series",
+    sourceUrl: "https://cdn-g.nzxt.com/dl/1698993634-h6-flow_digital-manual_231027_v2-pdf.pdf",
+    sourceNote: "NZXT 공식 H6 Flow (2023) 사양 문서에 화이트 SKU CC-H61FW-01과 3.5형 드라이브 베이 1개가 함께 명시돼 있고, 공식 H6 Series 매뉴얼도 3.5형 HDD 1개를 확인합니다."
   },
   {
     productCode: "79556969",
     hddBays: 1,
-    manufacturerModel: "CC-H61FW-R1",
-    sourceUrl: "https://support.nzxt.com/hc/ko/articles/40183529624347-H6-%ED%94%8C%EB%A1%9C%EC%9A%B0-2023-%EC%82%AC%EC%96%91",
-    sourceNote: "NZXT H6 Flow RGB 공식 2023 사양에서 흰색 모델 CC-H61FW-R1과 3.5형 드라이브 베이 1개를 확인했습니다."
+    manufacturerModel: "H6 Series",
+    sourceUrl: "https://cdn-g.nzxt.com/dl/1698993634-h6-flow_digital-manual_231027_v2-pdf.pdf",
+    sourceNote: "NZXT 공식 H6 Flow (2023) 사양 문서에 화이트 RGB SKU CC-H61FW-R1과 3.5형 드라이브 베이 1개가 함께 명시돼 있고, 공식 H6 Series 매뉴얼도 3.5형 HDD 1개를 확인합니다."
   },
   {
     productCode: "97308200",
@@ -130,6 +130,76 @@ const OFFICIAL_CASE_SPECS: OfficialCaseSpec[] = [
     manufacturerModel: "FD-C-TER1N-03",
     sourceUrl: "https://www.fractal-design.com/app/uploads/2023/05/Terra_Product-sheet_EN.pdf",
     sourceNote: "Fractal Design Terra 공식 제품 사양서에서 Jade SKU FD-C-TER1N-03, 3.5/2.5형 장착부 0개를 확인했습니다."
+  },
+  {
+    productCode: "40016345",
+    hddBays: 2,
+    manufacturerModel: "FD-C-NOR1X-03",
+    sourceUrl: "https://www.fractal-design.com/app/uploads/2025/03/North-XL_Product-Sheet_EN.pdf",
+    sourceNote: "Fractal Design North XL 제품 시트에서 SKU FD-C-NOR1X-03과 3.5/2.5형 결합 드라이브 장착부 2개를 확인했습니다."
+  },
+  {
+    productCode: "40016330",
+    hddBays: 2,
+    manufacturerModel: "FD-C-NOR1X-04",
+    sourceUrl: "https://www.fractal-design.com/app/uploads/2025/03/North-XL_Product-Sheet_EN.pdf",
+    sourceNote: "Fractal Design North XL 제품 시트에서 SKU FD-C-NOR1X-04와 3.5/2.5형 결합 드라이브 장착부 2개를 확인했습니다."
+  },
+  {
+    productCode: "90158345",
+    hddBays: 2,
+    manufacturerModel: "FD-C-NOR1X-06",
+    sourceUrl: "https://www.fractal-design.com/app/uploads/2025/03/North-XL_Product-Sheet_EN.pdf",
+    sourceNote: "Fractal Design North XL 제품 시트에서 SKU FD-C-NOR1X-06과 3.5/2.5형 결합 드라이브 장착부 2개를 확인했습니다."
+  },
+  {
+    productCode: "40016360",
+    hddBays: 2,
+    manufacturerModel: "FD-C-NOR1X-02",
+    sourceUrl: "https://www.fractal-design.com/app/uploads/2025/03/North-XL_Product-Sheet_EN.pdf",
+    sourceNote: "Fractal Design North XL 제품 시트에서 SKU FD-C-NOR1X-02와 3.5/2.5형 결합 드라이브 장착부 2개를 확인했습니다."
+  },
+  {
+    productCode: "108416156",
+    hddBays: 2,
+    manufacturerModel: "FD-C-NOR1X-07",
+    sourceUrl: "https://assets.fractal-design.com/files/uxzbxy2o/production/2bf236b6a310d8abe38ff7d334bb592a0965dcb0.pdf",
+    sourceNote: "Fractal Design North XL Momentum Edition 공식 사양의 SKU FD-C-NOR1X-07과 3.5/2.5형 결합 드라이브 장착부 2개를 확인했습니다."
+  },
+  {
+    productCode: "18448688",
+    hddBays: 2,
+    manufacturerModel: "FD-C-NOR1C-01",
+    sourceUrl: "https://assets.fractal-design.com/files/uxzbxy2o/production/23a01a08f4b1cecd7b3efda20f85d8dcee09d891.pdf",
+    sourceNote: "Fractal Design North 공식 사양의 SKU FD-C-NOR1C-01에서 3.5/2.5형 결합 장착 위치 3개(2개 포함)를 확인했습니다. `hddBays`는 추가 장착부 없이 사용할 수 있는 포함 수량 2로 보수적으로 기록했습니다."
+  },
+  {
+    productCode: "18448790",
+    hddBays: 2,
+    manufacturerModel: "FD-C-NOR1C-04",
+    sourceUrl: "https://assets.fractal-design.com/files/uxzbxy2o/production/23a01a08f4b1cecd7b3efda20f85d8dcee09d891.pdf",
+    sourceNote: "Fractal Design North Chalk White TG Clear 공식 사양의 SKU FD-C-NOR1C-04에서 3.5/2.5형 결합 장착 위치 3개(2개 포함)를 확인했습니다. `hddBays`는 추가 장착부 없이 사용할 수 있는 포함 수량 2로 보수적으로 기록했습니다."
+  },
+  {
+    productCode: "108416054",
+    hddBays: 2,
+    manufacturerModel: "FD-C-NOR1C-05",
+    sourceUrl: "https://assets.fractal-design.com/files/uxzbxy2o/production/9b2776d0cc8e0249db9357726411061d0d78df1b.pdf",
+    sourceNote: "Fractal Design North Momentum Edition 공식 사양의 SKU FD-C-NOR1C-05와 3.5/2.5형 결합 드라이브 장착부 2개를 확인했습니다."
+  },
+  {
+    productCode: "13489595",
+    hddBays: 2,
+    manufacturerModel: "FD-C-MES2C-01",
+    sourceUrl: "https://assets.fractal-design.com/files/uxzbxy2o/production/957ad6ea3e40c76bf4dbae6baf505bad55f3984d.pdf",
+    sourceNote: "Fractal Design Meshify 2 Compact Black 공식 사양의 SKU FD-C-MES2C-01과 3.5/2.5형 결합 드라이브 장착부 2개를 확인했습니다."
+  },
+  {
+    productCode: "11479695",
+    hddBays: 2,
+    manufacturerModel: "FD-C-DEF7C-01",
+    sourceUrl: "https://assets.fractal-design.com/files/uxzbxy2o/production/9469a1a218e61563c36ec487d1401fc21f583103.pdf",
+    sourceNote: "Fractal Design Define 7 Compact Black Solid 공식 사양의 SKU FD-C-DEF7C-01과 3.5/2.5형 결합 드라이브 장착부 2개를 확인했습니다."
   }
 ];
 
@@ -159,6 +229,7 @@ const inputItems = OFFICIAL_CASE_SPECS.flatMap((entry) => {
   if (existing?.fields.hddBays === entry.hddBays
     && existing.manufacturerModel === entry.manufacturerModel
     && existing.sourceUrl === entry.sourceUrl
+    && existing.sourceNote === entry.sourceNote
     && existingCheckPassed) {
     skipped.push({ productCode: entry.productCode, reason: "동일한 공식 제조사 정보와 모델 확인 결과가 이미 저장돼 있습니다." });
     return [];
@@ -177,9 +248,11 @@ const inputItems = OFFICIAL_CASE_SPECS.flatMap((entry) => {
   }];
 });
 
-const validation = validateCatalogSpecOverrideBatch({ items: inputItems }, catalog, existingOverrides);
-if (validation.errors.length > 0) throw new Error(`Official case HDD-bay validation failed: ${validation.errors.join(" | ")}`);
-const validationByPartId = new Map(validation.items.map((item) => [item.partId, item]));
+const validation = inputItems.length > 0
+  ? validateCatalogSpecOverrideBatch({ items: inputItems }, catalog, existingOverrides)
+  : undefined;
+if (validation?.errors.length) throw new Error(`Official case HDD-bay validation failed: ${validation.errors.join(" | ")}`);
+const validationByPartId = new Map((validation?.items ?? []).map((item) => [item.partId, item]));
 const candidateTargets = OFFICIAL_CASE_SPECS.flatMap((entry) => {
   const part = catalog.find((candidate) => candidate.category === "case" && candidate.sourceProductCode === entry.productCode);
   if (!part || !validationByPartId.get(part.id)?.valid) return [];
@@ -195,7 +268,9 @@ if (!values.apply) {
     count: candidateTargets.length
   }, null, 2));
 } else {
-  if (candidateTargets.length === 0) throw new Error("No exact, eligible official case HDD-bay candidates remain.");
+  if (candidateTargets.length === 0) {
+    console.log(JSON.stringify({ mode: "apply", updated: 0, passedSourceChecks: 0, skipped }, null, 2));
+  } else {
   const checks = await catalogSpecSourceCheckBatchFor(candidateTargets.map(({ part, entry }) => ({
     partId: part.id,
     partName: part.name,
@@ -228,6 +303,7 @@ if (!values.apply) {
       return sourceCheck ? { ...override, sourceCheck } : override;
     });
     const latestOverrideMap = await readCatalogSpecOverrides();
+    const previouslyEffectiveCatalog = applyCatalogSpecOverrides(latestCatalog, latestOverrideMap);
     const combinedOverrideMap = { ...latestOverrideMap, ...Object.fromEntries(checkedOverrides.map((override) => [override.partId, override])) };
     const updatedCatalog = applyCatalogSpecOverrides(latestCatalog, combinedOverrideMap);
     const beforeById = new Map(latestCatalog.map((part) => [part.id, part]));
@@ -263,7 +339,7 @@ if (!values.apply) {
         passedSourceChecks: checkedOverrides.length,
         rejected: rejectedTargets.map(({ part, entry }) => ({ productCode: entry.productCode, name: part.name, sourceCheck: checkByPartId.get(part.id) })),
         skipped,
-        completeCasesBefore: latestCatalog.filter((part) => part.category === "case" && part.missingFields.length === 0).length,
+        completeCasesBefore: previouslyEffectiveCatalog.filter((part) => part.category === "case" && part.missingFields.length === 0).length,
         completeCasesAfter: updatedCatalog.filter((part) => part.category === "case" && part.missingFields.length === 0).length,
         changeLogRecords: changeRecords.length,
         backupDirectory
@@ -276,4 +352,5 @@ if (!values.apply) {
       throw new Error(`Official case HDD-bay backfill failed; prior files were restored from ${backupDirectory}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
+}
 }

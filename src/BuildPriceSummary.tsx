@@ -33,7 +33,8 @@ function sectionPriceText(value: number, complete: boolean) {
 function budgetSummary(snapshot: BuildPriceSnapshot, budgetWon: number | undefined, hasSelection: boolean) {
   if (budgetWon === undefined) return { tone: "neutral", label: "목표 예산 미설정" } as const;
   if (!hasSelection) return { tone: "neutral", label: "부품 선택 후 계산" } as const;
-  if (!snapshot.priceComplete || (snapshot.priceEvidenceReviewCount ?? 0) > 0) return { tone: "unknown", label: "예산과 비교할 가격이 부족해요" } as const;
+  if (!snapshot.priceComplete) return { tone: "unknown", label: "가격 정보가 없는 부품이 있어요" } as const;
+  if ((snapshot.priceEvidenceReviewCount ?? 0) > 0) return { tone: "unknown", label: `가격 확인 필요 ${snapshot.priceEvidenceReviewCount}종 · 구매 전 다시 확인해 주세요` } as const;
   const delta = budgetWon - snapshot.totalPriceWon;
   return delta >= 0
     ? { tone: "within", label: `${formatWon(delta)} 여유` } as const
@@ -56,6 +57,7 @@ export function BuildPriceSummaryPanel({ snapshot, budgetWon, compact = false, t
     <div className="build-price-summary-total"><div><span>{totalLabel}</span><strong>{totalText}</strong></div></div>
     <div className="build-price-summary-breakdown"><div><span>핵심 부품</span><strong>{sectionPriceText(snapshot.coreTotalPriceWon, snapshot.corePriceComplete)}</strong></div><div><span>주변 부품</span><strong>{sectionPriceText(snapshot.accessoryTotalPriceWon, snapshot.accessoryPriceComplete)}</strong></div></div>
     {state === "partial" && <div className="build-price-summary-warning"><FiAlertTriangle /><div><strong>가격이 없는 부품은 합계에 포함되지 않았어요.</strong></div></div>}
+    {state === "complete" && priceEvidenceReviewCount > 0 && <div className="build-price-summary-warning" data-testid={`${testId}-price-evidence-warning`}><FiAlertTriangle /><div><strong>표시 합계에는 확인을 다시 해야 할 가격 {priceEvidenceReviewCount}종이 포함돼 있어요. 구매 전에 상품 페이지에서 확인해 주세요.</strong></div></div>}
     {state === "partial" && unknownItems.length > 0 && <div className="build-price-summary-unknown" data-testid={`${testId}-unknown-items`}><div className="build-price-summary-unknown-heading"><strong>가격 정보가 없는 부품</strong><span>{unknownPriceCount}종</span></div><div className="build-price-summary-unknown-list">{unknownItems.slice(0, 4).map((item) => { const sourceUrl = safeExternalUrl(item.sourceUrl); const refreshing = refreshingItemId === item.id; return <div className="build-price-summary-unknown-item" key={`${item.kind}-${item.id}`}><div><strong>{item.name}</strong><small>{item.kind === "accessory" ? "주변 부품" : "핵심 부품"} · -</small></div><div className="build-price-summary-unknown-actions">{sourceUrl && <a href={sourceUrl} target="_blank" rel="noreferrer">상품 페이지 <FiExternalLink /></a>}{item.refreshTarget && onRefresh && <button className="text-button" type="button" data-testid={`${testId}-refresh-${item.kind}-${item.id}`} onClick={() => onRefresh(item.refreshTarget!)} disabled={refreshingItemId !== null}>{refreshing ? <><FiRefreshCw className="spin" /> 가격 불러오는 중...</> : <><FiRefreshCw /> 가격 다시 불러오기</>}</button>}</div></div>; })}</div>{unknownItems.length > 4 && <small className="build-price-summary-unknown-more">그 외 {unknownItems.length - 4}종도 가격 정보가 없어요.</small>}</div>}
     {budgetWon !== undefined && <div className={`build-price-summary-budget ${budget.tone}`}><span><FiTag /> 목표 예산 {formatWon(budgetWon)}</span><strong>{budget.label}</strong></div>}
   </section>;

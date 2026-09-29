@@ -1,4 +1,4 @@
-import type { AccessoryCategory, AccessoryCategoryCoverage, AccessoryCoverageSnapshot, AccessoryCrawlCategoryReport, AccessoryItem, AccessoryPriceFilter, BrandCountOption, DataFreshness, DataQuality } from "../shared/types";
+import type { AccessoryCategory, AccessoryCategoryCoverage, AccessoryCoverageSnapshot, AccessoryCrawlCategoryReport, AccessoryItem, AccessoryPriceFilter, AccessorySpecProfileCount, BrandCountOption, DataFreshness, DataQuality } from "../shared/types";
 import { ACCESSORY_CATEGORIES, isKnownPrice } from "../shared/types";
 import { ACCESSORIES_PATH, ACCESSORY_COVERAGE_PATH, COOLING_FAN_LOAD_OVERRIDES_PATH, fileUpdatedAt, readJson, writeJson, withSerializedFileMutation } from "./storage";
 import { parseM2FormFactors } from "./danawa";
@@ -8,6 +8,7 @@ import { fanCurrentAFromText } from "../shared/fan-connectivity";
 import { parseAdapterPcieSlotWidth, parseAdapterStorageDeviceCount } from "../shared/storage-adapter";
 import { seedAccessories } from "./seed-accessories";
 import { brandCountsFor } from "../shared/brand-counts";
+import { accessorySpecProfileIdsFor, assessAccessorySpecProfile } from "./accessory-spec-coverage";
 
 let accessoryCache: AccessoryItem[] | null = null;
 let accessoryMtime: string | null = null;
@@ -98,6 +99,30 @@ export function accessoryCategoryQualityCountsFor(items: AccessoryItem[]) {
       Object.fromEntries(DATA_QUALITY_VALUES.map((quality) => [quality, items.filter((item) => item.category === category && item.dataQuality === quality).length])) as Record<DataQuality, number>
     ])
   ) as Record<AccessoryCategory, Record<DataQuality, number>>;
+}
+
+export function accessorySpecProfileCountsFor(items: AccessoryItem[], category: AccessoryCategory): AccessorySpecProfileCount[] {
+  const categoryItems = items.filter((item) => item.category === category);
+  const assessments = categoryItems.flatMap(assessAccessorySpecProfile);
+  return accessorySpecProfileIdsFor(category).map((profile) => {
+    const profileAssessments = assessments.filter((assessment) => assessment.profile === profile);
+    const complete = profileAssessments.filter((assessment) => assessment.status === "complete").length;
+    const partial = profileAssessments.filter((assessment) => assessment.status === "partial").length;
+    const notAssessed = profileAssessments.filter((assessment) => assessment.status === "not_assessed").length;
+    return {
+      profile,
+      total: profileAssessments.length,
+      assessed: complete + partial,
+      complete,
+      partial,
+      notAssessed
+    };
+  });
+}
+
+function accessorySpecProfilesCompleteFor(items: AccessoryItem[], category: AccessoryCategory) {
+  return accessorySpecProfileCountsFor(items, category).every((profile) => profile.total === 0
+    || (profile.complete === profile.total && profile.partial === 0 && profile.notAssessed === 0));
 }
 
 type AccessorySearchOptions = {
@@ -209,14 +234,16 @@ export function accessoryCoverageSnapshotFor(stored: AccessoryCoverageSnapshot, 
     categories: ACCESSORY_CATEGORIES.map((category) => {
       const categoryItems = items.filter((item) => item.category === category);
       const coverage = savedByCategory.get(category);
-      const storedSpecCoverage: AccessoryCategoryCoverage["storedSpecCoverage"] = categoryItems.every((item) => item.missingFields.length === 0) ? "complete" : "partial";
+      const specProfileCounts = accessorySpecProfileCountsFor(categoryItems, category);
+      const storedSpecCoverage: AccessoryCategoryCoverage["storedSpecCoverage"] = accessorySpecProfilesCompleteFor(categoryItems, category) ? "complete" : "partial";
       const currentCatalogStatus = {
         storedProductCount: categoryItems.length,
         liveProducts: categoryItems.filter((item) => item.dataQuality === "live").length,
         incompleteProducts: categoryItems.filter((item) => item.dataQuality === "incomplete").length,
         pricedProducts: categoryItems.filter((item) => isKnownPrice(item.priceWon)).length,
         incompleteSpecs: categoryItems.filter((item) => item.missingFields.length > 0).length,
-        storedSpecCoverage
+        storedSpecCoverage,
+        specProfileCounts
       };
       if (!coverage || coverage.evidenceSource !== "danawa-public-crawl") {
         return {
@@ -276,7 +303,7 @@ export async function recordAccessoryCoverage(
     const categoryItems = items.filter((item) => item.category === report.category);
     const previous = byCategory.get(report.category);
     const listEvidence = accessoryListEvidenceFor(previous, report, context);
-    const storedSpecCoverage = categoryItems.every((item) => item.missingFields.length === 0) ? "complete" : "partial";
+    const storedSpecCoverage = accessorySpecProfilesCompleteFor(categoryItems, report.category) ? "complete" : "partial";
     const coverage: AccessoryCategoryCoverage = {
       ...report,
       ...listEvidence,
@@ -289,6 +316,7 @@ export async function recordAccessoryCoverage(
       onlyIncomplete: context.onlyIncomplete,
       evidenceSource: "danawa-public-crawl",
       storedSpecCoverage,
+      specProfileCounts: accessorySpecProfileCountsFor(categoryItems, report.category),
       coverage: listEvidence.listCoverage === "complete" && storedSpecCoverage === "complete" ? "complete" : "partial",
       specCoverage: storedSpecCoverage,
       lastCrawledAt: context.lastCrawledAt,

@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { ACCESSORY_CATEGORY_LABELS, type AccessoryCategory } from "../shared/types";
 import { DANAWA_ACCESSORY_CATEGORIES } from "../server/accessory-crawler";
+import { parseDanawaPublicListPage } from "../server/danawa-public-list";
 
 type Category = { category: string; categoryId: string; label: string; root?: boolean };
 type Product = { productCode: string; name: string; url: string; priceWon?: number; spec?: string };
@@ -57,6 +58,7 @@ const pageTwoSelector = `(() => {
 })()`;
 const hasPageTwoExpression = `Boolean(${pageTwoSelector})`;
 const clickPageTwoExpression = `(() => { const target = ${pageTwoSelector}; if (!(target instanceof HTMLElement)) return false; target.click(); return true; })()`;
+const scrollToPageControlsExpression = `(() => { window.scrollTo(0, document.documentElement.scrollHeight); return { scrollHeight: document.documentElement.scrollHeight, clientHeight: window.innerHeight, scrollY: window.scrollY }; })()`;
 const pageControlsDiagnosticExpression = `JSON.stringify((() => {
   const controls = Array.from(document.querySelectorAll('button, a, [role="button"]'));
   return {
@@ -213,7 +215,7 @@ async function atomicSave(snapshot: Snapshot) {
   await rename(temp, OUTPUT);
 }
 
-type Capture = { url: string; body: string; headers: Record<string, string> };
+type Capture = { url: string; body: string; headers: Record<string, string>; requestShape?: ReturnType<typeof safeRequestShape> };
 function safeRequestShape(request: any) {
   const raw = typeof request.postData === "string" ? request.postData : "";
   let parsed: unknown;
@@ -225,8 +227,12 @@ function safeRequestShape(request: any) {
     if (typeof value !== "object") return;
     for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
       const path = prefix ? `${prefix}.${key}` : key;
-      if (/(?:page|cate|category)/i.test(key) && (typeof child === "number" || (typeof child === "string" && /^\d{1,16}$/.test(child)))) {
-        actionFields.push({ key: path, value: child as string | number });
+      if (/(?:page|cate|category|offset|limit|cursor|sort|order|start|end|position|after|before)/i.test(key) && (typeof child === "number" || typeof child === "string")) {
+        const stringValue = String(child);
+        const showValue = typeof child === "number"
+          || (/^(?:page|cate|category|offset|limit|pageSize)$/i.test(key) && /^\d{1,16}$/.test(stringValue))
+          || (/^(?:sort|sortType|order|orderBy)$/i.test(key) && stringValue.length <= 40);
+        actionFields.push({ key: path, value: showValue ? typeof child === "number" ? child : stringValue : `string-length:${stringValue.length}` });
       }
       walk(child, path, depth + 1);
     }
@@ -286,7 +292,7 @@ async function bootstrap(categoryId: string): Promise<{ capture: Capture; html: 
         });
       }
       const hasNextAction = Object.keys(request.headers).some(key => key.toLowerCase() === "next-action");
-      if (!capture && sameList && request.method === "POST" && pageTwo && hasNextAction) capture = { url: request.url, body: request.postData ?? "", headers: { ...request.headers } };
+      if (!capture && sameList && request.method === "POST" && pageTwo && hasNextAction) capture = { url: request.url, body: request.postData ?? "", headers: { ...request.headers }, requestShape: safeRequestShape(request) };
       const allow = !forbidden && (isStatic || rootDoc || (sameList && request.method === "GET"));
       if (allow && u.hostname === "prod.danawa.com" && u.pathname === "/list/") { const gap = Math.max(0, MIN_DELAY_MS - (Date.now() - lastSourceRequest)); if (gap) { setTimeout(() => ws?.send(JSON.stringify({ id: ++id, method: "Fetch.continueRequest", params: { requestId } })), gap); lastSourceRequest = Date.now() + gap; return; } lastSourceRequest = Date.now(); }
       ws!.send(JSON.stringify({ id: ++id, method: allow ? "Fetch.continueRequest" : "Fetch.failRequest", params: allow ? { requestId } : { requestId, errorReason: "BlockedByClient" } }));
@@ -296,7 +302,16 @@ async function bootstrap(categoryId: string): Promise<{ capture: Capture; html: 
     await cdp("Page.enable"); await cdp("Runtime.enable"); await cdp("Fetch.enable", { patterns: [{ urlPattern: "*", requestStage: "Request" }] });
     await cdp("Page.navigate", { url: `https://prod.danawa.com/list/?cate=${categoryId}` });
     const deadline = Date.now() + 20_000;
-    while (Date.now() < deadline) { const ready = await evaluate(hasPageTwoExpression); if (ready) break; await wait(100); }
+    let nextScrollAt = 0;
+    while (Date.now() < deadline) {
+      const ready = await evaluate(hasPageTwoExpression);
+      if (ready) break;
+      if (Date.now() >= nextScrollAt) {
+        await evaluate(scrollToPageControlsExpression);
+        nextScrollAt = Date.now() + 750;
+      }
+      await wait(100);
+    }
     html = String(await evaluate("document.documentElement.outerHTML") ?? "");
     const ready = await evaluate(hasPageTwoExpression);
     if (!ready) {
@@ -368,15 +383,28 @@ function updateCategoryMetrics(state: Snapshot["categories"][string]) {
   state.listedProductCount = allCodes.length;
   state.uniqueProductCount = new Set(allCodes).size;
 }
+function pagesWithRepeatedProductCodes(pages: Record<string, Page>) {
+  const seen = new Set<string>();
+  const repeatedPages = new Set<string>();
+  for (const [pageKey, page] of Object.entries(pages).sort(([left], [right]) => Number(left) - Number(right))) {
+    for (const code of page.codes) {
+      if (seen.has(code)) repeatedPages.add(pageKey);
+      else seen.add(code);
+    }
+  }
+  return repeatedPages;
+}
 function needsRefresh(page: Page | undefined) {
-  return Boolean(page && (page.parserVersion !== 4 || page.products.some(product => !product.name || product.name === "[object Object]" || product.spec === "[object Object]")));
+  return Boolean(page && (page.parserVersion !== 4 || page.rowCountMismatch || page.products.some(product => !product.name || product.name === "[object Object]" || product.spec === "[object Object]")));
 }
 
-if ([...args].some((argument) => argument !== "--prototype" && argument !== "--all" && argument !== "--accessory" && !argument.startsWith("--category="))) {
-  throw new Error("Allowed options: --prototype (default), --all, --accessory, --category=ACCESSORY_CATEGORY.");
+const captureOnly = args.has("--capture-only");
+if ([...args].some((argument) => argument !== "--prototype" && argument !== "--all" && argument !== "--accessory" && argument !== "--capture-only" && !argument.startsWith("--category="))) {
+  throw new Error("Allowed options: --prototype (default), --all, --accessory, --category=ACCESSORY_CATEGORY, --capture-only.");
 }
 if (args.has("--prototype") && args.has("--all")) throw new Error("Choose one run mode.");
 if (selectedAccessoryCategory && !accessoryMode) throw new Error("--category requires --accessory.");
+if (captureOnly && (!accessoryMode || !selectedAccessoryCategory || args.has("--all"))) throw new Error("--capture-only requires --accessory --category=... and cannot be combined with --all.");
 if (accessoryMode && selectedAccessoryCategory && !DANAWA_ACCESSORY_CATEGORIES.some((category) => category.category === selectedAccessoryCategory)) {
   throw new Error(`Unknown Danawa accessory category: ${selectedAccessoryCategory}`);
 }
@@ -393,6 +421,33 @@ if (!accessoryMode && (roots.length !== 10 || new Set(roots.map((target) => targ
 }
 if (accessoryMode && roots.length !== (selectedAccessoryCategory ? 1 : DANAWA_ACCESSORY_CATEGORIES.length)) {
   throw new Error("Danawa accessory target manifest did not match the selected accessory categories.");
+}
+if (captureOnly) {
+  const target = roots[0];
+  const { capture, html } = await bootstrapWithTransientRetries(target.categoryId);
+  const pageOne = parseDanawaPublicListPage(html, target.categoryId, 1);
+  console.log(JSON.stringify({
+    mode: "capture-only",
+    category: target.category,
+    categoryId: target.categoryId,
+    pageOne: {
+      source: pageOne.source,
+      currentPage: pageOne.currentPage,
+      totalPages: pageOne.totalPages,
+      totalProductCount: pageOne.totalProductCount,
+      pageSize: pageOne.pageSize,
+      parsedProductCount: pageOne.items.length,
+      firstProductCodes: pageOne.items.slice(0, 5).map((item) => item.sourceProductCode)
+    },
+    pageTwoUiRequest: capture.requestShape,
+    credentialsObservedButNotStored: {
+      cookiePresent: Boolean(capture.headers.cookie ?? capture.headers.Cookie),
+      nextActionPresent: Boolean(capture.headers["Next-Action"] ?? capture.headers["next-action"])
+    },
+    outputWritten: false
+  }, null, 2));
+  await new Promise<void>((resolveFlush) => process.stdout.write("", resolveFlush));
+  process.exit(0);
 }
 let snapshot: Snapshot;
 try { snapshot = JSON.parse(await readFile(OUTPUT, "utf8")) as Snapshot; } catch {
@@ -452,8 +507,9 @@ try {
     }
     updateCategoryMetrics(state);
     const pageNumbers = mode === "all" ? (maxPage ? Array.from({ length: maxPage }, (_, i) => i + 1) : (() => { throw new Error("Could not determine the category's exact last page; refusing unbounded enumeration."); })()) : target.pages;
+    const repeatedPageKeys = pagesWithRepeatedProductCodes(state.pages);
     for (const pageNo of pageNumbers.filter(n => n > 1)) {
-      if (state.pages[String(pageNo)] && !needsRefresh(state.pages[String(pageNo)])) continue;
+      if (state.pages[String(pageNo)] && !needsRefresh(state.pages[String(pageNo)]) && !repeatedPageKeys.has(String(pageNo))) continue;
       const result = await fetchPage(capture, category, pageNo);
       const { _requestEvidence, ...page } = result;
       maxPage = page.totalPages ?? maxPage;

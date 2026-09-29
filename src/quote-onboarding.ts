@@ -371,7 +371,7 @@ const WORK_BUDGET_TIERS: readonly { minWon: number; estimate: BudgetEstimate }[]
 
 const GENERAL_BUDGET_TIERS: readonly { minWon: number; estimate: BudgetEstimate }[] = [
   { minWon: 3_000_000, estimate: { performance: "상급 일반 구성", gpu: "상급 GPU", memory: "64GB", storage: "2TB SSD" } },
-  { minWon: 2_000_000, estimate: { performance: "균형형 일반 구성", gpu: "표준 GPU", memory: "32GB", storage: "1TB SSD" } },
+  { minWon: 2_000_000, estimate: { performance: "균형형 일반 구성", gpu: "외장 GPU 포함", memory: "32GB", storage: "1TB SSD" } },
   { minWon: 1_200_000, estimate: { performance: "기본형 일반 구성", gpu: "입문 GPU", memory: "32GB", storage: "1TB SSD" } },
   { minWon: 0, estimate: { performance: "실속형 일반 구성", gpu: "내장 그래픽 또는 입문 GPU", memory: "16GB", storage: "500GB SSD" } }
 ];
@@ -417,6 +417,15 @@ const WORK_ESTIMATES: Record<OnboardingWork, Record<OnboardingIntensity, BudgetE
 export function budgetEstimateFor(budgetWon: number, usecase: OnboardingUsecase | undefined): BudgetEstimate {
   const tiers = usecase === "gaming" ? GAMING_BUDGET_TIERS : usecase === "work" ? WORK_BUDGET_TIERS : GENERAL_BUDGET_TIERS;
   return tiers.find((tier) => budgetWon >= tier.minWon)?.estimate ?? tiers[tiers.length - 1].estimate;
+}
+
+export function budgetEstimateForSelectedTarget(state: OnboardingState): BudgetEstimate {
+  const estimate = budgetEstimateFor(state.budgetWon, state.usecase);
+  if (state.usecase !== "gaming") return estimate;
+  return {
+    ...estimate,
+    performance: `${resolutionLabelFor(state.resolution)} · ${state.refreshRate}Hz 주사율 목표`
+  };
 }
 
 export function workEstimateFor(works: readonly OnboardingWork[], intensity: OnboardingIntensity | undefined): BudgetEstimate {

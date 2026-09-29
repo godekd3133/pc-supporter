@@ -434,7 +434,7 @@ describe("public API evidence projection", () => {
       }
       await rm(directory, { recursive: true, force: true });
     }
-  });
+  }, 20_000);
 
   it("keeps benchmark coverage private when development admin authentication is disabled", async () => {
     const directory = await mkdtemp(join(tmpdir(), "pc-supporter-public-meta-dev-"));

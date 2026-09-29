@@ -16,7 +16,7 @@ import {
   ONBOARDING_WORKS,
   advanceOnboarding,
   backOnboarding,
-  budgetEstimateFor,
+  budgetEstimateForSelectedTarget,
   canAdvance,
   clampBudget,
   formatManWon,
@@ -273,7 +273,7 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome }: { o
     ? { performance: SPEC_TIER_LABELS[state.specTier], gpu: state.specIncludeGpu ? "외장 GPU" : "내장 그래픽", memory: `${state.memoryGb}GB`, storage: storageLabel(state.storageGb) }
     : state.usecase === "work"
       ? workEstimateFor(state.works, state.intensity)
-    : budgetEstimateFor(state.budgetWon, state.usecase);
+    : budgetEstimateForSelectedTarget(state);
   const targetBudgetRange = targetBudgetRangeFor(state);
   const primaryWork = primaryWorkFor(state.works);
   const estimateRows: [IconType, string, string][] = [
@@ -561,7 +561,7 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome }: { o
     works: { title: "주로 하는 작업을 골라주세요", description: "여러 작업을 선택할 수 있습니다. 가장 높은 작업 강도에 맞춰 사양을 계산합니다." },
     intensity: { title: primaryWork?.intensityQuestion ?? "작업 규모는 어느 정도인가요?", description: primaryWork?.intensitySummary ?? "작업 강도에 따라 예상 사양이 달라져요." },
     spec: { title: "성능 목표를 정하세요", description: "성능 등급·외장 GPU·메모리·저장공간을 선택하세요." },
-    budget: { title: "예산을 정해주세요", description: "금액에 따라 예상 사양이 달라져요. 원하는 금액을 직접 입력할 수 있어요." },
+    budget: { title: "예산을 정해주세요", description: "예산은 최대 금액으로 적용해요. 부품 구성에 따라 남는 금액이 생길 수 있습니다." },
     summary: { title: "견적 내용을 확인하세요", description: "선택한 항목을 확인하고 부품 추천으로 넘어갈 수 있어요." }
   };
   const heading = showResume

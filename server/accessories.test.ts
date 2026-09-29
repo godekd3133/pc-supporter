@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { ACCESSORY_CATEGORIES } from "../shared/types";
 import type { AccessoryCrawlCategoryReport, AccessoryItem, AccessoryCategoryCoverage } from "../shared/types";
-import { accessoryCategoryQualityCountsFor, accessoryCoverageSnapshotFor, accessoryListEvidenceFor, countAccessories, findAccessory, mergeAccessories, mergeDanawaAccessorySnapshot, searchAccessories } from "./accessories";
+import { accessoryCategoryQualityCountsFor, accessoryCoverageSnapshotFor, accessoryListEvidenceFor, accessorySpecProfileCountsFor, countAccessories, findAccessory, mergeAccessories, mergeDanawaAccessorySnapshot, searchAccessories } from "./accessories";
+import { assessAccessorySpecProfile } from "./accessory-spec-coverage";
 import { seedAccessories } from "./seed-accessories";
 
 function accessory(overrides: Partial<AccessoryItem>): AccessoryItem {
@@ -94,6 +95,106 @@ describe("accessory catalog", () => {
     expect(counts.cooling_fan).toEqual({ seed: 1, live: 1, manual: 0, incomplete: 0 });
     expect(counts.ups).toEqual({ seed: 0, live: 0, manual: 0, incomplete: 1 });
     expect(counts.fan_hub).toEqual({ seed: 0, live: 0, manual: 0, incomplete: 0 });
+  });
+
+  it("does not treat raw text as normalized M.2 adapter-fit evidence or rewrite crawl quality", () => {
+    const rawTextOnly = accessory({
+      category: "storage_accessory",
+      name: "M.2 PCIe x4 어댑터",
+      rawSpecText: "M.2 2280 · NVMe → PCIe x4",
+      specs: {},
+      dataQuality: "live",
+      missingFields: []
+    });
+    const assessment = assessAccessorySpecProfile(rawTextOnly);
+    const storedCoverage = accessoryCoverageSnapshotFor({ updatedAt: "", categories: [] }, [rawTextOnly]);
+    const storageCoverage = storedCoverage.categories.find((item) => item.category === "storage_accessory");
+
+    expect(assessment).toEqual([{
+      profile: "m2_pcie_adapter_fit",
+      status: "partial",
+      missingFields: ["supportedFormFactors", "interface", "adapterPcieSlotWidth"]
+    }]);
+    expect(storageCoverage?.specProfileCounts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ profile: "m2_pcie_adapter_fit", total: 1, assessed: 1, complete: 0, partial: 1, notAssessed: 0 }),
+      expect.objectContaining({ profile: "m2_sata_adapter_fit", total: 0 }),
+      expect.objectContaining({ profile: "storage_other_not_assessed", total: 0 })
+    ]));
+    expect(storageCoverage).toMatchObject({ incompleteProducts: 0, incompleteSpecs: 0, storedSpecCoverage: "partial" });
+    expect(rawTextOnly).toMatchObject({ dataQuality: "live", missingFields: [], specs: {} });
+  });
+
+  it("assesses PCIe and SATA M.2 adapters against distinct required fields", () => {
+    const pcie = accessory({
+      id: "pcie-m2-adapter",
+      name: "M.2 PCIe adapter",
+      specs: { interface: "NVMe", formFactor: "M.2 2280", supportedFormFactors: ["M.2 2280"], adapterPcieSlotWidth: 4 }
+    });
+    const sata = accessory({
+      id: "sata-m2-adapter",
+      name: "M.2 SATA adapter",
+      specs: { interface: "SATA", formFactor: "M.2 2280", supportedFormFactors: ["M.2 2280"] }
+    });
+
+    expect(assessAccessorySpecProfile(pcie)).toEqual([{ profile: "m2_pcie_adapter_fit", status: "complete" }]);
+    expect(assessAccessorySpecProfile(sata)).toEqual([{ profile: "m2_sata_adapter_fit", status: "complete" }]);
+  });
+
+  it("assesses only the cooling-fan mount width and height", () => {
+    const parsedFanSize = accessory({ category: "cooling_fan", specs: { lengthMm: 120, widthMm: 120 } });
+    const unparsedRawText = accessory({ category: "cooling_fan", rawSpecText: "팬 크기: 120mm", specs: {} });
+
+    expect(assessAccessorySpecProfile(parsedFanSize)).toEqual([{ profile: "cooling_fan_mount_size", status: "complete" }]);
+    expect(assessAccessorySpecProfile(unparsedRawText)).toEqual([{
+      profile: "cooling_fan_mount_size",
+      status: "partial",
+      missingFields: ["lengthMm", "widthMm"]
+    }]);
+  });
+
+  it("keeps fan and RGB hub connectivity profiles separate from load limits", () => {
+    const hub = accessory({
+      category: "fan_hub",
+      rawSpecText: "팬컨트롤러 / 입력단자: PWM, ARGB 3핀, SATA전원 / 분배단자: PWM 4핀, ARGB 3핀 / 팬분배: 4개 / RGB분배: 4개 / 최대 허용전력: 1A",
+      specs: { fanPortCount: 4, rgbPortCount: 4 }
+    });
+
+    expect(assessAccessorySpecProfile(hub)).toEqual([
+      { profile: "fan_hub_fan_connectivity", status: "complete" },
+      { profile: "fan_hub_rgb_connectivity", status: "complete" }
+    ]);
+    expect(accessorySpecProfileCountsFor([hub], "fan_hub")).toEqual([
+      expect.objectContaining({ profile: "fan_hub_fan_connectivity", total: 1, complete: 1, partial: 0, notAssessed: 0 }),
+      expect.objectContaining({ profile: "fan_hub_rgb_connectivity", total: 1, complete: 1, partial: 0, notAssessed: 0 })
+    ]);
+  });
+
+  it("does not infer UPS output watts from VA", () => {
+    const vaOnlyUps = accessory({ category: "ups", name: "UPS 700VA", rawSpecText: "출력 용량 (VA): 700VA", specs: { capacityVa: 700 } });
+
+    expect(assessAccessorySpecProfile(vaOnlyUps)).toEqual([{
+      profile: "ups_output_w",
+      status: "partial",
+      missingFields: ["outputW"]
+    }]);
+  });
+
+  it("marks unvalidated fit-oriented accessory types as not assessed", () => {
+    const items = (["gpu_support", "gpu_cooler", "memory_cooler", "thermal_pad"] as const).map((category) => accessory({
+      id: `not-assessed-${category}`,
+      category,
+      specs: {},
+      dataQuality: "incomplete",
+      missingFields: ["source detail"]
+    }));
+
+    for (const item of items) {
+      expect(assessAccessorySpecProfile(item)).toEqual([{ profile: "fit_not_assessed", status: "not_assessed" }]);
+      expect(accessorySpecProfileCountsFor([item], item.category)).toEqual([
+        { profile: "fit_not_assessed", total: 1, assessed: 0, complete: 0, partial: 0, notAssessed: 1 }
+      ]);
+      expect(item).toMatchObject({ dataQuality: "incomplete", missingFields: ["source detail"] });
+    }
   });
 
   it("joins stale crawl history to every category's current saved accessory status", () => {
