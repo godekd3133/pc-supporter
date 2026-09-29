@@ -5,7 +5,7 @@ services:
     environment:
       POSTGRES_DB: pcsupporter
       POSTGRES_USER: pcsupporter
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the environment or .env}
+      POSTGRES_PASSWORD: ${POSTGRES_OWNER_PASSWORD:?Set POSTGRES_OWNER_PASSWORD in the environment or .env}
     ports:
       - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"
     volumes:
@@ -16,20 +16,51 @@ services:
       timeout: 5s
       retries: 12
 
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_MIGRATION_URL: postgresql://pcsupporter@postgres:5432/pcsupporter
+      PGPASSWORD: ${POSTGRES_OWNER_PASSWORD:?Set POSTGRES_OWNER_PASSWORD in the environment or .env}
+    command: ["npm", "run", "db:migrate"]
+
+  runtime-role-bootstrap:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: "no"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: production
+      DATABASE_MIGRATION_URL: postgresql://pcsupporter@postgres:5432/pcsupporter
+      DATABASE_RUNTIME_ROLE: ${POSTGRES_RUNTIME_ROLE:-pcsupporter_runtime}
+      DATABASE_RUNTIME_PASSWORD: ${POSTGRES_RUNTIME_PASSWORD:?Set POSTGRES_RUNTIME_PASSWORD in the environment or .env}
+      PGPASSWORD: ${POSTGRES_OWNER_PASSWORD:?Set POSTGRES_OWNER_PASSWORD in the environment or .env}
+    command: ["node", "scripts/bootstrap-postgres-runtime-role.mjs"]
+
   app:
     build:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
     depends_on:
-      postgres:
-        condition: service_healthy
+      runtime-role-bootstrap:
+        condition: service_completed_successfully
     environment:
       NODE_ENV: production
       PORT: 4174
       PC_SUPPORTER_PROCESS_ROLE: api
       PC_SUPPORTER_DATA_DIR: /app/data
-      DATABASE_URL: postgresql://pcsupporter:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the environment or .env}@postgres:5432/pcsupporter
+      DATABASE_URL: postgresql://${POSTGRES_RUNTIME_ROLE:-pcsupporter_runtime}@postgres:5432/pcsupporter
+      PGPASSWORD: ${POSTGRES_RUNTIME_PASSWORD:?Set POSTGRES_RUNTIME_PASSWORD in the environment or .env}
       RATE_LIMIT_HMAC_SECRET: ${RATE_LIMIT_HMAC_SECRET:?Set RATE_LIMIT_HMAC_SECRET in the environment or .env}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in the environment or .env}
       ADMIN_SESSION_SECRET: ${ADMIN_SESSION_SECRET:?Set ADMIN_SESSION_SECRET in the environment or .env}
@@ -57,14 +88,15 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     depends_on:
-      postgres:
-        condition: service_healthy
+      runtime-role-bootstrap:
+        condition: service_completed_successfully
     environment:
       NODE_ENV: production
       PORT: 4174
       PC_SUPPORTER_PROCESS_ROLE: api
       PC_SUPPORTER_DATA_DIR: /app/data
-      DATABASE_URL: postgresql://pcsupporter:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the environment or .env}@postgres:5432/pcsupporter
+      DATABASE_URL: postgresql://${POSTGRES_RUNTIME_ROLE:-pcsupporter_runtime}@postgres:5432/pcsupporter
+      PGPASSWORD: ${POSTGRES_RUNTIME_PASSWORD:?Set POSTGRES_RUNTIME_PASSWORD in the environment or .env}
       RATE_LIMIT_HMAC_SECRET: ${RATE_LIMIT_HMAC_SECRET:?Set RATE_LIMIT_HMAC_SECRET in the environment or .env}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in the environment or .env}
       ADMIN_SESSION_SECRET: ${ADMIN_SESSION_SECRET:?Set ADMIN_SESSION_SECRET in the environment or .env}
@@ -88,13 +120,14 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     depends_on:
-      postgres:
-        condition: service_healthy
+      runtime-role-bootstrap:
+        condition: service_completed_successfully
     environment:
       NODE_ENV: production
       PC_SUPPORTER_PROCESS_ROLE: worker
       PC_SUPPORTER_DATA_DIR: /app/data
-      DATABASE_URL: postgresql://pcsupporter:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the environment or .env}@postgres:5432/pcsupporter
+      DATABASE_URL: postgresql://${POSTGRES_RUNTIME_ROLE:-pcsupporter_runtime}@postgres:5432/pcsupporter
+      PGPASSWORD: ${POSTGRES_RUNTIME_PASSWORD:?Set POSTGRES_RUNTIME_PASSWORD in the environment or .env}
       RATE_LIMIT_HMAC_SECRET: ${RATE_LIMIT_HMAC_SECRET:?Set RATE_LIMIT_HMAC_SECRET in the environment or .env}
       PRICE_REFRESH_SCHEDULER_ENABLED: ${PRICE_REFRESH_SCHEDULER_ENABLED:-false}
       PRICE_REFRESH_INTERVAL_HOURS: ${PRICE_REFRESH_INTERVAL_HOURS:-3}

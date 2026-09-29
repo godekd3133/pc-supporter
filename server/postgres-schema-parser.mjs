@@ -124,6 +124,12 @@ function splitColumns(source) {
   return splitTopLevel(source).map((column) => unquoteIdentifier(column.trim()));
 }
 
+function indexKeyColumn(source) {
+  const match = source.trim().match(/^("(?:[^"]|"")+"|[A-Za-z_][A-Za-z0-9_$]*)(?:\s+(?:ASC|DESC))?(?:\s+NULLS\s+(?:FIRST|LAST))?$/i);
+  if (!match) throw new Error("PostgreSQL schema index keys must be plain column identifiers with optional ordering modifiers.");
+  return unquoteIdentifier(match[1]);
+}
+
 function schemaDataType(sqlType) {
   const normalized = sqlType.trim().replace(/\s+/g, " ").toUpperCase();
   const base = normalized.replace(/\s*\([^)]*\)/g, "").trim();
@@ -164,7 +170,7 @@ function parseIndexDefinition(statement) {
   const tableName = unquoteIdentifier(match[3].split(".").at(-1));
   const openIndex = statement.indexOf("(", match[0].length - 1);
   const closeIndex = matchingCloseParen(statement, openIndex);
-  const columns = splitColumns(statement.slice(openIndex + 1, closeIndex));
+  const columns = splitTopLevel(statement.slice(openIndex + 1, closeIndex)).map(indexKeyColumn);
   return {
     tableName,
     indexName: unquoteIdentifier(match[2]),

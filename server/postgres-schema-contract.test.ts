@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { PoolClient } from "pg";
-import { postgresSchemaContractFromSql, type PostgresSchemaContractManifest } from "./postgres-schema-parser.mjs";
+import { parsePostgresIndexDefinition, postgresSchemaContractFromSql, type PostgresSchemaContractManifest } from "./postgres-schema-parser.mjs";
 import {
   initializePostgresSchemaWithClient,
   migratePostgresSchemaWithClient,
@@ -203,6 +203,22 @@ describe("PostgreSQL schema contract", () => {
   it("pins the runtime contract checksum to the canonical baseline file", async () => {
     const bytes = await readFile(resolve(process.cwd(), "db/schema.sql"));
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(POSTGRES_SCHEMA_SHA256);
+  });
+
+  it("matches a PostgreSQL 18 pg_get_indexdef fixture while preserving key order and uniqueness", () => {
+    const actualCatalogDefinition = "CREATE INDEX background_jobs_kind_created_idx ON public.background_jobs USING btree (kind, created_at DESC, id DESC)";
+    const parsedCatalogIndex = parsePostgresIndexDefinition(actualCatalogDefinition);
+    const canonicalIndex = canonicalSchemaContract.indexes.find((index) => index.indexName === "background_jobs_kind_created_idx");
+
+    expect(parsedCatalogIndex).toEqual({
+      tableName: "background_jobs",
+      indexName: "background_jobs_kind_created_idx",
+      unique: false,
+      keyColumns: ["kind", "created_at", "id"]
+    });
+    expect(parsedCatalogIndex).toEqual(canonicalIndex);
+    expect(() => parsePostgresIndexDefinition("CREATE INDEX expression_idx ON public.background_jobs USING btree (lower(kind))"))
+      .toThrow(/plain column identifiers/);
   });
 
   it("applies the full canonical schema and revision marker atomically to an unversioned database", async () => {

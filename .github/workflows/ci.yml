@@ -143,7 +143,9 @@ jobs:
       COMPOSE_PROFILES: container-smoke
       PRICE_REFRESH_SCHEDULER_ENABLED: "false"
       BUILD_MONITOR_SCHEDULER_ENABLED: "false"
-      POSTGRES_PASSWORD: pc-supporter-ci-only-postgres-password-not-for-deployment
+      POSTGRES_OWNER_PASSWORD: pc-supporter-ci-only-schema-owner-password-not-for-deployment
+      POSTGRES_RUNTIME_ROLE: pcsupporter_runtime_ci
+      POSTGRES_RUNTIME_PASSWORD: pc-supporter-ci-only-runtime-password-not-for-deployment
       RATE_LIMIT_HMAC_SECRET: pc-supporter-ci-only-rate-limit-secret-not-for-deployment
       ADMIN_PASSWORD: pc-supporter-ci-only-admin-password-not-for-deployment
       ADMIN_SESSION_SECRET: pc-supporter-ci-only-admin-session-secret-not-for-deployment
@@ -186,11 +188,14 @@ jobs:
             sleep 1
           done
           docker compose ps
-          docker compose logs --no-color app api-reader worker postgres
+          docker compose logs --no-color app api-reader worker postgres migrate runtime-role-bootstrap
           exit 1
 
       - name: Verify production metadata route
         run: curl --fail --silent "$PC_SUPPORTER_API_BASE_URL/api/meta" > /dev/null
+
+      - name: Verify PostgreSQL runtime role DML and denied DDL/ledger writes
+        run: docker compose exec -T app node scripts/postgres-runtime-role-smoke.mjs
 
       - name: Verify PostgreSQL comparison persistence round-trip
         run: npm run test:postgres:comparison
@@ -209,7 +214,7 @@ jobs:
             sleep 1
           done
           docker compose ps
-          docker compose logs --no-color app api-reader worker postgres
+          docker compose logs --no-color app api-reader worker postgres migrate runtime-role-bootstrap
           exit 1
 
       - name: Verify PostgreSQL durable price-refresh API and worker flow

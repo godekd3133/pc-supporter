@@ -7,6 +7,7 @@ SSH_TARGET="${PC_SUPPORTER_SSH_TARGET:-ubuntu@3.39.79.1}"
 SSH_KEY="${PC_SUPPORTER_SSH_KEY:-}"
 SSH_CERTIFICATE="${PC_SUPPORTER_SSH_CERTIFICATE:-}"
 ENV_FILE=""
+MIGRATION_ENV_FILE=""
 DOMAIN="${PC_SUPPORTER_API_DOMAIN:-pc-supporter.3-39-79-1.sslip.io}"
 REMOTE_TMP="${PC_SUPPORTER_REMOTE_TMP:-/tmp/pc-supporter-lightsail}"
 APP_DIR="${PC_SUPPORTER_REMOTE_APP_DIR:-/opt/pc-supporter}"
@@ -30,7 +31,9 @@ Options:
   --ssh-certificate      Temporary OpenSSH certificate path from Lightsail.
   --env-file             Production backend env file. The first deployment can
                          omit this; the remote host then generates admin auth
-                         secrets without printing them.
+                         secrets without printing them. It is loaded by API/worker.
+  --migration-env-file   Root-only PostgreSQL owner credentials plus runtime-role
+                         bootstrap inputs. It is never loaded by API/worker.
   --domain               HTTPS host. Default: pc-supporter.3-39-79-1.sslip.io.
   --remote-tmp           Remote temporary upload directory.
   --app-dir              Remote application directory.
@@ -64,6 +67,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --env-file)
       ENV_FILE="${2:-}"
+      shift 2
+      ;;
+    --migration-env-file)
+      MIGRATION_ENV_FILE="${2:-}"
       shift 2
       ;;
     --domain)
@@ -103,8 +110,10 @@ if [[ ! "$DOMAIN" =~ ^[A-Za-z0-9.-]+$ ]]; then
   exit 2
 fi
 
-if [[ "$APP_DIR" != /* || "$REMOTE_TMP" != /tmp/* ]]; then
-  echo "--app-dir must be absolute and --remote-tmp must stay under /tmp." >&2
+if [[ ! "$APP_DIR" =~ ^/[A-Za-z0-9._/-]+$ || "$APP_DIR" == *"/../"* || "$APP_DIR" == */.. \
+  || ! "$REMOTE_TMP" =~ ^/tmp/[A-Za-z0-9._/-]+$ || "$REMOTE_TMP" == "/tmp" || "$REMOTE_TMP" == */ \
+  || "$REMOTE_TMP" == *"/../"* || "$REMOTE_TMP" == */.. ]]; then
+  echo "--app-dir and --remote-tmp must use safe absolute paths; --remote-tmp must stay under /tmp." >&2
   exit 2
 fi
 
@@ -115,6 +124,10 @@ fi
 
 if [[ "$PRESERVE_ENV" != "true" && -n "$ENV_FILE" && ! -f "$ENV_FILE" ]]; then
   echo "Env file not found: $ENV_FILE" >&2
+  exit 2
+fi
+if [[ -n "$MIGRATION_ENV_FILE" && ! -f "$MIGRATION_ENV_FILE" ]]; then
+  echo "Migration env file not found: $MIGRATION_ENV_FILE" >&2
   exit 2
 fi
 
@@ -128,6 +141,7 @@ done
 require_cmd tar
 require_cmd mktemp
 require_cmd curl
+require_cmd rg
 if [[ "$DRY_RUN" != "true" ]]; then
   require_cmd ssh
   require_cmd scp
@@ -139,8 +153,14 @@ if [[ ! -f "$ROOT_DIR/package.json" || ! -f "$ROOT_DIR/package-lock.json" || ! -
 fi
 
 TMP_DIR="$(mktemp -d /tmp/pc-supporter-deploy.XXXXXX)"
+REMOTE_STAGE="$REMOTE_TMP/$(basename "$TMP_DIR")"
+REMOTE_STAGE_CREATED=false
+REMOTE_STAGE_COMPLETED=false
 cleanup() {
   rm -rf "$TMP_DIR"
+  if [[ "$REMOTE_STAGE_CREATED" == "true" && "$REMOTE_STAGE_COMPLETED" != "true" ]]; then
+    ssh "${SSH_ARGS[@]}" "$SSH_TARGET" "rm -f -- '$REMOTE_STAGE/pc-supporter.tar.gz' '$REMOTE_STAGE/backend.env' '$REMOTE_STAGE/migration.env' '$REMOTE_STAGE/backend.env.generated' '$REMOTE_STAGE/pc-supporter.caddy'; rmdir '$REMOTE_STAGE' 2>/dev/null || true" >/dev/null 2>&1 || true
+  fi
 }
 trap cleanup EXIT
 
@@ -161,11 +181,26 @@ BUNDLE="$TMP_DIR/pc-supporter-$RELEASE_ID.tar.gz"
     dist \
     server \
     shared \
-    scripts/import-private-catalog.ts
+    db/schema.sql \
+    scripts/import-private-catalog.ts \
+    scripts/migrate-postgres.ts \
+    scripts/bootstrap-postgres-runtime-role.mjs \
+    scripts/postgres-runtime-role-smoke.mjs
 )
 
 echo "pc_supporter_bundle=status=ok release=$RELEASE_ID"
 tar -tzf "$BUNDLE" | sed -n '1,36p'
+for required_file in \
+  db/schema.sql \
+  scripts/migrate-postgres.ts \
+  scripts/bootstrap-postgres-runtime-role.mjs \
+  scripts/postgres-runtime-role-smoke.mjs; do
+  if ! tar -tzf "$BUNDLE" | rg -qx "$required_file"; then
+    echo "Deployment bundle is missing the PostgreSQL startup file: $required_file" >&2
+    exit 1
+  fi
+done
+tar -tzf "$BUNDLE" | rg '^(db/schema.sql|scripts/migrate-postgres.ts|scripts/bootstrap-postgres-runtime-role.mjs|scripts/postgres-runtime-role-smoke.mjs)$'
 
 if [[ "$DRY_RUN" == "true" ]]; then
   echo "pc_supporter_deploy=status=ok mode=dry-run release=$RELEASE_ID domain=$DOMAIN"
@@ -183,22 +218,32 @@ if [[ -n "$SSH_CERTIFICATE" ]]; then
   SCP_ARGS+=(-o "CertificateFile=$SSH_CERTIFICATE")
 fi
 
-ssh "${SSH_ARGS[@]}" "$SSH_TARGET" "mkdir -p '$REMOTE_TMP'"
-scp "${SCP_ARGS[@]}" "$BUNDLE" "$SSH_TARGET:$REMOTE_TMP/pc-supporter.tar.gz"
+REMOTE_STAGE_CREATED=true
+ssh "${SSH_ARGS[@]}" "$SSH_TARGET" "set -eu; umask 077; mkdir -p '$REMOTE_TMP'; test -d '$REMOTE_TMP'; test ! -L '$REMOTE_TMP'; test \"\$(stat -c %u '$REMOTE_TMP')\" = \"\$(id -u)\"; chmod 0700 '$REMOTE_TMP'; install -d -m 0700 '$REMOTE_STAGE'"
+scp "${SCP_ARGS[@]}" "$BUNDLE" "$SSH_TARGET:$REMOTE_STAGE/pc-supporter.tar.gz"
 if [[ "$PRESERVE_ENV" != "true" && -n "$ENV_FILE" ]]; then
-  scp "${SCP_ARGS[@]}" "$ENV_FILE" "$SSH_TARGET:$REMOTE_TMP/backend.env"
+  scp "${SCP_ARGS[@]}" "$ENV_FILE" "$SSH_TARGET:$REMOTE_STAGE/backend.env"
 fi
+if [[ -n "$MIGRATION_ENV_FILE" ]]; then
+  scp "${SCP_ARGS[@]}" "$MIGRATION_ENV_FILE" "$SSH_TARGET:$REMOTE_STAGE/migration.env"
+fi
+STAGED_CHMOD="chmod 600 '$REMOTE_STAGE/pc-supporter.tar.gz'"
+if [[ "$PRESERVE_ENV" != "true" && -n "$ENV_FILE" ]]; then STAGED_CHMOD+=" && chmod 600 '$REMOTE_STAGE/backend.env'"; fi
+if [[ -n "$MIGRATION_ENV_FILE" ]]; then STAGED_CHMOD+=" && chmod 600 '$REMOTE_STAGE/migration.env'"; fi
+ssh "${SSH_ARGS[@]}" "$SSH_TARGET" "set -eu; $STAGED_CHMOD"
 
 ssh "${SSH_ARGS[@]}" "$SSH_TARGET" \
-  "RELEASE_ID='$RELEASE_ID' REMOTE_TMP='$REMOTE_TMP' APP_DIR='$APP_DIR' DOMAIN='$DOMAIN' SERVICE_NAME='$SERVICE_NAME' WORKER_SERVICE_NAME='$WORKER_SERVICE_NAME' PRESERVE_ENV='$PRESERVE_ENV' HAS_ENV='$([[ -n "$ENV_FILE" ]] && echo true || echo false)' INTERNAL_HEALTH_TIMEOUT_SECONDS='$INTERNAL_HEALTH_TIMEOUT_SECONDS' bash -s" <<'REMOTE'
+  "RELEASE_ID='$RELEASE_ID' REMOTE_TMP='$REMOTE_STAGE' APP_DIR='$APP_DIR' DOMAIN='$DOMAIN' SERVICE_NAME='$SERVICE_NAME' WORKER_SERVICE_NAME='$WORKER_SERVICE_NAME' PRESERVE_ENV='$PRESERVE_ENV' HAS_ENV='$([[ -n "$ENV_FILE" ]] && echo true || echo false)' HAS_MIGRATION_ENV='$([[ -n "$MIGRATION_ENV_FILE" ]] && echo true || echo false)' INTERNAL_HEALTH_TIMEOUT_SECONDS='$INTERNAL_HEALTH_TIMEOUT_SECONDS' bash -s" <<'REMOTE'
 set -euo pipefail
 
 SERVICE_USER="pc-supporter"
 RELEASE_DIR="$APP_DIR/releases/$RELEASE_ID"
 ENV_PATH="/etc/pc-supporter/backend.env"
+MIGRATION_ENV_PATH="/etc/pc-supporter/migration.env"
 API_UNIT_PATH="/etc/systemd/system/$SERVICE_NAME.service"
 WORKER_UNIT_PATH="/etc/systemd/system/$WORKER_SERVICE_NAME.service"
 ENV_BACKUP_PATH="$ENV_PATH.rollback-$RELEASE_ID"
+MIGRATION_ENV_BACKUP_PATH="$MIGRATION_ENV_PATH.rollback-$RELEASE_ID"
 API_UNIT_BACKUP_PATH="$API_UNIT_PATH.rollback-$RELEASE_ID"
 WORKER_UNIT_BACKUP_PATH="$WORKER_UNIT_PATH.rollback-$RELEASE_ID"
 CADDY_BACKUP_PATH="/etc/caddy/Caddyfile.pc-supporter-backup-$RELEASE_ID"
@@ -209,6 +254,8 @@ if [[ -f "$ENV_PATH" ]] && sudo grep -Eq '^DATABASE_URL=[^[:space:]]+' "$ENV_PAT
 fi
 ENV_WAS_REPLACED=false
 ENV_PREVIOUS_EXISTS=false
+MIGRATION_ENV_WAS_REPLACED=false
+MIGRATION_ENV_PREVIOUS_EXISTS=false
 API_UNIT_PREVIOUS_EXISTS=false
 WORKER_UNIT_PREVIOUS_EXISTS=false
 RELEASE_SWITCHED=false
@@ -223,6 +270,13 @@ rollback_failed_deployment() {
       sudo install -o root -g "$SERVICE_USER" -m 0640 "$ENV_BACKUP_PATH" "$ENV_PATH" || true
     else
       sudo rm -f "$ENV_PATH" || true
+    fi
+  fi
+  if [[ "$MIGRATION_ENV_WAS_REPLACED" == "true" ]]; then
+    if [[ "$MIGRATION_ENV_PREVIOUS_EXISTS" == "true" ]]; then
+      sudo install -o root -g root -m 0600 "$MIGRATION_ENV_BACKUP_PATH" "$MIGRATION_ENV_PATH" || true
+    else
+      sudo rm -f "$MIGRATION_ENV_PATH" || true
     fi
   fi
   if [[ "$CADDY_CONFIG_CHANGED" == "true" && -f "$CADDY_BACKUP_PATH" ]]; then
@@ -259,7 +313,12 @@ rollback_failed_deployment() {
       echo "Deployment failed without a previous release; disabled the new service units." >&2
     fi
   fi
+  cleanup_remote_staging
   exit "$deploy_exit_status"
+}
+cleanup_remote_staging() {
+  rm -f -- "$REMOTE_TMP/pc-supporter.tar.gz" "$REMOTE_TMP/backend.env" "$REMOTE_TMP/migration.env" "$REMOTE_TMP/backend.env.generated" "$REMOTE_TMP/pc-supporter.caddy"
+  rmdir "$REMOTE_TMP" 2>/dev/null || true
 }
 trap rollback_failed_deployment EXIT
 
@@ -306,6 +365,15 @@ ENV
   rm -f "$REMOTE_TMP/backend.env.generated"
 fi
 
+if [[ "$HAS_MIGRATION_ENV" == "true" ]]; then
+  if [[ -f "$MIGRATION_ENV_PATH" ]]; then
+    sudo cp -p "$MIGRATION_ENV_PATH" "$MIGRATION_ENV_BACKUP_PATH"
+    MIGRATION_ENV_PREVIOUS_EXISTS=true
+  fi
+  MIGRATION_ENV_WAS_REPLACED=true
+  sudo install -o root -g root -m 0600 "$REMOTE_TMP/migration.env" "$MIGRATION_ENV_PATH"
+fi
+
 if ! sudo grep -Eq '^ADMIN_PASSWORD=[^[:space:]]+' "$ENV_PATH" || ! sudo grep -Eq '^ADMIN_SESSION_SECRET=[^[:space:]]+' "$ENV_PATH"; then
   echo "Production admin authentication is not configured; refusing public deployment." >&2
   exit 1
@@ -327,6 +395,10 @@ if sudo grep -Eq '^DATABASE_URL=[^[:space:]]+' "$ENV_PATH" && ! sudo grep -Eq '^
 fi
 HAS_POSTGRES=false
 SERVICE_PROCESS_ROLE=combined
+if sudo grep -Eq '^(DATABASE_MIGRATION_URL|DATABASE_RUNTIME_ROLE|DATABASE_RUNTIME_PASSWORD|POSTGRES_PASSWORD|POSTGRES_OWNER_PASSWORD|POSTGRES_RUNTIME_PASSWORD)=' "$ENV_PATH"; then
+  echo "Owner and role-bootstrap credentials must stay in /etc/pc-supporter/migration.env, outside the API/worker EnvironmentFile." >&2
+  exit 1
+fi
 if sudo grep -Eq '^DATABASE_URL=[^[:space:]]+' "$ENV_PATH"; then
   HAS_POSTGRES=true
   SERVICE_PROCESS_ROLE=api
@@ -334,6 +406,34 @@ if sudo grep -Eq '^DATABASE_URL=[^[:space:]]+' "$ENV_PATH"; then
     echo "DATABASE_URL switches repositories away from file-backed saved user state. Confirm its separate migration and readback before enabling PostgreSQL on Lightsail." >&2
     exit 1
   fi
+fi
+
+if [[ "$HAS_POSTGRES" == "true" ]]; then
+  if [[ ! -f "$MIGRATION_ENV_PATH" ]]; then
+    echo "PostgreSQL startup requires root-only /etc/pc-supporter/migration.env with the schema-owner URL and runtime-role inputs." >&2
+    exit 1
+  fi
+  if ! sudo grep -Eq '^DATABASE_MIGRATION_URL=.' "$MIGRATION_ENV_PATH" \
+    || ! sudo grep -Eq '^DATABASE_RUNTIME_ROLE=.' "$MIGRATION_ENV_PATH" \
+    || ! sudo grep -Eq '^DATABASE_RUNTIME_PASSWORD=.' "$MIGRATION_ENV_PATH"; then
+    echo "PostgreSQL migration env must define DATABASE_MIGRATION_URL, DATABASE_RUNTIME_ROLE, and DATABASE_RUNTIME_PASSWORD." >&2
+    exit 1
+  fi
+  if sudo grep -Eq '^(DATABASE_URL|POSTGRES_PASSWORD|POSTGRES_OWNER_PASSWORD)=' "$MIGRATION_ENV_PATH"; then
+    echo "The root-only migration env cannot contain an application DATABASE_URL or Compose owner-password key." >&2
+    exit 1
+  fi
+  while IFS= read -r migration_env_key; do
+    [[ -z "$migration_env_key" || "$migration_env_key" == \#* ]] && continue
+    migration_env_key="${migration_env_key%%=*}"
+    case "$migration_env_key" in
+      DATABASE_MIGRATION_URL|DATABASE_RUNTIME_ROLE|DATABASE_RUNTIME_PASSWORD|PGPASSWORD|PGHOST|PGPORT|PGDATABASE|PGUSER|PGSSLMODE|PGSSLCERT|PGSSLKEY|PGSSLROOTCERT) ;;
+      *)
+        echo "The root-only migration env contains an unsupported variable name." >&2
+        exit 1
+        ;;
+    esac
+  done < <(sudo sed -n '/^[A-Za-z_][A-Za-z0-9_]*=/p' "$MIGRATION_ENV_PATH")
 fi
 
 install_node() {
@@ -386,6 +486,7 @@ User=$SERVICE_USER
 Group=$SERVICE_USER
 WorkingDirectory=$APP_DIR/current
 EnvironmentFile=$ENV_PATH
+UnsetEnvironment=DATABASE_MIGRATION_URL DATABASE_RUNTIME_ROLE DATABASE_RUNTIME_PASSWORD POSTGRES_PASSWORD POSTGRES_OWNER_PASSWORD POSTGRES_RUNTIME_PASSWORD
 Environment=PC_SUPPORTER_PROCESS_ROLE=$SERVICE_PROCESS_ROLE
 Environment=NODE_OPTIONS=--max-old-space-size=256
 ExecStart=$NPM_BIN run start
@@ -412,6 +513,7 @@ User=$SERVICE_USER
 Group=$SERVICE_USER
 WorkingDirectory=$APP_DIR/current
 EnvironmentFile=$ENV_PATH
+UnsetEnvironment=DATABASE_MIGRATION_URL DATABASE_RUNTIME_ROLE DATABASE_RUNTIME_PASSWORD POSTGRES_PASSWORD POSTGRES_OWNER_PASSWORD POSTGRES_RUNTIME_PASSWORD
 Environment=PC_SUPPORTER_PROCESS_ROLE=worker
 Environment=NODE_OPTIONS=--max-old-space-size=256
 ExecStart=$NPM_BIN run worker
@@ -447,6 +549,36 @@ fi
 
 sudo caddy validate --config /etc/caddy/Caddyfile
 sudo systemctl daemon-reload
+if [[ "$HAS_POSTGRES" == "true" ]]; then
+  echo "Applying the PostgreSQL schema migration before runtime role provisioning."
+  sudo systemd-run \
+    --quiet --wait --collect --pipe \
+    --unit="pc-supporter-db-migrate-$RELEASE_ID" \
+    --property=User=root \
+    --property="WorkingDirectory=$APP_DIR/current" \
+    --property="EnvironmentFile=$MIGRATION_ENV_PATH" \
+    --property=RuntimeMaxSec=300 \
+    "$NPM_BIN" run db:migrate
+  echo "Provisioning the restricted PostgreSQL runtime role before API/worker startup."
+  sudo systemd-run \
+    --quiet --wait --collect --pipe \
+    --unit="pc-supporter-db-runtime-role-$RELEASE_ID" \
+    --property=User=root \
+    --property="WorkingDirectory=$APP_DIR/current" \
+    --property="EnvironmentFile=$MIGRATION_ENV_PATH" \
+    --property=RuntimeMaxSec=300 \
+    node scripts/bootstrap-postgres-runtime-role.mjs
+  echo "Checking the configured application DATABASE_URL has runtime-only PostgreSQL privileges."
+  sudo systemd-run \
+    --quiet --wait --collect --pipe \
+    --unit="pc-supporter-db-runtime-smoke-$RELEASE_ID" \
+    --property="User=$SERVICE_USER" \
+    --property="Group=$SERVICE_USER" \
+    --property="WorkingDirectory=$APP_DIR/current" \
+    --property="EnvironmentFile=$ENV_PATH" \
+    --property=RuntimeMaxSec=60 \
+    node scripts/postgres-runtime-role-smoke.mjs
+fi
 sudo systemctl enable "$SERVICE_NAME"
 sudo systemctl restart "$SERVICE_NAME"
 if [[ "$HAS_POSTGRES" == "true" ]]; then
@@ -510,12 +642,14 @@ if [[ "$HAS_POSTGRES" == "true" ]]; then
   sudo systemctl is-active "$WORKER_SERVICE_NAME"
 fi
 sudo systemctl is-active caddy
-rm -f "$REMOTE_TMP/pc-supporter.tar.gz" "$REMOTE_TMP/backend.env"
+cleanup_remote_staging
 if [[ "$ENV_PREVIOUS_EXISTS" == "true" ]]; then sudo rm -f "$ENV_BACKUP_PATH"; fi
+if [[ "$MIGRATION_ENV_PREVIOUS_EXISTS" == "true" ]]; then sudo rm -f "$MIGRATION_ENV_BACKUP_PATH"; fi
 sudo rm -f "$API_UNIT_BACKUP_PATH" "$WORKER_UNIT_BACKUP_PATH"
 trap - EXIT
 echo "pc_supporter_remote_deploy=status=ok release=$RELEASE_ID"
 REMOTE
+REMOTE_STAGE_COMPLETED=true
 
 headers_file="$TMP_DIR/headers.txt"
 body_file="$TMP_DIR/health.json"

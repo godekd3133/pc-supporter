@@ -234,12 +234,68 @@ describe("CI verification contracts", () => {
     expect(dockerfile).toContain("/api/health");
     expect(compose).toContain("image: postgres:16-alpine");
     expect(compose).toContain("condition: service_healthy");
-    expect(compose).toContain("POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD");
-    expect(compose).toContain("DATABASE_URL: postgresql://pcsupporter:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD");
+    expect(compose).toContain("DATABASE_MIGRATION_URL: postgresql://pcsupporter@postgres:5432/pcsupporter");
+    expect(compose).toContain('command: ["npm", "run", "db:migrate"]');
+    expect(compose).toContain('command: ["node", "scripts/bootstrap-postgres-runtime-role.mjs"]');
+    expect(compose).toContain("condition: service_completed_successfully");
+    expect(compose).toContain("POSTGRES_PASSWORD: ${POSTGRES_OWNER_PASSWORD:?Set POSTGRES_OWNER_PASSWORD");
+    expect(compose).toContain("PGPASSWORD: ${POSTGRES_OWNER_PASSWORD:?Set POSTGRES_OWNER_PASSWORD");
+    expect(compose).toContain("DATABASE_URL: postgresql://${POSTGRES_RUNTIME_ROLE:-pcsupporter_runtime}@postgres:5432/pcsupporter");
+    expect(compose).toContain("PGPASSWORD: ${POSTGRES_RUNTIME_PASSWORD:?Set POSTGRES_RUNTIME_PASSWORD");
     expect(compose).toContain('127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432');
     expect(compose).toContain("APP_HOST_PORT:-4174");
     expect(compose).toContain("pg_isready -U pcsupporter -d pcsupporter");
+    expect(workflow).toContain("POSTGRES_OWNER_PASSWORD:");
+    expect(workflow).toContain("POSTGRES_RUNTIME_PASSWORD:");
+    expect(workflow).toContain("postgres-runtime-role-smoke.mjs");
     expect(workflow).toContain("docker compose up --build --detach");
     expect(workflow).toContain("docker compose down");
+  });
+
+  it("keeps PostgreSQL owner credentials out of API/worker environments", async () => {
+    const compose = await readFile(resolve(projectRoot, "docker-compose.yml"), "utf8");
+    const serviceBlock = (name: string, nextName: string) => {
+      const start = compose.indexOf(`  ${name}:`);
+      const end = compose.indexOf(`  ${nextName}:`, start + 1);
+      expect(start).toBeGreaterThanOrEqual(0);
+      expect(end).toBeGreaterThan(start);
+      return compose.slice(start, end);
+    };
+    for (const [name, nextName] of [["app", "api-reader"], ["api-reader", "worker"], ["worker", "volumes"]] as const) {
+      const block = serviceBlock(name, nextName);
+      expect(block).toContain("DATABASE_URL: postgresql://${POSTGRES_RUNTIME_ROLE");
+      expect(block).toContain("PGPASSWORD: ${POSTGRES_RUNTIME_PASSWORD");
+      expect(block).not.toContain("DATABASE_MIGRATION_URL");
+      expect(block).not.toContain("POSTGRES_PASSWORD");
+      expect(block).not.toContain("DATABASE_RUNTIME_PASSWORD");
+    }
+    const bootstrap = serviceBlock("runtime-role-bootstrap", "app");
+    expect(bootstrap).toContain("DATABASE_MIGRATION_URL:");
+    expect(bootstrap).toContain("DATABASE_RUNTIME_PASSWORD:");
+    expect(bootstrap).not.toContain("DATABASE_URL:");
+  });
+
+  it("keeps Lightsail PostgreSQL uploads private and blocks startup until the runtime URL passes", async () => {
+    const deploy = await readFile(resolve(projectRoot, "scripts/lightsail-deploy.sh"), "utf8");
+
+    expect(deploy).toContain('REMOTE_STAGE="$REMOTE_TMP/$(basename "$TMP_DIR")"');
+    expect(deploy).toContain("test ! -L '$REMOTE_TMP'");
+    expect(deploy).toContain("chmod 0700 '$REMOTE_TMP'; install -d -m 0700 '$REMOTE_STAGE'");
+    expect(deploy).toContain("chmod 600 '$REMOTE_STAGE/migration.env'");
+    expect(deploy).toContain('rm -f -- "$REMOTE_TMP/pc-supporter.tar.gz" "$REMOTE_TMP/backend.env" "$REMOTE_TMP/migration.env"');
+    expect(deploy).toContain("cleanup_remote_staging");
+    expect(deploy).toContain("/etc/pc-supporter/migration.env");
+    expect(deploy).toContain("UnsetEnvironment=DATABASE_MIGRATION_URL DATABASE_RUNTIME_ROLE DATABASE_RUNTIME_PASSWORD POSTGRES_PASSWORD POSTGRES_OWNER_PASSWORD POSTGRES_RUNTIME_PASSWORD");
+    expect(deploy).toContain("--property=\"EnvironmentFile=$ENV_PATH\"");
+    expect(deploy).toContain("scripts/postgres-runtime-role-smoke.mjs");
+
+    const migration = deploy.indexOf("Applying the PostgreSQL schema migration before runtime role provisioning.");
+    const bootstrap = deploy.indexOf("Provisioning the restricted PostgreSQL runtime role before API/worker startup.");
+    const runtimeSmoke = deploy.indexOf("Checking the configured application DATABASE_URL has runtime-only PostgreSQL privileges.");
+    const apiRestart = deploy.indexOf('sudo systemctl restart "$SERVICE_NAME"', runtimeSmoke);
+    expect(migration).toBeGreaterThanOrEqual(0);
+    expect(bootstrap).toBeGreaterThan(migration);
+    expect(runtimeSmoke).toBeGreaterThan(bootstrap);
+    expect(apiRestart).toBeGreaterThan(runtimeSmoke);
   });
 });
