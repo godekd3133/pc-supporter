@@ -29,7 +29,7 @@ export type DataQuality = "seed" | "live" | "manual" | "incomplete";
 export type CatalogPriceEvidence = "live" | "manual" | "reference" | "recorded" | "unknown";
 
 export const DATA_QUALITY_LABELS: Record<DataQuality, string> = {
-  live: "다나와 최신",
+  live: "다나와 상세 수집",
   seed: "기본 정보",
   manual: "직접 확인",
   incomplete: "일부 스펙 부족"
@@ -42,9 +42,9 @@ export type ListingPolicy = "retail_only" | "include_bulk" | "all";
 export type PriceAvailabilityFilter = "all" | "known" | "unknown";
 
 export const PRICE_AVAILABILITY_LABELS: Record<PriceAvailabilityFilter, string> = {
-  all: "전체 가격 상태",
-  known: "가격 기록 있음",
-  unknown: "가격 확인 필요"
+  all: "전체",
+  known: "가격 있음",
+  unknown: "가격 없음"
 };
 
 export type BenchmarkAvailabilityFilter = "all" | "complete" | "incomplete";
@@ -910,7 +910,7 @@ export type AccessoryPriceFilter = "all" | "priced" | "under_10000" | "10000_500
 
 export const ACCESSORY_PRICE_FILTER_LABELS: Record<AccessoryPriceFilter, string> = {
   all: "전체 가격",
-  priced: "가격 기록 있음",
+  priced: "가격 있음",
   under_10000: "1만원 이하",
   "10000_50000": "1~5만원",
   over_50000: "5만원 초과"
@@ -1782,8 +1782,8 @@ export interface SavedBuildCheckSnapshot {
   accessoryCompatibility?: SavedBuildAccessoryCompatibilitySnapshot;
   findings?: SavedBuildCheckFindingSummary[];
   analysisScore?: number;
-  analysisScoreLabel: BuildAnalysis["scoreLabel"];
-  analysisConfidence: BuildAnalysis["confidence"];
+  analysisScoreLabel?: BuildAnalysis["scoreLabel"];
+  analysisConfidence?: BuildAnalysis["confidence"];
   actionCenterState?: "blocked" | "review" | "ready";
   actionCenterSummary?: string;
   actionCenterTotalCount?: number;
@@ -2084,6 +2084,8 @@ export interface AccessoryCoverageLastRun {
 export interface AccessoryCategoryCoverage {
   category: AccessoryCategory;
   categoryId: string;
+  /** Records whether category counters came from a real public crawl or a test fixture. */
+  evidenceSource?: "danawa-public-crawl" | "browser-smoke-fixture";
   /** False when the stored accessory pool exists but no public-list crawl was recorded for this category. */
   hasCrawlHistory?: boolean;
   totalProductCount?: number;
@@ -2358,7 +2360,7 @@ export interface ServiceMeta {
   };
   accessoryUpdatedAt: string;
   accessoryCoverage: AccessoryCoverageSnapshot;
-  benchmarkCoverage: CatalogBenchmarkCoverage;
+  benchmarkCoverage?: CatalogBenchmarkCoverage;
   catalogSpecCoverage?: import("./catalog-spec-coverage").CatalogSpecCoverage;
   persistence: PersistenceDiagnostics;
   categoryCounts: Record<PartCategory, number>;

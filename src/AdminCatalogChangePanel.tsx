@@ -168,9 +168,9 @@ export function CatalogChangeHistoryPanel({ records, loading, error, historyLimi
     return value === "live" ? "live" : value === "manual" ? "직접 확인" : value === "seed" ? "seed" : "확인 필요";
   }
   function priceText(record: CatalogChangeRecord) {
-    if (record.previousPriceWon === undefined || record.nextPriceWon === undefined) return "가격 확인 필요";
+    if (record.previousPriceWon === undefined || record.nextPriceWon === undefined) return "-";
     const delta = record.priceDeltaWon;
-    if (delta === undefined) return `${record.previousPriceWon.toLocaleString("ko-KR")}원 → ${record.nextPriceWon.toLocaleString("ko-KR")}원 · 가격 변화 확인 필요`;
+    if (delta === undefined) return `${record.previousPriceWon.toLocaleString("ko-KR")}원 → ${record.nextPriceWon.toLocaleString("ko-KR")}원 · 가격 변화 -`;
     if (delta === 0) return `${record.nextPriceWon.toLocaleString("ko-KR")}원 · 변화 없음`;
     return `${record.previousPriceWon.toLocaleString("ko-KR")}원 → ${record.nextPriceWon.toLocaleString("ko-KR")}원 · ${delta > 0 ? "+" : ""}${delta.toLocaleString("ko-KR")}원`;
   }
@@ -179,7 +179,7 @@ export function CatalogChangeHistoryPanel({ records, loading, error, historyLimi
     return delta === undefined || delta === 0 ? "catalog-change-price" : delta > 0 ? "catalog-change-price up" : "catalog-change-price down";
   }
   function priceValue(value: number | undefined) {
-    return value === undefined ? "가격 확인 필요" : `${value.toLocaleString("ko-KR")}원`;
+    return value === undefined ? "-" : `${value.toLocaleString("ko-KR")}원`;
   }
   function signedWon(value: number) {
     return `${value > 0 ? "+" : ""}${value.toLocaleString("ko-KR")}원`;

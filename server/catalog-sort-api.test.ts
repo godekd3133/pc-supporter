@@ -35,4 +35,12 @@ describe("catalog sort API", () => {
       .filter((value): value is number => typeof value === "number" && Number.isFinite(value) && value > 0);
     expect(knownPrices).toEqual([...knownPrices].sort((left, right) => left - right));
   });
+
+  it("does not expose benchmark-based ordering from the public catalog API", async () => {
+    const [requested, defaultOrder] = await Promise.all([
+      fetch(`${baseUrl}/api/parts?category=cpu&sort=benchmark_desc&limit=10`).then((response) => response.json()),
+      fetch(`${baseUrl}/api/parts?category=cpu&sort=price_asc&limit=10`).then((response) => response.json())
+    ]) as Array<{ items?: Array<{ id: string }> }>;
+    expect(requested.items?.map(({ id }) => id)).toEqual(defaultOrder.items?.map(({ id }) => id));
+  });
 });

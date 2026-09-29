@@ -38,7 +38,7 @@ describe("purchase list progress", () => {
     expect(purchaseListProgressAmountsFor(pricedRows, new Set(["cpu"]))).toEqual({ checkedTotalPriceWon: 300_000, remainingTotalPriceWon: 700_000, checkedPriceComplete: true, remainingPriceComplete: false, checkedRowCount: 1, remainingRowCount: 2 });
     expect(purchaseListProgressAmountLabelFor(0, true, 0)).toBe("없음");
     expect(purchaseListProgressAmountLabelFor(300_000, true, 1)).toBe("300,000원");
-    expect(purchaseListProgressAmountLabelFor(0, false, 1)).toBe("가격 확인 필요");
+    expect(purchaseListProgressAmountLabelFor(0, false, 1)).toBe("-");
     expect(purchaseListBudgetSummaryFor(pricedRows, 1_500_000)).toMatchObject({ budgetWon: 1_500_000, priceComplete: false });
     expect(purchaseListBudgetSummaryFor(pricedRows.slice(0, 2), 1_500_000)).toMatchObject({ totalPriceWon: 1_000_000, priceComplete: true, deltaWon: -500_000, withinBudget: true });
     const referenceSummary = purchaseListBudgetSummaryFor(pricedRows.slice(0, 2).map((row, index) => ({ ...row, priceEvidence: index === 0 ? "reference" as const : "live" as const })), 1_500_000);

@@ -288,15 +288,16 @@ export const seedCatalog: Part[] = [
   seed({
     id: "case-full-airflow",
     category: "case",
-    name: "Fractal Design Pop Air XL",
+    name: "Fractal Design Pop XL Air",
     brand: "Fractal Design",
-    model: "Pop Air XL",
+    model: "Pop XL Air",
     priceWon: 159000,
+    rawSpecText: "제조사 사양: 전용 3.5인치 HDD 장착부 4개, 3.5/2.5인치 겸용 장착부 2개. 최대 3.5인치 HDD 6개. https://www.fractal-design.com/products/cases/pop/pop-xl-air/rgb-black-tg-clear",
     specs: {
       maxGpuLengthMm: 420,
       maxCoolerHeightMm: 185,
       maxPsuLengthMm: 220,
-      hddBays: 8,
+      hddBays: 6,
       ssdBays: 4,
       motherboardFormFactors: ["ATX", "mATX", "ITX"],
       supportedPsuFormFactors: ["ATX", "SFX"]

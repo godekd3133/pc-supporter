@@ -117,7 +117,7 @@ export function CaseRgbLoadOverridePanel({ onToast, onMetaRefresh }: { onToast: 
     let cancelled = false;
     const timer = window.setTimeout(() => {
       setPartsLoading(true);
-      void api<{ items: Part[] }>(`/api/parts?category=case&q=${encodeURIComponent(query.trim())}&quality=all&sort=name&listingPolicy=all&limit=12`)
+      void api<{ items: Part[] }>(`/api/parts?category=case&q=${encodeURIComponent(query.trim())}&quality=all&sort=name&listingPolicy=all&priceStatus=all&limit=12`)
         .then((payload) => { if (!cancelled) setParts(payload.items); })
         .catch(() => { if (!cancelled) setParts([]); })
         .finally(() => { if (!cancelled) setPartsLoading(false); });

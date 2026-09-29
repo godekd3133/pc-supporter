@@ -3,11 +3,11 @@ import { similarityBasisLabelFor, similarityReferenceUsedCategoryFor } from "../
 import { type M2SlotProfile, type Part, type PartCategory, type SimilarityEvidence, isKnownPrice } from "../shared/types";
 
 export function formatWon(value: number | undefined) {
-  return !isKnownPrice(value) ? "가격 확인 중" : `${value.toLocaleString("ko-KR")}원`;
+  return !isKnownPrice(value) ? "-" : `${value.toLocaleString("ko-KR")}원`;
 }
 
 export function formatPriceDelta(value: number | undefined) {
-  if (value === undefined) return "가격 확인 필요";
+  if (value === undefined) return "-";
   if (value === 0) return "현재와 같은 가격";
   return `${value > 0 ? "+" : ""}${value.toLocaleString("ko-KR")}원`;
 }

@@ -92,7 +92,7 @@ describe("recommendation trust", () => {
 
     expect(reference).toMatchObject({ priceKnown: true, priceEvidence: "reference" });
     expect(reference.score).toBeLessThan(live.score);
-    expect(reference.reasons).toContain("참고 가격만 있어 현재 판매 가격은 판매처에서 확인하세요.");
+    expect(reference.reasons).toContain("입력된 금액만 있어 현재 판매 금액과 다를 수 있어요. 구매 전에 상품 페이지에서 확인하세요.");
   });
 
   it("keeps a safe candidate highly rated while reporting unrelated build issues separately", () => {

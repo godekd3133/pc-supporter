@@ -92,18 +92,18 @@ try {
 
   // ── 1. 예산 모드: budget → summary(4/4) → recommend ──────────────
   await reset();
-  await clickBtn("새로운 견적을 맞추고 싶어요");
+  await clickBtn("새 PC 견적 보기");
   await clickBtn("새 견적 시작하기");
-  await waitFor("(document.querySelector('.onboarding-title')?.textContent ?? '').includes('방식')", "mode");
-  await clickBtn("예산으로 맞출래요");
-  await clickBtn("다음");
-  await waitFor("(document.querySelector('.onboarding-title')?.textContent ?? '').includes('예산은')", "budget screen");
-  await clickBtn("다음 · 조건 확인");
-  await waitFor("(document.querySelector('.onboarding-title')?.textContent ?? '').includes('조건') || (document.body?.innerText ?? '').includes('맞춰볼까요')", "budget summary");
+  await waitFor("(document.querySelector('.onboarding-title')?.textContent ?? '').includes('기준')", "mode");
+  await clickBtn("예산을 기준으로 고르기");
+  await clickBtn("이 기준으로 계속");
+  await waitFor("(document.querySelector('.onboarding-title')?.textContent ?? '').includes('예산')", "budget screen");
+  await clickBtn("예상 구성 확인");
+  await waitFor("(document.querySelector('.onboarding-title')?.textContent ?? '').includes('견적 내용을 확인')", "budget summary");
   check("예산모드 요약 스텝 도달", true, await eyebrow());
   check("예산모드 인디케이터 4/4", (await eyebrow()).includes("4 / 4"), await eyebrow());
   check("예산모드 요약에 예산 행", await bodyHas("예산"));
-  await clickBtn("이 조건으로 견적 생성하기");
+  await clickBtn("견적 만들기");
   await waitFor("location.pathname === '/recommend'", "recommend 이동");
   await sleep(1500);
   const posts1 = await ev("window.__posts.length");
@@ -117,20 +117,20 @@ try {
   await waitFor("document.querySelector('.onboarding-page') !== null", "재개 화면");
   check("재개 카드 표시", await bodyHas("이어서"), (await title()) || "");
   await clickBtn("이어서");
-  await waitFor("(document.querySelector('.onboarding-eyebrow')?.textContent ?? '').includes('READY')", "요약 복귀");
+  await waitFor("(document.querySelector('.onboarding-title')?.textContent ?? '').includes('견적 내용을 확인')", "요약 복귀");
   check("재개→요약 복귀", true, await eyebrow());
-  await clickBtn("이 조건으로 견적 생성하기");
+  await clickBtn("견적 만들기");
   await waitFor("location.pathname === '/recommend'", "재생성 이동");
   await sleep(1200);
   check("재개 후 재생성 POST", (await ev("window.__posts.length")) > posts1);
 
   // ── 3. 작업 분기 요약 (7/7) ─────────────────────────────────────
   await reset();
-  await clickBtn("새로운 견적을 맞추고 싶어요");
+  await clickBtn("새 PC 견적 보기");
   await clickBtn("새 견적 시작하기");
-  await clickBtn("특정 작업이나 게임을 할 거예요");
-  await clickBtn("다음");
-  await waitFor("(document.querySelector('.onboarding-title')?.textContent ?? '').includes('주로')", "usecase");
+  await clickBtn("게임·작업을 기준으로 고르기");
+  await clickBtn("이 기준으로 계속");
+  await waitFor("(document.querySelector('.onboarding-title')?.textContent ?? '').includes('용도')", "usecase");
   await clickBtn("작업");
   await clickBtn("다음");
   await waitFor("(document.querySelector('.onboarding-title')?.textContent ?? '').includes('작업을')", "work");
@@ -140,8 +140,8 @@ try {
   await clickBtn("균형");
   await clickBtn("다음 · 예산 정하기");
   await waitFor("(document.querySelector('.onboarding-title')?.textContent ?? '').includes('예산')", "work budget");
-  await clickBtn("다음 · 조건 확인");
-  await waitFor("(document.querySelector('.onboarding-eyebrow')?.textContent ?? '').includes('READY')", "work summary");
+  await clickBtn("예상 구성 확인");
+  await waitFor("(document.querySelector('.onboarding-title')?.textContent ?? '').includes('견적 내용을 확인')", "work summary");
   const wInd = await eyebrow();
   check("작업모드 요약 7/7", wInd.includes("7 / 7"), wInd);
   check("작업모드 요약에 작업 행", await bodyHas("개발") || await bodyHas("작업"));
@@ -150,36 +150,36 @@ try {
   await ev("document.querySelector('.onboarding-back')?.click() ?? true").catch(() => {});
   await waitFor("(document.querySelector('.onboarding-title')?.textContent ?? '').includes('예산')", "작업 뒤로가기");
   check("작업 요약→예산 뒤로가기", true);
-  await clickBtn("다음 · 조건 확인");
-  await waitFor("(document.querySelector('.onboarding-eyebrow')?.textContent ?? '').includes('READY')", "요약 재진입");
-  await clickBtn("이 조건으로 견적 생성하기");
+  await clickBtn("예상 구성 확인");
+  await waitFor("(document.querySelector('.onboarding-title')?.textContent ?? '').includes('견적 내용을 확인')", "요약 재진입");
+  await clickBtn("견적 만들기");
   await waitFor("location.pathname === '/recommend'", "작업 recommend");
   check("작업 쿼리 work=dev", (await ev("location.search")).includes("work=dev"), await ev("location.search"));
 
   // ── 4. 성능 분기 요약 (5/5) ─────────────────────────────────────
   await reset();
-  await clickBtn("새로운 견적을 맞추고 싶어요");
+  await clickBtn("새 PC 견적 보기");
   await clickBtn("새 견적 시작하기");
-  await clickBtn("생각해둔 성능이 있어요");
-  await clickBtn("다음");
+  await clickBtn("원하는 사양 직접 입력하기");
+  await clickBtn("이 기준으로 계속");
   await waitFor("(document.querySelector('.onboarding-title')?.textContent ?? '').includes('성능')", "spec");
   await clickBtn("다음");
   await waitFor("(document.querySelector('.onboarding-title')?.textContent ?? '').includes('예산')", "spec budget");
-  await clickBtn("다음 · 조건 확인");
-  await waitFor("(document.querySelector('.onboarding-eyebrow')?.textContent ?? '').includes('READY')", "spec summary");
+  await clickBtn("예상 구성 확인");
+  await waitFor("(document.querySelector('.onboarding-title')?.textContent ?? '').includes('견적 내용을 확인')", "spec summary");
   const sInd = await eyebrow();
   check("성능모드 요약 5/5", sInd.includes("5 / 5"), sInd);
   check("성능모드 요약에 등급 행", await bodyHas("등급") || await bodyHas("성능"));
-  await clickBtn("이 조건으로 견적 생성하기");
+  await clickBtn("견적 만들기");
   await waitFor("location.pathname === '/recommend'", "spec recommend");
   check("성능 쿼리 tier 포함", (await ev("location.search")).includes("tier="), await ev("location.search"));
 
-  // ── 5. 게임 근거 verified 카드 ──────────────────────────────────
+  // ── 5. 게임 목표 조건의 결과 보존 ───────────────────────────────
   await reset();
-  await clickBtn("새로운 견적을 맞추고 싶어요");
+  await clickBtn("새 PC 견적 보기");
   await clickBtn("새 견적 시작하기");
-  await clickBtn("특정 작업이나 게임을 할 거예요");
-  await clickBtn("다음");
+  await clickBtn("게임·작업을 기준으로 고르기");
+  await clickBtn("이 기준으로 계속");
   await clickBtn("게임");
   await clickBtn("다음");
   await waitFor("(document.querySelector('.onboarding-title')?.textContent ?? '').includes('게임')", "games");
@@ -209,18 +209,17 @@ try {
     const v = await ev("document.querySelector('.onboarding-budget-value')?.textContent ?? ''");
     if (v.includes("600")) break;
   }
-  await clickBtn("다음 · 조건 확인");
-  await waitFor("(document.querySelector('.onboarding-eyebrow')?.textContent ?? '').includes('READY')", "gaming summary");
+  await clickBtn("예상 구성 확인");
+  await waitFor("(document.querySelector('.onboarding-title')?.textContent ?? '').includes('견적 내용을 확인')", "gaming summary");
   check("게임 요약 8/8", (await eyebrow()).includes("8 / 8"), await eyebrow());
-  await clickBtn("이 조건으로 견적 생성하기");
+  await clickBtn("견적 만들기");
   await waitFor("location.pathname === '/recommend'", "gaming recommend");
   await sleep(3000);
   const gUrl = await ev("location.search");
   check("게임 쿼리 games=cyberpunk", gUrl.includes("cyberpunk"), gUrl);
-  const evidTxt = await ev("document.body?.innerText ?? ''");
-  check("근거 카드 존재", evidTxt.includes("PERFORMANCE") || evidTxt.includes("근거") || evidTxt.includes("FPS"), "");
-  const verified = evidTxt.includes("80") || evidTxt.toLowerCase().includes("verified") || evidTxt.includes("측정");
-  check("근거 verified 상태 (80FPS/측정 표시)", verified, evidTxt.match(/FPS.{0,80}/)?.[0] ?? "no FPS text");
+  const gamingContext = await ev("document.querySelector('[data-testid=generator-gaming-context]')?.innerText ?? ''");
+  check("게임 목표 결과 카드", gamingContext.includes("사이버펑크 2077") && gamingContext.includes("4K") && gamingContext.includes("60Hz"), gamingContext);
+  check("실제 FPS 보장으로 오인시키지 않음", gamingContext.includes("실제 게임 FPS") && gamingContext.includes("달라요"), gamingContext);
 
   console.log("---");
   const fails = results.filter(r => !r.ok);

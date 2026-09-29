@@ -131,7 +131,7 @@ function directionLabel(direction: BuildChangeResultExport["direction"]) {
 }
 
 function priceText(snapshot: BuildChangeResultSnapshotExport) {
-  return snapshot.priceComplete ? `${snapshot.totalPriceWon.toLocaleString("ko-KR")}원` : "가격 확인 필요";
+  return snapshot.priceComplete ? `${snapshot.totalPriceWon.toLocaleString("ko-KR")}원` : "-";
 }
 
 function signed(value: number) {
@@ -177,7 +177,7 @@ export function buildChangeResultDecisionNoteFor(comparison: BuildChangeResultCo
   const exported = buildChangeResultExportFor(comparison);
   const after = exported.after;
   const price = exported.deltas.priceDeltaWon === undefined
-    ? "가격 확인 필요"
+    ? "-"
     : `${exported.deltas.priceDeltaWon > 0 ? "+" : ""}${exported.deltas.priceDeltaWon.toLocaleString("ko-KR")}원`;
   return `적용 후 결과 · ${comparison.title} · ${directionLabel(exported.direction)} · 호환 ${statusLabel(after.status)} · 호환 불가 ${after.blockerCount} · 주의 ${after.warningCount} · 확인 ${after.unknownCount} · 금액 ${price} · 확인한 때 ${after.checkedAt}`;
 }

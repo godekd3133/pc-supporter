@@ -55,9 +55,9 @@ function candidatePriceNeedsReview(input: CandidatePurchaseDecisionInput) {
 }
 
 function candidatePriceReviewReason(input: CandidatePurchaseDecisionInput) {
-  if (input.priceEvidence === "reference") return "참고 가격입니다. 판매처에서 현재 가격을 확인하세요.";
-  if (input.priceEvidence === "recorded") return "가격이 기록된 날짜를 확인하세요.";
-  if (input.priceEvidence === "unknown" || !input.priceKnown) return "판매 가격을 알 수 없습니다. 판매처에서 확인하세요.";
+  if (input.priceEvidence === "reference") return "입력된 금액입니다. 구매 전에 상품 페이지에서 현재 금액을 확인하세요.";
+  if (input.priceEvidence === "recorded") return "기록 날짜를 확인한 뒤 구매하세요.";
+  if (input.priceEvidence === "unknown" || !input.priceKnown) return "현재 금액을 알 수 없습니다. 상품 페이지에서 확인하세요.";
   return "판매 페이지에서 최신 가격과 재고를 확인하세요.";
 }
 

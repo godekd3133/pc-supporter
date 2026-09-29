@@ -86,7 +86,7 @@ export function savedCheckRiskText(snapshot: NonNullable<SavedBuild["checkSnapsh
 }
 
 export function savedCheckPriceText(snapshot: NonNullable<SavedBuild["checkSnapshot"]>) {
-  return snapshot.priceComplete && isKnownPrice(snapshot.totalPriceWon) ? formatWon(snapshot.totalPriceWon) : "가격 정보 없음";
+  return snapshot.priceComplete && isKnownPrice(snapshot.totalPriceWon) ? formatWon(snapshot.totalPriceWon) : "-";
 }
 
 export function savedCheckResourceText(snapshot: NonNullable<SavedBuild["checkSnapshot"]>) {
@@ -526,7 +526,7 @@ export function SavedBuildCheckTimeline({ history, partMap, accessoryMap, showDi
 export function savedPriceText(saved: SavedBuild, key: "totalPriceWon" | "coreTotalPriceWon" | "accessoryTotalPriceWon") {
   const summary = saved.summary;
   if (!summary) return "정보 부족";
-  if (key !== "accessoryTotalPriceWon" && (!summary.priceComplete || !isKnownPrice(summary[key]))) return "가격 정보 없음";
-  if (key === "accessoryTotalPriceWon" && summary.accessoryCount > 0 && !summary.priceComplete) return "가격 정보 없음";
+  if (key !== "accessoryTotalPriceWon" && (!summary.priceComplete || !isKnownPrice(summary[key]))) return "-";
+  if (key === "accessoryTotalPriceWon" && summary.accessoryCount > 0 && !summary.priceComplete) return "-";
   return key === "accessoryTotalPriceWon" && summary.accessoryCount === 0 ? "없음" : formatWon(summary[key]);
 }

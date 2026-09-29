@@ -148,9 +148,9 @@ function reasonFor(criterion: CandidateComparisonCriterion, item: CandidateCompa
   }
   if (criterion === "price") {
     if (confirmedPriceFor(item)) return `가격 ${item.priceWon!.toLocaleString("ko-KR")}원 · 가격 점수 ${priceScore}점`;
-    if (item.priceEvidence === "reference") return "참고 가격 · 실판매가가 아니어서 가격 점수를 산정하지 않음";
-    if (item.priceEvidence === "recorded") return "기록 가격 · 재확인 전까지 가격 점수를 산정하지 않음";
-    return "가격 확인 필요";
+    if (item.priceEvidence === "reference") return "등록된 금액은 확인이 필요해 가격 비교에 반영하지 않았습니다.";
+    if (item.priceEvidence === "recorded") return "이전에 저장한 금액은 확인 전까지 가격 비교에 반영하지 않았습니다.";
+    return "-";
   }
   if (criterion === "evidence") return `정보 ${evidence}점 · ${item.freshness === "fresh" ? "최근 확인" : item.freshness === "aging" ? "갱신 권장" : item.freshness === "stale" ? "오래된 정보" : item.freshness === "unknown" ? "시점 확인 필요" : "상태 미확인"}`;
   return `균형 ${score}점 · 호환 ${compatibility} · 성능 ${performance} · 정보 ${evidence} · ${similarityEvidenceSummary(item.similarityEvidence)}`;

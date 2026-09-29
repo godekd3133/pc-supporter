@@ -167,7 +167,7 @@ app.use(express.json({ limit: "1mb" }));
 // Public responses must not expose internal recommendation scores or evidence.
 // Admin evidence APIs retain their full payloads for authorized review.
 app.use((request, response, next) => {
-  const authenticatedAdminMeta = request.path === "/api/meta" && isAdminAuthenticated(request);
+  const authenticatedAdminMeta = request.path === "/api/meta" && adminAuthEnabled() && isAdminAuthenticated(request);
   if (!isApiPath(request.path) || request.path === "/api/admin" || request.path.startsWith("/api/admin/") || authenticatedAdminMeta) {
     next();
     return;
@@ -318,8 +318,9 @@ function dataFreshnessFromUnknown(value: unknown): DataFreshness | "all" {
   return ["all", "fresh", "aging", "stale", "unknown"].includes(raw) ? raw as DataFreshness | "all" : "all";
 }
 
-function priceAvailabilityFromUnknown(value: unknown): PriceAvailabilityFilter {
-  return value === "known" || value === "unknown" ? value : "all";
+function priceAvailabilityFromUnknown(value: unknown, fallback: PriceAvailabilityFilter = "all"): PriceAvailabilityFilter {
+  if (value === "known" || value === "unknown" || value === "all") return value;
+  return fallback;
 }
 
 function routeParam(value: string | string[] | undefined) {
@@ -1157,9 +1158,15 @@ app.get("/api/health", (_request, response) => {
   response.json({ ok: true, service: "pc-supporter", engineVersion: ENGINE_VERSION });
 });
 
+app.get("/api/admin/meta", requireAdmin, async (request, response) => {
+  const [meta, crawler, persistence] = await Promise.all([catalogMeta(), readCrawlStatus(), persistenceDiagnostics()]);
+  sendJsonWithEtag(request, response, { ...meta, crawler: publicCrawlStatusFor(crawler as CrawlStatus), engineVersion: ENGINE_VERSION, storageMode: persistence.storageMode, persistence, adminAuthEnabled: adminAuthEnabled() }, undefined, false);
+});
+
 app.get("/api/meta", async (request, response) => {
   const [meta, crawler, persistence] = await Promise.all([catalogMeta(), readCrawlStatus(), persistenceDiagnostics()]);
-  sendJsonWithEtag(request, response, { ...meta, crawler: publicCrawlStatusFor(crawler as CrawlStatus), engineVersion: ENGINE_VERSION, storageMode: persistence.storageMode, persistence, adminAuthEnabled: adminAuthEnabled() }, undefined, !isAdminAuthenticated(request));
+  const mayReadInternalMeta = adminAuthEnabled() && isAdminAuthenticated(request);
+  sendJsonWithEtag(request, response, { ...meta, crawler: publicCrawlStatusFor(crawler as CrawlStatus), engineVersion: ENGINE_VERSION, storageMode: persistence.storageMode, persistence, adminAuthEnabled: adminAuthEnabled() }, undefined, !mayReadInternalMeta);
 });
 
 // 클라이언트는 app_open만 전송할 수 있다 — check/save/share/recommend는
@@ -1297,7 +1304,7 @@ app.get("/api/parts", publicCatalogReadRateLimit, async (request, response) => {
   const quality = ["all", "seed", "live", "manual", "incomplete"].includes(rawQuality)
     ? rawQuality as DataQuality | "all"
     : "all";
-  const priceAvailability = priceAvailabilityFromUnknown(request.query.priceStatus);
+  const priceAvailability = priceAvailabilityFromUnknown(request.query.priceStatus, "known");
   const freshness = dataFreshnessFromUnknown(request.query.freshness);
   // Benchmark coverage is an internal ranking signal; public listing queries
   // always use the full catalog regardless of a supplied benchmarkStatus.
@@ -1309,8 +1316,9 @@ app.get("/api/parts", publicCatalogReadRateLimit, async (request, response) => {
   }
   const missingField = parsedMissingField.value;
   const rawSort = typeof request.query.sort === "string" ? request.query.sort : "price_asc";
-  const sort = ["price_asc", "price_desc", "name", "updated", "benchmark_desc"].includes(rawSort)
-    ? rawSort as "price_asc" | "price_desc" | "name" | "updated" | "benchmark_desc"
+  // Never expose internal benchmark ordering through the public catalog API.
+  const sort = ["price_asc", "price_desc", "name", "updated"].includes(rawSort)
+    ? rawSort as "price_asc" | "price_desc" | "name" | "updated"
     : "price_asc";
   const rawListingPolicy = typeof request.query.listingPolicy === "string" ? request.query.listingPolicy : "all";
   const listingPolicy = ["retail_only", "include_bulk", "all"].includes(rawListingPolicy)
@@ -1623,7 +1631,7 @@ app.post("/api/parts/compatible", publicCandidateRateLimit, async (request, resp
   const quality = ["all", "seed", "live", "manual", "incomplete"].includes(rawQuality)
     ? rawQuality as DataQuality | "all"
     : "all";
-  const priceAvailability = priceAvailabilityFromUnknown(body.priceStatus);
+  const priceAvailability = priceAvailabilityFromUnknown(body.priceStatus, "known");
   const freshness = dataFreshnessFromUnknown(body.freshness);
   const rawSort = typeof body.sort === "string" ? body.sort : "price_asc";
   const sort = ["price_asc", "price_desc", "name", "updated", "similarity", "value"].includes(rawSort)
@@ -1852,10 +1860,10 @@ app.get("/api/accessories", publicAccessoryReadRateLimit, async (request, respon
   const category: AccessoryCategory | "all" = ACCESSORY_CATEGORIES.includes(rawCategory as AccessoryCategory)
     ? rawCategory as AccessoryCategory
     : "all";
-  const rawPriceFilter = typeof request.query.priceFilter === "string" ? request.query.priceFilter : "all";
+  const rawPriceFilter = typeof request.query.priceFilter === "string" ? request.query.priceFilter : "priced";
   const priceFilter: AccessoryPriceFilter = ["all", "priced", "under_10000", "10000_50000", "over_50000"].includes(rawPriceFilter)
     ? rawPriceFilter as AccessoryPriceFilter
-    : "all";
+    : "priced";
   const freshness = dataFreshnessFromUnknown(request.query.freshness);
   const accessories = await loadAccessories();
   const baseOptions = { category, ...(brand ? { brand } : {}), quality, sort, priceFilter };
@@ -3143,8 +3151,10 @@ app.put("/api/builds/:id/assembly-verification", buildShareRateLimit, async (req
   }
   const recommendationPreferences = build.recommendationPreferences ?? parseRecommendationPreferences(undefined);
   const expectedFingerprint = buildCompatibilityInputFingerprint(build.selection, recommendationPreferences);
-  const expectedPrefix = `pc-supporter-assembly-verification:${expectedFingerprint}:`;
-  if (!parsed.history.buildFingerprint.startsWith(expectedPrefix)) {
+  const expectedFingerprintBase = `pc-supporter-assembly-verification:${expectedFingerprint}`;
+  const submittedFingerprint = parsed.history.buildFingerprint;
+  const fingerprintMatches = submittedFingerprint === expectedFingerprintBase || submittedFingerprint.startsWith(`${expectedFingerprintBase}:`);
+  if (!fingerprintMatches) {
     response.status(409).json({ error: "현재 저장 견적과 다른 조립 확인 로그입니다. 같은 견적에서 생성한 로그만 저장할 수 있습니다.", code: "ASSEMBLY_VERIFICATION_BUILD_MISMATCH" });
     return;
   }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ACCESSORY_CATEGORIES } from "../shared/types";
-import type { AccessoryItem } from "../shared/types";
-import { accessoryCategoryQualityCountsFor, accessoryCoverageSnapshotFor, countAccessories, findAccessory, mergeAccessories, mergeDanawaAccessorySnapshot, searchAccessories } from "./accessories";
+import type { AccessoryCrawlCategoryReport, AccessoryItem, AccessoryCategoryCoverage } from "../shared/types";
+import { accessoryCategoryQualityCountsFor, accessoryCoverageSnapshotFor, accessoryListEvidenceFor, countAccessories, findAccessory, mergeAccessories, mergeDanawaAccessorySnapshot, searchAccessories } from "./accessories";
 import { seedAccessories } from "./seed-accessories";
 
 function accessory(overrides: Partial<AccessoryItem>): AccessoryItem {
@@ -21,6 +21,62 @@ function accessory(overrides: Partial<AccessoryItem>): AccessoryItem {
 }
 
 describe("accessory catalog", () => {
+  it("prefers a more complete public list page sample over an older underfilled sample", () => {
+    const previous: AccessoryCategoryCoverage = {
+      category: "storage_accessory",
+      categoryId: "11329818",
+      evidenceSource: "danawa-public-crawl",
+      hasCrawlHistory: true,
+      totalProductCount: 524,
+      storedProductCount: 20,
+      liveProducts: 20,
+      incompleteProducts: 0,
+      incompleteSpecs: 0,
+      pricedProducts: 20,
+      pagesExpected: 18,
+      pagesVisited: 1,
+      listedProducts: 6,
+      uniqueProducts: 6,
+      detailFetched: 6,
+      detailFailed: 0,
+      missingProducts: 518,
+      listCoverage: "partial",
+      coverage: "partial",
+      specCoverage: "partial",
+      storedSpecCoverage: "partial",
+      mode: "sample",
+      details: true,
+      onlyIncomplete: false,
+      lastCrawledAt: "2026-09-20T00:00:00.000Z"
+    };
+    const report: AccessoryCrawlCategoryReport = {
+      category: "storage_accessory",
+      categoryId: "11329818",
+      totalProductCount: 524,
+      offset: 0,
+      requestedLimit: 30,
+      pagesExpected: 18,
+      pagesVisited: 1,
+      listedProducts: 30,
+      uniqueProducts: 30,
+      detailFetched: 30,
+      detailFailed: 0,
+      missingProducts: 0,
+      incompleteSpecs: 0,
+      listCoverage: "partial",
+      coverage: "partial",
+      specCoverage: "complete"
+    };
+
+    expect(accessoryListEvidenceFor(previous, report, { mode: "sample", onlyIncomplete: false })).toMatchObject({
+      totalProductCount: 524,
+      pagesExpected: 18,
+      pagesVisited: 1,
+      listedProducts: 30,
+      uniqueProducts: 30
+    });
+  });
+
   it("provides a deterministic starter item for every peripheral category", () => {
     expect(seedAccessories.length).toBeGreaterThanOrEqual(40);
     expect(new Set(seedAccessories.map((item) => item.category))).toEqual(new Set(ACCESSORY_CATEGORIES));
@@ -46,6 +102,7 @@ describe("accessory catalog", () => {
       categories: [{
         category: "cooling_fan" as const,
         categoryId: "old-fan-list",
+        evidenceSource: "danawa-public-crawl" as const,
         totalProductCount: 6,
         storedProductCount: 6,
         liveProducts: 0,
@@ -79,6 +136,48 @@ describe("accessory catalog", () => {
     expect(snapshot.categories).toHaveLength(ACCESSORY_CATEGORIES.length);
     expect(coolingFan).toMatchObject({ storedProductCount: 1, liveProducts: 1, incompleteProducts: 0, incompleteSpecs: 0, pricedProducts: 1, hasCrawlHistory: true, listCoverage: "complete" });
     expect(ups).toMatchObject({ storedProductCount: 1, liveProducts: 0, incompleteProducts: 1, incompleteSpecs: 1, pricedProducts: 1, hasCrawlHistory: false, pagesVisited: 0, listCoverage: "partial" });
+  });
+
+  it("does not expose test-fixture counters as public crawl history", () => {
+    const snapshot = accessoryCoverageSnapshotFor({
+      updatedAt: "2026-09-12T00:00:00.000Z",
+      categories: [{
+        category: "cooling_fan",
+        categoryId: "browser-smoke-cooling-fan",
+        evidenceSource: "browser-smoke-fixture",
+        totalProductCount: 7,
+        storedProductCount: 7,
+        liveProducts: 0,
+        incompleteProducts: 0,
+        pricedProducts: 7,
+        pagesExpected: 1,
+        pagesVisited: 1,
+        listedProducts: 7,
+        uniqueProducts: 7,
+        detailFetched: 7,
+        detailFailed: 0,
+        missingProducts: 0,
+        incompleteSpecs: 1,
+        listCoverage: "complete",
+        coverage: "partial",
+        specCoverage: "partial",
+        storedSpecCoverage: "partial",
+        mode: "sample",
+        details: true,
+        onlyIncomplete: false,
+        lastCrawledAt: "2026-09-12T00:00:00.000Z"
+      }]
+    }, [accessory({ id: "fixture-fan", category: "cooling_fan" })]);
+    const coolingFan = snapshot.categories.find((entry) => entry.category === "cooling_fan");
+
+    expect(coolingFan).toMatchObject({
+      categoryId: "crawl-history-unavailable",
+      hasCrawlHistory: false,
+      pagesExpected: 0,
+      pagesVisited: 0,
+      listCoverage: "partial",
+      lastCrawledAt: ""
+    });
   });
 
   it("searches, sorts, paginates, and finds accessories", () => {

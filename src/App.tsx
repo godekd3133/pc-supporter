@@ -164,6 +164,7 @@ import { catalogChangeImpactsFor } from "../shared/catalog-change-impact";
 import type { CatalogChangeImpact } from "../shared/catalog-change-impact";
 import { compatibilityReportJsonFor, compatibilityReportTextFor } from "../shared/compatibility-report";
 import type { CompatibilityReportViewState } from "../shared/compatibility-report";
+import { publicCompatibilityResultFromStoredJson } from "./compatibility-result-storage";
 import { buildChangeResultDecisionNoteFor, buildChangeResultExportFor, buildChangeResultTextFor } from "../shared/build-change-result";
 import type { BuildChangeResultComparison } from "../shared/build-change-result";
 import { budgetLadderLocalShareRemember, budgetLadderLocalShareRemove, budgetLadderLocalSharesFromJson, budgetLadderLocalSharesToJson } from "../shared/budget-ladder-local-history";
@@ -620,7 +621,7 @@ function compatibilityReportViewStateForLocation(): CompatibilityReportViewState
 function readLastCompatibilityResult(): CompatibilityResult | null {
   try {
     const raw = window.sessionStorage.getItem("pc-supporter-last-compatibility-result");
-    return raw ? JSON.parse(raw) as CompatibilityResult : null;
+    return publicCompatibilityResultFromStoredJson(raw);
   } catch {
     return null;
   }
@@ -2924,7 +2925,8 @@ function App() {
     scenarioRequestSequenceRef.current += 1;
     setUpgradeBundleScenarioPreview(null);
     const nextBuild = upgradeBundleBuildFor(build, bundle);
-    openBuildChangePreview("업그레이드 조합 적용", `${bundle.changes.length}개 부품 조합을 적용합니다. ${bundle.reason} 적용 후 전체 견적의 호환 결과를 계산합니다.`, nextBuild, bundle.changes.map((change) => change.part));
+    const reason = typeof bundle.reason === "string" && bundle.reason.trim() ? bundle.reason : "선택한 부품 조합입니다.";
+    openBuildChangePreview("업그레이드 조합 적용", `${bundle.changes.length}개 부품 조합을 적용합니다. ${reason} 적용 후 전체 견적의 호환 결과를 계산합니다.`, nextBuild, bundle.changes.map((change) => change.part));
   }
 
   async function previewUpgradeBundle(bundle: UpgradeBundleRecommendation) {

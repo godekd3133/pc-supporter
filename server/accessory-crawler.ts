@@ -6,17 +6,13 @@ import { readFile } from "node:fs/promises";
 import type { AccessoryCategory, AccessoryCrawlCategoryReport, AccessoryCrawlManifest, AccessoryCrawlStatus, AccessoryItem, PartSpecs } from "../shared/types";
 import { ACCESSORY_CATEGORY_LABELS } from "../shared/types";
 import {
-  buildDanawaListAjaxParams,
   fetchDanawaHtml,
-  parseDanawaListPage,
-  parseDanawaListPageInfo,
-  parseDanawaListRequestContext,
   parseM2FormFactors,
   isAllowedSourceUrl,
   type DanawaCrawlerOptions,
-  type DanawaListItem,
-  type DanawaListRequestContext
+  type DanawaListItem
 } from "./danawa";
+import { parseDanawaPublicListPage } from "./danawa-public-list";
 import { loadAccessories, recordAccessoryCoverage, upsertAccessories } from "./accessories";
 import { fanCurrentAFromText } from "../shared/fan-connectivity";
 import { parseAdapterPcieSlotWidth, parseAdapterStorageDeviceCount } from "../shared/storage-adapter";
@@ -39,7 +35,7 @@ export type DanawaAccessoryCategoryConfig = {
 };
 
 export const DANAWA_ACCESSORY_CATEGORIES: DanawaAccessoryCategoryConfig[] = [
-  { category: "storage_accessory", categoryId: "112760" },
+  { category: "storage_accessory", categoryId: "11329818" },
   { category: "cooling_fan", categoryId: "11336858" },
   { category: "thermal_grease", categoryId: "11336859" },
   { category: "m2_heatsink", categoryId: "11336860" },
@@ -435,29 +431,27 @@ export async function crawlDanawaAccessoryCategory(
   let listedProducts = 0;
   const pages: DanawaListItem[][] = [];
   const firstPageUrl = `https://prod.danawa.com/list/?cate=${categoryId}`;
-  let requestContext: DanawaListRequestContext | undefined;
+  const pageSignatures = new Set<string>();
 
   for (let page = 1; page <= pageLimit && page <= maxSafePages; page += 1) {
     const html = page === 1
       ? await fetchDanawaHtml(firstPageUrl, options)
-      : requestContext
-        ? await fetchDanawaHtml("https://prod.danawa.com/list/ajax/getProductList.ajax.php", options, {
-            method: "POST",
-            referer: firstPageUrl,
-            body: new URLSearchParams(Object.entries(buildDanawaListAjaxParams(page, requestContext)))
-          })
-        : await fetchDanawaHtml(`${firstPageUrl}&page=${page}`, options);
+      : await fetchDanawaHtml(`${firstPageUrl}&page=${page}`, options, { referer: firstPageUrl });
     pagesVisited += 1;
-    const pageItems = parseDanawaListPage(html);
-    const pageInfo = parseDanawaListPageInfo(html);
+    const pageResult = parseDanawaPublicListPage(html, categoryId, page);
+    const pageItems = pageResult.items;
+    const pageInfo = { totalProductCount: pageResult.totalProductCount, pageSize: pageResult.pageSize };
     if (page === 1) {
-      requestContext = parseDanawaListRequestContext(html);
       totalProductCount = pageInfo.totalProductCount;
       pageSize = pageInfo.pageSize ?? pageItems.length;
       if ((exhaustive || (options.onlyIncomplete && options.pages === undefined)) && totalProductCount !== undefined && pageSize) {
         pageLimit = Math.ceil(totalProductCount / pageSize);
       }
     }
+    if (pageResult.currentPage !== page) throw new Error(`다나와 공개 목록이 요청 페이지 ${page} 대신 ${pageResult.currentPage}페이지를 반환했습니다.`);
+    const signature = pageItems.map((item) => item.sourceProductCode).sort().join(",");
+    if (page > 1 && signature && pageSignatures.has(signature)) break;
+    if (signature) pageSignatures.add(signature);
     listedProducts += pageItems.length;
     pages.push(pageItems);
     const selectedItems = selectAccessoryListWindow(

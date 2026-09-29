@@ -30,6 +30,8 @@ describe("listing policy", () => {
 
   it("separates case-category riser accessories without classifying case features as accessories", () => {
     expect(inferListingType(part({ category: "case", name: "AONE PCI-E 4.0 라이저 케이블", rawSpecText: "액세서리 / PCIe 라이저" }))).toBe("accessory");
+    expect(inferListingType(part({ category: "case", name: "bequiet! HDD CAGE 서린" }))).toBe("accessory");
+    expect(inferListingType(part({ category: "case", name: "Phanteks PREMIUM GEN5 VERTICAL GPU BRACKET (블랙)" }))).toBe("accessory");
     expect(inferListingType(part({ category: "case", name: "정상 케이스", rawSpecText: "ATX 케이스 / 라이저 케이블 장착 지원" }))).toBe("retail");
   });
 

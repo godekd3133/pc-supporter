@@ -74,8 +74,8 @@ export function BuildScenarioPreviewPanel({ preview, currentResult, onApply, onR
     : comparison.direction === "worsened"
       ? "부품을 바꾸면 호환 문제가 늘어날 수 있어요."
       : comparison.direction === "changed"
-        ? "예상 금액이나 호환 항목이 달라졌어요."
-        : "현재 구성과 예상 금액·호환 상태가 같아요.";
+        ? "가격이나 호환 항목이 달라졌어요."
+        : "현재 구성의 가격·호환 상태가 같아요.";
   return <section className={`build-scenario-preview ${comparison.direction}`} aria-label="구성 미리 보기" data-testid="build-scenario-preview">
     <div className="build-scenario-preview-heading"><div><p className="eyebrow">구성 비교</p><h2>구성 미리 보기</h2><p>{preview.summary}</p></div><div className="build-scenario-preview-heading-actions"><span className={`build-scenario-direction ${comparison.direction}`}>{directionLabel}</span><button className="icon-button" type="button" onClick={onClose} aria-label="구성 미리 보기 닫기"><FiXCircle /></button></div></div>
     <div className="build-scenario-candidate"><span>{CATEGORY_LABELS[preview.category]}</span><strong>{preview.part.name}</strong><small>현재 견적에 적용했을 때의 금액과 호환 정보예요.</small></div>
@@ -308,6 +308,10 @@ export function accessoryRecommendationUpdatedLabel(item: AccessoryItem) {
   return Number.isNaN(date.getTime()) ? "정보 부족" : date.toLocaleDateString("ko-KR");
 }
 
+export function accessoryRecommendationDataStatusFor(item: AccessoryItem) {
+  return DATA_QUALITY_LABELS[item.dataQuality];
+}
+
 export function accessoryRecommendationSpecRows(category: AccessoryCategory) {
   const rows: Array<{ label: string; value: (item: AccessoryItem) => string }> = [];
   const joinedDimensions = (item: AccessoryItem) => [item.specs.lengthMm, item.specs.widthMm, item.specs.thicknessMm].filter((value) => value !== undefined).map((value) => `${value}mm`).join(" × ") || "정보 부족";
@@ -467,7 +471,7 @@ export function AccessoryRecommendationComparison({ recommendations }: { recomme
     { label: "구매 시점 참고", value: (recommendation: AccessoryRecommendation) => priceWatchDecisionFor({ currentStatus: isKnownPrice(recommendation.item.priceWon) ? "available" : "unavailable", currentPriceWon: recommendation.item.priceWon, history: priceHistories[recommendation.item.id]?.summary }).label },
     { label: "최근 가격 이력", value: (recommendation: AccessoryRecommendation) => accessoryRecommendationPriceHistoryText(priceHistories[recommendation.item.id], recommendation.item.priceWon) },
     { label: "마지막 갱신", value: (recommendation: AccessoryRecommendation) => accessoryRecommendationUpdatedLabel(recommendation.item) },
-    { label: "필수 누락", value: (recommendation: AccessoryRecommendation) => recommendation.item.missingFields.length > 0 ? `${recommendation.item.missingFields.length}개` : "없음" },
+    { label: "수집 상태", value: (recommendation: AccessoryRecommendation) => accessoryRecommendationDataStatusFor(recommendation.item) },
     ...accessoryRecommendationSpecRows(category).map((row) => ({ label: row.label, value: (recommendation: AccessoryRecommendation) => row.value(recommendation.item) })),
     { label: "추천 이유", value: (recommendation: AccessoryRecommendation) => recommendation.reason },
     { label: "맞는 이유", value: (recommendation: AccessoryRecommendation) => recommendation.fitBasis }

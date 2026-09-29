@@ -86,7 +86,7 @@ export function M2SlotOverridePanel({ onToast, onMetaRefresh }: { onToast: (mess
     setBoardSearching(true);
     try {
       const query = boardQuery.trim();
-      const payload = await api<{ items: Part[] }>(`/api/parts?category=motherboard&q=${encodeURIComponent(query)}&quality=all&sort=name&listingPolicy=all&limit=20`);
+      const payload = await api<{ items: Part[] }>(`/api/parts?category=motherboard&q=${encodeURIComponent(query)}&quality=all&sort=name&listingPolicy=all&priceStatus=all&limit=20`);
       if (boardSearchRequestVersionRef.current !== requestVersion) return;
       setBoards(payload.items);
       if (payload.items.length === 0) onToast("검색 조건에 맞는 메인보드를 찾지 못했습니다.");

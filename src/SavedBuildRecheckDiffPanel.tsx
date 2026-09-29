@@ -22,7 +22,7 @@ function deltaText(value: number) {
 }
 
 function priceDeltaText(value: number | undefined, complete: boolean) {
-  if (!complete || value === undefined) return "가격 정보 없음";
+  if (!complete || value === undefined) return "-";
   if (value === 0) return "변화 없음";
   return `${value > 0 ? "+" : ""}${value.toLocaleString("ko-KR")}원`;
 }
@@ -50,8 +50,8 @@ function refreshPriceTransition(item: CatalogRefreshReportItem) {
   const beforeKnown = isKnownPrice(item.previousPriceWon);
   const afterKnown = isKnownPrice(item.nextPriceWon);
   if (!beforeKnown && !afterKnown) return "정보 부족 → 정보 부족";
-  if (!beforeKnown) return `가격 정보 없음 → ${item.nextPriceWon!.toLocaleString("ko-KR")}원`;
-  if (!afterKnown) return `${item.previousPriceWon!.toLocaleString("ko-KR")}원 → 가격 정보 없음`;
+  if (!beforeKnown) return `- → ${item.nextPriceWon!.toLocaleString("ko-KR")}원`;
+  if (!afterKnown) return `${item.previousPriceWon!.toLocaleString("ko-KR")}원 → -`;
   if (item.previousPriceWon === item.nextPriceWon) return `${item.nextPriceWon!.toLocaleString("ko-KR")}원 · 변화 없음`;
   const delta = item.nextPriceWon! - item.previousPriceWon!;
   return `${item.previousPriceWon!.toLocaleString("ko-KR")}원 → ${item.nextPriceWon!.toLocaleString("ko-KR")}원 · ${delta > 0 ? "+" : ""}${delta.toLocaleString("ko-KR")}원`;
@@ -141,7 +141,7 @@ export function SavedBuildRecheckDiffPanel({ snapshot, result, partMap, onFocusF
     <div className="saved-build-recheck-diff-grid">
       <article className={diff.statusChanged ? "changed" : undefined}><span>결과</span><strong>{statusLabel(snapshot.status)} → {statusLabel(result.status)}</strong><small>{diff.statusChanged ? "결과가 달라졌습니다." : "저장 당시와 현재 결과가 같습니다."}</small></article>
       <article className={riskChanged ? "changed" : undefined}><span>호환 항목</span><strong>호환 불가 {snapshot.blockerCount} → {result.blockerCount} · 주의 {snapshot.warningCount} → {result.warningCount} · 정보 부족 {snapshot.unknownCount} → {result.unknownCount}</strong><small>{riskChanged ? `호환 불가 ${deltaText(summary.blockerDelta)} · 주의 ${deltaText(summary.warningDelta)} · 정보 부족 ${deltaText(summary.unknownDelta)}` : "호환 불가·주의·정보 부족 항목 수는 그대로예요."}</small></article>
-      <article className={priceChanged ? "changed" : undefined}><span>가격</span><strong>{priceDeltaText(summary.priceDeltaWon, snapshot.priceComplete && result.priceComplete)}</strong><small>{diff.priceCompletenessChanged ? `가격 정보 ${snapshot.priceComplete ? "가격 정보 있음" : "가격 정보 없음"} → ${result.priceComplete ? "가격 정보 있음" : "가격 정보 없음"}` : "저장 당시와 현재 총액 비교"}</small></article>
+      <article className={priceChanged ? "changed" : undefined}><span>가격</span><strong>{priceDeltaText(summary.priceDeltaWon, snapshot.priceComplete && result.priceComplete)}</strong><small>{diff.priceCompletenessChanged ? `가격 정보 ${snapshot.priceComplete ? "가격 정보 있음" : "-"} → ${result.priceComplete ? "가격 정보 있음" : "-"}` : "저장 당시와 현재 총액 비교"}</small></article>
 
       <article className={resourceBudgetChanged ? "changed" : undefined}><span>전력·냉각 예산</span><strong>{resourceBudgetText(snapshot.resourceBudget)} → {resourceBudgetText(currentSnapshot.resourceBudget)}</strong><small>{resourceBudgetDeltaText(summary, resourceBudgetChanged)}</small></article>
 
@@ -166,7 +166,7 @@ export function SavedBuildRecheckDiffPanel({ snapshot, result, partMap, onFocusF
           {recommendation && <div className="saved-build-recheck-recommendation" data-testid={`saved-build-recheck-recommendation-${change.key}`}>
             <div className="saved-build-recheck-recommendation-heading"><span>우선 검토 부품</span><strong>{recommendation.suggestion.part.name}</strong><em className={recommendation.decision.state}>{recommendation.decision.label}</em></div>
             <p>{recommendation.decision.summary}</p>
-            <small>미리 적용 후 호환 불가 {recommendation.suggestion.remainingBlockers}개 · 주의 {recommendation.suggestion.remainingWarnings}개 · 정보 부족 {recommendation.suggestion.remainingUnknown}개{recommendation.suggestion.priceDeltaWon !== undefined ? ` · 가격 ${recommendation.suggestion.priceDeltaWon > 0 ? "+" : ""}${recommendation.suggestion.priceDeltaWon.toLocaleString("ko-KR")}원` : " · 가격 정보 없음"}</small>
+            <small>미리 적용 후 호환 불가 {recommendation.suggestion.remainingBlockers}개 · 주의 {recommendation.suggestion.remainingWarnings}개 · 정보 부족 {recommendation.suggestion.remainingUnknown}개{recommendation.suggestion.priceDeltaWon !== undefined ? ` · 가격 ${recommendation.suggestion.priceDeltaWon > 0 ? "+" : ""}${recommendation.suggestion.priceDeltaWon.toLocaleString("ko-KR")}원` : " · -"}</small>
             <div className="saved-build-recheck-recommendation-actions">{onPreviewSuggestion && recommendation.decision.state !== "hold" && <button className="text-button" type="button" onClick={() => onPreviewSuggestion(recommendation.suggestion.part.category, recommendation.suggestion.part, recommendation.suggestion.recommendedQuantity, currentFinding?.affectedPartIds)}><FiRefreshCw /> 미리 적용</button>}{currentFinding && onFocusFinding && <button className="text-button" type="button" onClick={() => onFocusFinding(currentFinding.ruleId)}><FiSearch /> 부품 전체 보기</button>}</div>
           </div>}
           {currentFinding && strategyPlans.length > 0 && <div className="saved-build-recheck-finding-strategies" data-testid={`saved-build-recheck-finding-strategies-${change.key}`}>

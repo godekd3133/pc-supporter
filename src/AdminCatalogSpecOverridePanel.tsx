@@ -160,7 +160,7 @@ export function AdminCatalogSpecOverridePanel({ onToast }: { onToast: (message: 
     const requestVersion = partSearchRequestVersionRef.current;
     setPartSearching(true);
     try {
-      const payload = await api<{ items: Part[] }>(`/api/parts?category=${encodeURIComponent(partCategory)}&q=${encodeURIComponent(partQuery.trim())}&quality=all&listingPolicy=all&sort=name&limit=12`);
+      const payload = await api<{ items: Part[] }>(`/api/parts?category=${encodeURIComponent(partCategory)}&q=${encodeURIComponent(partQuery.trim())}&quality=all&listingPolicy=all&priceStatus=all&sort=name&limit=12`);
       if (partSearchRequestVersionRef.current !== requestVersion) return;
       setPartResults(payload.items);
       if (payload.items.length === 0) onToast("조건에 맞는 핵심 부품을 찾지 못했습니다.");

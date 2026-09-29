@@ -50,9 +50,9 @@ function sourceUrlErrors(value: string) {
   }
 }
 
-function scalarValueFor(type: CatalogSpecOverrideValueType, value: unknown): CatalogSpecOverrideValue | undefined {
+function scalarValueFor(type: CatalogSpecOverrideValueType, value: unknown, allowZero = false): CatalogSpecOverrideValue | undefined {
   if (type === "number") {
-    if (typeof value !== "number" || !Number.isFinite(value) || value <= 0 || value > 100_000) return undefined;
+    if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || (!allowZero && value === 0) || value > 100_000) return undefined;
     return value;
   }
   if (type === "boolean") return typeof value === "boolean" ? value : undefined;
@@ -68,8 +68,9 @@ function scalarValueFor(type: CatalogSpecOverrideValueType, value: unknown): Cat
 
 function fieldValueFor(category: Part["category"], field: string, value: unknown) {
   const type = catalogSpecOverrideFieldTypeFor(category, field);
-  const normalized = type ? scalarValueFor(type, value) : undefined;
+  const normalized = type ? scalarValueFor(type, value, field === "hddBays") : undefined;
   if (normalized === undefined) return undefined;
+  if (field === "hddBays" && (typeof normalized !== "number" || !Number.isInteger(normalized))) return undefined;
   if (field === "coolerType" && normalized !== "air" && normalized !== "liquid") return undefined;
   if (field === "memoryFormFactor" && normalized !== "DIMM" && normalized !== "SO-DIMM") return undefined;
   if (field === "interface" && normalized !== "NVMe" && normalized !== "SATA") return undefined;

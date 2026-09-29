@@ -27,7 +27,7 @@ const candidates: AlternativeComparisonCandidate[] = [
     sourceUrl: "https://prod.danawa.com/info/?pcode=123"
   },
   {
-    name: "가격 확인 필요\n부품",
+    name: "미등록 부품\nCPU",
     summary: "스펙 확인 필요",
     price: "가격 확인 필요",
     similarity: "계산 불가",
@@ -71,9 +71,9 @@ describe("alternative comparison export", () => {
     const text = alternativeComparisonTextFor(candidates);
     expect(text).toContain("[부품 1] 테스트, 부품");
     expect(text).toContain("가격: 1,200,000원 · 추천 수량 1개");
-    expect(text).toContain("가격 출처: 다나와 가격");
+    expect(text).toContain("가격 확인: 확인됨");
     expect(text).toContain("구매 조건: 다나와 수집가 · 신품·정식 유통");
-    expect(text).toContain("가격 확인 필요");
+    expect(text).toContain("가격: -");
     expect(text).not.toContain("성능 유사도");
     expect(text).not.toContain("대안 43점");
     expect(text).not.toContain("QHD · 144Hz");
@@ -89,10 +89,10 @@ describe("alternative comparison export", () => {
 
   it("quotes CSV values with commas and newlines", () => {
     const csv = alternativeComparisonCsvFor(candidates);
-    expect(csv.startsWith("\uFEFF부품명,범주,부품 ID,핵심 스펙,가격,공유 당시 가격(원),가격 출처")).toBe(true);
+    expect(csv.startsWith("\uFEFF부품명,범주,부품 ID,핵심 스펙,가격,공유 당시 가격(원),가격 확인")).toBe(true);
     expect(csv).toContain('"테스트, 부품"');
-    expect(csv).toContain('"가격 확인 필요\n부품"');
-    expect(csv).toContain("\"1,200,000원\",1200000,다나와 가격,다나와 수집가 · 신품·정식 유통,1,VRAM 32GB → 12GB (-62.5%),호환 확인,추천 부품 · 현재 문제 해결 · 새 차단 없음,,확인 필요 · GPU·케이스 장착 정보를 구매 전 확인해야 합니다.,GPU · GPU-TEST-1 · rev-A · 확인 2026-09-01: GPU 제조사 설치 가이드 (https://vendor.example/gpu),다나와 최신,확인한 지 오래됨,2026-08-28,https://prod.danawa.com/info/?pcode=123");
+    expect(csv).toContain('"미등록 부품\nCPU"');
+    expect(csv).toContain("\"1,200,000원\",1200000,확인됨,다나와 수집가 · 신품·정식 유통,1,VRAM 32GB → 12GB (-62.5%),호환 확인,추천 부품 · 현재 문제 해결 · 새 차단 없음,,확인 필요 · GPU·케이스 장착 정보를 구매 전 확인해야 합니다.,GPU · GPU-TEST-1 · rev-A · 확인 2026-09-01: GPU 제조사 설치 가이드 (https://vendor.example/gpu),다나와 최신,확인한 지 오래됨,2026-08-28,https://prod.danawa.com/info/?pcode=123");
     expect(csv).not.toContain("성능 유사도");
     expect(csv).not.toContain("144Hz");
     expect(csv).not.toContain("높음 92점");
@@ -100,7 +100,7 @@ describe("alternative comparison export", () => {
 
   it("returns an empty export envelope for no selected candidates", () => {
     expect(alternativeComparisonTextFor([])).toBe("PC Supporter 부품 비교\n");
-    expect(alternativeComparisonCsvFor([])).toBe("\uFEFF부품명,범주,부품 ID,핵심 스펙,가격,공유 당시 가격(원),가격 출처,구매 조건,추천 수량,사양 차이,호환 상태,비교 결론,부품 교체 시,설치 공간 확인,설치 안내,부품 정보 상태,갱신 상태,갱신일,상품 페이지");
+    expect(alternativeComparisonCsvFor([])).toBe("\uFEFF부품명,범주,부품 ID,핵심 스펙,가격,공유 당시 가격(원),가격 확인,구매 조건,추천 수량,사양 차이,호환 상태,비교 결론,부품 교체 시,설치 공간 확인,설치 안내,부품 정보 상태,갱신 상태,갱신일,상품 페이지");
   });
 
   it("writes a versioned JSON snapshot with unknown values and source links", () => {
@@ -114,7 +114,7 @@ describe("alternative comparison export", () => {
     expect(parsed.items[0]).not.toHaveProperty("similarityEvidence");
     expect(parsed.items[0]).not.toHaveProperty("gpuTarget");
     expect(JSON.stringify(parsed)).not.toContain("144Hz");
-    expect(parsed.items[1].price).toBe("가격 확인 필요");
+    expect(parsed.items[1].price).toBe("-");
     expect(JSON.stringify(parsed)).not.toContain("낮음 38점");
     expect(JSON.stringify(parsed)).not.toContain("높음 92점");
   });
@@ -129,7 +129,7 @@ describe("alternative comparison export", () => {
     expect(text).toContain("현재 부품: 현재 GPU · 수량 1개");
     expect(text).toContain("현재 부품 정보: PCIe 4.0 · VRAM 8GB · 220W");
     expect(text).toContain("현재 부품 가격: 450,000원");
-    expect(csv.startsWith("\uFEFF부품명,범주,부품 ID,핵심 스펙,가격,공유 당시 가격(원),가격 출처,구매 조건,추천 수량,사양 차이,호환 상태,비교 결론,부품 교체 시,설치 공간 확인,설치 안내,부품 정보 상태,갱신 상태,갱신일,상품 페이지,비교 범주,현재 부품,현재 부품 정보,현재 부품 가격")).toBe(true);
+    expect(csv.startsWith("\uFEFF부품명,범주,부품 ID,핵심 스펙,가격,공유 당시 가격(원),가격 확인,구매 조건,추천 수량,사양 차이,호환 상태,비교 결론,부품 교체 시,설치 공간 확인,설치 안내,부품 정보 상태,갱신 상태,갱신일,상품 페이지,비교 범주,현재 부품,현재 부품 정보,현재 부품 가격")).toBe(true);
     expect(csv).toContain(",그래픽카드,현재 GPU · 수량 1개,PCIe 4.0 · VRAM 8GB · 220W,\"450,000원\"");
     expect(parsed.context).toEqual(context);
     expect(parsed.items).toHaveLength(2);

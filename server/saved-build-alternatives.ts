@@ -41,7 +41,8 @@ export function savedBuildAlternativeAlertsFor(build: SavedBuildRecord, catalogP
         const score = candidate.specs[watch.scoreKey];
         if (typeof score !== "number" || !Number.isFinite(score) || score < currentScore * MIN_SCORE_GAIN) return false;
         const price = partPriceFor(candidate);
-        if (currentPrice !== undefined && price !== undefined && price > currentPrice * MAX_PRICE_RATIO) return false;
+        if (price === undefined) return false;
+        if (currentPrice !== undefined && price > currentPrice * MAX_PRICE_RATIO) return false;
         return true;
       })
       .sort((a, b) => (b.specs[watch.scoreKey] ?? 0) - (a.specs[watch.scoreKey] ?? 0))[0];

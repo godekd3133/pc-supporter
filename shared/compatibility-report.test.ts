@@ -83,7 +83,7 @@ describe("compatibility report export", () => {
     const unknownPrice = { ...cpu, priceWon: undefined };
     const report = compatibilityReportTextFor(result, build, new Map([[cpu.id, unknownPrice]]), new Map([[accessory.id, accessory]]));
 
-    expect(report).toContain("CPU: 테스트 CPU · 가격 확인 필요");
+    expect(report).toContain("CPU: 테스트 CPU · -");
   });
 
   it("includes gaming target evidence for GPU alternatives in text and JSON reports", () => {
@@ -184,6 +184,25 @@ describe("compatibility report export", () => {
     expect(payload.savedCheckSnapshot.assemblyVerification).toMatchObject({ cpuMaxTempC: 86, gpuMaxTempC: 82, noiseLevel: "normal" });
   });
 
+  it("exports a public-projected compatibility result whose private analysis object is absent", () => {
+    const publicResult = { ...result };
+    Reflect.deleteProperty(publicResult, "analysis");
+    const publicBuild = build;
+    const partMap = new Map([[cpu.id, cpu]]);
+    const savedSnapshot = savedBuildCheckSnapshotFor(result);
+
+    expect(() => compatibilityReportTextFor(publicResult, publicBuild, partMap, new Map([[accessory.id, accessory]]), undefined, savedSnapshot)).not.toThrow();
+    const report = compatibilityReportTextFor(publicResult, publicBuild, partMap, new Map([[accessory.id, accessory]]), undefined, savedSnapshot);
+    const json = compatibilityReportJsonFor(publicResult, publicBuild, publicResult.recommendationPreferences, partMap, undefined, savedSnapshot);
+
+    expect(report).toContain("결과: 호환 불가");
+    expect(report).toContain("호환 불가: 1개 · 주의: 0개 · 확인 필요: 0개");
+    expect(report).toContain("소켓이 맞지 않습니다.");
+    expect(json).not.toContain("overallScore");
+    expect(json).not.toContain("Cinebench");
+    expect(json).toContain('"status": "incompatible"');
+  });
+
   it("includes actionable repair-plan detail in the text report", () => {
     const plan: RecommendationPlan = {
       label: "최소 변경",
@@ -227,7 +246,8 @@ describe("compatibility report export", () => {
     expect(report).toContain("적용 후 남는 항목: M.2 슬롯 확인 필요");
     expect(report).toContain("잔여 규칙 ID: m2-slot-generation");
     expect(report).toContain("변경 부품:");
-    expect(report).toContain("CPU: 테스트 CPU → 플랜 CPU · 가격 -20,000원 · 비교 스펙 유지");
+    expect(report).toContain("CPU: 테스트 CPU → 플랜 CPU · 가격 -20,000원");
+    expect(report).not.toContain("비교 스펙 유지");
     expect(report).toContain("목표 예산: 예산 내 · 150,000원 기준 20,000원 여유");
   });
 

@@ -23,24 +23,24 @@ describe("purchase list serialization", () => {
   it("preserves quantities, source URLs, newlines, and unknown price labels in text", () => {
     const text = purchaseListTextFor(rows);
     expect(text).toContain("테스트, CPU\n\"특별판\" ×1");
-    expect(text).toContain("가격 미확인 팬 ×2 · 가격 확인 필요 · 가격 출처 가격 확인 필요 · 신품·정식 유통 · 오래된 정보");
+    expect(text).toContain("가격 미확인 팬 ×2 · - · 신품·정식 유통 · 오래된 정보");
     expect(text).toContain("https://prod.danawa.com/info/?pcode=1");
-    expect(text).toContain("전체 합계: 가격 확인 필요");
+    expect(text).toContain("전체 합계: -");
   });
 
-  it("quotes CSV cells and leaves unknown numeric cells blank", () => {
+  it("quotes CSV cells and uses dashes for unknown prices", () => {
     const csv = purchaseListCsvFor(rows);
     expect(csv.startsWith("\uFEFF구분,분류,부품명")).toBe(true);
     expect(csv).toContain('"테스트, CPU\n""특별판"""');
-    expect(csv).toContain("주변 부품,쿨링팬,가격 미확인 팬,2,,,가격 확인 필요,신품·정식 유통,오래된 정보,,");
+    expect(csv).toContain("주변 부품,쿨링팬,가격 미확인 팬,2,-,-,-,신품·정식 유통,오래된 정보,,");
   });
 
   it("keeps accessory connection targets in copied text and CSV", () => {
     const targetedRows = [{ ...rows[1]!, id: "accessory:fan:hub-a", connectionTarget: "팬 허브 허브 A" }];
     expect(purchaseListTextFor(targetedRows)).toContain("연결 대상 팬 허브 허브 A");
     const csv = purchaseListCsvFor(targetedRows);
-    expect(csv).toContain("가격 출처,유통 조건,갱신 상태,연결 대상,상품 링크");
-    expect(csv).toContain("가격 확인 필요,신품·정식 유통,오래된 정보,팬 허브 허브 A,");
+    expect(csv).toContain("가격 확인,유통 조건,갱신 상태,연결 대상,상품 링크");
+    expect(csv).toContain("-,신품·정식 유통,오래된 정보,팬 허브 허브 A,");
   });
 
   it("summarizes current, reference, recorded, and unknown price evidence", () => {

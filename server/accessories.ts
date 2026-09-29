@@ -218,7 +218,7 @@ export function accessoryCoverageSnapshotFor(stored: AccessoryCoverageSnapshot, 
         incompleteSpecs: categoryItems.filter((item) => item.missingFields.length > 0).length,
         storedSpecCoverage
       };
-      if (!coverage) {
+      if (!coverage || coverage.evidenceSource !== "danawa-public-crawl") {
         return {
           category,
           categoryId: "crawl-history-unavailable",
@@ -275,25 +275,7 @@ export async function recordAccessoryCoverage(
   for (const report of reports) {
     const categoryItems = items.filter((item) => item.category === report.category);
     const previous = byCategory.get(report.category);
-    const listEvidence = context.mode === "sample" && previous?.hasCrawlHistory
-      ? {
-          totalProductCount: previous.totalProductCount,
-          pagesExpected: previous.pagesExpected,
-          pagesVisited: previous.pagesVisited,
-          listedProducts: previous.listedProducts,
-          uniqueProducts: previous.uniqueProducts,
-          missingProducts: previous.missingProducts,
-          listCoverage: previous.listCoverage
-        }
-      : {
-          totalProductCount: report.totalProductCount,
-          pagesExpected: report.pagesExpected,
-          pagesVisited: report.pagesVisited,
-          listedProducts: report.listedProducts,
-          uniqueProducts: report.uniqueProducts,
-          missingProducts: report.missingProducts,
-          listCoverage: report.listCoverage
-        };
+    const listEvidence = accessoryListEvidenceFor(previous, report, context);
     const storedSpecCoverage = categoryItems.every((item) => item.missingFields.length === 0) ? "complete" : "partial";
     const coverage: AccessoryCategoryCoverage = {
       ...report,
@@ -305,6 +287,7 @@ export async function recordAccessoryCoverage(
       mode: context.mode,
       details: context.details,
       onlyIncomplete: context.onlyIncomplete,
+      evidenceSource: "danawa-public-crawl",
       storedSpecCoverage,
       coverage: listEvidence.listCoverage === "complete" && storedSpecCoverage === "complete" ? "complete" : "partial",
       specCoverage: storedSpecCoverage,
@@ -340,6 +323,47 @@ export async function recordAccessoryCoverage(
   };
   await writeJson(ACCESSORY_COVERAGE_PATH, snapshot);
   return snapshot;
+}
+
+export function accessoryListEvidenceFor(
+  previous: AccessoryCategoryCoverage | undefined,
+  report: AccessoryCrawlCategoryReport,
+  context: { mode: "sample" | "all"; onlyIncomplete: boolean }
+) {
+  const current = {
+    totalProductCount: report.totalProductCount,
+    pagesExpected: report.pagesExpected,
+    pagesVisited: report.pagesVisited,
+    listedProducts: report.listedProducts,
+    uniqueProducts: report.uniqueProducts,
+    missingProducts: report.missingProducts,
+    listCoverage: report.listCoverage
+  };
+  if (!previous?.hasCrawlHistory || previous.evidenceSource !== "danawa-public-crawl" || previous.categoryId !== report.categoryId || context.mode === "all" || report.listCoverage === "complete") {
+    return current;
+  }
+
+  const prior = {
+    totalProductCount: previous.totalProductCount,
+    pagesExpected: previous.pagesExpected,
+    pagesVisited: previous.pagesVisited,
+    listedProducts: previous.listedProducts,
+    uniqueProducts: previous.uniqueProducts,
+    missingProducts: previous.missingProducts,
+    listCoverage: previous.listCoverage
+  };
+  if (context.onlyIncomplete) {
+    return {
+      ...prior,
+      totalProductCount: report.totalProductCount ?? prior.totalProductCount,
+      pagesExpected: report.pagesExpected || prior.pagesExpected
+    };
+  }
+  const sourceCountChanged = report.totalProductCount !== undefined && report.totalProductCount !== previous.totalProductCount;
+  const observedMoreRows = report.pagesVisited > previous.pagesVisited
+    || report.listedProducts > previous.listedProducts
+    || report.uniqueProducts > previous.uniqueProducts;
+  return sourceCountChanged || observedMoreRows ? current : prior;
 }
 
 function accessoryKey(item: AccessoryItem) {

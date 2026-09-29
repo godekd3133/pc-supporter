@@ -6,7 +6,7 @@ export function ResultQuickNav({ result, onFocusSection }: { result: Compatibili
   const items: Array<{ targetId: string; label: string; detail: string; Icon: IconType }> = [
     { targetId: "result-findings", label: "호환 상세", detail: `${result.findings.length}개 항목`, Icon: FiSearch },
     { targetId: "purchase-checklist", label: "구매 항목", detail: "준비 상태", Icon: FiCheckCircle },
-    { targetId: "purchase-list-panel", label: "부품·가격 목록", detail: "수량·예상 금액", Icon: FiShoppingCart }
+    { targetId: "purchase-list-panel", label: "부품·가격 목록", detail: "수량·가격", Icon: FiShoppingCart }
   ];
   return <details className="result-quick-nav-disclosure">
     <summary><span><FiZap /> 호환 결과 항목 보기</span><FiChevronDown /></summary>

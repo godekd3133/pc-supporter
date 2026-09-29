@@ -57,7 +57,7 @@ describe("candidate purchase decision", () => {
     const result = candidatePurchaseDecisionFor({ ...base, priceEvidence: "reference" });
 
     expect(result).toMatchObject({ state: "review", label: "확인 후 구매" });
-    expect(result.reasons).toContain("참고 가격입니다. 판매처에서 현재 가격을 확인하세요.");
+    expect(result.reasons).toContain("입력된 금액입니다. 구매 전에 상품 페이지에서 현재 금액을 확인하세요.");
   });
 
   it("requires review when a performance change has unknown analysis evidence", () => {

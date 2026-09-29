@@ -50,7 +50,7 @@ npm run capture:quote-onboarding
 
 ### 06 · 그래픽 옵션 계약
 
-그래픽 품질·업스케일링·레이 트레이싱과 평균 FPS 목표·참고 가격대를 함께 확인합니다.
+그래픽 품질·업스케일링·레이 트레이싱과 평균 FPS 목표·가격대를 함께 확인합니다.
 
 ![Desktop 06 · 그래픽 옵션 계약](../artifacts/quote-onboarding/desktop-06-graphics-contract.png)
 

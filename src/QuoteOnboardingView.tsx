@@ -118,7 +118,7 @@ function budgetRangeStatusFor(range: RequiredBudgetRange, budgetWon: number): "b
 }
 
 function budgetRangeStatusLabel(status: "below" | "within" | "above") {
-  return status === "below" ? "예산이 부족해요" : status === "above" ? "예산에 여유가 있어요" : "예상 가격대 안이에요";
+  return status === "below" ? "예산이 부족해요" : status === "above" ? "예산에 여유가 있어요" : "가격대에 들어요";
 }
 
 function BudgetRangeCard({ range, budgetWon, compact = false, gaming = false, onAdjust, onEditTarget }: { range: RequiredBudgetRange; budgetWon: number; compact?: boolean; gaming?: boolean; onAdjust?: (budgetWon: number) => void; onEditTarget?: () => void }) {
@@ -129,15 +129,15 @@ function BudgetRangeCard({ range, budgetWon, compact = false, gaming = false, on
       ? { label: `권장 상한 ${formatManWon(range.maxWon)}으로 변경`, budgetWon: range.maxWon }
       : null;
   return (
-    <section className={`onboarding-budget-range ${compact ? "compact" : ""} status-${status}`} aria-label="목표별 예상 가격대">
+    <section className={`onboarding-budget-range ${compact ? "compact" : ""} status-${status}`} aria-label="목표별 가격대">
       <div className="onboarding-budget-range-top">
         <div>
-          <span>예상 PC 가격대</span>
+          <span>PC 가격대</span>
           <strong>{formatManWon(range.minWon)} ~ {formatManWon(range.maxWon)}</strong>
         </div>
         <em>{budgetRangeStatusLabel(status)}</em>
       </div>
-      <p>{status === "below" ? "지금 예산으로는 선택한 성능이 어려울 수 있어요. 예산을 올리거나 성능을 낮춰보세요." : status === "above" ? "선택한 성능에 비해 예산이 넉넉해요." : "설정한 예산이 예상 가격대에 들어요."}</p>
+      <p>{status === "below" ? "지금 예산으로는 선택한 성능이 어려울 수 있어요. 예산을 올리거나 성능을 낮춰보세요." : status === "above" ? "선택한 성능에 비해 예산이 넉넉해요." : "설정한 예산이 가격대에 들어요."}</p>
       <p className="onboarding-note">목표 성능 기준 참고 금액입니다. 실시간 가격·재고는 반영되지 않아요.</p>
       {(onAdjust && adjustment || onEditTarget && status === "below") && <div className="onboarding-budget-range-actions">
         {onAdjust && adjustment && <button type="button" className="onboarding-budget-range-action" data-testid="onboarding-budget-range-adjust" onClick={() => onAdjust(clampBudget(adjustment.budgetWon))}>{adjustment.label}</button>}
@@ -154,7 +154,7 @@ function GamingTargetContract({ state, showBudgetHint = false }: { state: Onboar
       <div className="onboarding-target-contract-heading"><div><span>희망 주사율</span><strong>{state.refreshRate}Hz</strong></div><FiTarget aria-hidden="true" /></div>
       <div className="onboarding-target-contract-tags"><span>{resolutionLabelFor(state.resolution)}</span><span>{GAMING_GRAPHICS_PRESET_LABELS[state.graphicsPreset]}</span><span>{GAMING_UPSCALING_LABELS[state.upscaling]}</span>{state.rayTracing && <span>레이 트레이싱</span>}</div>
       {range && <>
-        <div className="onboarding-target-contract-budget"><span>예상 PC 가격대</span><strong>{formatManWon(range.minWon)} ~ {formatManWon(range.maxWon)}</strong></div>
+        <div className="onboarding-target-contract-budget"><span>PC 가격대</span><strong>{formatManWon(range.minWon)} ~ {formatManWon(range.maxWon)}</strong></div>
         <p className="onboarding-note">목표 성능 기준 참고 금액입니다. 실시간 가격·재고는 반영되지 않아요.</p>
       </>}
     </section>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { FiAlertTriangle, FiCheckCircle, FiDatabase, FiInfo, FiLoader, FiRefreshCw } from "react-icons/fi";
 import type { CatalogSeedPreview, CatalogSeedPreviewConflict } from "../shared/catalog-seed-preview";
-import { CATEGORY_LABELS, DATA_QUALITY_LABELS, PART_CATEGORIES } from "../shared/types";
+import { CATEGORY_LABELS, DATA_QUALITY_LABELS, isKnownPrice, PART_CATEGORIES } from "../shared/types";
 import { api } from "./api";
 
 const SOURCE_LABELS: Record<keyof CatalogSeedPreview["active"]["sourceCounts"], string> = {
@@ -21,7 +21,7 @@ function numberText(value: number | undefined) {
 }
 
 function priceText(value: number | undefined) {
-  return value === undefined ? "가격 기준 없음" : `${value.toLocaleString("ko-KR")}원`;
+  return isKnownPrice(value) ? `${value.toLocaleString("ko-KR")}원` : "-";
 }
 
 function sourceLabel(source: keyof CatalogSeedPreview["active"]["sourceCounts"]) {

@@ -102,7 +102,7 @@ export function buildActionCenterFor(result: CompatibilityResult, build?: BuildS
       priority: "blocker",
       source: "compatibility",
       title: "호환 문제 줄이기",
-      summary: `${firstRepairPlan.resolvedBlockers}개 호환 문제를 줄이는 ${firstRepairPlan.label} 구성입니다. 적용 전 부품과 예상 금액, 남는 문제를 살펴봐 주세요.`,
+      summary: `${firstRepairPlan.resolvedBlockers}개 호환 문제를 줄이는 ${firstRepairPlan.label} 구성입니다. 적용 전 부품과 가격, 남는 문제를 살펴봐 주세요.`,
       targetId: "repair-plan-panel"
     });
   }

@@ -1,5 +1,5 @@
 import { DATA_FRESHNESS_LABELS, type AccessoryCategory, type CatalogPriceEvidence, type DataFreshness, type PartCategory } from "./types";
-import { CATALOG_PRICE_EVIDENCE_LABELS } from "./catalog-price-evidence";
+import { CATALOG_PRICE_EVIDENCE_CHECK_LABELS, CATALOG_PRICE_EVIDENCE_LABELS } from "./catalog-price-evidence";
 import { PURCHASE_ITEM_STATUS_LABELS, purchaseListItemStatusFor } from "./purchase-list-status";
 import type { PurchaseListItemStatus } from "./purchase-list-status";
 
@@ -40,7 +40,12 @@ export interface PurchaseListPriceEvidenceSummary {
 
 export function purchaseListPriceEvidenceLabelFor(row: PurchaseListRow) {
   if (row.priceEvidence) return CATALOG_PRICE_EVIDENCE_LABELS[row.priceEvidence];
-  return row.totalPriceWon === undefined ? CATALOG_PRICE_EVIDENCE_LABELS.unknown : "가격 출처 기록 없음";
+  return row.totalPriceWon === undefined ? CATALOG_PRICE_EVIDENCE_LABELS.unknown : "가격";
+}
+
+export function purchaseListPriceEvidenceCheckLabelFor(row: PurchaseListRow) {
+  if (row.priceEvidence) return CATALOG_PRICE_EVIDENCE_CHECK_LABELS[row.priceEvidence];
+  return row.totalPriceWon === undefined ? "-" : "확인 기록 없음";
 }
 
 export function purchaseListPriceEvidenceNeedsReviewFor(row: PurchaseListRow) {
@@ -85,16 +90,16 @@ export function purchaseListTextFor(rows: PurchaseListRow[], checkedIds?: Readon
     if (sectionRows.length === 0) continue;
     lines.push(`[${section}]`);
     for (const { row, index: rowIndex } of sectionRows) {
-      const price = row.totalPriceWon === undefined ? "가격 확인 필요" : `${row.totalPriceWon.toLocaleString("ko-KR")}원`;
+      const price = row.totalPriceWon === undefined ? "-" : `${row.totalPriceWon.toLocaleString("ko-KR")}원`;
       const rowKey = purchaseListRowKey(row, rowIndex);
       const status = checkedIds ? `[${itemStates.length > 0 ? PURCHASE_ITEM_STATUS_LABELS[purchaseListItemStatusFor(itemStates, rowKey, checkedIds)] : checkedIds.has(rowKey) ? "구매 완료" : "구매 예정"}] ` : "";
-      lines.push(`- ${status}${row.categoryLabel}: ${row.name} ×${row.quantity} · ${price} · 가격 출처 ${purchaseListPriceEvidenceLabelFor(row)}${row.listingType ? ` · ${row.listingType}` : ""}${row.dataFreshness ? ` · ${DATA_FRESHNESS_LABELS[row.dataFreshness]}` : ""}${row.connectionTarget ? ` · 연결 대상 ${row.connectionTarget}` : ""}${row.sourceUrl ? ` · ${row.sourceUrl}` : ""}`);
+      lines.push(`- ${status}${row.categoryLabel}: ${row.name} ×${row.quantity} · ${price}${row.totalPriceWon === undefined ? "" : ` · 가격 확인: ${purchaseListPriceEvidenceCheckLabelFor(row)}`}${row.listingType ? ` · ${row.listingType}` : ""}${row.dataFreshness ? ` · ${DATA_FRESHNESS_LABELS[row.dataFreshness]}` : ""}${row.connectionTarget ? ` · 연결 대상 ${row.connectionTarget}` : ""}${row.sourceUrl ? ` · ${row.sourceUrl}` : ""}`);
     }
     lines.push("");
   }
-  lines.push(`핵심 부품 합계: ${core.priceComplete ? `${core.totalPriceWon.toLocaleString("ko-KR")}원` : "가격 확인 필요"}`);
-  lines.push(`주변 부품 합계: ${accessories.priceComplete ? `${accessories.totalPriceWon.toLocaleString("ko-KR")}원` : "가격 확인 필요"}`);
-  lines.push(`전체 합계: ${core.priceComplete && accessories.priceComplete ? `${(core.totalPriceWon + accessories.totalPriceWon).toLocaleString("ko-KR")}원` : "가격 확인 필요"}`);
+  lines.push(`핵심 부품 합계: ${core.priceComplete ? `${core.totalPriceWon.toLocaleString("ko-KR")}원` : "-"}`);
+  lines.push(`주변 부품 합계: ${accessories.priceComplete ? `${accessories.totalPriceWon.toLocaleString("ko-KR")}원` : "-"}`);
+  lines.push(`전체 합계: ${core.priceComplete && accessories.priceComplete ? `${(core.totalPriceWon + accessories.totalPriceWon).toLocaleString("ko-KR")}원` : "-"}`);
   return lines.join("\n");
 }
 
@@ -103,7 +108,7 @@ export function purchaseListCsvFor(rows: PurchaseListRow[], checkedIds?: Readonl
     const raw = value === undefined ? "" : String(value);
     return /[",\n\r]/.test(raw) ? `"${raw.replace(/"/g, '""')}"` : raw;
   };
-  const header = ["구분", "분류", "부품명", "수량", "단가(원)", "합계(원)", "가격 출처", "유통 조건", "갱신 상태", "연결 대상", "상품 링크", ...(checkedIds ? ["구매 상태"] : [])];
-  const records = rows.map((row, index) => { const rowKey = purchaseListRowKey(row, index); return [row.section, row.categoryLabel, row.name, row.quantity, row.unitPriceWon, row.totalPriceWon, purchaseListPriceEvidenceLabelFor(row), row.listingType, row.dataFreshness ? DATA_FRESHNESS_LABELS[row.dataFreshness] : undefined, row.connectionTarget, row.sourceUrl, ...(checkedIds ? [itemStates.length > 0 ? PURCHASE_ITEM_STATUS_LABELS[purchaseListItemStatusFor(itemStates, rowKey, checkedIds)] : checkedIds.has(rowKey) ? "구매 완료" : "구매 예정"] : [])]; });
+  const header = ["구분", "분류", "부품명", "수량", "단가(원)", "합계(원)", "가격 확인", "유통 조건", "갱신 상태", "연결 대상", "상품 링크", ...(checkedIds ? ["구매 상태"] : [])];
+  const records = rows.map((row, index) => { const rowKey = purchaseListRowKey(row, index); return [row.section, row.categoryLabel, row.name, row.quantity, (row.unitPriceWon ?? "-"), (row.totalPriceWon ?? "-"), purchaseListPriceEvidenceCheckLabelFor(row), row.listingType, row.dataFreshness ? DATA_FRESHNESS_LABELS[row.dataFreshness] : undefined, row.connectionTarget, row.sourceUrl, ...(checkedIds ? [itemStates.length > 0 ? PURCHASE_ITEM_STATUS_LABELS[purchaseListItemStatusFor(itemStates, rowKey, checkedIds)] : checkedIds.has(rowKey) ? "구매 완료" : "구매 예정"] : [])]; });
   return `\uFEFF${[header, ...records].map((record) => record.map(escape).join(",")).join("\r\n")}`;
 }

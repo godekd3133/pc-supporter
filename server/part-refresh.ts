@@ -162,7 +162,13 @@ export async function refreshDanawaAccessory(item: AccessoryItem, options: PartR
     rawSpecText: item.rawSpecText,
     sourceProductCode: item.sourceProductCode!
   };
-  const parsed = parseDanawaAccessoryPage(item.category, listItem, html, config.categoryId);
+  const storedCategoryId = item.danawaUrl ? new URL(item.danawaUrl).searchParams.get("cate") : undefined;
+  const sourceCategoryId = storedCategoryId && /^\d+$/.test(storedCategoryId)
+    ? storedCategoryId
+    : item.sourceCategoryId && /^\d+$/.test(item.sourceCategoryId)
+      ? item.sourceCategoryId
+      : config.categoryId;
+  const parsed = parseDanawaAccessoryPage(item.category, listItem, html, sourceCategoryId);
   options.onPriceObserved?.(parseDanawaPriceFromHtml(html, item.sourceProductCode!));
   return reconcileRefreshedAccessory(item, parsed);
 }

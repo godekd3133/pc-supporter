@@ -14578,7 +14578,11 @@ button.metric-card:disabled { cursor: not-allowed; }
 
 .catalog-data-priority-heading small { display: block; margin-top: 3px; color: #8f9b9c; font-size: 6.8px; line-height: 1.4; }
 
-.catalog-data-priority-heading > span { flex: 0 0 auto; padding: 3px 5px; border-radius: 4px; color: #806aaa; background: #f0eafa; font-family: "DM Mono", monospace; font-size: 6.5px; white-space: nowrap; }
+.catalog-data-priority-heading-actions { display: grid; justify-items: end; gap: 5px; flex: 0 0 auto; }
+
+.catalog-data-priority-heading-actions > span { padding: 3px 5px; border-radius: 4px; color: #806aaa; background: #f0eafa; font-family: "DM Mono", monospace; font-size: 6.5px; white-space: nowrap; }
+
+.catalog-data-priority-heading-actions > .text-button { font-size: 9px; white-space: nowrap; }
 
 .catalog-data-priority-subheading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding-top: 2px; color: #719087; }
 
@@ -21702,7 +21706,7 @@ html[data-theme="dark"] .admin-page .admin-seed-mapping-candidate .high,
 html[data-theme="dark"] .admin-page .catalog-category-integrity-heading > span,
 html[data-theme="dark"] .admin-page .catalog-pcie-slot-coverage-heading > span,
 html[data-theme="dark"] .admin-page .accessory-spec-coverage-heading > span,
-html[data-theme="dark"] .admin-page .catalog-data-priority-heading > span,
+html[data-theme="dark"] .admin-page .catalog-data-priority-heading-actions > span,
 html[data-theme="dark"] .admin-page .admin-crawl-progress-status.completed {
   border-color: #254c45 !important;
   color: #71ddb5 !important;

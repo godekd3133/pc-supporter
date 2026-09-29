@@ -34,9 +34,9 @@ describe("purchase list live prices", () => {
 
     const effective = purchaseListRowsWithLivePricesFor([sourceRow, catalogRow], livePrices);
     expect(effective.map((row) => row.priceEvidence)).toEqual(["live", "reference"]);
-    expect(purchaseListLivePriceDisplayFor(sourceRow, livePrices[sourceRow.id!])).toMatchObject({ tone: "increased", source: "source-refresh", sourceLabel: "실제 페이지 확인 가격" });
-    expect(purchaseListLivePriceDisplayFor(catalogRow, livePrices[catalogRow.id!])).toMatchObject({ tone: "increased", source: "catalog", sourceLabel: "저장 카탈로그 가격" });
-    expect(purchaseListLivePriceDisplayFor(catalogRow, livePrices[catalogRow.id!])?.label).toContain("저장 카탈로그 가격");
+    expect(purchaseListLivePriceDisplayFor(sourceRow, livePrices[sourceRow.id!])).toMatchObject({ tone: "increased", source: "source-refresh", sourceLabel: "상품 페이지" });
+    expect(purchaseListLivePriceDisplayFor(catalogRow, livePrices[catalogRow.id!])).toMatchObject({ tone: "increased", source: "catalog", sourceLabel: "저장된 정보" });
+    expect(purchaseListLivePriceDisplayFor(catalogRow, livePrices[catalogRow.id!])?.label).toContain("저장된 정보");
     expect(purchaseListLivePriceSummaryFor([sourceRow, catalogRow], livePrices)).toMatchObject({ sourceConfirmedCount: 1, catalogConfirmedCount: 1 });
   });
 

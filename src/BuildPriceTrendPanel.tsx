@@ -24,7 +24,7 @@ type QuoteTrendRow = {
 };
 
 function formatWon(value: number | undefined) {
-  return value === undefined ? "정보 부족" : `${value.toLocaleString("ko-KR")}원`;
+  return value === undefined ? "-" : `${value.toLocaleString("ko-KR")}원`;
 }
 
 function formatDelta(value: number | undefined) {

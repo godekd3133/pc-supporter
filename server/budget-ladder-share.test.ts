@@ -84,7 +84,7 @@ describe("budget ladder share", () => {
   it("rejects incomplete success items and non-adjacent or malformed diffs", () => {
     const missingTotal = parseBudgetLadderShareInput({ payload: { ...payload, items: [item("economy", 800_000, { totalPriceWon: undefined }), item("target", 1_000_000), item("headroom", 1_200_000)] } });
     expect(missingTotal.errors[0]).toBe("예산 비교를 공유하지 못했어요. 다시 만들어 주세요.");
-    expect(missingTotal.errors[1]).toContain("성공 결과에 예상 합계");
+    expect(missingTotal.errors[1]).toContain("성공 결과에 합계");
     expect(parseBudgetLadderShareInput({ payload: { ...payload, changes: [{ ...payload.changes[0], fromId: "economy", toId: "headroom" }] } }).errors[1]).toContain("인접 구간");
     expect(parseBudgetLadderShareInput({ payload: { ...payload, changes: [{ ...payload.changes[0], budgetDeltaWon: 200_000.5 }] } }).errors[1]).toContain("변화 값");
     expect(parseBudgetLadderShareInput({ payload, request: { ...request, gamingRefreshRate: 75 } }).errors[1]).toContain("주사율");

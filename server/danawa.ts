@@ -133,6 +133,29 @@ function absoluteUrl(value: string | undefined) {
   return isAllowedSourceUrl(normalized) ? normalized : undefined;
 }
 
+function catalogImageUrlFromAttributes(readAttribute: (name: string) => string | undefined) {
+  const srcsetUrls = (readAttribute("srcset") ?? "")
+    .split(",")
+    .map((entry) => entry.trim().split(/\s+/)[0])
+    .filter((value): value is string => Boolean(value));
+  const candidates = [
+    readAttribute("data-original"),
+    readAttribute("data-src"),
+    readAttribute("data-lazy-src"),
+    readAttribute("data-lazy"),
+    ...srcsetUrls,
+    readAttribute("src")
+  ];
+  for (const candidate of candidates) {
+    const url = absoluteUrl(candidate?.trim());
+    if (!url) continue;
+    const pathname = new URL(url).pathname.toLowerCase();
+    if (/(^|[/_-])(blank|spacer|transparent|loading|no[-_]?image|noimage|pixel)([._/-]|$)/i.test(pathname)) continue;
+    return url;
+  }
+  return undefined;
+}
+
 const ALLOWED_SOURCE_HOSTS = new Set([
   "prod.danawa.com",
   "www.danawa.com",
@@ -180,7 +203,9 @@ function collectItemLists(value: unknown, output: DanawaListItem[]) {
       const item = element as Record<string, unknown>;
       const rawUrl = typeof item.url === "string" ? item.url : undefined;
       const name = typeof item.name === "string" ? normalizeSpace(item.name) : "";
-      const imageUrl = typeof item.image === "string" ? absoluteUrl(item.image) : undefined;
+      const imageUrl = typeof item.image === "string"
+        ? catalogImageUrlFromAttributes((name) => name === "src" ? item.image as string : undefined)
+        : undefined;
       const url = rawUrl ? absoluteUrl(rawUrl) : undefined;
       const sourceProductCode = url ? productCodeFromUrl(url) : "";
       if (name && url && sourceProductCode) output.push({ name, url, imageUrl, sourceProductCode });
@@ -201,7 +226,12 @@ export function parseDanawaListPage(html: string): DanawaListItem[] {
       const name = normalizeSpace(anchor.text());
       const sourceProductCode = url ? productCodeFromUrl(url) : "";
       if (!url || !name || !sourceProductCode) return;
-      const imageUrl = absoluteUrl(row.find("img").first().attr("src"));
+      let imageUrl: string | undefined;
+      row.find("img").each((_, image) => {
+        const element = $(image);
+        imageUrl = catalogImageUrlFromAttributes((name) => element.attr(name));
+        return imageUrl ? false : undefined;
+      });
       const priceWon = parseWon(row.find("a.click_wish_prod[price]").first().attr("price"))
         ?? parseWon(row.find(".prod_pricelist .price_sect strong, .price_sect strong").first().text());
       const rawSpecText = normalizeSpace(row.find(".spec-box .spec_list").first().text());
@@ -720,6 +750,21 @@ function parseCpuMemorySpeed(text: string) {
   return parseNumber(text.slice(memoryStart, memoryStart + 240), /\b([\d,]{4,6})\s*MHz\b/i);
 }
 
+export function parseGpuPowerW(text: string) {
+  return parseNumber(text, /(?:최대\s*)?(?:소비전력|사용전력|TDP)\s*[:：]?\s*(?:최대\s*)?([\d,]+(?:\.\d+)?)\s*W/i);
+}
+
+export function parseCaseCoolerHeightMm(text: string) {
+  const range = text.match(/(?:CPU\s*)?쿨러\s*(?:높이)?\s*[:：]?\s*([\d,.]+)\s*(?:~|∼|-)\s*([\d,.]+)\s*mm/i);
+  if (range) {
+    const lower = Number(range[1].replace(/,/g, ""));
+    const upper = Number(range[2].replace(/,/g, ""));
+    if (!Number.isFinite(lower) || !Number.isFinite(upper) || upper < lower) return undefined;
+    return upper;
+  }
+  return parseNumber(text, /(?:CPU\s*)?쿨러[^\d]{0,18}(?:높이)?\s*[:：]?\s*([\d,.]+)\s*mm/i);
+}
+
 function parseSpecs(category: PartCategory, name: string, description: string, rawSpecText: string): PartSpecs {
   const text = normalizeSpace(`${name} ${description} ${rawSpecText}`);
   const specs: PartSpecs = {};
@@ -860,7 +905,7 @@ function parseSpecs(category: PartCategory, name: string, description: string, r
     specs.pcieSlotWidth = pcieWidth ? Number(pcieWidth) : undefined;
     specs.pciePowerOptions = parsePciePowerOptions(text);
     specs.pciePowerAdapterOptions = parsePciePowerAdapterOptions(text);
-    specs.powerW = parseNumber(text, /(?:소비전력|사용전력|TDP)\s*[:：]?\s*([\d,]+)\s*W/i);
+    specs.powerW = parseGpuPowerW(text);
     specs.recommendedPsuW = parseNumber(text, /(?:권장\s*파워|권장\s*PSU)\s*[:：]?\s*([\d,]+)\s*W/i)
       ?? parseNumber(text, /([\d,]{3,5})\s*W\s*이상/i);
     specs.vramGb = parseNumber(text, /(?:VRAM|비디오\s*메모리|그래픽\s*메모리)\s*[:：]?\s*(?!대역폭)[^/\d]{0,24}([\d,]+)\s*GB(?!\s*\/\s*s)/i)
@@ -906,7 +951,7 @@ function parseSpecs(category: PartCategory, name: string, description: string, r
     specs.maxGpuLengthMm = gpuLengthRange
       ? Number(gpuLengthRange[2].replace(/,/g, ""))
       : parseNumber(text, /(?:VGA|그래픽카드|GPU)[^\d]{0,18}(?:길이)?\s*[:：]?\s*([\d,.]+)\s*mm/i);
-    specs.maxCoolerHeightMm = parseNumber(text, /(?:CPU\s*)?쿨러[^\d]{0,18}(?:높이)?\s*[:：]?\s*([\d,.]+)\s*mm/i);
+    specs.maxCoolerHeightMm = parseCaseCoolerHeightMm(text);
     const psuLengthRange = text.match(/파워\s*장착\s*길이\s*[:：]?\s*([\d,.]+)\s*(?:~|∼|-)\s*([\d,.]+)\s*mm/i);
     specs.maxPsuLengthMm = psuLengthRange
       ? Number(psuLengthRange[2].replace(/,/g, ""))
@@ -985,7 +1030,7 @@ const REQUIRED_FIELDS: Record<PartCategory, string[]> = {
   gpu: ["powerW", "recommendedPsuW", "lengthMm"],
   ssd: ["interface", "formFactor", "capacityGb"],
   hdd: ["formFactor", "capacityGb"],
-  case: ["maxGpuLengthMm", "maxCoolerHeightMm", "hddBays"],
+  case: ["maxGpuLengthMm", "maxCoolerHeightMm", "hddBays", "motherboardFormFactors"],
   psu: ["wattageW"]
 };
 

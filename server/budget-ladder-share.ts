@@ -213,7 +213,7 @@ function exportItemFromUnknown(value: unknown): { item?: BudgetLadderExportItem;
   const analysisScore = value.analysisScore === undefined ? undefined : boundedInteger(value.analysisScore, 0, 100);
   const withinBudget = value.withinBudget === undefined ? undefined : typeof value.withinBudget === "boolean" ? value.withinBudget : undefined;
   const priceComplete = value.priceComplete === undefined ? undefined : typeof value.priceComplete === "boolean" ? value.priceComplete : undefined;
-  if (value.totalPriceWon !== undefined && totalPriceWon === undefined) return { error: `${band.label} 구간의 예상 합계가 올바르지 않습니다.` };
+  if (value.totalPriceWon !== undefined && totalPriceWon === undefined) return { error: `${band.label} 구간의 합계가 올바르지 않습니다.` };
   if (value.budgetDeltaWon !== undefined && budgetDeltaWon === undefined) return { error: `${band.label} 구간의 예산 변화가 올바르지 않습니다.` };
   if (value.blockerCount !== undefined && blockerCount === undefined || value.warningCount !== undefined && warningCount === undefined || value.unknownCount !== undefined && unknownCount === undefined) return { error: `${band.label} 구간의 호환 항목 수를 확인해 주세요.` };
   if (value.analysisScore !== undefined && analysisScore === undefined) return { error: `${band.label} 구간의 분석 점수가 올바르지 않습니다.` };
@@ -225,7 +225,7 @@ function exportItemFromUnknown(value: unknown): { item?: BudgetLadderExportItem;
   const error = textValue(value.error, 500);
   const diagnostics = diagnosticsFromUnknown(value.diagnostics);
   if (value.diagnostics !== undefined && diagnostics === undefined) return { error: `${band.label} 구간의 실패 정보 형식이 올바르지 않습니다.` };
-  if (status !== "생성 실패" && totalPriceWon === undefined) return { error: `${band.label} 구간의 성공 결과에 예상 합계가 없습니다.` };
+  if (status !== "생성 실패" && totalPriceWon === undefined) return { error: `${band.label} 구간의 성공 결과에 합계가 없습니다.` };
   return {
     item: {
       id,

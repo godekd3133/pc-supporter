@@ -35,7 +35,7 @@ function viewStateLines(viewState?: CompatibilityReportViewState) {
 function priceText(value: number | undefined) {
   return typeof value === "number" && Number.isFinite(value) && value > 0
     ? `${value.toLocaleString("ko-KR")}원`
-    : "가격 확인 필요";
+    : "-";
 }
 
 function quantityText(quantity: number) {
@@ -352,7 +352,7 @@ function actionCenterLines(result: CompatibilityResult, build?: BuildSelection, 
 }
 
 function repairPlanPriceText(priceDeltaWon: number | undefined, priceComplete: boolean) {
-  if (!priceComplete || priceDeltaWon === undefined) return "가격 확인 필요";
+  if (!priceComplete || priceDeltaWon === undefined) return "-";
   if (priceDeltaWon === 0) return "변화 없음";
   return `${priceDeltaWon > 0 ? "+" : ""}${priceDeltaWon.toLocaleString("ko-KR")}원`;
 }
@@ -377,7 +377,7 @@ function repairPlanLines(result: CompatibilityResult) {
       `### [${plan.label}] ${plan.title}`,
       `- 해결 범위: ${plan.resolvedFindings}개 항목 · 호환 불가 ${plan.resolvedBlockers}개 · 확인 필요 ${plan.resolvedUnknown}개`,
       `- 대체 부품 적용 후: 호환 불가 ${plan.remainingBlockers}개 · 주의 ${plan.remainingWarnings}개 · 확인 필요 ${plan.remainingUnknown}개`,
-      `- 가격 변화: ${repairPlanPriceText(plan.priceDeltaWon, plan.priceComplete)} · 적용 후 ${plan.priceComplete ? priceText(plan.afterTotalPriceWon) : "가격 확인 필요"}`,
+      `- 가격 변화: ${repairPlanPriceText(plan.priceDeltaWon, plan.priceComplete)} · 적용 후 ${plan.priceComplete ? priceText(plan.afterTotalPriceWon) : "-"}`,
       `- 비교 정보: ${plan.similarityLabel} · ${plan.profileSummary}`,
       `- 추천 이유: ${plan.reason}`
     );
@@ -430,7 +430,7 @@ function savedBuildRecheckLines(snapshot: SavedBuildCheckSnapshot, result: Compa
     "[저장 당시 결과와 현재 결과 비교]",
     `- 결과: ${savedCheckStatusLabel(snapshot.status)} → ${savedCheckStatusLabel(result.status)}`,
     `- 호환 항목: 호환 불가 ${snapshot.blockerCount} → ${result.blockerCount} · 주의 ${snapshot.warningCount} → ${result.warningCount} · 확인 필요 ${snapshot.unknownCount} → ${result.unknownCount}`,
-    `- 가격: ${snapshot.priceComplete && result.priceComplete ? `${priceText(snapshot.totalPriceWon)} → ${priceText(result.totalPriceWon)} · 변화 ${repairPlanPriceText(transition.priceDeltaWon, true)}` : "저장 당시 또는 현재 가격 확인 필요"}`,
+    `- 가격: ${snapshot.priceComplete && result.priceComplete ? `${priceText(snapshot.totalPriceWon)} → ${priceText(result.totalPriceWon)} · 변화 ${repairPlanPriceText(transition.priceDeltaWon, true)}` : "저장 당시 또는 현재 가격: -"}`,
     `- 전력·냉각 여유: ${savedCheckResourceText(snapshot)} → ${savedCheckResourceText(currentSnapshot)}${transition.resourceBudgetChanged ? ` · 전력 ${transition.powerHeadroomDeltaW === undefined ? "상태 변화" : `${transition.powerHeadroomDeltaW > 0 ? "+" : ""}${transition.powerHeadroomDeltaW}W`} · 냉각 ${transition.coolerHeadroomDeltaW === undefined ? "상태 변화" : `${transition.coolerHeadroomDeltaW > 0 ? "+" : ""}${transition.coolerHeadroomDeltaW}W`}` : ""}`,
     `- 계산 버전: ${snapshot.engineVersion} → ${result.engineVersion} · 부품 정보 기준일 ${snapshot.catalogSnapshotAt} → ${result.catalogSnapshotAt}`,
     `- 변화 방향: ${savedCheckDirectionLabel(transition.direction)}`,
@@ -474,7 +474,9 @@ function assemblyPlanLines(build: BuildSelection, result: CompatibilityResult) {
   ];
 }
 
-export function compatibilityReportTextFor(result: CompatibilityResult, build: BuildSelection, partMap: ReadonlyMap<string, Part>, accessoryMap: ReadonlyMap<string, AccessoryItem>, viewState?: CompatibilityReportViewState, savedCheckSnapshot?: SavedBuildCheckSnapshot) {
+export function compatibilityReportTextFor(inputResult: CompatibilityResult, build: BuildSelection, partMap: ReadonlyMap<string, Part>, accessoryMap: ReadonlyMap<string, AccessoryItem>, viewState?: CompatibilityReportViewState, savedCheckSnapshot?: SavedBuildCheckSnapshot) {
+  const result = publicReportValue(inputResult) as CompatibilityResult;
+  const publicSavedCheckSnapshot = savedCheckSnapshot ? publicReportValue(savedCheckSnapshot) as SavedBuildCheckSnapshot : undefined;
   const coreTotal = result.coreTotalPriceWon ?? result.totalPriceWon - (result.accessoryTotalPriceWon ?? 0);
   const coreComplete = result.corePriceComplete ?? result.priceComplete;
   const accessoryTotal = result.accessoryTotalPriceWon ?? 0;
@@ -489,7 +491,7 @@ export function compatibilityReportTextFor(result: CompatibilityResult, build: B
     `계산 버전: ${result.engineVersion}`,
     `부품 정보 기준일: ${result.catalogSnapshotAt}`,
     ...viewStateLines(viewState),
-    ...(savedCheckSnapshot ? savedBuildRecheckLines(savedCheckSnapshot, result) : []),
+    ...(publicSavedCheckSnapshot ? savedBuildRecheckLines(publicSavedCheckSnapshot, result) : []),
     "",
     "[추천 기준]",
     ...preferenceLines(result.recommendationPreferences),
@@ -511,9 +513,9 @@ export function compatibilityReportTextFor(result: CompatibilityResult, build: B
   lines.push(
     "",
     "[가격 요약]",
-    `- 핵심 부품: ${coreComplete ? priceText(coreTotal) : "가격 확인 필요"}`,
-    `- 주변 부품: ${accessoryComplete ? priceText(accessoryTotal) : "가격 확인 필요"}`,
-    `- 전체 합계: ${result.priceComplete ? priceText(result.totalPriceWon) : "가격 확인 필요"}`,
+    `- 핵심 부품: ${coreComplete ? priceText(coreTotal) : "-"}`,
+    `- 주변 부품: ${accessoryComplete ? priceText(accessoryTotal) : "-"}`,
+    `- 전체 합계: ${result.priceComplete ? priceText(result.totalPriceWon) : "-"}`,
     "",
     ...gpuFitLines(result),
     ...connectivityLines(build, partMap),
@@ -523,9 +525,10 @@ export function compatibilityReportTextFor(result: CompatibilityResult, build: B
   );
   lines.push(...findingLines(result, partMap));
   if (result.accessoryCompatibility) lines.push(...accessoryFindingLines(result));
-  if (result.analysis.nextActions.length > 0) {
+  const nextActions = result.analysis?.nextActions ?? [];
+  if (nextActions.length > 0) {
     lines.push("[구매 전 확인]");
-    result.analysis.nextActions.forEach((action, index) => lines.push(`${index + 1}. ${action}`));
+    nextActions.forEach((action, index) => lines.push(`${index + 1}. ${action}`));
     lines.push("");
   }
   lines.push(...repairPlanLines(result));

@@ -119,7 +119,7 @@ function buildExportFor(build: SavedBuild): SavedBuildVersionExportBuild {
 }
 
 function priceText(value: number | undefined, complete: boolean | undefined) {
-  return complete && value !== undefined ? `${value.toLocaleString("ko-KR")}원` : "가격 확인 필요";
+  return complete && value !== undefined ? `${value.toLocaleString("ko-KR")}원` : "-";
 }
 
 function statusText(status: SavedBuildCheckSnapshot["status"]) {

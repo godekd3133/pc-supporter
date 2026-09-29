@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
 import type { DanawaListItem } from "./danawa";
-import { parseAccessorySpecs, selectAccessoryListWindow } from "./accessory-crawler";
+import { DANAWA_ACCESSORY_CATEGORIES, parseAccessorySpecs, selectAccessoryListWindow } from "./accessory-crawler";
 
 function listItem(sourceProductCode: string, name = sourceProductCode): DanawaListItem {
   return { sourceProductCode, name, url: `https://prod.danawa.com/info/?pcode=${sourceProductCode}&cate=11324022` };
 }
 
 describe("accessory crawl page selection", () => {
+  it("uses Danawa's SSD/HDD peripherals category for storage accessories", () => {
+    expect(DANAWA_ACCESSORY_CATEGORIES.find((item) => item.category === "storage_accessory")?.categoryId).toBe("11329818");
+  });
+
   it("skips a requested offset across pages and ignores repeated product codes", () => {
     const pages = [
       [listItem("1"), listItem("2"), listItem("3")],

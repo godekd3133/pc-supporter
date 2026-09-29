@@ -397,12 +397,12 @@ async function main() {
           result: Boolean(result),
           lineCount: lines.length,
           linesWithName: lines.filter((line) => (line.querySelector('strong')?.textContent ?? '').trim().length > 0).length,
-          linesWithPrice: lines.filter((line) => /\\d[\\d,]*원|가격 확인 중/.test(line.textContent ?? '')).length,
+          linesWithPrice: lines.filter((line) => /\\d[\\d,]*원|-/.test(line.textContent ?? '')).length,
           rationalePanel: Boolean(rationalePanel),
           body
         };
       })()`);
-      if (probe.path !== "/recommend" || !probe.result || probe.lineCount < 6 || probe.linesWithName !== probe.lineCount || probe.linesWithPrice !== probe.lineCount || probe.rationalePanel || !probe.body.includes("예상 부품 합계")) {
+      if (probe.path !== "/recommend" || !probe.result || probe.lineCount < 6 || probe.linesWithName !== probe.lineCount || probe.linesWithPrice !== probe.lineCount || probe.rationalePanel || !probe.body.includes("합계")) {
         throw new Error(`자동 구성 견적 표시 검증 실패: ${JSON.stringify(probe)}`);
       }
       if (screenshotPath) {

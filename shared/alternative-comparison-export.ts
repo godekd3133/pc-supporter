@@ -1,5 +1,5 @@
 import { DATA_FRESHNESS_LABELS, DATA_QUALITY_LABELS, type BenchmarkScoreKey, type BenchmarkSourceKind, type CatalogPriceEvidence, type DataFreshness, type DataQuality, type PartCategory, type PhysicalEvidenceSource, type PhysicalSourceCheck, type SimilarityBasis, type SimilarityConfidence, type SimilarityDimensionEvidence, type SimilarityEvidence, type SimilarityReferenceEvidence, type ValueLabel } from "./types";
-import { CATALOG_PRICE_EVIDENCE_LABELS } from "./catalog-price-evidence";
+import { CATALOG_PRICE_EVIDENCE_CHECK_LABELS } from "./catalog-price-evidence";
 import type { AlternativeComparisonScenario } from "./alternative-comparison-scenario";
 import type { BenchmarkEvidencePart } from "./benchmark-evidence";
 import { OBJECTIVE_BENCHMARK_DIMENSION_KEYS } from "./objective-score";
@@ -233,7 +233,7 @@ export function alternativeComparisonShareCandidatesFor(candidates: AlternativeC
       ...(candidate.priceWon !== undefined ? { priceWon: candidate.priceWon } : {}),
       ...(candidate.priceEvidence ? { priceEvidence: candidate.priceEvidence } : {}),
       summary: candidate.summary,
-      price: candidate.price,
+      price: alternativeComparisonPriceTextFor(candidate),
       ...(candidate.purchaseCondition ? { purchaseCondition: candidate.purchaseCondition } : {}),
       ...(candidate.recommendedQuantity !== undefined ? { recommendedQuantity: candidate.recommendedQuantity } : {}),
       compatibility: candidate.compatibility,
@@ -267,6 +267,7 @@ function publicCandidateFor(candidate: AlternativeComparisonCandidate) {
   const specDifferences = selectedSpecDifferencesFor(similarityEvidence);
   return {
     ...safeCandidate,
+    price: alternativeComparisonPriceTextFor(candidate),
     ...(specSummary ? { specSummary } : {}),
     ...(specDifferences.length > 0 ? { specDifferences } : {}),
     ...(publicComparisonCopyText(decisionSummary) ? { decisionSummary: publicComparisonCopyText(decisionSummary) } : {}),
@@ -280,6 +281,13 @@ function specComparisonTextFor(candidate: AlternativeComparisonCandidate) {
   return [summary, dimensions].filter((value): value is string => Boolean(value)).join(" / ") || undefined;
 }
 
+export function alternativeComparisonPriceTextFor(candidate: Pick<AlternativeComparisonCandidate, "price" | "priceEvidence">) {
+  const legacyUnavailableLabels = ["가격 확인 필요", "가격 확인 중", "가격 정보 없음"];
+  return candidate.priceEvidence === "unknown" || !candidate.price.trim() || legacyUnavailableLabels.includes(candidate.price.trim())
+    ? "-"
+    : candidate.price;
+}
+
 function comparisonRows(candidates: AlternativeComparisonCandidate[], context: AlternativeComparisonExportContext = {}) {
   const contextValues = context.category || context.currentPartName || context.currentPartSummary || context.currentPartPrice
     ? [context.category, context.currentPartName, context.currentPartSummary, context.currentPartPrice]
@@ -289,9 +297,9 @@ function comparisonRows(candidates: AlternativeComparisonCandidate[], context: A
     candidate.category,
     candidate.partId,
     candidate.summary,
-    candidate.price,
-    candidate.priceWon,
-    candidate.priceEvidence ? CATALOG_PRICE_EVIDENCE_LABELS[candidate.priceEvidence] : undefined,
+    alternativeComparisonPriceTextFor(candidate),
+    candidate.priceWon ?? "-",
+    candidate.priceEvidence ? CATALOG_PRICE_EVIDENCE_CHECK_LABELS[candidate.priceEvidence] : undefined,
     candidate.purchaseCondition,
     candidate.recommendedQuantity,
     specComparisonTextFor(candidate),
@@ -319,8 +327,8 @@ export function alternativeComparisonTextFor(candidates: AlternativeComparisonCa
     lines.push(`[부품 ${index + 1}] ${candidate.name}`);
     if (candidate.category || candidate.partId) lines.push(`- 부품 분류: ${candidate.category ?? "분류 확인 필요"}${candidate.partId ? ` · ${candidate.partId}` : ""}`);
     lines.push(`- 핵심 스펙: ${candidate.summary}`);
-    lines.push(`- 가격: ${candidate.price}${candidate.recommendedQuantity !== undefined ? ` · 추천 수량 ${candidate.recommendedQuantity}개` : ""}`);
-    if (candidate.priceEvidence) lines.push(`- 가격 출처: ${CATALOG_PRICE_EVIDENCE_LABELS[candidate.priceEvidence]}`);
+    lines.push(`- 가격: ${alternativeComparisonPriceTextFor(candidate)}${candidate.recommendedQuantity !== undefined ? ` · 추천 수량 ${candidate.recommendedQuantity}개` : ""}`);
+    if (candidate.priceEvidence) lines.push(`- 가격 확인: ${CATALOG_PRICE_EVIDENCE_CHECK_LABELS[candidate.priceEvidence]}`);
     if (candidate.purchaseCondition) lines.push(`- 구매 조건: ${candidate.purchaseCondition}`);
     const performance = publicComparisonCopyText(candidate.performance);
     const specEvidence = alternativeComparisonSimilarityEvidenceTextFor(candidate.similarityEvidence);
@@ -345,7 +353,7 @@ export function alternativeComparisonCsvFor(candidates: AlternativeComparisonCan
   const contextColumns = context.category || context.currentPartName || context.currentPartSummary || context.currentPartPrice
     ? ["비교 범주", "현재 부품", "현재 부품 정보", "현재 부품 가격"]
     : [];
-  const header = ["부품명", "범주", "부품 ID", "핵심 스펙", "가격", "공유 당시 가격(원)", "가격 출처", "구매 조건", "추천 수량", "사양 차이", "호환 상태", "비교 결론", "부품 교체 시", "설치 공간 확인", "설치 안내", "부품 정보 상태", "갱신 상태", "갱신일", "상품 페이지", ...contextColumns];
+  const header = ["부품명", "범주", "부품 ID", "핵심 스펙", "가격", "공유 당시 가격(원)", "가격 확인", "구매 조건", "추천 수량", "사양 차이", "호환 상태", "비교 결론", "부품 교체 시", "설치 공간 확인", "설치 안내", "부품 정보 상태", "갱신 상태", "갱신일", "상품 페이지", ...contextColumns];
   return `\uFEFF${[header, ...comparisonRows(candidates, context)].map((row) => row.map((value) => csvCell(value)).join(",")).join("\r\n")}`;
 }
 

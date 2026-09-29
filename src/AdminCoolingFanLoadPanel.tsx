@@ -122,7 +122,7 @@ export function CoolingFanLoadOverridePanel({ onToast, onMetaRefresh }: { onToas
     let cancelled = false;
     const timer = window.setTimeout(() => {
       setFansLoading(true);
-      void api<{ items: AccessoryItem[] }>(`/api/accessories?category=cooling_fan&q=${encodeURIComponent(query.trim())}&quality=all&sort=name&limit=12`)
+      void api<{ items: AccessoryItem[] }>(`/api/accessories?category=cooling_fan&q=${encodeURIComponent(query.trim())}&quality=all&sort=name&priceFilter=all&limit=12`)
         .then((payload) => { if (!cancelled) setFans(payload.items); })
         .catch(() => { if (!cancelled) setFans([]); })
         .finally(() => { if (!cancelled) setFansLoading(false); });

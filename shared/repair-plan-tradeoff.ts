@@ -55,7 +55,7 @@ export function repairPlanTradeoffFor(plans: ReadonlyArray<RecommendationPlan>):
         ...metric,
         frontier: true,
         reason: metric.priceDeltaWon === undefined
-          ? "가격 확인 필요 상태를 유지한 채 남은 위험·변경 규모 기준의 비교 우위에 있습니다."
+          ? "가격이 비어 있어 남은 위험·변경 규모만 비교했습니다."
           : "비용·남은 문제·변경 수를 함께 살펴볼 수 있는 선택입니다."
       };
     }

@@ -1841,7 +1841,7 @@ export function buildUpgradeRecommendations(
     if (!current || current.dataQuality === "incomplete") continue;
     const quantity = selections[0].quantity;
     const assessedCandidates = catalog
-      .filter((candidate) => candidate.category === category && !currentPartIds.has(candidate.id) && candidate.dataQuality !== "incomplete")
+      .filter((candidate) => candidate.category === category && !currentPartIds.has(candidate.id) && candidate.dataQuality !== "incomplete" && isKnownPrice(candidate.priceWon))
       .filter((candidate) => isListingAllowed(candidate, listingPolicy))
       .map((candidate) => ({ candidate, assessment: upgradeAssessmentFor(current, candidate, profile, gamingResolution, gamingRefreshRate) }))
       .filter((entry): entry is { candidate: Part; assessment: UpgradeAssessment } => Boolean(entry.assessment))
@@ -2198,6 +2198,7 @@ function candidateSuggestions(
   const comparison = performanceComparisonFor(currentTarget, catalog);
   const candidates = catalog
     .filter((part) => part.category === targetCategory && !currentPartIds.has(part.id))
+    .filter((part) => isKnownPrice(part.priceWon))
     .filter((part) => isListingAllowed(part, listingPolicy))
     .filter((part) => candidateIsPlausible(finding, build, part, catalog, targetCategory));
   const evaluatedSuggestions = candidateEvaluationPoolFor(
@@ -2793,7 +2794,7 @@ function buildRepairPlans(
         ...candidate,
         label: "완전 호환",
         title: `완전 호환 우선 · ${candidate.changes.length}개 변경`,
-        reason: `호환 문제를 줄이기 위해 ${candidate.changes.length}개 항목을 바꿔요. 적용 후 호환 불가·주의·확인 필요 항목이 없습니다.${candidate.priceComplete ? "" : " 일부 부품 가격은 확인해 주세요."}`
+        reason: `호환 문제를 줄이기 위해 ${candidate.changes.length}개 항목을 바꿔요. 적용 후 호환 불가·주의·확인 필요 항목이 없습니다.${candidate.priceComplete ? "" : " 가격이 없는 부품은 합계에 포함되지 않습니다."}`
       };
     }
   }
@@ -2889,7 +2890,7 @@ function buildRepairPlans(
     const budgetReason = candidate.budgetWon === undefined
       ? ""
       : !candidate.priceComplete
-        ? " 가격 일부 확인 필요로 예산 적합 여부를 확정하지 못합니다."
+        ? " 가격이 없는 부품이 있어 예산 적합 여부를 판단할 수 없습니다."
       : candidate.withinBudget
         ? ` 예산 ${formatPrice(candidate.budgetWon)} 안입니다.`
         : ` 예산을 ${formatPrice(Math.max(0, candidate.budgetDeltaWon ?? 0))} 초과합니다.`;
@@ -4642,8 +4643,8 @@ const GENERATOR_REQUIRED_FIELDS: Partial<Record<PartCategory, string[]>> = {
 
 // Direct performance-tier requests narrow the candidate pools first: GPUs use a
 // VRAM floor (the only performance dimension populated across the catalog) and
-// CPUs use a relative capability-score floor. When nothing meets the bar the
-// original pool is kept so generation still succeeds below the requested tier.
+// CPUs use a relative capability-score floor. Gaming resolution/game VRAM is an
+// advisory score and remains visible as a post-selection fit status.
 const GENERATOR_PERFORMANCE_TIER_GPU_MIN_VRAM_GB: Record<RecommendationPerformanceTier, number> = {
   entry: 0,
   high: 12,
@@ -5143,7 +5144,6 @@ function generatorCaseRequiredFields(includeGpu: boolean, hddCount: number) {
 }
 
 const GENERATOR_WARNING_SCORE_PENALTY = 40;
-const GENERATOR_BUDGET_TOLERANCE_RATIO = 1.08;
 // 장착·전원이 아닌 팬/RGB 헤더 수·전압 같은 장식성 확인 항목은
 // 생성기 순위의 hard gate에서 제외한다. 누락 스펙이 실제 호환 위험이면 계속 gate가 된다.
 // 장착·동작에 실질 리스크가 없는 "확인용" 데이터 공백이다 — 케이스 팬/RGB 헤더
@@ -5569,10 +5569,7 @@ export function generateBuildDraft(catalog: Part[], request: BuildGenerationRequ
   const gpuPool = request.includeGpu
     ? filterGeneratorGpuPoolByMinVram(
         generatorCandidatePool(catalog, "gpu", profile, undefined, listingPolicy, gamingResolution, gamingRefreshRate, GENERATOR_REQUIRED_FIELDS.gpu ?? [], false, gamingAdvisoryTuning, gpuVendorPreference),
-        Math.max(
-          performanceTier ? GENERATOR_PERFORMANCE_TIER_GPU_MIN_VRAM_GB[performanceTier] : 0,
-          profile === "gaming" ? gamingAdvisoryTuning?.targetVramGb ?? GAMING_RESOLUTION_VRAM_TARGETS[gamingResolution] : 0
-        )
+        performanceTier ? GENERATOR_PERFORMANCE_TIER_GPU_MIN_VRAM_GB[performanceTier] : 0
       )
     : undefined;
   const missingPools = [
@@ -5795,10 +5792,9 @@ function preferCoolerHeadroom(parts: Part[], cpu: Part, profile: RecommendationP
   const ranked = evaluated.sort((a, b) => {
     const aValid = a.evaluation.blockerCount === 0 && a.fitUnknownCount === 0;
     const bValid = b.evaluation.blockerCount === 0 && b.fitUnknownCount === 0;
-    // 예산은 8% 허용 오차 안에서 hard gate로 두고, 초과분은 점수에 비례 페널티를 준다.
-    // 1원 초과로 최상위 구성이 탈락해 예산 1/3만 쓰는 견적이 당선되는 문제를 막는다.
-    const aWithin = a.state.priceWon <= request.budgetWon * GENERATOR_BUDGET_TOLERANCE_RATIO;
-    const bWithin = b.state.priceWon <= request.budgetWon * GENERATOR_BUDGET_TOLERANCE_RATIO;
+    // 예산 안 구성을 우선하고, 초과 시에는 아래 fail-closed 진단으로 돌려보낸다.
+    const aWithin = a.state.priceWon <= request.budgetWon;
+    const bWithin = b.state.priceWon <= request.budgetWon;
     const overBudgetPenalty = (entry: typeof a) => Math.max(0, entry.state.priceWon - request.budgetWon) / Math.max(request.budgetWon, 1) * 2000;
     // 호환 경고는 점수 페널티로 반영한다. lexicographic 거부로 두면 경고 1개가
     // 훨씬 나은 구성을 무조건 밀어내, 예산 대부분을 쓰지 않는 하위 견적이 선택됐다.
@@ -5818,7 +5814,28 @@ function preferCoolerHeadroom(parts: Part[], cpu: Part, profile: RecommendationP
       || a.evaluation.warningCount - b.evaluation.warningCount
       || a.state.priceWon - b.state.priceWon;
   });
-  const chosen = ranked[0];
+  const budgetCandidates = ranked.filter((entry) => entry.state.priceWon <= request.budgetWon);
+  const chosen = budgetCandidates[0];
+  if (!chosen) {
+    const leastExpensive = ranked.reduce<(typeof ranked)[number] | undefined>(
+      (best, entry) => !best || entry.state.priceWon < best.state.priceWon ? entry : best,
+      undefined
+    );
+    throw new BuildGenerationError(
+      `요청 예산 ${formatPrice(request.budgetWon)} 안에 자동 구성을 찾지 못했습니다.`,
+      [{
+        id: "budget-infeasible",
+        title: "요청 예산 안에 자동 구성이 없습니다.",
+        summary: "요청한 조건으로 생성한 모든 구성의 합계가 예산을 넘어 최종 견적을 제공하지 않았습니다.",
+        facts: [
+          { label: "요청 예산", value: formatPrice(request.budgetWon) },
+          { label: "예산 내 생성 조합", value: "0개" },
+          ...(leastExpensive ? [{ label: "가장 낮은 후보 합계", value: formatPrice(leastExpensive.state.priceWon) }] : [])
+        ],
+        recommendation: "예산을 늘리거나 외장 GPU·RAM·SSD 조건을 조정해 다시 찾아보세요."
+      }]
+    );
+  }
   if (GENERATOR_DEBUG) {
     for (const entry of ranked.slice(0, 12)) {
       const parts = Object.entries(entry.state.parts).map(([category, part]) => `${category}=${part?.id}`).join(" ");

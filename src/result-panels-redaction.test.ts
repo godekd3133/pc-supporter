@@ -35,4 +35,9 @@ describe("upgradeBundleSpecComparisonTextFor", () => {
 
     expect(upgradeBundleSpecComparisonTextFor({ similarityEvidence })).toBe("VRAM 8GB → 16GB");
   });
+
+  it("accepts bundle payloads where public projection omitted similarity evidence", () => {
+    expect(upgradeBundleSpecComparisonTextFor({})).toBeUndefined();
+    expect(upgradeBundleSpecComparisonTextFor({ similarityEvidence: undefined })).toBeUndefined();
+  });
 });

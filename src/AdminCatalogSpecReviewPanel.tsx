@@ -4,7 +4,7 @@ import { FiAlertTriangle, FiDownload, FiExternalLink, FiInfo, FiLoader, FiRefres
 import type { CatalogSpecRefreshBatchFilters, CatalogSpecRefreshBatchResponse, CatalogSpecRefreshHistoryEntry, CatalogSpecReviewAction, CatalogSpecReviewEvidence, CatalogSpecReviewPriority, CatalogSpecReviewWorkPackage, CatalogSpecReviewItem } from "../shared/catalog-spec-review";
 import { catalogSpecRefreshProgressSummaryFor } from "../shared/catalog-spec-review";
 import { catalogMissingFieldLabelFor } from "../shared/catalog-spec-coverage";
-import { CATEGORY_LABELS, DATA_FRESHNESS_LABELS, DATA_QUALITY_LABELS, PART_CATEGORIES, type PartCategory } from "../shared/types";
+import { CATEGORY_LABELS, DATA_FRESHNESS_LABELS, DATA_QUALITY_LABELS, isKnownPrice, PART_CATEGORIES, type PartCategory } from "../shared/types";
 import { api } from "./api";
 import { safeExternalUrl } from "./safe-source-url";
 
@@ -127,7 +127,7 @@ function CatalogSpecReviewItemCard({ item, selected, onToggle, disabled }: { ite
     <div className="catalog-spec-review-item-main">
       <div className="catalog-spec-review-item-top"><span className={`catalog-spec-review-priority ${item.priority}`}>{PRIORITY_LABELS[item.priority]}</span><strong>{item.priorityScore}점</strong><span>{CATEGORY_LABELS[item.category]}</span><span className={`catalog-spec-review-evidence ${item.evidenceKind}`}>{evidenceLabel}</span><span className={`catalog-spec-review-refresh-outcome ${item.refreshOutcome ?? "untried"}`}>{refreshOutcomeText(item)}</span></div>
       <strong className="catalog-spec-review-item-name">{item.partName}</strong>
-      <small className="catalog-spec-review-item-id">{item.partId}{item.sourceProductCode ? ` · 상품코드 ${item.sourceProductCode}` : ""} · {reviewItemQualityLabel(item)} · 정보 {DATA_FRESHNESS_LABELS[item.freshness]}{item.priceWon !== undefined ? ` · ${item.priceWon.toLocaleString("ko-KR")}원` : " · 가격 확인 필요"}</small>
+      <small className="catalog-spec-review-item-id">{item.partId}{item.sourceProductCode ? ` · 상품코드 ${item.sourceProductCode}` : ""} · {reviewItemQualityLabel(item)} · 정보 {DATA_FRESHNESS_LABELS[item.freshness]}{isKnownPrice(item.priceWon) ? ` · ${item.priceWon.toLocaleString("ko-KR")}원` : " · -"}</small>
       <small className="catalog-spec-review-item-reason">{item.reviewReason}</small>
       <div className="catalog-spec-review-focus-fields">{item.focusFields.length > 0 ? item.focusFields.map((field) => <span key={`${field.category}:${field.field}`} title={field.instruction}>{field.label}</span>) : <span>누락 필드 기록 없음 · 페이지 확인 필요</span>}</div>
     </div>

@@ -149,7 +149,7 @@ export function purchaseListProgressAmountsFor(rows: ReadonlyArray<PurchaseListR
 }
 
 export function purchaseListProgressAmountLabelFor(value: number, priceComplete: boolean, rowCount: number) {
-  if (!priceComplete) return "가격 확인 필요";
+  if (!priceComplete) return "-";
   if (rowCount === 0) return "없음";
   return `${value.toLocaleString("ko-KR")}원`;
 }

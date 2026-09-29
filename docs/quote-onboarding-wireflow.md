@@ -57,7 +57,7 @@ START HERE
 | 3 | `USE CASE` | 게임 또는 작업 | 다음 | usecase |
 | 4 | `GAMING` | 검색·카테고리·최대 5개 게임 | 다음 | game IDs |
 | 5 | `PERFORMANCE` | FHD/QHD/4K, 60/144/240 FPS, 평균 FPS 목표 기준 | 다음 | resolution, refresh |
-| 6 | `GRAPHICS OPTIONS` | 경쟁·균형·높음, 업스케일링, RT, 참고 가격대·실측 근거 기준 | 다음 · 예산 정하기 | graphics, upscaling, ray tracing |
+| 6 | `GRAPHICS OPTIONS` | 경쟁·균형·높음, 업스케일링, RT, 가격대·실측 근거 기준 | 다음 · 예산 정하기 | graphics, upscaling, ray tracing |
 | 7 | `WORK` | 영상·3D·개발·방송·AI·오디오·사무 + 대표 사용 장면 | 다음 | work IDs |
 | 8 | `INTENSITY` | 가볍게·균형 있게·무겁게 | 이 조건으로 맞춰보기 | intensity |
 | 9 | `SPEC` | 성능 등급·외장 GPU·RAM·SSD | 다음 | tier, GPU, RAM, SSD |
@@ -83,7 +83,7 @@ START HERE
 ```text
 평균 FPS 144 이상 목표
 4K · 144 FPS · 높음 · DLSS·품질 참고
-이 조건의 참고 가격대 · 450만원 ~ 530만원
+이 조건의 가격대 · 450만원 ~ 530만원
 동일한 게임·GPU·해상도·그래픽 조건의 최신 실측 자료가 있을 때만 검증 완료
 ```
 
@@ -94,7 +94,7 @@ START HERE
 ```text
 현재 목표 · 4K · 144 FPS · 높음 · DLSS·품질 참고
 선택 예산 · 500만원
-이 조건의 예상 가격대 · 450만원 ~ 530만원
+이 조건의 가격대 · 450만원 ~ 530만원
 이 금액에서 예상되는 수준 · 4K · 144 FPS · 최상급 GPU · 64GB · 2TB SSD
 ```
 

@@ -59,7 +59,7 @@ try {
   await waitForHomeDemoButtons(client, "purchase list context smoke home");
   assert(await clickText(client, "문제 있는 예시 견적"), "purchase list context smoke demo button not found");
   await waitForValue(client, "location.pathname === '/build' && document.querySelector('button.button-primary.full-width')?.disabled === false", "purchase list context smoke editor");
-  assert(await clickText(client, "호환성 검사하기"), "purchase list context smoke check button not found");
+  assert(await clickText(client, "호환 확인하기"), "purchase list context smoke check button not found");
   await waitForValue(client, "location.pathname === '/result' && document.querySelector('[data-testid=\"result-findings\"]') !== null", "purchase list context smoke result");
   await openResultDetails(client);
   await waitForValue(client, "document.querySelector('[data-testid=\"purchase-list-panel\"]') !== null || [...document.querySelectorAll('button')].some((button) => (button.textContent ?? '').includes('구매 목록'))", "purchase list context smoke purchase list mount");

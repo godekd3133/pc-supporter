@@ -30,6 +30,10 @@ describe("public API evidence projection", () => {
         valueEvidence: { scoreScale: 200, similarityScore: 92 },
         similarityLabel: "동급",
         improvementPercent: 18.2,
+        totalUpgradeScore: 291,
+        totalImprovementPercent: 217.1,
+        baselineScore: 60,
+        expansionEvidence: { baselineScore: 60, candidateScore: 65, baselineSummary: "확장성 60점", candidateSummary: "확장성 65점" },
         improvedDimensions: ["VRAM", "대역폭"],
         scoreDelta: 7,
         candidateScore: 88,
@@ -40,6 +44,40 @@ describe("public API evidence projection", () => {
       }
     });
     expect(projectedRankEvidence).toEqual({ item: { id: "gpu-public-boundary", priceWon: 650000, specs: { socket: "AM5", lengthMm: 270 } } });
+
+    expect(publicApiPayloadProjection({ specs: {
+      catalogSpecProvenance: { sourceUrl: "https://vendor.example/spec", sourceCheck },
+      gpuPhysicalSourceCheck: sourceCheck,
+      fanLoadProvenance: { sourceUrl: "https://vendor.example/fan" },
+      rgbDeviceLoadProvenance: { sourceUrl: "https://vendor.example/rgb" },
+      m2SlotProvenance: { sourceUrl: "https://vendor.example/m2" },
+      m2SlotSourceCheck: sourceCheck,
+      physicalEvidenceSourceNote: "내부 확인 메모",
+      physicalEvidenceSourceUrl: "https://vendor.example/physical",
+      physicalEvidenceManufacturerModel: "PRIVATE-SKU",
+      physicalEvidenceManufacturerRevision: "Rev 1",
+      physicalEvidenceUpdatedAt: "2026-09-28T00:00:00.000Z",
+      physicalEvidenceSourceCheck: sourceCheck,
+      powerW: 320,
+      m2Slots: 3
+    } })).toEqual({ specs: { powerW: 320, m2Slots: 3 } });
+
+    expect(publicApiPayloadProjection({ reason: "성능이 18.2% 개선됩니다." })).toEqual({});
+    expect(publicApiPayloadProjection({ reason: "구매 전에 호환 여부를 확인하세요." })).toEqual({ reason: "구매 전에 호환 여부를 확인하세요." });
+
+    const projectedUpgradeBundles = publicApiPayloadProjection({
+      upgradeBundlePayload: {
+        bundles: [{
+          id: "public-upgrade-bundle",
+          totalPriceDeltaWon: 250000,
+          totalUpgradeScore: 291,
+          totalImprovementPercent: 217.1,
+          expansionEvidence: { baselineScore: 60, candidateScore: 65, scoreDelta: 5, baselineSummary: "확장성 60점", candidateSummary: "확장성 65점" },
+          reason: "부품별 비교 변화가 합산 217.1%이며 호환 상태가 유지됩니다."
+        }]
+      }
+    });
+    expect(projectedUpgradeBundles).toEqual({ upgradeBundlePayload: { bundles: [{ id: "public-upgrade-bundle", totalPriceDeltaWon: 250000 }] } });
 
     const directory = await mkdtemp(join(tmpdir(), "pc-supporter-public-api-projection-"));
     const envKeys = ["PC_SUPPORTER_DATA_DIR", "DATABASE_URL", "ADMIN_PASSWORD", "GAMING_PERFORMANCE_EVIDENCE_PATH"] as const;
@@ -215,6 +253,10 @@ describe("public API evidence projection", () => {
       expect(adminMetaResponse.status).toBe(200);
       const adminMeta = await adminMetaResponse.json() as Record<string, any>;
       expect(adminMeta.benchmarkCoverage.cpu.total).toEqual(expect.any(Number));
+      const internalMetaResponse = await fetch(baseUrl + "/api/admin/meta", { headers: adminHeaders });
+      expect(internalMetaResponse.status).toBe(200);
+      const internalMeta = await internalMetaResponse.json() as Record<string, any>;
+      expect(internalMeta.benchmarkCoverage.cpu.total).toEqual(expect.any(Number));
 
       for (const part of [cpu, gpu]) {
         const detail = await fetch(baseUrl + "/api/parts/" + part.id);
@@ -239,10 +281,12 @@ describe("public API evidence projection", () => {
       const qhdCompatibilityPayload = await qhdCompatibility.json() as Record<string, any>;
       expect(qhdCompatibilityPayload.status).toBeDefined();
       expect(qhdCompatibilityPayload.analysis).toBeUndefined();
-      expect(JSON.stringify(qhdCompatibilityPayload)).not.toMatch(/gpuTarget|performanceSummary|analysisConfidence|scoreModelVersion|valueLabel|valueEvidence|similarityLabel|improvementPercent|improvedDimensions|scoreDelta|candidateScore|catalogSpecSourceCheckNeedsReview|benchmarkChanged|benchmarkNeedsReview|confidence|QHD · 144Hz · 권장 VRAM 12GB/);
+      expect(qhdCompatibilityPayload.upgradeBundlePayload?.version).toBe(1);
+      expect(qhdCompatibilityPayload.upgradeBundlePayload?.bundles?.length).toBeGreaterThan(0);
+      expect(JSON.stringify(qhdCompatibilityPayload)).not.toMatch(/gpuTarget|performanceSummary|analysisConfidence|scoreModelVersion|valueLabel|valueEvidence|similarityLabel|improvementPercent|totalUpgradeScore|totalImprovementPercent|expansionEvidence|baselineScore|baselineSummary|candidateSummary|improvedDimensions|scoreDelta|candidateScore|catalogSpecSourceCheckNeedsReview|benchmarkChanged|benchmarkNeedsReview|confidence|부품별 비교 변화가 합산|QHD · 144Hz · 권장 VRAM 12GB/);
 
-      const completeBenchmarkRequest = await fetch(baseUrl + "/api/parts?category=gpu&benchmarkStatus=complete");
-      const partialBenchmarkRequest = await fetch(baseUrl + "/api/parts?category=gpu&benchmarkStatus=partial");
+      const completeBenchmarkRequest = await fetch(baseUrl + "/api/parts?category=gpu&benchmarkStatus=complete&priceStatus=all");
+      const partialBenchmarkRequest = await fetch(baseUrl + "/api/parts?category=gpu&benchmarkStatus=partial&priceStatus=all");
       expect(completeBenchmarkRequest.status).toBe(200);
       expect(partialBenchmarkRequest.status).toBe(200);
       const completeBenchmarkPayload = await completeBenchmarkRequest.json() as Record<string, any>;
@@ -381,6 +425,58 @@ describe("public API evidence projection", () => {
       const adminBenchmarkReview = await fetch(baseUrl + "/api/admin/benchmark-review?limit=500", { headers: adminHeaders });
       expect(adminBenchmarkReview.status).toBe(200);
       expect(await adminBenchmarkReview.json()).toMatchObject({ sourceTotals: { gpu: { benchmarked: expect.any(Number) } } });
+    } finally {
+      if (server) await closeServer(server);
+      vi.resetModules();
+      for (const key of envKeys) {
+        if (previousEnv[key] === undefined) delete process.env[key];
+        else process.env[key] = previousEnv[key];
+      }
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps benchmark coverage private when development admin authentication is disabled", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "pc-supporter-public-meta-dev-"));
+    const envKeys = ["PC_SUPPORTER_DATA_DIR", "DATABASE_URL", "ADMIN_PASSWORD", "NODE_ENV"] as const;
+    const previousEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]])) as Record<typeof envKeys[number], string | undefined>;
+    process.env.PC_SUPPORTER_DATA_DIR = directory;
+    process.env.DATABASE_URL = "";
+    process.env.ADMIN_PASSWORD = "";
+    process.env.NODE_ENV = "development";
+    vi.resetModules();
+
+    let server: Server | undefined;
+    try {
+      const [{ app }, storage] = await Promise.all([import("./index"), import("./storage")]);
+      await writeFile(storage.CATALOG_PATH, JSON.stringify([{
+        id: "dev-private-benchmark-cpu",
+        category: "cpu",
+        name: "Development benchmark CPU",
+        brand: "Boundary",
+        model: "CPU-DEV-1",
+        source: "manual",
+        listingType: "retail",
+        specs: { cinebenchR23Single: 12345, cinebenchR23Multi: 23456 },
+        dataQuality: "manual",
+        missingFields: [],
+        updatedAt: "2026-09-20T00:00:00.000Z"
+      }]), "utf8");
+
+      server = app.listen(0, "127.0.0.1");
+      await new Promise<void>((resolve, reject) => { server?.once("listening", resolve); server?.once("error", reject); });
+      const address = server.address();
+      if (!address || typeof address === "string") throw new Error("development public meta test server did not expose a TCP port");
+      const response = await fetch("http://127.0.0.1:" + address.port + "/api/meta");
+      expect(response.status).toBe(200);
+      const payload = await response.json() as Record<string, any>;
+      expect(payload.adminAuthEnabled).toBe(false);
+      expect(payload).not.toHaveProperty("benchmarkCoverage");
+      expect(JSON.stringify(payload)).not.toMatch(/cinebenchR23Single|cinebenchR23Multi/);
+      const adminMetaResponse = await fetch("http://127.0.0.1:" + address.port + "/api/admin/meta");
+      expect(adminMetaResponse.status).toBe(200);
+      const adminMeta = await adminMetaResponse.json() as Record<string, any>;
+      expect(adminMeta.benchmarkCoverage.cpu.total).toEqual(expect.any(Number));
     } finally {
       if (server) await closeServer(server);
       vi.resetModules();

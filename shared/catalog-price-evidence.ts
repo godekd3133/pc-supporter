@@ -10,7 +10,15 @@ export const CATALOG_PRICE_EVIDENCE_LABELS: Record<CatalogPriceEvidence, string>
   manual: "가격",
   reference: "가격",
   recorded: "가격",
-  unknown: "가격 확인 필요"
+  unknown: "-"
+};
+
+export const CATALOG_PRICE_EVIDENCE_CHECK_LABELS: Record<CatalogPriceEvidence, string> = {
+  live: "확인됨",
+  manual: "확인됨",
+  reference: "구매 전 확인",
+  recorded: "구매 전 확인",
+  unknown: "-"
 };
 
 export const CATALOG_PRICE_EVIDENCE_DESCRIPTIONS: Record<CatalogPriceEvidence, string> = {
@@ -18,7 +26,7 @@ export const CATALOG_PRICE_EVIDENCE_DESCRIPTIONS: Record<CatalogPriceEvidence, s
   manual: "직접 입력한 금액입니다. 판매 페이지의 금액·재고와 다를 수 있으니 구매 전에 다시 확인해 주세요.",
   reference: "미리 등록한 금액입니다. 실제 판매가·재고와 다를 수 있어요.",
   recorded: "이전에 저장한 금액입니다. 구매 전에 상품 페이지의 금액과 사양을 다시 확인해 주세요.",
-  unknown: "가격을 아직 확인하지 못했습니다. 총액과 예산 계산에는 포함하지 않아요."
+  unknown: "가격 정보가 없어 합계와 예산 계산에 포함하지 않아요."
 };
 
 export type CatalogPriceEvidenceInput = {

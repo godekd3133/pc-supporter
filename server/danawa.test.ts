@@ -78,6 +78,16 @@ describe("Danawa parser", () => {
     expect(parseDanawaListPageInfo(html)).toEqual({ totalProductCount: 516, pageSize: 2 });
   });
 
+  it("uses a lazy-loaded product image instead of a transparent placeholder", () => {
+    const html = `
+      <ul><li class="prod_item" id="productItem3">
+        <p class="prod_name"><a name="productName" href="https://prod.danawa.com/info/?pcode=3&cate=112747">CPU three</a></p>
+        <img src="https://img.danawa.com/img/common/blank.gif" data-src="//img.danuri.io/catalog-image/cpu-three.jpg" />
+      </li></ul>
+    `;
+    expect(parseDanawaListPage(html)[0]?.imageUrl).toBe("https://img.danuri.io/catalog-image/cpu-three.jpg");
+  });
+
   it("drops non-HTTPS and non-Danawa product URLs at the parser boundary", () => {
     const html = `
       <ul>
@@ -489,6 +499,18 @@ describe("Danawa parser", () => {
     expect(gpu.specs.thicknessMm).toBe(50);
   });
 
+  it("parses maximum GPU usage power without confusing recommended PSU wattage", () => {
+    const gpu = parseDanawaProductPage("gpu", {
+      name: "GeForce RTX 3060 12GB",
+      url: "https://prod.danawa.com/info/?pcode=27017&cate=112753",
+      sourceProductCode: "27017"
+    }, `<title>GeForce RTX 3060 12GB : 다나와 가격비교</title><meta name="description" content="RTX 3060 / 사용전력: 최대 170W / 550W 이상 / 전원 포트: 8핀 x1 / 가로(길이): 235mm" />`, "112753");
+
+    expect(gpu.specs.powerW).toBe(170);
+    expect(gpu.specs.recommendedPsuW).toBe(550);
+    expect(gpu.missingFields).toEqual([]);
+  });
+
   it("keeps GPU adapter evidence and case radiator evidence limited to stable source text", () => {
     expect(parsePciePowerAdapterOptions("GPU 구성품: 2x8핀 to 16핀 커넥터 / [변경사항] 구성품: 3x8핀 to 16핀으로 변경")).toEqual([[{ kind: "pcie_8pin_6plus2", count: 2 }]]);
     expect(parsePciePowerAdapterOptions("GPU 구성품: 4x8핀 to 16핀 커넥터")).toEqual([[{ kind: "pcie_8pin_6plus2", count: 4 }]]);
@@ -501,6 +523,43 @@ describe("Danawa parser", () => {
       sourceProductCode: "27018"
     }, `<title>수랭 지원 케이스 : 다나와 가격비교</title><meta name="description" content="ATX 케이스 / VGA 길이: 400mm / CPU쿨러 높이: 170mm / 120mm 1열 수랭쿨러 제공 / [변경사항] 상단 라디에이터 120, 140, 240, 280, 360 →120, 240, 360으로 변경" />`, "112775");
     expect(casePart.specs.radiatorSizesMm).toEqual([120]);
+  });
+
+  it("marks a case without explicit supported motherboard formats incomplete", () => {
+    const computerCase = parseDanawaProductPage("case", {
+      name: "ATX PC case",
+      url: "https://prod.danawa.com/info/?pcode=270181&cate=112775",
+      sourceProductCode: "270181"
+    }, `<title>ATX PC case : 다나와 가격비교</title><meta name="description" content="VGA 길이: 420mm / CPU쿨러 높이: 170mm / HDD 베이: 2개" />`, "112775");
+
+    expect(computerCase.specs.motherboardFormFactors).toEqual([]);
+    expect(computerCase.missingFields).toContain("motherboardFormFactors");
+  });
+
+  it("uses the upper end of explicit case cooler-height ranges and rejects open ranges", () => {
+    const rangeExamples: Array<[string, number]> = [
+      ["CPU쿨러 높이: 50~70mm", 70],
+      ["CPU 쿨러 높이: 55~70mm", 70],
+      ["CPU쿨러 높이: 30~55mm", 55],
+      ["CPU쿨러 높이: 37~40mm", 40],
+      ["CPU쿨러 높이: 37-40mm", 40]
+    ];
+    for (const [heightText, expectedHeight] of rangeExamples) {
+      const part = parseDanawaProductPage("case", {
+        name: "Range-height PC case",
+        url: "https://prod.danawa.com/info/?pcode=270182&cate=112775",
+        sourceProductCode: "270182"
+      }, `<title>Range-height PC case : 다나와 가격비교</title><meta name="description" content="${heightText}" />`, "112775");
+      expect(part.specs.maxCoolerHeightMm).toBe(expectedHeight);
+    }
+
+    const openRange = parseDanawaProductPage("case", {
+      name: "Open-range PC case",
+      url: "https://prod.danawa.com/info/?pcode=270183&cate=112775",
+      sourceProductCode: "270183"
+    }, `<title>Open-range PC case : 다나와 가격비교</title><meta name="description" content="VGA 길이: 400~mm / CPU쿨러 높이: 50~mm" />`, "112775");
+    expect(openRange.specs.maxCoolerHeightMm).toBeUndefined();
+    expect(openRange.specs.maxGpuLengthMm).toBeUndefined();
   });
 
   it("parses PSU cable and rail topology as descriptive evidence without using change notes", () => {

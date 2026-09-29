@@ -89,6 +89,24 @@ describe("part detail refresh", () => {
     expect(reconcileRefreshedAccessory(danawaAccessory, { ...refreshed, priceWon: undefined }).priceWon).toBe(500);
   });
 
+  it("preserves the category ID of the stored accessory detail URL after a source mapping change", async () => {
+    const oldStorageAccessory: AccessoryItem = {
+      ...danawaAccessory,
+      id: "accessory-storage_accessory-old-source",
+      category: "storage_accessory",
+      sourceCategoryId: "112760",
+      sourceProductCode: "270200",
+      danawaUrl: "https://prod.danawa.com/info/?pcode=270200&cate=112760",
+      name: "M.2 SSD to PCIe adapter",
+      rawSpecText: "변환 컨버터 / M.2→PCIe 카드",
+      specs: { adapterPcieSlotWidth: 4 }
+    };
+    const html = `<title>M.2 SSD to PCIe adapter : 다나와 가격비교</title><meta name="description" content="변환 컨버터 / M.2→PCIe 카드 / PCIe x4" />`;
+    const refreshed = await refreshDanawaAccessory(oldStorageAccessory, { fetchHtml: async () => html });
+
+    expect(refreshed.sourceCategoryId).toBe("112760");
+  });
+
   it("rejects accessory refresh links that do not match the stored product code", () => {
     expect(accessoryRefreshBlockReason({ ...danawaAccessory, sourceProductCode: "3" })).toContain("상품 코드가 일치");
     expect(accessoryRefreshBlockReason(danawaAccessory)).toBeUndefined();

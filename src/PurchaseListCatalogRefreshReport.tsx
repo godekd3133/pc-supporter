@@ -17,9 +17,9 @@ function formatDate(value: string) {
 function priceTransition(item: CatalogRefreshReportItem) {
   const beforeKnown = isKnownPrice(item.previousPriceWon);
   const afterKnown = isKnownPrice(item.nextPriceWon);
-  if (!beforeKnown && !afterKnown) return "가격 정보 없음 → 가격 정보 없음";
-  if (!beforeKnown && afterKnown) return `가격 정보 없음 → ${formatWon(item.nextPriceWon!)}`;
-  if (beforeKnown && !afterKnown) return `${formatWon(item.previousPriceWon!)} → 가격 정보 없음`;
+  if (!beforeKnown && !afterKnown) return "- → -";
+  if (!beforeKnown && afterKnown) return `- → ${formatWon(item.nextPriceWon!)}`;
+  if (beforeKnown && !afterKnown) return `${formatWon(item.previousPriceWon!)} → -`;
   if (item.previousPriceWon === item.nextPriceWon) return `${formatWon(item.nextPriceWon!)} · 변화 없음`;
   const delta = item.nextPriceWon! - item.previousPriceWon!;
   return `${formatWon(item.previousPriceWon!)} → ${formatWon(item.nextPriceWon!)} · ${delta > 0 ? "+" : ""}${formatWon(delta)} 변화`;

@@ -153,7 +153,7 @@ function statusText(outcome: BudgetLadderOutcome) {
 }
 
 function budgetResultText(draft: BuildGenerationResult) {
-  if (!draft.priceComplete) return "가격 일부 확인 필요";
+  if (!draft.priceComplete) return "가격 -";
   return draft.withinBudget ? `${Math.abs(draft.budgetDeltaWon).toLocaleString("ko-KR")}원 여유` : `${draft.budgetDeltaWon.toLocaleString("ko-KR")}원 초과`;
 }
 
@@ -243,7 +243,7 @@ export function budgetLadderTextFor(outcomes: BudgetLadderOutcome[]) {
     lines.push(`- 목표 예산: ${outcome.budgetWon.toLocaleString("ko-KR")}원`);
     lines.push(`- 상태: ${statusText(outcome)}`);
     if (outcome.draft) {
-      lines.push(`- 예상 합계: ${outcome.draft.totalPriceWon.toLocaleString("ko-KR")}원 · ${budgetResultText(outcome.draft)}`);
+      lines.push(`- 합계: ${outcome.draft.totalPriceWon.toLocaleString("ko-KR")}원 · ${budgetResultText(outcome.draft)}`);
       lines.push(`- 위험: 호환 불가 ${outcome.draft.blockerCount}개 · 주의 ${outcome.draft.warningCount}개 · 확인 필요 ${outcome.draft.unknownCount}개`);
       for (const category of PART_CATEGORIES) lines.push(`- ${CATEGORY_LABELS[category]}: ${compactLineText(outcome.draft, category)}`);
     } else {
@@ -267,7 +267,7 @@ export function budgetLadderTextFor(outcomes: BudgetLadderOutcome[]) {
 }
 
 export function budgetLadderCsvFor(outcomes: BudgetLadderOutcome[]) {
-  const header = ["구간 ID", "구간", "설명", "목표 예산", "상태", "예상 합계", "예산 결과", "호환 불가", "주의", "확인 필요", ...PART_CATEGORIES.map((category) => CATEGORY_LABELS[category]), "오류"];
+  const header = ["구간 ID", "구간", "설명", "목표 예산", "상태", "합계", "예산 결과", "호환 불가", "주의", "확인 필요", ...PART_CATEGORIES.map((category) => CATEGORY_LABELS[category]), "오류"];
   const rows = outcomes.map((outcome) => {
     const draft = outcome.draft;
     return [
@@ -276,7 +276,7 @@ export function budgetLadderCsvFor(outcomes: BudgetLadderOutcome[]) {
       outcome.description,
       outcome.budgetWon,
       statusText(outcome),
-      draft?.totalPriceWon,
+      draft?.totalPriceWon ?? "-",
       draft ? budgetResultText(draft) : undefined,
       draft?.blockerCount,
       draft?.warningCount,
@@ -296,11 +296,11 @@ export function budgetLadderTextForPayload(payload: BudgetLadderExportPayload) {
     lines.push(`- 상태: ${item.status}`);
     if (item.totalPriceWon !== undefined) {
       const budgetResult = item.priceComplete === false
-        ? "가격 일부 확인 필요"
+        ? "가격 -"
         : item.withinBudget
           ? `${Math.abs(item.budgetDeltaWon ?? 0).toLocaleString("ko-KR")}원 여유`
           : `${(item.budgetDeltaWon ?? 0).toLocaleString("ko-KR")}원 초과`;
-      lines.push(`- 예상 합계: ${item.totalPriceWon.toLocaleString("ko-KR")}원 · ${budgetResult}`);
+      lines.push(`- 합계: ${item.totalPriceWon.toLocaleString("ko-KR")}원 · ${budgetResult}`);
       lines.push(`- 위험: 호환 불가 ${item.blockerCount ?? 0}개 · 주의 ${item.warningCount ?? 0}개 · 확인 필요 ${item.unknownCount ?? 0}개`);
       for (const line of item.lines ?? []) lines.push(`- ${CATEGORY_LABELS[line.category]}: ${line.text}`);
     } else {
@@ -327,10 +327,10 @@ export function budgetLadderTextForPayload(payload: BudgetLadderExportPayload) {
 }
 
 export function budgetLadderCsvForPayload(payload: BudgetLadderExportPayload) {
-  const header = ["구간 ID", "구간", "설명", "목표 예산", "상태", "예상 합계", "예산 결과", "호환 불가", "주의", "확인 필요", ...PART_CATEGORIES.map((category) => CATEGORY_LABELS[category]), "오류"];
+  const header = ["구간 ID", "구간", "설명", "목표 예산", "상태", "합계", "예산 결과", "호환 불가", "주의", "확인 필요", ...PART_CATEGORIES.map((category) => CATEGORY_LABELS[category]), "오류"];
   const rows = payload.items.map((item) => {
     const budgetResult = item.totalPriceWon === undefined ? undefined : item.priceComplete === false
-      ? "가격 일부 확인 필요"
+      ? "가격 -"
       : item.withinBudget
         ? `${Math.abs(item.budgetDeltaWon ?? 0).toLocaleString("ko-KR")}원 여유`
         : `${(item.budgetDeltaWon ?? 0).toLocaleString("ko-KR")}원 초과`;
@@ -341,7 +341,7 @@ export function budgetLadderCsvForPayload(payload: BudgetLadderExportPayload) {
       item.description,
       item.budgetWon,
       item.status,
-      item.totalPriceWon,
+      item.totalPriceWon ?? "-",
       budgetResult,
       item.blockerCount,
       item.warningCount,

@@ -77,4 +77,21 @@ describe("catalog spec overrides", () => {
     expect(completed.items[0]).toMatchObject({ valid: true, operation: "update", changedFields: ["lengthMm"] });
     expect(completed.validOverrides[0].fields).toEqual({ powerW: 300, lengthMm: 330 });
   });
+
+  it("accepts an explicitly verified case with no 3.5-inch HDD bays", () => {
+    const computerCase = part({ id: "case-zero-hdd-bays", category: "case", name: "검증된 2.5인치 전용 케이스", specs: {}, missingFields: ["hddBays"] });
+    const validation = validateCatalogSpecOverrideBatch({ items: [{ partId: computerCase.id, category: "case", fields: { hddBays: 0 }, ...provenance }] }, [computerCase]);
+
+    expect(validation.errors).toEqual([]);
+    expect(validation.validOverrides[0].fields).toEqual({ hddBays: 0 });
+
+    const applied = applyCatalogSpecOverrides([computerCase], { [computerCase.id]: validation.validOverrides[0] });
+    expect(applied[0]).toMatchObject({ dataQuality: "manual", missingFields: [], specs: { hddBays: 0 } });
+    expect(stripCatalogSpecOverride(applied[0])).toEqual(computerCase);
+
+    const fractional = validateCatalogSpecOverrideBatch({ items: [{ partId: computerCase.id, category: "case", fields: { hddBays: 0.5 }, ...provenance }] }, [computerCase]);
+    const negative = validateCatalogSpecOverrideBatch({ items: [{ partId: computerCase.id, category: "case", fields: { hddBays: -1 }, ...provenance }] }, [computerCase]);
+    expect(fractional.validOverrides).toEqual([]);
+    expect(negative.validOverrides).toEqual([]);
+  });
 });

@@ -9,6 +9,7 @@ import type { SavedBuildVersionLocalShareEntry } from "../shared/saved-build-ver
 import type { SavedBuildMonitorAlternative } from "../shared/saved-build-monitor-alerts";
 import { savedBuildMonitorSummaryForDisplay, savedBuildMonitorTitleForDisplay } from "../shared/saved-build-monitor-copy";
 import { compatibilityDisplayStatusFor } from "../shared/compatibility-display-status";
+import { HomeCatalogCachePanel } from "./HomeCatalogCachePanel";
 
 export type AlertCenterItem = {
   id: string;
@@ -169,8 +170,8 @@ export function HomeView({ meta, build, result, resultIsStale, partMap, budgetLa
     <section className="hero-section">
       <div className="hero-copy">
         {hasAnySelection
-          ? <><p className="eyebrow hero-eyebrow"><FiShield /> 현재 견적</p><h1>내 PC 견적</h1><p className="hero-description">{resultIsStale ? "부품 구성이 바뀌었습니다. 호환 결과를 다시 확인하세요." : result ? "선택한 부품의 호환 결과와 구매 전 확인 항목입니다." : "선택한 부품의 호환 여부와 예상 금액이 여기에 표시됩니다."}</p></>
-          : <><p className="eyebrow hero-eyebrow"><FiTarget /> 새 견적</p><h1>PC 견적 만들기</h1><p className="hero-description">용도와 예산을 정해 부품을 고르고, 예상 금액과 호환 결과를 확인하세요.</p></>}
+          ? <><p className="eyebrow hero-eyebrow"><FiShield /> 현재 견적</p><h1>내 PC 견적</h1><p className="hero-description">{resultIsStale ? "부품 구성이 바뀌었습니다. 호환 결과를 다시 확인하세요." : result ? "선택한 부품의 호환 결과와 구매 전 확인 항목입니다." : "선택한 부품의 호환 여부와 가격이 여기에 표시됩니다."}</p></>
+          : <><p className="eyebrow hero-eyebrow"><FiTarget /> 새 견적</p><h1>PC 견적 만들기</h1><p className="hero-description">용도와 예산을 정해 부품을 고르고, 가격과 호환 결과를 확인하세요.</p></>}
         <div className="hero-actions">
           <button className="button button-primary button-large" onClick={hasAnySelection ? onResume : onGuidedStart}>{hasAnySelection ? "견적 수정하기" : "새 견적 시작하기"} <FiArrowRight /></button>
           <button className="button button-secondary button-large hero-secondary-action" onClick={hasAnySelection ? onGenerate : onStart}>{hasAnySelection ? "다른 구성 보기" : "부품을 직접 선택하기"} {hasAnySelection ? <FiZap /> : <FiEdit3 />}</button>
@@ -180,6 +181,7 @@ export function HomeView({ meta, build, result, resultIsStale, partMap, budgetLa
       {hasAnySelection ? <HomeCurrentBuildPreview build={build} result={result} resultIsStale={resultIsStale} partMap={partMap} onOpenResult={onOpenResult} /> : <GuidedHomePreview />}
     </section>
     <HomeAlertCenter items={alertItems} unreadCount={alertUnreadCount} hasBuildAlerts={hasBuildAlerts} hasWatchlistAlerts={hasWatchlistAlerts} onOpenHistory={onOpenHistory} onOpenWatchlist={onOpenWatchlist} />
+    <HomeCatalogCachePanel />
     <details className="home-secondary-details" aria-label="홈 추가 정보">
       <summary><span><FiInfo /> 저장한 견적·비교</span><small>{localShareCount > 0 ? `${localShareCount}개 저장해뒀어요` : "필요할 때 열어보세요"}</small><FiChevronDown /></summary>
       <div className="home-secondary-details-body">

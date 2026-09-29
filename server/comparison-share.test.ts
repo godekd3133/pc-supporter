@@ -40,6 +40,8 @@ describe("alternative comparison share", () => {
     expect(result.candidates[0].priceWon).toBe(1200000);
     expect(result.candidates[0].priceEvidence).toBe("live");
     expect(result.candidates[0].purchaseCondition).toBe("가격 확인 · 신품·정식 유통");
+    expect(result.candidates[0]).not.toHaveProperty("similarity");
+    expect(result.candidates[0]).not.toHaveProperty("performance");
     expect(result.candidates[0].recommendationTrust).toBe("높음 90점");
     expect(result.candidates[0].decisionSummary).toBe("추천 부품 · 현재 문제 해결 · 새 차단 없음");
     expect(result.candidates[0].gpuTarget).toBeUndefined();
@@ -48,6 +50,21 @@ describe("alternative comparison share", () => {
     expect(result.candidates[0].physicalEvidenceSources).toEqual([{ category: "gpu", manufacturerModel: "GPU-TEST-1", manufacturerRevision: "rev-A", updatedAt: "2026-09-01", note: "GPU 제조사 문서", url: "https://vendor.example/gpu" }, { category: "case", manufacturerModel: "CASE-TEST-1", note: "케이스 설명서" }]);
     expect(result.candidates[1].sourceUrl).toBeUndefined();
     expect(result.expiresInDays).toBe(30);
+  });
+
+  it("accepts public candidates without legacy ranking fields and drops them from saved comparisons", () => {
+    const { similarity: _similarity, performance: _performance, ...publicCandidate } = candidate();
+    const result = parseAlternativeComparisonInput({ candidates: [publicCandidate, publicCandidate] });
+
+    expect(result.errors).toEqual([]);
+    expect(result.candidates).toHaveLength(2);
+    expect(result.candidates[0]).not.toHaveProperty("similarity");
+    expect(result.candidates[0]).not.toHaveProperty("performance");
+
+    const legacy = parseAlternativeComparisonInput({ candidates: [candidate(), candidate()] });
+    expect(legacy.errors).toEqual([]);
+    expect(legacy.candidates[0]).not.toHaveProperty("similarity");
+    expect(legacy.candidates[0]).not.toHaveProperty("performance");
   });
 
   it("requires between two and three candidates", () => {
@@ -74,7 +91,7 @@ describe("alternative comparison share", () => {
     expect(invalidPrice.errors[0]).toContain("현재 가격 값");
 
     const invalidPriceEvidence = parseAlternativeComparisonInput({ candidates: [candidate({ priceEvidence: "checkout" }), candidate()] });
-    expect(invalidPriceEvidence.errors[0]).toContain("가격 출처 값");
+    expect(invalidPriceEvidence.errors[0]).toContain("가격 확인 상태 값");
   });
 
   it("preserves optional GPU target evidence in a public comparison", () => {

@@ -1,5 +1,6 @@
 import type { AlternativeComparisonBenchmarkEvidence, AlternativeComparisonBenchmarkEvidenceRow, AlternativeComparisonCandidate, AlternativeComparisonSimilarityDimension, AlternativeComparisonSimilarityEvidence, AlternativeComparisonSimilarityReference } from "../shared/alternative-comparison-export";
 import { catalogPriceEvidenceFromUnknown } from "../shared/catalog-price-evidence";
+import { alternativeComparisonPriceTextFor } from "../shared/alternative-comparison-export";
 import { isKnownPrice, PART_CATEGORIES, type BenchmarkScoreKey, type BenchmarkSourceKind, type DataFreshness, type PartCategory, type PhysicalEvidenceSource, type SimilarityBasis, type SimilarityConfidence, type SimilarityDimensionSource, type ValueLabel } from "../shared/types";
 import { VALUE_SCORE_MAX } from "../shared/value-score";
 import type { AlternativeComparisonScenario, AlternativeComparisonScenarioCheck, AlternativeComparisonScenarioPriceHistory, AlternativeComparisonScenarioTradeoff } from "../shared/alternative-comparison-scenario";
@@ -305,14 +306,12 @@ function candidateFromUnknown(value: unknown, index: number) {
   const priceWon = rawPriceWon === undefined ? undefined : Number(rawPriceWon);
   const priceEvidence = candidate.priceEvidence === undefined ? undefined : catalogPriceEvidenceFromUnknown(candidate.priceEvidence);
   const purchaseCondition = textValue(candidate.purchaseCondition, 240);
-  const similarity = textValue(candidate.similarity, 240);
   const rawValueScore = candidate.valueScore;
   const valueScore = rawValueScore === undefined ? undefined : Number(rawValueScore);
   const valueLabel = valueLabelFromUnknown(candidate.valueLabel);
   const rawValueScoreScale = candidate.valueScoreScale;
   const valueScoreScale = rawValueScoreScale === undefined ? undefined : Number(rawValueScoreScale);
   const recommendationTrust = textValue(candidate.recommendationTrust, 120);
-  const performance = textValue(candidate.performance, 1_000);
   const compatibility = textValue(candidate.compatibility, 240);
   const decisionSummary = textValue(candidate.decisionSummary, 500);
   const physicalEvidence = textValue(candidate.physicalEvidence, 500);
@@ -327,10 +326,10 @@ function candidateFromUnknown(value: unknown, index: number) {
   const partId = candidate.partId === undefined ? undefined : textValue(candidate.partId, 160);
   if ((candidate.category !== undefined && category === undefined) || (candidate.partId !== undefined && !partId) || (category === undefined) !== (partId === undefined)) return { error: `${index + 1}번째 부품의 카탈로그 식별자가 올바르지 않습니다.` };
   const dataQuality = textValue(candidate.dataQuality, 80);
-  if (!name || !summary || !price || !similarity || !performance || !compatibility || !dataQuality) return { error: `${index + 1}번째 부품의 비교 정보가 부족합니다.` };
+  if (!name || !summary || !price || !compatibility || !dataQuality) return { error: `${index + 1}번째 부품의 비교 정보가 부족합니다.` };
   if (benchmarkEvidenceResult.evidence && (!category || !partId || benchmarkEvidenceResult.evidence.category !== category || benchmarkEvidenceResult.evidence.partId !== partId)) return { error: `${index + 1}번째 부품의 원본 성능 정보와 카탈로그 식별자가 일치하지 않습니다.` };
   if (priceWon !== undefined && (!Number.isInteger(priceWon) || !isKnownPrice(priceWon))) return { error: `${index + 1}번째 부품의 현재 가격 값이 올바르지 않습니다.` };
-  if (candidate.priceEvidence !== undefined && !priceEvidence) return { error: `${index + 1}번째 부품의 가격 출처 값이 올바르지 않습니다.` };
+  if (candidate.priceEvidence !== undefined && !priceEvidence) return { error: `${index + 1}번째 부품의 가격 확인 상태 값이 올바르지 않습니다.` };
   if (valueScore !== undefined && (!Number.isInteger(valueScore) || valueScore < 0 || valueScore > VALUE_SCORE_MAX || !valueLabel)) return { error: `${index + 1}번째 부품의 가격 대비 유사도 점수가 올바르지 않습니다.` };
   if (valueLabel && valueScore === undefined) return { error: `${index + 1}번째 부품의 가격 대비 유사도 점수가 필요합니다.` };
   if (valueScoreScale !== undefined && valueScoreScale !== VALUE_SCORE_MAX) return { error: `${index + 1}번째 부품의 가격 대비 유사도 점수 스케일이 올바르지 않습니다.` };
@@ -344,16 +343,14 @@ function candidateFromUnknown(value: unknown, index: number) {
     candidate: {
       name,
       summary,
-      price,
+      price: alternativeComparisonPriceTextFor({ price, priceEvidence }),
       ...(priceWon !== undefined ? { priceWon } : {}),
       ...(priceEvidence ? { priceEvidence } : {}),
       ...(purchaseCondition ? { purchaseCondition } : {}),
       ...(recommendedQuantity !== undefined ? { recommendedQuantity } : {}),
-      similarity,
       ...(gpuTarget ? { gpuTarget } : {}),
       ...(valueScore !== undefined && valueLabel ? { valueScore, valueLabel, valueScoreScale: VALUE_SCORE_MAX as 200 } : {}),
       ...(recommendationTrust ? { recommendationTrust } : {}),
-      performance,
       compatibility,
       ...(similarityEvidenceResult.evidence ? { similarityEvidence: similarityEvidenceResult.evidence } : {}),
       ...(benchmarkEvidenceResult.evidence ? { benchmarkEvidence: benchmarkEvidenceResult.evidence } : {}),

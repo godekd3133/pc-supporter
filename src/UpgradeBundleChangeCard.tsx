@@ -9,14 +9,14 @@ type UpgradeRecommendationDetailProps = { recommendation: UpgradeRecommendation 
 
 const BENCHMARK_SIMILARITY_KEYS = new Set(["cinebenchR23Single", "cinebenchR23Multi", "gpu3dmarkTimeSpyScore", "gpu3dmarkPortRoyalScore"]);
 
-export function upgradeBundleSpecComparisonTextFor(change: Pick<UpgradeRecommendation, "similarityEvidence">) {
-  const dimensions = (change.similarityEvidence.dimensions ?? []).filter((dimension) => !BENCHMARK_SIMILARITY_KEYS.has(dimension.key));
+export function upgradeBundleSpecComparisonTextFor(change: { similarityEvidence?: UpgradeRecommendation["similarityEvidence"] }) {
+  const dimensions = (change.similarityEvidence?.dimensions ?? []).filter((dimension) => !BENCHMARK_SIMILARITY_KEYS.has(dimension.key));
   if (dimensions.length === 0) return undefined;
   return dimensions.slice(0, 3).map((dimension) => `${dimension.label} ${dimension.currentValue} → ${dimension.candidateValue}`).join(" · ");
 }
 
 function formatPriceDelta(value: number | undefined) {
-  if (value === undefined) return "가격 정보 없음";
+  if (value === undefined) return "-";
   if (value === 0) return "현재와 같은 가격";
   return `${value > 0 ? "+" : ""}${value.toLocaleString("ko-KR")}원`;
 }

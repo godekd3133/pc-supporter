@@ -5,13 +5,14 @@ describe("catalogPriceEvidenceFor", () => {
   it("classifies a live Danawa price as a collected catalog price", () => {
     const item = { dataQuality: "live" as const, source: "danawa" as const, priceWon: 129000 };
     expect(catalogPriceEvidenceFor(item)).toBe("live");
-    expect(catalogPriceEvidenceLabelFor(item)).toBe("다나와 가격");
+    expect(catalogPriceEvidenceLabelFor(item)).toBe("가격");
   });
 
   it("classifies manual prices independently from live collection", () => {
     const item = { dataQuality: "manual" as const, source: "manual" as const, priceWon: 7900 };
     expect(catalogPriceEvidenceFor(item)).toBe("manual");
-    expect(catalogPriceEvidenceDescriptionFor(item)).toContain("직접 확인");
+    expect(catalogPriceEvidenceDescriptionFor(item)).toContain("직접 입력한 금액");
+    expect(catalogPriceEvidenceDescriptionFor(item)).toContain("구매 전에 다시 확인");
   });
 
   it("treats starter prices as project reference values", () => {
@@ -22,7 +23,8 @@ describe("catalogPriceEvidenceFor", () => {
   it("keeps incomplete non-seed numeric prices in a recheck state", () => {
     const item = { dataQuality: "incomplete" as const, source: "danawa" as const, priceWon: 9900 };
     expect(catalogPriceEvidenceFor(item)).toBe("recorded");
-    expect(catalogPriceEvidenceDescriptionFor(item)).toContain("정보가 완전하지 않습니다");
+    expect(catalogPriceEvidenceDescriptionFor(item)).toContain("이전에 저장한 금액");
+    expect(catalogPriceEvidenceDescriptionFor(item)).toContain("상품 페이지의 금액과 사양을 다시 확인");
   });
 
   it("does not treat missing, zero, or non-finite prices as known", () => {

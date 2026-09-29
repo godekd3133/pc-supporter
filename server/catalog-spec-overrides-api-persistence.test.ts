@@ -57,7 +57,8 @@ describe("catalog spec override API persistence", () => {
       const appliedResponse = await fetch(`${baseUrl}/api/parts/${basePart.id}`);
       const applied = await appliedResponse.json() as Record<string, any>;
       expect(appliedResponse.status).toBe(200);
-      expect(applied).toMatchObject({ dataQuality: "manual", missingFields: [], specs: { vramGb: 16, powerW: 320, catalogSpecProvenance: { fields: ["powerW"], manufacturerModel: "API-GPU-16" } } });
+      expect(applied).toMatchObject({ dataQuality: "manual", missingFields: [], specs: { vramGb: 16, powerW: 320 } });
+      expect(applied.specs).not.toHaveProperty("catalogSpecProvenance");
 
       const sourceCheckCheckedAt = new Date().toISOString();
       checkPhysicalSourceUrlMock.mockResolvedValue({ requestedUrl: "https://vendor.example/api-gpu", checkedAt: sourceCheckCheckedAt, status: "reachable", identityStatus: "matched", redirectCount: 0, finalUrl: "https://vendor.example/api-gpu", httpStatus: 200, contentType: "text/html", detail: "등록한 제조사 모델/SKU를 확인했습니다." });

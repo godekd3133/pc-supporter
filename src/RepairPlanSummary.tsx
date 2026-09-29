@@ -5,7 +5,7 @@ function formatWon(value: number) {
 }
 
 function formatPriceDelta(value: number | undefined) {
-  if (value === undefined) return "가격 정보 없음";
+  if (value === undefined) return "-";
   return `${value > 0 ? "+" : ""}${formatWon(value)}`;
 }
 
@@ -18,7 +18,7 @@ function remainingIssueText(plan: RecommendationPlan) {
 
 function budgetText(plan: RecommendationPlan) {
   if (plan.budgetWon === undefined) return "미설정";
-  if (!plan.priceComplete) return "가격 정보 없음";
+  if (!plan.priceComplete) return "-";
   return plan.withinBudget ? "예산 내" : `${formatPriceDelta(plan.budgetDeltaWon)} 초과`;
 }
 
@@ -33,7 +33,7 @@ export function RepairPlanSummaryTable({ plans, onFocusPlan }: { plans: Recommen
       <tr><th scope="row">정보 부족</th>{plans.map((plan) => <td className={plan.remainingUnknown > 0 ? "risk" : "clear"} key={`${plan.label}-unknown`}>{plan.remainingUnknown}개</td>)}</tr>
       <tr><th scope="row">적용 후 남는 문제</th>{plans.map((plan) => <td className="repair-plan-summary-issues" key={`${plan.label}-issues`}>{remainingIssueText(plan)}</td>)}</tr>
       <tr><th scope="row">가격 변화</th>{plans.map((plan) => <td key={`${plan.label}-price`}>{formatPriceDelta(plan.priceDeltaWon)}</td>)}</tr>
-      <tr><th scope="row">적용 후 합계</th>{plans.map((plan) => <td key={`${plan.label}-total`}>{plan.priceComplete ? formatWon(plan.afterTotalPriceWon) : "가격 정보 없음"}</td>)}</tr>
+      <tr><th scope="row">적용 후 합계</th>{plans.map((plan) => <td key={`${plan.label}-total`}>{plan.priceComplete ? formatWon(plan.afterTotalPriceWon) : "-"}</td>)}</tr>
       <tr><th scope="row">목표 예산</th>{plans.map((plan) => <td key={`${plan.label}-budget`}>{budgetText(plan)}</td>)}</tr>
     </tbody></table></div>
   </div>;

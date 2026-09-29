@@ -7,12 +7,16 @@ const OVERSEAS_PATTERN = /(해외구매|해외직구|직구)/i;
 const PARALLEL_IMPORT_PATTERN = /병행수입/i;
 const BULK_PATTERN = /(벌크|OEM)/i;
 const CORE_ACCESSORY_NAME_PATTERN = /(?:라이저\s*케이블|(?:수직\s*)?(?:GPU\s*)?(?:브라켓|지지대)|파워업\s*키트|Universal\s*Screen|(?:PCIe|PCI-E)\s*(?:라이저|브라켓))/i;
+const CASE_DRIVE_CAGE_ACCESSORY_PATTERN = /\bHDD\s*CAGE\b|\b(?:HARD\s*DRIVE|HARD\s*DISK)\s*CAGE\b|(?:HDD|하드디스크)\s*(?:케이지|랙)/i;
+const CASE_GPU_BRACKET_ACCESSORY_PATTERN = /\b(?:VERTICAL\s+)?GPU\s+BRACKET\b/i;
 const ACCESSORY_PREFIX_PATTERN = /^\s*(?:전용\s*)?액세서리\s*(?:\/|$)/i;
 
 export function inferListingType(input: Pick<Part, "category" | "name" | "rawSpecText" | "listingType">): ListingType {
   const rawSpecText = input.rawSpecText ?? "";
   const text = `${input.name} ${rawSpecText}`;
   if ((input.category === "ssd" || input.category === "hdd") && STORAGE_ACCESSORY_PATTERN.test(text)) return "accessory";
+  if (input.category === "case" && CASE_DRIVE_CAGE_ACCESSORY_PATTERN.test(input.name)) return "accessory";
+  if (input.category === "case" && CASE_GPU_BRACKET_ACCESSORY_PATTERN.test(input.name)) return "accessory";
   if (CORE_ACCESSORY_NAME_PATTERN.test(input.name) || ACCESSORY_PREFIX_PATTERN.test(rawSpecText)) return "accessory";
   if (USED_PATTERN.test(text)) return "used";
   if (PARALLEL_IMPORT_PATTERN.test(text)) return "parallel_import";

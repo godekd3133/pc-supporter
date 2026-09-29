@@ -185,9 +185,9 @@ export function recommendationTrustFor(input: RecommendationTrustInput): Recomme
   if (priceEvidence === "live" || priceEvidence === "manual") {
     score += 4;
   } else if (priceEvidence === "reference") {
-    reasons.push("참고 가격만 있어 현재 판매 가격은 판매처에서 확인하세요.");
+    reasons.push("입력된 금액만 있어 현재 판매 금액과 다를 수 있어요. 구매 전에 상품 페이지에서 확인하세요.");
   } else if (priceEvidence === "recorded") {
-    reasons.push("기록된 가격입니다. 현재 판매 가격은 판매처에서 확인하세요.");
+    reasons.push("이전에 저장한 금액입니다. 구매 전에 상품 페이지에서 현재 금액을 확인하세요.");
   } else {
     reasons.push("현재 가격을 알 수 없어 총액을 비교하지 않았습니다.");
   }

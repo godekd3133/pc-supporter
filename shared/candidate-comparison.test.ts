@@ -61,7 +61,7 @@ describe("candidate comparison decision", () => {
     ], "price");
 
     expect(result.top?.id).toBe("cheap-review");
-    expect(result.ranking.find((item) => item.id === "reference")?.reason).toContain("실판매가가 아니어서 가격 점수를 산정하지 않음");
+    expect(result.ranking.find((item) => item.id === "reference")?.reason).toContain("등록된 금액은 확인이 필요해 가격 비교에 반영하지 않았습니다");
   });
 
   it("uses similarity for performance but never recommends an unsafe top candidate", () => {

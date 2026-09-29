@@ -106,6 +106,7 @@ export function savedBuildCheckSnapshotFor(result: CompatibilityResult): SavedBu
   const accessoryCompatibility = accessoryCompatibilitySnapshotFor(result);
   const actionCenter = buildActionCenterFor(result);
   const resourceBudget = resourceBudgetForResult(result);
+  const analysis = result.analysis;
   return {
     status: result.status,
     blockerCount: result.blockerCount,
@@ -119,9 +120,8 @@ export function savedBuildCheckSnapshotFor(result: CompatibilityResult): SavedBu
     accessoryPriceComplete,
     ...(accessoryCompatibility ? { accessoryCompatibility } : {}),
     findings: result.findings.slice(0, SAVED_BUILD_CHECK_FINDING_LIMIT).map(findingSummaryFor),
-    ...(result.analysis.overallScore !== undefined ? { analysisScore: result.analysis.overallScore } : {}),
-    analysisScoreLabel: result.analysis.scoreLabel,
-    analysisConfidence: result.analysis.confidence,
+    ...(analysis?.overallScore !== undefined ? { analysisScore: analysis.overallScore } : {}),
+    ...(analysis ? { analysisScoreLabel: analysis.scoreLabel, analysisConfidence: analysis.confidence } : {}),
     actionCenterState: actionCenter.state,
     actionCenterSummary: actionCenter.summary,
     actionCenterTotalCount: actionCenter.totalCount,
@@ -247,8 +247,8 @@ export function savedBuildCheckSnapshotFromUnknown(value: unknown): SavedBuildCh
   if (!nonNegativeInteger(value.blockerCount) || !nonNegativeInteger(value.warningCount) || !nonNegativeInteger(value.unknownCount)) return undefined;
   if (!finiteNumber(value.totalPriceWon) || value.totalPriceWon < 0 || !finiteNumber(value.coreTotalPriceWon) || value.coreTotalPriceWon < 0 || !finiteNumber(value.accessoryTotalPriceWon) || value.accessoryTotalPriceWon < 0) return undefined;
   if (typeof value.priceComplete !== "boolean" || typeof value.corePriceComplete !== "boolean" || typeof value.accessoryPriceComplete !== "boolean") return undefined;
-  if (!ANALYSIS_SCORE_LABELS.includes(value.analysisScoreLabel as typeof ANALYSIS_SCORE_LABELS[number])) return undefined;
-  if (!ANALYSIS_CONFIDENCE.includes(value.analysisConfidence as typeof ANALYSIS_CONFIDENCE[number])) return undefined;
+  if (value.analysisScoreLabel !== undefined && !ANALYSIS_SCORE_LABELS.includes(value.analysisScoreLabel as typeof ANALYSIS_SCORE_LABELS[number])) return undefined;
+  if (value.analysisConfidence !== undefined && !ANALYSIS_CONFIDENCE.includes(value.analysisConfidence as typeof ANALYSIS_CONFIDENCE[number])) return undefined;
   const actionCenterStates = ["blocked", "review", "ready"] as const;
   if (value.actionCenterState !== undefined && !actionCenterStates.includes(value.actionCenterState as typeof actionCenterStates[number])) return undefined;
   if (value.actionCenterSummary !== undefined && !textWithinLimit(value.actionCenterSummary, 500)) return undefined;
@@ -285,8 +285,8 @@ export function savedBuildCheckSnapshotFromUnknown(value: unknown): SavedBuildCh
     ...(findings !== undefined ? { findings } : {}),
     ...(accessoryCompatibility ? { accessoryCompatibility } : {}),
     ...(value.analysisScore !== undefined ? { analysisScore: value.analysisScore } : {}),
-    analysisScoreLabel: value.analysisScoreLabel as SavedBuildCheckSnapshot["analysisScoreLabel"],
-    analysisConfidence: value.analysisConfidence as SavedBuildCheckSnapshot["analysisConfidence"],
+    ...(value.analysisScoreLabel !== undefined ? { analysisScoreLabel: value.analysisScoreLabel as SavedBuildCheckSnapshot["analysisScoreLabel"] } : {}),
+    ...(value.analysisConfidence !== undefined ? { analysisConfidence: value.analysisConfidence as SavedBuildCheckSnapshot["analysisConfidence"] } : {}),
     ...(value.actionCenterState !== undefined ? { actionCenterState: value.actionCenterState as SavedBuildCheckSnapshot["actionCenterState"] } : {}),
     ...(value.actionCenterSummary !== undefined ? { actionCenterSummary: value.actionCenterSummary } : {}),
     ...(value.actionCenterTotalCount !== undefined ? { actionCenterTotalCount: value.actionCenterTotalCount } : {}),
@@ -379,9 +379,13 @@ export function savedBuildCheckDiffFor(snapshot: SavedBuildCheckSnapshot, result
     || accessoryRiskChanged;
   const priceCompletenessChanged = snapshot.priceComplete !== result.priceComplete;
   const priceChanged = snapshot.priceComplete && result.priceComplete && snapshot.totalPriceWon !== result.totalPriceWon;
-  const analysisChanged = snapshot.analysisScore !== result.analysis.overallScore
-    || snapshot.analysisScoreLabel !== result.analysis.scoreLabel
-    || snapshot.analysisConfidence !== result.analysis.confidence;
+  const currentAnalysis = result.analysis;
+  const snapshotHasAnalysis = snapshot.analysisScore !== undefined || snapshot.analysisScoreLabel !== undefined || snapshot.analysisConfidence !== undefined;
+  const analysisChanged = Boolean(currentAnalysis && snapshotHasAnalysis && (
+    snapshot.analysisScore !== currentAnalysis.overallScore
+    || snapshot.analysisScoreLabel !== currentAnalysis.scoreLabel
+    || snapshot.analysisConfidence !== currentAnalysis.confidence
+  ));
   const resourceBudgetChanged = resourceBudgetFingerprint(snapshot.resourceBudget) !== resourceBudgetFingerprint(resourceBudgetForResult(result));
   const benchmarkImpact = buildBenchmarkImpactFor(snapshot.benchmarkSnapshot, result.benchmarkSnapshot);
   const benchmarkChanged = benchmarkImpact.status === "changed";
@@ -414,9 +418,13 @@ export function savedBuildCheckSnapshotDiffFor(before: SavedBuildCheckSnapshot, 
     || accessoryRiskChanged;
   const priceCompletenessChanged = before.priceComplete !== after.priceComplete;
   const priceChanged = before.priceComplete && after.priceComplete && before.totalPriceWon !== after.totalPriceWon;
-  const analysisChanged = before.analysisScore !== after.analysisScore
+  const beforeHasAnalysis = before.analysisScore !== undefined || before.analysisScoreLabel !== undefined || before.analysisConfidence !== undefined;
+  const afterHasAnalysis = after.analysisScore !== undefined || after.analysisScoreLabel !== undefined || after.analysisConfidence !== undefined;
+  const analysisChanged = beforeHasAnalysis && afterHasAnalysis && (
+    before.analysisScore !== after.analysisScore
     || before.analysisScoreLabel !== after.analysisScoreLabel
-    || before.analysisConfidence !== after.analysisConfidence;
+    || before.analysisConfidence !== after.analysisConfidence
+  );
   const resourceBudgetChanged = resourceBudgetFingerprint(before.resourceBudget) !== resourceBudgetFingerprint(after.resourceBudget);
   const benchmarkImpact = buildBenchmarkImpactFor(before.benchmarkSnapshot, after.benchmarkSnapshot);
   const benchmarkChanged = benchmarkImpact.status === "changed";

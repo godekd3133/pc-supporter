@@ -4,8 +4,8 @@ import { priceWatchDecisionCountsFor, priceWatchDecisionFor } from "./price-watc
 describe("price watch decision", () => {
   it("prioritizes errors and unavailable prices over optimistic actions", () => {
     expect(priceWatchDecisionFor({ currentStatus: "error" })).toMatchObject({ state: "error", label: "일시 확인 오류" });
-    expect(priceWatchDecisionFor({ currentStatus: "unavailable" })).toMatchObject({ state: "unavailable", label: "가격 확인 필요" });
-    expect(priceWatchDecisionFor({ currentStatus: "available" })).toMatchObject({ state: "unavailable", label: "가격 확인 필요" });
+    expect(priceWatchDecisionFor({ currentStatus: "unavailable" })).toMatchObject({ state: "unavailable", label: "-" });
+    expect(priceWatchDecisionFor({ currentStatus: "available" })).toMatchObject({ state: "unavailable", label: "-" });
   });
 
   it("prioritizes a reached target price", () => {

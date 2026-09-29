@@ -58,17 +58,62 @@ async function main() {
     await waitForValue(client, "location.pathname === '/recommend' && document.querySelector('.generator-form') !== null", "자동 견적 입력 화면");
     const clicked = await client.evaluate("(() => { const node = [...document.querySelectorAll('.generator-form button')].find((candidate) => !candidate.disabled && (candidate.textContent ?? '').includes('예산 구간 3안 비교')); if (!node) return false; node.click(); return true; })()");
     if (!clicked) throw new Error("예산 구간 3안 비교 버튼을 찾지 못했습니다.");
-    await waitForValue(client, "document.querySelector('[data-testid=\"generator-budget-comparison-summary\"]') !== null && document.querySelector('[data-testid=\"generator-budget-tradeoff\"]') !== null", "예산 구간 비교 핵심 요약");
+    await waitForValue(client, "document.querySelector('.generator-budget-ladder') !== null && /\\d+ \\/ 3개 생성 완료/.test(document.querySelector('.generator-budget-ladder')?.textContent ?? '')", "예산 구간 비교 결과");
     if (dark) await client.evaluate("document.documentElement.dataset.theme = 'dark'; document.documentElement.style.colorScheme = 'dark';");
     await sleep(350);
     const probe = await client.evaluate(`(() => {
-      const summary = document.querySelector('[data-testid="generator-budget-comparison-summary"]');
-      const tradeoff = document.querySelector('[data-testid="generator-budget-tradeoff"]');
+      const panel = document.querySelector('.generator-budget-ladder');
+      const summary = panel?.querySelector('[data-testid="generator-budget-comparison-summary"]');
+      const table = panel?.querySelector('.generator-budget-table-wrap');
+      const budgetErrors = panel?.querySelector('.generator-budget-errors');
+      const empty = panel?.querySelector('.generator-budget-empty');
       const deltas = document.querySelector('.generator-budget-deltas');
+      const cards = [...(panel?.querySelectorAll('.generator-budget-card') ?? [])].map((card) => {
+        const labeledValue = (label) => {
+          const row = [...card.querySelectorAll('.generator-budget-card-total > div')].find((candidate) => (candidate.querySelector('span')?.textContent ?? '').includes(label));
+          const text = row?.querySelector('strong')?.textContent ?? '';
+          return Number(text.replace(/[^0-9]/g, '')) || 0;
+        };
+        const gpuRow = [...card.querySelectorAll('.generator-budget-card-lines > div')].find((row) => /그래픽카드|GPU/.test(row.querySelector('span')?.textContent ?? ''));
+        return {
+          failed: card.classList.contains('error'),
+          targetBudgetWon: labeledValue('목표 예산'),
+          totalPriceWon: labeledValue('합계'),
+          gpu: gpuRow?.querySelector('strong')?.textContent?.trim() ?? ''
+        };
+      });
       const summaryText = summary?.textContent?.replace(/\\s+/g, " ").trim() ?? "";
-      return { path: location.pathname, summary: Boolean(summary), tradeoff: Boolean(tradeoff), deltas: Boolean(deltas), summaryText, tradeoffText: tradeoff?.textContent?.replace(/\\s+/g, " ").trim() ?? "", width: document.body?.getBoundingClientRect().width ?? 0, documentWidth: document.documentElement?.scrollWidth ?? 0 };
+      const errorText = budgetErrors?.textContent?.replace(/\\s+/g, " ").trim() ?? "";
+      return {
+        path: location.pathname,
+        summary: Boolean(summary),
+        table: Boolean(table),
+        deltas: Boolean(deltas),
+        cards,
+        summaryText,
+        errorText,
+        empty: Boolean(empty),
+        progressText: panel?.querySelector('.generator-budget-ladder-heading-actions > span')?.textContent?.replace(/\\s+/g, " ").trim() ?? "",
+        width: document.body?.getBoundingClientRect().width ?? 0,
+        documentWidth: document.documentElement?.scrollWidth ?? 0
+      };
     })()`);
-    if (probe.path !== "/recommend" || !probe.summary || !probe.tradeoff || !probe.deltas || !probe.summaryText.includes("비교 결과") || !probe.summaryText.includes("실제 합계") || !probe.summaryText.includes("카탈로그 분석") || !probe.summaryText.includes("부품 변경") || !probe.tradeoffText.includes("비교 결과")) {
+    const successfulCards = probe.cards.filter((card) => !card.failed);
+    const failedCards = probe.cards.filter((card) => card.failed);
+    const successfulTotals = successfulCards.map((card) => card.totalPriceWon);
+    const distinctTotals = new Set(successfulTotals).size;
+    const distinctGpus = new Set(successfulCards.map((card) => card.gpu).filter(Boolean)).size;
+    const successfulBudgetsFit = successfulCards.every((card) => card.targetBudgetWon > 0 && card.totalPriceWon > 0 && card.totalPriceWon <= card.targetBudgetWon);
+    const successfulSummary = successfulCards.length > 0
+      && probe.summary
+      && probe.table
+      && successfulBudgetsFit
+      && (distinctTotals > 1 || distinctGpus > 1 || probe.summaryText.includes("같은 구성"));
+    const explicitNoBudgetResults = successfulCards.length === 0
+      && failedCards.length === 0
+      && probe.empty
+      && /예산|구성|데이터/.test(probe.errorText);
+    if (probe.path !== "/recommend" || !/3개 생성 완료/.test(probe.progressText) || !(successfulSummary || explicitNoBudgetResults)) {
       throw new Error(`예산 구간 비교 핵심 요약 화면 검증 실패: ${JSON.stringify(probe)}`);
     }
     if (screenshotPath) {

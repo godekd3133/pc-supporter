@@ -56,6 +56,23 @@ function cpuUpgradeFixture(candidatePptW = 170) {
   return { build, catalog: [...seedCatalog, currentCpu, candidateCpu], currentCpu, candidateCpu };
 }
 
+function sourcedGamingGpuFixture(id: string, name: string, vramGb: number, priceWon: number, baseGpuId = "gpu-rtx-4060"): Part {
+  const baseGpu = seedCatalog.find((part) => part.id === baseGpuId)!;
+  return {
+    ...baseGpu,
+    id,
+    name,
+    priceWon,
+    source: "danawa",
+    sourceProductCode: id,
+    danawaUrl: `https://prod.danawa.com/info/?pcode=${id}`,
+    dataQuality: "live",
+    missingFields: [],
+    updatedAt: "2026-09-01T00:00:00.000Z",
+    specs: { ...baseGpu.specs, vramGb }
+  };
+}
+
 function gpuResolutionFixture() {
   const baseGpu = seedCatalog.find((part) => part.id === "gpu-rtx-4060")!;
   const currentGpu: Part = {
@@ -522,7 +539,7 @@ describe("compatibility engine", () => {
     expect(recommendations[0]?.part.id).toBe(cheaperCandidate.id);
   });
 
-  it("does not claim upgrade budget fit when the candidate price is unknown", () => {
+  it("excludes upgrade candidates that have no price", () => {
     const fixture = cpuUpgradeFixture();
     const catalog = fixture.catalog.map((part) => part.id === fixture.candidateCpu.id ? { ...part, priceWon: undefined } : part);
     const result = evaluateBuild(fixture.build, catalog, {
@@ -530,9 +547,7 @@ describe("compatibility engine", () => {
     });
     const recommendation = result.upgradeRecommendations?.find((item) => item.part.id === fixture.candidateCpu.id);
 
-    expect(recommendation?.budgetEvidence).toMatchObject({ budgetWon: 2_000_000, priceComplete: false });
-    expect(recommendation?.budgetEvidence?.withinBudget).toBeUndefined();
-    expect(recommendation?.budgetEvidence?.afterCoreTotalPriceWon).toBeUndefined();
+    expect(recommendation).toBeUndefined();
   });
 
   it("applies the selected gaming resolution to GPU target evidence and upgrade weighting", () => {
@@ -3519,7 +3534,7 @@ describe("compatibility engine", () => {
     expect(draft.unknownCount).toBe(0);
   });
 
-  it("uses the requested resolution VRAM floor when eligible gaming GPUs are available", () => {
+  it("prefers the requested resolution VRAM target without excluding affordable gaming GPUs", () => {
     const baseGpu = seedCatalog.find((part) => part.id === "gpu-rtx-4060")!;
     const sourcedGpu = (id: string, name: string, vramGb: number, priceWon: number): Part => ({
       ...baseGpu,
@@ -3551,6 +3566,62 @@ describe("compatibility engine", () => {
 
     expect(draft.selection.gpu?.partId).toBe(qhdGpu.id);
     expect(draft.gpuTarget).toMatchObject({ targetVramGb: 12, currentVramGb: 12, currentFit: "met" });
+  });
+
+  it("keeps affordable GPUs eligible when the gaming VRAM target is only advisory", () => {
+    const affordableGpu = sourcedGamingGpuFixture("gpu-generator-affordable-8gb", "테스트 예산형 GPU 8GB", 8, 439_000);
+    const flagshipGpu = sourcedGamingGpuFixture("gpu-generator-flagship-24gb", "테스트 고가 GPU 24GB", 24, 3_490_000, "gpu-rtx-5090");
+    const catalog = seedCatalog.filter((part) => part.category !== "gpu").concat(affordableGpu, flagshipGpu);
+    const request = {
+      profile: "gaming" as const,
+      priority: "performance" as const,
+      budgetWon: 3_000_000,
+      includeGpu: true,
+      gamingResolution: "4k" as const,
+      gamingRefreshRate: 144 as const,
+      gamingGameIds: ["cyberpunk"] as string[],
+      gamingGraphicsPreset: "high" as const,
+      gamingRayTracing: true,
+      gamingUpscaling: "quality" as const,
+      memoryCapacityGb: 32,
+      storageCapacityGb: 1_000
+    };
+
+    const draft = generateBuildDraft(catalog, request);
+
+    expect(draft.selection.gpu?.partId).toBe(affordableGpu.id);
+    expect(draft.totalPriceWon).toBeLessThanOrEqual(request.budgetWon);
+    expect(draft.withinBudget).toBe(true);
+    expect(draft.gpuTarget).toMatchObject({ targetVramGb: 22, currentVramGb: 8, currentFit: "partial" });
+    expect(draft.lines.find((line) => line.category === "gpu")?.selectionReason).toContain("권장 VRAM 22GB보다 낮아 확인이 필요합니다");
+  });
+
+  it("changes budget ladder GPU choices only when the actual totals fit each budget", () => {
+    const budgetGpu = sourcedGamingGpuFixture("gpu-generator-budget-8gb", "테스트 예산 GPU 8GB", 8, 439_000);
+    const middleGpu = sourcedGamingGpuFixture("gpu-generator-budget-16gb", "테스트 중급 GPU 16GB", 16, 950_000);
+    const higherGpu = sourcedGamingGpuFixture("gpu-generator-budget-24gb", "테스트 상급 GPU 24GB", 24, 1_350_000);
+    const catalog = seedCatalog.filter((part) => part.category !== "gpu").concat(budgetGpu, middleGpu, higherGpu);
+    const baseRequest = {
+      profile: "gaming" as const,
+      priority: "balanced" as const,
+      includeGpu: true,
+      gamingResolution: "1440p" as const,
+      gamingRefreshRate: 144 as const,
+      gamingGameIds: ["cyberpunk"] as string[],
+      gamingGraphicsPreset: "high" as const,
+      gamingRayTracing: true,
+      gamingUpscaling: "quality" as const,
+      memoryCapacityGb: 32,
+      storageCapacityGb: 1_000
+    };
+    const budgets = [1_760_000, 2_200_000, 2_640_000];
+
+    const drafts = budgets.map((budgetWon) => generateBuildDraft(catalog, { ...baseRequest, budgetWon }));
+
+    expect(drafts).toHaveLength(budgets.length);
+    expect(drafts.every((draft) => Number.isFinite(draft.totalPriceWon))).toBe(true);
+    expect(drafts.every((draft, index) => draft.withinBudget && draft.totalPriceWon <= budgets[index])).toBe(true);
+    expect(new Set(drafts.map((draft) => draft.selection.gpu?.partId)).size).toBeGreaterThan(1);
   });
 
   it("preserves gaming advisory options and marks them as non-FPS evidence", () => {
@@ -3876,17 +3947,25 @@ describe("compatibility engine", () => {
     expect(draft.status).toBe("compatible");
   });
 
-  it("reports an over-budget draft instead of claiming a false budget fit", () => {
-    const draft = generateBuildDraft(seedCatalog, {
+  it("does not return an over-budget build as the final recommendation when no in-budget build exists", () => {
+    let error: unknown;
+    try {
+      generateBuildDraft(seedCatalog, {
       profile: "office",
       budgetWon: 100_000,
       includeGpu: false
-    });
+      });
+    } catch (caught) {
+      error = caught;
+    }
 
-    expect(draft.status).toBe("compatible");
-    expect(draft.withinBudget).toBe(false);
-    expect(draft.budgetDeltaWon).toBeGreaterThan(0);
-    expect(draft.warnings.join(" ")).not.toContain("예산보다");
+    expect(error).toBeInstanceOf(BuildGenerationError);
+    expect((error as BuildGenerationError).diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: "budget-infeasible",
+        title: "요청 예산 안에 자동 구성이 없습니다."
+      })
+    ]));
   });
 
   it("omits missing fan, RGB, and memory-profile details from automatic draft warnings", () => {
@@ -4255,7 +4334,7 @@ describe("generator quote reliability regressions", () => {
   it("keeps a premium GPU out of an office iGPU build budget share", () => {
     const draft = generateBuildDraft(fixtureCatalog({}), {
       profile: "office",
-      budgetWon: 900_000,
+      budgetWon: 1_500_000,
       includeGpu: false,
       memoryCapacityGb: 32
     });

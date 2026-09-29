@@ -118,6 +118,7 @@ const accessoryCoverage: AccessoryCoverageSnapshot = {
   categories: [{
     category: "cooling_fan",
     categoryId: "browser-smoke-cooling-fan",
+    evidenceSource: "browser-smoke-fixture",
     totalProductCount: 7,
     storedProductCount: 7,
     liveProducts: 0,

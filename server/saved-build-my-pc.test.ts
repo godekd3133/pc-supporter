@@ -244,7 +244,7 @@ describe("saved build alternative detection", () => {
   });
 
   it("produces a stable alert id so repeated runs do not duplicate", () => {
-    const catalog = [cpuPart("cpu-current", 10000), cpuPart("cpu-better", 13000)];
+    const catalog = [cpuPart("cpu-current", 10000, 300000), cpuPart("cpu-better", 13000, 320000)];
     const first = savedBuildAlternativeAlertsFor(ownedRecord(), catalog, at);
     const second = savedBuildAlternativeAlertsFor(ownedRecord(), catalog, "2026-09-13T00:00:00.000Z");
     expect(first[0].id).toBe(second[0].id);

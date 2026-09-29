@@ -78,6 +78,24 @@ describe("saved build check snapshots", () => {
     expect(savedBuildCheckSnapshotFromUnknown({ ...snapshot, status: "unknown" })).toBeUndefined();
   });
 
+  it("keeps public projected checks usable when internal analysis fields are absent", () => {
+    const internalSnapshot = savedBuildCheckSnapshotFor(result());
+    const publicSnapshot = savedBuildCheckSnapshotFromUnknown({
+      ...internalSnapshot,
+      analysisScore: undefined,
+      analysisScoreLabel: undefined,
+      analysisConfidence: undefined
+    });
+    const publicResult = { ...result(), analysis: undefined } as unknown as CompatibilityResult;
+
+    expect(publicSnapshot).toBeDefined();
+    expect(publicSnapshot).not.toHaveProperty("analysisScore");
+    expect(publicSnapshot).not.toHaveProperty("analysisScoreLabel");
+    expect(publicSnapshot).not.toHaveProperty("analysisConfidence");
+    expect(() => savedBuildCheckSnapshotFor(publicResult)).not.toThrow();
+    expect(savedBuildCheckDiffFor(internalSnapshot, publicResult).analysisChanged).toBe(false);
+  });
+
   it("keeps the compact assembly verification summary in saved check history", () => {
     const log = withAssemblyVerificationCheck(emptyAssemblyVerificationLog("build-fingerprint"), "post", "pass");
     const verification = assemblyVerificationSavedSnapshotFor(log);

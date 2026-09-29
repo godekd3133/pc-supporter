@@ -120,7 +120,7 @@ describe("budget ladder scenarios", () => {
 
     const text = budgetLadderTextFor(outcomes);
     expect(text).toContain("[목표 예산] 입력한 목표 예산 그대로");
-    expect(text).toContain("예상 합계: 980,000원");
+    expect(text).toContain("합계: 980,000원");
     expect(text).toContain("변경: CPU · 이전 CPU → 새 CPU");
     expect(text).toContain("실패 정보: GPU 부품 부족: 조건을 만족하는 부품이 없습니다. · 부품 수 0개 · 권장 예산을 상향해 주세요.");
     expect(text).not.toContain("카탈로그 분석");
@@ -179,7 +179,7 @@ describe("budget ladder scenarios", () => {
       expect(content).not.toContain("92점");
     }
     expect(text).toContain("호환 불가 0개");
-    expect(text).toContain("예상 합계: 900,000원");
+    expect(text).toContain("합계: 900,000원");
     expect(csv).toContain("900000");
     expect(json).toContain("900000");
   });

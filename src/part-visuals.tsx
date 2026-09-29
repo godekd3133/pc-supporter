@@ -96,16 +96,16 @@ export function accessoryIsWatched(item: AccessoryItem) {
 
 export function PartEvidence({ part }: { part: Part }) {
   return <div className="part-evidence" aria-label={`${part.name} 상세 스펙`}>
-    <div className="part-evidence-price"><span>예상 가격</span><strong>{isKnownPrice(part.priceWon) ? formatWon(part.priceWon) : "가격 정보 없음"}</strong></div>
+    <div className="part-evidence-price"><span>가격</span><strong>{isKnownPrice(part.priceWon) ? formatWon(part.priceWon) : "-"}</strong></div>
     <div className="part-evidence-grid">{suggestionSpecRows(part).map(([label, value]) => <div className="part-evidence-row" key={label}><span>{label}</span><strong>{formatSpecValue(value)}</strong></div>)}</div>
     {part.missingFields.length > 0 && <p className="part-evidence-missing"><FiInfo /> 사양 정보 없음: {part.missingFields.map((field) => catalogMissingFieldLabelFor(field)).join(", ")}</p>}
   </div>;
 }
 
 export function AccessoryVisual({ item }: { item: AccessoryItem }) {
-  const [failed, setFailed] = useState(false);
+  const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null);
   const imageUrl = safeExternalUrl(item.imageUrl);
-  if (imageUrl && !failed) return <img src={imageUrl} alt="" loading="lazy" onError={() => setFailed(true)} />;
+  if (imageUrl && imageUrl !== failedImageUrl) return <img src={imageUrl} alt="" loading="lazy" decoding="async" onError={() => setFailedImageUrl(imageUrl)} />;
   return <FiTool />;
 }
 
@@ -131,8 +131,8 @@ export function PartWatchButton({ part, onWatch }: { part: Part; onWatch: PartWa
 }
 
 export function PartVisual({ part }: { part: Part }) {
-  const [failed, setFailed] = useState(false);
+  const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null);
   const imageUrl = safeExternalUrl(part.imageUrl);
-  if (imageUrl && !failed) return <img src={imageUrl} alt="" loading="lazy" onError={() => setFailed(true)} />;
+  if (imageUrl && imageUrl !== failedImageUrl) return <img src={imageUrl} alt="" loading="lazy" decoding="async" onError={() => setFailedImageUrl(imageUrl)} />;
   return <CategoryIcon category={part.category} />;
 }
