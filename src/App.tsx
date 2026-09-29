@@ -595,6 +595,10 @@ function currentView() : View {
   return "home";
 }
 
+function resultFindingRuleIntentForLocation(view: View, search: string) {
+  return view === "result" ? resultFindingRuleFromSearch(search) : null;
+}
+
 const resultSectionTargetIds: Record<ResultSection, string> = {
   findings: "result-findings",
   "purchase-list": "purchase-list-panel",
@@ -850,7 +854,7 @@ function App() {
   const [revokingShare, setRevokingShare] = useState(false);
   const [recordingCheckId, setRecordingCheckId] = useState<string | null>(null);
   const [openingSavedBuildId, setOpeningSavedBuildId] = useState<string | null>(null);
-  const [pendingResultFindingRuleId, setPendingResultFindingRuleId] = useState<string | null>(() => resultFindingRuleFromSearch(window.location.search));
+  const [pendingResultFindingRuleId, setPendingResultFindingRuleId] = useState<string | null>(() => resultFindingRuleIntentForLocation(currentView(), window.location.search));
   const [savedCheckHistory, setSavedCheckHistory] = useState<SavedBuildCheckSnapshot[] | null>(null);
   const [shareLoading, setShareLoading] = useState(() => window.location.pathname.startsWith("/share/"));
   const [shareLoadError, setShareLoadError] = useState<string | null>(null);
@@ -1520,6 +1524,8 @@ function App() {
   useEffect(() => {
     const onPopState = () => {
       const nextView = currentView();
+      const nextLocationKey = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      const nextIsSharedBuildRoute = /^\/share\/[^/]+/.test(window.location.pathname);
       abortSelectionHydration();
       routeRequestSequenceRef.current += 1;
       checkRequestSequenceRef.current += 1;
@@ -1544,7 +1550,10 @@ function App() {
       setOpeningSavedBuildId(null);
       setGenerating(false);
       setView(nextView);
-      setLocationKey(`${window.location.pathname}${window.location.search}${window.location.hash}`);
+      setLocationKey(nextLocationKey);
+      setPendingResultFindingRuleId(resultFindingRuleIntentForLocation(nextView, window.location.search));
+      setShareLoading(nextIsSharedBuildRoute);
+      setShareLoadError(null);
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
@@ -1673,7 +1682,7 @@ function App() {
     }
   }
 
-  function navigate(path: string, nextView: View, options: { preservePendingCheck?: boolean; preserveCatalogRefresh?: boolean } = {}) {
+  function navigate(path: string, nextView: View, options: { preservePendingCheck?: boolean; preserveCatalogRefresh?: boolean; resultFindingRuleId?: string | null } = {}) {
     abortSelectionHydration();
     routeRequestSequenceRef.current += 1;
     if (!options.preservePendingCheck) {
@@ -1705,6 +1714,11 @@ function App() {
     }
     if (nextView === "home" || nextView === "start" || nextView === "generator") setCurrentBuildOrigin(null);
     window.history.pushState({}, "", path);
+    setPendingResultFindingRuleId(options.resultFindingRuleId === undefined
+      ? resultFindingRuleIntentForLocation(nextView, window.location.search)
+      : options.resultFindingRuleId);
+    setShareLoading(/^\/share\/[^/]+/.test(window.location.pathname));
+    setShareLoadError(null);
     setView(nextView);
     setLocationKey(path);
     window.scrollTo({ top: 0, behavior: "auto" });
@@ -3085,9 +3099,10 @@ function App() {
     const hydrationController = new AbortController();
     selectionHydrationAbortControllerRef.current = hydrationController;
     const isCurrent = () => openingSavedBuildRequestRef.current === requestVersion && !hydrationController.signal.aborted;
+    const resultFindingRuleId = focus && typeof focus !== "string" && focus.type === "finding" ? focus.ruleId : null;
     openingSavedBuildIdRef.current = saved.id;
     setOpeningSavedBuildId(saved.id);
-    setPendingResultFindingRuleId(focus && typeof focus !== "string" && focus.type === "finding" ? focus.ruleId : null);
+    setPendingResultFindingRuleId(resultFindingRuleId);
     setToast(`${eul(saved.name)} 현재 부품 기준으로 호환 결과를 계산하고 있어요.`);
     const nextPreferences = saved.recommendationPreferences ?? recommendationPreferences;
     setBuild(saved.selection);
@@ -3112,7 +3127,7 @@ function App() {
       setShareId(saved.id);
       setShareExpiresAt(saved.expiresAt ?? null);
       setShareOwnerToken(readSavedBuildOwnerToken(saved.id) ?? null);
-      navigate(focus === "purchase-list" ? "/result#purchase-list" : "/result", "result");
+      navigate(focus === "purchase-list" ? "/result#purchase-list" : "/result", "result", { resultFindingRuleId });
       setToast(null);
       return true;
     } catch (error: unknown) {
