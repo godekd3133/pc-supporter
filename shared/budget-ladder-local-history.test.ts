@@ -31,6 +31,14 @@ describe("budget ladder local share history", () => {
     expect(budgetLadderLocalShareExpired({}, Date.parse(expiresAt))).toBe(false);
   });
 
+  it("persists session ownership without a bearer token and keeps the link metadata", () => {
+    const raw = budgetLadderLocalSharesToJson([entry("session-owned", { owned: true })]);
+    const parsed = budgetLadderLocalSharesFromJson(raw);
+
+    expect(raw).not.toContain("ownerToken");
+    expect(parsed[0]).toMatchObject({ id: "session-owned", owned: true, versionNumber: 1, name: "예산 session-owned" });
+  });
+
   it("rejects an oversized raw local history before normalizing every entry", () => {
     const oversized = Array.from({ length: 21 }, (_, index) => entry(`share-${index}`));
     expect(budgetLadderLocalSharesFromJson(JSON.stringify(oversized))).toEqual([]);

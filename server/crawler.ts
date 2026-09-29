@@ -6,6 +6,7 @@ import { DANAWA_CATEGORIES, crawlDanawaCategory, retryDanawaCategoryPage, type D
 import { loadCatalog, upsertCatalog } from "./catalog";
 import { CRAWL_LOCK_PATH, CRAWL_MANIFEST_PATH, CRAWL_STATE_PATH, createExclusiveFile, ensureDataDirectory, readJson, removeGeneratedFile, writeJson } from "./storage";
 import { appendCatalogChangeRecords, catalogChangeRecord, catalogChangeSummary, catalogItemKey, meaningfulCatalogChangeFields } from "./catalog-change-log";
+import { withCatalogIngestionLease } from "./catalog-ingestion-coordinator";
 
 export type CrawlJobOptions = {
   category?: PartCategory;
@@ -40,6 +41,7 @@ export type CrawlPageRetryBatchOptions = {
 };
 
 let activeJob: Promise<CrawlStatus> | null = null;
+let activeLeaseJob: Promise<CrawlStatus> | null = null;
 let activeJobAbortController: AbortController | null = null;
 let activeJobOperation: CrawlStatus["operation"] | null = null;
 
@@ -118,7 +120,7 @@ export async function readCrawlStatus() {
     pageRetries: stored.pageRetries ?? 0,
     failedPages: stored.failedPages ?? []
   };
-  if (normalized.status === "running" && !activeJob) {
+  if (normalized.status === "running" && !activeJob && !activeLeaseJob) {
     const ownerPid = await lockOwnerPid();
     if (!processIsAlive(ownerPid)) {
       const stale: CrawlStatus = {
@@ -471,7 +473,7 @@ async function persistPageRetryResult(manifest: CrawlManifest, category: PartCat
   return { changedProducts, finishedAt };
 }
 
-export async function runCrawlJob(options: CrawlJobOptions = {}) {
+async function runCrawlJobUnderLease(options: CrawlJobOptions = {}) {
   if (activeJob) return activeJob;
   activeJob = (async () => {
     const scopeConfigs = categoryConfigsFor(options.category);
@@ -685,7 +687,39 @@ export async function runCrawlJob(options: CrawlJobOptions = {}) {
   return activeJob;
 }
 
-export function runCrawlPageRetryJob(options: CrawlPageRetryOptions) {
+function catalogIngestionFailureStatus(error: unknown, options: CrawlJobOptions = {}): CrawlStatus {
+  const finishedAt = new Date().toISOString();
+  return {
+    ...defaultStatus(),
+    status: "failed",
+    mode: options.all === true ? "all" : "sample",
+    ...(options.category ? { category: options.category } : {}),
+    startedAt: finishedAt,
+    finishedAt,
+    workerPid: process.pid,
+    error: error instanceof Error ? error.message : String(error),
+    message: "카탈로그 수집 작업을 시작하지 못했습니다."
+  };
+}
+
+function runCrawlJobWithLease(options: CrawlJobOptions, operation: () => Promise<CrawlStatus>, onLeaseFailure = (error: unknown) => catalogIngestionFailureStatus(error, options)) {
+  if (activeJob) return activeJob;
+  if (activeLeaseJob) return activeLeaseJob;
+  let job!: Promise<CrawlStatus>;
+  job = withCatalogIngestionLease(operation)
+    .catch(onLeaseFailure)
+    .finally(() => {
+      if (activeLeaseJob === job) activeLeaseJob = null;
+    });
+  activeLeaseJob = job;
+  return job;
+}
+
+export function runCrawlJob(options: CrawlJobOptions = {}) {
+  return runCrawlJobWithLease(options, () => runCrawlJobUnderLease(options));
+}
+
+async function runCrawlPageRetryJobUnderLease(options: CrawlPageRetryOptions) {
   if (activeJob) return activeJob;
   activeJob = (async () => {
     const startedAt = new Date().toISOString();
@@ -782,7 +816,27 @@ export function runCrawlPageRetryJob(options: CrawlPageRetryOptions) {
   return activeJob;
 }
 
-export function runCrawlPageRetryBatchJob(options: CrawlPageRetryBatchOptions = {}) {
+function retryFailureStatus(error: unknown, operation: "page-retry" | "page-retry-batch", options: CrawlPageRetryOptions | CrawlPageRetryBatchOptions): CrawlStatus {
+  const finishedAt = new Date().toISOString();
+  return {
+    ...defaultStatus(),
+    status: "failed",
+    mode: "all",
+    operation,
+    ...(operation === "page-retry" ? { category: (options as CrawlPageRetryOptions).category, currentCategory: (options as CrawlPageRetryOptions).category, currentPage: (options as CrawlPageRetryOptions).page } : {}),
+    startedAt: finishedAt,
+    finishedAt,
+    workerPid: process.pid,
+    error: error instanceof Error ? error.message : String(error),
+    message: operation === "page-retry" ? "실패 페이지 재시도 작업을 시작하지 못했습니다." : "실패 페이지 일괄 재시도 작업을 시작하지 못했습니다."
+  };
+}
+
+export function runCrawlPageRetryJob(options: CrawlPageRetryOptions) {
+  return runCrawlJobWithLease({}, () => runCrawlPageRetryJobUnderLease(options), (error) => retryFailureStatus(error, "page-retry", options));
+}
+
+async function runCrawlPageRetryBatchJobUnderLease(options: CrawlPageRetryBatchOptions = {}) {
   if (activeJob) return activeJob;
   const abortController = new AbortController();
   activeJobAbortController = abortController;
@@ -927,8 +981,14 @@ export function runCrawlPageRetryBatchJob(options: CrawlPageRetryBatchOptions = 
   return activeJob;
 }
 
+export function runCrawlPageRetryBatchJob(options: CrawlPageRetryBatchOptions = {}) {
+  if (activeJob) return activeJob;
+  if (activeLeaseJob) return activeLeaseJob;
+  return runCrawlJobWithLease({}, () => runCrawlPageRetryBatchJobUnderLease(options), (error) => retryFailureStatus(error, "page-retry-batch", options));
+}
+
 export function isCrawlRunning() {
-  return Boolean(activeJob);
+  return Boolean(activeJob || activeLeaseJob);
 }
 
 export function isCrawlPageRetryBatchRunning() {

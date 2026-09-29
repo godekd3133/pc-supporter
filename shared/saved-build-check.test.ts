@@ -70,6 +70,19 @@ describe("saved build check snapshots", () => {
     expect("findings" in snapshot).toBe(true);
   });
 
+  it("keeps public compatibility summaries usable without internal analysis data", () => {
+    const source = result();
+    const { analysis: privateAnalysis, ...publicResult } = source;
+    expect(privateAnalysis).toBeDefined();
+
+    const snapshot = savedBuildCheckSnapshotFor(publicResult);
+
+    expect(snapshot.analysisScoreLabel).toBe("계산 불가");
+    expect(snapshot.analysisConfidence).toBe("unknown");
+    expect(snapshot).not.toHaveProperty("analysisScore");
+    expect(savedBuildCheckSnapshotFromUnknown(snapshot)).toEqual(snapshot);
+  });
+
   it("accepts valid persisted data and rejects malformed snapshot data", () => {
     const snapshot = savedBuildCheckSnapshotFor(result());
     expect(savedBuildCheckSnapshotFromUnknown(snapshot)).toEqual(snapshot);

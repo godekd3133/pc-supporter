@@ -4,6 +4,7 @@ import type { SavedBuildVersionComparisonShareSnapshot } from "../shared/saved-b
 import { savedBuildVersionLocalShareExpired } from "../shared/saved-build-version-local-history";
 import type { SavedBuildVersionLocalShareEntry } from "../shared/saved-build-version-local-history";
 import { ApiError, api } from "./api";
+import { ownerCredentialAvailable } from "./owner-session";
 
 type ShareHealthStatus = "checking" | "active" | "expired" | "revoked" | "error";
 type ShareHealthFilter = "all" | "active" | "closed" | "review";
@@ -103,8 +104,9 @@ export function HomeSavedBuildVersionSharePanel({ entries, currentCatalogSnapsho
   const refreshing = visibleEntries.some((entry) => healthById[entry.id]?.status === "checking");
 
   async function revoke(entry: SavedBuildVersionLocalShareEntry) {
-    if (!entry.ownerToken || revokingId) {
-      if (!entry.ownerToken) onToast("이 링크를 만든 브라우저 권한이 없어 공유를 취소할 수 없어요. 브라우저 이력에서만 지울 수 있어요.");
+    if (revokingId) return;
+    if (!ownerCredentialAvailable("version-comparison", entry.id, entry)) {
+      onToast("이 링크를 만든 브라우저 권한이 없어 공유를 취소할 수 없어요. 브라우저 이력에서만 지울 수 있어요.");
       return;
     }
     if (!window.confirm("이 견적 버전 비교 공유 링크를 취소할까요? 이미 전달된 링크도 더 이상 열리지 않아요.")) return;
@@ -131,7 +133,7 @@ export function HomeSavedBuildVersionSharePanel({ entries, currentCatalogSnapsho
       const health = healthById[entry.id];
       const checkedAt = health?.checkedAt;
       const catalogChangedSinceShare = Boolean(currentCatalogSnapshotAt && health?.afterCatalogSnapshotAt && Number.isFinite(Date.parse(currentCatalogSnapshotAt)) && Number.isFinite(Date.parse(health.afterCatalogSnapshotAt)) && Date.parse(currentCatalogSnapshotAt) !== Date.parse(health.afterCatalogSnapshotAt));
-      const canRevoke = Boolean(entry.ownerToken) && status !== "expired" && status !== "revoked";
+      const canRevoke = ownerCredentialAvailable("version-comparison", entry.id, entry) && status !== "expired" && status !== "revoked";
       return <article className={`home-alternative-comparison-share ${tone}`} key={entry.id}>
         <div className="home-alternative-comparison-share-main"><div><strong>{entry.name}</strong><span>{entry.beforeLabel} → {entry.afterLabel}</span></div><small>{entry.beforeName} → {entry.afterName} · 만든 날 {new Date(entry.createdAt).toLocaleString("ko-KR")} · {entry.expiresAt ? `만료 ${new Date(entry.expiresAt).toLocaleString("ko-KR")}` : "기간 제한 없음"}{checkedAt ? ` · 확인한 시각 ${new Date(checkedAt).toLocaleTimeString("ko-KR")}` : ""}</small>{(health?.beforeCatalogSnapshotAt || health?.afterCatalogSnapshotAt) && <div className="home-alternative-comparison-share-baseline" data-testid={`home-saved-build-version-catalog-${entry.id}`}><span>저장한 검사 기준</span>{health.beforeCatalogSnapshotAt && <small>{entry.beforeLabel} 부품 정보 기준 {new Date(health.beforeCatalogSnapshotAt).toLocaleString("ko-KR")}</small>}{health.afterCatalogSnapshotAt && <small>{entry.afterLabel} 부품 정보 기준 {new Date(health.afterCatalogSnapshotAt).toLocaleString("ko-KR")}</small>}{health.engineVersion && <strong>검사 버전 {health.engineVersion}</strong>}{catalogChangedSinceShare && <><em data-testid={`home-saved-build-version-catalog-changed-${entry.id}`}>부품 정보가 바뀌었어요 · 지금 기준으로 다시 확인해보세요.</em>{entry.afterBuildId && <a className="text-button home-saved-build-version-recheck" data-testid={`home-saved-build-version-recheck-${entry.id}`} href={`/share/${encodeURIComponent(entry.afterBuildId)}`}><FiRefreshCw /> 현재 기준 결과를 열어봐요</a>}</>}</div>}</div>
         <span className={`home-alternative-comparison-share-status ${tone}`}><span className="status-dot" /> {healthLabel(status)}</span>

@@ -120,7 +120,7 @@ CSV 적용 후에는 입력 품질 카드에서 유효/전체 행, 기본 센서
 
 결과 화면의 `구매 전 실행 체크리스트`도 JSON으로 저장·가져올 수 있습니다. 가져오기는 현재 체크 상태를 즉시 덮어쓰지 않고 내보낸 시각·파일 항목 수·현재 완료/가져올 완료·새로 체크·해제·유지 항목을 먼저 보여줍니다. 사용자가 `이 상태로 가져오기`를 눌러야 적용되며, 미리보기 중 검사 결과로 체크리스트 항목 구성이 바뀌면 오래된 상태를 적용하지 않고 다시 가져오도록 막습니다. 현재 견적에 없는 체크 항목은 무시 수로 분리하고, 다른 견적·잘못된 버전·잘못된 JSON은 현재 상태를 바꾸지 않습니다.
 
-초기 편집기 로딩을 가볍게 유지하기 위해 관리자 데이터 센터는 `/admin` 진입 시점에 별도 chunk로 로드됩니다. 자동 구성·가격 추적·후보 상세도 화면 진입 시 필요한 모듈만 요청하며, 분리된 화면의 데이터·인증·상태 경계는 기존 API와 동일하게 유지합니다. 결과·이력에서만 사용하는 카탈로그 변경·저장 견적·구매 계산 모듈도 `catalog-change-domain`·`saved-build-domain`·`purchase-domain`으로 분리해 앱 entry의 parse/cache 단위를 줄이며, 이 분리는 판정 순서나 데이터 계약을 변경하지 않습니다. `npm run build` 후 `scripts/verify-client-bundle.mjs`가 entry 540,000바이트 예산과 세 도메인 chunk 생성 여부를 검사해 번들 회귀를 차단합니다.
+초기 편집기 로딩을 가볍게 유지하기 위해 관리자 데이터 센터는 `/admin` 진입 시점에 별도 chunk로 로드됩니다. 자동 구성·가격 추적·후보 상세도 화면 진입 시 필요한 모듈만 요청하며, 분리된 화면의 데이터·인증·상태 경계는 기존 API와 동일하게 유지합니다. 결과·이력에서만 사용하는 카탈로그 변경·저장 견적·구매 계산 모듈도 `catalog-change-domain`·`saved-build-domain`·`purchase-domain`으로 분리해 앱 entry의 parse/cache 단위를 줄이며, 이 분리는 판정 순서나 데이터 계약을 변경하지 않습니다. `npm run build` 후 `scripts/verify-client-bundle.mjs`가 entry 600,000바이트 예산과 세 도메인 chunk 생성 여부를 검사해 번들 회귀를 차단합니다.
 
 관리자 chunk 안에서도 변경 이력·가격 분석, M.2 슬롯 검수, 벤치마크 검수, 케이스 RGB 부하 검수, 쿨링팬 소비전류 검수 패널을 별도 lazy chunk로 분리해, 데이터 센터 셸과 운영 패널의 로딩·오류 경계를 나눕니다. 패널은 viewport 근처에 도달했을 때만 해제해 초기 관리자 화면에서 아래 운영 도구를 모두 파싱하지 않으며, 늦게 도착해도 각각의 로딩 상태를 표시합니다. 기존 검수 API·원자적 저장 경계·관리자 인증은 그대로 사용합니다.
 
@@ -298,7 +298,7 @@ GPU 원문에서 GDDR5·GDDR6·GDDR6X·GDDR7·HBM 메모리 타입을 정규화�
 
 GPU 원문에 `3DMark Time Spy` 또는 `3DMark Port Royal` 점수가 명시되어 있으면 선택 부품의 GPU 유사도·업그레이드 비교에 선택적으로 반영하고, `벤치마크 근거 포함` 필터와 coverage에 연결합니다. 값이 없으면 GPU 스펙을 벤치마크로 포장하지 않으며, 재파싱 시 이전 원문에서만 존재하던 stale 점수도 제거합니다.
 
-관리자 데이터 센터의 `검수된 성능 데이터 보강`에서 원문에 없는 검증 점수를 JSON으로 입력할 수 있습니다. CPU·GPU별 허용 필드, 양수 정수 범위, 근거 메모, HTTPS 출처 URL, 중복 부품 ID를 서버에서 먼저 검증하며 한 항목이라도 오류가 있으면 전체 저장을 중단합니다. 저장된 보강은 PostgreSQL이 연결된 환경에서는 `benchmark_overrides` 테이블에, 연결되지 않은 환경에서는 원자적 JSON fallback에 저장하고 원문 파싱 결과 위에 별도 overlay로 적용합니다. 따라서 다음 원문 재수집에도 유지되며, 삭제하면 원문에 실제로 존재하는 점수만 다시 사용합니다.
+관리자 데이터 센터의 `검수된 성능 데이터 보강`에서 원문에 없는 검증 점수를 JSON으로 입력할 수 있습니다. CPU·GPU별 허용 필드, 양수 정수 범위, 근거 메모, HTTPS 출처 URL, 중복 부품 ID를 서버에서 먼저 검증하며 한 항목이라도 오류가 있으면 전체 저장을 중단합니다. 저장된 보강은 `DATABASE_URL`이 설정된 PostgreSQL 모드에서는 `benchmark_overrides` 테이블에, 변수가 비어 있는 JSON 모드에서는 원자적 파일에 저장하고 원문 파싱 결과 위에 별도 overlay로 적용합니다. 설정된 PostgreSQL에 연결할 수 없을 때는 파일 모드로 전환하지 않고 저장 요청을 실패시킵니다. 따라서 다음 원문 재수집에도 유지되며, 삭제하면 원문에 실제로 존재하는 점수만 다시 사용합니다.
 저장된 benchmark HTTPS 원문은 `원문 점검`으로 실제 접근·redirect·HTTP 상태·부품 모델/SKU 본문 일치 여부를 확인할 수 있습니다. 개별 점검 결과는 benchmark provenance와 별도 history에 저장하며, 같은 부품의 점검이 진행 중이면 중복 요청을 409로 막고 완료 뒤 15초 동안은 다시 확인하지 않도록 합니다. 개별 catalog-spec·GPU 물리·benchmark source-check도 각각 IP 기준 분당 30회로 제한해 다른 partId를 순회하는 반복 외부 조회를 막습니다. 저장 URL 일괄 점검은 최대 50개를 동시성 2로 처리하고 각 항목의 검증됨·재확인·저장 실패 수를 반환하며, GPU 물리·benchmark batch endpoint는 각각 IP 기준 분당 5회로 제한합니다. source-check가 실패한 benchmark는 추천 신뢰도를 낮추고, 고유사도 후보를 `확인 후 구매`로 보수적으로 안내합니다.
 
 보강 패널의 `ROW BUILDER`에서 CPU·GPU를 모델명으로 검색해 부품을 선택하고, 범주에 맞는 점수 입력칸과 검수 근거를 채운 뒤 현재 JSON batch에 행을 추가할 수 있습니다. 같은 partId의 기존 행은 교체하며, 행 추가만으로 저장하지 않고 서버 JSON 검증을 다시 통과해야 실제 저장 버튼이 활성화됩니다.
@@ -311,7 +311,7 @@ GPU 행을 만들 때는 `3DMark 결과 미리보기`에 Time Spy(`/spy/결과ID
 
 같은 패널의 `3DMark 결과 일괄 미리보기`는 `partId,sourceUrl` CSV(헤더 선택) 또는 `{ "items": [...] }` JSON을 받아 최대 12개 GPU 결과를 한 번에 읽습니다. 현재 작업 패키지에서 미완료 GPU 최대 12개의 `partId`를 일괄 입력창에 먼저 준비할 수 있으며, URL은 비워 두어 운영자가 실제 3DMark 결과 주소를 확인해 입력하게 합니다. 서버는 요청당 최대 동시성 2와 별도 rate limit을 사용하고, 존재하지 않는 부품·GPU가 아닌 부품·중복 ID·URL 오류를 행별 실패로 분리해 나머지 결과를 계속 처리합니다. 각 행은 `matched`·`manual_required`·`not_found`·`failed`로 반환되며, 식별 일치 행만 기존 benchmark 검수 JSON에 합칠 수 있습니다. 일괄 미리보기와 JSON 합치기는 모두 읽기 전용이고, 실제 카탈로그 반영은 기존 sourceNote·sourceKind·HTTPS·점수 검증과 원자 저장을 통과해야 합니다.
 
-서버 검증 결과에는 각 행의 `신규 등록`·`기존 값 수정`·`변경 없음`을 미리 표시하고, 수정되는 벤치마크 필드와 근거 메타데이터를 함께 보여줍니다. 저장소 상태도 해당 패널에서 PostgreSQL 또는 JSON fallback으로 구분해 운영자가 저장 위치를 오인하지 않도록 했습니다.
+서버 검증 결과에는 각 행의 `신규 등록`·`기존 값 수정`·`변경 없음`을 미리 표시하고, 수정되는 벤치마크 필드와 근거 메타데이터를 함께 보여줍니다. 저장소 상태도 해당 패널에서 PostgreSQL 또는 JSON 파일 모드로 구분해 운영자가 저장 위치를 오인하지 않도록 했습니다.
 
 저장된 보강 목록은 부품명·partId·검수 근거·출처 URL 검색과 CPU/GPU 범주·출처 유형 필터를 지원합니다. 목록 필터는 저장된 원본을 변경하지 않고 화면 표시만 좁히며, 결과가 없을 때 전체 데이터가 없는 경우와 검색 조건이 맞지 않는 경우를 구분해 안내합니다.
 
@@ -417,7 +417,7 @@ SSD·HDD를 문제 해결 후보로 제안할 때는 현재 저장장치의 용�
 
 일반 사용자의 저장 견적 히스토리는 브라우저에 보관한 공유 ID만 `GET /api/builds?ids=id1,id2`로 조회합니다. ID 없이 전체 저장 견적 목록을 요청하는 `GET /api/builds`는 관리자 인증이 켜진 환경에서 관리자만 사용할 수 있어, 다른 사용자의 저장 구성 목록이 일반 화면에 노출되지 않습니다. 공유 링크 상세 `GET /api/builds/:id`는 링크를 가진 사람에게 공개되지만 만료된 견적은 404로 차단합니다.
 
-공개 견적 생성은 IP 기준 분당 20회, 저장 견적·관심 목록 공유 링크 조회는 IP 기준 분당 120회로 제한합니다. 전체 호환성 검사와 호환 후보 계산은 서로 분리된 IP 기준 분당 60회 제한, 자동 구성은 분당 20회, 핵심·주변 부품 목록 조회는 분당 180회, 단건 상세 조회는 분당 240회, 일괄 조회는 분당 60회로 제한해 계산 비용과 대규모 반복 조회를 함께 보호합니다. 호환성 검사와 후보 계산을 서로 다른 bucket으로 분리해 정상적인 검사 후 후보 탐색이 한도에 묶이지 않도록 합니다. 최대 20개 견적을 한꺼번에 평가하는 전체 건강 점검은 별도의 IP 기준 분당 20회 제한을 적용합니다. 관리자 로그인 실패 시도도 IP 기준 분당 10회로 제한하고, 외부 원문 수집을 시작하는 관리자 핵심·주변 부품 crawler와 실패 페이지 단독 재시도는 각각 IP 기준 분당 10회, 실패 페이지 일괄 재시도·GPU 물리·benchmark 저장 URL batch 점검·저장 견적 version migration/rollback은 각각 IP 기준 분당 5회로 제한합니다. 제한에 도달하면 `429`와 `Retry-After`, `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`을 반환합니다. 현재 limiter는 단일 프로세스 메모리 보호 계층이므로 여러 서버 인스턴스를 운영할 때는 Redis 등 공유 저장소 기반 limiter로 교체해야 합니다.
+공개 견적 생성은 IP 기준 분당 20회, 저장 견적·관심 목록 공유 링크 조회는 IP 기준 분당 120회로 제한합니다. 전체 호환성 검사와 호환 후보 계산은 서로 분리된 IP 기준 분당 60회 제한, 자동 구성은 분당 20회, 핵심·주변 부품 목록 조회는 분당 180회, 단건 상세 조회는 분당 240회, 일괄 조회는 분당 60회로 제한해 계산 비용과 대규모 반복 조회를 함께 보호합니다. 호환성 검사와 후보 계산을 서로 다른 bucket으로 분리해 정상적인 검사 후 후보 탐색이 한도에 묶이지 않도록 합니다. 최대 20개 견적을 한꺼번에 평가하는 전체 건강 점검은 별도의 IP 기준 분당 20회 제한을 적용합니다. 관리자 로그인 실패 시도도 IP 기준 분당 10회로 제한하고, 외부 원문 수집을 시작하는 관리자 핵심·주변 부품 crawler와 실패 페이지 단독 재시도는 각각 IP 기준 분당 10회, 실패 페이지 일괄 재시도·GPU 물리·benchmark 저장 URL batch 점검·저장 견적 version migration/rollback은 각각 IP 기준 분당 5회로 제한합니다. 제한에 도달하면 `429`와 `Retry-After`, `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`을 반환합니다. PostgreSQL 모드에서는 정책·클라이언트별 atomic counter를 공유해 replica 간 한도를 유지하고, 설정된 DB나 HMAC key를 사용할 수 없으면 local Map으로 낮추지 않고 `503`으로 닫습니다. 파일 모드에서는 개발용 process-local Map을 사용합니다. `RATE_LIMIT_HMAC_SECRET`은 PostgreSQL을 쓰는 모든 replica에서 같은 32자 이상 비밀값이어야 하며, 교체하면 기존 client bucket이 새 key로 분리되어 일시적으로 한도가 초기화됩니다. HMAC 처리한 IP key만 DB에 남고 원문 IP는 저장하지 않습니다. 만료 bucket은 10분마다 최대 1,000행씩 정리합니다.
 
 견적을 새로 저장하면 서버는 생성자에게만 한 번 반환하는 owner token을 발급합니다. 브라우저는 이 토큰을 공유 견적 ID와 함께 로컬에 보관하고 결과 화면에 `공유 링크 취소`를 표시합니다. 취소 요청은 `X-Share-Owner-Token` 헤더의 해시가 저장된 값과 일치할 때만 허용하며, 서버 파일·PostgreSQL에는 원문 토큰이 아니라 SHA-256 해시만 저장합니다. 토큰이 없는 기존 견적은 관리자만 취소할 수 있습니다.
 
@@ -441,7 +441,7 @@ SSD·HDD를 문제 해결 후보로 제안할 때는 현재 저장장치의 용�
 
 현재 브라우저 저장 견적 목록에서 사라진 과거 알림은 미읽음이거나 점검 실패일 때까지는 보여 주되, 사용자가 읽은 뒤에는 목록에서 자동으로 접습니다. 알림 record 자체를 임의 삭제하지 않아 같은 fingerprint의 dismissal·읽음 상태는 계속 보존합니다.
 
-owner token이 있는 저장 견적은 `서버 백그라운드 점검`을 1시간·6시간·24시간 주기로 구독할 수 있습니다. owner token이 없는 legacy·공유 견적에는 제어를 노출하지 않고, 새로 저장한 내 견적부터 사용할 수 있다는 읽기 전용 안내만 표시합니다. `GET/PUT /api/builds/:id/monitor`, `POST /api/builds/:id/monitor/run`, `POST /api/builds/:id/monitor/alerts/read|dismiss`는 정확한 `X-Share-Owner-Token` 또는 명시적으로 활성화된 관리자 인증만 허용합니다. 관리자 인증이 꺼진 환경을 암묵적 admin으로 취급하지 않으며 무토큰 요청은 `401`입니다. 서버는 마지막 성공 snapshot·시도/성공/다음 예정 시각·최근 오류·최대 50개 알림을 `saved_builds.monitor_state` JSONB 또는 file fallback의 내부 record에 저장하고, 공개 공유 응답에서는 monitor state와 owner hash를 제거합니다. 구독을 처음 켜면 즉시 한 번 점검하고 이후 process scheduler가 매분 due 상태를 확인해 한 tick에 최대 5개를 순차 평가합니다. 전역 카탈로그 시각이나 엔진 버전만 바뀌고 실제 호환 상태·위험 수·가격·finding이 같으면 새 서버 알림을 만들지 않습니다. 같은 견적의 수동 실행과 scheduler 실행은 process-local job lock으로 합쳐 중복 평가를 막습니다. `BUILD_MONITOR_SCHEDULER_ENABLED=false`로 scheduler를 끌 수 있으며, 다중 서버 운영에서는 중복 계산 방지를 위한 PostgreSQL/Redis 기반 분산 lease가 추가로 필요합니다.
+owner token이 있는 저장 견적은 `서버 백그라운드 점검`을 1시간·6시간·24시간 주기로 구독할 수 있습니다. owner token이 없는 legacy·공유 견적에는 제어를 노출하지 않고, 새로 저장한 내 견적부터 사용할 수 있다는 읽기 전용 안내만 표시합니다. `GET/PUT /api/builds/:id/monitor`, `POST /api/builds/:id/monitor/run`, `POST /api/builds/:id/monitor/alerts/read|dismiss`는 정확한 `X-Share-Owner-Token` 또는 명시적으로 활성화된 관리자 인증만 허용합니다. 관리자 인증이 꺼진 환경을 암묵적 admin으로 취급하지 않으며 무토큰 요청은 `401`입니다. 서버는 마지막 성공 snapshot·시도/성공/다음 예정 시각·최근 오류·최대 50개 알림을 `saved_builds.monitor_state` JSONB 또는 file fallback의 내부 record에 저장하고, 공개 공유 응답에서는 monitor state와 owner hash를 제거합니다. 구독을 처음 켜면 즉시 한 번 점검하고 이후 process scheduler가 매분 due 상태를 확인해 한 tick에 최대 5개를 순차 평가합니다. 전역 카탈로그 시각이나 엔진 버전만 바뀌고 실제 호환 상태·위험 수·가격·finding이 같으면 새 서버 알림을 만들지 않습니다. 같은 process 안에서는 in-flight Map이 중복 실행을 합칩니다. 예약 monitor tick은 PostgreSQL advisory lease를 공유해 여러 replica에서 한 번만 실행됩니다. `BUILD_MONITOR_SCHEDULER_ENABLED=false`로 scheduler를 끌 수 있습니다. 수동 monitor run과 내 PC 승격 직후 run은 아직 process-local lock만 사용하므로, multi-replica 운영 전에 공유 직렬화와 monitor-state revision 보호가 필요합니다.
 
 앱이 실행 중일 때도 owner 견적의 서버 모니터 상태를 초기 로드하고 5분마다 보이는 탭에서 읽기 전용으로 동기화합니다. 따라서 사용자가 저장 견적 화면에 있지 않아도 서버가 생성한 알림이 상단 미읽음 배지에 반영됩니다. 동기화 중 한 견적이 실패해도 다른 owner 견적과 기존 로컬 알림은 유지하며, 요청이 겹치면 하나의 동기화 작업만 실행합니다.
 
@@ -455,7 +455,7 @@ owner token이 있는 저장 견적은 `서버 백그라운드 점검`을 1시�
 
 전체 호환성 API의 반복 계산은 서버 process-local 결과 캐시를 사용합니다. 캐시는 5분 TTL·최대 40개 LRU이며, 동일한 입력의 동시 요청은 한 계산으로 합칩니다. 캐시 키에는 부품 선택·수량·M.2 배치·추천 기준·엔진 버전·핵심 카탈로그 갱신 시각·주변 부품 갱신 시각·catalog runtime revision을 포함해 가격·override·주변 부품 변경 뒤 오래된 결과를 재사용하지 않습니다. 응답은 브라우저·프록시가 저장하지 않도록 `Cache-Control: no-store`를 사용하고 `X-PC-Supporter-Compatibility-Cache`에 `MISS`·`HIT`·`COALESCED`를 표시합니다. `X-PC-Supporter-Compatibility-Checked-At`은 실제 계산 결과의 검사 시각이며, `HIT`도 새 시각으로 위장하지 않습니다. 캐시는 서버 재시작 시 비워지며, 다중 서버 인스턴스에서는 각 process가 별도 캐시를 가지므로 공유 캐시가 필요하면 Redis 등으로 교체해야 합니다.
 
-관리자는 `/api/admin/monitor/status`에서 서버 monitor scheduler의 활성 여부·배치 상한·최근 lease backend·획득/skip/완료 시각·처리 건수·최근 오류와 호환성 결과 캐시의 size·in-flight·hit·miss·coalesced·eviction 통계를 확인할 수 있습니다. 이 운영 응답은 `requireAdmin` 뒤에 있으며 일반 공유 사용자에게 노출하지 않습니다. PostgreSQL 환경의 lease는 `pg_try_advisory_lock` 세션 락을 사용하고, JSON fallback은 공유된 `data/saved-build-monitor.lease`의 원자적 생성과 2시간 stale 복구를 사용합니다. 단일 process 내부 scheduler lock과 별도로 cross-process lease를 획득하지 못하면 해당 tick은 정상 skip합니다.
+관리자는 `/api/admin/monitor/status`에서 서버 monitor scheduler의 활성 여부·배치 상한·최근 lease backend·획득/skip/완료 시각·처리 건수·최근 오류와 호환성 결과 캐시의 size·in-flight·hit·miss·coalesced·eviction 통계를 확인할 수 있습니다. 이 운영 응답은 `requireAdmin` 뒤에 있으며 일반 공유 사용자에게 노출하지 않습니다. PostgreSQL 환경의 lease는 `pg_try_advisory_lock` 세션 락을 사용하고, JSON 모드의 lease는 공유된 `data/saved-build-monitor.lease`의 원자적 생성과 2시간 stale 복구를 사용합니다. 단일 process 내부 scheduler lock과 별도로 cross-process lease를 획득하지 못하면 해당 tick은 정상 skip합니다.
 
 결과 화면의 구매 목록은 선택된 핵심 부품과 주변 부품을 분리해 수량·단가·항목 합계를 보여줍니다. 각 행을 `구매 완료`로 체크해 전체 구매 진행률·남은 항목·완료 수를 관리할 수 있고, 모두 완료 처리와 상태 초기화를 제공합니다. 완료 상태는 견적 입력·카탈로그 기준·엔진 버전에 묶인 브라우저 로컬 상태로 우선 관리하며, `JSON 저장`·`JSON 가져오기`로 같은 견적의 구매 진행률을 다른 기기로 옮길 수 있습니다. 가져오기 전에는 현재 완료·신규 체크·해제·유지·현재 없는 행을 미리 보여주고 다른 견적이나 달라진 행 구성을 차단합니다. `목록 복사`와 `CSV 저장`에도 호출 시점의 행별 `구매 완료`·`구매 예정` 상태를 선택적으로 포함합니다. 목록을 텍스트로 클립보드에 복사하거나 CSV로 저장할 수 있으며, 가격 정보가 없는 항목은 `-`로 표시하고 합계에서 제외합니다. `현재 가격 확인`은 다나와 원문 연결이 있는 행에는 `/api/parts/:id/refresh` 또는 `/api/accessories/:id/refresh`를 순차 호출해 실제 원문 가격을 다시 확인하고, starter·수동 등 원문 갱신 대상이 아닌 행에는 해당 카탈로그 상세 API를 읽습니다. 결과는 `원문에서 확인한 금액`과 `저장된 금액`으로 출처를 구분해 행·수량 합계·완료/잔여 금액·예산 상태와 이후 복사/CSV에 반영하며, 원문 갱신 실패·cooldown·가격 미확인은 성공 가격으로 처리하지 않고 기존 단가를 유지합니다. 기존 단가와 비교해 상승·하락·동일·새로 확인된 가격을 행별로 표시합니다. 확인된 가격은 같은 견적의 브라우저 가격 확인 기록에 최대 20회까지 누적하고, 두 번째 확인부터 이전 확인가 대비 상승·하락·동일을 별도 표시하며 이력만 초기화할 수 있습니다. 이 기록은 서버 카탈로그 가격 이력이나 구매 진행률과 섞지 않습니다. 가격 확인 기록 요약은 최신·이전 확인 총액과 전체 증감액을 보여주되, 어느 한 행이라도 필요한 기록이 없으면 총액을 확정하지 않고 비교 보류로 안내합니다. `기록 JSON 저장`·`기록 CSV 저장`·`기록 JSON 가져오기`로 같은 견적의 확인 이력을 분석·옮길 수 있으며, 가져오기는 동일한 storage key와 행 구성을 확인한 뒤 현재 기록과 병합합니다. 다른 견적의 파일이나 현재 행과 맞지 않는 파일은 적용하지 않습니다. CSV는 부품별 확인 시각·수량·단가·직전 샘플 대비 증감을 한 행씩 기록합니다. 카탈로그 식별자가 있는 행은 구매 목록에서 바로 `가격 추적`에 등록할 수 있고, 이미 등록된 항목은 `추적 중`으로 잠급니다. 이 등록은 목표가·알림 조건을 자동으로 만들거나 baseline을 바꾸지 않고 기존 가격 추적 화면에서 이어서 설정하게 합니다. CSV에는 허용된 원문 링크를 포함한 구매 행을 스프레드시트에서 다시 사용할 수 있는 형태로 내보내고, 핵심·주변·전체 금액 요약은 화면에서 별도로 표시합니다.
 M.2 방열판·저장장치 어댑터는 대상 SSD를, 추가 쿨링팬은 대상 팬 허브를 구매 목록 행에 함께 표시합니다. 자동으로 선택한 전체 대상, 자동으로 해석되는 단일 허브, M.2 SSD 미지정·팬 허브 미지정·복수 허브 지정 필요 상태를 구분하며, 이 정보는 화면뿐 아니라 목록 복사·구매 CSV·가격 이력 CSV·구매 진행률 이력 CSV에도 남깁니다. 따라서 구매 후 조립할 때 어떤 SSD 규격과 어떤 허브 출력에 연결할지 다시 찾지 않아도 됩니다.
@@ -598,7 +598,7 @@ npm run dev
 - 웹: `http://127.0.0.1:5173`
 - API: `http://127.0.0.1:4174`
 
-`npm run preview -- --port 4184`로 production build를 preview할 때도 `/api` 요청은 `VITE_API_PROXY_TARGET`(기본 `http://127.0.0.1:4174`)으로 전달됩니다. 따라서 preview 포트에서 화면만 열리고 API가 끊기는 `Failed to fetch` 상황을 피할 수 있습니다. 외부 정적 호스팅을 사용할 때는 호스팅 레이어에서 `/api` reverse proxy를 같은 target으로 구성해야 합니다.
+`npm run preview -- --port 4184`로 production build를 preview할 때도 `/api` 요청은 `VITE_API_PROXY_TARGET`(기본 `http://127.0.0.1:4174`)으로 전달됩니다. 따라서 preview 포트에서 화면만 열리고 API가 끊기는 `Failed to fetch` 상황을 피할 수 있습니다. 외부 정적 호스팅을 사용할 때는 호스팅 레이어에서 `/api` reverse proxy를 같은 target으로 구성하고, `dist/index.html`의 CSP meta와 같은 CSP를 HTTP response header에도 설정해야 합니다. 그 헤더에는 `frame-ancestors 'none'`을 포함해야 합니다. CSP meta는 `frame-ancestors`를 적용하지 않습니다.
 
 API와 production preview를 한 번에 실행하려면 `npm run build && npm run preview:full`을 사용합니다. 기본값은 웹 `http://127.0.0.1:4184`, API `http://127.0.0.1:4174`이며, `PREVIEW_PORT`·`PREVIEW_API_PORT`·`VITE_API_PROXY_TARGET`로 변경할 수 있습니다. preview 전용 실행은 외부 다나와 수집을 기본적으로 시작하지 않으므로 테스트 중 catalog가 자동 변경되지 않습니다. 실제 수집이 필요한 경우에만 `DANAWA_CRAWL_ON_START=true`를 명시하세요.
 
@@ -609,15 +609,15 @@ npm run build
 npm run start
 ```
 
-웹 build는 `dist/`를 사용하고, `VITE_API_BASE_URL`이 필요한 native `npm run build:mobile`은 `dist-mobile/`을 별도로 사용합니다. native build가 remote API origin을 포함하더라도 웹 preview가 사용하는 `dist/`를 덮어쓰지 않으며, Capacitor sync는 native 전용 output을 읽습니다. 자세한 API 연결·iOS·Android·TestFlight 절차는 [`docs/mobile-build.md`](docs/mobile-build.md)를 참고하세요.
+웹 build는 `dist/`를 사용합니다. 원격 API native `npm run build:mobile`은 `VITE_API_BASE_URL`을 포함해 `dist-mobile/`을 사용하고, 로컬 데이터 native `npm run mobile:offline -- --snapshot-dir ...`은 명시 snapshot을 넣어 `artifacts/pc-supporter-offline/dist-mobile-offline/`을 사용합니다. 두 경로는 웹 preview의 `dist/`를 덮어쓰지 않으며, 오프라인 경로는 API origin을 포함하지 않고 Capacitor assets만 sync합니다. APK/IPA compile·install 및 전체 local-mode 빌드 절차는 [`docs/mobile-build.md`](docs/mobile-build.md)를 참고하세요.
 
-Docker로 API·정적 프론트·PostgreSQL을 함께 실행할 수도 있습니다. compose 기본값은 외부 다나와 수집과 저장 견적 scheduler를 자동 실행하지 않으며, seed catalog와 PostgreSQL schema를 초기화한 뒤 `http://127.0.0.1:4174`에서 정적 프론트를 제공합니다. 이미 사용 중인 host 포트와 충돌하면 `APP_HOST_PORT=54174 POSTGRES_HOST_PORT=55432 docker compose up -d`처럼 host 포트만 바꿀 수 있고, 컨테이너 내부 API·PostgreSQL 포트와 `DATABASE_URL`은 그대로 유지됩니다. 런타임 JSON·크롤링 상태는 `pc-supporter-data` named volume에, PostgreSQL 데이터는 `pc-supporter-postgres` named volume에 분리합니다.
+Docker로 API·정적 프론트·PostgreSQL을 함께 실행할 수도 있습니다. Compose는 외부 가격 갱신을 기본 실행하지 않으며, seed catalog와 PostgreSQL schema를 초기화한 뒤 `http://127.0.0.1:4174`에서 정적 프론트를 제공합니다. 먼저 `.env.example`을 `.env`로 복사해 `POSTGRES_PASSWORD`, `RATE_LIMIT_HMAC_SECRET`, `ADMIN_PASSWORD`, `ADMIN_SESSION_SECRET`에 서로 다른 무작위 값을 지정하세요. PostgreSQL password는 `openssl rand -hex 32`처럼 URL-safe한 32바이트 hex 값으로 만들 수 있습니다. 이미 사용 중인 host 포트와 충돌하면 `APP_HOST_PORT=54174 POSTGRES_HOST_PORT=55432 docker compose up -d`처럼 host 포트만 바꿀 수 있고, PostgreSQL port는 host loopback에만 바인딩됩니다. 런타임 JSON·크롤링 상태는 `pc-supporter-data` named volume에, PostgreSQL 데이터는 `pc-supporter-postgres` named volume에 분리합니다. 저장소의 `api-reader` replica는 CI 전용 `container-smoke` profile에서만 시작합니다.
 
 ```bash
 docker compose up --build
 ```
 
-private 카탈로그 snapshot을 PostgreSQL compose 환경에 넣을 때는 image를 다시 만들거나 JSON을 공개 저장소에 복사하지 않고, source 디렉터리를 read-only로 bind mount한 일회성 app container에서 `npm run import:private-catalog`을 실행합니다. 먼저 `--dry-run`으로 핵심·주변 부품 레코드·범주·중복 ID를 검증하고, 전체 핵심 snapshot일 때만 `--apply --replace-danawa`, 전체 주변 부품 snapshot일 때만 `--include-accessories --replace-accessories`를 사용합니다. 교체 플래그는 지원 범주가 하나라도 빠진 부분 snapshot을 차단하며, 부분 데이터는 교체 플래그 없이 병합해야 합니다. 이 작업은 `PC_SUPPORTER_DATA_DIR`·`DATABASE_URL`이 가리키는 대상 저장소에만 반영합니다. 자세한 명령과 데이터 경계는 [`data/README.md`](data/README.md)에 있습니다.
+private 카탈로그 snapshot을 PostgreSQL compose 환경에 넣을 때는 image를 다시 만들거나 JSON을 공개 저장소에 복사하지 않고, source 디렉터리를 read-only로 bind mount한 일회성 app container에서 `npm run import:private-catalog`을 실행합니다. `--source-dir`는 반드시 명시해야 하며 기본 `data/`를 자동으로 읽지 않습니다. 먼저 `--dry-run`으로 핵심·주변 부품 레코드·범주·중복 ID를 검증하고, 전체 핵심 snapshot일 때만 `--apply --replace-danawa`, 전체 주변 부품 snapshot일 때만 `--include-accessories --replace-accessories`를 사용합니다. 기존 주변 부품을 유지한 채 냉각팬 override까지 가져오려면 `--include-cooling-fan-overrides`를 별도로 지정합니다. 대상 저장소에 해당 팬이 없으면 `--include-accessories`를 함께 사용해야 합니다. 교체 플래그는 지원 범주가 하나라도 빠진 부분 snapshot을 차단하며, 부분 데이터는 교체 플래그 없이 병합해야 합니다. 이 작업은 `PC_SUPPORTER_DATA_DIR`·`DATABASE_URL`이 가리키는 대상 저장소에만 반영합니다. 자세한 명령과 데이터 경계는 [`data/README.md`](data/README.md)에 있습니다.
 
 상태 확인:
 
@@ -721,6 +721,7 @@ DANAWA_ACCESSORY_CRAWL_LIMIT=30
 DANAWA_ACCESSORY_CRAWL_PAGES=
 DANAWA_ACCESSORY_CRAWL_ALL=false
 DATABASE_URL=postgresql://pcsupporter:pcsupporter@127.0.0.1:5432/pcsupporter
+RATE_LIMIT_HMAC_SECRET=
 PC_SUPPORTER_DATA_DIR=
 ADMIN_PASSWORD=
 ADMIN_SESSION_SECRET=
@@ -728,7 +729,7 @@ ADMIN_SESSION_SECRET=
 
 서버는 기본적으로 시작 시 카탈로그 갱신을 한 번 실행하고, 설정된 시간마다 다시 갱신합니다. 비활성화하려면 `DANAWA_CRAWL_ON_START=false`를 사용합니다. 수집기는 요청 타임아웃·재시도·지연을 적용하고 일반 HTTP 요청만 사용하며, 로그인·CAPTCHA·접근 제한 우회 로직은 포함하지 않습니다.
 
-2026-09-29 로컬 snapshot에는 `data/catalog.json` 코어 5,648개와 `data/accessories.json` 주변 부품 3,874개가 있습니다. 적용 중인 로컬 사양 overlay를 반영한 기준 필수 사양 확인은 코어 4,060개입니다. 주변 부품 품질 상태는 `live` 3,587개·미완료 245개·seed 42개이며, 범주별 정규화 사양 프로파일은 완전 2,700개·부분 297개·미평가 877개입니다. 가격 값은 코어 5,629개, 주변 부품 3,866개에서 확인됐습니다. 원천 목록 manifest는 9개 핵심 논리 범주 8,872개 코드를 기록하고, 주변 부품은 예상 3,647개 중 3,463개를 관측해 쿨링팬 184개가 미포착 상태입니다. 이 수치는 수집 snapshot이며 전체 데이터 완전성·최신 가격·구매 적합성을 보증하지 않습니다. `npm run build`는 로컬 데이터가 있으면 API 공개 projection을 `dist/catalog-data/`에, 런타임 원본과 수집 근거를 비공개 `dist-local/data/` sidecar에 생성합니다. 실제 외부 배포 전에는 다나와 이용 조건·robots 정책·재배포 범위를 확인해야 합니다.
+2026-09-29 로컬 snapshot에는 `data/catalog.json` 코어 5,648개와 `data/accessories.json` 주변 부품 3,874개가 있습니다. 적용 중인 로컬 사양 overlay를 반영한 기준 필수 사양 확인은 코어 4,060개입니다. 주변 부품 품질 상태는 `live` 3,587개·미완료 245개·seed 42개이며, 범주별 정규화 사양 프로파일은 완전 2,700개·부분 297개·미평가 877개입니다. 가격 값은 코어 5,629개, 주변 부품 3,866개에서 확인됐습니다. 원천 목록 manifest는 9개 핵심 논리 범주 8,872개 코드를 기록하고, 주변 부품은 예상 3,647개 중 3,463개를 관측해 쿨링팬 184개가 미포착 상태입니다. 이 수치는 수집 snapshot이며 전체 데이터 완전성·최신 가격·구매 적합성을 보증하지 않습니다. 기본 `npm run build`는 원격·파일 모드에서 웹 번들만 생성하며 로컬 카탈로그를 설치물에 넣지 않습니다. 로컬 데이터 패키징은 명시적으로 `npm run build:local-bundle`을 실행해 공개 API projection을 `dist/catalog-data/`에, 런타임 원본과 수집 근거를 비공개 `dist-local/data/` sidecar에 생성합니다. 실제 외부 배포 전에는 다나와 이용 조건·robots 정책·재배포 범위를 확인해야 합니다.
 
 핵심 호환 대상은 `data/catalog.json`에 보관하고, 주변 부품은 `data/accessories.json`으로 분리합니다. 두 파일의 레코드는 서로 다른 역할을 가지며, 주변 부품이 SSD·HDD 같은 핵심 선택 후보로 섞이지 않도록 `/api/parts`와 `/api/accessories` 경계를 유지합니다.
 
@@ -1122,9 +1123,13 @@ npm run test:seed
 
 초기 동기화는 브라우저 네트워크 차단으로 메타데이터 또는 저장 견적 요청 하나만 실패시킨 뒤에도 편집기와 다른 데이터가 유지되는지, 차단 해제 후 `다시 동기화`로 정상 상태가 복구되는지 확인합니다.
 
-`DATABASE_URL`을 설정하면 카탈로그·검수 벤치마크 보강·저장 견적·관심 목록이 PostgreSQL에 저장되고, 설정하지 않으면 로컬 JSON 파일로 fallback합니다. `PC_SUPPORTER_DATA_DIR`을 설정하면 JSON fallback의 데이터 디렉터리를 프로젝트 기본 `data/`와 분리할 수 있습니다. `docker compose up -d postgres`로 로컬 PostgreSQL을 실행한 뒤 `.env`에 `DATABASE_URL`을 넣을 수 있으며, production compose의 PostgreSQL 후보 비교 저장·재조회는 `npm run test:postgres:comparison`으로 확인할 수 있습니다. `ADMIN_PASSWORD`를 설정하면 데이터 센터의 크롤링과 관리자용 전체 관심 목록 관리에 HttpOnly 세션 인증이 적용되고, 운영 환경에서는 기본값이 아닌 `ADMIN_SESSION_SECRET`도 필요합니다. 인증된 관리자 세션 응답은 환경·비밀번호 설정·세션 secret 설정·운영 준비 상태를 진단하며, 개발 모드에서 인증이 꺼져 있거나 운영 설정이 부족하면 데이터 센터 상단에 안내를 표시합니다. 운영 환경에서 `ADMIN_PASSWORD` 또는 non-default `ADMIN_SESSION_SECRET`가 빠지면 관리자 로그인과 보호 API를 열지 않고 `503 ADMIN_AUTH_MISCONFIGURED`로 차단하며, 기본 session secret으로 운영 cookie를 발급하지 않습니다. 관리자 보호 API가 세션 만료로 `401 ADMIN_AUTH_REQUIRED`를 반환하면 클라이언트는 작업 오류로 남기지 않고 로그인 화면으로 전환합니다. 공유 링크 조회는 UUID 링크 자체를 전달자 권한으로 취급하므로 운영 공개 전에는 링크 유출 대응·레이트 리밋·개인정보 저장 정책을 검토해야 합니다. 설정하지 않은 로컬 프로젝트에서는 관리자 화면과 관리자 보호 API가 개발 편의상 열려 있습니다. 인터넷에 공개하기 전에는 작업 큐, 수집 실패 알림, 소스 이용 조건 검토를 추가해야 합니다.
+`DATABASE_URL`을 설정하면 카탈로그·검수 벤치마크 보강·저장 견적·관심 목록은 PostgreSQL만 사용하고, 설정하지 않으면 JSON 파일을 사용합니다. PostgreSQL 모드의 rate limit도 shared bucket으로 동작하므로 운영 서버에는 `RATE_LIMIT_HMAC_SECRET` 32자 이상을 설정하고 모든 replica에 같은 값을 배포합니다. 이 key는 client IP를 scope별 HMAC 처리할 때만 사용되고 원문 IP는 저장하지 않습니다. Docker Compose는 `RATE_LIMIT_HMAC_SECRET`, `ADMIN_PASSWORD`, `ADMIN_SESSION_SECRET`을 모두 명시해야 시작되며 저장소에 기본 비밀값을 두지 않습니다. 설정된 PostgreSQL에 연결할 수 없거나 운영 HMAC key가 빠져 있으면 파일·process-local store로 전환하지 않고 요청과 `/api/health`를 HTTP 503으로 닫습니다. `PC_SUPPORTER_DATA_DIR`을 설정하면 파일 모드 데이터 디렉터리를 프로젝트 기본 `data/`와 분리할 수 있습니다. `docker compose up -d postgres`로 로컬 PostgreSQL을 실행한 뒤 `.env`에 `DATABASE_URL`과 필요한 관리자·rate-limit 비밀값을 넣을 수 있으며, PostgreSQL 후보 비교 저장·재조회는 `npm run test:postgres:comparison`으로 확인할 수 있습니다. `ADMIN_PASSWORD`를 설정하면 데이터 센터의 크롤링과 관리자용 전체 관심 목록 관리에 HttpOnly 세션 인증이 적용되고, 운영 환경에서는 기본값이 아닌 `ADMIN_SESSION_SECRET`도 필요합니다. 인증된 관리자 세션 응답은 환경·비밀번호 설정·세션 secret 설정·운영 준비 상태를 진단하며, 개발 모드에서 인증이 꺼져 있거나 운영 설정이 부족하면 데이터 센터 상단에 안내를 표시합니다. 운영 환경에서 `ADMIN_PASSWORD` 또는 non-default `ADMIN_SESSION_SECRET`가 빠지면 관리자 로그인과 보호 API를 열지 않고 `503 ADMIN_AUTH_MISCONFIGURED`로 차단하며, 기본 session secret으로 운영 cookie를 발급하지 않습니다. 관리자 보호 API가 세션 만료로 `401 ADMIN_AUTH_REQUIRED`를 반환하면 클라이언트는 작업 오류로 남기지 않고 로그인 화면으로 전환합니다. 공유 링크 조회는 UUID 링크 자체를 전달자 권한으로 취급하므로 운영 공개 전에는 링크 유출 대응·레이트 리밋·개인정보 저장 정책을 검토해야 합니다. 설정하지 않은 로컬 프로젝트에서는 관리자 화면과 관리자 보호 API가 개발 편의상 열려 있습니다. 인터넷에 공개하기 전에는 Core/accessory crawl·retry, saved-build monitor의 durable queue 이관과 수집 실패 알림, 소스 이용 조건 검토를 추가해야 합니다.
 
-`/api/meta`는 활성 저장소뿐 아니라 `persistence.databaseConfigured`와 `persistence.fallbackReason`도 반환합니다. PostgreSQL이 설정되어 있지만 연결에 실패한 경우 관리자 화면에 JSON fallback 경고를 표시해, 설정되지 않은 개발용 fallback과 실제 DB 장애를 구분합니다.
+`/api/meta`는 선택된 `persistence.storageMode`와 `persistence.databaseConfigured`, `persistence.ready`, `persistence.unavailableReason`을 반환합니다. `/api/health`는 PostgreSQL 연결과 운영 rate-limit key 준비 상태를 확인해 사용할 수 없으면 HTTP 503을 반환하고, 관리자 화면은 JSON fallback 대신 서버 저장 불가 상태를 표시합니다.
+
+운영 `/api/health`는 `adminSecurity.productionReady`도 함께 반환하고, 관리자 비밀번호나 non-default session secret이 빠진 경우 HTTP 503으로 닫힙니다. 배포 자동 검증은 PostgreSQL API readiness와 worker의 새 heartbeat를 따로 확인합니다.
+
+Compose에서는 `POSTGRES_PASSWORD`도 필수이며 PostgreSQL host port는 loopback에만 바인딩됩니다. Lightsail JSON 저장소에서 PostgreSQL로 전환할 때에는 저장 견적·관심 목록 등 기존 user state가 자동 복사되지 않습니다. 완전한 파일→PostgreSQL state migration과 readback을 별도 수행하기 전에는 운영 `DATABASE_URL`을 추가하지 마세요. 배포 스크립트는 `PC_SUPPORTER_POSTGRES_DATA_MIGRATION_CONFIRMED=true`가 없으면 해당 전환을 거부합니다.
 
 production compose의 PostgreSQL 저장 검증은 `npm run test:postgres:comparison`으로 후보 비교 저장·재조회를, `npm run test:postgres:saved-build`로 저장 견적의 선택 이유·구매 진행률·가격 확인 이력 revision/history 저장·재조회를 확인합니다. 두 smoke 모두 실행 전에 `/api/meta`의 실제 `storageMode=postgres`를 확인하므로, 일반 file backend를 잘못 PostgreSQL 통과로 보고하지 않습니다. 두 smoke는 owner credential을 공개 응답에 포함하지 않는지 확인하고 테스트 데이터를 소유자 토큰으로 정리합니다.
 

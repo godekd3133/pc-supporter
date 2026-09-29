@@ -1,3 +1,4 @@
+import { safeLocalStorage } from "./safe-storage";
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type { IconType } from "react-icons";
@@ -22,6 +23,7 @@ import { CATEGORY_LABELS, GAMING_GRAPHICS_PRESET_LABELS, GAMING_REFRESH_RATE_LAB
 import { generatorBriefInterpretationFor } from "../shared/generator-brief";
 import type { GeneratorBriefConfig, GeneratorBriefInterpretation } from "../shared/generator-brief";
 import { api, ApiError } from "./api";
+import { hasStoredOwnerCredentials, markOwnerSessionResource, ownerCredentialAvailable, ownerRequestOptions, ownerSessionCreateOptions, ownerSessionModeSupported, removeOwnerSessionResource, retryOwnerSessionMigration } from "./owner-session";
 import { budgetEstimateFor, gameLabelFor, intensityOptionFor, ONBOARDING_WORKS, workEstimateFor } from "./quote-onboarding";
 import type { OnboardingIntensity, OnboardingWork } from "./quote-onboarding";
 
@@ -32,14 +34,14 @@ export type GeneratorBudgetResult = BudgetLadderOutcome;
 export type GeneratorBudgetShareResult = {
   id: string;
   url: string;
-  ownerToken: string;
+  ownerToken?: string;
+  owned?: boolean;
   expiresAt?: string;
   catalogSnapshotAt?: string;
 };
 
-type GeneratorBudgetShareResponse = BudgetLadderShareSnapshot & {
-  ownerToken: string;
-};
+type SessionOrLegacyOwner = { ownerManaged: true; ownerToken?: never } | { ownerManaged?: false; ownerToken: string };
+type GeneratorBudgetShareResponse = BudgetLadderShareSnapshot & SessionOrLegacyOwner;
 
 const CATEGORY_ICONS: Record<PartCategory, IconType> = {
   cpu: FiCpu,
@@ -65,7 +67,9 @@ export function generatedDraftSummaryFor(draft: BuildGenerationResult) {
   const budget = draft.budgetWon >= 10_000 && draft.budgetWon % 10_000 === 0
     ? `${(draft.budgetWon / 10_000).toLocaleString("ko-KR")}만 원`
     : formatWon(draft.budgetWon);
-  return `${purpose} 견적이에요. 예산은 ${budget}으로 설정했어요.`;
+  return draft.profile === "gaming"
+    ? `${purpose} 목표를 기준으로 부품을 골랐어요. 예산은 ${budget}으로 설정했어요.`
+    : `${purpose} 견적이에요. 예산은 ${budget}으로 설정했어요.`;
 }
 
 function storageCapacityLabelFor(gb: number) {
@@ -77,10 +81,10 @@ function GeneratorWorkContext({ draft, workType, workIntensity }: { draft: Build
   if (!work || !workIntensity || draft.profile !== work.profile) return null;
   const estimate = workEstimateFor([work.id], workIntensity);
   return <section className="generator-work-context" data-testid="generator-work-context" aria-label="선택한 작업 기준">
-    <div className="generator-work-context-heading"><div><p className="eyebrow">선택한 작업 기준</p><strong>{work.label} · {intensityOptionFor(workIntensity).label}</strong></div><span>견적 입력 조건</span></div>
+    <div className="generator-work-context-heading"><div><p className="eyebrow">선택한 작업 기준</p><strong>{work.label} · {intensityOptionFor(workIntensity).label}</strong></div><span>선택한 조건</span></div>
     <div className="generator-work-context-tags"><span>{estimate.performance}</span><span>{draft.memoryCapacityGb}GB</span><span>{storageCapacityLabelFor(draft.storageCapacityGb)}</span><span>GPU 목표 · {estimate.gpu}</span></div>
-    <p>선택한 작업의 예상 사양을 자동 견적 요청에 전달했어요.</p>
-    <small>아래 부품·가격과 호환 상태가 실제 생성 결과예요. 목표 사양 자체가 성능이나 게임 FPS를 보장하지는 않아요.</small>
+    <p>선택한 작업과 강도를 기준으로 부품을 추천했어요.</p>
+    <small>아래는 이 조건에 맞춰 고른 추천 부품과 가격, 호환 상태예요. 목표 사양은 실제 성능이나 게임 FPS를 보장하지 않아요.</small>
   </section>;
 }
 
@@ -90,10 +94,10 @@ function GeneratorGamingContext({ draft }: { draft: BuildGenerationResult }) {
   const gameLabel = games.length > 0 ? games.join(" · ") : "일반 게이밍";
   const graphics = GAMING_GRAPHICS_PRESET_LABELS[draft.gamingGraphicsPreset ?? "balanced"];
   const upscaling = GAMING_UPSCALING_LABELS[draft.gamingUpscaling ?? "quality"];
-  return <section className="generator-work-context" data-testid="generator-gaming-context" aria-label="게임 견적 입력 기준">
-    <div className="generator-work-context-heading"><div><p className="eyebrow">게임 목표</p><strong>{gameLabel}</strong></div><span>견적 입력 조건</span></div>
+  return <section className="generator-work-context" data-testid="generator-gaming-context" aria-label="게임 견적 기준">
+    <div className="generator-work-context-heading"><div><p className="eyebrow">게임 목표</p><strong>{gameLabel}</strong></div><span>선택한 조건</span></div>
     <div className="generator-work-context-tags"><span>{GAMING_RESOLUTION_LABELS[draft.gamingResolution]}</span><span>{draft.gamingRefreshRate}Hz</span><span>{graphics}</span><span>{upscaling}</span>{draft.gamingRayTracing && <span>레이 트레이싱</span>}</div>
-    <small>해상도와 희망 주사율은 입력한 목표예요. 실제 게임 FPS는 부품·게임 설정·사용 환경에 따라 달라요.</small>
+    <small>해상도와 희망 주사율은 요청한 목표예요. 추천 부품과 가격, 호환 상태는 아래에서 확인해 주세요. 실제 게임 FPS는 부품·게임 설정·사용 환경에 따라 달라요.</small>
   </section>;
 }
 
@@ -103,10 +107,10 @@ function GeneratorGeneralContext({ draft }: { draft: BuildGenerationResult }) {
     ? RECOMMENDATION_PERFORMANCE_TIER_LABELS[draft.performanceTier]
     : budgetEstimateFor(draft.budgetWon, undefined).performance;
   const gpuSelected = Boolean(draft.selection.gpu?.partId);
-  return <section className="generator-work-context" data-testid="generator-general-context" aria-label="일반 견적 입력 기준">
-    <div className="generator-work-context-heading"><div><p className="eyebrow">일반 견적 기준</p><strong>{target}</strong></div><span>견적 입력 조건</span></div>
+  return <section className="generator-work-context" data-testid="generator-general-context" aria-label="일반 견적 조건">
+    <div className="generator-work-context-heading"><div><p className="eyebrow">일반 견적 기준</p><strong>{target}</strong></div><span>선택한 조건</span></div>
     <div className="generator-work-context-tags"><span>예산 {draft.budgetWon.toLocaleString("ko-KR")}원</span><span>{draft.memoryCapacityGb}GB</span><span>{storageCapacityLabelFor(draft.storageCapacityGb)}</span><span>{gpuSelected ? "외장 GPU 포함" : "외장 GPU 미포함"}</span></div>
-    <small>아래 부품·가격과 호환 상태가 실제 생성 결과예요. 입력 기준과 생성 결과를 함께 확인해 주세요.</small>
+    <small>아래는 이 기준에 맞춰 고른 추천 부품과 가격, 호환 상태예요.</small>
   </section>;
 }
 
@@ -228,7 +232,7 @@ export function BuildGeneratorView({ initialProfile, draft, variants, budgetLadd
   const [listingPolicy, setListingPolicy] = useState<ListingPolicy>(() => initialGeneratorChoice("listingPolicy", ["retail_only", "include_bulk", "all"], "retail_only") as ListingPolicy);
   const [error, setError] = useState<string | null>(null);
   const [budgetLadderShare, setBudgetLadderShare] = useState<GeneratorBudgetShareResult | null>(null);
-  const [savedPresets, setSavedPresets] = useState<SavedGeneratorPreset[]>(() => typeof window === "undefined" ? [] : savedGeneratorPresetsFromJson(window.localStorage.getItem(GENERATOR_PRESET_STORAGE_KEY)));
+  const [savedPresets, setSavedPresets] = useState<SavedGeneratorPreset[]>(() => typeof window === "undefined" ? [] : savedGeneratorPresetsFromJson(safeLocalStorage.getItem(GENERATOR_PRESET_STORAGE_KEY)));
   const [presetName, setPresetName] = useState("");
   const [presetImportPreview, setPresetImportPreview] = useState<SavedGeneratorPreset[] | null>(null);
   const [brief, setBrief] = useState("");
@@ -270,8 +274,8 @@ export function BuildGeneratorView({ initialProfile, draft, variants, budgetLadd
   useEffect(() => () => { budgetLadderShareMutationRequestRef.current += 1; }, []);
   useEffect(() => {
     try {
-      if (savedPresets.length > 0) window.localStorage.setItem(GENERATOR_PRESET_STORAGE_KEY, savedGeneratorPresetsToJson(savedPresets));
-      else window.localStorage.removeItem(GENERATOR_PRESET_STORAGE_KEY);
+      if (savedPresets.length > 0) safeLocalStorage.setItem(GENERATOR_PRESET_STORAGE_KEY, savedGeneratorPresetsToJson(savedPresets));
+      else safeLocalStorage.removeItem(GENERATOR_PRESET_STORAGE_KEY);
     } catch {
       // A full local storage bucket must not prevent automatic configuration from working.
     }
@@ -640,6 +644,7 @@ export function BuildGeneratorView({ initialProfile, draft, variants, budgetLadd
       const request = budgetLadderBaseRequestFor(budgetLadder);
       const saved = await api<GeneratorBudgetShareResponse>("/api/budget-ladders", {
         method: "POST",
+        ...ownerSessionCreateOptions(),
         body: JSON.stringify({
           name: "PC Supporter 예산 구간 비교",
           payload: budgetLadderExportPayloadFor(budgetLadder),
@@ -659,8 +664,10 @@ export function BuildGeneratorView({ initialProfile, draft, variants, budgetLadd
         onToast(`예산 구간 비교 링크가 생성되었습니다: ${url}`);
       }
       if (!isCurrent()) return;
-      setBudgetLadderShare({ id: saved.id, url, ownerToken: saved.ownerToken, ...(saved.expiresAt ? { expiresAt: saved.expiresAt } : {}), catalogSnapshotAt: saved.catalogSnapshotAt });
-      onBudgetLadderShareSaved({ id: saved.id, url, name: saved.name, createdAt: saved.createdAt, ...(saved.versionNumber !== undefined ? { versionNumber: saved.versionNumber } : {}), ...(saved.expiresAt ? { expiresAt: saved.expiresAt } : {}), ownerToken: saved.ownerToken });
+      const owned = saved.ownerManaged === true;
+      if (owned) markOwnerSessionResource("budget-ladder", saved.id);
+      setBudgetLadderShare({ id: saved.id, url, ...(saved.ownerToken ? { ownerToken: saved.ownerToken } : {}), ...(owned ? { owned: true } : {}), ...(saved.expiresAt ? { expiresAt: saved.expiresAt } : {}), catalogSnapshotAt: saved.catalogSnapshotAt });
+      onBudgetLadderShareSaved({ id: saved.id, url, name: saved.name, createdAt: saved.createdAt, ...(saved.versionNumber !== undefined ? { versionNumber: saved.versionNumber } : {}), ...(saved.expiresAt ? { expiresAt: saved.expiresAt } : {}), ...(saved.ownerToken ? { ownerToken: saved.ownerToken } : {}), ...(owned ? { owned: true } : {}) });
     } catch (error: unknown) {
       if (isCurrent()) onToast(error instanceof Error ? error.message : "예산 구간 비교 공유 링크를 만들지 못했습니다.");
     }
@@ -668,12 +675,17 @@ export function BuildGeneratorView({ initialProfile, draft, variants, budgetLadd
 
   async function revokeBudgetLadder() {
     if (!budgetLadderShare || !window.confirm("이 예산 구간 비교 공유 링크를 취소할까요? 이미 전달된 링크도 더 이상 열리지 않습니다.")) return;
+    if (!ownerCredentialAvailable("budget-ladder", budgetLadderShare.id, budgetLadderShare)) {
+      onToast("이 브라우저에서 공유 소유권을 확인할 수 없어 링크를 취소하지 못했습니다.");
+      return;
+    }
     const requestVersion = ++budgetLadderShareMutationRequestRef.current;
     const isCurrent = () => mountedRef.current && budgetLadderShareMutationRequestRef.current === requestVersion;
     const share = budgetLadderShare;
     try {
-      await api(`/api/budget-ladders/${encodeURIComponent(share.id)}`, { method: "DELETE", headers: { "X-Share-Owner-Token": share.ownerToken }, retry: 0 });
+      await api(`/api/budget-ladders/${encodeURIComponent(share.id)}`, { method: "DELETE", ...ownerRequestOptions("budget-ladder", share.id, share), retry: 0 });
       if (!isCurrent()) return;
+      removeOwnerSessionResource("budget-ladder", share.id);
       setBudgetLadderShare(null);
       onBudgetLadderShareRevoked(share.id);
       onToast("예산 구간 비교 공유 링크를 취소했습니다.");
@@ -1033,11 +1045,11 @@ function GeneratorVariantsPanel({ variants: sourceVariants, loading, onApply, on
   const [variantImportCandidate, setVariantImportCandidate] = useState<GeneratorVariantResult[] | null>(null);
   const [importedVariants, setImportedVariants] = useState<GeneratorVariantResult[] | null>(null);
   const [variantImportError, setVariantImportError] = useState<string | null>(null);
-  const [localHistory, setLocalHistory] = useState<GeneratorVariantsLocalHistoryEntry[]>(() => typeof window === "undefined" ? [] : generatorVariantsLocalHistoryFromJson(window.localStorage.getItem(GENERATOR_VARIANTS_LOCAL_HISTORY_KEY)));
+  const [localHistory, setLocalHistory] = useState<GeneratorVariantsLocalHistoryEntry[]>(() => typeof window === "undefined" ? [] : generatorVariantsLocalHistoryFromJson(safeLocalStorage.getItem(GENERATOR_VARIANTS_LOCAL_HISTORY_KEY)));
   const [shareLink, setShareLink] = useState<GeneratorVariantsLocalShareEntry | null>(null);
   const [shareError, setShareError] = useState<string | null>(null);
   const [sharing, setSharing] = useState(false);
-  const [localShares, setLocalShares] = useState<GeneratorVariantsLocalShareEntry[]>(() => typeof window === "undefined" ? [] : generatorVariantsLocalSharesFromJson(window.localStorage.getItem(GENERATOR_VARIANTS_LOCAL_SHARES_STORAGE_KEY)));
+  const [localShares, setLocalShares] = useState<GeneratorVariantsLocalShareEntry[]>(() => typeof window === "undefined" ? [] : generatorVariantsLocalSharesFromJson(safeLocalStorage.getItem(GENERATOR_VARIANTS_LOCAL_SHARES_STORAGE_KEY)));
   const importedSourceVariantsRef = useRef<GeneratorVariantResult[] | null>(null);
   const shareMutationRef = useRef(0);
   const panelMountedRef = useRef(true);
@@ -1059,16 +1071,16 @@ function GeneratorVariantsPanel({ variants: sourceVariants, loading, onApply, on
   }, []);
   useEffect(() => {
     try {
-      if (localHistory.length > 0) window.localStorage.setItem(GENERATOR_VARIANTS_LOCAL_HISTORY_KEY, generatorVariantsLocalHistoryToJson(localHistory));
-      else window.localStorage.removeItem(GENERATOR_VARIANTS_LOCAL_HISTORY_KEY);
+      if (localHistory.length > 0) safeLocalStorage.setItem(GENERATOR_VARIANTS_LOCAL_HISTORY_KEY, generatorVariantsLocalHistoryToJson(localHistory));
+      else safeLocalStorage.removeItem(GENERATOR_VARIANTS_LOCAL_HISTORY_KEY);
     } catch {
       // A full local storage bucket must not block comparison results.
     }
   }, [localHistory]);
   useEffect(() => {
     try {
-      if (localShares.length > 0) window.localStorage.setItem(GENERATOR_VARIANTS_LOCAL_SHARES_STORAGE_KEY, generatorVariantsLocalSharesToJson(localShares));
-      else window.localStorage.removeItem(GENERATOR_VARIANTS_LOCAL_SHARES_STORAGE_KEY);
+      if (localShares.length > 0) safeLocalStorage.setItem(GENERATOR_VARIANTS_LOCAL_SHARES_STORAGE_KEY, generatorVariantsLocalSharesToJson(localShares));
+      else safeLocalStorage.removeItem(GENERATOR_VARIANTS_LOCAL_SHARES_STORAGE_KEY);
     } catch {
       // A full local storage bucket must not block comparison results.
     }
@@ -1081,6 +1093,10 @@ function GeneratorVariantsPanel({ variants: sourceVariants, loading, onApply, on
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
   }, []);
+  useEffect(() => {
+    if (!ownerSessionModeSupported() || !hasStoredOwnerCredentials()) return;
+    void retryOwnerSessionMigration().catch(() => undefined);
+  }, [localShares]);
   const importedViewActive = importedVariants !== null && importedSourceVariantsRef.current === sourceVariants;
   const variants = importedViewActive && importedVariants ? importedVariants : sourceVariants;
   const readyVariants = variants.filter((variant): variant is GeneratorVariantResult & { draft: BuildGenerationResult } => Boolean(variant.draft));
@@ -1177,13 +1193,16 @@ function GeneratorVariantsPanel({ variants: sourceVariants, loading, onApply, on
     setSharing(true);
     setShareError(null);
     try {
-      const saved = await api<GeneratorVariantsShareSnapshot & { ownerToken: string }>("/api/generator-variants", {
+      const saved = await api<GeneratorVariantsShareSnapshot & SessionOrLegacyOwner>("/api/generator-variants", {
         method: "POST",
+        ...ownerSessionCreateOptions(),
         body: JSON.stringify({ name: "PC Supporter 자동 구성 3안 비교", payload: JSON.parse(generatorVariantsJsonFor(variants)), ...(generatorVariantsRequestFor(variants) ? { request: generatorVariantsRequestFor(variants) } : {}), expiresInDays: 30 }),
         retry: 0
       });
       if (!isCurrent()) return;
-      const entry: GeneratorVariantsLocalShareEntry = { id: saved.id, url: `${window.location.origin}/generator-variants/${saved.id}`, name: saved.name, createdAt: saved.createdAt, ...(saved.expiresAt ? { expiresAt: saved.expiresAt } : {}), ownerToken: saved.ownerToken };
+      const owned = saved.ownerManaged === true;
+      if (owned) markOwnerSessionResource("generator-variants", saved.id);
+      const entry: GeneratorVariantsLocalShareEntry = { id: saved.id, url: `${window.location.origin}/generator-variants/${saved.id}`, name: saved.name, createdAt: saved.createdAt, ...(saved.expiresAt ? { expiresAt: saved.expiresAt } : {}), ...(saved.ownerToken ? { ownerToken: saved.ownerToken } : {}), ...(owned ? { owned: true } : {}) };
       setLocalShares((current) => generatorVariantsLocalShareRemember(current, entry));
       setShareLink(entry);
       try {
@@ -1199,18 +1218,24 @@ function GeneratorVariantsPanel({ variants: sourceVariants, loading, onApply, on
   }
   async function revokeSharedVariants(entry: GeneratorVariantsLocalShareEntry) {
     if (sharing || !window.confirm("이 자동 구성 비교 공유 링크를 취소할까요? 전달된 링크도 더 이상 열리지 않습니다.")) return;
+    if (!ownerCredentialAvailable("generator-variants", entry.id, entry)) {
+      setShareError("이 브라우저에서 공유 소유권을 확인할 수 없어 링크를 취소하지 못했습니다.");
+      return;
+    }
     const requestVersion = ++shareMutationRef.current;
     const isCurrent = () => panelMountedRef.current && shareMutationRef.current === requestVersion;
     setSharing(true);
     setShareError(null);
     try {
-      await api(`/api/generator-variants/${encodeURIComponent(entry.id)}`, { method: "DELETE", headers: { "X-Share-Owner-Token": entry.ownerToken ?? "" }, retry: 0 });
+      await api(`/api/generator-variants/${encodeURIComponent(entry.id)}`, { method: "DELETE", ...ownerRequestOptions("generator-variants", entry.id, entry), retry: 0 });
       if (!isCurrent()) return;
+      removeOwnerSessionResource("generator-variants", entry.id);
       setLocalShares((current) => generatorVariantsLocalShareRemove(current, entry.id));
       setShareLink((current) => current?.id === entry.id ? null : current);
     } catch (error: unknown) {
       if (!isCurrent()) return;
       if (error instanceof ApiError && error.status === 404) {
+        removeOwnerSessionResource("generator-variants", entry.id);
         setLocalShares((current) => generatorVariantsLocalShareRemove(current, entry.id));
         setShareLink((current) => current?.id === entry.id ? null : current);
         return;

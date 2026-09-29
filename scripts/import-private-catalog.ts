@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { ACCESSORY_CATEGORIES, PART_CATEGORIES, type AccessoryCategory, type AccessoryItem, type Part, type PartCategory } from "../shared/types";
+import { ACCESSORY_CATEGORIES, PART_CATEGORIES, type AccessoryCategory, type AccessoryItem, type CoolingFanLoadOverride, type Part, type PartCategory } from "../shared/types";
 import { assertCompleteReplacementSnapshot, accessoryReplacementCoverageFor, coreReplacementCoverageFor } from "../shared/private-catalog-import";
+import { requiredDirectoryArgument } from "./private-catalog-import-args";
 
 const DATA_QUALITY_VALUES = new Set(["seed", "live", "manual", "incomplete"]);
 const SOURCE_VALUES = new Set(["seed", "danawa", "manual"]);
@@ -10,14 +11,6 @@ const MAX_IMPORT_RECORDS = 100_000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function argumentValue(args: string[], name: string) {
-  const index = args.indexOf(name);
-  if (index === -1) return undefined;
-  const value = args[index + 1]?.trim();
-  if (!value || value.startsWith("--")) throw new Error(`${name} 값이 필요합니다.`);
-  return value;
 }
 
 function usage() {
@@ -29,7 +22,8 @@ function usage() {
     "--apply            현재 PC_SUPPORTER_DATA_DIR 또는 DATABASE_URL 대상에 반영합니다.",
     "--replace-danawa   수집 snapshot의 9개 핵심 범주에서 기존 Danawa 행을 교체합니다.",
     "--include-accessories  같은 source 디렉터리의 accessories.json도 함께 검증·반영합니다.",
-    "--replace-accessories  10개 주변 부품 범주의 기존 Danawa 행을 교체합니다."
+    "--replace-accessories  10개 주변 부품 범주의 기존 Danawa 행을 교체합니다.",
+    "--include-cooling-fan-overrides  같은 source 디렉터리의 cooling-fan-load-overrides.json을 검증·반영합니다."
   ].join("\n");
 }
 
@@ -112,13 +106,52 @@ function accessoryCountsFor(items: AccessoryItem[]) {
   return { categoryCounts, qualityCounts };
 }
 
+function parseCoolingFanLoadOverrideSource(value: unknown, sourcePath: string): unknown[] {
+  const items = Array.isArray(value)
+    ? value
+    : isRecord(value) && Array.isArray(value.items)
+      ? value.items
+      : undefined;
+  if (!items) throw new Error(`${sourcePath}: 최상위 값은 쿨링팬 override 배열 또는 items 배열을 가진 객체여야 합니다.`);
+  if (items.length < 1) throw new Error(`${sourcePath}: items는 최소 1개가 필요합니다.`);
+  if (items.length > 500) throw new Error(`${sourcePath}: 한 번에 최대 500개 쿨링팬 override만 가져올 수 있습니다.`);
+  return items.map((raw, index) => {
+    const label = `${sourcePath} [${index}]`;
+    if (!isRecord(raw)) throw new Error(`${label}: 객체 레코드가 필요합니다.`);
+    const updatedAt = typeof raw.updatedAt === "string" ? raw.updatedAt.trim() : "";
+    if (!Number.isFinite(Date.parse(updatedAt))) throw new Error(`${label}: updatedAt가 ISO 날짜가 아닙니다.`);
+    const explicitAccessoryId = typeof raw.accessoryId === "string" ? raw.accessoryId.trim() : "";
+    const accessoryId = explicitAccessoryId || (typeof raw.partId === "string" ? raw.partId.trim() : "");
+    return { ...raw, accessoryId, updatedAt };
+  });
+}
+
+function validateCoolingFanLoadOverrideImport(
+  sourceItems: unknown[],
+  accessories: AccessoryItem[],
+  existingOverrides: Record<string, CoolingFanLoadOverride>,
+  validateBatch: typeof import("../server/cooling-fan-load-overrides").validateCoolingFanLoadOverrideBatch,
+  sourcePath: string
+) {
+  const validation = validateBatch({ items: sourceItems }, accessories, existingOverrides);
+  if (validation.errors.length > 0) throw new Error(`${sourcePath}: 쿨링팬 override 검증에 실패했습니다. ${validation.errors.join(" / ")}`);
+  const sourceByAccessoryId = new Map(sourceItems.map((item) => {
+    const record = item as Record<string, unknown>;
+    return [String(record.accessoryId), String(record.updatedAt)] as const;
+  }));
+  return validation.validOverrides.map((override) => ({
+    ...override,
+    updatedAt: sourceByAccessoryId.get(override.accessoryId) ?? override.updatedAt
+  }));
+}
+
 const args = process.argv.slice(2);
 if (args.includes("--help") || args.includes("-h")) {
   console.log(usage());
   process.exit(0);
 }
 
-const knownFlags = new Set(["--dry-run", "--apply", "--replace-danawa", "--include-accessories", "--replace-accessories", "--source-dir"]);
+const knownFlags = new Set(["--dry-run", "--apply", "--replace-danawa", "--include-accessories", "--replace-accessories", "--include-cooling-fan-overrides", "--source-dir"]);
 for (const [index, arg] of args.entries()) {
   if (arg.startsWith("--") && !knownFlags.has(arg)) throw new Error(`알 수 없는 옵션 ${arg}입니다.\n\n${usage()}`);
   if (arg === "--source-dir" && index === args.length - 1) throw new Error(`--source-dir 값이 필요합니다.\n\n${usage()}`);
@@ -129,39 +162,69 @@ const apply = args.includes("--apply");
 const replaceDanawa = args.includes("--replace-danawa");
 const includeAccessories = args.includes("--include-accessories");
 const replaceAccessories = args.includes("--replace-accessories");
+const includeCoolingFanOverrides = args.includes("--include-cooling-fan-overrides");
 if (dryRun === apply) throw new Error(`${usage()}\n\n--dry-run 또는 --apply 중 하나만 지정해야 합니다.`);
 if (replaceAccessories && !includeAccessories) throw new Error(`--replace-accessories는 --include-accessories와 함께 사용해야 합니다.\n\n${usage()}`);
-const sourceDirectory = resolve(argumentValue(args, "--source-dir") ?? "data");
+const sourceDirectory = requiredDirectoryArgument(args, "--source-dir");
+const coolingFanOverridesModule = includeCoolingFanOverrides ? await import("../server/cooling-fan-load-overrides") : undefined;
 const sourcePath = resolve(sourceDirectory, "catalog.json");
 const raw = JSON.parse(await readFile(sourcePath, "utf8")) as unknown;
 const parts = parseParts(raw, sourcePath);
 const sourceFingerprint = createHash("sha256").update(JSON.stringify(parts)).digest("hex");
 const sourceCounts = countsFor(parts);
 const accessoryPath = resolve(sourceDirectory, "accessories.json");
-const accessories = includeAccessories
+const sourceAccessories = includeAccessories || includeCoolingFanOverrides
   ? parseAccessories(JSON.parse(await readFile(accessoryPath, "utf8")) as unknown, accessoryPath)
   : undefined;
+const accessories = includeAccessories ? sourceAccessories : undefined;
 const accessoryFingerprint = accessories ? createHash("sha256").update(JSON.stringify(accessories)).digest("hex") : undefined;
 const accessoryCounts = accessories ? accessoryCountsFor(accessories) : undefined;
+const coolingFanOverridePath = resolve(sourceDirectory, "cooling-fan-load-overrides.json");
+const rawCoolingFanOverrides = includeCoolingFanOverrides
+  ? parseCoolingFanLoadOverrideSource(JSON.parse(await readFile(coolingFanOverridePath, "utf8")) as unknown, coolingFanOverridePath)
+  : undefined;
+const validatedCoolingFanOverrides = rawCoolingFanOverrides && sourceAccessories && coolingFanOverridesModule
+  ? validateCoolingFanLoadOverrideImport(rawCoolingFanOverrides, sourceAccessories, {}, coolingFanOverridesModule.validateCoolingFanLoadOverrideBatch, coolingFanOverridePath)
+  : undefined;
+const coolingFanOverrideFingerprint = validatedCoolingFanOverrides
+  ? createHash("sha256").update(JSON.stringify(validatedCoolingFanOverrides)).digest("hex")
+  : undefined;
 const coreReplacementCoverage = coreReplacementCoverageFor(parts);
 const accessoryReplacementCoverage = accessories ? accessoryReplacementCoverageFor(accessories) : undefined;
 if (replaceDanawa) assertCompleteReplacementSnapshot("--replace-danawa", coreReplacementCoverage);
 if (replaceAccessories && accessoryReplacementCoverage) assertCompleteReplacementSnapshot("--replace-accessories", accessoryReplacementCoverage);
 
 if (dryRun) {
-  console.log(JSON.stringify({ ok: true, mode: "dry-run", sourcePath, sourceFingerprint, sourceRecords: parts.length, ...sourceCounts, coreReplacementCoverage, ...(accessories ? { accessoryPath, accessoryFingerprint, accessoryRecords: accessories.length, accessoryCounts, accessoryReplacementCoverage } : {}), replaceDanawa, includeAccessories, replaceAccessories, message: "검증만 수행했으며 대상 저장소는 변경하지 않았습니다." }, null, 2));
+  console.log(JSON.stringify({ ok: true, mode: "dry-run", sourcePath, sourceFingerprint, sourceRecords: parts.length, ...sourceCounts, coreReplacementCoverage, ...(accessories ? { accessoryPath, accessoryFingerprint, accessoryRecords: accessories.length, accessoryCounts, accessoryReplacementCoverage } : {}), ...(validatedCoolingFanOverrides ? { coolingFanOverridePath, coolingFanOverrideFingerprint, coolingFanOverrideRecords: validatedCoolingFanOverrides.length } : {}), replaceDanawa, includeAccessories, replaceAccessories, includeCoolingFanOverrides, message: "검증만 수행했으며 대상 저장소는 변경하지 않았습니다." }, null, 2));
   process.exit(0);
 }
 
 const { catalogMeta, upsertCatalog } = await import("../server/catalog");
-const { upsertAccessories } = await import("../server/accessories");
+const { loadAccessories, upsertAccessories } = await import("../server/accessories");
 const { persistenceMode } = await import("../server/repository");
-const before = await catalogMeta();
-const merged = await upsertCatalog(parts, replaceDanawa ? { replaceDanawaCategories: [...PART_CATEGORIES] } : {});
-const mergedAccessories = accessories
-  ? await upsertAccessories(accessories, replaceAccessories ? { replaceDanawaCategories: [...ACCESSORY_CATEGORIES] } : {})
-  : undefined;
-const after = await catalogMeta();
+const { withCatalogIngestionLease } = await import("../server/catalog-ingestion-coordinator");
+const { before, merged, mergedAccessories, mergedCoolingFanOverrides, after } = await withCatalogIngestionLease(async () => {
+  const before = await catalogMeta();
+  const merged = await upsertCatalog(parts, replaceDanawa ? { replaceDanawaCategories: [...PART_CATEGORIES] } : {});
+  const mergedAccessories = accessories
+    ? await upsertAccessories(accessories, replaceAccessories ? { replaceDanawaCategories: [...ACCESSORY_CATEGORIES] } : {})
+    : undefined;
+  let mergedCoolingFanOverrides: CoolingFanLoadOverride[] | undefined;
+  if (rawCoolingFanOverrides && coolingFanOverridesModule) {
+    const existingOverrides = await coolingFanOverridesModule.readCoolingFanLoadOverrides();
+    const targetAccessories = await loadAccessories();
+    mergedCoolingFanOverrides = validateCoolingFanLoadOverrideImport(
+      rawCoolingFanOverrides,
+      targetAccessories,
+      existingOverrides,
+      coolingFanOverridesModule.validateCoolingFanLoadOverrideBatch,
+      coolingFanOverridePath
+    );
+    await coolingFanOverridesModule.saveCoolingFanLoadOverrides(mergedCoolingFanOverrides);
+  }
+  const after = await catalogMeta();
+  return { before, merged, mergedAccessories, mergedCoolingFanOverrides, after };
+});
 console.log(JSON.stringify({
   ok: true,
   mode: "apply",
@@ -171,14 +234,17 @@ console.log(JSON.stringify({
   ...sourceCounts,
   coreReplacementCoverage,
   ...(accessories ? { accessoryPath, accessoryFingerprint, accessoryRecords: accessories.length, accessoryCounts } : {}),
+  ...(validatedCoolingFanOverrides ? { coolingFanOverridePath, coolingFanOverrideFingerprint, coolingFanOverrideRecords: validatedCoolingFanOverrides.length } : {}),
   ...(accessoryReplacementCoverage ? { accessoryReplacementCoverage } : {}),
   replaceDanawa,
   includeAccessories,
   replaceAccessories,
+  includeCoolingFanOverrides,
   targetStorageMode: await persistenceMode(),
   before: { catalogCount: before.catalogCount, categoryCounts: before.categoryCounts, qualityCounts: before.qualityCounts },
   after: { catalogCount: after.catalogCount, categoryCounts: after.categoryCounts, qualityCounts: after.qualityCounts },
   mergedRecords: merged.length,
   ...(mergedAccessories ? { mergedAccessoryRecords: mergedAccessories.length } : {}),
+  ...(mergedCoolingFanOverrides ? { mergedCoolingFanOverrideRecords: mergedCoolingFanOverrides.length } : {}),
   message: "private catalog snapshot을 대상 저장소에 반영했습니다. 실제 가격·재고 최신성은 manifest와 원문 검수로 별도 확인해야 합니다."
 }, null, 2));

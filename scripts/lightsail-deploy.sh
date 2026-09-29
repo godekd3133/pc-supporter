@@ -12,6 +12,7 @@ REMOTE_TMP="${PC_SUPPORTER_REMOTE_TMP:-/tmp/pc-supporter-lightsail}"
 APP_DIR="${PC_SUPPORTER_REMOTE_APP_DIR:-/opt/pc-supporter}"
 INTERNAL_HEALTH_TIMEOUT_SECONDS="${PC_SUPPORTER_INTERNAL_HEALTH_TIMEOUT_SECONDS:-240}"
 SERVICE_NAME="pc-supporter-api"
+WORKER_SERVICE_NAME="pc-supporter-worker"
 PRESERVE_ENV=false
 DRY_RUN=false
 RELEASE_ID="$(date -u +%Y%m%d%H%M%S)"
@@ -189,12 +190,78 @@ if [[ "$PRESERVE_ENV" != "true" && -n "$ENV_FILE" ]]; then
 fi
 
 ssh "${SSH_ARGS[@]}" "$SSH_TARGET" \
-  "RELEASE_ID='$RELEASE_ID' REMOTE_TMP='$REMOTE_TMP' APP_DIR='$APP_DIR' DOMAIN='$DOMAIN' SERVICE_NAME='$SERVICE_NAME' PRESERVE_ENV='$PRESERVE_ENV' HAS_ENV='$([[ -n "$ENV_FILE" ]] && echo true || echo false)' INTERNAL_HEALTH_TIMEOUT_SECONDS='$INTERNAL_HEALTH_TIMEOUT_SECONDS' bash -s" <<'REMOTE'
+  "RELEASE_ID='$RELEASE_ID' REMOTE_TMP='$REMOTE_TMP' APP_DIR='$APP_DIR' DOMAIN='$DOMAIN' SERVICE_NAME='$SERVICE_NAME' WORKER_SERVICE_NAME='$WORKER_SERVICE_NAME' PRESERVE_ENV='$PRESERVE_ENV' HAS_ENV='$([[ -n "$ENV_FILE" ]] && echo true || echo false)' INTERNAL_HEALTH_TIMEOUT_SECONDS='$INTERNAL_HEALTH_TIMEOUT_SECONDS' bash -s" <<'REMOTE'
 set -euo pipefail
 
 SERVICE_USER="pc-supporter"
 RELEASE_DIR="$APP_DIR/releases/$RELEASE_ID"
 ENV_PATH="/etc/pc-supporter/backend.env"
+API_UNIT_PATH="/etc/systemd/system/$SERVICE_NAME.service"
+WORKER_UNIT_PATH="/etc/systemd/system/$WORKER_SERVICE_NAME.service"
+ENV_BACKUP_PATH="$ENV_PATH.rollback-$RELEASE_ID"
+API_UNIT_BACKUP_PATH="$API_UNIT_PATH.rollback-$RELEASE_ID"
+WORKER_UNIT_BACKUP_PATH="$WORKER_UNIT_PATH.rollback-$RELEASE_ID"
+CADDY_BACKUP_PATH="/etc/caddy/Caddyfile.pc-supporter-backup-$RELEASE_ID"
+PREVIOUS_RELEASE="$(readlink -f "$APP_DIR/current" 2>/dev/null || true)"
+PREVIOUS_HAS_POSTGRES=false
+if [[ -f "$ENV_PATH" ]] && sudo grep -Eq '^DATABASE_URL=[^[:space:]]+' "$ENV_PATH"; then
+  PREVIOUS_HAS_POSTGRES=true
+fi
+ENV_WAS_REPLACED=false
+ENV_PREVIOUS_EXISTS=false
+API_UNIT_PREVIOUS_EXISTS=false
+WORKER_UNIT_PREVIOUS_EXISTS=false
+RELEASE_SWITCHED=false
+CADDY_CONFIG_CHANGED=false
+
+rollback_failed_deployment() {
+  local deploy_exit_status=$?
+  trap - EXIT
+  if [[ "$deploy_exit_status" -eq 0 ]]; then return; fi
+  if [[ "$ENV_WAS_REPLACED" == "true" ]]; then
+    if [[ "$ENV_PREVIOUS_EXISTS" == "true" ]]; then
+      sudo install -o root -g "$SERVICE_USER" -m 0640 "$ENV_BACKUP_PATH" "$ENV_PATH" || true
+    else
+      sudo rm -f "$ENV_PATH" || true
+    fi
+  fi
+  if [[ "$CADDY_CONFIG_CHANGED" == "true" && -f "$CADDY_BACKUP_PATH" ]]; then
+    sudo cp -p "$CADDY_BACKUP_PATH" /etc/caddy/Caddyfile || true
+  fi
+  if [[ "$RELEASE_SWITCHED" == "true" ]]; then
+    if [[ "$API_UNIT_PREVIOUS_EXISTS" == "true" ]]; then
+      sudo install -o root -g root -m 0644 "$API_UNIT_BACKUP_PATH" "$API_UNIT_PATH" || true
+    else
+      sudo rm -f "$API_UNIT_PATH" || true
+    fi
+    if [[ "$WORKER_UNIT_PREVIOUS_EXISTS" == "true" ]]; then
+      sudo install -o root -g root -m 0644 "$WORKER_UNIT_BACKUP_PATH" "$WORKER_UNIT_PATH" || true
+    else
+      sudo rm -f "$WORKER_UNIT_PATH" || true
+    fi
+    sudo systemctl daemon-reload || true
+    if [[ -n "$PREVIOUS_RELEASE" ]]; then
+      sudo ln -sfn "$PREVIOUS_RELEASE" "$APP_DIR/current" || true
+      sudo systemctl restart "$SERVICE_NAME" || true
+      if [[ "$PREVIOUS_HAS_POSTGRES" == "true" && "$WORKER_UNIT_PREVIOUS_EXISTS" == "true" ]]; then
+        sudo systemctl restart "$WORKER_SERVICE_NAME" || true
+      else
+        sudo systemctl disable "$WORKER_SERVICE_NAME" 2>/dev/null || true
+        sudo systemctl stop "$WORKER_SERVICE_NAME" 2>/dev/null || true
+      fi
+      sudo systemctl reload caddy || true
+      echo "Deployment failed; restored previous release $PREVIOUS_RELEASE and restarted its saved services." >&2
+    else
+      sudo systemctl disable "$SERVICE_NAME" 2>/dev/null || true
+      sudo systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+      sudo systemctl disable "$WORKER_SERVICE_NAME" 2>/dev/null || true
+      sudo systemctl stop "$WORKER_SERVICE_NAME" 2>/dev/null || true
+      echo "Deployment failed without a previous release; disabled the new service units." >&2
+    fi
+  fi
+  exit "$deploy_exit_status"
+}
+trap rollback_failed_deployment EXIT
 
 if ! id "$SERVICE_USER" >/dev/null 2>&1; then
   sudo useradd --system --user-group --home /var/lib/pc-supporter --shell /usr/sbin/nologin "$SERVICE_USER"
@@ -211,10 +278,16 @@ if [[ "$PRESERVE_ENV" == "true" ]]; then
     exit 1
   fi
 elif [[ "$HAS_ENV" == "true" ]]; then
+  if [[ -f "$ENV_PATH" ]]; then
+    sudo cp -p "$ENV_PATH" "$ENV_BACKUP_PATH"
+    ENV_PREVIOUS_EXISTS=true
+  fi
+  ENV_WAS_REPLACED=true
   sudo install -o root -g "$SERVICE_USER" -m 0640 "$REMOTE_TMP/backend.env" "$ENV_PATH"
 elif [[ ! -f "$ENV_PATH" ]]; then
   admin_password="$(openssl rand -hex 32)"
   admin_session_secret="$(openssl rand -hex 32)"
+  rate_limit_hmac_secret="$(openssl rand -hex 32)"
   umask 077
   cat > "$REMOTE_TMP/backend.env.generated" <<ENV
 NODE_ENV=production
@@ -225,8 +298,10 @@ BUILD_MONITOR_SCHEDULER_ENABLED=false
 CORS_ALLOWED_ORIGINS=capacitor://localhost,https://localhost,http://localhost,https://$DOMAIN
 ADMIN_COOKIE_SAMESITE=none
 ADMIN_PASSWORD=$admin_password
-ADMIN_SESSION_SECRET=$admin_session_secret
+  ADMIN_SESSION_SECRET=$admin_session_secret
+RATE_LIMIT_HMAC_SECRET=$rate_limit_hmac_secret
 ENV
+  ENV_WAS_REPLACED=true
   sudo install -o root -g "$SERVICE_USER" -m 0640 "$REMOTE_TMP/backend.env.generated" "$ENV_PATH"
   rm -f "$REMOTE_TMP/backend.env.generated"
 fi
@@ -234,6 +309,31 @@ fi
 if ! sudo grep -Eq '^ADMIN_PASSWORD=[^[:space:]]+' "$ENV_PATH" || ! sudo grep -Eq '^ADMIN_SESSION_SECRET=[^[:space:]]+' "$ENV_PATH"; then
   echo "Production admin authentication is not configured; refusing public deployment." >&2
   exit 1
+fi
+session_secret_value="$(sudo sed -n 's/^ADMIN_SESSION_SECRET=//p' "$ENV_PATH" | head -n 1)"
+session_secret_value="${session_secret_value%\"}"
+session_secret_value="${session_secret_value#\"}"
+session_secret_value="${session_secret_value%\'}"
+session_secret_value="${session_secret_value#\'}"
+if [[ "$session_secret_value" == "pc-supporter-local-session-secret" ]]; then
+  echo "Production admin authentication cannot use the development session secret; refusing public deployment." >&2
+  exit 1
+fi
+unset session_secret_value
+
+if sudo grep -Eq '^DATABASE_URL=[^[:space:]]+' "$ENV_PATH" && ! sudo grep -Eq '^RATE_LIMIT_HMAC_SECRET=[^[:space:]]{32,}$' "$ENV_PATH"; then
+  echo "PostgreSQL-backed rate limiting requires a shared RATE_LIMIT_HMAC_SECRET of at least 32 characters; refusing public deployment." >&2
+  exit 1
+fi
+HAS_POSTGRES=false
+SERVICE_PROCESS_ROLE=combined
+if sudo grep -Eq '^DATABASE_URL=[^[:space:]]+' "$ENV_PATH"; then
+  HAS_POSTGRES=true
+  SERVICE_PROCESS_ROLE=api
+  if ! sudo grep -Eq '^PC_SUPPORTER_POSTGRES_DATA_MIGRATION_CONFIRMED=true$' "$ENV_PATH"; then
+    echo "DATABASE_URL switches repositories away from file-backed saved user state. Confirm its separate migration and readback before enabling PostgreSQL on Lightsail." >&2
+    exit 1
+  fi
 fi
 
 install_node() {
@@ -262,9 +362,19 @@ if [[ ! -x "$APP_DIR/shared/node_modules/.bin/tsx" || "$shared_hash" != "$lock_h
 fi
 sudo ln -sfn "$APP_DIR/shared/node_modules" "$RELEASE_DIR/node_modules"
 sudo ln -sfn "$RELEASE_DIR" "$APP_DIR/current"
+RELEASE_SWITCHED=true
 
 NPM_BIN="$(command -v npm)"
-sudo install -o root -g root -m 0644 /dev/stdin "/etc/systemd/system/$SERVICE_NAME.service" <<SERVICE
+if [[ -f "$API_UNIT_PATH" ]]; then
+  sudo cp -p "$API_UNIT_PATH" "$API_UNIT_BACKUP_PATH"
+  API_UNIT_PREVIOUS_EXISTS=true
+fi
+if [[ -f "$WORKER_UNIT_PATH" ]]; then
+  sudo cp -p "$WORKER_UNIT_PATH" "$WORKER_UNIT_BACKUP_PATH"
+  WORKER_UNIT_PREVIOUS_EXISTS=true
+fi
+
+sudo install -o root -g root -m 0644 /dev/stdin "$API_UNIT_PATH" <<SERVICE
 [Unit]
 Description=PC Supporter API
 After=network-online.target
@@ -276,10 +386,12 @@ User=$SERVICE_USER
 Group=$SERVICE_USER
 WorkingDirectory=$APP_DIR/current
 EnvironmentFile=$ENV_PATH
+Environment=PC_SUPPORTER_PROCESS_ROLE=$SERVICE_PROCESS_ROLE
 Environment=NODE_OPTIONS=--max-old-space-size=256
 ExecStart=$NPM_BIN run start
 Restart=always
 RestartSec=5
+TimeoutStopSec=120
 NoNewPrivileges=true
 PrivateTmp=true
 
@@ -287,13 +399,40 @@ PrivateTmp=true
 WantedBy=multi-user.target
 SERVICE
 
+if [[ "$HAS_POSTGRES" == "true" ]]; then
+  sudo install -o root -g root -m 0644 /dev/stdin "$WORKER_UNIT_PATH" <<SERVICE
+[Unit]
+Description=PC Supporter background worker
+After=network-online.target $SERVICE_NAME.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=$SERVICE_USER
+Group=$SERVICE_USER
+WorkingDirectory=$APP_DIR/current
+EnvironmentFile=$ENV_PATH
+Environment=PC_SUPPORTER_PROCESS_ROLE=worker
+Environment=NODE_OPTIONS=--max-old-space-size=256
+ExecStart=$NPM_BIN run worker
+Restart=always
+RestartSec=5
+TimeoutStopSec=120
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+fi
+
 if ! command -v caddy >/dev/null 2>&1; then
   echo "Caddy is not installed on the KBO Lightsail host; refusing to replace its HTTPS setup." >&2
   exit 1
 fi
 
 if ! sudo grep -Fq "# pc-supporter-managed" /etc/caddy/Caddyfile; then
-  sudo cp -p /etc/caddy/Caddyfile "/etc/caddy/Caddyfile.pc-supporter-backup-$RELEASE_ID"
+  sudo cp -p /etc/caddy/Caddyfile "$CADDY_BACKUP_PATH"
   cat > "$REMOTE_TMP/pc-supporter.caddy" <<CADDY
 
 # pc-supporter-managed
@@ -302,6 +441,7 @@ $DOMAIN {
   reverse_proxy 127.0.0.1:4174
 }
 CADDY
+  CADDY_CONFIG_CHANGED=true
   sudo tee -a /etc/caddy/Caddyfile < "$REMOTE_TMP/pc-supporter.caddy" >/dev/null
 fi
 
@@ -309,6 +449,16 @@ sudo caddy validate --config /etc/caddy/Caddyfile
 sudo systemctl daemon-reload
 sudo systemctl enable "$SERVICE_NAME"
 sudo systemctl restart "$SERVICE_NAME"
+if [[ "$HAS_POSTGRES" == "true" ]]; then
+  sudo systemctl enable "$WORKER_SERVICE_NAME"
+  worker_boot_epoch="$(date +%s)"
+  sudo systemctl restart "$WORKER_SERVICE_NAME"
+else
+  sudo systemctl disable "$WORKER_SERVICE_NAME" 2>/dev/null || true
+  if sudo systemctl is-active --quiet "$WORKER_SERVICE_NAME"; then
+    sudo systemctl stop "$WORKER_SERVICE_NAME"
+  fi
+fi
 sudo systemctl reload caddy
 
 health_body=""
@@ -333,8 +483,37 @@ if [[ -z "$health_body" ]]; then
 fi
 printf '%s\n' "$health_body"
 sudo systemctl is-active "$SERVICE_NAME"
+if [[ "$HAS_POSTGRES" == "true" ]]; then
+  worker_data_dir="$(sudo sed -n 's/^PC_SUPPORTER_DATA_DIR=//p' "$ENV_PATH" | head -n 1)"
+  worker_data_dir="${worker_data_dir%\"}"
+  worker_data_dir="${worker_data_dir#\"}"
+  worker_data_dir="${worker_data_dir%\'}"
+  worker_data_dir="${worker_data_dir#\'}"
+  if [[ -z "$worker_data_dir" ]]; then worker_data_dir="$APP_DIR/current/data"; fi
+  worker_health_file="$worker_data_dir/.price-refresh-worker-health.json"
+  worker_ready=false
+  worker_health_deadline=$((SECONDS + 60))
+  while (( SECONDS < worker_health_deadline )); do
+    if ! sudo systemctl is-active --quiet "$WORKER_SERVICE_NAME"; then break; fi
+    if sudo -u "$SERVICE_USER" env PC_SUPPORTER_WORKER_HEALTH_FILE="$worker_health_file" PC_SUPPORTER_WORKER_BOOT_EPOCH="$worker_boot_epoch" node -e 'const fs=require("node:fs");try{const h=JSON.parse(fs.readFileSync(process.env.PC_SUPPORTER_WORKER_HEALTH_FILE,"utf8"));const last=Date.parse(h.lastDatabaseSuccessAt);const started=Date.parse(h.startedAt);const boot=Number(process.env.PC_SUPPORTER_WORKER_BOOT_EPOCH)*1000;if(h.service!=="pc-supporter-price-refresh-worker"||!Number.isFinite(last)||Date.now()-last>45000||!Number.isFinite(started)||started<boot)process.exit(1)}catch{process.exit(1)}'; then
+      worker_ready=true
+      break
+    fi
+    sleep 1
+  done
+  if [[ "$worker_ready" != "true" ]]; then
+    echo "PC Supporter worker process is active but did not report a fresh successful PostgreSQL heartbeat." >&2
+    sudo systemctl status "$WORKER_SERVICE_NAME" --no-pager -l || true
+    sudo journalctl -u "$WORKER_SERVICE_NAME" -n 120 --no-pager || true
+    exit 1
+  fi
+  sudo systemctl is-active "$WORKER_SERVICE_NAME"
+fi
 sudo systemctl is-active caddy
 rm -f "$REMOTE_TMP/pc-supporter.tar.gz" "$REMOTE_TMP/backend.env"
+if [[ "$ENV_PREVIOUS_EXISTS" == "true" ]]; then sudo rm -f "$ENV_BACKUP_PATH"; fi
+sudo rm -f "$API_UNIT_BACKUP_PATH" "$WORKER_UNIT_BACKUP_PATH"
+trap - EXIT
 echo "pc_supporter_remote_deploy=status=ok release=$RELEASE_ID"
 REMOTE
 

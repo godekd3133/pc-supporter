@@ -1,3 +1,4 @@
+import { safeSessionStorage } from "./safe-storage";
 export type ApiRequestInit = RequestInit & {
   retry?: number;
   retryDelayMs?: number;
@@ -11,10 +12,18 @@ export type ApiRequestInit = RequestInit & {
    * leave the UI waiting forever on mobile networks.
    */
   timeoutMs?: number;
+  /**
+   * Legacy owner-token calls must stay unversioned because session-v1 is
+   * cookie-only and intentionally does not fall back to this header.
+   */
+  ownerSessionMode?: "session-v1" | "legacy";
 };
 
 export type ApiStatus = "unknown" | "online" | "offline" | "degraded";
 export type ApiStatusDetails = { status: ApiStatus; lastSuccessAt?: string; fallbackAt?: string; fallbackPath?: string };
+
+import { LOCAL_OFFLINE_BUILD } from "./offline/build-mode";
+import { ownerSessionModeSupported } from "./owner-session-mode";
 
 const API_SESSION_CACHE_PREFIX = "pc-supporter-api-cache:v1:";
 const API_SESSION_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -26,6 +35,9 @@ const API_REQUEST_TIMEOUT_MS = 20_000;
 const configuredApiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? "").trim().replace(/\/+$/, "");
 
 export function apiRequestUrl(path: string) {
+  if (LOCAL_OFFLINE_BUILD) {
+    throw new ApiError("로컬 설치 모드에서는 원격 API 주소를 사용할 수 없습니다.", 503, { code: "OFFLINE_NETWORK_DISABLED", path });
+  }
   if (!configuredApiBaseUrl || /^https?:\/\//i.test(path)) return path;
   return new URL(path, `${configuredApiBaseUrl}/`).toString();
 }
@@ -33,12 +45,23 @@ const sessionCacheRequestVersions = new Map<string, number>();
 const inFlightReadRequests = new Map<string, Promise<unknown>>();
 let latestApiRequestVersion = 0;
 
+export function apiRequestHeaders(init?: ApiRequestInit) {
+  const headers = new Headers({ "Content-Type": "application/json" });
+  new Headers(init?.headers).forEach((value, name) => headers.set(name, value));
+  if (init?.ownerSessionMode === "session-v1" && ownerSessionModeSupported()) {
+    headers.set("X-PC-Owner-Mode", "session-v1");
+  } else {
+    headers.delete("X-PC-Owner-Mode");
+  }
+  return headers;
+}
+
 // StrictMode can replay effect-driven build-detail reads; keep context-sensitive refreshes on their independent request seam.
 function inFlightReadRequestKey(path: string, init?: ApiRequestInit) {
   const method = (init?.method ?? "GET").toUpperCase();
   if ((method !== "GET" && method !== "HEAD") || init?.signal || init?.body || init?.mode || init?.cache || init?.redirect || init?.integrity || init?.referrer || init?.referrerPolicy) return undefined;
   if (!/^\/api\/builds\/[^/?]+(?:\/check-causes)?(?:\?|$)/.test(path)) return undefined;
-  const headers = [...new Headers(init?.headers).entries()].sort(([left], [right]) => left.localeCompare(right));
+  const headers = [...apiRequestHeaders(init).entries()].sort(([left], [right]) => left.localeCompare(right));
   return JSON.stringify([method, apiRequestUrl(path), headers, init?.credentials ?? "include", init?.retry ?? null, init?.retryDelayMs ?? 250, init?.retryOnRateLimit ?? null]);
 }
 
@@ -154,13 +177,13 @@ function apiSessionCacheKey(path: string, method: string) {
 function readApiSessionCache(key: string | undefined) {
   if (!key || typeof window === "undefined") return undefined;
   try {
-    const raw = window.sessionStorage.getItem(key);
+    const raw = safeSessionStorage.getItem(key);
     if (!raw) return undefined;
     const parsed: unknown = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return undefined;
     const record = parsed as { cachedAt?: unknown; payload?: unknown; etag?: unknown };
     if (typeof record.cachedAt !== "number" || !Number.isFinite(record.cachedAt) || Date.now() - record.cachedAt > API_SESSION_CACHE_TTL_MS || !Object.prototype.hasOwnProperty.call(record, "payload")) {
-      window.sessionStorage.removeItem(key);
+      safeSessionStorage.removeItem(key);
       return undefined;
     }
     return { payload: record.payload, cachedAt: record.cachedAt, etag: typeof record.etag === "string" ? record.etag : undefined };
@@ -174,8 +197,8 @@ function writeApiSessionCache(key: string | undefined, payload: unknown, etag: s
   if (requestVersion !== undefined && sessionCacheRequestVersions.get(key) !== requestVersion) return;
   try {
     const raw = JSON.stringify({ cachedAt: Date.now(), payload, ...(etag ? { etag } : {}) });
-    if (raw.length > API_SESSION_CACHE_MAX_BYTES) return;
-    window.sessionStorage.setItem(key, raw);
+    if (raw.length > API_SESSION_CACHE_MAX_BYTES || new TextEncoder().encode(raw).byteLength > API_SESSION_CACHE_MAX_BYTES) return;
+    safeSessionStorage.setItem(key, raw);
   } catch {
     // Session cache is a best-effort fallback and must never block a live response.
   }
@@ -203,7 +226,7 @@ function notifyAdminAuthMisconfigured(path: string, status: number, payload: unk
 }
 
 async function requestApi<T>(path: string, init?: ApiRequestInit): Promise<T> {
-  const { retry: requestedRetries, retryDelayMs = 250, retryOnRateLimit, timeoutMs: requestedTimeoutMs, ...requestInit } = init ?? {};
+  const { retry: requestedRetries, retryDelayMs = 250, retryOnRateLimit, timeoutMs: requestedTimeoutMs, ownerSessionMode: _ownerSessionMode, ...requestInit } = init ?? {};
   const apiRequestVersion = ++latestApiRequestVersion;
   const isCurrentApiRequest = () => latestApiRequestVersion === apiRequestVersion;
   const method = (requestInit.method ?? "GET").toUpperCase();
@@ -237,11 +260,11 @@ async function requestApi<T>(path: string, init?: ApiRequestInit): Promise<T> {
         ...requestInit,
         signal: attemptController.signal,
         credentials: requestInit.credentials ?? "include",
-        headers: {
-          "Content-Type": "application/json",
-          ...(requestInit.headers ?? {}),
-          ...(cachedForRequest?.etag ? { "If-None-Match": cachedForRequest.etag } : {})
-        }
+        headers: (() => {
+          const headers = apiRequestHeaders(init);
+          if (cachedForRequest?.etag) headers.set("If-None-Match", cachedForRequest.etag);
+          return headers;
+        })()
       });
     } catch (error) {
       lastNetworkError = error;
@@ -314,6 +337,17 @@ async function requestApi<T>(path: string, init?: ApiRequestInit): Promise<T> {
 }
 
 export function api<T>(path: string, init?: ApiRequestInit): Promise<T> {
+  if (LOCAL_OFFLINE_BUILD) {
+    return import("./offline/offline-api").then(async (offlineApi) => {
+      const { bundledOfflineCatalogSnapshot } = await import("./offline/bundled-catalog");
+      try {
+        return await offlineApi.offlineApiRequest<T>(path, init, await bundledOfflineCatalogSnapshot());
+      } catch (error: unknown) {
+        if (error instanceof offlineApi.OfflineApiError) throw new ApiError(error.message, error.status, error.payload);
+        throw error;
+      }
+    });
+  }
   const key = inFlightReadRequestKey(path, init);
   if (!key) return requestApi<T>(path, init);
   const existing = inFlightReadRequests.get(key);

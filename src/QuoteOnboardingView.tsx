@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { safeSessionStorage } from "./safe-storage";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { IconType } from "react-icons";
 import { FiActivity, FiAlertTriangle, FiArrowLeft, FiArrowRight, FiBox, FiBriefcase, FiCheck, FiClock, FiCode, FiDatabase, FiFileText, FiFilm, FiInfo, FiMinus, FiMonitor, FiMusic, FiPlay, FiPlus, FiRadio, FiSearch, FiSliders, FiTarget, FiZap } from "react-icons/fi";
+import "./quote-onboarding.css";
 import { GAMING_GRAPHICS_PRESET_LABELS, GAMING_UPSCALING_LABELS } from "../shared/types";
 import type { GamingGraphicsPreset, GamingRefreshRate, GamingResolution, GamingUpscaling } from "../shared/types";
 import {
@@ -43,15 +45,15 @@ type ModeId = "budget" | "task" | "spec";
 type UsecaseId = "gaming" | "work";
 
 const INTENT_OPTIONS: { id: IntentId; title: string; description: string; Icon: IconType }[] = [
-  { id: "new", title: "새 PC 견적 보기", description: "게임·작업 용도와 예산을 골라요.", Icon: FiFileText },
-  { id: "upgrade", title: "쓰던 PC 업그레이드하기", description: "현재 부품을 확인하고 교체할 부품을 비교합니다.", Icon: FiMonitor },
-  { id: "later", title: "나중에 하기", description: "홈으로 돌아가 다시 시작할 수 있어요.", Icon: FiClock }
+  { id: "new", title: "새 PC 견적 보기", description: "게임과 작업, 예산에 맞춰 부품을 골라요.", Icon: FiFileText },
+  { id: "upgrade", title: "쓰던 PC 업그레이드하기", description: "현재 부품의 호환을 확인하고 교체할 부품을 비교해요.", Icon: FiMonitor },
+  { id: "later", title: "나중에 하기", description: "홈으로 돌아가 언제든 다시 시작할 수 있어요.", Icon: FiClock }
 ];
 
 const MODE_OPTIONS: { id: ModeId; title: string; description: string; Icon: IconType }[] = [
   { id: "budget", title: "예산을 기준으로 고르기", description: "예산에 맞는 기본 구성을 확인합니다.", Icon: FiDatabase },
-  { id: "task", title: "게임·작업을 기준으로 고르기", description: "주로 할 게임이나 작업에 맞는 사양을 선택합니다.", Icon: FiPlay },
-  { id: "spec", title: "원하는 사양 직접 입력하기", description: "성능 등급과 그래픽·메모리·저장공간을 직접 정합니다.", Icon: FiMonitor }
+  { id: "task", title: "게임·작업을 기준으로 고르기", description: "주로 할 게임이나 작업에 맞춰 사양을 정해요.", Icon: FiPlay },
+  { id: "spec", title: "원하는 사양 직접 입력하기", description: "성능 등급과 그래픽·메모리·저장공간을 정해요.", Icon: FiMonitor }
 ];
 
 const USECASE_OPTIONS: { id: UsecaseId; title: string; description: string; Icon: IconType }[] = [
@@ -163,7 +165,7 @@ function GamingTargetContract({ state, showBudgetHint = false }: { state: Onboar
 
 function readStoredOnboarding(): { state: OnboardingState; hasDraft: boolean } {
   try {
-    const stored = onboardingStateFromJson(window.sessionStorage.getItem(ONBOARDING_STORAGE_KEY));
+    const stored = onboardingStateFromJson(safeSessionStorage.getItem(ONBOARDING_STORAGE_KEY));
     return { state: stored ?? initialOnboardingState(), hasDraft: Boolean(stored && stored.step !== "intent") };
   } catch {
     return { state: initialOnboardingState(), hasDraft: false };
@@ -173,7 +175,7 @@ function readStoredOnboarding(): { state: OnboardingState; hasDraft: boolean } {
 function OptionRow({ title, description, Icon, selected, recommended, checkStyle, onClick }: { title: string; description?: string; Icon?: IconType; selected: boolean; recommended?: boolean; checkStyle?: boolean; onClick: () => void }) {
   return (
     <button type="button" className={`onboarding-option${selected ? " selected" : ""}`} onClick={onClick} aria-pressed={selected}>
-      {Icon && <span className="onboarding-option-icon"><Icon /></span>}
+      {Icon && <span className="onboarding-option-icon" aria-hidden="true"><Icon /></span>}
       <span className="onboarding-option-copy">
         <strong>{title}{recommended && <em className="onboarding-recommend">추천</em>}</strong>
         {description && <small>{description}</small>}
@@ -185,16 +187,34 @@ function OptionRow({ title, description, Icon, selected, recommended, checkStyle
   );
 }
 
-function ChipRow({ label, options, value, onChange }: { label: string; options: { id: string; label: string }[]; value: string; onChange: (id: string) => void }) {
+function RadioOptionRow({ name, value, title, description, Icon, selected, recommended, checkStyle, onChange }: { name: string; value: string; title: string; description?: string; Icon?: IconType; selected: boolean; recommended?: boolean; checkStyle?: boolean; onChange: () => void }) {
+  return (
+    <label className={`onboarding-option onboarding-option-radio-row${selected ? " selected" : ""}`}>
+      <input className="onboarding-radio-input onboarding-option-radio" type="radio" name={name} value={value} checked={selected} onChange={onChange} />
+      {Icon && <span className="onboarding-option-icon" aria-hidden="true"><Icon /></span>}
+      <span className="onboarding-option-copy">
+        <strong>{title}{recommended && <em className="onboarding-recommend">추천</em>}</strong>
+        {description && <small>{description}</small>}
+      </span>
+      {checkStyle
+        ? <span className={`onboarding-check${selected ? " on" : ""}`} aria-hidden="true">{selected && <FiCheck />}</span>
+        : <FiArrowRight className="onboarding-option-arrow" aria-hidden="true" />}
+    </label>
+  );
+}
+
+function ChipRow({ name, label, options, value, onChange }: { name: string; label: string; options: { id: string; label: string }[]; value: string; onChange: (id: string) => void }) {
+  const labelId = `${name}-label`;
   return (
     <div className="onboarding-chip-group">
-      <span className="onboarding-chip-label">{label}</span>
-      <div className="onboarding-chip-row" role="group" aria-label={label}>
+      <span className="onboarding-chip-label" id={labelId}>{label}</span>
+      <div className="onboarding-chip-row" role="radiogroup" aria-labelledby={labelId}>
         {options.map((option) => (
-          <button key={option.id} type="button" className={`onboarding-chip${value === option.id ? " selected" : ""}`} onClick={() => onChange(option.id)} aria-pressed={value === option.id}>
+          <label key={option.id} className={`onboarding-chip onboarding-chip-radio-row${value === option.id ? " selected" : ""}`}>
+            <input className="onboarding-radio-input onboarding-chip-radio" type="radio" name={name} value={option.id} checked={value === option.id} onChange={() => onChange(option.id)} />
             <span className={`onboarding-check${value === option.id ? " on" : ""}`} aria-hidden="true">{value === option.id && <FiCheck />}</span>
-            {option.label}
-          </button>
+            <span>{option.label}</span>
+          </label>
         ))}
       </div>
     </div>
@@ -204,6 +224,7 @@ function ChipRow({ label, options, value, onChange }: { label: string; options: 
 export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome }: { onFinish: (query: string) => void; onUpgrade: () => void; onSkip: () => void; onHome: () => void }) {
   const [storedOnboarding] = useState(readStoredOnboarding);
   const [state, setState] = useState<OnboardingState>(storedOnboarding.state);
+  const headingRef = useRef<HTMLHeadingElement | null>(null);
   const [showResume, setShowResume] = useState(storedOnboarding.hasDraft);
   const [gameQuery, setGameQuery] = useState("");
   const [gameCategory, setGameCategory] = useState<OnboardingGameCategory | "all">("all");
@@ -211,11 +232,16 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome }: { o
 
   useEffect(() => {
     try {
-      window.sessionStorage.setItem(ONBOARDING_STORAGE_KEY, onboardingStateToJson(state));
+      safeSessionStorage.setItem(ONBOARDING_STORAGE_KEY, onboardingStateToJson(state));
     } catch {
       // A full session bucket must not break the wizard.
     }
   }, [state]);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "auto" });
+    headingRef.current?.focus({ preventScroll: true });
+  }, [state.step, showResume]);
 
   const indicator = showResume ? { eyebrow: "작성 중", index: 1, total: 1 } : stepIndicatorFor(state);
   const update = (patch: Partial<OnboardingState>) => setState((current) => ({ ...current, ...patch }));
@@ -319,18 +345,18 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome }: { o
   } else if (state.step === "intent") {
     ctaLabel = state.intent === "later" ? "홈으로 돌아가기" : state.intent === "upgrade" ? "다음" : "새 견적 시작하기";
     body = (
-      <div className="onboarding-options">
+      <div className="onboarding-options" role="radiogroup" aria-labelledby="onboarding-title">
         {INTENT_OPTIONS.map((option) => (
-          <OptionRow key={option.id} title={option.title} description={option.description} Icon={option.Icon} selected={state.intent === option.id} onClick={() => update({ intent: option.id })} />
+          <RadioOptionRow key={option.id} name="onboarding-intent" value={option.id} title={option.title} description={option.description} Icon={option.Icon} selected={state.intent === option.id} onChange={() => update({ intent: option.id })} />
         ))}
       </div>
     );
   } else if (state.step === "mode") {
     ctaLabel = "이 기준으로 계속";
     body = (
-      <div className="onboarding-options">
+      <div className="onboarding-options" role="radiogroup" aria-labelledby="onboarding-title">
         {MODE_OPTIONS.map((option) => (
-          <OptionRow key={option.id} title={option.title} description={option.description} Icon={option.Icon} selected={state.mode === option.id} onClick={() => update({ mode: option.id })} />
+          <RadioOptionRow key={option.id} name="onboarding-mode" value={option.id} title={option.title} description={option.description} Icon={option.Icon} selected={state.mode === option.id} onChange={() => update({ mode: option.id })} />
         ))}
       </div>
     );
@@ -349,9 +375,9 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome }: { o
     );
   } else if (state.step === "usecase") {
     body = (
-      <div className="onboarding-options">
+      <div className="onboarding-options" role="radiogroup" aria-labelledby="onboarding-title">
         {USECASE_OPTIONS.map((option) => (
-          <OptionRow key={option.id} title={option.title} description={option.description} Icon={option.Icon} selected={state.usecase === option.id} onClick={() => update({ usecase: option.id })} />
+          <RadioOptionRow key={option.id} name="onboarding-usecase" value={option.id} title={option.title} description={option.description} Icon={option.Icon} selected={state.usecase === option.id} onChange={() => update({ usecase: option.id })} />
         ))}
       </div>
     );
@@ -362,15 +388,18 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome }: { o
           <FiSearch aria-hidden="true" />
           <input type="search" value={gameQuery} onChange={(event) => setGameQuery(event.target.value)} placeholder="게임 이름 검색" aria-label="게임 이름 검색" />
         </label>
-        <div className="onboarding-game-categories" role="group" aria-label="게임 카테고리">
-          <button type="button" className={`onboarding-game-category${gameCategory === "all" ? " selected" : ""}`} onClick={() => setGameCategory("all")}>전체</button>
-          {ONBOARDING_GAME_CATEGORIES.map((category) => (
-            <button type="button" className={`onboarding-game-category${gameCategory === category ? " selected" : ""}`} key={category} onClick={() => setGameCategory(category)}>
-              {ONBOARDING_GAME_CATEGORY_LABELS[category]}
-            </button>
+        <div className="onboarding-game-categories" role="radiogroup" aria-label="게임 카테고리">
+          {[
+            { id: "all", label: "전체" },
+            ...ONBOARDING_GAME_CATEGORIES.map((category) => ({ id: category, label: ONBOARDING_GAME_CATEGORY_LABELS[category] }))
+          ].map((category) => (
+            <label className={`onboarding-game-category onboarding-game-category-radio-row${gameCategory === category.id ? " selected" : ""}`} key={category.id}>
+              <input className="onboarding-radio-input onboarding-game-category-radio" type="radio" name="onboarding-game-category" value={category.id} checked={gameCategory === category.id} onChange={() => setGameCategory(category.id as OnboardingGameCategory | "all")} />
+              <span>{category.label}</span>
+            </label>
           ))}
         </div>
-        <div className="onboarding-game-selection-summary">
+        <div className="onboarding-game-selection-summary" aria-live="polite">
           <strong>{state.games.length}개 선택</strong>
           <span>{state.games.length >= MAX_ONBOARDING_GAMES ? "선택한 목표 중 가장 높은 값으로 계산합니다." : "게임은 여러 개 선택할 수 있어요."}</span>
         </div>
@@ -383,15 +412,15 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome }: { o
           ))}
         </div>
         {visibleGames.length === 0 && <p className="onboarding-game-empty"><FiSearch /> 일치하는 게임이 없어요. 한글 이름이나 영문 게임 ID로 다시 검색해 보세요.</p>}
-        {gameLimitReached && <p className="onboarding-warning"><FiAlertTriangle /> 한 대의 PC로 비교할 게임은 최대 {MAX_ONBOARDING_GAMES}개까지예요. 새 게임을 고르려면 먼저 하나를 해제해 주세요.</p>}
+        {gameLimitReached && <p className="onboarding-warning" role="alert"><FiAlertTriangle /> 한 대의 PC로 비교할 게임은 최대 {MAX_ONBOARDING_GAMES}개까지예요. 새 게임을 고르려면 먼저 하나를 해제해 주세요.</p>}
       </>
     );
   } else if (state.step === "performance") {
     body = (
       <>
-        <p className="onboarding-callout"><FiInfo /> 해상도와 희망 주사율은 조립 요청 조건이에요. 실제 게임 FPS를 보장하지 않아요.</p>
-        <ChipRow label="해상도" options={RESOLUTION_OPTIONS.map((option) => ({ id: option.id, label: option.label }))} value={state.resolution} onChange={(id) => update({ resolution: id as GamingResolution })} />
-        <ChipRow label="희망 주사율" options={REFRESH_OPTIONS.map((option) => ({ id: String(option.id), label: option.label }))} value={String(state.refreshRate)} onChange={(id) => update({ refreshRate: Number(id) as GamingRefreshRate })} />
+        <p className="onboarding-callout"><FiInfo /> 해상도와 주사율은 견적 목표로 반영돼요. 실제 게임 프레임은 게임 설정과 사용 환경에 따라 달라질 수 있어요.</p>
+        <ChipRow name="onboarding-resolution" label="해상도" options={RESOLUTION_OPTIONS.map((option) => ({ id: option.id, label: option.label }))} value={state.resolution} onChange={(id) => update({ resolution: id as GamingResolution })} />
+        <ChipRow name="onboarding-refresh-rate" label="희망 주사율" options={REFRESH_OPTIONS.map((option) => ({ id: String(option.id), label: option.label }))} value={String(state.refreshRate)} onChange={(id) => update({ refreshRate: Number(id) as GamingRefreshRate })} />
         <p className="onboarding-pill"><FiPlay /> {gamesSummaryFor(state.games)} · {resolutionLabelFor(state.resolution)} · 희망 주사율 {state.refreshRate}Hz</p>
         <GamingTargetContract state={state} />
       </>
@@ -401,9 +430,9 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome }: { o
     body = (
       <>
         <p className="onboarding-pill"><FiPlay /> {gamesSummaryFor(state.games)} · {resolutionLabelFor(state.resolution)} · 희망 주사율 {state.refreshRate}Hz</p>
-        <ChipRow label="그래픽 품질" options={Object.entries(GAMING_GRAPHICS_PRESET_LABELS).map(([id, label]) => ({ id, label }))} value={state.graphicsPreset} onChange={(id) => update({ graphicsPreset: id as GamingGraphicsPreset })} />
+        <ChipRow name="onboarding-graphics-preset" label="그래픽 품질" options={Object.entries(GAMING_GRAPHICS_PRESET_LABELS).map(([id, label]) => ({ id, label }))} value={state.graphicsPreset} onChange={(id) => update({ graphicsPreset: id as GamingGraphicsPreset })} />
         <p className="onboarding-choice-note"><FiInfo /> {GAMING_GRAPHICS_GUIDANCE[state.graphicsPreset]}</p>
-        <ChipRow label="업스케일링" options={Object.entries(GAMING_UPSCALING_LABELS).map(([id, label]) => ({ id, label }))} value={state.upscaling} onChange={(id) => update({ upscaling: id as GamingUpscaling })} />
+        <ChipRow name="onboarding-upscaling" label="업스케일링" options={Object.entries(GAMING_UPSCALING_LABELS).map(([id, label]) => ({ id, label }))} value={state.upscaling} onChange={(id) => update({ upscaling: id as GamingUpscaling })} />
         <p className="onboarding-choice-note"><FiInfo /> {GAMING_UPSCALING_GUIDANCE[state.upscaling]}</p>
         <OptionRow
           title="레이 트레이싱"
@@ -439,18 +468,20 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome }: { o
     ctaLabel = "다음 · 예산 정하기";
     body = (
       <>
-        <div className="onboarding-options">
+        <div className="onboarding-options" role="radiogroup" aria-labelledby="onboarding-title">
           {ONBOARDING_INTENSITIES.map((option) => {
             const estimate = workEstimateFor(state.works, option.id);
-            return <OptionRow
+            return <RadioOptionRow
               key={option.id}
+              name="onboarding-work-intensity"
+              value={option.id}
               title={option.label}
               description={`${option.description} · 예상 ${estimate.performance} · ${estimate.gpu} · ${estimate.memory} · ${estimate.storage}`}
               Icon={INTENSITY_ICONS[option.id]}
               selected={state.intensity === option.id}
               recommended={option.recommended}
               checkStyle
-              onClick={() => update({ intensity: option.id })}
+              onChange={() => update({ intensity: option.id })}
             />;
           })}
         </div>
@@ -460,10 +491,10 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome }: { o
   } else if (state.step === "spec") {
     body = (
       <>
-        <ChipRow label="원하는 성능 등급" options={SPEC_TIER_OPTIONS} value={state.specTier} onChange={(id) => update({ specTier: id as OnboardingSpecTier })} />
+        <ChipRow name="onboarding-spec-tier" label="원하는 성능 등급" options={SPEC_TIER_OPTIONS} value={state.specTier} onChange={(id) => update({ specTier: id as OnboardingSpecTier })} />
         <OptionRow title="외장 그래픽카드 포함" description="게임·3D·GPU 가속 작업을 함께 고려해요." Icon={FiMonitor} selected={state.specIncludeGpu} checkStyle onClick={() => update({ specIncludeGpu: !state.specIncludeGpu })} />
-        <ChipRow label="메모리" options={MEMORY_OPTIONS.map((gb) => ({ id: String(gb), label: `${gb}GB` }))} value={String(state.memoryGb)} onChange={(id) => update({ memoryGb: Number(id) })} />
-        <ChipRow label="저장공간" options={STORAGE_OPTIONS.map((gb) => ({ id: String(gb), label: storageLabel(gb) }))} value={String(state.storageGb)} onChange={(id) => update({ storageGb: Number(id) })} />
+        <ChipRow name="onboarding-memory" label="메모리" options={MEMORY_OPTIONS.map((gb) => ({ id: String(gb), label: `${gb}GB` }))} value={String(state.memoryGb)} onChange={(id) => update({ memoryGb: Number(id) })} />
+        <ChipRow name="onboarding-storage" label="저장공간" options={STORAGE_OPTIONS.map((gb) => ({ id: String(gb), label: storageLabel(gb) }))} value={String(state.storageGb)} onChange={(id) => update({ storageGb: Number(id) })} />
         <p className="onboarding-note">선택한 성능 등급과 부품 정보가 추천에 반영돼요.</p>
       </>
     );
@@ -476,12 +507,15 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome }: { o
           <div className="onboarding-budget-heading"><strong>예산 선택</strong><span>(만원)</span></div>
           <div className="onboarding-budget-control">
             <button type="button" className="onboarding-budget-step" onClick={() => update({ budgetWon: clampBudget(state.budgetWon - BUDGET_STEP_WON) })} aria-label="예산 10만원 줄이기"><FiMinus /></button>
-            <strong className="onboarding-budget-value">{formatManWon(state.budgetWon)}</strong>
+            <strong className="onboarding-budget-value" aria-live="polite" aria-atomic="true">{formatManWon(state.budgetWon)}</strong>
             <button type="button" className="onboarding-budget-step" onClick={() => update({ budgetWon: clampBudget(state.budgetWon + BUDGET_STEP_WON) })} aria-label="예산 10만원 늘리기"><FiPlus /></button>
           </div>
-          <div className="onboarding-budget-stops" role="group" aria-label="빠른 예산 선택">
+          <div className="onboarding-budget-stops" role="radiogroup" aria-label="빠른 예산 선택">
             {BUDGET_STOPS_WON.map((stop) => (
-              <button key={stop} type="button" className={`onboarding-budget-stop${state.budgetWon === stop ? " selected" : ""}`} onClick={() => update({ budgetWon: stop })}>{formatManWon(stop)}</button>
+              <label key={stop} className={`onboarding-budget-stop${state.budgetWon === stop ? " selected" : ""}`}>
+                <input className="onboarding-radio-input onboarding-budget-stop-radio" type="radio" name="onboarding-budget-preset" value={String(stop)} checked={state.budgetWon === stop} onChange={() => update({ budgetWon: stop })} />
+                <span>{formatManWon(stop)}</span>
+              </label>
             ))}
           </div>
         </div>
@@ -507,7 +541,7 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome }: { o
     const summaryRows: { Icon: IconType; label: string; value: string; editStep?: OnboardingStep }[] = state.usecase === "gaming"
       ? [
           { Icon: FiPlay, label: "게임", value: gamesSummaryFor(state.games), editStep: "games" },
-          { Icon: FiActivity, label: "희망 주사율", value: `${resolutionLabelFor(state.resolution)} · ${state.refreshRate}Hz`, editStep: "performance" },
+          { Icon: FiActivity, label: "화면 목표", value: `${resolutionLabelFor(state.resolution)} · ${state.refreshRate}Hz`, editStep: "performance" },
           { Icon: FiSliders, label: "그래픽 옵션", value: `${GAMING_GRAPHICS_PRESET_LABELS[state.graphicsPreset]} · ${GAMING_UPSCALING_LABELS[state.upscaling]}${state.rayTracing ? " · 레이 트레이싱" : ""}`, editStep: "graphics" },
           { Icon: FiDatabase, label: "예산", value: formatManWon(state.budgetWon), editStep: "budget" },
           { Icon: FiZap, label: "예상 수준", value: `${estimate.performance} · ${estimate.gpu}` }
@@ -540,7 +574,7 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome }: { o
           {summaryRows.map(({ Icon, label, value, editStep }) => (
             <div className={`onboarding-estimate-row${editStep ? " editable" : ""}`} key={label}>
               <span className="onboarding-estimate-icon"><Icon /></span><span>{label}</span><strong>{value}</strong>
-              {editStep && <button type="button" className="onboarding-summary-edit" onClick={() => editSummaryStep(editStep)}>{label} 변경</button>}
+              {editStep && <button type="button" className="onboarding-summary-edit" aria-label={`${label} 변경`} onClick={() => editSummaryStep(editStep)}>{label} 변경</button>}
             </div>
           ))}
         </div>
@@ -551,13 +585,13 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome }: { o
   }
 
   const headings: Record<string, { title: string; description: string }> = {
-    intent: { title: "어떤 PC 견적을 볼까요?", description: "게임·작업 용도와 예산을 골라 견적을 만들어요." },
+    intent: { title: "어떤 PC 견적을 볼까요?", description: "새 PC 견적을 만들거나, 쓰던 PC를 업그레이드할 수 있어요." },
     mode: { title: "어떤 기준으로 부품을 고를까요?", description: "예산, 게임·작업, 원하는 사양 중 편한 기준을 선택하세요." },
     upgrade: { title: "지금 쓰는 PC 부품을 골라주세요", description: "현재 부품을 입력하면 호환 문제와 교체 후보를 확인할 수 있습니다." },
     usecase: { title: "어떤 용도로 쓸 PC인가요?", description: "게임과 작업 중 주된 용도를 골라주세요." },
-    games: { title: "주로 할 게임을 골라주세요", description: "여러 게임을 선택할 수 있습니다. 희망 주사율은 다음 화면에서 정합니다." },
-    performance: { title: "게임 성능 목표를 정해주세요", description: "해상도와 희망 주사율을 선택하세요. 이 값은 조립 요청 조건이며 실제 게임 FPS를 보장하지 않습니다." },
-    graphics: { title: "게임 옵션도 정해주세요", description: "같은 4K 해상도·144Hz 주사율 목표라도 그래픽 옵션에 따라 필요한 부품이 달라져요." },
+    games: { title: "주로 할 게임을 골라주세요", description: `게임은 최대 ${MAX_ONBOARDING_GAMES}개까지 고를 수 있어요. 해상도와 주사율은 다음 화면에서 정합니다.` },
+    performance: { title: "게임 성능 목표를 정해주세요", description: "화면 해상도와 희망 주사율을 선택하세요." },
+    graphics: { title: "게임 옵션도 정해주세요", description: "화질과 프레임 중 원하는 쪽을 정해주세요. 필요한 부품은 선택에 따라 달라져요." },
     works: { title: "주로 하는 작업을 골라주세요", description: "여러 작업을 선택할 수 있습니다. 가장 높은 작업 강도에 맞춰 사양을 계산합니다." },
     intensity: { title: primaryWork?.intensityQuestion ?? "작업 규모는 어느 정도인가요?", description: primaryWork?.intensitySummary ?? "작업 강도에 따라 예상 사양이 달라져요." },
     spec: { title: "성능 목표를 정하세요", description: "성능 등급·외장 GPU·메모리·저장공간을 선택하세요." },
@@ -569,11 +603,11 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome }: { o
     : headings[state.step];
 
   return (
-    <div className="onboarding-page">
-      <button type="button" className="onboarding-back" onClick={goBack} aria-label={showResume || state.step === "intent" ? "홈으로" : "이전 단계로"}><FiArrowLeft /></button>
+    <div className="onboarding-page" data-onboarding-step={state.step}>
+      <button type="button" className="onboarding-back" onClick={goBack} aria-label={showResume || state.step === "intent" ? "홈으로" : "이전 단계로"}><FiArrowLeft aria-hidden="true" /></button>
       <p className="onboarding-eyebrow">견적 설정 · {indicator.index} / {indicator.total}</p>
-      <div className="onboarding-progress" role="progressbar" aria-label={`견적 진행률 ${indicator.index} / ${indicator.total}`} aria-valuemin={1} aria-valuemax={indicator.total} aria-valuenow={indicator.index} data-testid="onboarding-progress"><span style={{ width: `${Math.round((indicator.index / indicator.total) * 100)}%` }} /></div>
-      <h1 className="onboarding-title">{heading.title}</h1>
+      <div className="onboarding-progress" role="progressbar" aria-label={`견적 진행률 ${indicator.index} / ${indicator.total}`} aria-valuetext={`단계 ${indicator.index}, 총 ${indicator.total}단계`} aria-valuemin={1} aria-valuemax={indicator.total} aria-valuenow={indicator.index} data-testid="onboarding-progress"><span style={{ width: `${Math.round((indicator.index / indicator.total) * 100)}%` }} /></div>
+      <h1 ref={headingRef} id="onboarding-title" className="onboarding-title" tabIndex={-1}>{heading.title}</h1>
       <p className="onboarding-desc">{heading.description}</p>
       {body}
       <div className="onboarding-cta-bar">

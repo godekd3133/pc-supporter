@@ -17,6 +17,7 @@ import { loadAccessories, recordAccessoryCoverage, upsertAccessories } from "./a
 import { fanCurrentAFromText } from "../shared/fan-connectivity";
 import { parseAdapterPcieSlotWidth, parseAdapterStorageDeviceCount } from "../shared/storage-adapter";
 import { appendCatalogChangeRecords, catalogChangeRecord, catalogChangeSummary, catalogItemKey, meaningfulCatalogChangeFields } from "./catalog-change-log";
+import { withCatalogIngestionLease } from "./catalog-ingestion-coordinator";
 import {
   ACCESSORY_CRAWL_LOCK_PATH,
   ACCESSORY_CRAWL_MANIFEST_PATH,
@@ -122,6 +123,7 @@ export type AccessoryCrawlJobResult = {
 };
 
 let activeAccessoryJob: Promise<AccessoryCrawlStatus> | null = null;
+let activeAccessoryLeaseJob: Promise<AccessoryCrawlStatus> | null = null;
 
 function accessoryConfigs(category?: AccessoryCategory) {
   return category
@@ -221,7 +223,7 @@ export async function readAccessoryCrawlStatus() {
     coverage: stored.coverage ?? "partial",
     specCoverage: stored.specCoverage ?? "partial"
   };
-  if (normalized.status === "running" && !activeAccessoryJob) {
+  if (normalized.status === "running" && !activeAccessoryJob && !activeAccessoryLeaseJob) {
     const ownerPid = await accessoryLockOwnerPid();
     if (!processIsAlive(ownerPid)) {
       const stale: AccessoryCrawlStatus = {
@@ -552,7 +554,7 @@ export async function crawlDanawaAccessoryCategory(
   };
 }
 
-export async function runAccessoryCrawl(options: AccessoryCrawlOptions = {}): Promise<AccessoryCrawlJobResult> {
+async function runAccessoryCrawlUnderLease(options: AccessoryCrawlOptions = {}): Promise<AccessoryCrawlJobResult> {
   const configs = accessoryConfigs(options.category);
   if (configs.length === 0) throw new Error(`알 수 없는 주변 부품 카테고리입니다: ${options.category}`);
   const categories: AccessoryCategoryCrawlResult[] = [];
@@ -575,6 +577,10 @@ export async function runAccessoryCrawl(options: AccessoryCrawlOptions = {}): Pr
     collected: collected.length,
     totalAfterMerge
   };
+}
+
+export function runAccessoryCrawl(options: AccessoryCrawlOptions = {}) {
+  return withCatalogIngestionLease(() => runAccessoryCrawlUnderLease(options));
 }
 
 function accessoryCrawlReport(result: AccessoryCategoryCrawlResult): AccessoryCrawlCategoryReport {
@@ -610,10 +616,10 @@ function accessoryReportTotals(reports: AccessoryCrawlCategoryReport[]) {
 }
 
 export function isAccessoryCrawlRunning() {
-  return activeAccessoryJob !== null;
+  return activeAccessoryJob !== null || activeAccessoryLeaseJob !== null;
 }
 
-export function runAccessoryCrawlJob(options: AccessoryCrawlOptions = {}) {
+function runAccessoryCrawlJobUnderLease(options: AccessoryCrawlOptions = {}) {
   if (activeAccessoryJob) return activeAccessoryJob;
   const configs = accessoryConfigs(options.category);
   if (configs.length === 0) return Promise.reject(new Error(`알 수 없는 주변 부품 카테고리입니다: ${options.category}`));
@@ -761,6 +767,36 @@ export function runAccessoryCrawlJob(options: AccessoryCrawlOptions = {}) {
     }
   })();
   activeAccessoryJob = job;
+  return job;
+}
+
+function accessoryCrawlLeaseFailureStatus(error: unknown, options: AccessoryCrawlOptions): AccessoryCrawlStatus {
+  const finishedAt = new Date().toISOString();
+  return {
+    ...defaultAccessoryCrawlStatus(options.category, options.all === true ? "all" : "sample"),
+    status: "failed",
+    details: options.details !== false,
+    onlyIncomplete: options.onlyIncomplete === true,
+    startedAt: finishedAt,
+    finishedAt,
+    workerPid: process.pid,
+    error: error instanceof Error ? error.message : String(error),
+    message: "주변 부품 카탈로그 수집 작업을 시작하지 못했습니다."
+  };
+}
+
+export function runAccessoryCrawlJob(options: AccessoryCrawlOptions = {}) {
+  if (activeAccessoryJob) return activeAccessoryJob;
+  if (activeAccessoryLeaseJob) return activeAccessoryLeaseJob;
+  const configs = accessoryConfigs(options.category);
+  if (configs.length === 0) return Promise.reject(new Error(`알 수 없는 주변 부품 카테고리입니다: ${options.category}`));
+  let job!: Promise<AccessoryCrawlStatus>;
+  job = withCatalogIngestionLease(() => runAccessoryCrawlJobUnderLease(options))
+    .catch((error: unknown) => accessoryCrawlLeaseFailureStatus(error, options))
+    .finally(() => {
+      if (activeAccessoryLeaseJob === job) activeAccessoryLeaseJob = null;
+    });
+  activeAccessoryLeaseJob = job;
   return job;
 }
 

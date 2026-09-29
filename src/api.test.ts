@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiError, api, apiStatusDetailsSnapshot, apiStatusSnapshot, subscribeApiStatus } from "./api";
+import { ApiError, api, apiRequestHeaders, apiStatusDetailsSnapshot, apiStatusSnapshot, subscribeApiStatus } from "./api";
 import type { ApiStatus } from "./api";
 import { retryAfterSecondsFromMessage } from "./retry-after";
 
 describe("api client", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
   });
 
   it("turns a browser network failure into an actionable local-server message", async () => {
@@ -24,6 +25,28 @@ describe("api client", () => {
 
     await expect(api<{ ok: boolean }>("/api/health", { retry: 1, retryDelayMs: 0 })).resolves.toEqual({ ok: true });
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("opts owner-session requests in explicitly, sends cookie credentials, and keeps public and legacy calls unversioned", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: vi.fn().mockResolvedValue({ ok: true }) });
+    vi.stubEnv("VITE_API_BASE_URL", "");
+    vi.stubGlobal("window", { location: { protocol: "https:", hostname: "pc.example.com", port: "", origin: "https://pc.example.com" } });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await api("/api/health", { retry: 0 });
+    const publicInit = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(new Headers(publicInit.headers).get("X-PC-Owner-Mode")).toBeNull();
+
+    await api("/api/owner-sessions/resources", { ownerSessionMode: "session-v1", retry: 0 });
+    const sessionInit = fetchMock.mock.calls[1]?.[1] as RequestInit;
+    expect(new Headers(sessionInit.headers).get("X-PC-Owner-Mode")).toBe("session-v1");
+    expect(sessionInit.credentials).toBe("include");
+
+    await api("/api/builds/legacy", { ownerSessionMode: "legacy", headers: { "X-Share-Owner-Token": "legacy-token" }, retry: 0 });
+    const legacyInit = fetchMock.mock.calls[2]?.[1] as RequestInit;
+    expect(new Headers(legacyInit.headers).get("X-PC-Owner-Mode")).toBeNull();
+    expect(new Headers(legacyInit.headers).get("X-Share-Owner-Token")).toBe("legacy-token");
+    expect(apiRequestHeaders().get("X-PC-Owner-Mode")).toBeNull();
   });
 
   it("coalesces identical concurrent idempotent reads", async () => {
@@ -270,6 +293,29 @@ describe("api client", () => {
     await expect(api<typeof payload>(path, { retry: 0, timeoutMs: 20 })).resolves.toEqual(payload);
   });
 
+  it("measures the catalog session cache limit in UTF-8 bytes", async () => {
+    const path = "/api/parts?category=cpu&cache-test=utf8-byte-budget";
+    const storage = new Map<string, string>();
+    vi.stubGlobal("window", {
+      location: { origin: "http://localhost" },
+      sessionStorage: {
+        getItem: (key: string) => storage.get(key) ?? null,
+        setItem: (key: string, value: string) => storage.set(key, value),
+        removeItem: (key: string) => storage.delete(key)
+      }
+    });
+    const payload = { items: [{ name: "부".repeat(180_000) }] };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      json: vi.fn().mockResolvedValue(payload)
+    }));
+
+    await expect(api<typeof payload>(path, { retry: 0 })).resolves.toEqual(payload);
+    expect(storage.size).toBe(0);
+  });
+
   it("publishes offline and online transitions for the global API status", async () => {
     const events: ApiStatus[] = [];
     const unsubscribe = subscribeApiStatus((details) => events.push(details.status));
@@ -307,7 +353,7 @@ describe("api client", () => {
 
     fetchMock.mockResolvedValueOnce({ ok: false, status: 304, headers, json: vi.fn().mockResolvedValue({}) });
     await expect(api<typeof payload>(path, { retry: 0 })).resolves.toEqual(payload);
-    expect((fetchMock.mock.calls[1]?.[1] as RequestInit).headers).toMatchObject({ "If-None-Match": '"cache-etag"' });
+    expect(new Headers((fetchMock.mock.calls[1]?.[1] as RequestInit).headers).get("If-None-Match")).toBe('"cache-etag"');
     expect(apiStatusDetailsSnapshot().fallbackAt).toBeUndefined();
 
     fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));

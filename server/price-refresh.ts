@@ -6,6 +6,7 @@ import { loadCatalog, patchCatalogPrices } from "./catalog";
 import { loadAccessories, patchAccessoryPrices } from "./accessories";
 import { appendCatalogChangeRecords, catalogChangeRecord } from "./catalog-change-log";
 import { refreshDanawaAccessory, refreshDanawaPart } from "./part-refresh";
+import { withPostgresTransaction } from "./repository";
 import {
   PRICE_REFRESH_LOCK_PATH,
   PRICE_REFRESH_STATE_PATH,
@@ -53,6 +54,11 @@ export interface PriceRefreshJobOptions {
   accessoryLimit?: number;
   delayMs?: number;
   dryRun?: boolean;
+  /** Durable jobs keep status and result in background_jobs instead of per-instance JSON. */
+  persistStatus?: boolean;
+  /** Fenced worker hook checked before further shared-state and catalog mutations. */
+  assertLease?: () => Promise<void>;
+  onProgress?: (status: Readonly<PriceRefreshStatus>) => Promise<void> | void;
   /** Called synchronously after the exclusive service and catalog locks are acquired. */
   onStarted?: (status: PriceRefreshStatus) => void;
 }
@@ -185,6 +191,43 @@ function addFailure(status: PriceRefreshStatus, failure: PriceRefreshFailure) {
 type CoreQueueItem = { before: Part; after: Part };
 type AccessoryQueueItem = { before: AccessoryItem; after: AccessoryItem };
 type PriceRefreshAttempts = Record<string, string>;
+type PriceRefreshAttemptEntry = { kind: "part" | "accessory"; itemId: string; attemptedAt: string };
+
+async function readPriceRefreshAttempts(): Promise<PriceRefreshAttempts> {
+  if (!process.env.DATABASE_URL?.trim()) return readJson<PriceRefreshAttempts>(PRICE_REFRESH_ATTEMPTS_PATH, {});
+  return withPostgresTransaction("read price-refresh attempt state", async (client) => {
+    const result = await client.query<{ item_kind: "part" | "accessory"; item_id: string; attempted_at: Date | string }>(
+      "SELECT item_kind, item_id, attempted_at FROM price_refresh_attempts"
+    );
+    return Object.fromEntries(result.rows.map((row) => [
+      `${row.item_kind}:${row.item_id}`,
+      row.attempted_at instanceof Date ? row.attempted_at.toISOString() : new Date(row.attempted_at).toISOString()
+    ]));
+  });
+}
+
+async function writePriceRefreshAttempts(entries: PriceRefreshAttemptEntry[]) {
+  if (entries.length === 0) return;
+  if (!process.env.DATABASE_URL?.trim()) {
+    const existing = await readJson<PriceRefreshAttempts>(PRICE_REFRESH_ATTEMPTS_PATH, {});
+    for (const entry of entries) existing[`${entry.kind}:${entry.itemId}`] = entry.attemptedAt;
+    await writeJson(PRICE_REFRESH_ATTEMPTS_PATH, existing);
+    return;
+  }
+  await withPostgresTransaction("write price-refresh attempt state", async (client) => {
+    await client.query(`
+      INSERT INTO price_refresh_attempts (item_kind, item_id, attempted_at)
+      SELECT item_kind, item_id, attempted_at
+      FROM UNNEST($1::text[], $2::text[], $3::timestamptz[]) AS input(item_kind, item_id, attempted_at)
+      ON CONFLICT (item_kind, item_id) DO UPDATE
+      SET attempted_at = GREATEST(price_refresh_attempts.attempted_at, EXCLUDED.attempted_at)
+    `, [
+      entries.map(({ kind }) => kind),
+      entries.map(({ itemId }) => itemId),
+      entries.map(({ attemptedAt }) => attemptedAt)
+    ]);
+  });
+}
 
 function refreshAttemptKey(kind: "part" | "accessory", item: Part | AccessoryItem) {
   return `${kind}:${item.id}`;
@@ -200,6 +243,7 @@ function lastAttempted(item: Part | AccessoryItem, kind: "part" | "accessory", a
 }
 
 export async function runPriceRefreshJob(options: PriceRefreshJobOptions = {}): Promise<PriceRefreshStatus> {
+  const persistStatus = options.persistStatus ?? !process.env.DATABASE_URL?.trim();
   const startedAt = new Date().toISOString();
   const status: PriceRefreshStatus = {
     ...emptyStatus(),
@@ -210,7 +254,8 @@ export async function runPriceRefreshJob(options: PriceRefreshJobOptions = {}): 
 
   const releaseLocks = await acquireJobLocks();
   try {
-    await writeJson(PRICE_REFRESH_STATE_PATH, status);
+    await options.assertLease?.();
+    if (persistStatus) await writeJson(PRICE_REFRESH_STATE_PATH, status);
     options.onStarted?.(status);
   } catch (error) {
     await releaseLocks();
@@ -219,12 +264,21 @@ export async function runPriceRefreshJob(options: PriceRefreshJobOptions = {}): 
 
   let coreQueue: CoreQueueItem[] = [];
   let accessoryQueue: AccessoryQueueItem[] = [];
+  let pendingAttemptWrites: PriceRefreshAttemptEntry[] = [];
 
-  const checkpoint = async () => {
-    await writeJson(PRICE_REFRESH_STATE_PATH, status);
+  const checkpoint = async (reportProgress = true) => {
+    await options.assertLease?.();
+    if (pendingAttemptWrites.length > 0) {
+      const entries = pendingAttemptWrites;
+      pendingAttemptWrites = [];
+      await writePriceRefreshAttempts(entries);
+    }
+    if (persistStatus) await writeJson(PRICE_REFRESH_STATE_PATH, status);
+    if (reportProgress) await options.onProgress?.(status);
   };
 
   const flush = async () => {
+    await options.assertLease?.();
     if (status.dryRun) {
       status.succeeded += coreQueue.length + accessoryQueue.length;
       status.changed += coreQueue.filter(({ before, after }) => before.priceWon !== after.priceWon).length;
@@ -236,6 +290,7 @@ export async function runPriceRefreshJob(options: PriceRefreshJobOptions = {}): 
     }
     const allChanges = [];
     if (coreQueue.length) {
+      await options.assertLease?.();
       const queue = coreQueue;
       coreQueue = [];
       try {
@@ -258,6 +313,7 @@ export async function runPriceRefreshJob(options: PriceRefreshJobOptions = {}): 
       }
     }
     if (accessoryQueue.length) {
+      await options.assertLease?.();
       const queue = accessoryQueue;
       accessoryQueue = [];
       try {
@@ -280,6 +336,7 @@ export async function runPriceRefreshJob(options: PriceRefreshJobOptions = {}): 
       }
     }
     try {
+      await options.assertLease?.();
       await appendCatalogChangeRecords(allChanges);
     } catch (error) {
       console.warn(`Price refresh saved prices but failed to write catalog change history: ${failureText(error)}`);
@@ -289,8 +346,9 @@ export async function runPriceRefreshJob(options: PriceRefreshJobOptions = {}): 
   };
 
   try {
+    await options.assertLease?.();
     const [parts, accessories] = await Promise.all([loadCatalog(), loadAccessories()]);
-    const attempts = await readJson<PriceRefreshAttempts>(PRICE_REFRESH_ATTEMPTS_PATH, {});
+    const attempts = await readPriceRefreshAttempts();
     const coreLimit = boundedLimit(options.coreLimit, MAX_CORE_LIMIT);
     const accessoryLimit = boundedLimit(options.accessoryLimit, MAX_ACCESSORY_LIMIT);
     const coreCandidates = parts
@@ -309,6 +367,7 @@ export async function runPriceRefreshJob(options: PriceRefreshJobOptions = {}): 
     let attemptsSinceCheckpoint = 0;
 
     for (const [index, entry] of work.entries()) {
+      await options.assertLease?.();
       status.attempted += 1;
       try {
         if (entry.kind === "part") {
@@ -336,27 +395,33 @@ export async function runPriceRefreshJob(options: PriceRefreshJobOptions = {}): 
         addFailure(status, { itemId: entry.item.id, itemName: entry.item.name, kind: entry.kind, message: failureText(error) });
       }
       if (!status.dryRun) {
-        attempts[refreshAttemptKey(entry.kind, entry.item)] = new Date().toISOString();
+        const attemptedAt = new Date().toISOString();
+        attempts[refreshAttemptKey(entry.kind, entry.item)] = attemptedAt;
+        pendingAttemptWrites.push({ kind: entry.kind, itemId: entry.item.id, attemptedAt });
         attemptsSinceCheckpoint += 1;
         if (attemptsSinceCheckpoint >= CHECKPOINT_SIZE || index === work.length - 1) {
-          await writeJson(PRICE_REFRESH_ATTEMPTS_PATH, attempts);
+          const entries = pendingAttemptWrites;
+          pendingAttemptWrites = [];
+          await options.assertLease?.();
+          await writePriceRefreshAttempts(entries);
           attemptsSinceCheckpoint = 0;
         }
       }
       if (coreQueue.length + accessoryQueue.length >= CHECKPOINT_SIZE) await flush();
-      else await checkpoint();
+      else await checkpoint(status.attempted % CHECKPOINT_SIZE === 0 || index === work.length - 1);
       if (delayMs > 0 && index < work.length - 1) await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
     await flush();
     status.running = false;
     status.completedAt = new Date().toISOString();
-    await writeJson(PRICE_REFRESH_STATE_PATH, status);
+    if (persistStatus) await writeJson(PRICE_REFRESH_STATE_PATH, status);
+    await options.onProgress?.(status);
     return status;
   } catch (error) {
     status.running = false;
     status.completedAt = new Date().toISOString();
     addFailure(status, { itemId: "job", itemName: "가격 갱신 작업", kind: "part", message: failureText(error) });
-    await writeJson(PRICE_REFRESH_STATE_PATH, status).catch(() => undefined);
+    if (persistStatus) await writeJson(PRICE_REFRESH_STATE_PATH, status).catch(() => undefined);
     throw error;
   } finally {
     await releaseLocks();

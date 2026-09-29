@@ -1,3 +1,5 @@
+import { safeLocalStorage } from "./safe-storage";
+import "./catalog-picker.css";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FiActivity, FiArrowLeft, FiBox, FiCheck, FiClock, FiCopy, FiDatabase, FiDownload, FiExternalLink, FiInfo, FiLayers, FiLoader, FiPlus, FiRefreshCw, FiSearch, FiShare2, FiTrash2, FiTrendingUp } from "react-icons/fi";
 import type { AlternativeRiskCounts, BuildSelection, CatalogChangeValueDiff, CompatiblePartCandidate, DataFreshness, DataQuality, GamingRefreshRate, GamingResolution, ListingPolicy, Part, PartCategory, PartRefreshResponse, PriceAvailabilityFilter, RecommendationProfile, ServiceMeta } from "../shared/types";
@@ -35,7 +37,7 @@ type CatalogSpecFilter = {
   interface: "all" | "NVMe" | "SATA";
 };
 type CatalogResponse = { items: CatalogPart[]; total: number; offset: number; limit: number; priceExcludedCount?: number; freshnessExcludedCount?: number; nonCoreExcludedCount?: number; categoryMismatchExcludedCount?: number; missingField?: string; incompleteExcludedCount?: number; incompleteMissingFields?: CatalogSpecCoverageMissingField[]; specFilter?: Partial<CatalogSpecFilter>; specExcludedCount?: number; specFilterDiagnostics?: Array<{ key: string; label: string; excludedCount: number; missingCount: number }>; riskExcludedCount?: number; riskCounts?: AlternativeRiskCounts; mode?: CatalogCandidateScope };
-type CatalogComparisonShare = { id: string; url: string; ownerToken: string; expiresAt?: string };
+type CatalogComparisonShare = { id: string; url: string; ownerToken?: string; owned?: boolean; ownerManaged?: boolean; expiresAt?: string };
 type CatalogComparisonContext = AlternativeComparisonExportContext;
 type CatalogComparisonShareHandler = (candidates: AlternativeComparisonCandidate[], context?: { name?: string; category?: string; currentPartName?: string; currentPartSummary?: string; currentPartPrice?: string }) => Promise<CatalogComparisonShare | undefined>;
 type CatalogComparisonRevokeHandler = (share: CatalogComparisonShare) => Promise<boolean>;
@@ -242,7 +244,7 @@ function specRowsFor(part: Part) {
   return rows.filter(([, value], index, all) => all.findIndex(([, candidate]) => candidate === value) === index).slice(0, 18);
 }
 
-function catalogWatchTargetFor(part: Part, raw = typeof window === "undefined" ? null : window.localStorage.getItem(CATALOG_WATCHLIST_STORAGE_KEY)) {
+function catalogWatchTargetFor(part: Part, raw = typeof window === "undefined" ? null : safeLocalStorage.getItem(CATALOG_WATCHLIST_STORAGE_KEY)) {
   if (typeof window === "undefined") return undefined;
   return catalogWatchlistFromJson(raw).find((entry) => entry.kind === "part" && entry.itemId === part.id)?.targetPriceWon;
 }

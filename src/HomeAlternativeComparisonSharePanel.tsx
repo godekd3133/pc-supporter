@@ -4,6 +4,7 @@ import { alternativeComparisonLocalShareExpired } from "../shared/alternative-co
 import type { AlternativeComparisonLocalShareEntry } from "../shared/alternative-comparison-local-history";
 import type { AlternativeComparisonSnapshot } from "../shared/alternative-comparison-share";
 import { ApiError, api } from "./api";
+import { ownerCredentialAvailable } from "./owner-session";
 
 type AlternativeComparisonShareHealthStatus = "checking" | "active" | "expired" | "revoked" | "error";
 
@@ -80,8 +81,9 @@ export function HomeAlternativeComparisonSharePanel({ entries, onCopy, onRemove,
   const refreshing = visibleEntries.some((entry) => serverHealthById[entry.id]?.status === "checking");
 
   async function revoke(entry: AlternativeComparisonLocalShareEntry) {
-    if (!entry.ownerToken || revokingId) {
-      if (!entry.ownerToken) onToast("이 링크를 만든 브라우저 권한이 없어 공유를 취소할 수 없어요. 브라우저 이력에서만 지울 수 있어요.");
+    if (revokingId) return;
+    if (!ownerCredentialAvailable("comparison", entry.id, entry)) {
+      onToast("이 링크를 만든 브라우저 권한이 없어 공유를 취소할 수 없어요. 브라우저 이력에서만 지울 수 있어요.");
       return;
     }
     if (!window.confirm("이 부품 비교 공유 링크를 취소할까요? 이미 전달된 링크도 더 이상 열리지 않아요.")) return;
@@ -106,7 +108,7 @@ export function HomeAlternativeComparisonSharePanel({ entries, onCopy, onRemove,
       const status = localExpired ? "expired" : serverStatus;
       const statusTone = shareHealthTone(status);
       const checkedAt = serverHealthById[entry.id]?.checkedAt;
-      const canRevoke = Boolean(entry.ownerToken) && status !== "expired" && status !== "revoked";
+      const canRevoke = ownerCredentialAvailable("comparison", entry.id, entry) && status !== "expired" && status !== "revoked";
       return <article className={`home-alternative-comparison-share ${statusTone}`} key={entry.id}>
         <div className="home-alternative-comparison-share-main"><div><strong>{entry.name}</strong>{entry.category && <span>{entry.category}</span>}</div><small>{entry.currentPartName ? `현재 기준 ${entry.currentPartName} · ` : ""}만든 날 {new Date(entry.createdAt).toLocaleString("ko-KR")} · {entry.expiresAt ? `만료 ${new Date(entry.expiresAt).toLocaleString("ko-KR")}` : "기간 제한 없음"}{checkedAt ? ` · 확인한 시각 ${new Date(checkedAt).toLocaleTimeString("ko-KR")}` : ""}</small>{(entry.currentPartSummary || entry.currentPartPrice) && <div className="home-alternative-comparison-share-baseline" data-testid={`home-alternative-comparison-baseline-${entry.id}`}><span>현재 기준</span>{entry.currentPartSummary && <small>{entry.currentPartSummary}</small>}{entry.currentPartPrice && <strong>{entry.currentPartPrice}</strong>}</div>}</div>
         <span className={`home-alternative-comparison-share-status ${statusTone}`}><span className="status-dot" /> {shareHealthLabel(status)}</span>

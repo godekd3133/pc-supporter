@@ -1,7 +1,9 @@
 import type { AccessoryItem, CoolingFanLoadOverride, FanLoadProvenance } from "../shared/types";
-import { COOLING_FAN_LOAD_OVERRIDES_PATH, readJson, writeJson } from "./storage";
+import { COOLING_FAN_LOAD_OVERRIDES_PATH, fileUpdatedAt, readJson, writeJson } from "./storage";
+import { mutateCoolingFanLoadOverrideRecords, persistenceMode, readCoolingFanLoadOverrideRecords } from "./repository";
 
 export type CoolingFanLoadOverrideMap = Record<string, CoolingFanLoadOverride>;
+export type CoolingFanLoadOverrideSnapshot = { overrides: CoolingFanLoadOverrideMap; updatedAt: string };
 export type CoolingFanLoadOverrideOperation = "create" | "update" | "unchanged";
 
 export type CoolingFanLoadOverrideValidationItem = {
@@ -43,7 +45,16 @@ const MAX_SOURCE_NOTE_LENGTH = 500;
 let overrideWriteQueue: Promise<void> = Promise.resolve();
 
 export async function readCoolingFanLoadOverrides(): Promise<CoolingFanLoadOverrideMap> {
+  if (await persistenceMode() === "postgres") return (await readCoolingFanLoadOverrideRecords()).overrides;
   return readJson<CoolingFanLoadOverrideMap>(COOLING_FAN_LOAD_OVERRIDES_PATH, {});
+}
+
+export async function readCoolingFanLoadOverrideSnapshot(): Promise<CoolingFanLoadOverrideSnapshot> {
+  if (await persistenceMode() === "postgres") return readCoolingFanLoadOverrideRecords();
+  return {
+    overrides: await readJson<CoolingFanLoadOverrideMap>(COOLING_FAN_LOAD_OVERRIDES_PATH, {}),
+    updatedAt: await fileUpdatedAt(COOLING_FAN_LOAD_OVERRIDES_PATH, "")
+  };
 }
 
 function normalizedString(value: unknown) {
@@ -204,14 +215,21 @@ export function coolingFanLoadCoverageFor(accessories: AccessoryItem[], override
   return { generatedAt: new Date().toISOString(), totalCoolingFans: fans.length, registeredCount, knownCount, missingCount: Math.max(0, fans.length - knownCount), coveragePercent: fans.length > 0 ? Number(((knownCount / fans.length) * 100).toFixed(1)) : 0 };
 }
 
-async function withOverrideWriteLock<T>(operation: (overrides: CoolingFanLoadOverrideMap) => T | Promise<T>) {
+async function withFileOverrideWriteLock<T>(operation: (overrides: CoolingFanLoadOverrideMap) => T | Promise<T>) {
   const current = overrideWriteQueue.then(async () => operation(await readCoolingFanLoadOverrides()));
   overrideWriteQueue = current.then(() => undefined, () => undefined);
   return current;
 }
 
 export async function saveCoolingFanLoadOverrides(values: CoolingFanLoadOverride[]) {
-  return withOverrideWriteLock(async (overrides) => {
+  if (await persistenceMode() === "postgres") {
+    await mutateCoolingFanLoadOverrideRecords((overrides) => {
+      for (const value of values) overrides[value.accessoryId] = value;
+      return overrides;
+    });
+    return values;
+  }
+  return withFileOverrideWriteLock(async (overrides) => {
     for (const value of values) overrides[value.accessoryId] = value;
     await writeJson(COOLING_FAN_LOAD_OVERRIDES_PATH, overrides);
     return values;
@@ -219,7 +237,17 @@ export async function saveCoolingFanLoadOverrides(values: CoolingFanLoadOverride
 }
 
 export async function deleteCoolingFanLoadOverride(accessoryId: string) {
-  return withOverrideWriteLock(async (overrides) => {
+  if (await persistenceMode() === "postgres") {
+    let deleted = false;
+    await mutateCoolingFanLoadOverrideRecords((overrides) => {
+      if (!overrides[accessoryId]) return overrides;
+      delete overrides[accessoryId];
+      deleted = true;
+      return overrides;
+    });
+    return deleted;
+  }
+  return withFileOverrideWriteLock(async (overrides) => {
     if (!overrides[accessoryId]) return false;
     delete overrides[accessoryId];
     await writeJson(COOLING_FAN_LOAD_OVERRIDES_PATH, overrides);

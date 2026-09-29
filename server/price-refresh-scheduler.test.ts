@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { boundedInteger, priceRefreshOptionsFromEnv, startPriceRefreshScheduler, waitForPriceRefreshStart } from "./price-refresh-scheduler";
+import { boundedInteger, priceRefreshOptionsFromEnv, scheduledPriceRefreshIdempotencyKey, scheduledPriceRefreshSlot, startDurablePriceRefreshScheduler, startPriceRefreshScheduler, waitForPriceRefreshStart } from "./price-refresh-scheduler";
+import type { BackgroundJob } from "./background-job-store";
 
 describe("price refresh scheduler", () => {
   it("bounds configured work to a complete but finite local catalog pass", () => {
@@ -44,5 +45,37 @@ describe("price refresh scheduler", () => {
     markStarted();
     expect(await outcome).toEqual({ kind: "started" });
     finishJob({ startedAt: "now", completedAt: "later", running: false, dryRun: false, attempted: 0, succeeded: 0, changed: 0, failed: 0, failures: [] });
+  });
+
+  it("assigns singleton UTC slot keys and catches up only to the latest missed slot", async () => {
+    const intervalMs = 3 * 60 * 60 * 1_000;
+    const base = Date.parse("2026-09-29T00:00:00.000Z");
+    expect(scheduledPriceRefreshIdempotencyKey(base + 1, intervalMs)).toBe("price-refresh:scheduled:10800000:165800");
+    expect(scheduledPriceRefreshIdempotencyKey(base + 2 * 60 * 60 * 1_000, intervalMs)).toBe("price-refresh:scheduled:10800000:165800");
+    expect(scheduledPriceRefreshIdempotencyKey(base + 8 * 60 * 60 * 1_000, intervalMs)).toBe("price-refresh:scheduled:10800000:165802");
+    expect(scheduledPriceRefreshIdempotencyKey(base + 1, 2 * 60 * 60 * 1_000)).toBe("price-refresh:scheduled:7200000:248700");
+    expect(scheduledPriceRefreshSlot(base + 1, intervalMs)).toEqual({ intervalMs, slot: 165800, scheduledAt: 165800 * intervalMs });
+
+    let currentTime = base + 8 * 60 * 60 * 1_000;
+    const requestedKeys: string[] = [];
+    const requestedSlots: Array<{ intervalMs: number; slot: number; scheduledAt: number }> = [];
+    const enqueue = async (key: string, slot: { intervalMs: number; slot: number; scheduledAt: number }) => {
+      requestedKeys.push(key);
+      requestedSlots.push(slot);
+      return { id: key, kind: "price-refresh", status: "queued" } as BackgroundJob;
+    };
+    const firstReplica = startDurablePriceRefreshScheduler({ enqueue, intervalMs, now: () => currentTime });
+    const secondReplica = startDurablePriceRefreshScheduler({ enqueue, intervalMs, now: () => currentTime });
+    await Promise.all([firstReplica.enqueueCurrentSlot(), secondReplica.enqueueCurrentSlot()]);
+    expect(requestedKeys).toEqual(["price-refresh:scheduled:10800000:165802", "price-refresh:scheduled:10800000:165802"]);
+    expect(requestedSlots).toEqual([
+      { intervalMs, slot: 165802, scheduledAt: 165802 * intervalMs },
+      { intervalMs, slot: 165802, scheduledAt: 165802 * intervalMs }
+    ]);
+
+    currentTime += 30 * 60 * 60 * 1_000;
+    expect(scheduledPriceRefreshIdempotencyKey(currentTime, intervalMs)).toBe("price-refresh:scheduled:10800000:165812");
+    await firstReplica.enqueueCurrentSlot();
+    expect(requestedKeys).toEqual(["price-refresh:scheduled:10800000:165802", "price-refresh:scheduled:10800000:165802", "price-refresh:scheduled:10800000:165812"]);
   });
 });

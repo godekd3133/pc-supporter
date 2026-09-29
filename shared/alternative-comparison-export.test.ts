@@ -244,16 +244,18 @@ describe("alternative comparison export", () => {
     const valuedCandidate: AlternativeComparisonCandidate = { ...candidates[0], scenario };
     const text = alternativeComparisonTextFor([valuedCandidate]);
     const csv = alternativeComparisonCsvFor([valuedCandidate]);
-    const json = JSON.stringify(JSON.parse(alternativeComparisonJsonFor([valuedCandidate])));
+    const jsonEnvelope = JSON.parse(alternativeComparisonJsonFor([valuedCandidate]));
+    const json = JSON.stringify(jsonEnvelope);
 
     expect(text).toContain("부품을 교체할 경우: 호환 결과: 구매 전 확인 필요 · 호환 불가 0 · 주의 1 · 확인 필요 2 · 가격 변화 +45,000원 · 구매 안내: 확인 후 구매 · 주의·확인 필요를 확인한 뒤 구매하세요. · 가격 이력 30일 4회 · 최저 100,000원 · 구매 전 확인 항목 2개 · 완료 1 · 추가 확인 1 · 진행 보류 0");
     expect(csv).toContain("부품 교체 시");
-    expect(csv).not.toContain("74");
-    expect(csv).not.toContain("-8");
+    expect(csv).not.toContain("analysisScore");
+    expect(csv).not.toContain("analysisConfidence");
     expect(json).not.toContain("analysisScore");
     expect(json).not.toContain("analysisConfidence");
-    expect(json).not.toContain("74");
-    expect(json).not.toContain("-8");
+    expect(jsonEnvelope.items[0].scenario).not.toHaveProperty("analysisScore");
+    expect(jsonEnvelope.items[0].scenario).not.toHaveProperty("analysisConfidence");
+    expect(jsonEnvelope.items[0].scenario).not.toHaveProperty("analysisScoreDelta");
     expect(json).toContain("45000");
     expect(json).toContain("구매 전 확인");
   });

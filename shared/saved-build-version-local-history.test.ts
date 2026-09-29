@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { savedBuildVersionLocalShareExpired, savedBuildVersionLocalShareRemember, savedBuildVersionLocalShareRemove, savedBuildVersionLocalSharesFromJson, savedBuildVersionLocalSharesToJson } from "./saved-build-version-local-history";
 
-function entry(id: string, overrides: Partial<ReturnType<typeof baseEntry>> = {}) {
+function entry(id: string, overrides: Record<string, unknown> = {}) {
   return { ...baseEntry(id), ...overrides };
 }
 
@@ -26,6 +26,15 @@ describe("saved build version local history", () => {
     expect(savedBuildVersionLocalShareExpired({ expiresAt }, Date.parse("2026-09-01T23:59:59.000Z"))).toBe(false);
     expect(savedBuildVersionLocalShareExpired({ expiresAt }, Date.parse(expiresAt))).toBe(true);
     expect(savedBuildVersionLocalShareExpired({})).toBe(false);
+  });
+
+  it("persists session ownership without a bearer token and keeps both version references", () => {
+    const raw = savedBuildVersionLocalSharesToJson([entry("session-owned", { ownerToken: "legacy-secret", owned: true })]);
+    const parsed = savedBuildVersionLocalSharesFromJson(raw);
+
+    expect(raw).not.toContain("ownerToken");
+    expect(raw).not.toContain("legacy-secret");
+    expect(parsed[0]).toMatchObject({ id: "session-owned", owned: true, beforeBuildId: "session-owned-before", afterBuildId: "session-owned-after" });
   });
 
   it("rejects an oversized raw local history before normalizing every entry", () => {

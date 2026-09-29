@@ -1,3 +1,4 @@
+import { safeSessionStorage } from "./safe-storage";
 import { useEffect, useMemo, useState } from "react";
 import { FiAlertTriangle, FiArrowLeft, FiCopy, FiDownload, FiInfo, FiLoader, FiRefreshCw, FiZap } from "react-icons/fi";
 import { GENERATOR_VARIANTS_DRAFT_TRANSFER_KEY, generatorVariantsConditionsSearchFor } from "../shared/generator-variants-share";
@@ -142,7 +143,7 @@ export function SharedGeneratorVariantsView({ onBack, onToast }: { onBack: () =>
     if (!item.draft || !snapshot) return;
     try {
       const payload = generatorVariantsCustomerExportPayloadFor(refreshState.items ? { ...snapshot.payload, exportedAt: new Date().toISOString(), items: refreshState.items } : snapshot.payload);
-      window.sessionStorage.setItem(GENERATOR_VARIANTS_DRAFT_TRANSFER_KEY, JSON.stringify({ source: "shared-generator-variants", payload, priority: item.priority, mode, origin: { shareId: snapshot.id, shareName: snapshot.name, catalogSnapshotAt: snapshot.catalogSnapshotAt, currentRecheckedAt: payload.exportedAt } }));
+      safeSessionStorage.setItem(GENERATOR_VARIANTS_DRAFT_TRANSFER_KEY, JSON.stringify({ source: "shared-generator-variants", payload, priority: item.priority, mode, origin: { shareId: snapshot.id, shareName: snapshot.name, catalogSnapshotAt: snapshot.catalogSnapshotAt, currentRecheckedAt: payload.exportedAt } }));
       window.location.href = "/build?entry=shared-generator";
     } catch {
       onToast("현재 결과를 편집기로 넘기지 못했습니다. JSON 저장 후 자동 구성 화면에서 다시 가져와 주세요.");

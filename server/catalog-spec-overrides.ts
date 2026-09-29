@@ -2,7 +2,7 @@ import type { CatalogSpecOverride, CatalogSpecOverrideFieldKey, CatalogSpecOverr
 import { catalogSpecOverrideFieldTypeFor } from "../shared/catalog-spec-overrides";
 import type { Part, PartSpecs } from "../shared/types";
 import { CATEGORY_LABELS, PART_CATEGORIES, isKnownPrice } from "../shared/types";
-import { CATALOG_SPEC_OVERRIDES_PATH, readJson, withSerializedFileMutation, writeJson } from "./storage";
+import { mutateCatalogSpecOverrideRecords, readCatalogSpecOverrideRecords } from "./repository";
 import { isListingAllowed } from "./listing";
 import { physicalSourceCheckFromUnknown } from "./physical-source-check-history";
 
@@ -100,10 +100,13 @@ function usableCatalogSpecOverride(value: unknown): value is CatalogSpecOverride
   });
 }
 
-export async function readCatalogSpecOverrides(): Promise<CatalogSpecOverrideMap> {
-  const raw = await readJson<unknown>(CATALOG_SPEC_OVERRIDES_PATH, {});
+function catalogSpecOverrideMapFromUnknown(raw: unknown): CatalogSpecOverrideMap {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
   return Object.fromEntries(Object.entries(raw).flatMap(([partId, value]) => usableCatalogSpecOverride(value) && value.partId === partId ? [[partId, value]] : []));
+}
+
+export async function readCatalogSpecOverrides(): Promise<CatalogSpecOverrideMap> {
+  return catalogSpecOverrideMapFromUnknown(await readCatalogSpecOverrideRecords());
 }
 
 export function validateCatalogSpecOverrideBatch(input: unknown, catalog: Part[], existingOverrides: CatalogSpecOverrideMap = {}): CatalogSpecOverrideBatchValidation {
@@ -250,39 +253,36 @@ export function catalogSpecOverrideListItems(catalog: Part[], overrides: Catalog
   });
 }
 
-let writeQueue: Promise<void> = Promise.resolve();
-
-async function withOverrideWriteLock<T>(operation: (overrides: CatalogSpecOverrideMap) => T | Promise<T>) {
-  const current = writeQueue.then(async () => operation(await readCatalogSpecOverrides()));
-  writeQueue = current.then(() => undefined, () => undefined);
-  return current;
+async function withOverrideWriteLock<T>(operation: (overrides: CatalogSpecOverrideMap) => { value: T; changed: boolean } | Promise<{ value: T; changed: boolean }>) {
+  return mutateCatalogSpecOverrideRecords(async (storedOverrides) => {
+    const overrides = catalogSpecOverrideMapFromUnknown(storedOverrides);
+    const result = await operation(overrides);
+    return { value: result.value, overrides, changed: result.changed };
+  });
 }
 
 export async function saveCatalogSpecOverrides(values: CatalogSpecOverride[]) {
-  return withOverrideWriteLock(async (overrides) => {
+  return withOverrideWriteLock((overrides) => {
     for (const value of values) overrides[value.partId] = value;
-    await writeJson(CATALOG_SPEC_OVERRIDES_PATH, overrides);
-    return values;
+    return { value: values, changed: true };
   });
 }
 
 export async function deleteCatalogSpecOverride(partId: string) {
-  return withOverrideWriteLock(async (overrides) => {
-    if (!overrides[partId]) return false;
+  return withOverrideWriteLock((overrides) => {
+    if (!overrides[partId]) return { value: false, changed: false };
     delete overrides[partId];
-    await writeJson(CATALOG_SPEC_OVERRIDES_PATH, overrides);
-    return true;
+    return { value: true, changed: true };
   });
 }
 
 export async function saveCatalogSpecOverrideSourceCheck(partId: string, sourceCheck: import("../shared/types").PhysicalSourceCheck) {
-  return withOverrideWriteLock(async (overrides) => {
-    if (!physicalSourceCheckFromUnknown(sourceCheck)) return undefined;
+  return withOverrideWriteLock((overrides) => {
+    if (!physicalSourceCheckFromUnknown(sourceCheck)) return { value: undefined, changed: false };
     const existing = overrides[partId];
-    if (!existing) return undefined;
+    if (!existing) return { value: undefined, changed: false };
     const updated = { ...existing, sourceCheck };
     overrides[partId] = updated;
-    await writeJson(CATALOG_SPEC_OVERRIDES_PATH, overrides);
-    return updated;
+    return { value: updated, changed: true };
   });
 }

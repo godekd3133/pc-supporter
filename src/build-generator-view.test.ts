@@ -58,9 +58,9 @@ function importPayload(draftOverrides: Record<string, unknown> | null = {}, extr
 }
 
 describe("generatedDraftSummaryFor", () => {
-  it("shows the gaming target once in a short sentence", () => {
+  it("describes the gaming display target as a build goal, not a measured result", () => {
     const draft = importedDraft({ profile: "gaming", priority: "performance", budgetWon: 2_000_000 });
-    expect(generatedDraftSummaryFor(draft)).toBe("QHD 144Hz 게임용 견적이에요. 예산은 200만 원으로 설정했어요.");
+    expect(generatedDraftSummaryFor(draft)).toBe("QHD 144Hz 게임용 목표를 기준으로 부품을 골랐어요. 예산은 200만 원으로 설정했어요.");
   });
 
   it("keeps an exact budget when it cannot be written in whole ten-thousands", () => {

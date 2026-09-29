@@ -84,6 +84,7 @@ describe("budget ladder share persistence API", () => {
       });
       const created = await create.json() as Record<string, any>;
       expect(create.status).toBe(201);
+      expect(create.headers.get("cache-control")).toBe("private, no-store");
       expect(created.ownerToken).toEqual(expect.any(String));
       expect(created.ownerTokenHash).toBeUndefined();
       expect(created.payload).toMatchObject({ type: "pc-supporter-budget-ladder", items: [{ id: "economy" }, { id: "target" }, { id: "headroom" }] });

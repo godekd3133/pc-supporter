@@ -1,3 +1,4 @@
+import { safeLocalStorage } from "./safe-storage";
 import { useEffect, useRef, useState } from "react";
 import { FiBookmark, FiCpu, FiLayers, FiMenu, FiMoon, FiMoreHorizontal, FiSearch, FiSun, FiTool, FiTrendingUp, FiX, FiZap } from "react-icons/fi";
 import type { ApiStatusDetails } from "./api";
@@ -33,7 +34,7 @@ export function AppHeader({ view, networkOnline, apiStatus, bootstrapLoading, bo
   const [moreOpen, setMoreOpen] = useState(false);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     try {
-      return themeModeFromStorage(window.localStorage.getItem(THEME_STORAGE_KEY));
+      return themeModeFromStorage(safeLocalStorage.getItem(THEME_STORAGE_KEY));
     } catch {
       return "light";
     }
@@ -44,7 +45,7 @@ export function AppHeader({ view, networkOnline, apiStatus, bootstrapLoading, bo
   useEffect(() => {
     applyTheme(themeMode);
     try {
-      window.localStorage.setItem(THEME_STORAGE_KEY, themeMode);
+      safeLocalStorage.setItem(THEME_STORAGE_KEY, themeMode);
     } catch {
       // The theme still applies for this tab when storage is unavailable.
     }

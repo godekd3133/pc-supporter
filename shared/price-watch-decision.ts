@@ -40,12 +40,12 @@ function nearLowThreshold(value: number | undefined) {
 }
 
 export function priceWatchDecisionFor(input: PriceWatchDecisionInput): PriceWatchDecision {
-  if (input.currentStatus === "error") return { state: "error", label: "일시 확인 오류", summary: "현재 가격을 다시 불러온 뒤 구매 시기를 살펴볼 수 있어요." };
+  if (input.currentStatus === "error") return { state: "error", label: "일시 확인 오류", summary: "저장된 가격 정보를 다시 불러온 뒤 구매 시기를 살펴볼 수 있어요." };
   if (input.currentStatus === "unavailable" || input.currentStatus === "unknown" || input.currentPriceWon === undefined || !Number.isFinite(input.currentPriceWon)) {
-    return { state: "unavailable", label: "-", summary: "현재 가격을 알 수 없어 목표가에 도달했는지 확인할 수 없어요." };
+    return { state: "unavailable", label: "-", summary: "저장된 가격 정보가 없어 목표가에 도달했는지 확인할 수 없어요." };
   }
   if (input.targetPriceWon !== undefined && Number.isFinite(input.targetPriceWon) && input.targetPriceWon > 0 && input.currentPriceWon <= input.targetPriceWon) {
-    return { state: "target", label: "목표가 도달", summary: `현재가 ${won(input.currentPriceWon)}가 설정한 목표가 ${won(input.targetPriceWon)} 이하입니다.` };
+    return { state: "target", label: "목표가 도달", summary: `저장 가격 ${won(input.currentPriceWon)}가 설정한 목표가 ${won(input.targetPriceWon)} 이하입니다.` };
   }
 
   const history = input.history;
@@ -63,7 +63,7 @@ export function priceWatchDecisionFor(input: PriceWatchDecisionInput): PriceWatc
   }
 
   if (input.targetPriceWon !== undefined && Number.isFinite(input.targetPriceWon) && input.targetPriceWon > 0 && input.currentPriceWon > input.targetPriceWon) {
-    return { state: "tracking", label: "목표가 관찰 중", summary: `현재가가 목표가보다 ${won(input.currentPriceWon - input.targetPriceWon)} 높습니다.` };
+    return { state: "tracking", label: "목표가 관찰 중", summary: `저장 가격이 목표가보다 ${won(input.currentPriceWon - input.targetPriceWon)} 높습니다.` };
   }
-  return { state: "tracking", label: "가격 추적 중", summary: "현재 가격과 변경 이력을 계속 관찰합니다." };
+  return { state: "tracking", label: "가격 추적 중", summary: "저장 가격과 변경 이력을 비교합니다." };
 }

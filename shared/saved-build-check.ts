@@ -18,6 +18,7 @@ const SAVED_BUILD_CHECK_TEXT_LIMIT = 240;
 const FINDING_SEVERITIES = ["blocker", "warning", "unknown", "info"] as const;
 const ACCESSORY_COMPATIBILITY_STATUSES = ["compatible", "incompatible", "needs_review"] as const;
 const ACCESSORY_FINDING_SEVERITIES = ["blocker", "warning", "unknown"] as const;
+type SavedBuildCheckSource = Omit<CompatibilityResult, "analysis"> & { analysis?: CompatibilityResult["analysis"] };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -74,7 +75,7 @@ function accessoryFindingSummaryFor(finding: AccessoryCompatibilityFinding): Sav
   };
 }
 
-function accessoryCompatibilitySnapshotFor(result: CompatibilityResult): SavedBuildAccessoryCompatibilitySnapshot | undefined {
+function accessoryCompatibilitySnapshotFor(result: Pick<CompatibilityResult, "accessoryCompatibility">): SavedBuildAccessoryCompatibilitySnapshot | undefined {
   const compatibility = result.accessoryCompatibility;
   if (!compatibility) return undefined;
   return {
@@ -86,7 +87,7 @@ function accessoryCompatibilitySnapshotFor(result: CompatibilityResult): SavedBu
   };
 }
 
-function resourceBudgetForResult(result: CompatibilityResult): SavedBuildResourceBudgetSnapshot | undefined {
+function resourceBudgetForResult(result: Pick<CompatibilityResult, "metrics">): SavedBuildResourceBudgetSnapshot | undefined {
   const summary = buildResourceSummaryFor(result.metrics);
   if (summary.state === "neutral") return undefined;
   return {
@@ -98,7 +99,7 @@ function resourceBudgetForResult(result: CompatibilityResult): SavedBuildResourc
   };
 }
 
-export function savedBuildCheckSnapshotFor(result: CompatibilityResult): SavedBuildCheckSnapshot {
+export function savedBuildCheckSnapshotFor(result: SavedBuildCheckSource): SavedBuildCheckSnapshot {
   const coreTotalPriceWon = result.coreTotalPriceWon ?? Math.max(0, result.totalPriceWon - (result.accessoryTotalPriceWon ?? 0));
   const corePriceComplete = result.corePriceComplete ?? result.priceComplete;
   const accessoryTotalPriceWon = result.accessoryTotalPriceWon ?? 0;
@@ -121,7 +122,8 @@ export function savedBuildCheckSnapshotFor(result: CompatibilityResult): SavedBu
     ...(accessoryCompatibility ? { accessoryCompatibility } : {}),
     findings: result.findings.slice(0, SAVED_BUILD_CHECK_FINDING_LIMIT).map(findingSummaryFor),
     ...(analysis?.overallScore !== undefined ? { analysisScore: analysis.overallScore } : {}),
-    ...(analysis ? { analysisScoreLabel: analysis.scoreLabel, analysisConfidence: analysis.confidence } : {}),
+    analysisScoreLabel: analysis?.scoreLabel ?? "계산 불가",
+    analysisConfidence: analysis?.confidence ?? "unknown",
     actionCenterState: actionCenter.state,
     actionCenterSummary: actionCenter.summary,
     actionCenterTotalCount: actionCenter.totalCount,

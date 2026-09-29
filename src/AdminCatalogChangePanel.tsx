@@ -1,3 +1,4 @@
+import { safeLocalStorage } from "./safe-storage";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import { FiCheckCircle, FiClock, FiDownload, FiInfo, FiLoader, FiRefreshCw, FiSearch, FiServer, FiTrash2, FiXCircle } from "react-icons/fi";
@@ -19,6 +20,7 @@ import { catalogWatchSnapshotMatches, sortCatalogWatchSnapshots } from "../share
 import type { CatalogWatchlistStatusFilter, CatalogWatchlistSort } from "../shared/catalog-watchlist-view";
 import { LOCAL_IMPORT_MAX_BYTES } from "../shared/file-import-limits";
 import { api } from "./api";
+import { forgetSavedWatchlistOwnerToken, hasOwnerSessionResource, markOwnerSessionResource, ownerRequestOptions, ownerSessionCreateOptions, ownerSessionModeSupported, readSavedWatchlistOwnerToken, rememberSavedWatchlistOwnerToken, removeOwnerSessionResource, retryOwnerSessionMigration } from "./owner-session";
 import { safeExternalUrl } from "./safe-source-url";
 import { eul } from "../shared/josa";
 
@@ -65,8 +67,8 @@ export function CatalogChangeHistoryPanel({ records, loading, error, historyLimi
   const [kindFilter, setKindFilter] = useState<CatalogChangeKindFilter>("all");
   const [changeFilter, setChangeFilter] = useState<CatalogChangeFilter>("all");
   const [selectedChangeId, setSelectedChangeId] = useState<string | null>(null);
-  const [watchEntries, setWatchEntries] = useState<CatalogWatchEntry[]>(() => typeof window === "undefined" ? [] : catalogWatchlistFromJson(window.localStorage.getItem(CATALOG_WATCHLIST_STORAGE_KEY)));
-  const [watchThreshold, setWatchThreshold] = useState<CatalogWatchThreshold>(() => typeof window === "undefined" ? 10 : catalogWatchThresholdFromStorage(window.localStorage.getItem(CATALOG_WATCH_THRESHOLD_STORAGE_KEY)));
+  const [watchEntries, setWatchEntries] = useState<CatalogWatchEntry[]>(() => typeof window === "undefined" ? [] : catalogWatchlistFromJson(safeLocalStorage.getItem(CATALOG_WATCHLIST_STORAGE_KEY)));
+  const [watchThreshold, setWatchThreshold] = useState<CatalogWatchThreshold>(() => typeof window === "undefined" ? 10 : catalogWatchThresholdFromStorage(safeLocalStorage.getItem(CATALOG_WATCH_THRESHOLD_STORAGE_KEY)));
   const [shareLinkUrl, setShareLinkUrl] = useState<string | null>(null);
   const [shareLinkTruncatedCount, setShareLinkTruncatedCount] = useState(0);
   const [watchlistName, setWatchlistName] = useState("내 관심 가격 목록");
@@ -105,8 +107,8 @@ export function CatalogChangeHistoryPanel({ records, loading, error, historyLimi
       setSavedWatchlistExpiresAt(null);
     }
   }, [revokingWatchlist, savingWatchlist, serverMutationContextKey]);
-  useEffect(() => { window.localStorage.setItem(CATALOG_WATCHLIST_STORAGE_KEY, catalogWatchlistToJson(watchEntries)); }, [watchEntries]);
-  useEffect(() => { window.localStorage.setItem(CATALOG_WATCH_THRESHOLD_STORAGE_KEY, String(watchThreshold)); }, [watchThreshold]);
+  useEffect(() => { safeLocalStorage.setItem(CATALOG_WATCHLIST_STORAGE_KEY, catalogWatchlistToJson(watchEntries)); }, [watchEntries]);
+  useEffect(() => { safeLocalStorage.setItem(CATALOG_WATCH_THRESHOLD_STORAGE_KEY, String(watchThreshold)); }, [watchThreshold]);
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
       if (event.key === CATALOG_WATCHLIST_STORAGE_KEY) {
@@ -323,8 +325,13 @@ export function CatalogChangeHistoryPanel({ records, loading, error, historyLimi
     const isCurrent = () => mountedRef.current && serverMutationRequestRef.current === requestVersion && serverMutationContextKeyRef.current === requestContextKey;
     setSavingWatchlist(true);
     try {
-      const saved = await api<SavedCatalogWatchlist>("/api/watchlists", { method: "POST", body: JSON.stringify({ name: watchlistName.trim() || "관심 가격 목록", entries: watchEntries, nearLowThresholdPercent: watchThreshold, expiresInDays: watchlistExpiryDays === "never" ? undefined : watchlistExpiryDays }) });
+      const saved = await api<SavedCatalogWatchlist & ({ ownerManaged: true; ownerToken?: never } | { ownerManaged?: false; ownerToken: string })>("/api/watchlists", { method: "POST", ...ownerSessionCreateOptions(), body: JSON.stringify({ name: watchlistName.trim() || "관심 가격 목록", entries: watchEntries, nearLowThresholdPercent: watchThreshold, expiresInDays: watchlistExpiryDays === "never" ? undefined : watchlistExpiryDays }) });
       if (!isCurrent()) return;
+      if (saved.ownerManaged) markOwnerSessionResource("watchlist", saved.id);
+      if (saved.ownerToken) {
+        rememberSavedWatchlistOwnerToken(saved.id, saved.ownerToken);
+        if (ownerSessionModeSupported()) void retryOwnerSessionMigration().catch(() => undefined);
+      }
       const url = `${window.location.origin}/watchlist/${saved.id}`;
       setSavedWatchlistUrl(url);
       setSavedWatchlistId(saved.id);
@@ -360,8 +367,12 @@ export function CatalogChangeHistoryPanel({ records, loading, error, historyLimi
     const isCurrent = () => mountedRef.current && serverMutationRequestRef.current === requestVersion && serverMutationContextKeyRef.current === requestContextKey;
     setRevokingWatchlist(true);
     try {
-      await api(`/api/watchlists/${encodeURIComponent(savedWatchlistId)}`, { method: "DELETE" });
+      const ownerToken = readSavedWatchlistOwnerToken(savedWatchlistId);
+      const ownerManaged = hasOwnerSessionResource("watchlist", savedWatchlistId);
+      await api(`/api/watchlists/${encodeURIComponent(savedWatchlistId)}`, { method: "DELETE", ...ownerRequestOptions("watchlist", savedWatchlistId, { ownerToken, owned: ownerManaged }) });
       if (!isCurrent()) return;
+      forgetSavedWatchlistOwnerToken(savedWatchlistId);
+      removeOwnerSessionResource("watchlist", savedWatchlistId);
       setSavedWatchlistUrl(null);
       setSavedWatchlistId(null);
       setSavedWatchlistExpiresAt(null);

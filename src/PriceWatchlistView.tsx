@@ -1,14 +1,17 @@
+import { safeLocalStorage } from "./safe-storage";
+import "./price-watchlist-view.css";
 import { useEffect, useRef, useState } from "react";
 import type React from "react";
 import { FiArrowLeft, FiBell, FiCheck, FiCheckCircle, FiClock, FiCopy, FiDownload, FiExternalLink, FiInfo, FiLoader, FiPlus, FiRefreshCw, FiSearch, FiServer, FiTag, FiTrash2, FiUpload, FiXCircle } from "react-icons/fi";
-import type { AccessoryCategory, AccessoryItem, Part, PartCategory } from "../shared/types";
-import { ACCESSORY_CATEGORIES, ACCESSORY_CATEGORY_LABELS, CATEGORY_LABELS, isKnownPrice, PART_CATEGORIES } from "../shared/types";
+import type { AccessoryCategory, AccessoryItem, Part, PartCategory, ServiceMeta } from "../shared/types";
+import { ACCESSORY_CATEGORIES, ACCESSORY_CATEGORY_LABELS, CATEGORY_LABELS, DATA_FRESHNESS_LABELS, isKnownPrice, PART_CATEGORIES } from "../shared/types";
 import { addCatalogWatchEntry, catalogWatchlistContains, catalogWatchlistFromJson, catalogWatchlistToJson, mergeCatalogWatchEntries, removeCatalogWatchEntry, updateCatalogWatchEntry } from "../shared/catalog-watchlist";
 import type { CatalogWatchEntry } from "../shared/catalog-watchlist";
 import { catalogWatchlistEntriesFromCsv, catalogWatchlistEntriesFromJson } from "../shared/catalog-watchlist-import";
 import { catalogWatchlistCsvFor, catalogWatchlistJsonFor } from "../shared/catalog-watchlist-export";
 import type { CatalogWatchSnapshot } from "../shared/catalog-watchlist-export";
-import { ApiError, api } from "./api";
+import { api } from "./api";
+import { hasOwnerSessionResource, markOwnerSessionResource, ownerCredentialAvailable, ownerRequestOptions, ownerSessionCreateOptions, ownerSessionModeSupported, removeOwnerSessionResource, retryOwnerSessionMigration, SAVED_WATCHLIST_LINK_STORAGE_KEY, SAVED_WATCHLIST_OWNER_TOKENS_STORAGE_KEY } from "./owner-session";
 import { DEFAULT_PRICE_ALERT_POLICY, PRICE_ALERT_DROP_THRESHOLDS, priceAlertPolicyFromUnknown, priceAlertPolicyText, priceAlertsFor } from "./price-alerts";
 import type { PriceAlertPolicy, PriceObservation, PriceWatchAlert } from "./price-alerts";
 import { autoRefreshEnabledFromStorage, autoRefreshMinutesFromStorage, priceAlertsFromJson, priceAlertsToJson, priceBaselineFromJson, priceBaselineToJson } from "./price-monitor-storage";
@@ -16,8 +19,8 @@ import { savedWatchlistLinksFromJson, savedWatchlistLinksToJson } from "./watchl
 import type { SavedWatchlistLink } from "./watchlist-link-storage";
 import { safeExternalUrl } from "./safe-source-url";
 import { recommendedTargetPriceFromHistory } from "./price-target";
-import { catalogWatchlistImportDiffFor, priceWatchDecisionCountsFor, priceWatchEntriesFor } from "./price-watchlist-view";
-import type { CatalogWatchlistImportDiff, PriceWatchSort, PriceWatchStatusFilter } from "./price-watchlist-view";
+import { catalogWatchlistImportDiffFor, priceWatchDecisionCountsFor, priceWatchEntriesFor, priceWatchSnapshotDateFor, priceWatchlistCapabilitiesFor, priceWatchlistStatusForMode, readPriceWatchCatalogPrices } from "./price-watchlist-view";
+import type { CatalogWatchlistImportDiff, PriceWatchLivePrice, PriceWatchSnapshotDates, PriceWatchSort, PriceWatchStatusFilter } from "./price-watchlist-view";
 import { priceWatchDecisionFor } from "../shared/price-watch-decision";
 import { useModalAccessibility } from "./use-modal-accessibility";
 import { LOCAL_IMPORT_MAX_BYTES } from "../shared/file-import-limits";
@@ -25,8 +28,6 @@ import { eul } from "../shared/josa";
 
 const CATALOG_WATCHLIST_STORAGE_KEY = "pc-supporter-catalog-watchlist";
 const CATALOG_WATCH_THRESHOLD_STORAGE_KEY = "pc-supporter-catalog-watch-threshold";
-const SAVED_WATCHLIST_OWNER_TOKENS_STORAGE_KEY = "pc-supporter-saved-watchlist-owner-tokens";
-const SAVED_WATCHLIST_LINK_STORAGE_KEY = "pc-supporter-saved-watchlist-link";
 const PRICE_MONITOR_BASELINE_STORAGE_KEY = "pc-supporter-price-monitor-baseline";
 const PRICE_MONITOR_ALERTS_STORAGE_KEY = "pc-supporter-price-monitor-alerts";
 const PRICE_MONITOR_AUTO_REFRESH_STORAGE_KEY = "pc-supporter-price-monitor-auto-refresh";
@@ -54,8 +55,7 @@ type SavedWatchlist = {
   expiresAt?: string;
   alertPreferences?: PriceAlertPolicy;
 };
-type SavedWatchlistCreateResponse = SavedWatchlist & { ownerToken: string };
-type LivePrice = { priceWon?: number; status: "available" | "unavailable" | "error"; sourceUrl?: string };
+type SavedWatchlistCreateResponse = SavedWatchlist & ({ ownerManaged: true; ownerToken?: never } | { ownerManaged?: false; ownerToken: string });
 type PublicPriceHistoryItem = {
   kind: "part" | "accessory";
   itemId: string;
@@ -80,6 +80,23 @@ type WatchlistImportPreview = {
 
 function formatWon(value: number | undefined) {
   return isKnownPrice(value) ? value.toLocaleString("ko-KR") + "원" : "-";
+}
+
+function priceCheckLabel(price: PriceWatchLivePrice) {
+  const checkedAt = price.priceCheckedAt ? dateTimeLabel(price.priceCheckedAt) : "날짜 기록 없음";
+  const sourceLabel = price.source === "danawa" ? "상품 페이지 확인" : price.source === "manual" ? "직접 입력" : price.source === "seed" ? "기본 카탈로그 기준" : "출처 정보 없음";
+  const freshnessLabel = price.dataFreshness && price.dataFreshness !== "fresh" ? ` · ${DATA_FRESHNESS_LABELS[price.dataFreshness]}` : "";
+  return `${sourceLabel} · ${checkedAt}${freshnessLabel}`;
+}
+
+function dateTimeLabel(value: string | undefined) {
+  if (!value) return "기록 없음";
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date.toLocaleString("ko-KR") : "기록 없음";
+}
+
+function snapshotPriceBasisLabel(updatedAt: string | undefined, priceCheckedAt: string | undefined, snapshotAt: string | undefined) {
+  return `품목 수정 ${dateTimeLabel(updatedAt)} · 가격 확인 ${dateTimeLabel(priceCheckedAt)} · 스냅샷 기준 ${dateTimeLabel(snapshotAt)}`;
 }
 
 function priceAlertPolicyFromStorage(raw: string | null): PriceAlertPolicy {
@@ -137,8 +154,8 @@ function initialPriceWatchListSort() {
   return value === "price_asc" || value === "price_desc" || value === "target_gap_asc" || value === "added_desc" ? value : "added_desc" as const;
 }
 
-function PriceWatchlistEntryFilters({ query, status, sort, total, visible, onQueryChange, onStatusChange, onSortChange }: { query: string; status: PriceWatchStatusFilter; sort: PriceWatchSort; total: number; visible: number; onQueryChange: (value: string) => void; onStatusChange: (value: PriceWatchStatusFilter) => void; onSortChange: (value: PriceWatchSort) => void }) {
-  return <div className="price-watchlist-entry-filters" aria-label="가격 추적 목록 도구"><label><span>목록 검색</span><input aria-label="가격 추적 목록 검색" type="search" value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="부품명·ID·분류" /></label><label><span>상태</span><select aria-label="가격 추적 목록 상태" value={status} onChange={(event) => onStatusChange(event.target.value as PriceWatchStatusFilter)}><option value="all">모든 항목</option><option value="alerts">알림 있음</option><option value="target">목표가 도달</option><option value="buy">구매 검토</option><option value="wait">가격 하락 대기</option><option value="observe">재상승 관찰</option><option value="tracking">목표가 관찰 중</option><option value="available">가격 확인 가능</option><option value="unavailable">가격 확인 불가</option><option value="error">일시 조회 오류</option></select></label><label><span>정렬</span><select aria-label="가격 추적 목록 정렬" value={sort} onChange={(event) => onSortChange(event.target.value as PriceWatchSort)}><option value="added_desc">최근 등록</option><option value="price_asc">현재가 낮은 순</option><option value="price_desc">현재가 높은 순</option><option value="target_gap_asc">목표가 차액 순</option></select></label><span className="price-watchlist-entry-count">{visible} / {total}개</span></div>;
+function PriceWatchlistEntryFilters({ query, status, sort, total, visible, allowAlerts, allowHistory, onQueryChange, onStatusChange, onSortChange }: { query: string; status: PriceWatchStatusFilter; sort: PriceWatchSort; total: number; visible: number; allowAlerts: boolean; allowHistory: boolean; onQueryChange: (value: string) => void; onStatusChange: (value: PriceWatchStatusFilter) => void; onSortChange: (value: PriceWatchSort) => void }) {
+  return <div className="price-watchlist-entry-filters" aria-label="가격 추적 목록 도구"><label><span>목록 검색</span><input aria-label="가격 추적 목록 검색" type="search" value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="부품명·ID·분류" /></label><label><span>상태</span><select aria-label="가격 추적 목록 상태" value={status} onChange={(event) => onStatusChange(event.target.value as PriceWatchStatusFilter)}><option value="all">모든 항목</option>{allowAlerts && <option value="alerts">알림 있음</option>}<option value="target">목표가 도달</option>{allowHistory && <><option value="buy">구매 검토</option><option value="wait">가격 하락 대기</option><option value="observe">재상승 관찰</option></>}<option value="tracking">목표가 관찰 중</option><option value="available">가격 확인 가능</option><option value="unavailable">가격 확인 불가</option><option value="error">일시 조회 오류</option></select></label><label><span>정렬</span><select aria-label="가격 추적 목록 정렬" value={sort} onChange={(event) => onSortChange(event.target.value as PriceWatchSort)}><option value="added_desc">최근 등록</option><option value="price_asc">저장 가격 낮은 순</option><option value="price_desc">저장 가격 높은 순</option><option value="target_gap_asc">목표가 차액 순</option></select></label><span className="price-watchlist-entry-count">{visible} / {total}개</span></div>;
 }
 
 function PriceAlertPreferencesPanel({ value, onChange, disabled }: { value: PriceAlertPolicy; onChange: (next: PriceAlertPolicy) => void; disabled: boolean }) {
@@ -153,7 +170,7 @@ function WatchlistImportPreviewDialog({ preview, currentEntries, onClose, onConf
 
 function readOwnerTokens() {
   try {
-    const raw = window.localStorage.getItem(SAVED_WATCHLIST_OWNER_TOKENS_STORAGE_KEY);
+    const raw = safeLocalStorage.getItem(SAVED_WATCHLIST_OWNER_TOKENS_STORAGE_KEY);
     const parsed: unknown = raw ? JSON.parse(raw) : {};
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {} as Record<string, string>;
     const entries = Object.entries(parsed).filter((row): row is [string, string] => typeof row[0] === "string" && typeof row[1] === "string" && row[1].length >= 40).slice(0, 20);
@@ -165,26 +182,27 @@ function readOwnerTokens() {
 
 function writeOwnerTokens(tokens: Record<string, string>) {
   try {
-    window.localStorage.setItem(SAVED_WATCHLIST_OWNER_TOKENS_STORAGE_KEY, JSON.stringify(Object.fromEntries(Object.entries(tokens).slice(0, 20))));
+    safeLocalStorage.setItem(SAVED_WATCHLIST_OWNER_TOKENS_STORAGE_KEY, JSON.stringify(Object.fromEntries(Object.entries(tokens).slice(0, 20))));
   } catch {
     // A full local storage bucket must not prevent price tracking from working.
   }
 }
 
 function readSavedLinks() {
-  return savedWatchlistLinksFromJson(window.localStorage.getItem(SAVED_WATCHLIST_LINK_STORAGE_KEY));
+  return savedWatchlistLinksFromJson(safeLocalStorage.getItem(SAVED_WATCHLIST_LINK_STORAGE_KEY));
 }
 
 function writeSavedLinks(links: SavedWatchlistLink[]) {
   try {
-    if (links.length > 0) window.localStorage.setItem(SAVED_WATCHLIST_LINK_STORAGE_KEY, savedWatchlistLinksToJson(links));
-    else window.localStorage.removeItem(SAVED_WATCHLIST_LINK_STORAGE_KEY);
+    if (links.length > 0) safeLocalStorage.setItem(SAVED_WATCHLIST_LINK_STORAGE_KEY, savedWatchlistLinksToJson(links));
+    else safeLocalStorage.removeItem(SAVED_WATCHLIST_LINK_STORAGE_KEY);
   } catch {
     // A full local storage bucket must not prevent price tracking from working.
   }
 }
 
-export function PriceWatchlistView({ onBack, onToast }: { onBack: () => void; onToast: (message: string) => void }) {
+export function PriceWatchlistView({ onBack, onToast, offlineMode = false }: { onBack: () => void; onToast: (message: string) => void; offlineMode?: boolean }) {
+  const capabilities = priceWatchlistCapabilitiesFor(offlineMode);
   const [kind, setKind] = useState<"part" | "accessory">(initialPriceWatchKind);
   const [partCategory, setPartCategory] = useState<PartCategory>(initialPriceWatchPartCategory);
   const [accessoryCategory, setAccessoryCategory] = useState<AccessoryCategory | "all">(initialPriceWatchAccessoryCategory);
@@ -195,22 +213,23 @@ export function PriceWatchlistView({ onBack, onToast }: { onBack: () => void; on
   const [searchRetryNonce, setSearchRetryNonce] = useState(0);
   const [searchLoading, setSearchLoading] = useState(true);
   const [searchError, setSearchError] = useState<string | null>(null);
-  const [watchEntries, setWatchEntries] = useState<CatalogWatchEntry[]>(() => typeof window === "undefined" ? [] : catalogWatchlistFromJson(window.localStorage.getItem(CATALOG_WATCHLIST_STORAGE_KEY)));
+  const [watchEntries, setWatchEntries] = useState<CatalogWatchEntry[]>(() => typeof window === "undefined" ? [] : catalogWatchlistFromJson(safeLocalStorage.getItem(CATALOG_WATCHLIST_STORAGE_KEY)));
   const [watchListQuery, setWatchListQuery] = useState(initialPriceWatchListQuery);
-  const [watchListStatus, setWatchListStatus] = useState<PriceWatchStatusFilter>(initialPriceWatchListStatus);
+  const [watchListStatus, setWatchListStatus] = useState<PriceWatchStatusFilter>(() => priceWatchlistStatusForMode(initialPriceWatchListStatus(), capabilities));
   const [watchListSort, setWatchListSort] = useState<PriceWatchSort>(initialPriceWatchListSort);
-  const [currentPrices, setCurrentPrices] = useState<Record<string, LivePrice>>({});
+  const [currentPrices, setCurrentPrices] = useState<Record<string, PriceWatchLivePrice>>({});
   const [priceHistories, setPriceHistories] = useState<Record<string, PublicPriceHistoryItem>>({});
+  const [snapshotDates, setSnapshotDates] = useState<PriceWatchSnapshotDates>();
   const [priceLoading, setPriceLoading] = useState(false);
   const [priceRefreshNonce, setPriceRefreshNonce] = useState(0);
-  const [priceCheckedAt, setPriceCheckedAt] = useState<string | null>(null);
-  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(() => typeof window !== "undefined" && autoRefreshEnabledFromStorage(window.localStorage.getItem(PRICE_MONITOR_AUTO_REFRESH_STORAGE_KEY)));
-  const [autoRefreshMinutes, setAutoRefreshMinutes] = useState<5 | 15 | 30>(() => typeof window === "undefined" ? 15 : autoRefreshMinutesFromStorage(window.localStorage.getItem(PRICE_MONITOR_INTERVAL_STORAGE_KEY)));
-  const [priceAlerts, setPriceAlerts] = useState<PriceWatchAlert[]>(() => typeof window === "undefined" ? [] : priceAlertsFromJson(window.localStorage.getItem(PRICE_MONITOR_ALERTS_STORAGE_KEY)));
-  const [alertPreferences, setAlertPreferences] = useState<PriceAlertPolicy>(() => typeof window === "undefined" ? DEFAULT_PRICE_ALERT_POLICY : priceAlertPolicyFromStorage(window.localStorage.getItem(PRICE_ALERT_POLICY_STORAGE_KEY)));
-  const [priceHistoryDays, setPriceHistoryDays] = useState<PriceHistoryWindow>(() => typeof window === "undefined" ? 30 : priceHistoryWindowFromStorage(window.localStorage.getItem(PRICE_HISTORY_WINDOW_STORAGE_KEY)));
-  const previousPricesRef = useRef<Record<string, PriceObservation>>(typeof window === "undefined" ? {} : priceBaselineFromJson(window.localStorage.getItem(PRICE_MONITOR_BASELINE_STORAGE_KEY)));
-  const [watchThreshold, setWatchThreshold] = useState<WatchThreshold>(() => typeof window === "undefined" ? 10 : watchThresholdFromStorage(window.localStorage.getItem(CATALOG_WATCH_THRESHOLD_STORAGE_KEY)));
+  const [priceListReadAt, setPriceListReadAt] = useState<string | null>(null);
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(() => !offlineMode && typeof window !== "undefined" && autoRefreshEnabledFromStorage(safeLocalStorage.getItem(PRICE_MONITOR_AUTO_REFRESH_STORAGE_KEY)));
+  const [autoRefreshMinutes, setAutoRefreshMinutes] = useState<5 | 15 | 30>(() => typeof window === "undefined" ? 15 : autoRefreshMinutesFromStorage(safeLocalStorage.getItem(PRICE_MONITOR_INTERVAL_STORAGE_KEY)));
+  const [priceAlerts, setPriceAlerts] = useState<PriceWatchAlert[]>(() => typeof window === "undefined" ? [] : priceAlertsFromJson(safeLocalStorage.getItem(PRICE_MONITOR_ALERTS_STORAGE_KEY)));
+  const [alertPreferences, setAlertPreferences] = useState<PriceAlertPolicy>(() => typeof window === "undefined" ? DEFAULT_PRICE_ALERT_POLICY : priceAlertPolicyFromStorage(safeLocalStorage.getItem(PRICE_ALERT_POLICY_STORAGE_KEY)));
+  const [priceHistoryDays, setPriceHistoryDays] = useState<PriceHistoryWindow>(() => typeof window === "undefined" ? 30 : priceHistoryWindowFromStorage(safeLocalStorage.getItem(PRICE_HISTORY_WINDOW_STORAGE_KEY)));
+  const previousPricesRef = useRef<Record<string, PriceObservation>>(typeof window === "undefined" ? {} : priceBaselineFromJson(safeLocalStorage.getItem(PRICE_MONITOR_BASELINE_STORAGE_KEY)));
+  const [watchThreshold, setWatchThreshold] = useState<WatchThreshold>(() => typeof window === "undefined" ? 10 : watchThresholdFromStorage(safeLocalStorage.getItem(CATALOG_WATCH_THRESHOLD_STORAGE_KEY)));
   const [watchlistName, setWatchlistName] = useState("내 가격 추적 목록");
   const [watchlistExpiryDays, setWatchlistExpiryDays] = useState<ShareExpiryDays>("never");
   const [watchlistImportPreview, setWatchlistImportPreview] = useState<WatchlistImportPreview | null>(null);
@@ -228,9 +247,10 @@ export function PriceWatchlistView({ onBack, onToast }: { onBack: () => void; on
   const [editingSavedLinkId, setEditingSavedLinkId] = useState<string | null>(null);
   const savedLink = savedLinks[0] ?? null;
   const savedLinkOwnerToken = savedLink ? readOwnerTokens()[savedLink.id] ?? "" : "";
-  const priceAlertContextKey = `${savedLink?.id ?? "local"}:${savedLink?.updatedAt ?? ""}:${savedLinkOwnerToken}`;
+  const savedLinkOwnerManaged = savedLink ? hasOwnerSessionResource("watchlist", savedLink.id) : false;
+  const priceAlertContextKey = `${savedLink?.id ?? "local"}:${savedLink?.updatedAt ?? ""}:${savedLinkOwnerToken || (savedLinkOwnerManaged ? "session" : "")}`;
   priceAlertContextKeyRef.current = priceAlertContextKey;
-  const savedWatchlistContextKey = `${savedLink?.id ?? ""}:${savedLink?.updatedAt ?? ""}:${savedLinkOwnerToken}|${editingSavedLinkId ?? ""}`;
+  const savedWatchlistContextKey = `${savedLink?.id ?? ""}:${savedLink?.updatedAt ?? ""}:${savedLinkOwnerToken || (savedLinkOwnerManaged ? "session" : "")}|${editingSavedLinkId ?? ""}`;
   savedWatchlistContextKeyRef.current = savedWatchlistContextKey;
   const savedLinksSyncKey = savedLinks.map((link) => JSON.stringify(link)).join("|");
   const previousWatchlistQueryKeyRef = useRef<string | null>(null);
@@ -243,6 +263,20 @@ export function PriceWatchlistView({ onBack, onToast }: { onBack: () => void; on
     mountedRef.current = true;
     return () => { mountedRef.current = false; };
   }, []);
+
+  useEffect(() => {
+    if (!offlineMode) {
+      setSnapshotDates(undefined);
+      return;
+    }
+    let cancelled = false;
+    void api<ServiceMeta>("/api/meta").then((meta) => {
+      if (!cancelled) setSnapshotDates({ part: meta.catalogUpdatedAt, accessory: meta.accessoryUpdatedAt });
+    }).catch(() => {
+      if (!cancelled) setSnapshotDates(undefined);
+    });
+    return () => { cancelled = true; };
+  }, [offlineMode]);
 
   useEffect(() => {
     const path = window.location.pathname;
@@ -307,7 +341,7 @@ export function PriceWatchlistView({ onBack, onToast }: { onBack: () => void; on
       setAccessoryCategory(initialPriceWatchAccessoryCategory());
       setQuery(initialPriceWatchSearchQuery());
       setWatchListQuery(initialPriceWatchListQuery());
-      setWatchListStatus(initialPriceWatchListStatus());
+      setWatchListStatus(priceWatchlistStatusForMode(initialPriceWatchListStatus(), capabilities));
       setWatchListSort(initialPriceWatchListSort());
       setSearchOffset(0);
     };
@@ -315,9 +349,8 @@ export function PriceWatchlistView({ onBack, onToast }: { onBack: () => void; on
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
-  useEffect(() => { window.localStorage.setItem(CATALOG_WATCHLIST_STORAGE_KEY, catalogWatchlistToJson(watchEntries)); }, [watchEntries]);
-  useEffect(() => { window.localStorage.setItem(CATALOG_WATCH_THRESHOLD_STORAGE_KEY, String(watchThreshold)); }, [watchThreshold]);
-  useEffect(() => { writeSavedLinks(savedLinks); }, [savedLinks]);
+  useEffect(() => { safeLocalStorage.setItem(CATALOG_WATCHLIST_STORAGE_KEY, catalogWatchlistToJson(watchEntries)); }, [watchEntries]);
+  useEffect(() => { safeLocalStorage.setItem(CATALOG_WATCH_THRESHOLD_STORAGE_KEY, String(watchThreshold)); }, [watchThreshold]);
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
       if (event.key === CATALOG_WATCHLIST_STORAGE_KEY) {
@@ -329,46 +362,55 @@ export function PriceWatchlistView({ onBack, onToast }: { onBack: () => void; on
         return;
       }
       if (event.key === SAVED_WATCHLIST_LINK_STORAGE_KEY) {
+        if (!capabilities.serverSharing) return;
         const nextLinks = savedWatchlistLinksFromJson(event.newValue);
         setSavedLinks(nextLinks);
         setEditingSavedLinkId((current) => current && nextLinks.some((link) => link.id === current) ? current : null);
         return;
       }
-      if (event.key === SAVED_WATCHLIST_OWNER_TOKENS_STORAGE_KEY) setSavedLinks((current) => [...current]);
+      if (event.key === SAVED_WATCHLIST_OWNER_TOKENS_STORAGE_KEY) {
+        if (capabilities.serverSharing) setSavedLinks((current) => [...current]);
+      }
       if (event.key === PRICE_MONITOR_BASELINE_STORAGE_KEY) {
+        if (!capabilities.alerts) return;
         previousPricesRef.current = priceBaselineFromJson(event.newValue);
         return;
       }
       if (event.key === PRICE_MONITOR_ALERTS_STORAGE_KEY) {
+        if (!capabilities.alerts) return;
         setPriceAlerts(priceAlertsFromJson(event.newValue));
         return;
       }
       if (event.key === PRICE_MONITOR_AUTO_REFRESH_STORAGE_KEY) {
+        if (!capabilities.automaticRefresh) return;
         const enabled = autoRefreshEnabledFromStorage(event.newValue);
         setAutoRefreshEnabled(enabled);
         if (enabled) setPriceRefreshNonce((current) => current + 1);
         return;
       }
       if (event.key === PRICE_MONITOR_INTERVAL_STORAGE_KEY) {
+        if (!capabilities.automaticRefresh) return;
         setAutoRefreshMinutes(autoRefreshMinutesFromStorage(event.newValue));
         return;
       }
       if (event.key === PRICE_ALERT_POLICY_STORAGE_KEY) {
+        if (!capabilities.alerts) return;
         setAlertPreferences(priceAlertPolicyFromStorage(event.newValue));
         return;
       }
-      if (event.key === PRICE_HISTORY_WINDOW_STORAGE_KEY) setPriceHistoryDays(priceHistoryWindowFromStorage(event.newValue));
+      if (event.key === PRICE_HISTORY_WINDOW_STORAGE_KEY && capabilities.priceHistory) setPriceHistoryDays(priceHistoryWindowFromStorage(event.newValue));
     };
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
-  }, []);
-  useEffect(() => { window.localStorage.setItem(PRICE_MONITOR_ALERTS_STORAGE_KEY, priceAlertsToJson(priceAlerts)); }, [priceAlerts]);
-  useEffect(() => { window.localStorage.setItem(PRICE_MONITOR_AUTO_REFRESH_STORAGE_KEY, String(autoRefreshEnabled)); }, [autoRefreshEnabled]);
-  useEffect(() => { window.localStorage.setItem(PRICE_MONITOR_INTERVAL_STORAGE_KEY, String(autoRefreshMinutes)); }, [autoRefreshMinutes]);
-  useEffect(() => { window.localStorage.setItem(PRICE_ALERT_POLICY_STORAGE_KEY, JSON.stringify(alertPreferences)); }, [alertPreferences]);
-  useEffect(() => { window.localStorage.setItem(PRICE_HISTORY_WINDOW_STORAGE_KEY, String(priceHistoryDays)); }, [priceHistoryDays]);
+  }, [capabilities.alerts, capabilities.automaticRefresh, capabilities.priceHistory, capabilities.serverSharing]);
+  useEffect(() => { if (capabilities.serverSharing) writeSavedLinks(savedLinks); }, [capabilities.serverSharing, savedLinks]);
+  useEffect(() => { if (capabilities.alerts) safeLocalStorage.setItem(PRICE_MONITOR_ALERTS_STORAGE_KEY, priceAlertsToJson(priceAlerts)); }, [capabilities.alerts, priceAlerts]);
+  useEffect(() => { if (capabilities.automaticRefresh) safeLocalStorage.setItem(PRICE_MONITOR_AUTO_REFRESH_STORAGE_KEY, String(autoRefreshEnabled)); }, [autoRefreshEnabled, capabilities.automaticRefresh]);
+  useEffect(() => { if (capabilities.automaticRefresh) safeLocalStorage.setItem(PRICE_MONITOR_INTERVAL_STORAGE_KEY, String(autoRefreshMinutes)); }, [autoRefreshMinutes, capabilities.automaticRefresh]);
+  useEffect(() => { if (capabilities.alerts) safeLocalStorage.setItem(PRICE_ALERT_POLICY_STORAGE_KEY, JSON.stringify(alertPreferences)); }, [alertPreferences, capabilities.alerts]);
+  useEffect(() => { if (capabilities.priceHistory) safeLocalStorage.setItem(PRICE_HISTORY_WINDOW_STORAGE_KEY, String(priceHistoryDays)); }, [capabilities.priceHistory, priceHistoryDays]);
   useEffect(() => {
-    if (savedLinks.length === 0) return;
+    if (!capabilities.serverSharing || savedLinks.length === 0) return;
     let cancelled = false;
     void Promise.all(savedLinks.map(async (link) => {
       try {
@@ -391,7 +433,7 @@ export function PriceWatchlistView({ onBack, onToast }: { onBack: () => void; on
       if (JSON.stringify(normalized) !== JSON.stringify(savedLinks)) setSavedLinks(normalized);
     });
     return () => { cancelled = true; };
-  }, [savedLinksSyncKey]);
+  }, [capabilities.serverSharing, savedLinksSyncKey]);
   useEffect(() => {
     savedWatchlistMutationVersionRef.current += 1;
     setSavingWatchlist(false);
@@ -399,11 +441,12 @@ export function PriceWatchlistView({ onBack, onToast }: { onBack: () => void; on
     setRevokingWatchlist(false);
   }, [savedWatchlistContextKey]);
   useEffect(() => {
-    if (!savedLink) return;
+    if (!capabilities.alerts || !savedLink) return;
     const token = savedLinkOwnerToken;
-    if (!token) return;
+    const ownerManaged = savedLinkOwnerManaged;
+    if (!ownerCredentialAvailable("watchlist", savedLink.id, { ownerToken: token, owned: ownerManaged })) return;
     let cancelled = false;
-    void api<{ items: PriceWatchAlert[]; alertPreferences?: PriceAlertPolicy }>("/api/watchlists/" + encodeURIComponent(savedLink.id) + "/alerts", { headers: { "X-Share-Owner-Token": token } }).then((payload) => {
+    void api<{ items: PriceWatchAlert[]; alertPreferences?: PriceAlertPolicy }>("/api/watchlists/" + encodeURIComponent(savedLink.id) + "/alerts", ownerRequestOptions("watchlist", savedLink.id, { ownerToken: token, owned: ownerManaged })).then((payload) => {
       if (cancelled) return;
       if (payload.alertPreferences) setAlertPreferences(priceAlertPolicyFromUnknown(payload.alertPreferences));
       setPriceAlerts((current) => {
@@ -413,7 +456,7 @@ export function PriceWatchlistView({ onBack, onToast }: { onBack: () => void; on
       });
     }).catch(() => undefined);
     return () => { cancelled = true; };
-  }, [priceAlertContextKey]);
+  }, [capabilities.alerts, priceAlertContextKey]);
   useEffect(() => {
     let cancelled = false;
     const controller = new AbortController();
@@ -450,67 +493,60 @@ export function PriceWatchlistView({ onBack, onToast }: { onBack: () => void; on
     if (watchEntries.length === 0) {
       setPriceLoading(false);
       setCurrentPrices({});
-      setPriceCheckedAt(null);
-      previousPricesRef.current = {};
-      window.localStorage.removeItem(PRICE_MONITOR_BASELINE_STORAGE_KEY);
-      setPriceAlerts([]);
+      setPriceListReadAt(null);
+      if (capabilities.alerts) {
+        previousPricesRef.current = {};
+        safeLocalStorage.removeItem(PRICE_MONITOR_BASELINE_STORAGE_KEY);
+        setPriceAlerts([]);
+      }
       return;
     }
+    const controller = new AbortController();
     setPriceLoading(true);
     void (async () => {
-      const results: Array<readonly [string, LivePrice]> = [];
-      for (let index = 0; index < watchEntries.length; index += 6) {
-        const batch = await Promise.all(watchEntries.slice(index, index + 6).map(async (entry) => {
-          try {
-            const endpoint = entry.kind === "accessory" ? "/api/accessories/" + encodeURIComponent(entry.itemId) : "/api/parts/" + encodeURIComponent(entry.itemId);
-            const item = await api<Part | AccessoryItem>(endpoint);
-            const sourceUrl = safeExternalUrl(item.danawaUrl);
-            const status = isKnownPrice(item.priceWon) ? "available" : "unavailable";
-            return [entry.kind + ":" + entry.itemId, { priceWon: item.priceWon, status, ...(sourceUrl ? { sourceUrl } : {}) }] as const;
-          } catch (error: unknown) {
-            const status = error instanceof ApiError && error.status === 404 ? "unavailable" : "error";
-            return [entry.kind + ":" + entry.itemId, { status }] as const;
-          }
-        }));
-        results.push(...batch);
-      }
+      const nextPrices = await readPriceWatchCatalogPrices(watchEntries, (entry, signal) => {
+        const endpoint = entry.kind === "accessory" ? "/api/accessories/" + encodeURIComponent(entry.itemId) : "/api/parts/" + encodeURIComponent(entry.itemId);
+        return api<Part | AccessoryItem>(endpoint, { signal });
+      }, controller.signal);
       if (!cancelled) {
-        const nextPrices = Object.fromEntries(results);
-        const previousPrices = previousPricesRef.current;
         const refreshedAt = new Date().toISOString();
-        const nextAlerts = priceAlertsFor(watchEntries.map((entry) => ({ itemKey: entry.kind + ":" + entry.itemId, itemName: entry.itemName, targetPriceWon: entry.targetPriceWon })), previousPrices, nextPrices, refreshedAt, alertPreferences);
-        const nextBaseline: Record<string, PriceObservation> = {};
-        watchEntries.forEach((entry) => {
-          const key = entry.kind + ":" + entry.itemId;
-          const observation = nextPrices[key];
-          if (!observation || observation.status === "error") {
-            const previous = previousPrices[key];
-            if (previous) nextBaseline[key] = previous;
-          } else {
-            nextBaseline[key] = observation;
-          }
-        });
-        previousPricesRef.current = nextBaseline;
-        window.localStorage.setItem(PRICE_MONITOR_BASELINE_STORAGE_KEY, priceBaselineToJson(nextBaseline));
+        const nextAlerts = capabilities.alerts
+          ? priceAlertsFor(watchEntries.map((entry) => ({ itemKey: entry.kind + ":" + entry.itemId, itemName: entry.itemName, targetPriceWon: entry.targetPriceWon })), previousPricesRef.current, nextPrices, refreshedAt, alertPreferences)
+          : [];
+        if (capabilities.alerts) {
+          const nextBaseline: Record<string, PriceObservation> = {};
+          watchEntries.forEach((entry) => {
+            const key = entry.kind + ":" + entry.itemId;
+            const observation = nextPrices[key];
+            if (!observation || observation.status === "error") {
+              const previous = previousPricesRef.current[key];
+              if (previous) nextBaseline[key] = previous;
+            } else {
+              nextBaseline[key] = observation;
+            }
+          });
+          previousPricesRef.current = nextBaseline;
+          safeLocalStorage.setItem(PRICE_MONITOR_BASELINE_STORAGE_KEY, priceBaselineToJson(nextBaseline));
+        }
         setCurrentPrices(nextPrices);
-        setPriceCheckedAt(refreshedAt);
-        if (nextAlerts.length > 0) {
+        setPriceListReadAt(refreshedAt);
+        if (capabilities.alerts && nextAlerts.length > 0) {
           setPriceAlerts((current) => nextAlerts.concat(current).slice(0, 20));
           onToast("가격 알림: " + nextAlerts[0].message);
         }
         setPriceLoading(false);
       }
     })();
-    return () => { cancelled = true; };
-  }, [alertPreferences, priceRefreshNonce, watchEntries]);
+    return () => { cancelled = true; controller.abort(); };
+  }, [alertPreferences, capabilities.alerts, priceRefreshNonce, watchEntries]);
   useEffect(() => {
-    if (!autoRefreshEnabled || watchEntries.length === 0) return;
+    if (!capabilities.automaticRefresh || !autoRefreshEnabled || watchEntries.length === 0) return;
     const timer = window.setInterval(() => setPriceRefreshNonce((current) => current + 1), autoRefreshMinutes * 60 * 1000);
     return () => window.clearInterval(timer);
-  }, [autoRefreshEnabled, autoRefreshMinutes, watchEntries.length]);
+  }, [autoRefreshEnabled, autoRefreshMinutes, capabilities.automaticRefresh, watchEntries.length]);
   useEffect(() => {
     let cancelled = false;
-    if (watchEntries.length === 0) {
+    if (!capabilities.priceHistory || watchEntries.length === 0) {
       setPriceHistories({});
       return;
     }
@@ -521,7 +557,7 @@ export function PriceWatchlistView({ onBack, onToast }: { onBack: () => void; on
       if (!cancelled) setPriceHistories({});
     });
     return () => { cancelled = true; };
-  }, [priceHistoryDays, priceRefreshNonce, watchEntries]);
+  }, [capabilities.priceHistory, priceHistoryDays, priceRefreshNonce, watchEntries]);
 
   function categoryLabel(item: Part | AccessoryItem) {
     return item.category in CATEGORY_LABELS ? CATEGORY_LABELS[item.category as PartCategory] : ACCESSORY_CATEGORY_LABELS[item.category as AccessoryCategory];
@@ -653,6 +689,7 @@ export function PriceWatchlistView({ onBack, onToast }: { onBack: () => void; on
     onToast(`${entries.length}개 가격 추적 항목을 현재 목록에 병합했습니다.`);
   }
   async function saveWatchlist() {
+    if (!capabilities.serverSharing) return;
     if (watchEntries.length === 0) {
       onToast("저장할 가격 추적 항목이 없습니다.");
       return;
@@ -662,9 +699,11 @@ export function PriceWatchlistView({ onBack, onToast }: { onBack: () => void; on
     const isCurrent = () => mountedRef.current && savedWatchlistMutationVersionRef.current === mutationVersion && savedWatchlistContextKeyRef.current === contextKey;
     setSavingWatchlist(true);
     try {
-      const saved = await api<SavedWatchlistCreateResponse>("/api/watchlists", { method: "POST", body: JSON.stringify({ name: watchlistName.trim() || "내 가격 추적 목록", entries: watchEntries, nearLowThresholdPercent: watchThreshold, expiresInDays: shareExpiryPayloadFor(watchlistExpiryDays), alertPreferences }) });
+      const saved = await api<SavedWatchlistCreateResponse>("/api/watchlists", { method: "POST", ...ownerSessionCreateOptions(), body: JSON.stringify({ name: watchlistName.trim() || "내 가격 추적 목록", entries: watchEntries, nearLowThresholdPercent: watchThreshold, expiresInDays: shareExpiryPayloadFor(watchlistExpiryDays), alertPreferences }) });
       if (!isCurrent()) return;
-      writeOwnerTokens({ [saved.id]: saved.ownerToken, ...readOwnerTokens() });
+      if (saved.ownerManaged) markOwnerSessionResource("watchlist", saved.id);
+      if (saved.ownerToken) writeOwnerTokens({ [saved.id]: saved.ownerToken, ...readOwnerTokens() });
+      if (saved.ownerToken && ownerSessionModeSupported()) void retryOwnerSessionMigration().catch(() => undefined);
       const nextLink = { id: saved.id, name: saved.name, createdAt: saved.createdAt, updatedAt: saved.updatedAt, ...(saved.expiresAt ? { expiresAt: saved.expiresAt } : {}), ...(saved.alertPreferences ? { alertPreferences: saved.alertPreferences } : {}) };
       const nextLinks = [nextLink, ...savedLinks.filter((link) => link.id !== saved.id)].slice(0, 20);
       setSavedLinks(nextLinks);
@@ -685,6 +724,7 @@ export function PriceWatchlistView({ onBack, onToast }: { onBack: () => void; on
     }
   }
   async function loadWatchlistForEdit(id: string) {
+    if (!capabilities.serverSharing) return;
     const requestVersion = ++savedWatchlistEditRequestRef.current;
     try {
       const saved = await api<SavedWatchlist>("/api/watchlists/" + encodeURIComponent(id));
@@ -706,12 +746,14 @@ export function PriceWatchlistView({ onBack, onToast }: { onBack: () => void; on
     }
   }
   async function updateWatchlist() {
+    if (!capabilities.serverSharing) return;
     if (!savedLink || editingSavedLinkId !== savedLink.id) {
       onToast("먼저 편집할 서버 가격 목록을 불러와 주세요.");
       return;
     }
     const token = readOwnerTokens()[savedLink.id];
-    if (!token) {
+    const ownerManaged = hasOwnerSessionResource("watchlist", savedLink.id);
+    if (!ownerCredentialAvailable("watchlist", savedLink.id, { ownerToken: token, owned: ownerManaged })) {
       onToast("이 가격 추적 목록을 수정할 소유 토큰이 없습니다.");
       return;
     }
@@ -724,7 +766,7 @@ export function PriceWatchlistView({ onBack, onToast }: { onBack: () => void; on
     const isCurrent = () => mountedRef.current && savedWatchlistMutationVersionRef.current === mutationVersion && savedWatchlistContextKeyRef.current === contextKey;
     setUpdatingWatchlist(true);
     try {
-      const saved = await api<SavedWatchlist>("/api/watchlists/" + encodeURIComponent(savedLink.id), { method: "PATCH", headers: { "X-Share-Owner-Token": token }, body: JSON.stringify({ name: watchlistName.trim() || "내 가격 추적 목록", entries: watchEntries, nearLowThresholdPercent: watchThreshold, alertPreferences, ...(watchlistExpiryDays !== "keep" ? { expiresInDays: watchlistExpiryDays === "never" ? null : watchlistExpiryDays } : {}) }) });
+      const saved = await api<SavedWatchlist>("/api/watchlists/" + encodeURIComponent(savedLink.id), { method: "PATCH", ...ownerRequestOptions("watchlist", savedLink.id, { ownerToken: token, owned: ownerManaged }), body: JSON.stringify({ name: watchlistName.trim() || "내 가격 추적 목록", entries: watchEntries, nearLowThresholdPercent: watchThreshold, alertPreferences, ...(watchlistExpiryDays !== "keep" ? { expiresInDays: watchlistExpiryDays === "never" ? null : watchlistExpiryDays } : {}) }) });
       if (!isCurrent()) return;
       const nextLinks = savedLinks.map((link) => {
         if (link.id !== saved.id) return link;
@@ -742,9 +784,11 @@ export function PriceWatchlistView({ onBack, onToast }: { onBack: () => void; on
     }
   }
   async function revokeWatchlistById(id: string) {
+    if (!capabilities.serverSharing) return;
     if (revokingWatchlist || updatingWatchlist) return;
     const token = readOwnerTokens()[id];
-    if (!token) {
+    const ownerManaged = hasOwnerSessionResource("watchlist", id);
+    if (!ownerCredentialAvailable("watchlist", id, { ownerToken: token, owned: ownerManaged })) {
       onToast("이 가격 추적 목록을 취소할 소유 토큰이 없습니다.");
       return;
     }
@@ -754,11 +798,12 @@ export function PriceWatchlistView({ onBack, onToast }: { onBack: () => void; on
     const isCurrent = () => mountedRef.current && savedWatchlistMutationVersionRef.current === mutationVersion && savedWatchlistContextKeyRef.current === contextKey;
     setRevokingWatchlist(true);
     try {
-      await api("/api/watchlists/" + encodeURIComponent(id), { method: "DELETE", headers: { "X-Share-Owner-Token": token } });
+      await api("/api/watchlists/" + encodeURIComponent(id), { method: "DELETE", ...ownerRequestOptions("watchlist", id, { ownerToken: token, owned: ownerManaged }) });
       if (!isCurrent()) return;
       const tokens = readOwnerTokens();
       delete tokens[id];
       writeOwnerTokens(tokens);
+      removeOwnerSessionResource("watchlist", id);
       const nextLinks = savedLinks.filter((link) => link.id !== id);
       setSavedLinks(nextLinks);
       if (editingSavedLinkId === id) setEditingSavedLinkId(null);
@@ -771,15 +816,17 @@ export function PriceWatchlistView({ onBack, onToast }: { onBack: () => void; on
     }
   }
   async function updateAlertStates(action: "read" | "dismiss") {
+    if (!capabilities.alerts) return;
     if (priceAlerts.length === 0) return;
     const alertIds = priceAlerts.map((alert) => alert.id);
     const mutationVersion = ++priceAlertMutationVersionRef.current;
     const contextKey = priceAlertContextKey;
     const isCurrent = () => mountedRef.current && priceAlertMutationVersionRef.current === mutationVersion && priceAlertContextKeyRef.current === contextKey;
     const token = savedLink ? readOwnerTokens()[savedLink.id] : undefined;
-    if (savedLink && token) {
+    const ownerManaged = savedLink ? hasOwnerSessionResource("watchlist", savedLink.id) : false;
+    if (savedLink && ownerCredentialAvailable("watchlist", savedLink.id, { ownerToken: token, owned: ownerManaged })) {
       try {
-        await api("/api/watchlists/" + encodeURIComponent(savedLink.id) + "/alerts/" + action, { method: "POST", headers: { "X-Share-Owner-Token": token }, body: JSON.stringify({ alertIds }) });
+        await api("/api/watchlists/" + encodeURIComponent(savedLink.id) + "/alerts/" + action, { method: "POST", ...ownerRequestOptions("watchlist", savedLink.id, { ownerToken: token, owned: ownerManaged }), body: JSON.stringify({ alertIds }) });
       } catch (error: unknown) {
         if (isCurrent()) onToast(error instanceof Error ? error.message : "가격 알림 상태를 저장하지 못했습니다.");
         return;
@@ -805,6 +852,7 @@ export function PriceWatchlistView({ onBack, onToast }: { onBack: () => void; on
   }
 
   async function copySavedLink(id: string) {
+    if (!capabilities.serverSharing) return;
     const url = window.location.origin + "/watchlist/" + id;
     try {
       await navigator.clipboard.writeText(url);
@@ -814,5 +862,5 @@ export function PriceWatchlistView({ onBack, onToast }: { onBack: () => void; on
     }
   }
 
-  return <><div className="price-watchlist-page"><div className="workspace-heading"><div><button className="back-link" type="button" onClick={onBack}><FiArrowLeft /> 홈으로</button><h1>가격 추적</h1><p>부품을 검색해 관심 목록에 담고 목표가와 현재 가격을 한 화면에서 관리합니다.</p></div><span className="admin-badge"><FiClock /> 현재가 모니터링</span></div><div className="mobile-price-watch-summary"><div><span className="mobile-kicker">가격 추적</span><strong>{watchEntries.length}개 추적 중</strong><small>{watchEntries.length > 0 ? "등록한 부품의 가격 변화를 확인하세요." : "관심 부품을 추가하면 가격 판단을 시작할 수 있어요."}</small></div><button className="button button-light" type="button" onClick={() => setPriceRefreshNonce((current) => current + 1)} disabled={priceLoading || watchEntries.length === 0}>{priceLoading ? <><FiLoader className="spin" /> 확인 중...</> : <><FiRefreshCw /> 현재가 새로고침</>}</button></div><div className="price-watchlist-grid"><section className="price-watchlist-search-card"><div className="price-watchlist-section-heading"><div><h2>추적할 부품 찾기</h2><p>핵심·주변 부품을 별도 카탈로그에서 검색합니다.</p></div><span>{total.toLocaleString("ko-KR")}개</span><button className="text-button price-watchlist-filter-link-button" type="button" data-testid="price-watchlist-copy-filter-link" onClick={() => void copyWatchlistSearchLink()}><FiCopy /> 조건 링크 복사</button></div><div className="price-watchlist-search-tools"><label><span>대상</span><select aria-label="가격 추적 검색 대상" value={kind} onChange={(event) => { setKind(event.target.value as "part" | "accessory"); setSearchOffset(0); }}><option value="part">핵심 부품</option><option value="accessory">주변 부품</option></select></label>{kind === "part" ? <label><span>분류</span><select aria-label="가격 추적 핵심 부품 분류" value={partCategory} onChange={(event) => { setPartCategory(event.target.value as PartCategory); setSearchOffset(0); }}>{PART_CATEGORIES.map((category) => <option value={category} key={category}>{CATEGORY_LABELS[category]}</option>)}</select></label> : <label><span>분류</span><select aria-label="가격 추적 주변 부품 분류" value={accessoryCategory} onChange={(event) => { setAccessoryCategory(event.target.value as AccessoryCategory | "all"); setSearchOffset(0); }}><option value="all">전체 주변 부품</option>{ACCESSORY_CATEGORIES.map((category) => <option value={category} key={category}>{ACCESSORY_CATEGORY_LABELS[category]}</option>)}</select></label>}<label className="price-watchlist-search-query"><span>검색</span><input aria-label="가격 추적 부품 검색" type="search" value={query} onChange={(event) => { setQuery(event.target.value); setSearchOffset(0); }} placeholder="모델명·브랜드 검색" /></label></div>{searchLoading && items.length === 0 ? <div className="price-watchlist-state"><FiLoader className="spin" /> 부품을 찾는 중...</div> : searchError && items.length === 0 ? <div className="price-watchlist-state error" role="alert"><FiXCircle /><span>{searchError}</span><button className="text-button" type="button" onClick={() => setSearchRetryNonce((current) => current + 1)}>다시 시도</button></div> : items.length === 0 ? <div className="price-watchlist-state"><FiSearch /> 검색 결과가 없습니다.</div> : <div className="price-watchlist-search-results">{items.map((item) => { const entry = { itemId: item.id, kind, category: item.category }; const watched = catalogWatchlistContains(watchEntries, entry); const sourceUrl = safeExternalUrl(item.danawaUrl); return <article className={watched ? "price-watchlist-search-item watched" : "price-watchlist-search-item"} key={kind + ":" + item.id}><div><strong>{item.name}</strong><small>{categoryLabel(item)} · {qualityLabel(item)} · {item.rawSpecText || "상세 스펙 정보 부족"}</small></div><div className="price-watchlist-search-side"><strong>{formatWon(item.priceWon)}</strong>{sourceUrl && <a className="price-watchlist-source-link" href={sourceUrl} target="_blank" rel="noreferrer">상품 페이지 <FiExternalLink /></a>}<button className="button button-small" type="button" onClick={() => toggleWatch(item)}>{watched ? <><FiCheck /> 추적 중</> : <><FiPlus /> 추적 추가</>}</button></div></article>; })}</div>}{items.length < total && <button className="button button-light full-width" type="button" onClick={() => setSearchOffset((current) => current + 24)} disabled={searchLoading}>{searchLoading ? <><FiLoader className="spin" /> 불러오는 중...</> : "더 많은 부품 불러오기 (" + items.length.toLocaleString("ko-KR") + " / " + total.toLocaleString("ko-KR") + ")"}</button>}{searchError && items.length > 0 && <p className="price-watchlist-inline-error" role="alert"><FiXCircle /> {searchError} <button className="text-button" type="button" onClick={() => setSearchRetryNonce((current) => current + 1)}>다시 시도</button></p>}</section><section className="price-watchlist-tracker-card"><div className="price-watchlist-section-heading"><div><h2>내 가격 추적 목록</h2><p>현재 가격과 목표가 도달 여부를 직접 확인합니다.</p></div><div className="price-watchlist-tracker-actions"><input ref={watchlistImportInputRef} className="price-watchlist-import-input" type="file" accept=".json,.csv,text/csv,application/json" aria-label="가격 추적 CSV·JSON 파일 가져오기" onChange={(event) => void importWatchlistFile(event)} /><button className="button button-light" type="button" data-testid="price-watchlist-import" onClick={() => watchlistImportInputRef.current?.click()}><FiUpload /> CSV·JSON 가져오기</button><button className="button button-light" type="button" data-testid="price-watchlist-export-csv" onClick={() => downloadWatchlistExport("csv")} disabled={watchEntries.length === 0}><FiDownload /> CSV 저장</button><button className="button button-light" type="button" data-testid="price-watchlist-export" onClick={() => downloadWatchlistExport("json")} disabled={watchEntries.length === 0}><FiDownload /> JSON 저장</button><button className="button button-light" type="button" onClick={() => setPriceRefreshNonce((current) => current + 1)} disabled={priceLoading || watchEntries.length === 0}>{priceLoading ? <><FiLoader className="spin" /> 확인 중...</> : <><FiRefreshCw /> 현재가 새로고침</>}</button></div></div>{priceCheckedAt && <p className="price-watchlist-checked"><FiClock /> 마지막 확인 {new Date(priceCheckedAt).toLocaleString("ko-KR")}</p>}{priceCheckedAt && watchEntries.length > 0 && <div className="price-watchlist-decision-overview" aria-label="현재 가격 판단 분포" data-testid="price-watchlist-decision-overview"><strong>현재 판단 분포</strong><div>{(Object.keys(PRICE_WATCH_DECISION_LABELS) as Array<keyof typeof PRICE_WATCH_DECISION_LABELS>).map((state) => <button className={state} data-testid={"price-watchlist-decision-" + state} disabled={decisionCounts[state] === 0} key={state} type="button" aria-pressed={watchListStatus === state} onClick={() => setWatchListStatus(state)}>{PRICE_WATCH_DECISION_LABELS[state]} <b>{decisionCounts[state]}</b></button>)}</div></div>}<div className="price-watchlist-monitor-controls"><label><input type="checkbox" aria-label="가격 추적 자동 확인" checked={autoRefreshEnabled} onChange={(event) => { setAutoRefreshEnabled(event.target.checked); if (event.target.checked) setPriceRefreshNonce((current) => current + 1); }} /><span>페이지를 열어 둔 동안 자동 확인</span></label>{autoRefreshEnabled && <label className="price-watchlist-monitor-interval"><span>주기</span><select aria-label="가격 추적 자동 확인 주기" value={autoRefreshMinutes} onChange={(event) => setAutoRefreshMinutes(Number(event.target.value) as 5 | 15 | 30)}><option value={5}>5분</option><option value={15}>15분</option><option value={30}>30분</option></select></label>}<label className="price-watchlist-history-window"><span>가격 이력</span><select aria-label="가격 추적 가격 이력 기간" value={priceHistoryDays} onChange={(event) => setPriceHistoryDays(Number(event.target.value) as PriceHistoryWindow)}><option value={7}>7일</option><option value={30}>30일</option><option value={90}>90일</option></select></label><span className="price-watchlist-monitor-status">{autoRefreshEnabled ? "자동 확인 " + autoRefreshMinutes + "분마다" : "자동 확인 꺼짐"}</span></div><PriceAlertPreferencesPanel value={alertPreferences} onChange={setAlertPreferences} disabled={savingWatchlist || updatingWatchlist || revokingWatchlist} />{priceAlerts.length > 0 && <div className="price-watchlist-alerts"><div className="price-watchlist-alerts-heading"><strong><FiBell /> 최근 가격 알림{unreadAlertCount > 0 ? " · 미읽음 " + unreadAlertCount : ""}</strong><div className="price-watchlist-alert-actions"><button className="text-button" type="button" onClick={() => void updateAlertStates("read")} disabled={unreadAlertCount === 0}>모두 읽음</button><button className="text-button" type="button" onClick={() => void updateAlertStates("dismiss")}>알림 지우기</button></div></div>{priceAlerts.map((alert) => <article className={(alert.kind === "target" ? "price-watchlist-alert target" : alert.kind === "availability" ? "price-watchlist-alert availability" : "price-watchlist-alert") + (alert.readAt ? " read" : "")} key={alert.id}><FiBell /><div><strong>{alert.kind === "target" ? "목표가 도달" : alert.kind === "availability" ? "가격 확인 상태 변경" : "가격 하락 감지"}</strong><span>{alert.message}</span><small>{new Date(alert.createdAt).toLocaleString("ko-KR")}</small></div></article>)}</div>}{watchEntries.length > 0 && <PriceWatchlistEntryFilters query={watchListQuery} status={watchListStatus} sort={watchListSort} total={watchEntries.length} visible={visibleWatchEntries.length} onQueryChange={setWatchListQuery} onStatusChange={setWatchListStatus} onSortChange={setWatchListSort} />}{watchEntries.length === 0 ? <div className="price-watchlist-empty\"><FiTag /><strong>아직 추적 중인 부품이 없습니다.</strong><span>왼쪽에서 CPU, 그래픽카드, SSD, 주변 부품을 검색해 추가해 보세요.</span></div> : visibleWatchEntries.length === 0 ? <div className="price-watchlist-filter-empty"><FiSearch /> 조건에 맞는 가격 추적 항목이 없습니다.<button className="text-button" type="button" onClick={resetWatchListView}>필터 초기화</button></div> : <div className="price-watchlist-tracked-list">{visibleWatchEntries.map((entry) => { const live = currentPrices[entryKey(entry)]; const targetReached = live?.status === "available" && live.priceWon !== undefined && entry.targetPriceWon !== undefined && live.priceWon <= entry.targetPriceWon; const targetGapWon = live?.priceWon !== undefined && entry.targetPriceWon !== undefined ? live.priceWon - entry.targetPriceWon : undefined; const history = priceHistories[entryKey(entry)]; const signals = historySignals(entry); const decision = priceWatchDecisionFor({ currentStatus: live?.status ?? "unknown", currentPriceWon: live?.priceWon, targetPriceWon: entry.targetPriceWon, nearLowThresholdPercent: watchThreshold, history: history?.summary }); return <article className="price-watchlist-tracked-item" key={entryKey(entry)}><div className="price-watchlist-tracked-copy"><strong>{entry.itemName}</strong><small>{entry.kind === "accessory" ? "주변 부품" : "핵심 부품"} · {entry.category}</small></div><label><span>목표가</span><input aria-label={entry.itemName + " 목표가"} type="number" min="1" step="1000" value={entry.targetPriceWon ?? ""} placeholder="미설정" onChange={(event) => updateTarget(entry, event.target.value)} />{history && recommendedTargetPriceFromHistory(history.summary) !== undefined && <button className="price-watchlist-target-suggest" type="button" aria-label={entry.itemName + " 최근 " + history.windowDays + "일 최저가로 목표가 설정"} onClick={() => suggestTargetFromHistory(entry, history)}>최근 {history.windowDays}일 최저가 {formatWon(recommendedTargetPriceFromHistory(history.summary))}</button>}</label><div className="price-watchlist-current"><span>현재가</span><strong>{live?.status === "error" ? "일시 확인 오류" : live?.status === "unavailable" ? "-" : live?.priceWon !== undefined ? formatWon(live.priceWon) : "-"}</strong><em className={`price-watchlist-decision ${decision.state}`}>{decision.label}</em><small className="price-watchlist-decision-summary">{decision.summary}</small>{live?.sourceUrl && <a className="price-watchlist-source-link" href={live.sourceUrl} target="_blank" rel="noreferrer">상품 페이지 <FiExternalLink /></a>}{targetGapWon !== undefined && !targetReached && <small className="price-watchlist-target-gap">목표가까지 +{formatWon(targetGapWon)}</small>}{history && history.summary.sampleCount >= 2 && <div className="price-watchlist-history"><small>최근 {history.windowDays}일 {history.summary.sampleCount}회{history.summary.minPriceWon !== undefined ? " · 최저가 " + formatWon(history.summary.minPriceWon) : ""}{history.summary.fromHighPercent !== undefined ? " · 최고가 대비 " + history.summary.fromHighPercent.toFixed(1) + "%" : ""}</small>{signals.length > 0 && <div className="price-watchlist-history-signals">{signals.map((signal) => <em key={signal}>{signal}</em>)}</div>}<div className="price-watchlist-sparkline" role="img" aria-label={entry.itemName + " 최근 " + history.windowDays + "일 가격 추세"}>{history.points.map((point) => <span key={point.changeId} style={{ height: historyBarHeight(history, point.priceWon) + "%" }} title={point.priceWon.toLocaleString("ko-KR") + "원"} />)}</div></div>}</div><button className="text-button" type="button" onClick={() => setWatchEntries((current) => removeCatalogWatchEntry(current, entry))}>제거</button></article>; })}</div>}<p className="price-watchlist-alert-summary"><FiTag /> 현재 기준 활성 가격 신호 {activeSignalCount}개</p><div className="price-watchlist-server-tools"><label><span>공유 목록 이름</span><input aria-label="가격 추적 공유 목록 이름" type="text" maxLength={60} value={watchlistName} onChange={(event) => setWatchlistName(event.target.value)} disabled={savingWatchlist || updatingWatchlist || revokingWatchlist} /></label><label><span>최저가 근접 기준</span><select aria-label="가격 추적 최저가 근접 기준" value={watchThreshold} onChange={(event) => setWatchThreshold(Number(event.target.value) as WatchThreshold)} disabled={savingWatchlist || updatingWatchlist || revokingWatchlist}><option value={5}>5%</option><option value={10}>10%</option><option value={20}>20%</option></select></label><label><span>공유 링크 유효기간</span><select aria-label="가격 추적 공유 링크 유효기간" value={watchlistExpiryDays} onChange={(event) => setWatchlistExpiryDays(event.target.value === "keep" ? "keep" : event.target.value === "7" ? 7 : event.target.value === "30" ? 30 : "never")} disabled={savingWatchlist || updatingWatchlist || revokingWatchlist}>{watchlistExpiryDays === "keep" && <option value="keep">현재 만료 유지{savedLink?.expiresAt ? ` · ${new Date(savedLink.expiresAt).toLocaleString("ko-KR")}` : ""}</option>}<option value="never">무기한</option><option value="7">7일</option><option value="30">30일</option></select></label><button className="button button-secondary" type="button" onClick={() => void (editingSavedLinkId === savedLink?.id ? updateWatchlist() : saveWatchlist())} disabled={savingWatchlist || updatingWatchlist || revokingWatchlist || watchEntries.length === 0}>{savingWatchlist ? <><FiLoader className="spin" /> 저장 중...</> : updatingWatchlist ? <><FiLoader className="spin" /> 업데이트 중...</> : editingSavedLinkId === savedLink?.id ? <><FiServer /> 목록 업데이트</> : <><FiServer /> 목록 저장·공유</>}</button>{editingSavedLinkId === savedLink?.id && <button className="button button-light" type="button" onClick={() => void saveWatchlist()} disabled={savingWatchlist || updatingWatchlist || revokingWatchlist || watchEntries.length === 0}>새 목록으로 저장</button>}</div>{savedLinks.length > 0 && <section className="price-watchlist-saved-links" aria-label="내 서버 가격 추적 목록"><div className="price-watchlist-saved-links-heading"><strong><FiServer /> 내 가격 목록</strong><span>{savedLinks.length} / 20</span></div>{savedLinks.map((link) => { const url = window.location.origin + "/watchlist/" + link.id; return <article className={savedLink?.id === link.id ? "price-watchlist-saved-link active" : "price-watchlist-saved-link"} key={link.id}><div className="price-watchlist-saved-link-meta"><strong>{link.name ?? "가격 추적 목록"}</strong><small>{link.createdAt ? "저장 " + new Date(link.createdAt).toLocaleString("ko-KR") + " · " : ""}{link.updatedAt ? "수정 " + new Date(link.updatedAt).toLocaleString("ko-KR") + " · " : ""}{link.expiresAt ? "만료 " + new Date(link.expiresAt).toLocaleString("ko-KR") : "무기한"}{link.alertPreferences ? " · 알림 " + priceAlertPolicyText(link.alertPreferences) : ""}</small></div><label><span>공유 링크</span><input aria-label={(link.name ?? "가격 추적 목록") + " 공유 링크"} type="text" value={url} readOnly onFocus={(event) => event.currentTarget.select()} /></label><div className="price-watchlist-saved-link-actions"><a className="text-button" href={url}>열기</a><button className="text-button" type="button" onClick={() => void loadWatchlistForEdit(link.id)} disabled={savingWatchlist || updatingWatchlist || revokingWatchlist}>{editingSavedLinkId === link.id ? "편집 중" : "편집"}</button><button className="text-button" type="button" onClick={() => void copySavedLink(link.id)}>다시 복사</button><button className="text-button danger-text-button" type="button" onClick={() => void revokeWatchlistById(link.id)} disabled={revokingWatchlist || updatingWatchlist}>{revokingWatchlist ? <><FiLoader className="spin" /> 취소 중...</> : <><FiTrash2 /> 공유 취소</>}</button></div></article>; })}</section>}</section></div></div>{watchlistImportPreview && <WatchlistImportPreviewDialog preview={watchlistImportPreview} currentEntries={watchEntries} onClose={() => setWatchlistImportPreview(null)} onConfirm={applyWatchlistImport} />}</>;
+  return <><div className="price-watchlist-page"><div className="workspace-heading"><div><button className="back-link" type="button" onClick={onBack}><FiArrowLeft /> 홈으로</button><h1>가격 추적</h1><p>{offlineMode ? "관심 부품을 등록하고 목표가를 설정하세요. 가격은 설치된 카탈로그 스냅샷에 포함된 값입니다." : "관심 부품을 등록하고 목표가를 설정하세요. 저장된 가격의 출처와 확인 날짜도 함께 보여드려요."}</p></div><span className="admin-badge"><FiClock />{offlineMode ? " 가격 스냅샷" : " 저장된 가격"}</span></div>{offlineMode && <p className="price-watchlist-offline-note" role="status">품목 수정 시각 · 핵심·주변 스냅샷 기준일 구분</p>}<div className="mobile-price-watch-summary"><div><span className="mobile-kicker">가격 추적</span><strong>{watchEntries.length}개 추적 중</strong><small>{watchEntries.length > 0 ? "등록한 부품의 가격을 확인하세요." : "관심 부품을 추가하면 가격 판단을 시작할 수 있어요."}</small></div><button className="button button-light" type="button" onClick={() => setPriceRefreshNonce((current) => current + 1)} disabled={priceLoading || watchEntries.length === 0}>{priceLoading ? <><FiLoader className="spin" /> 확인 중...</> : <><FiRefreshCw />{offlineMode ? " 스냅샷 가격 다시 읽기" : " 저장 가격 다시 확인"}</>}</button></div><div className="price-watchlist-grid"><section className="price-watchlist-search-card"><div className="price-watchlist-section-heading"><div><h2>추적할 부품 찾기</h2><p>핵심·주변 부품을 별도 카탈로그에서 검색합니다.</p></div><span>{total.toLocaleString("ko-KR")}개</span><button className="text-button price-watchlist-filter-link-button" type="button" data-testid="price-watchlist-copy-filter-link" onClick={() => void copyWatchlistSearchLink()}><FiCopy /> 조건 링크 복사</button></div><div className="price-watchlist-search-tools"><label><span>대상</span><select aria-label="가격 추적 검색 대상" value={kind} onChange={(event) => { setKind(event.target.value as "part" | "accessory"); setSearchOffset(0); }}><option value="part">핵심 부품</option><option value="accessory">주변 부품</option></select></label>{kind === "part" ? <label><span>분류</span><select aria-label="가격 추적 핵심 부품 분류" value={partCategory} onChange={(event) => { setPartCategory(event.target.value as PartCategory); setSearchOffset(0); }}>{PART_CATEGORIES.map((category) => <option value={category} key={category}>{CATEGORY_LABELS[category]}</option>)}</select></label> : <label><span>분류</span><select aria-label="가격 추적 주변 부품 분류" value={accessoryCategory} onChange={(event) => { setAccessoryCategory(event.target.value as AccessoryCategory | "all"); setSearchOffset(0); }}><option value="all">전체 주변 부품</option>{ACCESSORY_CATEGORIES.map((category) => <option value={category} key={category}>{ACCESSORY_CATEGORY_LABELS[category]}</option>)}</select></label>}<label className="price-watchlist-search-query"><span>검색</span><input aria-label="가격 추적 부품 검색" type="search" value={query} onChange={(event) => { setQuery(event.target.value); setSearchOffset(0); }} placeholder="모델명·브랜드 검색" /></label></div>{searchLoading && items.length === 0 ? <div className="price-watchlist-state"><FiLoader className="spin" /> 부품을 찾는 중...</div> : searchError && items.length === 0 ? <div className="price-watchlist-state error" role="alert"><FiXCircle /><span>{searchError}</span><button className="text-button" type="button" onClick={() => setSearchRetryNonce((current) => current + 1)}>다시 시도</button></div> : items.length === 0 ? <div className="price-watchlist-state"><FiSearch /> 검색 결과가 없습니다.</div> : <div className="price-watchlist-search-results">{items.map((item) => { const entry = { itemId: item.id, kind, category: item.category }; const watched = catalogWatchlistContains(watchEntries, entry); const sourceUrl = safeExternalUrl(item.danawaUrl); return <article className={watched ? "price-watchlist-search-item watched" : "price-watchlist-search-item"} key={kind + ":" + item.id}><div><strong>{item.name}</strong><small>{categoryLabel(item)} · {qualityLabel(item)} · {item.rawSpecText || "상세 스펙 정보 부족"}</small>{offlineMode && <small className="price-watchlist-price-provenance">{snapshotPriceBasisLabel(item.updatedAt, item.priceCheckedAt, priceWatchSnapshotDateFor(kind, snapshotDates))}</small>}</div><div className="price-watchlist-search-side"><strong>{formatWon(item.priceWon)}</strong>{offlineMode && <small className="price-watchlist-price-provenance">스냅샷 가격</small>}{sourceUrl && <a className="price-watchlist-source-link" href={sourceUrl} target="_blank" rel="noreferrer">상품 페이지 <FiExternalLink /></a>}<button className="button button-small" type="button" onClick={() => toggleWatch(item)}>{watched ? <><FiCheck /> 추적 중</> : <><FiPlus /> 추적 추가</>}</button></div></article>; })}</div>}{items.length < total && <button className="button button-light full-width" type="button" onClick={() => setSearchOffset((current) => current + 24)} disabled={searchLoading}>{searchLoading ? <><FiLoader className="spin" /> 불러오는 중...</> : "더 많은 부품 불러오기 (" + items.length.toLocaleString("ko-KR") + " / " + total.toLocaleString("ko-KR") + ")"}</button>}{searchError && items.length > 0 && <p className="price-watchlist-inline-error" role="alert"><FiXCircle /> {searchError} <button className="text-button" type="button" onClick={() => setSearchRetryNonce((current) => current + 1)}>다시 시도</button></p>}</section><section className="price-watchlist-tracker-card"><div className="price-watchlist-section-heading"><div><h2>내 가격 추적 목록</h2><p>{offlineMode ? "포함된 스냅샷 가격과 목표가를 비교합니다." : "저장된 가격과 목표가를 비교합니다."}</p></div><div className="price-watchlist-tracker-actions"><input ref={watchlistImportInputRef} className="price-watchlist-import-input" type="file" accept=".json,.csv,text/csv,application/json" aria-label="가격 추적 CSV·JSON 파일 가져오기" onChange={(event) => void importWatchlistFile(event)} /><button className="button button-light" type="button" data-testid="price-watchlist-import" onClick={() => watchlistImportInputRef.current?.click()}><FiUpload /> CSV·JSON 가져오기</button><button className="button button-light" type="button" data-testid="price-watchlist-export-csv" onClick={() => downloadWatchlistExport("csv")} disabled={watchEntries.length === 0}><FiDownload /> CSV 저장</button><button className="button button-light" type="button" data-testid="price-watchlist-export" onClick={() => downloadWatchlistExport("json")} disabled={watchEntries.length === 0}><FiDownload /> JSON 저장</button><button className="button button-light" type="button" onClick={() => setPriceRefreshNonce((current) => current + 1)} disabled={priceLoading || watchEntries.length === 0}>{priceLoading ? <><FiLoader className="spin" /> 확인 중...</> : <><FiRefreshCw />{offlineMode ? " 스냅샷 가격 다시 읽기" : " 저장 가격 다시 확인"}</>}</button></div></div>{priceListReadAt && <p className="price-watchlist-checked"><FiClock /> 목록을 불러온 시각 {dateTimeLabel(priceListReadAt)}</p>}{priceListReadAt && watchEntries.length > 0 && <div className="price-watchlist-decision-overview" aria-label={offlineMode ? "스냅샷 가격 판단 분포" : "현재 가격 판단 분포"} data-testid="price-watchlist-decision-overview"><strong>{offlineMode ? "스냅샷 기준 판단 분포" : "현재 판단 분포"}</strong><div>{(Object.keys(PRICE_WATCH_DECISION_LABELS) as Array<keyof typeof PRICE_WATCH_DECISION_LABELS>).filter((state) => capabilities.priceHistory || !["buy", "wait", "observe"].includes(state)).map((state) => <button className={state} data-testid={"price-watchlist-decision-" + state} disabled={decisionCounts[state] === 0} key={state} type="button" aria-pressed={watchListStatus === state} onClick={() => setWatchListStatus(state)}>{PRICE_WATCH_DECISION_LABELS[state]} <b>{decisionCounts[state]}</b></button>)}</div></div>}{capabilities.automaticRefresh && <div className="price-watchlist-monitor-controls"><label><input type="checkbox" aria-label="저장된 가격 자동 확인" checked={autoRefreshEnabled} onChange={(event) => { setAutoRefreshEnabled(event.target.checked); if (event.target.checked) setPriceRefreshNonce((current) => current + 1); }} /><span>화면을 열어 둔 동안 카탈로그를 다시 불러오기</span></label>{autoRefreshEnabled && <label className="price-watchlist-monitor-interval"><span>주기</span><select aria-label="가격 추적 자동 확인 주기" value={autoRefreshMinutes} onChange={(event) => setAutoRefreshMinutes(Number(event.target.value) as 5 | 15 | 30)}><option value={5}>5분</option><option value={15}>15분</option><option value={30}>30분</option></select></label>}<label className="price-watchlist-history-window"><span>가격 이력</span><select aria-label="가격 추적 가격 이력 기간" value={priceHistoryDays} onChange={(event) => setPriceHistoryDays(Number(event.target.value) as PriceHistoryWindow)}><option value={7}>7일</option><option value={30}>30일</option><option value={90}>90일</option></select></label><span className="price-watchlist-monitor-status">{autoRefreshEnabled ? "저장된 가격 자동 확인 " + autoRefreshMinutes + "분마다" : "자동 새로고침 꺼짐"}</span></div>}{capabilities.alerts && <PriceAlertPreferencesPanel value={alertPreferences} onChange={setAlertPreferences} disabled={savingWatchlist || updatingWatchlist || revokingWatchlist} />}{capabilities.alerts && priceAlerts.length > 0 && <div className="price-watchlist-alerts"><div className="price-watchlist-alerts-heading"><strong><FiBell /> 최근 가격 알림{unreadAlertCount > 0 ? " · 미읽음 " + unreadAlertCount : ""}</strong><div className="price-watchlist-alert-actions"><button className="text-button" type="button" onClick={() => void updateAlertStates("read")} disabled={unreadAlertCount === 0}>모두 읽음</button><button className="text-button" type="button" onClick={() => void updateAlertStates("dismiss")}>알림 지우기</button></div></div>{priceAlerts.map((alert) => <article className={(alert.kind === "target" ? "price-watchlist-alert target" : alert.kind === "availability" ? "price-watchlist-alert availability" : "price-watchlist-alert") + (alert.readAt ? " read" : "")} key={alert.id}><FiBell /><div><strong>{alert.kind === "target" ? "목표가 도달" : alert.kind === "availability" ? "가격 확인 상태 변경" : "가격 하락 감지"}</strong><span>{alert.message}</span><small>{new Date(alert.createdAt).toLocaleString("ko-KR")}</small></div></article>)}</div>}{watchEntries.length > 0 && <PriceWatchlistEntryFilters query={watchListQuery} status={watchListStatus} sort={watchListSort} total={watchEntries.length} visible={visibleWatchEntries.length} allowAlerts={capabilities.alerts} allowHistory={capabilities.priceHistory} onQueryChange={setWatchListQuery} onStatusChange={setWatchListStatus} onSortChange={setWatchListSort} />}{watchEntries.length === 0 ? <div className="price-watchlist-empty\"><FiTag /><strong>아직 추적 중인 부품이 없습니다.</strong><span>왼쪽에서 CPU, 그래픽카드, SSD, 주변 부품을 검색해 추가해 보세요.</span></div> : visibleWatchEntries.length === 0 ? <div className="price-watchlist-filter-empty"><FiSearch /> 조건에 맞는 가격 추적 항목이 없습니다.<button className="text-button" type="button" onClick={resetWatchListView}>필터 초기화</button></div> : <div className="price-watchlist-tracked-list">{visibleWatchEntries.map((entry) => { const live = currentPrices[entryKey(entry)]; const targetReached = live?.status === "available" && live.priceWon !== undefined && entry.targetPriceWon !== undefined && live.priceWon <= entry.targetPriceWon; const targetGapWon = live?.priceWon !== undefined && entry.targetPriceWon !== undefined ? live.priceWon - entry.targetPriceWon : undefined; const history = priceHistories[entryKey(entry)]; const signals = historySignals(entry); const decision = priceWatchDecisionFor({ currentStatus: live?.status ?? "unknown", currentPriceWon: live?.priceWon, targetPriceWon: entry.targetPriceWon, nearLowThresholdPercent: watchThreshold, history: history?.summary }); return <article className="price-watchlist-tracked-item" key={entryKey(entry)}><div className="price-watchlist-tracked-copy"><strong>{entry.itemName}</strong><small>{entry.kind === "accessory" ? "주변 부품" : "핵심 부품"} · {entry.category}</small></div><label><span>목표가</span><input aria-label={entry.itemName + " 목표가"} type="number" min="1" step="1000" value={entry.targetPriceWon ?? ""} placeholder="미설정" onChange={(event) => updateTarget(entry, event.target.value)} />{history && recommendedTargetPriceFromHistory(history.summary) !== undefined && <button className="price-watchlist-target-suggest" type="button" aria-label={entry.itemName + " 최근 " + history.windowDays + "일 최저가로 목표가 설정"} onClick={() => suggestTargetFromHistory(entry, history)}>최근 {history.windowDays}일 최저가 {formatWon(recommendedTargetPriceFromHistory(history.summary))}</button>}</label><div className="price-watchlist-current"><span>{offlineMode ? "포함된 스냅샷 가격" : "카탈로그 가격"}</span><strong>{live?.status === "error" ? "일시 확인 오류" : live?.status === "unavailable" ? "가격 확인 불가" : live?.priceWon !== undefined ? formatWon(live.priceWon) : "미확인"}</strong><em className={`price-watchlist-decision ${decision.state}`}>{decision.label}</em><small className="price-watchlist-decision-summary">{decision.summary}</small>{live && <small className="price-watchlist-decision-summary">{offlineMode ? snapshotPriceBasisLabel(live.updatedAt, live.priceCheckedAt, priceWatchSnapshotDateFor(entry.kind, snapshotDates)) : live.status === "error" ? "가격 정보를 불러오지 못했어요." : priceCheckLabel(live)}</small>}{live?.sourceUrl && <a className="price-watchlist-source-link" href={live.sourceUrl} target="_blank" rel="noreferrer">상품 페이지 <FiExternalLink /></a>}{targetGapWon !== undefined && !targetReached && <small className="price-watchlist-target-gap">목표가까지 +{formatWon(targetGapWon)}</small>}{history && history.summary.sampleCount >= 2 && <div className="price-watchlist-history"><small>최근 {history.windowDays}일 {history.summary.sampleCount}회{history.summary.minPriceWon !== undefined ? " · 최저가 " + formatWon(history.summary.minPriceWon) : ""}{history.summary.fromHighPercent !== undefined ? " · 최고가 대비 " + history.summary.fromHighPercent.toFixed(1) + "%" : ""}</small>{signals.length > 0 && <div className="price-watchlist-history-signals">{signals.map((signal) => <em key={signal}>{signal}</em>)}</div>}<div className="price-watchlist-sparkline" role="img" aria-label={entry.itemName + " 최근 " + history.windowDays + "일 가격 추세"}>{history.points.map((point) => <span key={point.changeId} style={{ height: historyBarHeight(history, point.priceWon) + "%" }} title={point.priceWon.toLocaleString("ko-KR") + "원"} />)}</div></div>}</div><button className="text-button" type="button" onClick={() => setWatchEntries((current) => removeCatalogWatchEntry(current, entry))}>제거</button></article>; })}</div>}<p className="price-watchlist-alert-summary"><FiTag />{offlineMode ? " 스냅샷 기준 목표가 이하 " + activeSignalCount + "개" : " 현재 기준 활성 가격 신호 " + activeSignalCount + "개"}</p>{capabilities.serverSharing && <div className="price-watchlist-server-tools"><label><span>공유 목록 이름</span><input aria-label="가격 추적 공유 목록 이름" type="text" maxLength={60} value={watchlistName} onChange={(event) => setWatchlistName(event.target.value)} disabled={savingWatchlist || updatingWatchlist || revokingWatchlist} /></label><label><span>최저가 근접 기준</span><select aria-label="가격 추적 최저가 근접 기준" value={watchThreshold} onChange={(event) => setWatchThreshold(Number(event.target.value) as WatchThreshold)} disabled={savingWatchlist || updatingWatchlist || revokingWatchlist}><option value={5}>5%</option><option value={10}>10%</option><option value={20}>20%</option></select></label><label><span>공유 링크 유효기간</span><select aria-label="가격 추적 공유 링크 유효기간" value={watchlistExpiryDays} onChange={(event) => setWatchlistExpiryDays(event.target.value === "keep" ? "keep" : event.target.value === "7" ? 7 : event.target.value === "30" ? 30 : "never")} disabled={savingWatchlist || updatingWatchlist || revokingWatchlist}>{watchlistExpiryDays === "keep" && <option value="keep">현재 만료 유지{savedLink?.expiresAt ? ` · ${new Date(savedLink.expiresAt).toLocaleString("ko-KR")}` : ""}</option>}<option value="never">무기한</option><option value="7">7일</option><option value="30">30일</option></select></label><button className="button button-secondary" type="button" onClick={() => void (editingSavedLinkId === savedLink?.id ? updateWatchlist() : saveWatchlist())} disabled={savingWatchlist || updatingWatchlist || revokingWatchlist || watchEntries.length === 0}>{savingWatchlist ? <><FiLoader className="spin" /> 저장 중...</> : updatingWatchlist ? <><FiLoader className="spin" /> 업데이트 중...</> : editingSavedLinkId === savedLink?.id ? <><FiServer /> 목록 업데이트</> : <><FiServer /> 목록 저장·공유</>}</button>{editingSavedLinkId === savedLink?.id && <button className="button button-light" type="button" onClick={() => void saveWatchlist()} disabled={savingWatchlist || updatingWatchlist || revokingWatchlist || watchEntries.length === 0}>새 목록으로 저장</button>}</div>}{capabilities.serverSharing && savedLinks.length > 0 && <section className="price-watchlist-saved-links" aria-label="내 서버 가격 추적 목록"><div className="price-watchlist-saved-links-heading"><strong><FiServer /> 내 가격 목록</strong><span>{savedLinks.length} / 20</span></div>{savedLinks.map((link) => { const url = window.location.origin + "/watchlist/" + link.id; return <article className={savedLink?.id === link.id ? "price-watchlist-saved-link active" : "price-watchlist-saved-link"} key={link.id}><div className="price-watchlist-saved-link-meta"><strong>{link.name ?? "가격 추적 목록"}</strong><small>{link.createdAt ? "저장 " + new Date(link.createdAt).toLocaleString("ko-KR") + " · " : ""}{link.updatedAt ? "수정 " + new Date(link.updatedAt).toLocaleString("ko-KR") + " · " : ""}{link.expiresAt ? "만료 " + new Date(link.expiresAt).toLocaleString("ko-KR") : "무기한"}{link.alertPreferences ? " · 알림 " + priceAlertPolicyText(link.alertPreferences) : ""}</small></div><label><span>공유 링크</span><input aria-label={(link.name ?? "가격 추적 목록") + " 공유 링크"} type="text" value={url} readOnly onFocus={(event) => event.currentTarget.select()} /></label><div className="price-watchlist-saved-link-actions"><a className="text-button" href={url}>열기</a><button className="text-button" type="button" onClick={() => void loadWatchlistForEdit(link.id)} disabled={savingWatchlist || updatingWatchlist || revokingWatchlist}>{editingSavedLinkId === link.id ? "편집 중" : "편집"}</button><button className="text-button" type="button" onClick={() => void copySavedLink(link.id)}>다시 복사</button><button className="text-button danger-text-button" type="button" onClick={() => void revokeWatchlistById(link.id)} disabled={revokingWatchlist || updatingWatchlist}>{revokingWatchlist ? <><FiLoader className="spin" /> 취소 중...</> : <><FiTrash2 /> 공유 취소</>}</button></div></article>; })}</section>}</section></div></div>{watchlistImportPreview && <WatchlistImportPreviewDialog preview={watchlistImportPreview} currentEntries={watchEntries} onClose={() => setWatchlistImportPreview(null)} onConfirm={applyWatchlistImport} />}</>;
 }

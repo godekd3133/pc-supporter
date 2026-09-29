@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
 import { tmpdir } from "node:os";
@@ -71,6 +71,52 @@ describe("admin crawler rate limits", () => {
       expect(retryBatchLimited.status).toBe(429);
       expect(retryBatchLimited.headers.get("x-ratelimit-limit")).toBe("5");
       expect(await retryBatchLimited.json()).toMatchObject({ code: "RATE_LIMITED" });
+    } finally {
+      if (server) await closeServer(server);
+      if (previousAdminPassword === undefined) delete process.env.ADMIN_PASSWORD;
+      else process.env.ADMIN_PASSWORD = previousAdminPassword;
+      if (previousDataDirectory === undefined) delete process.env.PC_SUPPORTER_DATA_DIR;
+      else process.env.PC_SUPPORTER_DATA_DIR = previousDataDirectory;
+      if (previousDatabaseUrl === undefined) delete process.env.DATABASE_URL;
+      else process.env.DATABASE_URL = previousDatabaseUrl;
+      await rm(directory, { recursive: true, force: true });
+    }
+  }, 15_000);
+
+  it("rejects price and crawler starts while another ingestion runner holds the shared lease", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "pc-supporter-admin-crawl-lease-"));
+    const previousAdminPassword = process.env.ADMIN_PASSWORD;
+    const previousDataDirectory = process.env.PC_SUPPORTER_DATA_DIR;
+    const previousDatabaseUrl = process.env.DATABASE_URL;
+    process.env.ADMIN_PASSWORD = "";
+    process.env.PC_SUPPORTER_DATA_DIR = directory;
+    process.env.DATABASE_URL = "";
+    await writeFile(join(directory, "background-job-catalog-ingestion.lease"), "locked", "utf8");
+    vi.resetModules();
+    let server: Server | undefined;
+    try {
+      const { app } = await import("./index");
+      server = app.listen(0, "127.0.0.1");
+      await new Promise<void>((resolve, reject) => { server?.once("listening", resolve); server?.once("error", reject); });
+      const address = server.address() as AddressInfo;
+      const baseUrl = `http://127.0.0.1:${address.port}`;
+      const post = (path: string, body: unknown) => fetch(`${baseUrl}${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+
+      const core = await post("/api/admin/crawl", { category: "cpu", pages: 1, limitPerCategory: 1 });
+      expect(core.status).toBe(409);
+      expect(await core.json()).toMatchObject({ code: "CRAWL_RUNNING" });
+
+      const accessories = await post("/api/admin/accessories/crawl", {});
+      expect(accessories.status).toBe(409);
+      expect(await accessories.json()).toMatchObject({ code: "ACCESSORY_CRAWL_RUNNING" });
+
+      const prices = await post("/api/admin/prices/refresh", { dryRun: true });
+      expect(prices.status).toBe(409);
+      expect(await prices.json()).toMatchObject({ code: "PRICE_REFRESH_RUNNING_ON_ANOTHER_INSTANCE" });
     } finally {
       if (server) await closeServer(server);
       if (previousAdminPassword === undefined) delete process.env.ADMIN_PASSWORD;

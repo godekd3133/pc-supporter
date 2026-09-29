@@ -4,7 +4,7 @@ PC Supporter는 Vite로 만든 웹 클라이언트를 Capacitor 8 네이티브 �
 
 ## API 연결 계약
 
-웹 개발에서는 `VITE_API_BASE_URL`을 비워 두면 기존처럼 Vite proxy를 통해 상대 경로 `/api`를 사용합니다. native bundle은 반드시 `VITE_API_BASE_URL`을 API 서버 origin으로 넣어야 합니다.
+웹 개발에서는 `VITE_API_BASE_URL`을 비워 두면 기존처럼 Vite proxy를 통해 상대 경로 `/api`를 사용합니다. 원격 API 모드 native bundle은 `VITE_API_BASE_URL`에 API 서버 origin을 지정해야 합니다. 빌드 시 CSP meta의 `connect-src`에는 그 API URL의 origin만 추가합니다. 설치 데이터 기반 local-offline bundle은 별도 명령으로 빌드하며 API origin을 포함하지 않고, CSP에서도 원격 API·font·image 출처를 허용하지 않습니다.
 
 ```text
 VITE_API_BASE_URL=https://api.example.com
@@ -16,9 +16,11 @@ ADMIN_COOKIE_SAMESITE=none
 
 API 서버는 Capacitor 기본 origin을 허용하고 `ETag`, `Last-Modified`, `Retry-After` 응답 헤더를 노출합니다. native 관리자 로그인을 사용할 때는 HTTPS API와 `ADMIN_COOKIE_SAMESITE=none`을 함께 설정해야 합니다. `CORS_ALLOWED_ORIGINS`는 실제 웹 운영 origin을 추가할 때 쉼표로 이어 붙입니다.
 
+Express가 웹 앱을 제공할 때 CSP 응답 헤더는 같은 `dist/index.html`의 CSP meta 정책을 재사용하고 `frame-ancestors 'none'`만 헤더에 추가합니다. 웹·Capacitor의 `connect-src`는 빌드 입력 `VITE_API_BASE_URL`에서 나오므로 웹 앱과 API를 다른 origin으로 둘 때도 헤더와 HTML 정책이 어긋나지 않습니다. 같은 출처 웹 배포에서는 이 변수를 비워 상대 경로 `/api`를 사용합니다.
+
 ## 로컬 빌드
 
-의존성 설치 후 `VITE_API_BASE_URL`이 없으면 native build가 중단됩니다.
+원격 API 모드 native build는 의존성 설치 후 `VITE_API_BASE_URL`이 없으면 중단됩니다.
 
 ```bash
 VITE_API_BASE_URL=https://api.example.com npm run build:mobile
@@ -26,7 +28,41 @@ VITE_API_BASE_URL=https://api.example.com npm run build:mobile
 
 이 명령은 웹 `dist/`와 충돌하지 않도록 native web assets를 격리된 `dist-mobile/`에 생성하고, 같은 디렉터리를 Capacitor `webDir`로 지정한 뒤 TypeScript·Vite·bundle gate와 `cap sync`를 실행합니다. 따라서 remote `VITE_API_BASE_URL`을 넣은 native build가 실행 중이어도 웹 preview가 사용하는 `dist/`를 덮어쓰지 않습니다. 생성된 `dist-mobile/`, `ios/App/App/public`, `android/app/src/main/assets/public`, Gradle/Xcode build output은 Git에 넣지 않습니다.
 
-Android Emulator에서 로컬 API까지 확인하려면 API 서버를 `4174` 포트에 띄우고 다음을 실행합니다.
+## 설치 데이터 포함 로컬 모드
+
+이 모드는 부품·주변 부품 카탈로그 snapshot을 앱 자산으로 포함합니다. 앱을 열면 포함된 데이터를 사용해 부품 탐색, 견적 편집, 호환 검사와 일반 사양 기반 추천을 수행하고, snapshot 가격과 이 기기에 저장한 목표가를 비교하는 가격 추적도 사용할 수 있습니다. 품목 수정일과 snapshot 기준일은 화면에서 따로 표시합니다. 벤치마크·게임 FPS 자료, 실시간 가격 갱신·가격 이력·알림, 서버 저장·공유, 관리자·수집 기능은 포함하지 않으며 앱 화면에도 기준일과 이 제한을 표시합니다. 견적과 가격 추적 목록은 현재 기기에 보관됩니다. 앱을 지우거나 재설치하면 로컬 저장 상태가 사라질 수 있으며, 사용자 상태 백업·복원 경로는 별도 작업입니다.
+
+먼저 사용자가 지정한 데이터 복사본을 `catalog.json`, `accessories.json`과 선택된 허용 override 파일로 준비합니다. 이 명령은 `data/`를 자동 검색하지 않습니다. source 경로는 명시해야 하고, output 경로는 아직 존재하지 않는 새 디렉터리여야 합니다. 카테고리는 해당 snapshot에 실제 존재하는 값만 지정합니다.
+
+```bash
+npm run offline:export -- \
+  --data-dir /absolute/path/to/explicit-catalog-copy \
+  --output-dir /tmp/pc-supporter-offline-snapshot \
+  --part-categories cpu,cooler,motherboard,memory,gpu,ssd,hdd,case,psu \
+  --accessory-categories storage_accessory,cooling_fan,thermal_grease,m2_heatsink,gpu_support,gpu_cooler,memory_cooler,thermal_pad,fan_hub,ups
+
+npm run build:offline -- --snapshot-dir /tmp/pc-supporter-offline-snapshot
+npm run mobile:offline -- --snapshot-dir /tmp/pc-supporter-offline-snapshot
+```
+
+`offline:export`는 선택한 catalog·accessory 범주와 허용된 override만 읽어 revision/hash manifest를 만듭니다. 저장 견적, 공유·소유/복구 토큰, 사용량, crawler/session 상태와 benchmark evidence는 포함하지 않습니다. Export는 URL query allowlist, snapshot 범주, byte budget을 검사하며 output directory를 덮어쓰지 않습니다. `build:offline`은 static web output을 만들고, `mobile:offline`은 Android/iOS Capacitor web assets를 검증·교체합니다. 두 명령 모두 실제 APK/IPA compile이나 install은 수행하지 않습니다.
+
+로컬 오프라인 빌드마다 client build revision을 새로 만들고, client에는 해당 snapshot revision을 함께 넣습니다. 생성된 service worker는 이 두 revision으로 분리한 cache에 HTML shell, 빌드된 JavaScript·CSS·asset 전체, `offline-catalog.json`을 함께 저장합니다. 설치 중 다운로드가 실패하거나 cache 안의 카탈로그·client revision이 worker와 다르면 후보 cache를 지우고 업데이트 설치를 실패시킵니다. 현재 사용 중인 worker와 cache는 유지됩니다. 로컬 오프라인 업데이트는 기존 앱 탭이 닫힐 때까지 기다린 뒤 활성화하고 이전 shell cache를 정리합니다. 활성화된 로컬 worker는 자신의 revision cache만 읽고 누락 asset을 network에서 섞어 가져오지 않으며, `/api/` 요청은 worker cache에서 처리하지 않습니다. 원격 build의 기존 service-worker 동작은 유지합니다.
+
+이 cache 계약은 첫 설치 때 인터넷 연결이 필요 없다는 뜻은 아닙니다. Browser storage는 사용자가 지우거나 브라우저가 회수할 수 있고, 오래 열린 이전 탭이 있으면 업데이트 활성화가 늦어질 수 있습니다. 현재 확인된 Chrome CDP 실행은 온라인에서 synthetic snapshot을 한 번 내려받은 뒤 오프라인 reload에서 CPU 16개 행을 표시한 warm-cache browsing입니다. 이는 새 A/B worker 교체나 cold first install까지 증명하지 않으므로, 실제 배포 전에는 서로 다른 catalog revision A/B 업데이트와 revision mismatch 거부를 브라우저에서 별도로 확인해야 합니다. 집중 회귀 테스트는 `npm test -- scripts/offline-pwa-cache.test.ts src/offline/bundled-catalog.test.ts`로 실행합니다.
+
+Android debug APK는 `mobile:offline` 뒤에 JDK 21과 Android SDK를 지정해 빌드합니다.
+
+```bash
+cd android
+JAVA_HOME=/absolute/path/to/jdk-21/Contents/Home \
+ANDROID_HOME=/absolute/path/to/Android/sdk \
+./gradlew assembleDebug
+```
+
+결과 APK는 `android/app/build/outputs/apk/debug/app-debug.apk`입니다. 이는 emulator/device 검증용 debug APK이며 release keystore 서명이나 Google Play 배포 승인이 아닙니다. iOS Simulator `.app`은 `ios/App/App.xcodeproj`의 `App` scheme을 `iphonesimulator` 대상으로 build할 수 있습니다. 실제 iPhone용 archive에는 Apple Developer Team ID와 별도 서명이 필요합니다. Build metadata 파일은 앱 assets와 분리하고, Android APK/iOS app 안의 snapshot revision을 build manifest와 대조해 확인합니다.
+
+Android Emulator에서 원격 API까지 확인하려면 API 서버를 `4174` 포트에 띄우고 다음을 실행합니다.
 
 ```bash
 VITE_API_BASE_URL=http://10.0.2.2:4174 npm run mobile:android:debug

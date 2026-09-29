@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Part } from "../shared/types";
+import type { SavedBuildMonitorSubscription } from "../shared/saved-build-monitor-subscription";
 import { createShareOwnerCredential } from "./build-share";
 import { savedBuildAlternativeAlertsFor } from "./saved-build-alternatives";
 import type { SavedBuildRecord } from "./build-share";
@@ -12,6 +13,18 @@ const selection = { memory: [], ssd: [], hdd: [], accessories: [], useIntegrated
 
 async function closeServer(server: Server) {
   await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+}
+
+async function waitForMonitorRun(baseUrl: string, buildId: string, ownerToken: string) {
+  const deadline = Date.now() + 8_000;
+  while (Date.now() < deadline) {
+    const response = await fetch(`${baseUrl}/api/builds/${buildId}/monitor`, { headers: { "X-Share-Owner-Token": ownerToken } });
+    if (!response.ok) throw new Error(`monitor read failed while awaiting first run: ${response.status}`);
+    const body = await response.json() as { subscription: SavedBuildMonitorSubscription };
+    if (body.subscription.lastCheckedAt || body.subscription.lastErrorAt) return body.subscription;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  throw new Error("promote-triggered monitor run did not settle before test cleanup");
 }
 
 async function startIsolatedServer() {
@@ -100,11 +113,11 @@ describe("saved build my-pc ownership cycle", () => {
       const body = await promoted.json() as { myPcAt?: string };
       expect(body.myPcAt).toBeTruthy();
 
-      const monitor = await fetch(`${baseUrl}/api/builds/${buildId}/monitor`, { headers: { "X-Share-Owner-Token": ownerCredential.token } });
-      const monitorBody = await monitor.json() as { subscription: { alertPolicy: string; enabled: boolean; nextCheckAt?: string } };
-      expect(monitorBody.subscription.alertPolicy).toBe("risk");
-      expect(monitorBody.subscription.enabled).toBe(true);
-      expect(monitorBody.subscription.nextCheckAt).toBeTruthy();
+      const monitorSubscription = await waitForMonitorRun(baseUrl, buildId, ownerCredential.token);
+      expect(monitorSubscription.alertPolicy).toBe("risk");
+      expect(monitorSubscription.enabled).toBe(true);
+      expect(monitorSubscription.nextCheckAt).toBeTruthy();
+      expect(monitorSubscription.lastCheckedAt).toBeTruthy();
 
       const demoted = await fetch(`${baseUrl}/api/builds/${buildId}/my-pc`, {
         method: "PUT",
@@ -152,11 +165,11 @@ describe("saved build my-pc ownership cycle", () => {
       });
       expect(promoted.status).toBe(200);
 
-      const monitor = await fetch(`${baseUrl}/api/builds/${buildId}/monitor`, { headers: { "X-Share-Owner-Token": ownerCredential.token } });
-      const body = await monitor.json() as { subscription: { alertPolicy: string; enabled: boolean; nextCheckAt?: string } };
-      expect(body.subscription.enabled).toBe(true);
-      expect(body.subscription.alertPolicy).toBe("risk");
-      expect(body.subscription.nextCheckAt).toBeTruthy();
+      const subscription = await waitForMonitorRun(baseUrl, buildId, ownerCredential.token);
+      expect(subscription.enabled).toBe(true);
+      expect(subscription.alertPolicy).toBe("risk");
+      expect(subscription.nextCheckAt).toBeTruthy();
+      expect(subscription.lastCheckedAt).toBeTruthy();
     } finally {
       await closeServer(server);
     }

@@ -40,6 +40,7 @@ describe("saved build version comparison share API", () => {
       const createShare = await fetch(`${baseUrl}/api/version-comparisons`, { method: "POST", headers: { "Content-Type": "application/json", "X-Share-Owner-Token": second.ownerToken }, body: JSON.stringify({ name: "원본·수정 버전 공유", beforeBuildId: first.id, afterBuildId: second.id, expiresInDays: 30 }) });
       const shared = await createShare.json() as Record<string, any>;
       expect(createShare.status).toBe(201);
+      expect(createShare.headers.get("cache-control")).toBe("private, no-store");
       expect(shared.ownerToken).toEqual(expect.any(String));
       expect(shared.payload).toMatchObject({ schemaVersion: 1, kind: "pc-supporter.saved-build-version-comparison-share", before: { id: first.id, label: "v1" }, after: { id: second.id, label: "v2" } });
       expect(shared.payload.text).toContain("PC Supporter 저장 견적 버전 비교");

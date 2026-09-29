@@ -1,3 +1,4 @@
+import { safeLocalStorage } from "./safe-storage";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import {
@@ -106,10 +107,10 @@ function sharedLivePriceText(row: AlternativeComparisonLiveCandidate) {
 }
 
 function SharedLiveWatchControl({ part, onToast }: { part: Part; onToast: (message: string) => void }) {
-  const [watching, setWatching] = useState(() => catalogWatchlistContains(catalogWatchlistFromJson(window.localStorage.getItem(CATALOG_WATCHLIST_STORAGE_KEY)), { kind: "part", itemId: part.id }));
+  const [watching, setWatching] = useState(() => catalogWatchlistContains(catalogWatchlistFromJson(safeLocalStorage.getItem(CATALOG_WATCHLIST_STORAGE_KEY)), { kind: "part", itemId: part.id }));
 
   useEffect(() => {
-    setWatching(catalogWatchlistContains(catalogWatchlistFromJson(window.localStorage.getItem(CATALOG_WATCHLIST_STORAGE_KEY)), { kind: "part", itemId: part.id }));
+    setWatching(catalogWatchlistContains(catalogWatchlistFromJson(safeLocalStorage.getItem(CATALOG_WATCHLIST_STORAGE_KEY)), { kind: "part", itemId: part.id }));
   }, [part.id]);
 
   useEffect(() => {
@@ -124,14 +125,14 @@ function SharedLiveWatchControl({ part, onToast }: { part: Part; onToast: (messa
   function register() {
     if (watching) return;
     try {
-      const current = catalogWatchlistFromJson(window.localStorage.getItem(CATALOG_WATCHLIST_STORAGE_KEY));
+      const current = catalogWatchlistFromJson(safeLocalStorage.getItem(CATALOG_WATCHLIST_STORAGE_KEY));
       if (catalogWatchlistContains(current, { kind: "part", itemId: part.id })) {
         setWatching(true);
         onToast("이미 가격 추적 중인 부품입니다.");
         return;
       }
       const next = addCatalogWatchEntry(current, { itemId: part.id, itemName: part.name, category: part.category, kind: "part", addedAt: new Date().toISOString() });
-      window.localStorage.setItem(CATALOG_WATCHLIST_STORAGE_KEY, catalogWatchlistToJson(next));
+      safeLocalStorage.setItem(CATALOG_WATCHLIST_STORAGE_KEY, catalogWatchlistToJson(next));
       setWatching(true);
       onToast(`${eul(part.name)} 가격 추적에 등록했습니다.`);
     } catch {
@@ -187,7 +188,7 @@ export function SharedAlternativeComparisonView({ onBack, onToast }: { onBack: (
   const [retryNonce, setRetryNonce] = useState(0);
   const mountedRef = useRef(true);
   const checklistStorageKey = sharedScenarioChecklistStorageKey(comparisonId);
-  const [checkedChecklistIds, setCheckedChecklistIds] = useState<string[]>(() => alternativeComparisonChecklistCheckedIdsFromJson(window.localStorage.getItem(checklistStorageKey)));
+  const [checkedChecklistIds, setCheckedChecklistIds] = useState<string[]>(() => alternativeComparisonChecklistCheckedIdsFromJson(safeLocalStorage.getItem(checklistStorageKey)));
   const checklistTransferInputRef = useRef<HTMLInputElement>(null);
   const [checklistTransferPreview, setChecklistTransferPreview] = useState<SharedChecklistTransferPreview | null>(null);
   const [checklistActionMessage, setChecklistActionMessage] = useState<string | null>(null);
@@ -221,14 +222,14 @@ export function SharedAlternativeComparisonView({ onBack, onToast }: { onBack: (
   }, []);
 
   useEffect(() => {
-    setCheckedChecklistIds(alternativeComparisonChecklistCheckedIdsFromJson(window.localStorage.getItem(checklistStorageKey)));
+    setCheckedChecklistIds(alternativeComparisonChecklistCheckedIdsFromJson(safeLocalStorage.getItem(checklistStorageKey)));
     setChecklistTransferPreview(null);
     setChecklistActionMessage(null);
   }, [checklistStorageKey]);
 
   useEffect(() => {
     try {
-      window.localStorage.setItem(checklistStorageKey, alternativeComparisonChecklistCheckedIdsToJson(checkedChecklistIds));
+      safeLocalStorage.setItem(checklistStorageKey, alternativeComparisonChecklistCheckedIdsToJson(checkedChecklistIds));
     } catch {
       // Local progress is optional and must not prevent the shared snapshot from loading.
     }

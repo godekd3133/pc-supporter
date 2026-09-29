@@ -1,3 +1,4 @@
+import { safeLocalStorage } from "./safe-storage";
 import { useEffect, useMemo, useState } from "react";
 import { FiAlertTriangle, FiCheckCircle, FiDatabase, FiInfo, FiMonitor, FiSearch, FiShoppingCart, FiTool, FiZap } from "react-icons/fi";
 import { buildActionCenterFor, type BuildAction, type BuildActionPriority, type BuildActionSource } from "../shared/build-action-center";
@@ -15,7 +16,7 @@ function actionButtonText(action: BuildAction) {
 
 function checkedIdsFromStorage(storageKey: string) {
   try {
-    const parsed: unknown = JSON.parse(window.localStorage.getItem(storageKey) ?? "[]");
+    const parsed: unknown = JSON.parse(safeLocalStorage.getItem(storageKey) ?? "[]");
     if (!Array.isArray(parsed) || parsed.length > PURCHASE_CHECKLIST_MAX_CHECKED_ITEMS) return [];
     return parsed.filter((value): value is string => typeof value === "string");
   } catch {
@@ -33,7 +34,7 @@ function dispatchChecklistAction(storageKey: string, actionId: string, checked: 
 
 function writeChecklistIds(storageKey: string, checkedIds: string[]) {
   try {
-    window.localStorage.setItem(storageKey, JSON.stringify(checkedIds.slice(0, PURCHASE_CHECKLIST_MAX_CHECKED_ITEMS)));
+    safeLocalStorage.setItem(storageKey, JSON.stringify(checkedIds.slice(0, PURCHASE_CHECKLIST_MAX_CHECKED_ITEMS)));
   } catch {
     // The in-memory action state still updates when storage is unavailable.
   }

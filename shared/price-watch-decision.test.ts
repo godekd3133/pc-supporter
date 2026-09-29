@@ -36,6 +36,14 @@ describe("price watch decision", () => {
     expect(result.summary).toContain("20,000원");
   });
 
+  it("describes saved catalog prices without implying continuous live monitoring", () => {
+    expect(priceWatchDecisionFor({ currentStatus: "available", currentPriceWon: 120000 })).toMatchObject({
+      state: "tracking",
+      label: "가격 추적 중",
+      summary: "저장 가격과 변경 이력을 비교합니다."
+    });
+  });
+
   it("counts the shared decision distribution without dropping unavailable states", () => {
     expect(priceWatchDecisionCountsFor({ first: "target", second: "buy", third: "unavailable", fourth: "error", fifth: "unavailable" })).toEqual({ target: 1, buy: 1, wait: 0, observe: 0, tracking: 0, unavailable: 2, error: 1 });
   });

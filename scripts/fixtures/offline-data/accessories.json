@@ -1,0 +1,17 @@
+[
+  {
+    "id": "offline-fixture-fan",
+    "category": "cooling_fan",
+    "name": "Offline Fixture 120 mm Fan",
+    "brand": "Fixture",
+    "model": "Fan-120",
+    "source": "manual",
+    "listingType": "accessory",
+    "priceWon": 8900,
+    "rawSpecText": "120 mm PWM fan; fixture only.",
+    "specs": { "lengthMm": 120, "fanCount": 1 },
+    "dataQuality": "manual",
+    "missingFields": [],
+    "updatedAt": "2026-09-24T00:00:00.000Z"
+  }
+]

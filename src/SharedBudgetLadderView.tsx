@@ -9,6 +9,7 @@ import type { BudgetLadderLocalShareEntry } from "../shared/budget-ladder-local-
 import type { BuildGenerationDiagnostic, BuildGenerationRequest, BuildGenerationResult, BuildSelection, CompatibilityResult, PartCategory, PartSelection } from "../shared/types";
 import { CATEGORY_LABELS, PART_CATEGORIES } from "../shared/types";
 import { ApiError, api } from "./api";
+import { markOwnerSessionResource, ownerCredentialAvailable, ownerRequestOptions, ownerSessionCreateOptions, ownerSessionModeSupported, removeOwnerSessionResource, retryOwnerSessionMigration } from "./owner-session";
 
 type BudgetLadderRefreshState = {
   status: "idle" | "loading" | "ready" | "error";
@@ -21,7 +22,8 @@ type BudgetLadderRefreshState = {
 type BudgetLadderShareLink = {
   id: string;
   url: string;
-  ownerToken: string;
+  ownerToken?: string;
+  owned?: boolean;
   expiresAt?: string;
   parentId?: string;
   versionNumber?: number;
@@ -33,9 +35,7 @@ type BudgetLadderMergePreviewState = {
   error?: string;
 };
 
-type BudgetLadderShareResponse = BudgetLadderShareSnapshot & {
-  ownerToken: string;
-};
+type BudgetLadderShareResponse = BudgetLadderShareSnapshot & ({ ownerManaged: true; ownerToken?: never } | { ownerManaged?: false; ownerToken: string });
 
 function sharedBudgetLadderResultText(item: BudgetLadderExportItem) {
   if (item.totalPriceWon === undefined) return "-";
@@ -547,6 +547,7 @@ export function SharedBudgetLadderView({ onBack, onToast, onApplyDraft, onApplyM
       const request = budgetLadderBaseRequestFor(outcomes);
       const saved = await api<BudgetLadderShareResponse>("/api/budget-ladders", {
         method: "POST",
+        ...ownerSessionCreateOptions(),
         body: JSON.stringify({
           name: budgetLadderDerivedSnapshotNameFor(snapshot.name),
           payload: budgetLadderExportPayloadFor(outcomes),
@@ -559,8 +560,11 @@ export function SharedBudgetLadderView({ onBack, onToast, onApplyDraft, onApplyM
       });
       if (!mountedRef.current || mutationRequestVersionRef.current !== requestVersion || controller.signal.aborted) return;
       const url = `${window.location.origin}/budget-ladder/${saved.id}`;
-      setSavedRefreshSnapshot({ id: saved.id, url, ownerToken: saved.ownerToken, ...(saved.expiresAt ? { expiresAt: saved.expiresAt } : {}), ...(saved.parentId ? { parentId: saved.parentId } : {}), ...(saved.versionNumber !== undefined ? { versionNumber: saved.versionNumber } : {}) });
-      onBudgetLadderShareSaved({ id: saved.id, url, name: saved.name, createdAt: saved.createdAt, ...(saved.versionNumber !== undefined ? { versionNumber: saved.versionNumber } : {}), ...(saved.expiresAt ? { expiresAt: saved.expiresAt } : {}), ownerToken: saved.ownerToken });
+      const owned = saved.ownerManaged === true;
+      if (owned) markOwnerSessionResource("budget-ladder", saved.id);
+      if (saved.ownerToken && ownerSessionModeSupported()) void retryOwnerSessionMigration().catch(() => undefined);
+      setSavedRefreshSnapshot({ id: saved.id, url, ...(saved.ownerToken ? { ownerToken: saved.ownerToken } : {}), ...(owned ? { owned: true } : {}), ...(saved.expiresAt ? { expiresAt: saved.expiresAt } : {}), ...(saved.parentId ? { parentId: saved.parentId } : {}), ...(saved.versionNumber !== undefined ? { versionNumber: saved.versionNumber } : {}) });
+      onBudgetLadderShareSaved({ id: saved.id, url, name: saved.name, createdAt: saved.createdAt, ...(saved.versionNumber !== undefined ? { versionNumber: saved.versionNumber } : {}), ...(saved.expiresAt ? { expiresAt: saved.expiresAt } : {}), ...(saved.ownerToken ? { ownerToken: saved.ownerToken } : {}), ...(owned ? { owned: true } : {}) });
       try {
         await navigator.clipboard.writeText(url);
         if (!mountedRef.current || mutationRequestVersionRef.current !== requestVersion || controller.signal.aborted) return;
@@ -578,15 +582,21 @@ export function SharedBudgetLadderView({ onBack, onToast, onApplyDraft, onApplyM
   }
 
   async function revokeSavedRefreshSnapshot() {
-    if (!savedRefreshSnapshot || !window.confirm("현재 결과의 공유 링크를 취소할까요? 취소하면 이 링크는 더 이상 열리지 않아요.")) return;
+    if (!savedRefreshSnapshot) return;
+    if (!ownerCredentialAvailable("budget-ladder", savedRefreshSnapshot.id, savedRefreshSnapshot)) {
+      onToast("이 브라우저에서 공유 소유권을 확인할 수 없어 링크를 취소하지 못했습니다.");
+      return;
+    }
+    if (!window.confirm("현재 결과의 공유 링크를 취소할까요? 취소하면 이 링크는 더 이상 열리지 않아요.")) return;
     snapshotSaveAbortControllerRef.current?.abort();
     const controller = new AbortController();
     snapshotSaveAbortControllerRef.current = controller;
     const requestVersion = ++mutationRequestVersionRef.current;
     const snapshotId = savedRefreshSnapshot.id;
     try {
-      await api(`/api/budget-ladders/${encodeURIComponent(savedRefreshSnapshot.id)}`, { method: "DELETE", headers: { "X-Share-Owner-Token": savedRefreshSnapshot.ownerToken }, retry: 0, signal: controller.signal });
+      await api(`/api/budget-ladders/${encodeURIComponent(savedRefreshSnapshot.id)}`, { method: "DELETE", ...ownerRequestOptions("budget-ladder", savedRefreshSnapshot.id, savedRefreshSnapshot), retry: 0, signal: controller.signal });
       if (!mountedRef.current || mutationRequestVersionRef.current !== requestVersion || controller.signal.aborted) return;
+      removeOwnerSessionResource("budget-ladder", snapshotId);
       setSavedRefreshSnapshot(null);
       onBudgetLadderShareRevoked(snapshotId);
       if (mountedRef.current) onToast("현재 결과의 공유 링크를 취소했어요.");

@@ -13,7 +13,8 @@ const mocks = vi.hoisted(() => ({
   upsertAccessories: vi.fn(),
   patchCatalogPrices: vi.fn(),
   patchAccessoryPrices: vi.fn(),
-  appendChanges: vi.fn()
+  appendChanges: vi.fn(),
+  withPostgresTransaction: vi.fn()
 }));
 
 vi.mock("./catalog", () => ({ loadCatalog: async () => mocks.parts, upsertCatalog: mocks.upsertCatalog, patchCatalogPrices: mocks.patchCatalogPrices }));
@@ -23,6 +24,7 @@ vi.mock("./catalog-change-log", () => ({
   appendCatalogChangeRecords: mocks.appendChanges,
   catalogChangeRecord: (kind: string, before: unknown, after: unknown, changedFields: string[]) => ({ kind, before, after, changedFields })
 }));
+vi.mock("./repository", () => ({ withPostgresTransaction: (...args: unknown[]) => mocks.withPostgresTransaction(...args) }));
 
 const part = (id: string, overrides: Partial<Part> = {}): Part => ({
   id, category: "cpu", name: `CPU ${id}`, source: "danawa", sourceProductCode: id,
@@ -40,9 +42,11 @@ const accessory = (id: string, overrides: Partial<AccessoryItem> = {}): Accessor
 describe("price refresh service", () => {
   let directory = "";
   let service: typeof import("./price-refresh");
+  let previousDatabaseUrl: string | undefined;
 
   beforeEach(async () => {
     vi.resetModules();
+    previousDatabaseUrl = process.env.DATABASE_URL;
     directory = await mkdtemp(join(tmpdir(), "pc-supporter-price-refresh-"));
     process.env.PC_SUPPORTER_DATA_DIR = directory;
     mocks.parts = [];
@@ -60,10 +64,13 @@ describe("price refresh service", () => {
       return before ? [{ before, after: { ...before, priceWon: patch.priceWon, priceCheckedAt: patch.priceCheckedAt } }] : [];
     }));
     mocks.appendChanges.mockReset().mockResolvedValue([]);
+    mocks.withPostgresTransaction.mockReset();
     service = await import("./price-refresh");
   });
 
   afterEach(async () => {
+    if (previousDatabaseUrl === undefined) delete process.env.DATABASE_URL;
+    else process.env.DATABASE_URL = previousDatabaseUrl;
     delete process.env.PC_SUPPORTER_DATA_DIR;
     await rm(directory, { recursive: true, force: true });
   });
@@ -155,5 +162,35 @@ describe("price refresh service", () => {
     await service.runPriceRefreshJob({ coreLimit: 1, accessoryLimit: 0, delayMs: 0 });
 
     expect(mocks.refreshPart).toHaveBeenLastCalledWith(expect.objectContaining({ id: "unattempted" }), expect.any(Object));
+  });
+
+  it("loads and writes last-attempt state through PostgreSQL without JSON fallback", async () => {
+    process.env.DATABASE_URL = "postgres://synthetic.test/pc_supporter";
+    const queries: Array<{ sql: string; values?: unknown[] }> = [];
+    mocks.parts = [part("already-tried"), part("new-candidate")];
+    mocks.refreshPart.mockImplementation(async (item: Part, options: { onPriceObserved?: (price: number | undefined) => void }) => {
+      options.onPriceObserved?.(115_000);
+      return { ...item, priceWon: 115_000 };
+    });
+    mocks.withPostgresTransaction.mockImplementation(async (_operation: string, callback: (client: { query: (sql: string, values?: unknown[]) => Promise<{ rows: unknown[]; rowCount: number }> }) => Promise<unknown>) => {
+      const client = {
+        async query(sql: string, values?: unknown[]) {
+          queries.push({ sql: sql.replace(/\s+/g, " ").trim(), values });
+          if (sql.includes("SELECT item_kind, item_id, attempted_at")) {
+            return { rows: [{ item_kind: "part", item_id: "already-tried", attempted_at: "2026-09-28T00:00:00.000Z" }], rowCount: 1 };
+          }
+          return { rows: [], rowCount: 1 };
+        }
+      };
+      return callback(client);
+    });
+
+    await service.runPriceRefreshJob({ coreLimit: 1, accessoryLimit: 0, delayMs: 0, persistStatus: false });
+    expect(mocks.refreshPart).toHaveBeenCalledTimes(1);
+    expect(mocks.refreshPart).toHaveBeenCalledWith(expect.objectContaining({ id: "new-candidate" }), expect.any(Object));
+    expect(queries.some(({ sql }) => sql === "SELECT item_kind, item_id, attempted_at FROM price_refresh_attempts")).toBe(true);
+    expect(queries.some(({ sql }) => sql.includes("INSERT INTO price_refresh_attempts"))).toBe(true);
+    expect(queries.find(({ sql }) => sql.includes("UNNEST"))?.values).toEqual([["part"], ["new-candidate"], [expect.any(String)]]);
+    await expect(import("node:fs/promises").then(({ readFile }) => readFile(join(directory, "price-refresh-attempts.json"), "utf8"))).rejects.toThrow();
   });
 });

@@ -1,4 +1,5 @@
 import type { BenchmarkAvailabilityFilter, BenchmarkSourceCoverage, CatalogBenchmarkCoverage, BrandCountOption, DataFreshness, DataQuality, ListingPolicy, Part, PartCategory, PriceAvailabilityFilter, ServiceMeta } from "../shared/types";
+import type { CatalogSnapshot } from "./catalog-snapshot";
 import { catalogCategoryIntegritySummaryFor, catalogCategoryMismatchFor } from "../shared/catalog-category-integrity";
 import { catalogSpecCoverageFor } from "../shared/catalog-spec-coverage";
 import { isKnownPrice, PART_CATEGORIES } from "../shared/types";
@@ -16,7 +17,7 @@ import {
   writeJson,
   withSerializedFileMutation
 } from "./storage";
-import { patchCatalogPriceRecords, persistenceMode, readCatalogRecords, writeCatalogRecords } from "./repository";
+import { patchCatalogPriceRecords, persistenceMode, readCatalogOverrideMapUpdatedAtRecords, readCatalogRecords, writeCatalogRecords } from "./repository";
 import { inferListingType, isListingAllowed } from "./listing";
 import { accessoryMeta, loadAccessories, readAccessoryCoverage } from "./accessories";
 import { reparseDanawaPart } from "./danawa";
@@ -48,6 +49,8 @@ let catalogMetaCache: {
   accessories: Awaited<ReturnType<typeof loadAccessories>>;
   accessoryCoverageMtime: string;
   catalogSpecCoverageValidUntil: number;
+  catalogUpdatedAt: string;
+  accessoryUpdatedAt: string;
   value: CatalogMeta;
 } | null = null;
 let catalogMetaInFlight: Promise<CatalogMeta> | null = null;
@@ -751,39 +754,68 @@ export function catalogEligibilitySummaryFor(catalog: Part[]): CatalogEligibilit
 }
 
 export async function catalogUpdatedAtFor(catalog: Part[]) {
-  if (catalogUpdatedAtCache?.catalog === catalog) return catalogUpdatedAtCache.value;
-  const value = [
-    catalog.reduce((latest, part) => part.updatedAt > latest ? part.updatedAt : latest, ""),
-    ...(await Promise.all([
+  const mode = await persistenceMode();
+  if (mode === "file" && catalogUpdatedAtCache?.catalog === catalog) return catalogUpdatedAtCache.value;
+  const movedOverrideTimes = mode === "postgres"
+    ? Object.values(await readCatalogOverrideMapUpdatedAtRecords())
+    : [];
+  const fileBackedTimes = await Promise.all([
+    ...(mode === "file" ? [
       fileUpdatedAt(CATALOG_PATH, ""),
       fileUpdatedAt(M2_SLOT_OVERRIDES_PATH, ""),
-      fileUpdatedAt(BENCHMARK_OVERRIDES_PATH, ""),
-      fileUpdatedAt(GPU_PHYSICAL_OVERRIDES_PATH, ""),
-      fileUpdatedAt(CASE_RGB_LOAD_OVERRIDES_PATH, ""),
       fileUpdatedAt(CATALOG_SPEC_OVERRIDES_PATH, "")
-    ]))
+    ] : []),
+    fileUpdatedAt(BENCHMARK_OVERRIDES_PATH, ""),
+    fileUpdatedAt(GPU_PHYSICAL_OVERRIDES_PATH, ""),
+    fileUpdatedAt(CASE_RGB_LOAD_OVERRIDES_PATH, "")
+  ]);
+  // Benchmark, GPU physical, and case RGB overrides remain file-backed; only
+  // catalog-spec and M.2 override timestamps move with their shared DB rows.
+  const value = [
+    catalog.reduce((latest, part) => part.updatedAt > latest ? part.updatedAt : latest, ""),
+    ...fileBackedTimes,
+    ...movedOverrideTimes
   ].filter(Boolean).sort().at(-1) ?? new Date().toISOString();
   catalogUpdatedAtCache = { catalog, value };
   return value;
 }
 
-async function buildCatalogMeta(): Promise<CatalogMeta> {
+async function buildCatalogMeta(snapshot?: CatalogSnapshot): Promise<CatalogMeta> {
   const now = Date.now();
-  const [catalog, accessories, accessoryCoverageMtime] = await Promise.all([
-    loadCatalog(),
-    loadAccessories(),
-    fileUpdatedAt(ACCESSORY_COVERAGE_PATH, "")
-  ]);
+  let catalog: Part[];
+  let accessories: Awaited<ReturnType<typeof loadAccessories>>;
+  let accessoryCoverageMtime: string;
+  if (snapshot) {
+    catalog = snapshot.catalog;
+    accessories = snapshot.accessories;
+    accessoryCoverageMtime = await fileUpdatedAt(ACCESSORY_COVERAGE_PATH, "");
+  } else {
+    [catalog, accessories, accessoryCoverageMtime] = await Promise.all([
+      loadCatalog(),
+      loadAccessories(),
+      fileUpdatedAt(ACCESSORY_COVERAGE_PATH, "")
+    ]);
+  }
   if (catalogMetaCache
     && catalogMetaCache.catalog === catalog
     && catalogMetaCache.accessories === accessories
     && catalogMetaCache.accessoryCoverageMtime === accessoryCoverageMtime
+    && (!snapshot || (catalogMetaCache.catalogUpdatedAt === snapshot.catalogUpdatedAt && catalogMetaCache.accessoryUpdatedAt === snapshot.accessoryUpdatedAt))
     && now < catalogMetaCache.catalogSpecCoverageValidUntil) {
     return catalogMetaCache.value;
   }
 
-  const { accessoryCount, accessoryCategoryCounts, accessoryBrandCounts, accessoryCategoryQualityCounts, accessoryQualityCounts, accessoryPriceCoverage, accessoryUpdatedAt } = await accessoryMeta();
-  const accessoryCoverage = await readAccessoryCoverage();
+  const accessoryMetadata = await accessoryMeta(accessories, snapshot?.accessoryUpdatedAt);
+  const {
+    accessoryCount,
+    accessoryCategoryCounts,
+    accessoryBrandCounts,
+    accessoryCategoryQualityCounts,
+    accessoryQualityCounts,
+    accessoryPriceCoverage,
+    accessoryUpdatedAt
+  } = accessoryMetadata;
+  const accessoryCoverage = await readAccessoryCoverage(accessories);
   const eligibility = catalogEligibilitySummaryFor(catalog);
   const catalogPartsByCategory = new Map<PartCategory, Part[]>(PART_CATEGORIES.map((category) => [category, []]));
   for (const part of catalog) catalogPartsByCategory.get(part.category)?.push(part);
@@ -801,7 +833,7 @@ async function buildCatalogMeta(): Promise<CatalogMeta> {
   const qualityCounts = Object.fromEntries(
     ["seed", "live", "manual", "incomplete"].map((quality) => [quality, catalog.filter((part) => part.dataQuality === quality).length])
   ) as Record<DataQuality, number>;
-  const catalogUpdatedAt = await catalogUpdatedAtFor(catalog);
+  const catalogUpdatedAt = snapshot?.catalogUpdatedAt ?? await catalogUpdatedAtFor(catalog);
   const value: CatalogMeta = {
     catalogCount: catalog.length,
     catalogEligibleCount: eligibility.eligibleCount,
@@ -828,11 +860,22 @@ async function buildCatalogMeta(): Promise<CatalogMeta> {
     },
     catalogUpdatedAt
   };
-  catalogMetaCache = { catalog, accessories, accessoryCoverageMtime, catalogSpecCoverageValidUntil, value };
+  catalogMetaCache = {
+    catalog,
+    accessories,
+    accessoryCoverageMtime,
+    catalogSpecCoverageValidUntil,
+    catalogUpdatedAt,
+    accessoryUpdatedAt,
+    value
+  };
   return value;
 }
 
-export async function catalogMeta(): Promise<CatalogMeta> {
+export async function catalogMeta(snapshot?: CatalogSnapshot): Promise<CatalogMeta> {
+  // Request-owned snapshots must keep their own freshness and metadata result.
+  // Only legacy callers without a captured snapshot may share in-flight work.
+  if (snapshot) return buildCatalogMeta(snapshot);
   if (catalogMetaInFlight) return catalogMetaInFlight;
   const promise = buildCatalogMeta();
   catalogMetaInFlight = promise;

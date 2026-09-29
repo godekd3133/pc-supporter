@@ -1,8 +1,8 @@
 import { USAGE_EVENTS_PATH, readJson, withSerializedFileMutation, writeJson } from "./storage";
+import { incrementUsageEventInDatabase, persistenceMode, readUsageEventDailyCountsFromDatabase } from "./repository";
 
 // Phase 0 최소 사용량 카운터: 익명·집계 전용 (개인 식별자/페이로드 없음).
-// 파일 기반 단일 카운터 — PostgreSQL 모드에서도 같은 파일을 사용한다.
-// 분석 품질보다 측정 가능성이 목적이므로 손실을 감수하고 저장 계약을 단순하게 유지한다.
+// 저장 위치는 서비스의 선택된 persistence mode를 따른다.
 
 export const USAGE_EVENT_NAMES = ["app_open", "check", "recommend", "save", "share"] as const;
 export type UsageEventName = (typeof USAGE_EVENT_NAMES)[number];
@@ -21,6 +21,11 @@ function dayKeyFor(date: Date) {
 
 export async function recordUsageEvent(name: UsageEventName, at: Date = new Date()) {
   const day = dayKeyFor(at);
+  if (await persistenceMode() === "postgres") {
+    await incrementUsageEventInDatabase(day, name, MAX_DAILY_BUCKETS);
+    return;
+  }
+
   await withSerializedFileMutation(USAGE_EVENTS_PATH, async () => {
     const store = await readJson<UsageEventStore>(USAGE_EVENTS_PATH, { schemaVersion: 1, daily: {} });
     const daily = store.daily && typeof store.daily === "object" ? store.daily : {};
@@ -42,14 +47,20 @@ export function trackUsageEvent(name: UsageEventName) {
 }
 
 export async function usageEventSummaryFor() {
-  const store = await readJson<UsageEventStore>(USAGE_EVENTS_PATH, { schemaVersion: 1, daily: {} });
-  const daily = store.daily && typeof store.daily === "object" ? store.daily : {};
+  const storageMode = await persistenceMode();
+  let dailyCounts: UsageEventStore["daily"];
+  if (storageMode === "postgres") {
+    dailyCounts = await readUsageEventDailyCountsFromDatabase();
+  } else {
+    const store = await readJson<UsageEventStore>(USAGE_EVENTS_PATH, { schemaVersion: 1, daily: {} });
+    dailyCounts = store.daily && typeof store.daily === "object" ? store.daily : {};
+  }
   const totals: Partial<Record<UsageEventName, number>> = {};
-  for (const bucket of Object.values(daily)) {
+  for (const bucket of Object.values(dailyCounts)) {
     for (const name of USAGE_EVENT_NAMES) {
       const value = bucket[name];
       if (typeof value === "number" && Number.isFinite(value)) totals[name] = (totals[name] ?? 0) + value;
     }
   }
-  return { retentionDays: USAGE_EVENT_RETENTION_DAYS, days: Object.keys(daily).length, totals, daily };
+  return { retentionDays: USAGE_EVENT_RETENTION_DAYS, days: Object.keys(dailyCounts).length, totals, daily: dailyCounts };
 }

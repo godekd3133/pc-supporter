@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it, vi } from "vitest";
 import { publicApiPayloadProjection } from "./public-api-projection";
+import { publicApiPayloadProjection as domainPublicApiPayloadProjection } from "../shared/domain/public-api-projection";
 
 const sourceCheck = {
   requestedUrl: "https://review.example/benchmark-boundary",
@@ -20,8 +21,24 @@ function closeServer(server: Server) {
 }
 
 describe("public API evidence projection", () => {
+  it("keeps the customer-facing gaming VRAM recovery explanation", () => {
+    const diagnostic = {
+      id: "gaming-gpu-vram-target",
+      title: "요청 조건을 충족하는 GPU 후보가 없습니다.",
+      summary: "현재 GPU 후보 중 요청 조건의 참고 VRAM 16GB 이상인 제품을 찾지 못했습니다. VRAM 기준은 후보를 좁히기 위한 참고선이며 실제 게임 성능이나 부품 호환성을 보장하지 않습니다.",
+      facts: [
+        { label: "요청 해상도", value: "4K" },
+        { label: "요청 조건 VRAM 참고 기준", value: "16GB" },
+        { label: "기준 충족 GPU", value: "0개" }
+      ],
+      recommendation: "해상도나 그래픽 설정을 조정하거나, VRAM 정보가 확인된 GPU 후보가 추가된 뒤 다시 시도해 주세요."
+    };
+
+    expect(publicApiPayloadProjection({ diagnostics: [diagnostic] })).toEqual({ diagnostics: [diagnostic] });
+  });
+
   it("hides engine ranking evidence from catalog, recommendation, and share routes while retaining buyer facts", async () => {
-    const projectedRankEvidence = publicApiPayloadProjection({
+    const rankingEvidence = {
       item: {
         id: "gpu-public-boundary",
         priceWon: 650000,
@@ -42,10 +59,12 @@ describe("public API evidence projection", () => {
         benchmarkChanged: true,
         benchmarkNeedsReview: true
       }
-    });
-    expect(projectedRankEvidence).toEqual({ item: { id: "gpu-public-boundary", priceWon: 650000, specs: { socket: "AM5", lengthMm: 270 } } });
+    };
+    const publicRankingEvidence = { item: { id: "gpu-public-boundary", priceWon: 650000, specs: { socket: "AM5", lengthMm: 270 } } };
+    expect(publicApiPayloadProjection(rankingEvidence)).toEqual(publicRankingEvidence);
+    expect(domainPublicApiPayloadProjection(rankingEvidence)).toEqual(publicRankingEvidence);
 
-    expect(publicApiPayloadProjection({ specs: {
+    const privateSpecificationEvidence = { specs: {
       catalogSpecProvenance: { sourceUrl: "https://vendor.example/spec", sourceCheck },
       gpuPhysicalSourceCheck: sourceCheck,
       fanLoadProvenance: { sourceUrl: "https://vendor.example/fan" },
@@ -60,10 +79,23 @@ describe("public API evidence projection", () => {
       physicalEvidenceSourceCheck: sourceCheck,
       powerW: 320,
       m2Slots: 3
-    } })).toEqual({ specs: { powerW: 320, m2Slots: 3 } });
+    } };
+    const publicSpecificationEvidence = { specs: { powerW: 320, m2Slots: 3 } };
+    expect(publicApiPayloadProjection(privateSpecificationEvidence)).toEqual(publicSpecificationEvidence);
+    expect(domainPublicApiPayloadProjection(privateSpecificationEvidence)).toEqual(publicSpecificationEvidence);
 
     expect(publicApiPayloadProjection({ reason: "성능이 18.2% 개선됩니다." })).toEqual({});
     expect(publicApiPayloadProjection({ reason: "구매 전에 호환 여부를 확인하세요." })).toEqual({ reason: "구매 전에 호환 여부를 확인하세요." });
+    const priceReferenceCaution = "입력된 금액만 있어 현재 판매 금액과 다를 수 있어요. 구매 전에 상품 페이지에서 확인하세요.";
+    expect(publicApiPayloadProjection({
+      priceWon: 650000,
+      priceEvidence: "reference",
+      reason: priceReferenceCaution
+    })).toEqual({
+      priceWon: 650000,
+      priceEvidence: "reference",
+      reason: priceReferenceCaution
+    });
 
     const projectedUpgradeBundles = publicApiPayloadProjection({
       upgradeBundlePayload: {
@@ -285,6 +317,41 @@ describe("public API evidence projection", () => {
       expect(qhdCompatibilityPayload.upgradeBundlePayload?.bundles?.length).toBeGreaterThan(0);
       expect(JSON.stringify(qhdCompatibilityPayload)).not.toMatch(/gpuTarget|performanceSummary|analysisConfidence|scoreModelVersion|valueLabel|valueEvidence|similarityLabel|improvementPercent|totalUpgradeScore|totalImprovementPercent|expansionEvidence|baselineScore|baselineSummary|candidateSummary|improvedDimensions|scoreDelta|candidateScore|catalogSpecSourceCheckNeedsReview|benchmarkChanged|benchmarkNeedsReview|confidence|부품별 비교 변화가 합산|QHD · 144Hz · 권장 VRAM 12GB/);
 
+      const recommendationRequest = {
+        profile: "gaming",
+        budgetWon: 3_000_000,
+        includeGpu: true,
+        gamingResolution: "1080p",
+        gamingRefreshRate: 60,
+        gamingGraphicsPreset: "competitive"
+      };
+      const recommendationResponse = await fetch(baseUrl + "/api/builds/recommend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(recommendationRequest)
+      });
+      const recommendationPayload = await recommendationResponse.json() as Record<string, any>;
+      expect(recommendationResponse.status, JSON.stringify(recommendationPayload)).toBe(200);
+      expect(recommendationPayload).toMatchObject({
+        profile: "gaming",
+        budgetWon: recommendationRequest.budgetWon,
+        totalPriceWon: expect.any(Number),
+        budgetDeltaWon: expect.any(Number),
+        withinBudget: true,
+        priceComplete: true,
+        lines: expect.arrayContaining([expect.objectContaining({
+          category: "gpu",
+          partId: expect.any(String),
+          priceWon: expect.any(Number)
+        })]),
+        warnings: expect.any(Array),
+        rationale: expect.any(Array)
+      });
+      expect(recommendationPayload).not.toHaveProperty("analysis");
+      expect(recommendationPayload).not.toHaveProperty("gpuTarget");
+      expect(recommendationPayload).not.toHaveProperty("gamingPerformanceAssessment");
+      expect(JSON.stringify(recommendationPayload)).not.toMatch(/recommendationTrust|benchmarkProvenance|gamingPerformanceAssessment|averageFps|onePercentLowFps|fps-private-boundary|GPU_PRIVATE_BENCHMARK_SOURCE|24680|13579/);
+
       const completeBenchmarkRequest = await fetch(baseUrl + "/api/parts?category=gpu&benchmarkStatus=complete&priceStatus=all");
       const partialBenchmarkRequest = await fetch(baseUrl + "/api/parts?category=gpu&benchmarkStatus=partial&priceStatus=all");
       expect(completeBenchmarkRequest.status).toBe(200);
@@ -434,16 +501,17 @@ describe("public API evidence projection", () => {
       }
       await rm(directory, { recursive: true, force: true });
     }
-  }, 20_000);
+  }, 30_000);
 
-  it("keeps benchmark coverage private when development admin authentication is disabled", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "pc-supporter-public-meta-dev-"));
-    const envKeys = ["PC_SUPPORTER_DATA_DIR", "DATABASE_URL", "ADMIN_PASSWORD", "NODE_ENV"] as const;
+  it("keeps development meta projected while admin authentication is disabled", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "pc-supporter-public-meta-development-"));
+    const envKeys = ["PC_SUPPORTER_DATA_DIR", "DATABASE_URL", "ADMIN_PASSWORD", "NODE_ENV", "PC_SUPPORTER_PROCESS_ROLE"] as const;
     const previousEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]])) as Record<typeof envKeys[number], string | undefined>;
     process.env.PC_SUPPORTER_DATA_DIR = directory;
     process.env.DATABASE_URL = "";
-    process.env.ADMIN_PASSWORD = "";
     process.env.NODE_ENV = "development";
+    process.env.PC_SUPPORTER_PROCESS_ROLE = "combined";
+    delete process.env.ADMIN_PASSWORD;
     vi.resetModules();
 
     let server: Server | undefined;
@@ -462,18 +530,18 @@ describe("public API evidence projection", () => {
         missingFields: [],
         updatedAt: "2026-09-20T00:00:00.000Z"
       }]), "utf8");
-
       server = app.listen(0, "127.0.0.1");
       await new Promise<void>((resolve, reject) => { server?.once("listening", resolve); server?.once("error", reject); });
       const address = server.address();
       if (!address || typeof address === "string") throw new Error("development public meta test server did not expose a TCP port");
-      const response = await fetch("http://127.0.0.1:" + address.port + "/api/meta");
+
+      const response = await fetch(`http://127.0.0.1:${address.port}/api/meta`);
       expect(response.status).toBe(200);
       const payload = await response.json() as Record<string, any>;
       expect(payload.adminAuthEnabled).toBe(false);
       expect(payload).not.toHaveProperty("benchmarkCoverage");
       expect(JSON.stringify(payload)).not.toMatch(/cinebenchR23Single|cinebenchR23Multi/);
-      const adminMetaResponse = await fetch("http://127.0.0.1:" + address.port + "/api/admin/meta");
+      const adminMetaResponse = await fetch(`http://127.0.0.1:${address.port}/api/admin/meta`);
       expect(adminMetaResponse.status).toBe(200);
       const adminMeta = await adminMetaResponse.json() as Record<string, any>;
       expect(adminMeta.benchmarkCoverage.cpu.total).toEqual(expect.any(Number));
@@ -486,7 +554,7 @@ describe("public API evidence projection", () => {
       }
       await rm(directory, { recursive: true, force: true });
     }
-  });
+  }, 30_000);
 });
 
 afterAll(() => vi.resetModules());

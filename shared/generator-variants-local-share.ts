@@ -5,6 +5,7 @@ export interface GeneratorVariantsLocalShareEntry {
   createdAt: string;
   expiresAt?: string;
   ownerToken?: string;
+  owned?: boolean;
 }
 
 export const GENERATOR_VARIANTS_LOCAL_SHARES_STORAGE_KEY = "pc-supporter-generator-variants-shares";
@@ -35,9 +36,10 @@ function normalizeEntry(value: unknown): GeneratorVariantsLocalShareEntry | unde
   if (!id || !url || !name || !createdAt || !Number.isFinite(Date.parse(createdAt))) return undefined;
   const expiresAt = candidate.expiresAt === undefined ? undefined : textValue(candidate.expiresAt, 80);
   if (expiresAt !== undefined && !Number.isFinite(Date.parse(expiresAt))) return undefined;
-  const ownerToken = candidate.ownerToken === undefined ? undefined : textValue(candidate.ownerToken, 500);
-  if (candidate.ownerToken !== undefined && !ownerToken) return undefined;
-  return { id, url, name, createdAt: new Date(createdAt).toISOString(), ...(expiresAt ? { expiresAt: new Date(expiresAt).toISOString() } : {}), ...(ownerToken ? { ownerToken } : {}) };
+  const owned = candidate.owned === true;
+  const ownerToken = owned || candidate.ownerToken === undefined ? undefined : textValue(candidate.ownerToken, 500);
+  if (!owned && candidate.ownerToken !== undefined && !ownerToken) return undefined;
+  return { id, url, name, createdAt: new Date(createdAt).toISOString(), ...(expiresAt ? { expiresAt: new Date(expiresAt).toISOString() } : {}), ...(owned ? { owned: true } : {}), ...(ownerToken ? { ownerToken } : {}) };
 }
 
 function uniqueEntries(entries: GeneratorVariantsLocalShareEntry[]) {
@@ -60,7 +62,11 @@ export function generatorVariantsLocalSharesFromJson(raw: string | null | undefi
 }
 
 export function generatorVariantsLocalSharesToJson(entries: GeneratorVariantsLocalShareEntry[]) {
-  return JSON.stringify(uniqueEntries(entries).slice(0, MAX_LOCAL_SHARES));
+  return JSON.stringify(uniqueEntries(entries).slice(0, MAX_LOCAL_SHARES).map((entry) => {
+    if (!entry.owned || !entry.ownerToken) return entry;
+    const { ownerToken: _ownerToken, ...metadata } = entry;
+    return metadata;
+  }));
 }
 
 export function generatorVariantsLocalShareRemember(entries: GeneratorVariantsLocalShareEntry[], entry: GeneratorVariantsLocalShareEntry) {

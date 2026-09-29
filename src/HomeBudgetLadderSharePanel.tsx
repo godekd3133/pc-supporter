@@ -5,6 +5,7 @@ import type { BudgetLadderLocalShareEntry } from "../shared/budget-ladder-local-
 import type { BudgetLadderShareSnapshot } from "../shared/budget-ladder-share";
 import { budgetLadderShareHealthFromHttp, budgetLadderShareHealthLabel, budgetLadderShareHealthTone, type BudgetLadderShareHealthStatus } from "../shared/budget-ladder-share-health";
 import { ApiError, api } from "./api";
+import { ownerCredentialAvailable, ownerRequestOptions, removeOwnerSessionResource } from "./owner-session";
 import { HomeBudgetLadderRevokeDialog } from "./HomeBudgetLadderRevokeDialog";
 
 export function HomeBudgetLadderSharePanel({ entries, onCopy, onRemove, onToast }: { entries: BudgetLadderLocalShareEntry[]; onCopy: (entry: BudgetLadderLocalShareEntry) => void; onRemove: (id: string) => void; onToast: (message: string) => void }) {
@@ -72,14 +73,15 @@ export function HomeBudgetLadderSharePanel({ entries, onCopy, onRemove, onToast 
 
   async function confirmRevoke() {
     const entry = pendingRevoke;
-    if (!entry?.ownerToken || revokingId) return;
+    if (!entry || revokingId || !ownerCredentialAvailable("budget-ladder", entry.id, entry)) return;
     const requestVersion = ++mutationRequestVersionRef.current;
     const requestContextKey = mutationContextKey;
     const isCurrent = () => mountedRef.current && mutationRequestVersionRef.current === requestVersion && mutationContextKeyRef.current === requestContextKey;
     setRevokingId(entry.id);
     try {
-      await api(`/api/budget-ladders/${encodeURIComponent(entry.id)}`, { method: "DELETE", headers: { "X-Share-Owner-Token": entry.ownerToken }, retry: 0 });
+      await api(`/api/budget-ladders/${encodeURIComponent(entry.id)}`, { method: "DELETE", ...ownerRequestOptions("budget-ladder", entry.id, entry), retry: 0 });
       if (!isCurrent()) return;
+      removeOwnerSessionResource("budget-ladder", entry.id);
       onRemove(entry.id);
       setPendingRevoke(null);
       onToast("공유 저장본을 서버에서 취소했고, 이 브라우저 이력에서도 제거했어요.");
@@ -100,7 +102,7 @@ export function HomeBudgetLadderSharePanel({ entries, onCopy, onRemove, onToast 
         const serverStatus = serverHealthById[entry.id]?.status ?? "unknown";
         const statusLabel = budgetLadderShareHealthLabel(serverStatus, localExpired);
         const statusTone = budgetLadderShareHealthTone(serverStatus, localExpired);
-        const canRevoke = Boolean(entry.ownerToken) && serverStatus !== "expired" && serverStatus !== "revoked";
+        const canRevoke = ownerCredentialAvailable("budget-ladder", entry.id, entry) && serverStatus !== "expired" && serverStatus !== "revoked";
         const checkedAt = serverHealthById[entry.id]?.checkedAt;
         const catalogChanged = serverHealthById[entry.id]?.catalogChangedSinceShare === true;
         return <article className={`home-budget-ladder-share ${statusTone === "expired" ? "expired" : catalogChanged ? "catalog-changed" : "active"}`} key={entry.id}>

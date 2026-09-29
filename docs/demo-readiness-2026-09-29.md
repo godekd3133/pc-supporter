@@ -94,7 +94,7 @@ Danawa 공개 목록을 대조한 결과 10개 범주에서 3,463개 고유 코�
 
 2026-09-29 최종 카탈로그 사본을 사용한 격리 preview에서 기능 검수를 끝냈습니다. 이번 변경 후 브라우저 smoke 124개 흐름, 온보딩 데스크톱·모바일, 선택 이유, 예산 ladder, 호환 예시 견적을 통과했습니다. 호환 예시 견적은 결과 상태 0/0/0을 확인했습니다. 예산이 목표와 맞지 않는 조합은 초과 가격으로 최종 draft를 내지 않고 사용자가 조건을 조정하도록 진단을 보여 줍니다. 이전 preview는 loopback `http://127.0.0.1:5201/`, API `127.0.0.1:4213`이었습니다. 이번 변경을 포함한 현재 bundle preview는 `http://127.0.0.1:5206/`, API `127.0.0.1:4219`에서 `/api/health` 200, `storageMode=file`, 관리자 인증 활성화, 코어 5,648개·주변 부품 3,874개를 반환합니다. manifest 상태는 `partial`입니다.
 
-`npm run build`는 고객용 공개 projection `dist/catalog-data/`와 정적 웹 경로 밖의 원본 sidecar `dist-local/data/`를 모두 생성합니다. 공개 projection에는 관리자 provenance/source-check가 노출되지 않고, 두 manifest 모두 현재 `partial`입니다.
+`npm run build:local-bundle`는 고객용 공개 projection `dist/catalog-data/`와 정적 웹 경로 밖의 원본 sidecar `dist-local/data/`를 생성합니다. 기본 `npm run build`는 원격·파일 모드 웹 번들만 생성합니다. 공개 projection에는 관리자 provenance/source-check가 노출되지 않고, 두 manifest 모두 현재 `partial`입니다.
 
 현재 빌드의 고객 흐름을 다시 재생했습니다. QHD·144Hz 목표는 300만원 예산과 최종 요약에서도 유지됩니다. `QHD 게이밍 220만원` preset에서 재생성한 결과는 2,171,160원이고 예산 잔액은 28,840원입니다. 결과 상태는 `정보 부족`이며 세부 호환 검사는 CPU 전력·메인보드 전원부 용량 데이터 1개를 확인하도록 표시합니다. 화면의 경고를 확인한 뒤 견적 저장·공유는 실행하지 않았습니다.
 

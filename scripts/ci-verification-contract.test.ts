@@ -234,7 +234,9 @@ describe("CI verification contracts", () => {
     expect(dockerfile).toContain("/api/health");
     expect(compose).toContain("image: postgres:16-alpine");
     expect(compose).toContain("condition: service_healthy");
-    expect(compose).toContain("DATABASE_URL: postgresql://pcsupporter:pcsupporter@postgres:5432/pcsupporter");
+    expect(compose).toContain("POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD");
+    expect(compose).toContain("DATABASE_URL: postgresql://pcsupporter:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD");
+    expect(compose).toContain('127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432');
     expect(compose).toContain("APP_HOST_PORT:-4174");
     expect(compose).toContain("pg_isready -U pcsupporter -d pcsupporter");
     expect(workflow).toContain("docker compose up --build --detach");

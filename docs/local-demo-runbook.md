@@ -4,15 +4,15 @@
 
 현재 로컬 시연 데이터는 코어 5,648개(필수 사양 확인 4,060개), 주변 부품 3,874개(`live` 3,587, 미완료 245, seed 42)입니다. 주변 부품 정규화 사양 프로파일은 완전 2,700개, 부분 297개, 미평가 877개입니다. 가격은 관찰 당시 참고값이고 코어 5,629개, 주변 부품 3,866개에 숫자 값이 있습니다. 케이스와 GPU의 필수 사양은 각각 3.6%, 43.1%에서만 확인됐습니다. 시연 전에 `/api/meta`를 확인해 실행 중 데이터의 범위와 카탈로그 기준 시점을 다시 읽습니다.
 
-## 1. 프로덕션 번들 만들기
+## 1. 로컬 시연 번들 만들기
 
 저장소 루트에서 실행합니다.
 
 ```sh
-npm run build
+npm run build:local-bundle
 ```
 
-로컬 카탈로그 파일이 있으면 빌드가 데이터도 함께 준비합니다. 공개 API와 같은 projection을 적용한 코어·주변 부품 JSON과 manifest는 `dist/catalog-data/`에 저장합니다. 서버가 사용하는 원본 catalog/accessory snapshot, override, 수집 목록 manifest는 정적 웹 경로 밖인 `dist-local/data/`에 sidecar로 저장합니다. 공개 projection은 정적 파일로 제공될 수 있으므로 현재 공개 API에서 허용하는 고객용 필드만 포함하고, 원본 sidecar는 Git ignore 대상입니다. 로컬 JSON이 없는 깨끗한 checkout에서는 웹 빌드만 진행하고 카탈로그 빌드는 생략합니다.
+기본 `npm run build`는 원격·파일 모드 웹 번들만 생성합니다. 명시적 `build:local-bundle`은 공개 API와 같은 projection을 적용한 코어·주변 부품 JSON과 manifest를 `dist/catalog-data/`에 저장하고, 서버가 사용하는 원본 catalog/accessory snapshot, override, 수집 목록 manifest를 정적 웹 경로 밖인 `dist-local/data/` sidecar에 저장합니다. 공개 projection은 정적 파일로 제공될 수 있으므로 현재 공개 API에서 허용하는 고객용 필드만 포함하고, 원본 sidecar는 Git ignore 대상입니다. 로컬 JSON이 없는 깨끗한 checkout에서는 로컬 카탈로그 패키징이 생략됩니다.
 
 패키징된 로컬 sidecar를 바로 쓰려면 `npm run preview:local-bundle`을 실행합니다. 이 명령은 `dist-local/data/`를 API의 `PC_SUPPORTER_DATA_DIR`로 사용하고 PostgreSQL·자동 수집·자동 갱신을 끈 뒤 웹과 API를 loopback에서 함께 시작합니다. manifest 상태가 `partial`이면 빌드 화면의 데이터가 아직 불완전하다는 뜻입니다.
 

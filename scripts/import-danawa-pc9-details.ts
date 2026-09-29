@@ -8,6 +8,7 @@ import { mergeCatalog } from "../server/catalog";
 import { parseDanawaProductPage, type DanawaListItem } from "../server/danawa";
 import { isListingAllowed, inferListingType } from "../server/listing";
 import { readCatalogRecords, writeCatalogRecords } from "../server/repository";
+import { withCatalogIngestionLease } from "../server/catalog-ingestion-coordinator";
 import { BENCHMARK_OVERRIDES_PATH, DATA_DIR, readJson, writeJson } from "../server/storage";
 
 type EnumeratedProduct = {
@@ -600,7 +601,9 @@ async function main() {
   if (blocked) process.exitCode = 1;
 }
 
-main().catch((error) => {
+const run = apply ? withCatalogIngestionLease(() => main()) : main();
+
+run.catch((error) => {
   console.error(error instanceof Error ? error.message : String(error));
   process.exitCode = 1;
 });
