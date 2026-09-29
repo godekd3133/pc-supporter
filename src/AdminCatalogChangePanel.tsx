@@ -1,3 +1,4 @@
+import { safeLocalStorage } from "./safe-storage";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import { FiCheckCircle, FiClock, FiDownload, FiInfo, FiLoader, FiRefreshCw, FiSearch, FiServer, FiTrash2, FiXCircle } from "react-icons/fi";
@@ -65,8 +66,8 @@ export function CatalogChangeHistoryPanel({ records, loading, error, historyLimi
   const [kindFilter, setKindFilter] = useState<CatalogChangeKindFilter>("all");
   const [changeFilter, setChangeFilter] = useState<CatalogChangeFilter>("all");
   const [selectedChangeId, setSelectedChangeId] = useState<string | null>(null);
-  const [watchEntries, setWatchEntries] = useState<CatalogWatchEntry[]>(() => typeof window === "undefined" ? [] : catalogWatchlistFromJson(window.localStorage.getItem(CATALOG_WATCHLIST_STORAGE_KEY)));
-  const [watchThreshold, setWatchThreshold] = useState<CatalogWatchThreshold>(() => typeof window === "undefined" ? 10 : catalogWatchThresholdFromStorage(window.localStorage.getItem(CATALOG_WATCH_THRESHOLD_STORAGE_KEY)));
+  const [watchEntries, setWatchEntries] = useState<CatalogWatchEntry[]>(() => typeof window === "undefined" ? [] : catalogWatchlistFromJson(safeLocalStorage.getItem(CATALOG_WATCHLIST_STORAGE_KEY)));
+  const [watchThreshold, setWatchThreshold] = useState<CatalogWatchThreshold>(() => typeof window === "undefined" ? 10 : catalogWatchThresholdFromStorage(safeLocalStorage.getItem(CATALOG_WATCH_THRESHOLD_STORAGE_KEY)));
   const [shareLinkUrl, setShareLinkUrl] = useState<string | null>(null);
   const [shareLinkTruncatedCount, setShareLinkTruncatedCount] = useState(0);
   const [watchlistName, setWatchlistName] = useState("내 관심 가격 목록");
@@ -105,8 +106,8 @@ export function CatalogChangeHistoryPanel({ records, loading, error, historyLimi
       setSavedWatchlistExpiresAt(null);
     }
   }, [revokingWatchlist, savingWatchlist, serverMutationContextKey]);
-  useEffect(() => { window.localStorage.setItem(CATALOG_WATCHLIST_STORAGE_KEY, catalogWatchlistToJson(watchEntries)); }, [watchEntries]);
-  useEffect(() => { window.localStorage.setItem(CATALOG_WATCH_THRESHOLD_STORAGE_KEY, String(watchThreshold)); }, [watchThreshold]);
+  useEffect(() => { safeLocalStorage.setItem(CATALOG_WATCHLIST_STORAGE_KEY, catalogWatchlistToJson(watchEntries)); }, [watchEntries]);
+  useEffect(() => { safeLocalStorage.setItem(CATALOG_WATCH_THRESHOLD_STORAGE_KEY, String(watchThreshold)); }, [watchThreshold]);
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
       if (event.key === CATALOG_WATCHLIST_STORAGE_KEY) {

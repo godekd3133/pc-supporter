@@ -1,4 +1,5 @@
-import { Fragment, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from "react";
+import { getLocalStorageHealth, safeLocalStorage, safeSessionStorage, subscribeLocalStorageHealth } from "./safe-storage";
+import { Fragment, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ComponentType } from "react";
 import type { IconType } from "react-icons";
 import {
   FiActivity,
@@ -198,6 +199,8 @@ import type { AlternativeComparisonSnapshot } from "../shared/alternative-compar
 import type { SavedBuildVersionComparisonShareSnapshot } from "../shared/saved-build-version-share";
 import { ApiError, api, apiStatusDetailsSnapshot, subscribeApiStatus } from "./api";
 import type { ApiStatusDetails } from "./api";
+import { LOCAL_OFFLINE_BUILD } from "./offline/build-mode";
+import "./offline/offline.css";
 import type { CatalogRefreshProgress } from "./AppHeader";
 import { useModalAccessibility } from "./use-modal-accessibility";
 import { RetryAfterButton } from "./RetryAfterButton";
@@ -510,7 +513,7 @@ const RULE_GUIDES: Record<string, string> = {
 
 function readRecommendationPreferences(): RecommendationPreferences {
   try {
-    const raw = window.localStorage.getItem("pc-supporter-recommendation-preferences");
+    const raw = safeLocalStorage.getItem("pc-supporter-recommendation-preferences");
     if (!raw) return DEFAULT_RECOMMENDATION_PREFERENCES;
     const value = JSON.parse(raw) as Partial<RecommendationPreferences>;
     const priority = value.priority === "budget" || value.priority === "performance" || value.priority === "reliability" ? value.priority : "balanced";
@@ -546,7 +549,7 @@ const INVALID_BUILD_DRAFT_BACKUP_MAX_BYTES = 512_000;
 
 function readBuildDraftStorageRaw() {
   try {
-    return window.localStorage.getItem(BUILD_DRAFT_STORAGE_KEY);
+    return safeLocalStorage.getItem(BUILD_DRAFT_STORAGE_KEY);
   } catch {
     return null;
   }
@@ -619,7 +622,7 @@ function compatibilityReportViewStateForLocation(): CompatibilityReportViewState
 
 function readLastCompatibilityResult(): CompatibilityResult | null {
   try {
-    const raw = window.sessionStorage.getItem("pc-supporter-last-compatibility-result");
+    const raw = safeSessionStorage.getItem("pc-supporter-last-compatibility-result");
     return raw ? JSON.parse(raw) as CompatibilityResult : null;
   } catch {
     return null;
@@ -628,7 +631,7 @@ function readLastCompatibilityResult(): CompatibilityResult | null {
 
 function readLastCompatibilityInputFingerprint() {
   try {
-    return window.sessionStorage.getItem("pc-supporter-last-compatibility-input");
+    return safeSessionStorage.getItem("pc-supporter-last-compatibility-input");
   } catch {
     return null;
   }
@@ -636,7 +639,7 @@ function readLastCompatibilityInputFingerprint() {
 
 function readBuildHistory(): BuildHistoryEntry[] {
   try {
-    const raw = window.sessionStorage.getItem("pc-supporter-build-history");
+    const raw = safeSessionStorage.getItem("pc-supporter-build-history");
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
@@ -661,7 +664,7 @@ function readBuildHistory(): BuildHistoryEntry[] {
 
 function readLocalSavedWatchlistLinks(): SavedWatchlistLink[] {
   try {
-    return savedWatchlistLinksFromJson(window.localStorage.getItem(SAVED_WATCHLIST_LINK_STORAGE_KEY));
+    return savedWatchlistLinksFromJson(safeLocalStorage.getItem(SAVED_WATCHLIST_LINK_STORAGE_KEY));
   } catch {
     return [];
   }
@@ -703,7 +706,7 @@ const WATCHLIST_ALERT_KIND_LABELS: Record<HomeAlertItem["kind"], string> = {
 
 function readSavedWatchlistOwnerTokens() {
   try {
-    const raw = window.localStorage.getItem(SAVED_WATCHLIST_OWNER_TOKENS_STORAGE_KEY);
+    const raw = safeLocalStorage.getItem(SAVED_WATCHLIST_OWNER_TOKENS_STORAGE_KEY);
     const parsed: unknown = raw ? JSON.parse(raw) : {};
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {} as Record<string, string>;
     const entries = Object.entries(parsed);
@@ -716,7 +719,7 @@ function readSavedWatchlistOwnerTokens() {
 
 function writeSavedWatchlistOwnerTokens(tokens: Record<string, string>) {
   try {
-    window.localStorage.setItem(SAVED_WATCHLIST_OWNER_TOKENS_STORAGE_KEY, JSON.stringify(Object.fromEntries(Object.entries(tokens).slice(0, LOCAL_SAVED_STATE_LIMIT))));
+    safeLocalStorage.setItem(SAVED_WATCHLIST_OWNER_TOKENS_STORAGE_KEY, JSON.stringify(Object.fromEntries(Object.entries(tokens).slice(0, LOCAL_SAVED_STATE_LIMIT))));
   } catch {
     // A full local storage bucket must not prevent price tracking from working.
   }
@@ -733,7 +736,7 @@ function readSavedWatchlistOwnerToken(id: string) {
 
 function readSavedWatchlistLink() {
   try {
-    const raw = window.localStorage.getItem(SAVED_WATCHLIST_LINK_STORAGE_KEY);
+    const raw = safeLocalStorage.getItem(SAVED_WATCHLIST_LINK_STORAGE_KEY);
     const parsed: unknown = raw ? JSON.parse(raw) : undefined;
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
     const candidate = parsed as Partial<SavedWatchlistLinkState>;
@@ -745,8 +748,8 @@ function readSavedWatchlistLink() {
 
 function writeSavedWatchlistLink(link: SavedWatchlistLinkState | null) {
   try {
-    if (link) window.localStorage.setItem(SAVED_WATCHLIST_LINK_STORAGE_KEY, JSON.stringify(link));
-    else window.localStorage.removeItem(SAVED_WATCHLIST_LINK_STORAGE_KEY);
+    if (link) safeLocalStorage.setItem(SAVED_WATCHLIST_LINK_STORAGE_KEY, JSON.stringify(link));
+    else safeLocalStorage.removeItem(SAVED_WATCHLIST_LINK_STORAGE_KEY);
   } catch {
     // A full local storage bucket must not prevent price tracking from working.
   }
@@ -803,7 +806,12 @@ function forgetSavedBuild(id: string) {
 }
 
 function App() {
-  const initialDraftLoad = parseBuildDraftStorage(readBuildDraftStorageRaw());
+  const localOfflineMode = LOCAL_OFFLINE_BUILD;
+  const [initialDraftLoad] = useState(() => parseBuildDraftStorage(readBuildDraftStorageRaw()));
+  const localStorageHealth = useSyncExternalStore(subscribeLocalStorageHealth, getLocalStorageHealth, getLocalStorageHealth);
+  const [draftOverwriteBlocked, setDraftOverwriteBlocked] = useState(initialDraftLoad.status === "recovered");
+  const [draftOverwriteRaw, setDraftOverwriteRaw] = useState<string | null>(null);
+  const [draftOverwriteExported, setDraftOverwriteExported] = useState(false);
   const [view, setView] = useState<View>(currentView);
   const [locationKey, setLocationKey] = useState(() => `${window.location.pathname}${window.location.search}${window.location.hash}`);
   const [networkOnline, setNetworkOnline] = useState(() => typeof navigator === "undefined" ? true : navigator.onLine);
@@ -815,11 +823,11 @@ function App() {
   const [accessoryItems, setAccessoryItems] = useState<AccessoryItem[]>([]);
   const [meta, setMeta] = useState<ServiceMeta | null>(null);
   const [savedBuilds, setSavedBuilds] = useState<SavedBuild[]>([]);
-  const [savedBuildMonitorAlerts, setSavedBuildMonitorAlerts] = useState<SavedBuildMonitorAlert[]>(() => savedBuildMonitorAlertsFromJson(window.localStorage.getItem(SAVED_BUILD_MONITOR_ALERTS_STORAGE_KEY)));
+  const [savedBuildMonitorAlerts, setSavedBuildMonitorAlerts] = useState<SavedBuildMonitorAlert[]>(() => savedBuildMonitorAlertsFromJson(safeLocalStorage.getItem(SAVED_BUILD_MONITOR_ALERTS_STORAGE_KEY)));
   const [watchlistAlertBundles, setWatchlistAlertBundles] = useState<WatchlistAlertBundle[]>([]);
   const watchlistAlertSyncVersionRef = useRef(0);
   const [browserNotificationPermission, setBrowserNotificationPermission] = useState<BrowserNotificationPermission>(currentBrowserNotificationPermission);
-  const [browserNotificationEnabled, setBrowserNotificationEnabled] = useState(() => browserNotificationEnabledFromStorage(window.localStorage.getItem(BROWSER_NOTIFICATION_ENABLED_STORAGE_KEY)));
+  const [browserNotificationEnabled, setBrowserNotificationEnabled] = useState(() => browserNotificationEnabledFromStorage(safeLocalStorage.getItem(BROWSER_NOTIFICATION_ENABLED_STORAGE_KEY)));
   const [picker, setPicker] = useState<PickerState | null>(null);
   const [checking, setChecking] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -829,9 +837,9 @@ function App() {
   const [generatorError, setGeneratorError] = useState<string | null>(null);
   const [generatorDiagnostics, setGeneratorDiagnostics] = useState<BuildGenerationDiagnostic[]>([]);
   const [generatorRecoveryOptions, setGeneratorRecoveryOptions] = useState<BuildGenerationRecoveryOption[]>([]);
-  const [budgetLadderShares, setBudgetLadderShares] = useState<BudgetLadderLocalShareEntry[]>(() => budgetLadderLocalSharesFromJson(window.localStorage.getItem(BUDGET_LADDER_LOCAL_SHARES_STORAGE_KEY)));
-  const [alternativeComparisonShares, setAlternativeComparisonShares] = useState<AlternativeComparisonLocalShareEntry[]>(() => alternativeComparisonLocalSharesFromJson(window.localStorage.getItem(ALTERNATIVE_COMPARISON_LOCAL_SHARES_STORAGE_KEY)));
-  const [savedBuildVersionShares, setSavedBuildVersionShares] = useState<SavedBuildVersionLocalShareEntry[]>(() => savedBuildVersionLocalSharesFromJson(window.localStorage.getItem(SAVED_BUILD_VERSION_LOCAL_SHARES_STORAGE_KEY)));
+  const [budgetLadderShares, setBudgetLadderShares] = useState<BudgetLadderLocalShareEntry[]>(() => budgetLadderLocalSharesFromJson(safeLocalStorage.getItem(BUDGET_LADDER_LOCAL_SHARES_STORAGE_KEY)));
+  const [alternativeComparisonShares, setAlternativeComparisonShares] = useState<AlternativeComparisonLocalShareEntry[]>(() => alternativeComparisonLocalSharesFromJson(safeLocalStorage.getItem(ALTERNATIVE_COMPARISON_LOCAL_SHARES_STORAGE_KEY)));
+  const [savedBuildVersionShares, setSavedBuildVersionShares] = useState<SavedBuildVersionLocalShareEntry[]>(() => savedBuildVersionLocalSharesFromJson(safeLocalStorage.getItem(SAVED_BUILD_VERSION_LOCAL_SHARES_STORAGE_KEY)));
   const localShareMutationContextRef = useRef(0);
   const [toast, setToast] = useState<string | null>(null);
   const [draftRecovery, setDraftRecovery] = useState<BuildDraftLoadResult | null>(() => initialDraftLoad.status === "recovered" ? initialDraftLoad : null);
@@ -887,6 +895,7 @@ function App() {
   const partsRequestRef = useRef(0);
   const metaRefreshRequestRef = useRef(0);
   const savedBuildsRequestRef = useRef(0);
+  const historySavedBuildRefreshRouteSequenceRef = useRef<number | null>(null);
   const skipNextHistoryRef = useRef(false);
   const historySequenceRef = useRef(0);
   const checkRequestSequenceRef = useRef(0);
@@ -906,7 +915,7 @@ function App() {
   const openingSavedBuildIdRef = useRef<string | null>(null);
   const openingSavedBuildRequestRef = useRef(0);
   const savedBuildServerAlertSyncVersionRef = useRef(0);
-  const deliveredBrowserNotificationIdsRef = useRef(new Set(browserNotificationIdsFromJson(window.localStorage.getItem(BROWSER_NOTIFICATION_DELIVERED_STORAGE_KEY))));
+  const deliveredBrowserNotificationIdsRef = useRef(new Set(browserNotificationIdsFromJson(safeLocalStorage.getItem(BROWSER_NOTIFICATION_DELIVERED_STORAGE_KEY))));
 
   const partMap = useMemo(() => new Map(parts.map((part) => [part.id, part])), [parts]);
   const accessoryMap = useMemo(() => new Map(accessoryItems.map((item) => [item.id, item])), [accessoryItems]);
@@ -962,15 +971,15 @@ function App() {
   useEffect(() => subscribeApiStatus(setApiStatusDetails), []);
 
   useEffect(() => {
-    trackUsageEvent("app_open");
-  }, []);
+    if (!localOfflineMode) trackUsageEvent("app_open");
+  }, [localOfflineMode]);
 
   useEffect(() => {
     if (view !== "editor" || new URLSearchParams(window.location.search).get("entry") !== "shared-generator") return;
     let raw: string | null = null;
     try {
-      raw = window.sessionStorage.getItem(GENERATOR_VARIANTS_DRAFT_TRANSFER_KEY);
-      if (raw) window.sessionStorage.removeItem(GENERATOR_VARIANTS_DRAFT_TRANSFER_KEY);
+      raw = safeSessionStorage.getItem(GENERATOR_VARIANTS_DRAFT_TRANSFER_KEY);
+      if (raw) safeSessionStorage.removeItem(GENERATOR_VARIANTS_DRAFT_TRANSFER_KEY);
     } catch {
       setToast("공유된 현재 결과를 편집기로 가져오지 못했습니다.");
       return;
@@ -1038,22 +1047,33 @@ function App() {
   useEffect(() => {
     if (!draftRecovery) return;
     let backupSaved = false;
+    let raw: string | null = null;
     try {
-      const raw = readBuildDraftStorageRaw();
+      raw = readBuildDraftStorageRaw();
       if (raw && raw.length <= INVALID_BUILD_DRAFT_BACKUP_MAX_BYTES) {
-        window.localStorage.setItem(INVALID_BUILD_DRAFT_BACKUP_STORAGE_KEY, JSON.stringify({ savedAt: new Date().toISOString(), errors: draftRecovery.errors, raw }));
-        backupSaved = true;
+        const backup = JSON.stringify({ savedAt: new Date().toISOString(), errors: draftRecovery.errors, raw });
+        safeLocalStorage.setItem(INVALID_BUILD_DRAFT_BACKUP_STORAGE_KEY, backup);
+        backupSaved = getLocalStorageHealth().persistence === "persistent" && safeLocalStorage.getItem(INVALID_BUILD_DRAFT_BACKUP_STORAGE_KEY) === backup;
       }
     } catch {
-      // A broken or full local storage bucket must not prevent safe recovery.
+      // The original draft remains untouched when it cannot be backed up.
     }
-    setToast(backupSaved ? "저장된 견적 형식을 읽지 못해 안전한 빈 견적으로 복구했습니다. 기존 값은 브라우저 백업에 보관했습니다." : "저장된 견적 형식을 읽지 못해 안전한 빈 견적으로 복구했습니다.");
+    if (backupSaved) {
+      setDraftOverwriteBlocked(false);
+      setDraftOverwriteRaw(null);
+      setToast("저장된 견적 형식을 읽지 못해 빈 견적으로 복구했습니다. 이전 내용은 브라우저 백업에 보관했습니다.");
+    } else {
+      setDraftOverwriteBlocked(true);
+      setDraftOverwriteRaw(raw);
+      setDraftOverwriteExported(false);
+      setToast("저장된 견적을 읽지 못했습니다. 이전 내용을 내보내기 전까지 자동 저장을 멈췄습니다.");
+    }
     setDraftRecovery(null);
   }, [draftRecovery]);
 
   useEffect(() => {
     try {
-      window.localStorage.setItem(SAVED_BUILD_MONITOR_ALERTS_STORAGE_KEY, savedBuildMonitorAlertsToJson(savedBuildMonitorAlerts));
+      safeLocalStorage.setItem(SAVED_BUILD_MONITOR_ALERTS_STORAGE_KEY, savedBuildMonitorAlertsToJson(savedBuildMonitorAlerts));
     } catch {
       // A full local storage bucket must not prevent the rest of the service from working.
     }
@@ -1069,7 +1089,7 @@ function App() {
 
   useEffect(() => {
     try {
-      window.localStorage.setItem(BUDGET_LADDER_LOCAL_SHARES_STORAGE_KEY, budgetLadderLocalSharesToJson(budgetLadderShares));
+      safeLocalStorage.setItem(BUDGET_LADDER_LOCAL_SHARES_STORAGE_KEY, budgetLadderLocalSharesToJson(budgetLadderShares));
     } catch {
       // A full local storage bucket must not prevent the rest of the service from working.
     }
@@ -1088,7 +1108,7 @@ function App() {
 
   useEffect(() => {
     try {
-      window.localStorage.setItem(ALTERNATIVE_COMPARISON_LOCAL_SHARES_STORAGE_KEY, alternativeComparisonLocalSharesToJson(alternativeComparisonShares));
+      safeLocalStorage.setItem(ALTERNATIVE_COMPARISON_LOCAL_SHARES_STORAGE_KEY, alternativeComparisonLocalSharesToJson(alternativeComparisonShares));
     } catch {
       // A full local storage bucket must not prevent the comparison workflow from working.
     }
@@ -1107,7 +1127,7 @@ function App() {
 
   useEffect(() => {
     try {
-      window.localStorage.setItem(SAVED_BUILD_VERSION_LOCAL_SHARES_STORAGE_KEY, savedBuildVersionLocalSharesToJson(savedBuildVersionShares));
+      safeLocalStorage.setItem(SAVED_BUILD_VERSION_LOCAL_SHARES_STORAGE_KEY, savedBuildVersionLocalSharesToJson(savedBuildVersionShares));
     } catch {
       // A full local storage bucket must not prevent the version comparison workflow from working.
     }
@@ -1126,7 +1146,7 @@ function App() {
 
   useEffect(() => {
     try {
-      window.localStorage.setItem(BROWSER_NOTIFICATION_ENABLED_STORAGE_KEY, String(browserNotificationEnabled));
+      safeLocalStorage.setItem(BROWSER_NOTIFICATION_ENABLED_STORAGE_KEY, String(browserNotificationEnabled));
     } catch {
       // Browser notification preference is optional and must not block the service.
     }
@@ -1191,7 +1211,7 @@ function App() {
       delivered.clear();
       nextDelivered.forEach((id) => delivered.add(id));
       try {
-        window.localStorage.setItem(BROWSER_NOTIFICATION_DELIVERED_STORAGE_KEY, browserNotificationIdsToJson(nextDelivered));
+        safeLocalStorage.setItem(BROWSER_NOTIFICATION_DELIVERED_STORAGE_KEY, browserNotificationIdsToJson(nextDelivered));
       } catch {
         // Delivery ledger persistence is best effort.
       }
@@ -1444,7 +1464,7 @@ function App() {
     if (!requestedResource || requestedResource === "meta") {
       tasks.push(loadResource("meta", "견적 기준", api<ServiceMeta>("/api/meta"), setMeta));
     }
-    if (!requestedResource || requestedResource === "savedBuilds") {
+    if (!localOfflineMode && (!requestedResource || requestedResource === "savedBuilds")) {
       tasks.push(loadResource("savedBuilds", "저장 견적", loadSavedBuildsForBrowser(), (payload) => {
         writeSavedBuildIds(payload.items.map((item) => item.id));
         setSavedBuilds(payload.items);
@@ -1454,7 +1474,16 @@ function App() {
       if (!cancelled) setBootstrapLoading(false);
     });
     return () => { cancelled = true; };
-  }, [bootstrapRetryRequest]);
+  }, [bootstrapRetryRequest, localOfflineMode]);
+
+  useEffect(() => {
+    const routeSequence = routeRequestSequenceRef.current;
+    if (localOfflineMode || view !== "history" || routeSequence === 0 || historySavedBuildRefreshRouteSequenceRef.current === routeSequence) return;
+    historySavedBuildRefreshRouteSequenceRef.current = routeSequence;
+    void refreshSavedBuildsForBrowser().catch(() => {
+      // Keep the last visible history if the service is temporarily unavailable.
+    });
+  }, [localOfflineMode, locationKey, view]);
 
   useEffect(() => {
     const hydrationController = new AbortController();
@@ -1503,23 +1532,24 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (draftOverwriteBlocked) return;
     try {
-      window.localStorage.setItem(BUILD_DRAFT_STORAGE_KEY, JSON.stringify(build));
+      safeLocalStorage.setItem(BUILD_DRAFT_STORAGE_KEY, JSON.stringify(build));
     } catch {
       // Draft persistence is best effort; a blocked or full storage bucket must not stop the editor.
     }
-  }, [build]);
+  }, [build, draftOverwriteBlocked]);
 
   useEffect(() => {
-    window.localStorage.setItem("pc-supporter-recommendation-preferences", JSON.stringify(recommendationPreferences));
+    safeLocalStorage.setItem("pc-supporter-recommendation-preferences", JSON.stringify(recommendationPreferences));
   }, [recommendationPreferences]);
 
   useEffect(() => {
     try {
-      if (result) window.sessionStorage.setItem("pc-supporter-last-compatibility-result", JSON.stringify(result));
-      else window.sessionStorage.removeItem("pc-supporter-last-compatibility-result");
-      if (result && checkedInputFingerprint) window.sessionStorage.setItem("pc-supporter-last-compatibility-input", checkedInputFingerprint);
-      else window.sessionStorage.removeItem("pc-supporter-last-compatibility-input");
+      if (result) safeSessionStorage.setItem("pc-supporter-last-compatibility-result", JSON.stringify(result));
+      else safeSessionStorage.removeItem("pc-supporter-last-compatibility-result");
+      if (result && checkedInputFingerprint) safeSessionStorage.setItem("pc-supporter-last-compatibility-input", checkedInputFingerprint);
+      else safeSessionStorage.removeItem("pc-supporter-last-compatibility-input");
     } catch {
       // A full session storage bucket must not prevent the editor from working.
     }
@@ -1527,8 +1557,8 @@ function App() {
 
   useEffect(() => {
     try {
-      if (changeHistory.length > 0) window.sessionStorage.setItem("pc-supporter-build-history", JSON.stringify(changeHistory));
-      else window.sessionStorage.removeItem("pc-supporter-build-history");
+      if (changeHistory.length > 0) safeSessionStorage.setItem("pc-supporter-build-history", JSON.stringify(changeHistory));
+      else safeSessionStorage.removeItem("pc-supporter-build-history");
     } catch {
       // A full session storage bucket must not prevent the editor from working.
     }
@@ -1767,9 +1797,9 @@ function App() {
 
   function importSavedWatchlist(saved: SavedCatalogWatchlist) {
     try {
-      const current = catalogWatchlistFromJson(window.localStorage.getItem(CATALOG_WATCHLIST_STORAGE_KEY));
-      window.localStorage.setItem(CATALOG_WATCHLIST_STORAGE_KEY, catalogWatchlistToJson(mergeCatalogWatchEntries(current, saved.entries)));
-      window.localStorage.setItem(CATALOG_WATCH_THRESHOLD_STORAGE_KEY, String(saved.nearLowThresholdPercent));
+      const current = catalogWatchlistFromJson(safeLocalStorage.getItem(CATALOG_WATCHLIST_STORAGE_KEY));
+      safeLocalStorage.setItem(CATALOG_WATCHLIST_STORAGE_KEY, catalogWatchlistToJson(mergeCatalogWatchEntries(current, saved.entries)));
+      safeLocalStorage.setItem(CATALOG_WATCH_THRESHOLD_STORAGE_KEY, String(saved.nearLowThresholdPercent));
       setToast(`${saved.entries.length}개 저장 관심 가격 항목을 내 목록에 병합했습니다.`);
       navigate("/admin", "admin");
     } catch {
@@ -2315,6 +2345,12 @@ function App() {
       if (!isCurrent()) return;
       setGeneratorBudgetLadder(results);
       if (isCurrent() && results.every((scenario) => !scenario.draft)) setToast("세 예산 구간에서 모두 자동 구성을 만들지 못했습니다.");
+    } catch (error: unknown) {
+      if (!isCurrent()) return;
+      const message = error instanceof Error ? error.message : "예산 구간별 자동 구성을 만들지 못했습니다.";
+      setGeneratorError(message);
+      setGeneratorDiagnostics(diagnosticsFromError(error));
+      setGeneratorRecoveryOptions(recoveryOptionsFromError(error));
     } finally {
       if (isCurrent()) setGenerating(false);
     }
@@ -2397,6 +2433,32 @@ function App() {
   async function saveGeneratedDraft(draft: BuildGenerationResult, origin?: SavedBuildOrigin) {
     const { generatedDraftSaveTargetFor } = await import("./generated-draft-save-target");
     requestSaveBuild(generatedDraftSaveTargetFor(draft, shareId && shareOwnerToken ? shareId : undefined, origin));
+  }
+
+  function exportDamagedBuildDraft() {
+    if (!draftOverwriteRaw) return;
+    const blob = new Blob([draftOverwriteRaw], { type: "application/json;charset=utf-8" });
+    const url = window.URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `pc-supporter-unreadable-draft-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.URL.revokeObjectURL(url);
+    setDraftOverwriteExported(true);
+    setToast("읽을 수 없는 이전 견적 원본을 JSON 파일로 내보냈습니다.");
+  }
+
+  function continueAfterDamagedDraftExport() {
+    if (!draftOverwriteExported) {
+      setToast("새 견적을 저장하기 전에 이전 견적 원본을 먼저 내보내 주세요.");
+      return;
+    }
+    setDraftOverwriteBlocked(false);
+    setDraftOverwriteRaw(null);
+    setDraftOverwriteExported(false);
+    setToast("원본을 내보냈습니다. 새 견적 저장을 시작합니다.");
   }
 
   function exportBuildDraft() {
@@ -2487,7 +2549,7 @@ function App() {
       invalidateSavedBuildReads();
       setSavedBuilds((current) => current.map((item) => item.id === updated.id ? updated : item));
       try {
-        window.localStorage.setItem(SAVED_BUILD_METADATA_SYNC_STORAGE_KEY, JSON.stringify({ id: updated.id, updatedAt: updated.updatedAt, nonce: Date.now() }));
+        safeLocalStorage.setItem(SAVED_BUILD_METADATA_SYNC_STORAGE_KEY, JSON.stringify({ id: updated.id, updatedAt: updated.updatedAt, nonce: Date.now() }));
       } catch {
         // Cross-tab metadata refresh is best effort and must not block the successful edit.
       }
@@ -2520,15 +2582,22 @@ function App() {
         ...(parentOwnerToken ? { headers: { "X-Share-Owner-Token": parentOwnerToken } } : {}),
         body: JSON.stringify({ name, selection: targetBuild, recommendationPreferences: targetPreferences, expiresInDays: saveExpiryDays === "never" ? undefined : saveExpiryDays, ...(decisionNote ? { decisionNote } : {}), ...(saveOrigin ? { origin: saveOrigin } : {}), ...(refreshReport ? { catalogRefreshReport: refreshReport } : {}), ...(parentOwnerToken && target?.parentBuildId ? { parentBuildId: target.parentBuildId } : {}) })
       });
-      if (!isCurrent()) return;
+      rememberSavedBuildId(saved.id);
+      rememberSavedBuildOwnerToken(saved.id, saved.ownerToken);
       invalidateSavedBuildReads();
+      if (!isCurrent()) {
+        if (currentView() === "history") {
+          void refreshSavedBuildsForBrowser().catch(() => {
+            // The saved identifiers and owner credential are already durable; History can retry.
+          });
+        }
+        return;
+      }
       setShareId(saved.id);
       setShareExpiresAt(saved.expiresAt ?? null);
       setCurrentBuildOrigin(saved.origin ?? null);
-      rememberSavedBuildOwnerToken(saved.id, saved.ownerToken);
       setShareOwnerToken(saved.ownerToken);
       if (saved.recoveryCode) setRecoveryCodeNotice({ code: saved.recoveryCode, buildName: name });
-      rememberSavedBuildId(saved.id);
       const { ownerToken: _ownerToken, recoveryCode: _recoveryCode, ...publicSaved } = saved;
       setSavedBuilds((current) => [publicSaved, ...current.filter((item) => item.id !== saved.id)].slice(0, 20));
       setSavedCheckHistory(saved.checkHistory ?? (saved.checkSnapshot ? [saved.checkSnapshot] : null));
@@ -3061,7 +3130,7 @@ function App() {
 
   function isCatalogWatchEntryWatched(target: Pick<CatalogWatchEntry, "kind" | "itemId">) {
     try {
-      return catalogWatchlistContains(catalogWatchlistFromJson(window.localStorage.getItem(CATALOG_WATCHLIST_STORAGE_KEY)), target);
+      return catalogWatchlistContains(catalogWatchlistFromJson(safeLocalStorage.getItem(CATALOG_WATCHLIST_STORAGE_KEY)), target);
     } catch {
       return false;
     }
@@ -3073,14 +3142,14 @@ function App() {
         setToast("목표가는 1원 이상의 숫자로 입력해 주세요.");
         return false;
       }
-      const current = catalogWatchlistFromJson(window.localStorage.getItem(CATALOG_WATCHLIST_STORAGE_KEY));
+      const current = catalogWatchlistFromJson(safeLocalStorage.getItem(CATALOG_WATCHLIST_STORAGE_KEY));
       const alreadyWatched = catalogWatchlistContains(current, target);
       const next = addCatalogWatchEntry(current, {
         ...target,
         addedAt: new Date().toISOString(),
         ...(targetPriceWon !== undefined ? { targetPriceWon } : {})
       });
-      window.localStorage.setItem(CATALOG_WATCHLIST_STORAGE_KEY, catalogWatchlistToJson(next));
+      safeLocalStorage.setItem(CATALOG_WATCHLIST_STORAGE_KEY, catalogWatchlistToJson(next));
       setToast(alreadyWatched
         ? (targetPriceWon !== undefined ? "가격 추적 중인 부품의 목표가를 갱신했습니다." : "이미 가격 추적 중인 부품입니다. 가격 추적 화면에서 목표가를 설정할 수 있습니다.")
         : "가격 추적에 등록했습니다. 가격 추적 화면에서 목표가와 알림 조건을 설정할 수 있습니다.");
@@ -3239,6 +3308,7 @@ function App() {
       result={result}
       resultIsStale={resultIsStale}
       partMap={partMap}
+      accessoryMap={accessoryMap}
       budgetLadderShares={budgetLadderShares}
       alternativeComparisonShares={alternativeComparisonShares}
       savedBuildVersionShares={savedBuildVersionShares}
@@ -3345,7 +3415,7 @@ function App() {
   ) : view === "accessories" ? (
     <Suspense fallback={<div className="accessory-page accessory-page-loading" role="status"><FiLoader className="spin" /> 주변 부품 카탈로그를 불러오는 중...</div>}><LazyAccessoryView meta={meta} accessoryItems={accessoryItems} selectedAccessories={accessorySelections(build)} onAddAccessory={(item) => void addAccessory(item)} onWatchAccessory={watchAccessory} isAccessoryWatched={accessoryIsWatched} onOpenWatchlist={() => navigate("/watchlist", "pricewatchlist")} onOpenBuild={() => navigate("/build", "editor")} onBack={() => navigate("/", "home")} onToast={setToast} formatWon={formatWon} AccessoryVisual={AccessoryVisual} /></Suspense>
   ) : view === "pricewatchlist" ? (
-    <Suspense fallback={<div className="shared-build-state"><FiLoader className="spin" /><span>가격 추적 화면을 불러오는 중...</span></div>}><PriceWatchlistView onBack={() => navigate("/", "home")} onToast={setToast} /></Suspense>
+    <Suspense fallback={<div className="shared-build-state"><FiLoader className="spin" /><span>가격 추적 화면을 불러오는 중...</span></div>}><PriceWatchlistView onBack={() => navigate("/", "home")} onToast={setToast} offlineMode={localOfflineMode} /></Suspense>
   ) : view === "budget" ? (
     <Suspense fallback={<div className="shared-budget-ladder-state"><FiLoader className="spin" /> 공유 예산 비교 화면을 불러오는 중...</div>}><LazySharedBudgetLadderView onBack={() => navigate("/", "home")} onToast={setToast} onApplyDraft={applyGeneratedDraft} onApplyMergedSelection={applyMergedGeneratedSelection} onPreviewMergedSelection={previewMergedGeneratedSelection} onBudgetLadderShareSaved={rememberBudgetLadderShare} onBudgetLadderShareRevoked={forgetBudgetLadderShare} /></Suspense>
   ) : view === "generator-variants" ? (
@@ -3362,6 +3432,12 @@ function App() {
       onMetaRefresh={refreshMeta}
       onToast={setToast}
     /></Suspense>
+  ) : view === "history" && localOfflineMode ? (
+    <section className="offline-history-unavailable" role="status" aria-label="로컬 저장 견적 안내">
+      <strong>저장한 견적은 이 설치판에서 열 수 없습니다.</strong>
+      <p>현재 편집 중인 견적은 이 기기에 자동 저장됩니다. 서버에 저장한 견적과 공유 기능은 원격 서비스가 필요합니다.</p>
+      <button className="button button-small button-primary" type="button" onClick={() => navigate("/build", "editor")}>현재 견적 보기</button>
+    </section>
   ) : view === "history" ? (
     <Suspense fallback={<div className="shared-build-state"><FiLoader className="spin" /><span>저장된 견적을 불러오는 중...</span></div>}><LazyHistoryView
       builds={savedBuilds}
@@ -3486,12 +3562,44 @@ function App() {
     />
   );
 
+  const localStorageNotice = localStorageHealth.persistence !== "persistent"
+    ? <section className="storage-health-notice" data-testid="storage-health-notice" role="status" aria-label="기기 저장 상태">
+        <strong>{localStorageHealth.reason === "quota" ? "브라우저 저장 공간이 부족합니다." : "브라우저 저장소를 사용할 수 없습니다."}</strong>
+        <span>현재 탭에서 변경사항을 계속 사용할 수 있지만, 탭이나 앱을 닫으면 이번 세션에서 바뀐 내용이 사라질 수 있습니다.</span>
+      </section>
+    : null;
+  const draftOverwriteNotice = draftOverwriteBlocked
+    ? <section className="draft-recovery-notice" data-testid="draft-recovery-notice" role="alert" aria-label="이전 견적 복구 안내">
+        <div><strong>이전 견적 원본을 안전하게 백업하지 못했습니다.</strong><span>원본을 덮어쓰지 않도록 자동 저장을 멈췄습니다. 먼저 원본 JSON을 내려받아 보관해 주세요.</span></div>
+        <div className="draft-recovery-actions">
+          <button className="button button-secondary" type="button" onClick={exportDamagedBuildDraft} disabled={!draftOverwriteRaw}>이전 견적 JSON 저장</button>
+          <button className="button button-light" type="button" onClick={continueAfterDamagedDraftExport} disabled={!draftOverwriteExported}>원본을 내보냈고 새 견적으로 계속</button>
+        </div>
+      </section>
+    : null;
   const BuildChangeDialog = buildChangeDialogComponent;
   return (
     <div className="app-shell" data-route-key={locationKey}>
       <a className="skip-to-content" href="#main-content">본문으로 건너뛰기</a>
       <Suspense fallback={<AppHeaderLoadingFallback />}><LazyAppHeader view={view} networkOnline={networkOnline} apiStatus={apiStatusDetails} bootstrapLoading={bootstrapLoading} bootstrapErrorCount={bootstrapIssues.length} savedBuildUnreadAlertCount={savedBuildUnreadAlertCount} watchlistUnreadAlertCount={watchlistUnreadAlertCount} catalogRefreshProgress={catalogRefreshProgress} onHome={() => navigate("/", "home")} onBuild={() => navigate("/build", "editor")} onGenerate={() => openGenerator()} onCatalog={() => navigate("/catalog", "catalog")} onAccessories={() => navigate("/accessories", "accessories")} onPriceWatchlist={() => navigate("/watchlist", "pricewatchlist")} onHistory={() => navigate("/history", "history")} /></Suspense>
-      <main className="page-container" id="main-content" tabIndex={-1}>{(incomingDraft || incomingPreferences) && <DraftSyncNotice build={incomingDraft ?? undefined} preferences={incomingPreferences ?? undefined} onApply={() => { skipNextHistoryRef.current = true; if (incomingDraft) setBuild(incomingDraft); if (incomingPreferences) setRecommendationPreferences(incomingPreferences); setResult(null); setCheckedInputFingerprint(null); setChangeHistory([]); setIncomingDraft(null); setIncomingPreferences(null); setToast("다른 탭에서 바뀐 견적을 불러왔어요. 호환 결과를 새로 확인해 주세요."); }} onDismiss={() => { setIncomingDraft(null); setIncomingPreferences(null); }} />}{(bootstrapIssues.length > 0 || !networkOnline || apiStatusDetails.status === "offline" || apiStatusDetails.status === "degraded") && <BootstrapNotice issues={bootstrapIssues} online={networkOnline} apiStatus={apiStatusDetails} onRetry={(resource) => setBootstrapRetryRequest((current) => ({ resource, nonce: current.nonce + 1 }))} onRetryAll={() => setBootstrapRetryRequest((current) => ({ resource: null, nonce: current.nonce + 1 }))} retryingResource={bootstrapLoading ? bootstrapRetryRequest.resource : null} retryingAll={bootstrapLoading && bootstrapRetryRequest.resource === null} />}<div className={`route-stage route-stage-${view}`} key={view}>{content}</div></main>
+      {localStorageNotice}
+      {draftOverwriteNotice}
+      <main className="page-container" id="main-content" tabIndex={-1}>{(incomingDraft || incomingPreferences) && <DraftSyncNotice build={incomingDraft ?? undefined} preferences={incomingPreferences ?? undefined} onApply={() => { skipNextHistoryRef.current = true; if (incomingDraft) setBuild(incomingDraft); if (incomingPreferences) setRecommendationPreferences(incomingPreferences); setResult(null); setCheckedInputFingerprint(null); setChangeHistory([]); setIncomingDraft(null); setIncomingPreferences(null); setToast("다른 탭에서 바뀐 견적을 불러왔어요. 호환 결과를 새로 확인해 주세요."); }} onDismiss={() => { setIncomingDraft(null); setIncomingPreferences(null); }} />}{localOfflineMode ? (
+        <section className="offline-local-mode-banner" role="status" aria-label="로컬 설치 모드 안내">
+          <div className="offline-local-mode-banner-header">
+            <strong>로컬 설치 모드</strong>
+            <div className="offline-local-mode-meta">
+              <span>{localStorageHealth.persistence === "persistent" ? "이 기기에 저장" : "이 세션에서만 유지"}</span>
+              {meta?.catalogUpdatedAt && <span>기준일 {new Date(meta.catalogUpdatedAt).toLocaleDateString("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit" })}</span>}
+            </div>
+          </div>
+          <p className="offline-local-mode-features">부품 탐색 · 견적 편집 · 호환 확인 · 자동 구성</p>
+          <details className="offline-local-mode-details">
+            <summary>지원 범위와 제한</summary>
+            <p>벤치마크·게임 FPS 데이터는 포함되지 않아 자동 구성은 설치된 부품 사양을 기준으로 합니다. 서버 저장·공유, 최신 가격 확인, 성능·출처 확인 필터, 관리자와 데이터 수집 기능은 사용할 수 없어요.</p>
+          </details>
+        </section>
+      ) : (bootstrapIssues.length > 0 || !networkOnline || apiStatusDetails.status === "offline" || apiStatusDetails.status === "degraded") ? <BootstrapNotice issues={bootstrapIssues} online={networkOnline} apiStatus={apiStatusDetails} onRetry={(resource) => setBootstrapRetryRequest((current) => ({ resource, nonce: current.nonce + 1 }))} onRetryAll={() => setBootstrapRetryRequest((current) => ({ resource: null, nonce: current.nonce + 1 }))} retryingResource={bootstrapLoading ? bootstrapRetryRequest.resource : null} retryingAll={bootstrapLoading && bootstrapRetryRequest.resource === null} /> : null}<div className={`route-stage route-stage-${view}`} key={view}>{content}</div></main>
       {candidateScenarioComparison && result && <Suspense fallback={<div className="modal-backdrop" role="presentation"><section className="candidate-scenario-dialog candidate-scenario-dialog-loading" role="dialog" aria-modal="true" aria-label="부품 미리 비교 불러오는 중"><FiLoader className="spin" /> 선택한 부품을 전체 구성에 적용하는 중...</section></div>}><LazyCandidateScenarioComparisonPanel state={candidateScenarioComparison} currentResult={result} onApply={applyCandidateScenario} onSave={saveCandidateScenario} onRetry={(itemId) => void retryCandidateScenario(itemId)} onClose={() => { scenarioRequestSequenceRef.current += 1; setCandidateScenarioComparison(null); }} onWatchPart={watchPart} onShareComparison={shareAlternativeComparison} onRevokeComparison={revokeAlternativeComparison} onToast={setToast} formatWon={formatWon} /></Suspense>}
       {picker && (
         <PartPicker

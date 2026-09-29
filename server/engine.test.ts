@@ -282,6 +282,14 @@ function positionedRadiatorFixture(coolerPosition: "front" | "top" | undefined, 
 }
 
 describe("compatibility engine", () => {
+  it("uses an injected clock for compatibility timestamps", () => {
+    const now = "2026-07-15T12:34:56.000Z";
+    const result = evaluateBuild(compatibleBuild(), seedCatalog, { now, includeSuggestions: false });
+
+    expect(result.checkedAt).toBe(now);
+    expect(result.catalogSnapshotAt).toBe(now);
+  });
+
   it("reuses request-scoped evaluations for the same candidate build", () => {
     const evaluationCache = new Map<string, ReturnType<typeof evaluateBuild>>();
     const build = compatibleBuild();
@@ -2338,8 +2346,10 @@ describe("compatibility engine", () => {
     const catalogWithUnprovenScore = seedCatalog.filter((part) => part.category !== "cpu").concat(proxyStrongCpu, benchmarkStrongCpu);
     const request = { profile: "creator" as const, priority: "performance" as const, budgetWon: 3_000_000, includeGpu: true };
 
-    const unprovenDraft = generateBuildDraft(catalogWithUnprovenScore, request);
-    const daysAgo = (days: number) => new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+    const now = "2026-09-01T00:00:00.000Z";
+    const clock = { now };
+    const unprovenDraft = generateBuildDraft(catalogWithUnprovenScore, request, [], clock);
+    const daysAgo = (days: number) => new Date(Date.parse(now) - days * 24 * 60 * 60 * 1000).toISOString();
     const documentedBenchmarkCpu: Part = {
       ...benchmarkStrongCpu,
       specs: {
@@ -2355,7 +2365,7 @@ describe("compatibility engine", () => {
       }
     };
     const catalogWithDocumentedScore = seedCatalog.filter((part) => part.category !== "cpu").concat(proxyStrongCpu, documentedBenchmarkCpu);
-    const documentedDraft = generateBuildDraft(catalogWithDocumentedScore, request);
+    const documentedDraft = generateBuildDraft(catalogWithDocumentedScore, request, [], clock);
     const staleBenchmarkCpu: Part = {
       ...documentedBenchmarkCpu,
       id: "cpu-generator-expired-benchmark",
@@ -2365,7 +2375,7 @@ describe("compatibility engine", () => {
       }
     };
     const catalogWithExpiredScore = seedCatalog.filter((part) => part.category !== "cpu").concat(proxyStrongCpu, staleBenchmarkCpu);
-    const expiredDraft = generateBuildDraft(catalogWithExpiredScore, request);
+    const expiredDraft = generateBuildDraft(catalogWithExpiredScore, request, [], clock);
     const futureBenchmarkCpu: Part = {
       ...documentedBenchmarkCpu,
       id: "cpu-generator-future-dated-benchmark",
@@ -2375,7 +2385,7 @@ describe("compatibility engine", () => {
       }
     };
     const catalogWithFutureScore = seedCatalog.filter((part) => part.category !== "cpu").concat(proxyStrongCpu, futureBenchmarkCpu);
-    const futureDraft = generateBuildDraft(catalogWithFutureScore, request);
+    const futureDraft = generateBuildDraft(catalogWithFutureScore, request, [], clock);
 
     expect(unprovenDraft.selection.cpu?.partId).toBe(proxyStrongCpu.id);
     expect(documentedDraft.selection.cpu?.partId).toBe(documentedBenchmarkCpu.id);
@@ -3422,7 +3432,8 @@ describe("compatibility engine", () => {
       sourceProductCode: String(20_000_000 + index),
       danawaUrl: `https://prod.danawa.com/info/?pcode=${20_000_000 + index}`,
       dataQuality: "live",
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
+      specs: part.category === "gpu" ? { ...part.specs, vramGb: 12 } : part.specs
     }));
     const draft = generateBuildDraft([...seedCatalog, ...sourcedCatalog], {
       profile: "gaming",
@@ -3501,7 +3512,10 @@ describe("compatibility engine", () => {
   });
 
   it("carries the gaming resolution into an automatic draft and its rationale", () => {
-    const draft = generateBuildDraft(seedCatalog, {
+    const catalog = seedCatalog.map((part) => part.category === "gpu"
+      ? { ...part, specs: { ...part.specs, vramGb: 16 } }
+      : part);
+    const draft = generateBuildDraft(catalog, {
       profile: "gaming",
       budgetWon: 3_000_000,
       includeGpu: true,
@@ -3512,9 +3526,9 @@ describe("compatibility engine", () => {
     expect(draft.gamingResolution).toBe("4k");
     expect(draft.gamingRefreshRate).toBe(240);
     expect(draft.gpuTarget?.resolution).toBe("4k");
-    expect(draft.gpuTarget?.currentFit).toBe("unknown");
+    expect(draft.gpuTarget?.currentFit).toBe("met");
     expect(draft.rationale.some((item) => item.includes("권장 VRAM 16GB") && item.includes("240Hz"))).toBe(true);
-    expect(draft.warnings.some((item) => item.includes("GPU VRAM을 제조사 페이지에서 확인해 주세요"))).toBe(true);
+    expect(draft.warnings.some((item) => item.includes("GPU VRAM을 제조사 페이지에서 확인해 주세요"))).toBe(false);
     expect(draft.blockerCount).toBe(0);
     expect(draft.unknownCount).toBe(0);
   });
@@ -3553,8 +3567,118 @@ describe("compatibility engine", () => {
     expect(draft.gpuTarget).toMatchObject({ targetVramGb: 12, currentVramGb: 12, currentFit: "met" });
   });
 
+  it("applies the gaming VRAM reference floor before shortlisting GPU candidates", () => {
+    const baseGpu = seedCatalog.find((part) => part.id === "gpu-rtx-4060")!;
+    const sourcedGpu = (id: string, priceWon: number, vramGb: number, highThroughput: boolean): Part => ({
+      ...baseGpu,
+      id,
+      name: `테스트 후보 ${id}`,
+      priceWon,
+      source: "danawa",
+      sourceProductCode: id,
+      danawaUrl: `https://example.com/${id}`,
+      dataQuality: "live",
+      missingFields: [],
+      updatedAt: "2026-09-01T00:00:00.000Z",
+      specs: {
+        ...baseGpu.specs,
+        vramGb,
+        gpu3dmarkTimeSpyScore: highThroughput ? 100_000 : 1_000,
+        gpu3dmarkPortRoyalScore: highThroughput ? 100_000 : 500,
+        gpuStreamProcessors: highThroughput ? 100_000 : 100,
+        gpuMemoryBandwidthGbps: highThroughput ? 10_000 : 50,
+        gpuBoostClockMhz: highThroughput ? 10_000 : 800
+      }
+    });
+    // These lower-price, higher-throughput rows fill the existing top-score,
+    // price, and reliability slices while failing the QHD VRAM reference floor.
+    const lowVramCandidates = Array.from({ length: 121 }, (_, index) => sourcedGpu(
+      `gpu-generator-below-qhd-floor-${index}`,
+      40_000 + index * 100,
+      2,
+      true
+    ));
+    const qualifyingGpu = sourcedGpu("gpu-generator-qhd-floor-outside-top-n", 650_000, 12, false);
+    const catalog = seedCatalog.filter((part) => part.category !== "gpu").concat(...lowVramCandidates, qualifyingGpu);
+
+    const draft = generateBuildDraft(catalog, {
+      profile: "gaming",
+      budgetWon: 3_000_000,
+      includeGpu: true,
+      gamingResolution: "1440p",
+      gamingRefreshRate: 144
+    });
+
+    expect(draft.selection.gpu?.partId).toBe(qualifyingGpu.id);
+    expect(draft.gpuTarget).toMatchObject({ targetVramGb: 12, currentVramGb: 12, currentFit: "met" });
+  });
+
+  it("returns a recovery diagnostic when no gaming GPU meets the VRAM reference floor", () => {
+    const baseGpu = seedCatalog.find((part) => part.id === "gpu-rtx-4060")!;
+    const lowVramGpu: Part = {
+      ...baseGpu,
+      id: "gpu-generator-below-qhd-floor-only",
+      name: "테스트 QHD 참고 VRAM 미달 GPU",
+      source: "danawa",
+      sourceProductCode: "gpu-generator-below-qhd-floor-only",
+      danawaUrl: "https://example.com/gpu-generator-below-qhd-floor-only",
+      dataQuality: "live",
+      missingFields: [],
+      updatedAt: "2026-09-01T00:00:00.000Z",
+      specs: { ...baseGpu.specs, vramGb: 2 }
+    };
+    const catalog = seedCatalog.filter((part) => part.category !== "gpu").concat(lowVramGpu);
+
+    let error: unknown;
+    try {
+      generateBuildDraft(catalog, {
+        profile: "gaming",
+        budgetWon: 2_000_000,
+        includeGpu: true,
+        gamingResolution: "1440p",
+        gamingRefreshRate: 144
+      });
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toBeInstanceOf(BuildGenerationError);
+    expect(error).toMatchObject({
+      diagnostics: [expect.objectContaining({
+        id: "gaming-gpu-vram-target",
+        facts: expect.arrayContaining([
+          { label: "요청 조건 VRAM 참고 기준", value: "12GB" },
+          { label: "기준 충족 GPU", value: "0개" }
+        ])
+      })]
+    });
+    expect((error as Error).message).toContain("VRAM 참고 기준 12GB");
+  });
+
+  it("keeps compatibility status separate from an unmet gaming VRAM target", () => {
+    const baseGpu = seedCatalog.find((part) => part.id === "gpu-rtx-4060")!;
+    const belowTargetGpu: Part = {
+      ...baseGpu,
+      id: "gpu-compatibility-vram-target-separation",
+      specs: { ...baseGpu.specs, vramGb: 8 }
+    };
+    const build = compatibleBuild();
+    build.gpu = { partId: belowTargetGpu.id, quantity: 1 };
+    const catalog = seedCatalog.filter((part) => part.id !== baseGpu.id).concat(belowTargetGpu);
+
+    const result = evaluateBuild(build, catalog, {
+      recommendationPreferences: { priority: "balanced", profile: "gaming", gamingResolution: "1440p" }
+    });
+
+    expect(result.status).toBe("compatible");
+    expect(result.analysis.gpuTarget?.currentFit).toBe("partial");
+  });
+
   it("preserves gaming advisory options and marks them as non-FPS evidence", () => {
-    const draft = generateBuildDraft(seedCatalog, {
+    const catalog = seedCatalog.map((part) => part.category === "gpu"
+      ? { ...part, specs: { ...part.specs, vramGb: 24 } }
+      : part);
+    const draft = generateBuildDraft(catalog, {
       profile: "gaming",
       budgetWon: 3_000_000,
       includeGpu: true,
@@ -3579,7 +3703,10 @@ describe("compatibility engine", () => {
   });
 
   it("explains why each generated component was selected from the request constraints", () => {
-    const draft = generateBuildDraft(seedCatalog, {
+    const catalog = seedCatalog.map((part) => part.category === "gpu"
+      ? { ...part, specs: { ...part.specs, vramGb: 24 } }
+      : part);
+    const draft = generateBuildDraft(catalog, {
       profile: "gaming",
       priority: "balanced",
       budgetWon: 3_000_000,
@@ -3604,21 +3731,35 @@ describe("compatibility engine", () => {
     expect(reasons.get("psu")).toContain("정격");
   });
 
-  it("reports the selected GPU VRAM fit instead of hiding a gaming target gap", () => {
+  it("returns recovery guidance instead of a gaming draft below the VRAM reference floor", () => {
     const baseGpu = seedCatalog.find((part) => part.id === "gpu-rtx-4060")!;
     const knownVramGpu: Part = { ...baseGpu, id: "gpu-generator-known-vram-reason", specs: { ...baseGpu.specs, vramGb: 8 } };
-    const draft = generateBuildDraft(seedCatalog.filter((part) => part.category !== "gpu").concat(knownVramGpu), {
-      profile: "gaming",
-      budgetWon: 3_000_000,
-      includeGpu: true,
-      gamingResolution: "4k",
-      gamingRefreshRate: 144,
-      gamingGameIds: ["cyberpunk"]
+    let error: unknown;
+    try {
+      generateBuildDraft(seedCatalog.filter((part) => part.category !== "gpu").concat(knownVramGpu), {
+        profile: "gaming",
+        budgetWon: 3_000_000,
+        includeGpu: true,
+        gamingResolution: "4k",
+        gamingRefreshRate: 144,
+        gamingGameIds: ["cyberpunk"]
+      });
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(BuildGenerationError);
+    expect(error).toMatchObject({
+      diagnostics: [expect.objectContaining({
+        id: "gaming-gpu-vram-target",
+        facts: expect.arrayContaining([{ label: "요청 조건 VRAM 참고 기준", value: "19GB" }])
+      })]
     });
-    expect(draft.lines.find((line) => line.category === "gpu")?.selectionReason).toContain("현재 VRAM 8GB로 권장 VRAM 19GB보다 낮아 확인이 필요합니다");
   });
 
   it("promotes a server-sourced matching evidence set without accepting client FPS values", () => {
+    const catalog = seedCatalog.map((part) => part.category === "gpu"
+      ? { ...part, specs: { ...part.specs, vramGb: 24 } }
+      : part);
     const request = {
       profile: "gaming" as const,
       budgetWon: 3_000_000,
@@ -3630,7 +3771,7 @@ describe("compatibility engine", () => {
       gamingRayTracing: true,
       gamingUpscaling: "quality" as const
     };
-    const baseline = generateBuildDraft(seedCatalog, request);
+    const baseline = generateBuildDraft(catalog, request);
     const selectedGpuPartId = baseline.selection.gpu?.partId;
     expect(selectedGpuPartId).toBeTruthy();
     if (!selectedGpuPartId) throw new Error("테스트용 자동 구성에서 GPU를 선택하지 않았습니다.");
@@ -3651,11 +3792,14 @@ describe("compatibility engine", () => {
       sourceKind: "lab",
       sourceUrl: "https://example.com/verified-evidence"
     }));
-    const draft = generateBuildDraft(seedCatalog, request, evidence);
+    const draft = generateBuildDraft(catalog, request, evidence);
     expect(draft.gamingPerformanceAssessment).toMatchObject({ status: "verified", gpuPartId: selectedGpuPartId, matchedRecordIds: ["evidence-cyberpunk", "evidence-pubg"], measurements: [{ averageFps: 160 }, { averageFps: 160 }] });
   });
 
   it("prefers an exact verified GPU evidence candidate after safety and budget gates pass", () => {
+    const catalog = seedCatalog.map((part) => part.category === "gpu"
+      ? { ...part, specs: { ...part.specs, vramGb: 24 } }
+      : part);
     const request = {
       profile: "gaming" as const,
       budgetWon: 3_000_000,
@@ -3667,8 +3811,8 @@ describe("compatibility engine", () => {
       gamingRayTracing: true,
       gamingUpscaling: "quality" as const
     };
-    const baseline = generateBuildDraft(seedCatalog, request);
-    const baselineGpu = seedCatalog.find((part) => part.id === baseline.selection.gpu?.partId);
+    const baseline = generateBuildDraft(catalog, request);
+    const baselineGpu = catalog.find((part) => part.id === baseline.selection.gpu?.partId);
     if (!baselineGpu) throw new Error("기준 자동 구성에서 GPU 부품을 찾지 못했습니다.");
     const evidenceGpuId = "gpu-exact-evidence-priority";
     const evidenceGpu: Part = { ...baselineGpu, id: evidenceGpuId, name: `${baselineGpu.name} · exact evidence candidate` };
@@ -3688,12 +3832,15 @@ describe("compatibility engine", () => {
       sourceKind: "lab",
       sourceUrl: "https://example.com/exact-evidence-priority"
     }];
-    const draft = generateBuildDraft(seedCatalog.concat(evidenceGpu), request, evidence);
+    const draft = generateBuildDraft(catalog.concat(evidenceGpu), request, evidence);
     expect(draft.selection.gpu?.partId).toBe(evidenceGpuId);
     expect(draft.gamingPerformanceAssessment).toMatchObject({ status: "verified", gpuPartId: evidenceGpuId, matchedRecordIds: ["evidence-exact-priority"] });
   });
 
   it("does not prefer an exact but stale evidence candidate", () => {
+    const catalog = seedCatalog.map((part) => part.category === "gpu"
+      ? { ...part, specs: { ...part.specs, vramGb: 24 } }
+      : part);
     const request = {
       profile: "gaming" as const,
       budgetWon: 3_000_000,
@@ -3705,8 +3852,8 @@ describe("compatibility engine", () => {
       gamingRayTracing: true,
       gamingUpscaling: "quality" as const
     };
-    const baseline = generateBuildDraft(seedCatalog, request);
-    const baselineGpu = seedCatalog.find((part) => part.id === baseline.selection.gpu?.partId);
+    const baseline = generateBuildDraft(catalog, request);
+    const baselineGpu = catalog.find((part) => part.id === baseline.selection.gpu?.partId);
     if (!baselineGpu) throw new Error("기준 자동 구성에서 GPU 부품을 찾지 못했습니다.");
     const staleGpuId = "gpu-stale-evidence-priority";
     const staleGpu: Part = { ...baselineGpu, id: staleGpuId, name: `${baselineGpu.name} · stale evidence candidate` };
@@ -3726,12 +3873,15 @@ describe("compatibility engine", () => {
       sourceKind: "lab",
       sourceUrl: "https://example.com/stale-evidence-priority"
     }];
-    const draft = generateBuildDraft(seedCatalog.concat(staleGpu), request, evidence);
+    const draft = generateBuildDraft(catalog.concat(staleGpu), request, evidence);
     expect(draft.selection.gpu?.partId).not.toBe(staleGpuId);
     expect(draft.gamingPerformanceAssessment?.status).not.toBe("verified");
   });
 
   it("does not call a matching GPU measurement verified when average FPS misses the target", () => {
+    const catalog = seedCatalog.map((part) => part.category === "gpu"
+      ? { ...part, specs: { ...part.specs, vramGb: 24 } }
+      : part);
     const request = {
       profile: "gaming" as const,
       budgetWon: 3_000_000,
@@ -3743,7 +3893,7 @@ describe("compatibility engine", () => {
       gamingRayTracing: true,
       gamingUpscaling: "quality" as const
     };
-    const baseline = generateBuildDraft(seedCatalog, request);
+    const baseline = generateBuildDraft(catalog, request);
     const selectedGpuPartId = baseline.selection.gpu?.partId;
     if (!selectedGpuPartId) throw new Error("테스트용 자동 구성에서 GPU를 선택하지 않았습니다.");
     const evidence: GamingPerformanceEvidenceRecord[] = [{
@@ -3762,11 +3912,14 @@ describe("compatibility engine", () => {
       sourceKind: "lab",
       sourceUrl: "https://example.com/below-target"
     }];
-    const draft = generateBuildDraft(seedCatalog, request, evidence);
+    const draft = generateBuildDraft(catalog, request, evidence);
     expect(draft.gamingPerformanceAssessment).toMatchObject({ status: "target_not_met", belowTargetRecordIds: ["evidence-below-target"] });
   });
 
   it("ranks an eligible unmeasured gaming GPU ahead of an exact measured GPU that misses the FPS target", () => {
+    const catalog = seedCatalog.map((part) => part.category === "gpu"
+      ? { ...part, specs: { ...part.specs, vramGb: 24 } }
+      : part);
     const request = {
       profile: "gaming" as const,
       budgetWon: 3_000_000,
@@ -3778,8 +3931,8 @@ describe("compatibility engine", () => {
       gamingRayTracing: true,
       gamingUpscaling: "quality" as const
     };
-    const baseline = generateBuildDraft(seedCatalog, request);
-    const measuredGpu = seedCatalog.find((part) => part.id === baseline.selection.gpu?.partId);
+    const baseline = generateBuildDraft(catalog, request);
+    const measuredGpu = catalog.find((part) => part.id === baseline.selection.gpu?.partId);
     if (!measuredGpu) throw new Error("기준 자동 구성에서 GPU 부품을 찾지 못했습니다.");
     const alternativeGpuId = "gpu-unmeasured-target-fallback";
     const alternativeGpu: Part = { ...measuredGpu, id: alternativeGpuId, name: `${measuredGpu.name} · unmeasured alternative` };
@@ -3800,7 +3953,7 @@ describe("compatibility engine", () => {
       sourceUrl: "https://example.com/target-miss-ranking"
     }];
 
-    const draft = generateBuildDraft(seedCatalog.concat(alternativeGpu), request, evidence);
+    const draft = generateBuildDraft(catalog.concat(alternativeGpu), request, evidence);
 
     expect(draft.selection.gpu?.partId).not.toBe(measuredGpu.id);
     expect(draft.gamingPerformanceAssessment?.status).not.toBe("target_not_met");
@@ -3855,7 +4008,7 @@ describe("compatibility engine", () => {
     expect(draft.warnings.some((warning) => warning.includes("VRAM 20GB 이상 필요") && warning.includes("요청한 성능보다 낮은 부품으로 구성"))).toBe(true);
   });
 
-  it("marks a compatible automatic gaming draft when its GPU misses the selected VRAM target", () => {
+  it("does not return a compatible gaming draft when all GPU candidates miss its VRAM reference floor", () => {
     const baseGpu = seedCatalog.find((part) => part.id === "gpu-rtx-4060")!;
     const gpuWithKnownVram: Part = {
       ...baseGpu,
@@ -3864,16 +4017,25 @@ describe("compatibility engine", () => {
       specs: { ...baseGpu.specs, vramGb: 8 }
     };
     const catalog = seedCatalog.filter((part) => part.category !== "gpu").concat(gpuWithKnownVram);
-    const draft = generateBuildDraft(catalog, {
-      profile: "gaming",
-      budgetWon: 3_000_000,
-      includeGpu: true,
-      gamingResolution: "4k"
-    });
+    let error: unknown;
+    try {
+      generateBuildDraft(catalog, {
+        profile: "gaming",
+        budgetWon: 3_000_000,
+        includeGpu: true,
+        gamingResolution: "4k"
+      });
+    } catch (caught) {
+      error = caught;
+    }
 
-    expect(draft.gpuTarget).toMatchObject({ resolution: "4k", targetVramGb: 16, currentVramGb: 8, currentFit: "partial" });
-    expect(draft.warnings.some((item) => item.includes("VRAM 8GB") && item.includes("게임의 권장 사양을 확인해 주세요"))).toBe(true);
-    expect(draft.status).toBe("compatible");
+    expect(error).toBeInstanceOf(BuildGenerationError);
+    expect(error).toMatchObject({
+      diagnostics: [expect.objectContaining({
+        id: "gaming-gpu-vram-target",
+        facts: expect.arrayContaining([{ label: "요청 조건 VRAM 참고 기준", value: "16GB" }])
+      })]
+    });
   });
 
   it("reports an over-budget draft instead of claiming a false budget fit", () => {

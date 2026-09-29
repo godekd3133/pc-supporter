@@ -1,4 +1,5 @@
-import { mkdir, open, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { access, mkdir, open, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { dirname, resolve } from "node:path";
 
@@ -40,27 +41,89 @@ export const BUDGET_LADDERS_PATH = resolve(DATA_DIR, "budget-ladders.json");
 export const GENERATOR_VARIANTS_PATH = resolve(DATA_DIR, "generator-variants.json");
 export const USAGE_EVENTS_PATH = resolve(DATA_DIR, "usage-events.json");
 
+const filePersistenceErrors = new Map<string, unknown>();
+
+function errorHasCode(error: unknown, code: string) {
+  return Boolean(error && typeof error === "object" && "code" in error && error.code === code);
+}
+
+function recordFilePersistenceError(path: string, error: unknown) {
+  filePersistenceErrors.set(path, error);
+}
+
+function clearFilePersistenceError(path: string) {
+  filePersistenceErrors.delete(path);
+}
+
 export async function ensureDataDirectory() {
-  await mkdir(DATA_DIR, { recursive: true });
+  try {
+    await mkdir(DATA_DIR, { recursive: true });
+    clearFilePersistenceError(DATA_DIR);
+  } catch (error: unknown) {
+    recordFilePersistenceError(DATA_DIR, error);
+    throw error;
+  }
 }
 
 export async function readJson<T>(path: string, fallback: T): Promise<T> {
+  let raw: string;
   try {
-    const raw = await readFile(path, "utf8");
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
+    raw = await readFile(path, "utf8");
+  } catch (error: unknown) {
+    if (errorHasCode(error, "ENOENT")) {
+      clearFilePersistenceError(path);
+      return fallback;
+    }
+    recordFilePersistenceError(path, error);
+    throw error;
+  }
+  try {
+    const parsed = JSON.parse(raw) as T;
+    clearFilePersistenceError(path);
+    return parsed;
+  } catch (error: unknown) {
+    recordFilePersistenceError(path, error);
+    throw error;
   }
 }
 
 export async function writeJson<T>(path: string, value: T) {
-  await ensureDataDirectory();
-  const temporaryPath = `${path}.${process.pid}.${randomUUID()}.tmp`;
   try {
-    await writeFile(temporaryPath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
-    await rename(temporaryPath, path);
-  } finally {
-    await unlink(temporaryPath).catch(() => undefined);
+    await ensureDataDirectory();
+    const temporaryPath = `${path}.${process.pid}.${randomUUID()}.tmp`;
+    try {
+      await writeFile(temporaryPath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+      await rename(temporaryPath, path);
+    } finally {
+      await unlink(temporaryPath).catch(() => undefined);
+    }
+    clearFilePersistenceError(path);
+  } catch (error: unknown) {
+    recordFilePersistenceError(path, error);
+    throw error;
+  }
+}
+
+export async function filePersistenceIsReady() {
+  for (const path of filePersistenceErrors.keys()) {
+    if (path === DATA_DIR) continue;
+    try {
+      const raw = await readFile(path, "utf8");
+      JSON.parse(raw);
+      clearFilePersistenceError(path);
+    } catch (error: unknown) {
+      if (errorHasCode(error, "ENOENT")) clearFilePersistenceError(path);
+    }
+  }
+  if ([...filePersistenceErrors.keys()].some((path) => path !== DATA_DIR)) return false;
+  try {
+    const directoryInfo = await stat(DATA_DIR);
+    if (!directoryInfo.isDirectory()) return false;
+    await access(DATA_DIR, constants.R_OK | constants.W_OK);
+    clearFilePersistenceError(DATA_DIR);
+    return true;
+  } catch (error: unknown) {
+    return errorHasCode(error, "ENOENT") && !filePersistenceErrors.has(DATA_DIR);
   }
 }
 

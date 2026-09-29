@@ -11,6 +11,7 @@ COPY shared ./shared
 
 ENV NODE_ENV=production \
     PORT=4174 \
+    PC_SUPPORTER_PROCESS_ROLE=api \
     PC_SUPPORTER_DATA_DIR=/app/data \
     BUILD_MONITOR_SCHEDULER_ENABLED=false
 

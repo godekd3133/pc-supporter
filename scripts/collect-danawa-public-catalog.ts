@@ -5,6 +5,7 @@ import type { Part, PartCategory } from "../shared/types";
 import { mergeCatalog } from "../server/catalog";
 import { parseDanawaListPage, parseDanawaListPageInfo, parseDanawaProductPage, type DanawaListItem } from "../server/danawa";
 import { readCatalogRecords, writeCatalogRecords } from "../server/repository";
+import { withCatalogIngestionLease } from "../server/catalog-ingestion-coordinator";
 import { BENCHMARK_OVERRIDES_PATH, DATA_DIR, readJson, writeJson } from "../server/storage";
 import { isListingAllowed } from "../server/listing";
 
@@ -750,7 +751,11 @@ function message(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
-main().catch((error) => {
+const run = apply || inventory && saveInventory
+  ? withCatalogIngestionLease(() => main())
+  : main();
+
+run.catch((error) => {
   console.error(message(error));
   process.exitCode = 1;
 });

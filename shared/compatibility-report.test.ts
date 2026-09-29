@@ -170,13 +170,14 @@ describe("compatibility report export", () => {
     expect(payloadText).not.toContain("private-fingerprint");
     expect(payloadText).not.toContain("cinebenchR23Multi");
     expect(payloadText).not.toContain("gpu3dmarkTimeSpyScore");
-    expect(payloadText).not.toContain("21000");
     expect(payloadText).not.toContain("Cinebench R23");
     expect(payloadText).not.toContain("private benchmark source");
     expect(payloadText).not.toContain("review.example/private");
     expect(payloadText).not.toContain("measuredFps");
     expect(payloadText).not.toContain("overallScore");
-    expect(payloadText).not.toContain("79");
+    expect(payload.result.analysis).toEqual({ nextActions: ["메인보드 소켓을 확인하세요."] });
+    expect(payload.result.findings[0].suggestions[0].part.specs).toEqual({});
+    expect(payload.result.gamingPerformanceAssessment).toBeUndefined();
     expect(payload.result.status).toBe("incompatible");
     expect(payload.result.blockerCount).toBe(1);
     expect(payload.result.engineVersion).toBe("2.50.0");

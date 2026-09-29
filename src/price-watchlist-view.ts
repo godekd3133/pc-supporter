@@ -1,4 +1,8 @@
 import type { CatalogWatchEntry } from "../shared/catalog-watchlist";
+import type { AccessoryItem, Part } from "../shared/types";
+import { isKnownPrice } from "../shared/types";
+import { ApiError } from "./api";
+import { safeExternalUrl } from "./safe-source-url";
 import type { PriceWatchDecisionState } from "../shared/price-watch-decision";
 export { priceWatchDecisionCountsFor } from "../shared/price-watch-decision";
 export type { PriceWatchDecisionCounts } from "../shared/price-watch-decision";
@@ -7,10 +11,95 @@ export type { CatalogWatchlistImportDiff } from "../shared/catalog-watchlist-vie
 
 export type PriceWatchStatusFilter = "all" | "alerts" | "target" | "buy" | "wait" | "observe" | "tracking" | "available" | "unavailable" | "error";
 export type PriceWatchSort = "added_desc" | "price_asc" | "price_desc" | "target_gap_asc";
+export interface PriceWatchlistCapabilities {
+  catalogSearch: true;
+  catalogSnapshotPrices: true;
+  browserLocalWatchlist: true;
+  priceHistory: boolean;
+  automaticRefresh: boolean;
+  alerts: boolean;
+  serverSharing: boolean;
+}
+
+export function priceWatchlistCapabilitiesFor(offlineMode: boolean): PriceWatchlistCapabilities {
+  const remoteFeaturesEnabled = !offlineMode;
+  return {
+    catalogSearch: true,
+    catalogSnapshotPrices: true,
+    browserLocalWatchlist: true,
+    priceHistory: remoteFeaturesEnabled,
+    automaticRefresh: remoteFeaturesEnabled,
+    alerts: remoteFeaturesEnabled,
+    serverSharing: remoteFeaturesEnabled
+  };
+}
+
+export function priceWatchlistStatusForMode(status: PriceWatchStatusFilter, capabilities: PriceWatchlistCapabilities): PriceWatchStatusFilter {
+  if (status === "alerts" && !capabilities.alerts) return "all";
+  if (["buy", "wait", "observe"].includes(status) && !capabilities.priceHistory) return "all";
+  return status;
+}
+
+export interface PriceWatchSnapshotDates {
+  part?: string;
+  accessory?: string;
+}
+
+export function priceWatchSnapshotDateFor(kind: CatalogWatchEntry["kind"], dates: PriceWatchSnapshotDates | undefined) {
+  return kind === "accessory" ? dates?.accessory : dates?.part;
+}
 
 export interface PriceWatchViewObservation {
   priceWon?: number;
   status: "available" | "unavailable" | "error";
+}
+
+type CatalogPriceItem = Part | AccessoryItem;
+
+export type PriceWatchLivePrice = PriceWatchViewObservation & {
+  source?: CatalogPriceItem["source"];
+  dataQuality?: CatalogPriceItem["dataQuality"];
+  dataFreshness?: CatalogPriceItem["dataFreshness"];
+  updatedAt?: string;
+  priceCheckedAt?: string;
+  sourceUrl?: string;
+};
+
+export async function readPriceWatchCatalogPrices(
+  entries: readonly CatalogWatchEntry[],
+  readCatalogItem: (entry: CatalogWatchEntry, signal: AbortSignal) => Promise<CatalogPriceItem>,
+  signal: AbortSignal
+): Promise<Record<string, PriceWatchLivePrice>> {
+  const prices: Record<string, PriceWatchLivePrice> = {};
+  for (let offset = 0; offset < entries.length; offset += 6) {
+    if (signal.aborted) return {};
+    const batch = await Promise.all(entries.slice(offset, offset + 6).map(async (entry) => {
+      try {
+        const item = await readCatalogItem(entry, signal);
+        if (signal.aborted) return undefined;
+        const sourceUrl = safeExternalUrl(item.danawaUrl);
+        return [entry.kind + ":" + entry.itemId, {
+          priceWon: item.priceWon,
+          status: isKnownPrice(item.priceWon) ? "available" : "unavailable",
+          source: item.source,
+          dataQuality: item.dataQuality,
+          dataFreshness: item.dataFreshness,
+          updatedAt: item.updatedAt,
+          priceCheckedAt: item.priceCheckedAt,
+          ...(sourceUrl ? { sourceUrl } : {})
+        }] as const;
+      } catch (error: unknown) {
+        if (signal.aborted) return undefined;
+        const status = error instanceof ApiError && error.status === 404 ? "unavailable" : "error";
+        return [entry.kind + ":" + entry.itemId, { status }] as const;
+      }
+    }));
+    if (signal.aborted) return {};
+    for (const result of batch) {
+      if (result) prices[result[0]] = result[1];
+    }
+  }
+  return prices;
 }
 
 export interface PriceWatchViewOptions {

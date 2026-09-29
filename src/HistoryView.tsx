@@ -1,3 +1,5 @@
+import { safeLocalStorage } from "./safe-storage";
+import "./history-view.css";
 // Extracted from App.tsx to keep the entry chunk lean. Loaded lazily.
 import { buildCompatibilityInputFingerprint } from "../shared/build-fingerprint";
 import { savedBuildComparisonRowDiffFor } from "../shared/saved-build-comparison-diff";
@@ -48,6 +50,10 @@ export type SavedBuildMetadataHistoryViewState =
   | { status: "loading" }
   | { status: "ready"; value: SavedBuildMetadataHistoryResponse }
   | { status: "error"; message: string };
+
+export function historyGridClassNameForItemCount(count: number) {
+  return count === 1 ? "history-grid history-grid-single-item" : "history-grid";
+}
 
 export function BuildComparisonPanel({ builds, onOpenBuild, openingBuildId, onLiveChecksChange }: { builds: SavedBuild[]; onOpenBuild?: (build: SavedBuild, focus?: "purchase-list") => void; openingBuildId?: string | null; onLiveChecksChange?: (checks: Record<string, SavedBuildLiveCheck>) => void }) {
   const [liveChecks, setLiveChecks] = useState<Record<string, SavedBuildLiveCheck>>({});
@@ -298,8 +304,8 @@ export function HistoryView({ builds, currentBuild, currentPreferences, partMap,
   const [monitorError, setMonitorError] = useState<string | null>(null);
   const [monitorCheckedAt, setMonitorCheckedAt] = useState<string | null>(null);
   const [monitorRefreshNonce, setMonitorRefreshNonce] = useState(0);
-  const [monitorAutoRefreshEnabled, setMonitorAutoRefreshEnabled] = useState(() => typeof window !== "undefined" && savedBuildMonitorAutoRefreshEnabledFromStorage(window.localStorage.getItem(SAVED_BUILD_MONITOR_AUTO_REFRESH_STORAGE_KEY)));
-  const [monitorAutoRefreshMinutes, setMonitorAutoRefreshMinutes] = useState<5 | 15 | 30>(() => typeof window === "undefined" ? 15 : savedBuildMonitorAutoRefreshMinutesFromStorage(window.localStorage.getItem(SAVED_BUILD_MONITOR_INTERVAL_STORAGE_KEY)));
+  const [monitorAutoRefreshEnabled, setMonitorAutoRefreshEnabled] = useState(() => typeof window !== "undefined" && savedBuildMonitorAutoRefreshEnabledFromStorage(safeLocalStorage.getItem(SAVED_BUILD_MONITOR_AUTO_REFRESH_STORAGE_KEY)));
+  const [monitorAutoRefreshMinutes, setMonitorAutoRefreshMinutes] = useState<5 | 15 | 30>(() => typeof window === "undefined" ? 15 : savedBuildMonitorAutoRefreshMinutesFromStorage(safeLocalStorage.getItem(SAVED_BUILD_MONITOR_INTERVAL_STORAGE_KEY)));
   const [serverMonitorStates, setServerMonitorStates] = useState<Record<string, SavedBuildServerMonitorViewState>>({});
   const [serverMonitorBusyBuildId, setServerMonitorBusyBuildId] = useState<string | null>(null);
   const [serverMonitorReloadNonce, setServerMonitorReloadNonce] = useState(0);
@@ -443,8 +449,8 @@ export function HistoryView({ builds, currentBuild, currentPreferences, partMap,
 
   useEffect(() => {
     try {
-      window.localStorage.setItem(SAVED_BUILD_MONITOR_AUTO_REFRESH_STORAGE_KEY, String(monitorAutoRefreshEnabled));
-      window.localStorage.setItem(SAVED_BUILD_MONITOR_INTERVAL_STORAGE_KEY, String(monitorAutoRefreshMinutes));
+      safeLocalStorage.setItem(SAVED_BUILD_MONITOR_AUTO_REFRESH_STORAGE_KEY, String(monitorAutoRefreshEnabled));
+      safeLocalStorage.setItem(SAVED_BUILD_MONITOR_INTERVAL_STORAGE_KEY, String(monitorAutoRefreshMinutes));
     } catch {
       // Monitoring still works manually when browser settings cannot be persisted.
     }
@@ -793,7 +799,7 @@ export function HistoryView({ builds, currentBuild, currentPreferences, partMap,
     {compareIds.length > 0 && <p className="history-compare-selection-note" role="status">{compareIds.length} / 3개 견적을 비교 대상으로 선택했습니다. 현재 편집기 견적과 저장 견적을 합쳐 최대 3개까지 비교할 수 있습니다.</p>}
     {builds.length > 0 && <section className="history-purchase-progress-filter" aria-label="저장 견적 구매 진행률 필터" data-testid="saved-build-purchase-progress-filter"><div><h2>구매 진행률 보기</h2><p>각 견적에 기록한 구매 진행 상태를 볼 수 있어요.</p><button className="text-button history-purchase-progress-filter-refresh" type="button" data-testid="saved-build-purchase-progress-refresh" onClick={() => void refreshPurchaseProgress()} disabled={purchaseProgressRefreshing}>{purchaseProgressRefreshing ? <><FiRefreshCw className="spin" /> 확인 중...</> : <><FiRefreshCw /> 구매 상태 새로고침</>}</button></div><div className="history-purchase-progress-filter-options" role="group" aria-label="구매 진행률 필터">{purchaseProgressFilterOptions.map((option) => <button className={purchaseProgressFilter === option.id ? "selected" : ""} type="button" aria-pressed={purchaseProgressFilter === option.id} data-testid={`saved-build-purchase-progress-filter-${option.id}`} onClick={() => setPurchaseProgressFilter(option.id)} key={option.id}>{option.label}<span>{option.count}</span></button>)}</div></section>}
     <Suspense fallback={null}><LazySavedBuildPurchasePriceHistoryPanel builds={builds} /></Suspense>
-    {builds.length === 0 ? <div className="empty-result"><FiSave /><h2>저장된 견적이 없습니다.</h2><p>견적을 검사한 뒤 저장하면 이곳에서 다시 열 수 있습니다.</p><button className="button button-primary" onClick={onStart}>첫 견적 만들기</button></div> : visiblePurchaseBuilds.length === 0 ? <div className="history-purchase-progress-empty" data-testid="saved-build-purchase-progress-empty"><FiInfo /><div><strong>선택한 구매 진행률 견적이 없습니다.</strong><span>다른 필터를 선택하거나 전체 견적을 확인해 주세요.</span></div><button className="text-button" type="button" onClick={() => setPurchaseProgressFilter("all")}>전체 견적 보기</button></div> : <div className="history-grid">{visiblePurchaseBuilds.map(({ build: saved, summary: purchaseProgress }) => {
+    {builds.length === 0 ? <div className="empty-result"><FiSave /><h2>저장된 견적이 없습니다.</h2><p>견적을 검사한 뒤 저장하면 이곳에서 다시 열 수 있습니다.</p><button className="button button-primary" onClick={onStart}>첫 견적 만들기</button></div> : visiblePurchaseBuilds.length === 0 ? <div className="history-purchase-progress-empty" data-testid="saved-build-purchase-progress-empty"><FiInfo /><div><strong>선택한 구매 진행률 견적이 없습니다.</strong><span>다른 필터를 선택하거나 전체 견적을 확인해 주세요.</span></div><button className="text-button" type="button" onClick={() => setPurchaseProgressFilter("all")}>전체 견적 보기</button></div> : <div className={historyGridClassNameForItemCount(visiblePurchaseBuilds.length)}>{visiblePurchaseBuilds.map(({ build: saved, summary: purchaseProgress }) => {
       const selectedCount = PART_CATEGORIES.filter((category) => selectionList(saved.selection, category).length > 0).length;
       const accessoryCount = accessorySelections(saved.selection).length;
       const preferences = saved.recommendationPreferences;

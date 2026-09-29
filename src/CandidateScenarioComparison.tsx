@@ -1,3 +1,4 @@
+import { safeLocalStorage } from "./safe-storage";
 import { useEffect, useMemo, useState } from "react";
 import { FiActivity, FiCheckCircle, FiClock, FiInfo, FiLoader, FiRefreshCw, FiSave, FiShare2, FiXCircle, FiZap } from "react-icons/fi";
 import type { AlternativeRisk, BuildSelection, CompatiblePartCandidate, CompatibilityResult, Part, PartCategory } from "../shared/types";
@@ -256,7 +257,7 @@ function CandidateScenarioChecks({ checks }: { checks: AlternativeComparisonScen
   return <div className="candidate-scenario-checks" aria-label="구매 전 확인 항목"><div className="candidate-scenario-checks-heading"><strong>구매 전 확인 항목</strong><small>공유 시에도 같은 확인 항목이 보존됩니다.</small></div><div className="candidate-scenario-check-list">{checks.map((check) => <div className={`candidate-scenario-check ${check.status}`} key={check.id}><span><b>{check.label}</b><small>{check.detail}</small></span><em>{scenarioCheckStatusLabel(check.status)}</em></div>)}</div></div>;
 }
 
-function candidateWatchStateFor(part: Part, raw = typeof window === "undefined" ? null : window.localStorage.getItem(CATALOG_WATCHLIST_STORAGE_KEY)) {
+function candidateWatchStateFor(part: Part, raw = typeof window === "undefined" ? null : safeLocalStorage.getItem(CATALOG_WATCHLIST_STORAGE_KEY)) {
   if (typeof window === "undefined") return { watching: false, targetPriceWon: undefined as number | undefined };
   const entry = catalogWatchlistFromJson(raw).find((item) => item.kind === "part" && item.itemId === part.id);
   return { watching: Boolean(entry), targetPriceWon: entry?.targetPriceWon };
@@ -264,13 +265,13 @@ function candidateWatchStateFor(part: Part, raw = typeof window === "undefined" 
 
 function setCandidateWatchTarget(part: Part, targetPriceWon: number | undefined, onToast?: (message: string) => void) {
   try {
-    const current = catalogWatchlistFromJson(window.localStorage.getItem(CATALOG_WATCHLIST_STORAGE_KEY));
+    const current = catalogWatchlistFromJson(safeLocalStorage.getItem(CATALOG_WATCHLIST_STORAGE_KEY));
     if (!catalogWatchlistContains(current, { kind: "part", itemId: part.id })) {
       onToast?.("먼저 가격 추적을 등록한 뒤 목표가를 설정해 주세요.");
       return false;
     }
     const next = updateCatalogWatchEntry(current, { kind: "part", itemId: part.id }, { targetPriceWon });
-    window.localStorage.setItem(CATALOG_WATCHLIST_STORAGE_KEY, catalogWatchlistToJson(next));
+    safeLocalStorage.setItem(CATALOG_WATCHLIST_STORAGE_KEY, catalogWatchlistToJson(next));
     onToast?.(targetPriceWon === undefined
       ? `${part.name} 목표가를 해제했습니다.`
       : `${part.name} 목표가를 ${targetPriceWon.toLocaleString("ko-KR")}원으로 설정했습니다.`);

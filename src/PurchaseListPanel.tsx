@@ -1,3 +1,4 @@
+import { safeLocalStorage } from "./safe-storage";
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import { FiCheck, FiCheckCircle, FiClock, FiCopy, FiDownload, FiExternalLink, FiInfo, FiRefreshCw, FiRotateCcw, FiServer } from "react-icons/fi";
@@ -143,8 +144,8 @@ function watchedRowKeysFor(rows: ReadonlyArray<PurchaseListRow>, isWatchedEntry?
 
 export function PurchaseListPanel({ rows, storageKey, inputFingerprint, budgetWon, savedBuildId, savedBuildOwnerToken, onCopy, onDownload, focusStatus, focusRowKey, onProgressChange, onServerProgressChange, onServerPriceHistoryChange, onWatchEntry, isWatchedEntry, onOpenCatalogItem, onRefreshAll, refreshingItemId, catalogRefreshReport }: { rows: PurchaseListRow[]; storageKey: string; inputFingerprint: string; budgetWon?: number; savedBuildId?: string; savedBuildOwnerToken?: string; onCopy: (checkedIds?: ReadonlySet<string>, rows?: PurchaseListRow[], itemStates?: ReadonlyArray<PurchaseListItemStatus>) => void; onDownload: (checkedIds?: ReadonlySet<string>, rows?: PurchaseListRow[], itemStates?: ReadonlyArray<PurchaseListItemStatus>) => void; focusStatus?: PurchaseItemStatus; focusRowKey?: string; onProgressChange?: (progress: PurchaseListExecutionProgress) => void; onServerProgressChange?: (progress?: SavedBuildPurchaseProgress) => void; onServerPriceHistoryChange?: (history?: SavedBuildPurchasePriceHistory) => void; onWatchEntry?: (target: PurchaseListWatchTarget) => boolean; isWatchedEntry?: (target: Pick<PurchaseListWatchTarget, "kind" | "itemId">) => boolean; onOpenCatalogItem?: (row: PurchaseListRow) => void; onRefreshAll?: (targets: RefreshTarget[]) => void; refreshingItemId?: string | null; catalogRefreshReport?: CatalogRefreshReport | null }) {
   const itemStatusStorageKey = `${storageKey}:item-statuses`;
-  const [checkedIds, setCheckedIds] = useState<string[]>(() => purchaseListCheckedIdsFromJson(window.localStorage.getItem(storageKey)));
-  const [itemStates, setItemStates] = useState<PurchaseListItemStatus[]>(() => purchaseListItemStatusesFromJson(window.localStorage.getItem(itemStatusStorageKey), storageKey));
+  const [checkedIds, setCheckedIds] = useState<string[]>(() => purchaseListCheckedIdsFromJson(safeLocalStorage.getItem(storageKey)));
+  const [itemStates, setItemStates] = useState<PurchaseListItemStatus[]>(() => purchaseListItemStatusesFromJson(safeLocalStorage.getItem(itemStatusStorageKey), storageKey));
   const itemStatesRef = useRef(itemStates);
   itemStatesRef.current = itemStates;
   const [hydratedStorageKey, setHydratedStorageKey] = useState(storageKey);
@@ -176,7 +177,7 @@ export function PurchaseListPanel({ rows, storageKey, inputFingerprint, budgetWo
   const serverMutationRequestRef = useRef(0);
   const serverContextKeyRef = useRef("");
   const [watchedRowKeys, setWatchedRowKeys] = useState<string[]>(() => watchedRowKeysFor(rows, isWatchedEntry));
-  const [priceHistory, setPriceHistory] = useState<PurchaseListPriceHistory>(() => purchaseListPriceHistoryFromJson(window.localStorage.getItem(`${storageKey}:price-history`)));
+  const [priceHistory, setPriceHistory] = useState<PurchaseListPriceHistory>(() => purchaseListPriceHistoryFromJson(safeLocalStorage.getItem(`${storageKey}:price-history`)));
   const [hydratedPriceHistoryKey, setHydratedPriceHistoryKey] = useState(storageKey);
   const priceHistoryTransferInputRef = useRef<HTMLInputElement>(null);
   const [priceHistoryTransferPreview, setPriceHistoryTransferPreview] = useState<PurchaseListPriceHistoryTransferParseResult | null>(null);
@@ -251,8 +252,8 @@ export function PurchaseListPanel({ rows, storageKey, inputFingerprint, budgetWo
   }
 
   useEffect(() => {
-    setCheckedIds(purchaseListCheckedIdsFromJson(window.localStorage.getItem(storageKey)));
-    setItemStatesImmediately(purchaseListItemStatusesFromJson(window.localStorage.getItem(itemStatusStorageKey), storageKey));
+    setCheckedIds(purchaseListCheckedIdsFromJson(safeLocalStorage.getItem(storageKey)));
+    setItemStatesImmediately(purchaseListItemStatusesFromJson(safeLocalStorage.getItem(itemStatusStorageKey), storageKey));
     setHydratedStorageKey(storageKey);
     setTransferPreview(null);
     setActionMessage(null);
@@ -267,7 +268,7 @@ export function PurchaseListPanel({ rows, storageKey, inputFingerprint, budgetWo
     setStatusFilter("all");
     setPurchaseSearchQuery("");
     setWatchedRowKeys(watchedRowKeysFor(rows, isWatchedEntry));
-    setPriceHistory(purchaseListPriceHistoryFromJson(window.localStorage.getItem(`${storageKey}:price-history`)));
+    setPriceHistory(purchaseListPriceHistoryFromJson(safeLocalStorage.getItem(`${storageKey}:price-history`)));
     setHydratedPriceHistoryKey(storageKey);
     setPriceHistoryTransferPreview(null);
   }, [itemStatusStorageKey, storageKey]);
@@ -317,7 +318,7 @@ export function PurchaseListPanel({ rows, storageKey, inputFingerprint, budgetWo
     setServerProgressError(null);
     setServerPriceHistoryError(null);
     void api<{ purchaseProgress?: SavedBuildPurchaseProgress; purchasePriceHistory?: SavedBuildPurchasePriceHistory }>(`/api/builds/${encodeURIComponent(savedBuildId)}`, { retry: 1 })
-      .then((saved) => { if (!cancelled) { setServerProgress(saved.purchaseProgress ?? null); if (saved.purchaseProgress?.itemStates) setItemStatesImmediately(latestItemStatesFor(itemStatesRef.current, purchaseListItemStatusesFromJson(window.localStorage.getItem(itemStatusStorageKey), storageKey), saved.purchaseProgress.itemStates)); serverProgressChangeRef.current?.(saved.purchaseProgress); setServerPriceHistory(saved.purchasePriceHistory ?? null); serverPriceHistoryChangeRef.current?.(saved.purchasePriceHistory); } })
+      .then((saved) => { if (!cancelled) { setServerProgress(saved.purchaseProgress ?? null); if (saved.purchaseProgress?.itemStates) setItemStatesImmediately(latestItemStatesFor(itemStatesRef.current, purchaseListItemStatusesFromJson(safeLocalStorage.getItem(itemStatusStorageKey), storageKey), saved.purchaseProgress.itemStates)); serverProgressChangeRef.current?.(saved.purchaseProgress); setServerPriceHistory(saved.purchasePriceHistory ?? null); serverPriceHistoryChangeRef.current?.(saved.purchasePriceHistory); } })
       .catch((reason: unknown) => { if (!cancelled) { const message = reason instanceof Error ? reason.message : "저장 견적 서버 상태를 확인하지 못했습니다."; setServerProgressError(message); setServerPriceHistoryError(message); } })
       .finally(() => { if (!cancelled) setServerProgressLoading(false); });
     return () => { cancelled = true; };
@@ -340,7 +341,7 @@ export function PurchaseListPanel({ rows, storageKey, inputFingerprint, budgetWo
   useEffect(() => {
     if (hydratedStorageKey !== storageKey) return;
     try {
-      window.localStorage.setItem(storageKey, purchaseListCheckedIdsToJson(checkedIds));
+      safeLocalStorage.setItem(storageKey, purchaseListCheckedIdsToJson(checkedIds));
     } catch {
       // A full local storage bucket must not prevent the purchase list from rendering.
     }
@@ -349,7 +350,7 @@ export function PurchaseListPanel({ rows, storageKey, inputFingerprint, budgetWo
   useEffect(() => {
     if (hydratedStorageKey !== storageKey) return;
     try {
-      window.localStorage.setItem(itemStatusStorageKey, purchaseListItemStatusesJsonFor(storageKey, itemStates));
+      safeLocalStorage.setItem(itemStatusStorageKey, purchaseListItemStatusesJsonFor(storageKey, itemStates));
     } catch {
       // A full local storage bucket must not prevent the purchase list from rendering.
     }
@@ -363,7 +364,7 @@ export function PurchaseListPanel({ rows, storageKey, inputFingerprint, budgetWo
   useEffect(() => {
     if (hydratedPriceHistoryKey !== storageKey) return;
     try {
-      window.localStorage.setItem(`${storageKey}:price-history`, purchaseListPriceHistoryToJson(priceHistory));
+      safeLocalStorage.setItem(`${storageKey}:price-history`, purchaseListPriceHistoryToJson(priceHistory));
     } catch {
       // A full local storage bucket must not prevent the purchase list from rendering.
     }
@@ -414,7 +415,7 @@ export function PurchaseListPanel({ rows, storageKey, inputFingerprint, budgetWo
   }
 
   function currentItemStatesForPersistence() {
-    const stored = purchaseListItemStatusesFromJson(window.localStorage.getItem(itemStatusStorageKey), storageKey);
+    const stored = purchaseListItemStatusesFromJson(safeLocalStorage.getItem(itemStatusStorageKey), storageKey);
     return latestItemStatesFor(itemStatesRef.current, stored);
   }
 
@@ -428,7 +429,7 @@ export function PurchaseListPanel({ rows, storageKey, inputFingerprint, budgetWo
     setItemStatesImmediately([]);
     setCheckedIds([]);
     try {
-      window.localStorage.removeItem(itemStatusStorageKey);
+      safeLocalStorage.removeItem(itemStatusStorageKey);
     } catch {
       // The state reset still applies when browser storage is unavailable.
     }

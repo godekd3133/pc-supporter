@@ -20,6 +20,22 @@ function closeServer(server: Server) {
 }
 
 describe("public API evidence projection", () => {
+  it("keeps the customer-facing gaming VRAM recovery explanation", () => {
+    const diagnostic = {
+      id: "gaming-gpu-vram-target",
+      title: "요청 조건을 충족하는 GPU 후보가 없습니다.",
+      summary: "현재 GPU 후보 중 요청 조건의 참고 VRAM 16GB 이상인 제품을 찾지 못했습니다. VRAM 기준은 후보를 좁히기 위한 참고선이며 실제 게임 성능이나 부품 호환성을 보장하지 않습니다.",
+      facts: [
+        { label: "요청 해상도", value: "4K" },
+        { label: "요청 조건 VRAM 참고 기준", value: "16GB" },
+        { label: "기준 충족 GPU", value: "0개" }
+      ],
+      recommendation: "해상도나 그래픽 설정을 조정하거나, VRAM 정보가 확인된 GPU 후보가 추가된 뒤 다시 시도해 주세요."
+    };
+
+    expect(publicApiPayloadProjection({ diagnostics: [diagnostic] })).toEqual({ diagnostics: [diagnostic] });
+  });
+
   it("hides engine ranking evidence from catalog, recommendation, and share routes while retaining buyer facts", async () => {
     const projectedRankEvidence = publicApiPayloadProjection({
       item: {

@@ -1,32 +1,37 @@
 import "dotenv/config";
 import express, { type NextFunction, type Request, type RequestHandler, type Response } from "express";
+import type { Server as HttpServer } from "node:http";
 import { existsSync } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { resolve } from "node:path";
-import type { AccessoryCategory, AccessoryPriceFilter, AccessoryRefreshResponse, AccessorySelection, AlternativeRisk, AlternativeRiskCounts, BuildGenerationRequest, BuildGenerationVariantResult, BuildSelection, CatalogChangeKind, CatalogChangeRecord, CompatibilityResult, CrawlResumePreview, CrawlStatus, DataFreshness, DataQuality, Finding, GpuPhysicalOverride, ListingPolicy, M2CoverageFilter, M2MappingStatus, M2SlotCoverage, M2SlotCoverageBucket, M2SlotCoverageItem, M2SlotOverride, M2SlotReviewTemplate, M2SlotReviewTemplateItem, Part, PartCategory, PartRefreshResponse, PriceAvailabilityFilter, RecommendationPerformanceTier, RecommendationPreferences, RecommendationProfile, SavedBuild, SavedBuildCheckSnapshot } from "../shared/types";
-import { ACCESSORY_CATEGORIES, isRecommendationPriority, PART_CATEGORIES, RECOMMENDATION_VARIANT_PRIORITIES } from "../shared/types";
+import type { AccessoryCategory, AccessoryPriceFilter, AccessoryRefreshResponse, AccessorySelection, AlternativeRisk, AlternativeRiskCounts, BuildGenerationRequest, BuildGenerationVariantResult, BuildSelection, CatalogChangeKind, CatalogChangeRecord, CompatibilityResult, CrawlResumePreview, CrawlStatus, DataFreshness, DataQuality, Finding, GpuPhysicalOverride, ListingPolicy, M2CoverageFilter, M2MappingStatus, M2SlotCoverage, M2SlotCoverageBucket, M2SlotCoverageItem, M2SlotOverride, M2SlotReviewTemplate, M2SlotReviewTemplateItem, Part, PartCategory, PartRefreshResponse, PriceAvailabilityFilter, RecommendationPreferences, RecommendationProfile, SavedBuild, SavedBuildCheckSnapshot } from "../shared/types";
+import { ACCESSORY_CATEGORIES, PART_CATEGORIES, RECOMMENDATION_VARIANT_PRIORITIES } from "../shared/types";
 import { catalogEligibilitySummaryFor, catalogMeta, catalogSearchTotalsFor, catalogUpdatedAtFor, countParts, currentCatalogRuntimeRevision, filterParts, findPart, invalidateCatalogCache, loadCatalog, parseCatalogMissingField, parsePartSpecFilter, partSpecFilterDiagnosticsFor, partSpecFilterMatcherFor, searchParts, upsertCatalog } from "./catalog";
 import { countAccessories, currentAccessoryUpdatedAt, findAccessory, loadAccessories, readAccessoryCoverage, searchAccessories, upsertAccessories } from "./accessories";
 import { loadCatalogSnapshot, loadCatalogSnapshotTimestamp } from "./catalog-snapshot";
 import { validateAccessoryTargetPartIds, validateBuildPartIds, validateBuildSelection } from "./build-validation";
 export { validateAccessoryTargetPartIds, validateBuildPartIds, validateBuildSelection } from "./build-validation";
 import { prepareCompatibilityRequest } from "./compatibility-request";
-import { recommendAccessories } from "./accessory-recommendations";
-import { summarizeAccessorySelections } from "./accessory-cart";
+import { emptyBuild, parseBuild, parseBuildGenerationRequest, parseRecommendationPreferences } from "../shared/domain/build-input";
+export { emptyBuild, parseBuild, parseBuildGenerationRequest, parseRecommendationPreferences } from "../shared/domain/build-input";
+export type { BuildParseResult, BuildGenerationRequestParseResult } from "../shared/domain/build-input";
+import { compatibilityResultForPublicTransport, evaluateBuildWithAccessories as evaluateBuildWithSharedDomain } from "../shared/domain/compatibility-evaluator";
 import { loadSavedBuildPresentationContext, savedBuildPresentationFor, savedBuildPresentationsFor } from "./saved-build-presentation";
 import { savedBuildAlternativeAlertsFor } from "./saved-build-alternatives";
 import { recordUsageEvent, trackUsageEvent, usageEventSummaryFor } from "./usage-events";
-import { classifyDataFreshness, summarizeBuildDataHealth } from "./data-health";
+import { classifyDataFreshness } from "./data-health";
 import { isAccessoryCrawlRunning, readAccessoryCrawlManifest, readAccessoryCrawlStatus, runAccessoryCrawlJob } from "./accessory-crawler";
 import { BuildGenerationError, ENGINE_VERSION, assessAlternativePart, buildGenerationRecoveryOptionsFor, candidateSimilarityForBuild, compareCandidateSimilarity, compareCandidateValue, evaluateBuild, generateBuildDraft } from "./engine";
 import { cancelCrawlPageRetryBatch, crawlPageRetryBatchPlanFor, crawlPageRetryPlanFor, crawlResumePlanFor, isCrawlPageRetryBatchRunning, isCrawlRunning, readCrawlStatus, runCrawlJob, runCrawlPageRetryBatchJob, runCrawlPageRetryJob } from "./crawler";
 import { CATALOG_PATH, CRAWL_MANIFEST_PATH, ensureDataDirectory, fileUpdatedAt, readJson } from "./storage";
 import type { CrawlManifest } from "../shared/types";
-import { appendSavedBuild, appendSavedBuildCheck, appendSavedBuildVersionComparison, appendSavedBudgetLadder, appendSavedGeneratorVariants, appendSavedComparison, appendSavedWatchlist, deleteSavedBuild, deleteSavedBuildVersionComparison, deleteSavedBudgetLadder, deleteSavedGeneratorVariants, deleteSavedComparison, deleteSavedWatchlist, deleteSavedWatchlistAlertStates, initializePersistence, migrateSavedBuildVersions, persistenceDiagnostics, readLatestSavedBuildVersionBackup, readSavedBuildVersionBackupDetail, readSavedBuildVersionBackups, readSavedBuilds, readSavedBuildVersionComparisons, readSavedBudgetLadders, readSavedGeneratorVariants, readSavedComparisons, readSavedWatchlistAlertStates, readSavedWatchlists, restoreSavedBuildPurchasePriceHistory, restoreSavedBuildPurchaseProgress, rollbackSavedBuildVersions, savedBuildVersionSnapshotFingerprintFor, updateSavedBuildAssemblyVerification, updateSavedBuildMetadata, updateSavedBuildMonitorState, updateSavedBuildMyPc, updateSavedBuildPurchasePriceHistory, updateSavedBuildPurchaseProgress, updateSavedBuildShareCredentials, updateSavedWatchlist, updateSavedWatchlistAlertStates, withSavedBuildMonitorLease } from "./repository";
+import { appendSavedBuild, appendSavedBuildCheck, appendSavedBuildVersionComparison, appendSavedBudgetLadder, appendSavedGeneratorVariants, appendSavedComparison, appendSavedWatchlist, closePersistence, consumeRateLimitWindow, deleteSavedBuild, deleteSavedBuildVersionComparison, deleteSavedBudgetLadder, deleteSavedGeneratorVariants, deleteSavedComparison, deleteSavedWatchlist, deleteSavedWatchlistAlertStates, initializePersistence, migrateSavedBuildVersions, persistenceDiagnostics, pruneRateLimitWindows, RATE_LIMIT_BUCKET_CLEANUP_INTERVAL_MS, readLatestSavedBuildVersionBackup, readSavedBuildVersionBackupDetail, readSavedBuildVersionBackups, readSavedBuilds, readSavedBuildVersionComparisons, readSavedBudgetLadders, readSavedGeneratorVariants, readSavedComparisons, readSavedWatchlistAlertStates, readSavedWatchlists, restoreSavedBuildPurchasePriceHistory, restoreSavedBuildPurchaseProgress, rollbackSavedBuildVersions, savedBuildVersionSnapshotFingerprintFor, updateSavedBuildAssemblyVerification, updateSavedBuildMetadata, updateSavedBuildMonitorState, updateSavedBuildMyPc, updateSavedBuildPurchasePriceHistory, updateSavedBuildPurchaseProgress, updateSavedBuildShareCredentials, updateSavedWatchlist, updateSavedWatchlistAlertStates, withSavedBuildMonitorLease } from "./repository";
+import { CATALOG_INGESTION_BUSY_MESSAGE, CatalogIngestionBusyError, startCatalogIngestionJob, withCatalogIngestionLease as executeCatalogIngestionJob } from "./catalog-ingestion-coordinator";
 import { DEFAULT_SAVED_WATCHLIST_ALERT_PREFERENCES, parseSavedCatalogWatchlistInput, parseSavedCatalogWatchlistUpdateInput, savedCatalogWatchlistExpired, savedWatchlistAlertPreferencesFor } from "./watchlist-store";
 import { shareExpired, shareExpiryDaysFrom, shareExpiryValueProvided, shareExpiresAtFor } from "./share-lifecycle";
 import { createShareOwnerCredential, createShareRecoveryCode, normalizeShareRecoveryCode, shareOwnerOrEnabledAdminCanManage, shareOwnerTokenMatches, shareRecoveryCodeMatches, type SavedBuildRecord } from "./build-share";
-import { createRateLimitMiddleware } from "./rate-limit";
+import { createRateLimitMiddleware as createBaseRateLimitMiddleware } from "./rate-limit";
+import type { RateLimitPolicy } from "./rate-limit";
 import { publicSavedCatalogWatchlist, type SavedCatalogWatchlistRecord } from "./watchlist-share";
 import { parsePublicPriceHistoryIds, parsePublicPriceHistoryWindow } from "./public-price-history";
 import { publicApiPayloadProjection } from "./public-api-projection";
@@ -40,7 +45,7 @@ import { budgetLadderScenariosFor } from "../shared/budget-ladder";
 import { parseGeneratorVariantsShareInput, publicGeneratorVariantsShare } from "./generator-variants-share";
 import { savedWatchlistAlertsFor, type SavedWatchlistAlert } from "./watchlist-alerts";
 import { parseSavedWatchlistAlertIds } from "./watchlist-alert-state";
-import { adminAuthEnabled, adminSession, isAdminAuthenticated, loginAdmin, logoutAdmin, requireAdmin } from "./auth";
+import { adminAuthEnabled, adminSecurityStatus, adminSession, isAdminAuthenticated, loginAdmin, logoutAdmin, requireAdmin } from "./auth";
 import { deleteM2SlotOverride, m2SlotOverrideCompleteness, normalizeM2SlotId, readM2SlotOverrides, saveM2SlotOverride, saveM2SlotOverrides, validateM2SlotOverride } from "./m2-overrides";
 import { deleteGpuPhysicalOverride, readGpuPhysicalOverrides, saveGpuPhysicalOverride, saveGpuPhysicalOverrides, saveGpuPhysicalSourceCheck, validateGpuPhysicalOverride, validateGpuPhysicalOverrideBatch } from "./gpu-physical-overrides";
 import { physicalReviewCoverageFor, physicalReviewQueueFor, physicalReviewWorkPackageFor } from "./gpu-physical-review";
@@ -80,12 +85,10 @@ import { mergeSavedBuildMonitorAlerts } from "../shared/saved-build-monitor-aler
 import type { SavedBuildMonitorSubscriptionResponse } from "../shared/saved-build-monitor-subscription";
 import { compatibilityRequestKey, compatibilityResultCache, compatibilityResultCacheKey, InFlightDeduper, TtlLruInFlightCache, type CompatibilityResponseCacheValue } from "./compatibility-cache";
 import { savedBuildCheckPreviewCache, savedBuildCheckPreviewCacheKey } from "./saved-build-check-cache";
-import { accessoryCompatibilityFor } from "./accessory-compatibility";
 import { parseCatalogBatchIds, parseCatalogBatchQuery } from "./catalog-batch";
 import { entityTagFor, ifNoneMatchMatches } from "./http-cache";
-import { upgradeBundlePayloadFor } from "../shared/upgrade-bundle-transport";
 import { gamingPerformanceEvidencePath, loadGamingPerformanceEvidence, saveGamingPerformanceEvidence } from "./gaming-performance-evidence";
-import { gamingPerformanceAssessmentFor, gamingPerformanceEvidenceBatchValidationFor } from "../shared/gaming-performance-evidence";
+import { gamingPerformanceEvidenceBatchValidationFor } from "../shared/gaming-performance-evidence";
 import { candidateDecisionSummaryFor } from "../shared/candidate-decision";
 import { assemblyVerificationSavedHistoryFor, parseAssemblyVerificationHistoryJson } from "../shared/assembly-verification";
 import { buildCompatibilityInputFingerprint } from "../shared/build-fingerprint";
@@ -107,11 +110,24 @@ import { publicSavedBuildVersionComparisonShare, parseSavedBuildVersionCompariso
 import { BUILD_INPUT_MAX_ID_LENGTH, BUILD_INPUT_MAX_M2_SLOTS, BUILD_INPUT_MAX_SELECTIONS_PER_LIST } from "../shared/build-input-limits";
 import { eul } from "../shared/josa";
 import { readPriceRefreshStatus, runPriceRefreshJob } from "./price-refresh";
-import { priceRefreshOptionsFromEnv, startPriceRefreshScheduler, waitForPriceRefreshStart } from "./price-refresh-scheduler";
+import { priceRefreshIntervalMsFromEnv, priceRefreshOptionsFromEnv, startDurablePriceRefreshScheduler, startPriceRefreshScheduler, waitForPriceRefreshStart } from "./price-refresh-scheduler";
+import { BackgroundJobActiveConflictError, BackgroundJobIdempotencyConflictError, backgroundJobStore, type BackgroundJob } from "./background-job-store";
+import { startPriceRefreshQueueWorker } from "./price-refresh-worker";
+import { requestTelemetry } from "./request-telemetry";
+import { securityHeaders } from "./security-headers";
 
 const app = express();
 const port = Number(process.env.PORT ?? 4174);
 const serverHost = process.env.SERVER_HOST?.trim() || "0.0.0.0";
+type ProcessRole = "combined" | "api" | "worker";
+const processRole = process.env.PC_SUPPORTER_PROCESS_ROLE?.trim() || "combined";
+if (processRole !== "combined" && processRole !== "api" && processRole !== "worker") {
+  throw new Error("PC_SUPPORTER_PROCESS_ROLE must be combined, api, or worker.");
+}
+const postgresConfigured = Boolean(process.env.DATABASE_URL?.trim());
+if (processRole !== "combined" && !postgresConfigured) {
+  throw new Error(`PC_SUPPORTER_PROCESS_ROLE=${processRole} requires DATABASE_URL; file-backed state requires one combined process.`);
+}
 let catalogSeedMappingPreviewCache: { key: string; value: ReturnType<typeof catalogSeedMappingPreviewFor> } | undefined;
 let catalogSeedMappingPreviewCacheEpoch = 0;
 let catalogSeedMappingPreviewInFlight: { key: string; epoch: number; promise: Promise<ReturnType<typeof catalogSeedMappingPreviewFor>> } | undefined;
@@ -121,8 +137,54 @@ function priceRefreshSchedulerEnabled() {
     || process.env.PRICE_REFRESH_SCHEDULER_ENABLED !== "false" && process.env.NODE_ENV === "production";
 }
 
+function safeRefreshResult(job: BackgroundJob) {
+  if (!job.result) return null;
+  const output: Record<string, unknown> = {};
+  for (const key of ["attempted", "succeeded", "changed", "failed"] as const) {
+    const value = job.result[key];
+    if (Number.isSafeInteger(value) && Number(value) >= 0) output[key] = Number(value);
+  }
+  if (typeof job.result.dryRun === "boolean") output.dryRun = job.result.dryRun;
+  if (job.result.skippedCode === "STALE_SCHEDULE_SLOT") output.skippedCode = "STALE_SCHEDULE_SLOT";
+  for (const key of ["startedAt", "completedAt"] as const) {
+    const value = job.result[key];
+    if (typeof value === "string" && Number.isFinite(Date.parse(value))) output[key] = new Date(value).toISOString();
+  }
+  return output;
+}
+
+function priceRefreshJobProjection(job: BackgroundJob | null) {
+  if (!job || job.kind !== "price-refresh") return null;
+  return {
+    jobId: job.id,
+    status: job.status,
+    attempt: job.attempt,
+    maxAttempts: job.maxAttempts,
+    availableAt: job.availableAt,
+    progress: job.progress,
+    result: safeRefreshResult(job),
+    error: job.error ? { code: job.error.code, retryable: job.error.retryable } : null,
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt,
+    finishedAt: job.finishedAt
+  };
+}
+
 const priceRefreshScheduler = startPriceRefreshScheduler({
-  run: runPriceRefreshJob
+  run: (options) => executeCatalogIngestionJob(() => runPriceRefreshJob(options))
+});
+const durablePriceRefreshScheduler = startDurablePriceRefreshScheduler({
+  intervalMs: priceRefreshIntervalMsFromEnv(),
+  enqueue: (idempotencyKey, slot) => backgroundJobStore.enqueue({
+    kind: "price-refresh",
+    payload: {
+      ...priceRefreshOptionsFromEnv(),
+      trigger: "scheduled",
+      scheduledIntervalMs: slot.intervalMs,
+      scheduledSlot: slot.slot
+    },
+    idempotencyKey
+  })
 });
 
 function isLoopbackProxyAddress(address: string) {
@@ -132,6 +194,9 @@ function isLoopbackProxyAddress(address: string) {
 
 // Caddy runs on the same host; trust only loopback so direct clients cannot spoof X-Forwarded-For.
 app.set("trust proxy", isLoopbackProxyAddress);
+
+app.use(securityHeaders());
+app.use(requestTelemetry());
 
 function isApiPath(path: string) {
   return path === "/api" || path.startsWith("/api/");
@@ -150,8 +215,8 @@ app.use((request, response, next) => {
     response.setHeader("Access-Control-Allow-Origin", origin);
     response.setHeader("Access-Control-Allow-Credentials", "true");
     response.setHeader("Access-Control-Allow-Methods", "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS");
-    response.setHeader("Access-Control-Allow-Headers", "Accept, Content-Type, If-Modified-Since, If-None-Match, X-Share-Owner-Token");
-    response.setHeader("Access-Control-Expose-Headers", "ETag, Last-Modified, Retry-After");
+    response.setHeader("Access-Control-Allow-Headers", "Accept, Content-Type, If-Modified-Since, If-None-Match, Idempotency-Key, X-Share-Owner-Token");
+    response.setHeader("Access-Control-Expose-Headers", "ETag, Last-Modified, Retry-After, X-Request-Id");
     response.setHeader("Access-Control-Max-Age", "600");
     response.vary("Origin");
     if (request.method === "OPTIONS") {
@@ -200,14 +265,6 @@ function jsonBodyErrorHandler(error: unknown, _request: Request, response: Respo
 // Keep parser failures in the JSON API contract without swallowing unrelated route errors.
 app.use(jsonBodyErrorHandler);
 
-const emptyBuild = (): BuildSelection => ({
-  memory: [],
-  ssd: [],
-  hdd: [],
-  accessories: [],
-  useIntegratedGraphics: true
-});
-
 function evaluateBuildWithAccessories(
   build: BuildSelection,
   catalog: Part[],
@@ -216,61 +273,13 @@ function evaluateBuildWithAccessories(
   recommendationPreferences: RecommendationPreferences,
   includeSuggestions = true
 ): CompatibilityResult {
-  const result = evaluateBuild(build, catalog, {
+  return evaluateBuildWithSharedDomain(build, catalog, accessories, {
     catalogSnapshotAt,
     recommendationPreferences,
-    ...(includeSuggestions ? {} : { includeSuggestions: false, includeAnalysis: true })
+    gamingPerformanceEvidence: loadGamingPerformanceEvidence(),
+    includeSuggestions,
+    now: new Date().toISOString()
   });
-  const gamingPerformanceAssessment = compatibilityGamingPerformanceAssessmentFor(build, catalog, recommendationPreferences);
-  if (gamingPerformanceAssessment) result.gamingPerformanceAssessment = gamingPerformanceAssessment;
-  result.coreTotalPriceWon = result.totalPriceWon;
-  result.corePriceComplete = result.priceComplete;
-  result.dataHealth = summarizeBuildDataHealth(build, catalog, accessories);
-  if (includeSuggestions) result.accessoryRecommendations = recommendAccessories(build, catalog, accessories).map((recommendation) => ({
-    ...recommendation,
-    item: { ...recommendation.item, dataFreshness: classifyDataFreshness(recommendation.item.updatedAt) }
-  }));
-  const accessorySummary = summarizeAccessorySelections(build.accessories ?? [], accessories);
-  if ((build.accessories ?? []).length > 0) result.accessoryCompatibility = accessoryCompatibilityFor(build, catalog, accessories);
-  result.accessoryTotalPriceWon = accessorySummary.totalPriceWon;
-  result.accessoryPriceComplete = accessorySummary.priceComplete;
-  result.totalPriceWon += accessorySummary.totalPriceWon;
-  result.priceComplete = result.priceComplete && accessorySummary.priceComplete;
-  for (const plan of result.repairPlans ?? []) {
-    plan.afterTotalPriceWon += accessorySummary.totalPriceWon;
-    plan.priceComplete = plan.priceComplete && accessorySummary.priceComplete;
-    if (plan.budgetWon !== undefined && plan.priceComplete) {
-      plan.budgetDeltaWon = plan.afterTotalPriceWon - plan.budgetWon;
-      plan.withinBudget = plan.budgetDeltaWon <= 0;
-    }
-  }
-  return result;
-}
-
-function compatibilityGamingPerformanceAssessmentFor(build: BuildSelection, catalog: Part[], recommendationPreferences: RecommendationPreferences) {
-  const hasGamingOptionAdvisory = recommendationPreferences.profile === "gaming" && (
-    (recommendationPreferences.gamingGameIds?.length ?? 0) > 0
-    || recommendationPreferences.gamingGraphicsPreset !== undefined
-    || recommendationPreferences.gamingRayTracing !== undefined
-    || recommendationPreferences.gamingUpscaling !== undefined
-  );
-  if (!hasGamingOptionAdvisory) return undefined;
-  const selectedGpu = build.gpu ? catalog.find((part) => part.id === build.gpu?.partId && part.category === "gpu") : undefined;
-  return gamingPerformanceAssessmentFor(loadGamingPerformanceEvidence(), {
-    gameIds: recommendationPreferences.gamingGameIds ?? [],
-    resolution: recommendationPreferences.gamingResolution ?? "1440p",
-    refreshRate: recommendationPreferences.gamingRefreshRate ?? 144,
-    graphicsPreset: recommendationPreferences.gamingGraphicsPreset,
-    rayTracing: recommendationPreferences.gamingRayTracing,
-    upscaling: recommendationPreferences.gamingUpscaling,
-    ...(selectedGpu ? { gpuPartId: selectedGpu.id, gpuName: selectedGpu.name } : {})
-  });
-}
-
-function compatibilityResponseFor(result: CompatibilityResult): CompatibilityResult {
-  if (!result.upgradeBundles) return result;
-  const { upgradeBundles: _fullBundles, ...withoutFullBundles } = result;
-  return { ...withoutFullBundles, upgradeBundlePayload: upgradeBundlePayloadFor(result.upgradeBundles) };
 }
 
 function catalogRefreshReportForRequest(value: unknown, build: BuildSelection, preferences: RecommendationPreferences): { report?: CatalogRefreshReport; error?: string } {
@@ -339,6 +348,7 @@ const partRefreshJobs = new Map<string, Promise<PartRefreshResponse>>();
 const partRefreshLastRunAt = new Map<string, number>();
 const accessoryRefreshJobs = new Map<string, Promise<AccessoryRefreshResponse>>();
 const accessoryRefreshLastRunAt = new Map<string, number>();
+const createRateLimitMiddleware = (name: string, policy: RateLimitPolicy) => createBaseRateLimitMiddleware(name, policy, { consume: consumeRateLimitWindow });
 const buildCreateRateLimit = createRateLimitMiddleware("build-create", { limit: 20, windowMs: 60_000 });
 const buildShareRateLimit = createRateLimitMiddleware("build-share", { limit: 120, windowMs: 60_000 });
 const buildRecoverRateLimit = createRateLimitMiddleware("build-recover", { limit: 10, windowMs: 60_000 });
@@ -698,326 +708,9 @@ export function buildM2SlotReviewTemplate(
   };
 }
 
-type BuildParseResult = {
-  build: BuildSelection;
-  errors: string[];
-};
-
 export const MAX_BUILD_SELECTIONS_PER_LIST = BUILD_INPUT_MAX_SELECTIONS_PER_LIST;
 export const MAX_BUILD_ID_LENGTH = BUILD_INPUT_MAX_ID_LENGTH;
 export const MAX_BUILD_M2_SLOTS = BUILD_INPUT_MAX_M2_SLOTS;
-
-function buildSelectionLabel(label: string) {
-  const match = /^(cpu|cooler|motherboard|memory|gpu|ssd|hdd|case|psu|accessories)(?:\[(\d+)\])?$/.exec(label);
-  if (!match) return "부품";
-  const labels: Record<string, string> = { cpu: "CPU", cooler: "CPU 쿨러", motherboard: "메인보드", memory: "메모리", gpu: "그래픽카드", ssd: "SSD", hdd: "하드디스크", case: "케이스", psu: "파워", accessories: "주변 부품" };
-  const base = labels[match[1]] ?? "부품";
-  return match[2] === undefined ? base : `${base} ${Number(match[2]) + 1}번째`;
-}
-
-function parseSelection(value: unknown, label: string, errors: string[]) {
-  const fieldLabel = buildSelectionLabel(label);
-  if (value === undefined || value === null) return undefined;
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    errors.push(`${fieldLabel} 선택 정보가 올바르지 않습니다.`);
-    return undefined;
-  }
-  const candidate = value as Record<string, unknown>;
-  if (typeof candidate.partId !== "string" || candidate.partId.trim().length === 0) {
-    errors.push(`${fieldLabel} 선택을 확인해 주세요.`);
-    return undefined;
-  }
-  if (candidate.partId.trim().length > MAX_BUILD_ID_LENGTH) {
-    errors.push(`${fieldLabel} 정보가 너무 깁니다.`);
-    return undefined;
-  }
-  const rawQuantity = candidate.quantity ?? 1;
-  const quantity = Number(rawQuantity);
-  if (!Number.isFinite(quantity) || !Number.isInteger(quantity) || quantity < 1 || quantity > 99) {
-    errors.push(`${fieldLabel} 수량은 1~99개로 입력해 주세요.`);
-    return undefined;
-  }
-  return { partId: candidate.partId.trim(), quantity };
-}
-
-function parseSelectionList(value: unknown, label: string, errors: string[]) {
-  const fieldLabel = buildSelectionLabel(label);
-  if (value === undefined) return [];
-  if (!Array.isArray(value)) {
-    errors.push(`${fieldLabel} 목록 형식이 올바르지 않습니다.`);
-    return [];
-  }
-  if (value.length > MAX_BUILD_SELECTIONS_PER_LIST) {
-    errors.push(`${fieldLabel} 목록은 한 번에 최대 ${MAX_BUILD_SELECTIONS_PER_LIST}개까지 선택할 수 있습니다.`);
-    return [];
-  }
-  return value
-    .map((item, index) => parseSelection(item, `${label}[${index}]`, errors))
-    .filter((selection): selection is NonNullable<ReturnType<typeof parseSelection>> => Boolean(selection));
-}
-
-function parseAccessorySelection(value: unknown, label: string, errors: string[]): AccessorySelection | undefined {
-  const fieldLabel = buildSelectionLabel(label);
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    errors.push(`${fieldLabel} 선택 정보가 올바르지 않습니다.`);
-    return undefined;
-  }
-  const candidate = value as Record<string, unknown>;
-  if (typeof candidate.accessoryId !== "string" || candidate.accessoryId.trim().length === 0) {
-    errors.push("주변 부품 선택을 확인해 주세요.");
-    return undefined;
-  }
-  if (candidate.accessoryId.trim().length > MAX_BUILD_ID_LENGTH) {
-    errors.push("주변 부품 정보가 너무 깁니다.");
-    return undefined;
-  }
-  const quantity = Number(candidate.quantity ?? 1);
-  if (!Number.isFinite(quantity) || !Number.isInteger(quantity) || quantity < 1 || quantity > 99) {
-    errors.push("주변 부품 수량은 1~99개로 입력해 주세요.");
-    return undefined;
-  }
-  const targetPartId = candidate.targetPartId;
-  if (targetPartId !== undefined && (typeof targetPartId !== "string" || targetPartId.trim().length === 0 || targetPartId.trim().length > MAX_BUILD_ID_LENGTH)) {
-    errors.push("주변 부품에 연결할 SSD를 확인해 주세요.");
-    return undefined;
-  }
-  const targetAccessoryId = candidate.targetAccessoryId;
-  if (targetAccessoryId !== undefined && (typeof targetAccessoryId !== "string" || targetAccessoryId.trim().length === 0 || targetAccessoryId.trim().length > MAX_BUILD_ID_LENGTH)) {
-    errors.push("주변 부품에 연결할 팬 허브를 확인해 주세요.");
-    return undefined;
-  }
-  return { accessoryId: candidate.accessoryId.trim(), quantity, ...(typeof targetPartId === "string" ? { targetPartId: targetPartId.trim() } : {}), ...(typeof targetAccessoryId === "string" ? { targetAccessoryId: targetAccessoryId.trim() } : {}) };
-}
-
-function parseAccessorySelectionList(value: unknown, label: string, errors: string[]) {
-  const fieldLabel = buildSelectionLabel(label);
-  if (value === undefined) return [];
-  if (!Array.isArray(value)) {
-    errors.push(`${fieldLabel} 목록 형식이 올바르지 않습니다.`);
-    return [];
-  }
-  if (value.length > MAX_BUILD_SELECTIONS_PER_LIST) {
-    errors.push(`${fieldLabel} 목록은 한 번에 최대 ${MAX_BUILD_SELECTIONS_PER_LIST}개까지 선택할 수 있습니다.`);
-    return [];
-  }
-  return value
-    .map((item, index) => parseAccessorySelection(item, `${label}[${index}]`, errors))
-    .filter((selection): selection is AccessorySelection => Boolean(selection));
-}
-
-function parseM2SlotSelection(value: unknown, errors: string[]) {
-  if (value === undefined || value === null) return undefined;
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    errors.push("M.2 슬롯별 SSD 선택을 확인해 주세요.");
-    return undefined;
-  }
-  const rawSlotKeys = Object.keys(value as Record<string, unknown>);
-  if (rawSlotKeys.length > MAX_BUILD_M2_SLOTS) {
-    errors.push(`M.2 슬롯은 최대 ${MAX_BUILD_M2_SLOTS}개까지 지정할 수 있습니다.`);
-    return undefined;
-  }
-  const normalized: Record<string, string> = {};
-  for (const [rawSlotId, rawPartId] of Object.entries(value as Record<string, unknown>)) {
-    const slotId = normalizeM2SlotId(rawSlotId);
-    if (!slotId) {
-      errors.push(`M.2 슬롯 이름 ${rawSlotId}가 올바르지 않습니다. M2_1부터 M2_8까지 사용할 수 있습니다.`);
-      continue;
-    }
-    if (Object.prototype.hasOwnProperty.call(normalized, slotId)) {
-      errors.push(`${slotId} 슬롯을 두 번 지정했습니다.`);
-      continue;
-    }
-    if (typeof rawPartId !== "string" || rawPartId.trim().length === 0 || rawPartId.trim().length > MAX_BUILD_ID_LENGTH) {
-      errors.push(`${slotId} 슬롯에 연결할 SSD를 확인해 주세요.`);
-      continue;
-    }
-    normalized[slotId] = rawPartId.trim();
-  }
-  if (Object.keys(normalized).length > MAX_BUILD_M2_SLOTS) {
-    errors.push(`M.2 슬롯은 최대 ${MAX_BUILD_M2_SLOTS}개까지 지정할 수 있습니다.`);
-  }
-  return Object.keys(normalized).length > 0 ? normalized : undefined;
-}
-
-export function parseBuild(value: unknown): BuildParseResult {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return { build: emptyBuild(), errors: ["견적 본문은 객체여야 합니다."] };
-  }
-  const candidate = value as Record<string, unknown>;
-  const errors: string[] = [];
-  if (candidate.useIntegratedGraphics !== undefined && typeof candidate.useIntegratedGraphics !== "boolean") {
-    errors.push("내장 그래픽 설정을 확인해 주세요.");
-  }
-  const rgbControllerAccessoryId = candidate.rgbControllerAccessoryId;
-  if (rgbControllerAccessoryId !== undefined && (typeof rgbControllerAccessoryId !== "string" || rgbControllerAccessoryId.trim().length === 0 || rgbControllerAccessoryId.trim().length > MAX_BUILD_ID_LENGTH)) {
-    errors.push("RGB 컨트롤러를 선택해 주세요.");
-    }
-  return {
-    build: {
-      cpu: parseSelection(candidate.cpu, "cpu", errors),
-      cooler: parseSelection(candidate.cooler, "cooler", errors),
-      motherboard: parseSelection(candidate.motherboard, "motherboard", errors),
-      memory: parseSelectionList(candidate.memory, "memory", errors),
-      gpu: parseSelection(candidate.gpu, "gpu", errors),
-      ssd: parseSelectionList(candidate.ssd, "ssd", errors),
-      hdd: parseSelectionList(candidate.hdd, "hdd", errors),
-      case: parseSelection(candidate.case, "case", errors),
-      psu: parseSelection(candidate.psu, "psu", errors),
-      accessories: parseAccessorySelectionList(candidate.accessories, "accessories", errors),
-      m2SlotSelection: parseM2SlotSelection(candidate.m2SlotSelection, errors),
-      ...(typeof rgbControllerAccessoryId === "string" ? { rgbControllerAccessoryId: rgbControllerAccessoryId.trim() } : {}),
-      useIntegratedGraphics: candidate.useIntegratedGraphics !== false
-    },
-    errors
-  };
-}
-
-export function parseRecommendationPreferences(value: unknown): RecommendationPreferences {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return { priority: "balanced", profile: "general", listingPolicy: "retail_only" };
-  const candidate = value as Record<string, unknown>;
-  const priority = isRecommendationPriority(candidate.priority)
-    ? candidate.priority
-    : "balanced";
-  const rawBudget = Number(candidate.budgetWon);
-  const budgetWon = Number.isFinite(rawBudget) && Number.isInteger(rawBudget) && rawBudget > 0 && rawBudget <= 100_000_000
-    ? rawBudget
-    : undefined;
-  const profile = ["general", "gaming", "creator", "development", "office"].includes(String(candidate.profile))
-    ? candidate.profile as RecommendationProfile
-    : "general";
-  const listingPolicy = ["retail_only", "include_bulk", "all"].includes(String(candidate.listingPolicy))
-    ? candidate.listingPolicy as ListingPolicy
-    : "retail_only";
-  const performanceTier = ["entry", "high", "top"].includes(String(candidate.performanceTier))
-    ? candidate.performanceTier as RecommendationPerformanceTier
-    : undefined;
-  const gamingResolution = ["1080p", "1440p", "4k"].includes(String(candidate.gamingResolution))
-    ? candidate.gamingResolution as RecommendationPreferences["gamingResolution"]
-    : undefined;
-  const gamingRefreshRate = [60, 144, 240].includes(Number(candidate.gamingRefreshRate))
-    ? Number(candidate.gamingRefreshRate) as RecommendationPreferences["gamingRefreshRate"]
-    : undefined;
-  const gamingGameIds = Array.isArray(candidate.gamingGameIds)
-    ? candidate.gamingGameIds.filter((value): value is string => typeof value === "string" && value.trim().length > 0 && value.trim().length <= 160).slice(0, 5)
-    : undefined;
-  const gamingGraphicsPreset = ["competitive", "balanced", "high"].includes(String(candidate.gamingGraphicsPreset))
-    ? candidate.gamingGraphicsPreset as RecommendationPreferences["gamingGraphicsPreset"]
-    : undefined;
-  const gamingRayTracing = typeof candidate.gamingRayTracing === "boolean" ? candidate.gamingRayTracing : undefined;
-  const gamingUpscaling = ["native", "quality", "balanced"].includes(String(candidate.gamingUpscaling))
-    ? candidate.gamingUpscaling as RecommendationPreferences["gamingUpscaling"]
-    : undefined;
-  return {
-    priority,
-    profile,
-    budgetWon,
-    listingPolicy,
-    ...(performanceTier ? { performanceTier } : {}),
-    ...(gamingResolution ? { gamingResolution } : {}),
-    ...(profile === "gaming" && gamingRefreshRate ? { gamingRefreshRate } : {}),
-    ...(profile === "gaming" && gamingGameIds?.length ? { gamingGameIds } : {}),
-    ...(profile === "gaming" && gamingGraphicsPreset ? { gamingGraphicsPreset } : {}),
-    ...(profile === "gaming" && gamingRayTracing !== undefined ? { gamingRayTracing } : {}),
-    ...(profile === "gaming" && gamingUpscaling ? { gamingUpscaling } : {})
-  };
-}
-
-export function parseBuildGenerationRequest(value: unknown): { request?: BuildGenerationRequest; errors: string[] } {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return { errors: ["자동 견적 요청은 객체여야 합니다."] };
-  }
-  const candidate = value as Record<string, unknown>;
-  const errors: string[] = [];
-  const profile = ["general", "gaming", "creator", "development", "office"].includes(String(candidate.profile))
-    ? candidate.profile as RecommendationProfile
-    : "general";
-  const priority = isRecommendationPriority(candidate.priority)
-    ? candidate.priority
-    : "balanced";
-  const budgetWon = Number(candidate.budgetWon);
-  if (!Number.isFinite(budgetWon) || !Number.isInteger(budgetWon) || budgetWon <= 0 || budgetWon > 100_000_000) {
-    errors.push("budgetWon은 1원부터 100,000,000원 사이의 정수여야 합니다.");
-  }
-  if (candidate.includeGpu !== undefined && typeof candidate.includeGpu !== "boolean") {
-    errors.push("includeGpu는 boolean이어야 합니다.");
-  }
-  if (candidate.priority !== undefined && !isRecommendationPriority(candidate.priority)) {
-    errors.push("priority는 balanced, budget, performance, reliability 중 하나여야 합니다.");
-  }
-  if (candidate.performanceTier !== undefined && !["entry", "high", "top"].includes(String(candidate.performanceTier))) {
-    errors.push("performanceTier는 entry, high, top 중 하나여야 합니다.");
-  }
-  if (candidate.includeNonRetail !== undefined && typeof candidate.includeNonRetail !== "boolean") {
-    errors.push("includeNonRetail은 boolean이어야 합니다.");
-  }
-  if (candidate.gamingResolution !== undefined && !["1080p", "1440p", "4k"].includes(String(candidate.gamingResolution))) {
-    errors.push("gamingResolution은 1080p, 1440p, 4k 중 하나여야 합니다.");
-  }
-  if (candidate.gamingRefreshRate !== undefined && ![60, 144, 240].includes(Number(candidate.gamingRefreshRate))) {
-    errors.push("gamingRefreshRate는 60, 144, 240 중 하나여야 합니다.");
-  }
-  if (candidate.gamingGameIds !== undefined && (!Array.isArray(candidate.gamingGameIds) || candidate.gamingGameIds.length > 5 || !candidate.gamingGameIds.every((value) => typeof value === "string" && value.trim().length > 0 && value.trim().length <= 160))) {
-    errors.push("gamingGameIds는 최대 5개의 비어 있지 않은 160자 이하 게임 ID 배열이어야 합니다.");
-  }
-  if (candidate.gamingGraphicsPreset !== undefined && !["competitive", "balanced", "high"].includes(String(candidate.gamingGraphicsPreset))) {
-    errors.push("gamingGraphicsPreset은 competitive, balanced, high 중 하나여야 합니다.");
-  }
-  if (candidate.gamingRayTracing !== undefined && typeof candidate.gamingRayTracing !== "boolean") {
-    errors.push("gamingRayTracing은 boolean이어야 합니다.");
-  }
-  if (candidate.gamingUpscaling !== undefined && !["native", "quality", "balanced"].includes(String(candidate.gamingUpscaling))) {
-    errors.push("gamingUpscaling은 native, quality, balanced 중 하나여야 합니다.");
-  }
-  const memoryCapacityGb = Number(candidate.memoryCapacityGb ?? 32);
-  if (![16, 32, 64, 128].includes(memoryCapacityGb)) {
-    errors.push("memoryCapacityGb는 16, 32, 64, 128 중 하나여야 합니다.");
-  }
-  const rawListingPolicy = candidate.listingPolicy === undefined
-    ? candidate.includeNonRetail === true ? "all" : "retail_only"
-    : String(candidate.listingPolicy);
-  if (!["retail_only", "include_bulk", "all"].includes(rawListingPolicy)) {
-    errors.push("listingPolicy는 retail_only, include_bulk, all 중 하나여야 합니다.");
-  }
-  const storageCapacityGb = Number(candidate.storageCapacityGb ?? 1000);
-  if (!Number.isInteger(storageCapacityGb) || storageCapacityGb <= 0 || storageCapacityGb > 100_000) {
-    errors.push("storageCapacityGb는 1부터 100,000 사이의 정수여야 합니다.");
-  }
-  const hddCount = Number(candidate.hddCount ?? 0);
-  if (!Number.isInteger(hddCount) || hddCount < 0 || hddCount > 8) {
-    errors.push("hddCount는 0부터 8 사이의 정수여야 합니다.");
-  }
-  const hddCapacityGb = Number(candidate.hddCapacityGb ?? 4000);
-  if (!Number.isInteger(hddCapacityGb) || hddCapacityGb <= 0 || hddCapacityGb > 100_000) {
-    errors.push("hddCapacityGb는 1부터 100,000 사이의 정수여야 합니다.");
-  }
-  if (errors.length > 0) return { errors };
-  return {
-    request: {
-      profile,
-      budgetWon,
-      includeGpu: typeof candidate.includeGpu === "boolean" ? candidate.includeGpu : profile === "gaming",
-      priority,
-      ...(typeof candidate.performanceTier === "string" ? { performanceTier: candidate.performanceTier as RecommendationPerformanceTier } : {}),
-      gamingResolution: ["1080p", "1440p", "4k"].includes(String(candidate.gamingResolution))
-        ? candidate.gamingResolution as BuildGenerationRequest["gamingResolution"]
-        : "1440p",
-      gamingRefreshRate: [60, 144, 240].includes(Number(candidate.gamingRefreshRate))
-        ? Number(candidate.gamingRefreshRate) as BuildGenerationRequest["gamingRefreshRate"]
-        : 144,
-      ...(Array.isArray(candidate.gamingGameIds) ? { gamingGameIds: candidate.gamingGameIds as string[] } : {}),
-      ...(typeof candidate.gamingGraphicsPreset === "string" ? { gamingGraphicsPreset: candidate.gamingGraphicsPreset as BuildGenerationRequest["gamingGraphicsPreset"] } : {}),
-      ...(typeof candidate.gamingRayTracing === "boolean" ? { gamingRayTracing: candidate.gamingRayTracing } : {}),
-      ...(typeof candidate.gamingUpscaling === "string" ? { gamingUpscaling: candidate.gamingUpscaling as BuildGenerationRequest["gamingUpscaling"] } : {}),
-      memoryCapacityGb,
-      storageCapacityGb,
-      hddCapacityGb,
-      hddCount,
-      includeNonRetail: rawListingPolicy === "all",
-      listingPolicy: rawListingPolicy as ListingPolicy
-    },
-    errors
-  };
-}
 
 async function loadBuilds() {
   return readSavedBuilds();
@@ -1153,8 +846,11 @@ async function runDueSavedBuildMonitors(now = new Date().toISOString()) {
   }
 }
 
-app.get("/api/health", (_request, response) => {
-  response.json({ ok: true, service: "pc-supporter", engineVersion: ENGINE_VERSION });
+app.get("/api/health", async (_request, response) => {
+  const persistence = await persistenceDiagnostics();
+  const adminSecurity = adminSecurityStatus();
+  const ok = persistence.ready && adminSecurity.productionReady;
+  response.status(ok ? 200 : 503).json({ ok, service: "pc-supporter", engineVersion: ENGINE_VERSION, persistence, adminSecurity });
 });
 
 app.get("/api/meta", async (request, response) => {
@@ -1439,7 +1135,7 @@ async function refreshCatalogPartById(partId: string) {
     }
     partRefreshLastRunAt.delete(partId);
   }
-  const job = (async () => {
+  const job = executeCatalogIngestionJob(async () => {
     try {
       const refreshed = await refreshDanawaPart(current);
       const savedCatalog = await upsertCatalog([refreshed]);
@@ -1454,7 +1150,10 @@ async function refreshCatalogPartById(partId: string) {
       if (error instanceof PartRefreshRouteError) throw error;
       throw new PartRefreshRouteError(422, "PART_REFRESH_FAILED", error instanceof Error ? error.message : "부품 상세 정보를 다시 확인하지 못했습니다.");
     }
-  })();
+  }).catch((error: unknown) => {
+    if (error instanceof CatalogIngestionBusyError) throw new PartRefreshRouteError(409, "PART_REFRESH_RUNNING", error.message);
+    throw error;
+  });
   partRefreshJobs.set(partId, job);
   try {
     const result = await job;
@@ -1999,7 +1698,7 @@ app.post("/api/accessories/:id/refresh", catalogRefreshRateLimit, requirePartRef
     accessoryRefreshLastRunAt.delete(accessoryId);
   }
 
-  const job = (async () => {
+  const job = executeCatalogIngestionJob(async () => {
     const refreshed = await refreshDanawaAccessory(current);
     const savedAccessories = await upsertAccessories([refreshed]);
     const savedItem = findAccessory(savedAccessories, current.id);
@@ -2009,14 +1708,15 @@ app.post("/api/accessories/:id/refresh", catalogRefreshRateLimit, requirePartRef
       console.warn(`주변 부품 변경 이력을 저장하지 못했습니다: ${error instanceof Error ? error.message : String(error)}`);
     });
     return result;
-  })();
+  });
   accessoryRefreshJobs.set(accessoryId, job);
   try {
     const result = await job;
     accessoryRefreshLastRunAt.set(accessoryId, Date.now());
     response.json(result);
   } catch (error: unknown) {
-    response.status(422).json({ error: error instanceof Error ? error.message : "주변 부품 상세 정보를 다시 확인하지 못했습니다.", code: "ACCESSORY_REFRESH_FAILED" });
+    const busy = error instanceof CatalogIngestionBusyError;
+    response.status(busy ? 409 : 422).json({ error: error instanceof Error ? error.message : "주변 부품 상세 정보를 다시 확인하지 못했습니다.", code: busy ? "ACCESSORY_REFRESH_RUNNING" : "ACCESSORY_REFRESH_FAILED" });
   } finally {
     if (accessoryRefreshJobs.get(accessoryId) === job) accessoryRefreshJobs.delete(accessoryId);
   }
@@ -2046,7 +1746,7 @@ app.post("/api/compatibility/check", publicCompatibilityRateLimit, async (reques
     });
     const cached = await compatibilityResultCache.getOrCompute(cacheKey, () => {
       const fullResult = evaluateBuildWithAccessories(build, catalog, accessories, catalogSnapshotAt, recommendationPreferences);
-      const result = compatibilityResponseFor(fullResult);
+      const result = compatibilityResultForPublicTransport(fullResult);
       return { result, body: JSON.stringify(result) } satisfies CompatibilityResponseCacheValue;
     });
     return { status: "ok", result: cached.value.result, body: cached.value.body, cacheLookup: cached.lookup === "COALESCED" ? "HIT" : cached.lookup };
@@ -2136,6 +1836,7 @@ app.post("/api/builds/recommend/budget-ladder", publicRecommendationRateLimit, a
         return { ...scenario, error: message, ...(diagnostics.length > 0 ? { diagnostics } : {}) };
       }
     });
+    trackUsageEvent("recommend");
     response.json({ scenarios: outcomes });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "예산 구간 자동 견적을 생성하지 못했습니다.";
@@ -3197,9 +2898,9 @@ app.post("/api/builds/:id/recovery-code", buildShareRateLimit, async (request, r
   // ownerTokenHash가 없는 레거시 견적에는 누구도 평문을 모르는 해시를 쓴다 —
   // 이 경우 발급된 복구 코드 자체가 유일한 소유 증명이 된다.
   const ownerTokenHash = build.ownerTokenHash ?? createShareOwnerCredential().hash;
-  const updated = await updateSavedBuildShareCredentials(build.id, ownerTokenHash, credential.hash);
+  const updated = await updateSavedBuildShareCredentials(build.id, ownerTokenHash, credential.hash, build.recoveryCodeHash);
   if (!updated) {
-    response.status(404).json({ error: "저장된 견적을 찾을 수 없습니다." });
+    response.status(409).json({ error: "복구 코드 상태가 변경되었습니다. 다시 시도해 주세요.", code: "RECOVERY_CODE_CONFLICT" });
     return;
   }
   response.status(201).json({ recoveryCode: credential.code });
@@ -3221,9 +2922,9 @@ app.post("/api/builds/:id/recover", buildRecoverRateLimit, async (request, respo
   }
   const ownerCredential = createShareOwnerCredential();
   const recoveryCredential = createShareRecoveryCode();
-  const updated = await updateSavedBuildShareCredentials(build.id, ownerCredential.hash, recoveryCredential.hash);
+  const updated = await updateSavedBuildShareCredentials(build.id, ownerCredential.hash, recoveryCredential.hash, build.recoveryCodeHash);
   if (!updated) {
-    response.status(404).json({ error: "저장된 견적을 찾을 수 없습니다." });
+    response.status(401).json({ error: "복구 코드가 이 견적과 일치하지 않습니다.", code: "RECOVERY_CODE_MISMATCH" });
     return;
   }
   response.json({ ownerToken: ownerCredential.token, recoveryCode: recoveryCredential.code });
@@ -3509,12 +3210,37 @@ app.get("/api/admin/crawl/status", requireAdmin, async (_request, response) => {
   response.json(await readCrawlStatus());
 });
 
-app.get("/api/admin/prices/refresh/status", requireAdmin, async (_request, response) => {
-  response.json({ enabled: priceRefreshSchedulerEnabled(), ...(await readPriceRefreshStatus()) });
+app.get("/api/admin/prices/refresh/status", requireAdmin, async (request, response) => {
+  if (!postgresConfigured) {
+    response.json({ enabled: priceRefreshSchedulerEnabled(), ...(await readPriceRefreshStatus()) });
+    return;
+  }
+  if (request.query.jobId !== undefined && typeof request.query.jobId !== "string") {
+    response.status(400).json({ error: "가격 갱신 작업 ID가 하나만 제공되어야 합니다.", code: "PRICE_REFRESH_JOB_ID_INVALID" });
+    return;
+  }
+  const requestedId = typeof request.query.jobId === "string" ? request.query.jobId : undefined;
+  if (requestedId !== undefined && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestedId)) {
+    response.status(400).json({ error: "가격 갱신 작업 ID가 올바르지 않습니다.", code: "PRICE_REFRESH_JOB_ID_INVALID" });
+    return;
+  }
+  const job = requestedId
+    ? await backgroundJobStore.getById(requestedId)
+    : await backgroundJobStore.getLatestByKind("price-refresh");
+  const projected = priceRefreshJobProjection(job);
+  if (requestedId && !projected) {
+    response.status(404).json({ error: "가격 갱신 작업을 찾을 수 없습니다.", code: "PRICE_REFRESH_JOB_NOT_FOUND" });
+    return;
+  }
+  response.json({ enabled: priceRefreshSchedulerEnabled(), job: projected });
 });
 
 app.post("/api/admin/prices/refresh", requireAdmin, async (request, response) => {
   const conflict = async (error?: unknown) => {
+    if (error instanceof Error && error.message.includes("다른 API 인스턴스")) {
+      response.status(409).json({ error: error.message, code: "PRICE_REFRESH_RUNNING_ON_ANOTHER_INSTANCE" });
+      return;
+    }
     const current = await readPriceRefreshStatus();
     response.status(409).json({ error: error instanceof Error ? error.message : "가격 갱신 작업이 이미 실행 중입니다.", status: current });
   };
@@ -3522,8 +3248,58 @@ app.post("/api/admin/prices/refresh", requireAdmin, async (request, response) =>
     await conflict();
     return;
   }
-  const limits = priceRefreshOptionsFromEnv();
   const dryRun = request.body?.dryRun === true;
+  const configuredLimits = priceRefreshOptionsFromEnv();
+  const requestedLimit = (key: "coreLimit" | "accessoryLimit" | "delayMs", maximum: number) => {
+    const value = request.body?.[key];
+    if (value === undefined) return configuredLimits[key];
+    if (!Number.isSafeInteger(value) || Number(value) < (dryRun ? 0 : 1) || Number(value) > maximum) return undefined;
+    return Number(value);
+  };
+  const coreLimit = requestedLimit("coreLimit", 100);
+  const accessoryLimit = requestedLimit("accessoryLimit", 1_000);
+  const delayMs = requestedLimit("delayMs", 10_000);
+  if (coreLimit === undefined || accessoryLimit === undefined || delayMs === undefined) {
+    response.status(400).json({ error: "가격 갱신 제한 값이 허용 범위를 벗어났습니다.", code: "PRICE_REFRESH_LIMITS_INVALID" });
+    return;
+  }
+  const limits = { ...configuredLimits, coreLimit, accessoryLimit, delayMs };
+  if (postgresConfigured) {
+    const suppliedKey = request.header("Idempotency-Key");
+    if (suppliedKey !== undefined && (suppliedKey.length < 1 || suppliedKey.length > 128 || !/^[A-Za-z0-9][A-Za-z0-9._:-]*$/.test(suppliedKey))) {
+      response.status(400).json({ error: "Idempotency-Key 헤더 형식이 올바르지 않습니다.", code: "IDEMPOTENCY_KEY_INVALID" });
+      return;
+    }
+    const idempotencyKey = suppliedKey
+      ? `price-refresh:manual:${createHash("sha256").update(suppliedKey).digest("hex")}`
+      : undefined;
+    let job: BackgroundJob;
+    try {
+      job = await backgroundJobStore.enqueue({
+        kind: "price-refresh",
+        payload: { ...limits, dryRun },
+        ...(idempotencyKey ? { idempotencyKey } : { deduplicateActive: true })
+      });
+    } catch (error) {
+      if (error instanceof BackgroundJobIdempotencyConflictError) {
+        response.status(409).json({ error: "같은 Idempotency-Key가 다른 가격 갱신 조건에 이미 사용되었습니다.", code: "IDEMPOTENCY_KEY_REUSED" });
+        return;
+      }
+      if (error instanceof BackgroundJobActiveConflictError) {
+        const active = await backgroundJobStore.getActiveByKind("price-refresh");
+        response.status(409).json({
+          error: "다른 조건의 가격 갱신 작업이 이미 대기 중이거나 실행 중입니다.",
+          code: "PRICE_REFRESH_ALREADY_ACTIVE",
+          job: priceRefreshJobProjection(active)
+        });
+        return;
+      }
+      throw error;
+    }
+    const statusUrl = `/api/admin/prices/refresh/status?jobId=${encodeURIComponent(job.id)}`;
+    response.status(202).json({ accepted: true, dryRun, limits, jobId: job.id, status: job.status, statusUrl });
+    return;
+  }
   let markStarted!: () => void;
   const started = new Promise<void>((resolve) => {
     markStarted = resolve;
@@ -3618,7 +3394,7 @@ app.post("/api/admin/crawl/retry-page", adminCatalogCrawlRetryRateLimit, require
     response.status(409).json({ error: plan.reason ?? "재시도할 실패 페이지를 찾을 수 없습니다.", code: "CRAWL_PAGE_RETRY_UNAVAILABLE" });
     return;
   }
-  void runCrawlPageRetryJob({
+  const job = await startCatalogIngestionJob(() => runCrawlPageRetryJob({
     category,
     page,
     ...(expectedManifestStartedAt ? { expectedManifestStartedAt } : {}),
@@ -3626,7 +3402,12 @@ app.post("/api/admin/crawl/retry-page", adminCatalogCrawlRetryRateLimit, require
     delayMs: Number(process.env.DANAWA_CRAWL_DELAY_MS ?? 850),
     timeoutMs: Number(process.env.DANAWA_CRAWL_TIMEOUT_MS ?? 20000),
     retries: Number(process.env.DANAWA_CRAWL_RETRIES ?? 2)
-  });
+  }));
+  if (!job.started) {
+    response.status(409).json({ error: CATALOG_INGESTION_BUSY_MESSAGE, code: "CRAWL_PAGE_RETRY_RUNNING" });
+    return;
+  }
+  void job.completion.catch((error: unknown) => console.warn("카탈로그 페이지 재시도 실패", error));
   response.status(202).json({ message: `${category} ${page}페이지 재시도를 시작했습니다.`, mode: "page-retry", category, page, ...(manifest?.startedAt ? { manifestStartedAt: manifest.startedAt } : {}) });
 });
 
@@ -3646,13 +3427,18 @@ app.post("/api/admin/crawl/retry-failed-pages", adminCatalogCrawlRetryBatchRateL
     response.status(409).json({ error: plan.reason ?? "재시도할 실패 페이지를 찾을 수 없습니다.", code: "CRAWL_PAGE_RETRY_UNAVAILABLE" });
     return;
   }
-  void runCrawlPageRetryBatchJob({
+  const job = await startCatalogIngestionJob(() => runCrawlPageRetryBatchJob({
     ...(expectedManifestStartedAt ? { expectedManifestStartedAt } : {}),
     details: request.body?.details !== false,
     delayMs: Number(process.env.DANAWA_CRAWL_DELAY_MS ?? 850),
     timeoutMs: Number(process.env.DANAWA_CRAWL_TIMEOUT_MS ?? 20000),
     retries: Number(process.env.DANAWA_CRAWL_RETRIES ?? 2)
-  });
+  }));
+  if (!job.started) {
+    response.status(409).json({ error: CATALOG_INGESTION_BUSY_MESSAGE, code: "CRAWL_PAGE_RETRY_RUNNING" });
+    return;
+  }
+  void job.completion.catch((error: unknown) => console.warn("실패 페이지 일괄 재시도 실패", error));
   response.status(202).json({ message: `실패 페이지 ${plan.failures.length}개 일괄 재시도를 시작했습니다.`, mode: "page-retry-batch", total: plan.failures.length, ...(manifest?.startedAt ? { manifestStartedAt: manifest.startedAt } : {}) });
 });
 
@@ -4712,7 +4498,12 @@ app.post("/api/admin/crawl", adminCatalogCrawlRateLimit, requireAdmin, async (re
       return;
     }
   }
-  void runCrawlJob({ ...(resumeCategory ? { category: resumeCategory } : {}), pages, limitPerCategory, details, all, ...(resume ? { resume: true } : {}) });
+  const job = await startCatalogIngestionJob(() => runCrawlJob({ ...(resumeCategory ? { category: resumeCategory } : {}), pages, limitPerCategory, details, all, ...(resume ? { resume: true } : {}) }));
+  if (!job.started) {
+    response.status(409).json({ error: CATALOG_INGESTION_BUSY_MESSAGE, code: "CRAWL_RUNNING" });
+    return;
+  }
+  void job.completion.catch((error: unknown) => console.warn("카탈로그 수집 실패", error));
   response.status(202).json({ message: resume ? "중단된 전체 카탈로그 수집을 미완료 범주부터 재개했습니다." : category ? `${category} 카테고리 ${all ? "전체" : "샘플"} 카탈로그 갱신을 시작했습니다.` : "카탈로그 갱신을 시작했습니다.", mode: all ? "all" : "sample", ...(resumeCategory ? { category: resumeCategory } : {}), ...(resume ? { resumed: true } : {}) });
 });
 
@@ -4748,7 +4539,12 @@ app.post("/api/admin/accessories/crawl", adminAccessoryCrawlRateLimit, requireAd
   }
   const onlyIncomplete = request.body?.onlyIncomplete === true;
   const dryRun = request.body?.dryRun === true;
-  void runAccessoryCrawlJob({ category, pages, limitPerCategory, offset, onlyIncomplete, details, all, delayMs, dryRun });
+  const job = await startCatalogIngestionJob(() => runAccessoryCrawlJob({ category, pages, limitPerCategory, offset, onlyIncomplete, details, all, delayMs, dryRun }));
+  if (!job.started) {
+    response.status(409).json({ error: CATALOG_INGESTION_BUSY_MESSAGE, code: "ACCESSORY_CRAWL_RUNNING" });
+    return;
+  }
+  void job.completion.catch((error: unknown) => console.warn("주변 부품 카탈로그 수집 실패", error));
   response.status(202).json({ message: "주변 부품 카탈로그 갱신을 시작했습니다." });
 });
 
@@ -4772,13 +4568,19 @@ app.use((request, response, next) => {
   response.status(404).json({ error: "요청한 API 경로를 찾을 수 없습니다.", code: "API_NOT_FOUND" });
 });
 
-function apiErrorHandler(error: unknown, request: Request, response: Response, next: NextFunction) {
+async function apiErrorHandler(error: unknown, request: Request, response: Response, next: NextFunction) {
   if (!isApiPath(request.path) || response.headersSent) {
     next(error);
     return;
   }
   if (error instanceof URIError) {
     response.status(400).json({ error: "API 요청 경로 형식이 올바르지 않습니다.", code: "API_INVALID_PATH" });
+    return;
+  }
+  const persistence = await persistenceDiagnostics();
+  if (!persistence.ready) {
+    response.setHeader("Retry-After", "1");
+    response.status(503).json({ error: "저장소에 연결할 수 없어 요청을 처리하지 못했습니다.", code: "PERSISTENCE_UNAVAILABLE" });
     return;
   }
   response.status(500).json({ error: "서버에서 API 요청을 처리하지 못했습니다.", code: "INTERNAL_SERVER_ERROR" });
@@ -4790,43 +4592,122 @@ export { app };
 
 async function start() {
   await ensureDataDirectory();
-  await initializePersistence();
-  await loadCatalog();
-  app.listen(port, serverHost, () => {
-    console.log(`PC Supporter API listening on http://127.0.0.1:${port}`);
-  });
+  try {
+    await initializePersistence();
+    await loadCatalog();
+  } catch (error: unknown) {
+    if (!process.env.DATABASE_URL?.trim()) throw error;
+    const persistence = await persistenceDiagnostics();
+    if (persistence.ready) throw error;
+    console.error(`Configured PostgreSQL is unavailable; starting API to report readiness: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  let apiServer: HttpServer | undefined;
+  let priceRefreshWorker: ReturnType<typeof startPriceRefreshQueueWorker> | undefined;
+  const backgroundTimers: NodeJS.Timeout[] = [];
+  const trackBackgroundTimer = (timer: NodeJS.Timeout) => {
+    timer.unref();
+    backgroundTimers.push(timer);
+    return timer;
+  };
+  if (processRole !== "worker") {
+    apiServer = app.listen(port, serverHost, () => {
+      console.log(`PC Supporter API listening on http://127.0.0.1:${port} (${processRole})`);
+    });
+  }
 
-  if (process.env.BUILD_MONITOR_SCHEDULER_ENABLED !== "false") {
-    const initialMonitorRun = setTimeout(() => void runDueSavedBuildMonitors(), 5_000);
-    initialMonitorRun.unref();
-    const monitorInterval = setInterval(() => void runDueSavedBuildMonitors(), 60_000);
-    monitorInterval.unref();
+  if (postgresConfigured && processRole !== "api") {
+    trackBackgroundTimer(setTimeout(() => {
+      void pruneRateLimitWindows().catch((error: unknown) => console.warn("공유 rate-limit 만료 항목 정리에 실패했습니다.", error));
+    }, 10_000));
+    trackBackgroundTimer(setInterval(() => {
+      void pruneRateLimitWindows().catch((error: unknown) => console.warn("공유 rate-limit 만료 항목 정리에 실패했습니다.", error));
+    }, RATE_LIMIT_BUCKET_CLEANUP_INTERVAL_MS));
+  }
+
+  if (processRole !== "api" && process.env.BUILD_MONITOR_SCHEDULER_ENABLED !== "false") {
+    trackBackgroundTimer(setTimeout(() => void runDueSavedBuildMonitors(), 5_000));
+    trackBackgroundTimer(setInterval(() => void runDueSavedBuildMonitors(), 60_000));
   }
 
   const priceRefreshEnabled = priceRefreshSchedulerEnabled();
-  if (priceRefreshEnabled) {
-    const intervalHours = Number(process.env.PRICE_REFRESH_INTERVAL_HOURS ?? 3);
-    const intervalMs = Number.isFinite(intervalHours) && intervalHours > 0 ? intervalHours * 60 * 60 * 1000 : 0;
+  const ownsBackgroundWork = processRole !== "api";
+  const runsDurableWorker = ownsBackgroundWork && postgresConfigured;
+  if (runsDurableWorker) {
+    priceRefreshWorker = startPriceRefreshQueueWorker();
+    void priceRefreshWorker.start().catch((error: unknown) => {
+      console.error(`Price-refresh worker stopped unexpectedly: ${error instanceof Error ? error.message : String(error)}`);
+      process.exitCode = 1;
+    });
+  }
+  if (priceRefreshEnabled && runsDurableWorker) {
+    durablePriceRefreshScheduler.start();
+    trackBackgroundTimer(setTimeout(() => {
+      void durablePriceRefreshScheduler.enqueueCurrentSlot()?.catch((error) => console.error("Initial price-refresh enqueue failed", error));
+    }, 5_000));
+  } else if (priceRefreshEnabled && ownsBackgroundWork && !postgresConfigured) {
+    const intervalMs = priceRefreshIntervalMsFromEnv();
     priceRefreshScheduler.start(intervalMs);
-    const initialRun = setTimeout(() => {
+    trackBackgroundTimer(setTimeout(() => {
       void priceRefreshScheduler.runOnce(priceRefreshOptionsFromEnv()).catch((error) => console.error("Initial price refresh failed", error));
-    }, 5_000);
-    initialRun.unref();
+    }, 5_000));
   }
 
   // The older catalog crawl uses broad/sample discovery settings. Keep it opt-in and
   // mutually exclusive with the source-price refresh scheduler.
-  const legacyCrawlEnabled = process.env.DANAWA_CRAWL_SCHEDULER_ENABLED === "true" && !priceRefreshEnabled;
+  const legacyCrawlEnabled = ownsBackgroundWork && process.env.DANAWA_CRAWL_SCHEDULER_ENABLED === "true" && !priceRefreshEnabled;
   const intervalHours = Number(process.env.DANAWA_CRAWL_INTERVAL_HOURS ?? 24);
   if (legacyCrawlEnabled && process.env.DANAWA_CRAWL_ON_START === "true") {
-    void runCrawlJob({ all: process.env.DANAWA_CRAWL_ALL === "true" });
+    void executeCatalogIngestionJob(() => runCrawlJob({ all: process.env.DANAWA_CRAWL_ALL === "true" }))
+      .catch((error: unknown) => console.warn("초기 카탈로그 수집이 시작되지 않았습니다.", error));
   }
   if (legacyCrawlEnabled && Number.isFinite(intervalHours) && intervalHours > 0) {
-    const legacyCrawlInterval = setInterval(() => {
-      if (!isCrawlRunning()) void runCrawlJob({ all: process.env.DANAWA_CRAWL_ALL === "true" });
-    }, intervalHours * 60 * 60 * 1000);
-    legacyCrawlInterval.unref();
+    trackBackgroundTimer(setInterval(() => {
+      if (!isCrawlRunning()) {
+        void executeCatalogIngestionJob(() => runCrawlJob({ all: process.env.DANAWA_CRAWL_ALL === "true" }))
+          .catch((error: unknown) => console.warn("예약된 카탈로그 수집이 시작되지 않았습니다.", error));
+      }
+    }, intervalHours * 60 * 60 * 1000));
   }
+
+  let shuttingDown = false;
+  const shutdown = async (signal: NodeJS.Signals) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`PC Supporter ${processRole} received ${signal}; draining requests and background work.`);
+    for (const timer of backgroundTimers) clearTimeout(timer);
+    priceRefreshScheduler.stop();
+    durablePriceRefreshScheduler.stop();
+    try {
+      if (apiServer) {
+        await new Promise<void>((resolveClose, rejectClose) => {
+          apiServer!.close((error) => error ? rejectClose(error) : resolveClose());
+          apiServer!.closeIdleConnections?.();
+        });
+      }
+      await priceRefreshScheduler.waitForIdle();
+      await durablePriceRefreshScheduler.waitForIdle();
+      if (priceRefreshWorker) await priceRefreshWorker.stop();
+      while (savedBuildMonitorSchedulerRunning) {
+        await new Promise((resolveWait) => setTimeout(resolveWait, 50));
+      }
+    } catch (error: unknown) {
+      process.exitCode = 1;
+      console.error(`PC Supporter ${processRole} shutdown drain failed: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      await closePersistence().catch((error: unknown) => {
+        process.exitCode = 1;
+        console.error(`PC Supporter persistence pool did not close cleanly: ${error instanceof Error ? error.message : String(error)}`);
+      });
+    }
+  };
+  const onShutdown = (signal: NodeJS.Signals) => {
+    void shutdown(signal).catch((error: unknown) => {
+      process.exitCode = 1;
+      console.error(`PC Supporter shutdown failed: ${error instanceof Error ? error.message : String(error)}`);
+    });
+  };
+  process.once("SIGTERM", () => onShutdown("SIGTERM"));
+  process.once("SIGINT", () => onShutdown("SIGINT"));
 }
 
 if (process.argv[1] && import.meta.url === `file://${resolve(process.argv[1])}`) {

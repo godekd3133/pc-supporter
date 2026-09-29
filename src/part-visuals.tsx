@@ -1,3 +1,4 @@
+import { safeLocalStorage } from "./safe-storage";
 // Shared part/accessory visual components and watch predicates.
 import { catalogMissingFieldLabelFor } from "../shared/catalog-spec-coverage";
 import { CATALOG_WATCHLIST_STORAGE_KEY, catalogWatchlistContains, catalogWatchlistFromJson } from "../shared/catalog-watchlist";
@@ -86,12 +87,12 @@ export const CATEGORY_META: Record<PartCategory, CategoryMeta> = {
 
 export function partIsWatched(part: Part) {
   if (typeof window === "undefined") return false;
-  return catalogWatchlistContains(catalogWatchlistFromJson(window.localStorage.getItem(CATALOG_WATCHLIST_STORAGE_KEY)), { kind: "part", itemId: part.id });
+  return catalogWatchlistContains(catalogWatchlistFromJson(safeLocalStorage.getItem(CATALOG_WATCHLIST_STORAGE_KEY)), { kind: "part", itemId: part.id });
 }
 
 export function accessoryIsWatched(item: AccessoryItem) {
   if (typeof window === "undefined") return false;
-  return catalogWatchlistContains(catalogWatchlistFromJson(window.localStorage.getItem(CATALOG_WATCHLIST_STORAGE_KEY)), { kind: "accessory", itemId: item.id });
+  return catalogWatchlistContains(catalogWatchlistFromJson(safeLocalStorage.getItem(CATALOG_WATCHLIST_STORAGE_KEY)), { kind: "accessory", itemId: item.id });
 }
 
 export function PartEvidence({ part }: { part: Part }) {

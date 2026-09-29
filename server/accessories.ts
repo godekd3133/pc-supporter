@@ -3,17 +3,19 @@ import { ACCESSORY_CATEGORIES, isKnownPrice } from "../shared/types";
 import { ACCESSORIES_PATH, ACCESSORY_COVERAGE_PATH, COOLING_FAN_LOAD_OVERRIDES_PATH, fileUpdatedAt, readJson, writeJson, withSerializedFileMutation } from "./storage";
 import { parseM2FormFactors } from "./danawa";
 import { classifyDataFreshness } from "./data-health";
-import { applyCoolingFanLoadOverrides, readCoolingFanLoadOverrides, stripCoolingFanLoadOverride } from "./cooling-fan-load-overrides";
+import { applyCoolingFanLoadOverrides, readCoolingFanLoadOverrideSnapshot, readCoolingFanLoadOverrides, stripCoolingFanLoadOverride } from "./cooling-fan-load-overrides";
 import { fanCurrentAFromText } from "../shared/fan-connectivity";
 import { parseAdapterPcieSlotWidth, parseAdapterStorageDeviceCount } from "../shared/storage-adapter";
 import { seedAccessories } from "./seed-accessories";
 import { brandCountsFor } from "../shared/brand-counts";
+import { mutateAccessoryCatalogRecords, mutateAccessoryCoverageRecord, patchAccessoryCatalogPriceRecords, persistenceMode, readAccessoryCatalogRecords, readAccessoryCoverageRecord } from "./repository";
 
 let accessoryCache: AccessoryItem[] | null = null;
 let accessoryMtime: string | null = null;
 let coolingFanOverrideMtime: string | null = null;
 let accessoryLoadInFlight: Promise<AccessoryItem[]> | null = null;
 let baseAccessoriesCache: { mtime: string; value: AccessoryItem[] } | null = null;
+let accessoryStateRevision = 0;
 
 function reparseM2Accessories(items: AccessoryItem[]) {
   return items.map((item) => {
@@ -60,7 +62,37 @@ async function loadBaseAccessoriesFromDisk() {
   return reparseCoolingFanAccessories(reparseM2Accessories(merged));
 }
 
+async function loadBaseAccessoriesFromDatabase() {
+  let snapshot = await readAccessoryCatalogRecords();
+  if (snapshot.items.length === 0) {
+    // The first API replica seeds PostgreSQL atomically. If another replica or
+    // crawler writes first, retain that authoritative snapshot instead.
+    snapshot = await mutateAccessoryCatalogRecords((current) => ({ items: current.length === 0 ? seedAccessories : current }));
+  }
+  const merged = mergeAccessories(seedAccessories, snapshot.items);
+  return {
+    items: reparseCoolingFanAccessories(reparseM2Accessories(merged)),
+    updatedAt: snapshot.updatedAt
+  };
+}
+
 async function loadAccessoriesUncoalesced() {
+  if (await persistenceMode() === "postgres") {
+    const revisionAtReadStart = accessoryStateRevision;
+    const { items, updatedAt } = await loadBaseAccessoriesFromDatabase();
+    const coolingFanOverrideSnapshot = await readCoolingFanLoadOverrideSnapshot();
+    const runtimeItems = applyCoolingFanLoadOverrides(items, coolingFanOverrideSnapshot.overrides);
+    // Never serve the process cache as the PostgreSQL catalog source. The
+    // revision check only prevents an older in-flight read from replacing the
+    // timestamp/runtime snapshot produced by a more recent local write.
+    if (revisionAtReadStart === accessoryStateRevision) {
+      accessoryCache = runtimeItems;
+      accessoryMtime = updatedAt;
+      coolingFanOverrideMtime = coolingFanOverrideSnapshot.updatedAt;
+    }
+    return runtimeItems;
+  }
+
   const persistedMtime = await fileUpdatedAt(ACCESSORIES_PATH, "");
   const persistedCoolingFanOverrideMtime = await fileUpdatedAt(COOLING_FAN_LOAD_OVERRIDES_PATH, "");
   if (accessoryCache && accessoryMtime === persistedMtime && coolingFanOverrideMtime === persistedCoolingFanOverrideMtime) return accessoryCache;
@@ -258,19 +290,22 @@ export function accessoryCoverageSnapshotFor(stored: AccessoryCoverageSnapshot, 
 }
 
 export async function readAccessoryCoverage(): Promise<AccessoryCoverageSnapshot> {
+  const mode = await persistenceMode();
   const [stored, items] = await Promise.all([
-    readJson<AccessoryCoverageSnapshot>(ACCESSORY_COVERAGE_PATH, { updatedAt: "", categories: [] }),
+    mode === "postgres"
+      ? readAccessoryCoverageRecord()
+      : readJson<AccessoryCoverageSnapshot>(ACCESSORY_COVERAGE_PATH, { updatedAt: "", categories: [] }),
     loadAccessories()
   ]);
   return accessoryCoverageSnapshotFor(stored, items);
 }
 
-export async function recordAccessoryCoverage(
+function accessoryCoverageAfterReports(
+  current: AccessoryCoverageSnapshot,
+  items: AccessoryItem[],
   reports: AccessoryCrawlCategoryReport[],
   context: { mode: "sample" | "all"; details: boolean; onlyIncomplete: boolean; lastCrawledAt: string }
 ) {
-  const current = await readAccessoryCoverage();
-  const items = await loadAccessories();
   const byCategory = new Map(current.categories.map((coverage) => [coverage.category, coverage]));
   for (const report of reports) {
     const categoryItems = items.filter((item) => item.category === report.category);
@@ -332,12 +367,28 @@ export async function recordAccessoryCoverage(
     };
     byCategory.set(report.category, coverage);
   }
-  const snapshot: AccessoryCoverageSnapshot = {
+  return {
     updatedAt: context.lastCrawledAt,
     categories: ACCESSORY_CATEGORIES
       .map((category) => byCategory.get(category))
       .filter((coverage): coverage is AccessoryCategoryCoverage => Boolean(coverage))
-  };
+  } satisfies AccessoryCoverageSnapshot;
+}
+
+export async function recordAccessoryCoverage(
+  reports: AccessoryCrawlCategoryReport[],
+  context: { mode: "sample" | "all"; details: boolean; onlyIncomplete: boolean; lastCrawledAt: string }
+) {
+  const items = await loadAccessories();
+  if (await persistenceMode() === "postgres") {
+    return mutateAccessoryCoverageRecord((stored) => {
+      const current = accessoryCoverageSnapshotFor(stored, items);
+      return accessoryCoverageAfterReports(current, items, reports, context);
+    });
+  }
+  const stored = await readJson<AccessoryCoverageSnapshot>(ACCESSORY_COVERAGE_PATH, { updatedAt: "", categories: [] });
+  const current = accessoryCoverageSnapshotFor(stored, items);
+  const snapshot = accessoryCoverageAfterReports(current, items, reports, context);
   await writeJson(ACCESSORY_COVERAGE_PATH, snapshot);
   return snapshot;
 }
@@ -405,6 +456,31 @@ export async function upsertAccessories(
   items: AccessoryItem[],
   options: { replaceDanawaCategories?: AccessoryCategory[] } = {}
 ) {
+  if (await persistenceMode() === "postgres") {
+    accessoryLoadInFlight = null;
+    const incoming = items.map(stripCoolingFanLoadOverride);
+    const snapshot = await mutateAccessoryCatalogRecords((persisted) => {
+      const current = reparseCoolingFanAccessories(reparseM2Accessories(mergeAccessories(seedAccessories, persisted)));
+      const replaceDanawaCategories = options.replaceDanawaCategories ?? [];
+      const merged = replaceDanawaCategories.length > 0
+        ? mergeDanawaAccessorySnapshot(current, incoming, replaceDanawaCategories)
+        : mergeAccessories(current, incoming);
+      const incomingKeys = new Set(incoming.map(accessoryKey));
+      const replacementCategorySet = new Set(replaceDanawaCategories);
+      const writeItems = persisted.length === 0
+        ? merged
+        : merged.filter((item) => incomingKeys.has(accessoryKey(item)) || replacementCategorySet.has(item.category));
+      return { items: merged, writeItems, replaceDanawaCategories };
+    });
+    const baseAccessories = reparseCoolingFanAccessories(reparseM2Accessories(snapshot.items));
+    const coolingFanOverrideSnapshot = await readCoolingFanLoadOverrideSnapshot();
+    accessoryStateRevision += 1;
+    baseAccessoriesCache = null;
+    accessoryCache = applyCoolingFanLoadOverrides(baseAccessories, coolingFanOverrideSnapshot.overrides);
+    accessoryMtime = snapshot.updatedAt;
+    coolingFanOverrideMtime = coolingFanOverrideSnapshot.updatedAt;
+    return snapshot.items;
+  }
   return withSerializedFileMutation(ACCESSORIES_PATH, () => upsertAccessoriesUnlocked(items, options));
 }
 
@@ -418,6 +494,17 @@ export interface AccessoryPricePatch {
 
 export async function patchAccessoryPrices(patches: AccessoryPricePatch[]) {
   if (patches.length === 0) return [];
+  if (await persistenceMode() === "postgres") {
+    const result = await patchAccessoryCatalogPriceRecords(patches);
+    const coolingFanOverrideSnapshot = await readCoolingFanLoadOverrideSnapshot();
+    accessoryStateRevision += 1;
+    accessoryLoadInFlight = null;
+    accessoryCache = null;
+    baseAccessoriesCache = null;
+    accessoryMtime = result.updatedAt;
+    coolingFanOverrideMtime = coolingFanOverrideSnapshot.updatedAt;
+    return result.updates;
+  }
   return withSerializedFileMutation(ACCESSORIES_PATH, async () => {
     const current = await readJson<AccessoryItem[]>(ACCESSORIES_PATH, []);
     const patchesById = new Map(patches.map((patch) => [patch.id, patch]));

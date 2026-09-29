@@ -1,3 +1,4 @@
+import { safeLocalStorage } from "./safe-storage";
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type { IconType } from "react-icons";
@@ -65,7 +66,9 @@ export function generatedDraftSummaryFor(draft: BuildGenerationResult) {
   const budget = draft.budgetWon >= 10_000 && draft.budgetWon % 10_000 === 0
     ? `${(draft.budgetWon / 10_000).toLocaleString("ko-KR")}만 원`
     : formatWon(draft.budgetWon);
-  return `${purpose} 견적이에요. 예산은 ${budget}으로 설정했어요.`;
+  return draft.profile === "gaming"
+    ? `${purpose} 목표를 기준으로 부품을 골랐어요. 예산은 ${budget}으로 설정했어요.`
+    : `${purpose} 견적이에요. 예산은 ${budget}으로 설정했어요.`;
 }
 
 
@@ -186,7 +189,7 @@ export function BuildGeneratorView({ initialProfile, draft, variants, budgetLadd
   const [listingPolicy, setListingPolicy] = useState<ListingPolicy>(() => initialGeneratorChoice("listingPolicy", ["retail_only", "include_bulk", "all"], "retail_only") as ListingPolicy);
   const [error, setError] = useState<string | null>(null);
   const [budgetLadderShare, setBudgetLadderShare] = useState<GeneratorBudgetShareResult | null>(null);
-  const [savedPresets, setSavedPresets] = useState<SavedGeneratorPreset[]>(() => typeof window === "undefined" ? [] : savedGeneratorPresetsFromJson(window.localStorage.getItem(GENERATOR_PRESET_STORAGE_KEY)));
+  const [savedPresets, setSavedPresets] = useState<SavedGeneratorPreset[]>(() => typeof window === "undefined" ? [] : savedGeneratorPresetsFromJson(safeLocalStorage.getItem(GENERATOR_PRESET_STORAGE_KEY)));
   const [presetName, setPresetName] = useState("");
   const [presetImportPreview, setPresetImportPreview] = useState<SavedGeneratorPreset[] | null>(null);
   const [brief, setBrief] = useState("");
@@ -228,8 +231,8 @@ export function BuildGeneratorView({ initialProfile, draft, variants, budgetLadd
   useEffect(() => () => { budgetLadderShareMutationRequestRef.current += 1; }, []);
   useEffect(() => {
     try {
-      if (savedPresets.length > 0) window.localStorage.setItem(GENERATOR_PRESET_STORAGE_KEY, savedGeneratorPresetsToJson(savedPresets));
-      else window.localStorage.removeItem(GENERATOR_PRESET_STORAGE_KEY);
+      if (savedPresets.length > 0) safeLocalStorage.setItem(GENERATOR_PRESET_STORAGE_KEY, savedGeneratorPresetsToJson(savedPresets));
+      else safeLocalStorage.removeItem(GENERATOR_PRESET_STORAGE_KEY);
     } catch {
       // A full local storage bucket must not prevent automatic configuration from working.
     }
@@ -984,11 +987,11 @@ function GeneratorVariantsPanel({ variants: sourceVariants, loading, onApply, on
   const [variantImportCandidate, setVariantImportCandidate] = useState<GeneratorVariantResult[] | null>(null);
   const [importedVariants, setImportedVariants] = useState<GeneratorVariantResult[] | null>(null);
   const [variantImportError, setVariantImportError] = useState<string | null>(null);
-  const [localHistory, setLocalHistory] = useState<GeneratorVariantsLocalHistoryEntry[]>(() => typeof window === "undefined" ? [] : generatorVariantsLocalHistoryFromJson(window.localStorage.getItem(GENERATOR_VARIANTS_LOCAL_HISTORY_KEY)));
+  const [localHistory, setLocalHistory] = useState<GeneratorVariantsLocalHistoryEntry[]>(() => typeof window === "undefined" ? [] : generatorVariantsLocalHistoryFromJson(safeLocalStorage.getItem(GENERATOR_VARIANTS_LOCAL_HISTORY_KEY)));
   const [shareLink, setShareLink] = useState<GeneratorVariantsLocalShareEntry | null>(null);
   const [shareError, setShareError] = useState<string | null>(null);
   const [sharing, setSharing] = useState(false);
-  const [localShares, setLocalShares] = useState<GeneratorVariantsLocalShareEntry[]>(() => typeof window === "undefined" ? [] : generatorVariantsLocalSharesFromJson(window.localStorage.getItem(GENERATOR_VARIANTS_LOCAL_SHARES_STORAGE_KEY)));
+  const [localShares, setLocalShares] = useState<GeneratorVariantsLocalShareEntry[]>(() => typeof window === "undefined" ? [] : generatorVariantsLocalSharesFromJson(safeLocalStorage.getItem(GENERATOR_VARIANTS_LOCAL_SHARES_STORAGE_KEY)));
   const importedSourceVariantsRef = useRef<GeneratorVariantResult[] | null>(null);
   const shareMutationRef = useRef(0);
   const panelMountedRef = useRef(true);
@@ -1010,16 +1013,16 @@ function GeneratorVariantsPanel({ variants: sourceVariants, loading, onApply, on
   }, []);
   useEffect(() => {
     try {
-      if (localHistory.length > 0) window.localStorage.setItem(GENERATOR_VARIANTS_LOCAL_HISTORY_KEY, generatorVariantsLocalHistoryToJson(localHistory));
-      else window.localStorage.removeItem(GENERATOR_VARIANTS_LOCAL_HISTORY_KEY);
+      if (localHistory.length > 0) safeLocalStorage.setItem(GENERATOR_VARIANTS_LOCAL_HISTORY_KEY, generatorVariantsLocalHistoryToJson(localHistory));
+      else safeLocalStorage.removeItem(GENERATOR_VARIANTS_LOCAL_HISTORY_KEY);
     } catch {
       // A full local storage bucket must not block comparison results.
     }
   }, [localHistory]);
   useEffect(() => {
     try {
-      if (localShares.length > 0) window.localStorage.setItem(GENERATOR_VARIANTS_LOCAL_SHARES_STORAGE_KEY, generatorVariantsLocalSharesToJson(localShares));
-      else window.localStorage.removeItem(GENERATOR_VARIANTS_LOCAL_SHARES_STORAGE_KEY);
+      if (localShares.length > 0) safeLocalStorage.setItem(GENERATOR_VARIANTS_LOCAL_SHARES_STORAGE_KEY, generatorVariantsLocalSharesToJson(localShares));
+      else safeLocalStorage.removeItem(GENERATOR_VARIANTS_LOCAL_SHARES_STORAGE_KEY);
     } catch {
       // A full local storage bucket must not block comparison results.
     }

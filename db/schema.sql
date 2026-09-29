@@ -11,6 +11,32 @@ CREATE TABLE IF NOT EXISTS catalog_parts (
 CREATE INDEX IF NOT EXISTS catalog_parts_category_idx ON catalog_parts(category);
 CREATE INDEX IF NOT EXISTS catalog_parts_quality_idx ON catalog_parts(data_quality);
 
+CREATE TABLE IF NOT EXISTS catalog_accessories (
+  id TEXT PRIMARY KEY,
+  category TEXT NOT NULL,
+  source TEXT NOT NULL,
+  source_product_code TEXT,
+  data_quality TEXT NOT NULL,
+  payload JSONB NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS catalog_accessories_danawa_product_code_idx
+  ON catalog_accessories(source_product_code)
+  WHERE source = 'danawa' AND source_product_code IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS accessory_coverage_state (
+  singleton_id TEXT PRIMARY KEY CHECK (singleton_id = 'current'),
+  payload JSONB NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp()
+);
+
+CREATE TABLE IF NOT EXISTS cooling_fan_load_overrides (
+  singleton_id TEXT PRIMARY KEY CHECK (singleton_id = 'current'),
+  payload JSONB NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp()
+);
+
 CREATE TABLE IF NOT EXISTS benchmark_overrides (
   part_id TEXT PRIMARY KEY,
   payload JSONB NOT NULL,
@@ -28,6 +54,7 @@ CREATE TABLE IF NOT EXISTS saved_builds (
   updated_at TIMESTAMPTZ NOT NULL,
   expires_at TIMESTAMPTZ,
   owner_token_hash TEXT,
+  recovery_code_hash TEXT,
   version_group_id TEXT,
   version_number INTEGER,
   derived_from_build_id TEXT,
@@ -45,6 +72,7 @@ CREATE INDEX IF NOT EXISTS saved_builds_updated_idx ON saved_builds(updated_at D
 ALTER TABLE saved_builds ADD COLUMN IF NOT EXISTS recommendation_preferences JSONB;
 ALTER TABLE saved_builds ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
 ALTER TABLE saved_builds ADD COLUMN IF NOT EXISTS owner_token_hash TEXT;
+ALTER TABLE saved_builds ADD COLUMN IF NOT EXISTS recovery_code_hash TEXT;
 ALTER TABLE saved_builds ADD COLUMN IF NOT EXISTS version_group_id TEXT;
 ALTER TABLE saved_builds ADD COLUMN IF NOT EXISTS version_number INTEGER;
 ALTER TABLE saved_builds ADD COLUMN IF NOT EXISTS derived_from_build_id TEXT;
@@ -131,3 +159,71 @@ CREATE TABLE IF NOT EXISTS saved_watchlist_alert_states (
 );
 
 CREATE INDEX IF NOT EXISTS saved_watchlist_alert_states_updated_idx ON saved_watchlist_alert_states(updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS usage_event_daily_counts (
+  day_utc DATE PRIMARY KEY,
+  counts JSONB NOT NULL DEFAULT '{}'::jsonb
+);
+
+CREATE TABLE IF NOT EXISTS api_rate_limit_buckets (
+  scope TEXT NOT NULL,
+  client_key_hash TEXT NOT NULL,
+  window_started_at TIMESTAMPTZ NOT NULL,
+  request_count INTEGER NOT NULL CHECK (request_count >= 1),
+  last_seen_at TIMESTAMPTZ NOT NULL,
+  PRIMARY KEY (scope, client_key_hash)
+);
+
+CREATE INDEX IF NOT EXISTS api_rate_limit_buckets_last_seen_idx ON api_rate_limit_buckets(last_seen_at);
+
+CREATE TABLE IF NOT EXISTS background_jobs (
+  id UUID PRIMARY KEY,
+  kind TEXT NOT NULL CHECK (kind IN ('catalog-ingestion', 'price-refresh', 'saved-build-monitor')),
+  status TEXT NOT NULL CHECK (status IN ('queued', 'running', 'succeeded', 'failed')),
+  payload JSONB NOT NULL CHECK (jsonb_typeof(payload) = 'object'),
+  attempt INTEGER NOT NULL DEFAULT 0 CHECK (attempt >= 0),
+  max_attempts INTEGER NOT NULL CHECK (max_attempts BETWEEN 1 AND 20),
+  available_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp(),
+  progress JSONB CHECK (progress IS NULL OR jsonb_typeof(progress) = 'object'),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp(),
+  finished_at TIMESTAMPTZ,
+  lease_owner TEXT,
+  lease_token UUID,
+  lease_expires_at TIMESTAMPTZ,
+  error JSONB CHECK (error IS NULL OR jsonb_typeof(error) = 'object'),
+  idempotency_key TEXT,
+  result JSONB CHECK (result IS NULL OR jsonb_typeof(result) = 'object'),
+  CHECK (attempt <= max_attempts),
+  CHECK ((status = 'running' AND lease_owner IS NOT NULL AND lease_token IS NOT NULL AND lease_expires_at IS NOT NULL)
+    OR (status <> 'running' AND lease_owner IS NULL AND lease_token IS NULL AND lease_expires_at IS NULL)),
+  CHECK ((status IN ('succeeded', 'failed') AND finished_at IS NOT NULL)
+    OR (status IN ('queued', 'running') AND finished_at IS NULL)),
+  CHECK (status <> 'failed' OR error IS NOT NULL),
+  CHECK (status <> 'succeeded' OR error IS NULL)
+);
+ALTER TABLE background_jobs ADD COLUMN IF NOT EXISTS idempotency_key TEXT;
+ALTER TABLE background_jobs ADD COLUMN IF NOT EXISTS result JSONB;
+
+CREATE INDEX IF NOT EXISTS background_jobs_claim_idx
+  ON background_jobs(available_at, created_at, id)
+  WHERE status = 'queued';
+
+CREATE INDEX IF NOT EXISTS background_jobs_expired_lease_idx
+  ON background_jobs(lease_expires_at)
+  WHERE status = 'running';
+
+CREATE INDEX IF NOT EXISTS background_jobs_kind_created_idx
+  ON background_jobs(kind, created_at DESC, id DESC);
+
+CREATE UNIQUE INDEX IF NOT EXISTS background_jobs_kind_idempotency_idx
+  ON background_jobs(kind, idempotency_key);
+
+CREATE TABLE IF NOT EXISTS price_refresh_attempts (
+  item_kind TEXT NOT NULL CHECK (item_kind IN ('part', 'accessory')),
+  item_id TEXT NOT NULL CHECK (length(item_id) BETWEEN 1 AND 512),
+  attempted_at TIMESTAMPTZ NOT NULL,
+  PRIMARY KEY (item_kind, item_id)
+);
+CREATE INDEX IF NOT EXISTS price_refresh_attempts_attempted_idx
+  ON price_refresh_attempts(attempted_at, item_kind, item_id);

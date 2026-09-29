@@ -1,3 +1,4 @@
+import { safeLocalStorage } from "./safe-storage";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
@@ -6,7 +7,7 @@ import { applyTheme, THEME_STORAGE_KEY, themeModeFromStorage } from "./theme";
 import "./styles.css";
 
 try {
-  applyTheme(themeModeFromStorage(window.localStorage.getItem(THEME_STORAGE_KEY)));
+  applyTheme(themeModeFromStorage(safeLocalStorage.getItem(THEME_STORAGE_KEY)));
 } catch {
   applyTheme("light");
 }

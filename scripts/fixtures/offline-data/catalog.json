@@ -1,0 +1,16 @@
+[
+  {
+    "id": "offline-fixture-cpu",
+    "category": "cpu",
+    "name": "Offline Fixture CPU",
+    "brand": "Fixture",
+    "model": "Offline-1",
+    "source": "manual",
+    "priceWon": 123456,
+    "rawSpecText": "Fixture only; no live price or availability claim.",
+    "specs": { "socket": "AM5", "cores": 6, "threads": 12, "boostClockGhz": 4.2 },
+    "dataQuality": "manual",
+    "missingFields": [],
+    "updatedAt": "2026-09-24T00:00:00.000Z"
+  }
+]

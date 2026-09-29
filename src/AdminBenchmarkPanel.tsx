@@ -1,3 +1,4 @@
+import { safeLocalStorage } from "./safe-storage";
 import { useEffect, useRef, useState } from "react";
 import { FiActivity, FiAlertTriangle, FiCheckCircle, FiChevronDown, FiDatabase, FiDownload, FiExternalLink, FiInfo, FiLoader, FiPlus, FiSave, FiSearch, FiTrash2 } from "react-icons/fi";
 import type { Benchmark3DMarkBatchItem, Benchmark3DMarkBatchRequestItem, Benchmark3DMarkBatchResponse, Benchmark3DMarkImportPreview, Benchmark3DMarkReviewWorkItem, Benchmark3DMarkReviewWorkPackage, BenchmarkOverride, BenchmarkOverrideOperation, BenchmarkReviewQueue, BenchmarkScoreKey, BenchmarkSourceCheckBatchResponse, BenchmarkSourceCheckHistoryEntry, BenchmarkSourceKind, Part, PartCategory, ServiceMeta } from "../shared/types";
@@ -152,7 +153,7 @@ function readBenchmark3DMarkWorkProgress(): Benchmark3DMarkWorkProgress {
   const empty: Benchmark3DMarkWorkProgress = { offset: 0, queueFingerprint: null, completedIds: [] };
   if (typeof window === "undefined") return empty;
   try {
-    const raw = window.localStorage.getItem(BENCHMARK_3DMARK_WORK_PROGRESS_KEY);
+    const raw = safeLocalStorage.getItem(BENCHMARK_3DMARK_WORK_PROGRESS_KEY);
     if (!raw) return empty;
     const parsed: unknown = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return empty;
@@ -169,7 +170,7 @@ function readBenchmark3DMarkWorkProgress(): Benchmark3DMarkWorkProgress {
 function writeBenchmark3DMarkWorkProgress(progress: Benchmark3DMarkWorkProgress) {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(BENCHMARK_3DMARK_WORK_PROGRESS_KEY, JSON.stringify(progress));
+    safeLocalStorage.setItem(BENCHMARK_3DMARK_WORK_PROGRESS_KEY, JSON.stringify(progress));
   } catch {
     // Local progress is best effort; the read-only server package remains authoritative.
   }

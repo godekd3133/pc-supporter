@@ -100,6 +100,37 @@ describe("saved build share recovery", () => {
     }
   }, 15_000);
 
+  it("consumes a recovery code only once when two recovery requests race", async () => {
+    const buildId = "recovery-race-build";
+    const { ownerCredential, recoveryCredential } = await seedBuild(buildId);
+    const { server, baseUrl } = await startIsolatedServer();
+    try {
+      const responses = await Promise.all(Array.from({ length: 2 }, () => fetch(`${baseUrl}/api/builds/${buildId}/recover`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recoveryCode: recoveryCredential.code })
+      })));
+      expect(responses.map((response) => response.status).sort()).toEqual([200, 401]);
+
+      const successfulResponse = responses.find((response) => response.status === 200);
+      const rejectedResponse = responses.find((response) => response.status === 401);
+      expect(successfulResponse).toBeDefined();
+      expect(rejectedResponse).toBeDefined();
+      expect(await rejectedResponse!.json()).toMatchObject({ code: "RECOVERY_CODE_MISMATCH" });
+
+      const { ownerToken, recoveryCode: rotatedCode } = await successfulResponse!.json() as { ownerToken: string; recoveryCode: string };
+      expect((await fetch(`${baseUrl}/api/builds/${buildId}/monitor`, { headers: { "X-Share-Owner-Token": ownerToken } })).status).toBe(200);
+      expect((await fetch(`${baseUrl}/api/builds/${buildId}/monitor`, { headers: { "X-Share-Owner-Token": ownerCredential.token } })).status).toBe(401);
+      expect((await fetch(`${baseUrl}/api/builds/${buildId}/recover`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recoveryCode: rotatedCode })
+      })).status).toBe(200);
+    } finally {
+      await closeServer(server);
+    }
+  }, 15_000);
+
   it("rejects wrong and malformed recovery codes", async () => {
     const buildId = "recovery-reject-build";
     await seedBuild(buildId);

@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { renderToStaticMarkup } from "react-dom/server";
+import { createElement } from "react";
+import { QuoteOnboardingView } from "./QuoteOnboardingView";
 import {
   advanceOnboarding,
   backOnboarding,
@@ -30,6 +33,19 @@ function stateWith(patch: Partial<OnboardingState>): OnboardingState {
 }
 
 describe("quote-onboarding flow", () => {
+  it("renders a labeled first step, selectable choices, and a disabled next action", () => {
+    const markup = renderToStaticMarkup(createElement(QuoteOnboardingView, { onFinish: () => undefined, onUpgrade: () => undefined, onSkip: () => undefined, onHome: () => undefined }));
+
+    expect(markup).toContain('data-testid="onboarding-progress"');
+    expect(markup).toContain('aria-valuetext="단계 1, 총 4단계"');
+    expect(markup).toContain('id="onboarding-title"');
+    expect(markup).toContain('role="radiogroup" aria-labelledby="onboarding-title"');
+    expect(markup.match(/type="radio" name="onboarding-intent"/g)).toHaveLength(3);
+    expect(markup).not.toContain('aria-pressed="false"');
+    expect(markup).toContain('disabled=""');
+    expect(markup).toContain("새 견적 시작하기");
+  });
+
   it("covers the visual catalog categories with an expandable famous-game list", () => {
     expect(ONBOARDING_GAMES.length).toBeGreaterThanOrEqual(40);
     expect(new Set(ONBOARDING_GAMES.map((game) => game.category))).toEqual(new Set(ONBOARDING_GAME_CATEGORIES));

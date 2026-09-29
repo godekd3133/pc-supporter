@@ -51,6 +51,13 @@ describe("production admin authentication configuration", () => {
 
   it("keeps admin APIs blocked when production credentials are missing", async () => {
     await withProductionServer({}, async (baseUrl) => {
+      const health = await fetch(`${baseUrl}/api/health`);
+      expect(health.status).toBe(503);
+      expect(await health.json()).toMatchObject({
+        ok: false,
+        adminSecurity: { productionReady: false }
+      });
+
       const session = await fetch(`${baseUrl}/api/admin/session`).then((response) => response.json());
       expect(session).toMatchObject({
         enabled: true,
@@ -83,6 +90,10 @@ describe("production admin authentication configuration", () => {
 
   it("allows a production session only when both password and non-default secret exist", async () => {
     await withProductionServer({ password: "production-password", secret: "production-session-secret" }, async (baseUrl) => {
+      const health = await fetch(`${baseUrl}/api/health`);
+      expect(health.status).toBe(200);
+      expect(await health.json()).toMatchObject({ ok: true, adminSecurity: { productionReady: true } });
+
       const login = await fetch(`${baseUrl}/api/admin/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: "production-password" }) });
       expect(login.status).toBe(200);
       const cookie = login.headers.get("set-cookie")?.split(";", 1)[0];

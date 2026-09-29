@@ -1,7 +1,9 @@
 import "dotenv/config";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomUUID } from "node:crypto";
+import { resolve } from "node:path";
 import { Pool, type PoolClient } from "pg";
-import type { BenchmarkOverride, Part, PartCategory, PersistenceDiagnostics, SavedBuildPurchasePriceHistory, SavedBuildPurchasePriceHistorySnapshot, SavedBuildPurchaseProgress } from "../shared/types";
+import type { AccessoryCategory, AccessoryCoverageSnapshot, AccessoryItem, BenchmarkOverride, CoolingFanLoadOverride, Part, PartCategory, PersistenceDiagnostics, SavedBuildPurchasePriceHistory, SavedBuildPurchasePriceHistorySnapshot, SavedBuildPurchaseProgress } from "../shared/types";
+import { RateLimitStoreUnavailableError, type RateLimitDecision, type RateLimitPolicy } from "./rate-limit";
 import { appendSavedBuildCheckHistory, savedBuildCheckHistoryFromUnknown, savedBuildCheckSnapshotFromUnknown, SAVED_BUILD_CHECK_HISTORY_LIMIT } from "../shared/saved-build-check";
 import type { SavedBuildCheckSnapshot } from "../shared/types";
 import { savedBuildMonitorSubscriptionFromUnknown } from "../shared/saved-build-monitor-subscription";
@@ -24,7 +26,9 @@ import { savedWatchlistAlertStateFromUnknown, upsertSavedWatchlistAlertStates } 
 import { savedBuildDecisionNoteFromUnknown, savedBuildMetadataHistoryEntryFor, savedBuildMetadataHistoryFromUnknown, savedBuildMetadataHistoryWithNextEntryFor } from "../shared/saved-build-decision-note";
 import { savedBuildOriginFromUnknown } from "../shared/saved-build-origin";
 import type { SavedWatchlistAlertState } from "./watchlist-alert-state";
+import type { UsageEventName } from "./usage-events";
 import {
+  DATA_DIR,
   BUILDS_PATH,
   SAVED_BUILD_VERSION_BACKUP_PATH,
   SAVED_BUILD_VERSION_LEASE_PATH,
@@ -37,13 +41,15 @@ import {
   GENERATOR_VARIANTS_PATH,
   WATCHLIST_ALERT_STATES_PATH,
   WATCHLISTS_PATH,
-  readJson,
+  ensureDataDirectory,
+  filePersistenceIsReady,
+  readJson as readStoredJson,
   withSerializedFileMutation,
-  writeJson
+  writeJson as writeStoredJson
 } from "./storage";
-import { withFileLease } from "./lease";
+import { withFileLease as acquireFileLease } from "./lease";
 
-const SCHEMA_SQL = `
+export const POSTGRES_SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS catalog_parts (
   id TEXT PRIMARY KEY,
   category TEXT NOT NULL,
@@ -55,6 +61,28 @@ CREATE TABLE IF NOT EXISTS catalog_parts (
 );
 CREATE INDEX IF NOT EXISTS catalog_parts_category_idx ON catalog_parts(category);
 CREATE INDEX IF NOT EXISTS catalog_parts_quality_idx ON catalog_parts(data_quality);
+CREATE TABLE IF NOT EXISTS catalog_accessories (
+  id TEXT PRIMARY KEY,
+  category TEXT NOT NULL,
+  source TEXT NOT NULL,
+  source_product_code TEXT,
+  data_quality TEXT NOT NULL,
+  payload JSONB NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS catalog_accessories_danawa_product_code_idx
+  ON catalog_accessories(source_product_code)
+  WHERE source = 'danawa' AND source_product_code IS NOT NULL;
+CREATE TABLE IF NOT EXISTS accessory_coverage_state (
+  singleton_id TEXT PRIMARY KEY CHECK (singleton_id = 'current'),
+  payload JSONB NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp()
+);
+CREATE TABLE IF NOT EXISTS cooling_fan_load_overrides (
+  singleton_id TEXT PRIMARY KEY CHECK (singleton_id = 'current'),
+  payload JSONB NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp()
+);
 CREATE TABLE IF NOT EXISTS benchmark_overrides (
   part_id TEXT PRIMARY KEY,
   payload JSONB NOT NULL,
@@ -195,6 +223,65 @@ CREATE TABLE IF NOT EXISTS saved_watchlist_alert_states (
   PRIMARY KEY (watchlist_id, alert_id)
 );
 CREATE INDEX IF NOT EXISTS saved_watchlist_alert_states_updated_idx ON saved_watchlist_alert_states(updated_at DESC);
+CREATE TABLE IF NOT EXISTS usage_event_daily_counts (
+  day_utc DATE PRIMARY KEY,
+  counts JSONB NOT NULL DEFAULT '{}'::jsonb
+);
+CREATE TABLE IF NOT EXISTS api_rate_limit_buckets (
+  scope TEXT NOT NULL,
+  client_key_hash TEXT NOT NULL,
+  window_started_at TIMESTAMPTZ NOT NULL,
+  request_count INTEGER NOT NULL CHECK (request_count >= 1),
+  last_seen_at TIMESTAMPTZ NOT NULL,
+  PRIMARY KEY (scope, client_key_hash)
+);
+CREATE INDEX IF NOT EXISTS api_rate_limit_buckets_last_seen_idx ON api_rate_limit_buckets(last_seen_at);
+CREATE TABLE IF NOT EXISTS background_jobs (
+  id UUID PRIMARY KEY,
+  kind TEXT NOT NULL CHECK (kind IN ('catalog-ingestion', 'price-refresh', 'saved-build-monitor')),
+  status TEXT NOT NULL CHECK (status IN ('queued', 'running', 'succeeded', 'failed')),
+  payload JSONB NOT NULL CHECK (jsonb_typeof(payload) = 'object'),
+  attempt INTEGER NOT NULL DEFAULT 0 CHECK (attempt >= 0),
+  max_attempts INTEGER NOT NULL CHECK (max_attempts BETWEEN 1 AND 20),
+  available_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp(),
+  progress JSONB CHECK (progress IS NULL OR jsonb_typeof(progress) = 'object'),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp(),
+  finished_at TIMESTAMPTZ,
+  lease_owner TEXT,
+  lease_token UUID,
+  lease_expires_at TIMESTAMPTZ,
+  error JSONB CHECK (error IS NULL OR jsonb_typeof(error) = 'object'),
+  idempotency_key TEXT,
+  result JSONB CHECK (result IS NULL OR jsonb_typeof(result) = 'object'),
+  CHECK (attempt <= max_attempts),
+  CHECK ((status = 'running' AND lease_owner IS NOT NULL AND lease_token IS NOT NULL AND lease_expires_at IS NOT NULL)
+    OR (status <> 'running' AND lease_owner IS NULL AND lease_token IS NULL AND lease_expires_at IS NULL)),
+  CHECK ((status IN ('succeeded', 'failed') AND finished_at IS NOT NULL)
+    OR (status IN ('queued', 'running') AND finished_at IS NULL)),
+  CHECK (status <> 'failed' OR error IS NOT NULL),
+  CHECK (status <> 'succeeded' OR error IS NULL)
+);
+ALTER TABLE background_jobs ADD COLUMN IF NOT EXISTS idempotency_key TEXT;
+ALTER TABLE background_jobs ADD COLUMN IF NOT EXISTS result JSONB;
+CREATE INDEX IF NOT EXISTS background_jobs_claim_idx
+  ON background_jobs(available_at, created_at, id)
+  WHERE status = 'queued';
+CREATE INDEX IF NOT EXISTS background_jobs_expired_lease_idx
+  ON background_jobs(lease_expires_at)
+  WHERE status = 'running';
+CREATE INDEX IF NOT EXISTS background_jobs_kind_created_idx
+  ON background_jobs(kind, created_at DESC, id DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS background_jobs_kind_idempotency_idx
+  ON background_jobs(kind, idempotency_key);
+CREATE TABLE IF NOT EXISTS price_refresh_attempts (
+  item_kind TEXT NOT NULL CHECK (item_kind IN ('part', 'accessory')),
+  item_id TEXT NOT NULL CHECK (length(item_id) BETWEEN 1 AND 512),
+  attempted_at TIMESTAMPTZ NOT NULL,
+  PRIMARY KEY (item_kind, item_id)
+);
+CREATE INDEX IF NOT EXISTS price_refresh_attempts_attempted_idx
+  ON price_refresh_attempts(attempted_at, item_kind, item_id);
 `;
 
 function canonicalJson(value: unknown): string {
@@ -212,29 +299,116 @@ export function savedBuildVersionSnapshotFingerprintFor(builds: SavedBuildRecord
 }
 
 const configuredDatabaseUrl = process.env.DATABASE_URL?.trim();
-let pool: Pool | null = configuredDatabaseUrl ? new Pool({ connectionString: configuredDatabaseUrl, max: 5 }) : null;
+const configuredRateLimitHmacSecret = process.env.RATE_LIMIT_HMAC_SECRET?.trim();
+const DEVELOPMENT_RATE_LIMIT_HMAC_SECRET = "pc-supporter-local-rate-limit-secret";
+const DATABASE_RETRY_COOLDOWN_MS = 1_000;
+const RATE_LIMIT_BUCKET_RETENTION_MS = 24 * 60 * 60 * 1_000;
+export const RATE_LIMIT_BUCKET_CLEANUP_INTERVAL_MS = 10 * 60 * 1_000;
+const RATE_LIMIT_BUCKET_CLEANUP_BATCH_SIZE = 1_000;
+let pool: Pool | null = null;
+let poolCreationError: unknown;
+if (configuredDatabaseUrl) {
+  try {
+    pool = new Pool({ connectionString: configuredDatabaseUrl, max: 5, connectionTimeoutMillis: 2_000 });
+  } catch (error: unknown) {
+    poolCreationError = error;
+  }
+}
 let databaseReady = false;
-let databaseDisabled = false;
 let schemaPromise: Promise<boolean> | null = null;
+let nextDatabaseRetryAt = 0;
+let lastDatabaseError: unknown;
+
+class DatabaseRetryDeferredError extends Error {
+  constructor(retryAt: number, lastError: unknown) {
+    super(`PostgreSQL retry is deferred until ${new Date(retryAt).toISOString()}: ${postgresErrorMessage(lastError)}`);
+    this.name = "DatabaseRetryDeferredError";
+  }
+}
+
+function postgresErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function rateLimitHmacSecret() {
+  if (configuredRateLimitHmacSecret && configuredRateLimitHmacSecret.length >= 32) return configuredRateLimitHmacSecret;
+  return process.env.NODE_ENV === "production" ? undefined : DEVELOPMENT_RATE_LIMIT_HMAC_SECRET;
+}
+
+function markDatabaseUnavailable(operation: string, error: unknown) {
+  databaseReady = false;
+  schemaPromise = null;
+  nextDatabaseRetryAt = Date.now() + DATABASE_RETRY_COOLDOWN_MS;
+  lastDatabaseError = error;
+  console.warn(`PostgreSQL ${operation} failed: ${postgresErrorMessage(error)}`);
+}
+
+function assertFilePersistenceSelected() {
+  if (configuredDatabaseUrl) {
+    throw new Error("File persistence is disabled while DATABASE_URL is configured.");
+  }
+}
+
+async function readFileJson<T>(path: string, fallback: T): Promise<T> {
+  assertFilePersistenceSelected();
+  return readStoredJson<T>(path, fallback);
+}
+
+async function writeFileJson<T>(path: string, value: T) {
+  assertFilePersistenceSelected();
+  await writeStoredJson(path, value);
+}
+
+async function withFilePersistenceLease<T>(path: string, operation: () => Promise<T>) {
+  assertFilePersistenceSelected();
+  return acquireFileLease(path, operation);
+}
 
 export type SavedBuildMonitorLeaseResult<T> =
   | { backend: "postgres" | "file"; acquired: true; value: T }
   | { backend: "postgres" | "file"; acquired: false };
 
 async function ensureDatabase() {
-  if (!pool || databaseDisabled) return false;
+  if (!configuredDatabaseUrl) return false;
+  if (!pool) {
+    throw new Error(`PostgreSQL is configured but its connection pool could not be created: ${postgresErrorMessage(poolCreationError)}`);
+  }
   if (databaseReady) return true;
+  if (schemaPromise) return schemaPromise;
+  if (Date.now() < nextDatabaseRetryAt) throw new DatabaseRetryDeferredError(nextDatabaseRetryAt, lastDatabaseError);
   if (!schemaPromise) {
-    schemaPromise = pool.query(SCHEMA_SQL)
-      .then(() => {
+    schemaPromise = (async () => {
+      let client: PoolClient | undefined;
+      let clientReleased = false;
+      let transactionStarted = false;
+      try {
+        client = await pool!.connect();
+        await client.query("BEGIN");
+        transactionStarted = true;
+        await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", ["pc-supporter:postgres-schema"]);
+        await client.query(POSTGRES_SCHEMA_SQL);
+        await client.query("COMMIT");
+        transactionStarted = false;
         databaseReady = true;
+        nextDatabaseRetryAt = 0;
+        lastDatabaseError = undefined;
         return true;
-      })
-      .catch((error) => {
-        databaseDisabled = true;
-        console.warn(`PostgreSQL unavailable; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
-        return false;
-      });
+      } catch (error: unknown) {
+        if (client && transactionStarted) {
+          try {
+            await client.query("ROLLBACK");
+            transactionStarted = false;
+          } catch {
+            client.release(true);
+            clientReleased = true;
+          }
+        }
+        markDatabaseUnavailable("initialization", error);
+        throw error;
+      } finally {
+        if (client && !clientReleased) client.release(transactionStarted ? true : undefined);
+      }
+    })()
   }
   return schemaPromise;
 }
@@ -243,7 +417,59 @@ export async function initializePersistence() {
   await ensureDatabase();
 }
 
-export async function withSavedBuildMonitorLease<T>(operation: () => Promise<T>, scope = "scheduler"): Promise<SavedBuildMonitorLeaseResult<T>> {
+export type PostgresTransactionRunner = <T>(
+  operation: string,
+  callback: (client: PoolClient) => Promise<T>
+) => Promise<T>;
+
+/**
+ * Run an internal repository operation in PostgreSQL only. This deliberately
+ * throws when file mode is selected and never redirects database failures to
+ * JSON storage.
+ */
+export async function withPostgresTransaction<T>(
+  operation: string,
+  callback: (client: PoolClient) => Promise<T>
+): Promise<T> {
+  if (!await ensureDatabase()) {
+    throw new Error(`PostgreSQL is required for ${operation}; file persistence is not supported.`);
+  }
+
+  let client: PoolClient;
+  try {
+    client = await pool!.connect();
+  } catch (error: unknown) {
+    markDatabaseUnavailable(`${operation} connection`, error);
+    throw error;
+  }
+
+  let transactionStarted = false;
+  let discardClient = false;
+  try {
+    await client.query("BEGIN");
+    transactionStarted = true;
+    const result = await callback(client);
+    await client.query("COMMIT");
+    transactionStarted = false;
+    return result;
+  } catch (error: unknown) {
+    if (!transactionStarted) {
+      discardClient = true;
+    } else {
+      try {
+        await client.query("ROLLBACK");
+      } catch {
+        discardClient = true;
+      }
+    }
+    markDatabaseUnavailable(operation, error);
+    throw error;
+  } finally {
+    client.release(discardClient);
+  }
+}
+
+async function withPersistenceLease<T>(leaseScope: string, fileLeasePath: string, operation: () => Promise<T>): Promise<SavedBuildMonitorLeaseResult<T>> {
   if (await ensureDatabase()) {
     let client: PoolClient | undefined;
     let acquired = false;
@@ -251,14 +477,13 @@ export async function withSavedBuildMonitorLease<T>(operation: () => Promise<T>,
       client = await pool!.connect();
       const result = await client.query<{ acquired: boolean }>(
         "SELECT pg_try_advisory_lock(hashtextextended($1, 0)) AS acquired",
-        [`pc-supporter:saved-build-monitor:${scope}`]
+        [`pc-supporter:${leaseScope}`]
       );
       acquired = result.rows[0]?.acquired === true;
     } catch (error: unknown) {
-      client?.release();
-      databaseDisabled = true;
-      console.warn(`PostgreSQL monitor lease failed; using file lease instead: ${error instanceof Error ? error.message : String(error)}`);
-      client = undefined;
+      client?.release(true);
+      markDatabaseUnavailable("background job lease", error);
+      throw error;
     }
     if (client && !acquired) {
       client.release();
@@ -268,30 +493,195 @@ export async function withSavedBuildMonitorLease<T>(operation: () => Promise<T>,
       try {
         return { backend: "postgres", acquired: true, value: await operation() };
       } finally {
-        await client.query("SELECT pg_advisory_unlock(hashtextextended($1, 0))", [`pc-supporter:saved-build-monitor:${scope}`]).catch((error: unknown) => {
-          console.warn(`PostgreSQL monitor lease release failed: ${error instanceof Error ? error.message : String(error)}`);
-        });
-        client.release();
+        let discardClient = false;
+        try {
+          const result = await client.query<{ pg_advisory_unlock: boolean }>(
+            "SELECT pg_advisory_unlock(hashtextextended($1, 0))",
+            [`pc-supporter:${leaseScope}`]
+          );
+          discardClient = result.rows[0]?.pg_advisory_unlock !== true;
+          if (discardClient) console.warn("PostgreSQL background-job lease release reported no held lock; discarding the connection.");
+        } catch (error: unknown) {
+          discardClient = true;
+          console.warn(`PostgreSQL background-job lease release failed; discarding the connection: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        client.release(discardClient);
       }
     }
   }
-  const fileLease = await withFileLease(SAVED_BUILD_MONITOR_LEASE_PATH, operation);
+  await ensureDataDirectory();
+  const fileLease = await withFilePersistenceLease(fileLeasePath, operation);
   return fileLease.acquired
     ? { backend: "file", acquired: true, value: fileLease.value }
     : { backend: "file", acquired: false };
 }
 
+function normalizedLeaseScope(scope: string) {
+  const normalized = scope.trim().replace(/[^a-z0-9:_-]/gi, "-").slice(0, 80);
+  if (!normalized) throw new Error("Background job lease scope is required.");
+  return normalized;
+}
+
+export async function withBackgroundJobLease<T>(scope: string, operation: () => Promise<T>): Promise<SavedBuildMonitorLeaseResult<T>> {
+  const normalized = normalizedLeaseScope(scope);
+  return withPersistenceLease(`background-job:${normalized}`, resolve(DATA_DIR, `background-job-${normalized}.lease`), operation);
+}
+
+export async function withSavedBuildMonitorLease<T>(operation: () => Promise<T>, scope = "scheduler"): Promise<SavedBuildMonitorLeaseResult<T>> {
+  return withPersistenceLease(`saved-build-monitor:${normalizedLeaseScope(scope)}`, SAVED_BUILD_MONITOR_LEASE_PATH, operation);
+}
+
 export async function persistenceMode(): Promise<"postgres" | "file"> {
-  return (await ensureDatabase()) ? "postgres" : "file";
+  return configuredDatabaseUrl ? "postgres" : "file";
+}
+
+export async function incrementUsageEventInDatabase(dayUtc: string, name: UsageEventName, maxDailyBuckets: number) {
+  if (!await ensureDatabase()) throw new Error("PostgreSQL usage-event persistence is not configured.");
+
+  let client: PoolClient;
+  try {
+    client = await pool!.connect();
+  } catch (error: unknown) {
+    markDatabaseUnavailable("usage-event connection", error);
+    throw error;
+  }
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT pg_advisory_xact_lock(hashtext('pc-supporter:usage_event_daily_counts'))");
+    await client.query(
+      `INSERT INTO usage_event_daily_counts (day_utc, counts)
+       VALUES ($1::date, jsonb_build_object($2::text, 1))
+       ON CONFLICT (day_utc) DO UPDATE SET counts = jsonb_set(
+         usage_event_daily_counts.counts,
+         ARRAY[$2::text],
+         to_jsonb(COALESCE((usage_event_daily_counts.counts ->> $2::text)::integer, 0) + 1),
+         true
+       )`,
+      [dayUtc, name]
+    );
+    await client.query(
+      `DELETE FROM usage_event_daily_counts
+       WHERE day_utc NOT IN (
+         SELECT day_utc FROM usage_event_daily_counts ORDER BY day_utc DESC LIMIT $1
+       )`,
+      [maxDailyBuckets]
+    );
+    await client.query("COMMIT");
+  } catch (error: unknown) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    markDatabaseUnavailable("usage-event write", error);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function readUsageEventDailyCountsFromDatabase(): Promise<Record<string, Partial<Record<UsageEventName, number>>>> {
+  if (!await ensureDatabase()) throw new Error("PostgreSQL usage-event persistence is not configured.");
+  try {
+    const result = await pool!.query<{ day_utc: string; counts: Partial<Record<UsageEventName, number>> }>(
+      "SELECT day_utc::text AS day_utc, counts FROM usage_event_daily_counts ORDER BY day_utc"
+    );
+    return Object.fromEntries(result.rows.map((row) => [row.day_utc, row.counts]));
+  } catch (error: unknown) {
+    markDatabaseUnavailable("usage-event read", error);
+    throw error;
+  }
 }
 
 export async function persistenceDiagnostics(): Promise<PersistenceDiagnostics> {
-  const storageMode = await persistenceMode();
-  return {
-    databaseConfigured: Boolean(configuredDatabaseUrl),
-    storageMode,
-    ...(configuredDatabaseUrl && storageMode === "file" ? { fallbackReason: "database_unavailable" as const } : {})
-  };
+  if (!configuredDatabaseUrl) {
+    const ready = await filePersistenceIsReady();
+    return { databaseConfigured: false, storageMode: "file", ready, ...(ready ? {} : { unavailableReason: "file_storage_unavailable" as const }) };
+  }
+  try {
+    await ensureDatabase();
+    await pool!.query("SELECT 1");
+    if (!rateLimitHmacSecret()) return { databaseConfigured: true, storageMode: "postgres", ready: false, unavailableReason: "rate_limit_key_unconfigured" };
+    return { databaseConfigured: true, storageMode: "postgres", ready: true };
+  } catch (error: unknown) {
+    if (Date.now() >= nextDatabaseRetryAt) markDatabaseUnavailable("readiness check", error);
+    return { databaseConfigured: true, storageMode: "postgres", ready: false, unavailableReason: "database_unavailable" };
+  }
+}
+
+export async function consumeRateLimitWindow(scope: string, address: string, policy: RateLimitPolicy, _now = Date.now()): Promise<RateLimitDecision | undefined> {
+  let databaseConfigured: boolean;
+  try {
+    databaseConfigured = await ensureDatabase();
+  } catch {
+    throw new RateLimitStoreUnavailableError("PERSISTENCE_UNAVAILABLE");
+  }
+  if (!databaseConfigured) return undefined;
+  const secret = rateLimitHmacSecret();
+  if (!secret) throw new RateLimitStoreUnavailableError("RATE_LIMIT_KEY_UNCONFIGURED");
+  const limit = Math.max(1, Math.floor(policy.limit));
+  const windowMs = Math.max(1_000, Math.floor(policy.windowMs));
+  const clientKeyHash = createHmac("sha256", secret).update(`${scope}\0${address}`).digest("hex");
+  try {
+    const result = await pool!.query<{ window_started_at: Date | string; request_count: number; last_seen_at: Date | string }>(
+      `INSERT INTO api_rate_limit_buckets (scope, client_key_hash, window_started_at, request_count, last_seen_at)
+       VALUES ($1, $2, statement_timestamp(), 1, statement_timestamp())
+       ON CONFLICT (scope, client_key_hash) DO UPDATE SET
+         window_started_at = CASE
+           WHEN api_rate_limit_buckets.window_started_at + ($3::double precision * INTERVAL '1 millisecond') <= EXCLUDED.last_seen_at
+           THEN EXCLUDED.last_seen_at
+           ELSE api_rate_limit_buckets.window_started_at
+         END,
+         request_count = CASE
+           WHEN api_rate_limit_buckets.window_started_at + ($3::double precision * INTERVAL '1 millisecond') <= EXCLUDED.last_seen_at
+           THEN 1
+           ELSE api_rate_limit_buckets.request_count + 1
+         END,
+         last_seen_at = EXCLUDED.last_seen_at
+       RETURNING window_started_at, request_count, last_seen_at`,
+      [scope, clientKeyHash, windowMs]
+    );
+    const row = result.rows[0];
+    const startedAt = row ? new Date(row.window_started_at).getTime() : Number.NaN;
+    const observedAt = row ? new Date(row.last_seen_at).getTime() : Number.NaN;
+    const count = Number(row?.request_count);
+    if (!Number.isFinite(startedAt) || !Number.isFinite(observedAt) || !Number.isSafeInteger(count) || count < 1) {
+      throw new Error("PostgreSQL returned an invalid shared rate-limit counter.");
+    }
+    const resetAt = startedAt + windowMs;
+    return {
+      allowed: count <= limit,
+      limit,
+      remaining: Math.max(0, limit - count),
+      resetAt,
+      retryAfterSeconds: Math.max(1, Math.ceil((resetAt - observedAt) / 1_000))
+    };
+  } catch (error: unknown) {
+    markDatabaseUnavailable("rate limit update", error);
+    throw new RateLimitStoreUnavailableError("PERSISTENCE_UNAVAILABLE");
+  }
+}
+
+export async function pruneRateLimitWindows() {
+  if (!await ensureDatabase()) return 0;
+  try {
+    const lease = await withBackgroundJobLease("rate-limit-window-prune", async () => {
+      const result = await pool!.query(
+        `WITH expired AS (
+           SELECT scope, client_key_hash
+           FROM api_rate_limit_buckets
+           WHERE last_seen_at < statement_timestamp() - ($1::double precision * INTERVAL '1 millisecond')
+           ORDER BY last_seen_at
+           LIMIT $2
+         )
+         DELETE FROM api_rate_limit_buckets AS buckets
+         USING expired
+         WHERE buckets.scope = expired.scope AND buckets.client_key_hash = expired.client_key_hash`,
+        [RATE_LIMIT_BUCKET_RETENTION_MS, RATE_LIMIT_BUCKET_CLEANUP_BATCH_SIZE]
+      );
+      return result.rowCount ?? 0;
+    });
+    return lease.acquired ? lease.value : 0;
+  } catch (error: unknown) {
+    markDatabaseUnavailable("rate limit cleanup", error);
+    throw error;
+  }
 }
 
 export async function readCatalogRecords(): Promise<Part[]> {
@@ -300,11 +690,11 @@ export async function readCatalogRecords(): Promise<Part[]> {
       const result = await pool!.query<{ payload: Part }>("SELECT payload FROM catalog_parts ORDER BY updated_at DESC");
       return result.rows.map((row) => row.payload);
     } catch (error) {
-      databaseDisabled = true;
-      console.warn(`PostgreSQL catalog read failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+      markDatabaseUnavailable("catalog read", error);
+      throw error;
     }
   }
-  return readJson<Part[]>(CATALOG_PATH, []);
+  return readFileJson<Part[]>(CATALOG_PATH, []);
 }
 
 export async function writeCatalogRecords(
@@ -340,13 +730,13 @@ export async function writeCatalogRecords(
       return;
     } catch (error) {
       await client.query("ROLLBACK").catch(() => undefined);
-      databaseDisabled = true;
-      console.warn(`PostgreSQL catalog write failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+      markDatabaseUnavailable("catalog write", error);
+      throw error;
     } finally {
       client.release();
     }
   }
-  await writeJson(CATALOG_PATH, parts);
+  await writeFileJson(CATALOG_PATH, parts);
 }
 
 export async function patchCatalogPriceRecords(
@@ -388,8 +778,348 @@ export async function patchCatalogPriceRecords(
   }
 }
 
+export interface AccessoryCatalogSnapshot {
+  items: AccessoryItem[];
+  updatedAt: string;
+}
+
+export interface AccessoryCatalogMutation {
+  items: AccessoryItem[];
+  /** Optional delta to persist while `items` remains the complete post-mutation snapshot. */
+  writeItems?: AccessoryItem[];
+  replaceDanawaCategories?: AccessoryCategory[];
+}
+
+export interface AccessoryCatalogPricePatchResult {
+  updates: Array<{ before: AccessoryItem; after: AccessoryItem }>;
+  updatedAt: string;
+}
+
+function accessoryCatalogTimestamp(value: Date | string | null | undefined) {
+  if (value === null || value === undefined) return "";
+  const timestamp = new Date(value);
+  return Number.isFinite(timestamp.getTime()) ? timestamp.toISOString() : "";
+}
+
+function assertUniqueAccessoryCatalogKeys(items: AccessoryItem[]) {
+  const ids = new Set<string>();
+  const danawaProductCodes = new Set<string>();
+  for (const item of items) {
+    if (!item.id || ids.has(item.id)) throw new Error(`Accessory catalog contains a duplicate or empty id: ${item.id}`);
+    ids.add(item.id);
+    if (item.source === "danawa" && item.sourceProductCode) {
+      if (danawaProductCodes.has(item.sourceProductCode)) throw new Error(`Accessory catalog contains duplicate Danawa product code: ${item.sourceProductCode}`);
+      danawaProductCodes.add(item.sourceProductCode);
+    }
+  }
+}
+
+export async function readAccessoryCatalogRecords(): Promise<AccessoryCatalogSnapshot> {
+  if (!await ensureDatabase()) throw new Error("PostgreSQL accessory catalog persistence is not configured.");
+  try {
+    const result = await pool!.query<{ payload: AccessoryItem; updated_at: Date | string }>(
+      "SELECT payload, updated_at FROM catalog_accessories ORDER BY updated_at DESC, id ASC"
+    );
+    return {
+      items: result.rows.map((row) => row.payload),
+      updatedAt: accessoryCatalogTimestamp(result.rows[0]?.updated_at)
+    };
+  } catch (error: unknown) {
+    markDatabaseUnavailable("accessory catalog read", error);
+    throw error;
+  }
+}
+
+/**
+ * Serializes read/merge/write operations across API replicas. The callback receives
+ * the authoritative PostgreSQL snapshot while holding the same transaction lock
+ * used by accessory price patches.
+ */
+export async function mutateAccessoryCatalogRecords(
+  mutation: (current: AccessoryItem[]) => AccessoryCatalogMutation
+): Promise<AccessoryCatalogSnapshot> {
+  if (!await ensureDatabase()) throw new Error("PostgreSQL accessory catalog persistence is not configured.");
+
+  let client: PoolClient;
+  try {
+    client = await pool!.connect();
+  } catch (error: unknown) {
+    markDatabaseUnavailable("accessory catalog connection", error);
+    throw error;
+  }
+
+  let discardClient = false;
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT pg_advisory_xact_lock(hashtextextended('pc-supporter:catalog-accessories', 0))");
+    const currentResult = await client.query<{ payload: AccessoryItem }>(
+      "SELECT payload FROM catalog_accessories ORDER BY updated_at DESC, id ASC"
+    );
+    const currentItems = currentResult.rows.map((row) => row.payload);
+    const next = mutation(currentItems);
+    assertUniqueAccessoryCatalogKeys(next.items);
+    const writeItems = next.writeItems ?? next.items;
+    assertUniqueAccessoryCatalogKeys(writeItems);
+
+    const replaceDanawaCategories = [...new Set(next.replaceDanawaCategories ?? [])];
+    if (replaceDanawaCategories.length > 0) {
+      await client.query(
+        "DELETE FROM catalog_accessories WHERE source = 'danawa' AND category = ANY($1::text[])",
+        [replaceDanawaCategories]
+      );
+    }
+
+    const insertBatch = async (items: AccessoryItem[], conflictTarget: "id" | "danawa_product_code") => {
+      const batchSize = 300;
+      for (let offset = 0; offset < items.length; offset += batchSize) {
+        const batch = items.slice(offset, offset + batchSize);
+        const values: unknown[] = [];
+        const rowsSql = batch.map((item, index) => {
+          const firstParameter = index * 6 + 1;
+          values.push(item.id, item.category, item.source, item.sourceProductCode ?? null, item.dataQuality, JSON.stringify(item));
+          return `($${firstParameter}, $${firstParameter + 1}, $${firstParameter + 2}, $${firstParameter + 3}, $${firstParameter + 4}, $${firstParameter + 5}::jsonb, statement_timestamp())`;
+        });
+        const conflictSql = conflictTarget === "danawa_product_code"
+          ? `ON CONFLICT (source_product_code) WHERE source = 'danawa' AND source_product_code IS NOT NULL DO UPDATE SET
+               id = EXCLUDED.id,
+               category = EXCLUDED.category,
+               source = EXCLUDED.source,
+               data_quality = EXCLUDED.data_quality,
+               payload = EXCLUDED.payload,
+               updated_at = statement_timestamp()`
+          : `ON CONFLICT (id) DO UPDATE SET
+               category = EXCLUDED.category,
+               source = EXCLUDED.source,
+               source_product_code = EXCLUDED.source_product_code,
+               data_quality = EXCLUDED.data_quality,
+               payload = EXCLUDED.payload,
+               updated_at = statement_timestamp()`;
+        await client.query(
+          `INSERT INTO catalog_accessories (id, category, source, source_product_code, data_quality, payload, updated_at)
+           VALUES ${rowsSql.join(", ")}
+           ${conflictSql}`,
+          values
+        );
+      }
+    };
+
+    await insertBatch(writeItems.filter((item) => item.source === "danawa" && Boolean(item.sourceProductCode)), "danawa_product_code");
+    await insertBatch(writeItems.filter((item) => item.source !== "danawa" || !item.sourceProductCode), "id");
+
+    const timestampResult = await client.query<{ updated_at: Date | string | null }>(
+      "SELECT MAX(updated_at) AS updated_at FROM catalog_accessories"
+    );
+    await client.query("COMMIT");
+    return { items: next.items, updatedAt: accessoryCatalogTimestamp(timestampResult.rows[0]?.updated_at) };
+  } catch (error: unknown) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      discardClient = true;
+    }
+    markDatabaseUnavailable("accessory catalog write", error);
+    throw error;
+  } finally {
+    client.release(discardClient);
+  }
+}
+
+export async function patchAccessoryCatalogPriceRecords(
+  patches: Array<{ id: string; sourceProductCode: string; danawaUrl: string; priceWon: number; priceCheckedAt: string }>
+): Promise<AccessoryCatalogPricePatchResult> {
+  if (patches.length === 0) return { updates: [], updatedAt: "" };
+  if (!await ensureDatabase()) throw new Error("PostgreSQL accessory catalog persistence is not configured.");
+
+  let client: PoolClient;
+  try {
+    client = await pool!.connect();
+  } catch (error: unknown) {
+    markDatabaseUnavailable("accessory price patch connection", error);
+    throw error;
+  }
+
+  let discardClient = false;
+  const changed: Array<{ before: AccessoryItem; after: AccessoryItem }> = [];
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT pg_advisory_xact_lock(hashtextextended('pc-supporter:catalog-accessories', 0))");
+    for (const patch of patches) {
+      const result = await client.query<{ before_payload: AccessoryItem; after_payload: AccessoryItem }>(
+        `WITH current AS (
+           SELECT id, payload AS before_payload FROM catalog_accessories
+           WHERE id = $1 AND source = 'danawa' AND source_product_code = $2 AND payload->>'danawaUrl' = $3
+           FOR UPDATE
+         ), updated AS (
+           UPDATE catalog_accessories AS catalog
+           SET payload = jsonb_set(
+             jsonb_set(current.before_payload, '{priceWon}', to_jsonb($4::numeric), true),
+             '{priceCheckedAt}', to_jsonb($5::text), true
+           ), updated_at = statement_timestamp()
+           FROM current
+           WHERE catalog.id = current.id
+           RETURNING catalog.id, catalog.payload AS after_payload
+         )
+         SELECT current.before_payload, updated.after_payload FROM current JOIN updated USING (id)`,
+        [patch.id, patch.sourceProductCode, patch.danawaUrl, patch.priceWon, patch.priceCheckedAt]
+      );
+      if (result.rows[0]) changed.push({ before: result.rows[0].before_payload, after: result.rows[0].after_payload });
+    }
+    const timestampResult = await client.query<{ updated_at: Date | string | null }>("SELECT MAX(updated_at) AS updated_at FROM catalog_accessories");
+    await client.query("COMMIT");
+    return { updates: changed, updatedAt: accessoryCatalogTimestamp(timestampResult.rows[0]?.updated_at) };
+  } catch (error: unknown) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      discardClient = true;
+    }
+    markDatabaseUnavailable("accessory price patch", error);
+    throw new Error(`PostgreSQL accessory price patch failed; kept the existing database prices: ${error instanceof Error ? error.message : String(error)}`);
+  } finally {
+    client.release(discardClient);
+  }
+}
+
+export type CoolingFanLoadOverrideMapRecord = Record<string, CoolingFanLoadOverride>;
+export type CoolingFanLoadOverrideSnapshotRecord = {
+  overrides: CoolingFanLoadOverrideMapRecord;
+  updatedAt: string;
+};
+
+function coolingFanLoadOverrideMapFromUnknown(value: unknown): CoolingFanLoadOverrideMapRecord {
+  if (value === undefined || value === null) return {};
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("PostgreSQL cooling-fan override snapshot is not an object.");
+  }
+  return value as CoolingFanLoadOverrideMapRecord;
+}
+
+export async function readCoolingFanLoadOverrideRecords(): Promise<CoolingFanLoadOverrideSnapshotRecord> {
+  if (!await ensureDatabase()) throw new Error("PostgreSQL cooling-fan override persistence is not configured.");
+  try {
+    const result = await pool!.query<{ payload: unknown; updated_at: Date | string | null }>(
+      "SELECT payload, updated_at FROM cooling_fan_load_overrides WHERE singleton_id = 'current'"
+    );
+    return {
+      overrides: coolingFanLoadOverrideMapFromUnknown(result.rows[0]?.payload),
+      updatedAt: accessoryCatalogTimestamp(result.rows[0]?.updated_at)
+    };
+  } catch (error: unknown) {
+    markDatabaseUnavailable("cooling-fan override read", error);
+    throw error;
+  }
+}
+
+/**
+ * Serializes read/modify/write operations for the singleton override map across
+ * API replicas. The transaction lock also protects the first insert when the
+ * singleton row does not exist yet.
+ */
+export async function mutateCoolingFanLoadOverrideRecords(
+  mutation: (current: CoolingFanLoadOverrideMapRecord) => CoolingFanLoadOverrideMapRecord
+): Promise<CoolingFanLoadOverrideMapRecord> {
+  if (!await ensureDatabase()) throw new Error("PostgreSQL cooling-fan override persistence is not configured.");
+
+  let client: PoolClient;
+  try {
+    client = await pool!.connect();
+  } catch (error: unknown) {
+    markDatabaseUnavailable("cooling-fan override connection", error);
+    throw error;
+  }
+
+  let discardClient = false;
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT pg_advisory_xact_lock(hashtextextended('pc-supporter:cooling-fan-load-overrides', 0))");
+    const currentResult = await client.query<{ payload: unknown }>(
+      "SELECT payload FROM cooling_fan_load_overrides WHERE singleton_id = 'current' FOR UPDATE"
+    );
+    const next = coolingFanLoadOverrideMapFromUnknown(mutation(coolingFanLoadOverrideMapFromUnknown(currentResult.rows[0]?.payload)));
+    await client.query(
+      `INSERT INTO cooling_fan_load_overrides (singleton_id, payload, updated_at)
+       VALUES ('current', $1::jsonb, statement_timestamp())
+       ON CONFLICT (singleton_id) DO UPDATE SET
+         payload = EXCLUDED.payload,
+         updated_at = statement_timestamp()`,
+      [JSON.stringify(next)]
+    );
+    await client.query("COMMIT");
+    return next;
+  } catch (error: unknown) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      discardClient = true;
+    }
+    markDatabaseUnavailable("cooling-fan override write", error);
+    throw error;
+  } finally {
+    client.release(discardClient);
+  }
+}
+
+const EMPTY_ACCESSORY_COVERAGE: AccessoryCoverageSnapshot = { updatedAt: "", categories: [] };
+
+export async function readAccessoryCoverageRecord(): Promise<AccessoryCoverageSnapshot> {
+  if (!await ensureDatabase()) throw new Error("PostgreSQL accessory coverage persistence is not configured.");
+  try {
+    const result = await pool!.query<{ payload: AccessoryCoverageSnapshot }>(
+      "SELECT payload FROM accessory_coverage_state WHERE singleton_id = 'current'"
+    );
+    return result.rows[0]?.payload ?? EMPTY_ACCESSORY_COVERAGE;
+  } catch (error: unknown) {
+    markDatabaseUnavailable("accessory coverage read", error);
+    throw error;
+  }
+}
+
+export async function mutateAccessoryCoverageRecord(
+  mutation: (current: AccessoryCoverageSnapshot) => AccessoryCoverageSnapshot
+): Promise<AccessoryCoverageSnapshot> {
+  if (!await ensureDatabase()) throw new Error("PostgreSQL accessory coverage persistence is not configured.");
+
+  let client: PoolClient;
+  try {
+    client = await pool!.connect();
+  } catch (error: unknown) {
+    markDatabaseUnavailable("accessory coverage connection", error);
+    throw error;
+  }
+
+  let discardClient = false;
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT pg_advisory_xact_lock(hashtextextended('pc-supporter:accessory-coverage', 0))");
+    const currentResult = await client.query<{ payload: AccessoryCoverageSnapshot }>(
+      "SELECT payload FROM accessory_coverage_state WHERE singleton_id = 'current' FOR UPDATE"
+    );
+    const next = mutation(currentResult.rows[0]?.payload ?? EMPTY_ACCESSORY_COVERAGE);
+    await client.query(
+      `INSERT INTO accessory_coverage_state (singleton_id, payload, updated_at)
+       VALUES ('current', $1::jsonb, statement_timestamp())
+       ON CONFLICT (singleton_id) DO UPDATE SET
+         payload = EXCLUDED.payload,
+         updated_at = statement_timestamp()`,
+      [JSON.stringify(next)]
+    );
+    await client.query("COMMIT");
+    return next;
+  } catch (error: unknown) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      discardClient = true;
+    }
+    markDatabaseUnavailable("accessory coverage write", error);
+    throw error;
+  } finally {
+    client.release(discardClient);
+  }
+}
+
 async function readFileBenchmarkOverrideRecords(): Promise<Record<string, BenchmarkOverride>> {
-  const raw = await readJson<unknown>(BENCHMARK_OVERRIDES_PATH, {});
+  const raw = await readFileJson<unknown>(BENCHMARK_OVERRIDES_PATH, {});
   return raw && typeof raw === "object" && !Array.isArray(raw) ? raw as Record<string, BenchmarkOverride> : {};
 }
 
@@ -400,15 +1130,10 @@ export async function readBenchmarkOverrideRecords(): Promise<Record<string, Ben
         "SELECT part_id, payload FROM benchmark_overrides ORDER BY updated_at DESC"
       );
       if (result.rows.length > 0) return Object.fromEntries(result.rows.map((row) => [row.part_id, row.payload]));
-      const fileOverrides = await readFileBenchmarkOverrideRecords();
-      if (Object.keys(fileOverrides).length > 0) {
-        await writeBenchmarkOverrideRecords(fileOverrides);
-        return fileOverrides;
-      }
       return {};
     } catch (error) {
-      databaseDisabled = true;
-      console.warn(`PostgreSQL benchmark override read failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+      markDatabaseUnavailable("benchmark override read", error);
+      throw error;
     }
   }
   return readFileBenchmarkOverrideRecords();
@@ -439,14 +1164,16 @@ export async function writeBenchmarkOverrideRecords(overrides: Record<string, Be
       return;
     } catch (error) {
       await client.query("ROLLBACK").catch(() => undefined);
-      databaseDisabled = true;
-      console.warn(`PostgreSQL benchmark override write failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+      markDatabaseUnavailable("benchmark override write", error);
+      throw error;
     } finally {
       client.release();
     }
   }
-  await writeJson(BENCHMARK_OVERRIDES_PATH, overrides);
+  await writeFileJson(BENCHMARK_OVERRIDES_PATH, overrides);
 }
+
+const SAVED_BUILD_DATABASE_COLUMNS = "id, name, selection, recommendation_preferences, created_at, updated_at, expires_at, owner_token_hash, recovery_code_hash, my_pc_at, version_group_id, version_number, derived_from_build_id, check_snapshot, check_history, monitor_state, purchase_progress, purchase_price_history, decision_note, origin, metadata_history";
 
 type SavedBuildDatabaseRow = {
   id: string;
@@ -556,20 +1283,32 @@ function savedBuildRecordFromDatabaseRow(row: SavedBuildDatabaseRow) {
   });
 }
 
+function requiredSavedBuildRecordFromDatabaseRow(row: SavedBuildDatabaseRow | undefined) {
+  const build = row ? savedBuildRecordFromDatabaseRow(row) : undefined;
+  if (!build) throw new Error("저장 견적 변경 결과를 안전하게 해석할 수 없습니다.");
+  return build;
+}
+
 export async function readSavedBuilds(): Promise<SavedBuildRecord[]> {
   if (await ensureDatabase()) {
     try {
       const result = await pool!.query<SavedBuildDatabaseRow>(
-        "SELECT id, name, selection, recommendation_preferences, created_at, updated_at, expires_at, owner_token_hash, recovery_code_hash, my_pc_at, version_group_id, version_number, derived_from_build_id, check_snapshot, check_history, monitor_state, purchase_progress, purchase_price_history, decision_note, origin, metadata_history FROM saved_builds ORDER BY updated_at DESC"
+        `SELECT ${SAVED_BUILD_DATABASE_COLUMNS} FROM saved_builds ORDER BY updated_at DESC`
       );
-      return result.rows.map(savedBuildRecordFromDatabaseRow).filter((value): value is SavedBuildRecord => value !== undefined);
+      return savedBuildRecordsFromUnknownArray(result.rows.map(savedBuildRecordFromDatabaseRow));
     } catch (error) {
-      databaseDisabled = true;
-      console.warn(`PostgreSQL build read failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+      markDatabaseUnavailable("build read", error);
+      throw error;
     }
   }
-  const raw = await readJson<unknown[]>(BUILDS_PATH, []);
-  return raw.map(savedBuildRecordFromUnknown).filter((value): value is SavedBuildRecord => value !== undefined);
+  return savedBuildRecordsFromUnknownArray(await readFileJson<unknown>(BUILDS_PATH, []));
+}
+
+function savedBuildRecordsFromUnknownArray(value: unknown): SavedBuildRecord[] {
+  if (!Array.isArray(value)) throw new Error("저장 견적 데이터가 배열 형식이 아니므로 원본을 보존했습니다.");
+  const builds = value.map(savedBuildRecordFromUnknown);
+  if (builds.some((build) => build === undefined)) throw new Error("저장 견적 데이터 일부를 안전하게 해석할 수 없어 원본을 보존했습니다.");
+  return builds.filter((build): build is SavedBuildRecord => build !== undefined);
 }
 
 export async function writeSavedBuilds(builds: SavedBuildRecord[]) {
@@ -613,13 +1352,13 @@ export async function writeSavedBuilds(builds: SavedBuildRecord[]) {
       return;
     } catch (error) {
       await client.query("ROLLBACK").catch(() => undefined);
-      databaseDisabled = true;
-      console.warn(`PostgreSQL build write failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+      markDatabaseUnavailable("build write", error);
+      throw error;
     } finally {
       client.release();
     }
   }
-  await writeJson(BUILDS_PATH, builds);
+  await writeFileJson(BUILDS_PATH, builds);
 }
 
 function savedBuildWithNextVersionFor(build: SavedBuildRecord, existingBuilds: SavedBuildRecord[]) {
@@ -666,14 +1405,14 @@ export async function appendSavedBuild(build: SavedBuildRecord, max = 100) {
     try {
       return await appendSavedBuildToDatabase(build, boundedMax);
     } catch (error: unknown) {
-      databaseDisabled = true;
-      console.warn(`PostgreSQL versioned build write failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+      markDatabaseUnavailable("versioned build write", error);
+      throw error;
     }
   }
-  const fileLease = await withSerializedFileMutation(BUILDS_PATH, () => withFileLease(SAVED_BUILD_VERSION_LEASE_PATH, async () => {
+  const fileLease = await withSerializedFileMutation(BUILDS_PATH, () => withFilePersistenceLease(SAVED_BUILD_VERSION_LEASE_PATH, async () => {
     const builds = await readSavedBuilds();
     const next = savedBuildWithNextVersionFor(build, builds);
-    await writeJson(BUILDS_PATH, [next, ...builds].slice(0, boundedMax));
+    await writeFileJson(BUILDS_PATH, [next, ...builds].slice(0, boundedMax));
     return next;
   }));
   if (!fileLease.acquired) throw new Error("다른 저장 요청이 버전 번호를 발급 중입니다. 잠시 후 다시 시도해 주세요.");
@@ -707,17 +1446,17 @@ export async function updateSavedBuildMetadata(id: string, name: string, decisio
           updatedAt
         )
       );
-      await client.query(
-        "UPDATE saved_builds SET name = $2, decision_note = $3, updated_at = $4::timestamptz, metadata_history = $5::jsonb WHERE id = $1",
+      const updatedResult = await client.query<SavedBuildDatabaseRow>(
+        `UPDATE saved_builds SET name = $2, decision_note = $3, updated_at = $4::timestamptz, metadata_history = $5::jsonb WHERE id = $1 RETURNING ${SAVED_BUILD_DATABASE_COLUMNS}`,
         [id, name, decisionNote ?? null, updatedAt, JSON.stringify(metadataHistory)]
       );
+      const updated = requiredSavedBuildRecordFromDatabaseRow(updatedResult.rows[0]);
       await client.query("COMMIT");
-      const updated = (await readSavedBuilds()).find((build) => build.id === id);
-      return updated ? { status: "updated", build: updated } : { status: "not-found" };
+      return { status: "updated", build: updated };
     } catch (error: unknown) {
       await client.query("ROLLBACK").catch(() => undefined);
-      databaseDisabled = true;
-      console.warn(`PostgreSQL saved build metadata update failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+      markDatabaseUnavailable("saved build metadata update", error);
+      throw error;
     } finally {
       client.release();
     }
@@ -807,11 +1546,11 @@ export async function readSavedBuildVersionBackups(): Promise<SavedBuildVersionB
       const currentFingerprint = savedBuildVersionSnapshotFingerprintFor(await readSavedBuilds());
       return result.rows.map((row) => ({ backupId: row.id, createdAt: new Date(row.created_at).toISOString(), totalBuilds: Number(row.total_builds), changedCount: Number(row.changed_count), sourceFingerprint: row.source_fingerprint, resultingFingerprint: row.resulting_fingerprint, rollbackAvailable: currentFingerprint === row.resulting_fingerprint }));
     } catch (error: unknown) {
-      databaseDisabled = true;
-      console.warn(`PostgreSQL version backup read failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+      markDatabaseUnavailable("version backup read", error);
+      throw error;
     }
   }
-  const backups = savedBuildVersionBackupsFromUnknown(await readJson<unknown>(SAVED_BUILD_VERSION_BACKUP_PATH, undefined))
+  const backups = savedBuildVersionBackupsFromUnknown(await readFileJson<unknown>(SAVED_BUILD_VERSION_BACKUP_PATH, undefined))
     .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
   if (backups.length === 0) return [];
   const currentFingerprint = savedBuildVersionSnapshotFingerprintFor(await readSavedBuilds());
@@ -836,18 +1575,18 @@ export async function readSavedBuildVersionBackupDetail(backupId: string): Promi
       const currentFingerprint = savedBuildVersionSnapshotFingerprintFor(await readSavedBuilds());
       return savedBuildVersionBackupDetailFor(backup, currentFingerprint);
     } catch (error: unknown) {
-      databaseDisabled = true;
-      console.warn(`PostgreSQL version backup detail read failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+      markDatabaseUnavailable("version backup detail read", error);
+      throw error;
     }
   }
-  const backup = savedBuildVersionBackupsFromUnknown(await readJson<unknown>(SAVED_BUILD_VERSION_BACKUP_PATH, undefined)).find((candidate) => candidate.id === backupId);
+  const backup = savedBuildVersionBackupsFromUnknown(await readFileJson<unknown>(SAVED_BUILD_VERSION_BACKUP_PATH, undefined)).find((candidate) => candidate.id === backupId);
   if (!backup) return undefined;
   return savedBuildVersionBackupDetailFor(backup, savedBuildVersionSnapshotFingerprintFor(await readSavedBuilds()));
 }
 
 async function readSavedBuildsWithDatabaseClient(client: PoolClient) {
   const result = await client.query<SavedBuildDatabaseRow>(
-    "SELECT id, name, selection, recommendation_preferences, created_at, updated_at, expires_at, owner_token_hash, recovery_code_hash, my_pc_at, version_group_id, version_number, derived_from_build_id, check_snapshot, check_history, monitor_state, purchase_progress, purchase_price_history, decision_note, origin, metadata_history FROM saved_builds ORDER BY updated_at DESC"
+    `SELECT ${SAVED_BUILD_DATABASE_COLUMNS} FROM saved_builds ORDER BY updated_at DESC`
   );
   const builds = result.rows.map(savedBuildRecordFromDatabaseRow).filter((value): value is SavedBuildRecord => value !== undefined);
   if (builds.length !== result.rows.length) throw new Error("저장 견적 데이터 일부를 안전하게 해석할 수 없어 마이그레이션을 중단했습니다.");
@@ -937,7 +1676,7 @@ async function rollbackSavedBuildVersionsInDatabase(backupId: string, expectedFi
 
 export async function migrateSavedBuildVersions(expectedFingerprint: string): Promise<SavedBuildVersionMigrationOperation> {
   if (await ensureDatabase()) return migrateSavedBuildVersionsInDatabase(expectedFingerprint);
-  const fileLease = await withSerializedFileMutation(BUILDS_PATH, () => withFileLease(SAVED_BUILD_VERSION_LEASE_PATH, async () => {
+  const fileLease = await withSerializedFileMutation(BUILDS_PATH, () => withFilePersistenceLease(SAVED_BUILD_VERSION_LEASE_PATH, async () => {
     const builds = await readSavedBuilds();
     const sourceFingerprint = savedBuildVersionSnapshotFingerprintFor(builds);
     if (sourceFingerprint !== expectedFingerprint) return { status: "conflict", expectedFingerprint, actualFingerprint: sourceFingerprint, totalBuilds: builds.length } satisfies SavedBuildVersionMigrationOperation;
@@ -949,9 +1688,9 @@ export async function migrateSavedBuildVersions(expectedFingerprint: string): Pr
     const createdAt = new Date().toISOString();
     const resultingFingerprint = savedBuildVersionSnapshotFingerprintFor(migrated);
     const backup: SavedBuildVersionBackup = { id: backupId, createdAt, sourceFingerprint, resultingFingerprint, changedCount: preview.changedCount, builds };
-    const existingBackups = savedBuildVersionBackupsFromUnknown(await readJson<unknown>(SAVED_BUILD_VERSION_BACKUP_PATH, undefined));
-    await writeJson(SAVED_BUILD_VERSION_BACKUP_PATH, [backup, ...existingBackups].slice(0, SAVED_BUILD_VERSION_BACKUP_RETENTION));
-    await writeJson(BUILDS_PATH, migrated);
+    const existingBackups = savedBuildVersionBackupsFromUnknown(await readFileJson<unknown>(SAVED_BUILD_VERSION_BACKUP_PATH, undefined));
+    await writeFileJson(SAVED_BUILD_VERSION_BACKUP_PATH, [backup, ...existingBackups].slice(0, SAVED_BUILD_VERSION_BACKUP_RETENTION));
+    await writeFileJson(BUILDS_PATH, migrated);
     return { status: "applied", backupId, totalBuilds: builds.length, changedCount: preview.changedCount, sourceFingerprint, resultingFingerprint } satisfies SavedBuildVersionMigrationOperation;
   }));
   if (!fileLease.acquired) throw new Error("다른 저장 요청이 버전 번호를 발급 중입니다. 잠시 후 다시 시도해 주세요.");
@@ -960,13 +1699,13 @@ export async function migrateSavedBuildVersions(expectedFingerprint: string): Pr
 
 export async function rollbackSavedBuildVersions(backupId: string, expectedFingerprint: string): Promise<SavedBuildVersionRollbackOperation> {
   if (await ensureDatabase()) return rollbackSavedBuildVersionsInDatabase(backupId, expectedFingerprint);
-  const fileLease = await withSerializedFileMutation(BUILDS_PATH, () => withFileLease(SAVED_BUILD_VERSION_LEASE_PATH, async () => {
-    const backup = savedBuildVersionBackupsFromUnknown(await readJson<unknown>(SAVED_BUILD_VERSION_BACKUP_PATH, undefined)).find((candidate) => candidate.id === backupId);
+  const fileLease = await withSerializedFileMutation(BUILDS_PATH, () => withFilePersistenceLease(SAVED_BUILD_VERSION_LEASE_PATH, async () => {
+    const backup = savedBuildVersionBackupsFromUnknown(await readFileJson<unknown>(SAVED_BUILD_VERSION_BACKUP_PATH, undefined)).find((candidate) => candidate.id === backupId);
     if (!backup) return { status: "not_found", backupId } satisfies SavedBuildVersionRollbackOperation;
     const builds = await readSavedBuilds();
     const actualFingerprint = savedBuildVersionSnapshotFingerprintFor(builds);
     if (actualFingerprint !== expectedFingerprint || actualFingerprint !== backup.resultingFingerprint) return { status: "conflict", backupId, expectedFingerprint, actualFingerprint } satisfies SavedBuildVersionRollbackOperation;
-    await writeJson(BUILDS_PATH, backup.builds);
+    await writeFileJson(BUILDS_PATH, backup.builds);
     return { status: "rolled_back", backupId, totalBuilds: backup.builds.length, changedCount: backup.changedCount, sourceFingerprint: backup.sourceFingerprint, resultingFingerprint: backup.sourceFingerprint } satisfies SavedBuildVersionRollbackOperation;
   }));
   if (!fileLease.acquired) throw new Error("다른 저장 요청이 진행 중입니다. 잠시 후 다시 시도해 주세요.");
@@ -1035,14 +1774,17 @@ export async function updateSavedBuildPurchaseProgress(id: string, purchaseProgr
         return { status: "conflict", ...(currentProgress ? { currentProgress } : {}) };
       }
       const nextPurchaseProgress = savedBuildPurchaseProgressWithNextRevisionFor(purchaseProgress, currentProgress);
-      await client.query("UPDATE saved_builds SET purchase_progress = $2::jsonb WHERE id = $1", [id, JSON.stringify(nextPurchaseProgress)]);
+      const updatedResult = await client.query<SavedBuildDatabaseRow>(
+        `UPDATE saved_builds SET purchase_progress = $2::jsonb WHERE id = $1 RETURNING ${SAVED_BUILD_DATABASE_COLUMNS}`,
+        [id, JSON.stringify(nextPurchaseProgress)]
+      );
+      const build = requiredSavedBuildRecordFromDatabaseRow(updatedResult.rows[0]);
       await client.query("COMMIT");
-      const updated = (await readSavedBuilds()).find((build) => build.id === id);
-      return updated ? { status: "updated", build: updated, purchaseProgress: nextPurchaseProgress } : { status: "not-found" };
+      return { status: "updated", build, purchaseProgress: nextPurchaseProgress };
     } catch (error: unknown) {
       await client.query("ROLLBACK").catch(() => undefined);
-      databaseDisabled = true;
-      console.warn(`PostgreSQL purchase progress update failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+      markDatabaseUnavailable("purchase progress update", error);
+      throw error;
     } finally {
       client.release();
     }
@@ -1082,14 +1824,17 @@ export async function updateSavedBuildPurchasePriceHistory(id: string, purchaseP
         return { status: "conflict", ...(currentPriceHistory ? { currentPriceHistory } : {}) };
       }
       const nextPriceHistory = savedBuildPurchasePriceHistoryWithNextRevisionFor(purchasePriceHistory, currentPriceHistory);
-      await client.query("UPDATE saved_builds SET purchase_price_history = $2::jsonb WHERE id = $1", [id, JSON.stringify(nextPriceHistory)]);
+      const updatedResult = await client.query<SavedBuildDatabaseRow>(
+        `UPDATE saved_builds SET purchase_price_history = $2::jsonb WHERE id = $1 RETURNING ${SAVED_BUILD_DATABASE_COLUMNS}`,
+        [id, JSON.stringify(nextPriceHistory)]
+      );
+      const build = requiredSavedBuildRecordFromDatabaseRow(updatedResult.rows[0]);
       await client.query("COMMIT");
-      const updated = (await readSavedBuilds()).find((build) => build.id === id);
-      return updated ? { status: "updated", build: updated, purchasePriceHistory: nextPriceHistory } : { status: "not-found" };
+      return { status: "updated", build, purchasePriceHistory: nextPriceHistory };
     } catch (error: unknown) {
       await client.query("ROLLBACK").catch(() => undefined);
-      databaseDisabled = true;
-      console.warn(`PostgreSQL purchase price history update failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+      markDatabaseUnavailable("purchase price history update", error);
+      throw error;
     } finally {
       client.release();
     }
@@ -1103,7 +1848,7 @@ export async function updateSavedBuildPurchasePriceHistory(id: string, purchaseP
     }
     const nextPriceHistory = savedBuildPurchasePriceHistoryWithNextRevisionFor(purchasePriceHistory, current.purchasePriceHistory);
     const next = { ...current, purchasePriceHistory: nextPriceHistory };
-    await writeJson(BUILDS_PATH, builds.map((build) => build.id === id ? next : build));
+    await writeFileJson(BUILDS_PATH, builds.map((build) => build.id === id ? next : build));
     return { status: "updated", build: next, purchasePriceHistory: nextPriceHistory } as const;
   });
 }
@@ -1133,14 +1878,17 @@ export async function restoreSavedBuildPurchasePriceHistory(id: string, targetRe
         return { status: "history-unavailable", ...(currentPriceHistory ? { currentPriceHistory } : {}) };
       }
       const nextPriceHistory = savedBuildPurchasePriceHistoryWithNextRevisionFor(target, currentPriceHistory);
-      await client.query("UPDATE saved_builds SET purchase_price_history = $2::jsonb WHERE id = $1", [id, JSON.stringify(nextPriceHistory)]);
+      const updatedResult = await client.query<SavedBuildDatabaseRow>(
+        `UPDATE saved_builds SET purchase_price_history = $2::jsonb WHERE id = $1 RETURNING ${SAVED_BUILD_DATABASE_COLUMNS}`,
+        [id, JSON.stringify(nextPriceHistory)]
+      );
+      const build = requiredSavedBuildRecordFromDatabaseRow(updatedResult.rows[0]);
       await client.query("COMMIT");
-      const updated = (await readSavedBuilds()).find((build) => build.id === id);
-      return updated ? { status: "updated", build: updated, purchasePriceHistory: nextPriceHistory } : { status: "not-found" };
+      return { status: "updated", build, purchasePriceHistory: nextPriceHistory };
     } catch (error: unknown) {
       await client.query("ROLLBACK").catch(() => undefined);
-      databaseDisabled = true;
-      console.warn(`PostgreSQL purchase price history restore failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+      markDatabaseUnavailable("purchase price history restore", error);
+      throw error;
     } finally {
       client.release();
     }
@@ -1159,7 +1907,7 @@ export async function restoreSavedBuildPurchasePriceHistory(id: string, targetRe
     }
     const nextPriceHistory = savedBuildPurchasePriceHistoryWithNextRevisionFor(target, current.purchasePriceHistory);
     const next = { ...current, purchasePriceHistory: nextPriceHistory };
-    await writeJson(BUILDS_PATH, builds.map((build) => build.id === id ? next : build));
+    await writeFileJson(BUILDS_PATH, builds.map((build) => build.id === id ? next : build));
     return { status: "updated", build: next, purchasePriceHistory: nextPriceHistory } as const;
   });
 }
@@ -1186,14 +1934,17 @@ export async function restoreSavedBuildPurchaseProgress(id: string, targetRevisi
         return { status: "history-unavailable", ...(currentProgress ? { currentProgress } : {}) };
       }
       const nextPurchaseProgress = savedBuildPurchaseProgressWithNextRevisionFor(target, currentProgress);
-      await client.query("UPDATE saved_builds SET purchase_progress = $2::jsonb WHERE id = $1", [id, JSON.stringify(nextPurchaseProgress)]);
+      const updatedResult = await client.query<SavedBuildDatabaseRow>(
+        `UPDATE saved_builds SET purchase_progress = $2::jsonb WHERE id = $1 RETURNING ${SAVED_BUILD_DATABASE_COLUMNS}`,
+        [id, JSON.stringify(nextPurchaseProgress)]
+      );
+      const build = requiredSavedBuildRecordFromDatabaseRow(updatedResult.rows[0]);
       await client.query("COMMIT");
-      const updated = (await readSavedBuilds()).find((build) => build.id === id);
-      return updated ? { status: "updated", build: updated, purchaseProgress: nextPurchaseProgress } : { status: "not-found" };
+      return { status: "updated", build, purchaseProgress: nextPurchaseProgress };
     } catch (error: unknown) {
       await client.query("ROLLBACK").catch(() => undefined);
-      databaseDisabled = true;
-      console.warn(`PostgreSQL purchase progress restore failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+      markDatabaseUnavailable("purchase progress restore", error);
+      throw error;
     } finally {
       client.release();
     }
@@ -1220,15 +1971,15 @@ export async function restoreSavedBuildPurchaseProgress(id: string, targetRevisi
 export async function updateSavedBuildMonitorState(id: string, monitorState: SavedBuildMonitorSubscription) {
   if (await ensureDatabase()) {
     try {
-      const result = await pool!.query(
-        "UPDATE saved_builds SET monitor_state = $2::jsonb WHERE id = $1",
+      const result = await pool!.query<SavedBuildDatabaseRow>(
+        `UPDATE saved_builds SET monitor_state = $2::jsonb WHERE id = $1 RETURNING ${SAVED_BUILD_DATABASE_COLUMNS}`,
         [id, JSON.stringify(monitorState)]
       );
-      if ((result.rowCount ?? 0) === 0) return undefined;
-      return (await readSavedBuilds()).find((build) => build.id === id);
+      const row = result.rows[0];
+      return row ? requiredSavedBuildRecordFromDatabaseRow(row) : undefined;
     } catch (error) {
-      databaseDisabled = true;
-      console.warn(`PostgreSQL build monitor update failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+      markDatabaseUnavailable("build monitor update", error);
+      throw error;
     }
   }
   return withSerializedFileMutation(BUILDS_PATH, async () => {
@@ -1241,42 +1992,46 @@ export async function updateSavedBuildMonitorState(id: string, monitorState: Sav
   });
 }
 
-export async function updateSavedBuildShareCredentials(id: string, ownerTokenHash: string, recoveryCodeHash: string) {
+export async function updateSavedBuildShareCredentials(
+  id: string,
+  ownerTokenHash: string,
+  recoveryCodeHash: string,
+  expectedRecoveryCodeHash: string | undefined
+): Promise<{ id: string } | undefined> {
   if (await ensureDatabase()) {
     try {
       const result = await pool!.query(
-        "UPDATE saved_builds SET owner_token_hash = $2, recovery_code_hash = $3 WHERE id = $1",
-        [id, ownerTokenHash, recoveryCodeHash]
+        "UPDATE saved_builds SET owner_token_hash = $2, recovery_code_hash = $3 WHERE id = $1 AND recovery_code_hash IS NOT DISTINCT FROM $4 RETURNING id",
+        [id, ownerTokenHash, recoveryCodeHash, expectedRecoveryCodeHash ?? null]
       );
-      if ((result.rowCount ?? 0) === 0) return undefined;
-      return (await readSavedBuilds()).find((build) => build.id === id);
+      return result.rows[0]?.id ? { id: result.rows[0].id as string } : undefined;
     } catch (error) {
-      databaseDisabled = true;
-      console.warn(`PostgreSQL build credential update failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+      markDatabaseUnavailable("build credential update", error);
+      throw error;
     }
   }
   return withSerializedFileMutation(BUILDS_PATH, async () => {
     const builds = await readSavedBuilds();
     const current = builds.find((build) => build.id === id);
-    if (!current) return undefined;
+    if (!current || current.recoveryCodeHash !== expectedRecoveryCodeHash) return undefined;
     const next = { ...current, ownerTokenHash, recoveryCodeHash };
     await writeSavedBuilds(builds.map((build) => build.id === id ? next : build));
-    return next;
+    return { id: next.id };
   });
 }
 
 export async function updateSavedBuildMyPc(id: string, myPcAt: string | null, monitorState?: SavedBuildMonitorSubscription) {
   if (await ensureDatabase()) {
     try {
-      const result = await pool!.query(
-        "UPDATE saved_builds SET my_pc_at = $2::timestamptz, monitor_state = COALESCE($3::jsonb, monitor_state) WHERE id = $1",
+      const result = await pool!.query<SavedBuildDatabaseRow>(
+        `UPDATE saved_builds SET my_pc_at = $2::timestamptz, monitor_state = COALESCE($3::jsonb, monitor_state) WHERE id = $1 RETURNING ${SAVED_BUILD_DATABASE_COLUMNS}`,
         [id, myPcAt, monitorState ? JSON.stringify(monitorState) : null]
       );
-      if ((result.rowCount ?? 0) === 0) return undefined;
-      return (await readSavedBuilds()).find((build) => build.id === id);
+      const row = result.rows[0];
+      return row ? requiredSavedBuildRecordFromDatabaseRow(row) : undefined;
     } catch (error) {
-      databaseDisabled = true;
-      console.warn(`PostgreSQL build my-pc update failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+      markDatabaseUnavailable("build my-pc update", error);
+      throw error;
     }
   }
   return withSerializedFileMutation(BUILDS_PATH, async () => {
@@ -1297,14 +2052,14 @@ export async function deleteSavedBuild(id: string) {
         const result = await pool!.query("DELETE FROM saved_builds WHERE id = $1", [id]);
         return (result.rowCount ?? 0) > 0;
       } catch (error) {
-        databaseDisabled = true;
-        console.warn(`PostgreSQL build delete failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+        markDatabaseUnavailable("build delete", error);
+        throw error;
       }
     }
     const builds = await readSavedBuilds();
     const next = builds.filter((build) => build.id !== id);
     if (next.length === builds.length) return false;
-    await writeJson(BUILDS_PATH, next);
+    await writeFileJson(BUILDS_PATH, next);
     return true;
   });
 }
@@ -1325,11 +2080,11 @@ export async function readSavedWatchlists(): Promise<SavedCatalogWatchlistRecord
       );
       return result.rows.map((row) => ({ id: row.id, name: row.name, entries: row.entries, nearLowThresholdPercent: row.near_low_threshold_percent, createdAt: new Date(row.created_at).toISOString(), updatedAt: new Date(row.updated_at).toISOString(), ...(row.alert_preferences ? { alertPreferences: savedWatchlistAlertPreferencesFromUnknown(row.alert_preferences) } : {}), ...(row.expires_at ? { expiresAt: new Date(row.expires_at).toISOString() } : {}), ...(row.owner_token_hash ? { ownerTokenHash: row.owner_token_hash } : {}) }));
     } catch (error) {
-      databaseDisabled = true;
-      console.warn(`PostgreSQL watchlist read failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+      markDatabaseUnavailable("watchlist read", error);
+      throw error;
     }
   }
-  const raw = await readJson<unknown[]>(WATCHLISTS_PATH, []);
+  const raw = await readFileJson<unknown[]>(WATCHLISTS_PATH, []);
   return raw.map(savedWatchlistRecordFromUnknown).filter((value): value is SavedCatalogWatchlistRecord => value !== undefined);
 }
 
@@ -1362,13 +2117,13 @@ export async function writeSavedWatchlists(watchlists: SavedCatalogWatchlistReco
       return;
     } catch (error) {
       await client.query("ROLLBACK").catch(() => undefined);
-      databaseDisabled = true;
-      console.warn(`PostgreSQL watchlist write failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+      markDatabaseUnavailable("watchlist write", error);
+      throw error;
     } finally {
       client.release();
     }
   }
-  await writeJson(WATCHLISTS_PATH, watchlists);
+  await writeFileJson(WATCHLISTS_PATH, watchlists);
 }
 
 export async function appendSavedWatchlist(watchlist: SavedCatalogWatchlistRecord, max = 100) {
@@ -1394,8 +2149,8 @@ export async function updateSavedWatchlist(watchlist: SavedCatalogWatchlistRecor
       );
       return (result.rowCount ?? 0) > 0;
     } catch (error) {
-      databaseDisabled = true;
-      console.warn(`PostgreSQL watchlist update failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+      markDatabaseUnavailable("watchlist update", error);
+      throw error;
     }
   }
   return withSerializedFileMutation(WATCHLISTS_PATH, async () => {
@@ -1416,14 +2171,14 @@ export async function deleteSavedWatchlist(id: string) {
         const result = await pool!.query("DELETE FROM saved_watchlists WHERE id = $1", [id]);
         return (result.rowCount ?? 0) > 0;
       } catch (error) {
-        databaseDisabled = true;
-        console.warn(`PostgreSQL watchlist delete failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+        markDatabaseUnavailable("watchlist delete", error);
+        throw error;
       }
     }
     const watchlists = await readSavedWatchlists();
     const next = watchlists.filter((watchlist) => watchlist.id !== id);
     if (next.length === watchlists.length) return false;
-    await writeJson(WATCHLISTS_PATH, next);
+    await writeFileJson(WATCHLISTS_PATH, next);
     return true;
   });
 }
@@ -1436,11 +2191,11 @@ export async function readSavedComparisons(): Promise<SavedAlternativeComparison
       );
       return result.rows.map(savedAlternativeComparisonFromDatabaseRow);
     } catch (error) {
-      databaseDisabled = true;
-      console.warn(`PostgreSQL comparison read failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+      markDatabaseUnavailable("comparison read", error);
+      throw error;
     }
   }
-  const raw = await readJson<unknown[]>(COMPARISONS_PATH, []);
+  const raw = await readFileJson<unknown[]>(COMPARISONS_PATH, []);
   return raw.map(savedAlternativeComparisonFromUnknown).filter((value): value is SavedAlternativeComparisonRecord => value !== undefined);
 }
 
@@ -1511,13 +2266,13 @@ export async function writeSavedComparisons(comparisons: SavedAlternativeCompari
       return;
     } catch (error) {
       await client.query("ROLLBACK").catch(() => undefined);
-      databaseDisabled = true;
-      console.warn(`PostgreSQL comparison write failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+      markDatabaseUnavailable("comparison write", error);
+      throw error;
     } finally {
       client.release();
     }
   }
-  await writeJson(COMPARISONS_PATH, comparisons);
+  await writeFileJson(COMPARISONS_PATH, comparisons);
 }
 
 export async function appendSavedComparison(comparison: SavedAlternativeComparisonRecord, max = 100) {
@@ -1534,14 +2289,14 @@ export async function deleteSavedComparison(id: string) {
         const result = await pool!.query("DELETE FROM saved_comparisons WHERE id = $1", [id]);
         return (result.rowCount ?? 0) > 0;
       } catch (error) {
-        databaseDisabled = true;
-        console.warn(`PostgreSQL comparison delete failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+        markDatabaseUnavailable("comparison delete", error);
+        throw error;
       }
     }
     const comparisons = await readSavedComparisons();
     const next = comparisons.filter((comparison) => comparison.id !== id);
     if (next.length === comparisons.length) return false;
-    await writeJson(COMPARISONS_PATH, next);
+    await writeFileJson(COMPARISONS_PATH, next);
     return true;
   });
 }
@@ -1580,11 +2335,11 @@ export async function readSavedBuildVersionComparisons(): Promise<SavedBuildVers
       );
       return result.rows.map(savedBuildVersionComparisonRecordFromDatabaseRow).filter((value): value is SavedBuildVersionComparisonShareRecord => value !== undefined);
     } catch (error) {
-      databaseDisabled = true;
-      console.warn(`PostgreSQL saved version comparison read failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+      markDatabaseUnavailable("saved version comparison read", error);
+      throw error;
     }
   }
-  const raw = await readJson<unknown[]>(VERSION_COMPARISONS_PATH, []);
+  const raw = await readFileJson<unknown[]>(VERSION_COMPARISONS_PATH, []);
   return raw.map(savedBuildVersionComparisonFromUnknown).filter((value): value is SavedBuildVersionComparisonShareRecord => value !== undefined);
 }
 
@@ -1617,13 +2372,13 @@ export async function writeSavedBuildVersionComparisons(comparisons: SavedBuildV
       return;
     } catch (error) {
       await client.query("ROLLBACK").catch(() => undefined);
-      databaseDisabled = true;
-      console.warn(`PostgreSQL saved version comparison write failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+      markDatabaseUnavailable("saved version comparison write", error);
+      throw error;
     } finally {
       client.release();
     }
   }
-  await writeJson(VERSION_COMPARISONS_PATH, comparisons);
+  await writeFileJson(VERSION_COMPARISONS_PATH, comparisons);
 }
 
 export async function appendSavedBuildVersionComparison(comparison: SavedBuildVersionComparisonShareRecord, max = 100) {
@@ -1640,8 +2395,8 @@ export async function deleteSavedBuildVersionComparison(id: string) {
         const result = await pool!.query("DELETE FROM saved_version_comparisons WHERE id = $1", [id]);
         return (result.rowCount ?? 0) > 0;
       } catch (error) {
-        databaseDisabled = true;
-        console.warn(`PostgreSQL saved version comparison delete failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+        markDatabaseUnavailable("saved version comparison delete", error);
+        throw error;
       }
     }
     const comparisons = await readSavedBuildVersionComparisons();
@@ -1677,11 +2432,11 @@ export async function readSavedBudgetLadders(): Promise<SavedBudgetLadderRecord[
       );
       return result.rows.map(savedBudgetLadderRecordFromDatabaseRow).filter((value): value is SavedBudgetLadderRecord => value !== undefined);
     } catch (error) {
-      databaseDisabled = true;
-      console.warn(`PostgreSQL budget ladder read failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+      markDatabaseUnavailable("budget ladder read", error);
+      throw error;
     }
   }
-  const raw = await readJson<unknown[]>(BUDGET_LADDERS_PATH, []);
+  const raw = await readFileJson<unknown[]>(BUDGET_LADDERS_PATH, []);
   return raw.map(savedBudgetLadderFromUnknown).filter((value): value is SavedBudgetLadderRecord => value !== undefined);
 }
 
@@ -1717,13 +2472,13 @@ export async function writeSavedBudgetLadders(ladders: SavedBudgetLadderRecord[]
       return;
     } catch (error) {
       await client.query("ROLLBACK").catch(() => undefined);
-      databaseDisabled = true;
-      console.warn(`PostgreSQL budget ladder write failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+      markDatabaseUnavailable("budget ladder write", error);
+      throw error;
     } finally {
       client.release();
     }
   }
-  await writeJson(BUDGET_LADDERS_PATH, ladders);
+  await writeFileJson(BUDGET_LADDERS_PATH, ladders);
 }
 
 export async function appendSavedBudgetLadder(ladder: SavedBudgetLadderRecord, max = 100) {
@@ -1740,14 +2495,14 @@ export async function deleteSavedBudgetLadder(id: string) {
         const result = await pool!.query("DELETE FROM saved_budget_ladders WHERE id = $1", [id]);
         return (result.rowCount ?? 0) > 0;
       } catch (error) {
-        databaseDisabled = true;
-        console.warn(`PostgreSQL budget ladder delete failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+        markDatabaseUnavailable("budget ladder delete", error);
+        throw error;
       }
     }
     const ladders = await readSavedBudgetLadders();
     const next = ladders.filter((ladder) => ladder.id !== id);
     if (next.length === ladders.length) return false;
-    await writeJson(BUDGET_LADDERS_PATH, next);
+    await writeFileJson(BUDGET_LADDERS_PATH, next);
     return true;
   });
 }
@@ -1774,11 +2529,11 @@ export async function readSavedGeneratorVariants(): Promise<SavedGeneratorVarian
       );
       return result.rows.map(savedGeneratorVariantsRecordFromDatabaseRow).filter((value): value is SavedGeneratorVariantsRecord => value !== undefined);
     } catch (error) {
-      databaseDisabled = true;
-      console.warn(`PostgreSQL generator variants read failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+      markDatabaseUnavailable("generator variants read", error);
+      throw error;
     }
   }
-  const raw = await readJson<unknown[]>(GENERATOR_VARIANTS_PATH, []);
+  const raw = await readFileJson<unknown[]>(GENERATOR_VARIANTS_PATH, []);
   return raw.map(savedGeneratorVariantsFromUnknown).filter((value): value is SavedGeneratorVariantsRecord => value !== undefined);
 }
 
@@ -1811,13 +2566,13 @@ export async function writeSavedGeneratorVariants(records: SavedGeneratorVariant
       return;
     } catch (error) {
       await client.query("ROLLBACK").catch(() => undefined);
-      databaseDisabled = true;
-      console.warn(`PostgreSQL generator variants write failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+      markDatabaseUnavailable("generator variants write", error);
+      throw error;
     } finally {
       client.release();
     }
   }
-  await writeJson(GENERATOR_VARIANTS_PATH, records);
+  await writeFileJson(GENERATOR_VARIANTS_PATH, records);
 }
 
 export async function appendSavedGeneratorVariants(record: SavedGeneratorVariantsRecord, max = 100) {
@@ -1834,14 +2589,14 @@ export async function deleteSavedGeneratorVariants(id: string) {
         const result = await pool!.query("DELETE FROM saved_generator_variants WHERE id = $1", [id]);
         return (result.rowCount ?? 0) > 0;
       } catch (error) {
-        databaseDisabled = true;
-        console.warn(`PostgreSQL generator variants delete failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+        markDatabaseUnavailable("generator variants delete", error);
+        throw error;
       }
     }
     const records = await readSavedGeneratorVariants();
     const next = records.filter((record) => record.id !== id);
     if (next.length === records.length) return false;
-    await writeJson(GENERATOR_VARIANTS_PATH, next);
+    await writeFileJson(GENERATOR_VARIANTS_PATH, next);
     return true;
   });
 }
@@ -1854,11 +2609,11 @@ export async function readSavedWatchlistAlertStates(): Promise<SavedWatchlistAle
       );
       return result.rows.map((row) => ({ watchlistId: row.watchlist_id, alertId: row.alert_id, ...(row.read_at ? { readAt: new Date(row.read_at).toISOString() } : {}), ...(row.dismissed_at ? { dismissedAt: new Date(row.dismissed_at).toISOString() } : {}), updatedAt: new Date(row.updated_at).toISOString() }));
     } catch (error) {
-      databaseDisabled = true;
-      console.warn(`PostgreSQL watchlist alert state read failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+      markDatabaseUnavailable("watchlist alert state read", error);
+      throw error;
     }
   }
-  const raw = await readJson<unknown[]>(WATCHLIST_ALERT_STATES_PATH, []);
+  const raw = await readFileJson<unknown[]>(WATCHLIST_ALERT_STATES_PATH, []);
   return raw.map(savedWatchlistAlertStateFromUnknown).filter((value): value is SavedWatchlistAlertState => value !== undefined);
 }
 
@@ -1887,13 +2642,13 @@ export async function writeSavedWatchlistAlertStates(states: SavedWatchlistAlert
       return;
     } catch (error) {
       await client.query("ROLLBACK").catch(() => undefined);
-      databaseDisabled = true;
-      console.warn(`PostgreSQL watchlist alert state write failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+      markDatabaseUnavailable("watchlist alert state write", error);
+      throw error;
     } finally {
       client.release();
     }
   }
-  await writeJson(WATCHLIST_ALERT_STATES_PATH, states);
+  await writeFileJson(WATCHLIST_ALERT_STATES_PATH, states);
 }
 
 export async function updateSavedWatchlistAlertStates(watchlistId: string, alertIds: string[], patch: "read" | "dismiss", updatedAt: string) {
@@ -1912,8 +2667,8 @@ export async function deleteSavedWatchlistAlertStates(watchlistId: string) {
         await pool!.query("DELETE FROM saved_watchlist_alert_states WHERE watchlist_id = $1", [watchlistId]);
         return;
       } catch (error) {
-        databaseDisabled = true;
-        console.warn(`PostgreSQL watchlist alert state delete failed; using file persistence instead: ${error instanceof Error ? error.message : String(error)}`);
+        markDatabaseUnavailable("watchlist alert state delete", error);
+        throw error;
       }
     }
     const states = await readSavedWatchlistAlertStates();

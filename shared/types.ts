@@ -2170,7 +2170,8 @@ export type BenchmarkOverrideOperation = "create" | "update" | "unchanged";
 export interface PersistenceDiagnostics {
   databaseConfigured: boolean;
   storageMode: "postgres" | "file";
-  fallbackReason?: "database_unavailable";
+  ready: boolean;
+  unavailableReason?: "database_unavailable" | "file_storage_unavailable" | "rate_limit_key_unconfigured";
 }
 
 export interface BenchmarkOverride {

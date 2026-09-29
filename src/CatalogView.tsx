@@ -1,3 +1,5 @@
+import { safeLocalStorage } from "./safe-storage";
+import "./catalog-picker.css";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FiActivity, FiArrowLeft, FiBox, FiCheck, FiClock, FiCopy, FiDatabase, FiDownload, FiExternalLink, FiInfo, FiLayers, FiLoader, FiPlus, FiRefreshCw, FiSearch, FiShare2, FiTrash2, FiTrendingUp } from "react-icons/fi";
 import type { AlternativeRiskCounts, BuildSelection, CatalogChangeValueDiff, CompatiblePartCandidate, DataFreshness, DataQuality, GamingRefreshRate, GamingResolution, ListingPolicy, Part, PartCategory, PartRefreshResponse, PriceAvailabilityFilter, RecommendationProfile, ServiceMeta } from "../shared/types";
@@ -242,7 +244,7 @@ function specRowsFor(part: Part) {
   return rows.filter(([, value], index, all) => all.findIndex(([, candidate]) => candidate === value) === index).slice(0, 18);
 }
 
-function catalogWatchTargetFor(part: Part, raw = typeof window === "undefined" ? null : window.localStorage.getItem(CATALOG_WATCHLIST_STORAGE_KEY)) {
+function catalogWatchTargetFor(part: Part, raw = typeof window === "undefined" ? null : safeLocalStorage.getItem(CATALOG_WATCHLIST_STORAGE_KEY)) {
   if (typeof window === "undefined") return undefined;
   return catalogWatchlistFromJson(raw).find((entry) => entry.kind === "part" && entry.itemId === part.id)?.targetPriceWon;
 }

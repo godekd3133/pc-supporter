@@ -1,3 +1,4 @@
+import { safeLocalStorage } from "./safe-storage";
 // Extracted from App.tsx to keep the entry chunk lean. Loaded lazily.
 import type { BuildHistoryEntry } from "../shared/build-history";
 import { buildScenarioComparisonFor } from "../shared/build-scenario";
@@ -172,14 +173,14 @@ export function BuildWatchlistPanel({ build, partMap, accessoryMap, onToast }: {
 
   function watchAll() {
     try {
-      const current = catalogWatchlistFromJson(window.localStorage.getItem(CATALOG_WATCHLIST_STORAGE_KEY));
+      const current = catalogWatchlistFromJson(safeLocalStorage.getItem(CATALOG_WATCHLIST_STORAGE_KEY));
       const currentKeys = new Set(current.map(catalogWatchEntryKey));
       const next = [...candidates.values()].reduce((entries, candidate) => addCatalogWatchEntry(entries, candidate.entry), current);
       const nextKeys = new Set(next.map(catalogWatchEntryKey));
       const addedCount = [...candidates.keys()].filter((key) => !currentKeys.has(key) && nextKeys.has(key)).length;
       const alreadyTrackedCount = [...candidates.keys()].filter((key) => currentKeys.has(key)).length;
       const omittedCount = candidates.size - addedCount - alreadyTrackedCount;
-      window.localStorage.setItem(CATALOG_WATCHLIST_STORAGE_KEY, catalogWatchlistToJson(next));
+      safeLocalStorage.setItem(CATALOG_WATCHLIST_STORAGE_KEY, catalogWatchlistToJson(next));
       const parts: string[] = [`새로 등록 ${addedCount}개`];
       if (alreadyTrackedCount > 0) parts.push(`이미 추적 중 ${alreadyTrackedCount}개`);
       if (omittedCount > 0) parts.push(`목록 한도로 제외 ${omittedCount}개`);

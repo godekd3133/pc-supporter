@@ -5,9 +5,9 @@ services:
     environment:
       POSTGRES_DB: pcsupporter
       POSTGRES_USER: pcsupporter
-      POSTGRES_PASSWORD: pcsupporter
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the environment or .env}
     ports:
-      - "${POSTGRES_HOST_PORT:-5432}:5432"
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"
     volumes:
       - pc-supporter-postgres:/var/lib/postgresql/data
     healthcheck:
@@ -27,10 +27,19 @@ services:
     environment:
       NODE_ENV: production
       PORT: 4174
+      PC_SUPPORTER_PROCESS_ROLE: api
       PC_SUPPORTER_DATA_DIR: /app/data
-      DATABASE_URL: postgresql://pcsupporter:pcsupporter@postgres:5432/pcsupporter
+      DATABASE_URL: postgresql://pcsupporter:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the environment or .env}@postgres:5432/pcsupporter
+      RATE_LIMIT_HMAC_SECRET: ${RATE_LIMIT_HMAC_SECRET:?Set RATE_LIMIT_HMAC_SECRET in the environment or .env}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in the environment or .env}
+      ADMIN_SESSION_SECRET: ${ADMIN_SESSION_SECRET:?Set ADMIN_SESSION_SECRET in the environment or .env}
       DANAWA_CRAWL_ON_START: "false"
       BUILD_MONITOR_SCHEDULER_ENABLED: "false"
+      PRICE_REFRESH_SCHEDULER_ENABLED: ${PRICE_REFRESH_SCHEDULER_ENABLED:-false}
+      PRICE_REFRESH_INTERVAL_HOURS: ${PRICE_REFRESH_INTERVAL_HOURS:-3}
+      PRICE_REFRESH_CORE_LIMIT: ${PRICE_REFRESH_CORE_LIMIT:-100}
+      PRICE_REFRESH_ACCESSORY_LIMIT: ${PRICE_REFRESH_ACCESSORY_LIMIT:-500}
+      PRICE_REFRESH_DELAY_MS: ${PRICE_REFRESH_DELAY_MS:-1200}
     ports:
       - "${APP_HOST_PORT:-4174}:4174"
     volumes:
@@ -40,6 +49,69 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
+
+  api-reader:
+    profiles: ["container-smoke"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 4174
+      PC_SUPPORTER_PROCESS_ROLE: api
+      PC_SUPPORTER_DATA_DIR: /app/data
+      DATABASE_URL: postgresql://pcsupporter:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the environment or .env}@postgres:5432/pcsupporter
+      RATE_LIMIT_HMAC_SECRET: ${RATE_LIMIT_HMAC_SECRET:?Set RATE_LIMIT_HMAC_SECRET in the environment or .env}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in the environment or .env}
+      ADMIN_SESSION_SECRET: ${ADMIN_SESSION_SECRET:?Set ADMIN_SESSION_SECRET in the environment or .env}
+      BUILD_MONITOR_SCHEDULER_ENABLED: "false"
+      PRICE_REFRESH_SCHEDULER_ENABLED: ${PRICE_REFRESH_SCHEDULER_ENABLED:-false}
+      PRICE_REFRESH_INTERVAL_HOURS: ${PRICE_REFRESH_INTERVAL_HOURS:-3}
+      PRICE_REFRESH_CORE_LIMIT: ${PRICE_REFRESH_CORE_LIMIT:-100}
+      PRICE_REFRESH_ACCESSORY_LIMIT: ${PRICE_REFRESH_ACCESSORY_LIMIT:-500}
+      PRICE_REFRESH_DELAY_MS: ${PRICE_REFRESH_DELAY_MS:-1200}
+    volumes:
+      - pc-supporter-data:/app/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4174/api/health').then((response) => { if (!response.ok) process.exit(1); }).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PC_SUPPORTER_PROCESS_ROLE: worker
+      PC_SUPPORTER_DATA_DIR: /app/data
+      DATABASE_URL: postgresql://pcsupporter:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the environment or .env}@postgres:5432/pcsupporter
+      RATE_LIMIT_HMAC_SECRET: ${RATE_LIMIT_HMAC_SECRET:?Set RATE_LIMIT_HMAC_SECRET in the environment or .env}
+      PRICE_REFRESH_SCHEDULER_ENABLED: ${PRICE_REFRESH_SCHEDULER_ENABLED:-false}
+      PRICE_REFRESH_INTERVAL_HOURS: ${PRICE_REFRESH_INTERVAL_HOURS:-3}
+      PRICE_REFRESH_CORE_LIMIT: ${PRICE_REFRESH_CORE_LIMIT:-100}
+      PRICE_REFRESH_ACCESSORY_LIMIT: ${PRICE_REFRESH_ACCESSORY_LIMIT:-500}
+      PRICE_REFRESH_DELAY_MS: ${PRICE_REFRESH_DELAY_MS:-1200}
+      BUILD_MONITOR_SCHEDULER_ENABLED: ${BUILD_MONITOR_SCHEDULER_ENABLED:-false}
+      DANAWA_CRAWL_SCHEDULER_ENABLED: ${DANAWA_CRAWL_SCHEDULER_ENABLED:-false}
+    command: ["npm", "run", "worker"]
+    volumes:
+      - pc-supporter-data:/app/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "const fs=require('node:fs');try{const h=JSON.parse(fs.readFileSync('/app/data/.price-refresh-worker-health.json','utf8'));const t=Date.parse(h.lastDatabaseSuccessAt);if(h.service!=='pc-supporter-price-refresh-worker'||!Number.isFinite(t)||Date.now()-t>45000)process.exit(1)}catch{process.exit(1)}"]
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
 
 volumes:
   pc-supporter-postgres:

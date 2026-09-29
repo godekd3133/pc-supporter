@@ -1,3 +1,4 @@
+import { safeLocalStorage } from "./safe-storage";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import { FiAlertTriangle, FiCheckCircle, FiDownload, FiInfo, FiRefreshCw, FiSave, FiShield, FiUpload, FiXCircle } from "react-icons/fi";
@@ -19,7 +20,7 @@ import { api } from "./api";
 
 function readStoredHistory(storageKey: string) {
   try {
-    const raw = window.localStorage.getItem(storageKey);
+    const raw = safeLocalStorage.getItem(storageKey);
     if (!raw) return emptyAssemblyVerificationHistory(storageKey);
     const parsed = parseAssemblyVerificationHistoryJson(raw, storageKey);
     return parsed.history ?? emptyAssemblyVerificationHistory(storageKey);
@@ -30,7 +31,7 @@ function readStoredHistory(storageKey: string) {
 
 function writeStoredHistory(storageKey: string, history: AssemblyVerificationHistory) {
   try {
-    window.localStorage.setItem(storageKey, assemblyVerificationHistoryJsonFor(history));
+    safeLocalStorage.setItem(storageKey, assemblyVerificationHistoryJsonFor(history));
   } catch {
     // Local storage가 가득 차도 화면의 현재 확인 기록은 계속 보여준다.
   }

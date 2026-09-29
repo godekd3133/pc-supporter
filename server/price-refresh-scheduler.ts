@@ -1,4 +1,5 @@
 import type { PriceRefreshStatus } from "./price-refresh";
+import type { BackgroundJob } from "./background-job-store";
 
 export type PriceRefreshOptions = {
   coreLimit?: number;
@@ -36,6 +37,76 @@ export function priceRefreshOptionsFromEnv(env: NodeJS.ProcessEnv = process.env)
   };
 }
 
+export interface PriceRefreshScheduleSlot {
+  intervalMs: number;
+  slot: number;
+  scheduledAt: number;
+}
+
+/** A shared UTC time bucket makes every scheduler replica agree on one durable run. */
+export function scheduledPriceRefreshSlot(now: number | Date, intervalMs: number): PriceRefreshScheduleSlot {
+  if (!Number.isSafeInteger(intervalMs) || intervalMs < 1_000) throw new TypeError("Price-refresh interval must be at least one second.");
+  const timestamp = now instanceof Date ? now.getTime() : now;
+  if (!Number.isFinite(timestamp) || timestamp < 0) throw new TypeError("Price-refresh schedule time is invalid.");
+  const slot = Math.floor(timestamp / intervalMs);
+  return { intervalMs, slot, scheduledAt: slot * intervalMs };
+}
+
+export function scheduledPriceRefreshIdempotencyKey(now: number | Date, intervalMs: number) {
+  const slot = scheduledPriceRefreshSlot(now, intervalMs);
+  return `price-refresh:scheduled:${intervalMs}:${slot.slot}`;
+}
+
+export function priceRefreshIntervalMsFromEnv(env: NodeJS.ProcessEnv = process.env) {
+  const intervalHours = Number(env.PRICE_REFRESH_INTERVAL_HOURS ?? 3);
+  return Number.isFinite(intervalHours) && intervalHours > 0
+    ? Math.max(1_000, Math.min(365 * 24 * 60 * 60 * 1_000, Math.floor(intervalHours * 60 * 60 * 1_000)))
+    : 0;
+}
+
+/** Scheduler instances enqueue only the current slot; missed slots are never replayed. */
+export function startDurablePriceRefreshScheduler({
+  enqueue,
+  intervalMs,
+  now = Date.now,
+  onError = (error) => console.error("Price refresh schedule enqueue failed", error)
+}: {
+  enqueue: (idempotencyKey: string, slot: PriceRefreshScheduleSlot) => Promise<BackgroundJob>;
+  intervalMs: number;
+  now?: () => number;
+  onError?: (error: unknown) => void;
+}) {
+  let timer: ReturnType<typeof setInterval> | undefined;
+  let inFlight: Promise<BackgroundJob> | undefined;
+  const enqueueCurrentSlot = () => {
+    if (intervalMs <= 0 || inFlight) return inFlight;
+    const slot = scheduledPriceRefreshSlot(now(), intervalMs);
+    const key = scheduledPriceRefreshIdempotencyKey(slot.scheduledAt, slot.intervalMs);
+    const current = enqueue(key, slot).finally(() => {
+      if (inFlight === current) inFlight = undefined;
+    });
+    inFlight = current;
+    return current;
+  };
+  return {
+    enqueueCurrentSlot,
+    async waitForIdle() {
+      if (inFlight) await inFlight.catch(() => undefined);
+    },
+    start() {
+      if (timer) clearInterval(timer);
+      if (intervalMs > 0) {
+        timer = setInterval(() => { void enqueueCurrentSlot()?.catch(onError); }, intervalMs);
+        timer.unref();
+      }
+    },
+    stop() {
+      if (timer) clearInterval(timer);
+      timer = undefined;
+    }
+  };
+}
+
 /** Starts a bounded refresh timer. The runner itself owns source selection and persistence. */
 export function startPriceRefreshScheduler({
   run,
@@ -68,6 +139,9 @@ export function startPriceRefreshScheduler({
   return {
     runOnce,
     tryRunOnce,
+    async waitForIdle() {
+      if (inFlight) await inFlight.catch(() => undefined);
+    },
     start,
     isRunning: () => Boolean(inFlight),
     stop: () => { if (timer) clearInterval(timer); timer = undefined; }

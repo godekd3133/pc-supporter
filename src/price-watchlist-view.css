@@ -1,0 +1,553 @@
+/* Loaded with the lazy PriceWatchlistView route. */
+.price-watchlist-page { padding-bottom: 34px; }
+
+.price-watchlist-grid { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr); gap: 15px; }
+
+.price-watchlist-search-card, .price-watchlist-tracker-card { min-width: 0; padding: 19px; border: 1px solid var(--line); border-radius: 14px; background: #fff; box-shadow: var(--small-shadow); }
+
+.price-watchlist-section-heading { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 14px; }
+
+.price-watchlist-section-heading h2 { margin-bottom: 4px; color: var(--ink); font-size: 17px; }
+
+.price-watchlist-section-heading p:not(.eyebrow) { margin: 0; color: #89999e; font-size: 9px; line-height: 1.5; }
+
+.price-watchlist-section-heading > span { flex: 0 0 auto; padding: 5px 7px; border-radius: 5px; color: var(--teal-deep); background: var(--teal-soft); font-family: "DM Mono", monospace; font-size: 8px; }
+
+.price-watchlist-section-heading .price-watchlist-filter-link-button { margin: 0; padding: 4px 6px; border: 1px solid #e5e8eb; border-radius: 6px; color: #6b7684; background: #f9fafb; font-size: 8px; white-space: nowrap; }
+
+.price-watchlist-search-tools { display: grid; grid-template-columns: minmax(115px, 0.35fr) minmax(130px, 0.45fr) minmax(0, 1fr); align-items: end; gap: 7px; margin-bottom: 11px; padding: 9px; border: 1px solid #e6efef; border-radius: 8px; background: #f9fafb; }
+
+.price-watchlist-search-tools label, .price-watchlist-server-tools label, .price-watchlist-saved-link label { display: flex; min-width: 0; flex-direction: column; gap: 4px; color: #8fa2a4; font-size: 8px; font-weight: 700; }
+
+.price-watchlist-search-tools input, .price-watchlist-search-tools select, .price-watchlist-server-tools input, .price-watchlist-server-tools select, .price-watchlist-saved-link input { width: 100%; height: 31px; padding: 0 8px; border: 1px solid #dfeaea; border-radius: 6px; outline: 0; color: #5f777d; background: #fff; font-size: 9px; }
+
+.price-watchlist-search-tools input:focus, .price-watchlist-search-tools select:focus, .price-watchlist-server-tools input:focus, .price-watchlist-server-tools select:focus, .price-watchlist-saved-link input:focus { border-color: #86aaa5; box-shadow: 0 0 0 3px #edf7f5; }
+
+.price-watchlist-search-results, .price-watchlist-tracked-list { display: grid; gap: 6px; }
+
+.price-watchlist-search-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 9px; border: 1px solid #e7eeee; border-radius: 8px; background: #fff; }
+
+.price-watchlist-search-item.watched { border-color: #b8ded6; background: #f9fafb; }
+
+.price-watchlist-search-item > div:first-child { min-width: 0; }
+
+.price-watchlist-search-item strong, .price-watchlist-tracked-copy strong { display: block; overflow: hidden; color: #5d737a; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+
+.price-watchlist-search-item small, .price-watchlist-tracked-copy small { display: block; margin-top: 4px; overflow: hidden; color: #99a8ab; font-size: 8px; line-height: 1.45; text-overflow: ellipsis; white-space: nowrap; }
+
+.price-watchlist-search-side { display: flex; align-items: center; gap: 8px; }
+
+.price-watchlist-search-side > strong { color: var(--teal-deep); font-family: "DM Mono", monospace; font-size: 9px; white-space: nowrap; }
+
+.price-watchlist-source-link { display: inline-flex; align-items: center; gap: 3px; color: #6b918c; font-size: 7px; text-decoration: none; white-space: nowrap; }
+
+.price-watchlist-source-link:hover { color: var(--teal-deep); text-decoration: underline; }
+
+.price-watchlist-source-link svg { font-size: 9px; }
+
+.price-watchlist-search-side .button { min-height: 28px; padding: 0 8px; font-size: 8px; white-space: nowrap; }
+
+.price-watchlist-state { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 150px; color: #93a2a5; font-size: 10px; }
+
+.price-watchlist-state.error { justify-content: flex-start; flex-wrap: wrap; color: var(--red); }
+
+.price-watchlist-inline-error { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; margin: 9px 0 0; color: var(--red); font-size: 8px; }
+
+.price-watchlist-inline-error .text-button { margin: 0; font-size: 8px; }
+
+.price-watchlist-tracker-card { background: #f9fafb; }
+
+.price-watchlist-tracker-card .price-watchlist-section-heading { align-items: center; }
+
+.price-watchlist-tracker-actions { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 5px; }
+
+.price-watchlist-import-input { display: none; }
+
+.price-watchlist-tracker-card .price-watchlist-section-heading .button { min-height: 30px; padding: 0 8px; font-size: 8px; white-space: nowrap; }
+
+.price-watchlist-checked { display: flex; align-items: center; gap: 5px; margin: -4px 0 10px; color: #7d9695; font-family: "DM Mono", monospace; font-size: 8px; }
+
+.price-watchlist-decision-overview { display: grid; gap: 6px; margin: -3px 0 10px; padding: 7px 8px; border: 1px solid #e2eeec; border-radius: 6px; background: #f9fafb; }
+
+.price-watchlist-decision-overview > strong { color: #698482; font-size: 8px; }
+
+.price-watchlist-decision-overview > div { display: flex; flex-wrap: wrap; gap: 5px; }
+
+.price-watchlist-decision-overview button { padding: 3px 5px; border: 1px solid transparent; border-radius: 4px; color: #7d9690; background: #eef6f3; font: inherit; font-family: "DM Mono", monospace; font-size: 6.8px; cursor: pointer; }
+
+.price-watchlist-decision-overview button.target, .price-watchlist-decision-overview button.buy { color: #4f8575; background: #e5f5ef; }
+
+.price-watchlist-decision-overview button.wait, .price-watchlist-decision-overview button.observe { color: #927746; background: #fff5dd; }
+
+.price-watchlist-decision-overview button.error { color: #a06060; background: #feebed; }
+
+.price-watchlist-decision-overview button[aria-pressed="true"] { border-color: currentColor; box-shadow: 0 0 0 2px rgba(65, 137, 119, 0.1); }
+
+.price-watchlist-decision-overview button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.price-watchlist-import-dialog { width: min(600px, 100%); max-height: min(760px, calc(100vh - 40px)); }
+
+.price-watchlist-import-dialog .modal-header { margin-bottom: 0; }
+
+.price-watchlist-import-stats { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+
+.price-watchlist-import-change, .price-watchlist-import-warning { display: flex; align-items: flex-start; gap: 5px; margin: 10px 25px 0; padding: 8px; border-radius: 7px; font-size: 8px; line-height: 1.45; }
+
+.price-watchlist-import-change { color: #4f8575; background: #eef9f5; }
+
+.price-watchlist-import-warning { color: #9a6a58; background: #fff7f1; }
+
+.price-watchlist-import-threshold { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 10px 25px 0; padding: 8px; border: 1px solid #e5e8eb; border-radius: 7px; color: #819591; font-size: 8px; }
+
+.price-watchlist-import-threshold strong { color: var(--teal-deep); font-family: "DM Mono", monospace; font-size: 10px; }
+
+.price-watchlist-import-threshold small { flex-basis: 100%; color: #9aaba7; font-size: 7px; }
+
+.price-watchlist-import-note { display: flex; align-items: flex-start; gap: 5px; margin: 10px 25px 0; color: #899d99; font-size: 7.5px; line-height: 1.5; }
+
+.price-watchlist-import-note svg, .price-watchlist-import-change svg, .price-watchlist-import-warning svg { flex: 0 0 auto; margin-top: 1px; }
+
+.price-watchlist-monitor-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: -2px 0 10px; padding: 7px 8px; border: 1px solid #e2eeec; border-radius: 6px; background: #f9fafb; }
+
+.price-watchlist-monitor-controls > label { display: inline-flex; align-items: center; gap: 5px; color: #698482; font-size: 8px; font-weight: 700; }
+
+.price-watchlist-monitor-controls input[type="checkbox"] { accent-color: var(--teal); }
+
+.price-watchlist-monitor-interval, .price-watchlist-history-window { padding-left: 8px; border-left: 1px solid #dbeae6; }
+
+.price-watchlist-monitor-interval select, .price-watchlist-history-window select { height: 24px; padding: 0 5px; border: 1px solid #dbeae6; border-radius: 5px; color: #65807c; background: #fff; font-size: 8px; }
+
+.price-watchlist-monitor-status { margin-left: auto; color: #8da3a0; font-family: "DM Mono", monospace; font-size: 7px; }
+
+.price-watchlist-alert-preferences { margin-bottom: 10px; padding: 9px; border: 1px solid #e5e8eb; border-radius: 8px; background: #f9fafb; }
+
+.price-watchlist-alert-preferences-heading { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 7px; }
+
+.price-watchlist-alert-preferences-heading strong { display: block; color: #5f7c78; font-size: 9px; }
+
+.price-watchlist-alert-preferences-heading small { display: block; margin-top: 3px; color: #97a8a6; font-size: 7px; line-height: 1.45; }
+
+.price-watchlist-alert-preferences-heading > span { flex: 0 1 auto; min-width: 0; padding: 3px 5px; border-radius: 4px; color: #5f8880; background: #e6f4f0; font-family: "DM Mono", monospace; font-size: 7px; }
+
+.price-watchlist-alert-preferences-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+
+.price-watchlist-alert-preferences-controls > label { display: inline-flex; align-items: center; gap: 5px; color: #698482; font-size: 8px; font-weight: 700; }
+
+.price-watchlist-alert-preferences-controls input[type="checkbox"] { accent-color: var(--teal); }
+
+.price-watchlist-alert-preferences-controls select { height: 24px; padding: 0 5px; border: 1px solid #dbeae6; border-radius: 5px; color: #65807c; background: #fff; font-size: 8px; }
+
+.price-watchlist-alerts { margin-bottom: 10px; padding: 9px; border: 1px solid #e7ddbe; border-radius: 8px; background: #fffdf6; }
+
+.price-watchlist-alerts-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+
+.price-watchlist-alerts-heading > strong { display: inline-flex; align-items: center; gap: 4px; color: #897346; font-size: 9px; }
+
+.price-watchlist-alert-actions { display: flex; align-items: center; gap: 8px; }
+
+.price-watchlist-alerts-heading .text-button { margin: 0; color: #a18b5e; font-size: 7px; }
+
+.price-watchlist-alerts-heading .text-button:disabled { color: #c8c0a9; cursor: default; }
+
+.price-watchlist-alert { display: flex; align-items: flex-start; gap: 6px; padding: 6px 0; border-top: 1px solid #f0e9d5; }
+
+.price-watchlist-alert > svg { flex: 0 0 auto; margin-top: 1px; color: #ad9562; font-size: 11px; }
+
+.price-watchlist-alert > div { min-width: 0; }
+
+.price-watchlist-alert strong, .price-watchlist-alert span, .price-watchlist-alert small { display: block; }
+
+.price-watchlist-alert strong { color: #8a7650; font-size: 8px; }
+
+.price-watchlist-alert span { margin-top: 2px; color: #8e8777; font-size: 8px; }
+
+.price-watchlist-alert small { margin-top: 2px; color: #aaa18e; font-family: "DM Mono", monospace; font-size: 7px; }
+
+.price-watchlist-alert.target > svg, .price-watchlist-alert.target strong { color: #4f8575; }
+
+.price-watchlist-alert.availability > svg, .price-watchlist-alert.availability strong { color: #637f98; }
+
+.price-watchlist-alert.read { opacity: 0.65; }
+
+.price-watchlist-entry-filters { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; align-items: end; gap: 7px; margin: 0 0 10px; padding: 8px; border: 1px solid #e2eeec; border-radius: 7px; background: #f9fafb; }
+
+.price-watchlist-entry-filters label { display: flex; min-width: 0; flex-direction: column; gap: 3px; color: #91a1a2; font-size: 7px; font-weight: 700; }
+
+.price-watchlist-entry-filters input, .price-watchlist-entry-filters select { width: 100%; height: 27px; padding: 0 7px; border: 1px solid #dfeaea; border-radius: 5px; outline: 0; color: #63807e; background: #fff; font-size: 8px; }
+
+.price-watchlist-entry-filters input:focus, .price-watchlist-entry-filters select:focus { border-color: #86aaa5; box-shadow: 0 0 0 3px #edf7f5; }
+
+.price-watchlist-entry-count { align-self: center; color: #8ca19f; font-family: "DM Mono", monospace; font-size: 7px; white-space: nowrap; }
+
+.price-watchlist-filter-empty { display: flex; min-height: 120px; align-items: center; justify-content: center; gap: 5px; color: #94a4a5; font-size: 9px; }
+
+.price-watchlist-filter-empty .text-button { margin: 0; font-size: 8px; }
+
+.price-watchlist-empty { display: flex; min-height: 180px; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: #a0adae; text-align: center; }
+
+.price-watchlist-empty svg { color: var(--teal); font-size: 28px; }
+
+.price-watchlist-empty strong { color: #668083; font-size: 11px; }
+
+.price-watchlist-empty span { font-size: 8px; }
+
+.price-watchlist-tracked-item { display: grid; grid-template-columns: minmax(0, 1fr) 92px auto auto; align-items: center; gap: 8px; padding: 9px; border: 1px solid #e1edeb; border-radius: 8px; background: #fff; }
+
+.price-watchlist-tracked-copy { min-width: 0; }
+
+.price-watchlist-tracked-item label { display: flex; flex-direction: column; gap: 3px; color: #91a1a2; font-size: 7px; font-weight: 700; }
+
+.price-watchlist-tracked-item label input { width: 92px; height: 27px; padding: 0 6px; border: 1px solid #dfeaea; border-radius: 6px; outline: 0; color: #63807e; background: #fff; font-family: "DM Mono", monospace; font-size: 8px; }
+
+.price-watchlist-target-suggest { margin-top: 3px; padding: 0; border: 0; color: #6b918c; background: transparent; font-size: 7px; text-align: left; white-space: nowrap; }
+
+.price-watchlist-target-suggest:hover { color: var(--teal-deep); text-decoration: underline; }
+
+.price-watchlist-current { min-width: 75px; text-align: right; }
+
+.price-watchlist-current span { display: block; color: #97a6a7; font-size: 7px; }
+
+.price-watchlist-current strong { display: block; margin-top: 3px; color: var(--teal-deep); font-family: "DM Mono", monospace; font-size: 9px; white-space: nowrap; }
+
+.price-watchlist-current .price-watchlist-source-link { justify-content: flex-end; margin-top: 3px; }
+
+.price-watchlist-current em { display: block; margin-top: 3px; color: #4f8575; font-size: 7px; font-style: normal; white-space: nowrap; }
+
+.price-watchlist-current .price-watchlist-decision { width: fit-content; margin-left: auto; padding: 3px 5px; border-radius: 4px; color: #4f8575; background: #e8f7f0; font-weight: 700; }
+
+.price-watchlist-current .price-watchlist-decision.target, .price-watchlist-current .price-watchlist-decision.buy { color: #3f8173; background: #e4f5ee; }
+
+.price-watchlist-current .price-watchlist-decision.wait, .price-watchlist-current .price-watchlist-decision.observe { color: #927746; background: #fff5dd; }
+
+.price-watchlist-current .price-watchlist-decision.unavailable, .price-watchlist-current .price-watchlist-decision.error { color: #a06060; background: #feebed; }
+
+.price-watchlist-decision-summary { display: block; margin-top: 4px; color: #8d9f9d; font-size: 6.8px; line-height: 1.4; overflow-wrap: anywhere; }
+
+.price-watchlist-target-gap { display: block; margin-top: 3px; color: #a28455; font-family: "DM Mono", monospace; font-size: 7px; white-space: nowrap; }
+
+.price-watchlist-history { margin-top: 4px; }
+
+.price-watchlist-history > small { display: block; color: #97a6a7; font-family: "DM Mono", monospace; font-size: 7px; white-space: nowrap; }
+
+.price-watchlist-history-signals { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 3px; margin-top: 3px; }
+
+.price-watchlist-history-signals em { padding: 2px 4px; border-radius: 3px; color: #66879b; background: #e9f3fa; font-size: 7px; font-style: normal; white-space: nowrap; }
+
+.price-watchlist-sparkline { display: flex; align-items: flex-end; justify-content: flex-end; gap: 2px; height: 24px; margin-top: 5px; padding: 2px 0; }
+
+.price-watchlist-sparkline span { display: block; width: 4px; min-height: 3px; border-radius: 2px 2px 0 0; background: #8bc7bb; }
+
+.price-watchlist-alert-summary { display: flex; align-items: center; gap: 5px; margin: 11px 0 0; padding: 7px 8px; border-radius: 6px; color: #62827d; background: #eff9f5; font-size: 8px; }
+
+.price-watchlist-tracked-item > .text-button { margin: 0; font-size: 8px; white-space: nowrap; }
+
+.price-watchlist-server-tools { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.55fr) minmax(0, 0.8fr) auto auto; align-items: end; gap: 7px; margin-top: 13px; padding-top: 12px; border-top: 1px solid #e2eeec; }
+
+.price-watchlist-server-tools .button { min-height: 31px; padding: 0 9px; font-size: 8px; white-space: nowrap; }
+
+.price-watchlist-saved-link { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 7px; margin-top: 9px; padding: 9px; border: 1px solid #cfe6df; border-radius: 8px; background: #f8fffc; }
+
+.price-watchlist-saved-link > div { display: flex; align-items: center; gap: 8px; }
+
+.price-watchlist-saved-link > div .text-button { margin: 0; font-size: 8px; white-space: nowrap; }
+
+.price-watchlist-saved-link > small { grid-column: 1 / -1; color: #8fa5a1; font-size: 7px; }
+
+.price-watchlist-saved-links { margin-top: 12px; padding-top: 11px; border-top: 1px solid #e2eeec; }
+
+.price-watchlist-saved-links-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 7px; }
+
+.price-watchlist-saved-links-heading strong { display: inline-flex; align-items: center; gap: 4px; color: #65817d; font-size: 9px; }
+
+.price-watchlist-saved-links-heading span { color: #91a4a1; font-family: "DM Mono", monospace; font-size: 7px; }
+
+.price-watchlist-saved-link { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1fr) auto; }
+
+.price-watchlist-saved-link.active { border-color: #9ed0c3; box-shadow: 0 0 0 2px #effaf6; }
+
+.price-watchlist-saved-link-meta { min-width: 0; }
+
+.price-watchlist-saved-link > .price-watchlist-saved-link-meta { display: block; }
+
+.price-watchlist-saved-link-meta > strong, .price-watchlist-saved-link-meta > small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.price-watchlist-saved-link-meta > strong { color: #5f7d78; font-size: 9px; }
+
+.price-watchlist-saved-link-meta > small { margin-top: 4px; color: #91a6a2; font-size: 7px; }
+
+.price-watchlist-saved-link-actions { display: flex; align-items: center; gap: 7px; }
+
+.price-watchlist-saved-link-actions .text-button { margin: 0; font-size: 8px; white-space: nowrap; }
+
+.price-watchlist-saved-link-actions a { text-decoration: none; }
+
+.price-watchlist-note { display: flex; align-items: flex-start; gap: 5px; margin: 12px 0 0; padding-top: 11px; border-top: 1px solid #e2eeec; color: #8d9da1; font-size: 8px; line-height: 1.55; }
+
+@media (max-width: 760px) {
+  .price-watchlist-grid { grid-template-columns: 1fr; }
+  .price-watchlist-search-tools { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .price-watchlist-search-query { grid-column: 1 / -1; }
+  .price-watchlist-server-tools { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .price-watchlist-server-tools .button { grid-column: 1 / -1; width: 100%; }
+}
+
+@media (max-width: 500px) {
+  .price-watchlist-search-card, .price-watchlist-tracker-card { padding: 17px 14px; }
+  .price-watchlist-tracker-actions { width: 100%; justify-content: stretch; }
+  .price-watchlist-tracker-actions .button { flex: 1; }
+  .price-watchlist-search-tools, .price-watchlist-server-tools { grid-template-columns: 1fr; }
+  .price-watchlist-search-query, .price-watchlist-server-tools .button { grid-column: auto; }
+  .price-watchlist-search-item { align-items: flex-start; }
+  .price-watchlist-search-side { align-items: flex-end; flex-direction: column; gap: 5px; }
+  .price-watchlist-tracked-item { grid-template-columns: minmax(0, 1fr) auto; }
+  .price-watchlist-tracked-item label { grid-column: 2; grid-row: 1; }
+  .price-watchlist-current { grid-column: 1 / -1; min-width: 0; text-align: left; }
+  .price-watchlist-current .price-watchlist-source-link { justify-content: flex-start; }
+  .price-watchlist-current .price-watchlist-decision { margin-left: 0; }
+  .price-watchlist-history-signals { justify-content: flex-start; }
+  .price-watchlist-tracked-item > .text-button { grid-column: 1 / -1; width: 100%; text-align: left; }
+  .price-watchlist-saved-link { grid-template-columns: 1fr; }
+  .price-watchlist-saved-link > .price-watchlist-saved-link-meta { flex-direction: column; align-items: stretch; gap: 3px; }
+  .price-watchlist-saved-link > .price-watchlist-saved-link-actions { flex-direction: row; align-items: stretch; gap: 3px; }
+  .price-watchlist-saved-link > .price-watchlist-saved-link-actions .text-button { flex: 1; text-align: left; }
+  .price-watchlist-monitor-status { width: 100%; margin-left: 0; }
+  .price-watchlist-monitor-interval, .price-watchlist-history-window { padding-left: 0; border-left: 0; }
+  .price-watchlist-entry-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }
+  .price-watchlist-entry-filters label:first-child, .price-watchlist-entry-count { grid-column: 1 / -1; }
+  .price-watchlist-entry-count { align-self: start; }
+  .price-watchlist-alert-preferences-heading { flex-direction: column; }
+  .price-watchlist-alert-preferences-controls { align-items: flex-start; flex-direction: column; }
+  .price-watchlist-alerts-heading { align-items: flex-start; flex-direction: column; }
+  .price-watchlist-alert-actions { width: 100%; }
+  .price-watchlist-alert-actions .text-button { flex: 1; text-align: left; }
+}
+
+@media print {
+  @page { margin: 12mm; }
+}
+
+@media (max-width: 760px) {
+}
+
+@media (max-width: 760px) {
+
+  .price-watchlist-page { max-width: none; }
+
+  .price-watchlist-grid { display: block; }
+
+  .price-watchlist-search-card,
+  .price-watchlist-tracker-card { padding: 14px; border: 1px solid var(--mobile-line); border-radius: 17px; background: var(--mobile-surface); box-shadow: var(--mobile-shadow); }
+
+  .price-watchlist-tracker-card { margin-top: 14px; }
+
+  .price-watchlist-search-tools { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+
+  .price-watchlist-search-tools .price-watchlist-search-query { grid-column: 1 / -1; }
+
+  .price-watchlist-search-tools label { min-width: 0; }
+
+  .price-watchlist-search-tools select,
+  .price-watchlist-search-tools input { min-height: 40px; font-size: 11px; }
+
+  .price-watchlist-search-item { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 12px 0; }
+
+  .price-watchlist-search-item > div:first-child strong { display: block; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+
+  .price-watchlist-search-side { display: flex; align-items: center; gap: 8px; }
+
+  .price-watchlist-search-side > strong { margin-right: auto; font-size: 12px; }
+
+  .price-watchlist-search-side .button { min-height: 36px; font-size: 10px; }
+
+  .price-watchlist-entry-filters { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+  .price-watchlist-entry-filters label:first-child { grid-column: 1 / -1; }
+
+  .price-watchlist-entry-filters input,
+  .price-watchlist-entry-filters select { min-height: 40px; font-size: 11px; }
+
+  .price-watchlist-tracked-item { display: grid; grid-template-columns: 1fr; gap: 10px; padding: 14px 0; border-bottom: 1px solid var(--mobile-line); }
+
+  .price-watchlist-tracked-copy strong { display: block; overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+
+  .price-watchlist-tracked-item > label { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 5px 9px; align-items: center; grid-column: 1 / -1; grid-row: auto; }
+
+  .price-watchlist-tracked-item > label input { min-height: 40px; }
+
+  .price-watchlist-target-suggest { grid-column: 2; justify-self: start; }
+
+  .price-watchlist-current { padding: 10px; border: 1px solid #e4eaf2; border-radius: 12px; background: #fbfcfe; }
+
+  .price-watchlist-current span { font-size: 11px; }
+
+  .price-watchlist-current strong { font-size: 16px; }
+
+  .price-watchlist-current em { font-size: 11px; white-space: normal; }
+
+  .price-watchlist-current .price-watchlist-decision { font-size: 11px; white-space: normal; }
+
+  .price-watchlist-current .price-watchlist-decision-summary { font-size: 12px; line-height: 1.5; overflow-wrap: break-word; word-break: keep-all; }
+
+  .price-watchlist-current .price-watchlist-target-gap { font-size: 11px; white-space: normal; }
+
+  .price-watchlist-tracked-item label { font-size: 11px; }
+
+  .price-watchlist-tracked-item > .text-button { display: inline-flex; min-height: 44px; align-items: center; font-size: 12px; }
+
+  .price-watchlist-server-tools { grid-template-columns: 1fr; gap: 8px; }
+
+  .price-watchlist-server-tools .button { width: 100%; }
+
+  .price-watchlist-alert-preferences { padding: 13px; border-radius: 14px; }
+
+  .price-watchlist-alert-preferences-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+  .price-watchlist-alert-preferences-controls label:last-child { grid-column: 1 / -1; }
+}
+
+html[data-theme="dark"] :where(
+  .price-watchlist-search-card,
+  .price-watchlist-tracker-card,
+  .price-watchlist-search-tools,
+  .price-watchlist-search-item,
+  .price-watchlist-decision-overview,
+  .price-watchlist-monitor-controls,
+  .price-watchlist-alert-preferences,
+  .price-watchlist-alerts,
+  .price-watchlist-entry-filters,
+  .price-watchlist-tracked-item,
+  .price-watchlist-saved-link,
+  .price-watchlist-filter-empty,
+  .price-watchlist-empty,
+  .price-watchlist-import-dialog,
+  .price-watchlist-import-threshold,
+  .price-watchlist-import-change,
+  .price-watchlist-import-warning
+) {
+  border-color: var(--line) !important;
+  color: var(--ink) !important;
+  background: #202631 !important;
+}
+
+html[data-theme="dark"] :where(
+  .price-watchlist-search-item strong,
+  .price-watchlist-tracked-copy strong,
+  .price-watchlist-empty strong,
+  .price-watchlist-alert-preferences-heading strong,
+  .price-watchlist-alerts-heading > strong,
+  .price-watchlist-saved-links-heading strong
+) { color: var(--ink) !important; }
+
+html[data-theme="dark"] :where(
+  .price-watchlist-search-item small,
+  .price-watchlist-tracked-copy small,
+  .price-watchlist-section-heading p:not(.eyebrow),
+  .price-watchlist-checked,
+  .price-watchlist-monitor-status,
+  .price-watchlist-alert-preferences-heading small,
+  .price-watchlist-alert span,
+  .price-watchlist-alert small,
+  .price-watchlist-entry-count,
+  .price-watchlist-current span,
+  .price-watchlist-history > small,
+  .price-watchlist-saved-link > small,
+  .price-watchlist-saved-link-meta > small,
+  .price-watchlist-note
+) { color: var(--muted) !important; }
+
+html[data-theme="dark"] :where(
+  .price-watchlist-section-heading .price-watchlist-filter-link-button,
+  .price-watchlist-search-tools input,
+  .price-watchlist-search-tools select,
+  .price-watchlist-server-tools input,
+  .price-watchlist-server-tools select,
+  .price-watchlist-saved-link input,
+  .price-watchlist-entry-filters input,
+  .price-watchlist-entry-filters select,
+  .price-watchlist-tracked-item label input,
+  .price-watchlist-monitor-interval select,
+  .price-watchlist-history-window select,
+  .price-watchlist-alert-preferences-controls select
+) {
+  border-color: #354152 !important;
+  color: var(--ink) !important;
+  background: #171c24 !important;
+}
+
+html[data-theme="dark"] :where(
+  .price-watchlist-decision-overview button,
+  .price-watchlist-current .price-watchlist-decision,
+  .price-watchlist-alert-summary
+) { border-color: var(--line) !important; background: var(--teal-soft) !important; color: var(--teal-deep) !important; }
+
+html[data-theme="dark"] :where(
+  .price-watchlist-decision-overview button.wait,
+  .price-watchlist-decision-overview button.observe,
+  .price-watchlist-current .price-watchlist-decision.wait,
+  .price-watchlist-current .price-watchlist-decision.observe
+) { color: var(--yellow) !important; background: var(--yellow-soft) !important; }
+
+html[data-theme="dark"] :where(
+  .price-watchlist-decision-overview button.error,
+  .price-watchlist-current .price-watchlist-decision.unavailable,
+  .price-watchlist-current .price-watchlist-decision.error
+) { color: var(--red) !important; background: var(--red-soft) !important; }
+
+html[data-theme="dark"] .price-watchlist-alerts { border-color: #5a4b29 !important; background: var(--yellow-soft) !important; }
+
+html[data-theme="dark"] .price-watchlist-saved-link.active { border-color: #3f6da8 !important; box-shadow: 0 0 0 2px rgba(91, 157, 247, .16); }
+
+html[data-theme="dark"] .price-watchlist-history-signals em {
+  border: 1px solid #3f5e84 !important;
+  color: #b9d4ff !important;
+  background: var(--teal-soft) !important;
+}
+
+html[data-theme="dark"] .price-watchlist-alert-summary {
+  border-color: #254c45 !important;
+  color: #71ddb5 !important;
+  background: var(--mobile-success-soft) !important;
+}
+
+html[data-theme="dark"] .price-watchlist-alert-preferences-heading > span {
+  border: 1px solid #254c45 !important;
+  color: #71ddb5 !important;
+  background: var(--mobile-success-soft) !important;
+}
+
+.price-watchlist-offline-note {
+  margin: -4px 0 6px;
+  padding: 5px 8px;
+  border-inline-start: 3px solid var(--teal);
+  border-radius: 6px;
+  color: var(--muted);
+  background: var(--teal-soft);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+@media (max-width: 760px) {
+  .price-watchlist-offline-note {
+    margin: -8px 0 0;
+    padding: 1px 8px;
+    font-size: 10px;
+    line-height: 1.15;
+    white-space: nowrap;
+  }
+
+  .price-watchlist-page .mobile-price-watch-summary { margin-bottom: 0; }
+}
+
+.price-watchlist-price-provenance {
+  overflow: visible !important;
+  color: var(--muted) !important;
+  font-size: 9px !important;
+  line-height: 1.45 !important;
+  text-overflow: clip !important;
+  white-space: normal !important;
+}
+
+html[data-theme="dark"] .price-watchlist-offline-note {
+  color: var(--ink) !important;
+  background: var(--teal-soft) !important;
+}

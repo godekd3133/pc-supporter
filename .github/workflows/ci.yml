@@ -138,9 +138,30 @@ jobs:
   container-smoke:
     runs-on: [self-hosted, personal-mac]
     timeout-minutes: 15
+    env:
+      COMPOSE_PROJECT_NAME: pc-supporter-ci-${{ github.run_id }}-${{ github.run_attempt }}
+      COMPOSE_PROFILES: container-smoke
+      PRICE_REFRESH_SCHEDULER_ENABLED: "false"
+      BUILD_MONITOR_SCHEDULER_ENABLED: "false"
+      POSTGRES_PASSWORD: pc-supporter-ci-only-postgres-password-not-for-deployment
+      RATE_LIMIT_HMAC_SECRET: pc-supporter-ci-only-rate-limit-secret-not-for-deployment
+      ADMIN_PASSWORD: pc-supporter-ci-only-admin-password-not-for-deployment
+      ADMIN_SESSION_SECRET: pc-supporter-ci-only-admin-session-secret-not-for-deployment
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Choose per-run loopback ports
+        shell: bash
+        run: |
+          port_suffix="$(printf '%s-%s' "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" | cksum | awk '{ print $1 % 10000 }')"
+          app_port=$((30000 + port_suffix))
+          postgres_port=$((40000 + port_suffix))
+          {
+            echo "APP_HOST_PORT=$app_port"
+            echo "POSTGRES_HOST_PORT=$postgres_port"
+            echo "PC_SUPPORTER_API_BASE_URL=http://127.0.0.1:$app_port"
+          } >> "$GITHUB_ENV"
 
       - name: Build and start production compose stack
         run: docker compose up --build --detach
@@ -149,29 +170,47 @@ jobs:
         shell: bash
         run: |
           for attempt in {1..90}; do
-            if curl --fail --silent http://127.0.0.1:4174/api/health > "${RUNNER_TEMP}/pc-supporter-container-health.json"; then
+            if curl --fail --silent "${PC_SUPPORTER_API_BASE_URL}/api/health" > "${RUNNER_TEMP}/pc-supporter-container-health.json"; then
               cat "${RUNNER_TEMP}/pc-supporter-container-health.json"
               exit 0
             fi
             sleep 1
           done
           docker compose ps
-          docker compose logs --no-color app postgres
+          docker compose logs --no-color app api-reader worker postgres
           exit 1
 
       - name: Verify production metadata route
-        run: curl --fail --silent http://127.0.0.1:4174/api/meta > /dev/null
+        run: curl --fail --silent "$PC_SUPPORTER_API_BASE_URL/api/meta" > /dev/null
 
       - name: Verify PostgreSQL comparison persistence round-trip
-        env:
-          PC_SUPPORTER_API_BASE_URL: http://127.0.0.1:4174
         run: npm run test:postgres:comparison
 
       - name: Verify PostgreSQL saved build state round-trip
-        env:
-          PC_SUPPORTER_API_BASE_URL: http://127.0.0.1:4174
         run: npm run test:postgres:saved-build
+
+      - name: Wait for the isolated API replica and worker heartbeat
+        shell: bash
+        run: |
+          for attempt in {1..90}; do
+            if docker compose exec -T app node -e "fetch('http://api-reader:4174/api/health').then((r)=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))" \
+              && docker compose exec -T app node -e "const fs=require('node:fs');try{const h=JSON.parse(fs.readFileSync('/app/data/.price-refresh-worker-health.json','utf8'));const t=Date.parse(h.lastDatabaseSuccessAt);if(h.service!=='pc-supporter-price-refresh-worker'||!Number.isFinite(t)||Date.now()-t>45000)process.exit(1)}catch{process.exit(1)}"; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker compose ps
+          docker compose logs --no-color app api-reader worker postgres
+          exit 1
+
+      - name: Verify PostgreSQL durable price-refresh API and worker flow
+        run: docker compose exec -T app env PC_SUPPORTER_PRICE_REFRESH_SMOKE_PHASE=api-worker npm run test:postgres:price-refresh
+
+      - name: Kill a queue-worker child during a synthetic handler and verify lease recovery
+        run: |
+          docker compose stop worker
+          docker compose exec -T app env PC_SUPPORTER_PRICE_REFRESH_SMOKE_PHASE=recovery npm run test:postgres:price-refresh
 
       - name: Stop production compose stack
         if: always()
-        run: docker compose down
+        run: docker compose down --volumes --remove-orphans

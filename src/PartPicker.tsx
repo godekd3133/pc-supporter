@@ -1,3 +1,5 @@
+import { safeLocalStorage } from "./safe-storage";
+import "./catalog-picker.css";
 import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import { FiActivity, FiCheck, FiChevronDown, FiClock, FiCopy, FiDatabase, FiDownload, FiExternalLink, FiInfo, FiLayers, FiLoader, FiRefreshCw, FiSearch, FiShare2, FiTrash2, FiXCircle } from "react-icons/fi";
 import type { AlternativeRiskCounts, BrandCountOption, BuildSelection, CatalogBenchmarkCoverage, CompatiblePartCandidate, DataFreshness, DataQuality, GamingRefreshRate, GamingResolution, Part, PartCategory, PartSelection, PriceAvailabilityFilter, RecommendationProfile, SimilarityEvidence, ListingPolicy } from "../shared/types";
@@ -432,7 +434,7 @@ export function PartPicker({ category, build, partMap, profile, recommendationLi
   const [retryNonce, setRetryNonce] = useState(0);
   const [cachedSnapshot, setCachedSnapshot] = useState(() => {
     try {
-      return typeof window === "undefined" ? { schemaVersion: 1 as const, items: [] as Part[] } : catalogPickerCacheSnapshotFromJson(window.localStorage.getItem(CATALOG_PICKER_CACHE_STORAGE_KEY));
+      return typeof window === "undefined" ? { schemaVersion: 1 as const, items: [] as Part[] } : catalogPickerCacheSnapshotFromJson(safeLocalStorage.getItem(CATALOG_PICKER_CACHE_STORAGE_KEY));
     } catch {
       return { schemaVersion: 1 as const, items: [] as Part[] };
     }
@@ -476,7 +478,7 @@ export function PartPicker({ category, build, partMap, profile, recommendationLi
   useEffect(() => {
     try {
       if (cachedSnapshot.items.length > 0) {
-        window.localStorage.setItem(CATALOG_PICKER_CACHE_STORAGE_KEY, catalogPickerCacheToJson(cachedSnapshot.items, cachedSnapshot.cachedAt));
+        safeLocalStorage.setItem(CATALOG_PICKER_CACHE_STORAGE_KEY, catalogPickerCacheToJson(cachedSnapshot.items, cachedSnapshot.cachedAt));
         window.dispatchEvent(new Event(CATALOG_CACHE_CHANGED_EVENT));
       }
     } catch {

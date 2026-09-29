@@ -10,6 +10,7 @@ RUN npm run build
 
 ENV NODE_ENV=production \
     PORT=4174 \
+    PC_SUPPORTER_PROCESS_ROLE=combined \
     PC_SUPPORTER_DATA_DIR=/app/data \
     DANAWA_CRAWL_ON_START=false \
     BUILD_MONITOR_SCHEDULER_ENABLED=false

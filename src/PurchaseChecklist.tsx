@@ -1,3 +1,4 @@
+import { safeLocalStorage } from "./safe-storage";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import { FiCheckCircle, FiCopy, FiDownload, FiInfo, FiLoader, FiPrinter, FiRefreshCw } from "react-icons/fi";
@@ -10,7 +11,7 @@ import { LOCAL_IMPORT_MAX_BYTES } from "../shared/file-import-limits";
 
 function checkedIdsFromStorage(storageKey: string) {
   try {
-    const parsed: unknown = JSON.parse(window.localStorage.getItem(storageKey) ?? "[]");
+    const parsed: unknown = JSON.parse(safeLocalStorage.getItem(storageKey) ?? "[]");
     if (!Array.isArray(parsed) || parsed.length > PURCHASE_CHECKLIST_MAX_CHECKED_ITEMS) return [];
     return parsed.filter((value): value is string => typeof value === "string");
   } catch {
@@ -20,7 +21,7 @@ function checkedIdsFromStorage(storageKey: string) {
 
 function writeCheckedIdsToStorage(storageKey: string, checkedIds: string[]) {
   try {
-    window.localStorage.setItem(storageKey, JSON.stringify(checkedIds.slice(0, PURCHASE_CHECKLIST_MAX_CHECKED_ITEMS)));
+    safeLocalStorage.setItem(storageKey, JSON.stringify(checkedIds.slice(0, PURCHASE_CHECKLIST_MAX_CHECKED_ITEMS)));
   } catch {
     // A full local storage bucket must not prevent the result page from working.
   }

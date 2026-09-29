@@ -6,19 +6,19 @@ import { isKnownPrice, type CatalogPriceEvidence, type DataQuality } from "./typ
  * only answers whether a numeric value exists.
  */
 export const CATALOG_PRICE_EVIDENCE_LABELS: Record<CatalogPriceEvidence, string> = {
-  live: "가격",
-  manual: "가격",
-  reference: "가격",
-  recorded: "가격",
+  live: "다나와 가격",
+  manual: "직접 입력",
+  reference: "기준 가격",
+  recorded: "이전 가격",
   unknown: "가격 확인 필요"
 };
 
 export const CATALOG_PRICE_EVIDENCE_DESCRIPTIONS: Record<CatalogPriceEvidence, string> = {
-  live: "상품 페이지에서 확인한 금액입니다. 판매처·재고·배송·옵션에 따라 결제 금액이 달라질 수 있으니 확인 날짜와 상품 페이지를 함께 확인해 주세요.",
-  manual: "직접 입력한 금액입니다. 판매 페이지의 금액·재고와 다를 수 있으니 구매 전에 다시 확인해 주세요.",
-  reference: "미리 등록한 금액입니다. 실제 판매가·재고와 다를 수 있어요.",
-  recorded: "이전에 저장한 금액입니다. 구매 전에 상품 페이지의 금액과 사양을 다시 확인해 주세요.",
-  unknown: "가격을 아직 확인하지 못했습니다. 총액과 예산 계산에는 포함하지 않아요."
+  live: "다나와 상품 페이지에서 확인한 금액입니다. 판매처·재고·배송·옵션에 따라 실제 결제 금액은 달라질 수 있으니 구매 전에 상품 페이지에서 다시 확인해 주세요.",
+  manual: "직접 확인해 입력한 금액입니다. 판매 페이지의 가격이나 재고와 다를 수 있으니 구매 전에 다시 확인해 주세요.",
+  reference: "기준으로 참고하는 금액입니다. 실제 판매가나 재고를 뜻하지 않습니다.",
+  recorded: "이전에 저장한 금액입니다. 부품 정보가 완전하지 않습니다. 구매 전에 상품 페이지에서 금액과 사양을 다시 확인해 주세요.",
+  unknown: "가격 정보를 찾지 못해 합계와 예산 계산에서 제외했습니다."
 };
 
 export type CatalogPriceEvidenceInput = {

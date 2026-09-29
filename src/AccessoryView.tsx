@@ -1,3 +1,4 @@
+import { safeLocalStorage } from "./safe-storage";
 import { Suspense, lazy, useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import { FiArrowLeft, FiCheck, FiClock, FiCopy, FiDatabase, FiExternalLink, FiLoader, FiPlus, FiRefreshCw, FiSearch, FiTool, FiXCircle } from "react-icons/fi";
 import type { AccessoryCategory, AccessoryItem, AccessoryPriceFilter, AccessoryRefreshResponse, AccessorySelection, CatalogChangeValueDiff, DataFreshness, DataQuality, ServiceMeta } from "../shared/types";
@@ -69,7 +70,7 @@ function initialAccessoryPriceFilter() {
 
 function accessoryIsWatched(item: AccessoryItem) {
   if (typeof window === "undefined") return false;
-  return catalogWatchlistContains(catalogWatchlistFromJson(window.localStorage.getItem(CATALOG_WATCHLIST_STORAGE_KEY)), { kind: "accessory", itemId: item.id });
+  return catalogWatchlistContains(catalogWatchlistFromJson(safeLocalStorage.getItem(CATALOG_WATCHLIST_STORAGE_KEY)), { kind: "accessory", itemId: item.id });
 }
 
 function AccessoryWatchButton({ item, onWatch }: { item: AccessoryItem; onWatch: (item: AccessoryItem) => boolean }) {
@@ -122,7 +123,7 @@ export function AccessoryView({ meta, accessoryItems = [], selectedAccessories, 
   const [refreshAccessoryFeedback, setRefreshAccessoryFeedback] = useState<{ itemId: string; tone: "success" | "error"; message: string; valueDiffs?: CatalogChangeValueDiff[] } | null>(null);
   const [cachedSnapshot, setCachedSnapshot] = useState(() => {
     try {
-      return typeof window === "undefined" ? { schemaVersion: 1 as const, items: [] as AccessoryItem[] } : accessoryCatalogCacheSnapshotFromJson(window.localStorage.getItem(ACCESSORY_CATALOG_CACHE_STORAGE_KEY));
+      return typeof window === "undefined" ? { schemaVersion: 1 as const, items: [] as AccessoryItem[] } : accessoryCatalogCacheSnapshotFromJson(safeLocalStorage.getItem(ACCESSORY_CATALOG_CACHE_STORAGE_KEY));
     } catch {
       return { schemaVersion: 1 as const, items: [] as AccessoryItem[] };
     }
@@ -164,7 +165,7 @@ export function AccessoryView({ meta, accessoryItems = [], selectedAccessories, 
   useEffect(() => {
     try {
       if (cachedSnapshot.items.length > 0) {
-        window.localStorage.setItem(ACCESSORY_CATALOG_CACHE_STORAGE_KEY, accessoryCatalogCacheToJson(cachedSnapshot.items, cachedSnapshot.cachedAt));
+        safeLocalStorage.setItem(ACCESSORY_CATALOG_CACHE_STORAGE_KEY, accessoryCatalogCacheToJson(cachedSnapshot.items, cachedSnapshot.cachedAt));
         window.dispatchEvent(new Event(CATALOG_CACHE_CHANGED_EVENT));
       }
     } catch {
