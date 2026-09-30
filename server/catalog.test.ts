@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Part } from "../shared/types";
-import { benchmarkCoverageForCatalog, catalogEligibilitySummaryFor, catalogSearchTotalsFor, countParts, filterParts, mergeCatalog, mergeDanawaSnapshot, parseCatalogMissingField, parsePartSpecFilter, partMatchesSpecFilter, partSpecFilterDiagnosticsFor, partSpecFilterMatcherFor, searchParts, seedBaseFor } from "./catalog";
+import { benchmarkCoverageForCatalog, catalogEligibilitySummaryFor, catalogSearchTotalsFor, countParts, filterParts, mergeCatalog, mergeDanawaSnapshot, parseCatalogDetailFilterQuery, parseCatalogMissingField, parsePartSpecFilter, partMatchesSpecFilter, partSpecFilterDiagnosticsFor, partSpecFilterMatcherFor, searchParts, seedBaseFor } from "./catalog";
 import { seedCatalog } from "./seed-catalog";
 import { starterCatalog } from "./seed-catalog-starter";
 
@@ -391,6 +391,52 @@ describe("catalog merge", () => {
     ]);
     expect(parsePartSpecFilter({ pcieSlotInfo: "missing" })).toEqual({ filter: { pcieSlotInfo: "missing" }, errors: [] });
     expect(parsePartSpecFilter({ pcieSlotInfo: "all" }).errors).toEqual(["PCIe 슬롯 정보 상태는 complete 또는 missing이어야 합니다."]);
+  });
+
+  it("applies Danawa-style detail filters to category browsing", () => {
+    const catalog = [
+      part({ category: "ssd", sourceProductCode: "ssd-a", brand: "삼성전자", priceWon: 100000, specs: { interface: "NVMe", formFactor: "M.2 2280", capacityGb: 1000 } }),
+      part({ category: "ssd", sourceProductCode: "ssd-b", brand: "SK하이닉스", priceWon: 80000, specs: { interface: "SATA", formFactor: "2.5in", capacityGb: 2000 } }),
+      part({ category: "ssd", sourceProductCode: "ssd-c", brand: "삼성전자", priceWon: 150000, specs: { interface: "NVMe", capacityGb: 4000 } })
+    ];
+
+    // 인터페이스 다중 선택(OR) + 용량 범위 + 가격대는 AND로 결합한다.
+    expect(searchParts(catalog, "ssd", undefined, 10, { detailRule: { specValues: { interface: ["NVMe", "SATA"] }, numericRanges: { capacityGb: [{ min: 1500 }] }, priceWon: { max: 120000 } } }).map((item) => item.sourceProductCode)).toEqual(["ssd-b"]);
+    // 제조사 다중 선택도 같은 규칙으로 걸러낸다.
+    expect(searchParts(catalog, "ssd", undefined, 10, { detailRule: { brands: ["삼성전자"] } }).map((item) => item.sourceProductCode)).toEqual(["ssd-a", "ssd-c"]);
+    // 핵심 사양 필터와 세부 조건은 함께 AND로 적용된다.
+    expect(searchParts(catalog, "ssd", undefined, 10, { specFilter: { minCapacityGb: 500 }, detailRule: { specValues: { formFactor: ["M.2 2280"] } } }).map((item) => item.sourceProductCode)).toEqual(["ssd-a"]);
+  });
+
+  it("parses Danawa-style detail filter query params and drops undeclared facets", () => {
+    const parsed = parseCatalogDetailFilterQuery({
+      "dv.socket": "AM5,AM4",
+      "dr.cores": "6-11;16-",
+      "df.integratedGraphics": "1",
+      dprice: "50000-300000",
+      db: "AMD,인텔"
+    }, "cpu");
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.filter).toEqual({
+      brands: ["AMD", "인텔"],
+      specValues: { socket: ["AM5", "AM4"] },
+      numericRanges: { cores: [{ min: 6, max: 11 }, { min: 16 }] },
+      flags: { integratedGraphics: true },
+      priceWon: { min: 50000, max: 300000 }
+    });
+
+    // gpu에는 socket facet이 없다 — 선언되지 않은 조건은 버리고 선언된 것만 남긴다.
+    const gpuParsed = parseCatalogDetailFilterQuery({ "dv.socket": "AM5", "dv.gpuVendor": "nvidia" }, "gpu");
+    expect(gpuParsed.errors).toEqual([]);
+    expect(gpuParsed.filter).toEqual({ specValues: { gpuVendor: ["nvidia"] } });
+    // 모두 버려지면 규칙 자체가 사라진다.
+    expect(parseCatalogDetailFilterQuery({ "dv.socket": "AM5" }, "gpu").filter).toBeUndefined();
+    // 범주 없이 보낸 세부 조건은 무시한다.
+    expect(parseCatalogDetailFilterQuery({ "dv.socket": "AM5" }, undefined).filter).toBeUndefined();
+    // 잘못된 형식·화이트리스트에 없는 필드는 오류로 보고한다.
+    expect(parseCatalogDetailFilterQuery({ "df.wifi": "maybe" }, "motherboard").errors).toEqual(["세부 조건 wifi은 1 또는 0이어야 합니다."]);
+    expect(parseCatalogDetailFilterQuery({ "dr.cores": "abc" }, "cpu").errors.length).toBeGreaterThan(0);
+    expect(parseCatalogDetailFilterQuery({ "dv.notAField": "x" }, "cpu").errors.length).toBeGreaterThan(0);
   });
 
   it("separates missing facts from values that fail an active spec condition", () => {

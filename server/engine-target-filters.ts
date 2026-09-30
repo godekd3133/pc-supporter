@@ -2,7 +2,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { emptyEngineTargetFiltersConfig, engineTargetFilterActiveFacetCount, engineTargetFilterConfigFromUnknown, engineTargetFiltersAllowPart, ENGINE_TARGET_FILTER_FACETS } from "../shared/engine-target-filters";
 import type { EngineTargetFiltersConfig } from "../shared/engine-target-filters";
-import { PART_CATEGORIES } from "../shared/types";
+import { isKnownPrice, PART_CATEGORIES } from "../shared/types";
 import type { Part, PartCategory } from "../shared/types";
 import { isQuoteBrandAllowed, isQuoteSelectable } from "./listing";
 import { DATA_DIR, fileUpdatedAt, withSerializedFileMutation, writeJson } from "./storage";
@@ -106,37 +106,57 @@ export function engineTargetFilterFacetOptionsFor(catalog: Part[]): Record<PartC
   const result = {} as Record<PartCategory, EngineTargetFilterCategoryFacetOptions>;
   for (const category of PART_CATEGORIES) {
     const parts = catalog.filter((part) => part.category === category && part.listingType !== "accessory");
-    const brands = new Map<string, { value: string; count: number }>();
-    const facetOptions: EngineTargetFilterCategoryFacetOptions["facetOptions"] = {};
-    const facets = ENGINE_TARGET_FILTER_FACETS[category];
-    const collectors = new Map<string, { options: Map<string, { value: string; count: number }>; missingCount: number }>();
-    for (const facet of facets) {
-      if (facet.kind === "values") collectors.set(facet.id, { options: new Map(), missingCount: 0 });
-    }
-    for (const part of parts) {
-      if (part.brand?.trim()) pushOption(brands, part.brand);
-      for (const facet of facets) {
-        if (facet.kind !== "values") continue;
-        const collector = collectors.get(facet.id)!;
-        const raw = part.specs[facet.id as keyof Part["specs"]];
-        const values = Array.isArray(raw) ? raw : raw === undefined || raw === null ? [] : [raw];
-        if (values.length === 0) {
-          collector.missingCount += 1;
-          continue;
-        }
-        for (const value of values) pushOption(collector.options, value);
-      }
-    }
-    for (const [facetId, collector] of collectors) {
-      facetOptions[facetId] = { options: sortedOptions(collector.options), missingCount: collector.missingCount };
-    }
-    result[category] = {
-      partCount: parts.length,
-      brandOptions: sortedOptions(brands),
-      facetOptions
-    };
+    result[category] = facetOptionsForParts(parts, category);
   }
   return result;
+}
+
+// 공개 부품 찾기 화면의 세부 조건 패널이 쓰는 facet 옵션 집계 — 이미 사용자가
+// 탐색 가능한 풀(가격·사양 확인된 부품)을 인자로 받아 범주 facet별 선택지와
+// 개수, 실제 가격 범위를 돌려준다.
+export type CatalogFacetOptions = EngineTargetFilterCategoryFacetOptions & {
+  priceRange: { min: number; max: number } | null;
+};
+
+export function catalogPartFacetOptionsFor(parts: Part[], category: PartCategory): CatalogFacetOptions {
+  const base = facetOptionsForParts(parts, category);
+  const prices = parts.map((part) => part.priceWon).filter(isKnownPrice);
+  return {
+    ...base,
+    priceRange: prices.length > 0 ? { min: Math.min(...prices), max: Math.max(...prices) } : null
+  };
+}
+
+function facetOptionsForParts(parts: Part[], category: PartCategory): EngineTargetFilterCategoryFacetOptions {
+  const brands = new Map<string, { value: string; count: number }>();
+  const facetOptions: EngineTargetFilterCategoryFacetOptions["facetOptions"] = {};
+  const facets = ENGINE_TARGET_FILTER_FACETS[category];
+  const collectors = new Map<string, { options: Map<string, { value: string; count: number }>; missingCount: number }>();
+  for (const facet of facets) {
+    if (facet.kind === "values") collectors.set(facet.id, { options: new Map(), missingCount: 0 });
+  }
+  for (const part of parts) {
+    if (part.brand?.trim()) pushOption(brands, part.brand);
+    for (const facet of facets) {
+      if (facet.kind !== "values") continue;
+      const collector = collectors.get(facet.id)!;
+      const raw = part.specs[facet.id as keyof Part["specs"]];
+      const values = Array.isArray(raw) ? raw : raw === undefined || raw === null ? [] : [raw];
+      if (values.length === 0) {
+        collector.missingCount += 1;
+        continue;
+      }
+      for (const value of values) pushOption(collector.options, value);
+    }
+  }
+  for (const [facetId, collector] of collectors) {
+    facetOptions[facetId] = { options: sortedOptions(collector.options), missingCount: collector.missingCount };
+  }
+  return {
+    partCount: parts.length,
+    brandOptions: sortedOptions(brands),
+    facetOptions
+  };
 }
 
 export function normalizeEngineTargetFiltersInput(raw: unknown) {

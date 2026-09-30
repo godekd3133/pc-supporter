@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Part } from "../shared/types";
-import { catalogChangeRecord, catalogChangeSummary, filterCatalogChangeRecords, meaningfulCatalogChangeFields } from "./catalog-change-log";
+import { catalogChangeRecord, catalogChangeSummary, catalogChangeValueDiffsFor, catalogItemAddedRecord, filterCatalogChangeRecords, meaningfulCatalogChangeFields } from "./catalog-change-log";
 
 const part = (overrides: Partial<Part> = {}): Part => ({
   id: "part-1", category: "cpu", name: "테스트 CPU", source: "danawa", sourceProductCode: "1", priceWon: 100000, specs: {}, dataQuality: "incomplete", missingFields: ["socket"], updatedAt: "2026-08-28T00:00:00.000Z", ...overrides
@@ -63,6 +63,40 @@ describe("catalog change log", () => {
       catalogChangeRecord("accessory", part(), part({ dataQuality: "live", missingFields: [] }), ["데이터 상태", "누락 필드", "정규화 스펙"], { changedAt: "2026-08-28T02:00:00.000Z" })
     ];
 
-    expect(catalogChangeSummary(records, 5)).toEqual({ inspectedProducts: 5, changedProducts: 2, priceChangedProducts: 1, qualityChangedProducts: 1, missingFieldChangedProducts: 1, specChangedProducts: 1 });
+    expect(catalogChangeSummary(records, 5)).toEqual({ inspectedProducts: 5, changedProducts: 2, priceChangedProducts: 1, qualityChangedProducts: 1, missingFieldChangedProducts: 1, specChangedProducts: 1, addedProducts: 0, delistedProducts: 0, relistedProducts: 0 });
+  });
+
+  it("summarizes new, delisted, and relisted presence records", () => {
+    const records = [
+      catalogItemAddedRecord("part", part({ id: "added-1" }), { quoteNote: "견적 포함" }),
+      catalogChangeRecord("part", part(), part({ delistedAt: "2026-10-01T00:00:00.000Z" }), ["판매 중단"]),
+      catalogChangeRecord("part", part({ delistedAt: "2026-09-01T00:00:00.000Z" }), part(), ["판매 재개"])
+    ];
+
+    expect(catalogChangeSummary(records, 3)).toEqual({ inspectedProducts: 3, changedProducts: 3, priceChangedProducts: 0, qualityChangedProducts: 0, missingFieldChangedProducts: 0, specChangedProducts: 0, addedProducts: 1, delistedProducts: 1, relistedProducts: 1 });
+  });
+
+  it("marks added items without a previous price and carries the quote eligibility note", () => {
+    const record = catalogItemAddedRecord("part", part({ priceWon: 120000 }), { changedAt: "2026-10-01T00:00:00.000Z", quoteNote: "견적 포함" });
+
+    expect(record.changedFields).toEqual(["신규 등록"]);
+    expect(record.previousMissingFields).toEqual([]);
+    expect(record.previousPriceWon).toBeUndefined();
+    expect(record.nextPriceWon).toBe(120000);
+    expect(record.priceDeltaWon).toBeUndefined();
+    expect(record.valueDiffs).toEqual(expect.arrayContaining([
+      { field: "가격", next: "120,000원" },
+      { field: "견적 후보", next: "견적 포함" }
+    ]));
+  });
+
+  it("diffs the listing state when a delisted marker appears or clears", () => {
+    const delisted = catalogChangeValueDiffsFor(part(), part({ delistedAt: "2026-10-01T00:00:00.000Z" }));
+    expect(delisted).toEqual(expect.arrayContaining([{ field: "판매 상태", previous: "판매 중", next: "판매 중단" }]));
+
+    const relisted = catalogChangeValueDiffsFor(part({ delistedAt: "2026-09-01T00:00:00.000Z" }), part());
+    expect(relisted).toEqual(expect.arrayContaining([{ field: "판매 상태", previous: "판매 중단", next: "판매 중" }]));
+
+    expect(catalogChangeValueDiffsFor(part(), part())).toEqual([]);
   });
 });

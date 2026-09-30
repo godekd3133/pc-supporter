@@ -27,6 +27,7 @@ describe("admin crawl read boundary", () => {
   it.each([
     "/api/admin/crawl/status",
     "/api/admin/crawl/manifest",
+    "/api/admin/crawl/engine",
     "/api/admin/accessories/crawl/status",
     "/api/admin/accessories/crawl/manifest",
     "/api/admin/accessories/coverage"

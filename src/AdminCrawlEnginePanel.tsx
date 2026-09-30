@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FiActivity, FiAlertTriangle, FiCheckCircle, FiChevronDown, FiClock, FiCpu, FiDatabase, FiLoader, FiRefreshCw, FiServer, FiXCircle } from "react-icons/fi";
 import { ACCESSORY_CATEGORY_LABELS, CATEGORY_LABELS } from "../shared/types";
-import type { AccessoryCrawlCategoryReport, AccessoryCrawlManifest, AccessoryCrawlStatus, CrawlCategoryReport, CrawlManifest, CrawlPageFailure, CrawlPageRetryRecord, CrawlStatus } from "../shared/types";
+import type { AccessoryCrawlCategoryReport, AccessoryCrawlManifest, AccessoryCrawlStatus, CatalogChangeSummary, CrawlCategoryReport, CrawlManifest, CrawlPageFailure, CrawlPageRetryRecord, CrawlStatus } from "../shared/types";
 import { api } from "./api";
 
 type CrawlEngineParameters = {
@@ -56,9 +56,10 @@ function dateTimeLabel(value: string | undefined) {
   return value ? new Date(value).toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" }) : "-";
 }
 
-function changeSummaryLine(summary: { inspectedProducts: number; changedProducts: number; priceChangedProducts: number; qualityChangedProducts: number; missingFieldChangedProducts: number; specChangedProducts: number } | undefined) {
+function changeSummaryLine(summary: CatalogChangeSummary | undefined) {
   if (!summary) return null;
-  return `검사 ${summary.inspectedProducts.toLocaleString("ko-KR")}개 중 ${summary.changedProducts.toLocaleString("ko-KR")}개 변경 · 가격 ${summary.priceChangedProducts.toLocaleString("ko-KR")} · 스펙 ${summary.specChangedProducts.toLocaleString("ko-KR")} · 누락 필드 ${summary.missingFieldChangedProducts.toLocaleString("ko-KR")} · 품질 ${summary.qualityChangedProducts.toLocaleString("ko-KR")}`;
+  const presence = `신규 ${(summary.addedProducts ?? 0).toLocaleString("ko-KR")} · 중단 ${(summary.delistedProducts ?? 0).toLocaleString("ko-KR")} · 재등록 ${(summary.relistedProducts ?? 0).toLocaleString("ko-KR")}`;
+  return `검사 ${summary.inspectedProducts.toLocaleString("ko-KR")}개 중 ${summary.changedProducts.toLocaleString("ko-KR")}개 변경 · 가격 ${summary.priceChangedProducts.toLocaleString("ko-KR")} · 스펙 ${summary.specChangedProducts.toLocaleString("ko-KR")} · 누락 필드 ${summary.missingFieldChangedProducts.toLocaleString("ko-KR")} · 품질 ${summary.qualityChangedProducts.toLocaleString("ko-KR")} · ${presence}`;
 }
 
 function failedPageCount(report: Pick<CrawlCategoryReport, "failedPages">) {
@@ -67,13 +68,16 @@ function failedPageCount(report: Pick<CrawlCategoryReport, "failedPages">) {
 
 function CatalogCategoryTable({ categories }: { categories: Omit<CrawlCategoryReport, "pageProductCodes">[] }) {
   return <div className="crawl-engine-table-wrap"><table className="crawl-engine-table">
-    <thead><tr><th>범주</th><th>페이지</th><th>목록 상품</th><th>중복 제외</th><th>상세 성공</th><th>상세 실패</th><th>누락</th><th>미완성</th><th>목록</th><th>스펙</th><th>실패 페이지</th></tr></thead>
+    <thead><tr><th>범주</th><th>페이지</th><th>목록 상품</th><th>중복 제외</th><th>신규</th><th>중단</th><th>재등록</th><th>상세 성공</th><th>상세 실패</th><th>누락</th><th>미완성</th><th>목록</th><th>스펙</th><th>실패 페이지</th></tr></thead>
     <tbody>
       {categories.map((report) => <tr key={report.category} className={report.error ? "has-error" : ""}>
         <td><strong>{CATEGORY_LABELS[report.category]}</strong>{report.error && <small className="crawl-engine-row-error">{report.error}</small>}</td>
         <td>{report.pagesVisited} / {report.pagesExpected}</td>
         <td>{report.listedProducts.toLocaleString("ko-KR")}</td>
         <td>{report.uniqueProducts.toLocaleString("ko-KR")}</td>
+        <td>{(report.newProducts ?? 0).toLocaleString("ko-KR")}</td>
+        <td className={(report.delistedProducts ?? 0) > 0 ? "warn" : ""}>{(report.delistedProducts ?? 0).toLocaleString("ko-KR")}</td>
+        <td>{(report.relistedProducts ?? 0).toLocaleString("ko-KR")}</td>
         <td>{report.detailFetched.toLocaleString("ko-KR")}</td>
         <td className={report.detailFailed > 0 ? "warn" : ""}>{report.detailFailed.toLocaleString("ko-KR")}</td>
         <td className={report.missingProducts > 0 ? "warn" : ""}>{report.missingProducts.toLocaleString("ko-KR")}</td>

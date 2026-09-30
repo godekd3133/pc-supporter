@@ -19,7 +19,7 @@ Compose는 API (`app`)와 worker를 분리하고 모두 같은 Postgres 및 `pc-
 - `GET /api/admin/prices/refresh/status`: 가장 최근 durable job을 반환하며, `?jobId=<uuid>`를 붙이면 해당 job을 조회합니다.
 - `POST /api/admin/prices/refresh`: 기본값으로 즉시 실행을 예약합니다. `{ "dryRun": true }`도 mode에 따라 file 실행 또는 durable queue job으로 등록됩니다. `coreLimit`, `accessoryLimit`, `delayMs`는 관리자 요청에서 설정할 수 있으며, 0은 dry-run에서만 허용됩니다.
 
-새 자동 가격 갱신과 기존 광범위 카탈로그 크롤러는 함께 예약하지 않습니다. 레거시 크롤러는 `DANAWA_CRAWL_SCHEDULER_ENABLED=true`일 때만 예약되며 가격 갱신 스케줄러가 켜져 있으면 건너뜁니다. 기존의 `DANAWA_CRAWL_ON_START`는 `true`로 명시한 경우에만 시작 실행을 허용합니다. 이 크롤러의 수동 관리자 API는 계속 별도 작업입니다.
+자동 가격 갱신과 광범위 카탈로그 크롤러는 함께 예약할 수 있습니다. 둘은 `catalog-ingestion` advisory lease로 직렬화되므로 카탈로그 쓰기가 겹치지 않습니다. 레거시 크롤러는 `DANAWA_CRAWL_SCHEDULER_ENABLED=true`일 때만 예약되고 `DANAWA_CRAWL_INTERVAL_HOURS`(기본 24)마다 실행되며, `DANAWA_CRAWL_ALL=true`면 전체 범주를 수집합니다. 전체 크롤은 목록 가격을 일괄 반영하고 신규 상품을 등록(견적 포함 여부를 이력에 기록)하며, 완료된 범주 수집에서 사라진 상품은 삭제 대신 `delistedAt` 표시로 남겨 견적 후보에서만 제외합니다 — 부분/실패 수집은 목록 전체를 보지 못하므로 중단을 판별하지 않습니다. 목록에 다시 나타난 상품은 `delistedAt`이 지워지고 "판매 재개"가 기록됩니다. 상세 페이지의 `최저가 0원` 상품은 `현금최저가`로 갱신됩니다. 기존의 `DANAWA_CRAWL_ON_START`는 `true`로 명시한 경우에만 시작 실행을 허용합니다. 이 크롤러의 수동 관리자 API는 계속 별도 작업입니다.
 
 `seed-catalog-starter`에 있는 기준/샘플 가격은 외부 쇼핑몰의 실시간 원문 가격으로 간주하면 안 됩니다. 자동 작업은 현재 카탈로그와 주변 부품 저장소에 존재하는 항목을 대상으로 가격 근거를 갱신합니다. 새 배포 뒤 상태 API의 `attempted`, `changed`, `failed`, `failures`와 각 항목의 가격·갱신 시각을 확인해야 합니다.
 

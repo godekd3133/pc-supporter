@@ -20,6 +20,8 @@ import { applyGpuPhysicalOverrides, readGpuPhysicalOverrides, stripGpuPhysicalOv
 import { applyCaseRgbLoadOverrides, readCaseRgbLoadOverrides, stripCaseRgbLoadOverride } from "./case-rgb-load-overrides";
 import { applyCatalogSpecOverrides, readCatalogSpecOverrides, stripCatalogSpecOverride } from "./catalog-spec-overrides";
 import { loadEngineTargetFiltersConfig } from "./engine-target-filters";
+import { engineTargetFilterRuleAllowsPart, engineTargetFilterRuleForCategory, engineTargetFilterRuleFromUnknown } from "../shared/engine-target-filters";
+import type { EngineCategoryTargetFilter } from "../shared/engine-target-filters";
 import { classifyDataFreshness, nextDataFreshnessChangeAt } from "../shared/data-freshness";
 import { benchmarkAvailabilityMatchesFilter } from "../shared/benchmark-evidence";
 import { pcieCompatibleSlotInventoryFor, pcieSlotWidthFromUnknown, type PcieSlotWidth } from "../shared/pcie-slot";
@@ -319,6 +321,77 @@ export interface ParsedCatalogMissingField {
   error?: string;
 }
 
+// 공개 부품 찾기의 다나와식 세부 조건 — 쿼리 파라미터로 주고받는다.
+//   db=제조사1,제조사2           제조사 다중 선택(정확 일치 OR)
+//   dv.<스펙필드>=값1,값2         스펙 값 다중 선택(필드 안 OR, 필드 사이 AND)
+//   dr.<스펙필드>=최소-최대;...   수치 범위 다중 선택
+//   df.<플래그필드>=1             부울 플래그(내장 그래픽·Wi-Fi 등)
+//   dprice=최소-최대            가격대
+// 허용 필드는 범주별 ENGINE_TARGET_FILTER_FACETS 선언으로 제한한다.
+export const CATALOG_DETAIL_FILTER_PREFIXES = { values: "dv.", ranges: "dr.", flags: "df." } as const;
+const CATALOG_DETAIL_BRANDS_PARAM = "db";
+const CATALOG_DETAIL_PRICE_PARAM = "dprice";
+
+function detailFilterValueList(raw: unknown): unknown[] {
+  const items = Array.isArray(raw) ? raw : [raw];
+  return items.flatMap((item) => String(item ?? "").split(",")).map((item) => item.trim()).filter((item) => item.length > 0);
+}
+
+function detailFilterRangeFromText(raw: string) {
+  const boundary = raw.indexOf("-");
+  const minRaw = (boundary < 0 ? raw : raw.slice(0, boundary)).trim();
+  const maxRaw = boundary < 0 ? "" : raw.slice(boundary + 1).trim();
+  const range: { min?: number; max?: number } = {};
+  if (minRaw !== "") range.min = Number(minRaw);
+  if (maxRaw !== "") range.max = Number(maxRaw);
+  return range;
+}
+
+export function parseCatalogDetailFilterQuery(query: Record<string, unknown>, category: PartCategory | undefined): { filter: EngineCategoryTargetFilter | undefined; errors: string[] } {
+  if (!category) return { filter: undefined, errors: [] };
+  const errors: string[] = [];
+  const candidate: Record<string, unknown> = {};
+  const specValues: Record<string, unknown> = {};
+  const numericRanges: Record<string, unknown> = {};
+  const flags: Record<string, unknown> = {};
+  for (const [key, raw] of Object.entries(query)) {
+    if (key === CATALOG_DETAIL_BRANDS_PARAM) {
+      const values = detailFilterValueList(raw);
+      if (values.length > 0) candidate.brands = values;
+      continue;
+    }
+    if (key === CATALOG_DETAIL_PRICE_PARAM) {
+      const text = String(raw ?? "").trim();
+      if (text) candidate.priceWon = detailFilterRangeFromText(text);
+      continue;
+    }
+    if (key.startsWith(CATALOG_DETAIL_FILTER_PREFIXES.values)) {
+      const field = key.slice(CATALOG_DETAIL_FILTER_PREFIXES.values.length);
+      const values = detailFilterValueList(raw);
+      if (values.length > 0) specValues[field] = values;
+      continue;
+    }
+    if (key.startsWith(CATALOG_DETAIL_FILTER_PREFIXES.ranges)) {
+      const field = key.slice(CATALOG_DETAIL_FILTER_PREFIXES.ranges.length);
+      const ranges = String(raw ?? "").split(";").map((token) => token.trim()).filter(Boolean).map(detailFilterRangeFromText);
+      if (ranges.length > 0) numericRanges[field] = ranges;
+      continue;
+    }
+    if (key.startsWith(CATALOG_DETAIL_FILTER_PREFIXES.flags)) {
+      const field = key.slice(CATALOG_DETAIL_FILTER_PREFIXES.flags.length);
+      const normalized = String(raw ?? "").trim().toLowerCase();
+      if (normalized === "1" || normalized === "true") flags[field] = true;
+      else if (normalized === "0" || normalized === "false") flags[field] = false;
+      else errors.push(`세부 조건 ${field}은 1 또는 0이어야 합니다.`);
+    }
+  }
+  if (Object.keys(specValues).length > 0) candidate.specValues = specValues;
+  if (Object.keys(numericRanges).length > 0) candidate.numericRanges = numericRanges;
+  if (Object.keys(flags).length > 0) candidate.flags = flags;
+  const rule = engineTargetFilterRuleFromUnknown(Object.keys(candidate).length > 0 ? candidate : undefined, category, errors);
+  return { filter: engineTargetFilterRuleForCategory(rule, category), errors };
+}
+
 export function parseCatalogMissingField(input: unknown): ParsedCatalogMissingField {
   if (input === undefined || input === null || input === "") return {};
   if (typeof input !== "string") return { error: "누락 필드는 문자열이어야 합니다." };
@@ -487,6 +560,7 @@ export type PartSearchOptions = {
   listingPolicy?: ListingPolicy;
   missingField?: string;
   specFilter?: PartSpecFilter;
+  detailRule?: EngineCategoryTargetFilter;
   quoteBrandRestricted?: boolean;
   quoteSellableOnly?: boolean;
 };
@@ -515,6 +589,7 @@ function partSearchPredicateFor(
     if (options.listingPolicy && !isListingAllowed(part, options.listingPolicy)) return false;
     if (options.missingField && !part.missingFields.includes(options.missingField)) return false;
     if (!specRules.every((rule) => rule.matches(part))) return false;
+    if (options.detailRule && !engineTargetFilterRuleAllowsPart(part, options.detailRule)) return false;
     if (!normalizedQuery) return true;
     const haystack = [
       part.name,

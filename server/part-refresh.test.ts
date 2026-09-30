@@ -54,6 +54,14 @@ describe("part detail refresh", () => {
     expect(() => reconcileRefreshedPart(danawaPart, { ...danawaPart, dataQuality: "incomplete", missingFields: ["hddBays"] })).toThrow("기존 데이터보다 부족");
   });
 
+  it("keeps the delisted marker through a detail refresh — only a list crawl can clear it", () => {
+    const before = { ...danawaPart, delistedAt: "2026-09-30T00:00:00.000Z" };
+    const refreshed = reconcileRefreshedPart(before, { ...danawaPart, priceWon: 51000 });
+
+    expect(refreshed.delistedAt).toBe("2026-09-30T00:00:00.000Z");
+    expect(refreshed.priceWon).toBe(51000);
+  });
+
   it("refreshes through the shared Danawa parser and reports changed fields", async () => {
     const html = `<title>테스트 케이스 : 다나와 가격비교</title><link rel="canonical" href="https://prod.danawa.com/info/?pcode=1"><meta property="og:description" content="최저가 58,900원" /><meta name="description" content="ATX 케이스 / 지원보드규격: ATX / VGA 길이: 410mm / CPU쿨러 높이: 180mm / 3.5인치 베이: 4개 / 지원파워규격: 표준-ATX / 파워 장착 길이: 220mm" />`;
     let observedPrice: number | undefined;

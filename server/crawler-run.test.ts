@@ -133,6 +133,115 @@ describe("exhaustive crawler execution resume", () => {
     });
   });
 
+  it("marks absent products as delisted after a complete category crawl and records the new/delisted items", async () => {
+    const ghostPart: Part = {
+      ...part,
+      id: "danawa-cpu-ghost-1",
+      category: "cpu",
+      name: "사라진 테스트 CPU",
+      sourceProductCode: "ghost-1",
+      danawaUrl: "https://prod.danawa.com/info/?pcode=ghost-1&cate=112747",
+      specs: { socket: "AM5", tdpW: 65 }
+    };
+    const freshPart: Part = {
+      ...part,
+      id: "danawa-cpu-fresh-1",
+      category: "cpu",
+      name: "신규 테스트 CPU",
+      sourceProductCode: "fresh-1",
+      danawaUrl: "https://prod.danawa.com/info/?pcode=fresh-1&cate=112747",
+      specs: { socket: "AM5", tdpW: 105 }
+    };
+    mocks.appendCatalogChangeRecords.mockReset().mockResolvedValue([]);
+    mocks.crawlDanawaCategory.mockReset().mockResolvedValue({ ...report("cpu"), parts: [freshPart] });
+    mocks.createExclusiveFile.mockReset().mockResolvedValue(undefined);
+    mocks.ensureDataDirectory.mockReset().mockResolvedValue(undefined);
+    mocks.loadCatalog.mockReset().mockResolvedValue([ghostPart]);
+    mocks.readJson.mockReset().mockResolvedValue({});
+    mocks.removeGeneratedFile.mockReset().mockResolvedValue(undefined);
+    mocks.upsertCatalog.mockReset().mockImplementation(async (parts: Part[]) => parts);
+    mocks.writeJson.mockReset().mockResolvedValue(undefined);
+
+    const status = await runCrawlJob({ all: true, category: "cpu", pages: 1, limitPerCategory: 0, details: true, delayMs: 0 });
+
+    expect(status.status).toBe("completed");
+    expect(status.newProducts).toBe(1);
+    expect(status.delistedProducts).toBe(1);
+    expect(status.relistedProducts).toBe(0);
+    const upserted = mocks.upsertCatalog.mock.calls[0]?.[0] as Part[];
+    const marked = upserted.find((candidate) => candidate.id === ghostPart.id);
+    expect(marked?.delistedAt).toBeDefined();
+    expect(upserted.find((candidate) => candidate.id === freshPart.id)?.delistedAt).toBeUndefined();
+    const recorded = mocks.appendCatalogChangeRecords.mock.calls.flatMap(([records]) => records as { itemId: string; changedFields: string[] }[]);
+    expect(recorded).toEqual(expect.arrayContaining([
+      expect.objectContaining({ itemId: freshPart.id, changedFields: ["신규 등록"] }),
+      expect.objectContaining({ itemId: ghostPart.id, changedFields: ["판매 중단"] })
+    ]));
+  });
+
+  it("does not mark absent products as delisted when category coverage is partial", async () => {
+    const ghostPart: Part = {
+      ...part,
+      id: "danawa-cpu-ghost-2",
+      category: "cpu",
+      name: "보존되는 테스트 CPU",
+      sourceProductCode: "ghost-2",
+      danawaUrl: "https://prod.danawa.com/info/?pcode=ghost-2&cate=112747",
+      specs: { socket: "AM5", tdpW: 65 }
+    };
+    mocks.appendCatalogChangeRecords.mockReset().mockResolvedValue([]);
+    mocks.crawlDanawaCategory.mockReset().mockResolvedValue({ ...report("cpu", false), parts: [] });
+    mocks.createExclusiveFile.mockReset().mockResolvedValue(undefined);
+    mocks.ensureDataDirectory.mockReset().mockResolvedValue(undefined);
+    mocks.loadCatalog.mockReset().mockResolvedValue([ghostPart]);
+    mocks.readJson.mockReset().mockResolvedValue({});
+    mocks.removeGeneratedFile.mockReset().mockResolvedValue(undefined);
+    mocks.upsertCatalog.mockReset().mockImplementation(async (parts: Part[]) => parts);
+    mocks.writeJson.mockReset().mockResolvedValue(undefined);
+
+    const status = await runCrawlJob({ all: true, category: "cpu", pages: 1, limitPerCategory: 0, details: true, delayMs: 0 });
+
+    expect(status.status).toBe("failed");
+    expect(status.delistedProducts ?? 0).toBe(0);
+    const upserted = mocks.upsertCatalog.mock.calls[0]?.[0] as Part[];
+    expect(upserted).toHaveLength(0);
+    const recorded = mocks.appendCatalogChangeRecords.mock.calls.flatMap(([records]) => records as { itemId: string; changedFields: string[] }[]);
+    expect(recorded.every((record) => !record.changedFields.includes("판매 중단"))).toBe(true);
+  });
+
+  it("clears the delisted marker and records a relist when a product reappears", async () => {
+    const relistedPart: Part = {
+      ...part,
+      id: "danawa-cpu-back-1",
+      category: "cpu",
+      name: "돌아온 테스트 CPU",
+      sourceProductCode: "back-1",
+      danawaUrl: "https://prod.danawa.com/info/?pcode=back-1&cate=112747",
+      specs: { socket: "AM5", tdpW: 65 },
+      delistedAt: "2026-09-20T00:00:00.000Z"
+    };
+    mocks.appendCatalogChangeRecords.mockReset().mockResolvedValue([]);
+    mocks.crawlDanawaCategory.mockReset().mockResolvedValue({ ...report("cpu"), parts: [{ ...relistedPart, delistedAt: undefined }] });
+    mocks.createExclusiveFile.mockReset().mockResolvedValue(undefined);
+    mocks.ensureDataDirectory.mockReset().mockResolvedValue(undefined);
+    mocks.loadCatalog.mockReset().mockResolvedValue([relistedPart]);
+    mocks.readJson.mockReset().mockResolvedValue({});
+    mocks.removeGeneratedFile.mockReset().mockResolvedValue(undefined);
+    mocks.upsertCatalog.mockReset().mockImplementation(async (parts: Part[]) => parts);
+    mocks.writeJson.mockReset().mockResolvedValue(undefined);
+
+    const status = await runCrawlJob({ all: true, category: "cpu", pages: 1, limitPerCategory: 0, details: true, delayMs: 0 });
+
+    expect(status.status).toBe("completed");
+    expect(status.relistedProducts).toBe(1);
+    const upserted = mocks.upsertCatalog.mock.calls[0]?.[0] as Part[];
+    expect(upserted[0]?.delistedAt).toBeUndefined();
+    const recorded = mocks.appendCatalogChangeRecords.mock.calls.flatMap(([records]) => records as { itemId: string; changedFields: string[] }[]);
+    expect(recorded).toEqual(expect.arrayContaining([
+      expect.objectContaining({ itemId: relistedPart.id, changedFields: ["판매 재개"] })
+    ]));
+  });
+
   it("persists the failed category page and retry telemetry before marking the job failed", async () => {
     const failure: CrawlPageFailure = {
       category: "cpu",

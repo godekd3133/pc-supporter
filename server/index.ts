@@ -5,8 +5,8 @@ import { existsSync } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import type { AccessoryCategory, AccessoryPriceFilter, AccessoryRefreshResponse, AccessorySelection, AlternativeRisk, AlternativeRiskCounts, BuildGenerationRequest, BuildGenerationVariantResult, BuildSelection, CatalogChangeKind, CatalogChangeRecord, CompatibilityResult, CrawlResumePreview, CrawlStatus, DataFreshness, DataQuality, Finding, GpuPhysicalOverride, ListingPolicy, M2CoverageFilter, M2MappingStatus, M2SlotCoverage, M2SlotCoverageBucket, M2SlotCoverageItem, M2SlotOverride, M2SlotReviewTemplate, M2SlotReviewTemplateItem, Part, PartCategory, PartRefreshResponse, PriceAvailabilityFilter, RecommendationPreferences, RecommendationProfile, SavedBuild, SavedBuildCheckSnapshot } from "../shared/types";
-import { ACCESSORY_CATEGORIES, PART_CATEGORIES, RECOMMENDATION_VARIANT_PRIORITIES } from "../shared/types";
-import { catalogEligibilitySummaryFor, catalogMeta, catalogSearchTotalsFor, catalogUpdatedAtFor, countParts, currentCatalogRuntimeRevision, filterParts, findPart, invalidateCatalogCache, loadCatalog, parseCatalogMissingField, parsePartSpecFilter, partSpecFilterDiagnosticsFor, partSpecFilterMatcherFor, searchParts, upsertCatalog } from "./catalog";
+import { ACCESSORY_CATEGORIES, PART_CATEGORIES } from "../shared/types";
+import { catalogEligibilitySummaryFor, catalogMeta, catalogSearchTotalsFor, catalogUpdatedAtFor, countParts, currentCatalogRuntimeRevision, filterParts, findPart, invalidateCatalogCache, loadCatalog, parseCatalogDetailFilterQuery, parseCatalogMissingField, parsePartSpecFilter, partSpecFilterDiagnosticsFor, partSpecFilterMatcherFor, searchParts, upsertCatalog } from "./catalog";
 import { countAccessories, currentAccessoryUpdatedAt, findAccessory, loadAccessories, readAccessoryCoverage, searchAccessories, upsertAccessories } from "./accessories";
 import { loadCatalogSnapshot, loadCatalogSnapshotTimestamp } from "./catalog-snapshot";
 import { validateAccessoryTargetPartIds, validateBuildPartIds, validateBuildSelection } from "./build-validation";
@@ -20,12 +20,12 @@ import { loadSavedBuildPresentationContext, savedBuildPresentationFor, savedBuil
 import { savedBuildAlternativeAlertsFor } from "./saved-build-alternatives";
 import { recordUsageEvent, trackUsageEvent, usageEventSummaryFor } from "./usage-events";
 import { classifyDataFreshness } from "./data-health";
-import { isAccessoryCrawlRunning, readAccessoryCrawlManifest, readAccessoryCrawlStatus, runAccessoryCrawlJob } from "./accessory-crawler";
-import { BuildGenerationError, ENGINE_VERSION, assessAlternativePart, buildGenerationRecoveryOptionsFor, candidateSimilarityForBuild, compareCandidateSimilarity, compareCandidateValue, evaluateBuild, generateBuildDraft, minimumFeasibleBuildPriceFor } from "./engine";
+import { isAccessoryCrawlRunning, readAccessoryCrawlManifest, readAccessoryCrawlStatus, runAccessoryCrawlJob } from "./engines/crawler-engine";
+import { BuildGenerationError, ENGINE_VERSION, assessAlternativePart, buildGenerationRecoveryOptionsFor, candidateSimilarityForBuild, compareCandidateSimilarity, compareCandidateValue, evaluateBuild, generateBuildDraft } from "./engine";
 import { recordGenerationFailure, recentGenerationFailures } from "./generation-failure-log";
-import { cancelCrawlPageRetryBatch, crawlPageRetryBatchPlanFor, crawlPageRetryPlanFor, crawlResumePlanFor, isCrawlPageRetryBatchRunning, isCrawlRunning, readCrawlStatus, runCrawlJob, runCrawlPageRetryBatchJob, runCrawlPageRetryJob } from "./crawler";
+import { cancelCrawlPageRetryBatch, crawlPageRetryBatchPlanFor, crawlPageRetryPlanFor, crawlResumePlanFor, isCrawlPageRetryBatchRunning, isCrawlRunning, readCrawlStatus, runCrawlJob, runCrawlPageRetryBatchJob, runCrawlPageRetryJob } from "./engines/crawler-engine";
 import { CRAWL_MANIFEST_PATH, ensureDataDirectory, fileUpdatedAt, readJson } from "./storage";
-import type { CrawlCategoryReport, CrawlManifest } from "../shared/types";
+import type { CrawlManifest } from "../shared/types";
 import { appendSavedBuild, appendSavedBuildCheck, appendSavedBuildVersionComparison, appendSavedBudgetLadder, appendSavedGeneratorVariants, appendSavedComparison, appendSavedWatchlist, closePersistence, consumeRateLimitWindow, createOwnerShareSession, deleteOwnerShareSession, deleteOwnerShareSessionGrantsForResource, deleteSavedBuild, deleteSavedBuildVersionComparison, deleteSavedBudgetLadder, deleteSavedGeneratorVariants, deleteSavedComparison, deleteSavedWatchlist, deleteSavedWatchlistAlertStates, initializePersistence, listOwnerShareSessionGrants, migrateSavedBuildVersions, ownerShareSessionGrantMatches, ownerShareSessionIsActive, persistenceDiagnostics, pruneExpiredOwnerShareSessionGrants, pruneExpiredOwnerShareSessions, pruneRateLimitWindows, RATE_LIMIT_BUCKET_CLEANUP_INTERVAL_MS, readLatestSavedBuildVersionBackup, readSavedBuildVersionBackupDetail, readSavedBuildVersionBackups, readSavedBuilds, readSavedBuildVersionComparisons, readSavedBudgetLadders, readSavedGeneratorVariants, readSavedComparisons, readSavedWatchlistAlertStates, readSavedWatchlists, restoreSavedBuildPurchasePriceHistory, restoreSavedBuildPurchaseProgress, rollbackSavedBuildVersions, savedBuildVersionSnapshotFingerprintFor, updateSavedBuildAssemblyVerification, updateSavedBuildMetadata, updateSavedBuildMonitorState, updateSavedBuildMyPc, updateSavedBuildPurchasePriceHistory, updateSavedBuildPurchaseProgress, updateSavedBuildShareCredentials, updateSavedWatchlist, updateSavedWatchlistAlertStates, upsertOwnerShareSessionGrant, withSavedBuildMonitorLease } from "./repository";
 import { CATALOG_INGESTION_BUSY_MESSAGE, CatalogIngestionBusyError, startCatalogIngestionJob, withCatalogIngestionLease as executeCatalogIngestionJob } from "./catalog-ingestion-coordinator";
 import { DEFAULT_SAVED_WATCHLIST_ALERT_PREFERENCES, parseSavedCatalogWatchlistInput, parseSavedCatalogWatchlistUpdateInput, savedCatalogWatchlistExpired, savedWatchlistAlertPreferencesFor } from "./watchlist-store";
@@ -92,7 +92,12 @@ import { savedBuildCheckPreviewCache, savedBuildCheckPreviewCacheKey } from "./s
 import { parseCatalogBatchIds, parseCatalogBatchQuery } from "./catalog-batch";
 import { entityTagFor, ifNoneMatchMatches } from "./http-cache";
 import { gamingPerformanceEvidencePath, loadGamingPerformanceEvidence, saveGamingPerformanceEvidence } from "./gaming-performance-evidence";
-import { engineTargetFilterFacetOptionsFor, engineTargetFilterSummaryFor, engineTargetFiltersPath, loadEngineTargetFiltersConfig, normalizeEngineTargetFiltersInput, saveEngineTargetFiltersConfig } from "./engine-target-filters";
+import { clearCompatibilityEngineCaches, compatiblePartAssessmentCache } from "./engines/compatibility-engine";
+import { crawlerEngineSnapshot } from "./engines/crawler-engine";
+import { engineModulesStatus } from "./engines";
+import { ENGINE_GENERATION_OPTION_DEFAULTS, engineGenerationLadderMultipliersFor, engineGenerationOptionsPath, engineGenerationVariantPrioritiesFor, loadEngineGenerationOptions, normalizeEngineGenerationOptions, quotationEngineFloorFor, saveEngineGenerationOptions } from "./engines/quotation-engine";
+import { catalogPartFacetOptionsFor, engineTargetFilterFacetOptionsFor, engineTargetFilterSummaryFor, engineTargetFiltersPath, loadEngineTargetFiltersConfig, normalizeEngineTargetFiltersInput, saveEngineTargetFiltersConfig } from "./engine-target-filters";
+import { engineTargetFilterFacetDiagnosticsFor, engineTargetFilterRuleAllowsPart, engineTargetFilterRuleForCategory, engineTargetFilterRuleFromUnknown, ENGINE_TARGET_FILTER_FACETS } from "../shared/engine-target-filters";
 import { gamingPerformanceEvidenceBatchValidationFor } from "../shared/gaming-performance-evidence";
 import { candidateDecisionSummaryFor } from "../shared/candidate-decision";
 import { assemblyVerificationSavedHistoryFor, parseAssemblyVerificationHistoryJson } from "../shared/assembly-verification";
@@ -444,23 +449,6 @@ type CompatibilityApiOutcome =
   | { status: "error"; statusCode: number; body: Record<string, unknown> };
 
 const compatibilityRequestDeduper = new InFlightDeduper<CompatibilityApiOutcome>();
-type CompatiblePartAssessmentRow = {
-  part: Part;
-  assessment: ReturnType<typeof assessAlternativePart>;
-  similarity: ReturnType<typeof candidateSimilarityForBuild>;
-  recommendationTrust: ReturnType<typeof recommendationTrustFor>;
-  decision: ReturnType<typeof candidateDecisionSummaryFor>;
-};
-type CompatiblePartAssessmentCacheValue = {
-  intentFinding?: Finding;
-  assessedParts: CompatiblePartAssessmentRow[];
-  policyExcludedParts: Part[];
-  priceExcludedCount: number;
-  freshnessExcludedCount: number;
-  specExcludedCount: number;
-  specFilterDiagnostics: ReturnType<typeof partSpecFilterDiagnosticsFor>;
-};
-const compatiblePartAssessmentCache = new TtlLruInFlightCache<CompatiblePartAssessmentCacheValue>({ ttlMs: 2 * 60 * 1000, maxEntries: 40 });
 const watchlistCreateRateLimit = createRateLimitMiddleware("watchlist-create", { limit: 10, windowMs: 60_000 });
 const ownerSessionMigrationRateLimit = createRateLimitMiddleware("owner-session-migrate", { limit: 10, windowMs: 60_000 });
 const watchlistShareRateLimit = createRateLimitMiddleware("watchlist-share", { limit: 120, windowMs: 60_000 });
@@ -1118,6 +1106,12 @@ app.get("/api/parts", publicCatalogReadRateLimit, async (request, response) => {
     response.status(400).json({ error: "스펙 필터 형식이 올바르지 않습니다.", details: parsedSpecFilter.errors });
     return;
   }
+  const parsedDetailFilter = parseCatalogDetailFilterQuery(request.query as Record<string, unknown>, category);
+  if (parsedDetailFilter.errors.length > 0) {
+    response.status(400).json({ error: "세부 조건 형식이 올바르지 않습니다.", details: parsedDetailFilter.errors });
+    return;
+  }
+  const detailRule = parsedDetailFilter.filter;
   const catalog = await loadCatalog();
   // partId 조회는 목록 탐색이 아니라 부품 상세 확인용이라 브랜드 제한을 걸지 않는다.
   // 견적 후보 목록에서는 가격·사양 정보가 없는 부품을 뺀다 — 스펙 미등록 부품을
@@ -1127,7 +1121,7 @@ app.get("/api/parts", publicCatalogReadRateLimit, async (request, response) => {
   const priceOptions = { ...baseOptions, priceAvailability };
   const freshnessOptions = { ...priceOptions, freshness };
   const benchmarkOptions = { ...freshnessOptions, benchmarkAvailability };
-  const options = { ...benchmarkOptions, specFilter: parsedSpecFilter.filter };
+  const options = { ...benchmarkOptions, specFilter: parsedSpecFilter.filter, ...(detailRule ? { detailRule } : {}) };
   const unfilteredOptions = { ...(partId ? { partId } : {}), ...(brand ? { brand } : {}), ...(missingField ? { missingField } : {}), quality, sort, priceAvailability, freshness, benchmarkAvailability, specFilter: parsedSpecFilter.filter };
   const coreCandidateOptions = { ...unfilteredOptions, listingPolicy: "all" as const };
   const { baseTotal, priceTotal, freshnessTotal, benchmarkTotal, total, unfilteredTotal, coreCandidateTotal, categoryMismatchExcludedCount } = catalogSearchTotalsFor(catalog, category, query, {
@@ -1140,7 +1134,11 @@ app.get("/api/parts", publicCatalogReadRateLimit, async (request, response) => {
     coreCandidate: coreCandidateOptions
   });
   const specFilterApplied = Object.keys(parsedSpecFilter.filter).length > 0;
-  const specInputParts = specFilterApplied ? filterParts(catalog, category, query, benchmarkOptions) : [];
+  const detailApplied = detailRule !== undefined && category !== undefined;
+  // 핵심 사양 조건(legacy)과 세부 조건(detailRule)의 제외 개수를 따로 안내하기 위해
+  // 두 단계로 나눠 센다 — detailExcludedCount는 legacy 조건까지 통과한 풀 기준이다.
+  const specInputParts = (specFilterApplied || detailApplied) ? filterParts(catalog, category, query, benchmarkOptions) : [];
+  const detailInputParts = detailApplied ? specInputParts.filter(partSpecFilterMatcherFor(parsedSpecFilter.filter)) : [];
   const payload = {
     items: searchParts(catalog, category, query, limit, options, offset).map((part) => ({ ...part, dataFreshness: classifyDataFreshness(part.updatedAt) })),
     total,
@@ -1151,7 +1149,8 @@ app.get("/api/parts", publicCatalogReadRateLimit, async (request, response) => {
     ...(freshness !== "all" ? { freshness, freshnessExcludedCount: priceTotal - freshnessTotal } : {}),
     ...(unfilteredTotal > coreCandidateTotal ? { nonCoreExcludedCount: unfilteredTotal - coreCandidateTotal } : {}),
     ...(categoryMismatchExcludedCount > 0 ? { categoryMismatchExcludedCount } : {}),
-    ...(specFilterApplied ? { specFilter: parsedSpecFilter.filter, specExcludedCount: benchmarkTotal - total, specFilterDiagnostics: partSpecFilterDiagnosticsFor(specInputParts, parsedSpecFilter.filter) } : {}),
+    ...(specFilterApplied ? { specFilter: parsedSpecFilter.filter, specExcludedCount: benchmarkTotal - (detailApplied ? detailInputParts.length : total), specFilterDiagnostics: partSpecFilterDiagnosticsFor(specInputParts, parsedSpecFilter.filter) } : {}),
+    ...(detailApplied ? { detailExcludedCount: detailInputParts.length - total, detailFilterDiagnostics: engineTargetFilterFacetDiagnosticsFor(detailInputParts, detailRule, category) } : {}),
     offset,
     limit
   };
@@ -1169,6 +1168,24 @@ app.get("/api/parts/batch", publicCatalogBatchRateLimit, async (request, respons
   const payload = { items: parsed.ids.map((id) => byId.get(id)).filter((part): part is Part => part !== undefined).map((part) => ({ ...part, dataFreshness: classifyDataFreshness(part.updatedAt) })), missingIds: parsed.ids.filter((id) => !byId.has(id)) };
   const lastModified = payload.items.reduce<string | undefined>((latest, part) => !latest || part.updatedAt > latest ? part.updatedAt : latest, undefined);
   sendJsonWithEtag(request, response, payload, lastModified);
+});
+
+// 부품 찾기 세부 조건 패널용 facet 정의 + 실제 선택지 — 탐색 목록과 동일한
+// 풀(브랜드 허용·견적 선택 가능 부품) 위에서 개수를 집계해 다나와처럼
+// "선택지(N개)"를 보여준다.
+app.get("/api/parts/facets", publicCatalogReadRateLimit, async (request, response) => {
+  const category = isCategory(request.query.category) ? request.query.category : undefined;
+  if (!category) {
+    response.status(400).json({ error: "세부 조건을 찾으려면 부품 카테고리가 필요합니다." });
+    return;
+  }
+  const catalog = await loadCatalog();
+  const parts = filterParts(catalog, category, undefined, { quoteBrandRestricted: true, quoteSellableOnly: true });
+  sendJsonWithEtag(request, response, {
+    category,
+    facets: ENGINE_TARGET_FILTER_FACETS[category],
+    options: catalogPartFacetOptionsFor(parts, category)
+  });
 });
 
 app.get("/api/parts/:id", publicCatalogDetailRateLimit, async (request, response) => {
@@ -1420,6 +1437,13 @@ app.post("/api/parts/compatible", publicCandidateRateLimit, async (request, resp
     response.status(400).json({ error: "스펙 필터 형식이 올바르지 않습니다.", details: parsedSpecFilter.errors });
     return;
   }
+  // 다나와식 세부 조건(detailFilter)은 공개 /api/parts와 같은 규칙 형식을 JSON 본문으로 받는다.
+  const detailFilterErrors: string[] = [];
+  const detailRule = engineTargetFilterRuleForCategory(engineTargetFilterRuleFromUnknown(body.detailFilter, category, detailFilterErrors), category);
+  if (detailFilterErrors.length > 0) {
+    response.status(400).json({ error: "세부 조건 형식이 올바르지 않습니다.", details: detailFilterErrors });
+    return;
+  }
   const performanceFilter = alternativePerformanceFilterFromUnknown(body.performanceFilter);
   const physicalEvidenceFilter = physicalEvidenceFilterFromUnknown(body.physicalEvidenceFilter);
   const recommendationTrustFilter = recommendationTrustFilterFromUnknown(body.recommendationTrustFilter);
@@ -1466,13 +1490,14 @@ app.post("/api/parts/compatible", publicCandidateRateLimit, async (request, resp
     freshness,
     sort: catalogSort,
     listingPolicy,
-    specFilter: parsedSpecFilter.filter
+    specFilter: parsedSpecFilter.filter,
+    detailFilter: detailRule
   })).digest("hex")}`;
   const assessedCache = await compatiblePartAssessmentCache.getOrCompute(assessmentCacheKey, () => {
     const intentFinding = requestedFindingRuleId
       ? evaluateBuild(parsed.build, catalog, { includeSuggestions: false }).findings.find((finding) => finding.ruleId === requestedFindingRuleId)
       : undefined;
-    if (requestedFindingRuleId && !intentFinding) return { intentFinding, assessedParts: [], policyExcludedParts: [], priceExcludedCount: 0, freshnessExcludedCount: 0, specExcludedCount: 0, specFilterDiagnostics: [] };
+    if (requestedFindingRuleId && !intentFinding) return { intentFinding, assessedParts: [], policyExcludedParts: [], priceExcludedCount: 0, freshnessExcludedCount: 0, specExcludedCount: 0, detailExcludedCount: 0, specFilterDiagnostics: [] };
     const baseOptions = { ...(brand ? { brand } : {}), quality, sort: catalogSort, listingPolicy, quoteBrandRestricted: true, quoteSellableOnly: true };
     const priceOptions = { ...baseOptions, priceAvailability };
     const options = { ...priceOptions, freshness };
@@ -1481,10 +1506,11 @@ app.post("/api/parts/compatible", publicCandidateRateLimit, async (request, resp
     const searchedParts = searchParts(catalog, category, query, catalog.length, options, 0);
     const specFilteredParts = searchedParts.filter(partSpecFilterMatcherFor(parsedSpecFilter.filter));
     const specFilterDiagnostics = partSpecFilterDiagnosticsFor(searchedParts, parsedSpecFilter.filter);
+    const detailFilteredParts = detailRule ? specFilteredParts.filter((part) => engineTargetFilterRuleAllowsPart(part, detailRule)) : specFilteredParts;
     // 판매 정책으로 빠진 부품(스펙 미등록·가격 미확인)도 안내 문구를 위해 따로 센다.
     const policyExcludedParts = searchParts(catalog, category, query, catalog.length, { ...options, quoteSellableOnly: false }, 0)
       .filter((part) => !isQuoteSelectable(part));
-    const assessedParts = specFilteredParts
+    const assessedParts = detailFilteredParts
       .map((part) => {
         const assessment = assessAlternativePart(parsed.build, catalog, category, part, intentFinding);
         const similarity = candidateSimilarityForBuild(parsed.build, catalog, category, part, profile, gamingResolution, gamingRefreshRate);
@@ -1525,6 +1551,7 @@ app.post("/api/parts/compatible", publicCandidateRateLimit, async (request, resp
       priceExcludedCount: baseCount - priceCount,
       freshnessExcludedCount: priceCount - searchedParts.length,
       specExcludedCount: searchedParts.length - specFilteredParts.length,
+      detailExcludedCount: specFilteredParts.length - detailFilteredParts.length,
       specFilterDiagnostics
     };
   });
@@ -1535,7 +1562,7 @@ app.post("/api/parts/compatible", publicCandidateRateLimit, async (request, resp
     return;
   }
   response.setHeader("X-PC-Supporter-Compatible-Cache", assessedCache.lookup === "COALESCED" ? "COALESCED" : assessedCache.lookup);
-  const { priceExcludedCount, freshnessExcludedCount, specExcludedCount, specFilterDiagnostics, policyExcludedParts } = assessedCache.value;
+  const { priceExcludedCount, freshnessExcludedCount, specExcludedCount, detailExcludedCount, specFilterDiagnostics, policyExcludedParts } = assessedCache.value;
   // 견적에는 현재 구성에서 호환 확인이 끝난 부품만 올린다 — 정보 부족(review)이나
   // 비호환(unsafe) 후보는 위험도 집계에만 남기고 선택 목록에서 제외한다.
   const intentEligibleParts = intentFinding
@@ -1603,6 +1630,7 @@ app.post("/api/parts/compatible", publicCandidateRateLimit, async (request, resp
     ...(priceAvailability !== "all" ? { priceStatus: priceAvailability, priceExcludedCount } : {}),
     ...(freshness !== "all" ? { freshness, freshnessExcludedCount } : {}),
     ...(Object.keys(parsedSpecFilter.filter).length > 0 ? { specFilter: parsedSpecFilter.filter, specExcludedCount, specFilterDiagnostics } : {}),
+    ...(detailRule ? { detailExcludedCount } : {}),
     ...(budgetWon !== undefined ? { budgetWon, budgetExcludedCount } : {}),
     performanceFilter,
     ...(performanceFilter !== "all" ? { performanceExcludedCount } : {}),
@@ -1887,7 +1915,7 @@ app.post("/api/builds/recommend", publicRecommendationRateLimit, async (request,
 function buildGenerationVariantResultsFor(catalog: Part[], request: BuildGenerationRequest, requestId?: string): BuildGenerationVariantResult[] {
   const gamingPerformanceEvidence = loadGamingPerformanceEvidence();
   const targetFilters = loadEngineTargetFiltersConfig();
-  return RECOMMENDATION_VARIANT_PRIORITIES.map((priority) => {
+  return engineGenerationVariantPrioritiesFor().map((priority) => {
     try {
       return { priority, draft: generateBuildDraft(catalog, { ...request, priority }, gamingPerformanceEvidence, { targetFilters }) };
     } catch (error: unknown) {
@@ -1908,24 +1936,7 @@ function buildGenerationVariantResultsFor(catalog: Part[], request: BuildGenerat
   });
 }
 
-// floor 계산은 풀 전수 탐색이라 작은 서버에서 수 초가 걸린다. 같은 요청이
-// 반복되면(온보딩 버튼, 복구 제안 확인) 캐시로 응답한다 — 키는 카탈로그 배열
-// 참조라 재로드 시 자동 무효화된다. 엔진 타겟 필터도 풀을 바꾸므로 키에 포함한다.
-const generationFloorCache = new WeakMap<Part[], Map<string, number | null>>();
-function generationFloorFor(catalog: Part[], request: BuildGenerationRequest) {
-  const targetFilters = loadEngineTargetFiltersConfig();
-  const key = JSON.stringify(request) + "|" + JSON.stringify(targetFilters);
-  let byRequest = generationFloorCache.get(catalog);
-  if (!byRequest) {
-    byRequest = new Map();
-    generationFloorCache.set(catalog, byRequest);
-  }
-  if (byRequest.has(key)) return byRequest.get(key) ?? null;
-  const value = minimumFeasibleBuildPriceFor(catalog, request, { targetFilters }) ?? null;
-  if (byRequest.size >= 300) byRequest.clear();
-  byRequest.set(key, value);
-  return value;
-}
+
 
 // 온보딩·복구 제안이 "이 요청 그대로 만들 수 있는 최저 견적"을 표시하도록
 // 요청 형태 그대로의 실측 최저가를 반환한다 — 프로필 평균이 아니라 요청과 같은
@@ -1938,7 +1949,7 @@ app.post("/api/builds/recommend/floor", publicRecommendationRateLimit, async (re
   }
   try {
     const catalog = await loadCatalog();
-    response.json({ floorWon: generationFloorFor(catalog, parsed.request) });
+    response.json({ floorWon: quotationEngineFloorFor(catalog, parsed.request) });
   } catch (error: unknown) {
     recordGenerationFailure({
       route: "/api/builds/recommend/floor",
@@ -1991,7 +2002,7 @@ app.post("/api/builds/recommend/budget-ladder", publicRecommendationRateLimit, a
   let catalog: Part[] | undefined;
   try {
     catalog = await loadCatalog();
-    const scenarios = budgetLadderScenariosFor(parsed.request);
+    const scenarios = budgetLadderScenariosFor(parsed.request, engineGenerationLadderMultipliersFor());
     const targetFilters = loadEngineTargetFiltersConfig();
     const outcomes = scenarios.map((scenario) => {
       try {
@@ -3630,33 +3641,32 @@ app.get("/api/admin/crawl/manifest", requireAdmin, async (_request, response) =>
 });
 
 // 크롤링 엔진 화면용 집계 응답 — 실행 중 상태·적용 엔진 파라미터·핵심/주변
-// 부품 manifest를 한 번에 묶는다. pageProductCodes는 상품 코드 전체 목록이라
-// 화면에 필요 없고 응답만 커지므로 범주 리포트에서 제외한다.
+// 부품 manifest를 한 번에 묶는다. 집계 자체는 crawler-engine 모듈이 담당한다.
 app.get("/api/admin/crawl/engine", requireAdmin, async (_request, response) => {
-  const manifest = await readJson<CrawlManifest | null>(CRAWL_MANIFEST_PATH, null);
-  const accessoryManifest = await readAccessoryCrawlManifest();
-  const stripPageProductCodes = (category: CrawlCategoryReport) => {
-    const { pageProductCodes: _pageProductCodes, ...rest } = category;
-    return rest;
-  };
-  response.json({
-    parameters: {
-      delayMs: Number(process.env.DANAWA_CRAWL_DELAY_MS ?? 850),
-      timeoutMs: Number(process.env.DANAWA_CRAWL_TIMEOUT_MS ?? 20000),
-      retries: Number(process.env.DANAWA_CRAWL_RETRIES ?? 2),
-      pages: Number(process.env.DANAWA_CRAWL_PAGES ?? 1),
-      limitPerCategory: Number(process.env.DANAWA_CRAWL_LIMIT ?? 5),
-      details: process.env.DANAWA_CRAWL_DETAILS !== "false"
-    },
-    catalog: {
-      status: await readCrawlStatus(),
-      manifest: manifest ? { ...manifest, categories: manifest.categories.map(stripPageProductCodes) } : null
-    },
-    accessories: {
-      status: await readAccessoryCrawlStatus(),
-      manifest: accessoryManifest
-    }
-  });
+  response.json(await crawlerEngineSnapshot());
+});
+
+// 세 엔진(크롤링·견적 생성·호환성 검사)의 운영 상태를 한 번에 묶는다.
+app.get("/api/admin/engines", requireAdmin, async (_request, response) => {
+  response.json(await engineModulesStatus());
+});
+
+// 견적 생성 엔진 옵션 — variants 우선순위 세트와 예산 사다리 배율을 관리자가
+// 조정한다. 저장은 파일 기반 운영 아티팩트(data/engine-generation-options.json).
+app.get("/api/admin/engine-options", requireAdmin, async (_request, response) => {
+  const options = loadEngineGenerationOptions();
+  const updatedAt = await fileUpdatedAt(engineGenerationOptionsPath());
+  response.json({ options, defaults: ENGINE_GENERATION_OPTION_DEFAULTS, updatedAt });
+});
+
+app.put("/api/admin/engine-options", adminCatalogCrawlRetryRateLimit, requireAdmin, async (request, response) => {
+  const { options, errors } = normalizeEngineGenerationOptions(request.body);
+  if (errors.length > 0) {
+    response.status(400).json({ error: "견적 생성 옵션 형식이 올바르지 않습니다.", details: errors });
+    return;
+  }
+  const saved = await saveEngineGenerationOptions(options);
+  response.json({ options: saved.options, updatedAt: saved.updatedAt });
 });
 
 app.post("/api/admin/crawl/retry-page", adminCatalogCrawlRetryRateLimit, requireAdmin, async (request, response) => {
@@ -4008,8 +4018,7 @@ app.put("/api/admin/cooling-fan-load-overrides/batch", requireAdmin, async (requ
     return;
   }
   await saveCoolingFanLoadOverrides(validation.validOverrides);
-  compatibilityResultCache.clear();
-  savedBuildCheckPreviewCache.clear();
+  clearCompatibilityEngineCaches();
   const refreshedAccessories = await loadAccessories();
   response.json({ saved: true, count: validation.validOverrides.length, items: coolingFanLoadOverrideListItems(refreshedAccessories, await readCoolingFanLoadOverrides()) });
 });
@@ -4032,8 +4041,7 @@ app.put("/api/admin/cooling-fan-load-overrides/:accessoryId", requireAdmin, asyn
     return;
   }
   await saveCoolingFanLoadOverrides([validation.value]);
-  compatibilityResultCache.clear();
-  savedBuildCheckPreviewCache.clear();
+  clearCompatibilityEngineCaches();
   const refreshedAccessories = await loadAccessories();
   response.json({ override: validation.value, accessory: refreshedAccessories.find((candidate) => candidate.id === accessoryId) });
 });
@@ -4049,8 +4057,7 @@ app.delete("/api/admin/cooling-fan-load-overrides/:accessoryId", requireAdmin, a
     response.status(404).json({ error: "삭제할 쿨링팬 소비전류 보강을 찾을 수 없습니다." });
     return;
   }
-  compatibilityResultCache.clear();
-  savedBuildCheckPreviewCache.clear();
+  clearCompatibilityEngineCaches();
   response.json({ deleted: true, accessoryId });
 });
 
@@ -4989,9 +4996,9 @@ async function start() {
     }, 5_000));
   }
 
-  // The older catalog crawl uses broad/sample discovery settings. Keep it opt-in and
-  // mutually exclusive with the source-price refresh scheduler.
-  const legacyCrawlEnabled = ownsBackgroundWork && process.env.DANAWA_CRAWL_SCHEDULER_ENABLED === "true" && !priceRefreshEnabled;
+  // The older catalog crawl uses broad/sample discovery settings. It stays opt-in and
+  // serializes with the price-refresh scheduler through the catalog-ingestion lease.
+  const legacyCrawlEnabled = ownsBackgroundWork && process.env.DANAWA_CRAWL_SCHEDULER_ENABLED === "true";
   const intervalHours = Number(process.env.DANAWA_CRAWL_INTERVAL_HOURS ?? 24);
   if (legacyCrawlEnabled && process.env.DANAWA_CRAWL_ON_START === "true") {
     void executeCatalogIngestionJob(() => runCrawlJob({ all: process.env.DANAWA_CRAWL_ALL === "true" }))

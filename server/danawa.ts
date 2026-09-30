@@ -448,7 +448,11 @@ function parseWon(text: string | undefined) {
 
 function parseLowestPrice(text: string | undefined) {
   if (!text) return undefined;
-  return parseNumber(text, /최저가\s*([\d,]+)\s*원/i);
+  const cardLowest = parseNumber(text, /최저가\s*([\d,]+)\s*원/i);
+  if (cardLowest !== undefined && cardLowest > 0) return cardLowest;
+  // 카드가 기준 최저가가 없는 상품은 "최저가 0원, 현금최저가: N원" 형태다 —
+  // 0원은 가격이 없다는 뜻이 아니라 현금가만 있다는 뜻이므로 그 값을 쓴다.
+  return parseNumber(text, /현금최저가\s*[:：]?\s*([\d,]+)\s*원/i);
 }
 
 /** Returns only a price explicitly present in the product page's Open Graph description. */

@@ -4,8 +4,10 @@ import { parseArgs } from "node:util";
 import type { CrawlCategoryReport, CrawlManifest, CrawlPageFailure, CrawlPageRetryBatchProgress, CrawlPageRetryRecord, CrawlStatus, Part, PartCategory } from "../shared/types";
 import { DANAWA_CATEGORIES, crawlDanawaCategory, retryDanawaCategoryPage, type DanawaPageRetryResult } from "./danawa";
 import { loadCatalog, upsertCatalog } from "./catalog";
+import { inferListingType, isListingAllowed, isQuoteBrandAllowed, isQuoteSelectable } from "./listing";
+import { LISTING_TYPE_LABELS, isKnownPrice } from "../shared/types";
 import { CRAWL_LOCK_PATH, CRAWL_MANIFEST_PATH, CRAWL_STATE_PATH, createExclusiveFile, ensureDataDirectory, readJson, removeGeneratedFile, writeJson } from "./storage";
-import { appendCatalogChangeRecords, catalogChangeRecord, catalogChangeSummary, catalogItemKey, meaningfulCatalogChangeFields } from "./catalog-change-log";
+import { CATALOG_DELISTED_CHANGE_FIELD_LABEL, CATALOG_RELISTED_CHANGE_FIELD_LABEL, appendCatalogChangeRecords, catalogChangeRecord, catalogChangeSummary, catalogItemAddedRecord, catalogItemKey, meaningfulCatalogChangeFields } from "./catalog-change-log";
 import { withCatalogIngestionLease } from "./catalog-ingestion-coordinator";
 
 export type CrawlJobOptions = {
@@ -94,6 +96,9 @@ function defaultStatus(): CrawlStatus {
     failedProducts: 0,
     missingProducts: 0,
     incompleteSpecs: 0,
+    newProducts: 0,
+    delistedProducts: 0,
+    relistedProducts: 0,
     coverage: "partial",
     specCoverage: "partial",
     pageRetries: 0,
@@ -115,6 +120,9 @@ export async function readCrawlStatus() {
     detailFailed: stored.detailFailed ?? 0,
     missingProducts: stored.missingProducts ?? 0,
     incompleteSpecs: stored.incompleteSpecs ?? 0,
+    newProducts: stored.newProducts ?? 0,
+    delistedProducts: stored.delistedProducts ?? 0,
+    relistedProducts: stored.relistedProducts ?? 0,
     coverage: stored.coverage ?? "partial",
     specCoverage: stored.specCoverage ?? "partial",
     pageRetries: stored.pageRetries ?? 0,
@@ -160,6 +168,39 @@ export function crawlPartChangeRecords(beforeCatalog: Part[], afterCatalog: Part
     const changedFields = meaningfulCatalogChangeFields(before, after);
     return changedFields.length > 0 ? [catalogChangeRecord("part", before, after, changedFields, { changedAt })] : [];
   });
+}
+
+function quoteInclusionNoteFor(part: Part) {
+  if (!isQuoteSelectable(part)) return isKnownPrice(part.priceWon) ? "견적 제외 · 스펙 미확인" : "견적 제외 · 가격 미확인";
+  const listingType = inferListingType(part);
+  if (!isListingAllowed(part, "retail_only")) {
+    return listingType === "retail" ? "견적 제외 · 카탈로그 분류 불일치" : `견적 제외 · ${LISTING_TYPE_LABELS[listingType]}`;
+  }
+  if (!isQuoteBrandAllowed(part.category, part.brand ?? part.name.split(" ")[0])) return "견적 제외 · 견적 브랜드 제한";
+  return "견적 포함";
+}
+
+// 필드 변경 이력과 별개로 "목록에 나타났다/사라졌다"를 기록한다 — 신규 상품은
+// 이전 카탈로그에 없던 키, 중단은 완료된 범주 수집에서 빠진 키, 재등록은 이전에
+// 중단 표시됐던 상품이 다시 수집된 경우다.
+export function crawlPresenceChangeRecords(beforeCatalog: Part[], collected: Part[], delisted: Part[], changedAt: string) {
+  const beforeByKey = new Map(beforeCatalog.map((part) => [catalogItemKey(part), part]));
+  const records: ReturnType<typeof catalogChangeRecord>[] = [];
+  for (const part of collected) {
+    const before = beforeByKey.get(catalogItemKey(part));
+    if (!before) {
+      records.push(catalogItemAddedRecord("part", part, { changedAt, quoteNote: quoteInclusionNoteFor(part) }));
+    } else if (before.delistedAt) {
+      records.push(catalogChangeRecord("part", before, part, [CATALOG_RELISTED_CHANGE_FIELD_LABEL], { changedAt }));
+    }
+  }
+  for (const part of delisted) {
+    const before = beforeByKey.get(catalogItemKey(part));
+    if (before && !before.delistedAt && part.delistedAt) {
+      records.push(catalogChangeRecord("part", before, part, [CATALOG_DELISTED_CHANGE_FIELD_LABEL], { changedAt }));
+    }
+  }
+  return records;
 }
 
 type DanawaCategoryConfig = (typeof DANAWA_CATEGORIES)[number];
@@ -226,6 +267,9 @@ function addCategoryReportToStatus(status: CrawlStatus, report: CrawlCategoryRep
   status.failedProducts += report.detailFailed;
   status.missingProducts += report.missingProducts;
   status.incompleteSpecs += report.incompleteSpecs;
+  status.newProducts = (status.newProducts ?? 0) + (report.newProducts ?? 0);
+  status.delistedProducts = (status.delistedProducts ?? 0) + (report.delistedProducts ?? 0);
+  status.relistedProducts = (status.relistedProducts ?? 0) + (report.relistedProducts ?? 0);
 }
 
 function addCategoryTelemetryToStatus(status: CrawlStatus, report: CrawlCategoryReport) {
@@ -241,6 +285,9 @@ function addCategoryReportToManifest(manifest: CrawlManifest, report: CrawlCateg
   manifest.totalDetailFailed += report.detailFailed;
   manifest.totalMissingProducts += report.missingProducts;
   manifest.totalIncompleteSpecs += report.incompleteSpecs;
+  manifest.totalNewProducts = (manifest.totalNewProducts ?? 0) + (report.newProducts ?? 0);
+  manifest.totalDelistedProducts = (manifest.totalDelistedProducts ?? 0) + (report.delistedProducts ?? 0);
+  manifest.totalRelistedProducts = (manifest.totalRelistedProducts ?? 0) + (report.relistedProducts ?? 0);
   manifest.totalPageRetries = (manifest.totalPageRetries ?? 0) + (report.pageRetries ?? 0);
   manifest.failedPages = [...(manifest.failedPages ?? []), ...(report.failedPages ?? [])];
 }
@@ -300,6 +347,9 @@ function manifestReportTotals(manifest: CrawlManifest) {
     detailFailed: totals.detailFailed + report.detailFailed,
     missingProducts: totals.missingProducts + report.missingProducts,
     incompleteSpecs: totals.incompleteSpecs + report.incompleteSpecs,
+    newProducts: totals.newProducts + (report.newProducts ?? 0),
+    delistedProducts: totals.delistedProducts + (report.delistedProducts ?? 0),
+    relistedProducts: totals.relistedProducts + (report.relistedProducts ?? 0),
     pageRetries: totals.pageRetries + (report.pageRetries ?? 0),
     failedPages: [...totals.failedPages, ...(report.failedPages ?? [])]
   }), {
@@ -311,6 +361,9 @@ function manifestReportTotals(manifest: CrawlManifest) {
     detailFailed: 0,
     missingProducts: 0,
     incompleteSpecs: 0,
+    newProducts: 0,
+    delistedProducts: 0,
+    relistedProducts: 0,
     pageRetries: 0,
     failedPages: [] as CrawlPageFailure[]
   });
@@ -324,6 +377,9 @@ function recalculateManifestTotals(manifest: CrawlManifest) {
   manifest.totalDetailFailed = totals.detailFailed;
   manifest.totalMissingProducts = totals.missingProducts;
   manifest.totalIncompleteSpecs = totals.incompleteSpecs;
+  manifest.totalNewProducts = totals.newProducts;
+  manifest.totalDelistedProducts = totals.delistedProducts;
+  manifest.totalRelistedProducts = totals.relistedProducts;
   manifest.totalPageRetries = totals.pageRetries;
   manifest.failedPages = totals.failedPages;
   const expectedCategoryCount = categoryConfigsFor(manifest.category).length;
@@ -361,6 +417,9 @@ function statusFromManifest(manifest: CrawlManifest, startedAt: string, operatio
     failedProducts: totals.detailFailed,
     missingProducts: totals.missingProducts,
     incompleteSpecs: totals.incompleteSpecs,
+    newProducts: totals.newProducts,
+    delistedProducts: totals.delistedProducts,
+    relistedProducts: totals.relistedProducts,
     coverage: manifest.coverage,
     specCoverage: manifest.specCoverage,
     ...(manifest.changeSummary ? { changeSummary: manifest.changeSummary } : {}),
@@ -428,7 +487,10 @@ function mergeCatalogChangeSummary(manifest: CrawlManifest, records: ReturnType<
         priceChangedProducts: previous.priceChangedProducts + next.priceChangedProducts,
         qualityChangedProducts: previous.qualityChangedProducts + next.qualityChangedProducts,
         missingFieldChangedProducts: previous.missingFieldChangedProducts + next.missingFieldChangedProducts,
-        specChangedProducts: previous.specChangedProducts + next.specChangedProducts
+        specChangedProducts: previous.specChangedProducts + next.specChangedProducts,
+        addedProducts: (previous.addedProducts ?? 0) + next.addedProducts,
+        delistedProducts: (previous.delistedProducts ?? 0) + next.delistedProducts,
+        relistedProducts: (previous.relistedProducts ?? 0) + next.relistedProducts
       }
     : next;
 }
@@ -441,8 +503,17 @@ async function persistPageRetryResult(manifest: CrawlManifest, category: PartCat
   let changedProducts = 0;
   if (!result.error && result.parts.length > 0) {
     const beforeCatalog = await loadCatalog();
-    const afterCatalog = await upsertCatalog(result.parts, { replaceDanawaCategories: [] });
-    const changes = crawlPartChangeRecords(beforeCatalog, afterCatalog, result.parts, new Date().toISOString());
+    const changedAt = new Date().toISOString();
+    const beforeByKey = new Map(beforeCatalog.map((existing) => [catalogItemKey(existing), existing]));
+    // 페이지 재시도로 목록 재등장이 확인된 상품도 중단 표시를 지운다.
+    const upsertParts = result.parts.map((item) =>
+      beforeByKey.get(catalogItemKey(item))?.delistedAt ? { ...item, delistedAt: undefined } : item
+    );
+    const afterCatalog = await upsertCatalog(upsertParts, { replaceDanawaCategories: [] });
+    const changes = [
+      ...crawlPartChangeRecords(beforeCatalog, afterCatalog, result.parts, changedAt),
+      ...crawlPresenceChangeRecords(beforeCatalog, result.parts, [], changedAt)
+    ];
     changedProducts = changes.length;
     if (changes.length > 0) await appendCatalogChangeRecords(changes);
     mergeCatalogChangeSummary(manifest, changes, result.parts.length);
@@ -521,6 +592,9 @@ async function runCrawlJobUnderLease(options: CrawlJobOptions = {}) {
       totalDetailFailed: 0,
       totalMissingProducts: 0,
       totalIncompleteSpecs: 0,
+      totalNewProducts: 0,
+      totalDelistedProducts: 0,
+      totalRelistedProducts: 0,
       totalPageRetries: 0,
       failedPages: [],
       categories: []
@@ -610,14 +684,39 @@ async function runCrawlJobUnderLease(options: CrawlJobOptions = {}) {
         };
         if (!options.dryRun && exhaustive) {
           const categoryBeforeCatalog = await loadCatalog();
-          const categoryAfterCatalog = await upsertCatalog(categoryResult.parts, {
+          const changedAt = new Date().toISOString();
+          const beforeByKey = new Map(categoryBeforeCatalog.map((existing) => [catalogItemKey(existing), existing]));
+          // 목록에 다시 나타난 상품은 이전 수집의 중단 표시를 지운다 — spread에서
+          // 키를 undefined로 덮어쓰면 payload에서 제거된다.
+          const upsertParts = categoryResult.parts.map((part) =>
+            beforeByKey.get(catalogItemKey(part))?.delistedAt ? { ...part, delistedAt: undefined } : part
+          );
+          // 완료된 범주 목록에서 사라진 다나와 상품은 삭제하지 않고 중단 시각만
+          // 남긴다 — 부분 수집은 목록 전체를 보지 못하므로 여기서 판별하지 않고,
+          // replaceDanawaCategories 대상에서 빠뜨리지 않도록 결과에 함께 넣는다.
+          const delistedParts: Part[] = [];
+          if (categoryResult.coverage === "complete") {
+            const seenKeys = new Set(categoryResult.parts.map(catalogItemKey));
+            for (const existing of categoryBeforeCatalog) {
+              if (existing.source !== "danawa" || existing.category !== config.category || seenKeys.has(catalogItemKey(existing))) continue;
+              delistedParts.push(existing.delistedAt ? existing : { ...existing, delistedAt: changedAt, updatedAt: changedAt });
+            }
+            upsertParts.push(...delistedParts);
+          }
+          const categoryAfterCatalog = await upsertCatalog(upsertParts, {
             // A partial exhaustive response is merged so an interrupted or
             // incomplete repair never deletes the existing live snapshot.
             replaceDanawaCategories: categoryResult.coverage === "complete" ? [config.category] : []
           });
-          const categoryChanges = crawlPartChangeRecords(categoryBeforeCatalog, categoryAfterCatalog, categoryResult.parts, new Date().toISOString());
+          const categoryChanges = [
+            ...crawlPartChangeRecords(categoryBeforeCatalog, categoryAfterCatalog, categoryResult.parts, changedAt),
+            ...crawlPresenceChangeRecords(categoryBeforeCatalog, categoryResult.parts, delistedParts, changedAt)
+          ];
           changeRecords.push(...categoryChanges);
           if (categoryChanges.length > 0) await appendCatalogChangeRecords(categoryChanges);
+          categoryReport.newProducts = categoryResult.parts.filter((part) => !beforeByKey.has(catalogItemKey(part))).length;
+          categoryReport.delistedProducts = delistedParts.filter((part) => part.delistedAt === changedAt).length;
+          categoryReport.relistedProducts = categoryResult.parts.filter((part) => beforeByKey.get(catalogItemKey(part))?.delistedAt !== undefined).length;
         }
         addCategoryReportToStatus(status, categoryReport);
         status.productsUpdated += categoryResult.parts.length;
@@ -632,17 +731,24 @@ async function runCrawlJobUnderLease(options: CrawlJobOptions = {}) {
 
       let afterCatalog = beforeCatalog;
       if (!options.dryRun && !exhaustive) {
-        afterCatalog = await upsertCatalog(collected, {
+        const crawlChangedAt = new Date().toISOString();
+        const beforeByKey = new Map(beforeCatalog.map((existing) => [catalogItemKey(existing), existing]));
+        const upsertParts = collected.map((part) =>
+          beforeByKey.get(catalogItemKey(part))?.delistedAt ? { ...part, delistedAt: undefined } : part
+        );
+        afterCatalog = await upsertCatalog(upsertParts, {
           replaceDanawaCategories: []
         });
-      }
-      if (!options.dryRun && exhaustive) afterCatalog = await loadCatalog();
-      if (!options.dryRun && !exhaustive) {
-        const crawlChangedAt = new Date().toISOString();
-        const finalChangeRecords = crawlPartChangeRecords(beforeCatalog, afterCatalog, collected, crawlChangedAt);
+        const finalChangeRecords = [
+          ...crawlPartChangeRecords(beforeCatalog, afterCatalog, collected, crawlChangedAt),
+          ...crawlPresenceChangeRecords(beforeCatalog, collected, [], crawlChangedAt)
+        ];
         changeRecords.push(...finalChangeRecords);
         if (finalChangeRecords.length > 0) await appendCatalogChangeRecords(finalChangeRecords);
+        status.newProducts = collected.filter((part) => !beforeByKey.has(catalogItemKey(part))).length;
+        status.relistedProducts = collected.filter((part) => beforeByKey.get(catalogItemKey(part))?.delistedAt !== undefined).length;
       }
+      if (!options.dryRun && exhaustive) afterCatalog = await loadCatalog();
       const changeSummary = catalogChangeSummary(changeRecords, collected.length);
       status.changeSummary = changeSummary;
       manifest.changeSummary = changeSummary;

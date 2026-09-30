@@ -15854,6 +15854,7 @@ button.metric-card:disabled { cursor: not-allowed; }
 
 .catalog-page:not(.filters-open) > .catalog-spec-filter-panel,
 .catalog-page:not(.filters-open) > .catalog-spec-preset,
+.catalog-page:not(.filters-open) > .catalog-detail-filter-panel,
 .catalog-page:not(.filters-open) > .catalog-brand-suggestions,
 .catalog-page:not(.filters-open) > .catalog-brand-filter-panel,
 .catalog-page:not(.filters-open) > .catalog-benchmark-sort-panel { display: none; }
@@ -16083,6 +16084,7 @@ html[data-theme="dark"] :where(
   .catalog-toolbar,
   .catalog-brand-filter-panel,
   .catalog-spec-filter-panel,
+  .catalog-detail-filter-panel,
   .catalog-spec-preset,
   .catalog-comparison-bar,
   .catalog-spec-comparison,
@@ -18517,9 +18519,29 @@ html[data-theme="dark"] .home-catalog-cache-item > div > strong {
 .price-trend-chart-tooltip { position: absolute; z-index: 5; display: grid; gap: 1px; padding: 6px 9px; border: 1px solid var(--line); border-radius: 9px; color: var(--ink); background: var(--surface, #fff); box-shadow: var(--small-shadow); transform: translate(-50%, calc(-100% - 9px)); pointer-events: none; white-space: nowrap; }
 .price-trend-chart-tooltip strong { font-family: "DM Mono", monospace; font-size: 11px; font-weight: 700; }
 .price-trend-chart-tooltip small { color: var(--muted); font-family: "DM Mono", monospace; font-size: 9px; text-align: center; }
+.price-trend-chart-tooltip em { font-style: normal; font-family: "DM Mono", monospace; font-size: 9px; font-weight: 600; text-align: center; }
+.price-trend-chart-tooltip em.increased { color: #d64550; }
+.price-trend-chart-tooltip em.decreased { color: #2e7268; }
 .price-trend-chart-tooltip[data-edge="left"] { transform: translate(-8%, calc(-100% - 9px)); }
 .price-trend-chart-tooltip[data-edge="right"] { transform: translate(-92%, calc(-100% - 9px)); }
 .price-trend-chart-labels { display: flex; justify-content: space-between; gap: 6px; padding: 1px 2px 0; color: #91a5b5; font-family: "DM Mono", monospace; font-size: 8px; }
+
+/* 부품 목록 로딩 — 스피너 대신 카드 모양 플레이스홀더를 띄워 전환을 부드럽게 한다 */
+.catalog-skeleton-wrap { display: grid; gap: 12px; padding: 6px 0; }
+.catalog-skeleton-status { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 11px; }
+.catalog-part-skeleton-list { display: grid; gap: 9px; }
+.catalog-part-skeleton { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; align-items: center; gap: 8px; min-width: 0; padding: 9px; border: 1px solid #e4ecee; border-radius: 9px; background: #f9fafb; }
+.catalog-part-skeleton-image, .catalog-part-skeleton-line, .catalog-part-skeleton-price { position: relative; overflow: hidden; border-radius: 6px; background: #e8eff3; }
+.catalog-part-skeleton-image { width: 64px; height: 64px; border-radius: 10px; }
+.catalog-part-skeleton-copy { display: grid; gap: 7px; }
+.catalog-part-skeleton-line { display: block; height: 11px; width: 55%; }
+.catalog-part-skeleton-line.wide { width: 82%; }
+.catalog-part-skeleton-price { display: block; width: 74px; height: 14px; }
+.catalog-part-skeleton-image::after, .catalog-part-skeleton-line::after, .catalog-part-skeleton-price::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .75), transparent); transform: translateX(-100%); animation: catalog-skeleton-shimmer 1.4s ease-in-out infinite; }
+@keyframes catalog-skeleton-shimmer { to { transform: translateX(100%); } }
+html[data-theme="dark"] .catalog-part-skeleton { border-color: var(--line) !important; background: var(--surface) !important; }
+html[data-theme="dark"] .catalog-part-skeleton-image, html[data-theme="dark"] .catalog-part-skeleton-line, html[data-theme="dark"] .catalog-part-skeleton-price { background: #232a35 !important; }
+html[data-theme="dark"] .catalog-part-skeleton-image::after, html[data-theme="dark"] .catalog-part-skeleton-line::after, html[data-theme="dark"] .catalog-part-skeleton-price::after { background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .08), transparent) !important; }
 .catalog-price-history-range, .build-price-trend-range { display: flex; gap: 5px; margin-top: 10px; }
 .catalog-price-history-range button, .build-price-trend-range button { min-height: 27px; padding: 0 9px; border: 1px solid #dce7ef; border-radius: 7px; color: #8197a8; background: #fff; font-size: 8px; cursor: pointer; }
 .catalog-price-history-range button:hover, .build-price-trend-range button:hover { border-color: #a7c6df; color: var(--teal-deep); }

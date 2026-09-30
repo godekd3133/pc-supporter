@@ -52,6 +52,9 @@ export function reconcileRefreshedPart(before: Part, parsed: Part) {
     priceCheckedAt: isKnownPrice(parsed.priceWon) ? refreshedAt : before.priceCheckedAt,
     imageUrl: parsed.imageUrl ?? before.imageUrl,
     rawSpecText: parsed.rawSpecText || before.rawSpecText,
+    // 목록 기반 중단 표시는 상세 페이지 재확인으로 지우지 않는다 — 단종 상품도
+    // 상세 페이지는 남아 있으므로 해제는 목록 재등장(크롤)에만 맡긴다.
+    ...(before.delistedAt ? { delistedAt: before.delistedAt } : {}),
     updatedAt: refreshedAt
   } satisfies Part;
 }

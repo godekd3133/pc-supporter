@@ -76,7 +76,8 @@ export function quoteBrandOptionsFor<T extends { brand: string }>(category: Part
 
 // 견적에는 가격이 확인되고 호환 판단에 필요한 사양이 모두 등록된 부품만 올린다.
 // 스펙이 덜 채워진 부품(incomplete, missingFields)은 호환 검증이 불가능하고
-// 가격이 없는 부품은 합계를 계산할 수 없어 견적 후보에서 모두 제외한다.
+// 가격이 없는 부품은 합계를 계산할 수 없으며, 다나와 목록에서 사라진 부품
+// (delistedAt)은 구할 수 없으므로 견적 후보에서 모두 제외한다.
 export function isQuoteSelectable(part: Part) {
-  return isKnownPrice(part.priceWon) && part.dataQuality !== "incomplete";
+  return isKnownPrice(part.priceWon) && part.dataQuality !== "incomplete" && !part.delistedAt;
 }

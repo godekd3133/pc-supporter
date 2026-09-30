@@ -235,6 +235,82 @@ export function engineTargetFiltersAllowPart(part: Part, config: EngineTargetFil
   return engineTargetFilterRuleAllowsPart(part, config.categories[part.category]);
 }
 
+// 범주 facet에 선언된 필드만 남긴다 — 다른 범주 링크를 재사용해도 선언되지
+// 않은 조건이 결과를 좁히지 않는다.
+export function engineTargetFilterRuleForCategory(rule: EngineCategoryTargetFilter | undefined, category: PartCategory): EngineCategoryTargetFilter | undefined {
+  if (!rule) return undefined;
+  const facets = ENGINE_TARGET_FILTER_FACETS[category];
+  const valueIds = new Set<string>(facets.filter((facet) => facet.kind === "values").map((facet) => facet.id));
+  const rangeIds = new Set<string>(facets.filter((facet) => facet.kind === "range").map((facet) => facet.id));
+  const flagIds = new Set<string>(facets.filter((facet) => facet.kind === "flag").map((facet) => facet.id));
+  const scoped: EngineCategoryTargetFilter = {};
+  if (rule.brands && rule.brands.length > 0 && facets.some((facet) => facet.kind === "brands")) scoped.brands = rule.brands;
+  if (rule.specValues) {
+    const entries = Object.entries(rule.specValues).filter(([field]) => valueIds.has(field));
+    if (entries.length > 0) scoped.specValues = Object.fromEntries(entries) as EngineCategoryTargetFilter["specValues"];
+  }
+  if (rule.numericRanges) {
+    const entries = Object.entries(rule.numericRanges).filter(([field]) => rangeIds.has(field));
+    if (entries.length > 0) scoped.numericRanges = Object.fromEntries(entries) as EngineCategoryTargetFilter["numericRanges"];
+  }
+  if (rule.flags) {
+    const entries = Object.entries(rule.flags).filter(([field]) => flagIds.has(field));
+    if (entries.length > 0) scoped.flags = Object.fromEntries(entries) as EngineCategoryTargetFilter["flags"];
+  }
+  if (rule.priceWon && facets.some((facet) => facet.kind === "price")) scoped.priceWon = rule.priceWon;
+  return engineCategoryTargetFilterIsEmpty(scoped) ? undefined : scoped;
+}
+
+export type EngineTargetFilterFacetDiagnostic = {
+  id: string;
+  label: string;
+  excludedCount: number;
+  missingCount: number;
+};
+
+// 공개 카탈로그의 세부 조건 패널 안내용 — 적용된 facet을 하나씩만 걸어 보면서
+// "이 조건이 후보를 몇 개 제외하는지", "비교 값이 없어 자동 제외된 부품이 몇 개인지"를 돌려준다.
+export function engineTargetFilterFacetDiagnosticsFor(parts: Part[], rule: EngineCategoryTargetFilter | undefined, category: PartCategory): EngineTargetFilterFacetDiagnostic[] {
+  if (!rule || engineCategoryTargetFilterIsEmpty(rule)) return [];
+  const diagnostics: EngineTargetFilterFacetDiagnostic[] = [];
+  for (const facet of ENGINE_TARGET_FILTER_FACETS[category]) {
+    let facetRule: EngineCategoryTargetFilter | undefined;
+    let missing: (part: Part) => boolean = () => false;
+    if (facet.kind === "brands") {
+      if (!rule.brands || rule.brands.length === 0) continue;
+      facetRule = { brands: rule.brands };
+      missing = (part) => !part.brand?.trim();
+    } else if (facet.kind === "values") {
+      const values = rule.specValues?.[facet.id];
+      if (!values || values.length === 0) continue;
+      facetRule = { specValues: { [facet.id]: values } };
+      missing = (part) => specFilterValuesFor(part, facet.id).length === 0;
+    } else if (facet.kind === "range") {
+      const ranges = rule.numericRanges?.[facet.id];
+      if (!ranges || ranges.length === 0) continue;
+      facetRule = { numericRanges: { [facet.id]: ranges } };
+      missing = (part) => typeof part.specs[facet.id as keyof PartSpecs] !== "number";
+    } else if (facet.kind === "flag") {
+      const expected = rule.flags?.[facet.id];
+      if (expected === undefined) continue;
+      facetRule = { flags: { [facet.id]: expected } };
+      missing = (part) => typeof part.specs[facet.id as keyof PartSpecs] !== "boolean";
+    } else if (facet.kind === "price") {
+      if (!rule.priceWon || (rule.priceWon.min === undefined && rule.priceWon.max === undefined)) continue;
+      facetRule = { priceWon: rule.priceWon };
+      missing = (part) => !isKnownPrice(part.priceWon);
+    }
+    if (!facetRule) continue;
+    diagnostics.push({
+      id: facet.id,
+      label: facet.label,
+      excludedCount: parts.filter((part) => !engineTargetFilterRuleAllowsPart(part, facetRule)).length,
+      missingCount: parts.filter(missing).length
+    });
+  }
+  return diagnostics;
+}
+
 // ---------- 정규화 ----------
 
 export type EngineTargetFiltersParseResult = {

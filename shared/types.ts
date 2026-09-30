@@ -763,6 +763,8 @@ export interface Part {
   updatedAt: string;
   /** Last time a live source price was successfully read. */
   priceCheckedAt?: string;
+  /** When a complete Danawa category crawl last stopped listing this product. */
+  delistedAt?: string;
   /** Runtime-only freshness classification added by catalog API responses. */
   dataFreshness?: DataFreshness;
 }
@@ -826,6 +828,9 @@ export interface CatalogChangeSummary {
   qualityChangedProducts: number;
   missingFieldChangedProducts: number;
   specChangedProducts: number;
+  addedProducts: number;
+  delistedProducts: number;
+  relistedProducts: number;
 }
 
 export type AlternativeRisk = "safe" | "review" | "unsafe";
@@ -1941,6 +1946,9 @@ export interface CrawlStatus {
   failedProducts: number;
   missingProducts: number;
   incompleteSpecs: number;
+  newProducts?: number;
+  delistedProducts?: number;
+  relistedProducts?: number;
   coverage: "partial" | "complete";
   specCoverage: "partial" | "complete";
   changeSummary?: CatalogChangeSummary;
@@ -1972,6 +1980,9 @@ export interface CrawlCategoryReport {
   detailFailed: number;
   missingProducts: number;
   incompleteSpecs: number;
+  newProducts?: number;
+  delistedProducts?: number;
+  relistedProducts?: number;
   coverage: "partial" | "complete";
   specCoverage: "partial" | "complete";
   lastSuccessfulPage?: number;
@@ -2014,6 +2025,9 @@ export interface CrawlManifest {
   totalDetailFailed: number;
   totalMissingProducts: number;
   totalIncompleteSpecs: number;
+  totalNewProducts?: number;
+  totalDelistedProducts?: number;
+  totalRelistedProducts?: number;
   totalPageRetries?: number;
   failedPages?: CrawlPageFailure[];
   pageRetryHistory?: CrawlPageRetryRecord[];

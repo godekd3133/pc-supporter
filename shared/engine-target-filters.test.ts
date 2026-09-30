@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Part } from "./types";
-import { emptyEngineTargetFiltersConfig, engineFilterOptionLabelFor, engineTargetFilterActiveFacetCount, engineTargetFilterConfigFromUnknown, engineTargetFiltersActiveCategories, engineTargetFiltersAllowPart } from "./engine-target-filters";
+import { emptyEngineTargetFiltersConfig, engineFilterOptionLabelFor, engineTargetFilterActiveFacetCount, engineTargetFilterConfigFromUnknown, engineTargetFilterFacetDiagnosticsFor, engineTargetFilterRuleForCategory, engineTargetFiltersActiveCategories, engineTargetFiltersAllowPart } from "./engine-target-filters";
 
 const partFixture = (overrides: Partial<Part> = {}): Part => ({
   id: "p-1",
@@ -133,5 +133,44 @@ describe("engineFilterOptionLabelFor", () => {
     expect(engineFilterOptionLabelFor("m2PcieGeneration", "4")).toBe("PCIe 4.0");
     expect(engineFilterOptionLabelFor("memoryModuleCountPerKit", "2")).toBe("2개 모듈");
     expect(engineFilterOptionLabelFor("socket", "AM5")).toBe("AM5");
+  });
+});
+
+describe("engineTargetFilterRuleForCategory", () => {
+  it("범주 facet에 선언된 필드만 남기고 나머지는 버린다", () => {
+    const scoped = engineTargetFilterRuleForCategory({
+      specValues: { socket: ["AM5"], gpuVendor: ["nvidia"] },
+      numericRanges: { cores: [{ min: 8 }], vramGb: [{ min: 12 }] },
+      flags: { integratedGraphics: true, wifi: true },
+      priceWon: { min: 100000 },
+      brands: ["AMD"]
+    }, "cpu");
+    expect(scoped).toEqual({
+      specValues: { socket: ["AM5"] },
+      numericRanges: { cores: [{ min: 8 }] },
+      flags: { integratedGraphics: true },
+      priceWon: { min: 100000 },
+      brands: ["AMD"]
+    });
+  });
+
+  it("모든 조건이 버려지면 규칙 자체가 사라진다", () => {
+    // gpu에는 socket·integratedGraphics facet이 없다.
+    expect(engineTargetFilterRuleForCategory({ specValues: { socket: ["AM5"] }, flags: { integratedGraphics: true } }, "gpu")).toBeUndefined();
+    expect(engineTargetFilterRuleForCategory(undefined, "ssd")).toBeUndefined();
+  });
+});
+
+describe("engineTargetFilterFacetDiagnosticsFor", () => {
+  it("적용된 facet별 제외·미등록 개수를 돌려준다", () => {
+    const parts = [
+      partFixture({ id: "a", specs: { interface: "NVMe", capacityGb: 1000 } }),
+      partFixture({ id: "b", specs: { interface: "SATA", capacityGb: 2000 } }),
+      partFixture({ id: "c", specs: { capacityGb: 500 } })
+    ];
+    const diagnostics = engineTargetFilterFacetDiagnosticsFor(parts, { specValues: { interface: ["NVMe"] } }, "ssd");
+    expect(diagnostics).toEqual([{ id: "interface", label: "인터페이스", excludedCount: 2, missingCount: 1 }]);
+    // 조건이 없으면 진단도 없다.
+    expect(engineTargetFilterFacetDiagnosticsFor(parts, {}, "ssd")).toEqual([]);
   });
 });

@@ -45,6 +45,8 @@ export function PriceTrendChart({ points, ariaLabel, testId }: { points: PriceTr
     setHoverIndex(nearest);
   };
   const hoverPoint = hoverIndex === null ? undefined : points[hoverIndex];
+  const previousPoint = hoverIndex !== null && hoverIndex > 0 ? points[hoverIndex - 1] : undefined;
+  const hoverDelta = hoverPoint && previousPoint ? hoverPoint.priceWon - previousPoint.priceWon : undefined;
   const tooltipLeftPercent = hoverIndex === null ? 0 : (xFor(hoverIndex) / width) * 100;
   const tooltipTopPercent = hoverIndex === null ? 0 : (yFor(hoverPoint!.priceWon) / height) * 100;
 
@@ -78,6 +80,7 @@ export function PriceTrendChart({ points, ariaLabel, testId }: { points: PriceTr
       >
         <strong>{formatWon(hoverPoint.priceWon)}</strong>
         <small>{shortDate(hoverPoint.at)}</small>
+        {hoverDelta !== undefined && hoverDelta !== 0 && <em className={hoverDelta > 0 ? "increased" : "decreased"}>직전 대비 {hoverDelta > 0 ? "+" : ""}{formatWon(hoverDelta)}</em>}
       </div>}
     </div>
     <div className="price-trend-chart-labels" aria-hidden="true">{labelIndexes.map((index) => <span key={`${points[index].at}-${index}`}>{shortDate(points[index].at)}</span>)}</div>

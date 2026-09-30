@@ -12,6 +12,8 @@ import { classifyDataFreshness } from "../shared/data-freshness";
 import { catalogMissingFieldLabelFor } from "../shared/catalog-spec-coverage";
 import type { CatalogSpecCoverageMissingField } from "../shared/catalog-spec-coverage";
 import { compatibilityFilterPresetFor } from "../shared/compatibility-filter-preset";
+import { engineFilterOptionLabelFor, engineFilterRangeEqual, engineTargetFilterRuleForCategory, ENGINE_TARGET_FILTER_FACETS } from "../shared/engine-target-filters";
+import type { EngineCategoryTargetFilter, EngineFilterRange, EngineTargetFilterFacet } from "../shared/engine-target-filters";
 import { quoteBrandOptionsFor } from "../shared/domain/listing";
 import { safeExternalUrl } from "../shared/safe-source-url";
 import { ApiError, api } from "./api";
@@ -37,7 +39,7 @@ type CatalogSpecFilter = {
   pcieSlotInfo: "all" | "complete" | "missing";
   interface: "all" | "NVMe" | "SATA";
 };
-type CatalogResponse = { items: CatalogPart[]; total: number; offset: number; limit: number; priceExcludedCount?: number; freshnessExcludedCount?: number; nonCoreExcludedCount?: number; categoryMismatchExcludedCount?: number; missingField?: string; incompleteExcludedCount?: number; incompleteMissingFields?: CatalogSpecCoverageMissingField[]; specFilter?: Partial<CatalogSpecFilter>; specExcludedCount?: number; specFilterDiagnostics?: Array<{ key: string; label: string; excludedCount: number; missingCount: number }>; riskExcludedCount?: number; riskCounts?: AlternativeRiskCounts; mode?: CatalogCandidateScope };
+type CatalogResponse = { items: CatalogPart[]; total: number; offset: number; limit: number; priceExcludedCount?: number; freshnessExcludedCount?: number; nonCoreExcludedCount?: number; categoryMismatchExcludedCount?: number; missingField?: string; incompleteExcludedCount?: number; incompleteMissingFields?: CatalogSpecCoverageMissingField[]; specFilter?: Partial<CatalogSpecFilter>; specExcludedCount?: number; specFilterDiagnostics?: Array<{ key: string; label: string; excludedCount: number; missingCount: number }>; detailExcludedCount?: number; detailFilterDiagnostics?: Array<{ id: string; label: string; excludedCount: number; missingCount: number }>; riskExcludedCount?: number; riskCounts?: AlternativeRiskCounts; mode?: CatalogCandidateScope };
 type CatalogComparisonShare = { id: string; url: string; ownerToken?: string; owned?: boolean; ownerManaged?: boolean; expiresAt?: string };
 type CatalogComparisonContext = AlternativeComparisonExportContext;
 type CatalogComparisonShareHandler = (candidates: AlternativeComparisonCandidate[], context?: { name?: string; category?: string; currentPartName?: string; currentPartSummary?: string; currentPartPrice?: string }) => Promise<CatalogComparisonShare | undefined>;
@@ -54,6 +56,157 @@ const CATALOG_PSU_WATTAGE_OPTIONS = [["", "전체"], ["500", "500W 이상"], ["6
 const CATALOG_PCIE_SLOT_WIDTH_OPTIONS = [["", "전체 슬롯 폭"], ["16", "x16 이상 사용 가능"], ["8", "x8 이상 사용 가능"], ["4", "x4 이상 사용 가능"], ["1", "x1 이상 사용 가능"]] as const;
 const CATALOG_PCIE_SLOT_INFO_OPTIONS = [["all", "전체"], ["complete", "사양 등록"], ["missing", "사양 미등록"]] as const;
 const MOBILE_CATALOG_CATEGORY_ORDER: PartCategory[] = ["cpu", "motherboard", "memory", "gpu", "ssd"];
+
+// 다나와식 세부 사양 조건 — 범주 facet 레지스트리(ENGINE_TARGET_FILTER_FACETS)를
+// 그대로 쓰고, 선택값은 쿼리 파라미터 dv./dr./df./db/dprice로 주고받는다.
+type CatalogDetailFilterDiagnostic = { id: string; label: string; excludedCount: number; missingCount: number };
+type CatalogFacetOption = { value: string; count: number };
+type CatalogFacetOptions = {
+  partCount: number;
+  brandOptions: CatalogFacetOption[];
+  facetOptions: Partial<Record<string, { options: CatalogFacetOption[]; missingCount: number }>>;
+  priceRange: { min: number; max: number } | null;
+};
+type CatalogFacetsResponse = { category: PartCategory; facets: EngineTargetFilterFacet[]; options: CatalogFacetOptions };
+const CATALOG_DETAIL_VALUE_PREFIX = "dv.";
+const CATALOG_DETAIL_RANGE_PREFIX = "dr.";
+const CATALOG_DETAIL_FLAG_PREFIX = "df.";
+const CATALOG_DETAIL_BRANDS_PARAM = "db";
+const CATALOG_DETAIL_PRICE_PARAM = "dprice";
+
+function detailRangeFromText(raw: string): EngineFilterRange {
+  const boundary = raw.indexOf("-");
+  const minRaw = (boundary < 0 ? raw : raw.slice(0, boundary)).trim();
+  const maxRaw = boundary < 0 ? "" : raw.slice(boundary + 1).trim();
+  const range: EngineFilterRange = {};
+  if (minRaw !== "") {
+    const min = Number(minRaw);
+    if (Number.isFinite(min)) range.min = min;
+  }
+  if (maxRaw !== "") {
+    const max = Number(maxRaw);
+    if (Number.isFinite(max)) range.max = max;
+  }
+  return range;
+}
+
+function detailRangeTextFor(range: EngineFilterRange) {
+  return `${range.min ?? ""}-${range.max ?? ""}`;
+}
+
+function initialCatalogDetailFilter(): EngineCategoryTargetFilter {
+  if (typeof window === "undefined") return {};
+  const params = new URLSearchParams(window.location.search);
+  const filter: EngineCategoryTargetFilter = {};
+  const specValues: Record<string, string[]> = {};
+  const numericRanges: Record<string, EngineFilterRange[]> = {};
+  const flags: Record<string, boolean> = {};
+  for (const [key, raw] of params.entries()) {
+    if (key === CATALOG_DETAIL_BRANDS_PARAM) {
+      const brands = raw.split(",").map((value) => value.trim()).filter(Boolean);
+      if (brands.length > 0) filter.brands = brands;
+      continue;
+    }
+    if (key === CATALOG_DETAIL_PRICE_PARAM) {
+      const range = detailRangeFromText(raw);
+      if (range.min !== undefined || range.max !== undefined) filter.priceWon = range;
+      continue;
+    }
+    if (key.startsWith(CATALOG_DETAIL_VALUE_PREFIX)) {
+      const field = key.slice(CATALOG_DETAIL_VALUE_PREFIX.length);
+      const values = raw.split(",").map((value) => value.trim()).filter(Boolean);
+      if (values.length > 0) specValues[field] = [...(specValues[field] ?? []), ...values];
+      continue;
+    }
+    if (key.startsWith(CATALOG_DETAIL_RANGE_PREFIX)) {
+      const field = key.slice(CATALOG_DETAIL_RANGE_PREFIX.length);
+      const ranges = raw.split(";").map((token) => token.trim()).filter(Boolean).map(detailRangeFromText).filter((range) => range.min !== undefined || range.max !== undefined);
+      if (ranges.length > 0) numericRanges[field] = [...(numericRanges[field] ?? []), ...ranges];
+      continue;
+    }
+    if (key.startsWith(CATALOG_DETAIL_FLAG_PREFIX)) {
+      const field = key.slice(CATALOG_DETAIL_FLAG_PREFIX.length);
+      const normalized = raw.trim().toLowerCase();
+      if (normalized === "1" || normalized === "true") flags[field] = true;
+      else if (normalized === "0" || normalized === "false") flags[field] = false;
+    }
+  }
+  if (Object.keys(specValues).length > 0) filter.specValues = specValues as EngineCategoryTargetFilter["specValues"];
+  if (Object.keys(numericRanges).length > 0) filter.numericRanges = numericRanges as EngineCategoryTargetFilter["numericRanges"];
+  if (Object.keys(flags).length > 0) filter.flags = flags as EngineCategoryTargetFilter["flags"];
+  return filter;
+}
+
+// 현재 범주 facet에 선언된 필드만 남긴다 — 다른 범주의 공유 링크가 열려도
+// 선언되지 않은 조건은 보내지 않는다(서버도 같은 규칙으로 걸러낸다).
+function catalogDetailFilterScopedFor(category: PartCategory, filter: EngineCategoryTargetFilter): EngineCategoryTargetFilter | undefined {
+  const scoped = engineTargetFilterRuleForCategory(filter, category);
+  return scoped;
+}
+
+function catalogDetailFilterParamsFor(category: PartCategory, filter: EngineCategoryTargetFilter): Record<string, string> {
+  const scoped = catalogDetailFilterScopedFor(category, filter);
+  const params: Record<string, string> = {};
+  if (!scoped) return params;
+  if (scoped.brands?.length) params[CATALOG_DETAIL_BRANDS_PARAM] = scoped.brands.join(",");
+  for (const [field, values] of Object.entries(scoped.specValues ?? {})) {
+    if (values && values.length > 0) params[`${CATALOG_DETAIL_VALUE_PREFIX}${field}`] = values.join(",");
+  }
+  for (const [field, ranges] of Object.entries(scoped.numericRanges ?? {})) {
+    if (ranges && ranges.length > 0) params[`${CATALOG_DETAIL_RANGE_PREFIX}${field}`] = ranges.map(detailRangeTextFor).join(";");
+  }
+  for (const [field, expected] of Object.entries(scoped.flags ?? {})) {
+    if (expected !== undefined) params[`${CATALOG_DETAIL_FLAG_PREFIX}${field}`] = expected ? "1" : "0";
+  }
+  if (scoped.priceWon && (scoped.priceWon.min !== undefined || scoped.priceWon.max !== undefined)) params[CATALOG_DETAIL_PRICE_PARAM] = detailRangeTextFor(scoped.priceWon);
+  return params;
+}
+
+type CatalogDetailFilterChip = { key: string; label: string; remove: (rule: EngineCategoryTargetFilter) => EngineCategoryTargetFilter };
+
+function toggleDetailString(list: string[] | undefined, value: string) {
+  const next = new Set(list ?? []);
+  if (next.has(value)) next.delete(value);
+  else next.add(value);
+  return [...next];
+}
+
+function toggleDetailRange(list: EngineFilterRange[] | undefined, range: EngineFilterRange) {
+  const current = list ?? [];
+  return current.some((existing) => engineFilterRangeEqual(existing, range)) ? current.filter((existing) => !engineFilterRangeEqual(existing, range)) : [...current, range];
+}
+
+function catalogDetailFilterChipsFor(category: PartCategory, filter: EngineCategoryTargetFilter): CatalogDetailFilterChip[] {
+  const scoped = catalogDetailFilterScopedFor(category, filter) ?? {};
+  const chips: CatalogDetailFilterChip[] = [];
+  const facetById = new Map<string, EngineTargetFilterFacet>(ENGINE_TARGET_FILTER_FACETS[category].map((facet) => [facet.id, facet]));
+  for (const brand of scoped.brands ?? []) {
+    chips.push({ key: `brand:${brand}`, label: brand, remove: (rule) => ({ ...rule, brands: (rule.brands ?? []).filter((value) => value !== brand) }) });
+  }
+  for (const [field, values] of Object.entries(scoped.specValues ?? {})) {
+    for (const value of values ?? []) {
+      chips.push({ key: `value:${field}:${value}`, label: `${facetById.get(field as EngineTargetFilterFacet["id"])?.label ?? field} · ${engineFilterOptionLabelFor(field, value)}`, remove: (rule) => ({ ...rule, specValues: { ...rule.specValues, [field]: ((rule.specValues?.[field as keyof NonNullable<typeof rule.specValues>] ?? []) as string[]).filter((item) => item !== value) } }) });
+    }
+  }
+  for (const [field, ranges] of Object.entries(scoped.numericRanges ?? {})) {
+    const facet = facetById.get(field as EngineTargetFilterFacet["id"]);
+    const unit = facet?.kind === "range" ? facet.unit ?? "" : "";
+    for (const range of ranges ?? []) {
+      const bounds = `${range.min ?? ""}~${range.max ?? ""}${unit ? ` ${unit}` : ""}`;
+      chips.push({ key: `range:${field}:${bounds}`, label: `${facet?.label ?? field} ${bounds}`, remove: (rule) => ({ ...rule, numericRanges: { ...rule.numericRanges, [field]: ((rule.numericRanges?.[field as keyof NonNullable<typeof rule.numericRanges>] ?? []) as EngineFilterRange[]).filter((item) => !engineFilterRangeEqual(item, range)) } }) });
+    }
+  }
+  for (const [field, expected] of Object.entries(scoped.flags ?? {})) {
+    if (expected === undefined) continue;
+    const facet = facetById.get(field as EngineTargetFilterFacet["id"]);
+    chips.push({ key: `flag:${field}`, label: facet?.kind === "flag" ? facet.optionLabel : facet?.label ?? field, remove: (rule) => ({ ...rule, flags: { ...rule.flags, [field]: undefined } }) });
+  }
+  if (scoped.priceWon && (scoped.priceWon.min !== undefined || scoped.priceWon.max !== undefined)) {
+    const label = `가격대 ${scoped.priceWon.min?.toLocaleString("ko-KR") ?? ""}~${scoped.priceWon.max?.toLocaleString("ko-KR") ?? ""}원`;
+    chips.push({ key: "price", label, remove: (rule) => ({ ...rule, priceWon: undefined }) });
+  }
+  return chips;
+}
 
 function candidateScopeDescription(scope: CatalogCandidateScope) {
   if (scope === "safe") return "현재 견적과 호환되는 부품만 표시합니다.";
@@ -493,10 +646,10 @@ function CatalogPartCard({ part, selected, compareSelected, showCompare, onSelec
   return <article className={selected ? "catalog-part-card selected" : "catalog-part-card"}>
     <button className="catalog-part-card-main" type="button" data-testid={`catalog-part-${part.id}`} onClick={onSelect}>
       <span className="catalog-part-card-image"><CatalogPartVisual part={part} /></span>
-      <span className="catalog-part-card-copy"><strong>{part.name}</strong><small>{part.source === "seed" && !safeExternalUrl(part.imageUrl) ? "예시 부품" : part.brand ?? part.model ?? CATEGORY_LABELS[part.category]}</small><span>{compactSummary(part)}</span>{part.candidateRisk && <em className={`catalog-candidate-risk ${part.candidateRisk}`}>{candidateRiskLabel(part.candidateRisk)}</em>}{part.decision && <em className={`catalog-candidate-decision ${part.decision.status}`}>호환 기준 · {part.decision.label}</em>}</span>
+      <span className="catalog-part-card-copy"><strong>{part.name}</strong><small>{part.source === "seed" && !safeExternalUrl(part.imageUrl) ? "예시 부품" : part.brand ?? part.model ?? CATEGORY_LABELS[part.category]}</small><span>{compactSummary(part)}</span>{part.delistedAt && <em className="catalog-delisted-badge" data-testid={`catalog-delisted-${part.id}`}>판매 중단 추정</em>}{part.candidateRisk && <em className={`catalog-candidate-risk ${part.candidateRisk}`}>{candidateRiskLabel(part.candidateRisk)}</em>}{part.decision && <em className={`catalog-candidate-decision ${part.decision.status}`}>호환 기준 · {part.decision.label}</em>}</span>
       <span className="catalog-part-card-price">{priceLabel(part.priceWon)}{priceEvidence !== "unknown" && <small className={`catalog-detail-price-evidence ${priceEvidence}`} data-testid={`catalog-price-evidence-${part.id}`}>{catalogPriceEvidenceLabelFor(part)}</small>}</span>
     </button>
-    <div className="catalog-part-card-actions">{sourceUrl && <a href={sourceUrl} target="_blank" rel="noreferrer" aria-label={`${part.name} 상품 페이지 보기`}>상품 페이지 <FiExternalLink /></a>}{onWatchPart && <CatalogWatchButton part={part} onWatch={onWatchPart} isWatched={isPartWatched} />}{showCompare && <button className={compareSelected ? "button button-small catalog-part-compare selected" : "button button-small catalog-part-compare"} type="button" aria-pressed={compareSelected} data-testid={`catalog-compare-${part.id}`} onClick={onToggleCompare}>{compareSelected ? <><FiCheck /> 비교 중</> : <><FiLayers /> 비교</>}</button>}<button className="button button-small catalog-part-add" type="button" onClick={onAdd} disabled={selected || blocked || priceMissing}>{blocked ? "호환 불가 · 적용할 수 없어요" : selected ? <><FiCheck /> 현재 선택</> : priceMissing ? "가격 없음 · 추가할 수 없어요" : <><FiPlus /> 견적에 추가</>}</button></div>
+    <div className="catalog-part-card-actions">{sourceUrl && <a href={sourceUrl} target="_blank" rel="noreferrer" aria-label={`${part.name} 상품 페이지 보기`}>상품 페이지 <FiExternalLink /></a>}{onWatchPart && <CatalogWatchButton part={part} onWatch={onWatchPart} isWatched={isPartWatched} />}{showCompare && <button className={compareSelected ? "button button-small catalog-part-compare selected" : "button button-small catalog-part-compare"} type="button" aria-pressed={compareSelected} data-testid={`catalog-compare-${part.id}`} onClick={onToggleCompare}>{compareSelected ? <><FiCheck /> 비교 중</> : <><FiLayers /> 비교</>}</button>}<button className="button button-small catalog-part-add" type="button" onClick={onAdd} disabled={selected || blocked || priceMissing || Boolean(part.delistedAt)}>{part.delistedAt ? "판매 중단 · 추가할 수 없어요" : blocked ? "호환 불가 · 적용할 수 없어요" : selected ? <><FiCheck /> 현재 선택</> : priceMissing ? "가격 없음 · 추가할 수 없어요" : <><FiPlus /> 견적에 추가</>}</button></div>
   </article>;
 }
 
@@ -513,11 +666,12 @@ function CatalogPartDetail({ part, priceHistory, priceHistoryLoading, priceHisto
     <CatalogPriceHistoryPanel part={part} history={priceHistory} loading={priceHistoryLoading} error={priceHistoryError} />
     {part.candidateRisk && <div className={`catalog-candidate-summary ${part.candidateRisk}`}><strong>{candidateRiskLabel(part.candidateRisk)}</strong><small className="catalog-candidate-scope-note">현재 견적 기준</small><span>{candidateDetailSummary(part) || "현재 견적과의 호환 정보예요."}</span>{part.candidateReasons && part.candidateReasons.length > 0 && <small>호환 정보 · {part.candidateReasons.slice(0, 2).join(" · ")}</small>}{part.remainingBlockers !== undefined && <small>남은 항목 · 호환 불가 {part.remainingBlockers} · 주의 {part.remainingWarnings ?? 0} · 정보 부족 {part.remainingUnknown ?? 0}</small>}</div>}
     <CatalogSimilarityEvidencePanel part={part} />
+    {part.delistedAt && <p className="catalog-detail-delisted" role="status"><FiInfo /> 다나와 부품 목록에서 사라진 상품으로 확인돼요 · 마지막 표시 가격이며 최신 정보가 아닐 수 있어요 · 감지 {new Date(part.delistedAt).toLocaleDateString("ko-KR")}</p>}
     <div className="catalog-detail-price"><div><span>가격</span><small className={`catalog-detail-price-evidence ${priceEvidence}`} data-testid={`catalog-price-evidence-${part.id}`}>{priceEvidence !== "unknown" && `${catalogPriceEvidenceLabelFor(part)} · `}{catalogPriceEvidenceDescriptionFor(part)}</small></div><strong>{priceLabel(part.priceWon)}</strong></div>
     <dl className="catalog-detail-specs">{specRowsFor(part).map(([label, value]) => <div key={`${label}-${value}`}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
     {part.missingFields.length > 0 && <p className="catalog-detail-missing"><FiInfo /> 정보가 없는 사양 {part.missingFields.slice(0, 5).map((field) => catalogMissingFieldLabelFor(field)).join(", ")}{part.missingFields.length > 5 ? ` 외 ${part.missingFields.length - 5}개` : ""}</p>}
 
-    <div className="catalog-detail-actions">{onWatchPart && <CatalogWatchButton part={part} onWatch={onWatchPart} isWatched={isPartWatched} />}{onOpenWatchlist && <button className="button button-light" type="button" onClick={onOpenWatchlist}><FiClock /> 가격 추적 화면</button>}{showCompare && <button className={compareSelected ? "button button-light catalog-detail-compare selected" : "button button-light catalog-detail-compare"} type="button" aria-pressed={compareSelected} onClick={onToggleCompare}>{compareSelected ? <><FiCheck /> 비교에서 제외</> : <><FiLayers /> 비교에 추가</>}</button>}<button className="button button-primary" type="button" onClick={onAdd} disabled={selected || blocked || priceMissing}>{blocked ? "호환 불가 · 적용할 수 없어요" : selected ? <><FiCheck /> 현재 견적에 선택됨</> : priceMissing ? "가격 없음 · 추가할 수 없어요" : <><FiPlus /> 현재 견적에 추가</>}</button><button className="button button-light" type="button" onClick={onOpenBuild}><FiActivity /> 내 견적에서 보기</button>{onRefresh && part.source === "danawa" && part.sourceProductCode && part.danawaUrl && <button className="button button-light catalog-detail-refresh" type="button" data-testid="catalog-refresh-part" onClick={onRefresh} disabled={refreshing}>{refreshing ? <><FiLoader className="spin" /> 불러오는 중...</> : <><FiRefreshCw /> 가격·사양 새로 불러오기</>}</button>}{sourceUrl && <a className="button button-light" href={sourceUrl} target="_blank" rel="noreferrer"><FiExternalLink /> 상품 페이지 열기</a>}</div>
+    <div className="catalog-detail-actions">{onWatchPart && <CatalogWatchButton part={part} onWatch={onWatchPart} isWatched={isPartWatched} />}{onOpenWatchlist && <button className="button button-light" type="button" onClick={onOpenWatchlist}><FiClock /> 가격 추적 화면</button>}{showCompare && <button className={compareSelected ? "button button-light catalog-detail-compare selected" : "button button-light catalog-detail-compare"} type="button" aria-pressed={compareSelected} onClick={onToggleCompare}>{compareSelected ? <><FiCheck /> 비교에서 제외</> : <><FiLayers /> 비교에 추가</>}</button>}<button className="button button-primary" type="button" onClick={onAdd} disabled={selected || blocked || priceMissing || Boolean(part.delistedAt)}>{part.delistedAt ? "판매 중단 · 추가할 수 없어요" : blocked ? "호환 불가 · 적용할 수 없어요" : selected ? <><FiCheck /> 현재 견적에 선택됨</> : priceMissing ? "가격 없음 · 추가할 수 없어요" : <><FiPlus /> 현재 견적에 추가</>}</button><button className="button button-light" type="button" onClick={onOpenBuild}><FiActivity /> 내 견적에서 보기</button>{onRefresh && part.source === "danawa" && part.sourceProductCode && part.danawaUrl && <button className="button button-light catalog-detail-refresh" type="button" data-testid="catalog-refresh-part" onClick={onRefresh} disabled={refreshing}>{refreshing ? <><FiLoader className="spin" /> 불러오는 중...</> : <><FiRefreshCw /> 가격·사양 새로 불러오기</>}</button>}{sourceUrl && <a className="button button-light" href={sourceUrl} target="_blank" rel="noreferrer"><FiExternalLink /> 상품 페이지 열기</a>}</div>
     {(refreshMessage || refreshError) && <p className={refreshError ? "catalog-detail-refresh-status error" : "catalog-detail-refresh-status"} role={refreshError ? "alert" : "status"}><FiInfo /> {refreshError ?? refreshMessage}</p>}
     {refreshDiffs !== undefined && refreshDiffs !== null && <CatalogRefreshDiffPanel diffs={refreshDiffs} kind="part" />}
     {blocked && <p className="catalog-detail-blocked-note"><FiInfo /> 현재 견적과 호환되지 않아 추가할 수 없어요.</p>}
@@ -547,6 +701,168 @@ function CatalogSpecFilterPanel({ category, filter, specExcludedCount, specFilte
 function CatalogSpecPresetAction({ preset, onApply }: { preset: ReturnType<typeof catalogCompatibilityPresetFor>; onApply: (values: Partial<CatalogSpecFilter>) => void }) {
   if (!preset.summary) return null;
   return <div className="catalog-spec-preset" data-testid="catalog-spec-preset"><div><strong>현재 구성에 맞는 조건</strong><small>{preset.summary}</small></div><button className="button button-small button-light" type="button" data-testid="catalog-apply-spec-preset" onClick={() => onApply(preset.values)}>조건 적용</button>{preset.omitted.length > 0 && <p><FiInfo /> 입력하지 않은 조건: {preset.omitted.join(" · ")}</p>}</div>;
+}
+
+// 다나와 스타일의 범주별 세부 사양 필터 패널 — 서버가 범주 facet과 실제
+// 카탈로그 선택지(개수 포함)를 내려주면 체크박스/버킷/범위 입력으로 고른다.
+function CatalogDetailFilterPanel({ category, filter, facetOptions, loading, error, detailExcludedCount, detailDiagnostics, onChange, onReset, onRetry }: {
+  category: PartCategory;
+  filter: EngineCategoryTargetFilter;
+  facetOptions: CatalogFacetOptions | null;
+  loading: boolean;
+  error: string | null;
+  detailExcludedCount: number;
+  detailDiagnostics: CatalogDetailFilterDiagnostic[];
+  onChange: (next: EngineCategoryTargetFilter) => void;
+  onReset: () => void;
+  onRetry: () => void;
+}) {
+  const facets = ENGINE_TARGET_FILTER_FACETS[category];
+  const rule = catalogDetailFilterScopedFor(category, filter) ?? {};
+  const chips = catalogDetailFilterChipsFor(category, filter);
+  const apply = (next: EngineCategoryTargetFilter) => onChange(catalogDetailFilterScopedFor(category, next) ?? {});
+  const missingNotes = detailDiagnostics.filter((diagnostic) => diagnostic.missingCount > 0).slice(0, 4);
+
+  const renderValuesFacet = (facet: Extract<EngineTargetFilterFacet, { kind: "values" }>) => {
+    const selected = rule.specValues?.[facet.id] ?? [];
+    const optionSet = facetOptions?.facetOptions?.[facet.id];
+    const knownValues = new Set((optionSet?.options ?? []).map((option) => option.value));
+    const extraValues = selected.filter((value) => !knownValues.has(value));
+    const options = [...(optionSet?.options ?? []), ...extraValues.map((value) => ({ value, count: 0 }))];
+    if (options.length === 0) return <p className="catalog-detail-facet-empty">등록된 값이 없는 조건입니다.</p>;
+    return <>
+      <div className="catalog-detail-facet-options">
+        {options.map((option) => {
+          const checked = selected.includes(option.value);
+          return <label key={option.value} className={`catalog-facet-option${checked ? " checked" : ""}`}>
+            <input
+              type="checkbox"
+              checked={checked}
+              data-testid={`catalog-detail-facet-${facet.id}-${option.value}`}
+              onChange={() => apply({ ...rule, specValues: { ...rule.specValues, [facet.id]: toggleDetailString(selected, option.value) } })}
+            />
+            <span>{engineFilterOptionLabelFor(facet.id, option.value)}</span>
+            {option.count > 0 && <em>{option.count.toLocaleString("ko-KR")}</em>}
+          </label>;
+        })}
+      </div>
+      {(optionSet?.missingCount ?? 0) > 0 && <small className="catalog-detail-facet-missing">값 미등록 {optionSet!.missingCount.toLocaleString("ko-KR")}개 — 선택하면 자동으로 제외됩니다.</small>}
+    </>;
+  };
+
+  const renderRangeFacet = (facet: Extract<EngineTargetFilterFacet, { kind: "range" }>) => {
+    const ranges = rule.numericRanges?.[facet.id] ?? [];
+    const first = ranges[0] ?? {};
+    const setBound = (bound: "min" | "max", raw: string) => {
+      const value = raw.trim() === "" ? undefined : Number(raw);
+      if (value !== undefined && (!Number.isFinite(value) || value < 0)) return;
+      const next = { ...first };
+      if (value === undefined) delete next[bound];
+      else next[bound] = value;
+      apply({ ...rule, numericRanges: { ...rule.numericRanges, [facet.id]: next.min === undefined && next.max === undefined ? [] : [next] } });
+    };
+    return <>
+      {facet.buckets && facet.buckets.length > 0 && (
+        <div className="catalog-detail-facet-options">
+          {facet.buckets.map((bucket) => {
+            const checked = ranges.some((range) => engineFilterRangeEqual(range, { min: bucket.min, max: bucket.max }));
+            return <label key={bucket.label} className={`catalog-facet-option${checked ? " checked" : ""}`}>
+              <input
+                type="checkbox"
+                checked={checked}
+                data-testid={`catalog-detail-facet-${facet.id}-${bucket.label}`}
+                onChange={() => apply({ ...rule, numericRanges: { ...rule.numericRanges, [facet.id]: toggleDetailRange(ranges, { min: bucket.min, max: bucket.max }) } })}
+              />
+              <span>{bucket.label}</span>
+            </label>;
+          })}
+        </div>
+      )}
+      <div className="catalog-detail-facet-range-inputs">
+        <input type="number" min="0" inputMode="numeric" aria-label={`${facet.label} 최소`} placeholder="최소" value={first.min ?? ""} onChange={(event) => setBound("min", event.target.value)} />
+        <span>~</span>
+        <input type="number" min="0" inputMode="numeric" aria-label={`${facet.label} 최대`} placeholder="최대" value={first.max ?? ""} onChange={(event) => setBound("max", event.target.value)} />
+        {facet.unit && <em>{facet.unit}</em>}
+      </div>
+    </>;
+  };
+
+  const renderFacetBody = (facet: EngineTargetFilterFacet) => {
+    if (facet.kind === "brands") {
+      const options = facetOptions?.brandOptions ?? [];
+      const selected = new Set(rule.brands ?? []);
+      const extraBrands = (rule.brands ?? []).filter((brand) => !options.some((option) => option.value === brand));
+      const rows = [...options, ...extraBrands.map((value) => ({ value, count: 0 }))];
+      if (rows.length === 0) return <p className="catalog-detail-facet-empty">등록된 제조사가 없습니다.</p>;
+      return <div className="catalog-detail-facet-options">
+        {rows.map((option) => {
+          const checked = selected.has(option.value);
+          return <label key={option.value} className={`catalog-facet-option${checked ? " checked" : ""}`}>
+            <input
+              type="checkbox"
+              checked={checked}
+              data-testid={`catalog-detail-facet-brand-${option.value}`}
+              onChange={() => apply({ ...rule, brands: toggleDetailString(rule.brands, option.value) })}
+            />
+            <span>{option.value}</span>
+            {option.count > 0 && <em>{option.count.toLocaleString("ko-KR")}</em>}
+          </label>;
+        })}
+      </div>;
+    }
+    if (facet.kind === "values") return renderValuesFacet(facet);
+    if (facet.kind === "range") return renderRangeFacet(facet);
+    if (facet.kind === "flag") {
+      const checked = rule.flags?.[facet.id] === true;
+      return <label className={`catalog-facet-option flag${checked ? " checked" : ""}`}>
+        <input
+          type="checkbox"
+          checked={checked}
+          data-testid={`catalog-detail-facet-${facet.id}`}
+          onChange={(event) => apply({ ...rule, flags: { ...rule.flags, [facet.id]: event.target.checked ? true : undefined } })}
+        />
+        <span>{facet.optionLabel}</span>
+      </label>;
+    }
+    const price = rule.priceWon ?? {};
+    const priceRange = facetOptions?.priceRange;
+    const setPriceBound = (bound: "min" | "max", raw: string) => {
+      const value = raw.trim() === "" ? undefined : Number(raw);
+      if (value !== undefined && (!Number.isFinite(value) || value < 0)) return;
+      const next = { ...price };
+      if (value === undefined) delete next[bound];
+      else next[bound] = value;
+      apply({ ...rule, priceWon: next.min === undefined && next.max === undefined ? undefined : next });
+    };
+    return <div className="catalog-detail-facet-range-inputs">
+      <input type="number" min="0" inputMode="numeric" aria-label="가격대 최소" placeholder={priceRange ? `최소 ${priceRange.min.toLocaleString("ko-KR")}` : "최소 가격"} value={price.min ?? ""} onChange={(event) => setPriceBound("min", event.target.value)} />
+      <span>~</span>
+      <input type="number" min="0" inputMode="numeric" aria-label="가격대 최대" placeholder={priceRange ? `최대 ${priceRange.max.toLocaleString("ko-KR")}` : "최대 가격"} value={price.max ?? ""} onChange={(event) => setPriceBound("max", event.target.value)} />
+      <em>원</em>
+    </div>;
+  };
+
+  return <section className="catalog-detail-filter-panel" aria-label="카탈로그 세부 사양 필터" data-testid="catalog-detail-filters">
+    <div className="catalog-spec-filter-heading">
+      <div><strong>세부 사양 조건</strong><small>다나와처럼 범주별 세부 스펙을 골라요. 같은 조건 안의 선택지는 OR, 다른 조건끼리는 AND로 적용돼요.</small></div>
+      <button className="text-button" type="button" data-testid="catalog-clear-detail-filters" onClick={onReset} disabled={chips.length === 0}>조건 초기화</button>
+    </div>
+    {loading && !facetOptions
+      ? <p className="catalog-detail-facet-state" role="status"><FiLoader className="spin" /> 세부 조건을 불러오는 중...</p>
+      : error && !facetOptions
+        ? <p className="catalog-detail-facet-state error" role="alert"><FiInfo /> {error} <button className="text-button" type="button" onClick={onRetry}>다시 불러오기</button></p>
+        : <div className="catalog-detail-facet-list">
+            {facets.map((facet) => <div className="catalog-detail-facet" key={facet.id}>
+              <div className="catalog-detail-facet-label"><span>{facet.label}</span></div>
+              <div className="catalog-detail-facet-body">{renderFacetBody(facet)}</div>
+            </div>)}
+          </div>}
+    {chips.length > 0 && <div className="catalog-detail-filter-chips" data-testid="catalog-detail-filter-chips">
+      <span className="catalog-detail-filter-chips-label">선택 조건 {chips.length}개{detailExcludedCount > 0 ? ` · ${detailExcludedCount.toLocaleString("ko-KR")}개 제외` : ""}</span>
+      {chips.map((chip) => <button key={chip.key} type="button" className="catalog-detail-filter-chip" data-testid={`catalog-detail-chip-${chip.key}`} onClick={() => apply(chip.remove(rule))} aria-label={`${chip.label} 조건 해제`}>{chip.label}<FiTrash2 aria-hidden="true" /></button>)}
+    </div>}
+    {missingNotes.length > 0 && <p className="catalog-spec-filter-missing" role="status"><FiInfo /> 비교 값이 없어 제외된 부품 {missingNotes.map((item) => `${item.label} ${item.missingCount.toLocaleString("ko-KR")}개`).join(" · ")}</p>}
+  </section>;
 }
 
 function catalogComparisonSpecRowsFor(parts: CatalogPart[]) {
@@ -649,6 +965,11 @@ export function CatalogView({ meta, build, partMap, profile, gamingResolution, g
   const [sort, setSort] = useState<CatalogSort>(initialCatalogSort);
   const [page, setPage] = useState(initialCatalogPage);
   const [specFilter, setSpecFilter] = useState<CatalogSpecFilter>(initialCatalogSpecFilter);
+  const [detailFilter, setDetailFilter] = useState<EngineCategoryTargetFilter>(initialCatalogDetailFilter);
+  const [facetOptions, setFacetOptions] = useState<CatalogFacetOptions | null>(null);
+  const [facetsLoading, setFacetsLoading] = useState(true);
+  const [facetsError, setFacetsError] = useState<string | null>(null);
+  const [facetsNonce, setFacetsNonce] = useState(0);
   const [items, setItems] = useState<CatalogPart[]>([]);
   const [total, setTotal] = useState(0);
   const [priceExcludedCount, setPriceExcludedCount] = useState(0);
@@ -677,6 +998,8 @@ export function CatalogView({ meta, build, partMap, profile, gamingResolution, g
   const [incompleteMissingFields, setIncompleteMissingFields] = useState<CatalogSpecCoverageMissingField[]>([]);
   const [specExcludedCount, setSpecExcludedCount] = useState(0);
   const [specFilterDiagnostics, setSpecFilterDiagnostics] = useState<Array<{ key: string; label: string; excludedCount: number; missingCount: number }>>([]);
+  const [detailExcludedCount, setDetailExcludedCount] = useState(0);
+  const [detailFilterDiagnostics, setDetailFilterDiagnostics] = useState<CatalogDetailFilterDiagnostic[]>([]);
   const [refreshingPartId, setRefreshingPartId] = useState<string | null>(null);
   const [refreshPartMessage, setRefreshPartMessage] = useState<string | null>(null);
   const [refreshPartError, setRefreshPartError] = useState<string | null>(null);
@@ -721,10 +1044,11 @@ export function CatalogView({ meta, build, partMap, profile, gamingResolution, g
     if (page > 0) params.set("page", String(page + 1));
     if (mode === "compatible" || catalogSort !== "price_asc") params.set("sort", catalogSort);
     Object.entries(catalogSpecFilterPayloadFor(category, specFilter)).forEach(([key, value]) => params.set(key, value));
+    Object.entries(catalogDetailFilterParamsFor(category, detailFilter)).forEach(([key, value]) => params.set(key, value));
     const nextSearch = params.toString();
     const nextUrl = `/catalog${nextSearch ? `?${nextSearch}` : ""}`;
     const currentUrl = window.location.pathname + window.location.search;
-    const filterKey = [candidateScope, category, mode, partId ?? "", quality, missingField, freshness, priceStatus, listingPolicy, catalogSort, query, brand, JSON.stringify(catalogSpecFilterPayloadFor(category, specFilter))].join("\u0000");
+    const filterKey = [candidateScope, category, mode, partId ?? "", quality, missingField, freshness, priceStatus, listingPolicy, catalogSort, query, brand, JSON.stringify(catalogSpecFilterPayloadFor(category, specFilter)), JSON.stringify(catalogDetailFilterParamsFor(category, detailFilter))].join("\u0000");
     const catalogTextFilterKey = [query, brand].join("\u0001");
     const queryChanged = previousCatalogFilterQueryRef.current !== null && previousCatalogFilterQueryRef.current !== catalogTextFilterKey;
     const clearQueryHistoryTimer = () => {
@@ -770,10 +1094,10 @@ export function CatalogView({ meta, build, partMap, profile, gamingResolution, g
     }
     previousCatalogUrlRef.current = nextUrl;
     previousCatalogFilterQueryRef.current = catalogTextFilterKey;
-  }, [brand, candidateScope, category, catalogSort, freshness, listingPolicy, missingField, mode, page, partId, priceStatus, quality, query, sort, specFilter]);
+  }, [brand, candidateScope, category, catalogSort, detailFilter, freshness, listingPolicy, missingField, mode, page, partId, priceStatus, quality, query, sort, specFilter]);
 
   useEffect(() => {
-    const filterKey = [candidateScope, category, mode, partId ?? "", quality, missingField, freshness, priceStatus, listingPolicy, catalogSort, query, brand, JSON.stringify(catalogSpecFilterPayloadFor(category, specFilter))].join("\u0000");
+    const filterKey = [candidateScope, category, mode, partId ?? "", quality, missingField, freshness, priceStatus, listingPolicy, catalogSort, query, brand, JSON.stringify(catalogSpecFilterPayloadFor(category, specFilter)), JSON.stringify(catalogDetailFilterParamsFor(category, detailFilter))].join("\u0000");
     const restoringFilter = restoreCatalogFilterRef.current;
     if (previousCatalogFilterKeyRef.current === null) {
       previousCatalogFilterKeyRef.current = filterKey;
@@ -798,7 +1122,7 @@ export function CatalogView({ meta, build, partMap, profile, gamingResolution, g
     setComparePartsById({});
     setCatalogComparisonOpen(false);
     restoreCatalogFilterRef.current = false;
-  }, [brand, candidateScope, category, catalogSort, mode, partId, quality, missingField, freshness, priceStatus, listingPolicy, sort, query, specFilter]);
+  }, [brand, candidateScope, category, catalogSort, detailFilter, mode, partId, quality, missingField, freshness, priceStatus, listingPolicy, sort, query, specFilter]);
 
   useEffect(() => {
     const onPopState = () => {
@@ -819,6 +1143,7 @@ export function CatalogView({ meta, build, partMap, profile, gamingResolution, g
       setSort(initialCatalogSort());
       setPage(initialCatalogPage());
       setSpecFilter(initialCatalogSpecFilter());
+      setDetailFilter(initialCatalogDetailFilter());
       setFiltersOpen(catalogFiltersRequestedByUrl());
     };
     window.addEventListener("popstate", onPopState);
@@ -866,22 +1191,39 @@ export function CatalogView({ meta, build, partMap, profile, gamingResolution, g
       setIncompleteMissingFields([]);
       setSpecExcludedCount(0);
       setSpecFilterDiagnostics([]);
+      setDetailExcludedCount(0);
+      setDetailFilterDiagnostics([]);
       const request = mode === "compatible"
-        ? api<CatalogResponse>("/api/parts/compatible", { method: "POST", body: JSON.stringify({ category, build, profile, gamingResolution, gamingRefreshRate, q: query.trim(), brand: brand.trim(), quality, freshness, priceStatus, listingPolicy, sort, mode: candidateScope, riskFilter: "all", performanceFilter: "all", physicalEvidenceFilter: "all", recommendationTrustFilter: "all", specFilter: catalogSpecFilterPayloadFor(category, specFilter), offset: page * PAGE_SIZE, limit: PAGE_SIZE }), retry: 2, retryOnRateLimit: true, signal: controller.signal })
+        ? api<CatalogResponse>("/api/parts/compatible", { method: "POST", body: JSON.stringify({ category, build, profile, gamingResolution, gamingRefreshRate, q: query.trim(), brand: brand.trim(), quality, freshness, priceStatus, listingPolicy, sort, mode: candidateScope, riskFilter: "all", performanceFilter: "all", physicalEvidenceFilter: "all", recommendationTrustFilter: "all", specFilter: catalogSpecFilterPayloadFor(category, specFilter), detailFilter: catalogDetailFilterScopedFor(category, detailFilter), offset: page * PAGE_SIZE, limit: PAGE_SIZE }), retry: 2, retryOnRateLimit: true, signal: controller.signal })
         : (() => {
           const params = new URLSearchParams({ category, q: query.trim(), brand: brand.trim(), quality, freshness, priceStatus, listingPolicy, sort: catalogSort === "similarity" || catalogSort === "value" ? "price_asc" : catalogSort, offset: String(page * PAGE_SIZE), limit: String(PAGE_SIZE) });
           if (missingField) params.set("missingField", missingField);
           if (partId) params.set("partId", partId);
           Object.entries(catalogSpecFilterPayloadFor(category, specFilter)).forEach(([key, value]) => params.set(key, value));
+          Object.entries(catalogDetailFilterParamsFor(category, detailFilter)).forEach(([key, value]) => params.set(key, value));
           return api<CatalogResponse>(`/api/parts?${params.toString()}`, { retry: 2, signal: controller.signal });
         })();
       void request
-        .then((payload) => { if (!cancelled) { setItems(payload.items); setTotal(payload.total); setPriceExcludedCount(payload.priceExcludedCount ?? 0); setNonCoreExcludedCount(payload.nonCoreExcludedCount ?? 0); setCategoryMismatchExcludedCount(payload.categoryMismatchExcludedCount ?? 0); setIncompleteExcludedCount(mode === "compatible" ? payload.incompleteExcludedCount ?? 0 : 0); setIncompleteMissingFields(mode === "compatible" ? payload.incompleteMissingFields ?? [] : []); setSpecExcludedCount(payload.specExcludedCount ?? 0); setSpecFilterDiagnostics(payload.specFilterDiagnostics ?? []); setRiskCounts(mode === "compatible" ? payload.riskCounts ?? null : null); setSelectedId((current) => payload.items.some((item) => item.id === current) ? current : payload.items[0]?.id ?? null); } })
+        .then((payload) => { if (!cancelled) { setItems(payload.items); setTotal(payload.total); setPriceExcludedCount(payload.priceExcludedCount ?? 0); setNonCoreExcludedCount(payload.nonCoreExcludedCount ?? 0); setCategoryMismatchExcludedCount(payload.categoryMismatchExcludedCount ?? 0); setIncompleteExcludedCount(mode === "compatible" ? payload.incompleteExcludedCount ?? 0 : 0); setIncompleteMissingFields(mode === "compatible" ? payload.incompleteMissingFields ?? [] : []); setSpecExcludedCount(payload.specExcludedCount ?? 0); setSpecFilterDiagnostics(payload.specFilterDiagnostics ?? []); setDetailExcludedCount(payload.detailExcludedCount ?? 0); setDetailFilterDiagnostics(payload.detailFilterDiagnostics ?? []); setRiskCounts(mode === "compatible" ? payload.riskCounts ?? null : null); setSelectedId((current) => payload.items.some((item) => item.id === current) ? current : payload.items[0]?.id ?? null); } })
         .catch((reason: unknown) => { if (!cancelled) setError(reason instanceof ApiError ? reason.message : reason instanceof Error ? reason.message : "부품 카탈로그를 불러오지 못했습니다."); })
         .finally(() => { if (!cancelled) setLoading(false); });
     }, 220);
     return () => { cancelled = true; controller.abort(); window.clearTimeout(timer); };
-  }, [brand, build, candidateScope, category, catalogSort, freshness, gamingRefreshRate, gamingResolution, listingPolicy, missingField, mode, page, partId, priceStatus, profile, quality, query, retryNonce, sort, specFilter]);
+  }, [brand, build, candidateScope, category, catalogSort, detailFilter, freshness, gamingRefreshRate, gamingResolution, listingPolicy, missingField, mode, page, partId, priceStatus, profile, quality, query, retryNonce, sort, specFilter]);
+
+  // 세부 조건 패널의 범주별 선택지 — 카탈로그 목록과 같은 "탐색 가능 풀" 위에서
+  // 서버가 개수까지 집계해 내려준다. 범주가 바뀌면 새로 받는다.
+  useEffect(() => {
+    let cancelled = false;
+    const controller = new AbortController();
+    setFacetsLoading(true);
+    setFacetsError(null);
+    void api<CatalogFacetsResponse>(`/api/parts/facets?category=${category}`, { retry: 1, signal: controller.signal })
+      .then((payload) => { if (!cancelled) setFacetOptions(payload.options ?? null); })
+      .catch((reason: unknown) => { if (!cancelled) { setFacetOptions(null); setFacetsError(reason instanceof Error ? reason.message : "세부 조건 선택지를 불러오지 못했습니다."); } })
+      .finally(() => { if (!cancelled) setFacetsLoading(false); });
+    return () => { cancelled = true; controller.abort(); };
+  }, [category, facetsNonce]);
 
   useEffect(() => {
     if (!selectedPart) {
@@ -973,6 +1315,15 @@ export function CatalogView({ meta, build, partMap, profile, gamingResolution, g
     onCompareParts(category, compareParts);
   }
 
+  // 범주가 바뀌면 세부 조건도 새 범주 facet으로 다시 고르게 초기화한다 —
+  // 공유 링크처럼 범주와 묶여 들어온 초기값만 초기 상태로 유지된다.
+  const changeCategory = (nextCategory: PartCategory) => {
+    setPartId(undefined);
+    setMissingField("");
+    setCategory(nextCategory);
+    setDetailFilter({});
+  };
+
   async function copyCatalogSearchLink() {
     const url = window.location.origin + window.location.pathname + window.location.search;
     try {
@@ -1003,9 +1354,10 @@ export function CatalogView({ meta, build, partMap, profile, gamingResolution, g
     <div className="workspace-heading"><div><button className="back-link" type="button" onClick={onBack}><FiArrowLeft /> 홈으로</button><p className="eyebrow">부품 목록</p><h1>부품 찾기</h1></div><div className="catalog-heading-actions"><button className="button button-light catalog-filter-toggle" type="button" onClick={() => setFiltersOpen((current) => !current)}><FiSearch /> {filtersOpen ? "조건 접기" : "상세 조건"}</button><button className="button button-secondary" type="button" onClick={onOpenBuild}><FiActivity /> 현재 견적 보기</button></div></div>
     <CatalogSpecFilterPanel category={category} filter={specFilter} specExcludedCount={specExcludedCount} specFilterDiagnostics={specFilterDiagnostics} onChange={(next) => { setSpecFilter(next); setPage(0); }} onReset={() => { setSpecFilter({ ...EMPTY_CATALOG_SPEC_FILTER }); setPage(0); }} />
     <CatalogSpecPresetAction preset={catalogSpecPreset} onApply={(values) => { setSpecFilter((current) => ({ ...current, ...values })); setPage(0); }} />
+    <CatalogDetailFilterPanel category={category} filter={detailFilter} facetOptions={facetOptions} loading={facetsLoading} error={facetsError} detailExcludedCount={detailExcludedCount} detailDiagnostics={detailFilterDiagnostics} onChange={(next) => { setDetailFilter(next); setPage(0); }} onReset={() => { setDetailFilter({}); setPage(0); }} onRetry={() => setFacetsNonce((current) => current + 1)} />
     {brandOptions.length > 0 && <div className="catalog-brand-suggestions" role="group" aria-label="카탈로그 제조사 빠른 선택"><span>빠른 제조사</span>{brandOptions.slice(0, 8).map((option) => <button className={brand.trim().toLocaleLowerCase("ko-KR") === option.brand.toLocaleLowerCase("ko-KR") ? "selected" : ""} type="button" aria-pressed={brand.trim().toLocaleLowerCase("ko-KR") === option.brand.toLocaleLowerCase("ko-KR")} onClick={() => { setBrand(option.brand); setPage(0); }} key={option.brand}>{option.brand}<small>{option.count}</small></button>)}</div>}
     <section className="catalog-brand-filter-panel" aria-label="카탈로그 제조사 필터" data-testid="catalog-brand-filter"><label><span>제조사</span><input aria-label="카탈로그 제조사 필터" type="search" value={brand} onChange={(event) => { setBrand(event.target.value.slice(0, 80)); setPage(0); }} placeholder="예: ASUS · AMD · GIGABYTE" /></label>{brand.trim() && <button className="text-button" type="button" onClick={() => { setBrand(""); setPage(0); }}>제조사 초기화</button>}</section>
-    <section className="catalog-toolbar" aria-label="부품 카탈로그 필터"><div className="catalog-mode-toggle" role="group" aria-label="카탈로그 탐색 모드"><button className={mode === "catalog" ? "selected" : ""} type="button" aria-pressed={mode === "catalog"} onClick={() => { setMode("catalog"); setPartId(undefined); setMissingField("");  setSort("price_asc"); setPage(0); }}>전체 카탈로그</button><button className={mode === "compatible" ? "selected" : ""} type="button" aria-pressed={mode === "compatible"} onClick={() => { setMode("compatible");  setPartId(undefined); setMissingField("");  setSort("similarity"); setPage(0); }}>현재 견적에 맞는 부품</button><small>{mode === "compatible" ? "현재 견적과 호환되는 부품만 표시합니다." : "호환 여부와 상관없이 전체 부품을 찾아봅니다."} · 검색 목록에는 가격이 있는 부품만 표시합니다.</small><button className="text-button catalog-filter-link-button" type="button" data-testid="catalog-copy-filter-link" onClick={() => void copyCatalogSearchLink()}><FiCopy /> 조건 링크 복사</button></div>{mode === "compatible" && <div className="catalog-candidate-scope" role="group" aria-label="호환 부품 범위"><span>호환 상태</span>{(Object.keys(CANDIDATE_SCOPE_LABELS) as CatalogCandidateScope[]).map((scope) => <button className={candidateScope === scope ? "selected" : ""} type="button" aria-pressed={candidateScope === scope} data-testid={`catalog-scope-${scope}`} onClick={() => { setCandidateScope(scope);  setSort("similarity"); setPage(0); }} key={scope}>{CANDIDATE_SCOPE_LABELS[scope]}</button>)}<small>{candidateScopeDescription(candidateScope)}</small></div>}<form className="catalog-search" onSubmit={(event) => { event.preventDefault(); setPage(0); }}><FiSearch /><input aria-label="부품 카탈로그 검색" enterKeyHint="search" value={query} onChange={(event) => { setPartId(undefined); setQuery(event.target.value); }} placeholder="모델명·제조사·소켓·메모리 세대 검색" /><button className="button button-primary button-small" type="submit">검색</button></form><div className="mobile-catalog-category-chips" role="group" aria-label="모바일 카탈로그 범주 빠른 선택">{MOBILE_CATALOG_CATEGORY_ORDER.map((item) => <button className={category === item ? "selected" : ""} type="button" aria-pressed={category === item} onClick={() => { setPartId(undefined); setMissingField(""); setCategory(item); setPage(0); }} key={item}>{CATEGORY_LABELS[item]}</button>)}</div><div className="desktop-catalog-category-chips" role="group" aria-label="카탈로그 범주 바로가기">{PART_CATEGORIES.map((item) => <button className={category === item ? "selected" : ""} type="button" aria-pressed={category === item} data-testid={`catalog-category-chip-${item}`} onClick={() => { setPartId(undefined); setMissingField(""); setCategory(item); setPage(0); }} key={item}>{CATEGORY_LABELS[item]}</button>)}</div><div className="catalog-filters"><label><span>범주</span><select aria-label="카탈로그 부품 범주" value={category} onChange={(event) => { const nextCategory = event.target.value as PartCategory; setPartId(undefined); setMissingField(""); setCategory(nextCategory); }}>{PART_CATEGORIES.map((item) => <option value={item} key={item}>{CATEGORY_LABELS[item]}</option>)}</select></label><label><span>구매 조건</span><select aria-label="카탈로그 구매 조건" value={listingPolicy} onChange={(event) => setListingPolicy(event.target.value as ListingPolicy)}>{Object.entries(LISTING_POLICY_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label><label><span>정렬</span><select aria-label="카탈로그 정렬" value={sort} onChange={(event) => {  setSort(event.target.value as CatalogSort); }}><option value="price_asc">가격 낮은 순</option><option value="price_desc">가격 높은 순</option><option value="name">이름 순</option><option value="updated">최근 갱신</option>{mode === "compatible" && <><option value="similarity">유사도 높은 순</option><option value="value">가성비 높은 순</option></>}</select></label></div>{missingField && <div className="catalog-missing-field-filter" data-testid="catalog-missing-field-filter"><div><span>누락 필드 필터</span><strong>{catalogMissingFieldLabelFor(missingField)}</strong><small>{missingField}</small></div><button className="text-button" type="button" onClick={() => { setMissingField(""); setPage(0); }}>필터 해제</button></div>}</section>
-    <section className="catalog-comparison-bar" aria-label="카탈로그 부품 비교" data-testid="catalog-comparison-bar"><div><strong><FiLayers /> 부품 비교 {compareIds.length} / 3</strong></div><button className="button button-small button-primary" type="button" data-testid="catalog-compare-submit" onClick={compareSelectedParts} disabled={compareParts.length < 2 || (mode === "compatible" && (!onCompareParts || !compareReady))}>{mode === "compatible" ? (compareReady ? <><FiActivity /> 선택 부품 미리 비교</> : <><FiActivity /> 호환 결과 확인 후 비교</>) : <><FiLayers /> 선택 부품 비교</>}</button></section>{mode === "catalog" && catalogComparisonOpen && compareParts.length >= 2 && <CatalogSpecComparison category={category} parts={compareParts} selectedIds={selectedIds} compareReady={compareReady} comparisonContext={comparisonContext} onAdd={onAddPart} onRemove={removeComparePart} onCompareScenarios={onCompareParts} onShareComparison={onShareComparison} onRevokeComparison={onRevokeComparison} onToast={onToast} onClear={() => { setCompareIds([]); setComparePartsById({}); setCatalogComparisonOpen(false); }} />}<div className="catalog-layout"><section className="catalog-results" aria-label="부품 카탈로그 결과"><div className="catalog-results-heading"><div><p className="eyebrow">{mode === "compatible" ? "현재 견적에 맞는 부품" : "부품 목록"}</p><h2>{CATEGORY_LABELS[category]} {mode === "compatible" ? candidateScopeResultLabel(candidateScope) : "목록"}</h2></div><span>{loading ? "불러오는 중" : `${total.toLocaleString("ko-KR")}개 결과 · ${page + 1}/${pageCount}페이지${candidateScopeSummary ? ` · ${candidateScopeSummary}` : ""}`}</span></div><CatalogIncompleteNotice count={mode === "compatible" ? incompleteExcludedCount : 0} category={category} missingFields={incompleteMissingFields} /><CatalogNonCoreNotice count={mode === "catalog" ? nonCoreExcludedCount : 0} categoryMismatchCount={mode === "catalog" ? categoryMismatchExcludedCount : 0} query={query} onOpenAccessories={onOpenAccessories} />{error ? <div className="catalog-state error" role="alert"><FiInfo /><div><strong>부품 목록을 불러오지 못했어요.</strong></div><button className="button button-small button-light" type="button" onClick={() => setRetryNonce((current) => current + 1)}><FiRefreshCw /> 다시 시도</button></div> : loading ? <div className="catalog-state" role="status"><FiLoader className="spin" /> {mode === "compatible" ? `${CANDIDATE_SCOPE_LABELS[candidateScope]}를 계산하는 중...` : "부품 카탈로그를 불러오는 중..."}</div> : items.length === 0 ? <div className="catalog-state"><FiSearch /> {candidateEmptyMessage}</div> : <div className="catalog-part-list">{items.map((part) => <CatalogPartCard key={part.id} part={part} selected={selectedIds.has(part.id)} compareSelected={compareIds.includes(part.id)} showCompare onSelect={() => setSelectedId(part.id)} onAdd={() => onAddPart(part)} onToggleCompare={() => toggleCompare(part)} onWatchPart={onWatchPart} isPartWatched={isPartWatched} />)}</div>}{total > 0 && <div className="catalog-pagination"><button className="button button-light button-small" type="button" onClick={() => goToPage(page - 1)} disabled={page === 0 || loading}>이전</button><span>{page + 1} / {pageCount}</span><button className="button button-light button-small" type="button" onClick={() => goToPage(page + 1)} disabled={page >= pageCount - 1 || loading}>다음</button></div>}</section><aside>{selectedPart ? <CatalogPartDetail part={selectedPart} priceHistory={selectedPriceHistory} priceHistoryLoading={selectedPriceHistoryLoading} priceHistoryError={selectedPriceHistoryError} selected={selectedIds.has(selectedPart.id)} compareSelected={compareIds.includes(selectedPart.id)} showCompare onToggleCompare={() => toggleCompare(selectedPart)} onAdd={() => onAddPart(selectedPart)} onWatchPart={onWatchPart} isPartWatched={isPartWatched} onOpenWatchlist={onOpenWatchlist} onOpenBuild={onOpenBuild} onRefresh={meta?.adminAuthEnabled === false || meta?.adminSessionAuthenticated === true ? () => void refreshCatalogPart(selectedPart) : undefined} refreshing={refreshingPartId === selectedPart.id} refreshMessage={refreshPartMessage} refreshError={refreshPartError} refreshDiffs={refreshPartDiffs} /> : <section className="catalog-detail-empty"><FiBox /><h2>부품을 선택하세요</h2></section>}</aside></div>
+    <section className="catalog-toolbar" aria-label="부품 카탈로그 필터"><div className="catalog-mode-toggle" role="group" aria-label="카탈로그 탐색 모드"><button className={mode === "catalog" ? "selected" : ""} type="button" aria-pressed={mode === "catalog"} onClick={() => { setMode("catalog"); setPartId(undefined); setMissingField("");  setSort("price_asc"); setPage(0); }}>전체 카탈로그</button><button className={mode === "compatible" ? "selected" : ""} type="button" aria-pressed={mode === "compatible"} onClick={() => { setMode("compatible");  setPartId(undefined); setMissingField("");  setSort("similarity"); setPage(0); }}>현재 견적에 맞는 부품</button><small>{mode === "compatible" ? "현재 견적과 호환되는 부품만 표시합니다." : "호환 여부와 상관없이 전체 부품을 찾아봅니다."} · 검색 목록에는 가격이 있는 부품만 표시합니다.</small><button className="text-button catalog-filter-link-button" type="button" data-testid="catalog-copy-filter-link" onClick={() => void copyCatalogSearchLink()}><FiCopy /> 조건 링크 복사</button></div>{mode === "compatible" && <div className="catalog-candidate-scope" role="group" aria-label="호환 부품 범위"><span>호환 상태</span>{(Object.keys(CANDIDATE_SCOPE_LABELS) as CatalogCandidateScope[]).map((scope) => <button className={candidateScope === scope ? "selected" : ""} type="button" aria-pressed={candidateScope === scope} data-testid={`catalog-scope-${scope}`} onClick={() => { setCandidateScope(scope);  setSort("similarity"); setPage(0); }} key={scope}>{CANDIDATE_SCOPE_LABELS[scope]}</button>)}<small>{candidateScopeDescription(candidateScope)}</small></div>}<form className="catalog-search" onSubmit={(event) => { event.preventDefault(); setPage(0); }}><FiSearch /><input aria-label="부품 카탈로그 검색" enterKeyHint="search" value={query} onChange={(event) => { setPartId(undefined); setQuery(event.target.value); }} placeholder="모델명·제조사·소켓·메모리 세대 검색" />{query && <button className="catalog-search-clear" type="button" aria-label="검색어 지우기" data-testid="catalog-search-clear" onClick={() => { setPartId(undefined); setQuery(""); setPage(0); }}>×</button>}<button className="button button-primary button-small" type="submit">검색</button></form><div className="mobile-catalog-category-chips" role="group" aria-label="모바일 카탈로그 범주 빠른 선택">{MOBILE_CATALOG_CATEGORY_ORDER.map((item) => <button className={category === item ? "selected" : ""} type="button" aria-pressed={category === item} onClick={() => { changeCategory(item); setPage(0); }} key={item}>{CATEGORY_LABELS[item]}</button>)}</div><div className="desktop-catalog-category-chips" role="group" aria-label="카탈로그 범주 바로가기">{PART_CATEGORIES.map((item) => <button className={category === item ? "selected" : ""} type="button" aria-pressed={category === item} data-testid={`catalog-category-chip-${item}`} onClick={() => { changeCategory(item); setPage(0); }} key={item}>{CATEGORY_LABELS[item]}</button>)}</div><div className="catalog-filters"><label><span>범주</span><select aria-label="카탈로그 부품 범주" value={category} onChange={(event) => { changeCategory(event.target.value as PartCategory); }}>{PART_CATEGORIES.map((item) => <option value={item} key={item}>{CATEGORY_LABELS[item]}</option>)}</select></label><label><span>구매 조건</span><select aria-label="카탈로그 구매 조건" value={listingPolicy} onChange={(event) => setListingPolicy(event.target.value as ListingPolicy)}>{Object.entries(LISTING_POLICY_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label><label><span>정렬</span><select aria-label="카탈로그 정렬" value={sort} onChange={(event) => {  setSort(event.target.value as CatalogSort); }}><option value="price_asc">가격 낮은 순</option><option value="price_desc">가격 높은 순</option><option value="name">이름 순</option><option value="updated">최근 갱신</option>{mode === "compatible" && <><option value="similarity">유사도 높은 순</option><option value="value">가성비 높은 순</option></>}</select></label></div>{missingField && <div className="catalog-missing-field-filter" data-testid="catalog-missing-field-filter"><div><span>누락 필드 필터</span><strong>{catalogMissingFieldLabelFor(missingField)}</strong><small>{missingField}</small></div><button className="text-button" type="button" onClick={() => { setMissingField(""); setPage(0); }}>필터 해제</button></div>}</section>
+    <section className="catalog-comparison-bar" aria-label="카탈로그 부품 비교" data-testid="catalog-comparison-bar"><div><strong><FiLayers /> 부품 비교 {compareIds.length} / 3</strong></div><button className="button button-small button-primary" type="button" data-testid="catalog-compare-submit" onClick={compareSelectedParts} disabled={compareParts.length < 2 || (mode === "compatible" && (!onCompareParts || !compareReady))}>{mode === "compatible" ? (compareReady ? <><FiActivity /> 선택 부품 미리 비교</> : <><FiActivity /> 호환 결과 확인 후 비교</>) : <><FiLayers /> 선택 부품 비교</>}</button></section>{mode === "catalog" && catalogComparisonOpen && compareParts.length >= 2 && <CatalogSpecComparison category={category} parts={compareParts} selectedIds={selectedIds} compareReady={compareReady} comparisonContext={comparisonContext} onAdd={onAddPart} onRemove={removeComparePart} onCompareScenarios={onCompareParts} onShareComparison={onShareComparison} onRevokeComparison={onRevokeComparison} onToast={onToast} onClear={() => { setCompareIds([]); setComparePartsById({}); setCatalogComparisonOpen(false); }} />}<div className="catalog-layout"><section className="catalog-results" aria-label="부품 카탈로그 결과"><div className="catalog-results-heading"><div><p className="eyebrow">{mode === "compatible" ? "현재 견적에 맞는 부품" : "부품 목록"}</p><h2>{CATEGORY_LABELS[category]} {mode === "compatible" ? candidateScopeResultLabel(candidateScope) : "목록"}</h2></div><span aria-live="polite" aria-atomic="true">{loading ? "불러오는 중" : `${total.toLocaleString("ko-KR")}개 결과 · ${page + 1}/${pageCount}페이지${candidateScopeSummary ? ` · ${candidateScopeSummary}` : ""}`}</span></div><CatalogIncompleteNotice count={mode === "compatible" ? incompleteExcludedCount : 0} category={category} missingFields={incompleteMissingFields} /><CatalogNonCoreNotice count={mode === "catalog" ? nonCoreExcludedCount : 0} categoryMismatchCount={mode === "catalog" ? categoryMismatchExcludedCount : 0} query={query} onOpenAccessories={onOpenAccessories} />{error ? <div className="catalog-state error" role="alert"><FiInfo /><div><strong>부품 목록을 불러오지 못했어요.</strong></div><button className="button button-small button-light" type="button" onClick={() => setRetryNonce((current) => current + 1)}><FiRefreshCw /> 다시 시도</button></div> : loading ? <div className="catalog-skeleton-wrap" role="status"><span className="catalog-skeleton-status"><FiLoader className="spin" /> {mode === "compatible" ? `${CANDIDATE_SCOPE_LABELS[candidateScope]}를 계산하는 중...` : "부품 카탈로그를 불러오는 중..."}</span><div className="catalog-part-skeleton-list" aria-hidden="true">{Array.from({ length: 6 }, (_, index) => <div className="catalog-part-skeleton" key={index}><span className="catalog-part-skeleton-image" /><span className="catalog-part-skeleton-copy"><span className="catalog-part-skeleton-line wide" /><span className="catalog-part-skeleton-line" /></span><span className="catalog-part-skeleton-price" /></div>)}</div></div> : items.length === 0 ? <div className="catalog-state"><FiSearch /> {candidateEmptyMessage}</div> : <div className="catalog-part-list">{items.map((part) => <CatalogPartCard key={part.id} part={part} selected={selectedIds.has(part.id)} compareSelected={compareIds.includes(part.id)} showCompare onSelect={() => setSelectedId(part.id)} onAdd={() => onAddPart(part)} onToggleCompare={() => toggleCompare(part)} onWatchPart={onWatchPart} isPartWatched={isPartWatched} />)}</div>}{total > 0 && <div className="catalog-pagination" role="navigation" aria-label="부품 목록 페이지"><button className="button button-light button-small" type="button" aria-label={`이전 페이지 ${page} / ${pageCount}`} onClick={() => goToPage(page - 1)} disabled={page === 0 || loading}>이전</button><span aria-current="page">{page + 1} / {pageCount}</span><button className="button button-light button-small" type="button" aria-label={`다음 페이지 ${page + 2} / ${pageCount}`} onClick={() => goToPage(page + 1)} disabled={page >= pageCount - 1 || loading}>다음</button></div>}</section><aside>{selectedPart ? <CatalogPartDetail part={selectedPart} priceHistory={selectedPriceHistory} priceHistoryLoading={selectedPriceHistoryLoading} priceHistoryError={selectedPriceHistoryError} selected={selectedIds.has(selectedPart.id)} compareSelected={compareIds.includes(selectedPart.id)} showCompare onToggleCompare={() => toggleCompare(selectedPart)} onAdd={() => onAddPart(selectedPart)} onWatchPart={onWatchPart} isPartWatched={isPartWatched} onOpenWatchlist={onOpenWatchlist} onOpenBuild={onOpenBuild} onRefresh={meta?.adminAuthEnabled === false || meta?.adminSessionAuthenticated === true ? () => void refreshCatalogPart(selectedPart) : undefined} refreshing={refreshingPartId === selectedPart.id} refreshMessage={refreshPartMessage} refreshError={refreshPartError} refreshDiffs={refreshPartDiffs} /> : <section className="catalog-detail-empty"><FiBox /><h2>부품을 선택하세요</h2></section>}</aside></div>
   </div>;
 }

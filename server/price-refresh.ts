@@ -344,7 +344,7 @@ export async function runPriceRefreshJob(options: PriceRefreshJobOptions = {}): 
     const coreLimit = boundedLimit(options.coreLimit, MAX_CORE_LIMIT);
     const accessoryLimit = boundedLimit(options.accessoryLimit, MAX_ACCESSORY_LIMIT);
     const coreCandidates = parts
-      .filter((part) => part.source === "danawa" && Boolean(part.sourceProductCode && part.danawaUrl))
+      .filter((part) => part.source === "danawa" && !part.delistedAt && Boolean(part.sourceProductCode && part.danawaUrl))
       .sort((left, right) => lastAttempted(left, "part", attempts) - lastAttempted(right, "part", attempts))
       .slice(0, coreLimit);
     const accessoryCandidates = accessories

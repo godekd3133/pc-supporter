@@ -66,6 +66,14 @@ function valueDiff(field: string, previous: unknown, next: unknown, price = fals
   return { field, ...(previousText ? { previous: previousText } : {}), ...(nextText ? { next: nextText } : {}) };
 }
 
+export const CATALOG_ADDED_CHANGE_FIELD_LABEL = "신규 등록";
+export const CATALOG_DELISTED_CHANGE_FIELD_LABEL = "판매 중단";
+export const CATALOG_RELISTED_CHANGE_FIELD_LABEL = "판매 재개";
+
+function catalogListingStateValue(item: CatalogItem) {
+  return "delistedAt" in item && item.delistedAt ? "판매 중단" : "판매 중";
+}
+
 export function catalogChangeValueDiffsFor(before: CatalogItem, after: CatalogItem) {
   return [
     valueDiff("상품명", before.name, after.name),
@@ -73,7 +81,8 @@ export function catalogChangeValueDiffsFor(before: CatalogItem, after: CatalogIt
     valueDiff("원문 스펙", before.rawSpecText, after.rawSpecText),
     valueDiff("정규화 스펙", before.specs, after.specs),
     valueDiff(CATALOG_DATA_QUALITY_CHANGE_FIELD_LABEL, before.dataQuality, after.dataQuality),
-    valueDiff("누락 필드", before.missingFields, after.missingFields)
+    valueDiff("누락 필드", before.missingFields, after.missingFields),
+    valueDiff("판매 상태", catalogListingStateValue(before), catalogListingStateValue(after))
   ].filter((diff): diff is CatalogChangeValueDiff => diff !== undefined).slice(0, MAX_VALUE_DIFFS);
 }
 
@@ -113,6 +122,33 @@ export function catalogChangeRecord(kind: CatalogChangeKind, before: CatalogItem
     ...(nextPriceWon !== undefined ? { nextPriceWon } : {}),
     ...(previousPriceWon !== undefined && nextPriceWon !== undefined ? { priceDeltaWon: nextPriceWon - previousPriceWon } : {}),
     valueDiffs: catalogChangeValueDiffsFor(before, after)
+  };
+}
+
+// 이전 카탈로그에 없던 상품이 수집될 때 남기는 이력 — "변경"이 아니라 등록이라
+// before 상태가 없으므로 품질/가격은 현재 항목 기준으로만 기록한다.
+export function catalogItemAddedRecord(kind: CatalogChangeKind, item: CatalogItem, options: { changedAt?: string; quoteNote?: string } = {}): CatalogChangeRecord {
+  const nextPriceWon = isKnownPrice(item.priceWon) ? item.priceWon : undefined;
+  const priceText = nextPriceWon !== undefined ? boundedValue(readableValue(nextPriceWon, true)) : undefined;
+  const valueDiffs: CatalogChangeValueDiff[] = [
+    ...(priceText ? [{ field: "가격", next: priceText }] : []),
+    ...(options.quoteNote ? [{ field: "견적 후보", next: options.quoteNote }] : [])
+  ];
+  return {
+    id: randomUUID(),
+    kind,
+    itemId: item.id,
+    itemName: item.name,
+    category: item.category,
+    ...(item.sourceProductCode ? { sourceProductCode: item.sourceProductCode } : {}),
+    changedAt: options.changedAt ?? new Date().toISOString(),
+    changedFields: [CATALOG_ADDED_CHANGE_FIELD_LABEL],
+    previousDataQuality: item.dataQuality,
+    nextDataQuality: item.dataQuality,
+    previousMissingFields: [],
+    nextMissingFields: [...item.missingFields],
+    ...(nextPriceWon !== undefined ? { nextPriceWon } : {}),
+    valueDiffs
   };
 }
 
@@ -158,6 +194,9 @@ export function catalogChangeSummary(records: CatalogChangeRecord[], inspectedPr
     priceChangedProducts: records.filter((record) => record.changedFields.includes("가격") || (record.priceDeltaWon !== undefined && record.priceDeltaWon !== 0)).length,
     qualityChangedProducts: records.filter((record) => record.previousDataQuality !== record.nextDataQuality).length,
     missingFieldChangedProducts: records.filter((record) => record.changedFields.includes("누락 필드")).length,
-    specChangedProducts: records.filter((record) => record.changedFields.includes("원문 스펙") || record.changedFields.includes("정규화 스펙")).length
+    specChangedProducts: records.filter((record) => record.changedFields.includes("원문 스펙") || record.changedFields.includes("정규화 스펙")).length,
+    addedProducts: records.filter((record) => record.changedFields.includes(CATALOG_ADDED_CHANGE_FIELD_LABEL)).length,
+    delistedProducts: records.filter((record) => record.changedFields.includes(CATALOG_DELISTED_CHANGE_FIELD_LABEL)).length,
+    relistedProducts: records.filter((record) => record.changedFields.includes(CATALOG_RELISTED_CHANGE_FIELD_LABEL)).length
   };
 }

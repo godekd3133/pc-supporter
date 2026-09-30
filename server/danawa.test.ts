@@ -42,6 +42,15 @@ describe("Danawa parser", () => {
     expect(parseDanawaPriceFromHtml(`<meta property="og:url" content="https://prod.danawa.com/info/?pcode=123"><meta property="og:description" content="최저가 45,900원" />`, "123")).toBe(45900);
   });
 
+  it("falls back to the cash price when the card lowest price is 0", () => {
+    const cashOnly = `<meta property="og:url" content="https://prod.danawa.com/info/?pcode=123"><meta property="og:description" content="최저가 0원, 현금최저가: 490,000원" />`;
+    expect(parseDanawaPriceFromHtml(cashOnly, "123")).toBe(490000);
+    const noPrice = `<meta property="og:url" content="https://prod.danawa.com/info/?pcode=123"><meta property="og:description" content="최저가 0원" />`;
+    expect(parseDanawaPriceFromHtml(noPrice, "123")).toBeUndefined();
+    const normal = `<meta property="og:url" content="https://prod.danawa.com/info/?pcode=123"><meta property="og:description" content="최저가 38,450원, 현금최저가: 36,400원" />`;
+    expect(parseDanawaPriceFromHtml(normal, "123")).toBe(38450);
+  });
+
   it("extracts product codes from the structured list markup", () => {
     const html = `
       <script type="application/ld+json">

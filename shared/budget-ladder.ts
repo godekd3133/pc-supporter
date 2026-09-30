@@ -97,14 +97,21 @@ function roundedBudgetWon(value: number) {
   return Math.max(1, Math.round(value / 10_000) * 10_000);
 }
 
-export function budgetLadderScenariosFor(request: BuildGenerationRequest): BudgetLadderScenario[] {
+// 관리자 견적 생성 옵션으로 아래/위 밴드 배율을 조정할 수 있다 — 기본값은
+// BUDGET_LADDER_BANDS의 0.8 / 1.2다.
+export function budgetLadderScenariosFor(request: BuildGenerationRequest, multipliers?: { down?: number; up?: number }): BudgetLadderScenario[] {
   const baseBudgetWon = Math.max(1, Math.floor(request.budgetWon));
+  const overrides: Partial<Record<BudgetLadderBandId, number>> = {};
+  if (multipliers?.down !== undefined && multipliers.down > 0 && multipliers.down < 1) overrides.economy = multipliers.down;
+  if (multipliers?.up !== undefined && multipliers.up > 1) overrides.headroom = multipliers.up;
   return BUDGET_LADDER_BANDS.map((band) => {
-    const budgetWon = band.id === "target" ? baseBudgetWon : roundedBudgetWon(baseBudgetWon * band.multiplier);
+    const multiplier = overrides[band.id] ?? band.multiplier;
+    const budgetWon = band.id === "target" ? baseBudgetWon : roundedBudgetWon(baseBudgetWon * multiplier);
+    const description = overrides[band.id] !== undefined ? `입력 예산의 약 ${Math.round(multiplier * 100)}%로 구성` : band.description;
     return {
       id: band.id,
       label: band.label,
-      description: band.description,
+      description,
       budgetWon,
       request: { ...request, budgetWon }
     };
