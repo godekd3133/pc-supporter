@@ -937,9 +937,12 @@ export async function initializePersistence() {
   await ensureDatabase();
 }
 
+export type PostgresTransactionErrorClassifier = (error: unknown) => boolean;
+
 export type PostgresTransactionRunner = <T>(
   operation: string,
-  callback: (client: PoolClient) => Promise<T>
+  callback: (client: PoolClient) => Promise<T>,
+  expectedDomainConflict?: PostgresTransactionErrorClassifier
 ) => Promise<T>;
 
 /**
@@ -949,7 +952,8 @@ export type PostgresTransactionRunner = <T>(
  */
 export async function withPostgresTransaction<T>(
   operation: string,
-  callback: (client: PoolClient) => Promise<T>
+  callback: (client: PoolClient) => Promise<T>,
+  expectedDomainConflict?: PostgresTransactionErrorClassifier
 ): Promise<T> {
   if (!await ensureDatabase()) {
     throw new Error(`PostgreSQL is required for ${operation}; file persistence is not supported.`);
@@ -973,16 +977,28 @@ export async function withPostgresTransaction<T>(
     transactionStarted = false;
     return result;
   } catch (error: unknown) {
+    let rollbackFailed = false;
+    let rollbackError: unknown;
     if (!transactionStarted) {
       discardClient = true;
     } else {
       try {
         await client.query("ROLLBACK");
-      } catch {
+      } catch (failure: unknown) {
         discardClient = true;
+        rollbackFailed = true;
+        rollbackError = failure;
       }
     }
-    markDatabaseUnavailable(operation, error);
+    let preserveDatabaseReadiness = false;
+    if (transactionStarted && !rollbackFailed && expectedDomainConflict) {
+      try {
+        preserveDatabaseReadiness = expectedDomainConflict(error);
+      } catch {
+        // A failing conflict classifier must not mask the transaction error.
+      }
+    }
+    if (!preserveDatabaseReadiness) markDatabaseUnavailable(operation, rollbackFailed ? rollbackError : error);
     throw error;
   } finally {
     client.release(discardClient);

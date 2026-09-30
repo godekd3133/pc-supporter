@@ -104,6 +104,10 @@ export class BackgroundJobActiveConflictError extends Error {
   }
 }
 
+function isExpectedBackgroundJobEnqueueConflict(error: unknown) {
+  return error instanceof BackgroundJobIdempotencyConflictError || error instanceof BackgroundJobActiveConflictError;
+}
+
 const MAX_PAYLOAD_BYTES = 64 * 1024;
 const MAX_PAYLOAD_DEPTH = 16;
 const MAX_PAYLOAD_NODES = 2_000;
@@ -408,7 +412,7 @@ export function createBackgroundJobStore(dependencies: BackgroundJobStoreDepende
         if (!row && input.idempotencyKey) throw new BackgroundJobIdempotencyConflictError();
         if (!row) throw new Error("PostgreSQL did not return the enqueued background job.");
         return backgroundJobFromRow(row);
-      });
+      }, isExpectedBackgroundJobEnqueueConflict);
     },
 
     async claimNext(owner, leaseDurationMs = DEFAULT_LEASE_MS, kinds) {

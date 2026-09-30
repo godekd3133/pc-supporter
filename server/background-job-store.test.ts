@@ -495,6 +495,112 @@ describe("PostgreSQL durable background job store", () => {
 
 describe("PostgreSQL transaction helper for durable jobs", () => {
   const savedDatabaseUrl = process.env.DATABASE_URL;
+  const savedNodeEnv = process.env.NODE_ENV;
+
+  function createFakePostgresDatabase() {
+    type FakeJobRow = {
+      id: string;
+      kind: string;
+      status: string;
+      payload: Record<string, unknown>;
+      attempt: number;
+      max_attempts: number;
+      available_at: Date;
+      progress: null;
+      idempotency_key: string | null;
+      result: null;
+      created_at: Date;
+      updated_at: Date;
+      finished_at: null;
+      lease_owner: null;
+      lease_token: null;
+      lease_expires_at: null;
+      error: null;
+    };
+    const jobsByKey = new Map<string, FakeJobRow>();
+    const jobsById = new Map<string, FakeJobRow>();
+    const released: boolean[] = [];
+    let rollbackFails = false;
+
+    const client = {
+      async query(sql: string, values?: unknown[]) {
+        if (sql === "ROLLBACK" && rollbackFails) throw new Error("synthetic rollback failure");
+        if (sql === "SELECT synthetic_database_failure") {
+          throw Object.assign(new Error("synthetic PostgreSQL query failure"), { code: "XX000" });
+        }
+        if (sql.includes("INSERT INTO background_jobs")) {
+          const [id, kind, payloadJson, maxAttempts, availableAt, idempotencyKey] = values ?? [];
+          const payload = JSON.parse(String(payloadJson)) as Record<string, unknown>;
+          const key = idempotencyKey === null ? null : String(kind) + "\0" + String(idempotencyKey);
+          const existing = key === null ? undefined : jobsByKey.get(key);
+          if (existing) {
+            if (JSON.stringify(existing.payload) === JSON.stringify(payload) && existing.max_attempts === Number(maxAttempts)) {
+              return { rows: [existing], rowCount: 1 };
+            }
+            return { rows: [], rowCount: 0 };
+          }
+          const timestamp = new Date("2026-09-30T00:00:00.000Z");
+          const row: FakeJobRow = {
+            id: String(id),
+            kind: String(kind),
+            status: "queued",
+            payload,
+            attempt: 0,
+            max_attempts: Number(maxAttempts),
+            available_at: new Date(String(availableAt)),
+            progress: null,
+            idempotency_key: key === null ? null : String(idempotencyKey),
+            result: null,
+            created_at: timestamp,
+            updated_at: timestamp,
+            finished_at: null,
+            lease_owner: null,
+            lease_token: null,
+            lease_expires_at: null,
+            error: null
+          };
+          jobsById.set(row.id, row);
+          if (key !== null) jobsByKey.set(key, row);
+          return { rows: [row], rowCount: 1 };
+        }
+        if (sql.includes("SELECT * FROM background_jobs")) {
+          const [kind, payloadJson] = values ?? [];
+          const payload = JSON.parse(String(payloadJson)) as Record<string, unknown>;
+          const row = [...jobsById.values()].find((candidate) => candidate.kind === kind
+            && ["queued", "running"].includes(candidate.status)
+            && JSON.stringify(candidate.payload) === JSON.stringify(payload));
+          return { rows: row ? [row] : [], rowCount: row ? 1 : 0 };
+        }
+        if (sql.includes("SELECT id FROM background_jobs")) {
+          const [kind] = values ?? [];
+          const row = [...jobsById.values()].find((candidate) => candidate.kind === kind
+            && ["queued", "running"].includes(candidate.status));
+          return { rows: row ? [{ id: row.id }] : [], rowCount: row ? 1 : 0 };
+        }
+        return { rows: [], rowCount: 0 };
+      },
+      release(discard?: boolean) {
+        released.push(discard === true);
+      }
+    };
+
+    return {
+      Pool: class {
+        async connect() {
+          return client;
+        }
+
+        async query(sql: string) {
+          if (sql === "SELECT 1") return { rows: [{ value: 1 }], rowCount: 1 };
+          return { rows: [], rowCount: 0 };
+        }
+      },
+      released,
+      setRollbackFails(value: boolean) {
+        rollbackFails = value;
+      }
+    };
+  }
 
   beforeEach(() => {
     vi.resetModules();
@@ -503,6 +609,8 @@ describe("PostgreSQL transaction helper for durable jobs", () => {
   afterEach(() => {
     if (savedDatabaseUrl === undefined) delete process.env.DATABASE_URL;
     else process.env.DATABASE_URL = savedDatabaseUrl;
+    if (savedNodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = savedNodeEnv;
     vi.doUnmock("pg");
     vi.resetModules();
   });
@@ -587,6 +695,109 @@ describe("PostgreSQL transaction helper for durable jobs", () => {
     expect(queries.some((sql) => sql.includes("FOR UPDATE SKIP LOCKED"))).toBe(true);
     expect(queries.filter((sql) => sql === "BEGIN")).toHaveLength(4);
     expect(queries.filter((sql) => sql === "COMMIT")).toHaveLength(4);
+  });
+
+  it("keeps PostgreSQL readiness after handled background-job enqueue conflicts", async () => {
+    process.env.NODE_ENV = "test";
+    process.env.DATABASE_URL = "postgres://synthetic.test/pc_supporter";
+    const database = createFakePostgresDatabase();
+    vi.doMock("pg", () => ({ Pool: database.Pool }));
+    vi.resetModules();
+    const [repository, backgroundJobs] = await Promise.all([
+      import("./repository"),
+      import("./background-job-store")
+    ]);
+
+    await repository.initializePersistence();
+    const original = await backgroundJobs.backgroundJobStore.enqueue({
+      kind: "price-refresh",
+      payload: { dryRun: true, coreLimit: 0, accessoryLimit: 0, delayMs: 0 },
+      idempotencyKey: "price-refresh:domain-conflict"
+    });
+
+    await expect(backgroundJobs.backgroundJobStore.enqueue({
+      kind: "price-refresh",
+      payload: { dryRun: true, coreLimit: 1, accessoryLimit: 0, delayMs: 0 },
+      idempotencyKey: "price-refresh:domain-conflict"
+    })).rejects.toBeInstanceOf(backgroundJobs.BackgroundJobIdempotencyConflictError);
+    await expect(repository.persistenceDiagnostics()).resolves.toMatchObject({
+      databaseConfigured: true,
+      storageMode: "postgres",
+      ready: true
+    });
+    await expect(repository.withPostgresTransaction("after idempotency conflict", async (client) => {
+      await client.query("SELECT 1");
+      return "ready";
+    })).resolves.toBe("ready");
+
+    await expect(backgroundJobs.backgroundJobStore.enqueue({
+      kind: "price-refresh",
+      payload: { dryRun: false, coreLimit: 1, accessoryLimit: 0, delayMs: 0 },
+      deduplicateActive: true
+    })).rejects.toBeInstanceOf(backgroundJobs.BackgroundJobActiveConflictError);
+    await expect(repository.persistenceDiagnostics()).resolves.toMatchObject({ ready: true });
+
+    const next = await backgroundJobs.backgroundJobStore.enqueue({
+      kind: "catalog-ingestion",
+      payload: { afterConflictId: original.id },
+      idempotencyKey: "catalog-ingestion:after-conflict"
+    });
+    expect(next).toMatchObject({ kind: "catalog-ingestion", payload: { afterConflictId: original.id } });
+    await expect(repository.persistenceDiagnostics()).resolves.toMatchObject({ ready: true });
+    expect(database.released).not.toContain(true);
+  });
+
+  it("marks PostgreSQL unavailable after a genuine query error even when rollback succeeds", async () => {
+    process.env.NODE_ENV = "test";
+    process.env.DATABASE_URL = "postgres://synthetic.test/pc_supporter";
+    const database = createFakePostgresDatabase();
+    vi.doMock("pg", () => ({ Pool: database.Pool }));
+    vi.resetModules();
+    const repository = await import("./repository");
+    await repository.initializePersistence();
+
+    await expect(repository.withPostgresTransaction("synthetic query failure", async (client) => {
+      await client.query("SELECT synthetic_database_failure");
+    })).rejects.toThrow("synthetic PostgreSQL query failure");
+    await expect(repository.persistenceDiagnostics()).resolves.toMatchObject({
+      databaseConfigured: true,
+      storageMode: "postgres",
+      ready: false,
+      unavailableReason: "database_unavailable"
+    });
+    expect(database.released.at(-1)).toBe(false);
+  });
+
+  it("marks PostgreSQL unavailable when an expected domain conflict cannot be rolled back", async () => {
+    process.env.NODE_ENV = "test";
+    process.env.DATABASE_URL = "postgres://synthetic.test/pc_supporter";
+    const database = createFakePostgresDatabase();
+    vi.doMock("pg", () => ({ Pool: database.Pool }));
+    vi.resetModules();
+    const [repository, backgroundJobs] = await Promise.all([
+      import("./repository"),
+      import("./background-job-store")
+    ]);
+    await repository.initializePersistence();
+    await backgroundJobs.backgroundJobStore.enqueue({
+      kind: "price-refresh",
+      payload: { dryRun: true, coreLimit: 0 },
+      idempotencyKey: "price-refresh:rollback-failure"
+    });
+
+    database.setRollbackFails(true);
+    await expect(backgroundJobs.backgroundJobStore.enqueue({
+      kind: "price-refresh",
+      payload: { dryRun: false, coreLimit: 1 },
+      idempotencyKey: "price-refresh:rollback-failure"
+    })).rejects.toBeInstanceOf(backgroundJobs.BackgroundJobIdempotencyConflictError);
+    await expect(repository.persistenceDiagnostics()).resolves.toMatchObject({
+      databaseConfigured: true,
+      storageMode: "postgres",
+      ready: false,
+      unavailableReason: "database_unavailable"
+    });
+    expect(database.released.at(-1)).toBe(true);
   });
 });
 
