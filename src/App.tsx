@@ -3635,6 +3635,7 @@ function App() {
       onEdit={() => navigate(routeHasUpgradeEntry ? "/build?entry=upgrade" : "/build", "editor")}
       upgradeEntry={view === "result" && routeHasUpgradeEntry}
       onCloneSharedBuild={cloneSharedBuildToDraft}
+      onStartNew={() => navigate("/start", "start")}
       onBack={() => navigate("/", "home")}
       onCheck={() => void checkBuild()}
       initialFindingRuleId={pendingResultFindingRuleId}

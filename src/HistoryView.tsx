@@ -12,6 +12,7 @@ import { type SavedBuildPriorityAction, savedBuildNextActionFor } from "../share
 import { type SavedBuildPurchaseProgressFilter, savedBuildPurchaseProgressMatchesFilter, savedBuildPurchaseProgressSummaryFor } from "../shared/saved-build-purchase-progress";
 import { type SavedBuildVersionGroup, savedBuildVersionGroupsFor, savedBuildVersionLabelFor } from "../shared/saved-build-version";
 import { savedBuildOriginAvailabilityLabelFor, savedBuildOriginDetailFor, savedBuildOriginLabelFor, type SavedBuildOriginAvailability } from "../shared/saved-build-origin";
+import { savedBuildPreferenceTagsFor } from "../shared/recommendation-preference-tags";
 import { GENERATOR_VARIANTS_LOCAL_SHARES_STORAGE_KEY } from "../shared/generator-variants-local-share";
 import { type AccessoryItem, type BuildSelection, type CompatibilityResult, type Part, type RecommendationPreferences, type SavedBuild, CATEGORY_LABELS, isKnownPrice, LISTING_POLICY_LABELS, PART_CATEGORIES, RECOMMENDATION_PROFILE_LABELS } from "../shared/types";
 import type { SavedBuildLiveCheck } from "./SavedBuildComparisonDecision";
@@ -817,6 +818,7 @@ export function HistoryView({ builds, currentBuild, currentPreferences, partMap,
       const monitorAssessment = monitorItem?.status === "ready" ? savedBuildMonitorAssessmentFor(monitorItem.snapshot, monitorItem.transition) : undefined;
       const metadataHistory = metadataHistoryStates[saved.id];
       const originStatus = saved.origin?.sourceShareId ? originAvailability[saved.origin.sourceShareId] : undefined;
+      const preferenceTags = preferences ? savedBuildPreferenceTagsFor(preferences) : [];
       const purchaseProgressLabel = purchaseProgress.status === "completed" ? "모두 구매 완료" : purchaseProgress.status === "in-progress" ? "구매 진행 중" : "진행 정보 없음";
       const purchaseProgressMeta = purchaseProgress.status === "unrecorded"
         ? purchaseProgress.historyCount > 0 ? `이전 이력 ${purchaseProgress.historyCount}개` : ""
@@ -827,6 +829,7 @@ export function HistoryView({ builds, currentBuild, currentPreferences, partMap,
         {saved.decisionNote && <div className="history-card-decision-note" data-testid="saved-build-decision-note"><FiInfo /><div><span>선택 메모</span><strong>{saved.decisionNote}</strong></div></div>}
 
         <p>부품 종류 {selectedCount}개{accessoryCount > 0 ? ` · 주변 부품 ${accessoryCount}종` : ""}{summary ? ` · ${summary.priceComplete && isKnownPrice(summary.totalPriceWon) ? formatWon(summary.totalPriceWon) : "-"}` : ""}{preferences ? ` · ${RECOMMENDATION_PROFILE_LABELS[preferences.profile]} · ${LISTING_POLICY_LABELS[preferences.listingPolicy ?? "retail_only"]}` : ""}{saved.expiresAt ? ` · 공유 만료 ${new Date(saved.expiresAt).toLocaleString("ko-KR")}` : " · 공유 기한 없음"}</p>
+        {preferenceTags.length > 0 && <div className="history-card-preference-tags" data-testid={`saved-build-preference-tags-${saved.id}`} aria-label="생성 조건">{preferenceTags.map((tag) => <span key={tag}>{tag}</span>)}</div>}
         <div className="history-preview">{PART_CATEGORIES.filter((category) => selectionList(saved.selection, category).length > 0).slice(0, 5).map((category) => <span key={category}><CategoryIcon category={category} /> {CATEGORY_LABELS[category]}</span>)}{accessoryCount > 0 && <span><FiTool /> 주변 {accessoryCount}종</span>}{selectedCount > 5 && <span>외 {selectedCount - 5}종</span>}</div>
         <div className={`history-card-purchase-progress ${purchaseProgress.status}`} data-testid={`saved-build-purchase-progress-${saved.id}`}><div className="history-card-purchase-progress-heading"><span>구매 진행률</span><div><strong>{purchaseProgress.status === "unrecorded" ? "기록 없음" : `${purchaseProgress.checked} / ${purchaseProgress.total}개`}</strong><button className="text-button history-card-purchase-progress-open" type="button" data-testid={`saved-build-purchase-list-${saved.id}`} onClick={() => onOpen(saved, "purchase-list")} disabled={openingBuildId !== null}>{openingBuildId === saved.id ? <><FiLoader className="spin" /> 여는 중...</> : <><FiExternalLink /> 구매 목록 보기</>}</button></div></div>{purchaseProgress.status !== "unrecorded" && <div className="history-card-purchase-progress-bar" role="progressbar" aria-label={`${saved.name} 구매 진행률 ${purchaseProgress.percent}%`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={purchaseProgress.percent}><span style={{ width: `${purchaseProgress.percent}%` }} /></div>}{purchaseProgressMeta && <small>{purchaseProgressMeta}</small>}</div>
         <SavedBuildMonitorCardState item={monitorItem} loading={monitorLoading} />

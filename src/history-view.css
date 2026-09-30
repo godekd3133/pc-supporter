@@ -489,6 +489,10 @@
 
 .history-revoke-button { display: inline-flex; align-items: center; gap: 4px; margin-top: 9px; color: #a36f6f; font-size: 8px; }
 
+.history-card-preference-tags { display: flex; flex-wrap: wrap; gap: 4px; margin: -8px 0 10px; }
+
+.history-card-preference-tags span { display: inline-flex; align-items: center; padding: 3px 6px; border: 1px solid #d4e4ef; border-radius: 999px; color: #5c7d91; background: rgba(244, 247, 248, .7); font-size: 8px; font-weight: 700; white-space: nowrap; }
+
 .history-preview { display: flex; flex-wrap: wrap; gap: 5px; min-height: 27px; margin-bottom: 17px; }
 
 .history-preview span { display: inline-flex; align-items: center; gap: 4px; padding: 5px 6px; border-radius: 5px; color: #75878d; background: #f4f7f8; font-size: 8px; }

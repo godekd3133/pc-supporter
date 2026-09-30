@@ -11,6 +11,7 @@ import type { BudgetLadderShareSnapshot } from "../shared/budget-ladder-share";
 import type { BudgetLadderLocalShareEntry } from "../shared/budget-ladder-local-history";
 import { LOCAL_IMPORT_MAX_BYTES } from "../shared/file-import-limits";
 import { GENERATOR_VARIANTS_LOCAL_HISTORY_KEY, generatorVariantsLocalHistoryFromJson, generatorVariantsLocalHistoryRemember, generatorVariantsLocalHistoryRemove, generatorVariantsLocalHistoryToJson } from "../shared/generator-variants-local-history";
+import { engineConditionTagsFor } from "../shared/recommendation-preference-tags";
 import type { GeneratorVariantsLocalHistoryEntry } from "../shared/generator-variants-local-history";
 import { GENERATOR_VARIANTS_LOCAL_SHARES_STORAGE_KEY, generatorVariantsLocalShareExpired, generatorVariantsLocalShareRemember, generatorVariantsLocalShareRemove, generatorVariantsLocalSharesFromJson, generatorVariantsLocalSharesToJson } from "../shared/generator-variants-local-share";
 import type { GeneratorVariantsLocalShareEntry } from "../shared/generator-variants-local-share";
@@ -220,16 +221,7 @@ function savedPresetCapacityLabelFor(gb: number) {
 }
 
 export function savedPresetConditionTagsFor(preset: SavedGeneratorPreset): string[] {
-  const tags: string[] = [];
-  if (preset.profile === "gaming") {
-    tags.push(GAMING_RESOLUTION_LABELS[preset.gamingResolution], GAMING_REFRESH_RATE_LABELS[preset.gamingRefreshRate]);
-    if (preset.gamingGraphicsPreset) tags.push(GAMING_GRAPHICS_PRESET_LABELS[preset.gamingGraphicsPreset]);
-    if (preset.gamingUpscaling) tags.push(GAMING_UPSCALING_LABELS[preset.gamingUpscaling]);
-    if (preset.gamingRayTracing) tags.push("레이 트레이싱");
-    if (preset.gamingGameIds && preset.gamingGameIds.length > 0) tags.push(`게임 ${preset.gamingGameIds.length}개`);
-  } else if (preset.profile === "general" && preset.performanceTier) {
-    tags.push(RECOMMENDATION_PERFORMANCE_TIER_LABELS[preset.performanceTier]);
-  }
+  const tags: string[] = engineConditionTagsFor(preset);
   tags.push(preset.includeGpu ? "외장 GPU" : "내장 그래픽");
   tags.push(`RAM ${preset.memoryCapacityGb}GB`, `SSD ${savedPresetCapacityLabelFor(preset.storageCapacityGb)}`);
   if (preset.hddCount > 0) tags.push(`HDD ${savedPresetCapacityLabelFor(preset.hddCapacityGb)}×${preset.hddCount}`);
