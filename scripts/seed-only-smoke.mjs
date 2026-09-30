@@ -183,7 +183,11 @@ try {
   });
   assert(alternatives.items?.some((part) => part.id === "mb-b650-4x3"), "호환되지 않는 메인보드에 대한 안전 대체 후보가 없습니다.", alternatives);
   assert(alternatives.items?.every((part) => part.candidateRisk === "safe"), "safe 후보 응답에 안전하지 않은 후보가 포함되었습니다.", alternatives.items);
-  assert(alternatives.items?.every((part) => part.recommendationTrust && part.decision), "대체 후보에 추천 근거 또는 판단 요약이 없습니다.", alternatives.items);
+  assert(alternatives.items?.every((part) => Number.isInteger(part.remainingBlockers) && part.remainingBlockers >= 0
+    && Number.isInteger(part.remainingWarnings) && part.remainingWarnings >= 0
+    && Number.isInteger(part.remainingUnknown) && part.remainingUnknown >= 0
+    && Array.isArray(part.candidateReasons) && part.candidateReasons.every((reason) => typeof reason === "string" && reason.trim().length > 0)
+    && !Object.hasOwn(part, "recommendationTrust") && !Object.hasOwn(part, "decision")), "대체 후보의 공개 호환 상태·남은 문제 수가 없거나 내부 추천 근거가 노출되었습니다.", alternatives.items);
 
   const generated = await jsonResponse("/api/builds/recommend", {
     method: "POST",
