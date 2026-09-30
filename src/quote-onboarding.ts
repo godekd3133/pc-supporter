@@ -2,6 +2,7 @@ import { GAMING_GRAPHICS_PRESET_LABELS, GAMING_UPSCALING_LABELS, RECOMMENDATION_
 import type { BuildGenerationRequest, GamingGraphicsPreset, GamingRefreshRate, GamingResolution, GamingUpscaling, RecommendationFloorWon, RecommendationPerformanceTier, RecommendationPriority, RecommendationProfile } from "../shared/types";
 import { GAMING_GAME_CATEGORY_LABELS, GAMING_GAMES, gamingAdvisoryTuningFor } from "../shared/gaming-catalog";
 import type { GamingGameCategory, GamingGameId, GamingGameOption } from "../shared/gaming-catalog";
+import type { GeneratorPresetConfig } from "../shared/generator-preset";
 
 export type OnboardingStep = "intent" | "mode" | "upgrade" | "usecase" | "games" | "performance" | "graphics" | "works" | "intensity" | "spec" | "budget" | "summary";
 export type OnboardingIntent = "new" | "upgrade" | "later";
@@ -216,6 +217,66 @@ export function onboardingStateFromJson(raw: string | null | undefined): Onboard
   } catch {
     return null;
   }
+}
+
+// 자동 구성 프리셋을 온보딩 마법사로 가져올 때의 초기 상태.
+// 마법사가 표현하지 못하는 조건(우선순위·HDD·구매 조건)은 주입하지 않고,
+// 요약 화면에서 예산·성능 조건을 다시 고를 수 있게 summary 단계로 연다.
+const PRESET_WORK_FALLBACK: Record<"office" | "development" | "creator", OnboardingWork> = {
+  office: "office",
+  development: "dev",
+  creator: "video"
+};
+
+export function onboardingStateForGeneratorPreset(config: GeneratorPresetConfig): OnboardingState {
+  const base = initialOnboardingState();
+  const budgetWon = clampBudget(config.budgetWon);
+  if (config.profile === "gaming") {
+    const games = (config.gamingGameIds ?? [])
+      .filter((id): id is OnboardingGame => GAME_IDS.includes(id as OnboardingGame))
+      .slice(0, MAX_ONBOARDING_GAMES);
+    return {
+      ...base,
+      step: "summary",
+      intent: "new",
+      mode: "task",
+      usecase: "gaming",
+      games,
+      resolution: config.gamingResolution,
+      refreshRate: config.gamingRefreshRate,
+      graphicsPreset: config.gamingGraphicsPreset ?? base.graphicsPreset,
+      rayTracing: config.gamingRayTracing ?? false,
+      upscaling: config.gamingUpscaling ?? base.upscaling,
+      memoryGb: config.memoryCapacityGb,
+      storageGb: config.storageCapacityGb,
+      budgetWon
+    };
+  }
+  if (config.profile === "general") {
+    return {
+      ...base,
+      step: "summary",
+      intent: "new",
+      mode: "spec",
+      specTier: config.performanceTier ?? base.specTier,
+      specIncludeGpu: config.includeGpu,
+      memoryGb: config.memoryCapacityGb,
+      storageGb: config.storageCapacityGb,
+      budgetWon
+    };
+  }
+  return {
+    ...base,
+    step: "summary",
+    intent: "new",
+    mode: "task",
+    usecase: "work",
+    works: [PRESET_WORK_FALLBACK[config.profile]],
+    intensity: config.memoryCapacityGb >= 64 ? "heavy" : config.memoryCapacityGb <= 16 ? "light" : "balanced",
+    memoryGb: config.memoryCapacityGb,
+    storageGb: config.storageCapacityGb,
+    budgetWon
+  };
 }
 
 export function primaryWorkFor(works: readonly OnboardingWork[]): OnboardingWorkOption | undefined {

@@ -216,6 +216,8 @@ import { savedBuildMonitorAlertsFromJson, savedBuildMonitorAlertsToJson, savedBu
 import { savedWatchlistLinksFromJson } from "./watchlist-link-storage";
 import type { SavedWatchlistLink } from "./watchlist-link-storage";
 import type { GeneratorBudgetResult, GeneratorVariantResult } from "./BuildGeneratorView";
+import { ONBOARDING_STORAGE_KEY, onboardingStateForGeneratorPreset, onboardingStateToJson } from "./quote-onboarding";
+import type { SavedGeneratorPreset } from "../shared/generator-preset";
 import { GENERATOR_VARIANTS_DRAFT_TRANSFER_KEY, generatorVariantsDraftTransferFromUnknown, type GeneratorVariantsDraftTransferOrigin } from "../shared/generator-variants-share";
 import type { SavedBuildOrigin } from "../shared/saved-build-origin";
 import type { PickerCandidateMode, PickerPart } from "./PartPicker";
@@ -1741,6 +1743,18 @@ function App() {
     setGeneratorDiagnostics([]);
     setGeneratorRecoveryOptions([]);
     navigate(`/recommend${priority ? `?priority=${encodeURIComponent(priority)}` : ""}`, "generator");
+  }
+
+  // 저장된 자동 구성 프리셋을 온보딩 마법사에 주입한다 — 요약 화면에서
+  // 예산·성능 조건을 다시 고른 뒤 /recommend로 넘어가는 편집 경로다.
+  function openGeneratorPresetInOnboarding(preset: SavedGeneratorPreset) {
+    try {
+      safeSessionStorage.setItem(ONBOARDING_STORAGE_KEY, onboardingStateToJson(onboardingStateForGeneratorPreset(preset)));
+    } catch {
+      // Session storage may be blocked; the wizard then opens a fresh draft.
+    }
+    navigate("/start?preset=1", "start");
+    setToast(`${preset.name} 프리셋을 견적 설정에 불러왔어요. 예산과 조건을 확인하고 필요하면 수정하세요.`);
   }
 
   function resetRouteTransientState() {
@@ -3476,6 +3490,7 @@ function App() {
         onToast={setToast}
         onBudgetLadderShareSaved={rememberBudgetLadderShare}
         onBudgetLadderShareRevoked={forgetBudgetLadderShare}
+        onEditPresetInOnboarding={openGeneratorPresetInOnboarding}
         onBack={() => navigate("/", "home")}
       />
     </Suspense>
@@ -3685,7 +3700,7 @@ function App() {
   return (
     <div className="app-shell" data-route-key={locationKey}>
       <a className="skip-to-content" href="#main-content">본문으로 건너뛰기</a>
-      <Suspense fallback={<AppHeaderLoadingFallback />}><LazyAppHeader view={view} networkOnline={networkOnline} apiStatus={apiStatusDetails} bootstrapLoading={bootstrapLoading} bootstrapErrorCount={bootstrapIssues.length} savedBuildUnreadAlertCount={savedBuildUnreadAlertCount} watchlistUnreadAlertCount={watchlistUnreadAlertCount} catalogRefreshProgress={catalogRefreshProgress} onHome={() => navigate("/", "home")} onBuild={() => navigate("/build", "editor")} onGenerate={() => openGenerator()} onCatalog={() => navigate("/catalog", "catalog")} onAccessories={() => navigate("/accessories", "accessories")} onPriceWatchlist={() => navigate("/watchlist", "pricewatchlist")} onHistory={() => navigate("/history", "history")} /></Suspense>
+      <Suspense fallback={<AppHeaderLoadingFallback />}><LazyAppHeader view={view} networkOnline={networkOnline} apiStatus={apiStatusDetails} bootstrapLoading={bootstrapLoading} bootstrapErrorCount={bootstrapIssues.length} savedBuildUnreadAlertCount={savedBuildUnreadAlertCount} watchlistUnreadAlertCount={watchlistUnreadAlertCount} catalogRefreshProgress={catalogRefreshProgress} onHome={() => navigate("/", "home")} onBuild={() => navigate("/build", "editor")} onGenerate={() => openGenerator()} onCatalog={() => navigate("/catalog", "catalog")} onAccessories={() => navigate("/accessories", "accessories")} onPriceWatchlist={() => navigate("/watchlist", "pricewatchlist")} onHistory={() => navigate("/history", "history")} onAdmin={() => navigate("/admin", "admin")} /></Suspense>
       {localStorageNotice}
       {draftOverwriteNotice}
       <main className="page-container" id="main-content" tabIndex={-1}>{(incomingDraft || incomingPreferences) && <DraftSyncNotice build={incomingDraft ?? undefined} preferences={incomingPreferences ?? undefined} onApply={() => { skipNextHistoryRef.current = true; if (incomingDraft) setBuild(incomingDraft); if (incomingPreferences) setRecommendationPreferences(incomingPreferences); setResult(null); setCheckedInputFingerprint(null); setChangeHistory([]); setIncomingDraft(null); setIncomingPreferences(null); setToast("다른 탭에서 바뀐 견적을 불러왔어요. 호환 결과를 새로 확인해 주세요."); }} onDismiss={() => { setIncomingDraft(null); setIncomingPreferences(null); }} />}{(bootstrapIssues.length > 0 || !networkOnline || apiStatusDetails.status === "offline" || apiStatusDetails.status === "degraded") ? <BootstrapNotice issues={bootstrapIssues} online={networkOnline} apiStatus={apiStatusDetails} onRetry={(resource) => setBootstrapRetryRequest((current) => ({ resource, nonce: current.nonce + 1 }))} onRetryAll={() => setBootstrapRetryRequest((current) => ({ resource: null, nonce: current.nonce + 1 }))} retryingResource={bootstrapLoading ? bootstrapRetryRequest.resource : null} retryingAll={bootstrapLoading && bootstrapRetryRequest.resource === null} /> : null}<div className={`route-stage route-stage-${view}`} key={view}>{content}</div></main>

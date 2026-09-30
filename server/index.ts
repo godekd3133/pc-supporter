@@ -1908,6 +1908,25 @@ function buildGenerationVariantResultsFor(catalog: Part[], request: BuildGenerat
   });
 }
 
+// floor 계산은 풀 전수 탐색이라 작은 서버에서 수 초가 걸린다. 같은 요청이
+// 반복되면(온보딩 버튼, 복구 제안 확인) 캐시로 응답한다 — 키는 카탈로그 배열
+// 참조라 재로드 시 자동 무효화된다. 엔진 타겟 필터도 풀을 바꾸므로 키에 포함한다.
+const generationFloorCache = new WeakMap<Part[], Map<string, number | null>>();
+function generationFloorFor(catalog: Part[], request: BuildGenerationRequest) {
+  const targetFilters = loadEngineTargetFiltersConfig();
+  const key = JSON.stringify(request) + "|" + JSON.stringify(targetFilters);
+  let byRequest = generationFloorCache.get(catalog);
+  if (!byRequest) {
+    byRequest = new Map();
+    generationFloorCache.set(catalog, byRequest);
+  }
+  if (byRequest.has(key)) return byRequest.get(key) ?? null;
+  const value = minimumFeasibleBuildPriceFor(catalog, request, { targetFilters }) ?? null;
+  if (byRequest.size >= 300) byRequest.clear();
+  byRequest.set(key, value);
+  return value;
+}
+
 // 온보딩·복구 제안이 "이 요청 그대로 만들 수 있는 최저 견적"을 표시하도록
 // 요청 형태 그대로의 실측 최저가를 반환한다 — 프로필 평균이 아니라 요청과 같은
 // 풀·게이트를 적용한 값이어야 다음 예산 제안이 다시 실패하지 않는다.
@@ -1919,7 +1938,7 @@ app.post("/api/builds/recommend/floor", publicRecommendationRateLimit, async (re
   }
   try {
     const catalog = await loadCatalog();
-    response.json({ floorWon: minimumFeasibleBuildPriceFor(catalog, parsed.request, { targetFilters: loadEngineTargetFiltersConfig() }) ?? null });
+    response.json({ floorWon: generationFloorFor(catalog, parsed.request) });
   } catch (error: unknown) {
     recordGenerationFailure({
       route: "/api/builds/recommend/floor",

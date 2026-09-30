@@ -92,6 +92,7 @@ PC Supporter — PC 부품 카탈로그, 호환성 검사, 가격·원문·성�
 - `server/*.test.ts`, `shared/*.test.ts`, `src/*.test.ts`: Vitest 회귀 테스트.
 - `scripts/`: build 검증과 브라우저 smoke/수집 보조 도구.
 - 실제 Git root는 이 디렉터리이며, 이미 존재하는 dirty 변경은 사용자 작업으로 간주해 보존한다. 광범위한 reset/clean/stage/commit/push는 지시 없이는 하지 않는다.
+- 저장된 자동 구성 프리셋의 온보딩 편집 seam: `onboardingStateForGeneratorPreset()`(`src/quote-onboarding.ts`)이 preset config를 wizard state(gaming→게임 분기, general→spec 분기, office/development/creator→대표 work 분기, `step:"summary"`)로 매핑하고, App이 sessionStorage(`ONBOARDING_STORAGE_KEY`)에 쓴 뒤 `/start?preset`으로 이동한다. `QuoteOnboardingView`는 `?preset` 파라미터가 있으면 "작성 중인 견적" resume 화면을 건너뛰고 주입된 단계에서 시작한다. wizard가 표현하지 못하는 조건(우선순위·HDD·구매 조건)은 주입하지 않으며, 사이드바 카드의 "불러오기"는 손실 없는 폼 복원 경로로 유지한다. 카드 조건 요약은 `savedPresetConditionTagsFor()`가 만든다.
 
 ## Tools
 
@@ -125,3 +126,4 @@ PC Supporter — PC 부품 카탈로그, 호환성 검사, 가격·원문·성�
 - TestFlight build 6 업로드 완료(2026-09-15 17:23 KST, Delivery UUID `fd1588c2-9da8-4636-8f94-4fde1f4958a0`): `APPLE_TEAM_ID=A23ZPKGMW9 VITE_API_BASE_URL=https://pc-supporter.3-39-79-1.sslip.io node scripts/build-ios-archive.mjs`로 dist-mobile 재빌드+archive+IPA export 후 `xcrun altool --upload-app`. ASC API 확인 결과 즉시 `VALID`, Internal 그룹 `builds=[6,5,4,3,2]` 자동 포함 — 내부 테스터는 리뷰 없이 설치 가능. 외부 그룹 `Internal Testers`는 builds=[4,3,2]로 build 5·6 모두 미배정(수동 정책).
 - 웹 프로덕션 배포 보류(2026-09-15): Toss+메뉴 숨김이 포함된 `dist/`는 빌드 완료(`index-DzZOZKyi.js`)지만 `aws login` 세션 만료로 Lightsail 임시 SSH 크레덴셜 발급이 불가 — 사용자 재인증 후 `lightsail-deploy.sh --preserve-env`로 배포 필요.
 - 병행 작업 주의: 별도 프로세스가 동시에 `server/engine.ts`·`shared/catalog-spec-coverage.ts`·`src/App.tsx`·`scripts/browser-smoke.mjs`를 수정 중(missing-field 한글 라벨 매핑 + smoke 조건화). 17:23 이후 등장한 미커밋 변경으로 build 6 IPA(17:21 생성)에는 미포함 — 해당 작업의 커밋·배포는 그 프로세스의 몫.
+- 관리자 진입 경로 복원(2026-09-30): `7a85da9`에서 제품 정책으로 숨겼던 "데이터 센터" 메뉴를 사용자 요청으로 되돌림 — `AppHeader`에 `onAdmin` prop을 다시 받고 데스크톱 topnav 끝과 모바일 더보기 시트(4번째 항목, FiDatabase)에 배치. `/admin`은 production에서 `ADMIN_PASSWORD` 게이트가 그대로 적용된다.

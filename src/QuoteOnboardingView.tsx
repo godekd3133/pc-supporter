@@ -183,6 +183,13 @@ function readStoredOnboarding(): { state: OnboardingState; hasDraft: boolean } {
   }
 }
 
+// /start?preset — 자동 구성 프리셋이 온보딩 상태로 주입된 진입은
+// "작성 중인 견적" 확인 화면을 건너뛰고 주입된 단계에서 바로 시작한다.
+function onboardingSkipsResume() {
+  if (typeof window === "undefined") return false;
+  return new URLSearchParams(window.location.search).has("preset");
+}
+
 function OptionRow({ title, description, Icon, selected, recommended, checkStyle, onClick }: { title: string; description?: string; Icon?: IconType; selected: boolean; recommended?: boolean; checkStyle?: boolean; onClick: () => void }) {
   return (
     <button type="button" className={`onboarding-option${selected ? " selected" : ""}`} onClick={onClick} aria-pressed={selected}>
@@ -236,7 +243,7 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome, floor
   const [storedOnboarding] = useState(readStoredOnboarding);
   const [state, setState] = useState<OnboardingState>(storedOnboarding.state);
   const headingRef = useRef<HTMLHeadingElement | null>(null);
-  const [showResume, setShowResume] = useState(storedOnboarding.hasDraft);
+  const [showResume, setShowResume] = useState(storedOnboarding.hasDraft && !onboardingSkipsResume());
   const [gameQuery, setGameQuery] = useState("");
   const [gameCategory, setGameCategory] = useState<OnboardingGameCategory | "all">("all");
   const [gameLimitReached, setGameLimitReached] = useState(false);

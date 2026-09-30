@@ -6252,6 +6252,8 @@ export function generateBuildDraft(catalog: Part[], request: BuildGenerationRequ
 // 빔 탐색 없이 후보 풀 안에서 만들 수 있는 가장 저렴한 호환 조합의 총액을 구한다.
 // 목표별 예산 안내와 실패 시 "예산을 얼마나 올려야 하는지" 복구 제안이 같은
 // 실측 하한을 공유하도록, 풀 구성·호환 게이트·우선 후보 필터를 생성기와 동일하게 적용한다.
+// 풀은 가격 오름차순으로 정렬해 두고 "첫 호환 후보 = 그 차원의 최솟값"으로 찾는다 —
+// (cpu × 보드 × 쿨러 × GPU × 케이스) 전수 열거는 카탈로그가 커지면 수 초가 된다.
 export function minimumFeasibleBuildPriceFor(catalog: Part[], request: BuildGenerationRequest, options: EngineGenerationOptions = {}): number | undefined {
   const context = generatorSearchContextFor(catalog, request, engineNowMilliseconds(options.now), options.targetFilters);
   if (context.missingPools.length > 0) return undefined;
@@ -6272,17 +6274,35 @@ export function minimumFeasibleBuildPriceFor(catalog: Part[], request: BuildGene
     gpuVendorPreference,
     gpuPool
   } = context;
-  const unboundedBudget = Number.MAX_SAFE_INTEGER;
+  const pricedParts = (parts: Part[]) => parts.filter((part): part is Part & { priceWon: number } => isKnownPrice(part.priceWon));
+  const byPrice = (left: { priceWon: number }, right: { priceWon: number }) => left.priceWon - right.priceWon;
   const kitQuantity = (part: Part) => memoryKitQuantityFor(part, memoryCapacityGb);
-  const minCost = (parts: Part[], quantityFor: (part: Part) => number = () => 1) => {
-    let min = Number.POSITIVE_INFINITY;
-    for (const part of parts) {
-      if (!isKnownPrice(part.priceWon)) continue;
-      const cost = part.priceWon * quantityFor(part);
-      if (cost < min) min = cost;
-    }
-    return min;
-  };
+  const memorySorted = pricedParts(memoryPool.parts).sort((a, b) => a.priceWon * kitQuantity(a) - b.priceWon * kitQuantity(b));
+  const ssdSorted = pricedParts(ssdPool.parts).sort(byPrice);
+  const hddSorted = pricedParts(hddPool?.parts ?? []).sort(byPrice);
+  const caseSorted = pricedParts(casePool.parts).sort(byPrice);
+  const psuSorted = pricedParts(psuPool.parts).sort(byPrice);
+  const coolerSorted = pricedParts(coolerPool.parts).sort(byPrice);
+  const cpuSorted = pricedParts(cpuPool.parts).filter((part) => request.includeGpu || part.specs.integratedGraphics === true).sort(byPrice);
+  const motherboardSorted = pricedParts(motherboardPool.parts).sort(byPrice);
+
+  const gpuCandidatesUnsorted = gpuPool === undefined
+    ? []
+    : (() => {
+        const vendorMatched = gpuVendorPreference ? preferGpuVendor(gpuPool.parts, gpuVendorPreference) : gpuPool.parts;
+        const vramMatched = profile === "creator" || profile === "development" ? preferMinGpuVram(vendorMatched, 12) : vendorMatched;
+        return preferBudgetCandidates(vramMatched, Number.MAX_SAFE_INTEGER, 0.6);
+      })();
+  const gpuSorted = pricedParts(gpuCandidatesUnsorted).sort(byPrice);
+
+  // 차원별 낙관적 하한 — 호환 무시하고 풀 최저가만 합산한 값. 이 값으로도
+  // 현재 최선을 못 이기는 조합은 실제 호환 검사 없이 건너뛴다.
+  const minAnyMemory = memorySorted.length > 0 ? memorySorted[0].priceWon * kitQuantity(memorySorted[0]) : 0;
+  const minAnyStorage = (ssdSorted[0]?.priceWon ?? 0) + (hddCount > 0 ? (hddSorted[0]?.priceWon ?? 0) * hddCount : 0);
+  const minAnyCase = caseSorted[0]?.priceWon ?? 0;
+  const minAnyPsu = psuSorted[0]?.priceWon ?? 0;
+  const minAnyGpu = gpuPool === undefined ? 0 : (gpuSorted[0]?.priceWon ?? 0);
+  const optimisticTail = minAnyMemory + minAnyStorage + minAnyCase + minAnyPsu + minAnyGpu;
 
   const psuStateFor = (cpu: Part | undefined, gpu: Part | undefined): GeneratorState => ({
     selection: { memory: [], ssd: [], hdd: [], useIntegratedGraphics: gpu === undefined },
@@ -6292,90 +6312,159 @@ export function minimumFeasibleBuildPriceFor(catalog: Part[], request: BuildGene
     rankingPriority: "balanced"
   });
   const psuCostCache = new Map<string, number>();
+  // 가격 오름차순 파워에서 처음으로 "GPU 커넥터 + 적정 용량"을 통과하는 것 = 최저가.
   const minPsuCostFor = (cpu: Part | undefined, gpu: Part | undefined) => {
     const key = `${cpu?.id ?? ""}|${gpu?.id ?? ""}`;
     const cached = psuCostCache.get(key);
     if (cached !== undefined) return cached;
-    const compatible = psuPool.parts.filter((part) => generatorPsuCanUseGpu(part, gpu));
-    const adequate = preferBudgetCandidates(preferAdequatePsu(compatible, psuStateFor(cpu, gpu)), unboundedBudget, 0.25);
-    const cost = minCost(adequate);
+    const ceilingW = (() => {
+      const needW = estimateSystemPowerW(psuStateFor(cpu, gpu));
+      return Math.max(needW * 1.9, needW + 300, 650);
+    })();
+    let firstAdequate = Number.POSITIVE_INFINITY;
+    let firstAny = Number.POSITIVE_INFINITY;
+    for (const psu of psuSorted) {
+      if (!generatorPsuCanUseGpu(psu, gpu)) continue;
+      if (!Number.isFinite(firstAny)) firstAny = psu.priceWon;
+      if ((psu.specs.wattageW ?? Number.MAX_SAFE_INTEGER) <= ceilingW) { firstAdequate = psu.priceWon; break; }
+    }
+    const cost = Number.isFinite(firstAdequate) ? firstAdequate : firstAny;
     psuCostCache.set(key, cost);
     return cost;
   };
 
-  const gpuCandidates = gpuPool === undefined
-    ? []
-    : (() => {
-        const vendorMatched = gpuVendorPreference ? preferGpuVendor(gpuPool.parts, gpuVendorPreference) : gpuPool.parts;
-        const vramMatched = profile === "creator" || profile === "development" ? preferMinGpuVram(vendorMatched, 12) : vendorMatched;
-        return preferBudgetCandidates(vramMatched, unboundedBudget, 0.6);
-      })();
+  // 메모리 최저가: 생성기와 같은 호환+우선 체인을 거친 뒤 가장 싼 것.
+  const memoryCostCache = new Map<string, number>();
+  const minMemoryCostFor = (cpu: Part, motherboard: Part) => {
+    const key = `${cpu.id}|${motherboard.id}`;
+    const cached = memoryCostCache.get(key);
+    if (cached !== undefined) return cached;
+    const candidates = preferBudgetCandidates(
+      preferMatchingMemoryProfile(preferDualChannelMemory(preferUsableMemorySpeed(memoryPool.parts.filter((part) => generatorMemoryCanUseMotherboard(part, motherboard, cpu, memoryCapacityGb)), motherboard, cpu), memoryCapacityGb), cpu),
+      Number.MAX_SAFE_INTEGER,
+      0.16,
+      kitQuantity
+    );
+    let cost = Number.POSITIVE_INFINITY;
+    for (const part of candidates) {
+      if (!isKnownPrice(part.priceWon)) continue;
+      const total = part.priceWon * kitQuantity(part);
+      if (total < cost) cost = total;
+    }
+    memoryCostCache.set(key, cost);
+    return cost;
+  };
 
-  const cpuCandidates = cpuPool.parts.filter((part) => request.includeGpu || part.specs.integratedGraphics === true);
-  let best = Number.POSITIVE_INFINITY;
-  for (const cpu of cpuCandidates) {
-    if (!isKnownPrice(cpu.priceWon)) continue;
-    for (const motherboard of motherboardPool.parts) {
-      if (!isKnownPrice(motherboard.priceWon) || !generatorCpuCanUseMotherboard(cpu, motherboard)) continue;
-      const memoryCandidates = preferBudgetCandidates(
-        preferMatchingMemoryProfile(preferDualChannelMemory(preferUsableMemorySpeed(memoryPool.parts.filter((part) => generatorMemoryCanUseMotherboard(part, motherboard, cpu, memoryCapacityGb)), motherboard, cpu), memoryCapacityGb), cpu),
-        unboundedBudget,
-        0.16,
-        kitQuantity
-      );
-      const minMemoryCost = minCost(memoryCandidates, kitQuantity);
-      if (!Number.isFinite(minMemoryCost)) continue;
-      const stockCoolerAvailable = cpu.specs.coolerIncluded === true && (cpu.specs.pptW ?? cpu.specs.tdpW ?? 999) <= 100;
-      const coolerCandidates = preferBudgetCandidates(
-        preferCoolerHeadroom(coolerPool.parts.filter((part) => generatorCoolerCanUseCpu(part, cpu)), cpu, profile),
-        unboundedBudget,
-        0.1
-      );
-      const coolerOptions: (Part | undefined)[] = stockCoolerAvailable ? [undefined, ...coolerCandidates] : coolerCandidates;
-      if (coolerOptions.length === 0) continue;
-      const ssdCandidates = preferBudgetCandidates(
-        preferRequestedCapacity(
-          ssdPool.parts.filter((part) => (part.specs.capacityGb ?? 0) >= storageCapacityGb && generatorStorageCanUseMotherboard(part, motherboard, undefined, hddCount)),
-          storageCapacityGb
-        ),
-        unboundedBudget,
-        0.15
-      );
-      if (ssdCandidates.length === 0) continue;
-      let minStorageCost = Number.POSITIVE_INFINITY;
-      for (const ssd of ssdCandidates) {
-        if (!isKnownPrice(ssd.priceWon)) continue;
-        let hddCost = 0;
-        if (hddCount > 0 && hddPool !== undefined) {
-          const hddCandidates = preferBudgetCandidates(
-            preferRequestedCapacity(
-              hddPool.parts.filter((part) => (part.specs.capacityGb ?? 0) >= hddCapacityGb && generatorStorageCanUseMotherboard(part, motherboard, ssd, hddCount)),
-              hddCapacityGb
-            ),
-            unboundedBudget,
-            0.3,
-            hddCount
-          );
-          const minHddCost = minCost(hddCandidates, () => hddCount);
-          if (!Number.isFinite(minHddCost)) continue;
-          hddCost = minHddCost;
-        }
-        minStorageCost = Math.min(minStorageCost, ssd.priceWon + hddCost);
+  // 저장장치 최저가: 보드만 바뀌어도 같은 결과라 보드별로 캐시한다.
+  // HDD 최저가는 SSD가 SATA 포트를 잡아먹는지에만 달려 인터페이스별로 캐시한다.
+  const hddCostCache = new Map<string, number>();
+  const minHddCostFor = (motherboard: Part, ssd: Part) => {
+    const key = `${motherboard.id}|${ssd.specs.interface ?? ""}`;
+    const cached = hddCostCache.get(key);
+    if (cached !== undefined) return cached;
+    const candidates = preferRequestedCapacity(
+      hddSorted.filter((part) => (part.specs.capacityGb ?? 0) >= hddCapacityGb && generatorStorageCanUseMotherboard(part, motherboard, ssd, hddCount)),
+      hddCapacityGb
+    );
+    const cost = candidates[0] !== undefined && isKnownPrice(candidates[0].priceWon) ? candidates[0].priceWon : Number.POSITIVE_INFINITY;
+    hddCostCache.set(key, cost);
+    return cost;
+  };
+  const storageCostCache = new Map<string, number>();
+  const minStorageCostFor = (motherboard: Part) => {
+    const key = motherboard.id;
+    const cached = storageCostCache.get(key);
+    if (cached !== undefined) return cached;
+    let cost = Number.POSITIVE_INFINITY;
+    const ssdCandidates = preferBudgetCandidates(
+      preferRequestedCapacity(
+        ssdSorted.filter((part) => (part.specs.capacityGb ?? 0) >= storageCapacityGb && generatorStorageCanUseMotherboard(part, motherboard, undefined, hddCount)),
+        storageCapacityGb
+      ),
+      Number.MAX_SAFE_INTEGER,
+      0.15
+    );
+    for (const ssd of ssdCandidates) {
+      if (!isKnownPrice(ssd.priceWon)) continue;
+      let hddCost = 0;
+      if (hddCount > 0 && hddPool !== undefined) {
+        const minHdd = minHddCostFor(motherboard, ssd);
+        if (!Number.isFinite(minHdd)) continue;
+        hddCost = minHdd * hddCount;
       }
+      const total = ssd.priceWon + hddCost;
+      if (total < cost) cost = total;
+      const cheapestSsdPrice = ssdCandidates[0] !== undefined && isKnownPrice(ssdCandidates[0].priceWon) ? ssdCandidates[0].priceWon : Number.POSITIVE_INFINITY;
+      if (total <= cheapestSsdPrice) break;
+    }
+    storageCostCache.set(key, cost);
+    return cost;
+  };
+
+  // 쿨러 옵션 목록은 CPU만으로 결정된다 — cpuId로 캐시.
+  const coolerOptionsCache = new Map<string, ((Part & { priceWon: number }) | undefined)[]>();
+  const coolerOptionsFor = (cpu: Part) => {
+    const cached = coolerOptionsCache.get(cpu.id);
+    if (cached !== undefined) return cached;
+    const stockCoolerAvailable = cpu.specs.coolerIncluded === true && (cpu.specs.pptW ?? cpu.specs.tdpW ?? 999) <= 100;
+    const candidates = preferBudgetCandidates(
+      preferCoolerHeadroom(coolerSorted.filter((part) => generatorCoolerCanUseCpu(part, cpu)), cpu, profile),
+      Number.MAX_SAFE_INTEGER,
+      0.1
+    ).filter((part): part is Part & { priceWon: number } => isKnownPrice(part.priceWon));
+    const options: ((Part & { priceWon: number }) | undefined)[] = stockCoolerAvailable ? [undefined, ...candidates] : candidates;
+    coolerOptionsCache.set(cpu.id, options);
+    return options;
+  };
+
+  // 보드+드라이브 개수만으로 호환되는 케이스 목록 — 쿨러·GPU 차원은 이후 필터.
+  const caseByMbCache = new Map<string, Part[]>();
+  const mbCompatibleCasesFor = (motherboard: Part) => {
+    const cached = caseByMbCache.get(motherboard.id);
+    if (cached !== undefined) return cached;
+    const compatible = caseSorted.filter((part) =>
+      motherboard.specs.formFactor !== undefined
+      && part.specs.motherboardFormFactors?.includes(motherboard.specs.formFactor) === true
+      && (hddCount === 0 || (part.specs.hddBays ?? 0) >= hddCount)
+    );
+    caseByMbCache.set(motherboard.id, compatible);
+    return compatible;
+  };
+
+  let best = Number.POSITIVE_INFINITY;
+  for (const cpu of cpuSorted) {
+    if (cpu.priceWon + optimisticTail >= best) break;
+    for (const motherboard of motherboardSorted) {
+      if (cpu.priceWon + motherboard.priceWon + optimisticTail >= best) break;
+      if (!generatorCpuCanUseMotherboard(cpu, motherboard)) continue;
+      const minMemoryCost = minMemoryCostFor(cpu, motherboard);
+      if (!Number.isFinite(minMemoryCost)) continue;
+      const coolerOptions = coolerOptionsFor(cpu);
+      if (coolerOptions.length === 0) continue;
+      const minStorageCost = minStorageCostFor(motherboard);
       if (!Number.isFinite(minStorageCost)) continue;
       const baseCost = cpu.priceWon + motherboard.priceWon + minMemoryCost + minStorageCost;
+      if (baseCost + optimisticTail - minAnyMemory - minAnyStorage >= best) continue;
+      const mbCompatibleCases = mbCompatibleCasesFor(motherboard);
       for (const cooler of coolerOptions) {
-        const coolerCost = isKnownPrice(cooler?.priceWon) ? cooler.priceWon : cooler === undefined ? 0 : Number.POSITIVE_INFINITY;
-        if (!Number.isFinite(coolerCost)) continue;
-        const caseCompatible = casePool.parts.filter((part) => generatorCaseCanUseParts(part, motherboard, cooler, undefined, hddCount));
-        if (gpuPool === undefined) {
-          const caseCost = minCost(preferBudgetCandidates(preferCooledCase(caseCompatible, undefined), unboundedBudget, 0.15));
+        const coolerCost = cooler === undefined ? 0 : cooler.priceWon;
+        if (baseCost + coolerCost + minAnyCase + minAnyPsu + minAnyGpu >= best) break;
+        if (baseCost + coolerCost >= best) continue;
+        const coolerCompatible = cooler === undefined
+          ? mbCompatibleCases
+          : mbCompatibleCases.filter((part) => cooler.specs.maxCoolerHeightMm !== undefined && part.specs.maxCoolerHeightMm !== undefined && cooler.specs.maxCoolerHeightMm <= part.specs.maxCoolerHeightMm);
+        if (gpuSorted.length === 0) {
+          const caseCost = coolerCompatible[0]?.priceWon ?? Number.POSITIVE_INFINITY;
           const psuCost = minPsuCostFor(cpu, undefined);
           if (Number.isFinite(caseCost) && Number.isFinite(psuCost)) best = Math.min(best, baseCost + coolerCost + caseCost + psuCost);
         } else {
-          for (const gpu of gpuCandidates) {
-            if (!isKnownPrice(gpu.priceWon)) continue;
-            const caseCost = minCost(preferBudgetCandidates(preferCooledCase(caseCompatible.filter((part) => generatorCaseCanUseParts(part, motherboard, cooler, gpu, hddCount)), gpu), unboundedBudget, 0.15));
+          for (const gpu of gpuSorted) {
+            if (baseCost + coolerCost + gpu.priceWon + minAnyCase + minAnyPsu >= best) break;
+            const cooled = preferCooledCase(
+              coolerCompatible.filter((part) => gpu.specs.lengthMm !== undefined && part.specs.maxGpuLengthMm !== undefined && gpu.specs.lengthMm <= part.specs.maxGpuLengthMm),
+              gpu
+            );
+            const caseCost = cooled[0]?.priceWon ?? Number.POSITIVE_INFINITY;
             const psuCost = minPsuCostFor(cpu, gpu);
             if (Number.isFinite(caseCost) && Number.isFinite(psuCost)) best = Math.min(best, baseCost + coolerCost + gpu.priceWon + caseCost + psuCost);
           }

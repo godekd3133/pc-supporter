@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { generatedDraftSummaryFor, generatedVariantGamingConditionText, generatorVariantsImportPreviewFor, generatorVariantsJsonFor } from "./BuildGeneratorView";
+import { generatedDraftSummaryFor, generatedVariantGamingConditionText, generatorVariantsImportPreviewFor, generatorVariantsJsonFor, savedPresetConditionTagsFor } from "./BuildGeneratorView";
 import type { BuildGenerationResult } from "../shared/types";
+import type { SavedGeneratorPreset } from "../shared/generator-preset";
 
 const draftSelection: BuildGenerationResult["selection"] = {
   cpu: { partId: "cpu-1", quantity: 1 },
@@ -74,6 +75,53 @@ describe("generatedVariantGamingConditionText", () => {
     const text = generatedVariantGamingConditionText(importedDraft({ profile: "gaming" }));
     expect(text).toContain("144Hz");
     expect(text).not.toContain("FPS");
+  });
+});
+
+describe("savedPresetConditionTagsFor", () => {
+  function savedPresetWith(patch: Partial<SavedGeneratorPreset>): SavedGeneratorPreset {
+    return {
+      id: "preset-1",
+      name: "테스트 프리셋",
+      createdAt: "2026-09-01T00:00:00.000Z",
+      updatedAt: "2026-09-01T00:00:00.000Z",
+      profile: "general",
+      priority: "balanced",
+      gamingResolution: "1440p",
+      gamingRefreshRate: 144,
+      memoryCapacityGb: 32,
+      budgetWon: 1_500_000,
+      includeGpu: true,
+      storageCapacityGb: 1000,
+      hddCount: 0,
+      hddCapacityGb: 4000,
+      listingPolicy: "retail_only",
+      ...patch
+    };
+  }
+
+  it("summarizes gaming target, graphics options and hardware conditions", () => {
+    const tags = savedPresetConditionTagsFor(savedPresetWith({
+      profile: "gaming",
+      priority: "performance",
+      gamingResolution: "1440p",
+      gamingRefreshRate: 144,
+      gamingGameIds: ["league", "cyberpunk"],
+      gamingGraphicsPreset: "high",
+      gamingRayTracing: true,
+      gamingUpscaling: "quality",
+      memoryCapacityGb: 32,
+      storageCapacityGb: 2000,
+      hddCount: 1,
+      hddCapacityGb: 4000,
+      listingPolicy: "include_bulk"
+    }));
+    expect(tags).toEqual(["QHD", "144Hz", "높음", "DLSS·품질 참고", "레이 트레이싱", "게임 2개", "외장 GPU", "RAM 32GB", "SSD 2TB", "HDD 4TB×1", "벌크 포함"]);
+  });
+
+  it("keeps a compact summary for non-gaming presets", () => {
+    const tags = savedPresetConditionTagsFor(savedPresetWith({ profile: "office", includeGpu: false, memoryCapacityGb: 16, storageCapacityGb: 500 }));
+    expect(tags).toEqual(["내장 그래픽", "RAM 16GB", "SSD 500GB"]);
   });
 });
 

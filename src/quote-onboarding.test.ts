@@ -15,6 +15,7 @@ import {
   ONBOARDING_GAMES,
   ONBOARDING_INTENSITIES,
   ONBOARDING_WORKS,
+  onboardingStateForGeneratorPreset,
   onboardingStateFromJson,
   onboardingStateToJson,
   recommendGenerationRequestFor,
@@ -29,6 +30,7 @@ import {
   workEstimateFor
 } from "./quote-onboarding";
 import type { OnboardingState } from "./quote-onboarding";
+import type { GeneratorPresetConfig } from "../shared/generator-preset";
 
 function stateWith(patch: Partial<OnboardingState>): OnboardingState {
   return { ...initialOnboardingState(), ...patch };
@@ -452,6 +454,91 @@ describe("quote-onboarding recommend params", () => {
     expect(params.get("graphics")).toBe("high");
     expect(params.get("rt")).toBe("1");
     expect(params.get("upscaling")).toBe("balanced");
+  });
+});
+
+function presetConfigWith(patch: Partial<GeneratorPresetConfig>): GeneratorPresetConfig {
+  return {
+    profile: "general",
+    priority: "balanced",
+    gamingResolution: "1440p",
+    gamingRefreshRate: 144,
+    memoryCapacityGb: 32,
+    budgetWon: 1_500_000,
+    includeGpu: true,
+    storageCapacityGb: 1000,
+    hddCount: 0,
+    hddCapacityGb: 4000,
+    listingPolicy: "retail_only",
+    ...patch
+  };
+}
+
+describe("quote-onboarding generator presets", () => {
+  it("maps a gaming preset into the gaming wizard branch at the summary step", () => {
+    const state = onboardingStateForGeneratorPreset(presetConfigWith({
+      profile: "gaming",
+      priority: "performance",
+      gamingResolution: "1080p",
+      gamingRefreshRate: 60,
+      gamingGameIds: ["league", "cyberpunk"],
+      gamingGraphicsPreset: "competitive",
+      gamingRayTracing: true,
+      gamingUpscaling: "native",
+      budgetWon: 1_200_000
+    }));
+    expect(state).toMatchObject({
+      step: "summary",
+      intent: "new",
+      mode: "task",
+      usecase: "gaming",
+      games: ["league", "cyberpunk"],
+      resolution: "1080p",
+      refreshRate: 60,
+      graphicsPreset: "competitive",
+      rayTracing: true,
+      upscaling: "native",
+      budgetWon: 1_200_000
+    });
+  });
+
+  it("maps a general preset into the spec branch with tier, GPU, memory and storage", () => {
+    const state = onboardingStateForGeneratorPreset(presetConfigWith({
+      profile: "general",
+      performanceTier: "top",
+      includeGpu: false,
+      memoryCapacityGb: 64,
+      storageCapacityGb: 2000
+    }));
+    expect(state).toMatchObject({
+      step: "summary",
+      mode: "spec",
+      specTier: "top",
+      specIncludeGpu: false,
+      memoryGb: 64,
+      storageGb: 2000,
+      budgetWon: 1_500_000
+    });
+  });
+
+  it("maps work profiles onto a representative work and derives intensity from memory", () => {
+    expect(onboardingStateForGeneratorPreset(presetConfigWith({ profile: "development", memoryCapacityGb: 64 }))).toMatchObject({ usecase: "work", works: ["dev"], intensity: "heavy" });
+    expect(onboardingStateForGeneratorPreset(presetConfigWith({ profile: "office", memoryCapacityGb: 16 }))).toMatchObject({ usecase: "work", works: ["office"], intensity: "light" });
+    expect(onboardingStateForGeneratorPreset(presetConfigWith({ profile: "creator", memoryCapacityGb: 32 }))).toMatchObject({ usecase: "work", works: ["video"], intensity: "balanced" });
+  });
+
+  it("clamps preset budgets into the wizard range and drops unknown game ids", () => {
+    const state = onboardingStateForGeneratorPreset(presetConfigWith({ profile: "gaming", gamingGameIds: ["league", "not-a-real-game"], budgetWon: 100 }));
+    expect(state.games).toEqual(["league"]);
+    expect(state.budgetWon).toBe(800_000);
+    expect(onboardingStateForGeneratorPreset(presetConfigWith({ profile: "gaming", gamingGameIds: ["bogus"], budgetWon: 99_000_000 }))).toMatchObject({ games: [], budgetWon: 8_000_000 });
+  });
+
+  it("produces a state that survives persistence and can finish the wizard", () => {
+    const state = onboardingStateForGeneratorPreset(presetConfigWith({ profile: "gaming", gamingGameIds: ["pubg"] }));
+    expect(onboardingStateFromJson(onboardingStateToJson(state))).toEqual(state);
+    expect(canAdvance(state)).toBe(true);
+    expect(stepIndicatorFor(state).eyebrow).toBe("READY");
   });
 });
 

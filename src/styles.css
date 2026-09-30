@@ -1121,23 +1121,29 @@ p, li { word-break: keep-all; overflow-wrap: break-word; }
 
 .generator-preset-import-preview .button { min-height: 27px; padding: 0 7px; font-size: 7.5px; }
 
-.generator-saved-preset-list { display: grid; gap: 5px; margin-top: 8px; }
+.generator-saved-preset-list { display: grid; gap: 6px; margin-top: 8px; }
 
-.generator-saved-preset-list article { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; padding: 7px 8px; border: 1px solid #e0ece9; border-radius: 6px; background: #fff; }
+.generator-saved-preset-list article { display: grid; gap: 5px; min-width: 0; padding: 8px; border: 1px solid #e0ece9; border-radius: 6px; background: #fff; }
 
-.generator-saved-preset-list article > div:first-child { display: grid; min-width: 0; gap: 2px; }
+.generator-saved-preset-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; }
 
-.generator-saved-preset-list strong, .generator-saved-preset-list small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.generator-saved-preset-head strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #5f7a74; font-size: 9px; }
 
-.generator-saved-preset-list strong { color: #678680; font-size: 8px; }
+.generator-saved-preset-head small { flex: 0 0 auto; color: #9aa6ae; font-size: 7px; }
 
-.generator-saved-preset-list small { color: #8b95a1; font-size: 7px; }
+.generator-saved-preset-meta { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #8b95a1; font-size: 7.5px; }
 
-.generator-saved-preset-list article > div:last-child { display: flex; flex: 0 0 auto; gap: 5px; }
+.generator-saved-preset-tags { display: flex; flex-wrap: wrap; gap: 3px; }
+
+.generator-saved-preset-tags span { padding: 2px 5px; border: 1px solid #e3eeeb; border-radius: 999px; background: #f4f9f7; color: #6f8580; font-size: 6.5px; font-weight: 600; white-space: nowrap; }
+
+.generator-saved-preset-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
 
 .generator-saved-preset-list .text-button { margin: 0; padding: 0 2px; font-size: 7px; white-space: nowrap; }
 
-.generator-saved-preset-list .danger-text-button { color: #a06f6f; }
+.generator-saved-preset-list .danger-text-button { margin-left: auto; color: #a06f6f; }
+
+.generator-saved-preset-note { margin: 5px 0 0; color: #97a3ab; font-size: 7px; line-height: 1.55; }
 
 .generator-form > label:not(.generator-checkbox) { display: grid; gap: 6px; margin-top: 14px; color: #70838a; font-size: 10px; font-weight: 700; }
 
@@ -15856,6 +15862,40 @@ button.metric-card:disabled { cursor: not-allowed; }
   .mobile-catalog-category-chips { display: none; }
 }
 
+/* 데스크톱 범주 chips — 모바일의 범주 빠른 선택을 넓은 화면에 이식해
+   전체 9개 범주를 한 번에 보여주고 드롭다운 없이 전환할 수 있게 한다. */
+.desktop-catalog-category-chips { display: none; }
+
+@media (min-width: 761px) {
+  .desktop-catalog-category-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 9px; }
+
+  .desktop-catalog-category-chips button { padding: 6px 13px; border: 1px solid var(--line); border-radius: 999px; color: var(--ink); background: #fff; font-size: 10px; font-weight: 700; transition: border-color 120ms ease, color 120ms ease, background-color 120ms ease; }
+
+  .desktop-catalog-category-chips button:hover { border-color: var(--teal); color: var(--teal-deep); }
+
+  .desktop-catalog-category-chips button.selected { border-color: var(--teal); color: #fff; background: var(--teal); }
+}
+
+html[data-theme="dark"] .desktop-catalog-category-chips button:not(.selected) {
+  border-color: var(--line);
+  color: var(--ink);
+  background: #20242c;
+}
+
+html[data-theme="dark"] .desktop-catalog-category-chips button:not(.selected):hover,
+html[data-theme="dark"] .desktop-catalog-category-chips button:not(.selected):focus-visible {
+  border-color: var(--teal);
+  color: var(--teal-deep);
+}
+
+/* 부품 비교 바를 데스크톱에서도 하단 sticky로 — 모바일 하단 시트와 같은
+   "선택한 부품을 바로 비교" 접근 경로를 넓은 화면에도 유지한다. */
+@media (min-width: 761px) {
+  .catalog-comparison-bar { position: sticky; bottom: 16px; z-index: 20; border: 1px solid #cfe7df; background: rgba(247, 253, 251, 0.94); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); box-shadow: 0 10px 28px -14px rgba(16, 24, 40, 0.28); }
+}
+
+html[data-theme="dark"] .catalog-comparison-bar { border-color: var(--line) !important; background: rgba(27, 31, 39, 0.94) !important; }
+
 .accessory-filter-toggle { margin: 0; padding: 0 12px; border: 1px solid #d4e3f2; border-radius: 10px; color: var(--teal-deep); background: #f5f9fd; }
 
 .accessory-browser:not(.filters-open) .accessory-brand-filter-panel { display: none; }
@@ -16621,6 +16661,12 @@ html[data-theme="dark"] :where(
 html[data-theme="dark"] .generator-gaming-game-chip {
   color: var(--teal-deep) !important;
   background: var(--teal-soft) !important;
+}
+
+html[data-theme="dark"] .generator-saved-preset-tags span {
+  border-color: var(--line) !important;
+  color: var(--muted) !important;
+  background: #202631 !important;
 }
 
 html[data-theme="dark"] .result-gaming-evidence {
