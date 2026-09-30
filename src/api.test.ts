@@ -3,6 +3,24 @@ import { ApiError, api, apiRequestHeaders, apiStatusDetailsSnapshot, apiStatusSn
 import type { ApiStatus } from "./api";
 import { retryAfterSecondsFromMessage } from "./retry-after";
 
+function mockStorage(initial?: Map<string, string>) {
+  const values = initial ?? new Map<string, string>();
+  const storage: Storage = {
+    get length() { return values.size; },
+    clear() { values.clear(); },
+    getItem(key) { return values.get(String(key)) ?? null; },
+    key(index) { return [...values.keys()][index] ?? null; },
+    removeItem(key) { values.delete(String(key)); },
+    setItem(key, value) { values.set(String(key), String(value)); }
+  };
+  return { values, storage };
+}
+
+function mockBrowserStorage(origin: string, local = mockStorage(), session = mockStorage()) {
+  vi.stubGlobal("window", { location: { origin }, localStorage: local.storage, sessionStorage: session.storage });
+  return { local, session };
+}
+
 describe("api client", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -270,18 +288,10 @@ describe("api client", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("serves the catalog session cache when a request times out", async () => {
+  it("serves the durable public cache when a request times out", async () => {
     const path = "/api/parts?category=cpu&cache-test=timeout-fallback";
     const payload = { items: [{ id: "cached-on-timeout" }] };
-    const storage = new Map<string, string>();
-    vi.stubGlobal("window", {
-      location: { origin: "http://localhost" },
-      sessionStorage: {
-        getItem: (key: string) => storage.get(key) ?? null,
-        setItem: (key: string, value: string) => storage.set(key, value),
-        removeItem: (key: string) => storage.delete(key)
-      }
-    });
+    mockBrowserStorage("http://localhost");
     const headers = { get: () => null };
     const fetchMock = vi.fn().mockResolvedValueOnce({ ok: true, status: 200, headers, json: vi.fn().mockResolvedValue(payload) });
     vi.stubGlobal("fetch", fetchMock);
@@ -293,17 +303,9 @@ describe("api client", () => {
     await expect(api<typeof payload>(path, { retry: 0, timeoutMs: 20 })).resolves.toEqual(payload);
   });
 
-  it("measures the catalog session cache limit in UTF-8 bytes", async () => {
+  it("measures the public cache entry limit in UTF-8 bytes", async () => {
     const path = "/api/parts?category=cpu&cache-test=utf8-byte-budget";
-    const storage = new Map<string, string>();
-    vi.stubGlobal("window", {
-      location: { origin: "http://localhost" },
-      sessionStorage: {
-        getItem: (key: string) => storage.get(key) ?? null,
-        setItem: (key: string, value: string) => storage.set(key, value),
-        removeItem: (key: string) => storage.delete(key)
-      }
-    });
+    const { local } = mockBrowserStorage("http://localhost");
     const payload = { items: [{ name: "부".repeat(180_000) }] };
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
       ok: true,
@@ -313,7 +315,7 @@ describe("api client", () => {
     }));
 
     await expect(api<typeof payload>(path, { retry: 0 })).resolves.toEqual(payload);
-    expect(storage.size).toBe(0);
+    expect(local.values.size).toBe(0);
   });
 
   it("publishes offline and online transitions for the global API status", async () => {
@@ -334,18 +336,10 @@ describe("api client", () => {
     expect(apiStatusDetailsSnapshot().fallbackAt).toBeUndefined();
   });
 
-  it("uses an exact recent catalog GET response as a stale offline fallback", async () => {
+  it("uses an exact recent public GET response as a stale offline fallback", async () => {
     const path = "/api/parts?category=cpu&cache-test=unique";
     const payload = { items: [{ id: "cached-cpu" }] };
-    const storage = new Map<string, string>();
-    vi.stubGlobal("window", {
-      location: { origin: "http://localhost" },
-      sessionStorage: {
-        getItem: (key: string) => storage.get(key) ?? null,
-        setItem: (key: string, value: string) => storage.set(key, value),
-        removeItem: (key: string) => storage.delete(key)
-      }
-    });
+    mockBrowserStorage("http://localhost");
     const headers = { get: (name: string) => name.toLowerCase() === "etag" ? '"cache-etag"' : null };
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, headers, json: vi.fn().mockResolvedValue(payload) });
     vi.stubGlobal("fetch", fetchMock);
@@ -361,23 +355,140 @@ describe("api client", () => {
     expect(apiStatusSnapshot()).toBe("offline");
     expect(apiStatusDetailsSnapshot().fallbackAt).toEqual(expect.any(String));
     expect(apiStatusDetailsSnapshot().fallbackPath).toBe(path);
+    expect(apiStatusDetailsSnapshot().fallbackCachedAt).toEqual(expect.any(String));
 
     await expect(api("/api/health", { retry: 0 })).rejects.toThrow("API 서버에 연결할 수 없습니다.");
     expect(apiStatusDetailsSnapshot().fallbackAt).toBeUndefined();
     expect(apiStatusDetailsSnapshot().fallbackPath).toBeUndefined();
+    expect(apiStatusDetailsSnapshot().fallbackCachedAt).toBeUndefined();
   });
 
-  it("does not let an older catalog response roll the session cache back", async () => {
-    const path = "/api/parts?category=cpu&cache-test=concurrent-ordering";
-    const storage = new Map<string, string>();
-    vi.stubGlobal("window", {
-      location: { origin: "http://localhost" },
-      sessionStorage: {
-        getItem: (key: string) => storage.get(key) ?? null,
-        setItem: (key: string, value: string) => storage.set(key, value),
-        removeItem: (key: string) => storage.delete(key)
-      }
+  it("uses a public cache across app sessions but isolates exact query and API origin", async () => {
+    const path = "/api/parts?category=cpu&cache-test=durable-origin";
+    const payload = { items: [{ id: "durable-cpu" }] };
+    const local = mockStorage();
+    mockBrowserStorage("https://api-one.example", local, mockStorage());
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200, headers: { get: () => null }, json: vi.fn().mockResolvedValue(payload) }));
+    await expect(api<typeof payload>(path, { retry: 0 })).resolves.toEqual(payload);
+    expect(local.values.size).toBe(1);
+
+    // A new page/WebView session keeps localStorage but gets a fresh sessionStorage.
+    mockBrowserStorage("https://api-one.example", local, mockStorage());
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+    await expect(api<typeof payload>(path, { retry: 0 })).resolves.toEqual(payload);
+    await expect(api("/api/parts?category=gpu&cache-test=durable-origin", { retry: 0 })).rejects.toThrow("API 서버에 연결할 수 없습니다.");
+
+    mockBrowserStorage("https://api-two.example", local, mockStorage());
+    await expect(api(path, { retry: 0 })).rejects.toThrow("API 서버에 연결할 수 없습니다.");
+  });
+
+  it("expires durable cache entries after 24 hours", async () => {
+    const path = "/api/meta?cache-test=expiry";
+    const local = mockStorage();
+    mockBrowserStorage("https://api.example", local, mockStorage());
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200, headers: { get: () => null }, json: vi.fn().mockResolvedValue({ catalogCount: 5 }) }));
+    await expect(api(path, { retry: 0 })).resolves.toEqual({ catalogCount: 5 });
+    const [[key, raw]] = [...local.values.entries()];
+    const entry = JSON.parse(raw) as { cachedAt: number };
+    local.values.set(key, JSON.stringify({ ...entry, cachedAt: Date.now() - 24 * 60 * 60_000 - 1 }));
+
+    mockBrowserStorage("https://api.example", local, mockStorage());
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+    await expect(api(path, { retry: 0 })).rejects.toThrow("API 서버에 연결할 수 없습니다.");
+    expect(local.values.size).toBe(0);
+  });
+
+  it("keeps the durable public API cache below its total LRU budget", async () => {
+    const local = mockStorage();
+    const session = mockStorage();
+    mockBrowserStorage("https://api.example", local, session);
+    const largePayload = { items: [{ name: "x".repeat(400_000) }] };
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, headers: { get: () => null }, json: vi.fn().mockResolvedValue(largePayload) });
+    vi.stubGlobal("fetch", fetchMock);
+    const olderPath = "/api/parts?cache-test=lru-old";
+    const newerPath = "/api/accessories?cache-test=lru-new";
+    await expect(api(olderPath, { retry: 0 })).resolves.toEqual(largePayload);
+    await new Promise((resolve) => setTimeout(resolve, 3));
+    await expect(api(newerPath, { retry: 0 })).resolves.toEqual(largePayload);
+    expect(local.values.size).toBe(1);
+    session.values.clear();
+
+    mockBrowserStorage("https://api.example", local, mockStorage());
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+    await expect(api(olderPath, { retry: 0 })).rejects.toThrow("API 서버에 연결할 수 없습니다.");
+    await expect(api(newerPath, { retry: 0 })).resolves.toEqual(largePayload);
+  });
+
+  it("does not block a live response when device storage is full", async () => {
+    const localStorage: Storage = {
+      get length() { return 0; },
+      clear() {},
+      getItem() { return null; },
+      key() { return null; },
+      removeItem() {},
+      setItem() { throw new DOMException("Storage is full", "QuotaExceededError"); }
+    };
+    vi.stubGlobal("window", { location: { origin: "https://api.example" }, localStorage, sessionStorage: mockStorage().storage });
+    const payload = { items: [{ id: "live-response" }] };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200, headers: { get: () => null }, json: vi.fn().mockResolvedValue(payload) }));
+
+    await expect(api<typeof payload>("/api/parts?cache-test=storage-quota", { retry: 0 })).resolves.toEqual(payload);
+  });
+
+  it("fails closed for cached admin metadata and never stores authenticated state", async () => {
+    const path = "/api/meta?cache-test=auth-sanitization";
+    const local = mockStorage();
+    const liveMeta = { catalogCount: 1, adminAuthEnabled: false, adminSessionAuthenticated: true };
+    mockBrowserStorage("https://api.example", local, mockStorage());
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, headers: { get: () => '"meta-etag"' }, json: vi.fn().mockResolvedValue(liveMeta) })
+      .mockResolvedValueOnce({ ok: true, status: 200, headers: { get: () => '"meta-etag"' }, json: vi.fn().mockResolvedValue(liveMeta) });
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(api(path, { retry: 0 })).resolves.toEqual(liveMeta);
+    await expect(api(path, { retry: 0 })).resolves.toEqual(liveMeta);
+    expect(new Headers(fetchMock.mock.calls[1]?.[1]?.headers).get("If-None-Match")).toBeNull();
+    const raw = [...local.values.values()].find((value) => {
+      try { return JSON.parse(value)?.payload?.catalogCount === 1; } catch { return false; }
     });
+    expect(raw).toBeDefined();
+    const stored = JSON.parse(raw!) as { payload: { adminAuthEnabled: boolean; adminSessionAuthenticated: boolean }; etag?: string };
+    expect(stored.payload).toMatchObject({ adminAuthEnabled: true, adminSessionAuthenticated: false });
+    expect(stored.etag).toBeUndefined();
+
+    mockBrowserStorage("https://api.example", local, mockStorage());
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+    await expect(api<typeof liveMeta>(path, { retry: 0 })).resolves.toMatchObject({ adminAuthEnabled: true, adminSessionAuthenticated: false });
+  });
+
+  it.each([401, 403, 404, 500])("does not hide HTTP %s with a cached public response", async (status) => {
+    const path = `/api/parts?cache-test=http-${status}`;
+    const local = mockStorage();
+    mockBrowserStorage("https://api.example", local, mockStorage());
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, headers: { get: () => null }, json: vi.fn().mockResolvedValue({ items: [{ id: "cached" }] }) });
+    vi.stubGlobal("fetch", fetchMock);
+    await api(path, { retry: 0 });
+    fetchMock.mockResolvedValueOnce({ ok: false, status, headers: { get: () => null }, json: vi.fn().mockResolvedValue({ error: "request failed" }) });
+    await expect(api(path, { retry: 0 })).rejects.toMatchObject({ status });
+  });
+
+  it("does not persist private reads or use a public GET cache for a mutation", async () => {
+    const local = mockStorage();
+    mockBrowserStorage("https://api.example", local, mockStorage());
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, headers: { get: () => null }, json: vi.fn().mockResolvedValue({ id: "private-build" }) });
+    vi.stubGlobal("fetch", fetchMock);
+    await api("/api/builds/private-build", { retry: 0 });
+    expect(local.values.size).toBe(0);
+
+    const publicPath = "/api/parts?cache-test=mutation";
+    fetchMock.mockResolvedValueOnce({ ok: true, status: 200, headers: { get: () => null }, json: vi.fn().mockResolvedValue({ items: [{ id: "cached" }] }) });
+    await api(publicPath, { retry: 0 });
+    fetchMock.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    await expect(api(publicPath, { method: "POST", body: "{}", retry: 0 })).rejects.toThrow("API 서버에 연결할 수 없습니다.");
+  });
+
+  it("does not let an older catalog response roll the durable cache back", async () => {
+    const path = "/api/parts?category=cpu&cache-test=concurrent-ordering";
+    mockBrowserStorage("http://localhost");
     const oldPayload = { items: [{ id: "old-cpu" }] };
     const latestPayload = { items: [{ id: "latest-cpu" }] };
     let releaseOld: ((response: unknown) => void) | undefined;

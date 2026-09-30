@@ -16,7 +16,17 @@ ADMIN_COOKIE_SAMESITE=none
 
 API 서버는 Capacitor 기본 origin을 허용하고 `ETag`, `Last-Modified`, `Retry-After` 응답 헤더를 노출합니다. native 관리자 로그인을 사용할 때는 HTTPS API와 `ADMIN_COOKIE_SAMESITE=none`을 함께 설정해야 합니다. `CORS_ALLOWED_ORIGINS`는 실제 웹 운영 origin을 추가할 때 쉼표로 이어 붙입니다.
 
+Capacitor에서는 owner-session `session-v1` cookie mode를 사용하지 않습니다. 공유 자원의 기존 소유자 권한은 기기에 보관된 legacy owner token으로 서버 API에 전달하며, owner token은 공개 캐시에 저장하지 않습니다.
+
 Express가 웹 앱을 제공할 때 CSP 응답 헤더는 같은 `dist/index.html`의 CSP meta 정책을 재사용하고 `frame-ancestors 'none'`만 헤더에 추가합니다. 웹·Capacitor의 `connect-src`는 빌드 입력 `VITE_API_BASE_URL`에서 나오므로 웹 앱과 API를 다른 origin으로 둘 때도 헤더와 HTML 정책이 어긋나지 않습니다. 같은 출처 웹 배포에서는 이 변수를 비워 상대 경로 `/api`를 사용합니다.
+
+## 온라인 API와 기기 캐시
+
+원격 API iOS bundle은 `VITE_API_BASE_URL`에 지정한 HTTPS 서버를 먼저 호출합니다. `/api/meta`, `/api/parts`, `/api/accessories`의 성공한 GET/HEAD 응답은 API origin과 전체 경로·query가 같은 요청에 한해 기기의 제한된 캐시에 저장합니다. 각 응답은 최대 512 KB, 전체는 최대 750 KB, 유효기간은 24시간입니다. 용량이 차면 오래 사용하지 않은 항목부터 비우며, 저장 공간이 부족해도 API 응답이나 견적 편집을 막지 않습니다.
+
+서버에 연결할 수 없거나 응답 시간이 초과된 경우에만 해당 요청과 정확히 일치하는 캐시 응답을 표시합니다. 화면은 저장 시각을 보여 줍니다. 권한 오류와 기타 HTTP 오류는 이전 응답으로 가리지 않습니다. 소유자 정보, 저장 견적, 관리자 응답과 모든 변경 요청은 캐시에 넣지 않으며, 연결이 끊긴 상태에서 서버 변경이 성공한 것처럼 처리하지 않습니다. 이 캐시는 마지막으로 가져온 공개 카탈로그 조회 결과를 다시 보여 주는 기능이며 전체 카탈로그 snapshot이나 호환 계산을 오프라인에서 새로 수행하는 기능은 아닙니다. 기존 초안, 로컬 공유 자료와 owner token을 온라인 모드로 자동 이전하거나 서버에 일괄 등록하지 않습니다. 서버에 저장된 자원은 기존 API 권한 확인을 거쳐 사용합니다.
+
+API 주소는 앱 bundle에 들어가는 공개 HTTPS origin입니다. 데이터베이스 URL, 관리자 비밀번호, owner token은 앱 설정에 포함하지 않습니다. PostgreSQL 연결은 서버가 관리하므로 서버의 저장소 구성이 바뀌어도 공개 API 계약이 유지되는 한 iOS 앱에서 SQL 연결 설정을 바꿀 필요는 없습니다.
 
 ## 로컬 빌드
 

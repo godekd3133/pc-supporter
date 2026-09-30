@@ -1,4 +1,4 @@
-import { safeSessionStorage } from "./safe-storage";
+import { safeLocalStorage } from "./safe-storage";
 export type ApiRequestInit = RequestInit & {
   retry?: number;
   retryDelayMs?: number;
@@ -20,14 +20,15 @@ export type ApiRequestInit = RequestInit & {
 };
 
 export type ApiStatus = "unknown" | "online" | "offline" | "degraded";
-export type ApiStatusDetails = { status: ApiStatus; lastSuccessAt?: string; fallbackAt?: string; fallbackPath?: string };
+export type ApiStatusDetails = { status: ApiStatus; lastSuccessAt?: string; fallbackAt?: string; fallbackPath?: string; fallbackCachedAt?: string };
 
 import { LOCAL_OFFLINE_BUILD } from "./offline/build-mode";
 import { ownerSessionModeSupported } from "./owner-session-mode";
 
-const API_SESSION_CACHE_PREFIX = "pc-supporter-api-cache:v1:";
-const API_SESSION_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-const API_SESSION_CACHE_MAX_BYTES = 512_000;
+const API_PUBLIC_READ_CACHE_PREFIX = "pc-supporter-api-cache:v2:";
+const API_PUBLIC_READ_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const API_PUBLIC_READ_CACHE_MAX_ENTRY_BYTES = 512_000;
+const API_PUBLIC_READ_CACHE_MAX_TOTAL_BYTES = 750 * 1024;
 const MAX_RATE_LIMIT_AUTO_RETRY_COUNT = 1;
 const MAX_RATE_LIMIT_AUTO_RETRY_WAIT_MS = 3_000;
 const MAX_RETRY_AFTER_SECONDS = 24 * 60 * 60;
@@ -41,7 +42,7 @@ export function apiRequestUrl(path: string) {
   if (!configuredApiBaseUrl || /^https?:\/\//i.test(path)) return path;
   return new URL(path, `${configuredApiBaseUrl}/`).toString();
 }
-const sessionCacheRequestVersions = new Map<string, number>();
+const apiCacheRequestVersions = new Map<string, number>();
 const inFlightReadRequests = new Map<string, Promise<unknown>>();
 let latestApiRequestVersion = 0;
 
@@ -86,7 +87,7 @@ export function subscribeApiStatus(listener: (details: ApiStatusDetails) => void
 
 function publishApiStatus(status: ApiStatus, patch: Partial<ApiStatusDetails> = {}) {
   const next = { ...currentApiStatusDetails, ...patch, status };
-  if (next.status === currentApiStatusDetails.status && next.lastSuccessAt === currentApiStatusDetails.lastSuccessAt && next.fallbackAt === currentApiStatusDetails.fallbackAt && next.fallbackPath === currentApiStatusDetails.fallbackPath) return;
+  if (next.status === currentApiStatusDetails.status && next.lastSuccessAt === currentApiStatusDetails.lastSuccessAt && next.fallbackAt === currentApiStatusDetails.fallbackAt && next.fallbackPath === currentApiStatusDetails.fallbackPath && next.fallbackCachedAt === currentApiStatusDetails.fallbackCachedAt) return;
   currentApiStatusDetails = next;
   apiStatusListeners.forEach((listener) => listener(apiStatusDetailsSnapshot()));
 }
@@ -163,44 +164,142 @@ function rateLimitMessage(message: string, retryAfterSeconds?: number) {
   return `${message.replace(/[.!?。]+$/, "")} ${waitMessage}`;
 }
 
-function apiSessionCacheKey(path: string, method: string) {
-  if (method !== "GET" && method !== "HEAD" || typeof window === "undefined") return undefined;
+type ApiPublicReadCacheEntry = { cachedAt: number; lastAccessedAt?: number; payload: unknown; etag?: string };
+type ApiPublicReadCacheLocation = { key: string; pathname: string };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function utf8ByteLength(value: string) {
+  return new TextEncoder().encode(value).byteLength;
+}
+
+function apiPublicReadCacheLocation(path: string, method: string): ApiPublicReadCacheLocation | undefined {
+  if ((method !== "GET" && method !== "HEAD") || typeof window === "undefined") return undefined;
   try {
-    const url = new URL(path, window.location.origin);
+    const url = new URL(apiRequestUrl(path), window.location.origin);
+    if ((url.protocol !== "http:" && url.protocol !== "https:") || url.username || url.password) return undefined;
     if (url.pathname !== "/api/parts" && url.pathname !== "/api/accessories" && url.pathname !== "/api/meta") return undefined;
-    return API_SESSION_CACHE_PREFIX + url.pathname + url.search;
+    const requestIdentity = `${method}\u0000${url.origin}\u0000${url.pathname}${url.search}`;
+    return { key: API_PUBLIC_READ_CACHE_PREFIX + encodeURIComponent(requestIdentity), pathname: url.pathname };
   } catch {
     return undefined;
   }
 }
 
-function readApiSessionCache(key: string | undefined) {
-  if (!key || typeof window === "undefined") return undefined;
+function parseApiPublicReadCache(raw: string | null): ApiPublicReadCacheEntry | undefined {
+  if (!raw || utf8ByteLength(raw) > API_PUBLIC_READ_CACHE_MAX_ENTRY_BYTES) return undefined;
   try {
-    const raw = safeSessionStorage.getItem(key);
-    if (!raw) return undefined;
     const parsed: unknown = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return undefined;
-    const record = parsed as { cachedAt?: unknown; payload?: unknown; etag?: unknown };
-    if (typeof record.cachedAt !== "number" || !Number.isFinite(record.cachedAt) || Date.now() - record.cachedAt > API_SESSION_CACHE_TTL_MS || !Object.prototype.hasOwnProperty.call(record, "payload")) {
-      safeSessionStorage.removeItem(key);
-      return undefined;
-    }
-    return { payload: record.payload, cachedAt: record.cachedAt, etag: typeof record.etag === "string" ? record.etag : undefined };
+    if (!isRecord(parsed)) return undefined;
+    const cachedAt = parsed.cachedAt;
+    const lastAccessedAt = parsed.lastAccessedAt;
+    if (typeof cachedAt !== "number" || !Number.isFinite(cachedAt) || cachedAt > Date.now() + 5 * 60_000 || Date.now() - cachedAt > API_PUBLIC_READ_CACHE_TTL_MS || !Object.prototype.hasOwnProperty.call(parsed, "payload")) return undefined;
+    return {
+      cachedAt,
+      ...(typeof lastAccessedAt === "number" && Number.isFinite(lastAccessedAt) ? { lastAccessedAt } : {}),
+      payload: parsed.payload,
+      ...(typeof parsed.etag === "string" ? { etag: parsed.etag } : {})
+    };
   } catch {
     return undefined;
   }
 }
 
-function writeApiSessionCache(key: string | undefined, payload: unknown, etag: string | undefined, requestVersion?: number) {
-  if (!key || typeof window === "undefined") return;
-  if (requestVersion !== undefined && sessionCacheRequestVersions.get(key) !== requestVersion) return;
+function cacheApiPublicPayload(pathname: string, payload: unknown) {
+  if (pathname !== "/api/meta" || !isRecord(payload)) return payload;
+  // Cached metadata is display-only. It must never claim that an old admin
+  // session or a previously disabled admin gate is still valid.
+  return { ...payload, adminAuthEnabled: true, adminSessionAuthenticated: false };
+}
+
+function localApiPublicReadCacheEntries() {
+  const keys: string[] = [];
   try {
-    const raw = JSON.stringify({ cachedAt: Date.now(), payload, ...(etag ? { etag } : {}) });
-    if (raw.length > API_SESSION_CACHE_MAX_BYTES || new TextEncoder().encode(raw).byteLength > API_SESSION_CACHE_MAX_BYTES) return;
-    safeSessionStorage.setItem(key, raw);
+    for (let index = 0; index < safeLocalStorage.length; index += 1) {
+      const key = safeLocalStorage.key(index);
+      if (key?.startsWith(API_PUBLIC_READ_CACHE_PREFIX)) keys.push(key);
+    }
   } catch {
-    // Session cache is a best-effort fallback and must never block a live response.
+    return [];
+  }
+
+  const entries: Array<{ key: string; entry: ApiPublicReadCacheEntry; bytes: number }> = [];
+  for (const key of keys) {
+    const raw = safeLocalStorage.getItem(key);
+    const entry = parseApiPublicReadCache(raw);
+    if (!raw || !entry) {
+      safeLocalStorage.removeItem(key);
+      continue;
+    }
+    const bytes = utf8ByteLength(key) + utf8ByteLength(raw);
+    if (bytes > API_PUBLIC_READ_CACHE_MAX_ENTRY_BYTES) {
+      safeLocalStorage.removeItem(key);
+      continue;
+    }
+    entries.push({ key, entry, bytes });
+  }
+  return entries;
+}
+
+function enforceApiPublicReadCacheBudget(protectedKey?: string) {
+  const entries = localApiPublicReadCacheEntries();
+  let totalBytes = entries.reduce((total, entry) => total + entry.bytes, 0);
+  if (totalBytes <= API_PUBLIC_READ_CACHE_MAX_TOTAL_BYTES) return;
+
+  const oldestFirst = entries
+    .filter((entry) => entry.key !== protectedKey)
+    .sort((left, right) => (left.entry.lastAccessedAt ?? left.entry.cachedAt) - (right.entry.lastAccessedAt ?? right.entry.cachedAt));
+  for (const entry of oldestFirst) {
+    if (totalBytes <= API_PUBLIC_READ_CACHE_MAX_TOTAL_BYTES) break;
+    safeLocalStorage.removeItem(entry.key);
+    totalBytes -= entry.bytes;
+  }
+  if (totalBytes > API_PUBLIC_READ_CACHE_MAX_TOTAL_BYTES && protectedKey) safeLocalStorage.removeItem(protectedKey);
+}
+
+function readApiPublicReadCacheFrom(storage: Storage, key: string) {
+  const raw = storage.getItem(key);
+  const entry = parseApiPublicReadCache(raw);
+  if (raw && !entry) storage.removeItem(key);
+  return entry;
+}
+
+function readApiPublicReadCache(key: string | undefined) {
+  if (!key || typeof window === "undefined") return undefined;
+  const entry = readApiPublicReadCacheFrom(safeLocalStorage, key);
+  if (!entry) return undefined;
+
+  const lastAccessed = Date.now();
+  const touched = { ...entry, lastAccessedAt: lastAccessed };
+  const raw = JSON.stringify(touched);
+  safeLocalStorage.setItem(key, raw);
+  enforceApiPublicReadCacheBudget(key);
+  return touched;
+}
+
+function writeApiPublicReadCache(location: ApiPublicReadCacheLocation | undefined, payload: unknown, etag: string | undefined, requestVersion?: number) {
+  const key = location?.key;
+  if (!key || typeof window === "undefined") return;
+  if (requestVersion !== undefined && apiCacheRequestVersions.get(key) !== requestVersion) return;
+  try {
+    const now = Date.now();
+    const entry: ApiPublicReadCacheEntry = {
+      cachedAt: now,
+      lastAccessedAt: now,
+      payload: cacheApiPublicPayload(location.pathname, payload),
+      // /api/meta contains request-specific admin authentication state. A 304
+      // must not make cached authorization metadata look current.
+      ...(etag && location.pathname !== "/api/meta" ? { etag } : {})
+    };
+    const raw = JSON.stringify(entry);
+    const byteLength = utf8ByteLength(key) + utf8ByteLength(raw);
+    if (byteLength > API_PUBLIC_READ_CACHE_MAX_ENTRY_BYTES) return;
+    safeLocalStorage.setItem(key, raw);
+    enforceApiPublicReadCacheBudget(key);
+  } catch {
+    // Cache storage is best-effort and must never block a live API response.
   }
 }
 
@@ -233,17 +332,18 @@ async function requestApi<T>(path: string, init?: ApiRequestInit): Promise<T> {
   const retries = Math.max(0, Math.min(3, requestedRetries ?? (method === "GET" || method === "HEAD" ? 2 : 0)));
   const canRetryRateLimit = retryOnRateLimit ?? (method === "GET" || method === "HEAD");
   const timeoutMs = Math.max(1_000, Math.min(120_000, requestedTimeoutMs ?? API_REQUEST_TIMEOUT_MS));
-  const sessionCacheKey = apiSessionCacheKey(path, method);
-  const sessionCacheRequestVersion = sessionCacheKey
-    ? (sessionCacheRequestVersions.get(sessionCacheKey) ?? 0) + 1
+  const apiCacheLocation = apiPublicReadCacheLocation(path, method);
+  const apiCacheKey = apiCacheLocation?.key;
+  const apiCacheRequestVersion = apiCacheKey
+    ? (apiCacheRequestVersions.get(apiCacheKey) ?? 0) + 1
     : undefined;
-  if (sessionCacheKey && sessionCacheRequestVersion !== undefined) sessionCacheRequestVersions.set(sessionCacheKey, sessionCacheRequestVersion);
+  if (apiCacheKey && apiCacheRequestVersion !== undefined) apiCacheRequestVersions.set(apiCacheKey, apiCacheRequestVersion);
   let lastNetworkError: unknown;
   let rateLimitRetryCount = 0;
 
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     let response: Response;
-    const cachedForRequest = readApiSessionCache(sessionCacheKey);
+    const cachedForRequest = readApiPublicReadCache(apiCacheKey);
     const attemptController = new AbortController();
     let attemptTimedOut = false;
     const onCallerAbort = () => attemptController.abort(requestInit.signal?.reason);
@@ -262,7 +362,7 @@ async function requestApi<T>(path: string, init?: ApiRequestInit): Promise<T> {
         credentials: requestInit.credentials ?? "include",
         headers: (() => {
           const headers = apiRequestHeaders(init);
-          if (cachedForRequest?.etag) headers.set("If-None-Match", cachedForRequest.etag);
+          if (cachedForRequest?.etag && apiCacheLocation?.pathname !== "/api/meta") headers.set("If-None-Match", cachedForRequest.etag);
           return headers;
         })()
       });
@@ -274,10 +374,14 @@ async function requestApi<T>(path: string, init?: ApiRequestInit): Promise<T> {
       if (callerAborted || (!(isNetworkFailure || isTimeout)) || attempt >= retries) {
         if (callerAborted) throw error;
         if (isNetworkFailure || isTimeout) {
-          if (isCurrentApiRequest()) publishApiStatus("offline", { fallbackAt: undefined, fallbackPath: undefined });
-          const cachedPayload = readApiSessionCache(sessionCacheKey);
+          if (isCurrentApiRequest()) publishApiStatus("offline", { fallbackAt: undefined, fallbackPath: undefined, fallbackCachedAt: undefined });
+          const cachedPayload = readApiPublicReadCache(apiCacheKey);
           if (cachedPayload !== undefined) {
-            if (isCurrentApiRequest()) publishApiStatus("offline", { fallbackAt: new Date().toISOString(), fallbackPath: path });
+            if (isCurrentApiRequest()) publishApiStatus("offline", {
+              fallbackAt: new Date().toISOString(),
+              fallbackPath: path,
+              fallbackCachedAt: new Date(cachedPayload.cachedAt).toISOString()
+            });
             return cachedPayload.payload as T;
           }
           throw new Error(isTimeout
@@ -295,18 +399,18 @@ async function requestApi<T>(path: string, init?: ApiRequestInit): Promise<T> {
 
     const responseLiveAt = new Date().toISOString();
     const etag = typeof response.headers?.get === "function" ? response.headers.get("ETag") ?? undefined : undefined;
-    if (isCurrentApiRequest()) publishApiStatus(isServerError(response.status) ? "degraded" : "online", { ...(response.ok || response.status === 304 ? { lastSuccessAt: responseLiveAt } : {}), fallbackAt: undefined, fallbackPath: undefined });
+    if (isCurrentApiRequest()) publishApiStatus(isServerError(response.status) ? "degraded" : "online", { ...(response.ok || response.status === 304 ? { lastSuccessAt: responseLiveAt } : {}), fallbackAt: undefined, fallbackPath: undefined, fallbackCachedAt: undefined });
     if (response.status === 304) {
-      const cachedResponse = cachedForRequest ?? readApiSessionCache(sessionCacheKey);
+      const cachedResponse = cachedForRequest ?? readApiPublicReadCache(apiCacheKey);
       if (cachedResponse !== undefined) {
-        writeApiSessionCache(sessionCacheKey, cachedResponse.payload, etag ?? cachedResponse.etag, sessionCacheRequestVersion);
+        writeApiPublicReadCache(apiCacheLocation, cachedResponse.payload, etag ?? cachedResponse.etag, apiCacheRequestVersion);
         return cachedResponse.payload as T;
       }
       throw new ApiError("조건부 응답을 복원할 원본 캐시가 없습니다.", 304);
     }
     const payload = (await response.json().catch(() => ({}))) as T & { error?: string; retryAfterSeconds?: unknown };
     if (response.ok) {
-      writeApiSessionCache(sessionCacheKey, payload, etag, sessionCacheRequestVersion);
+      writeApiPublicReadCache(apiCacheLocation, payload, etag, apiCacheRequestVersion);
       return payload;
     }
     if (isCurrentApiRequest()) {
