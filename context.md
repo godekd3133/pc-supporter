@@ -75,6 +75,7 @@ PC Supporter — PC 부품 카탈로그, 호환성 검사, 가격·원문·성�
 - `/api/admin/crawl`과 `/api/admin/accessories/crawl`은 각각 독립된 IP rate-limit(분당 10회)을 적용해 외부 원문 수집 trigger 반복을 제한한다. 기존 category validation과 running-lock은 그대로 유지한다.
 - `/api/admin/crawl/retry-page`는 IP 분당 10회, `/api/admin/crawl/retry-failed-pages`는 IP 분당 5회의 독립 bucket으로 실패 페이지 외부 재수집 trigger 반복을 제한한다. cancel endpoint는 시작 trigger가 아니므로 이 limiter 대상이 아니다.
 - `/api/admin/build-versions/migrate`와 `/api/admin/build-versions/rollback`은 각각 IP 분당 5회 limiter를 사용한다. fingerprint·confirmation·file/DB lease에 더해 반복적인 destructive mutation 시도를 제한한다.
+- `/api/admin/engine-filters`는 자동 견적 생성기의 범주별 카탈로그 타겟 필터를 관리한다. GET(설정+범주별 통과 수 요약), PUT(검증·저장), GET `/facets`(카탈로그 옵션+수량), POST `/preview`(저장 없이 통과 수)가 있고 PUT/preview는 `admin-engine-filters` IP 분당 20회 bucket을 공유한다. 설정은 `ENGINE_TARGET_FILTERS_PATH` 또는 `data/engine-target-filters.json`에 mtime-캐시로 저장되며, 읽기는 깨진 파일에 fail-open한다. 공유 모듈 `shared/engine-target-filters.ts`가 화이트리스트 스펙 필드·범주별 facet 레지스트리·정규화·매칭을 정의하고, 엔진은 `generateBuildDraft`/`minimumFeasibleBuildPriceFor`/`recommendationFloorWonFor`의 `options.targetFilters`로 받아 `generatorCandidatePool`에서 `isQuoteSelectable` 직후에 적용한다 — 같은 facet 안 OR, facet 사이 AND, 미설정 facet은 무제한.
 - 관리자 core/accessory crawler 입력은 서버에서 pages·batch·delay 상한을 다시 검증한다. core `all:true`의 legacy `limitPerCategory: 0` sentinel만 예외적으로 허용하며, 모든 실제 범위는 bounded integer로 정규화한다.
 - GPU 물리·benchmark 개별 source-check는 partId별 in-flight job map으로 중복 외부 호출을 409로 막고, 완료 후 15초 cooldown을 `Retry-After` 429로 적용한다.
 - catalog-spec·GPU 물리·benchmark 개별 source-check는 각각 IP 분당 30회 bucket도 적용해 partId 순회로 cooldown을 우회하는 반복 외부 조회를 제한한다.
@@ -100,7 +101,7 @@ PC Supporter — PC 부품 카탈로그, 호환성 검사, 가격·원문·성�
 - `npm run test:browser`: 실행 중인 API/웹을 대상으로 브라우저 smoke.
 - `npm run test:browser`: 기본 wait 120초·CDP evaluate 30초로 긴 lazy DOM/route flow의 관찰 timeout을 고정하며 환경변수로 override 가능하다.
 - `/result`에 검사 결과가 준비되면 `BuildChangeDecisionDialog` lazy chunk를 background preload해 첫 대체 후보 클릭이 chunk load 관찰 지연에 걸리지 않게 한다.
-- `AdminView`의 `DeferredAdminPanel`은 lazy child를 유지하면서 운영 deep-link·focus·브라우저 검증이 같은 anchor를 사용하도록 주요 보강 패널에 안정적인 `anchorId`를 제공한다. 현재 고정 anchor는 `admin-catalog-change-log`, `admin-catalog-spec-review`, `admin-benchmark-review`, `admin-m2-mapping`, `admin-gpu-physical`, `admin-case-rgb-load`, `admin-cooling-fan-load`다.
+- `AdminView`의 `DeferredAdminPanel`은 lazy child를 유지하면서 운영 deep-link·focus·브라우저 검증이 같은 anchor를 사용하도록 주요 보강 패널에 안정적인 `anchorId`를 제공한다. 현재 고정 anchor는 `admin-engine-filters`, `admin-catalog-change-log`, `admin-catalog-spec-review`, `admin-benchmark-review`, `admin-m2-mapping`, `admin-gpu-physical`, `admin-case-rgb-load`, `admin-cooling-fan-load`다.
 - `npm run test:browser:picker-cache-storage`는 저장소 전용 picker sentinel 삭제를 검증하며, 같은 세션의 App `partMap`이 제공하는 탐색용 fallback 목록은 남을 수 있다는 계약을 분리한다.
 - `npm run test:browser:purchase-list-context`는 지연된 현재가 조회 중 견적 `inputFingerprint`가 바뀌면 새 구매 목록 버튼이 다시 활성화되는지 검증한다.
 - `npm run test:browser:clipboard-route-ownership`는 Accessory·Generator·Result candidate comparison·Purchase checklist의 지연 clipboard 결과가 route 이탈 뒤 toast를 쓰지 않는지 검증한다.

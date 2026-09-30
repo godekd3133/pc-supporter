@@ -713,19 +713,21 @@ html[data-theme="dark"] .admin-page .m2-coverage-empty {
 
 .engine-filter-preview-note { display: flex; align-items: center; gap: 6px; margin: 0 0 12px; padding: 8px 11px; border: 1px solid #cfe1f8; border-radius: 8px; color: var(--teal); background: #f0f7ff; font-size: 9px; }
 
-.engine-filter-layout { display: grid; grid-template-columns: 168px minmax(0, 1fr); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin-bottom: 18px; }
+.engine-filter-layout { display: grid; grid-template-columns: 176px minmax(0, 1fr); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin-bottom: 18px; }
 
 .engine-filter-nav { border-right: 1px solid var(--line); background: #f6f7f9; }
 
 .engine-filter-nav-title { padding: 10px 12px; border-bottom: 1px solid var(--line); color: var(--ink); font-size: 10px; font-weight: 800; }
 
-.engine-filter-nav-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; padding: 10px 12px; border: 0; border-bottom: 1px solid #eef0f3; color: var(--muted); background: transparent; font-size: 10px; font-weight: 600; text-align: left; cursor: pointer; }
+.engine-filter-nav-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; padding: 10px 12px; border: 0; border-bottom: 1px solid #eef0f3; color: var(--muted); background: transparent; font-size: 10px; font-weight: 600; text-align: left; cursor: pointer; word-break: keep-all; }
 
 .engine-filter-nav-item:hover { color: var(--ink); background: #fff; }
 
 .engine-filter-nav-item.active { color: var(--teal-deep); background: #fff; box-shadow: inset 2px 0 0 var(--teal); }
 
-.engine-filter-nav-meta { display: inline-flex; align-items: center; gap: 5px; }
+.engine-filter-nav-item > span:first-child { flex: 1 1 auto; }
+
+.engine-filter-nav-meta { display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto; }
 
 .engine-filter-nav-meta em { font-style: normal; padding: 2px 5px; border-radius: 4px; color: #fff; background: var(--teal); font-size: 7px; font-weight: 700; }
 
