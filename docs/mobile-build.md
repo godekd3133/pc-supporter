@@ -4,7 +4,7 @@ PC Supporter는 Vite로 만든 웹 클라이언트를 Capacitor 8 네이티브 �
 
 ## API 연결 계약
 
-웹 개발에서는 `VITE_API_BASE_URL`을 비워 두면 기존처럼 Vite proxy를 통해 상대 경로 `/api`를 사용합니다. 원격 API 모드 native bundle은 `VITE_API_BASE_URL`에 API 서버 origin을 지정해야 합니다. 빌드 시 CSP meta의 `connect-src`에는 그 API URL의 origin만 추가합니다. 설치 데이터 기반 local-offline bundle은 별도 명령으로 빌드하며 API origin을 포함하지 않고, CSP에서도 원격 API·font·image 출처를 허용하지 않습니다.
+웹 개발에서는 `VITE_API_BASE_URL`을 비워 두면 기존처럼 Vite proxy를 통해 상대 경로 `/api`를 사용합니다. 원격 API 모드 native bundle은 `VITE_API_BASE_URL`에 API 서버 origin을 지정해야 합니다. 빌드 시 CSP meta의 `connect-src`에는 그 API URL의 origin만 추가합니다.
 
 ```text
 VITE_API_BASE_URL=https://api.example.com

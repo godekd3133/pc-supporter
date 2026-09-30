@@ -1,9 +1,12 @@
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
 import { existsSync, rmSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
 import { Client } from "pg";
+import { migratePostgresSchemaWithClient } from "../postgres-schema-contract";
 import { TEST_POSTGRES_PORT } from "./postgres-url";
 
 const require = createRequire(import.meta.url);
@@ -80,6 +83,16 @@ async function ensureTestDatabase() {
     if (found.rows.length === 0) await client.query(`CREATE DATABASE "${TEST_DATABASE}"`);
   } finally {
     await client.end();
+  }
+  const schemaBytes = await readFile(resolve(process.cwd(), "db/schema.sql"));
+  const schemaSql = schemaBytes.toString("utf8");
+  const schemaSha256 = createHash("sha256").update(schemaBytes).digest("hex");
+  const migrationClient = new Client({ ...ADMIN_CONNECTION, database: TEST_DATABASE, connectionTimeoutMillis: 5_000 });
+  await migrationClient.connect();
+  try {
+    await migratePostgresSchemaWithClient(migrationClient, schemaSql, schemaSha256);
+  } finally {
+    await migrationClient.end();
   }
 }
 

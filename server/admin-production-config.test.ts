@@ -10,7 +10,7 @@ async function closeServer(server: Server) {
 
 async function withProductionServer(options: { password?: string; secret?: string }, run: (baseUrl: string) => Promise<void>) {
   const directory = await mkdtemp(join(tmpdir(), "pc-supporter-admin-production-config-"));
-  const keys = ["NODE_ENV", "ADMIN_PASSWORD", "ADMIN_SESSION_SECRET", "ADMIN_COOKIE_SAMESITE", "CORS_ALLOWED_ORIGINS", "PC_SUPPORTER_DATA_DIR", "DATABASE_URL", "DANAWA_CRAWL_ON_START", "BUILD_MONITOR_SCHEDULER_ENABLED"] as const;
+  const keys = ["NODE_ENV", "ADMIN_PASSWORD", "ADMIN_SESSION_SECRET", "ADMIN_COOKIE_SAMESITE", "CORS_ALLOWED_ORIGINS", "PC_SUPPORTER_DATA_DIR", "DATABASE_URL", "DANAWA_CRAWL_ON_START", "BUILD_MONITOR_SCHEDULER_ENABLED", "RATE_LIMIT_HMAC_SECRET"] as const;
   const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
   let server: Server | undefined;
   try {
@@ -20,11 +20,11 @@ async function withProductionServer(options: { password?: string; secret?: strin
     if (options.secret === undefined) process.env.ADMIN_SESSION_SECRET = "";
     else process.env.ADMIN_SESSION_SECRET = options.secret;
     process.env.PC_SUPPORTER_DATA_DIR = directory;
-    process.env.DATABASE_URL = "";
     process.env.ADMIN_COOKIE_SAMESITE = "none";
     process.env.CORS_ALLOWED_ORIGINS = "";
     process.env.DANAWA_CRAWL_ON_START = "false";
     process.env.BUILD_MONITOR_SCHEDULER_ENABLED = "false";
+    process.env.RATE_LIMIT_HMAC_SECRET = "test-rate-limit-hmac-secret-0123456789abcdef";
     vi.resetModules();
     const { app } = await import("./index");
     server = await new Promise<Server>((resolve, reject) => {

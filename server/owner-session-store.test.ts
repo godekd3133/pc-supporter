@@ -190,7 +190,7 @@ function grant(overrides: Partial<{
   };
 }
 
-describe("HttpOnly owner-session grant persistence foundation", () => {
+describe("HttpOnly owner-session grant persistence", () => {
   const environmentKeys = ["DATABASE_URL", "PC_SUPPORTER_DATA_DIR", "NODE_ENV"] as const;
   const previousEnvironment = Object.fromEntries(environmentKeys.map((key) => [key, process.env[key]])) as Record<(typeof environmentKeys)[number], string | undefined>;
   let dataDirectory = "";
@@ -203,7 +203,6 @@ describe("HttpOnly owner-session grant persistence foundation", () => {
     fakeDatabase.clientQueries = [];
     fakeDatabase.failOwnerSessionOperations = false;
     dataDirectory = await mkdtemp(join(tmpdir(), "pc-supporter-owner-session-test-"));
-    process.env.DATABASE_URL = "";
     process.env.PC_SUPPORTER_DATA_DIR = dataDirectory;
     process.env.NODE_ENV = "test";
   });
@@ -218,8 +217,8 @@ describe("HttpOnly owner-session grant persistence foundation", () => {
     await rm(dataDirectory, { recursive: true, force: true });
   });
 
-  async function loadRepository(databaseUrl?: string) {
-    process.env.DATABASE_URL = databaseUrl ?? "";
+  async function loadRepository() {
+    process.env.DATABASE_URL = "postgres://synthetic.test/pc_supporter";
     vi.resetModules();
     return import("./repository");
   }
@@ -228,135 +227,8 @@ describe("HttpOnly owner-session grant persistence foundation", () => {
     await repository.createOwnerShareSession({ sessionHash: hash, createdAt, expiresAt });
   }
 
-  it("serializes file upserts and lists only unexpired IDs, types, and owner-token hashes", async () => {
-    const repository = await loadRepository();
-    const now = "2026-09-29T12:00:00.000Z";
-    const first = grant({ expiresAt: "2026-09-29T12:30:00.000Z" });
-    const expired = grant({ resourceId: "expired-build", ownerTokenHash: secondOwnerTokenHash, expiresAt: "2026-09-29T11:59:59.000Z" });
-    const permanent = grant({ resourceType: "watchlist", resourceId: "watch-1", ownerTokenHash: secondOwnerTokenHash });
-
-    await createSession(repository, sessionHash, farFuture);
-    await Promise.all([
-      expect(repository.upsertOwnerShareSessionGrant(first, now)).resolves.toBe(true),
-      expect(repository.upsertOwnerShareSessionGrant(expired, now)).resolves.toBe(true),
-      expect(repository.upsertOwnerShareSessionGrant(permanent, now)).resolves.toBe(true)
-    ]);
-    const renewed = { ...first, createdAt: "2026-09-29T11:00:00.000Z", expiresAt: "2026-09-29T13:00:00.000Z" };
-    await expect(repository.upsertOwnerShareSessionGrant(renewed, now)).resolves.toBe(true);
-    const unboundedRenewal = grant({ createdAt: "2026-09-29T11:30:00.000Z" });
-    await expect(repository.upsertOwnerShareSessionGrant(unboundedRenewal, now)).resolves.toBe(true);
-
-    await expect(repository.ownerShareSessionGrantMatches({ sessionHash, resourceType: "build", resourceId: "build-1", ownerTokenHash, now })).resolves.toBe(true);
-    await expect(repository.ownerShareSessionGrantMatches({ sessionHash: secondSessionHash, resourceType: "build", resourceId: "build-1", ownerTokenHash, now })).resolves.toBe(false);
-    await expect(repository.ownerShareSessionGrantMatches({ sessionHash, resourceType: "watchlist", resourceId: "build-1", ownerTokenHash, now })).resolves.toBe(false);
-    await expect(repository.ownerShareSessionGrantMatches({ sessionHash, resourceType: "build", resourceId: "missing", ownerTokenHash, now })).resolves.toBe(false);
-    await expect(repository.ownerShareSessionGrantMatches({ sessionHash, resourceType: "build", resourceId: "build-1", ownerTokenHash: secondOwnerTokenHash, now })).resolves.toBe(false);
-    await expect(repository.ownerShareSessionGrantMatches({ sessionHash, resourceType: "build", resourceId: "expired-build", ownerTokenHash: secondOwnerTokenHash, now })).resolves.toBe(false);
-    await expect(repository.ownerShareSessionGrantMatches({ sessionHash, resourceType: "watchlist", resourceId: "watch-1", ownerTokenHash: secondOwnerTokenHash, now: "2050-01-01T00:00:00.000Z" })).resolves.toBe(true);
-    await expect(repository.listOwnerShareSessionGrants(sessionHash, now)).resolves.toEqual([
-      { resourceType: "build", resourceId: "build-1", ownerTokenHash },
-      { resourceType: "watchlist", resourceId: "watch-1", ownerTokenHash: secondOwnerTokenHash }
-    ]);
-
-    const stored = JSON.parse(await readFile(join(dataDirectory, "owner-session-grants.json"), "utf8")) as { grants: Array<Record<string, unknown>> };
-    expect(stored.grants).toHaveLength(3);
-    expect(stored.grants.find((entry) => entry.resourceId === "build-1")).toMatchObject({ createdAt, expiresAt: renewed.expiresAt });
-    expect(stored.grants.find((entry) => entry.resourceId === "watch-1")).not.toHaveProperty("expiresAt");
-    expect(stored.grants.every((entry) => !("ownerToken" in entry))).toBe(true);
-  });
-
-  it("deletes all grants for a revoked resource or a closed session", async () => {
-    const repository = await loadRepository();
-    await createSession(repository, sessionHash);
-    await createSession(repository, secondSessionHash);
-    await Promise.all([
-      repository.upsertOwnerShareSessionGrant(grant()),
-      repository.upsertOwnerShareSessionGrant(grant({ sessionHash: secondSessionHash, ownerTokenHash: secondOwnerTokenHash })),
-      repository.upsertOwnerShareSessionGrant(grant({ resourceType: "comparison", resourceId: "comparison-1" }))
-    ]);
-
-    await expect(repository.deleteOwnerShareSessionGrantsForResource("build", "build-1")).resolves.toBe(2);
-    await expect(repository.listOwnerShareSessionGrants(sessionHash)).resolves.toEqual([
-      { resourceType: "comparison", resourceId: "comparison-1", ownerTokenHash }
-    ]);
-    await expect(repository.deleteOwnerShareSessionGrantsForSession(sessionHash)).resolves.toBe(1);
-    await expect(repository.listOwnerShareSessionGrants(sessionHash)).resolves.toEqual([]);
-    await expect(repository.listOwnerShareSessionGrants(secondSessionHash)).resolves.toEqual([]);
-  });
-
-  it("prunes only the requested number of expired file grants and retains a corrupt file", async () => {
-    const repository = await loadRepository();
-    const now = "2026-09-29T12:00:00.000Z";
-    await createSession(repository, sessionHash);
-    await Promise.all([
-      repository.upsertOwnerShareSessionGrant(grant({ resourceId: "expired-1", expiresAt: "2026-09-29T11:00:00.000Z" }), now),
-      repository.upsertOwnerShareSessionGrant(grant({ resourceId: "expired-2", expiresAt: "2026-09-29T11:10:00.000Z" }), now),
-      repository.upsertOwnerShareSessionGrant(grant({ resourceId: "expired-3", expiresAt: "2026-09-29T11:20:00.000Z" }), now),
-      repository.upsertOwnerShareSessionGrant(grant({ resourceId: "still-valid", expiresAt: "2026-09-29T12:01:00.000Z" }), now)
-    ]);
-
-    await expect(repository.pruneExpiredOwnerShareSessionGrants(2, now)).resolves.toBe(2);
-    const stored = JSON.parse(await readFile(join(dataDirectory, "owner-session-grants.json"), "utf8")) as { sessions: unknown[]; grants: Array<{ resourceId: string }> };
-    expect(stored.sessions).toHaveLength(1);
-    expect(stored.grants.map((entry) => entry.resourceId).sort()).toEqual(["expired-3", "still-valid"]);
-    await expect(repository.pruneExpiredOwnerShareSessionGrants(0, now)).resolves.toBe(0);
-
-    const path = join(dataDirectory, "owner-session-grants.json");
-    const malformed = "{ owner grants are not json";
-    await writeFile(path, malformed, "utf8");
-    await expect(repository.upsertOwnerShareSessionGrant(grant({ resourceId: "must-not-overwrite" }))).rejects.toBeInstanceOf(SyntaxError);
-    await expect(readFile(path, "utf8")).resolves.toBe(malformed);
-  });
-
-  it("keeps session expiry separate from resource expiry and deletes its grants on revoke", async () => {
-    const repository = await loadRepository();
-    const now = "2026-09-29T12:00:00.000Z";
-    const session = { sessionHash, createdAt, expiresAt: "2026-09-29T13:00:00.000Z" };
-    const grantWithLaterResourceExpiry = grant({ expiresAt: "2026-09-29T14:00:00.000Z" });
-    await repository.createOwnerShareSession(session);
-    await expect(repository.ownerShareSessionIsActive(sessionHash, now)).resolves.toBe(true);
-    await expect(repository.upsertOwnerShareSessionGrant(grantWithLaterResourceExpiry, now)).resolves.toBe(true);
-
-    await expect(repository.createOwnerShareSession({ ...session, expiresAt: farFuture })).rejects.toThrow("already exists");
-    await expect(repository.ownerShareSessionIsActive(sessionHash, "2026-09-29T13:00:00.000Z")).resolves.toBe(false);
-    await expect(repository.ownerShareSessionGrantMatches({ sessionHash, resourceType: "build", resourceId: "build-1", ownerTokenHash, now: "2026-09-29T13:30:00.000Z" })).resolves.toBe(false);
-    await expect(repository.listOwnerShareSessionGrants(sessionHash, "2026-09-29T13:30:00.000Z")).resolves.toEqual([]);
-
-    const storedBeforeRevoke = JSON.parse(await readFile(join(dataDirectory, "owner-session-grants.json"), "utf8")) as { sessions: Array<{ expiresAt: string }>; grants: Array<{ expiresAt: string }> };
-    expect(storedBeforeRevoke.sessions[0]?.expiresAt).toBe(session.expiresAt);
-    expect(storedBeforeRevoke.grants[0]?.expiresAt).toBe(grantWithLaterResourceExpiry.expiresAt);
-    await expect(repository.deleteOwnerShareSession(sessionHash)).resolves.toBe(true);
-    await expect(repository.ownerShareSessionIsActive(sessionHash, now)).resolves.toBe(false);
-    await expect(repository.listOwnerShareSessionGrants(sessionHash, now)).resolves.toEqual([]);
-    const storedAfterRevoke = JSON.parse(await readFile(join(dataDirectory, "owner-session-grants.json"), "utf8")) as { sessions: unknown[]; grants: unknown[] };
-    expect(storedAfterRevoke.sessions).toEqual([]);
-    expect(storedAfterRevoke.grants).toEqual([]);
-  });
-
-  it("prunes expired file sessions and their grants in the same mutation", async () => {
-    const repository = await loadRepository();
-    const now = "2026-09-29T12:00:00.000Z";
-    const sessionHashes = ["e", "f", "1", "2"].map((letter) => letter.repeat(64));
-    const expiries = ["2026-09-29T11:00:00.000Z", "2026-09-29T11:30:00.000Z", "2026-09-29T12:00:00.000Z", "2026-09-29T13:00:00.000Z"];
-    for (let index = 0; index < sessionHashes.length; index += 1) {
-      await repository.createOwnerShareSession({ sessionHash: sessionHashes[index], createdAt, expiresAt: expiries[index] });
-      const beforeExpiry = new Date(Date.parse(expiries[index]) - 1_000).toISOString();
-      await expect(repository.upsertOwnerShareSessionGrant(grant({ sessionHash: sessionHashes[index], resourceId: `session-${index}` }), beforeExpiry)).resolves.toBe(true);
-    }
-
-    await expect(repository.pruneExpiredOwnerShareSessions(2, now)).resolves.toBe(2);
-    const afterFirstPrune = JSON.parse(await readFile(join(dataDirectory, "owner-session-grants.json"), "utf8")) as { sessions: Array<{ sessionHash: string }>; grants: Array<{ sessionHash: string }> };
-    expect(afterFirstPrune.sessions.map(({ sessionHash: value }) => value).sort()).toEqual(sessionHashes.slice(2).sort());
-    expect(afterFirstPrune.grants.map(({ sessionHash: value }) => value).sort()).toEqual(sessionHashes.slice(2).sort());
-    await expect(repository.pruneExpiredOwnerShareSessions(0, now)).resolves.toBe(0);
-    await expect(repository.pruneExpiredOwnerShareSessions(10_000, now)).resolves.toBe(1);
-    const afterSecondPrune = JSON.parse(await readFile(join(dataDirectory, "owner-session-grants.json"), "utf8")) as { sessions: Array<{ sessionHash: string }>; grants: Array<{ sessionHash: string }> };
-    expect(afterSecondPrune.sessions.map(({ sessionHash: value }) => value)).toEqual([sessionHashes[3]]);
-    expect(afterSecondPrune.grants.map(({ sessionHash: value }) => value)).toEqual([sessionHashes[3]]);
-  });
-
   it("prunes PostgreSQL sessions with a hard cap and relies on the FK cascade for grants", async () => {
-    const repository = await loadRepository("postgres://synthetic.test/pc_supporter");
+    const repository = await loadRepository();
     const now = "2026-09-29T12:00:00.000Z";
     const sessionHashes = ["3", "4", "5"].map((digit) => digit.repeat(64));
     const expiries = ["2026-09-29T11:00:00.000Z", "2026-09-29T11:30:00.000Z", "2026-09-29T13:00:00.000Z"];
@@ -377,23 +249,8 @@ describe("HttpOnly owner-session grant persistence foundation", () => {
     expect([...fakeDatabase.grants.values()].map((entry) => entry.session_hash)).toEqual([sessionHashes[2]]);
   });
 
-  it("preserves legacy grant-only JSON without exposing or reviving its token hash", async () => {
-    const repository = await loadRepository();
-    const legacyGrant = grant({ resourceId: "legacy-build", expiresAt: farFuture });
-    const path = join(dataDirectory, "owner-session-grants.json");
-    const legacyJson = JSON.stringify({ schemaVersion: 1, grants: [legacyGrant] });
-    await writeFile(path, legacyJson, "utf8");
-
-    await expect(repository.ownerShareSessionIsActive(sessionHash, createdAt)).resolves.toBe(false);
-    await expect(repository.listOwnerShareSessionGrants(sessionHash, createdAt)).resolves.toEqual([]);
-    await expect(repository.ownerShareSessionGrantMatches({ sessionHash, resourceType: "build", resourceId: "legacy-build", ownerTokenHash, now: createdAt })).resolves.toBe(false);
-    await expect(repository.upsertOwnerShareSessionGrant(legacyGrant, createdAt)).resolves.toBe(false);
-    await expect(repository.createOwnerShareSession({ sessionHash, createdAt, expiresAt: farFuture })).rejects.toThrow("pending grant");
-    await expect(readFile(path, "utf8")).resolves.toBe(legacyJson);
-  });
-
   it("does not expose or revive a pending PostgreSQL grant without its session row", async () => {
-    const repository = await loadRepository("postgres://synthetic.test/pc_supporter");
+    const repository = await loadRepository();
     const legacyGrant = grant({ resourceId: "legacy-database-build", expiresAt: farFuture });
     fakeDatabase.grants.set(JSON.stringify([sessionHash, legacyGrant.resourceType, legacyGrant.resourceId, ownerTokenHash]), {
       session_hash: sessionHash,
@@ -413,7 +270,7 @@ describe("HttpOnly owner-session grant persistence foundation", () => {
   });
 
   it("aligns runtime bootstrap, baseline schema, and the additive migration", async () => {
-    const repository = await loadRepository("postgres://synthetic.test/pc_supporter");
+    const repository = await loadRepository();
     const baseline = await readFile(new URL("../db/schema.sql", import.meta.url), "utf8");
     const migration = await readFile(new URL("../db/migrations/20260930_owner_session_grants.sql", import.meta.url), "utf8");
     const definitions = [
@@ -443,7 +300,7 @@ describe("HttpOnly owner-session grant persistence foundation", () => {
   });
 
   it("uses PostgreSQL for grant insert, match, list, revoke, and bounded expiry pruning", async () => {
-    const repository = await loadRepository("postgres://synthetic.test/pc_supporter");
+    const repository = await loadRepository();
     const now = "2026-09-29T12:00:00.000Z";
     await createSession(repository, sessionHash, "2026-09-29T23:59:59.000Z");
     await createSession(repository, secondSessionHash, farFuture);
@@ -472,7 +329,7 @@ describe("HttpOnly owner-session grant persistence foundation", () => {
   });
 
   it("uses PostgreSQL session expiry as an independent gate and cascades revoke/prune to grants", async () => {
-    const repository = await loadRepository("postgres://synthetic.test/pc_supporter");
+    const repository = await loadRepository();
     const now = "2026-09-29T12:00:00.000Z";
     await repository.createOwnerShareSession({ sessionHash, createdAt, expiresAt: "2026-09-29T13:00:00.000Z" });
     await repository.createOwnerShareSession({ sessionHash: secondSessionHash, createdAt, expiresAt: "2026-09-29T11:00:00.000Z" });
@@ -498,7 +355,7 @@ describe("HttpOnly owner-session grant persistence foundation", () => {
   });
 
   it("fails closed on PostgreSQL errors without writing a JSON fallback", async () => {
-    const repository = await loadRepository("postgres://synthetic.test/pc_supporter");
+    const repository = await loadRepository();
     await createSession(repository, sessionHash);
     fakeDatabase.failOwnerSessionOperations = true;
 
@@ -506,14 +363,10 @@ describe("HttpOnly owner-session grant persistence foundation", () => {
     await expect(access(join(dataDirectory, "owner-session-grants.json"))).rejects.toMatchObject({ code: "ENOENT" });
   });
 
-  it("rejects malformed hashes and malformed file rows instead of accepting partial ownership", async () => {
+  it("rejects malformed hashes instead of accepting partial ownership", async () => {
     const repository = await loadRepository();
     await expect(repository.upsertOwnerShareSessionGrant(grant({ sessionHash: "A".repeat(64) }))).rejects.toThrow("lowercase SHA-256");
     await expect(repository.upsertOwnerShareSessionGrant(grant({ resourceType: "unknown" as never }))).rejects.toThrow("resource type");
-
-    const path = join(dataDirectory, "owner-session-grants.json");
-    await writeFile(path, JSON.stringify({ schemaVersion: 1, grants: [{ ...grant(), ownerTokenHash: "not-a-hash" }] }), "utf8");
-    await expect(repository.listOwnerShareSessionGrants(sessionHash)).rejects.toThrow("lowercase SHA-256");
-    await expect(readFile(path, "utf8")).resolves.toContain("not-a-hash");
+    await expect(repository.upsertOwnerShareSessionGrant(grant({ ownerTokenHash: "not-a-hash" }))).rejects.toThrow("lowercase SHA-256");
   });
 });

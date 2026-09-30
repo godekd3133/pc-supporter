@@ -1,9 +1,11 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import type { Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
 import { describe, expect, it, vi } from "vitest";
 import type { Part } from "../shared/types";
+import { truncatePostgresTables } from "./testkit/postgres";
 
 const { checkPhysicalSourceUrlMock } = vi.hoisted(() => ({ checkPhysicalSourceUrlMock: vi.fn() }));
 
@@ -20,7 +22,6 @@ describe("catalog seed mapping API persistence", () => {
     const previousDatabaseUrl = process.env.DATABASE_URL;
     const previousAdminPassword = process.env.ADMIN_PASSWORD;
     process.env.PC_SUPPORTER_DATA_DIR = directory;
-    process.env.DATABASE_URL = "";
     process.env.ADMIN_PASSWORD = "";
     vi.resetModules();
     let server: Server | undefined;
@@ -43,9 +44,11 @@ describe("catalog seed mapping API persistence", () => {
     };
 
     try {
-      const [{ app }, { CATALOG_PATH, readJson, writeJson }] = await Promise.all([import("./index"), import("./storage")]);
-      await writeJson(CATALOG_PATH, [candidate]);
-      const catalogBefore = await readFile(CATALOG_PATH, "utf8");
+      const [repository, { app }, { CATALOG_SEED_MAPPINGS_PATH, readJson }] = await Promise.all([import("./repository"), import("./index"), import("./storage")]);
+      await repository.initializePersistence();
+      await truncatePostgresTables();
+      await repository.writeCatalogRecords([candidate]);
+      const catalogBefore = await repository.readCatalogRecords();
       server = app.listen(0, "127.0.0.1");
       await new Promise<void>((resolve, reject) => { server?.once("listening", resolve); server?.once("error", reject); });
       const address = server.address();
@@ -72,8 +75,8 @@ describe("catalog seed mapping API persistence", () => {
       const reloaded = await reloadedResponse.json() as Record<string, any>;
       expect(reloaded.summary).toMatchObject({ approvedCount: 1, staleCount: 0 });
       expect(reloaded.items.find((entry: any) => entry.starter.id === "cpu-9600x")).toMatchObject({ status: "approved", approvedMapping: { activePartId: candidate.id, activeSourceProductCode: candidate.sourceProductCode } });
-      expect(await readFile(CATALOG_PATH, "utf8")).toBe(catalogBefore);
-      expect((await readJson<unknown>(join(directory, "catalog-seed-mappings.json"), {}))).toMatchObject({ schemaVersion: 1, items: [expect.objectContaining({ starterPartId: "cpu-9600x" })] });
+      expect(await repository.readCatalogRecords()).toEqual(catalogBefore);
+      expect((await readJson<unknown>(CATALOG_SEED_MAPPINGS_PATH, {}))).toMatchObject({ schemaVersion: 1, items: [expect.objectContaining({ starterPartId: "cpu-9600x" })] });
 
       const deletedResponse = await fetch(`${baseUrl}/api/admin/catalog/seed-mapping-reviews/cpu-9600x`, { method: "DELETE" });
       expect(deletedResponse.status).toBe(200);
@@ -99,7 +102,6 @@ describe("catalog seed mapping API persistence", () => {
     const previousDatabaseUrl = process.env.DATABASE_URL;
     const previousAdminPassword = process.env.ADMIN_PASSWORD;
     process.env.PC_SUPPORTER_DATA_DIR = directory;
-    process.env.DATABASE_URL = "";
     process.env.ADMIN_PASSWORD = "";
     vi.resetModules();
     let server: Server | undefined;
@@ -123,9 +125,11 @@ describe("catalog seed mapping API persistence", () => {
     const matchedSourceCheck = { requestedUrl: sourceUrl, checkedAt: "2026-09-03T00:02:00.000Z", status: "reachable" as const, identityStatus: "matched" as const, redirectCount: 0, finalUrl: sourceUrl, httpStatus: 200, contentType: "text/html", detail: "원문에서 상품 식별자를 확인했습니다." };
 
     try {
-      const [{ app }, { CATALOG_PATH, readJson, writeJson }] = await Promise.all([import("./index"), import("./storage")]);
-      await writeJson(CATALOG_PATH, [catalogPart]);
-      const catalogBefore = await readFile(CATALOG_PATH, "utf8");
+      const [repository, { app }, { CATALOG_SEED_MAPPINGS_PATH, readJson }] = await Promise.all([import("./repository"), import("./index"), import("./storage")]);
+      await repository.initializePersistence();
+      await truncatePostgresTables();
+      await repository.writeCatalogRecords([catalogPart]);
+      const catalogBefore = await repository.readCatalogRecords();
       server = app.listen(0, "127.0.0.1");
       await new Promise<void>((resolve, reject) => { server?.once("listening", resolve); server?.once("error", reject); });
       const address = server.address();
@@ -141,7 +145,7 @@ describe("catalog seed mapping API persistence", () => {
       checkPhysicalSourceUrlMock.mockResolvedValueOnce({ ...matchedSourceCheck, status: "identity_mismatch", identityStatus: "not_found", detail: "원문에서 다른 상품을 확인했습니다." }).mockResolvedValue(matchedSourceCheck);
       const rejectedResponse = await fetch(`${baseUrl}/api/admin/catalog/seed-mapping-reviews/cpu-9600x/manual-verify`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sourceProductCode, sourceUrl }) });
       expect(rejectedResponse.status).toBe(422);
-      expect((await readJson<unknown>(join(directory, "catalog-seed-mappings.json"), {}))).toEqual({});
+      expect((await readJson<unknown>(CATALOG_SEED_MAPPINGS_PATH, {}))).toEqual({});
 
       const saveResponse = await fetch(`${baseUrl}/api/admin/catalog/seed-mapping-reviews/cpu-9600x/manual-verify`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sourceProductCode, sourceUrl }) });
       const saved = await saveResponse.json() as Record<string, any>;
@@ -153,8 +157,8 @@ describe("catalog seed mapping API persistence", () => {
       const after = await afterResponse.json() as Record<string, any>;
       expect(after.summary).toMatchObject({ approvedCount: 1, staleCount: 0 });
       expect(after.items.find((entry: any) => entry.starter.id === "cpu-9600x")).toMatchObject({ status: "approved", approvedMapping: { sourceUrl, verification: { identityStatus: "matched" } } });
-      expect(await readFile(CATALOG_PATH, "utf8")).toBe(catalogBefore);
-      expect(await readJson<unknown>(join(directory, "catalog-seed-mappings.json"), {})).toMatchObject({ schemaVersion: 1, items: [expect.objectContaining({ starterPartId: "cpu-9600x", sourceUrl })] });
+      expect(await repository.readCatalogRecords()).toEqual(catalogBefore);
+      expect(await readJson<unknown>(CATALOG_SEED_MAPPINGS_PATH, {})).toMatchObject({ schemaVersion: 1, items: [expect.objectContaining({ starterPartId: "cpu-9600x", sourceUrl })] });
 
       const deletedResponse = await fetch(`${baseUrl}/api/admin/catalog/seed-mapping-reviews/cpu-9600x`, { method: "DELETE" });
       expect(deletedResponse.status).toBe(200);

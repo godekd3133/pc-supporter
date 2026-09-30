@@ -2,12 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AccessoryItem, Part } from "../shared/types";
 
 const fake = vi.hoisted(() => ({
-  mode: "postgres" as "postgres" | "file",
   databaseCatalog: [] as unknown[],
-  fileCatalog: [] as unknown[],
   accessories: [] as unknown[],
   catalogReads: 0,
-  fileCatalogReads: 0,
   accessoryReads: 0,
   accessoryMetaSnapshots: [] as unknown[][],
   accessoryCoverageSnapshots: [] as unknown[][],
@@ -16,7 +13,8 @@ const fake = vi.hoisted(() => ({
 }));
 
 vi.mock("./repository", () => ({
-  persistenceMode: async () => fake.mode,
+  readAccessoryCoverageRecord: async () => ({ updatedAt: fake.accessoryUpdatedAt, categories: [] }),
+  readBenchmarkOverrideRecords: async () => ({}),
   readCatalogOverrideMapUpdatedAtRecords: async () => ({ catalogSpecUpdatedAt: "", m2SlotUpdatedAt: "" }),
   readCatalogRecords: async () => {
     fake.catalogReads += 1;
@@ -27,21 +25,10 @@ vi.mock("./repository", () => ({
 }));
 
 vi.mock("./storage", () => ({
-  CATALOG_PATH: "/fixture/catalog.json",
-  CATALOG_SPEC_OVERRIDES_PATH: "/fixture/catalog-spec-overrides.json",
-  ACCESSORY_COVERAGE_PATH: "/fixture/accessory-coverage.json",
-  BENCHMARK_OVERRIDES_PATH: "/fixture/benchmark-overrides.json",
   CASE_RGB_LOAD_OVERRIDES_PATH: "/fixture/case-rgb-load-overrides.json",
   GPU_PHYSICAL_OVERRIDES_PATH: "/fixture/gpu-physical-overrides.json",
-  M2_SLOT_OVERRIDES_PATH: "/fixture/m2-slot-overrides.json",
   fileUpdatedAt: async () => fake.fileUpdatedAt,
-  readJson: async (path: string, fallback: unknown) => {
-    if (path === "/fixture/catalog.json") {
-      fake.fileCatalogReads += 1;
-      return fake.fileCatalog;
-    }
-    return fallback;
-  },
+  readJson: async (_path: string, fallback: unknown) => fallback,
   writeJson: async () => undefined,
   withSerializedFileMutation: async (_path: string, operation: () => Promise<unknown>) => operation()
 }));
@@ -141,55 +128,36 @@ describe("catalog metadata uses one request-local snapshot", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-09-29T12:00:00.000Z"));
-    fake.mode = "postgres";
     fake.databaseCatalog = [syntheticPart];
-    fake.fileCatalog = [syntheticPart];
     fake.accessories = [syntheticAccessory];
     fake.catalogReads = 0;
-    fake.fileCatalogReads = 0;
     fake.accessoryReads = 0;
     fake.accessoryMetaSnapshots = [];
     fake.accessoryCoverageSnapshots = [];
   });
 
-  it("reads once and returns the same metadata in PostgreSQL and file persistence modes", async () => {
+  it("reads once and returns metadata tied to the request-local snapshot", async () => {
     const [{ loadCatalogSnapshot }, { catalogMeta }] = await Promise.all([
       import("./catalog-snapshot"),
       import("./catalog")
     ]);
 
-    const postgresSnapshot = await loadCatalogSnapshot();
-    const postgresMeta = await catalogMeta(postgresSnapshot);
+    const snapshot = await loadCatalogSnapshot();
+    const meta = await catalogMeta(snapshot);
     expect(fake.catalogReads).toBe(1);
-    expect(fake.fileCatalogReads).toBe(0);
     expect(fake.accessoryReads).toBe(1);
     expect(fake.accessoryMetaSnapshots).toHaveLength(1);
     expect(fake.accessoryCoverageSnapshots).toHaveLength(1);
     expect(fake.accessoryMetaSnapshots[0]).toBe(fake.accessories);
     expect(fake.accessoryCoverageSnapshots[0]).toBe(fake.accessories);
-    expect(postgresMeta).toMatchObject({
+    expect(meta).toMatchObject({
       catalogCount: expect.any(Number),
-      catalogUpdatedAt: postgresSnapshot.catalogUpdatedAt,
+      catalogUpdatedAt: snapshot.catalogUpdatedAt,
       accessoryCount: 1,
-      accessoryUpdatedAt: postgresSnapshot.accessoryUpdatedAt,
+      accessoryUpdatedAt: snapshot.accessoryUpdatedAt,
       accessoryPriceCoverage: { priced: 0, unpriced: 1 },
       accessoryCoverage: { updatedAt: fake.accessoryUpdatedAt, categories: [{ storedProductCount: 1 }] }
     });
-
-    fake.mode = "file";
-    const fileSnapshot = await loadCatalogSnapshot();
-    const fileMeta = await catalogMeta(fileSnapshot);
-
-    expect(fake.catalogReads).toBe(1);
-    expect(fake.fileCatalogReads).toBe(1);
-    expect(fake.accessoryReads).toBe(2);
-    expect(fake.accessoryMetaSnapshots).toHaveLength(2);
-    expect(fake.accessoryCoverageSnapshots).toHaveLength(2);
-    expect(fake.accessoryMetaSnapshots[1]).toBe(fake.accessories);
-    expect(fake.accessoryCoverageSnapshots[1]).toBe(fake.accessories);
-    expect(fileMeta).toEqual(postgresMeta);
-    expect(fileMeta.catalogUpdatedAt).toBe(fileSnapshot.catalogUpdatedAt);
-    expect(fileMeta.accessoryUpdatedAt).toBe(fileSnapshot.accessoryUpdatedAt);
   });
 
   it("keeps concurrent metadata calls tied to their own snapshot freshness", async () => {

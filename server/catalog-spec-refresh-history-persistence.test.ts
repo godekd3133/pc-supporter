@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { Part } from "../shared/types";
+import { truncatePostgresTables } from "./testkit/postgres";
 
 const { refreshDanawaPartMock } = vi.hoisted(() => ({ refreshDanawaPartMock: vi.fn() }));
 
@@ -23,7 +24,6 @@ describe("catalog spec refresh history persistence API", () => {
     const previousDatabaseUrl = process.env.DATABASE_URL;
     const previousAdminPassword = process.env.ADMIN_PASSWORD;
     process.env.PC_SUPPORTER_DATA_DIR = directory;
-    process.env.DATABASE_URL = "";
     process.env.ADMIN_PASSWORD = "";
     const sourcePart: Part = {
       id: "danawa-cpu-history-test",
@@ -42,8 +42,10 @@ describe("catalog spec refresh history persistence API", () => {
     vi.resetModules();
     let server: Server | undefined;
     try {
-      const [{ app }, { CATALOG_PATH, writeJson }] = await Promise.all([import("./index"), import("./storage")]);
-      await writeJson(CATALOG_PATH, [sourcePart]);
+      const [repository, { app }] = await Promise.all([import("./repository"), import("./index")]);
+      await repository.initializePersistence();
+      await truncatePostgresTables();
+      await repository.writeCatalogRecords([sourcePart]);
       server = app.listen(0, "127.0.0.1");
       await new Promise<void>((resolve, reject) => { server?.once("listening", resolve); server?.once("error", reject); });
       const address = server.address();
@@ -91,7 +93,6 @@ describe("catalog spec refresh history persistence API", () => {
     const previousDatabaseUrl = process.env.DATABASE_URL;
     const previousAdminPassword = process.env.ADMIN_PASSWORD;
     process.env.PC_SUPPORTER_DATA_DIR = directory;
-    process.env.DATABASE_URL = "";
     process.env.ADMIN_PASSWORD = "";
     const sourcePart: Part = {
       id: "danawa-motherboard-pcie-history-test",
@@ -116,8 +117,10 @@ describe("catalog spec refresh history persistence API", () => {
     vi.resetModules();
     let server: Server | undefined;
     try {
-      const [{ app }, { CATALOG_PATH, writeJson }] = await Promise.all([import("./index"), import("./storage")]);
-      await writeJson(CATALOG_PATH, [sourcePart]);
+      const [repository, { app }] = await Promise.all([import("./repository"), import("./index")]);
+      await repository.initializePersistence();
+      await truncatePostgresTables();
+      await repository.writeCatalogRecords([sourcePart]);
       server = app.listen(0, "127.0.0.1");
       await new Promise<void>((resolve, reject) => { server?.once("listening", resolve); server?.once("error", reject); });
       const address = server.address();

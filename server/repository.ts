@@ -333,11 +333,25 @@ const DATABASE_RETRY_COOLDOWN_MS = 1_000;
 const RATE_LIMIT_BUCKET_RETENTION_MS = 24 * 60 * 60 * 1_000;
 export const RATE_LIMIT_BUCKET_CLEANUP_INTERVAL_MS = 10 * 60 * 1_000;
 const RATE_LIMIT_BUCKET_CLEANUP_BATCH_SIZE = 1_000;
+// Vitest reloads modules between tests; keep pools alive on globalThis so a reset module
+// reuses the connection pool for the same DATABASE_URL instead of leaking clients.
+// The registry is keyed by the Pool implementation too: files that mock "pg" with a
+// synthetic class must never share a live pool with the real driver or other mocks.
+const sharedPoolGroups = ((globalThis as { __pcSupporterPgPools?: Map<unknown, Map<string, Pool>> }).__pcSupporterPgPools ??= new Map());
+let sharedPools = sharedPoolGroups.get(Pool);
+if (!sharedPools) {
+  sharedPools = new Map<string, Pool>();
+  sharedPoolGroups.set(Pool, sharedPools);
+}
 let pool: Pool | null = null;
 let poolCreationError: unknown;
 if (configuredDatabaseUrl) {
   try {
-    pool = new Pool({ connectionString: configuredDatabaseUrl, max: 5, connectionTimeoutMillis: 2_000 });
+    pool = sharedPools.get(configuredDatabaseUrl) ?? null;
+    if (!pool) {
+      pool = new Pool({ connectionString: configuredDatabaseUrl, max: 5, connectionTimeoutMillis: 2_000 });
+      sharedPools.set(configuredDatabaseUrl, pool);
+    }
   } catch (error: unknown) {
     poolCreationError = error;
   }
@@ -1016,7 +1030,7 @@ export async function readCatalogRecords(): Promise<Part[]> {
 
 export async function writeCatalogRecords(
   parts: Part[],
-  options: { replaceDanawaCategories?: PartCategory[] } = {}
+  options: { replaceDanawaCategories?: PartCategory[]; removeIds?: string[] } = {}
 ) {
   await ensureDatabase();
   const client = await pool!.connect();
@@ -1027,6 +1041,13 @@ export async function writeCatalogRecords(
       await client.query(
         "DELETE FROM catalog_parts WHERE source = 'danawa' AND category = ANY($1::text[])",
         [replaceCategories]
+      );
+    }
+    const removeIds = [...new Set(options.removeIds ?? [])];
+    if (removeIds.length > 0) {
+      await client.query(
+        "DELETE FROM catalog_parts WHERE id = ANY($1::text[])",
+        [removeIds]
       );
     }
     for (const part of parts) {
@@ -1102,6 +1123,8 @@ export interface AccessoryCatalogMutation {
   items: AccessoryItem[];
   /** Optional delta to persist while `items` remains the complete post-mutation snapshot. */
   writeItems?: AccessoryItem[];
+  /** Ids to delete outright — accessory rows absent from `items` are otherwise kept. */
+  removeIds?: string[];
   replaceDanawaCategories?: AccessoryCategory[];
 }
 
@@ -1181,6 +1204,14 @@ export async function mutateAccessoryCatalogRecords(
       await client.query(
         "DELETE FROM catalog_accessories WHERE source = 'danawa' AND category = ANY($1::text[])",
         [replaceDanawaCategories]
+      );
+    }
+
+    const removeIds = [...new Set(next.removeIds ?? [])];
+    if (removeIds.length > 0) {
+      await client.query(
+        "DELETE FROM catalog_accessories WHERE id = ANY($1::text[])",
+        [removeIds]
       );
     }
 
@@ -2817,6 +2848,8 @@ export async function deleteSavedWatchlistAlertStates(watchlistId: string) {
 }
 
 export async function closePersistence() {
-  if (pool) await pool.end();
+  const closing = pool;
   pool = null;
+  if (configuredDatabaseUrl && closing) sharedPools.delete(configuredDatabaseUrl);
+  if (closing) await closing.end();
 }

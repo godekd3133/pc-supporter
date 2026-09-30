@@ -66,7 +66,6 @@ describe("budget ladder share persistence API", () => {
     const previousDatabaseUrl = process.env.DATABASE_URL;
     const previousAdminPassword = process.env.ADMIN_PASSWORD;
     process.env.PC_SUPPORTER_DATA_DIR = directory;
-    process.env.DATABASE_URL = "";
     process.env.ADMIN_PASSWORD = "";
     vi.resetModules();
     let server: Server | undefined;

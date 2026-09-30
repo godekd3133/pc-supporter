@@ -7,9 +7,9 @@ import type { Part, PartCategory } from "../shared/types";
 import { mergeCatalog } from "../server/catalog";
 import { parseDanawaProductPage, type DanawaListItem } from "../server/danawa";
 import { isListingAllowed, inferListingType } from "../server/listing";
-import { readCatalogRecords, writeCatalogRecords } from "../server/repository";
+import { readBenchmarkOverrideRecords, readCatalogRecords, writeCatalogRecords } from "../server/repository";
 import { withCatalogIngestionLease } from "../server/catalog-ingestion-coordinator";
-import { BENCHMARK_OVERRIDES_PATH, DATA_DIR, readJson, writeJson } from "../server/storage";
+import { DATA_DIR, readJson, writeJson } from "../server/storage";
 
 type EnumeratedProduct = {
   productCode: string | number;
@@ -306,14 +306,8 @@ function partRejectionReason(part: Part) {
   return undefined;
 }
 
-async function hashFile(path: string) {
-  let raw: Buffer;
-  try { raw = await readFile(path); }
-  catch (error) {
-    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") raw = Buffer.alloc(0);
-    else throw error;
-  }
-  return createHash("sha256").update(raw).digest("hex");
+async function benchmarkOverridesFingerprint() {
+  return createHash("sha256").update(JSON.stringify(await readBenchmarkOverrideRecords())).digest("hex");
 }
 
 async function persistNewRawParts(parts: Part[], expectedBenchmarkHash: string) {
@@ -323,7 +317,7 @@ async function persistNewRawParts(parts: Part[], expectedBenchmarkHash: string) 
     const safe = parts.filter((part) => !keys.has(`${part.category}:${part.sourceProductCode ?? part.id}`));
     if (safe.length > 0) await writeCatalogRecords(mergeCatalog(latest, safe));
   }
-  const currentBenchmarkHash = await hashFile(BENCHMARK_OVERRIDES_PATH);
+  const currentBenchmarkHash = await benchmarkOverridesFingerprint();
   if (currentBenchmarkHash !== expectedBenchmarkHash) throw new Error("Benchmark overrides changed during detail import; stop and inspect persistence.");
 }
 
@@ -458,7 +452,7 @@ async function main() {
 
   await robotsPreflight();
   lastDetailRequestAt = Date.now();
-  const benchmarkHashBefore = await hashFile(BENCHMARK_OVERRIDES_PATH);
+  const benchmarkHashBefore = await benchmarkOverridesFingerprint();
   const requestQueue = pendingFromCheckpoint.slice(0, limit);
   let detailsAttempted = 0;
   let imported = 0;
@@ -562,7 +556,7 @@ async function main() {
     const latestKeys = new Set(latestCatalog.map((part) => `${part.category}:${part.sourceProductCode ?? part.id}`));
     const safeBatch = parsedParts.filter((part) => !latestKeys.has(`${part.category}:${part.sourceProductCode ?? part.id}`));
     if (safeBatch.length > 0) await writeCatalogRecords(mergeCatalog(latestCatalog, safeBatch));
-    const benchmarkHashAfter = await hashFile(BENCHMARK_OVERRIDES_PATH);
+    const benchmarkHashAfter = await benchmarkOverridesFingerprint();
     if (benchmarkHashAfter !== benchmarkHashBefore) throw new Error("Benchmark overrides changed during detail import; stop and inspect persistence.");
 
     for (const [key, state] of batchStatuses) {

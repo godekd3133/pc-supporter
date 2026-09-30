@@ -7,6 +7,7 @@ import type { Part } from "../shared/types";
 import type { SavedBuildMonitorSubscription } from "../shared/saved-build-monitor-subscription";
 import { createShareOwnerCredential } from "./build-share";
 import { savedBuildAlternativeAlertsFor } from "./saved-build-alternatives";
+import { truncatePostgresTables } from "./testkit/postgres";
 import type { SavedBuildRecord } from "./build-share";
 
 const selection = { memory: [], ssd: [], hdd: [], accessories: [], useIntegratedGraphics: true };
@@ -83,11 +84,12 @@ describe("saved build my-pc ownership cycle", () => {
     const directory = await mkdtemp(join(tmpdir(), "pc-supporter-my-pc-"));
     temporaryDirectories.push(directory);
     process.env.PC_SUPPORTER_DATA_DIR = directory;
-    process.env.DATABASE_URL = "";
     process.env.ADMIN_PASSWORD = "";
-    const { BUILDS_PATH, writeJson } = await import("./storage");
+    const repository = await import("./repository");
+    await repository.initializePersistence();
+    await truncatePostgresTables();
     const ownerCredential = createShareOwnerCredential();
-    await writeJson(BUILDS_PATH, [{
+    await repository.writeSavedBuilds([{
       id,
       name: "My PC boundary build",
       selection,
@@ -143,12 +145,13 @@ describe("saved build my-pc ownership cycle", () => {
     const directory = await mkdtemp(join(tmpdir(), "pc-supporter-my-pc-enable-"));
     temporaryDirectories.push(directory);
     process.env.PC_SUPPORTER_DATA_DIR = directory;
-    process.env.DATABASE_URL = "";
     process.env.ADMIN_PASSWORD = "";
-    const { BUILDS_PATH, writeJson } = await import("./storage");
+    const repository = await import("./repository");
+    await repository.initializePersistence();
+    await truncatePostgresTables();
     const ownerCredential = createShareOwnerCredential();
     // 모니터 구독이 아예 없는 견적 — 승격만으로 enabled 구독이 생겨야 한다.
-    await writeJson(BUILDS_PATH, [{
+    await repository.writeSavedBuilds([{
       id: buildId,
       name: "Monitor-less build",
       selection,
@@ -195,16 +198,17 @@ describe("saved build my-pc ownership cycle", () => {
     const directory = await mkdtemp(join(tmpdir(), "pc-supporter-my-pc-alt-"));
     temporaryDirectories.push(directory);
     process.env.PC_SUPPORTER_DATA_DIR = directory;
-    process.env.DATABASE_URL = "";
     process.env.ADMIN_PASSWORD = "";
-    const { BUILDS_PATH, CATALOG_PATH, writeJson } = await import("./storage");
+    const repository = await import("./repository");
+    await repository.initializePersistence();
+    await truncatePostgresTables();
     const ownerCredential = createShareOwnerCredential();
     // source:"manual" 부품은 danawa reparse를 거치지 않아 벤치 점수가 유지된다.
-    await writeJson(CATALOG_PATH, [
+    await repository.writeCatalogRecords([
       cpuPart("cpu-current", 10000, 300000),
       cpuPart("cpu-better", 13000, 400000)
-    ].map((part) => ({ ...part, source: "manual" })));
-    await writeJson(BUILDS_PATH, [{
+    ].map((part) => ({ ...part, source: "manual" as const })));
+    await repository.writeSavedBuilds([{
       id: "my-pc-monitor-build",
       name: "모니터 대상 내 PC",
       selection: { ...selection, cpu: { partId: "cpu-current", quantity: 1 } },

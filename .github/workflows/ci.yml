@@ -72,6 +72,34 @@ jobs:
         env:
           npm_config_cache: ${{ runner.temp }}/npm-cache
 
+      - name: Provision scratch PostgreSQL
+        shell: bash
+        run: |
+          node scripts/ci-embedded-postgres.mjs pcsupporter_browser_smoke "${RUNNER_TEMP}/pc-supporter-pg-url.txt" &
+          for attempt in {1..90}; do
+            if [ -s "${RUNNER_TEMP}/pc-supporter-pg-url.txt" ]; then break; fi
+            sleep 1
+          done
+          if [ ! -s "${RUNNER_TEMP}/pc-supporter-pg-url.txt" ]; then
+            echo "Embedded PostgreSQL did not become ready."
+            exit 1
+          fi
+          echo "DATABASE_URL=$(cat "${RUNNER_TEMP}/pc-supporter-pg-url.txt")" >> "$GITHUB_ENV"
+
+      - name: Start embedded PostgreSQL for the dev servers
+        run: |
+          node scripts/ci-embedded-postgres.mjs pcsupporter_dev "${RUNNER_TEMP}/pc-supporter-pg-url.txt" > "${RUNNER_TEMP}/pc-supporter-pg.log" 2>&1 &
+          echo $! > "${RUNNER_TEMP}/pc-supporter-pg.pid"
+          for attempt in {1..60}; do
+            if [ -s "${RUNNER_TEMP}/pc-supporter-pg-url.txt" ]; then
+              echo "DATABASE_URL=$(cat "${RUNNER_TEMP}/pc-supporter-pg-url.txt")" >> "$GITHUB_ENV"
+              exit 0
+            fi
+            sleep 1
+          done
+          cat "${RUNNER_TEMP}/pc-supporter-pg.log"
+          exit 1
+
       - name: Prepare deterministic browser fixture
         env:
           PC_SUPPORTER_BROWSER_SMOKE_FIXTURE: "1"
@@ -156,6 +184,7 @@ jobs:
           path: |
             ${{ runner.temp }}/pc-supporter-dev.log
             ${{ runner.temp }}/pc-supporter-api.log
+            ${{ runner.temp }}/pc-supporter-pg.log
             ${{ runner.temp }}/pc-supporter-preview.log
 
   container-smoke:

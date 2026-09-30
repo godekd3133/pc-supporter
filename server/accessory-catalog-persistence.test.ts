@@ -241,11 +241,12 @@ async function withFakePostgres(run: (context: {
 
 describe("PostgreSQL accessory persistence", () => {
   it("loads the shared accessory rows and cooling-fan overrides without consulting accessories.json", async () => {
-    await withFakePostgres(async ({ storage, accessories }) => {
+    await withFakePostgres(async ({ accessories, directory }) => {
+      const strayLocalJson = join(directory, "accessories.json");
       const fan = accessory({ id: "shared-db-fan", sourceProductCode: "shared-db-fan-pcode" });
       fakeDatabase.rows = [databaseRow(fan)];
       const localOnly = accessory({ id: "instance-local-only", source: "manual", sourceProductCode: undefined, name: "인스턴스 전용 데이터" });
-      await writeFile(storage.ACCESSORIES_PATH, "{ deliberately invalid local JSON", "utf8");
+      await writeFile(strayLocalJson, "{ deliberately invalid local JSON", "utf8");
       const { saveCoolingFanLoadOverrides } = await import("./cooling-fan-load-overrides");
       await saveCoolingFanLoadOverrides([{
         accessoryId: fan.id,
@@ -259,7 +260,7 @@ describe("PostgreSQL accessory persistence", () => {
       expect(loaded.some((item) => item.id === fan.id && item.specs.fanCurrentA === 0.42)).toBe(true);
       expect(loaded.some((item) => item.id === localOnly.id)).toBe(false);
       expect(fakeDatabase.queries.some(({ sql }) => sql.startsWith("SELECT payload, updated_at FROM catalog_accessories"))).toBe(true);
-      await expect(readFile(storage.ACCESSORIES_PATH, "utf8")).resolves.toBe("{ deliberately invalid local JSON");
+      await expect(readFile(strayLocalJson, "utf8")).resolves.toBe("{ deliberately invalid local JSON");
 
       const writtenByAnotherReplica = accessory({ id: "second-replica-fan", sourceProductCode: "second-replica-pcode" });
       fakeDatabase.rows.push(databaseRow(writtenByAnotherReplica));
@@ -267,12 +268,13 @@ describe("PostgreSQL accessory persistence", () => {
 
       fakeDatabase.failAccessoryRead = true;
       await expect(accessories.loadAccessories()).rejects.toThrow("synthetic PostgreSQL accessory read outage");
-      await expect(readFile(storage.ACCESSORIES_PATH, "utf8")).resolves.toBe("{ deliberately invalid local JSON");
+      await expect(readFile(strayLocalJson, "utf8")).resolves.toBe("{ deliberately invalid local JSON");
     });
   });
 
   it("uses the shared PostgreSQL override updated_at for accessory metadata after another replica changes it", async () => {
-    await withFakePostgres(async ({ storage, accessories }) => {
+    await withFakePostgres(async ({ accessories, directory }) => {
+      const strayOverrideJson = join(directory, "cooling-fan-load-overrides.json");
       const fan = accessory({ id: "metadata-shared-fan", sourceProductCode: "metadata-shared-fan-pcode" });
       fakeDatabase.rows = [databaseRow(fan)];
       fakeDatabase.coolingFanOverrides = {
@@ -285,7 +287,7 @@ describe("PostgreSQL accessory persistence", () => {
         }
       };
       fakeDatabase.coolingFanOverrideUpdatedAt = new Date("2026-09-29T03:00:00.000Z");
-      await writeFile(storage.COOLING_FAN_LOAD_OVERRIDES_PATH, "{ intentionally invalid instance-local JSON", "utf8");
+      await writeFile(strayOverrideJson, "{ intentionally invalid instance-local JSON", "utf8");
 
       const first = await accessories.accessoryMeta();
       expect(first.accessoryUpdatedAt).toBe("2026-09-29T03:00:00.000Z");
@@ -301,7 +303,7 @@ describe("PostgreSQL accessory persistence", () => {
       const second = await accessories.accessoryMeta();
       expect(second.accessoryUpdatedAt).toBe("2026-09-30T03:00:00.000Z");
       expect(fakeDatabase.queries.filter(({ sql }) => sql.startsWith("SELECT payload, updated_at FROM cooling_fan_load_overrides WHERE singleton_id = 'current'"))).toHaveLength(2);
-      await expect(readFile(storage.COOLING_FAN_LOAD_OVERRIDES_PATH, "utf8")).resolves.toBe("{ intentionally invalid instance-local JSON");
+      await expect(readFile(strayOverrideJson, "utf8")).resolves.toBe("{ intentionally invalid instance-local JSON");
     });
   });
 
@@ -325,7 +327,8 @@ describe("PostgreSQL accessory persistence", () => {
   });
 
   it("shares override writes and deletes through the PostgreSQL singleton", async () => {
-    await withFakePostgres(async ({ storage, repository }) => {
+    await withFakePostgres(async ({ repository, directory }) => {
+      const strayOverrideJson = join(directory, "cooling-fan-load-overrides.json");
       const replicaOne = await import("./cooling-fan-load-overrides");
       const first: CoolingFanLoadOverride = {
         accessoryId: "shared-fan-one",
@@ -355,7 +358,7 @@ describe("PostgreSQL accessory persistence", () => {
 
         fakeDatabase.failCoolingFanOverrideRead = true;
         await expect(replicaTwo.readCoolingFanLoadOverrides()).rejects.toThrow("synthetic PostgreSQL cooling-fan override read outage");
-        await expect(readFile(storage.COOLING_FAN_LOAD_OVERRIDES_PATH, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+        await expect(readFile(strayOverrideJson, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
 
         const baseline = await readFile(new URL("../db/schema.sql", import.meta.url), "utf8");
         const migration = await readFile(new URL("../db/migrations/20260930_cooling_fan_load_overrides.sql", import.meta.url), "utf8");
@@ -368,7 +371,7 @@ describe("PostgreSQL accessory persistence", () => {
   });
 
   it("does not fall back to a local file when a PostgreSQL override write fails", async () => {
-    await withFakePostgres(async ({ storage }) => {
+    await withFakePostgres(async ({ directory }) => {
       fakeDatabase.failCoolingFanOverrideWrite = true;
       const overrides = await import("./cooling-fan-load-overrides");
       await expect(overrides.saveCoolingFanLoadOverrides([{
@@ -379,7 +382,7 @@ describe("PostgreSQL accessory persistence", () => {
         updatedAt: "2026-09-29T01:00:00.000Z"
       }])).rejects.toThrow("synthetic PostgreSQL cooling-fan override write outage");
       expect(fakeDatabase.coolingFanOverrides).toEqual({});
-      await expect(readFile(storage.COOLING_FAN_LOAD_OVERRIDES_PATH, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+      await expect(readFile(join(directory, "cooling-fan-load-overrides.json"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
     });
   });
 
@@ -425,10 +428,11 @@ describe("PostgreSQL accessory persistence", () => {
   });
 
   it("applies guarded price patches transactionally and persists coverage in the shared store", async () => {
-    await withFakePostgres(async ({ storage, accessories }) => {
+    await withFakePostgres(async ({ accessories, directory }) => {
+      const strayLocalJson = join(directory, "accessories.json");
       const fan = accessory({ id: "price-patch-fan", sourceProductCode: "price-patch-fan-pcode" });
       fakeDatabase.rows = [databaseRow(fan)];
-      await writeFile(storage.ACCESSORIES_PATH, "{ not the configured database", "utf8");
+      await writeFile(strayLocalJson, "{ not the configured database", "utf8");
       const updates = await accessories.patchAccessoryPrices([
         { id: fan.id, sourceProductCode: "price-patch-fan-pcode", danawaUrl: fan.danawaUrl!, priceWon: 13_500, priceCheckedAt: "2026-09-29T02:00:00.000Z" },
         { id: fan.id, sourceProductCode: "wrong-pcode", danawaUrl: fan.danawaUrl!, priceWon: 1, priceCheckedAt: "2026-09-29T02:01:00.000Z" },
@@ -463,69 +467,28 @@ describe("PostgreSQL accessory persistence", () => {
       expect(coverage.updatedAt).toBe("2026-09-29T02:10:00.000Z");
       expect(fakeDatabase.coverage?.updatedAt).toBe(coverage.updatedAt);
       expect(fakeDatabase.queries.some(({ sql }) => sql.includes("accessory-coverage"))).toBe(true);
-      await expect(readFile(storage.ACCESSORIES_PATH, "utf8")).resolves.toBe("{ not the configured database");
+      await expect(readFile(strayLocalJson, "utf8")).resolves.toBe("{ not the configured database");
 
       fakeDatabase.coverage = null;
-      await writeFile(storage.ACCESSORY_COVERAGE_PATH, "{ divergent instance-local coverage", "utf8");
+      const strayCoverageJson = join(directory, "accessory-coverage.json");
+      await writeFile(strayCoverageJson, "{ divergent instance-local coverage", "utf8");
       const sharedCoverage = await accessories.readAccessoryCoverage();
       expect(sharedCoverage.categories.find((entry) => entry.category === "cooling_fan")?.hasCrawlHistory).toBe(false);
-      await expect(readFile(storage.ACCESSORY_COVERAGE_PATH, "utf8")).resolves.toBe("{ divergent instance-local coverage");
+      await expect(readFile(strayCoverageJson, "utf8")).resolves.toBe("{ divergent instance-local coverage");
     });
   });
 
-  it("keeps file mode as the accessory and coverage source and aligns baseline and migration schemas", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "pc-supporter-accessory-file-"));
-    const keys = ["DATABASE_URL", "PC_SUPPORTER_DATA_DIR"] as const;
-    const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]])) as Record<(typeof keys)[number], string | undefined>;
-    let repository: typeof import("./repository") | undefined;
-    try {
-      process.env.DATABASE_URL = "";
-      process.env.PC_SUPPORTER_DATA_DIR = directory;
-      fakeDatabase.queries = [];
-      vi.resetModules();
-      const storage = await import("./storage");
-      const accessories = await import("./accessories");
-      repository = await import("./repository");
-      const fileFan = accessory({ id: "file-mode-fan", sourceProductCode: "file-mode-fan-pcode" });
-      const fileCoverage: AccessoryCoverageSnapshot = { updatedAt: "2026-09-29T03:00:00.000Z", categories: [] };
-      await storage.writeJson(storage.ACCESSORIES_PATH, [fileFan]);
-      await storage.writeJson(storage.ACCESSORY_COVERAGE_PATH, fileCoverage);
-      expect((await accessories.loadAccessories()).some((item) => item.id === fileFan.id)).toBe(true);
-      expect((await accessories.readAccessoryCoverage()).updatedAt).toBe(fileCoverage.updatedAt);
-      const overrides = await import("./cooling-fan-load-overrides");
-      const fileOverride: CoolingFanLoadOverride = {
-        accessoryId: fileFan.id,
-        fanCurrentA: 0.28,
-        manufacturerModel: "SYNTHETIC-FILE-FAN",
-        sourceNote: "합성 file fixture",
-        updatedAt: "2026-09-29T03:10:00.000Z"
-      };
-      await overrides.saveCoolingFanLoadOverrides([fileOverride]);
-      expect(await overrides.readCoolingFanLoadOverrides()).toEqual({ [fileFan.id]: fileOverride });
-      expect(JSON.parse(await readFile(storage.COOLING_FAN_LOAD_OVERRIDES_PATH, "utf8"))).toEqual({ [fileFan.id]: fileOverride });
-      expect(await overrides.deleteCoolingFanLoadOverride(fileFan.id)).toBe(true);
-      expect(fakeDatabase.queries).toEqual([]);
-
-      const baseline = await readFile(new URL("../db/schema.sql", import.meta.url), "utf8");
-      const migration = await readFile(new URL("../db/migrations/20260930_accessory_catalog.sql", import.meta.url), "utf8");
-      const overrideMigration = await readFile(new URL("../db/migrations/20260930_cooling_fan_load_overrides.sql", import.meta.url), "utf8");
-      for (const table of ["catalog_accessories", "accessory_coverage_state"]) {
-        expect(baseline).toContain(`CREATE TABLE IF NOT EXISTS ${table}`);
-        expect(migration).toContain(`CREATE TABLE IF NOT EXISTS ${table}`);
-      }
-      expect(baseline).toContain("CREATE TABLE IF NOT EXISTS cooling_fan_load_overrides");
-      expect(overrideMigration).toContain("CREATE TABLE IF NOT EXISTS cooling_fan_load_overrides");
-      expect(baseline).toContain("catalog_accessories_danawa_product_code_idx");
-      expect(migration).toContain("catalog_accessories_danawa_product_code_idx");
-    } finally {
-      if (repository) await repository.closePersistence();
-      vi.resetModules();
-      for (const key of keys) {
-        const value = previous[key];
-        if (value === undefined) delete process.env[key];
-        else process.env[key] = value;
-      }
-      await rm(directory, { recursive: true, force: true });
+  it("aligns baseline and migration schemas for the accessory tables", async () => {
+    const baseline = await readFile(new URL("../db/schema.sql", import.meta.url), "utf8");
+    const migration = await readFile(new URL("../db/migrations/20260930_accessory_catalog.sql", import.meta.url), "utf8");
+    const overrideMigration = await readFile(new URL("../db/migrations/20260930_cooling_fan_load_overrides.sql", import.meta.url), "utf8");
+    for (const table of ["catalog_accessories", "accessory_coverage_state"]) {
+      expect(baseline).toContain(`CREATE TABLE IF NOT EXISTS ${table}`);
+      expect(migration).toContain(`CREATE TABLE IF NOT EXISTS ${table}`);
     }
+    expect(baseline).toContain("CREATE TABLE IF NOT EXISTS cooling_fan_load_overrides");
+    expect(overrideMigration).toContain("CREATE TABLE IF NOT EXISTS cooling_fan_load_overrides");
+    expect(baseline).toContain("catalog_accessories_danawa_product_code_idx");
+    expect(migration).toContain("catalog_accessories_danawa_product_code_idx");
   });
 });

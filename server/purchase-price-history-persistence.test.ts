@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createShareOwnerCredential } from "./build-share";
+import { truncatePostgresTables } from "./testkit/postgres";
 
 const selection = { memory: [], ssd: [], hdd: [], accessories: [], useIntegratedGraphics: true };
 
@@ -17,17 +18,18 @@ describe("purchase price history persistence API", () => {
     const previousDataDirectory = process.env.PC_SUPPORTER_DATA_DIR;
     const previousDatabaseUrl = process.env.DATABASE_URL;
     process.env.PC_SUPPORTER_DATA_DIR = directory;
-    process.env.DATABASE_URL = "";
     let server: Server | undefined;
     try {
-      const [{ app, parseRecommendationPreferences }, { BUILDS_PATH, writeJson }, { buildCompatibilityInputFingerprint }] = await Promise.all([
+      const [repository, { app, parseRecommendationPreferences }, { buildCompatibilityInputFingerprint }] = await Promise.all([
+        import("./repository"),
         import("./index"),
-        import("./storage"),
         import("../shared/build-fingerprint")
       ]);
+      await repository.initializePersistence();
+      await truncatePostgresTables();
       const credential = createShareOwnerCredential();
       const buildId = "purchase-price-history-api-test";
-      await writeJson(BUILDS_PATH, [{ id: buildId, name: "가격 이력 통합 테스트", selection, createdAt: "2026-09-02T00:00:00.000Z", updatedAt: "2026-09-02T00:00:00.000Z", ownerTokenHash: credential.hash }]);
+      await repository.appendSavedBuild({ id: buildId, name: "가격 이력 통합 테스트", selection, createdAt: "2026-09-02T00:00:00.000Z", updatedAt: "2026-09-02T00:00:00.000Z", ownerTokenHash: credential.hash });
       const preferences = parseRecommendationPreferences(undefined);
       const inputFingerprint = buildCompatibilityInputFingerprint(selection, preferences);
       const rowKeys = ["row:cpu", "row:gpu"];

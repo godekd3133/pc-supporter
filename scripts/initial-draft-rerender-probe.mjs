@@ -5,6 +5,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import { CdpClient, firstAvailable, freePort, pressKey, waitForJson, waitForValue } from "./browser-smoke.mjs";
+import { ensureEmbeddedPostgres } from "./ensure-embedded-postgres.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const SESSION_ID = "01a0e8e6-9d63-7632-bcd8-a11ff4160218";
@@ -138,6 +139,7 @@ async function main() {
   const apiUrl = `http://127.0.0.1:${apiPort}`;
   const previewUrl = `http://127.0.0.1:${previewPort}`;
   const dataDirectory = await mkdtemp(resolve(tmpdir(), "pc-supporter-draft-probe-data-"));
+  const scratchPostgres = await ensureEmbeddedPostgres("pcsupporter_draft_probe");
   const profileDirectory = await mkdtemp(resolve(tmpdir(), "pc-supporter-draft-probe-chrome-"));
   const limitsSource = await readFile(resolve(ROOT, "shared/build-input-limits.ts"), "utf8");
   const limitFor = (name) => {
@@ -175,7 +177,7 @@ async function main() {
       PORT: String(apiPort),
       SERVER_HOST: "127.0.0.1",
       PC_SUPPORTER_DATA_DIR: dataDirectory,
-      DATABASE_URL: "",
+      DATABASE_URL: scratchPostgres.url,
       DANAWA_CRAWL_ON_START: "false",
       BUILD_MONITOR_SCHEDULER_ENABLED: "false",
       NODE_ENV: "test"
@@ -193,7 +195,7 @@ async function main() {
     const metaResponse = await fetch(`${previewUrl}/api/meta`, { signal: AbortSignal.timeout(5_000) });
     assert(metaResponse.ok, `격리 seed API meta 요청 실패: ${metaResponse.status}`);
     const meta = await metaResponse.json();
-    assert.equal(meta.storageMode, "file", "probe API가 임시 파일 저장소를 사용하지 않습니다.");
+    assert.equal(meta.storageMode, "postgres", "probe API가 PostgreSQL 저장소를 사용하지 않습니다.");
     assert.equal(meta.qualityCounts?.live, 0, "probe API에 live catalog 데이터가 섞였습니다.");
     assert.equal(meta.accessoryQualityCounts?.live, 0, "probe API에 live accessory 데이터가 섞였습니다.");
 
@@ -397,6 +399,7 @@ async function main() {
         }
       }
     }
+    await scratchPostgres.stop();
     if (!chromeStarted || chromeStopped) await rm(profileDirectory, { recursive: true, force: true });
     else if (chromeStarted) console.warn(`세션 관리 Chrome이 아직 종료되지 않아 profile을 보존했습니다: ${profileDirectory}`);
   }

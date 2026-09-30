@@ -1,4 +1,4 @@
-import { ACCESSORIES_PATH, ACCESSORY_COVERAGE_PATH, CATALOG_PATH, writeJson } from "../server/storage";
+import { mutateAccessoryCatalogRecords, mutateAccessoryCoverageRecord, writeCatalogRecords } from "../server/repository";
 import { starterCatalog } from "../server/seed-catalog-starter";
 import type { AccessoryCoverageSnapshot, AccessoryItem, Part } from "../shared/types";
 
@@ -143,9 +143,11 @@ const accessoryCoverage: AccessoryCoverageSnapshot = {
   }]
 };
 
-await writeJson(CATALOG_PATH, [...incompleteCases, ...categoryMismatchBoards, pcieSlotMotherboard, unknownPriceMotherboard, ...extraBenchmarkQueueGpus]);
-await writeJson(ACCESSORY_COVERAGE_PATH, accessoryCoverage);
-await writeJson(ACCESSORIES_PATH, [asusCoolingFan]);
+await writeCatalogRecords([...incompleteCases, ...categoryMismatchBoards, pcieSlotMotherboard, unknownPriceMotherboard, ...extraBenchmarkQueueGpus]);
+await mutateAccessoryCoverageRecord(() => accessoryCoverage);
+await mutateAccessoryCatalogRecords((current) => ({
+  items: [...current.filter((item) => item.id !== asusCoolingFan.id), asusCoolingFan]
+}));
 
 console.log(JSON.stringify({
   ok: true,

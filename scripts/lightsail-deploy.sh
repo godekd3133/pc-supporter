@@ -401,13 +401,15 @@ if sudo grep -Eq '^(DATABASE_MIGRATION_URL|DATABASE_RUNTIME_ROLE|DATABASE_RUNTIM
   echo "Owner and role-bootstrap credentials must stay in /etc/pc-supporter/migration.env, outside the API/worker EnvironmentFile." >&2
   exit 1
 fi
-if sudo grep -Eq '^DATABASE_URL=[^[:space:]]+' "$ENV_PATH"; then
-  HAS_POSTGRES=true
-  SERVICE_PROCESS_ROLE=api
-  if ! sudo grep -Eq '^PC_SUPPORTER_POSTGRES_DATA_MIGRATION_CONFIRMED=true$' "$ENV_PATH"; then
-    echo "DATABASE_URL switches repositories away from file-backed saved user state. Set this operator attestation only after reviewing the frozen DATA_DIR manifest, applying each present SQL-backed source, and verifying target readback." >&2
-    exit 1
-  fi
+if ! sudo grep -Eq '^DATABASE_URL=[^[:space:]]+' "$ENV_PATH"; then
+  echo "DATABASE_URL is required; the application no longer supports file-backed persistence and refuses to start without it." >&2
+  exit 1
+fi
+HAS_POSTGRES=true
+SERVICE_PROCESS_ROLE=api
+if ! sudo grep -Eq '^PC_SUPPORTER_POSTGRES_DATA_MIGRATION_CONFIRMED=true$' "$ENV_PATH"; then
+  echo "Existing file-backed user state is not copied automatically. Set this operator attestation only after reviewing the frozen DATA_DIR manifest, applying each present SQL-backed source, and verifying target readback." >&2
+  exit 1
 fi
 
 if [[ "$HAS_POSTGRES" == "true" ]]; then

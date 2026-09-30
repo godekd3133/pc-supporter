@@ -19,7 +19,6 @@ describe("benchmark source-check persistence API", () => {
     const previousDatabaseUrl = process.env.DATABASE_URL;
     const previousAdminPassword = process.env.ADMIN_PASSWORD;
     process.env.PC_SUPPORTER_DATA_DIR = directory;
-    process.env.DATABASE_URL = "";
     process.env.ADMIN_PASSWORD = "";
     checkPhysicalSourceUrlMock.mockResolvedValue({
       requestedUrl: "https://vendor.example/benchmark",
@@ -35,8 +34,9 @@ describe("benchmark source-check persistence API", () => {
     vi.resetModules();
     let server: Server | undefined;
     try {
-      const [{ app }, { BENCHMARK_OVERRIDES_PATH, writeJson }] = await Promise.all([import("./index"), import("./storage")]);
-      await writeJson(BENCHMARK_OVERRIDES_PATH, {
+      const [{ app }, repository] = await Promise.all([import("./index"), import("./repository")]);
+      await repository.initializePersistence();
+      await repository.writeBenchmarkOverrideRecords({
         "cpu-7600": {
           partId: "cpu-7600",
           scores: { cinebenchR23Multi: 14500 },

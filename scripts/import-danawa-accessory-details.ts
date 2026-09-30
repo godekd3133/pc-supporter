@@ -1,20 +1,18 @@
 import "dotenv/config";
 import { copyFile, mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { parseArgs } from "node:util";
 import type { AccessoryCategory, AccessoryCrawlCategoryReport, AccessoryItem, AccessoryCrawlManifest } from "../shared/types";
 import { DANAWA_ACCESSORY_CATEGORIES, parseDanawaAccessoryPage } from "../server/accessory-crawler";
 import { recordAccessoryCoverage, upsertAccessories } from "../server/accessories";
 import { appendCatalogChangeRecords, catalogChangeRecord, meaningfulCatalogChangeFields } from "../server/catalog-change-log";
 import { fetchDanawaHtml, isAllowedSourceUrl, type DanawaCrawlerOptions, type DanawaListItem } from "../server/danawa";
+import { readAccessoryCatalogRecords, readAccessoryCoverageRecord } from "../server/repository";
 import {
-  ACCESSORIES_PATH,
-  ACCESSORY_COVERAGE_PATH,
   CATALOG_CHANGE_LOG_PATH,
   DATA_DIR,
   readJson,
-  removeGeneratedFile,
   writeJson
 } from "../server/storage";
 
@@ -115,8 +113,7 @@ const { values, positionals } = parseArgs({
 });
 
 if (positionals.length > 0) throw new Error("Use only --apply, --all, --category=ACCESSORY_CATEGORY, and --limit=N.");
-if (process.env.DATABASE_URL?.trim()) throw new Error("Accessory detail import is file-backed only; unset DATABASE_URL before running it.");
-if (DATA_DIR !== resolve(process.cwd(), "data")) throw new Error("This importer writes only this checkout's data folder; unset PC_SUPPORTER_DATA_DIR.");
+if (!process.env.DATABASE_URL?.trim()) throw new Error("DATABASE_URL is required; the accessory catalog lives only in PostgreSQL.");
 if (values.all && values.limit) throw new Error("Choose either --all or --limit=N.");
 
 const categoryFilter = values.category as AccessoryCategory | undefined;
@@ -279,11 +276,12 @@ function validateSortSupplement(categoryId: string, expectedProductCount: number
   return supplements;
 }
 
-const [manifest, sortSupplement, accessories] = await Promise.all([
+const [manifest, sortSupplement, accessorySnapshot] = await Promise.all([
   readRequiredJson<Snapshot>(manifestPath),
   readRequiredJson<SortSupplementSnapshot>(sortSupplementPath),
-  readJson<AccessoryItem[]>(ACCESSORIES_PATH, [])
+  readAccessoryCatalogRecords()
 ]);
+const accessories = accessorySnapshot.items;
 if (manifest.schemaVersion !== 1 || !manifest.source.includes("Danawa public accessory list pages")) {
   throw new Error("Unsupported public accessory list manifest.");
 }
@@ -350,12 +348,14 @@ if (!values.apply) {
   if (planned.length === 0) throw new Error("No listed incomplete accessory details are pending.");
 
   const backupDirectory = await mkdtemp(join(tmpdir(), "pc-supporter-accessory-details-"));
-  const backupPaths = [ACCESSORIES_PATH, ACCESSORY_COVERAGE_PATH, CATALOG_CHANGE_LOG_PATH, statePath];
+  const backupPaths = [CATALOG_CHANGE_LOG_PATH, statePath];
   const backedUp = new Set<string>();
   for (const path of backupPaths) {
     try { await copyFile(path, join(backupDirectory, path.split("/").at(-1)!)); backedUp.add(path); }
     catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
   }
+  await writeJson(join(backupDirectory, "accessories.json"), accessorySnapshot.items);
+  await writeJson(join(backupDirectory, "accessory-coverage.json"), await readAccessoryCoverageRecord());
 
   const priorState = await readJson<ImportState | null>(statePath, null);
   const priorCodes = priorState?.manifestUpdatedAt === manifest.updatedAt ? priorState.detailFetchedProductCodes : [];

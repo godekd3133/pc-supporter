@@ -49,7 +49,7 @@ The top result region and first finding were reviewed at readable scale. The sou
 - Saved-build navigation now exposes a history view and can re-run a saved build.
 - The catalog cache reloads when the persisted catalog modification time changes, so a separate crawl process becomes visible to the running API without a restart.
 - Server startup now triggers a five-products-per-category refresh by default and continues on the configured interval; `DANAWA_CRAWL_ON_START=false` remains available for offline runs.
-- PostgreSQL is available through the repository adapter and the local file store remains an explicit fallback; the fallback path was verified with an unavailable database endpoint.
+- PostgreSQL is available through the repository adapter; the file-store fallback was verified at the time and was later removed so PostgreSQL is now the only application persistence backend.
 - Admin authentication is available through an HttpOnly signed session when `ADMIN_PASSWORD` is configured; unauthenticated crawl requests were rejected with 401 in the HTTP smoke test.
 - Crawl lock ownership and stale-running recovery were added so concurrent processes do not overwrite each other silently.
 

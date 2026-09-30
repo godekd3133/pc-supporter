@@ -5,6 +5,8 @@ import { join } from "node:path";
 import { afterAll, describe, expect, it, vi } from "vitest";
 import { publicApiPayloadProjection } from "./public-api-projection";
 import { publicApiPayloadProjection as domainPublicApiPayloadProjection } from "../shared/domain/public-api-projection";
+import { truncatePostgresTables } from "./testkit/postgres";
+import type { Part } from "../shared/types";
 
 const sourceCheck = {
   requestedUrl: "https://review.example/benchmark-boundary",
@@ -13,7 +15,7 @@ const sourceCheck = {
   identityStatus: "matched",
   redirectCount: 0,
   httpStatus: 200
-};
+} as const;
 
 function closeServer(server: Server) {
   server.closeAllConnections?.();
@@ -119,15 +121,16 @@ describe("public API evidence projection", () => {
     const envKeys = ["PC_SUPPORTER_DATA_DIR", "DATABASE_URL", "ADMIN_PASSWORD", "GAMING_PERFORMANCE_EVIDENCE_PATH"] as const;
     const previousEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]])) as Record<typeof envKeys[number], string | undefined>;
     process.env.PC_SUPPORTER_DATA_DIR = directory;
-    process.env.DATABASE_URL = "";
     process.env.ADMIN_PASSWORD = "test-admin-password";
     process.env.GAMING_PERFORMANCE_EVIDENCE_PATH = join(directory, "gaming-performance-evidence.json");
     vi.resetModules();
 
     let server: Server | undefined;
     try {
-      const [{ app }, storage, catalog, engine] = await Promise.all([import("./index"), import("./storage"), import("./catalog"), import("./engine")]);
-      const cpu = {
+      const [repository, { app }, catalog, engine] = await Promise.all([import("./repository"), import("./index"), import("./catalog"), import("./engine")]);
+      await repository.initializePersistence();
+      await truncatePostgresTables();
+      const cpu: Part = {
         id: "cpu-public-boundary",
         category: "cpu",
         name: "Public Boundary CPU",
@@ -156,7 +159,7 @@ describe("public API evidence projection", () => {
         missingFields: [],
         updatedAt: "2026-09-20T00:00:00.000Z"
       };
-      const gpu = {
+      const gpu: Part = {
         id: "gpu-public-boundary",
         category: "gpu",
         name: "Public Boundary GPU",
@@ -174,7 +177,7 @@ describe("public API evidence projection", () => {
           pcieSlotWidth: 16,
           recommendedPsuW: 550,
           pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 1 }]],
-          gpuVendor: "NVIDIA",
+          gpuVendor: "nvidia",
           gpuMemoryBandwidthGbps: 320,
           gpu3dmarkTimeSpyScore: 24680,
           gpu3dmarkPortRoyalScore: 13579,
@@ -190,7 +193,7 @@ describe("public API evidence projection", () => {
         missingFields: [],
         updatedAt: "2026-09-20T00:00:00.000Z"
       };
-      const selectedGpu = {
+      const selectedGpu: Part = {
         id: "gpu-rtx-4060",
         category: "gpu",
         name: "NVIDIA GeForce RTX 4060",
@@ -199,7 +202,7 @@ describe("public API evidence projection", () => {
         source: "manual",
         listingType: "retail",
         priceWon: 439000,
-        specs: { vramGb: 8, powerW: 115, recommendedPsuW: 550, lengthMm: 221, gpuVendor: "NVIDIA" },
+        specs: { vramGb: 8, powerW: 115, recommendedPsuW: 550, lengthMm: 221, gpuVendor: "nvidia" },
         dataQuality: "manual",
         missingFields: [],
         updatedAt: "2026-09-20T00:00:00.000Z"
@@ -221,9 +224,9 @@ describe("public API evidence projection", () => {
         sourceKind: "lab",
         sourceUrl: "https://review.example/fps-private"
       }];
-      await writeFile(storage.CATALOG_PATH, JSON.stringify([cpu, gpu, selectedGpu]), "utf8");
+      await repository.writeCatalogRecords([cpu, gpu, selectedGpu]);
       await writeFile(process.env.GAMING_PERFORMANCE_EVIDENCE_PATH, JSON.stringify(gamingEvidence), "utf8");
-      await writeFile(storage.BENCHMARK_OVERRIDES_PATH, JSON.stringify({
+      await repository.writeBenchmarkOverrideRecords({
         "gpu-public-boundary": {
           partId: "gpu-public-boundary",
           scores: { gpu3dmarkTimeSpyScore: 24680 },
@@ -232,7 +235,7 @@ describe("public API evidence projection", () => {
           sourceUrl: "https://review.example/gpu-private",
           updatedAt: "2026-09-20T00:00:00.000Z"
         }
-      }), "utf8");
+      });
 
       const loadedCatalog = await catalog.loadCatalog();
       expect(loadedCatalog.find((part) => part.id === cpu.id)?.specs.cinebenchR23Multi).toBe(87654);
@@ -516,7 +519,6 @@ describe("public API evidence projection", () => {
     const envKeys = ["PC_SUPPORTER_DATA_DIR", "DATABASE_URL", "ADMIN_PASSWORD", "NODE_ENV", "PC_SUPPORTER_PROCESS_ROLE"] as const;
     const previousEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]])) as Record<typeof envKeys[number], string | undefined>;
     process.env.PC_SUPPORTER_DATA_DIR = directory;
-    process.env.DATABASE_URL = "";
     process.env.NODE_ENV = "development";
     process.env.PC_SUPPORTER_PROCESS_ROLE = "combined";
     delete process.env.ADMIN_PASSWORD;
@@ -524,8 +526,10 @@ describe("public API evidence projection", () => {
 
     let server: Server | undefined;
     try {
-      const [{ app }, storage] = await Promise.all([import("./index"), import("./storage")]);
-      await writeFile(storage.CATALOG_PATH, JSON.stringify([{
+      const [repository, { app }] = await Promise.all([import("./repository"), import("./index")]);
+      await repository.initializePersistence();
+      await truncatePostgresTables();
+      const devCpu: Part = {
         id: "dev-private-benchmark-cpu",
         category: "cpu",
         name: "Development benchmark CPU",
@@ -537,7 +541,8 @@ describe("public API evidence projection", () => {
         dataQuality: "manual",
         missingFields: [],
         updatedAt: "2026-09-20T00:00:00.000Z"
-      }]), "utf8");
+      };
+      await repository.writeCatalogRecords([devCpu]);
       server = app.listen(0, "127.0.0.1");
       await new Promise<void>((resolve, reject) => { server?.once("listening", resolve); server?.once("error", reject); });
       const address = server.address();

@@ -4,9 +4,9 @@ import { resolve } from "node:path";
 import type { Part, PartCategory } from "../shared/types";
 import { mergeCatalog } from "../server/catalog";
 import { parseDanawaListPage, parseDanawaListPageInfo, parseDanawaProductPage, type DanawaListItem } from "../server/danawa";
-import { readCatalogRecords, writeCatalogRecords } from "../server/repository";
+import { readBenchmarkOverrideRecords, readCatalogRecords, writeCatalogRecords } from "../server/repository";
 import { withCatalogIngestionLease } from "../server/catalog-ingestion-coordinator";
-import { BENCHMARK_OVERRIDES_PATH, DATA_DIR, readJson, writeJson } from "../server/storage";
+import { DATA_DIR, readJson, writeJson } from "../server/storage";
 import { isListingAllowed } from "../server/listing";
 
 type Target = { category: PartCategory; categoryId: string; label: string };
@@ -485,7 +485,7 @@ async function persistRawChunk(parts: Part[], benchmarkOverridesBefore: unknown)
   const latestKeys = new Set(latest.map((part) => `${part.category}:${part.sourceProductCode ?? part.id}`));
   const safeChunk = parts.filter((part) => !latestKeys.has(`${part.category}:${part.sourceProductCode ?? part.id}`));
   if (safeChunk.length > 0) await writeCatalogRecords(mergeCatalog(latest, safeChunk));
-  const benchmarkOverridesAfter = await readJson<unknown>(BENCHMARK_OVERRIDES_PATH, {});
+  const benchmarkOverridesAfter = await readBenchmarkOverrideRecords();
   if (JSON.stringify(benchmarkOverridesBefore) !== JSON.stringify(benchmarkOverridesAfter)) {
     throw new Error("Benchmark overrides changed during catalog write; inspect persistence immediately.");
   }
@@ -520,7 +520,7 @@ async function main() {
   const existing = await readCatalogRecords();
   const existingCodes = new Set(existing.filter((p) => p.source === "danawa").map((p) => `${p.category}:${p.sourceProductCode}`));
   const originalExistingCodes = new Set(existingCodes);
-  const benchmarkOverridesBefore = await readJson<unknown>(BENCHMARK_OVERRIDES_PATH, {});
+  const benchmarkOverridesBefore = await readBenchmarkOverrideRecords();
   if (inventory) {
     const result = await runInventory(targets as InventoryTarget[], existing);
     const uniqueSnapshotCodes = new Set(result.snapshotItems.map((item) => `${item.category}:${item.sourceProductCode}`)).size;

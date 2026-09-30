@@ -1,8 +1,9 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { Pool } from "pg";
 import { describe, expect, it, vi } from "vitest";
 
 async function closeServer(server: Server) {
@@ -17,7 +18,6 @@ describe("admin crawler rate limits", () => {
     const previousDatabaseUrl = process.env.DATABASE_URL;
     process.env.ADMIN_PASSWORD = "";
     process.env.PC_SUPPORTER_DATA_DIR = directory;
-    process.env.DATABASE_URL = "";
     vi.resetModules();
     let server: Server | undefined;
     try {
@@ -90,9 +90,10 @@ describe("admin crawler rate limits", () => {
     const previousDatabaseUrl = process.env.DATABASE_URL;
     process.env.ADMIN_PASSWORD = "";
     process.env.PC_SUPPORTER_DATA_DIR = directory;
-    process.env.DATABASE_URL = "";
-    await writeFile(join(directory, "background-job-catalog-ingestion.lease"), "locked", "utf8");
     vi.resetModules();
+    const leasePool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
+    const leaseClient = await leasePool.connect();
+    await leaseClient.query("SELECT pg_advisory_lock(hashtextextended($1, 0))", ["pc-supporter:background-job:catalog-ingestion"]);
     let server: Server | undefined;
     try {
       const { app } = await import("./index");
@@ -114,11 +115,15 @@ describe("admin crawler rate limits", () => {
       expect(accessories.status).toBe(409);
       expect(await accessories.json()).toMatchObject({ code: "ACCESSORY_CRAWL_RUNNING" });
 
+      // Price refresh requests enqueue a durable job; the shared ingestion lease
+      // serializes execution inside the queue worker rather than rejecting enqueue.
       const prices = await post("/api/admin/prices/refresh", { dryRun: true });
-      expect(prices.status).toBe(409);
-      expect(await prices.json()).toMatchObject({ code: "PRICE_REFRESH_RUNNING_ON_ANOTHER_INSTANCE" });
+      expect(prices.status).toBe(202);
+      expect(await prices.json()).toMatchObject({ accepted: true, status: "queued" });
     } finally {
       if (server) await closeServer(server);
+      leaseClient.release();
+      await leasePool.end();
       if (previousAdminPassword === undefined) delete process.env.ADMIN_PASSWORD;
       else process.env.ADMIN_PASSWORD = previousAdminPassword;
       if (previousDataDirectory === undefined) delete process.env.PC_SUPPORTER_DATA_DIR;

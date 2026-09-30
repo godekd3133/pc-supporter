@@ -21,9 +21,9 @@ import { savedBuildAlternativeAlertsFor } from "./saved-build-alternatives";
 import { recordUsageEvent, trackUsageEvent, usageEventSummaryFor } from "./usage-events";
 import { classifyDataFreshness } from "./data-health";
 import { isAccessoryCrawlRunning, readAccessoryCrawlManifest, readAccessoryCrawlStatus, runAccessoryCrawlJob } from "./accessory-crawler";
-import { BuildGenerationError, ENGINE_VERSION, assessAlternativePart, buildGenerationRecoveryOptionsFor, candidateSimilarityForBuild, compareCandidateSimilarity, compareCandidateValue, evaluateBuild, generateBuildDraft } from "./engine";
+import { BuildGenerationError, ENGINE_VERSION, assessAlternativePart, buildGenerationRecoveryOptionsFor, candidateSimilarityForBuild, compareCandidateSimilarity, compareCandidateValue, evaluateBuild, generateBuildDraft, minimumFeasibleBuildPriceFor } from "./engine";
 import { cancelCrawlPageRetryBatch, crawlPageRetryBatchPlanFor, crawlPageRetryPlanFor, crawlResumePlanFor, isCrawlPageRetryBatchRunning, isCrawlRunning, readCrawlStatus, runCrawlJob, runCrawlPageRetryBatchJob, runCrawlPageRetryJob } from "./crawler";
-import { CATALOG_PATH, CRAWL_MANIFEST_PATH, ensureDataDirectory, fileUpdatedAt, readJson } from "./storage";
+import { CRAWL_MANIFEST_PATH, ensureDataDirectory, fileUpdatedAt, readJson } from "./storage";
 import type { CrawlManifest } from "../shared/types";
 import { appendSavedBuild, appendSavedBuildCheck, appendSavedBuildVersionComparison, appendSavedBudgetLadder, appendSavedGeneratorVariants, appendSavedComparison, appendSavedWatchlist, closePersistence, consumeRateLimitWindow, createOwnerShareSession, deleteOwnerShareSession, deleteOwnerShareSessionGrantsForResource, deleteSavedBuild, deleteSavedBuildVersionComparison, deleteSavedBudgetLadder, deleteSavedGeneratorVariants, deleteSavedComparison, deleteSavedWatchlist, deleteSavedWatchlistAlertStates, initializePersistence, listOwnerShareSessionGrants, migrateSavedBuildVersions, ownerShareSessionGrantMatches, ownerShareSessionIsActive, persistenceDiagnostics, pruneExpiredOwnerShareSessionGrants, pruneExpiredOwnerShareSessions, pruneRateLimitWindows, RATE_LIMIT_BUCKET_CLEANUP_INTERVAL_MS, readLatestSavedBuildVersionBackup, readSavedBuildVersionBackupDetail, readSavedBuildVersionBackups, readSavedBuilds, readSavedBuildVersionComparisons, readSavedBudgetLadders, readSavedGeneratorVariants, readSavedComparisons, readSavedWatchlistAlertStates, readSavedWatchlists, restoreSavedBuildPurchasePriceHistory, restoreSavedBuildPurchaseProgress, rollbackSavedBuildVersions, savedBuildVersionSnapshotFingerprintFor, updateSavedBuildAssemblyVerification, updateSavedBuildMetadata, updateSavedBuildMonitorState, updateSavedBuildMyPc, updateSavedBuildPurchasePriceHistory, updateSavedBuildPurchaseProgress, updateSavedBuildShareCredentials, updateSavedWatchlist, updateSavedWatchlistAlertStates, upsertOwnerShareSessionGrant, withSavedBuildMonitorLease } from "./repository";
 import { CATALOG_INGESTION_BUSY_MESSAGE, CatalogIngestionBusyError, startCatalogIngestionJob, withCatalogIngestionLease as executeCatalogIngestionJob } from "./catalog-ingestion-coordinator";
@@ -216,7 +216,7 @@ function isOwnerSessionUnsafePath(path: string, method: string) {
     || path === "/api/version-comparisons" || path === "/api/budget-ladders" || path === "/api/generator-variants") {
     return upperMethod === "POST";
   }
-  if (["/api/builds/recommend", "/api/builds/recommend/variants", "/api/builds/recommend/budget-ladder", "/api/builds/check-preview"].includes(path)) return false;
+  if (["/api/builds/recommend", "/api/builds/recommend/variants", "/api/builds/recommend/budget-ladder", "/api/builds/recommend/floor", "/api/builds/check-preview"].includes(path)) return false;
   if (/^\/api\/builds\/[^/]+(?:\/.*)?$/.test(path)) return true;
   if (/^\/api\/watchlists\/[^/]+$/.test(path)) return upperMethod === "PATCH" || upperMethod === "DELETE";
   if (/^\/api\/watchlists\/[^/]+\/alerts\/(?:read|dismiss)$/.test(path)) return upperMethod === "POST";
@@ -1872,6 +1872,24 @@ function buildGenerationVariantResultsFor(catalog: Part[], request: BuildGenerat
     }
   });
 }
+
+// 온보딩·복구 제안이 "이 요청 그대로 만들 수 있는 최저 견적"을 표시하도록
+// 요청 형태 그대로의 실측 최저가를 반환한다 — 프로필 평균이 아니라 요청과 같은
+// 풀·게이트를 적용한 값이어야 다음 예산 제안이 다시 실패하지 않는다.
+app.post("/api/builds/recommend/floor", publicRecommendationRateLimit, async (request, response) => {
+  const parsed = parseBuildGenerationRequest(request.body);
+  if (parsed.errors.length > 0 || !parsed.request) {
+    response.status(400).json({ error: "자동 견적 최저가 요청 형식이 올바르지 않습니다.", details: parsed.errors });
+    return;
+  }
+  try {
+    const catalog = await loadCatalog();
+    response.json({ floorWon: minimumFeasibleBuildPriceFor(catalog, parsed.request) ?? null });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "자동 견적 최저가를 계산하지 못했습니다.";
+    response.status(500).json({ error: message });
+  }
+});
 
 app.post("/api/builds/recommend/variants", publicRecommendationRateLimit, async (request, response) => {
   const parsed = parseBuildGenerationRequest(request.body);
@@ -4485,8 +4503,8 @@ app.get("/api/admin/catalog/seed-preview", requireAdmin, async (_request, respon
 
 async function cachedCatalogSeedMappingPreview(catalog: Part[]) {
   const reviews = await readCatalogSeedMappingReviews();
-  const catalogSourceMtime = await fileUpdatedAt(CATALOG_PATH, "");
-  const key = JSON.stringify([currentCatalogRuntimeRevision(), catalogSourceMtime, reviews]);
+  const catalogDataStamp = await catalogUpdatedAtFor(catalog);
+  const key = JSON.stringify([currentCatalogRuntimeRevision(), catalogDataStamp, reviews]);
   if (catalogSeedMappingPreviewCache?.key === key) return catalogSeedMappingPreviewCache.value;
   const epoch = catalogSeedMappingPreviewCacheEpoch;
   if (catalogSeedMappingPreviewInFlight?.key === key && catalogSeedMappingPreviewInFlight.epoch === epoch) return catalogSeedMappingPreviewInFlight.promise;

@@ -4,27 +4,19 @@ import { dirname, resolve } from "node:path";
 
 const configuredDataDirectory = process.env.PC_SUPPORTER_DATA_DIR?.trim();
 export const DATA_DIR = configuredDataDirectory ? resolve(configuredDataDirectory) : resolve(process.cwd(), "data");
-export const CATALOG_PATH = resolve(DATA_DIR, "catalog.json");
-export const ACCESSORIES_PATH = resolve(DATA_DIR, "accessories.json");
-
 export const CRAWL_STATE_PATH = resolve(DATA_DIR, "crawl-state.json");
 export const CRAWL_LOCK_PATH = resolve(DATA_DIR, "crawl.lock");
 export const CRAWL_MANIFEST_PATH = resolve(DATA_DIR, "crawl-manifest.json");
-export const M2_SLOT_OVERRIDES_PATH = resolve(DATA_DIR, "m2-slot-overrides.json");
 export const GPU_PHYSICAL_OVERRIDES_PATH = resolve(DATA_DIR, "gpu-physical-overrides.json");
 export const PHYSICAL_SOURCE_CHECK_HISTORY_PATH = resolve(DATA_DIR, "physical-source-check-history.json");
 export const BENCHMARK_SOURCE_CHECK_HISTORY_PATH = resolve(DATA_DIR, "benchmark-source-check-history.json");
-export const BENCHMARK_OVERRIDES_PATH = resolve(DATA_DIR, "benchmark-overrides.json");
 export const CASE_RGB_LOAD_OVERRIDES_PATH = resolve(DATA_DIR, "case-rgb-load-overrides.json");
-export const COOLING_FAN_LOAD_OVERRIDES_PATH = resolve(DATA_DIR, "cooling-fan-load-overrides.json");
 export const ACCESSORY_CRAWL_STATE_PATH = resolve(DATA_DIR, "accessory-crawl-state.json");
 export const ACCESSORY_CRAWL_LOCK_PATH = resolve(DATA_DIR, "accessory-crawl.lock");
 export const ACCESSORY_CRAWL_MANIFEST_PATH = resolve(DATA_DIR, "accessory-crawl-manifest.json");
-export const ACCESSORY_COVERAGE_PATH = resolve(DATA_DIR, "accessory-coverage.json");
 export const CATALOG_CHANGE_LOG_PATH = resolve(DATA_DIR, "catalog-change-log.json");
 export const PRICE_REFRESH_STATE_PATH = resolve(DATA_DIR, "price-refresh-state.json");
 export const PRICE_REFRESH_LOCK_PATH = resolve(DATA_DIR, "price-refresh.lock");
-export const CATALOG_SPEC_OVERRIDES_PATH = resolve(DATA_DIR, "catalog-spec-overrides.json");
 export const CATALOG_SPEC_OVERRIDE_SOURCE_CHECK_HISTORY_PATH = resolve(DATA_DIR, "catalog-spec-override-source-check-history.json");
 export const CATALOG_SPEC_REFRESH_HISTORY_PATH = resolve(DATA_DIR, "catalog-spec-refresh-history.json");
 export const CATALOG_SEED_MAPPINGS_PATH = resolve(DATA_DIR, "catalog-seed-mappings.json");

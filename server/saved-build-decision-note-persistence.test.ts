@@ -16,7 +16,6 @@ describe("saved build decision note persistence API", () => {
     const previousDataDirectory = process.env.PC_SUPPORTER_DATA_DIR;
     const previousDatabaseUrl = process.env.DATABASE_URL;
     process.env.PC_SUPPORTER_DATA_DIR = directory;
-    process.env.DATABASE_URL = "";
     vi.resetModules();
     let server: Server | undefined;
     try {

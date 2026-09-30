@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Server } from "node:http";
+import { truncatePostgresTables } from "./testkit/postgres";
 
 const budgetLadderRequest = {
   profile: "gaming",
@@ -46,9 +47,10 @@ describe("usage events", () => {
     directory = await mkdtemp(join(tmpdir(), "pc-supporter-usage-events-"));
     process.env.PC_SUPPORTER_DATA_DIR = directory;
     process.env.ADMIN_PASSWORD = "usage-events-test-password";
-    process.env.DATABASE_URL = "";
 
-    const [{ app }] = await Promise.all([import("./index")]);
+    const [repository, { app }] = await Promise.all([import("./repository"), import("./index")]);
+    await repository.initializePersistence();
+    await truncatePostgresTables();
     const server = app.listen(0, "127.0.0.1");
     try {
       await new Promise<void>((resolve, reject) => { server.once("listening", resolve); server.once("error", reject); });
@@ -98,15 +100,17 @@ describe("usage events", () => {
   it("serializes concurrent increments without losing counts", async () => {
     directory = await mkdtemp(join(tmpdir(), "pc-supporter-usage-events-"));
     process.env.PC_SUPPORTER_DATA_DIR = directory;
-    process.env.DATABASE_URL = "";
 
+    const repository = await import("./repository");
+    await repository.initializePersistence();
+    await truncatePostgresTables();
     const { recordUsageEvent, usageEventSummaryFor } = await import("./usage-events");
     await Promise.all(Array.from({ length: 8 }, () => recordUsageEvent("check")));
     const summary = await usageEventSummaryFor();
     expect(summary.totals.check).toBe(8);
   });
 
-  it("uses the selected PostgreSQL aggregate store without importing or deleting the old JSON file", async () => {
+  it("aggregates events in the PostgreSQL daily-count store", async () => {
     directory = await mkdtemp(join(tmpdir(), "pc-supporter-usage-events-postgres-"));
     process.env.PC_SUPPORTER_DATA_DIR = directory;
     process.env.DATABASE_URL = "postgresql://usage-events.test.invalid/not-a-database";
@@ -146,10 +150,6 @@ describe("usage events", () => {
 
     try {
       vi.resetModules();
-      const storage = await import("./storage");
-      const oldFileStore = { schemaVersion: 1, daily: { "2026-09-28": { app_open: 9 } } };
-      await storage.writeJson(storage.USAGE_EVENTS_PATH, oldFileStore);
-
       const repository = await import("./repository");
       await repository.initializePersistence();
       const { recordUsageEvent, usageEventSummaryFor } = await import("./usage-events");
@@ -162,7 +162,6 @@ describe("usage events", () => {
         totals: { check: 1 },
         daily: { "2026-09-29": { check: 1 } }
       });
-      expect(await storage.readJson(storage.USAGE_EVENTS_PATH, null)).toEqual(oldFileStore);
       expect(queryMock.mock.calls.some(([statement]) => statement.includes("CREATE TABLE IF NOT EXISTS usage_event_daily_counts"))).toBe(true);
       expect(queryMock.mock.calls.some(([statement, params]) => statement.startsWith("INSERT INTO usage_event_daily_counts") && params?.[0] === "2026-09-29" && params?.[1] === "check")).toBe(true);
       expect(queryMock.mock.calls.some(([statement, params]) => statement.startsWith("DELETE FROM usage_event_daily_counts") && params?.[0] === 97)).toBe(true);

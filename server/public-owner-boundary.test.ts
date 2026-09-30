@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createShareOwnerCredential } from "./build-share";
+import { truncatePostgresTables } from "./testkit/postgres";
 
 const selection = { memory: [], ssd: [], hdd: [], accessories: [], useIntegratedGraphics: true };
 
@@ -32,18 +33,19 @@ describe("public owner-token boundary", () => {
     const directory = await mkdtemp(join(tmpdir(), "pc-supporter-owner-boundary-"));
     temporaryDirectories.push(directory);
     process.env.PC_SUPPORTER_DATA_DIR = directory;
-    process.env.DATABASE_URL = "";
     process.env.ADMIN_PASSWORD = "";
 
-    const [{ app }, { BUILDS_PATH, WATCHLISTS_PATH, readJson, writeJson }] = await Promise.all([
-      import("./index"),
-      import("./storage")
+    const [repository, { app }] = await Promise.all([
+      import("./repository"),
+      import("./index")
     ]);
+    await repository.initializePersistence();
+    await truncatePostgresTables();
     const buildId = "owner-boundary-build";
     const watchlistId = "owner-boundary-watchlist";
     const buildCredential = createShareOwnerCredential();
     const watchlistCredential = createShareOwnerCredential();
-    await writeJson(BUILDS_PATH, [{
+    await repository.writeSavedBuilds([{
       id: buildId,
       name: "Owner boundary build",
       selection,
@@ -51,7 +53,7 @@ describe("public owner-token boundary", () => {
       updatedAt: "2026-09-09T00:00:00.000Z",
       ownerTokenHash: buildCredential.hash
     }]);
-    await writeJson(WATCHLISTS_PATH, [{
+    await repository.writeSavedWatchlists([{
       id: watchlistId,
       name: "Owner boundary watchlist",
       entries: [{ itemId: "cpu-1", itemName: "Test CPU", category: "cpu", kind: "part", addedAt: "2026-09-09T00:00:00.000Z" }],
@@ -83,8 +85,8 @@ describe("public owner-token boundary", () => {
       expect(responses[1].headers.get("x-ratelimit-limit")).toBe("120");
       for (const response of responses) expect(await response.json()).toMatchObject({ code: "SHARE_OWNER_AUTH_REQUIRED" });
 
-      expect(await readJson<unknown[]>(BUILDS_PATH, [])).toHaveLength(1);
-      expect(await readJson<unknown[]>(WATCHLISTS_PATH, [])).toHaveLength(1);
+      expect(await repository.readSavedBuilds()).toHaveLength(1);
+      expect(await repository.readSavedWatchlists()).toHaveLength(1);
     } finally {
       await closeServer(server);
     }

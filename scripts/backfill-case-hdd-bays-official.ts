@@ -1,14 +1,15 @@
 import "dotenv/config";
 import { copyFile, mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { parseArgs } from "node:util";
 import type { CatalogSpecOverride, Part } from "../shared/types";
 import { applyCatalogSpecOverrides, readCatalogSpecOverrides, saveCatalogSpecOverrides, validateCatalogSpecOverrideBatch } from "../server/catalog-spec-overrides";
 import { appendCatalogChangeRecords, catalogChangeRecord, meaningfulCatalogChangeFields } from "../server/catalog-change-log";
 import { catalogSpecSourceCheckBatchFor } from "../server/catalog-spec-source-check-batch";
 import { appendCatalogSpecOverrideSourceCheckHistory } from "../server/catalog-spec-override-source-check-history";
-import { CATALOG_CHANGE_LOG_PATH, CATALOG_PATH, CATALOG_SPEC_OVERRIDE_SOURCE_CHECK_HISTORY_PATH, CATALOG_SPEC_OVERRIDES_PATH, DATA_DIR, readJson, removeGeneratedFile, writeJson } from "../server/storage";
+import { mutateCatalogSpecOverrideRecords, readCatalogRecords } from "../server/repository";
+import { CATALOG_CHANGE_LOG_PATH, CATALOG_SPEC_OVERRIDE_SOURCE_CHECK_HISTORY_PATH, readJson, removeGeneratedFile, writeJson } from "../server/storage";
 
 type OfficialCaseSpec = {
   productCode: string;
@@ -493,10 +494,9 @@ const { values, positionals } = parseArgs({
 });
 
 if (positionals.length > 0) throw new Error("Only --apply is supported.");
-if (process.env.DATABASE_URL?.trim()) throw new Error("This bounded backfill only supports the file-backed core catalog; unset DATABASE_URL.");
-if (DATA_DIR !== resolve(process.cwd(), "data")) throw new Error("This backfill writes only this checkout's data folder; unset PC_SUPPORTER_DATA_DIR.");
+if (!process.env.DATABASE_URL?.trim()) throw new Error("DATABASE_URL is required; the catalog lives only in PostgreSQL.");
 
-const catalog = await readJson<Part[]>(CATALOG_PATH, []);
+const catalog = await readCatalogRecords();
 const existingOverrides = await readCatalogSpecOverrides();
 const skipped: Array<{ productCode: string; reason: string }> = [];
 const inputItems = OFFICIAL_CASE_SPECS.flatMap((entry) => {
@@ -573,7 +573,7 @@ if (!values.apply) {
     console.log(JSON.stringify({ mode: "apply", updated: 0, rejected: rejectedTargets.map(({ part, entry }) => ({ productCode: entry.productCode, name: part.name, sourceCheck: checkByPartId.get(part.id) })) }, null, 2));
     process.exitCode = 1;
   } else {
-    const latestCatalog = await readJson<Part[]>(CATALOG_PATH, []);
+    const latestCatalog = await readCatalogRecords();
     for (const { part, entry } of acceptedTargets) {
       const latest = latestCatalog.find((candidate) => candidate.id === part.id);
       if (!latest || latest.sourceProductCode !== entry.productCode || (!latest.missingFields.includes("hddBays") && existingOverrides[part.id]?.fields.hddBays === undefined)) {
@@ -601,7 +601,8 @@ if (!values.apply) {
       return [catalogChangeRecord("part", before, after, changedFields, { changedAt: override.updatedAt || checkedAt })];
     });
     const backupDirectory = await mkdtemp(join(tmpdir(), "pc-supporter-case-hdd-bays-backfill-"));
-    const backupPaths = [CATALOG_SPEC_OVERRIDES_PATH, CATALOG_CHANGE_LOG_PATH, CATALOG_SPEC_OVERRIDE_SOURCE_CHECK_HISTORY_PATH] as const;
+    await writeJson(join(backupDirectory, "catalog-spec-overrides.json"), latestOverrideMap);
+    const backupPaths = [CATALOG_CHANGE_LOG_PATH, CATALOG_SPEC_OVERRIDE_SOURCE_CHECK_HISTORY_PATH] as const;
     const backedUp = new Set<string>();
     for (const path of backupPaths) {
       try {
@@ -630,11 +631,13 @@ if (!values.apply) {
         backupDirectory
       }, null, 2));
     } catch (error) {
+      const restoredOverrides = JSON.parse(await readFile(join(backupDirectory, "catalog-spec-overrides.json"), "utf8"));
+      await mutateCatalogSpecOverrideRecords((current) => ({ value: undefined, overrides: restoredOverrides, changed: JSON.stringify(current) !== JSON.stringify(restoredOverrides) }));
       for (const path of backupPaths) {
         if (backedUp.has(path)) await copyFile(join(backupDirectory, path.split("/").at(-1)!), path);
         else await removeGeneratedFile(path);
       }
-      throw new Error(`Official case HDD-bay backfill failed; prior files were restored from ${backupDirectory}: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(`Official case HDD-bay backfill failed; prior state was restored from ${backupDirectory}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 }

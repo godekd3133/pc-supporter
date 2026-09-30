@@ -38,14 +38,14 @@ describe("admin source-check deduplication", () => {
     const previousDatabaseUrl = process.env.DATABASE_URL;
     const previousAdminPassword = process.env.ADMIN_PASSWORD;
     process.env.PC_SUPPORTER_DATA_DIR = directory;
-    process.env.DATABASE_URL = "";
     process.env.ADMIN_PASSWORD = "";
     checkPhysicalSourceUrlMock.mockReset().mockImplementation(() => new Promise((resolve) => setTimeout(() => resolve(checkedSource()), 200)));
     vi.resetModules();
     let server: Server | undefined;
     try {
-      const [{ app }, { BENCHMARK_OVERRIDES_PATH, writeJson }] = await Promise.all([import("./index"), import("./storage")]);
-      await writeJson(BENCHMARK_OVERRIDES_PATH, { "cpu-7600": { partId: "cpu-7600", scores: { cinebenchR23Multi: 14500 }, sourceKind: "official", sourceNote: "제조사 공식 측정표", sourceUrl: "https://vendor.example/source-check", updatedAt: "2026-09-09T00:00:00.000Z" } });
+      const [{ app }, repository] = await Promise.all([import("./index"), import("./repository")]);
+      await repository.initializePersistence();
+      await repository.writeBenchmarkOverrideRecords({ "cpu-7600": { partId: "cpu-7600", scores: { cinebenchR23Multi: 14500 }, sourceKind: "official", sourceNote: "제조사 공식 측정표", sourceUrl: "https://vendor.example/source-check", updatedAt: "2026-09-09T00:00:00.000Z" } });
       server = app.listen(0, "127.0.0.1");
       await new Promise<void>((resolve, reject) => { server?.once("listening", resolve); server?.once("error", reject); });
       const address = server.address();
@@ -83,7 +83,6 @@ describe("admin source-check deduplication", () => {
     const previousDatabaseUrl = process.env.DATABASE_URL;
     const previousAdminPassword = process.env.ADMIN_PASSWORD;
     process.env.PC_SUPPORTER_DATA_DIR = directory;
-    process.env.DATABASE_URL = "";
     process.env.ADMIN_PASSWORD = "";
     checkPhysicalSourceUrlMock.mockReset().mockImplementation(() => new Promise((resolve) => setTimeout(() => resolve(checkedSource()), 200)));
     vi.resetModules();

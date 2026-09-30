@@ -61,7 +61,6 @@ async function sourceDirectory(options: { accessories?: boolean; overrides?: unk
 
 async function runImporter(directory: string, flags: string[]) {
   vi.resetModules();
-  process.env.DATABASE_URL = "";
   process.env.NODE_ENV = "test";
   process.env.PC_SUPPORTER_DATA_DIR = join(directory, "target-data");
   process.argv = [originalArgv[0] ?? "node", "scripts/import-private-catalog.ts", "--source-dir", directory, ...flags];
@@ -177,8 +176,9 @@ describe("private catalog cooling-fan override import", () => {
     expect(importerMocks.upsertAccessories).not.toHaveBeenCalled();
     expect(importerMocks.loadAccessories).toHaveBeenCalledTimes(1);
     const report = JSON.parse(String(logs[0]?.[0])) as Record<string, unknown>;
-    expect(report).toMatchObject({ mode: "apply", includeCoolingFanOverrides: true, mergedCoolingFanOverrideRecords: 1, targetStorageMode: "file" });
-    const persisted = JSON.parse(await readFile(join(directory, "target-data", "cooling-fan-load-overrides.json"), "utf8")) as Record<string, { updatedAt: string }>;
+    expect(report).toMatchObject({ mode: "apply", includeCoolingFanOverrides: true, mergedCoolingFanOverrideRecords: 1, targetStorageMode: "postgres" });
+    const { readCoolingFanLoadOverrides } = await import("../server/cooling-fan-load-overrides");
+    const persisted = await readCoolingFanLoadOverrides();
     expect(persisted["synthetic-fan"]?.updatedAt).toBe("2026-09-28T01:00:00.000Z");
   });
 

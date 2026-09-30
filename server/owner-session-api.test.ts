@@ -6,7 +6,17 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { truncatePostgresTables } from "./testkit/postgres";
 
 const selection = { memory: [], ssd: [], hdd: [], accessories: [], useIntegratedGraphics: true };
-const grantFailureOverride = { denyWrites: false };
+const grantFailureOverride = vi.hoisted(() => ({ denyWrites: false }));
+
+vi.mock("./repository", async (importOriginal) => {
+  const repository = await importOriginal<typeof import("./repository")>();
+  return {
+    ...repository,
+    upsertOwnerShareSessionGrant: (...args: Parameters<typeof repository.upsertOwnerShareSessionGrant>) => grantFailureOverride.denyWrites
+      ? Promise.resolve(false)
+      : repository.upsertOwnerShareSessionGrant(...args)
+  };
+});
 
 async function closeServer(server: Server) {
   await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
@@ -22,7 +32,6 @@ describe("owner session API integration", () => {
 
   afterEach(async () => {
     grantFailureOverride.denyWrites = false;
-    vi.doUnmock("./repository");
     vi.resetModules();
     if (previousDataDirectory === undefined) delete process.env.PC_SUPPORTER_DATA_DIR;
     else process.env.PC_SUPPORTER_DATA_DIR = previousDataDirectory;
@@ -214,15 +223,7 @@ describe("owner session API integration", () => {
     process.env.PC_SUPPORTER_DATA_DIR = directory;
     process.env.ADMIN_PASSWORD = "";
     process.env.PC_SUPPORTER_PROCESS_ROLE = "combined";
-    vi.doMock("./repository", async (importOriginal) => {
-      const repository = await importOriginal<typeof import("./repository")>();
-      return {
-        ...repository,
-        upsertOwnerShareSessionGrant: (...args: Parameters<typeof repository.upsertOwnerShareSessionGrant>) => grantFailureOverride.denyWrites
-          ? Promise.resolve(false)
-          : repository.upsertOwnerShareSessionGrant(...args)
-      };
-    });
+    vi.resetModules();
     const [repositoryModule, { app }] = await Promise.all([import("./repository"), import("./index")]);
     await repositoryModule.initializePersistence();
     await truncatePostgresTables();

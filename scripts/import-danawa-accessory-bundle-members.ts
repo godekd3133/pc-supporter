@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { copyFile, mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { parseArgs } from "node:util";
 import type { AccessoryCategory, AccessoryItem, Part } from "../shared/types";
 import { DANAWA_ACCESSORY_CATEGORIES, parseDanawaAccessoryPage } from "../server/accessory-crawler";
@@ -20,7 +20,8 @@ import {
   type BundleMembersArtifact,
   type BundleSortMethod
 } from "./danawa-accessory-bundle-members";
-import { ACCESSORIES_PATH, CATALOG_PATH, DATA_DIR, readJson, writeJson } from "../server/storage";
+import { readAccessoryCatalogRecords, readCatalogRecords } from "../server/repository";
+import { DATA_DIR, readJson, writeJson } from "../server/storage";
 
 const USER_AGENT = "PCSupporterAccessoryBundleMembers/1.0 (public Danawa product detail pages)";
 const MIN_DELAY_MS = 900;
@@ -44,8 +45,7 @@ const { values, positionals } = parseArgs({
 });
 
 if (positionals.length > 0) throw new Error("Use only --apply, --all, --category=ACCESSORY_CATEGORY, --limit=N, --product-code=PCODE[,PCODE...], --retry-quarantined, and --resume-pending.");
-if (process.env.DATABASE_URL?.trim()) throw new Error("Bundle member import is file-backed only; unset DATABASE_URL before running it.");
-if (DATA_DIR !== resolve(process.cwd(), "data")) throw new Error("This importer is limited to this checkout's data directory; unset PC_SUPPORTER_DATA_DIR.");
+if (!process.env.DATABASE_URL?.trim()) throw new Error("DATABASE_URL is required; the catalogs live only in PostgreSQL.");
 if (values.all && (values.limit || values["product-code"]?.length)) throw new Error("Choose --all, --limit=N, or explicit --product-code selections.");
 if (values.limit && values["product-code"]?.length) throw new Error("Choose --limit=N or explicit --product-code selections.");
 if (values["resume-pending"] && (!values.apply || values.all || values.limit || values["product-code"]?.length)) throw new Error("--resume-pending requires --apply and must run without product selection options.");
@@ -113,10 +113,9 @@ function emptyBundleImportState(): BundleImportState {
 
 async function createImportBackup() {
   const backupDirectory = await mkdtemp(join(tmpdir(), "pc-supporter-bundle-member-import-"));
-  for (const [sourcePath, backupName] of [[ACCESSORIES_PATH, "accessories.json"], [importStatePath, "accessory-bundle-detail-import-state.json"]] as const) {
-    try { await copyFile(sourcePath, join(backupDirectory, backupName)); }
-    catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
-  }
+  try { await copyFile(importStatePath, join(backupDirectory, "accessory-bundle-detail-import-state.json")); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+  await writeJson(join(backupDirectory, "accessories.json"), (await readAccessoryCatalogRecords()).items);
   return backupDirectory;
 }
 
@@ -260,12 +259,13 @@ function collectMemberEvidence(artifact: BundleMembersArtifact) {
   return byCode;
 }
 
-const [bundleArtifact, accessories, coreParts, storedImportState] = await Promise.all([
+const [bundleArtifact, accessorySnapshot, coreParts, storedImportState] = await Promise.all([
   readRequiredJson<BundleMembersArtifact>(bundleArtifactPath),
-  readJson<AccessoryItem[]>(ACCESSORIES_PATH, []),
-  readJson<Part[]>(CATALOG_PATH, []),
+  readAccessoryCatalogRecords(),
+  readCatalogRecords(),
   readJson<BundleImportState>(importStatePath, emptyBundleImportState())
 ]);
+const accessories = accessorySnapshot.items;
 if (storedImportState.schemaVersion !== 1 || storedImportState.source !== BUNDLE_IMPORT_STATE_SOURCE || !storedImportState.entries) {
   throw new Error("Unsupported or invalid bundle member import state artifact.");
 }
@@ -539,7 +539,7 @@ for (let offset = 0; offset < selectedCandidates.length; offset += APPLY_BATCH_S
       importState.updatedAt = now;
       await writeJson(importStatePath, importState);
 
-      const latestAccessories = await readJson<AccessoryItem[]>(ACCESSORIES_PATH, []);
+      const latestAccessories = (await readAccessoryCatalogRecords()).items;
       const latestAccessoryByCode = new Map<string, AccessoryItem[]>();
       for (const item of latestAccessories) {
         if (item.sourceProductCode) latestAccessoryByCode.set(item.sourceProductCode, [...(latestAccessoryByCode.get(item.sourceProductCode) ?? []), item]);

@@ -9,10 +9,15 @@ import { recordAccessoryCoverage } from "../server/accessories";
 import { appendCatalogChangeRecords, catalogChangeRecord, meaningfulCatalogChangeFields } from "../server/catalog-change-log";
 import { isAllowedSourceUrl } from "../server/danawa";
 import {
-  ACCESSORIES_PATH,
-  ACCESSORY_COVERAGE_PATH,
+  mutateAccessoryCatalogRecords,
+  mutateAccessoryCoverageRecord,
+  readAccessoryCatalogRecords,
+  readAccessoryCoverageRecord,
+  readCatalogRecords,
+  writeCatalogRecords
+} from "../server/repository";
+import {
   CATALOG_CHANGE_LOG_PATH,
-  CATALOG_PATH,
   DATA_DIR,
   readJson,
   removeGeneratedFile,
@@ -153,7 +158,7 @@ const { values, positionals } = parseArgs({
 });
 
 if (positionals.length > 0) throw new Error("Use only --apply, --include-partial, --move-core-overlaps, --category=ACCESSORY_CATEGORY, and --product-code=PCODE.");
-if (process.env.DATABASE_URL?.trim()) throw new Error("This list reconciliation is file-backed only; unset DATABASE_URL before running it.");
+if (!process.env.DATABASE_URL?.trim()) throw new Error("DATABASE_URL is required; the catalogs live only in PostgreSQL.");
 
 const categoryFilter = values.category as AccessoryCategory | undefined;
 const productCodeFilter = values["product-code"];
@@ -387,10 +392,11 @@ if (productCodeFilter && !selectedProductsByCode.has(productCodeFilter)) {
   throw new Error(`Product ${productCodeFilter} was not found in the captured ${categoryFilter} source list or its verified supplemental pages.`);
 }
 
-const [existingAccessories, coreParts] = await Promise.all([
-  readJson<AccessoryItem[]>(ACCESSORIES_PATH, []),
-  readJson<Part[]>(CATALOG_PATH, [])
+const [existingAccessorySnapshot, coreParts] = await Promise.all([
+  readAccessoryCatalogRecords(),
+  readCatalogRecords()
 ]);
+const existingAccessories = existingAccessorySnapshot.items;
 const coreByCode = new Map(coreParts.flatMap((part) => part.sourceProductCode ? [[part.sourceProductCode, part] as const] : []));
 const coreConflictsByCategory = new Map<AccessoryCategory, Array<{ productCode: string; corePartId: string; coreCategory: string; coreName: string }>>();
 for (const [code, source] of selectedProductsByCode) {
@@ -644,7 +650,7 @@ if (!values.apply) {
   console.log(JSON.stringify(reportOutput, null, 2));
 } else {
   const backupDirectory = await mkdtemp(join(tmpdir(), "pc-supporter-accessory-list-reconcile-"));
-  const paths = [ACCESSORIES_PATH, CATALOG_PATH, ACCESSORY_COVERAGE_PATH, CATALOG_CHANGE_LOG_PATH, auditPath];
+  const paths = [CATALOG_CHANGE_LOG_PATH, auditPath];
   const backedUp = new Set<string>();
   for (const path of paths) {
     try {
@@ -654,9 +660,17 @@ if (!values.apply) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     }
   }
+  await writeJson(join(backupDirectory, "accessories.json"), existingAccessories);
+  await writeJson(join(backupDirectory, "catalog.json"), coreParts);
+  const priorCoverage = await readAccessoryCoverageRecord();
+  await writeJson(join(backupDirectory, "accessory-coverage.json"), priorCoverage);
+  const nextAccessoryIds = new Set(nextAccessories.map((item) => item.id));
+  const accessoryRemoveIds = existingAccessories.filter((item) => !nextAccessoryIds.has(item.id)).map((item) => item.id);
+  const nextCoreIds = new Set(nextCoreParts.map((part) => part.id));
+  const coreRemoveIds = coreParts.filter((part) => !nextCoreIds.has(part.id)).map((part) => part.id);
   try {
-    await writeJson(ACCESSORIES_PATH, nextAccessories);
-    if (movedCoreParts.length > 0) await writeJson(CATALOG_PATH, nextCoreParts);
+    await mutateAccessoryCatalogRecords(() => ({ items: nextAccessories, removeIds: accessoryRemoveIds }));
+    if (movedCoreParts.length > 0) await writeCatalogRecords(nextCoreParts, { removeIds: coreRemoveIds });
     for (const category of categoryResults) {
       await recordAccessoryCoverage([category.report], {
         mode: "all",
@@ -669,11 +683,25 @@ if (!values.apply) {
     await writeJson(auditPath, audit);
     console.log(JSON.stringify({ ...reportOutput, backupDirectory, auditFile: auditPath }, null, 2));
   } catch (error) {
+    const backupAccessories = JSON.parse(await readFile(join(backupDirectory, "accessories.json"), "utf8")) as AccessoryItem[];
+    const backupAccessoryIds = new Set(backupAccessories.map((item) => item.id));
+    const restoredSnapshot = await readAccessoryCatalogRecords();
+    await mutateAccessoryCatalogRecords(() => ({
+      items: backupAccessories,
+      removeIds: restoredSnapshot.items.filter((item) => !backupAccessoryIds.has(item.id)).map((item) => item.id)
+    }));
+    if (movedCoreParts.length > 0) {
+      const backupCatalog = JSON.parse(await readFile(join(backupDirectory, "catalog.json"), "utf8")) as Part[];
+      const backupCoreIds = new Set(backupCatalog.map((part) => part.id));
+      const currentCore = await readCatalogRecords();
+      await writeCatalogRecords(backupCatalog, { removeIds: currentCore.filter((part) => !backupCoreIds.has(part.id)).map((part) => part.id) });
+    }
+    await mutateAccessoryCoverageRecord(() => JSON.parse(await readFile(join(backupDirectory, "accessory-coverage.json"), "utf8")));
     for (const path of paths) {
       const backupPath = join(backupDirectory, path.split("/").at(-1)!);
       if (backedUp.has(path)) await copyFile(backupPath, path);
       else await removeGeneratedFile(path);
     }
-    throw new Error(`Reconciliation failed; prior files were restored from ${backupDirectory}: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(`Reconciliation failed; prior state was restored from ${backupDirectory}: ${error instanceof Error ? error.message : String(error)}`);
   }
 }

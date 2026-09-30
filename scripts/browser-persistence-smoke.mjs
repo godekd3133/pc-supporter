@@ -1,6 +1,8 @@
 import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
+import pg from "pg";
+import { ensureEmbeddedPostgres } from "./ensure-embedded-postgres.mjs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -248,8 +250,7 @@ async function main() {
     missingFields: ["powerW"],
     updatedAt: freshProvenanceAt
   };
-  await writeFile(join(dataDir, "catalog.json"), JSON.stringify([provenancePart]));
-  await writeFile(join(dataDir, "catalog-spec-overrides.json"), JSON.stringify({
+  const provenanceSpecOverride = {
     [provenancePart.id]: {
       partId: provenancePart.id,
       category: "gpu",
@@ -270,7 +271,7 @@ async function main() {
       },
       updatedAt: freshProvenanceAt
     }
-  }));
+  };
   await writeFile(join(dataDir, "catalog-change-log.json"), JSON.stringify([
     { id: "smoke-price-history-1", kind: "part", itemId: "cpu-7800x3d", itemName: "AMD 라이젠7-5세대 7800X3D", category: "cpu", changedAt: "2026-08-20T00:00:00.000Z", changedFields: ["가격"], previousDataQuality: "seed", nextDataQuality: "seed", previousMissingFields: [], nextMissingFields: [], previousPriceWon: 480000, nextPriceWon: 460000, priceDeltaWon: -20000, valueDiffs: [] },
     { id: "smoke-price-history-2", kind: "part", itemId: "cpu-7800x3d", itemName: "AMD 라이젠7-5세대 7800X3D", category: "cpu", changedAt: "2026-08-25T00:00:00.000Z", changedFields: ["가격"], previousDataQuality: "seed", nextDataQuality: "seed", previousMissingFields: [], nextMissingFields: [], previousPriceWon: 460000, nextPriceWon: 420000, priceDeltaWon: -40000, valueDiffs: [] }
@@ -279,9 +280,11 @@ async function main() {
   const webPort = await freePort();
   const apiUrl = `http://127.0.0.1:${apiPort}`;
   const webUrl = `http://127.0.0.1:${webPort}`;
+  const scratchPostgres = await ensureEmbeddedPostgres("pcsupporter_browser_persistence_smoke");
   const env = {
     ...process.env,
     PC_SUPPORTER_DATA_DIR: dataDir,
+    DATABASE_URL: scratchPostgres.url,
     PORT: String(apiPort),
     DANAWA_CRAWL_ON_START: "false",
     BUILD_MONITOR_SCHEDULER_ENABLED: "false",
@@ -302,6 +305,24 @@ async function main() {
   try {
     const apiHealth = await waitForHttp(`${apiUrl}/api/health`, "격리 API", apiServer);
     await waitForHttp(`${webUrl}/api/health`, "격리 Vite proxy", webServer);
+    const seedClient = new pg.Client({ connectionString: scratchPostgres.url });
+    await seedClient.connect();
+    try {
+      await seedClient.query(
+        `INSERT INTO catalog_parts (id, category, source, source_product_code, data_quality, payload, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::timestamptz)
+         ON CONFLICT (id) DO UPDATE SET payload = EXCLUDED.payload, updated_at = EXCLUDED.updated_at`,
+        [provenancePart.id, provenancePart.category, provenancePart.source, null, provenancePart.dataQuality, JSON.stringify(provenancePart), provenancePart.updatedAt]
+      );
+      await seedClient.query(
+        `INSERT INTO catalog_spec_overrides (singleton_id, payload, updated_at)
+         VALUES ('current', $1::jsonb, statement_timestamp())
+         ON CONFLICT (singleton_id) DO UPDATE SET payload = EXCLUDED.payload, updated_at = statement_timestamp()`,
+        [JSON.stringify(provenanceSpecOverride)]
+      );
+    } finally {
+      await seedClient.end();
+    }
     const catalogRateLimitProbe = await fetch(`${apiUrl}/api/parts?category=cpu&limit=1`);
     await catalogRateLimitProbe.arrayBuffer();
     assert(catalogRateLimitProbe.ok && catalogRateLimitProbe.headers.get("x-ratelimit-limit") === "180" && catalogRateLimitProbe.headers.has("x-ratelimit-remaining"), "카탈로그 조회 rate limit 헤더가 없습니다.");
@@ -968,6 +989,7 @@ async function main() {
     await browser?.stop();
     await webServer.stop();
     await apiServer.stop();
+    await scratchPostgres.stop();
     await rm(dataDir, { recursive: true, force: true });
     await rm(dataDir + "-chrome", { recursive: true, force: true });
   }

@@ -1,12 +1,23 @@
-import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import pg from "pg";
+import { ensureEmbeddedPostgres } from "./ensure-embedded-postgres.mjs";
 
 const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
 const port = Number(process.env.SEED_SMOKE_PORT ?? 4197);
 const baseUrl = `http://127.0.0.1:${port}`;
 const dataDirectory = await mkdtemp(join(tmpdir(), "pc-supporter-seed-smoke-"));
+const scratchPostgres = await ensureEmbeddedPostgres("pcsupporter_seed_smoke");
+const scratchAdmin = new pg.Client({
+  host: "127.0.0.1",
+  port: 55439,
+  user: "postgres",
+  password: "pc-supporter-test-password",
+  database: "pcsupporter_seed_smoke",
+  connectionTimeoutMillis: 5_000
+});
 const childOutput = [];
 let server;
 
@@ -109,7 +120,7 @@ try {
       ...process.env,
       PORT: String(port),
       PC_SUPPORTER_DATA_DIR: dataDirectory,
-      DATABASE_URL: "",
+      DATABASE_URL: scratchPostgres.url,
       DANAWA_CRAWL_ON_START: "false",
       BUILD_MONITOR_SCHEDULER_ENABLED: "false",
       NODE_ENV: "test"
@@ -134,7 +145,7 @@ try {
     case: 12,
     psu: 15
   };
-  assert(meta.storageMode === "file", "seed-only smoke가 file fallback을 사용하지 않았습니다.", meta.storageMode);
+  assert(meta.storageMode === "postgres", "seed-only smoke가 PostgreSQL 저장소를 사용하지 않습니다.", meta.storageMode);
   assert(meta.catalogCount >= 115, "starter 핵심 부품 수가 기준보다 작습니다.", meta.catalogCount);
   assert(meta.accessoryCount >= 42, "starter 주변 부품 수가 기준보다 작습니다.", meta.accessoryCount);
   for (const [category, minimum] of Object.entries(expectedCategories)) {
@@ -207,11 +218,13 @@ try {
   assert(Array.isArray(generated.lines) && generated.lines.length > 0, "seed-only 자동 구성 결과가 비어 있습니다.", generated);
   assert(generated.selection?.cpu?.partId && generated.selection?.motherboard?.partId, "seed-only 자동 구성에 CPU 또는 메인보드가 없습니다.", generated.selection);
 
-  const persistedFiles = await readdir(dataDirectory);
-  const persistedCatalog = JSON.parse(await readFile(join(dataDirectory, "catalog.json"), "utf8"));
-  const persistedAccessories = JSON.parse(await readFile(join(dataDirectory, "accessories.json"), "utf8"));
-  assert(persistedFiles.includes("catalog.json") && persistedFiles.includes("accessories.json"), "seed 요청 후 fallback catalog 파일이 materialize되지 않았습니다.", persistedFiles);
-  assert(persistedCatalog.length >= 115 && persistedAccessories.length >= 42, "materialized seed 파일의 레코드 수가 부족합니다.", { catalog: persistedCatalog.length, accessories: persistedAccessories.length });
+  await scratchAdmin.connect();
+  const persistedCatalog = Number((await scratchAdmin.query("SELECT COUNT(*)::int AS count FROM catalog_parts")).rows[0]?.count ?? 0);
+  const persistedAccessories = Number((await scratchAdmin.query("SELECT COUNT(*)::int AS count FROM catalog_accessories")).rows[0]?.count ?? 0);
+  await scratchAdmin.end();
+  // 주변 부품은 첫 API 읽기에서 PostgreSQL에 materialize된다. 핵심 부품 starter는
+  // 병합 fallback이라 테이블이 비어 있어도 정상이며 catalogCount로 검증한다.
+  assert(persistedAccessories >= 42, "materialized 주변 부품 seed 레코드 수가 부족합니다.", { accessories: persistedAccessories });
 
   console.log(JSON.stringify({
     ok: true,
@@ -224,7 +237,8 @@ try {
     alternativeCount: alternatives.items.length,
     generatedStatus: generated.status,
     generatedLineCount: generated.lines.length,
-    persistedFiles
+    persistedAccessoryCount: persistedAccessories,
+    persistedCatalogCount: persistedCatalog
   }, null, 2));
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));
@@ -239,5 +253,7 @@ try {
   }
   server?.stdout?.destroy();
   server?.stderr?.destroy();
+  await scratchAdmin.end().catch(() => undefined);
+  await scratchPostgres.stop();
   await rm(dataDirectory, { recursive: true, force: true });
 }

@@ -11,8 +11,10 @@ describe("catalog snapshot seam", () => {
     expect(Number.isFinite(Date.parse(first.catalogUpdatedAt))).toBe(true);
     expect(typeof first.accessoryUpdatedAt).toBe("string");
     expect(Number.isInteger(first.catalogRevision)).toBe(true);
-    expect(second.catalog).toBe(first.catalog);
-    expect(second.accessories).toBe(first.accessories);
+    // PostgreSQL reads yield fresh arrays per call; downstream caches key on the
+    // shared snapshot object, not on cross-call array identity.
+    expect(second.catalog).toStrictEqual(first.catalog);
+    expect(second.accessories).toStrictEqual(first.accessories);
     expect(second.catalogUpdatedAt).toBe(first.catalogUpdatedAt);
     expect(second.accessoryUpdatedAt).toBe(first.accessoryUpdatedAt);
     expect(second.catalogRevision).toBe(first.catalogRevision);

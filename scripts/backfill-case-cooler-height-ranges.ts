@@ -1,12 +1,13 @@
 import "dotenv/config";
 import { copyFile, mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { parseArgs } from "node:util";
 import type { CatalogChangeRecord, Part } from "../shared/types";
 import { parseCaseCoolerHeightMm } from "../server/danawa";
 import { appendCatalogChangeRecords, catalogChangeRecord, meaningfulCatalogChangeFields } from "../server/catalog-change-log";
-import { CATALOG_CHANGE_LOG_PATH, CATALOG_PATH, DATA_DIR, readJson, removeGeneratedFile, writeJson } from "../server/storage";
+import { readCatalogRecords, writeCatalogRecords } from "../server/repository";
+import { CATALOG_CHANGE_LOG_PATH, DATA_DIR, readJson, removeGeneratedFile, writeJson } from "../server/storage";
 
 const { values, positionals } = parseArgs({
   options: { apply: { type: "boolean", default: false } },
@@ -15,11 +16,10 @@ const { values, positionals } = parseArgs({
 });
 
 if (positionals.length > 0) throw new Error("Only --apply is supported.");
-if (process.env.DATABASE_URL?.trim()) throw new Error("This bounded backfill only supports the file-backed core catalog; unset DATABASE_URL.");
-if (DATA_DIR !== resolve(process.cwd(), "data")) throw new Error("This backfill writes only this checkout's data folder; unset PC_SUPPORTER_DATA_DIR.");
+if (!process.env.DATABASE_URL?.trim()) throw new Error("DATABASE_URL is required; the catalog lives only in PostgreSQL.");
 
 const [catalog, detailImportState] = await Promise.all([
-  readJson<Part[]>(CATALOG_PATH, []),
+  readCatalogRecords(),
   readJson<{ status?: string } | null>(join(DATA_DIR, "accessory-detail-import-state.json"), null)
 ]);
 if (values.apply && detailImportState?.status === "running") {
@@ -63,7 +63,7 @@ if (!values.apply) {
 } else {
   if (updates.length === 0) throw new Error("No unparsed, explicitly bounded cooler-height ranges remain.");
   const backupDirectory = await mkdtemp(join(tmpdir(), "pc-supporter-case-cooler-height-backfill-"));
-  await copyFile(CATALOG_PATH, join(backupDirectory, "catalog.json"));
+  await writeJson(join(backupDirectory, "catalog.json"), catalog);
   let hadChangeLog = false;
   try {
     await copyFile(CATALOG_CHANGE_LOG_PATH, join(backupDirectory, "catalog-change-log.json"));
@@ -73,13 +73,13 @@ if (!values.apply) {
   }
   try {
     const updateById = new Map(updates.map((update) => [update.before.id, update.after]));
-    await writeJson(CATALOG_PATH, catalog.map((part) => updateById.get(part.id) ?? part));
+    await writeCatalogRecords(catalog.map((part) => updateById.get(part.id) ?? part));
     await appendCatalogChangeRecords(changeRecords);
     console.log(JSON.stringify({ ...output, backupDirectory }, null, 2));
   } catch (error) {
-    await writeJson(CATALOG_PATH, JSON.parse(await readFile(join(backupDirectory, "catalog.json"), "utf8")));
+    await writeCatalogRecords(JSON.parse(await readFile(join(backupDirectory, "catalog.json"), "utf8")));
     if (hadChangeLog) await copyFile(join(backupDirectory, "catalog-change-log.json"), CATALOG_CHANGE_LOG_PATH);
     else await removeGeneratedFile(CATALOG_CHANGE_LOG_PATH);
-    throw new Error(`Case cooler-height backfill failed; prior files were restored from ${backupDirectory}: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(`Case cooler-height backfill failed; prior records were restored from ${backupDirectory}: ${error instanceof Error ? error.message : String(error)}`);
   }
 }

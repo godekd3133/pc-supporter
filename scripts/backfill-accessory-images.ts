@@ -1,4 +1,4 @@
-import { copyFile, mkdir, stat, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import type { AccessoryCategory, AccessoryItem } from "../shared/types";
@@ -7,7 +7,7 @@ import {
   DANAWA_ACCESSORY_CATEGORIES,
   parseDanawaAccessoryPage
 } from "../server/accessory-crawler";
-import { ACCESSORIES_PATH, readJson, writeJson } from "../server/storage";
+import { mutateAccessoryCatalogRecords, readAccessoryCatalogRecords } from "../server/repository";
 import { fetchDanawaHtml, isAllowedSourceUrl, parseDanawaListPageInfo } from "../server/danawa";
 
 const CATEGORY_IDS = new Map(DANAWA_ACCESSORY_CATEGORIES.map(({ category, categoryId }) => [category, categoryId]));
@@ -86,12 +86,13 @@ async function main() {
   const detailLimitArgument = process.argv.find((argument) => argument.startsWith("--limit-details="))?.split("=")[1];
   const detailLimit = detailLimitArgument === undefined ? Number.MAX_SAFE_INTEGER : Number(detailLimitArgument);
   if (!Number.isInteger(detailLimit) || detailLimit < 1) throw new Error("--limit-details에는 1 이상의 정수를 지정해 주세요.");
-  const beforeStat = await stat(ACCESSORIES_PATH);
-  const original = await readJson<AccessoryItem[]>(ACCESSORIES_PATH, []);
+  if (!process.env.DATABASE_URL?.trim()) throw new Error("DATABASE_URL is required; the accessory catalog lives only in PostgreSQL.");
+  const beforeSnapshot = await readAccessoryCatalogRecords();
+  const original = beforeSnapshot.items;
   const missing = original.filter(isMissingImage);
   report = {
     mode: apply ? "apply" : "dry-run",
-    sourceFile: ACCESSORIES_PATH,
+    sourceFile: "postgresql://catalog_accessories",
     detailsOnly,
     before: {
       total: original.length,
@@ -108,36 +109,34 @@ async function main() {
   const listItemByProductCode = new Map<string, { name: string; url: string; sourceProductCode: string; imageUrl?: string; rawSpecText?: string; priceWon?: number }>();
   const updateById = new Map<string, string>();
   const pendingById = new Map<string, string>();
-  let latestStat = beforeStat;
+  let latestUpdatedAt = beforeSnapshot.updatedAt;
   let backupPath: string | undefined;
   let appliedUpdates = 0;
 
   async function flushPendingUpdates() {
     if (!apply || pendingById.size === 0) return;
-    let currentStat = await stat(ACCESSORIES_PATH);
-    if (currentStat.mtimeMs !== latestStat.mtimeMs || currentStat.size !== latestStat.size) {
-      throw new Error("주변 부품 원본 파일이 수집 도중 바뀌어 덮어쓰기를 중단했습니다.");
+    const currentSnapshot = await readAccessoryCatalogRecords();
+    if (currentSnapshot.updatedAt !== latestUpdatedAt) {
+      throw new Error("주변 부품 저장소가 수집 도중 바뀌어 덮어쓰기를 중단했습니다.");
     }
-    const current = await readJson<AccessoryItem[]>(ACCESSORIES_PATH, []);
-    currentStat = await stat(ACCESSORIES_PATH);
-    if (currentStat.mtimeMs !== latestStat.mtimeMs || currentStat.size !== latestStat.size) {
-      throw new Error("주변 부품 원본 파일이 읽기 도중 바뀌어 덮어쓰기를 중단했습니다.");
-    }
+    const pendingUpdates = new Map(pendingById);
+    pendingById.clear();
     let changed = 0;
-    const merged = current.map((item) => {
-      const imageUrl = pendingById.get(item.id);
+    const mergeItems = (items: AccessoryItem[]) => items.map((item) => {
+      const imageUrl = pendingUpdates.get(item.id);
       if (!imageUrl || !isMissingImage(item) || item.source !== "danawa" || productCodeFromUrl(item.danawaUrl) !== item.sourceProductCode) return item;
       changed += 1;
       return { ...item, imageUrl };
     });
-    pendingById.clear();
+    const merged = mergeItems(currentSnapshot.items);
     if (changed === 0) return;
     if (!backupPath) {
       backupPath = join(tmpdir(), `pc-supporter-accessories-before-image-backfill-${Date.now()}.json`);
-      await copyFile(ACCESSORIES_PATH, backupPath);
+      await writeFile(backupPath, `${JSON.stringify(currentSnapshot.items, null, 2)}\n`, "utf8");
     }
-    await writeJson(ACCESSORIES_PATH, merged);
-    latestStat = await stat(ACCESSORIES_PATH);
+    changed = 0;
+    const nextSnapshot = await mutateAccessoryCatalogRecords((currentItems) => ({ items: mergeItems(currentItems) }));
+    latestUpdatedAt = nextSnapshot.updatedAt;
     appliedUpdates += changed;
     report.imageUpdates = appliedUpdates;
     report.afterMissing = merged.filter(isMissingImage).length;

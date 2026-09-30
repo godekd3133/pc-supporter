@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createShareOwnerCredential, createShareRecoveryCode } from "./build-share";
+import { truncatePostgresTables } from "./testkit/postgres";
 
 const selection = { memory: [], ssd: [], hdd: [], accessories: [], useIntegratedGraphics: true };
 
@@ -41,12 +42,13 @@ describe("saved build share recovery", () => {
     const directory = await mkdtemp(join(tmpdir(), "pc-supporter-recovery-"));
     temporaryDirectories.push(directory);
     process.env.PC_SUPPORTER_DATA_DIR = directory;
-    process.env.DATABASE_URL = "";
     process.env.ADMIN_PASSWORD = "";
-    const { BUILDS_PATH, writeJson } = await import("./storage");
+    const repository = await import("./repository");
+    await repository.initializePersistence();
+    await truncatePostgresTables();
     const ownerCredential = createShareOwnerCredential();
     const recoveryCredential = createShareRecoveryCode();
-    await writeJson(BUILDS_PATH, [{
+    await repository.writeSavedBuilds([{
       id,
       name: "Recovery boundary build",
       selection,

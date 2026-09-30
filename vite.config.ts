@@ -64,7 +64,9 @@ export default defineConfig(({ mode }) => {
     },
     test: {
       globalSetup: ["server/testkit/global-setup.ts"],
-      setupFiles: ["server/testkit/setup-env.ts"]
+      setupFiles: ["server/testkit/setup-env.ts"],
+      exclude: ["**/node_modules/**", "**/dist/**", "**/artifacts/**"],
+      hookTimeout: 30_000
     },
     build: {
       outDir: process.env.PC_SUPPORTER_BUILD_OUT_DIR?.trim() || "dist",

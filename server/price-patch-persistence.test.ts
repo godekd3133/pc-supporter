@@ -3,19 +3,20 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { AccessoryItem, Part } from "../shared/types";
+import { truncatePostgresTables } from "./testkit/postgres";
 
 describe("price-only catalog patches", () => {
   it("serializes with catalog upserts and changes only prices for current Danawa identities", async () => {
     const directory = await mkdtemp(join(tmpdir(), "pc-supporter-price-patch-"));
     const previousDataDirectory = process.env.PC_SUPPORTER_DATA_DIR;
-    const previousDatabaseUrl = process.env.DATABASE_URL;
     process.env.PC_SUPPORTER_DATA_DIR = directory;
-    process.env.DATABASE_URL = "";
     vi.resetModules();
     try {
-      const [{ CATALOG_PATH, ACCESSORIES_PATH, readJson, writeJson }, { patchCatalogPrices, loadCatalog }, { patchAccessoryPrices, loadAccessories }] = await Promise.all([
-        import("./storage"), import("./catalog"), import("./accessories")
+      const [repository, { patchCatalogPrices, loadCatalog }, { patchAccessoryPrices, loadAccessories, upsertAccessories }] = await Promise.all([
+        import("./repository"), import("./catalog"), import("./accessories")
       ]);
+      await repository.initializePersistence();
+      await truncatePostgresTables();
       const part: Part = {
         id: "danawa-cpu-price-patch",
         category: "cpu",
@@ -43,8 +44,8 @@ describe("price-only catalog patches", () => {
         missingFields: [],
         updatedAt: "2026-09-20T00:00:00.000Z"
       };
-      await writeJson(CATALOG_PATH, [part]);
-      await writeJson(ACCESSORIES_PATH, [accessory]);
+      await repository.writeCatalogRecords([part]);
+      await upsertAccessories([accessory]);
 
       const patchedPart = await patchCatalogPrices([{
         id: part.id, sourceProductCode: part.sourceProductCode!, danawaUrl: part.danawaUrl!, priceWon: 175_000, priceCheckedAt: "2026-09-23T01:00:00.000Z"
@@ -55,8 +56,8 @@ describe("price-only catalog patches", () => {
 
       expect(patchedPart[0]).toMatchObject({ before: part, after: { ...part, priceWon: 175_000, priceCheckedAt: "2026-09-23T01:00:00.000Z" } });
       expect(patchedAccessory[0]).toMatchObject({ before: accessory, after: { ...accessory, priceWon: 15_000, priceCheckedAt: "2026-09-23T01:00:00.000Z" } });
-      expect((await readJson<Part[]>(CATALOG_PATH, [])).find(({ id }) => id === part.id)).toMatchObject({ name: part.name, specs: part.specs, updatedAt: part.updatedAt, priceWon: 175_000 });
-      expect((await readJson<AccessoryItem[]>(ACCESSORIES_PATH, [])).find(({ id }) => id === accessory.id)).toMatchObject({ name: accessory.name, specs: accessory.specs, updatedAt: accessory.updatedAt, priceWon: 15_000 });
+      expect((await repository.readCatalogRecords()).find(({ id }) => id === part.id)).toMatchObject({ name: part.name, specs: part.specs, updatedAt: part.updatedAt, priceWon: 175_000 });
+      expect((await repository.readAccessoryCatalogRecords()).items.find(({ id }) => id === accessory.id)).toMatchObject({ name: accessory.name, specs: accessory.specs, updatedAt: accessory.updatedAt, priceWon: 15_000 });
 
       const mismatched = await patchCatalogPrices([{
         id: part.id, sourceProductCode: "wrong-code", danawaUrl: part.danawaUrl!, priceWon: 1, priceCheckedAt: "2026-09-23T02:00:00.000Z"
@@ -67,8 +68,6 @@ describe("price-only catalog patches", () => {
     } finally {
       if (previousDataDirectory === undefined) delete process.env.PC_SUPPORTER_DATA_DIR;
       else process.env.PC_SUPPORTER_DATA_DIR = previousDataDirectory;
-      if (previousDatabaseUrl === undefined) delete process.env.DATABASE_URL;
-      else process.env.DATABASE_URL = previousDatabaseUrl;
       await rm(directory, { recursive: true, force: true });
     }
   });

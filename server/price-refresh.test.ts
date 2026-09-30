@@ -14,7 +14,8 @@ const mocks = vi.hoisted(() => ({
   patchCatalogPrices: vi.fn(),
   patchAccessoryPrices: vi.fn(),
   appendChanges: vi.fn(),
-  withPostgresTransaction: vi.fn()
+  withPostgresTransaction: vi.fn(),
+  attempts: new Map<string, string>()
 }));
 
 vi.mock("./catalog", () => ({ loadCatalog: async () => mocks.parts, upsertCatalog: mocks.upsertCatalog, patchCatalogPrices: mocks.patchCatalogPrices }));
@@ -64,7 +65,31 @@ describe("price refresh service", () => {
       return before ? [{ before, after: { ...before, priceWon: patch.priceWon, priceCheckedAt: patch.priceCheckedAt } }] : [];
     }));
     mocks.appendChanges.mockReset().mockResolvedValue([]);
-    mocks.withPostgresTransaction.mockReset();
+    mocks.attempts.clear();
+    mocks.withPostgresTransaction.mockReset().mockImplementation(async (_operation: string, callback: (client: { query: (sql: string, values?: unknown[]) => Promise<{ rows: unknown[]; rowCount: number }> }) => Promise<unknown>) => {
+      const client = {
+        async query(sql: string, values?: unknown[]) {
+          if (sql.includes("INSERT INTO price_refresh_attempts")) {
+            const [kinds, ids, attemptedAts] = values as [string[], string[], string[]];
+            kinds.forEach((kind, index) => {
+              const key = `${kind}:${ids[index]}`;
+              const previous = mocks.attempts.get(key);
+              if (!previous || attemptedAts[index] > previous) mocks.attempts.set(key, attemptedAts[index]);
+            });
+            return { rows: [], rowCount: ids.length };
+          }
+          if (sql.includes("SELECT item_kind, item_id, attempted_at")) {
+            const rows = [...mocks.attempts.entries()].map(([key, attempted_at]) => {
+              const separator = key.indexOf(":");
+              return { item_kind: key.slice(0, separator), item_id: key.slice(separator + 1), attempted_at };
+            });
+            return { rows, rowCount: rows.length };
+          }
+          return { rows: [], rowCount: 0 };
+        }
+      };
+      return callback(client);
+    });
     service = await import("./price-refresh");
   });
 
@@ -92,7 +117,7 @@ describe("price refresh service", () => {
       return { ...item, priceWon: 12_000 };
     });
 
-    const status = await service.runPriceRefreshJob({ coreLimit: 1, accessoryLimit: 1, delayMs: 0 });
+    const status = await service.runPriceRefreshJob({ coreLimit: 1, accessoryLimit: 1, delayMs: 0, persistStatus: true });
 
     expect(mocks.refreshPart).toHaveBeenCalledTimes(1);
     expect(mocks.refreshPart).toHaveBeenCalledWith(expect.objectContaining({ id: "old" }), expect.objectContaining({ onPriceObserved: expect.any(Function) }));

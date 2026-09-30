@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { Part } from "../shared/types";
+import { truncatePostgresTables } from "./testkit/postgres";
 
 const { checkPhysicalSourceUrlMock } = vi.hoisted(() => ({ checkPhysicalSourceUrlMock: vi.fn() }));
 
@@ -20,7 +21,6 @@ describe("catalog spec override API persistence", () => {
     const previousDatabaseUrl = process.env.DATABASE_URL;
     const previousAdminPassword = process.env.ADMIN_PASSWORD;
     process.env.PC_SUPPORTER_DATA_DIR = directory;
-    process.env.DATABASE_URL = "";
     process.env.ADMIN_PASSWORD = "";
     vi.resetModules();
     let server: Server | undefined;
@@ -35,8 +35,10 @@ describe("catalog spec override API persistence", () => {
       updatedAt: "2026-09-01T00:00:00.000Z"
     };
     try {
-      const [{ app }, { CATALOG_PATH, readJson, writeJson }] = await Promise.all([import("./index"), import("./storage")]);
-      await writeJson(CATALOG_PATH, [basePart]);
+      const [repository, { app }] = await Promise.all([import("./repository"), import("./index")]);
+      await repository.initializePersistence();
+      await truncatePostgresTables();
+      await repository.writeCatalogRecords([basePart]);
       server = app.listen(0, "127.0.0.1");
       await new Promise<void>((resolve, reject) => { server?.once("listening", resolve); server?.once("error", reject); });
       const address = server.address();
@@ -92,7 +94,7 @@ describe("catalog spec override API persistence", () => {
       const restored = await restoredResponse.json() as Record<string, any>;
       expect(restoredResponse.status).toBe(200);
       expect(restored).toEqual({ ...basePart, dataFreshness: expect.any(String) });
-      expect(await readJson<Record<string, unknown>>(join(directory, "catalog-spec-overrides.json"), {})).toEqual({});
+      expect(await repository.readCatalogSpecOverrideRecords()).toEqual({});
     } finally {
       if (server) await closeServer(server);
       if (previousDataDirectory === undefined) delete process.env.PC_SUPPORTER_DATA_DIR;

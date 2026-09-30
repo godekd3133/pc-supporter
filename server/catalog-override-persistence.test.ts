@@ -35,6 +35,7 @@ vi.mock("pg", () => ({
     async query(sql: string, values?: unknown[]) {
       fakeDatabase.queries.push({ sql, values });
       if (sql.includes("CREATE TABLE IF NOT EXISTS catalog_parts")) return { rows: [], rowCount: 0 };
+      if (sql.startsWith("SELECT part_id, payload FROM benchmark_overrides")) return { rows: [], rowCount: 0 };
       if (sql.includes("AS catalog_spec_updated_at")) {
         return {
           rows: [{ catalog_spec_updated_at: fakeDatabase.catalogSpecUpdatedAt, m2_slot_updated_at: fakeDatabase.m2SlotUpdatedAt }],
@@ -129,12 +130,11 @@ const m2Override = (partId: string): M2SlotOverride => ({
   updatedAt: "2026-09-30T00:00:00.000Z"
 });
 
-async function temporaryDataDirectory(configurePostgres: boolean) {
+async function temporaryDataDirectory() {
   const directory = await mkdtemp(join(tmpdir(), "pc-supporter-catalog-override-persistence-"));
   process.env.PC_SUPPORTER_DATA_DIR = directory;
   process.env.NODE_ENV = "test";
-  if (configurePostgres) process.env.DATABASE_URL = "postgres://synthetic.test/pc_supporter";
-  else delete process.env.DATABASE_URL;
+  process.env.DATABASE_URL = "postgres://synthetic.test/pc_supporter";
   fakeDatabase.catalogSpecOverrides = null;
   fakeDatabase.m2SlotOverrides = null;
   fakeDatabase.catalogSpecUpdatedAt = null;
@@ -158,40 +158,8 @@ async function loadPersistenceReplica() {
 }
 
 describe("catalog override repository persistence", () => {
-  it("retains JSON file mode and merges existing entries on writes", async () => {
-    const directory = await temporaryDataDirectory(false);
-    try {
-      const { storage, catalog, m2 } = await loadPersistenceReplica();
-      const existingCatalog = catalogOverride("cpu-existing");
-      const existingM2 = m2Override("board-existing");
-      await storage.writeJson(storage.CATALOG_SPEC_OVERRIDES_PATH, { [existingCatalog.partId]: existingCatalog });
-      await storage.writeJson(storage.M2_SLOT_OVERRIDES_PATH, { [existingM2.partId]: existingM2 });
-
-      const nextCatalog = catalogOverride("cpu-next");
-      const nextM2 = m2Override("board-next");
-      await catalog.saveCatalogSpecOverrides([nextCatalog]);
-      await m2.saveM2SlotOverrides([nextM2]);
-
-      expect(await storage.readJson(storage.CATALOG_SPEC_OVERRIDES_PATH, {})).toEqual({
-        [existingCatalog.partId]: existingCatalog,
-        [nextCatalog.partId]: nextCatalog
-      });
-      expect(await catalog.readCatalogSpecOverrides()).toEqual({
-        [existingCatalog.partId]: existingCatalog,
-        [nextCatalog.partId]: nextCatalog
-      });
-      expect(await m2.readM2SlotOverrides()).toEqual({
-        [existingM2.partId]: existingM2,
-        [nextM2.partId]: nextM2
-      });
-      expect(fakeDatabase.queries).toEqual([]);
-    } finally {
-      await rm(directory, { recursive: true, force: true });
-    }
-  });
-
   it("shares writes on the next read and serializes concurrent replica updates in PostgreSQL", async () => {
-    const directory = await temporaryDataDirectory(true);
+    const directory = await temporaryDataDirectory();
     const repositories: Array<typeof import("./repository")> = [];
     try {
       const replicaOne = await loadPersistenceReplica();
@@ -239,8 +207,8 @@ describe("catalog override repository persistence", () => {
     }
   });
 
-  it("uses PostgreSQL override updated_at values instead of stale local JSON mtimes", async () => {
-    const directory = await temporaryDataDirectory(true);
+  it("uses PostgreSQL override updated_at values instead of stray local artifact mtimes", async () => {
+    const directory = await temporaryDataDirectory();
     let repository: typeof import("./repository") | undefined;
     try {
       const replica = await loadPersistenceReplica();
@@ -249,13 +217,16 @@ describe("catalog override repository persistence", () => {
       await replica.m2.saveM2SlotOverride(m2Override("board-timestamp"));
 
       const staleLocalTime = new Date("2050-01-01T00:00:00.000Z");
-      await writeFile(replica.storage.M2_SLOT_OVERRIDES_PATH, "{}\n", "utf8");
-      await writeFile(replica.storage.CATALOG_SPEC_OVERRIDES_PATH, "{}\n", "utf8");
-      await writeFile(replica.storage.CATALOG_PATH, "[]\n", "utf8");
-      await utimes(replica.storage.M2_SLOT_OVERRIDES_PATH, staleLocalTime, staleLocalTime);
-      await utimes(replica.storage.CATALOG_SPEC_OVERRIDES_PATH, staleLocalTime, staleLocalTime);
+      const strayM2Path = join(directory, "m2-slot-overrides.json");
+      const straySpecPath = join(directory, "catalog-spec-overrides.json");
+      const strayCatalogPath = join(directory, "catalog.json");
+      await writeFile(strayM2Path, "{}\n", "utf8");
+      await writeFile(straySpecPath, "{}\n", "utf8");
+      await writeFile(strayCatalogPath, "[]\n", "utf8");
+      await utimes(strayM2Path, staleLocalTime, staleLocalTime);
+      await utimes(straySpecPath, staleLocalTime, staleLocalTime);
       const staleCatalogTime = new Date("2060-01-01T00:00:00.000Z");
-      await utimes(replica.storage.CATALOG_PATH, staleCatalogTime, staleCatalogTime);
+      await utimes(strayCatalogPath, staleCatalogTime, staleCatalogTime);
       fakeDatabase.catalogSpecUpdatedAt = "2026-10-01T00:00:00.000Z";
       fakeDatabase.m2SlotUpdatedAt = "2026-10-02T00:00:00.000Z";
 
@@ -271,12 +242,12 @@ describe("catalog override repository persistence", () => {
         updatedAt: "2026-09-01T00:00:00.000Z"
       };
       const baseCatalog = [basePart];
-      expect(await fileUpdatedAt(replica.storage.M2_SLOT_OVERRIDES_PATH)).toBe(staleLocalTime.toISOString());
-      expect(await fileUpdatedAt(replica.storage.CATALOG_SPEC_OVERRIDES_PATH)).toBe(staleLocalTime.toISOString());
-      expect(await fileUpdatedAt(replica.storage.CATALOG_PATH)).toBe(staleCatalogTime.toISOString());
+      expect(await fileUpdatedAt(strayM2Path)).toBe(staleLocalTime.toISOString());
+      expect(await fileUpdatedAt(straySpecPath)).toBe(staleLocalTime.toISOString());
+      expect(await fileUpdatedAt(strayCatalogPath)).toBe(staleCatalogTime.toISOString());
       expect(await catalogUpdatedAtFor(baseCatalog)).toBe("2026-10-02T00:00:00.000Z");
       fakeDatabase.catalogSpecUpdatedAt = "2026-10-03T00:00:00.000Z";
-      expect(await catalogUpdatedAtFor(baseCatalog)).toBe("2026-10-03T00:00:00.000Z");
+      expect(await catalogUpdatedAtFor([...baseCatalog])).toBe("2026-10-03T00:00:00.000Z");
       expect(fakeDatabase.queries.some(({ sql }) => sql.includes("AS catalog_spec_updated_at"))).toBe(true);
     } finally {
       if (repository) await repository.closePersistence();
@@ -284,8 +255,8 @@ describe("catalog override repository persistence", () => {
     }
   });
 
-  it("fails closed on PostgreSQL read and write errors without touching override JSON files", async () => {
-    const directory = await temporaryDataDirectory(true);
+  it("fails closed on PostgreSQL read and write errors without touching stray override JSON files", async () => {
+    const directory = await temporaryDataDirectory();
     const repositories: Array<typeof import("./repository")> = [];
     const catalogFile = join(directory, "catalog-spec-overrides.json");
     const m2File = join(directory, "m2-slot-overrides.json");
