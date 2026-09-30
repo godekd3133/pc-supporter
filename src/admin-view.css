@@ -866,3 +866,6 @@ html[data-theme="dark"] .admin-page .generation-failure-request em { background:
 html[data-theme="dark"] .admin-page .admin-section-nav-link.active { color: #8fd8cd !important; background: #16322e !important; }
 
 html[data-theme="dark"] .admin-page .generation-failure-item { background: var(--card-bg, #1b1f27) !important; }
+
+/* sticky 섹션 nav 아래로 앵커가 깔끔하게 도착하도록 여백 */
+.admin-page [id^="admin-"] { scroll-margin-top: 130px; }

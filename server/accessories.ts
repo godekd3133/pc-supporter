@@ -1,6 +1,6 @@
 import type { AccessoryCategory, AccessoryCategoryCoverage, AccessoryCoverageSnapshot, AccessoryCrawlCategoryReport, AccessoryItem, AccessoryPriceFilter, AccessorySpecProfileCount, BrandCountOption, DataFreshness, DataQuality } from "../shared/types";
 import { ACCESSORY_CATEGORIES, isKnownPrice } from "../shared/types";
-import { mutateAccessoryCatalogRecords, mutateAccessoryCoverageRecord, patchAccessoryCatalogPriceRecords, readAccessoryCatalogRecords, readAccessoryCoverageRecord } from "./repository";
+import { mutateAccessoryCatalogRecords, mutateAccessoryCoverageRecord, patchAccessoryCatalogPriceRecords, readAccessoryCatalogRecords, readAccessoryCoverageRecord, readAccessoryVersionStamp } from "./repository";
 import { parseM2FormFactors } from "./danawa";
 import { classifyDataFreshness } from "./data-health";
 import { applyCoolingFanLoadOverrides, readCoolingFanLoadOverrideSnapshot, readCoolingFanLoadOverrides, stripCoolingFanLoadOverride } from "./cooling-fan-load-overrides";
@@ -11,6 +11,7 @@ import { brandCountsFor } from "../shared/brand-counts";
 import { accessorySpecProfileIdsFor, assessAccessorySpecProfile } from "./accessory-spec-coverage";
 
 let accessoryCache: AccessoryItem[] | null = null;
+let accessoryCacheStamp: string | null = null;
 let accessoryMtime: string | null = null;
 let coolingFanOverrideMtime: string | null = null;
 let accessoryLoadInFlight: Promise<AccessoryItem[]> | null = null;
@@ -70,6 +71,18 @@ async function loadBaseAccessoriesFromDatabase() {
 
 async function loadAccessoriesUncoalesced() {
   const revisionAtReadStart = accessoryStateRevision;
+  // DB가 진짜 소스다 — 전체 행 재구성은 요청마다 수 초를 쓰므로 건수+최신
+  // updated_at 스탬프가 같으면 캐시를 그대로 돌려준다. 스탬프는 읽기 전에
+  // 잡아서, 읽는 도중 다른 쓰기가 끼어들면 다음 요청이 다시 읽도록 한다.
+  let stampBefore: string | null = null;
+  try {
+    stampBefore = await readAccessoryVersionStamp();
+  } catch (error) {
+    // DB 일시 실패에도 마지막 액세서리 목록으로 이어간다.
+    if (accessoryCache) return accessoryCache;
+    throw error;
+  }
+  if (accessoryCache && accessoryCacheStamp === stampBefore) return accessoryCache;
   const { items, updatedAt } = await loadBaseAccessoriesFromDatabase();
   const coolingFanOverrideSnapshot = await readCoolingFanLoadOverrideSnapshot();
   const runtimeItems = applyCoolingFanLoadOverrides(items, coolingFanOverrideSnapshot.overrides);
@@ -78,6 +91,7 @@ async function loadAccessoriesUncoalesced() {
   // timestamp/runtime snapshot produced by a more recent local write.
   if (revisionAtReadStart === accessoryStateRevision) {
     accessoryCache = runtimeItems;
+    accessoryCacheStamp = stampBefore;
     accessoryMtime = updatedAt;
     coolingFanOverrideMtime = coolingFanOverrideSnapshot.updatedAt;
   }
@@ -472,6 +486,7 @@ export async function upsertAccessories(
   const coolingFanOverrideSnapshot = await readCoolingFanLoadOverrideSnapshot();
   accessoryStateRevision += 1;
   accessoryCache = applyCoolingFanLoadOverrides(baseAccessories, coolingFanOverrideSnapshot.overrides);
+  accessoryCacheStamp = null;
   accessoryMtime = snapshot.updatedAt;
   coolingFanOverrideMtime = coolingFanOverrideSnapshot.updatedAt;
   return snapshot.items;
@@ -492,6 +507,7 @@ export async function patchAccessoryPrices(patches: AccessoryPricePatch[]) {
   accessoryStateRevision += 1;
   accessoryLoadInFlight = null;
   accessoryCache = null;
+  accessoryCacheStamp = null;
   accessoryMtime = result.updatedAt;
   coolingFanOverrideMtime = coolingFanOverrideSnapshot.updatedAt;
   return result.updates;

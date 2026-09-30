@@ -528,10 +528,17 @@ function DeferredAdminPanel({ label, anchorId, children }: { label: string; anch
     const loadFromHash = () => {
       if (window.location.hash !== hash) return;
       setShouldLoad(true);
-      window.setTimeout(() => {
+      // 섹션 인덱스의 앵커 도착. 주위의 lazy 패널이 비동기로 마운트되며
+      // 목표 위치가 계속 밀리므로 짧게 여러 번 다시 맞춘다.
+      const scrollToAnchor = () => {
         const target = anchorRef.current;
-        target?.scrollIntoView({ block: "center" });
-        target?.focus({ preventScroll: true });
+        if (target) target.scrollIntoView({ block: "start" });
+      };
+      window.setTimeout(scrollToAnchor, 0);
+      window.setTimeout(scrollToAnchor, 350);
+      window.setTimeout(scrollToAnchor, 900);
+      window.setTimeout(() => {
+        anchorRef.current?.focus({ preventScroll: true });
       }, 0);
     };
     loadFromHash();
@@ -601,12 +608,16 @@ function AdminSectionNav() {
     let frame = 0;
     const update = () => {
       frame = 0;
-      const probeY = window.scrollY + 140;
+      // nav의 나열 순서와 실제 DOM 순서가 다르므로(예: seed 패널이 견적
+      // 버전 카드 안에 있음) 문서 위치를 기준으로 마지막 통과 앵커를 고른다.
       let current = "";
+      let currentTop = Number.NEGATIVE_INFINITY;
       for (const group of ADMIN_SECTION_GROUPS) {
         for (const item of group.items) {
           const el = document.getElementById(item.id);
-          if (el && el.offsetTop <= probeY) current = item.id;
+          if (!el) continue;
+          const top = el.getBoundingClientRect().top;
+          if (top <= 140 && top > currentTop) { current = item.id; currentTop = top; }
         }
       }
       setActiveId(current);

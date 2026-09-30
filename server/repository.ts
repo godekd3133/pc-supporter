@@ -1027,6 +1027,47 @@ export async function readCatalogRecords(): Promise<Part[]> {
   }
 }
 
+// 캐시된 런타임 카탈로그가 DB와 같은지 확인하는 저비용 프로브 — 부품+스펙/M.2
+// 오버라이드 테이블의 건수와 최신 updated_at을 묶은 스탬프. 전체 행을 다시
+// 읽는 대신 이 스탬프만 비교하면 된다.
+export async function readCatalogVersionStamp(): Promise<string> {
+  await ensureDatabase();
+  try {
+    const result = await pool!.query<{ stamp: string }>(`
+      SELECT
+        (SELECT count(*) FROM catalog_parts)::text || ':' ||
+        coalesce((SELECT max(updated_at) FROM catalog_parts)::text, '-') || ':' ||
+        (SELECT count(*) FROM catalog_spec_overrides)::text || ':' ||
+        coalesce((SELECT max(updated_at) FROM catalog_spec_overrides)::text, '-') || ':' ||
+        (SELECT count(*) FROM m2_slot_overrides)::text || ':' ||
+        coalesce((SELECT max(updated_at) FROM m2_slot_overrides)::text, '-') || ':' ||
+        (SELECT count(*) FROM benchmark_overrides)::text || ':' ||
+        coalesce((SELECT max(updated_at) FROM benchmark_overrides)::text, '-') AS stamp
+    `);
+    return result.rows[0]?.stamp ?? "";
+  } catch (error) {
+    markDatabaseUnavailable("catalog version stamp", error);
+    throw error;
+  }
+}
+
+export async function readAccessoryVersionStamp(): Promise<string> {
+  await ensureDatabase();
+  try {
+    const result = await pool!.query<{ stamp: string }>(`
+      SELECT
+        (SELECT count(*) FROM catalog_accessories)::text || ':' ||
+        coalesce((SELECT max(updated_at) FROM catalog_accessories)::text, '-') || ':' ||
+        (SELECT count(*) FROM cooling_fan_load_overrides)::text || ':' ||
+        coalesce((SELECT max(updated_at) FROM cooling_fan_load_overrides)::text, '-') AS stamp
+    `);
+    return result.rows[0]?.stamp ?? "";
+  } catch (error) {
+    markDatabaseUnavailable("accessory version stamp", error);
+    throw error;
+  }
+}
+
 export async function writeCatalogRecords(
   parts: Part[],
   options: { replaceDanawaCategories?: PartCategory[]; removeIds?: string[] } = {}

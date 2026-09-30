@@ -9,7 +9,7 @@ import {
   GPU_PHYSICAL_OVERRIDES_PATH,
   fileUpdatedAt
 } from "./storage";
-import { patchCatalogPriceRecords, readAccessoryCoverageRecord, readCatalogOverrideMapUpdatedAtRecords, readCatalogRecords, readBenchmarkOverrideRecords, writeCatalogRecords } from "./repository";
+import { patchCatalogPriceRecords, readAccessoryCoverageRecord, readCatalogOverrideMapUpdatedAtRecords, readCatalogRecords, readCatalogVersionStamp, readBenchmarkOverrideRecords, writeCatalogRecords } from "./repository";
 import { inferListingType, isListingAllowed, isQuoteBrandAllowed, isQuoteSelectable } from "./listing";
 import { recommendationFloorWonFor } from "../shared/domain/engine";
 import { accessoryMeta, loadAccessories, readAccessoryCoverage } from "./accessories";
@@ -26,6 +26,7 @@ import { pcieCompatibleSlotInventoryFor, pcieSlotWidthFromUnknown, type PcieSlot
 import { brandCountsFor } from "../shared/brand-counts";
 
 let catalogCache: Part[] | null = null;
+let catalogCacheStamp: string | null = null;
 let catalogRuntimeRevision = 0;
 let catalogLoadInFlight: Promise<Part[]> | null = null;
 
@@ -116,13 +117,26 @@ export function mergeDanawaSnapshot(base: Part[], incoming: Part[], categories: 
 }
 
 async function loadCatalogUncoalesced() {
-  const persisted = await readCatalogRecords();
-  const overrideMaps = await readCatalogOverrideMaps();
-  catalogCache = applyCatalogOverrideMaps(
-    mergeCatalog(seedBaseFor(persisted), persisted.map((part) => reparseDanawaPart(part))),
-    overrideMaps
-  );
-  return catalogCache;
+  // DB가 진짜 소스다 — 다만 전체 행 재구성은 요청마다 수 초를 쓰므로
+  // 건수+최신 updated_at 스탬프가 같으면 캐시를 그대로 돌려준다. 파일 기반
+  // 오버라이드(GPU 물리·RGB 부하)는 인프로세스 쓰기라 invalidateCatalogCache로
+  // 무효화된다. 스탬프는 읽기 전에 잡아 읽기 도중 끼어든 쓰기를 놓치지 않는다.
+  try {
+    const stampBefore = await readCatalogVersionStamp();
+    if (catalogCache && catalogCacheStamp === stampBefore) return catalogCache;
+    const persisted = await readCatalogRecords();
+    const overrideMaps = await readCatalogOverrideMaps();
+    catalogCache = applyCatalogOverrideMaps(
+      mergeCatalog(seedBaseFor(persisted), persisted.map((part) => reparseDanawaPart(part))),
+      overrideMaps
+    );
+    catalogCacheStamp = stampBefore;
+    return catalogCache;
+  } catch (error) {
+    // DB 일시 실패에도 마지막 카탈로그로 추천을 이어간다.
+    if (catalogCache) return catalogCache;
+    throw error;
+  }
 }
 
 export async function loadCatalog() {
@@ -139,6 +153,7 @@ export async function loadCatalog() {
 export function invalidateCatalogCache() {
   catalogLoadInFlight = null;
   catalogCache = null;
+  catalogCacheStamp = null;
   catalogRuntimeRevision += 1;
 }
 
@@ -156,6 +171,7 @@ export async function saveCatalog(parts: Part[]) {
   await writeCatalogRecords(baseCatalog);
   const overrideMaps = await readCatalogOverrideMaps();
   catalogCache = applyCatalogOverrideMaps(baseCatalog, overrideMaps);
+  catalogCacheStamp = null;
   catalogRuntimeRevision += 1;
   return catalogCache;
 }
@@ -173,6 +189,7 @@ async function upsertCatalogUnlocked(
   await writeCatalogRecords(baseCatalog, { replaceDanawaCategories });
   const overrideMaps = await readCatalogOverrideMaps();
   catalogCache = applyCatalogOverrideMaps(baseCatalog, overrideMaps);
+  catalogCacheStamp = null;
   catalogRuntimeRevision += 1;
   return catalogCache;
 }
