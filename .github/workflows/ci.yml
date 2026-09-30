@@ -94,6 +94,23 @@ jobs:
           PC_SUPPORTER_BROWSER_SMOKE_FIXTURE: "1"
         run: npx --no-install tsx scripts/prepare-browser-smoke-data.ts
 
+      - name: Free smoke ports from stale processes
+        run: |
+          for port in 4274 5273; do
+            pids=$(lsof -ti tcp:"$port" 2>/dev/null || true)
+            if [ -n "$pids" ]; then
+              echo "port $port held by stale process: $pids"
+              echo "$pids" | xargs kill -9 2>/dev/null || true
+            fi
+          done
+          sleep 1
+          for port in 4274 5273; do
+            if lsof -ti tcp:"$port" >/dev/null 2>&1; then
+              echo "port $port is still in use after cleanup" >&2
+              exit 1
+            fi
+          done
+
       - name: Start local web and API servers
         run: |
           SERVER_HOST=127.0.0.1 PORT=4274 PC_SUPPORTER_RATE_LIMIT_SCALE=50 npx --no-install tsx server/index.ts > "${RUNNER_TEMP}/pc-supporter-api.log" 2>&1 &
