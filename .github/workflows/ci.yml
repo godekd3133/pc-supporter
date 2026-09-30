@@ -16,8 +16,6 @@ jobs:
   verify:
     runs-on: [self-hosted, personal-mac]
     timeout-minutes: 10
-    env:
-      NPM_CONFIG_CACHE: ${{ runner.temp }}/npm-cache
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,6 +28,8 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+        env:
+          npm_config_cache: ${{ runner.temp }}/npm-cache
 
       - name: Typecheck
         run: npm run typecheck
@@ -47,7 +47,6 @@ jobs:
     runs-on: [self-hosted, personal-mac]
     timeout-minutes: 10
     env:
-      NPM_CONFIG_CACHE: ${{ runner.temp }}/npm-cache
       DANAWA_CRAWL_ON_START: "false"
       BUILD_MONITOR_SCHEDULER_ENABLED: "false"
       NODE_ENV: test
@@ -65,6 +64,8 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+        env:
+          npm_config_cache: ${{ runner.temp }}/npm-cache
 
       - name: Prepare deterministic browser fixture
         env:
