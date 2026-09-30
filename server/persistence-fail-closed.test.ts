@@ -1,22 +1,25 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import type { Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import type { Part } from "../shared/types";
 
 type IsolatedBackend = {
   directory: string;
   storage: typeof import("./storage");
   repository: typeof import("./repository");
-  baseUrl: string;
+  baseUrl?: string;
 };
 
 async function closeServer(server: Server) {
   await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
 }
 
-async function withIsolatedBackend(databaseUrl: string | undefined, run: (backend: IsolatedBackend) => Promise<void>) {
+async function withIsolatedBackend(
+  databaseUrl: string | undefined,
+  run: (backend: IsolatedBackend) => Promise<void>,
+  options: { loadApp?: boolean } = {}
+) {
   const directory = await mkdtemp(join(tmpdir(), "pc-supporter-persistence-mode-"));
   const keys = ["PC_SUPPORTER_DATA_DIR", "DATABASE_URL", "BUILD_MONITOR_SCHEDULER_ENABLED", "DANAWA_CRAWL_ON_START"] as const;
   const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]])) as Record<(typeof keys)[number], string | undefined>;
@@ -33,15 +36,19 @@ async function withIsolatedBackend(databaseUrl: string | undefined, run: (backen
 
     const storage = await import("./storage");
     repository = await import("./repository");
-    const { app } = await import("./index");
-    server = await new Promise<Server>((resolve, reject) => {
-      const instance = app.listen(0, "127.0.0.1", () => resolve(instance));
-      instance.once("error", reject);
-    });
-    const address = server.address();
-    if (!address || typeof address === "string") throw new Error("isolated persistence API did not expose a TCP port");
+    let baseUrl: string | undefined;
+    if (options.loadApp ?? true) {
+      const { app } = await import("./index");
+      server = await new Promise<Server>((resolve, reject) => {
+        const instance = app.listen(0, "127.0.0.1", () => resolve(instance));
+        instance.once("error", reject);
+      });
+      const address = server.address();
+      if (!address || typeof address === "string") throw new Error("isolated persistence API did not expose a TCP port");
+      baseUrl = `http://127.0.0.1:${address.port}`;
+    }
 
-    await run({ directory, storage, repository, baseUrl: `http://127.0.0.1:${address.port}` });
+    await run({ directory, storage, repository, baseUrl });
   } finally {
     if (server) await closeServer(server);
     if (repository) await repository.closePersistence();
@@ -55,25 +62,11 @@ async function withIsolatedBackend(databaseUrl: string | undefined, run: (backen
   }
 }
 
-const preparedLocalPart: Part = {
-  id: "local-only-catalog-record",
-  category: "cpu",
-  name: "Local JSON record that must not be served",
-  source: "manual",
-  specs: {},
-  dataQuality: "incomplete",
-  missingFields: [],
-  updatedAt: "2026-09-29T00:00:00.000Z"
-};
-
 describe("persistence backend selection", () => {
   it("keeps PostgreSQL authoritative and reports unhealthy when the configured database cannot connect", async () => {
-    await withIsolatedBackend("postgresql://pc_supporter:pc_supporter@127.0.0.1:1/pc_supporter?connect_timeout=1", async ({ storage, repository, baseUrl }) => {
-      await storage.writeJson(storage.CATALOG_PATH, [preparedLocalPart]);
-
-      await expect(repository.persistenceMode()).resolves.toBe("postgres");
-      await expect(repository.readCatalogRecords()).rejects.toThrow(/connect|PostgreSQL/i);
-      expect(await storage.readJson<Part[]>(storage.CATALOG_PATH, [])).toEqual([preparedLocalPart]);
+    await withIsolatedBackend("postgresql://pc_supporter:pc_supporter@127.0.0.1:1/pc_supporter?connect_timeout=1", async ({ repository, baseUrl }) => {
+      await expect(repository.persistenceDiagnostics()).resolves.toMatchObject({ databaseConfigured: true, storageMode: "postgres", ready: false });
+      await expect(repository.readCatalogRecords()).rejects.toThrow(/connect|PostgreSQL|ECONNREFUSED/i);
 
       const catalogResponse = await fetch(`${baseUrl}/api/parts`);
       expect(catalogResponse.status).toBe(503);
@@ -94,39 +87,22 @@ describe("persistence backend selection", () => {
     });
   });
 
-  it("uses local JSON and stays healthy when DATABASE_URL is absent", async () => {
-    await withIsolatedBackend(undefined, async ({ storage, repository, baseUrl }) => {
-      await storage.writeJson(storage.CATALOG_PATH, [preparedLocalPart]);
+  it("requires DATABASE_URL instead of serving local JSON storage", async () => {
+    await withIsolatedBackend(undefined, async ({ repository }) => {
+      await expect(repository.persistenceDiagnostics()).resolves.toMatchObject({ databaseConfigured: false, storageMode: "postgres", ready: false });
+      await expect(repository.readCatalogRecords()).rejects.toThrow(/DATABASE_URL is required/);
+      await expect(repository.readSavedBuilds()).rejects.toThrow(/DATABASE_URL is required/);
+    }, { loadApp: false });
 
-      await expect(repository.persistenceMode()).resolves.toBe("file");
-      await expect(repository.readCatalogRecords()).resolves.toEqual([preparedLocalPart]);
-      await expect(repository.persistenceDiagnostics()).resolves.toMatchObject({ databaseConfigured: false, storageMode: "file", ready: true });
-
-      const response = await fetch(`${baseUrl}/api/health`);
-      expect(response.status).toBe(200);
-      expect(await response.json()).toMatchObject({
-        ok: true,
-        persistence: { databaseConfigured: false, storageMode: "file", ready: true }
-      });
-
-      await writeFile(storage.CATALOG_PATH, "{\"parts\":[", "utf8");
-      await expect(repository.readCatalogRecords()).rejects.toThrow(SyntaxError);
-      await expect(repository.persistenceDiagnostics()).resolves.toMatchObject({
-        databaseConfigured: false,
-        storageMode: "file",
-        ready: false,
-        unavailableReason: "file_storage_unavailable"
-      });
-
-      await storage.writeJson(storage.CATALOG_PATH, [preparedLocalPart]);
-      await expect(repository.persistenceDiagnostics()).resolves.toMatchObject({ ready: true });
-
-      const malformedBuilds = [{ id: "invalid-build", name: 7, selection: null, createdAt: "invalid", updatedAt: "invalid" }];
-      await storage.writeJson(storage.BUILDS_PATH, malformedBuilds);
-      const originalBuilds = await readFile(storage.BUILDS_PATH, "utf8");
-      await expect(repository.readSavedBuilds()).rejects.toThrow(/safely interpret|안전하게 해석/i);
-      await expect(readFile(storage.BUILDS_PATH, "utf8")).resolves.toBe(originalBuilds);
-    });
+    const previousUrl = process.env.DATABASE_URL;
+    delete process.env.DATABASE_URL;
+    vi.resetModules();
+    try {
+      await expect(import("./index")).rejects.toThrow(/DATABASE_URL is required/);
+    } finally {
+      if (previousUrl !== undefined) process.env.DATABASE_URL = previousUrl;
+      vi.resetModules();
+    }
   });
 
   it("retries PostgreSQL after a bounded cooldown and recovers without reading the local catalog", async () => {
@@ -146,9 +122,7 @@ describe("persistence backend selection", () => {
     }));
 
     try {
-      await withIsolatedBackend("postgresql://pc_supporter:pc_supporter@127.0.0.1:5432/pc_supporter", async ({ storage, repository, baseUrl }) => {
-        await storage.writeJson(storage.CATALOG_PATH, [preparedLocalPart]);
-
+      await withIsolatedBackend("postgresql://pc_supporter:pc_supporter@127.0.0.1:5432/pc_supporter", async ({ repository, baseUrl }) => {
         await expect(repository.initializePersistence()).rejects.toThrow(/ECONNREFUSED/);
         const attemptsAfterFailure = queryMock.mock.calls.length;
         await expect(repository.readCatalogRecords()).rejects.toThrow(/retry is deferred/);
@@ -160,7 +134,6 @@ describe("persistence backend selection", () => {
 
         await expect(repository.persistenceDiagnostics()).resolves.toMatchObject({ databaseConfigured: true, storageMode: "postgres", ready: true });
         await expect(repository.readCatalogRecords()).resolves.toEqual([]);
-        expect(await storage.readJson<Part[]>(storage.CATALOG_PATH, [])).toEqual([preparedLocalPart]);
 
         const response = await fetch(`${baseUrl}/api/health`);
         expect(response.status).toBe(200);

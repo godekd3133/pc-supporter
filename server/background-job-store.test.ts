@@ -615,12 +615,11 @@ describe("PostgreSQL transaction helper for durable jobs", () => {
     vi.resetModules();
   });
 
-  it("rejects file mode without attempting a JSON fallback", async () => {
+  it("requires DATABASE_URL without attempting a JSON fallback", async () => {
     process.env.DATABASE_URL = "";
     const repository = await import("./repository");
     await expect(repository.withPostgresTransaction("test durable job", async () => "done"))
-      .rejects.toThrow(/PostgreSQL is required/);
-    await expect(repository.persistenceMode()).resolves.toBe("file");
+      .rejects.toThrow(/PostgreSQL is required|DATABASE_URL is required/);
   });
 
   it("runs PostgreSQL-only work inside a transaction and checks the shared schema", async () => {

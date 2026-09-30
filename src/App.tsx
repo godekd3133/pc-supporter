@@ -18,6 +18,7 @@ import {
   FiEdit3,
   FiExternalLink,
   FiHardDrive,
+  FiHome,
   FiInfo,
   FiKey,
   FiLayers,
@@ -786,7 +787,8 @@ function AppHeaderLoadingFallback() {
       <span className="topbar-status loading"><span className="status-dot loading" /> 서비스 동기화 중</span>
     </div>
     <nav className="mobile-bottom-nav" aria-hidden="true">
-      <span className="mobile-bottom-nav-item"><FiSearch /><span>검사</span></span>
+      <span className="mobile-bottom-nav-item"><FiHome /><span>홈</span></span>
+      <span className="mobile-bottom-nav-item"><FiSearch /><span>견적</span></span>
       <span className="mobile-bottom-nav-item"><FiLayers /><span>카탈로그</span></span>
       <span className="mobile-bottom-nav-item"><span className="mobile-bottom-nav-icon"><FiBookmark /></span><span>저장</span></span>
       <span className="mobile-bottom-nav-item"><FiMoreHorizontal /><span>더보기</span></span>

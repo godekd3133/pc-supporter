@@ -90,8 +90,9 @@ describe("mobile home build summary", () => {
     expect(markup).toContain('aria-label="견적 진행 순서"');
     expect(markup).toContain("용도와 예산부터 정해요.");
     expect(markup).toContain("1</span>용도");
-    expect(markup).toContain("2</span>성능");
+    expect(markup).toContain("2</span>화면·성능");
     expect(markup).toContain("3</span>예산");
+    expect(markup).toContain("선택한 조건에 맞춰 부품을 추천하고, 호환 결과까지 확인해요.");
     expect(markup).toContain("견적의 부품 선택이나 주변 부품 찾기에서 목록을 불러오면 여기에 표시됩니다.");
     expect(markup).not.toContain("부품 목록을 열면 최근 항목이 이 기기에 저장됩니다.");
   });

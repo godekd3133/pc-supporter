@@ -1,6 +1,6 @@
 import { safeLocalStorage } from "./safe-storage";
 import { useEffect, useRef, useState } from "react";
-import { FiBookmark, FiCpu, FiLayers, FiMenu, FiMoon, FiMoreHorizontal, FiSearch, FiSun, FiTool, FiTrendingUp, FiX, FiZap } from "react-icons/fi";
+import { FiBookmark, FiCpu, FiHome, FiLayers, FiMenu, FiMoon, FiMoreHorizontal, FiSearch, FiSun, FiTool, FiTrendingUp, FiX, FiZap } from "react-icons/fi";
 import type { ApiStatusDetails } from "./api";
 import { applyTheme, THEME_CHANGE_EVENT, THEME_STORAGE_KEY, themeModeFromStorage, type ThemeMode } from "./theme";
 
@@ -82,6 +82,7 @@ export function AppHeader({ view, networkOnline, apiStatus, bootstrapLoading, bo
   const refreshTotal = Math.max(1, catalogRefreshProgress?.requestedCount ?? 1);
   const refreshCompleted = Math.min(refreshTotal, Math.max(0, catalogRefreshProgress?.completedCount ?? 0));
   const refreshPercent = Math.round((refreshCompleted / refreshTotal) * 100);
+  const quoteFlowActive = ["start", "generator", "editor", "result"].includes(view);
   const nextThemeModeLabel = themeMode === "dark" ? "라이트 모드" : "다크 모드";
   const ThemeIcon = themeMode === "dark" ? FiSun : FiMoon;
   const toggleTheme = () => setThemeMode((current) => current === "dark" ? "light" : "dark");
@@ -118,7 +119,10 @@ export function AppHeader({ view, networkOnline, apiStatus, bootstrapLoading, bo
         <small>{catalogRefreshProgress.currentName ? `${catalogRefreshProgress.currentName} 업데이트 중` : "업데이트 준비 중"} · {refreshCompleted} / {refreshTotal}개</small>
       </div>}
       <nav className="mobile-bottom-nav" aria-label="모바일 주 메뉴">
-        <button className={`mobile-bottom-nav-item ${view === "home" || view === "editor" || view === "result" ? "active" : ""}`} type="button" aria-current={view === "home" || view === "editor" || view === "result" ? "page" : undefined} onClick={onBuild}>
+        <button className={`mobile-bottom-nav-item ${view === "home" ? "active" : ""}`} type="button" aria-current={view === "home" ? "page" : undefined} onClick={onHome}>
+          <FiHome aria-hidden="true" /><span>홈</span>
+        </button>
+        <button className={`mobile-bottom-nav-item ${quoteFlowActive ? "active" : ""}`} type="button" aria-current={quoteFlowActive ? "page" : undefined} onClick={onBuild}>
           <FiSearch aria-hidden="true" /><span>견적</span>
         </button>
         <button className={`mobile-bottom-nav-item ${view === "catalog" || view === "accessories" ? "active" : ""}`} type="button" aria-current={view === "catalog" || view === "accessories" ? "page" : undefined} onClick={onCatalog}>
@@ -127,7 +131,7 @@ export function AppHeader({ view, networkOnline, apiStatus, bootstrapLoading, bo
         <button className={`mobile-bottom-nav-item ${view === "history" ? "active" : ""}`} type="button" aria-current={view === "history" ? "page" : undefined} onClick={onHistory} aria-label={savedBuildUnreadAlertCount > 0 ? `저장 견적, 미읽음 알림 ${savedBuildUnreadAlertCount}건` : "저장 견적"}>
           <span className="mobile-bottom-nav-icon"><FiBookmark aria-hidden="true" />{savedBuildUnreadAlertCount > 0 && <span className="mobile-bottom-nav-badge" aria-hidden="true">{savedBuildUnreadAlertCount > 99 ? "99+" : savedBuildUnreadAlertCount}</span>}</span><span>저장</span>
         </button>
-        <button ref={moreTriggerRef} className={`mobile-bottom-nav-item ${moreOpen || ["generator", "pricewatchlist"].includes(view) ? "active" : ""}`} type="button" aria-expanded={moreOpen} aria-controls="mobile-more-sheet" aria-haspopup="dialog" onClick={() => setMoreOpen((open) => !open)}>
+        <button ref={moreTriggerRef} className={`mobile-bottom-nav-item ${moreOpen || view === "pricewatchlist" ? "active" : ""}`} type="button" aria-expanded={moreOpen} aria-controls="mobile-more-sheet" aria-haspopup="dialog" onClick={() => setMoreOpen((open) => !open)}>
           {moreOpen ? <FiX aria-hidden="true" /> : <FiMoreHorizontal aria-hidden="true" />}<span>더보기</span>
         </button>
       </nav>

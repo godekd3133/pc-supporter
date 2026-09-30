@@ -329,7 +329,7 @@ describe("PostgreSQL schema contract", () => {
     expect(testClient.state.revision).toBeUndefined();
   });
 
-  it("selects file mode from DATABASE_URL alone even when DATABASE_MIGRATION_URL is set", async () => {
+  it("requires DATABASE_URL even when DATABASE_MIGRATION_URL is set", async () => {
     const keys = ["DATABASE_URL", "DATABASE_MIGRATION_URL", "DOTENV_CONFIG_PATH"] as const;
     const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]])) as Record<(typeof keys)[number], string | undefined>;
     try {
@@ -338,8 +338,7 @@ describe("PostgreSQL schema contract", () => {
       process.env.DOTENV_CONFIG_PATH = "/dev/null";
       vi.resetModules();
       const repository = await import("./repository");
-      await expect(repository.persistenceMode()).resolves.toBe("file");
-      await expect(repository.initializePersistence()).resolves.toBeUndefined();
+      await expect(repository.initializePersistence()).rejects.toThrow(/DATABASE_URL is required/);
     } finally {
       for (const key of keys) {
         const value = previous[key];

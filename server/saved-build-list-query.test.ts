@@ -1,8 +1,6 @@
-import { mkdtemp, rm } from "node:fs/promises";
 import type { Server } from "node:http";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
+import { truncatePostgresTables } from "./testkit/postgres";
 
 const selection = { memory: [], ssd: [], hdd: [], accessories: [], useIntegratedGraphics: true };
 
@@ -12,27 +10,24 @@ async function closeServer(server: Server) {
 
 describe("saved build list query", () => {
   it("uses the default page size when limit is not finite", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "pc-supporter-saved-build-list-query-"));
-    const previousDataDirectory = process.env.PC_SUPPORTER_DATA_DIR;
-    const previousDatabaseUrl = process.env.DATABASE_URL;
-    process.env.PC_SUPPORTER_DATA_DIR = directory;
-    process.env.DATABASE_URL = "";
     vi.resetModules();
-    let server: Server | undefined;
-    try {
-      const [{ app }, { BUILDS_PATH, writeJson }] = await Promise.all([
-        import("./index"),
-        import("./storage")
-      ]);
-      const ids = ["saved-build-list-query-a", "saved-build-list-query-b"];
-      await writeJson(BUILDS_PATH, ids.map((id) => ({
+    const [repository, { app }] = await Promise.all([import("./repository"), import("./index")]);
+    await repository.initializePersistence();
+    await truncatePostgresTables();
+
+    const ids = ["saved-build-list-query-a", "saved-build-list-query-b"];
+    for (const id of ids) {
+      await repository.appendSavedBuild({
         id,
         name: id,
         selection,
         createdAt: "2026-09-09T00:00:00.000Z",
         updatedAt: "2026-09-09T00:00:00.000Z"
-      })));
+      });
+    }
 
+    let server: Server | undefined;
+    try {
       server = app.listen(0, "127.0.0.1");
       await new Promise<void>((resolve, reject) => { server?.once("listening", resolve); server?.once("error", reject); });
       const address = server.address();
@@ -50,11 +45,8 @@ describe("saved build list query", () => {
       expect(payload.items?.map((item) => item.id)).toEqual(ids);
     } finally {
       if (server) await closeServer(server);
-      if (previousDataDirectory === undefined) delete process.env.PC_SUPPORTER_DATA_DIR;
-      else process.env.PC_SUPPORTER_DATA_DIR = previousDataDirectory;
-      if (previousDatabaseUrl === undefined) delete process.env.DATABASE_URL;
-      else process.env.DATABASE_URL = previousDatabaseUrl;
-      await rm(directory, { recursive: true, force: true });
+      await repository.closePersistence();
+      vi.resetModules();
     }
   }, 15_000);
 });

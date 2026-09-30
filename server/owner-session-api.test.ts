@@ -3,6 +3,7 @@ import type { Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { truncatePostgresTables } from "./testkit/postgres";
 
 const selection = { memory: [], ssd: [], hdd: [], accessories: [], useIntegratedGraphics: true };
 const grantFailureOverride = { denyWrites: false };
@@ -39,10 +40,11 @@ describe("owner session API integration", () => {
     const directory = await mkdtemp(join(tmpdir(), "pc-supporter-owner-session-api-"));
     temporaryDirectories.push(directory);
     process.env.PC_SUPPORTER_DATA_DIR = directory;
-    process.env.DATABASE_URL = "";
     process.env.ADMIN_PASSWORD = "";
     process.env.PC_SUPPORTER_PROCESS_ROLE = "combined";
-    const [{ app }, { BUILDS_PATH, readJson }] = await Promise.all([import("./index"), import("./storage")]);
+    const [repository, { app }] = await Promise.all([import("./repository"), import("./index")]);
+    await repository.initializePersistence();
+    await truncatePostgresTables();
     const server = app.listen(0, "127.0.0.1");
     servers.push(server);
     await new Promise<void>((resolve, reject) => { server.once("listening", resolve); server.once("error", reject); });
@@ -89,7 +91,7 @@ describe("owner session API integration", () => {
       body: JSON.stringify({ name: "untrusted origin should not save", selection })
     });
     expect(rejectedBeforeWrite.status).toBe(403);
-    expect(await readJson<unknown[]>(BUILDS_PATH, [])).toHaveLength(1);
+    expect(await repository.readSavedBuilds()).toHaveLength(1);
 
     const sessionCreate = await fetch(`${baseUrl}/api/builds`, {
       method: "POST",
@@ -210,7 +212,6 @@ describe("owner session API integration", () => {
     const directory = await mkdtemp(join(tmpdir(), "pc-supporter-owner-session-recovery-failure-"));
     temporaryDirectories.push(directory);
     process.env.PC_SUPPORTER_DATA_DIR = directory;
-    process.env.DATABASE_URL = "";
     process.env.ADMIN_PASSWORD = "";
     process.env.PC_SUPPORTER_PROCESS_ROLE = "combined";
     vi.doMock("./repository", async (importOriginal) => {
@@ -222,7 +223,9 @@ describe("owner session API integration", () => {
           : repository.upsertOwnerShareSessionGrant(...args)
       };
     });
-    const [{ app }] = await Promise.all([import("./index")]);
+    const [repositoryModule, { app }] = await Promise.all([import("./repository"), import("./index")]);
+    await repositoryModule.initializePersistence();
+    await truncatePostgresTables();
     const server = app.listen(0, "127.0.0.1");
     servers.push(server);
     await new Promise<void>((resolve, reject) => { server.once("listening", resolve); server.once("error", reject); });

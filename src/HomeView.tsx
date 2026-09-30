@@ -311,7 +311,7 @@ function MobileHomeView({ build, result, resultIsStale, partMap, accessoryMap, a
     : "용도와 예산을 정한 뒤, 부품을 고르고 호환성을 확인해요.");
   return <section className="mobile-home-view" aria-label="PC Supporter 모바일 홈">
     <div className="mobile-home-heading">
-      <div><span className="mobile-kicker">내 견적</span><h1>내 PC</h1><p>{headingCopy}</p></div>
+      <div><span className="mobile-kicker">내 견적</span><h1>{hasBuild || result ? "내 PC 견적" : "PC 견적 만들기"}</h1><p>{headingCopy}</p></div>
     </div>
     <div className="mobile-primary-actions"><button className="mobile-primary-action" data-testid="mobile-home-primary-action" type="button" onClick={resultReady ? onOpenResult : hasBuild ? onStart : onGuidedStart}><FiSearch /><span>{resultReady ? "최근 견적 결과 보기" : hasBuild ? "견적 이어서 만들기" : "용도와 예산 정하기"}</span><FiArrowRight /></button>{resultReady && <button className="mobile-secondary-action" type="button" onClick={onStart}><FiEdit3 /><span>견적 수정하기</span><FiArrowRight /></button>}</div>
     {!hasBuild && !resultReady
@@ -321,9 +321,10 @@ function MobileHomeView({ build, result, resultIsStale, partMap, accessoryMap, a
           <p>게임·작업 용도와 화면에 맞는 부품을 살펴볼 수 있어요.</p>
           <ol className="mobile-guided-steps" aria-label="견적 진행 순서">
             <li><span>1</span>용도</li>
-            <li><span>2</span>성능</li>
+            <li><span>2</span>화면·성능</li>
             <li><span>3</span>예산</li>
           </ol>
+          <p className="mobile-guided-outcome">선택한 조건에 맞춰 부품을 추천하고, 호환 결과까지 확인해요.</p>
         </section>
       : <section className="mobile-current-build" aria-label="현재 견적">
           <div className="mobile-section-heading"><div><span className="mobile-kicker">부품 구성</span><h2>{hasBuild ? resultReady ? "최근 견적" : "현재 구성" : "새 견적"}</h2></div></div>
