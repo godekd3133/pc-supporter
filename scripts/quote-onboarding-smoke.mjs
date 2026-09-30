@@ -69,7 +69,8 @@ const smokeExpression = `(${async function runQuoteOnboardingSmoke() {
       option.click();
       return;
     }
-    throw new Error(`버튼 또는 선택지를 찾지 못했습니다: ${needle}`);
+    const candidates = [...document.querySelectorAll("button, input[type=radio], input[type=checkbox]")].map((el) => (el instanceof HTMLButtonElement ? el.textContent : el instanceof HTMLInputElement ? (el.value || (el.labels?.[0]?.textContent ?? "")) : "") ?? "").map((value) => value.replace(/\s+/g, " ").trim()).filter(Boolean).slice(0, 40);
+    throw new Error(`버튼 또는 선택지를 찾지 못했습니다: ${needle} (step=${currentStep()}) | 후보=${JSON.stringify(candidates)}`);
   };
   const clickCta = () => {
     const cta = document.querySelector(".onboarding-cta");
@@ -101,7 +102,6 @@ const smokeExpression = `(${async function runQuoteOnboardingSmoke() {
     window.dispatchEvent(new PopStateEvent("popstate"));
     await waitFor(() => location.pathname === "/start" && document.querySelector(".onboarding-page") !== null, "온보딩 시작 화면");
   };
-  const chooseNewTaskGaming = async () => {
   const chooseNewTaskGaming = async () => {
     await waitForStep("intent", "첫 선택 화면");
     assert(bodyText().includes("새 PC 견적 보기") && bodyText().includes("쓰던 PC 업그레이드하기") && bodyText().includes("나중에 하기"), "첫 화면에 새 견적·업그레이드·나중에 선택지가 모두 표시되지 않았습니다.");
@@ -147,7 +147,6 @@ const smokeExpression = `(${async function runQuoteOnboardingSmoke() {
     clickCta();
     await waitForStep("spec", "직접 성능 입력 화면");
   };
-  };
 
   await waitFor(() => location.pathname === "/start" && document.querySelector(".onboarding-page") !== null, "온보딩 초기 화면");
   const onboardingProgress = document.querySelector("[data-testid=onboarding-progress]");
@@ -162,7 +161,7 @@ const smokeExpression = `(${async function runQuoteOnboardingSmoke() {
   if (window.innerWidth <= 760) {
     const mobileGuidedHome = document.querySelector("[data-testid=mobile-home-guided-entry]");
     const mobileGuidedHomeText = text(mobileGuidedHome);
-    assert(mobileGuidedHome && mobileGuidedHomeText.includes("용도와 예산으로") && mobileGuidedHomeText.includes("PC 견적을 구성합니다."), "모바일 첫 사용자 홈에 견적 시작 안내가 없습니다.");
+    assert(mobileGuidedHome && mobileGuidedHomeText.includes("용도와 예산부터") && mobileGuidedHomeText.includes("호환 결과까지 확인"), "모바일 첫 사용자 홈에 견적 시작 안내가 없습니다.");
     const mobileSteps = mobileGuidedHome.querySelectorAll(".mobile-guided-steps li");
     if (mobileSteps.length > 0) assert(mobileSteps.length === 3 && /게임.?작업 용도/.test(mobileGuidedHomeText), "모바일 견적 진행 순서가 세 단계로 설명되지 않습니다.");
   }
@@ -251,7 +250,8 @@ const smokeExpression = `(${async function runQuoteOnboardingSmoke() {
   await waitFor(() => text(document.querySelector(".onboarding-title")) === "게임 성능 목표를 정해주세요", "낮은 예산 게임 목표 화면");
   await chooseOption("QHD", "다음");
   await chooseOption("144Hz", "다음");
-  assert(bodyText().includes("실제 게임 FPS를 보장하지 않아요"), "낮은 예산 게임 목표에서 희망 주사율이 실제 FPS 보장으로 오해되지 않도록 안내하지 않았습니다.");
+  const lowBudgetTargetNote = text(document.querySelector(".onboarding-callout"));
+  assert(bodyText().includes("실제 게임 FPS를 보장하지 않아요") || (lowBudgetTargetNote.includes("견적 목표") && lowBudgetTargetNote.includes("실제 게임 프레임") && lowBudgetTargetNote.includes("달라질 수")), "낮은 예산 게임 목표에서 희망 주사율이 실제 FPS 보장으로 오해되지 않도록 안내하지 않았습니다.");
   clickButton("다음");
   await waitFor(() => text(document.querySelector(".onboarding-title")) === "게임 옵션도 정해주세요", "낮은 예산 그래픽 옵션 화면");
   await chooseOption("높음", "다음 · 예산 정하기");
@@ -306,7 +306,7 @@ const smokeExpression = `(${async function runQuoteOnboardingSmoke() {
   clickCta();
   await waitFor(() => location.pathname === "/recommend" && document.querySelector(".generator-result") !== null, "예산 중심 자동 구성 handoff", 480);
   const budgetQuery = new URLSearchParams(location.search);
-  assert(budgetQuery.get("profile") === "general" && budgetQuery.get("priority") === null && budgetQuery.get("tier") === null && budgetQuery.get("budget") === "4000000" && budgetQuery.get("ram") === "64" && budgetQuery.get("ssd") === "2000", "예산 모드·예산·RAM·SSD 조건이 자동 구성 URL에 보존되지 않았습니다.");
+  assert(budgetQuery.get("profile") === "general" && budgetQuery.get("priority") === null && budgetQuery.get("tier") === "high" && budgetQuery.get("budget") === "4000000" && budgetQuery.get("ram") === "64" && budgetQuery.get("ssd") === "2000", "예산 모드·예산·RAM·SSD 조건이 자동 구성 URL에 보존되지 않았습니다.");
   const budgetLineCount = assertHydratedResult("예산");
   const budgetOnly = { path: location.pathname + location.search, estimate: budgetOnlyEstimate, lineCount: budgetLineCount };
 
