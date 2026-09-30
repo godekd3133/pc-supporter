@@ -23,6 +23,8 @@ export function requestTelemetry(log: HttpRequestLogSink = defaultLogSink): Requ
     const requestId = randomUUID();
     const startedAt = performance.now();
     response.setHeader("X-Request-Id", requestId);
+    // 실패 로그가 http.request 기록과 같은 요청으로 매칭되도록 locals에 남긴다.
+    (response.locals ??= {}).requestId = requestId;
     let recorded = false;
 
     const record = (outcome: HttpRequestLog["outcome"]) => {

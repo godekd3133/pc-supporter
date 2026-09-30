@@ -3,7 +3,7 @@ import { incrementUsageEventInDatabase, readUsageEventDailyCountsFromDatabase } 
 // Phase 0 최소 사용량 카운터: 익명·집계 전용 (개인 식별자/페이로드 없음).
 // PostgreSQL `usage_event_daily_counts` 테이블에 저장한다.
 
-export const USAGE_EVENT_NAMES = ["app_open", "check", "recommend", "save", "share"] as const;
+export const USAGE_EVENT_NAMES = ["app_open", "check", "recommend", "recommend_failed", "save", "share"] as const;
 export type UsageEventName = (typeof USAGE_EVENT_NAMES)[number];
 
 const USAGE_EVENT_RETENTION_DAYS = 90;

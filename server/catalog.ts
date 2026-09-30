@@ -19,6 +19,7 @@ import { applyBenchmarkOverrides, readBenchmarkOverrides } from "./benchmark-ove
 import { applyGpuPhysicalOverrides, readGpuPhysicalOverrides, stripGpuPhysicalOverrides } from "./gpu-physical-overrides";
 import { applyCaseRgbLoadOverrides, readCaseRgbLoadOverrides, stripCaseRgbLoadOverride } from "./case-rgb-load-overrides";
 import { applyCatalogSpecOverrides, readCatalogSpecOverrides, stripCatalogSpecOverride } from "./catalog-spec-overrides";
+import { loadEngineTargetFiltersConfig } from "./engine-target-filters";
 import { classifyDataFreshness, nextDataFreshnessChangeAt } from "../shared/data-freshness";
 import { benchmarkAvailabilityMatchesFilter } from "../shared/benchmark-evidence";
 import { pcieCompatibleSlotInventoryFor, pcieSlotWidthFromUnknown, type PcieSlotWidth } from "../shared/pcie-slot";
@@ -773,7 +774,7 @@ async function buildCatalogMeta(snapshot?: CatalogSnapshot): Promise<CatalogMeta
       unpriced: catalog.filter((part) => !isKnownPrice(part.priceWon)).length
     },
     catalogUpdatedAt,
-    recommendationFloorWon: recommendationFloorWonFor(catalog)
+    recommendationFloorWon: recommendationFloorWonFor(catalog, { targetFilters: loadEngineTargetFiltersConfig() })
   };
   catalogMetaCache = {
     catalog,

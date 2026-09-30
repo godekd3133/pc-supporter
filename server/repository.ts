@@ -757,9 +757,8 @@ export type PostgresTransactionRunner = <T>(
 ) => Promise<T>;
 
 /**
- * Run an internal repository operation in PostgreSQL only. This deliberately
- * throws when file mode is selected and never redirects database failures to
- * JSON storage.
+ * Run an internal repository operation in PostgreSQL only. Database failures
+ * propagate to the caller and never redirect to JSON storage.
  */
 export async function withPostgresTransaction<T>(
   operation: string,

@@ -120,7 +120,7 @@ CSV 적용 후에는 입력 품질 카드에서 유효/전체 행, 기본 센서
 
 결과 화면의 `구매 전 실행 체크리스트`도 JSON으로 저장·가져올 수 있습니다. 가져오기는 현재 체크 상태를 즉시 덮어쓰지 않고 내보낸 시각·파일 항목 수·현재 완료/가져올 완료·새로 체크·해제·유지 항목을 먼저 보여줍니다. 사용자가 `이 상태로 가져오기`를 눌러야 적용되며, 미리보기 중 검사 결과로 체크리스트 항목 구성이 바뀌면 오래된 상태를 적용하지 않고 다시 가져오도록 막습니다. 현재 견적에 없는 체크 항목은 무시 수로 분리하고, 다른 견적·잘못된 버전·잘못된 JSON은 현재 상태를 바꾸지 않습니다.
 
-초기 편집기 로딩을 가볍게 유지하기 위해 관리자 데이터 센터는 `/admin` 진입 시점에 별도 chunk로 로드됩니다. 자동 구성·가격 추적·후보 상세도 화면 진입 시 필요한 모듈만 요청하며, 분리된 화면의 데이터·인증·상태 경계는 기존 API와 동일하게 유지합니다. 결과·이력에서만 사용하는 카탈로그 변경·저장 견적·구매 계산 모듈도 `catalog-change-domain`·`saved-build-domain`·`purchase-domain`으로 분리해 앱 entry의 parse/cache 단위를 줄이며, 이 분리는 판정 순서나 데이터 계약을 변경하지 않습니다. `npm run build` 후 `scripts/verify-client-bundle.mjs`가 entry와 App shell 합계 600,000바이트 예산, first-route JS/CSS/전체 closure 예산, 개별 lazy feature chunk 예산(원격 160,000바이트·local-offline 320,000바이트), 세 도메인 chunk 생성을 검사해 번들 회귀를 차단합니다.
+초기 편집기 로딩을 가볍게 유지하기 위해 관리자 데이터 센터는 `/admin` 진입 시점에 별도 chunk로 로드됩니다. 자동 구성·가격 추적·후보 상세도 화면 진입 시 필요한 모듈만 요청하며, 분리된 화면의 데이터·인증·상태 경계는 기존 API와 동일하게 유지합니다. 결과·이력에서만 사용하는 카탈로그 변경·저장 견적·구매 계산 모듈도 `catalog-change-domain`·`saved-build-domain`·`purchase-domain`으로 분리해 앱 entry의 parse/cache 단위를 줄이며, 이 분리는 판정 순서나 데이터 계약을 변경하지 않습니다. `npm run build` 후 `scripts/verify-client-bundle.mjs`가 entry와 App shell 합계 600,000바이트 예산, first-route JS/CSS/전체 closure 예산, 개별 lazy feature chunk 예산(160,000바이트), 세 도메인 chunk 생성을 검사해 번들 회귀를 차단합니다.
 
 관리자 chunk 안에서도 변경 이력·가격 분석, M.2 슬롯 검수, 벤치마크 검수, 케이스 RGB 부하 검수, 쿨링팬 소비전류 검수 패널을 별도 lazy chunk로 분리해, 데이터 센터 셸과 운영 패널의 로딩·오류 경계를 나눕니다. 패널은 viewport 근처에 도달했을 때만 해제해 초기 관리자 화면에서 아래 운영 도구를 모두 파싱하지 않으며, 늦게 도착해도 각각의 로딩 상태를 표시합니다. 기존 검수 API·원자적 저장 경계·관리자 인증은 그대로 사용합니다.
 
@@ -609,7 +609,7 @@ npm run build
 npm run start
 ```
 
-웹 build는 `dist/`를 사용합니다. 원격 API native `npm run build:mobile`은 `VITE_API_BASE_URL`을 포함해 `dist-mobile/`을 사용하고, 로컬 데이터 native `npm run mobile:offline -- --snapshot-dir ...`은 명시 snapshot을 넣어 `artifacts/pc-supporter-offline/dist-mobile-offline/`을 사용합니다. 두 경로는 웹 preview의 `dist/`를 덮어쓰지 않으며, 오프라인 경로는 API origin을 포함하지 않고 Capacitor assets만 sync합니다. APK/IPA compile·install 및 전체 local-mode 빌드 절차는 [`docs/mobile-build.md`](docs/mobile-build.md)를 참고하세요.
+웹 build는 `dist/`를 사용합니다. 원격 API native `npm run build:mobile`은 `VITE_API_BASE_URL`을 포함해 `dist-mobile/`을 사용합니다. 두 경로는 웹 preview의 `dist/`를 덮어쓰지 않습니다. APK/IPA compile·install 및 전체 native 빌드 절차는 [`docs/mobile-build.md`](docs/mobile-build.md)를 참고하세요.
 
 Docker로 API·정적 프론트·PostgreSQL을 함께 실행할 수도 있습니다. Compose는 외부 가격 갱신을 기본 실행하지 않으며, seed catalog와 PostgreSQL schema를 초기화한 뒤 `http://127.0.0.1:4174`에서 정적 프론트를 제공합니다. 먼저 `.env.example`을 `.env`로 복사해 `POSTGRES_PASSWORD`, `RATE_LIMIT_HMAC_SECRET`, `ADMIN_PASSWORD`, `ADMIN_SESSION_SECRET`에 서로 다른 무작위 값을 지정하세요. PostgreSQL password는 `openssl rand -hex 32`처럼 URL-safe한 32바이트 hex 값으로 만들 수 있습니다. 이미 사용 중인 host 포트와 충돌하면 `APP_HOST_PORT=54174 POSTGRES_HOST_PORT=55432 docker compose up -d`처럼 host 포트만 바꿀 수 있고, PostgreSQL port는 host loopback에만 바인딩됩니다. 런타임 JSON·크롤링 상태는 `pc-supporter-data` named volume에, PostgreSQL 데이터는 `pc-supporter-postgres` named volume에 분리합니다. 저장소의 `api-reader` replica는 CI 전용 `container-smoke` profile에서만 시작합니다.
 
@@ -681,7 +681,7 @@ npm run crawl -- --all --resume --delay 850
 npm run crawl -- --category cpu --pages 1 --limit 1 --no-details --dry-run
 ```
 
-주변 부품은 핵심 카탈로그와 별도의 `data/accessories.json`에 저장합니다. 현재 지원하는 다나와 범주는 저장장치 주변기기, 쿨링팬, 써멀그리스, M.2 SSD 방열판, 그래픽카드 지지대·쿨러, RAM 쿨러, 써멀패드, 팬 허브·컨트롤러, UPS입니다. 수집 결과가 없는 새 환경에서도 `server/seed-accessories.ts`가 각 범주를 한 건 이상 제공해 주변 부품 화면이 빈 목록으로 시작하지 않으며, 이 starter 항목은 seed 품질로 남아 live 데이터와 구분됩니다.
+주변 부품은 핵심 카탈로그와 별도의 PostgreSQL 테이블(`catalog_accessories`)에 저장합니다. 현재 지원하는 다나와 범주는 저장장치 주변기기, 쿨링팬, 써멀그리스, M.2 SSD 방열판, 그래픽카드 지지대·쿨러, RAM 쿨러, 써멀패드, 팬 허브·컨트롤러, UPS입니다. 수집 결과가 없는 새 환경에서도 `server/seed-accessories.ts`가 각 범주를 한 건 이상 제공해 주변 부품 화면이 빈 목록으로 시작하지 않으며, 이 starter 항목은 seed 품질로 남아 live 데이터와 구분됩니다.
 
 주변 부품 샘플 수집:
 
@@ -729,9 +729,9 @@ ADMIN_SESSION_SECRET=
 
 서버는 기본적으로 시작 시 카탈로그 갱신을 한 번 실행하고, 설정된 시간마다 다시 갱신합니다. 비활성화하려면 `DANAWA_CRAWL_ON_START=false`를 사용합니다. 수집기는 요청 타임아웃·재시도·지연을 적용하고 일반 HTTP 요청만 사용하며, 로그인·CAPTCHA·접근 제한 우회 로직은 포함하지 않습니다.
 
-2026-09-29 로컬 snapshot에는 `data/catalog.json` 코어 5,648개와 `data/accessories.json` 주변 부품 3,874개가 있습니다. 적용 중인 로컬 사양 overlay를 반영한 기준 필수 사양 확인은 코어 4,060개입니다. 주변 부품 품질 상태는 `live` 3,587개·미완료 245개·seed 42개이며, 범주별 정규화 사양 프로파일은 완전 2,700개·부분 297개·미평가 877개입니다. 가격 값은 코어 5,629개, 주변 부품 3,866개에서 확인됐습니다. 원천 목록 manifest는 9개 핵심 논리 범주 8,872개 코드를 기록하고, 주변 부품은 예상 3,647개 중 3,463개를 관측해 쿨링팬 184개가 미포착 상태입니다. 이 수치는 수집 snapshot이며 전체 데이터 완전성·최신 가격·구매 적합성을 보증하지 않습니다. 기본 `npm run build`는 원격·파일 모드에서 웹 번들만 생성하며 로컬 카탈로그를 설치물에 넣지 않습니다. 로컬 데이터 패키징은 명시적으로 `npm run build:local-bundle`을 실행해 공개 API projection을 `dist/catalog-data/`에, 런타임 원본과 수집 근거를 비공개 `dist-local/data/` sidecar에 생성합니다. 실제 외부 배포 전에는 다나와 이용 조건·robots 정책·재배포 범위를 확인해야 합니다.
+2026-09-29 로컬 snapshot에는 코어 부품 5,648개와 주변 부품 3,874개가 있습니다. 적용 중인 로컬 사양 overlay를 반영한 기준 필수 사양 확인은 코어 4,060개입니다. 주변 부품 품질 상태는 `live` 3,587개·미완료 245개·seed 42개이며, 범주별 정규화 사양 프로파일은 완전 2,700개·부분 297개·미평가 877개입니다. 가격 값은 코어 5,629개, 주변 부품 3,866개에서 확인됐습니다. 원천 목록 manifest는 9개 핵심 논리 범주 8,872개 코드를 기록하고, 주변 부품은 예상 3,647개 중 3,463개를 관측해 쿨링팬 184개가 미포착 상태입니다. 이 수치는 수집 snapshot이며 전체 데이터 완전성·최신 가격·구매 적합성을 보증하지 않습니다. 기본 `npm run build`는 웹 번들만 생성하며 카탈로그는 항상 서버의 PostgreSQL 저장소에서 제공됩니다. 실제 외부 배포 전에는 다나와 이용 조건·robots 정책·재배포 범위를 확인해야 합니다.
 
-핵심 호환 대상은 `data/catalog.json`에 보관하고, 주변 부품은 `data/accessories.json`으로 분리합니다. 두 파일의 레코드는 서로 다른 역할을 가지며, 주변 부품이 SSD·HDD 같은 핵심 선택 후보로 섞이지 않도록 `/api/parts`와 `/api/accessories` 경계를 유지합니다.
+핵심 호환 대상은 PostgreSQL `catalog_parts`에 보관하고, 주변 부품은 `catalog_accessories`로 분리합니다. 두 테이블의 레코드는 서로 다른 역할을 가지며, 주변 부품이 SSD·HDD 같은 핵심 선택 후보로 섞이지 않도록 `/api/parts`와 `/api/accessories` 경계를 유지합니다.
 
 ## 주요 API
 
@@ -837,8 +837,8 @@ DELETE /api/admin/catalog-spec-overrides/:partId
 ```text
 다나와 목록/상세 페이지
           ↓
-수집기 → 정규화 → 품질 검사 → data/catalog.json
-                                  ↘ data/accessories.json → 주변 부품 카탈로그
+수집기 → 정규화 → 품질 검사 → PostgreSQL catalog_parts
+                                  ↘ catalog_accessories → 주변 부품 카탈로그
                                       ↓
 견적 입력 → 호환성 규칙 엔진 → 설명 가능한 결과·호환 관계 맵
                                       ↓

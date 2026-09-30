@@ -1,4 +1,5 @@
 import { getLocalStorageHealth, safeLocalStorage, safeSessionStorage, subscribeLocalStorageHealth } from "./safe-storage";
+import "./mobile-navigation.css";
 import { Fragment, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ComponentType } from "react";
 import type { IconType } from "react-icons";
 import {
@@ -341,6 +342,10 @@ function recoveryOptionsFromError(error: unknown): BuildGenerationRecoveryOption
       && ["compatible", "incompatible", "needs_review"].includes(String(preview.status))
       && Number.isInteger(preview.blockerCount) && Number.isInteger(preview.warningCount) && Number.isInteger(preview.unknownCount);
   }).slice(0, 6);
+}
+
+function requestIdFromError(error: unknown): string | null {
+  return error instanceof ApiError && error.requestId ? error.requestId : null;
 }
 
 function diagnosticsFromError(error: unknown): BuildGenerationDiagnostic[] {
@@ -834,6 +839,7 @@ function App() {
   const [generatorVariants, setGeneratorVariants] = useState<GeneratorVariantResult[]>([]);
   const [generatorBudgetLadder, setGeneratorBudgetLadder] = useState<GeneratorBudgetResult[]>([]);
   const [generatorError, setGeneratorError] = useState<string | null>(null);
+  const [generatorRequestId, setGeneratorRequestId] = useState<string | null>(null);
   const [generatorDiagnostics, setGeneratorDiagnostics] = useState<BuildGenerationDiagnostic[]>([]);
   const [generatorRecoveryOptions, setGeneratorRecoveryOptions] = useState<BuildGenerationRecoveryOption[]>([]);
   const [budgetLadderShares, setBudgetLadderShares] = useState<BudgetLadderLocalShareEntry[]>(() => budgetLadderLocalSharesFromJson(safeLocalStorage.getItem(BUDGET_LADDER_LOCAL_SHARES_STORAGE_KEY)));
@@ -1731,6 +1737,7 @@ function App() {
     setGeneratorVariants([]);
     setGeneratorBudgetLadder([]);
     setGeneratorError(null);
+    setGeneratorRequestId(null);
     setGeneratorDiagnostics([]);
     setGeneratorRecoveryOptions([]);
     navigate(`/recommend${priority ? `?priority=${encodeURIComponent(priority)}` : ""}`, "generator");
@@ -2301,6 +2308,7 @@ function App() {
     setGeneratorVariants([]);
     setGeneratorBudgetLadder([]);
     setGeneratorError(null);
+    setGeneratorRequestId(null);
     setGeneratorDiagnostics([]);
     setGeneratorRecoveryOptions([]);
     try {
@@ -2317,6 +2325,7 @@ function App() {
       if (!isCurrent()) return;
       const message = error instanceof Error ? error.message : "자동 견적을 생성하지 못했습니다.";
       setGeneratorError(message);
+      setGeneratorRequestId(requestIdFromError(error));
       setGeneratorDiagnostics(diagnosticsFromError(error));
       setGeneratorRecoveryOptions(recoveryOptionsFromError(error));
       setToast(message);
@@ -2333,6 +2342,7 @@ function App() {
     setGeneratorVariants([]);
     setGeneratorBudgetLadder([]);
     setGeneratorError(null);
+    setGeneratorRequestId(null);
     setGeneratorDiagnostics([]);
     setGeneratorRecoveryOptions([]);
     try {
@@ -2358,6 +2368,7 @@ function App() {
       if (!isCurrent()) return;
       const message = error instanceof Error ? error.message : "세 가지 자동 구성 결과를 만들지 못했습니다.";
       setGeneratorError(message);
+      setGeneratorRequestId(requestIdFromError(error));
       setGeneratorDiagnostics(diagnosticsFromError(error));
       setGeneratorRecoveryOptions(recoveryOptionsFromError(error));
       setToast(message);
@@ -2374,6 +2385,7 @@ function App() {
     setGeneratorVariants([]);
     setGeneratorBudgetLadder([]);
     setGeneratorError(null);
+    setGeneratorRequestId(null);
     setGeneratorDiagnostics([]);
     setGeneratorRecoveryOptions([]);
     try {
@@ -2394,6 +2406,7 @@ function App() {
       if (!isCurrent()) return;
       const message = error instanceof Error ? error.message : "예산 구간별 자동 구성을 만들지 못했습니다.";
       setGeneratorError(message);
+      setGeneratorRequestId(requestIdFromError(error));
       setGeneratorDiagnostics(diagnosticsFromError(error));
       setGeneratorRecoveryOptions(recoveryOptionsFromError(error));
     } finally {
@@ -2409,6 +2422,7 @@ function App() {
     const routeRequestSequence = routeRequestSequenceRef.current;
     const isCurrent = () => generatorRequestRef.current === requestVersion && routeRequestSequenceRef.current === routeRequestSequence && !hydrationController.signal.aborted;
     setGeneratorError(null);
+    setGeneratorRequestId(null);
     setGeneratorDiagnostics([]);
     setGeneratorRecoveryOptions([]);
     await rememberBuildSelection(draft.selection, hydrationController.signal);
@@ -3450,6 +3464,7 @@ function App() {
         variants={generatorVariants}
         budgetLadder={generatorBudgetLadder}
         requestError={generatorError}
+        requestErrorId={generatorRequestId}
         diagnostics={generatorDiagnostics}
         recoveryOptions={generatorRecoveryOptions}
         loading={generating}

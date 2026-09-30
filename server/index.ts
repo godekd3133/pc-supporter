@@ -22,6 +22,7 @@ import { recordUsageEvent, trackUsageEvent, usageEventSummaryFor } from "./usage
 import { classifyDataFreshness } from "./data-health";
 import { isAccessoryCrawlRunning, readAccessoryCrawlManifest, readAccessoryCrawlStatus, runAccessoryCrawlJob } from "./accessory-crawler";
 import { BuildGenerationError, ENGINE_VERSION, assessAlternativePart, buildGenerationRecoveryOptionsFor, candidateSimilarityForBuild, compareCandidateSimilarity, compareCandidateValue, evaluateBuild, generateBuildDraft, minimumFeasibleBuildPriceFor } from "./engine";
+import { recordGenerationFailure, recentGenerationFailures } from "./generation-failure-log";
 import { cancelCrawlPageRetryBatch, crawlPageRetryBatchPlanFor, crawlPageRetryPlanFor, crawlResumePlanFor, isCrawlPageRetryBatchRunning, isCrawlRunning, readCrawlStatus, runCrawlJob, runCrawlPageRetryBatchJob, runCrawlPageRetryJob } from "./crawler";
 import { CRAWL_MANIFEST_PATH, ensureDataDirectory, fileUpdatedAt, readJson } from "./storage";
 import type { CrawlManifest } from "../shared/types";
@@ -91,6 +92,7 @@ import { savedBuildCheckPreviewCache, savedBuildCheckPreviewCacheKey } from "./s
 import { parseCatalogBatchIds, parseCatalogBatchQuery } from "./catalog-batch";
 import { entityTagFor, ifNoneMatchMatches } from "./http-cache";
 import { gamingPerformanceEvidencePath, loadGamingPerformanceEvidence, saveGamingPerformanceEvidence } from "./gaming-performance-evidence";
+import { engineTargetFilterFacetOptionsFor, engineTargetFilterSummaryFor, engineTargetFiltersPath, loadEngineTargetFiltersConfig, normalizeEngineTargetFiltersInput, saveEngineTargetFiltersConfig } from "./engine-target-filters";
 import { gamingPerformanceEvidenceBatchValidationFor } from "../shared/gaming-performance-evidence";
 import { candidateDecisionSummaryFor } from "../shared/candidate-decision";
 import { assemblyVerificationSavedHistoryFor, parseAssemblyVerificationHistoryJson } from "../shared/assembly-verification";
@@ -388,7 +390,10 @@ const partRefreshJobs = new Map<string, Promise<PartRefreshResponse>>();
 const partRefreshLastRunAt = new Map<string, number>();
 const accessoryRefreshJobs = new Map<string, Promise<AccessoryRefreshResponse>>();
 const accessoryRefreshLastRunAt = new Map<string, number>();
-const createRateLimitMiddleware = (name: string, policy: RateLimitPolicy) => createBaseRateLimitMiddleware(name, policy, { consume: consumeRateLimitWindow });
+const configuredRateLimitScale = Number(process.env.PC_SUPPORTER_RATE_LIMIT_SCALE ?? "1");
+const rateLimitScale = Number.isFinite(configuredRateLimitScale) && configuredRateLimitScale > 0 ? configuredRateLimitScale : 1;
+const scaledRateLimitPolicy = (policy: RateLimitPolicy): RateLimitPolicy => rateLimitScale === 1 ? policy : { limit: Math.max(1, Math.ceil(policy.limit * rateLimitScale)), windowMs: policy.windowMs };
+const createRateLimitMiddleware = (name: string, policy: RateLimitPolicy) => createBaseRateLimitMiddleware(name, scaledRateLimitPolicy(policy), { consume: consumeRateLimitWindow });
 const privateNoStore: RequestHandler = (_request, response, next) => {
   response.setHeader("Cache-Control", "private, no-store");
   next();
@@ -426,6 +431,7 @@ const catalogSpecSourceCheckRateLimit = createRateLimitMiddleware("catalog-spec-
 const gpuPhysicalSourceCheckRateLimit = createRateLimitMiddleware("gpu-physical-source-check", { limit: 30, windowMs: 60_000 });
 const benchmarkSourceCheckRateLimit = createRateLimitMiddleware("benchmark-source-check", { limit: 30, windowMs: 60_000 });
 const adminGamingPerformanceEvidenceRateLimit = createRateLimitMiddleware("admin-gaming-performance-evidence", { limit: 20, windowMs: 60_000 });
+const adminEngineFiltersRateLimit = createRateLimitMiddleware("admin-engine-filters", { limit: 20, windowMs: 60_000 });
 const catalogSpecSourceCheckJobs = new Map<string, Promise<import("../shared/types").PhysicalSourceCheck>>();
 const catalogSpecSourceCheckLastRunAt = new Map<string, number>();
 const gpuPhysicalSourceCheckJobs = new Map<string, Promise<import("../shared/types").PhysicalSourceCheck>>();
@@ -940,6 +946,14 @@ app.post("/api/events", usageEventRateLimit, async (request, response) => {
 
 app.get("/api/admin/usage-events", requireAdmin, async (_request, response) => {
   response.json(await usageEventSummaryFor());
+});
+
+// 자동 구성 실패는 422 응답만으로는 원인을 알기 어렵다 — 최근 실패를 요청
+// 조건·진단과 함께 관리자가 바로 조회할 수 있게 한다.
+app.get("/api/admin/generation-failures", requireAdmin, (request, response) => {
+  const rawLimit = Number(request.query.limit);
+  const limit = Number.isInteger(rawLimit) && rawLimit > 0 ? rawLimit : 50;
+  response.json({ failures: recentGenerationFailures(limit) });
 });
 
 app.get("/api/admin/monitor/status", requireAdmin, (_request, response) => {
@@ -1851,23 +1865,44 @@ app.post("/api/builds/recommend", publicRecommendationRateLimit, async (request,
   try {
     catalog = await loadCatalog();
     trackUsageEvent("recommend");
-    response.json(generateBuildDraft(catalog, parsed.request, loadGamingPerformanceEvidence()));
+    response.json(generateBuildDraft(catalog, parsed.request, loadGamingPerformanceEvidence(), { targetFilters: loadEngineTargetFiltersConfig() }));
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "현재 데이터로 자동 견적을 생성하지 못했습니다.";
     const recoveryOptions = catalog ? buildGenerationRecoveryOptionsFor(catalog, parsed.request) : [];
     const diagnostics = error instanceof BuildGenerationError ? error.diagnostics : [];
+    trackUsageEvent("recommend_failed");
+    recordGenerationFailure({
+      route: "/api/builds/recommend",
+      statusCode: 422,
+      error,
+      request: parsed.request,
+      diagnostics,
+      recoveryOptionIds: recoveryOptions.map((option) => option.id),
+      requestId: response.locals.requestId as string | undefined
+    });
     response.status(422).json({ error: message, ...(diagnostics.length > 0 ? { diagnostics } : {}), ...(recoveryOptions.length > 0 ? { recoveryOptions } : {}) });
   }
 });
 
-function buildGenerationVariantResultsFor(catalog: Part[], request: BuildGenerationRequest): BuildGenerationVariantResult[] {
+function buildGenerationVariantResultsFor(catalog: Part[], request: BuildGenerationRequest, requestId?: string): BuildGenerationVariantResult[] {
   const gamingPerformanceEvidence = loadGamingPerformanceEvidence();
+  const targetFilters = loadEngineTargetFiltersConfig();
   return RECOMMENDATION_VARIANT_PRIORITIES.map((priority) => {
     try {
-      return { priority, draft: generateBuildDraft(catalog, { ...request, priority }, gamingPerformanceEvidence) };
+      return { priority, draft: generateBuildDraft(catalog, { ...request, priority }, gamingPerformanceEvidence, { targetFilters }) };
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "이 기준의 자동 구성을 만들지 못했습니다.";
       const diagnostics = error instanceof BuildGenerationError ? error.diagnostics : [];
+      trackUsageEvent("recommend_failed");
+      recordGenerationFailure({
+        route: "/api/builds/recommend/variants",
+        statusCode: 200,
+        error,
+        request: { ...request, priority },
+        diagnostics,
+        requestId,
+        context: `variant:${priority}`
+      });
       return { priority, error: message, ...(diagnostics.length > 0 ? { diagnostics } : {}) };
     }
   });
@@ -1884,8 +1919,15 @@ app.post("/api/builds/recommend/floor", publicRecommendationRateLimit, async (re
   }
   try {
     const catalog = await loadCatalog();
-    response.json({ floorWon: minimumFeasibleBuildPriceFor(catalog, parsed.request) ?? null });
+    response.json({ floorWon: minimumFeasibleBuildPriceFor(catalog, parsed.request, { targetFilters: loadEngineTargetFiltersConfig() }) ?? null });
   } catch (error: unknown) {
+    recordGenerationFailure({
+      route: "/api/builds/recommend/floor",
+      statusCode: 500,
+      error,
+      request: parsed.request,
+      requestId: response.locals.requestId as string | undefined
+    });
     const message = error instanceof Error ? error.message : "자동 견적 최저가를 계산하지 못했습니다.";
     response.status(500).json({ error: message });
   }
@@ -1900,13 +1942,23 @@ app.post("/api/builds/recommend/variants", publicRecommendationRateLimit, async 
   let catalog: Part[] | undefined;
   try {
     catalog = await loadCatalog();
-    const variants = buildGenerationVariantResultsFor(catalog, parsed.request);
+    const variants = buildGenerationVariantResultsFor(catalog, parsed.request, response.locals.requestId as string | undefined);
     trackUsageEvent("recommend");
     response.json({ variants });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "세 가지 자동 구성 결과를 만들지 못했습니다.";
     const recoveryOptions = catalog ? buildGenerationRecoveryOptionsFor(catalog, parsed.request) : [];
     const diagnostics = error instanceof BuildGenerationError ? error.diagnostics : [];
+    trackUsageEvent("recommend_failed");
+    recordGenerationFailure({
+      route: "/api/builds/recommend/variants",
+      statusCode: 422,
+      error,
+      request: parsed.request,
+      diagnostics,
+      recoveryOptionIds: recoveryOptions.map((option) => option.id),
+      requestId: response.locals.requestId as string | undefined
+    });
     response.status(422).json({ error: message, ...(diagnostics.length > 0 ? { diagnostics } : {}), ...(recoveryOptions.length > 0 ? { recoveryOptions } : {}) });
   }
 });
@@ -1921,12 +1973,22 @@ app.post("/api/builds/recommend/budget-ladder", publicRecommendationRateLimit, a
   try {
     catalog = await loadCatalog();
     const scenarios = budgetLadderScenariosFor(parsed.request);
+    const targetFilters = loadEngineTargetFiltersConfig();
     const outcomes = scenarios.map((scenario) => {
       try {
-        return { ...scenario, draft: generateBuildDraft(catalog!, scenario.request, loadGamingPerformanceEvidence()) };
+        return { ...scenario, draft: generateBuildDraft(catalog!, scenario.request, loadGamingPerformanceEvidence(), { targetFilters }) };
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "이 예산 구간의 자동 구성을 만들지 못했습니다.";
         const diagnostics = error instanceof BuildGenerationError ? error.diagnostics : [];
+        recordGenerationFailure({
+          route: "/api/builds/recommend/budget-ladder",
+          statusCode: 200,
+          error,
+          request: scenario.request,
+          diagnostics,
+          requestId: response.locals.requestId as string | undefined,
+          context: `scenario:${scenario.id}`
+        });
         return { ...scenario, error: message, ...(diagnostics.length > 0 ? { diagnostics } : {}) };
       }
     });
@@ -1936,6 +1998,16 @@ app.post("/api/builds/recommend/budget-ladder", publicRecommendationRateLimit, a
     const message = error instanceof Error ? error.message : "예산 구간 자동 견적을 생성하지 못했습니다.";
     const recoveryOptions = catalog ? buildGenerationRecoveryOptionsFor(catalog, parsed.request) : [];
     const diagnostics = error instanceof BuildGenerationError ? error.diagnostics : [];
+    trackUsageEvent("recommend_failed");
+    recordGenerationFailure({
+      route: "/api/builds/recommend/budget-ladder",
+      statusCode: 422,
+      error,
+      request: parsed.request,
+      diagnostics,
+      recoveryOptionIds: recoveryOptions.map((option) => option.id),
+      requestId: response.locals.requestId as string | undefined
+    });
     response.status(422).json({ error: message, ...(diagnostics.length > 0 ? { diagnostics } : {}), ...(recoveryOptions.length > 0 ? { recoveryOptions } : {}) });
   }
 });
@@ -4223,6 +4295,44 @@ app.put("/api/admin/gaming-performance-evidence", adminGamingPerformanceEvidence
   response.json({ saved: true, count: items.length, items, updatedAt: await fileUpdatedAt(gamingPerformanceEvidencePath()) });
 });
 
+// 자동 견적 생성기의 카탈로그 타겟 필터 — 범주별로 허용 브랜드·스펙 값·수치
+// 범위·가격대를 관리자가 지정하면 추천 후보 풀에 들어가기 전에 부품을 걸러낸다.
+// 설정 파일을 저장하면 다음 추천 요청부터 같은 기준이 적용된다.
+app.get("/api/admin/engine-filters", requireAdmin, async (_request, response) => {
+  const config = loadEngineTargetFiltersConfig();
+  const catalog = await loadCatalog();
+  const path = engineTargetFiltersPath();
+  response.json({
+    config,
+    summary: engineTargetFilterSummaryFor(catalog, config),
+    pathConfigured: Boolean(process.env.ENGINE_TARGET_FILTERS_PATH?.trim()),
+    ...(existsSync(path) ? { updatedAt: await fileUpdatedAt(path) } : {})
+  });
+});
+
+app.get("/api/admin/engine-filters/facets", requireAdmin, async (_request, response) => {
+  response.json({ generatedAt: new Date().toISOString(), categories: engineTargetFilterFacetOptionsFor(await loadCatalog()) });
+});
+
+app.post("/api/admin/engine-filters/preview", adminEngineFiltersRateLimit, requireAdmin, async (request, response) => {
+  const parsed = normalizeEngineTargetFiltersInput(request.body);
+  if (!parsed.valid) {
+    response.status(400).json({ error: "견적 필터 형식이 올바르지 않습니다.", details: parsed.errors });
+    return;
+  }
+  response.json({ config: parsed.config, summary: engineTargetFilterSummaryFor(await loadCatalog(), parsed.config) });
+});
+
+app.put("/api/admin/engine-filters", adminEngineFiltersRateLimit, requireAdmin, async (request, response) => {
+  const parsed = normalizeEngineTargetFiltersInput(request.body);
+  if (!parsed.valid) {
+    response.status(400).json({ saved: false, error: "견적 필터 저장을 중단했습니다. 오류가 있는 조건은 하나라도 반영하지 않습니다.", details: parsed.errors });
+    return;
+  }
+  const saved = await saveEngineTargetFiltersConfig(parsed.config);
+  response.json({ saved: true, config: saved.config, updatedAt: saved.updatedAt, summary: engineTargetFilterSummaryFor(await loadCatalog(), saved.config) });
+});
+
 app.get("/api/admin/benchmark-overrides", requireAdmin, async (_request, response) => {
   const catalog = await loadCatalog();
   response.json({ items: benchmarkOverrideListItems(catalog, sortedBenchmarkOverrides(await readBenchmarkOverrides())) });
@@ -4749,6 +4859,20 @@ async function apiErrorHandler(error: unknown, request: Request, response: Respo
     return;
   }
   const persistence = await persistenceDiagnostics();
+  const statusCode = persistence.ready ? 500 : 503;
+  // 500/503은 클라이언트에만 코드를 남기면 원인을 추적할 수 없다 — 요청 ID와 함께
+  // 서버 로그에 남겨 "견적 실패" 보고를 특정 요청으로 되돌릴 수 있게 한다.
+  console.error(JSON.stringify({
+    event: "api.error",
+    at: new Date().toISOString(),
+    requestId: response.locals.requestId,
+    method: request.method,
+    path: request.path,
+    statusCode,
+    persistenceReady: persistence.ready,
+    error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+    stack: error instanceof Error && error.stack ? error.stack.split("\n").slice(0, 8).join("\n") : undefined
+  }));
   if (!persistence.ready) {
     response.setHeader("Retry-After", "1");
     response.status(503).json({ error: "저장소에 연결할 수 없어 요청을 처리하지 못했습니다.", code: "PERSISTENCE_UNAVAILABLE" });

@@ -1,5 +1,5 @@
 import { GAMING_GRAPHICS_PRESET_LABELS, GAMING_UPSCALING_LABELS, RECOMMENDATION_PERFORMANCE_TIER_LABELS } from "../shared/types";
-import type { GamingGraphicsPreset, GamingRefreshRate, GamingResolution, GamingUpscaling, RecommendationFloorWon, RecommendationPerformanceTier, RecommendationPriority, RecommendationProfile } from "../shared/types";
+import type { BuildGenerationRequest, GamingGraphicsPreset, GamingRefreshRate, GamingResolution, GamingUpscaling, RecommendationFloorWon, RecommendationPerformanceTier, RecommendationPriority, RecommendationProfile } from "../shared/types";
 import { GAMING_GAME_CATEGORY_LABELS, GAMING_GAMES, gamingAdvisoryTuningFor } from "../shared/gaming-catalog";
 import type { GamingGameCategory, GamingGameId, GamingGameOption } from "../shared/gaming-catalog";
 
@@ -487,13 +487,13 @@ export function requiredGamingBudgetFor(resolution: GamingResolution, refreshRat
   return floorBoundedBudgetRange({ minWon: roundTo100k(required * 0.92), maxWon: roundTo100k(required * 1.08) }, floorWon);
 }
 
-export function gamingTargetShortfall(state: OnboardingState, floors?: RecommendationFloorWon): RequiredBudgetRange | null {
+export function gamingTargetShortfall(state: OnboardingState, floors?: RecommendationFloorWon, requestFloorWon?: number): RequiredBudgetRange | null {
   if (state.usecase !== "gaming") return null;
   const required = requiredGamingBudgetFor(state.resolution, state.refreshRate, state.games, {
     graphicsPreset: state.graphicsPreset,
     rayTracing: state.rayTracing,
     upscaling: state.upscaling
-  }, floors?.gaming?.[state.resolution] ?? floors?.discreteGpu);
+  }, requestFloorWon ?? floors?.gaming?.[state.resolution] ?? floors?.discreteGpu);
   return state.budgetWon < required.minWon ? required : null;
 }
 
@@ -522,19 +522,19 @@ export function requiredWorkBudgetFor(works: readonly OnboardingWork[], intensit
   return floorBoundedBudgetRange({ minWon: roundTo100k(base * 0.9), maxWon: roundTo100k(base * 1.15) }, floorWon);
 }
 
-export function targetBudgetRangeFor(state: OnboardingState, floors?: RecommendationFloorWon): RequiredBudgetRange | null {
+export function targetBudgetRangeFor(state: OnboardingState, floors?: RecommendationFloorWon, requestFloorWon?: number): RequiredBudgetRange | null {
   if (state.usecase === "gaming") {
     return requiredGamingBudgetFor(state.resolution, state.refreshRate, state.games, {
       graphicsPreset: state.graphicsPreset,
       rayTracing: state.rayTracing,
       upscaling: state.upscaling
-    }, floors?.gaming?.[state.resolution] ?? floors?.discreteGpu);
+    }, requestFloorWon ?? floors?.gaming?.[state.resolution] ?? floors?.discreteGpu);
   }
   if (state.usecase === "work") {
-    const floorWon = workEstimateFor(state.works, state.intensity).gpu === "내장 그래픽" ? floors?.integrated : floors?.discreteGpu;
+    const floorWon = requestFloorWon ?? (workEstimateFor(state.works, state.intensity).gpu === "내장 그래픽" ? floors?.integrated : floors?.discreteGpu);
     return requiredWorkBudgetFor(state.works, state.intensity, floorWon);
   }
-  if (state.mode === "spec") return requiredSpecBudgetFor(state.specTier, state.specIncludeGpu, state.memoryGb, state.storageGb, state.specIncludeGpu ? floors?.discreteGpu : floors?.integrated);
+  if (state.mode === "spec") return requiredSpecBudgetFor(state.specTier, state.specIncludeGpu, state.memoryGb, state.storageGb, requestFloorWon ?? (state.specIncludeGpu ? floors?.discreteGpu : floors?.integrated));
   return null;
 }
 
@@ -622,6 +622,27 @@ export function recommendParamsFor(state: OnboardingState): RecommendParams {
     includeGpu: budgetEstimate.gpu.includes("GPU"),
     memoryCapacityGb: capacityGbFromEstimateLabel(budgetEstimate.memory),
     storageCapacityGb: capacityGbFromEstimateLabel(budgetEstimate.storage)
+  };
+}
+
+// 온보딩이 실제로 보낼 자동 구성 요청 — 최저 구성가 조회가 안내 수치가 아니라
+// 이 요청의 풀·게이트 그대로를 기준으로 해야 한다.
+export function recommendGenerationRequestFor(state: OnboardingState): BuildGenerationRequest {
+  const params = recommendParamsFor(state);
+  return {
+    profile: params.profile,
+    priority: params.priority,
+    performanceTier: params.performanceTier,
+    budgetWon: params.budgetWon,
+    includeGpu: params.includeGpu,
+    gamingResolution: params.gamingResolution,
+    gamingRefreshRate: params.gamingRefreshRate,
+    gamingGameIds: params.gamingGameIds,
+    gamingGraphicsPreset: params.gamingGraphicsPreset,
+    gamingRayTracing: params.gamingRayTracing,
+    gamingUpscaling: params.gamingUpscaling,
+    memoryCapacityGb: params.memoryCapacityGb,
+    storageCapacityGb: params.storageCapacityGb
   };
 }
 

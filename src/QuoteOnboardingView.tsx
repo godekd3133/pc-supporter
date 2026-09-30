@@ -4,9 +4,11 @@ import type { ReactNode } from "react";
 import type { IconType } from "react-icons";
 import { FiActivity, FiAlertTriangle, FiArrowLeft, FiArrowRight, FiBox, FiBriefcase, FiCheck, FiClock, FiCode, FiDatabase, FiFileText, FiFilm, FiInfo, FiMinus, FiMonitor, FiMusic, FiPlay, FiPlus, FiRadio, FiSearch, FiSliders, FiTarget, FiZap } from "react-icons/fi";
 import "./quote-onboarding.css";
+import { api } from "./api";
 import { GAMING_GRAPHICS_PRESET_LABELS, GAMING_UPSCALING_LABELS } from "../shared/types";
 import type { GamingGraphicsPreset, GamingRefreshRate, GamingResolution, GamingUpscaling, RecommendationFloorWon } from "../shared/types";
 import {
+  BUDGET_MAX_WON,
   BUDGET_STEP_WON,
   BUDGET_STOPS_WON,
   MAX_ONBOARDING_GAMES,
@@ -29,6 +31,7 @@ import {
   onboardingStateFromJson,
   onboardingStateToJson,
   primaryWorkFor,
+  recommendGenerationRequestFor,
   recommendQueryFor,
   resolutionLabelFor,
   SPEC_TIER_LABELS,
@@ -123,10 +126,17 @@ function budgetRangeStatusLabel(status: "below" | "within" | "above") {
   return status === "below" ? "예산이 부족해요" : status === "above" ? "예산에 여유가 있어요" : "가격대에 들어요";
 }
 
-function BudgetRangeCard({ range, budgetWon, compact = false, gaming = false, onAdjust, onEditTarget }: { range: RequiredBudgetRange; budgetWon: number; compact?: boolean; gaming?: boolean; onAdjust?: (budgetWon: number) => void; onEditTarget?: () => void }) {
+function BudgetRangeCard({ range, budgetWon, compact = false, gaming = false, floorWon, suggestedBudgetWon, onAdjust, onEditTarget }: { range: RequiredBudgetRange; budgetWon: number; compact?: boolean; gaming?: boolean; floorWon?: number; suggestedBudgetWon?: number; onAdjust?: (budgetWon: number) => void; onEditTarget?: () => void }) {
   const status = budgetRangeStatusFor(range, budgetWon);
-  const adjustment = status === "below"
-    ? { label: `최저 권장 금액 ${formatManWon(range.minWon)}으로 변경`, budgetWon: range.minWon }
+  // 카탈로그 실측 최저가가 잡힌 경우 그 요청과 같은 부품 기준을 표시한다 —
+  // 추천 예산이 다시 실패로 돌아가는 루프를 막으려면 제안값도 같은 실측 기준이어야 한다.
+  const floorBelowBudget = floorWon !== undefined && floorWon > budgetWon;
+  const adjustment = status === "below" || floorBelowBudget
+    ? (suggestedBudgetWon !== undefined && suggestedBudgetWon <= BUDGET_MAX_WON
+        ? { label: `구성 가능 예산 ${formatManWon(suggestedBudgetWon)}으로 변경`, budgetWon: suggestedBudgetWon }
+        : floorBelowBudget
+          ? null
+          : { label: `최저 권장 금액 ${formatManWon(range.minWon)}으로 변경`, budgetWon: range.minWon })
     : status === "above"
       ? { label: `권장 상한 ${formatManWon(range.maxWon)}으로 변경`, budgetWon: range.maxWon }
       : null;
@@ -140,6 +150,7 @@ function BudgetRangeCard({ range, budgetWon, compact = false, gaming = false, on
         <em>{budgetRangeStatusLabel(status)}</em>
       </div>
       <p>{status === "below" ? "지금 예산으로는 선택한 성능이 어려울 수 있어요. 예산을 올리거나 성능을 낮춰보세요." : status === "above" ? "선택한 성능에 비해 예산이 넉넉해요." : "설정한 예산이 가격대에 들어요."}</p>
+      {floorWon !== undefined && <p className="onboarding-note">현재 부품 기준 최저 구성가는 약 {formatManWon(floorWon)}입니다.{floorBelowBudget && suggestedBudgetWon === undefined ? " 이 조건은 예산 상한을 넘어요. 목표를 낮춰야 합니다." : ""}</p>}
       <p className="onboarding-note">목표 성능 기준 참고 금액입니다. 실시간 가격·재고는 반영되지 않아요.</p>
       {(onAdjust && adjustment || onEditTarget && status === "below") && <div className="onboarding-budget-range-actions">
         {onAdjust && adjustment && <button type="button" className="onboarding-budget-range-action" data-testid="onboarding-budget-range-adjust" onClick={() => onAdjust(clampBudget(adjustment.budgetWon))}>{adjustment.label}</button>}
@@ -149,8 +160,8 @@ function BudgetRangeCard({ range, budgetWon, compact = false, gaming = false, on
   );
 }
 
-function GamingTargetContract({ state, showBudgetHint = false, floors }: { state: OnboardingState; showBudgetHint?: boolean; floors?: RecommendationFloorWon }) {
-  const range = showBudgetHint ? targetBudgetRangeFor(state, floors) : null;
+function GamingTargetContract({ state, showBudgetHint = false, floors, requestFloorWon }: { state: OnboardingState; showBudgetHint?: boolean; floors?: RecommendationFloorWon; requestFloorWon?: number }) {
+  const range = showBudgetHint ? targetBudgetRangeFor(state, floors, requestFloorWon) : null;
   return (
     <section className="onboarding-target-contract" aria-label="게이밍 성능 목표 기준">
       <div className="onboarding-target-contract-heading"><div><span>희망 주사율</span><strong>{state.refreshRate}Hz</strong></div><FiTarget aria-hidden="true" /></div>
@@ -229,6 +240,9 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome, floor
   const [gameQuery, setGameQuery] = useState("");
   const [gameCategory, setGameCategory] = useState<OnboardingGameCategory | "all">("all");
   const [gameLimitReached, setGameLimitReached] = useState(false);
+  // 카탈로그 실측 최저가 — 안내 범위가 실제로 만들 수 없는 예산을 약속하지 않도록
+  // 지금 선택 조건의 요청 그대로 서버에 묻는다.
+  const [requestFloor, setRequestFloor] = useState<{ floorWon?: number; suggestedBudgetWon?: number }>({});
 
   useEffect(() => {
     try {
@@ -237,6 +251,43 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome, floor
       // A full session bucket must not break the wizard.
     }
   }, [state]);
+
+  const floorProbeRelevant = state.usecase === "gaming" || state.usecase === "work" || state.mode === "spec";
+  const requestFloorApplies = floorProbeRelevant && (state.step === "budget" || state.step === "summary" || (state.usecase === "gaming" && state.step === "graphics"));
+  useEffect(() => {
+    if (!requestFloorApplies) { setRequestFloor({}); return; }
+    let cancelled = false;
+    setRequestFloor({});
+    const floorForBudget = async (budgetWon: number) => {
+      const response = await api<{ floorWon: number | null }>("/api/builds/recommend/floor", {
+        method: "POST",
+        body: JSON.stringify(recommendGenerationRequestFor({ ...state, budgetWon }))
+      });
+      return response.floorWon ?? undefined;
+    };
+    void (async () => {
+      try {
+        const floorWon = await floorForBudget(state.budgetWon);
+        let suggestedBudgetWon: number | undefined;
+        if (floorWon !== undefined && floorWon > state.budgetWon) {
+          // 제안 예산에서는 요청 스펙이 달라질 수 있다(예: RAM 16GB → 32GB 티어 경계).
+          // 제안값이 그대로 만든 요청의 최저가를 넘는지 다시 확인해야 루프가 끊긴다.
+          let candidate = Math.ceil(floorWon / BUDGET_STEP_WON) * BUDGET_STEP_WON;
+          for (let attempt = 0; attempt < 3 && candidate <= BUDGET_MAX_WON; attempt += 1) {
+            const probe = await floorForBudget(candidate);
+            if (probe === undefined) break;
+            if (probe <= candidate) { suggestedBudgetWon = candidate; break; }
+            candidate = Math.ceil(probe / BUDGET_STEP_WON) * BUDGET_STEP_WON;
+          }
+        }
+        if (!cancelled) setRequestFloor({ floorWon, suggestedBudgetWon });
+      } catch {
+        if (!cancelled) setRequestFloor({});
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestFloorApplies, state.budgetWon, state.usecase, state.mode, JSON.stringify(state.games), state.resolution, state.refreshRate, state.graphicsPreset, state.rayTracing, state.upscaling, JSON.stringify(state.works), state.intensity, state.specTier, state.specIncludeGpu, state.memoryGb, state.storageGb]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "auto" });
@@ -300,7 +351,7 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome, floor
     : state.usecase === "work"
       ? workEstimateFor(state.works, state.intensity)
     : budgetEstimateForSelectedTarget(state);
-  const targetBudgetRange = targetBudgetRangeFor(state, floors);
+  const targetBudgetRange = targetBudgetRangeFor(state, floors, requestFloor.floorWon);
   const primaryWork = primaryWorkFor(state.works);
   const estimateRows: [IconType, string, string][] = [
     [FiActivity, "목표 성능", estimate.performance],
@@ -443,7 +494,7 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome, floor
           onClick={() => update({ rayTracing: !state.rayTracing })}
         />
         {state.rayTracing && <p className="onboarding-warning"><FiAlertTriangle /> 레이 트레이싱은 같은 주사율 목표에서도 더 높은 GPU 등급이 필요할 수 있어요.</p>}
-        <GamingTargetContract state={state} showBudgetHint floors={floors} />
+        <GamingTargetContract state={state} showBudgetHint floors={floors} requestFloorWon={requestFloor.floorWon} />
 
       </>
     );
@@ -523,6 +574,8 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome, floor
           range={targetBudgetRange}
           budgetWon={state.budgetWon}
           gaming={state.usecase === "gaming"}
+          floorWon={requestFloor.floorWon}
+          suggestedBudgetWon={requestFloor.suggestedBudgetWon}
           onAdjust={(budgetWon) => update({ budgetWon })}
           onEditTarget={() => editSummaryStep(state.usecase === "gaming" ? "performance" : state.usecase === "work" ? "intensity" : state.mode === "spec" ? "spec" : "mode")}
         />}
@@ -579,7 +632,7 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome, floor
           ))}
         </div>
         {state.usecase === "gaming" && <p className="onboarding-note">희망 주사율은 조립 요청 조건이며, 실제 게임 FPS는 부품과 설정에 따라 달라요.</p>}
-        {targetBudgetRange && <BudgetRangeCard range={targetBudgetRange} budgetWon={state.budgetWon} gaming={state.usecase === "gaming"} compact />}
+        {targetBudgetRange && <BudgetRangeCard range={targetBudgetRange} budgetWon={state.budgetWon} gaming={state.usecase === "gaming"} floorWon={requestFloor.floorWon} suggestedBudgetWon={requestFloor.suggestedBudgetWon} onAdjust={(budgetWon) => update({ budgetWon })} compact />}
       </div>
     );
   }

@@ -92,13 +92,16 @@ export class ApiError extends Error {
   readonly status: number;
   readonly details: unknown;
   readonly retryAfterSeconds?: number;
+  /** 서버 액세스 로그/실패 기록과 매칭되는 X-Request-Id — 오류 보고 시 그대로 넘겨 추적한다. */
+  readonly requestId?: string;
 
-  constructor(message: string, status: number, details?: unknown, retryAfterSeconds?: number) {
+  constructor(message: string, status: number, details?: unknown, retryAfterSeconds?: number, requestId?: string) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.details = details;
     this.retryAfterSeconds = retryAfterSeconds;
+    this.requestId = requestId;
   }
 }
 
@@ -429,7 +432,8 @@ async function requestApi<T>(path: string, init?: ApiRequestInit): Promise<T> {
       rateLimitMessage(payload.error ?? `요청에 실패했습니다. (${response.status})`, retryAfterSeconds),
       response.status,
       payload,
-      retryAfterSeconds
+      retryAfterSeconds,
+      response.headers?.get?.("X-Request-Id") ?? undefined
     );
   }
 

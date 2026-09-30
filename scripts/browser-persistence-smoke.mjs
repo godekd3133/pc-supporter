@@ -285,6 +285,7 @@ async function main() {
     ...process.env,
     PC_SUPPORTER_DATA_DIR: dataDir,
     DATABASE_URL: scratchPostgres.url,
+    PC_SUPPORTER_RATE_LIMIT_SCALE: "50",
     PORT: String(apiPort),
     DANAWA_CRAWL_ON_START: "false",
     BUILD_MONITOR_SCHEDULER_ENABLED: "false",
@@ -325,10 +326,10 @@ async function main() {
     }
     const catalogRateLimitProbe = await fetch(`${apiUrl}/api/parts?category=cpu&limit=1`);
     await catalogRateLimitProbe.arrayBuffer();
-    assert(catalogRateLimitProbe.ok && catalogRateLimitProbe.headers.get("x-ratelimit-limit") === "180" && catalogRateLimitProbe.headers.has("x-ratelimit-remaining"), "카탈로그 조회 rate limit 헤더가 없습니다.");
+    assert(catalogRateLimitProbe.ok && catalogRateLimitProbe.headers.get("x-ratelimit-limit") === String(180 * 50) && catalogRateLimitProbe.headers.has("x-ratelimit-remaining"), "카탈로그 조회 rate limit 헤더가 없습니다.");
     const compatibilityRateLimitProbe = await fetch(`${apiUrl}/api/compatibility/check`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cpu: "invalid-selection" }) });
     await compatibilityRateLimitProbe.arrayBuffer();
-    assert(compatibilityRateLimitProbe.status === 400 && compatibilityRateLimitProbe.headers.get("x-ratelimit-limit") === "60" && compatibilityRateLimitProbe.headers.has("x-ratelimit-reset"), "호환성 검사 rate limit 헤더가 없습니다.");
+    assert(compatibilityRateLimitProbe.status === 400 && compatibilityRateLimitProbe.headers.get("x-ratelimit-limit") === String(60 * 50) && compatibilityRateLimitProbe.headers.has("x-ratelimit-reset"), "호환성 검사 rate limit 헤더가 없습니다.");
     browser = await launchChrome(`${webUrl}/`, dataDir + "-chrome");
     const { client } = browser;
 
@@ -600,7 +601,7 @@ async function main() {
     await waitForValue(client, "document.querySelector('[data-testid=\"saved-build-current-comparison\"]') !== null", "버전 현재 catalog 비교표");
     await waitForValue(client, "document.querySelectorAll('[data-testid^=\"saved-build-version-current-check-\"]').length >= 2 && [...document.querySelectorAll('[data-testid^=\"saved-build-version-current-check-\"]')].every((node) => /(현재 기준|현재 카탈로그)/.test(node.textContent ?? ''))", "버전 행 현재 카탈로그 상태");
     assert(await client.evaluate("[...document.querySelectorAll('[data-testid^=\"saved-build-version-current-check-\"]')].every((node) => /(현재 기준|현재 카탈로그)/.test(node.textContent ?? ''))"), "버전 행에 현재 카탈로그 확인 상태가 표시되지 않았습니다.");
-    assert((await clickSelector(client, `[data-testid^="saved-build-purchase-list-"]`, 1)) === 1, "저장 견적 이력의 구매 목록 열기 버튼을 찾지 못했습니다.");
+    assert((await clickSelector(client, `[data-testid="${candidatePurchaseListTestId}"]`, 1)) === 1, "후보 저장 견적 이력의 구매 목록 열기 버튼을 찾지 못했습니다.");
     await waitForValue(client, "location.pathname === '/result' && location.hash === '#purchase-list'", "저장 견적 구매 목록 route");
     await openResultDetails(client);
     await waitForValue(client, "document.querySelector('[data-testid=\"purchase-list-panel\"]') !== null", "저장 견적 구매 목록");
@@ -658,11 +659,11 @@ async function main() {
     await waitForValue(client, "(document.body?.innerText ?? '').includes('1 /') && (document.body?.innerText ?? '').includes('구매 완료')", "구매 진행률 1개");
     await waitForValue(client, "Object.keys(localStorage).filter((key) => key.includes(':item-statuses')).some((key) => { try { return JSON.parse(localStorage.getItem(key) ?? 'null')?.items?.some((item) => item.status === 'received') === true; } catch { return false; } })", "수령 완료 단계 로컬 저장");
     await waitForValue(client, "document.querySelector('.purchase-list-status-select')?.value === 'received'", "수령 완료 단계 화면 반영");
-    const purchaseProgressRequestProbe = await client.evaluate("(async () => { const originalFetch = window.fetch; let captured; window.fetch = async (input, init) => { const url = typeof input === 'string' ? input : input.url; if (url.includes('/purchase-progress') && init?.method === 'PUT') captured = typeof init.body === 'string' ? JSON.parse(init.body) : undefined; return originalFetch(input, init); }; try { const button = [...document.querySelectorAll('button')].find((candidate) => !candidate.disabled && (candidate.textContent ?? '').includes('현재 상태 저장')); if (!(button instanceof HTMLButtonElement)) return { stage: 'no-button' }; button.click(); for (let index = 0; index < 100 && !captured; index += 1) await new Promise((resolve) => setTimeout(resolve, 50)); const localStatuses = Object.entries(localStorage).filter(([key]) => key.includes(':item-statuses')).map(([key, value]) => ({ key, value })); return { stage: captured ? 'captured' : 'timeout', progress: captured?.progress, localStatuses, selectors: [...document.querySelectorAll('.purchase-list-status-select')].slice(0, 3).map((select) => select.value), gate: document.querySelector('[data-testid=\"purchase-decision-gate\"]')?.textContent ?? '' }; } finally { window.fetch = originalFetch; } })()");
+    const purchaseProgressRequestProbe = await client.evaluate("(async () => { const originalFetch = window.fetch; let captured; let putResponse; window.fetch = async (input, init) => { const url = typeof input === 'string' ? input : input.url; const response = await originalFetch(input, init); if (url.includes('/purchase-progress') && init?.method === 'PUT') { captured = typeof init.body === 'string' ? JSON.parse(init.body) : undefined; try { putResponse = { status: response.status, body: await response.clone().json() }; } catch { putResponse = { status: response.status }; } } return response; }; try { const button = [...document.querySelectorAll('button')].find((candidate) => !candidate.disabled && (candidate.textContent ?? '').includes('현재 상태 저장')); if (!(button instanceof HTMLButtonElement)) return { stage: 'no-button' }; button.click(); for (let index = 0; index < 100 && !captured; index += 1) await new Promise((resolve) => setTimeout(resolve, 50)); const localStatuses = Object.entries(localStorage).filter(([key]) => key.includes(':item-statuses')).map(([key, value]) => ({ key, value })); return { stage: captured ? 'captured' : 'timeout', progress: captured?.progress, putResponse, localStatuses, selectors: [...document.querySelectorAll('.purchase-list-status-select')].slice(0, 3).map((select) => select.value), gate: document.querySelector('[data-testid=\"purchase-decision-gate\"]')?.textContent ?? '' }; } finally { window.fetch = originalFetch; } })()");
     assert(purchaseProgressRequestProbe.stage === 'captured' && Array.isArray(purchaseProgressRequestProbe.progress?.itemStates) && purchaseProgressRequestProbe.progress.itemStates.some((item) => item.status === 'received'), "브라우저 구매 진행률 request body에 단계별 itemStates가 없습니다. probe=" + JSON.stringify(purchaseProgressRequestProbe));
     await waitForValue(client, "(document.body?.innerText ?? '').includes('현재 구매 완료 상태 1개를 저장 견적 서버에 저장했습니다')", "구매 진행률 서버 저장 완료");
     const savedProgressPayload = await fetch(`${apiUrl}/api/builds/${encodeURIComponent(candidateSavedId)}`).then((response) => response.json());
-    assert(Array.isArray(savedProgressPayload?.purchaseProgress?.itemStates) && savedProgressPayload.purchaseProgress.itemStates.some((item) => item.status === 'received'), "서버 구매 진행률에 단계별 itemStates가 저장되지 않았습니다. payload=" + JSON.stringify({ savedId: candidateSavedId, purchaseProgress: savedProgressPayload?.purchaseProgress }));
+    assert(Array.isArray(savedProgressPayload?.purchaseProgress?.itemStates) && savedProgressPayload.purchaseProgress.itemStates.some((item) => item.status === 'received'), "서버 구매 진행률에 단계별 itemStates가 저장되지 않았습니다. payload=" + JSON.stringify({ savedId: candidateSavedId, purchaseProgress: savedProgressPayload?.purchaseProgress ?? null, putResponse: purchaseProgressRequestProbe.putResponse ?? null }));
     await waitForValue(secondClient, "[...document.querySelectorAll('button')].some((button) => !button.disabled && (button.textContent ?? '').includes('현재 상태 저장'))", "두 번째 탭의 오래된 구매 진행률 저장 버튼");
     assert(await clickText(secondClient, "현재 상태 저장"), "두 번째 탭 구매 진행률 서버 저장 버튼을 찾지 못했습니다.");
     const conflictStartedAt = Date.now();
@@ -681,6 +682,15 @@ async function main() {
     await navigate(client, `${webUrl}/share/${encodeURIComponent(candidateSavedId)}`, "서버 진행률 재조회 route");
     await openResultDetails(client);
     await waitForValue(client, "document.querySelector('[data-testid=\"purchase-list-panel\"]') !== null", "서버 진행률 구매 목록");
+    const serverProgressSyncProbe = await client.evaluate("(() => { const node = document.querySelector('[data-testid=\"purchase-list-server-sync\"]'); return { syncText: node?.textContent?.trim() ?? null, audit: window.__pcSupporterApiRequestAudit?.filter((entry) => /purchase-progress|builds\\//.test(entry.path))?.slice(-6) ?? [] }; })()");
+    if (!(serverProgressSyncProbe.syncText ?? "").includes("서버 저장")) {
+      for (let i = 0; i < 240; i += 1) {
+        await sleep(500);
+        const current = await client.evaluate("document.querySelector('[data-testid=\"purchase-list-server-sync\"]')?.textContent ?? ''");
+        if (current.includes("서버 저장 1 /")) break;
+        if (i === 239) throw new Error(`서버 저장 진행률 표시을(를) 확인하지 못했습니다. sync=${JSON.stringify(serverProgressSyncProbe)} latest=${JSON.stringify(current)}`);
+      }
+    }
     await waitForValue(client, "(document.body?.innerText ?? '').includes('서버 저장 1 /')", "서버 저장 진행률 표시");
     assert(await clickText(client, "저장 상태 불러오기"), "저장 상태 불러오기 버튼을 찾지 못했습니다.");
     await waitForValue(client, "(document.body?.innerText ?? '').includes('저장 견적 서버에서 1개 구매 완료 상태를 불러왔습니다')", "서버 진행률 로컬 복원");

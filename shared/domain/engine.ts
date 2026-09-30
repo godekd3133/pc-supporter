@@ -68,6 +68,8 @@ import type { ObjectiveScore, ObjectiveScoreExtraTerm } from "../objective-score
 import { gamingPerformanceAssessmentFor } from "../gaming-performance-evidence";
 import type { GamingPerformanceEvidenceRecord } from "../gaming-performance-evidence";
 import { isListingAllowed, isQuoteBrandAllowed, isQuoteSelectable } from "./listing";
+import { engineTargetFiltersAllowPart } from "../engine-target-filters";
+import type { EngineTargetFiltersConfig } from "../engine-target-filters";
 import { scoreCachedByIdentity } from "../generator-score-cache";
 import { classifyDataFreshness } from "./data-health";
 import { compareRecommendationTrust, recommendationTrustFor } from "./recommendation-trust";
@@ -92,6 +94,10 @@ const catalogPartIndexCache = new WeakMap<Part[], Map<string, Part>>();
 
 export type EngineClockOptions = {
   now?: string | number;
+};
+
+export type EngineGenerationOptions = EngineClockOptions & {
+  targetFilters?: EngineTargetFiltersConfig;
 };
 
 type EngineOptions = EngineClockOptions & {
@@ -5102,13 +5108,15 @@ function generatorCandidatePool(
   gamingAdvisoryTuning?: GamingAdvisoryTuning,
   gpuVendorPreference?: GpuVendor,
   nowMilliseconds = Date.now(),
-  preShortlistPredicate?: (part: Part) => boolean
+  preShortlistPredicate?: (part: Part) => boolean,
+  targetFilters?: EngineTargetFiltersConfig
 ) {
   const catalogCandidates = catalog
     .filter((part) => part.category === category)
     .filter((part) => part.listingType !== "accessory")
     .filter((part) => isQuoteBrandAllowed(category, part.brand))
     .filter((part) => isQuoteSelectable(part))
+    .filter((part) => engineTargetFiltersAllowPart(part, targetFilters))
     .filter((part) => generatorHasFields(part, requiredFields))
     .filter((part) => isListingAllowed(part, listingPolicy))
     .filter(predicate);
@@ -5147,18 +5155,18 @@ function preferNamedParts(parts: Part[]) {
   return named.length > 0 ? named : parts;
 }
 
-function generatorStoragePool(catalog: Part[], category: "ssd" | "hdd", profile: RecommendationProfile, requestedCapacityGb: number, listingPolicy: ListingPolicy, gamingResolution: GamingResolution = DEFAULT_GAMING_RESOLUTION, gamingRefreshRate: GamingRefreshRate = DEFAULT_GAMING_REFRESH_RATE, nowMilliseconds = Date.now()) {
+function generatorStoragePool(catalog: Part[], category: "ssd" | "hdd", profile: RecommendationProfile, requestedCapacityGb: number, listingPolicy: ListingPolicy, gamingResolution: GamingResolution = DEFAULT_GAMING_RESOLUTION, gamingRefreshRate: GamingRefreshRate = DEFAULT_GAMING_REFRESH_RATE, nowMilliseconds = Date.now(), targetFilters?: EngineTargetFiltersConfig) {
   const preferred = generatorCandidatePool(catalog, category, profile, (part) => {
     const capacity = part.specs.capacityGb;
     // 확장 단계의 preferRequestedCapacity와 같은 2배 폭으로 둔다 — 더 좁은
     // 상한은 "요청보다 크지만 더 싼" 부품(예: 500GB 요청에 더 저렴한 1TB)을
     // 풀에서 빼버려 오히려 총액이 올라가는 경우를 만든다.
     return capacity !== undefined && capacity >= requestedCapacityGb && capacity <= requestedCapacityGb * 2;
-  }, listingPolicy, gamingResolution, gamingRefreshRate, undefined, undefined, undefined, nowMilliseconds);
-  return preferred.parts.length > 0 ? preferred : generatorCandidatePool(catalog, category, profile, () => true, listingPolicy, gamingResolution, gamingRefreshRate, undefined, undefined, undefined, nowMilliseconds);
+  }, listingPolicy, gamingResolution, gamingRefreshRate, undefined, undefined, undefined, nowMilliseconds, undefined, targetFilters);
+  return preferred.parts.length > 0 ? preferred : generatorCandidatePool(catalog, category, profile, () => true, listingPolicy, gamingResolution, gamingRefreshRate, undefined, undefined, undefined, nowMilliseconds, undefined, targetFilters);
 }
 
-function generatorMemoryPool(catalog: Part[], profile: RecommendationProfile, requestedCapacityGb: number, listingPolicy: ListingPolicy, gamingResolution: GamingResolution, gamingRefreshRate: GamingRefreshRate = DEFAULT_GAMING_REFRESH_RATE, nowMilliseconds = Date.now()) {
+function generatorMemoryPool(catalog: Part[], profile: RecommendationProfile, requestedCapacityGb: number, listingPolicy: ListingPolicy, gamingResolution: GamingResolution, gamingRefreshRate: GamingRefreshRate = DEFAULT_GAMING_REFRESH_RATE, nowMilliseconds = Date.now(), targetFilters?: EngineTargetFiltersConfig) {
   // 요청 용량과 거의 같은 총용량(실제 구매 수량 기준)을 우선한다 — 32GB 요청에
   // 64GB가 나오는 과잉 구성을 막고, 없을 때만 넓은 범위로 fallback한다.
   const fitsRequest = (part: Part, overshootRatio: number) => {
@@ -5167,9 +5175,9 @@ function generatorMemoryPool(catalog: Part[], profile: RecommendationProfile, re
     const totalGb = capacityGb * memoryKitQuantityFor(part, requestedCapacityGb);
     return totalGb >= requestedCapacityGb && totalGb <= requestedCapacityGb * overshootRatio;
   };
-  const tight = generatorCandidatePool(catalog, "memory", profile, (part) => fitsRequest(part, 1.25), listingPolicy, gamingResolution, gamingRefreshRate, undefined, undefined, undefined, nowMilliseconds);
+  const tight = generatorCandidatePool(catalog, "memory", profile, (part) => fitsRequest(part, 1.25), listingPolicy, gamingResolution, gamingRefreshRate, undefined, undefined, undefined, nowMilliseconds, undefined, targetFilters);
   if (tight.parts.length > 0) return tight;
-  return generatorCandidatePool(catalog, "memory", profile, (part) => fitsRequest(part, 2), listingPolicy, gamingResolution, gamingRefreshRate, undefined, undefined, undefined, nowMilliseconds);
+  return generatorCandidatePool(catalog, "memory", profile, (part) => fitsRequest(part, 2), listingPolicy, gamingResolution, gamingRefreshRate, undefined, undefined, undefined, nowMilliseconds, undefined, targetFilters);
 }
 
 function generatorCaseRequiredFields(includeGpu: boolean, hddCount: number) {
@@ -5633,7 +5641,7 @@ type GeneratorSearchContext = {
   missingPools: string[];
 };
 
-function generatorSearchContextFor(catalog: Part[], request: BuildGenerationRequest, nowMilliseconds: number): GeneratorSearchContext {
+function generatorSearchContextFor(catalog: Part[], request: BuildGenerationRequest, nowMilliseconds: number, targetFilters?: EngineTargetFiltersConfig): GeneratorSearchContext {
   if (!Number.isFinite(request.budgetWon) || !Number.isInteger(request.budgetWon) || request.budgetWon <= 0) {
     throw new Error("예산은 1원 이상의 정수여야 합니다.");
   }
@@ -5670,24 +5678,24 @@ function generatorSearchContextFor(catalog: Part[], request: BuildGenerationRequ
   }
   const performanceTier = request.performanceTier === "entry" || request.performanceTier === "high" || request.performanceTier === "top" ? request.performanceTier : undefined;
   const cpuPool = filterGeneratorPoolByMinScore(
-    generatorCandidatePool(catalog, "cpu", profile, request.includeGpu ? undefined : (part) => part.specs.integratedGraphics === true, listingPolicy, gamingResolution, gamingRefreshRate, undefined, undefined, undefined, nowMilliseconds),
+    generatorCandidatePool(catalog, "cpu", profile, request.includeGpu ? undefined : (part) => part.specs.integratedGraphics === true, listingPolicy, gamingResolution, gamingRefreshRate, undefined, undefined, undefined, nowMilliseconds, undefined, targetFilters),
     performanceTier ? GENERATOR_PERFORMANCE_TIER_CPU_MIN_SCORE[performanceTier] : 0
   );
   // 견적 판매 정책으로 스펙 미등록(incomplete) 부품은 후보에서 제외하고,
   // 메인보드는 vrmCapacityW까지 필수로 둔다 — 전원부 용량이 없는 보드는
   // CPU 전력 확인이 불가능해 "확인 필요" 결과를 만들기 때문이다.
-  const motherboardPool = generatorCandidatePool(catalog, "motherboard", profile, undefined, listingPolicy, gamingResolution, gamingRefreshRate, GENERATOR_REQUIRED_FIELDS.motherboard, undefined, undefined, nowMilliseconds);
-  const memoryPool = generatorMemoryPool(catalog, profile, memoryCapacityGb, listingPolicy, gamingResolution, gamingRefreshRate, nowMilliseconds);
+  const motherboardPool = generatorCandidatePool(catalog, "motherboard", profile, undefined, listingPolicy, gamingResolution, gamingRefreshRate, GENERATOR_REQUIRED_FIELDS.motherboard, undefined, undefined, nowMilliseconds, undefined, targetFilters);
+  const memoryPool = generatorMemoryPool(catalog, profile, memoryCapacityGb, listingPolicy, gamingResolution, gamingRefreshRate, nowMilliseconds, targetFilters);
   // 수랭 쿨러는 라디에이터 규격·장착 위치가 없으면 케이스 호환 검증이 불가능하다.
   const coolerPool = generatorCandidatePool(catalog, "cooler", profile,
     (part) => part.specs.coolerType !== "liquid" || (part.specs.radiatorSizeMm !== undefined && part.specs.radiatorPosition !== undefined),
-    listingPolicy, gamingResolution, gamingRefreshRate, undefined, undefined, undefined, nowMilliseconds);
-  const casePool = generatorCandidatePool(catalog, "case", profile, undefined, listingPolicy, gamingResolution, gamingRefreshRate, generatorCaseRequiredFields(request.includeGpu, hddCount), undefined, undefined, nowMilliseconds);
-  const ssdPool = generatorStoragePool(catalog, "ssd", profile, storageCapacityGb, listingPolicy, gamingResolution, gamingRefreshRate, nowMilliseconds);
-  const hddPool = hddCount > 0 ? generatorStoragePool(catalog, "hdd", profile, hddCapacityGb, listingPolicy, gamingResolution, gamingRefreshRate, nowMilliseconds) : undefined;
+    listingPolicy, gamingResolution, gamingRefreshRate, undefined, undefined, undefined, nowMilliseconds, undefined, targetFilters);
+  const casePool = generatorCandidatePool(catalog, "case", profile, undefined, listingPolicy, gamingResolution, gamingRefreshRate, generatorCaseRequiredFields(request.includeGpu, hddCount), undefined, undefined, nowMilliseconds, undefined, targetFilters);
+  const ssdPool = generatorStoragePool(catalog, "ssd", profile, storageCapacityGb, listingPolicy, gamingResolution, gamingRefreshRate, nowMilliseconds, targetFilters);
+  const hddPool = hddCount > 0 ? generatorStoragePool(catalog, "hdd", profile, hddCapacityGb, listingPolicy, gamingResolution, gamingRefreshRate, nowMilliseconds, targetFilters) : undefined;
   // GPU 보조전원 단자 정보가 없는 파워는 GPU 견적의 커넥터 검증을 할 수 없다.
   const psuPool = generatorCandidatePool(catalog, "psu", profile, undefined, listingPolicy, gamingResolution, gamingRefreshRate,
-    request.includeGpu ? [...(GENERATOR_REQUIRED_FIELDS.psu ?? []), "pciePowerConnectors"] : undefined, undefined, undefined, nowMilliseconds);
+    request.includeGpu ? [...(GENERATOR_REQUIRED_FIELDS.psu ?? []), "pciePowerConnectors"] : undefined, undefined, undefined, nowMilliseconds, undefined, targetFilters);
   const gpuVendorPreference: GpuVendor | undefined = request.includeGpu && (
     (profile === "gaming" && request.gamingRayTracing === true)
       || profile === "creator"
@@ -5715,7 +5723,8 @@ function generatorSearchContextFor(catalog: Part[], request: BuildGenerationRequ
         nowMilliseconds,
         gamingVramReferenceGate
           ? (part) => typeof part.specs.vramGb === "number" && part.specs.vramGb >= minimumGpuVramGb
-          : undefined
+          : undefined,
+        targetFilters
       )
     : undefined;
   // A gaming reference threshold is a candidate gate, not a compatibility or
@@ -5768,8 +5777,8 @@ function generatorSearchContextFor(catalog: Part[], request: BuildGenerationRequ
   };
 }
 
-export function generateBuildDraft(catalog: Part[], request: BuildGenerationRequest, gamingPerformanceEvidence: readonly GamingPerformanceEvidenceRecord[] = [], clockOptions: EngineClockOptions = {}): BuildGenerationResult {
-  const nowMilliseconds = engineNowMilliseconds(clockOptions.now);
+export function generateBuildDraft(catalog: Part[], request: BuildGenerationRequest, gamingPerformanceEvidence: readonly GamingPerformanceEvidenceRecord[] = [], options: EngineGenerationOptions = {}): BuildGenerationResult {
+  const nowMilliseconds = engineNowMilliseconds(options.now);
   const {
     profile,
     priority,
@@ -5796,7 +5805,7 @@ export function generateBuildDraft(catalog: Part[], request: BuildGenerationRequ
     gpuPool,
     gamingGpuVramThresholdMiss,
     missingPools
-  } = generatorSearchContextFor(catalog, request, nowMilliseconds);
+  } = generatorSearchContextFor(catalog, request, nowMilliseconds, options.targetFilters);
   if (missingPools.length > 0) {
     const hasMissingPoolsApartFromGpu = missingPools.some((label) => label !== "그래픽카드");
     const diagnostics: BuildGenerationDiagnostic[] = [];
@@ -6243,8 +6252,8 @@ export function generateBuildDraft(catalog: Part[], request: BuildGenerationRequ
 // 빔 탐색 없이 후보 풀 안에서 만들 수 있는 가장 저렴한 호환 조합의 총액을 구한다.
 // 목표별 예산 안내와 실패 시 "예산을 얼마나 올려야 하는지" 복구 제안이 같은
 // 실측 하한을 공유하도록, 풀 구성·호환 게이트·우선 후보 필터를 생성기와 동일하게 적용한다.
-export function minimumFeasibleBuildPriceFor(catalog: Part[], request: BuildGenerationRequest, clockOptions: EngineClockOptions = {}): number | undefined {
-  const context = generatorSearchContextFor(catalog, request, engineNowMilliseconds(clockOptions.now));
+export function minimumFeasibleBuildPriceFor(catalog: Part[], request: BuildGenerationRequest, options: EngineGenerationOptions = {}): number | undefined {
+  const context = generatorSearchContextFor(catalog, request, engineNowMilliseconds(options.now), options.targetFilters);
   if (context.missingPools.length > 0) return undefined;
   const {
     profile,
@@ -6380,7 +6389,7 @@ export function minimumFeasibleBuildPriceFor(catalog: Part[], request: BuildGene
 // 온보딩의 목표별 가격대가 "실제로 만들 수 있는 최저 견적" 아래를 약속하지
 // 않도록, 카탈로그 기준 최저 합계를 메타에 함께보낸다. 최저가를 재는
 // probe 요청의 budgetWon은 풀 구성에 영향이 없으므로 임의의 유효 정수면 된다.
-export function recommendationFloorWonFor(catalog: Part[], clockOptions: EngineClockOptions = {}): { integrated?: number; discreteGpu?: number; gaming?: Partial<Record<GamingResolution, number>> } {
+export function recommendationFloorWonFor(catalog: Part[], options: EngineGenerationOptions = {}): { integrated?: number; discreteGpu?: number; gaming?: Partial<Record<GamingResolution, number>> } {
   const probe = (overrides: Partial<BuildGenerationRequest>) => minimumFeasibleBuildPriceFor(catalog, {
     profile: "general",
     budgetWon: 10_000_000,
@@ -6390,7 +6399,7 @@ export function recommendationFloorWonFor(catalog: Part[], clockOptions: EngineC
     hddCount: 0,
     listingPolicy: "retail_only",
     ...overrides
-  }, clockOptions);
+  }, options);
   return {
     integrated: probe({ includeGpu: false }),
     discreteGpu: probe({}),

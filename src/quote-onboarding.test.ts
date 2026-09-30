@@ -17,6 +17,7 @@ import {
   ONBOARDING_WORKS,
   onboardingStateFromJson,
   onboardingStateToJson,
+  recommendGenerationRequestFor,
   recommendParamsFor,
   recommendQueryFor,
   requiredWorkBudgetFor,
@@ -255,6 +256,23 @@ describe("quote-onboarding estimates", () => {
     expect(targetBudgetRangeFor(stateWith({ usecase: "work", works: ["threed"], intensity: "heavy" }), { discreteGpu: 936_330 })).toEqual(requiredWorkBudgetFor(["threed"], "heavy"));
   });
 
+  it("prefers the exact request floor over profile-class floors so suggested budgets cannot fail again", () => {
+    // spec 최상급 등급은 정적 범위(수백만원대)보다 훨씬 비싼 실측 최저가를 가진다 —
+    // 프로필 평균 하한이 아니라 그 요청 자체의 최저가로 안내해야 실패를 되풀이하지 않는다.
+    const specTop = stateWith({ mode: "spec", specTier: "top", specIncludeGpu: true, memoryGb: 32, storageGb: 1000 });
+    const range = targetBudgetRangeFor(specTop, { discreteGpu: 936_330 }, 10_267_150);
+    expect(range?.minWon).toBe(10_300_000);
+
+    // 가벼운 게임의 정적 범위는 실제 요청 최저가보다 낮을 수 있다 — 실제 요청
+    // (예산 티어가 올라 32GB/1TB를 요구)의 floor로 하한을 올려 잡는다.
+    const gamingLow = stateWith({ usecase: "gaming", games: ["league"], resolution: "1080p", refreshRate: 60, budgetWon: 1_400_000 });
+    expect(gamingTargetShortfall(gamingLow, { gaming: { "1080p": 936_330 } }, 1_601_330)?.minWon).toBe(1_700_000);
+
+    // 요청 floor가 정적 범위 안이면 범위를 줄이지 않는다 — 바닥을 올리기만 한다.
+    const staticOnly = requiredGamingBudgetFor("4k", 144, ["cyberpunk"], { graphicsPreset: "high", rayTracing: true, upscaling: "native" }, 1_601_330);
+    expect(staticOnly.minWon).toBe(requiredGamingBudgetFor("4k", 144, ["cyberpunk"], { graphicsPreset: "high", rayTracing: true, upscaling: "native" }).minWon);
+  });
+
   it("clamps the budget control range", () => {
     expect(clampBudget(100_000)).toBe(800_000);
     expect(clampBudget(9_000_000)).toBe(8_000_000);
@@ -287,6 +305,26 @@ describe("quote-onboarding recommend params", () => {
     const mid = recommendParamsFor(stateWith({ usecase: "gaming", games: ["league"], budgetWon: 1_200_000 }));
     expect(mid.memoryCapacityGb).toBe(32);
     expect(mid.storageCapacityGb).toBe(1000);
+  });
+
+  it("maps the wizard state to the generation request the floor probe must mirror", () => {
+    const request = recommendGenerationRequestFor(stateWith({ usecase: "gaming", games: ["cyberpunk"], resolution: "4k", refreshRate: 144, graphicsPreset: "high", rayTracing: true, upscaling: "native", budgetWon: 2_000_000 }));
+    expect(request).toMatchObject({
+      profile: "gaming",
+      includeGpu: true,
+      budgetWon: 2_000_000,
+      gamingResolution: "4k",
+      gamingRefreshRate: 144,
+      gamingGameIds: ["cyberpunk"],
+      gamingGraphicsPreset: "high",
+      gamingRayTracing: true,
+      gamingUpscaling: "native",
+      memoryCapacityGb: 32,
+      storageCapacityGb: 1000
+    });
+
+    const spec = recommendGenerationRequestFor(stateWith({ mode: "spec", specTier: "top", specIncludeGpu: true, memoryGb: 128, storageGb: 4000 }));
+    expect(spec).toMatchObject({ profile: "general", performanceTier: "top", includeGpu: true, memoryCapacityGb: 128, storageCapacityGb: 4000 });
   });
 
   it("maps work selections to profiles and GPU inclusion", () => {

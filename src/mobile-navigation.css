@@ -1,0 +1,17 @@
+@media (max-width: 760px) {
+  .app-shell .mobile-bottom-nav {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .app-shell .mobile-bottom-nav-item {
+    min-height: 60px;
+    gap: 4px;
+    font-size: 12px;
+    line-height: 1.15;
+  }
+
+  .app-shell .mobile-bottom-nav-item svg {
+    width: 20px;
+    height: 20px;
+  }
+}

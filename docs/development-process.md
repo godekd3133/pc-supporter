@@ -140,7 +140,7 @@ PCIe 세대처럼 물리 호환과 성능 경고가 분리되는 영역은 무�
 - 범용 카탈로그 스펙 보강 큐는 누락률이 높은 범주와 호환 영향도가 큰 필드를 함께 사용해 작업 우선순위를 계산하며, 검색·카테고리·우선순위·누락 필드·offset을 반영한 schemaVersion 1 JSON 작업 패키지와 `nextOffset`을 제공함. 패키지는 원문 확인용 deep-link와 필드별 검수 지침을 포함하지만 안전 후보 판정을 우회하거나 값을 자동 확정하지 않음
 - 보강 큐는 `all`·`spec`·`pcie` 근거 범위를 제공해 일반 누락과 PCIe evidence 누락을 분리하며, `pcie` 범위는 PCIe 누락 필드·전용 검수 지침·전용 badge를 사용함. 선택한 다나와 핵심 후보는 `/api/admin/catalog-spec/refresh-batch`로 최대 12개까지 순차 원문 재확인할 수 있으며, 각 결과를 반영·건너뜀·실패로 분리하고 중복 ID·비핵심 항목·동시 저장·cooldown을 차단함. 성공 후에는 카탈로그 metadata와 보강 큐를 다시 읽어 남은 작업을 최신 snapshot으로 갱신함
 - 일괄 보강 결과는 `catalog-spec-refresh-history.json`에 최대 100회까지 runId·필터·항목별 결과로 보존하고 `/api/admin/catalog-spec/refresh-history`에서 최근 20회만 읽음. 이력 저장 실패는 실제 원문 반영 결과와 분리해 `historyPersisted=false`로 표시하며, 견적·owner token·원문 본문은 저장하지 않음
-- 제조사 근거 수동 스펙 보강은 현재 누락된 scalar/list 필드만 입력할 수 있고, 제조사 모델/SKU·근거 메모·HTTPS URL을 필수로 요구함. `/api/admin/catalog-spec-overrides/batch/validate`가 전체 항목을 먼저 검증하며 하나라도 오류가 있으면 `/batch` 저장을 차단함. overlay는 적용 전 원래 스펙·품질·누락 필드·갱신 시각을 provenance에 보존하고 `catalog.json`에 runtime 값을 영구 병합하지 않음
+- 제조사 근거 수동 스펙 보강은 현재 누락된 scalar/list 필드만 입력할 수 있고, 제조사 모델/SKU·근거 메모·HTTPS URL을 필수로 요구함. `/api/admin/catalog-spec-overrides/batch/validate`가 전체 항목을 먼저 검증하며 하나라도 오류가 있으면 `/batch` 저장을 차단함. overlay는 적용 전 원래 스펙·품질·누락 필드·갱신 시각을 provenance에 보존하고 `catalog_parts`에 runtime 값을 영구 병합하지 않음
 - 수동 override의 근거 URL은 `/source-check`에서 공개 HTTPS·HTTP 응답·모델/SKU 본문 일치를 점검하고, 결과를 별도 history의 최초·상태 유지·상태 변경 전이로 기록함. 점검 실패나 시점 만료는 값을 자동 삭제하지 않지만 provenance와 관리자 목록을 `재확인 필요`로 낮춤
 - 수동 override가 많을 때는 `/api/admin/catalog-spec-overrides/source-check/batch`로 offset으로 다음 묶음을 재개하면서 한 번에 최대 50개를 동시 2개씩 점검하고, 항목별 성공·실패·저장 실패·건너뜀을 반환함. 관리자의 `최대 50개 근거 점검`은 기존 history와 runtime overlay를 갱신하고, 추천 신뢰도와 후보 적용·구매 판단은 새 결과를 즉시 소비함
 - 카탈로그 스펙 보강 작업 패키지는 결정적 `queueFingerprint`를 페이지 간 전달하며, 다음 페이지 요청에서 큐가 원문 반영으로 바뀌었는지 확인함. fingerprint가 달라지면 stale offset을 계속 사용하지 않고 첫 묶음부터 다시 기준을 잡음
@@ -176,7 +176,6 @@ PCIe 세대처럼 물리 호환과 성능 경고가 분리되는 영역은 무�
 - 견적 변경 이력은 800ms 안의 연속 수량·선택 편집을 하나의 작업으로 합치고 가장 이른 이전 snapshot을 보존해 복원 단위를 사용자 작업에 맞춤
 - 브라우저에 저장된 raw 견적은 transfer parser로 부팅 전에 검증하며, 깨진 값은 별도 백업 후 안전한 빈 견적으로 복구해 새로고침 반복 오류를 막음
 - 여러 탭의 draft·추천 기준 변경은 canonical key로 비교해 같은 입력은 무시하고, 다른 입력은 자동 덮어쓰기 없이 사용자가 불러오기·현재 입력 유지를 선택하게 함
-- production service worker는 API를 캐시하지 않고 정적 shell만 offline fallback으로 제공해 최신 가격·호환성 판정과 오프라인 재진입을 섞지 않음
 - 부품 선택기의 전체 카탈로그 모드는 성공한 목록 응답의 기본 부품 정보만 브라우저 로컬 캐시에 schemaVersion 1 envelope로 최대 600개·약 1.8MB까지 보관함. envelope의 캐시 저장 시각과 각 부품 원본 갱신 시각을 분리하고, 이전 배열형 캐시의 시각은 미확인으로 유지함. 목록 요청 실패 시 캐시를 탐색 전용 후보로만 표시하고 정밀 호환·유사도·실시간 가격은 재연결 전까지 계산·확정하지 않음
 - 주변 부품 카탈로그는 App bootstrap과 성공한 목록·상세 응답을 같은 schemaVersion 1 제한 캐시에 저장 시각과 함께 보관하고, 실패 시 범주·검색·가격·갱신 조건을 적용한 탐색 전용 목록으로 전환함. 캐시 상세나 추가는 최신 원문·실시간 가격·주변 부품 호환성 확정으로 승격하지 않으며 재시도 성공 시 서버 응답을 기준으로 복귀함
 - 홈의 LOCAL CATALOG CACHE 패널은 두 캐시의 개수·신선도를 읽기 전용으로 요약하고, 명시적 확인 뒤 핵심·주변·전체 탐색 캐시만 선택적으로 삭제함. 삭제 이벤트는 두 카탈로그 키와 상태 표시만 갱신하며 draft·saved build·share·watchlist 저장소에는 접근하지 않음
@@ -266,7 +265,7 @@ Vite가 브라우저 번들을 만들고 React 화면이 API 계약을 소비합
 
 1. 공개 저장소 CI가 동일한 typecheck/test/build와 `npm run test:seed`를 재실행하는지 확인합니다.
 2. 다나와 수집 결과를 공개할지, 사설 데이터 디렉터리와 샘플 export만 제공할지 이용 조건을 확인합니다.
-3. `DATABASE_URL` 미설정 파일 저장소와 설정된 PostgreSQL 저장소의 저장·lease·재시작 복구를 분리해 검증합니다. production Compose에서는 `npm run test:postgres:comparison`으로 후보 비교를, `npm run test:postgres:saved-build`로 선택 이유·구매 진행률·가격 확인 이력의 revision/history round-trip을 검증합니다.
+3. PostgreSQL 저장소의 저장·lease·재시작 복구를 검증합니다. production Compose에서는 `npm run test:postgres:comparison`으로 후보 비교를, `npm run test:postgres:saved-build`로 선택 이유·구매 진행률·가격 확인 이력의 revision/history round-trip을 검증합니다.
 4. 실제 브라우저에서 견적 입력 → finding → 후보 미리보기 → 저장/공유 → 현재 재검사 흐름을 캡처하고, 정적 테스트와 별도 증거로 기록합니다.
 5. 공개 릴리스에서는 최신 catalog freshness, API rate limit, 관리자 인증 secret, 로그/개인 데이터 보존 정책을 운영 환경 기준으로 다시 검토합니다.
 
