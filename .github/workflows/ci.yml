@@ -291,6 +291,9 @@ jobs:
       - name: Production build
         run: npm run build:assets
 
+      - name: Install ripgrep for the deploy script
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ripgrep
+
       - name: Prepare deploy SSH key and pinned host keys
         shell: bash
         run: |
@@ -298,10 +301,10 @@ jobs:
           printf '%s\n' "${{ secrets.LIGHTSAIL_DEPLOY_SSH_KEY }}" > "$RUNNER_TEMP/ssh/deploy_key"
           chmod 600 "$RUNNER_TEMP/ssh/deploy_key"
           install -d -m 700 ~/.ssh
-          cat >> ~/.ssh/known_hosts <<'EOF'
-          3.39.79.1 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINp3g/Wo34rSawQvCOtBT094vitITAW4lF9x1Ihn/2bi
-          3.39.79.1 ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCwd57QdBWkJ57kHII+oJ6BL3/Fdetv0BHv21iH2ZKQdbFehqs66Lf05XmI8ifklBu385AJzZFveGAl7TRivAECYTbWFAyCGEsq5Zq2B+gGC5+fJXaU+aQ0U1T2h5ePLmOlnjEFigDyIZ8NQEnypvH8wg4TSVuT3S9JMRudkvc7LxfG06dBgL/iMHWIWrXQAfknOyE4d3J67hEGOpoEKOP2G1uLQSp1voHrx/RvAtebSbIPKzFxa587HtlnLte+0L3JotgUmlNRiD9DNTZ13xh72W+FozVQ9RPN6SD5IVlGDQlNJ/Vmd77KZMXxZX6Ke785QMSrXQT2XpFAIlQx/A/SCRa4jiLTNqXbeTDtzY0+3YzyInkOh6G0ArT9oOBujIX+QsB5+XgSL14fftZs8Q1JoNLG/Nn/2G6xh/HSF3juwi9qe8b3+LTNPDe67ZyGg5XFx1Nbu9PeDpY4KAx/kaAqO4WBD+6TGEjIrs72WOJw9TMp2FSzUAuEuAcK0KBtrzE=
-          EOF
+          printf '%s\n' \
+            '3.39.79.1 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINp3g/Wo34rSawQvCOtBT094vitITAW4lF9x1Ihn/2bi' \
+            '3.39.79.1 ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCwd57QdBWkJ57kHII+oJ6BL3/Fdetv0BHv21iH2ZKQdbFehqs66Lf05XmI8ifklBu385AJzZFveGAl7TRivAECYTbWFAyCGEsq5Zq2B+gGC5+fJXaU+aQ0U1T2h5ePLmOlnjEFigDyIZ8NQEnypvH8wg4TSVuT3S9JMRudkvc7LxfG06dBgL/iMHWIWrXQAfknOyE4d3J67hEGOpoEKOP2G1uLQSp1voHrx/RvAtebSbIPKzFxa587HtlnLte+0L3JotgUmlNRiD9DNTZ13xh72W+FozVQ9RPN6SD5IVlGDQlNJ/Vmd77KZMXxZX6Ke785QMSrXQT2XpFAIlQx/A/SCRa4jiLTNqXbeTDtzY0+3YzyInkOh6G0ArT9oOBujIX+QsB5+XgSL14fftZs8Q1JoNLG/Nn/2G6xh/HSF3juwi9qe8b3+LTNPDe67ZyGg5XFx1Nbu9PeDpY4KAx/kaAqO4WBD+6TGEjIrs72WOJw9TMp2FSzUAuEuAcK0KBtrzE=' \
+            >> ~/.ssh/known_hosts
 
       - name: Deploy to Lightsail
         run: |
