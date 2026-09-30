@@ -25,7 +25,7 @@ import { BuildGenerationError, ENGINE_VERSION, assessAlternativePart, buildGener
 import { recordGenerationFailure, recentGenerationFailures } from "./generation-failure-log";
 import { cancelCrawlPageRetryBatch, crawlPageRetryBatchPlanFor, crawlPageRetryPlanFor, crawlResumePlanFor, isCrawlPageRetryBatchRunning, isCrawlRunning, readCrawlStatus, runCrawlJob, runCrawlPageRetryBatchJob, runCrawlPageRetryJob } from "./crawler";
 import { CRAWL_MANIFEST_PATH, ensureDataDirectory, fileUpdatedAt, readJson } from "./storage";
-import type { CrawlManifest } from "../shared/types";
+import type { CrawlCategoryReport, CrawlManifest } from "../shared/types";
 import { appendSavedBuild, appendSavedBuildCheck, appendSavedBuildVersionComparison, appendSavedBudgetLadder, appendSavedGeneratorVariants, appendSavedComparison, appendSavedWatchlist, closePersistence, consumeRateLimitWindow, createOwnerShareSession, deleteOwnerShareSession, deleteOwnerShareSessionGrantsForResource, deleteSavedBuild, deleteSavedBuildVersionComparison, deleteSavedBudgetLadder, deleteSavedGeneratorVariants, deleteSavedComparison, deleteSavedWatchlist, deleteSavedWatchlistAlertStates, initializePersistence, listOwnerShareSessionGrants, migrateSavedBuildVersions, ownerShareSessionGrantMatches, ownerShareSessionIsActive, persistenceDiagnostics, pruneExpiredOwnerShareSessionGrants, pruneExpiredOwnerShareSessions, pruneRateLimitWindows, RATE_LIMIT_BUCKET_CLEANUP_INTERVAL_MS, readLatestSavedBuildVersionBackup, readSavedBuildVersionBackupDetail, readSavedBuildVersionBackups, readSavedBuilds, readSavedBuildVersionComparisons, readSavedBudgetLadders, readSavedGeneratorVariants, readSavedComparisons, readSavedWatchlistAlertStates, readSavedWatchlists, restoreSavedBuildPurchasePriceHistory, restoreSavedBuildPurchaseProgress, rollbackSavedBuildVersions, savedBuildVersionSnapshotFingerprintFor, updateSavedBuildAssemblyVerification, updateSavedBuildMetadata, updateSavedBuildMonitorState, updateSavedBuildMyPc, updateSavedBuildPurchasePriceHistory, updateSavedBuildPurchaseProgress, updateSavedBuildShareCredentials, updateSavedWatchlist, updateSavedWatchlistAlertStates, upsertOwnerShareSessionGrant, withSavedBuildMonitorLease } from "./repository";
 import { CATALOG_INGESTION_BUSY_MESSAGE, CatalogIngestionBusyError, startCatalogIngestionJob, withCatalogIngestionLease as executeCatalogIngestionJob } from "./catalog-ingestion-coordinator";
 import { DEFAULT_SAVED_WATCHLIST_ALERT_PREFERENCES, parseSavedCatalogWatchlistInput, parseSavedCatalogWatchlistUpdateInput, savedCatalogWatchlistExpired, savedWatchlistAlertPreferencesFor } from "./watchlist-store";
@@ -3627,6 +3627,36 @@ app.get("/api/admin/crawl/manifest", requireAdmin, async (_request, response) =>
     return;
   }
   response.json(manifest);
+});
+
+// 크롤링 엔진 화면용 집계 응답 — 실행 중 상태·적용 엔진 파라미터·핵심/주변
+// 부품 manifest를 한 번에 묶는다. pageProductCodes는 상품 코드 전체 목록이라
+// 화면에 필요 없고 응답만 커지므로 범주 리포트에서 제외한다.
+app.get("/api/admin/crawl/engine", requireAdmin, async (_request, response) => {
+  const manifest = await readJson<CrawlManifest | null>(CRAWL_MANIFEST_PATH, null);
+  const accessoryManifest = await readAccessoryCrawlManifest();
+  const stripPageProductCodes = (category: CrawlCategoryReport) => {
+    const { pageProductCodes: _pageProductCodes, ...rest } = category;
+    return rest;
+  };
+  response.json({
+    parameters: {
+      delayMs: Number(process.env.DANAWA_CRAWL_DELAY_MS ?? 850),
+      timeoutMs: Number(process.env.DANAWA_CRAWL_TIMEOUT_MS ?? 20000),
+      retries: Number(process.env.DANAWA_CRAWL_RETRIES ?? 2),
+      pages: Number(process.env.DANAWA_CRAWL_PAGES ?? 1),
+      limitPerCategory: Number(process.env.DANAWA_CRAWL_LIMIT ?? 5),
+      details: process.env.DANAWA_CRAWL_DETAILS !== "false"
+    },
+    catalog: {
+      status: await readCrawlStatus(),
+      manifest: manifest ? { ...manifest, categories: manifest.categories.map(stripPageProductCodes) } : null
+    },
+    accessories: {
+      status: await readAccessoryCrawlStatus(),
+      manifest: accessoryManifest
+    }
+  });
 });
 
 app.post("/api/admin/crawl/retry-page", adminCatalogCrawlRetryRateLimit, requireAdmin, async (request, response) => {

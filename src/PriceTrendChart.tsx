@@ -1,3 +1,5 @@
+import { useState } from "react";
+import type { PointerEvent } from "react";
 import type { PriceTrendPoint } from "../shared/price-trend";
 
 function formatWon(value: number) {
@@ -11,6 +13,7 @@ function shortDate(value: string) {
 }
 
 export function PriceTrendChart({ points, ariaLabel, testId }: { points: PriceTrendPoint[]; ariaLabel: string; testId?: string }) {
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   if (points.length === 0) return null;
   const width = 320;
   const height = 132;
@@ -27,13 +30,56 @@ export function PriceTrendChart({ points, ariaLabel, testId }: { points: PriceTr
   const guideValues = [maxValue, minValue + valueRange / 2, minValue];
   const labelIndexes = [...new Set([0, Math.floor((points.length - 1) / 2), points.length - 1])];
 
+  // 점이 3px라 직접 겨냥하기 어려우니 차트 위 아무 곳이나 호버하면
+  // 가장 가까운 점의 날짜·금액을 띄운다.
+  const onPointerMove = (event: PointerEvent<SVGSVGElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (rect.width <= 0) return;
+    const x = ((event.clientX - rect.left) / rect.width) * width;
+    let nearest = 0;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    for (let index = 0; index < points.length; index += 1) {
+      const distance = Math.abs(xFor(index) - x);
+      if (distance < nearestDistance) { nearest = index; nearestDistance = distance; }
+    }
+    setHoverIndex(nearest);
+  };
+  const hoverPoint = hoverIndex === null ? undefined : points[hoverIndex];
+  const tooltipLeftPercent = hoverIndex === null ? 0 : (xFor(hoverIndex) / width) * 100;
+  const tooltipTopPercent = hoverIndex === null ? 0 : (yFor(hoverPoint!.priceWon) / height) * 100;
+
   return <div className="price-trend-chart" data-testid={testId}>
-    <svg className="price-trend-chart-svg" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${ariaLabel} · 현재 ${formatWon(points.at(-1)!.priceWon)}`}>
-      {guideValues.map((value, index) => <line className="price-trend-chart-guide" x1={padding.left} x2={padding.left + chartWidth} y1={yFor(value)} y2={yFor(value)} key={`${value}-${index}`} />)}
-      <polygon className="price-trend-chart-area" points={area} />
-      <polyline className="price-trend-chart-line" points={line} />
-      {points.map((point, index) => <circle className={index === points.length - 1 ? "price-trend-chart-point current" : "price-trend-chart-point"} cx={xFor(index)} cy={yFor(point.priceWon)} r={index === points.length - 1 ? 4.5 : 3.2} key={`${point.at}-${index}`}><title>{`${shortDate(point.at)} · ${formatWon(point.priceWon)}`}</title></circle>)}
-    </svg>
+    <div className="price-trend-chart-plot">
+      <svg
+        className="price-trend-chart-svg"
+        viewBox={`0 0 ${width} ${height}`}
+        role="img"
+        aria-label={`${ariaLabel} · 현재 ${formatWon(points.at(-1)!.priceWon)}`}
+        onPointerMove={onPointerMove}
+        onPointerLeave={() => setHoverIndex(null)}
+      >
+        {guideValues.map((value, index) => <line className="price-trend-chart-guide" x1={padding.left} x2={padding.left + chartWidth} y1={yFor(value)} y2={yFor(value)} key={`${value}-${index}`} />)}
+        <polygon className="price-trend-chart-area" points={area} />
+        {hoverIndex !== null && <line className="price-trend-chart-hover-rule" x1={xFor(hoverIndex)} x2={xFor(hoverIndex)} y1={padding.top} y2={height - padding.bottom} />}
+        <polyline className="price-trend-chart-line" points={line} />
+        {points.map((point, index) => <circle
+          className={`price-trend-chart-point${index === points.length - 1 ? " current" : ""}${index === hoverIndex ? " hover" : ""}`}
+          cx={xFor(index)}
+          cy={yFor(point.priceWon)}
+          r={index === hoverIndex ? 4.6 : index === points.length - 1 ? 4.5 : 3.2}
+          key={`${point.at}-${index}`}
+        ><title>{`${shortDate(point.at)} · ${formatWon(point.priceWon)}`}</title></circle>)}
+      </svg>
+      {hoverPoint && <div
+        className="price-trend-chart-tooltip"
+        role="tooltip"
+        style={{ left: `${tooltipLeftPercent}%`, top: `${tooltipTopPercent}%` }}
+        data-edge={tooltipLeftPercent > 72 ? "right" : tooltipLeftPercent < 28 ? "left" : "center"}
+      >
+        <strong>{formatWon(hoverPoint.priceWon)}</strong>
+        <small>{shortDate(hoverPoint.at)}</small>
+      </div>}
+    </div>
     <div className="price-trend-chart-labels" aria-hidden="true">{labelIndexes.map((index) => <span key={`${points[index].at}-${index}`}>{shortDate(points[index].at)}</span>)}</div>
   </div>;
 }

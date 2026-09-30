@@ -869,3 +869,113 @@ html[data-theme="dark"] .admin-page .generation-failure-item { background: var(-
 
 /* sticky 섹션 nav 아래로 앵커가 깔끔하게 도착하도록 여백 */
 .admin-page [id^="admin-"] { scroll-margin-top: 130px; }
+
+/* 크롤링 엔진 상태/리포트 */
+.crawl-engine-card .admin-card-description { margin: -4px 0 12px; }
+
+.crawl-engine-status-strip { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
+
+.crawl-engine-run-state { display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: #f9fafb; font-size: 9px; font-weight: 600; }
+
+.crawl-engine-run-state.running { border-color: #bfe0d9; color: #2e7268; background: #ecf8f4; }
+
+.crawl-engine-run-state.failed { border-color: #f2c3c8; color: #d64550; background: var(--red-soft); }
+
+.crawl-engine-run-state.completed { border-color: #bfe0d9; color: #2e7268; background: #f3fbf8; }
+
+.crawl-engine-params { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; background: #f9fafb; }
+
+.crawl-engine-param { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 9px; }
+
+.crawl-engine-param strong { color: var(--ink); font-family: "DM Mono", monospace; font-weight: 600; }
+
+.crawl-engine-param small { color: var(--muted); font-family: "DM Mono", monospace; font-size: 7px; opacity: .8; }
+
+.crawl-engine-state { display: flex; align-items: center; gap: 8px; margin: 0; padding: 14px 0; color: var(--muted); font-size: 11px; }
+
+.crawl-engine-state.error { color: #d64550; }
+
+.crawl-engine-manifest { border: 1px solid var(--line); border-radius: 11px; padding: 13px; background: #fff; }
+
+.crawl-engine-manifest + .crawl-engine-manifest { margin-top: 12px; }
+
+.crawl-engine-manifest-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 11px; }
+
+.crawl-engine-manifest-heading strong { color: var(--ink); font-size: 11px; }
+
+.crawl-engine-manifest-heading small { display: block; margin-top: 3px; color: var(--muted); font-size: 9px; }
+
+.crawl-engine-manifest-badges { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 9px; }
+
+.crawl-engine-badge { display: inline-block; padding: 2px 7px; border-radius: 6px; font-size: 8px; font-weight: 700; }
+
+.crawl-engine-badge.complete { color: #2e7268; background: #e5f6ef; }
+
+.crawl-engine-badge.partial { color: #b07514; background: #fff4de; }
+
+.crawl-engine-badge.warn { color: #d64550; background: var(--red-soft); }
+
+.crawl-engine-totals { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin-bottom: 11px; }
+
+.crawl-engine-totals > div { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: #f9fafb; display: grid; gap: 3px; }
+
+.crawl-engine-totals span { color: var(--muted); font-size: 8px; }
+
+.crawl-engine-totals strong { color: var(--ink); font-family: "DM Mono", monospace; font-size: 13px; font-weight: 700; }
+
+.crawl-engine-totals strong.warn, .crawl-engine-table td.warn { color: #d64550; }
+
+.crawl-engine-change-summary { display: flex; align-items: flex-start; gap: 6px; margin: 0 0 11px; color: var(--muted); font-size: 9px; }
+
+.crawl-engine-change-summary svg { flex: 0 0 auto; margin-top: 1px; color: #2e7268; }
+
+.crawl-engine-table-wrap { overflow-x: auto; margin: 0 -2px; }
+
+.crawl-engine-table { width: 100%; border-collapse: collapse; font-size: 9px; }
+
+.crawl-engine-table th { padding: 6px 8px; color: var(--muted); font-size: 8px; font-weight: 600; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; }
+
+.crawl-engine-table td { padding: 6px 8px; color: var(--ink); border-bottom: 1px solid #f1f3f6; white-space: nowrap; font-family: "DM Mono", monospace; }
+
+.crawl-engine-table td:first-child { font-family: inherit; font-weight: 600; }
+
+.crawl-engine-table tr:last-child td { border-bottom: 0; }
+
+.crawl-engine-table tr.has-error td:first-child strong { color: #d64550; }
+
+.crawl-engine-row-error { display: block; color: #d64550; font-family: inherit; font-weight: 400; font-size: 8px; white-space: normal; }
+
+.crawl-engine-disclosure { margin-top: 10px; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+
+.crawl-engine-disclosure > summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 11px; cursor: pointer; list-style: none; color: var(--ink); font-size: 9px; font-weight: 600; background: #f9fafb; }
+
+.crawl-engine-disclosure > summary::-webkit-details-marker { display: none; }
+
+.crawl-engine-disclosure > summary span { display: inline-flex; align-items: center; gap: 6px; }
+
+.crawl-engine-disclosure > summary svg:last-child { color: var(--muted); transition: transform 150ms ease; }
+
+.crawl-engine-disclosure[open] > summary svg:last-child { transform: rotate(180deg); }
+
+.crawl-engine-failure-list { margin: 0; padding: 0; list-style: none; }
+
+.crawl-engine-failure-list li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 7px 11px; border-top: 1px solid #f1f3f6; font-size: 9px; }
+
+.crawl-engine-failure-list li strong { color: var(--ink); }
+
+.crawl-engine-failure-list li small { color: var(--muted); }
+
+.crawl-engine-failure-list li.crawl-engine-list-omitted { justify-content: center; color: var(--muted); }
+
+.crawl-engine-note { display: flex; align-items: center; gap: 5px; margin-top: 9px; color: var(--muted); font-size: 8px; }
+
+html[data-theme="dark"] .admin-page .crawl-engine-run-state,
+html[data-theme="dark"] .admin-page .crawl-engine-params,
+html[data-theme="dark"] .admin-page .crawl-engine-totals > div,
+html[data-theme="dark"] .admin-page .crawl-engine-disclosure > summary { background: #20242c !important; }
+
+html[data-theme="dark"] .admin-page .crawl-engine-manifest { background: var(--card-bg, #1b1f27) !important; }
+
+html[data-theme="dark"] .admin-page .crawl-engine-table td { border-color: #262b34 !important; }
+
+html[data-theme="dark"] .admin-page .crawl-engine-failure-list li { border-color: #262b34 !important; }

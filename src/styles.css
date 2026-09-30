@@ -18505,12 +18505,20 @@ html[data-theme="dark"] .home-catalog-cache-item > div > strong {
 /* Price-trend surfaces: the same visual language is shared by part detail,
    quote summary, and the alert opportunity cards. */
 .price-trend-chart { margin-top: 12px; padding: 8px 8px 0; border-radius: 11px; background: #fbfdff; }
-.price-trend-chart-svg { display: block; width: 100%; height: auto; overflow: visible; }
+.price-trend-chart-plot { position: relative; }
+.price-trend-chart-svg { display: block; width: 100%; height: auto; overflow: visible; cursor: crosshair; }
 .price-trend-chart-guide { stroke: #e7eff6; stroke-dasharray: 3 4; stroke-width: 1; }
 .price-trend-chart-area { fill: rgba(49, 130, 246, .09); }
 .price-trend-chart-line { fill: none; stroke: var(--teal); stroke-linecap: round; stroke-linejoin: round; stroke-width: 2.5; }
+.price-trend-chart-hover-rule { stroke: color-mix(in srgb, var(--teal) 45%, transparent); stroke-width: 1; stroke-dasharray: 3 3; pointer-events: none; }
 .price-trend-chart-point { fill: #fff; stroke: var(--teal); stroke-width: 2; }
 .price-trend-chart-point.current { fill: var(--teal); stroke: #fff; stroke-width: 3; filter: drop-shadow(0 2px 4px rgba(49, 130, 246, .28)); }
+.price-trend-chart-point.hover { fill: var(--teal); stroke: #fff; stroke-width: 3; }
+.price-trend-chart-tooltip { position: absolute; z-index: 5; display: grid; gap: 1px; padding: 6px 9px; border: 1px solid var(--line); border-radius: 9px; color: var(--ink); background: var(--surface, #fff); box-shadow: var(--small-shadow); transform: translate(-50%, calc(-100% - 9px)); pointer-events: none; white-space: nowrap; }
+.price-trend-chart-tooltip strong { font-family: "DM Mono", monospace; font-size: 11px; font-weight: 700; }
+.price-trend-chart-tooltip small { color: var(--muted); font-family: "DM Mono", monospace; font-size: 9px; text-align: center; }
+.price-trend-chart-tooltip[data-edge="left"] { transform: translate(-8%, calc(-100% - 9px)); }
+.price-trend-chart-tooltip[data-edge="right"] { transform: translate(-92%, calc(-100% - 9px)); }
 .price-trend-chart-labels { display: flex; justify-content: space-between; gap: 6px; padding: 1px 2px 0; color: #91a5b5; font-family: "DM Mono", monospace; font-size: 8px; }
 .catalog-price-history-range, .build-price-trend-range { display: flex; gap: 5px; margin-top: 10px; }
 .catalog-price-history-range button, .build-price-trend-range button { min-height: 27px; padding: 0 9px; border: 1px solid #dce7ef; border-radius: 7px; color: #8197a8; background: #fff; font-size: 8px; cursor: pointer; }
