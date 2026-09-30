@@ -52,6 +52,11 @@ jobs:
       NODE_ENV: test
       BROWSER_SMOKE_TIMEOUT_MS: "120000"
       BROWSER_SMOKE_EVALUATE_TIMEOUT_MS: "30000"
+      # Dedicated loopback ports: a stale dev/preview server occupying the
+      # default 5173/4174 ports would otherwise shadow this job's servers
+      # (loopback binds win over wildcard binds on macOS) and make the smoke
+      # silently test the wrong build.
+      BROWSER_SMOKE_BASE_URL: "http://127.0.0.1:5273"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -74,20 +79,30 @@ jobs:
 
       - name: Start local web and API servers
         run: |
-          npm run dev > "${RUNNER_TEMP}/pc-supporter-dev.log" 2>&1 &
-          echo $! > "${RUNNER_TEMP}/pc-supporter-dev.pid"
+          SERVER_HOST=127.0.0.1 PORT=4274 npx --no-install tsx server/index.ts > "${RUNNER_TEMP}/pc-supporter-api.log" 2>&1 &
+          api_pid=$!
+          VITE_API_PROXY_TARGET="http://127.0.0.1:4274" npx --no-install vite --host 127.0.0.1 --port 5273 --strictPort > "${RUNNER_TEMP}/pc-supporter-dev.log" 2>&1 &
+          web_pid=$!
+          echo "$api_pid $web_pid" > "${RUNNER_TEMP}/pc-supporter-dev.pid"
 
       - name: Wait for local API
         shell: bash
         run: |
+          read -r api_pid web_pid < "${RUNNER_TEMP}/pc-supporter-dev.pid"
           for attempt in {1..60}; do
-            if curl --fail --silent http://127.0.0.1:5173/api/health > "${RUNNER_TEMP}/pc-supporter-health.json"; then
+            if ! kill -0 "$api_pid" 2>/dev/null || ! kill -0 "$web_pid" 2>/dev/null; then
+              echo "A CI dev server process exited early; a stale server may already hold the port."
+              cat "${RUNNER_TEMP}/pc-supporter-api.log" "${RUNNER_TEMP}/pc-supporter-dev.log"
+              exit 1
+            fi
+            if curl --fail --silent http://127.0.0.1:5273/api/health > "${RUNNER_TEMP}/pc-supporter-health.json" \
+              && curl --fail --silent http://127.0.0.1:5273/ | grep -q '/src/main.tsx'; then
               cat "${RUNNER_TEMP}/pc-supporter-health.json"
               exit 0
             fi
             sleep 1
           done
-          cat "${RUNNER_TEMP}/pc-supporter-dev.log"
+          cat "${RUNNER_TEMP}/pc-supporter-api.log" "${RUNNER_TEMP}/pc-supporter-dev.log"
           exit 1
 
       - name: Browser DOM smoke flow
@@ -102,13 +117,16 @@ jobs:
         run: npm run build
 
       - name: Start production preview server
-        run: npm run preview -- --port 4184 > "${RUNNER_TEMP}/pc-supporter-preview.log" 2>&1 &
+        env:
+          VITE_API_PROXY_TARGET: http://127.0.0.1:4274
+        run: npm run preview -- --host 127.0.0.1 --port 4184 --strictPort > "${RUNNER_TEMP}/pc-supporter-preview.log" 2>&1 &
 
       - name: Wait for production preview API proxy
         shell: bash
         run: |
           for attempt in {1..60}; do
-            if curl --fail --silent http://127.0.0.1:4184/api/health > "${RUNNER_TEMP}/pc-supporter-preview-health.json"; then
+            if curl --fail --silent http://127.0.0.1:4184/api/health > "${RUNNER_TEMP}/pc-supporter-preview-health.json" \
+              && curl --fail --silent http://127.0.0.1:4184/ | grep -q '/assets/'; then
               cat "${RUNNER_TEMP}/pc-supporter-preview-health.json"
               exit 0
             fi
@@ -137,6 +155,7 @@ jobs:
           name: pc-supporter-browser-smoke-log
           path: |
             ${{ runner.temp }}/pc-supporter-dev.log
+            ${{ runner.temp }}/pc-supporter-api.log
             ${{ runner.temp }}/pc-supporter-preview.log
 
   container-smoke:
