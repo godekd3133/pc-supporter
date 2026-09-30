@@ -36,7 +36,7 @@ jobs:
         run: npm test -- --reporter=dot
 
       - name: Production build
-        run: npm run build
+        run: npm run build:assets
 
       - name: Seed-only API compatibility smoke
         run: npm run test:seed

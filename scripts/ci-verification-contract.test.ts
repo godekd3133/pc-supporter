@@ -210,7 +210,11 @@ describe("CI verification contracts", () => {
   });
 
   it("keeps the CI evidence lanes explicit", async () => {
-    const workflow = await readFile(resolve(projectRoot, ".github/workflows/ci.yml"), "utf8");
+    const [workflow, packageJson] = await Promise.all([
+      readFile(resolve(projectRoot, ".github/workflows/ci.yml"), "utf8"),
+      readFile(resolve(projectRoot, "package.json"), "utf8")
+    ]);
+    const packageScripts = JSON.parse(packageJson).scripts as Record<string, string>;
     expect(workflow).toContain("Seed-only API compatibility smoke");
     expect(workflow).toContain("Browser DOM smoke flow");
     expect(workflow).toContain("Production preview browser DOM smoke flow");
@@ -219,6 +223,19 @@ describe("CI verification contracts", () => {
     expect(workflow).toContain("docker compose up --build --detach");
     expect(workflow).toContain("npm run test:postgres:comparison");
     expect(workflow).toContain("npm run test:postgres:saved-build");
+
+    const verifyJobStart = workflow.indexOf("  verify:\n");
+    const browserJobStart = workflow.indexOf("\n  browser-smoke:", verifyJobStart + 1);
+    expect(verifyJobStart).toBeGreaterThanOrEqual(0);
+    expect(browserJobStart).toBeGreaterThan(verifyJobStart);
+    const verifyJob = workflow.slice(verifyJobStart, browserJobStart);
+    const typecheckStep = verifyJob.indexOf("run: npm run typecheck");
+    const assetsBuildStep = verifyJob.indexOf("run: npm run build:assets");
+    expect(typecheckStep).toBeGreaterThanOrEqual(0);
+    expect(assetsBuildStep).toBeGreaterThan(typecheckStep);
+    expect(packageScripts["build:assets"]).toBe("vite build && node scripts/verify-client-bundle.mjs");
+    expect(packageScripts.build).toContain("tsc --noEmit && vite build");
+    expect(packageScripts.build).toContain("node scripts/verify-client-bundle.mjs");
   });
 
   it("keeps the production container storage and health contracts aligned", async () => {

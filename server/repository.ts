@@ -1989,7 +1989,7 @@ export async function writeSavedBuilds(builds: SavedBuildRecord[]) {
       for (const build of builds) {
         await client.query(
           `INSERT INTO saved_builds (id, name, decision_note, origin, selection, recommendation_preferences, created_at, updated_at, expires_at, owner_token_hash, recovery_code_hash, my_pc_at, version_group_id, version_number, derived_from_build_id, check_snapshot, check_history, monitor_state, purchase_progress, purchase_price_history, metadata_history)
-           VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7::timestamptz, $8::timestamptz, $9::timestamptz, $10, $11, $12::timestamptz, $13, $14, $15, $16::jsonb, $17::jsonb, $18::jsonb, $19::jsonb, $20::jsonb, $21::jsonb, $22::jsonb)
+           VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7::timestamptz, $8::timestamptz, $9::timestamptz, $10, $11, $12::timestamptz, $13, $14, $15, $16::jsonb, $17::jsonb, $18::jsonb, $19::jsonb, $20::jsonb, $21::jsonb)
            ON CONFLICT (id) DO UPDATE SET
              name = EXCLUDED.name,
              decision_note = EXCLUDED.decision_note,
@@ -2048,7 +2048,7 @@ async function appendSavedBuildToDatabase(build: SavedBuildRecord, max: number) 
     const next = { ...build, versionGroupId, versionNumber: nextVersion } satisfies SavedBuildRecord;
     await client.query(
       `INSERT INTO saved_builds (id, name, decision_note, origin, selection, recommendation_preferences, created_at, updated_at, expires_at, owner_token_hash, recovery_code_hash, my_pc_at, version_group_id, version_number, derived_from_build_id, check_snapshot, check_history, monitor_state, purchase_progress, purchase_price_history, metadata_history)
-       VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7::timestamptz, $8::timestamptz, $9::timestamptz, $10, $11, $12::timestamptz, $13, $14, $15, $16::jsonb, $17::jsonb, $18::jsonb, $19::jsonb, $20::jsonb, $21::jsonb, $22::jsonb)`,
+       VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7::timestamptz, $8::timestamptz, $9::timestamptz, $10, $11, $12::timestamptz, $13, $14, $15, $16::jsonb, $17::jsonb, $18::jsonb, $19::jsonb, $20::jsonb, $21::jsonb)`,
       [next.id, next.name, next.decisionNote ?? null, next.origin ? JSON.stringify(next.origin) : null, JSON.stringify(next.selection), next.recommendationPreferences ? JSON.stringify(next.recommendationPreferences) : null, next.createdAt, next.updatedAt, next.expiresAt ?? null, next.ownerTokenHash ?? null, next.recoveryCodeHash ?? null, next.myPcAt ?? null, next.versionGroupId, next.versionNumber, next.derivedFromBuildId ?? null, next.checkSnapshot ? JSON.stringify(next.checkSnapshot) : null, next.checkHistory ? JSON.stringify(next.checkHistory) : null, next.monitorState ? JSON.stringify(next.monitorState) : null, next.purchaseProgress ? JSON.stringify(next.purchaseProgress) : null, next.purchasePriceHistory ? JSON.stringify(next.purchasePriceHistory) : null, next.metadataHistory ? JSON.stringify(next.metadataHistory) : null]
     );
     const boundedMax = Math.max(1, Math.floor(max));
