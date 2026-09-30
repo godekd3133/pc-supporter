@@ -491,7 +491,7 @@ async function main() {
     const categoryCrawlStatus = await client.evaluate("fetch('/api/admin/crawl/status').then((response) => response.json())");
     assert(typeof categoryCrawlStatus?.pageRetries === 'number' && Array.isArray(categoryCrawlStatus?.failedPages), "카탈로그 페이지 telemetry 필드가 없습니다. probe=" + JSON.stringify(categoryCrawlStatus));
     if (categoryCrawlStatus?.currentPage !== undefined || categoryCrawlStatus?.currentCategory || categoryCrawlStatus?.failedPages?.length > 0) {
-      await waitForValue(client, "document.querySelector('[data-testid=\"admin-crawl-progress-detail\"]') !== null && (document.body?.innerText ?? '').includes('PAGE TELEMETRY')", "카탈로그 페이지 telemetry 패널");
+      await waitForValue(client, "document.querySelector('[data-testid=\"admin-crawl-progress-detail\"]') !== null && (document.body?.innerText ?? '').includes('화면 통계')", "카탈로그 페이지 telemetry 패널");
     }
     if (categoryCrawlStatus?.failedPages?.some((failure) => failure.stage === 'list')) {
       await waitForValue(client, "document.querySelector('[data-testid^=\"admin-crawl-retry-page-\"]') !== null", "실패 목록 페이지 단독 재시도 액션");
