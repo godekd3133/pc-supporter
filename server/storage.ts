@@ -1,5 +1,4 @@
-import { constants } from "node:fs";
-import { access, mkdir, open, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { dirname, resolve } from "node:path";
 
@@ -7,10 +6,7 @@ const configuredDataDirectory = process.env.PC_SUPPORTER_DATA_DIR?.trim();
 export const DATA_DIR = configuredDataDirectory ? resolve(configuredDataDirectory) : resolve(process.cwd(), "data");
 export const CATALOG_PATH = resolve(DATA_DIR, "catalog.json");
 export const ACCESSORIES_PATH = resolve(DATA_DIR, "accessories.json");
-export const BUILDS_PATH = resolve(DATA_DIR, "builds.json");
-export const SAVED_BUILD_VERSION_LEASE_PATH = resolve(DATA_DIR, "saved-build-version.lease");
-export const SAVED_BUILD_VERSION_BACKUP_PATH = resolve(DATA_DIR, "saved-build-version-backup.json");
-export const SAVED_BUILD_MONITOR_LEASE_PATH = resolve(DATA_DIR, "saved-build-monitor.lease");
+
 export const CRAWL_STATE_PATH = resolve(DATA_DIR, "crawl-state.json");
 export const CRAWL_LOCK_PATH = resolve(DATA_DIR, "crawl.lock");
 export const CRAWL_MANIFEST_PATH = resolve(DATA_DIR, "crawl-manifest.json");
@@ -27,45 +23,18 @@ export const ACCESSORY_CRAWL_MANIFEST_PATH = resolve(DATA_DIR, "accessory-crawl-
 export const ACCESSORY_COVERAGE_PATH = resolve(DATA_DIR, "accessory-coverage.json");
 export const CATALOG_CHANGE_LOG_PATH = resolve(DATA_DIR, "catalog-change-log.json");
 export const PRICE_REFRESH_STATE_PATH = resolve(DATA_DIR, "price-refresh-state.json");
-export const PRICE_REFRESH_ATTEMPTS_PATH = resolve(DATA_DIR, "price-refresh-attempts.json");
 export const PRICE_REFRESH_LOCK_PATH = resolve(DATA_DIR, "price-refresh.lock");
 export const CATALOG_SPEC_OVERRIDES_PATH = resolve(DATA_DIR, "catalog-spec-overrides.json");
 export const CATALOG_SPEC_OVERRIDE_SOURCE_CHECK_HISTORY_PATH = resolve(DATA_DIR, "catalog-spec-override-source-check-history.json");
 export const CATALOG_SPEC_REFRESH_HISTORY_PATH = resolve(DATA_DIR, "catalog-spec-refresh-history.json");
 export const CATALOG_SEED_MAPPINGS_PATH = resolve(DATA_DIR, "catalog-seed-mappings.json");
-export const WATCHLISTS_PATH = resolve(DATA_DIR, "watchlists.json");
-export const WATCHLIST_ALERT_STATES_PATH = resolve(DATA_DIR, "watchlist-alert-states.json");
-export const COMPARISONS_PATH = resolve(DATA_DIR, "comparisons.json");
-export const VERSION_COMPARISONS_PATH = resolve(DATA_DIR, "version-comparisons.json");
-export const BUDGET_LADDERS_PATH = resolve(DATA_DIR, "budget-ladders.json");
-export const GENERATOR_VARIANTS_PATH = resolve(DATA_DIR, "generator-variants.json");
-export const USAGE_EVENTS_PATH = resolve(DATA_DIR, "usage-events.json");
-// Keep the original pending grant-store path; its versioned JSON now holds both sessions and grants.
-export const OWNER_SESSION_STORE_PATH = resolve(DATA_DIR, "owner-session-grants.json");
-export const OWNER_SESSION_GRANTS_PATH = OWNER_SESSION_STORE_PATH;
-
-const filePersistenceErrors = new Map<string, unknown>();
 
 function errorHasCode(error: unknown, code: string) {
   return Boolean(error && typeof error === "object" && "code" in error && error.code === code);
 }
 
-function recordFilePersistenceError(path: string, error: unknown) {
-  filePersistenceErrors.set(path, error);
-}
-
-function clearFilePersistenceError(path: string) {
-  filePersistenceErrors.delete(path);
-}
-
 export async function ensureDataDirectory() {
-  try {
-    await mkdir(DATA_DIR, { recursive: true });
-    clearFilePersistenceError(DATA_DIR);
-  } catch (error: unknown) {
-    recordFilePersistenceError(DATA_DIR, error);
-    throw error;
-  }
+  await mkdir(DATA_DIR, { recursive: true });
 }
 
 export async function readJson<T>(path: string, fallback: T): Promise<T> {
@@ -73,60 +42,20 @@ export async function readJson<T>(path: string, fallback: T): Promise<T> {
   try {
     raw = await readFile(path, "utf8");
   } catch (error: unknown) {
-    if (errorHasCode(error, "ENOENT")) {
-      clearFilePersistenceError(path);
-      return fallback;
-    }
-    recordFilePersistenceError(path, error);
+    if (errorHasCode(error, "ENOENT")) return fallback;
     throw error;
   }
-  try {
-    const parsed = JSON.parse(raw) as T;
-    clearFilePersistenceError(path);
-    return parsed;
-  } catch (error: unknown) {
-    recordFilePersistenceError(path, error);
-    throw error;
-  }
+  return JSON.parse(raw) as T;
 }
 
 export async function writeJson<T>(path: string, value: T) {
+  await ensureDataDirectory();
+  const temporaryPath = `${path}.${process.pid}.${randomUUID()}.tmp`;
   try {
-    await ensureDataDirectory();
-    const temporaryPath = `${path}.${process.pid}.${randomUUID()}.tmp`;
-    try {
-      await writeFile(temporaryPath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
-      await rename(temporaryPath, path);
-    } finally {
-      await unlink(temporaryPath).catch(() => undefined);
-    }
-    clearFilePersistenceError(path);
-  } catch (error: unknown) {
-    recordFilePersistenceError(path, error);
-    throw error;
-  }
-}
-
-export async function filePersistenceIsReady() {
-  for (const path of filePersistenceErrors.keys()) {
-    if (path === DATA_DIR) continue;
-    try {
-      const raw = await readFile(path, "utf8");
-      JSON.parse(raw);
-      clearFilePersistenceError(path);
-    } catch (error: unknown) {
-      if (errorHasCode(error, "ENOENT")) clearFilePersistenceError(path);
-    }
-  }
-  if ([...filePersistenceErrors.keys()].some((path) => path !== DATA_DIR)) return false;
-  try {
-    const directoryInfo = await stat(DATA_DIR);
-    if (!directoryInfo.isDirectory()) return false;
-    await access(DATA_DIR, constants.R_OK | constants.W_OK);
-    clearFilePersistenceError(DATA_DIR);
-    return true;
-  } catch (error: unknown) {
-    return errorHasCode(error, "ENOENT") && !filePersistenceErrors.has(DATA_DIR);
+    await writeFile(temporaryPath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+    await rename(temporaryPath, path);
+  } finally {
+    await unlink(temporaryPath).catch(() => undefined);
   }
 }
 

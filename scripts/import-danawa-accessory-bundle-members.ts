@@ -3,7 +3,7 @@ import { copyFile, mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
-import type { AccessoryCategory, AccessoryItem, DanawaCrawlManifest, Part } from "../shared/types";
+import type { AccessoryCategory, AccessoryItem, Part } from "../shared/types";
 import { DANAWA_ACCESSORY_CATEGORIES, parseDanawaAccessoryPage } from "../server/accessory-crawler";
 import { fetchDanawaHtml, type DanawaCrawlerOptions, type DanawaListItem, isAllowedSourceUrl } from "../server/danawa";
 import { upsertAccessories } from "../server/accessories";
@@ -11,7 +11,7 @@ import {
   BUNDLE_MEMBERS_SOURCE,
   bundleProductEvidenceEdges,
   canonicalAccessoryDetailUrl,
-  detailPageMatchesPCode,
+  classifyDetailPageIdentity,
   detailPagePCodeEvidence,
   safeDetailPCodeSourceObjects,
   isDanawaPCode,
@@ -20,11 +20,13 @@ import {
   type BundleMembersArtifact,
   type BundleSortMethod
 } from "./danawa-accessory-bundle-members";
-import { ACCESSORIES_PATH, CATALOG_PATH, DATA_DIR, readJson } from "../server/storage";
+import { ACCESSORIES_PATH, CATALOG_PATH, DATA_DIR, readJson, writeJson } from "../server/storage";
 
 const USER_AGENT = "PCSupporterAccessoryBundleMembers/1.0 (public Danawa product detail pages)";
 const MIN_DELAY_MS = 900;
 const DEFAULT_LIMIT = 50;
+const APPLY_BATCH_SIZE = 25;
+const BUNDLE_IMPORT_STATE_SOURCE = "verified Danawa accessory bundle member detail import state";
 let lastSourceRequestAt = 0;
 
 const { values, positionals } = parseArgs({
@@ -33,17 +35,20 @@ const { values, positionals } = parseArgs({
     all: { type: "boolean", default: false },
     category: { type: "string" },
     limit: { type: "string" },
+    "retry-quarantined": { type: "boolean", default: false },
+    "resume-pending": { type: "boolean", default: false },
     "product-code": { type: "string", multiple: true }
   },
   strict: true,
   allowPositionals: true
 });
 
-if (positionals.length > 0) throw new Error("Use only --apply, --all, --category=ACCESSORY_CATEGORY, --limit=N, and --product-code=PCODE[,PCODE...].");
+if (positionals.length > 0) throw new Error("Use only --apply, --all, --category=ACCESSORY_CATEGORY, --limit=N, --product-code=PCODE[,PCODE...], --retry-quarantined, and --resume-pending.");
 if (process.env.DATABASE_URL?.trim()) throw new Error("Bundle member import is file-backed only; unset DATABASE_URL before running it.");
 if (DATA_DIR !== resolve(process.cwd(), "data")) throw new Error("This importer is limited to this checkout's data directory; unset PC_SUPPORTER_DATA_DIR.");
 if (values.all && (values.limit || values["product-code"]?.length)) throw new Error("Choose --all, --limit=N, or explicit --product-code selections.");
 if (values.limit && values["product-code"]?.length) throw new Error("Choose --limit=N or explicit --product-code selections.");
+if (values["resume-pending"] && (!values.apply || values.all || values.limit || values["product-code"]?.length)) throw new Error("--resume-pending requires --apply and must run without product selection options.");
 
 const categoryFilter = values.category as AccessoryCategory | undefined;
 if (categoryFilter && !DANAWA_ACCESSORY_CATEGORIES.some((entry) => entry.category === categoryFilter)) throw new Error(`Unknown accessory category: ${categoryFilter}`);
@@ -56,6 +61,64 @@ const requestedProductCodes = [...new Set((values["product-code"] ?? []).flatMap
 for (const code of requestedProductCodes) if (!isDanawaPCode(code)) throw new Error(`Invalid --product-code PCode: ${code}`);
 
 const bundleArtifactPath = join(DATA_DIR, "danawa-accessory-bundle-members.json");
+const importStatePath = join(DATA_DIR, "accessory-bundle-detail-import-state.json");
+
+type SourceEvidenceRef = {
+  kind: "bundle_member" | "list_parent";
+  parentProductCode: string;
+  sortMethod: BundleSortMethod;
+  page: number;
+  fetchedAt: string;
+};
+type BundleImportStateEntry = {
+  productCode: string;
+  category: AccessoryCategory;
+  categoryId: string;
+  status: "imported" | "quarantined";
+  updatedAt: string;
+  sourceEvidence: SourceEvidenceRef[];
+  reason?: string;
+  identityEvidence?: ReturnType<typeof detailPagePCodeEvidence>;
+  itemId?: string;
+};
+type PendingVerifiedItem = {
+  productCode: string;
+  sourceEvidence: SourceEvidenceRef[];
+  identityEvidence: ReturnType<typeof detailPagePCodeEvidence>;
+  verifiedItem: AccessoryItem;
+};
+type BundleImportState = {
+  schemaVersion: 1;
+  source: typeof BUNDLE_IMPORT_STATE_SOURCE;
+  updatedAt: string;
+  entries: Record<string, BundleImportStateEntry>;
+  pendingBatch?: {
+    batchNumber: number;
+    startedAt: string;
+    phase: "ready-to-commit" | "hard-stop";
+    stoppedAt?: string;
+    stoppedAtProductCode?: string;
+    stopReason?: string;
+    plannedProductCodes: string[];
+    uncommittedProductCodes: string[];
+    verifiedActualParsedItems: PendingVerifiedItem[];
+    quarantinedEntries: BundleImportStateEntry[];
+  };
+  lastBatch?: { batchNumber: number; committedAt: string; importedCount: number; quarantinedCount: number };
+};
+
+function emptyBundleImportState(): BundleImportState {
+  return { schemaVersion: 1, source: BUNDLE_IMPORT_STATE_SOURCE, updatedAt: new Date().toISOString(), entries: {} };
+}
+
+async function createImportBackup() {
+  const backupDirectory = await mkdtemp(join(tmpdir(), "pc-supporter-bundle-member-import-"));
+  for (const [sourcePath, backupName] of [[ACCESSORIES_PATH, "accessories.json"], [importStatePath, "accessory-bundle-detail-import-state.json"]] as const) {
+    try { await copyFile(sourcePath, join(backupDirectory, backupName)); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+  }
+  return backupDirectory;
+}
 
 async function readRequiredJson<T>(path: string): Promise<T> {
   return JSON.parse(await readFile(path, "utf8")) as T;
@@ -103,14 +166,42 @@ type MembershipEvidence = {
   category: AccessoryCategory;
   categoryId: string;
   productCode: string;
-  sourceEvidence: Array<{
-    kind: "bundle_member" | "list_parent";
-    parentProductCode: string;
-    sortMethod: BundleSortMethod;
-    page: number;
-    fetchedAt: string;
-  }>;
+  sourceEvidence: SourceEvidenceRef[];
 };
+
+function bundleImportStateKey(categoryId: string, productCode: string) {
+  return `${categoryId}:${productCode}`;
+}
+
+function quarantineEntry(evidence: MembershipEvidence, reason: string, identityEvidence?: ReturnType<typeof detailPagePCodeEvidence>): BundleImportStateEntry {
+  return {
+    productCode: evidence.productCode,
+    category: evidence.category,
+    categoryId: evidence.categoryId,
+    status: "quarantined",
+    updatedAt: new Date().toISOString(),
+    sourceEvidence: evidence.sourceEvidence,
+    reason,
+    ...(identityEvidence ? { identityEvidence } : {})
+  };
+}
+
+function safeFetchErrorReason(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.replace(/https?:\/\/\S+/g, "[source URL]").slice(0, 240);
+}
+
+function hardStopFetchError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /(?:STOP:|\b403\b|\b429\b|redirect rejected|captcha|challenge|접근이 제한|자동입력 방지)/i.test(message);
+}
+
+class BundleDetailHardStop extends Error {
+  constructor(readonly productCode: string, readonly reason: string, readonly identityEvidence?: ReturnType<typeof detailPagePCodeEvidence>) {
+    super(`STOP: ${reason} for ${productCode}.`);
+    this.name = "BundleDetailHardStop";
+  }
+}
 
 function collectMemberEvidence(artifact: BundleMembersArtifact) {
   if (artifact.schemaVersion !== 1 || artifact.source !== BUNDLE_MEMBERS_SOURCE || !artifact.categories || !Number.isFinite(Date.parse(artifact.updatedAt))) {
@@ -169,11 +260,16 @@ function collectMemberEvidence(artifact: BundleMembersArtifact) {
   return byCode;
 }
 
-const [bundleArtifact, accessories, coreParts] = await Promise.all([
+const [bundleArtifact, accessories, coreParts, storedImportState] = await Promise.all([
   readRequiredJson<BundleMembersArtifact>(bundleArtifactPath),
   readJson<AccessoryItem[]>(ACCESSORIES_PATH, []),
-  readJson<Part[]>(CATALOG_PATH, [])
+  readJson<Part[]>(CATALOG_PATH, []),
+  readJson<BundleImportState>(importStatePath, emptyBundleImportState())
 ]);
+if (storedImportState.schemaVersion !== 1 || storedImportState.source !== BUNDLE_IMPORT_STATE_SOURCE || !storedImportState.entries) {
+  throw new Error("Unsupported or invalid bundle member import state artifact.");
+}
+const importState = storedImportState;
 const memberEvidenceByCode = collectMemberEvidence(bundleArtifact);
 const coreCodes = new Set(coreParts.flatMap((part) => part.sourceProductCode ? [part.sourceProductCode] : []));
 const accessoryRowsByCode = new Map<string, AccessoryItem[]>();
@@ -181,11 +277,65 @@ for (const item of accessories) {
   if (item.sourceProductCode) accessoryRowsByCode.set(item.sourceProductCode, [...(accessoryRowsByCode.get(item.sourceProductCode) ?? []), item]);
 }
 
+if (values["resume-pending"]) {
+  const pending = importState.pendingBatch;
+  if (!values.apply || !pending) throw new Error("--resume-pending requires --apply and an existing pending batch for review.");
+  const pendingItems = pending.verifiedActualParsedItems.map(({ productCode, verifiedItem }) => {
+    const config = DANAWA_ACCESSORY_CATEGORIES.find((entry) => entry.category === verifiedItem.category && entry.categoryId === verifiedItem.sourceCategoryId);
+    if (!config || !isDanawaPCode(productCode) || verifiedItem.source !== "danawa" || verifiedItem.sourceProductCode !== productCode
+      || verifiedItem.id !== `accessory-${verifiedItem.category}-${productCode}`
+      || verifiedItem.danawaUrl !== canonicalAccessoryDetailUrl(productCode, config.categoryId)) {
+      throw new Error(`STOP: pending parsed product identity is invalid for ${productCode}.`);
+    }
+    if (coreCodes.has(productCode)) throw new Error(`STOP: pending bundle member ${productCode} conflicts with a core catalog product.`);
+    const current = accessoryRowsByCode.get(productCode) ?? [];
+    if (current.length > 1 || (current.length === 1 && (current[0].source !== "danawa" || current[0].category !== verifiedItem.category || current[0].sourceCategoryId !== verifiedItem.sourceCategoryId))) {
+      throw new Error(`STOP: pending bundle member ${productCode} conflicts with the current accessory catalog.`);
+    }
+    return verifiedItem;
+  });
+  const backupDirectory = await createImportBackup();
+  if (pendingItems.length > 0) await upsertAccessories(pendingItems);
+  for (const item of pendingItems) {
+    const key = `${item.sourceCategoryId}:${item.sourceProductCode}`;
+    const previous = importState.entries[key];
+    importState.entries[key] = {
+      productCode: item.sourceProductCode!,
+      category: item.category,
+      categoryId: item.sourceCategoryId!,
+      status: "imported",
+      updatedAt: new Date().toISOString(),
+      sourceEvidence: pending.verifiedActualParsedItems.find((candidate) => candidate.productCode === item.sourceProductCode)?.sourceEvidence ?? previous?.sourceEvidence ?? [],
+      itemId: item.id
+    };
+  }
+  for (const entry of pending.quarantinedEntries) importState.entries[`${entry.categoryId}:${entry.productCode}`] = entry;
+  importState.updatedAt = new Date().toISOString();
+  importState.lastBatch = { batchNumber: pending.batchNumber, committedAt: importState.updatedAt, importedCount: pendingItems.length, quarantinedCount: pending.quarantinedEntries.length };
+  delete importState.pendingBatch;
+  await writeJson(importStatePath, importState);
+  console.log(JSON.stringify({
+    mode: "resume-pending-applied",
+    backupDirectory,
+    importedCount: pendingItems.length,
+    quarantinedCount: pending.quarantinedEntries.length,
+    pendingBatchCleared: true
+  }, null, 2));
+  process.exit(0);
+}
+if (values.apply && importState.pendingBatch) {
+  throw new Error(`STOP: pending batch ${importState.pendingBatch.batchNumber} must be reviewed and resumed explicitly before another --apply run.`);
+}
+
 const missingEvidenceCodes = requestedProductCodes.filter((code) => !memberEvidenceByCode.has(code));
 if (missingEvidenceCodes.length) throw new Error(`Requested PCode(s) are not present in the verified bundle/list parent artifact: ${missingEvidenceCodes.join(", ")}`);
 const inventory = [...memberEvidenceByCode.values()].sort((left, right) => left.productCode.localeCompare(right.productCode));
 const candidates: MembershipEvidence[] = [];
 const alreadyPresent: string[] = [];
+const skippedQuarantined: string[] = [];
+const skippedImportedState: string[] = [];
+const skippedPending: string[] = [];
+const pendingProductCodes = new Set(importState.pendingBatch?.uncommittedProductCodes ?? []);
 for (const evidence of inventory) {
   if (coreCodes.has(evidence.productCode)) throw new Error(`STOP: bundle member PCode ${evidence.productCode} conflicts with a core catalog product.`);
   const matches = accessoryRowsByCode.get(evidence.productCode) ?? [];
@@ -200,89 +350,266 @@ for (const evidence of inventory) {
     alreadyPresent.push(evidence.productCode);
     continue;
   }
+  const priorState = importState.entries[`${evidence.categoryId}:${evidence.productCode}`];
+  if (priorState?.status === "quarantined" && !values["retry-quarantined"]) {
+    skippedQuarantined.push(evidence.productCode);
+    continue;
+  }
+  if (priorState?.status === "imported") {
+    skippedImportedState.push(evidence.productCode);
+    continue;
+  }
+  if (pendingProductCodes.has(evidence.productCode)) {
+    skippedPending.push(evidence.productCode);
+    continue;
+  }
   candidates.push(evidence);
 }
 
 const selectedCandidates = requestedProductCodes.length
   ? requestedProductCodes.flatMap((code) => candidates.filter((candidate) => candidate.productCode === code))
   : values.all ? candidates : candidates.slice(0, configuredLimit);
-if (requestedProductCodes.length && selectedCandidates.length !== requestedProductCodes.filter((code) => !alreadyPresent.includes(code)).length) {
-  throw new Error("Some explicitly selected bundle member PCode(s) are already present; review existing catalog rows before importing.");
+if (requestedProductCodes.length && selectedCandidates.length !== requestedProductCodes.filter((code) =>
+  !alreadyPresent.includes(code) && !skippedQuarantined.includes(code) && !skippedImportedState.includes(code) && !skippedPending.includes(code)
+).length) {
+  throw new Error("Some explicitly selected PCode(s) are not eligible for detail verification; inspect category conflict or quarantine state.");
 }
-if (selectedCandidates.length === 0) throw new Error("No missing verified bundle member PCode is selected for detail verification.");
+if (selectedCandidates.length === 0) {
+  console.log(JSON.stringify({
+    mode: "dry-run-no-pending-candidates",
+    selectedProductCodes: requestedProductCodes,
+    alreadyPresentCount: alreadyPresent.length,
+    skippedQuarantinedCount: skippedQuarantined.length,
+    skippedImportedStateCount: skippedImportedState.length,
+    skippedPendingCount: skippedPending.length,
+    outputWritten: false
+  }, null, 2));
+  process.exit(0);
+}
 
 await preflightInfoRobots();
-const verifiedItems: AccessoryItem[] = [];
-const verificationRows: Array<{ productCode: string; category: AccessoryCategory; result: "verified"; sourceKinds: Array<"bundle_member" | "list_parent">; sourceParents: string[]; sortMethod: BundleSortMethod; page: number; verifiedName: string; dataQuality: string; specFieldCount: number; priceWon?: number; priceCheckedAt?: string; imageUrl?: string }> = [];
-for (const evidence of selectedCandidates) {
+type VerifiedDetailResult = {
+  status: "verified";
+  evidence: MembershipEvidence;
+  item: AccessoryItem;
+  identityEvidence: ReturnType<typeof detailPagePCodeEvidence>;
+};
+type QuarantinedDetailResult = {
+  status: "quarantined";
+  entry: BundleImportStateEntry;
+};
+const verifyCandidate = async (evidence: MembershipEvidence): Promise<VerifiedDetailResult | QuarantinedDetailResult> => {
   const url = canonicalAccessoryDetailUrl(evidence.productCode, evidence.categoryId);
   const parsedUrl = new URL(url);
   if (!isAllowedSourceUrl(parsedUrl.href) || parsedUrl.pathname !== "/info/" || parsedUrl.searchParams.get("pcode") !== evidence.productCode
     || parsedUrl.searchParams.get("cate") !== evidence.categoryId) {
-    throw new Error(`STOP: bundle member ${evidence.productCode} canonical detail identity mismatch.`);
+    throw new BundleDetailHardStop(evidence.productCode, "canonical-request-url-mismatch");
   }
   const waitMs = Math.max(0, MIN_DELAY_MS - (Date.now() - lastSourceRequestAt));
   if (waitMs > 0) await new Promise((resolveDelay) => setTimeout(resolveDelay, waitMs));
   lastSourceRequestAt = Date.now();
-  const html = await fetchDanawaHtml(url, { timeoutMs: 20_000, retries: 2, userAgent: USER_AGENT } satisfies DanawaCrawlerOptions);
-  if (/접근이 제한|비정상적인 접근|자동입력 방지|보안문자|로봇이 아닙니다|captcha/i.test(html)) {
-    throw new Error(`STOP: product detail returned an access challenge for PCode ${evidence.productCode}.`);
+  let html: string;
+  try {
+    html = await fetchDanawaHtml(url, { timeoutMs: 20_000, retries: 2, userAgent: USER_AGENT } satisfies DanawaCrawlerOptions);
+  } catch (error) {
+    if (hardStopFetchError(error)) throw new BundleDetailHardStop(evidence.productCode, "source-blocked-or-redirected");
+    return {
+      status: "quarantined",
+      entry: quarantineEntry(evidence, `detail-fetch-failed:${safeFetchErrorReason(error)}`)
+    };
   }
-  if (!detailPageMatchesPCode(html, evidence.productCode, evidence.categoryId)) {
-    const detailIdentity = detailPagePCodeEvidence(html);
-    const sourceObjects = safeDetailPCodeSourceObjects(html, evidence.productCode);
-    throw new Error(`STOP: product detail canonical/primary PCode identity mismatch for ${evidence.productCode}: ${JSON.stringify({ detailIdentity, matchingPCodeSourceObjects: sourceObjects })}`);
+  const identity = classifyDetailPageIdentity(html, evidence.productCode, evidence.categoryId);
+  if (identity.status === "hard-stop") throw new BundleDetailHardStop(evidence.productCode, identity.reason, identity.evidence);
+  if (identity.status === "quarantined") {
+    return { status: "quarantined", entry: quarantineEntry(evidence, identity.reason, identity.evidence) };
   }
   const listItem: DanawaListItem = { name: "", url, sourceProductCode: evidence.productCode };
   const parsed = parseDanawaAccessoryPage(evidence.category, listItem, html, evidence.categoryId);
   if (parsed.sourceProductCode !== evidence.productCode || parsed.category !== evidence.category || parsed.sourceCategoryId !== evidence.categoryId) {
-    throw new Error(`STOP: accessory detail parser returned mismatched source identity for ${evidence.productCode}.`);
+    throw new BundleDetailHardStop(evidence.productCode, "detail-parser-returned-mismatched-source-identity", identity.evidence);
   }
-  if (!parsed.name.trim()) throw new Error(`STOP: source detail title is missing for verified PCode ${evidence.productCode}.`);
+  if (!parsed.name.trim()) {
+    return { status: "quarantined", entry: quarantineEntry(evidence, "detail-title-missing", identity.evidence) };
+  }
   parsed.imageUrl = trustedDanawaImageUrl(parsed.imageUrl);
   if (parsed.priceWon !== undefined && parsed.priceWon > 0) parsed.priceCheckedAt = new Date().toISOString();
-  verifiedItems.push(parsed);
-  verificationRows.push({
-    productCode: evidence.productCode,
-    category: evidence.category,
-    result: "verified",
-    sourceKinds: [...new Set(evidence.sourceEvidence.map((source) => source.kind))],
-    sourceParents: [...new Set(evidence.sourceEvidence.map((source) => source.parentProductCode))].sort(),
-    sortMethod: evidence.sourceEvidence[0].sortMethod,
-    page: evidence.sourceEvidence[0].page,
-    verifiedName: parsed.name,
-    dataQuality: parsed.dataQuality,
-    specFieldCount: Object.keys(parsed.specs).length,
-    ...(parsed.priceWon !== undefined ? { priceWon: parsed.priceWon } : {}),
-    ...(parsed.priceCheckedAt ? { priceCheckedAt: parsed.priceCheckedAt } : {}),
-    ...(parsed.imageUrl ? { imageUrl: parsed.imageUrl } : {})
-  });
+  return { status: "verified", evidence, item: parsed, identityEvidence: identity.evidence };
+};
+
+const verifiedRows: Array<Record<string, unknown>> = [];
+const quarantinedRows: BundleImportStateEntry[] = [];
+const batchSummaries: Array<{ batchNumber: number; plannedCount: number; verifiedCount: number; quarantinedCount: number; importedCount: number }> = [];
+let importedCount = 0;
+let quarantinedCount = 0;
+let batchNumber = importState.lastBatch?.batchNumber ?? 0;
+const backupDirectory = values.apply ? await createImportBackup() : undefined;
+
+for (let offset = 0; offset < selectedCandidates.length; offset += APPLY_BATCH_SIZE) {
+  batchNumber += 1;
+  const batch = selectedCandidates.slice(offset, offset + APPLY_BATCH_SIZE);
+  const startedAt = new Date().toISOString();
+  const verifiedActualParsedItems: PendingVerifiedItem[] = [];
+  const batchQuarantined: BundleImportStateEntry[] = [];
+  let hardStop: BundleDetailHardStop | undefined;
+
+  for (const evidence of batch) {
+    try {
+      const result = await verifyCandidate(evidence);
+      if (result.status === "quarantined") {
+        batchQuarantined.push(result.entry);
+        quarantinedRows.push(result.entry);
+        continue;
+      }
+      const { item, identityEvidence } = result;
+      verifiedActualParsedItems.push({ productCode: evidence.productCode, sourceEvidence: evidence.sourceEvidence, identityEvidence, verifiedItem: item });
+      verifiedRows.push({
+        productCode: evidence.productCode,
+        category: evidence.category,
+        result: "verified",
+        sourceKinds: [...new Set(evidence.sourceEvidence.map((source) => source.kind))],
+        sourceParents: [...new Set(evidence.sourceEvidence.map((source) => source.parentProductCode))].sort(),
+        sortMethod: evidence.sourceEvidence[0].sortMethod,
+        page: evidence.sourceEvidence[0].page,
+        verifiedName: item.name,
+        dataQuality: item.dataQuality,
+        specFieldCount: Object.keys(item.specs).length,
+        ...(item.priceWon !== undefined ? { priceWon: item.priceWon } : {}),
+        ...(item.priceCheckedAt ? { priceCheckedAt: item.priceCheckedAt } : {}),
+        ...(item.imageUrl ? { imageUrl: item.imageUrl } : {})
+      });
+    } catch (error) {
+      if (!(error instanceof BundleDetailHardStop)) throw error;
+      hardStop = error;
+      const evidence = batch.find((candidate) => candidate.productCode === error.productCode)!;
+      const hardStopEntry = quarantineEntry(evidence, `hard-stop:${error.reason}`, error.identityEvidence);
+      batchQuarantined.push(hardStopEntry);
+      quarantinedRows.push(hardStopEntry);
+      break;
+    }
+  }
+
+  if (hardStop) {
+    if (values.apply) {
+      for (const entry of batchQuarantined) importState.entries[bundleImportStateKey(entry.categoryId, entry.productCode)] = entry;
+      const now = new Date().toISOString();
+      importState.pendingBatch = {
+        batchNumber,
+        startedAt,
+        phase: "hard-stop",
+        stoppedAt: now,
+        stoppedAtProductCode: hardStop.productCode,
+        stopReason: hardStop.reason,
+        plannedProductCodes: batch.map((candidate) => candidate.productCode),
+        uncommittedProductCodes: selectedCandidates.slice(offset).map((candidate) => candidate.productCode),
+        verifiedActualParsedItems,
+        quarantinedEntries: batchQuarantined
+      };
+      importState.updatedAt = now;
+      await writeJson(importStatePath, importState);
+    }
+    const stopped = {
+      mode: values.apply ? "apply-stopped-hard-stop" : "dry-run-stopped-hard-stop",
+      stopReason: hardStop.reason,
+      stoppedAtProductCode: hardStop.productCode,
+      verifiedActualParsedItemsInUncommittedBatch: verifiedActualParsedItems.length,
+      quarantinedInUncommittedBatch: batchQuarantined.length,
+      uncommittedProductCodes: selectedCandidates.slice(offset).map((candidate) => candidate.productCode),
+      previouslyCommittedAccessoryCount: importedCount,
+      pendingBatchCheckpointWritten: Boolean(values.apply),
+      importStatePath: values.apply ? importStatePath : undefined
+    };
+    console.log(JSON.stringify(stopped, null, 2));
+    throw new Error(`STOP: ${hardStop.message}`);
+  }
+
+  let batchImportedCount = 0;
+  if (values.apply) {
+    for (const entry of batchQuarantined) importState.entries[bundleImportStateKey(entry.categoryId, entry.productCode)] = entry;
+    if (verifiedActualParsedItems.length > 0) {
+      const now = new Date().toISOString();
+      importState.pendingBatch = {
+        batchNumber,
+        startedAt,
+        phase: "ready-to-commit",
+        plannedProductCodes: batch.map((candidate) => candidate.productCode),
+        uncommittedProductCodes: verifiedActualParsedItems.map((item) => item.productCode),
+        verifiedActualParsedItems,
+        quarantinedEntries: batchQuarantined
+      };
+      importState.updatedAt = now;
+      await writeJson(importStatePath, importState);
+
+      const latestAccessories = await readJson<AccessoryItem[]>(ACCESSORIES_PATH, []);
+      const latestAccessoryByCode = new Map<string, AccessoryItem[]>();
+      for (const item of latestAccessories) {
+        if (item.sourceProductCode) latestAccessoryByCode.set(item.sourceProductCode, [...(latestAccessoryByCode.get(item.sourceProductCode) ?? []), item]);
+      }
+      const newVerifiedItems: AccessoryItem[] = [];
+      for (const { productCode, verifiedItem } of verifiedActualParsedItems) {
+        if (coreCodes.has(productCode)) throw new Error(`STOP: verified member PCode ${productCode} now conflicts with core catalog before batch apply.`);
+        const existing = latestAccessoryByCode.get(productCode) ?? [];
+        if (existing.length > 1 || (existing.length === 1 && (existing[0].source !== "danawa" || existing[0].category !== verifiedItem.category || existing[0].sourceCategoryId !== verifiedItem.sourceCategoryId))) {
+          throw new Error(`STOP: verified member PCode ${productCode} now conflicts with accessory catalog before batch apply.`);
+        }
+        if (existing.length === 0) newVerifiedItems.push(verifiedItem);
+      }
+      if (newVerifiedItems.length > 0) await upsertAccessories(newVerifiedItems);
+      batchImportedCount = newVerifiedItems.length;
+      importedCount += batchImportedCount;
+      for (const { productCode, verifiedItem, sourceEvidence } of verifiedActualParsedItems) {
+        const key = bundleImportStateKey(verifiedItem.sourceCategoryId!, productCode);
+        importState.entries[key] = {
+          productCode,
+          category: verifiedItem.category,
+          categoryId: verifiedItem.sourceCategoryId!,
+          status: "imported",
+          updatedAt: new Date().toISOString(),
+          sourceEvidence,
+          itemId: verifiedItem.id
+        };
+      }
+      delete importState.pendingBatch;
+    }
+    quarantinedCount += batchQuarantined.length;
+    importState.updatedAt = new Date().toISOString();
+    importState.lastBatch = { batchNumber, committedAt: importState.updatedAt, importedCount: batchImportedCount, quarantinedCount: batchQuarantined.length };
+    await writeJson(importStatePath, importState);
+  } else {
+    importedCount += verifiedActualParsedItems.length;
+    quarantinedCount += batchQuarantined.length;
+  }
+
+  const batchSummary = { batchNumber, plannedCount: batch.length, verifiedCount: verifiedActualParsedItems.length, quarantinedCount: batchQuarantined.length, importedCount: batchImportedCount };
+  batchSummaries.push(batchSummary);
+  console.log(JSON.stringify({ progress: batchSummary, mode: values.apply ? "apply" : "dry-run" }));
 }
 
 const report = {
-  mode: values.apply ? "apply" : "dry-run-source-verified",
+  mode: values.apply ? "apply-complete" : "dry-run-source-verified",
   bundleArtifact: "data/danawa-accessory-bundle-members.json",
   bundleArtifactUpdatedAt: bundleArtifact.updatedAt,
+  importStatePath: values.apply ? importStatePath : undefined,
   artifactUniqueObservedProductPCodes: memberEvidenceByCode.size,
   artifactUniqueBundleMemberPCodes: new Set(Object.values(bundleArtifact.categories).flatMap((category) => Object.values(category.pagesBySort).flatMap((pages) => Object.values(pages).flatMap((page) => page.parents.flatMap((parent) => parent.members.map((member) => member.memberProductCode)))))).size,
   artifactUniqueListParentPCodes: new Set(Object.values(bundleArtifact.categories).flatMap((category) => Object.values(category.pagesBySort).flatMap((pages) => Object.values(pages).flatMap((page) => page.parents.map((parent) => parent.parentProductCode))))).size,
   selectedMissingProductPCodes: selectedCandidates.map((candidate) => candidate.productCode),
   alreadyPresentProductCount: alreadyPresent.length,
   alreadyPresentProductPCodeExamples: alreadyPresent.slice(0, 5),
-  verifiedDetails: verificationRows.length,
-  verifiedRows: verificationRows,
+  skippedQuarantinedCount: skippedQuarantined.length,
+  skippedImportedStateCount: skippedImportedState.length,
+  skippedPendingCount: skippedPending.length,
+  verifiedDetails: verifiedRows.length,
+  quarantinedDetails: quarantinedRows.length,
+  verifiedRows,
+  quarantinedRows,
+  batches: batchSummaries,
+  importedThisRun: values.apply ? importedCount : 0,
   currentAccessoryCount: accessories.length,
-  projectedAccessoryCount: accessories.length + verifiedItems.length,
+  projectedAccessoryCount: accessories.length + verifiedRows.length,
   sourceListStatus: "partial; bundle member evidence is tracked separately from declared page group totals",
   detailCoverage: "Only actual product detail page fields were parsed; parent geometry/spec/price/image were not copied.",
-  outputWritten: Boolean(values.apply)
+  catalogWrites: Boolean(values.apply && importedCount > 0),
+  importStateWritten: Boolean(values.apply)
 };
 
-if (!values.apply) {
-  console.log(JSON.stringify(report, null, 2));
-} else {
-  const backupDirectory = await mkdtemp(join(tmpdir(), "pc-supporter-bundle-member-import-"));
-  await copyFile(ACCESSORIES_PATH, join(backupDirectory, "accessories.json"));
-  await upsertAccessories(verifiedItems);
-  console.log(JSON.stringify({ ...report, backupDirectory, writtenAccessoryCount: verifiedItems.length }, null, 2));
-}
+console.log(JSON.stringify(report, null, 2));

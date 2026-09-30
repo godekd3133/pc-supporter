@@ -10,7 +10,6 @@ import { withPostgresTransaction } from "./repository";
 import {
   PRICE_REFRESH_LOCK_PATH,
   PRICE_REFRESH_STATE_PATH,
-  PRICE_REFRESH_ATTEMPTS_PATH,
   CRAWL_LOCK_PATH,
   ACCESSORY_CRAWL_LOCK_PATH,
   createExclusiveFile,
@@ -194,7 +193,6 @@ type PriceRefreshAttempts = Record<string, string>;
 type PriceRefreshAttemptEntry = { kind: "part" | "accessory"; itemId: string; attemptedAt: string };
 
 async function readPriceRefreshAttempts(): Promise<PriceRefreshAttempts> {
-  if (!process.env.DATABASE_URL?.trim()) return readJson<PriceRefreshAttempts>(PRICE_REFRESH_ATTEMPTS_PATH, {});
   return withPostgresTransaction("read price-refresh attempt state", async (client) => {
     const result = await client.query<{ item_kind: "part" | "accessory"; item_id: string; attempted_at: Date | string }>(
       "SELECT item_kind, item_id, attempted_at FROM price_refresh_attempts"
@@ -208,12 +206,6 @@ async function readPriceRefreshAttempts(): Promise<PriceRefreshAttempts> {
 
 async function writePriceRefreshAttempts(entries: PriceRefreshAttemptEntry[]) {
   if (entries.length === 0) return;
-  if (!process.env.DATABASE_URL?.trim()) {
-    const existing = await readJson<PriceRefreshAttempts>(PRICE_REFRESH_ATTEMPTS_PATH, {});
-    for (const entry of entries) existing[`${entry.kind}:${entry.itemId}`] = entry.attemptedAt;
-    await writeJson(PRICE_REFRESH_ATTEMPTS_PATH, existing);
-    return;
-  }
   await withPostgresTransaction("write price-refresh attempt state", async (client) => {
     await client.query(`
       INSERT INTO price_refresh_attempts (item_kind, item_id, attempted_at)
@@ -243,7 +235,7 @@ function lastAttempted(item: Part | AccessoryItem, kind: "part" | "accessory", a
 }
 
 export async function runPriceRefreshJob(options: PriceRefreshJobOptions = {}): Promise<PriceRefreshStatus> {
-  const persistStatus = options.persistStatus ?? !process.env.DATABASE_URL?.trim();
+  const persistStatus = options.persistStatus ?? false;
   const startedAt = new Date().toISOString();
   const status: PriceRefreshStatus = {
     ...emptyStatus(),

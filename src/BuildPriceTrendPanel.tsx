@@ -2,13 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import { FiInfo, FiLoader, FiTrendingUp } from "react-icons/fi";
 import type { AccessoryItem, BuildSelection, Part, PartCategory } from "../shared/types";
 import type { BuildPriceSnapshot } from "../shared/build-price-summary";
-import type { PriceHistoryFailureNotice } from "./offline/price-history-notice";
 import { CATEGORY_LABELS, PART_CATEGORIES, isKnownPrice } from "../shared/types";
 import { priceTrendFor, type PriceTrendHistoryPoint, type PriceTrendWindow } from "../shared/price-trend";
-import { ApiError, api } from "./api";
+import { api } from "./api";
 import { accessorySelections, selectionList } from "./build-edit";
-import { LOCAL_OFFLINE_BUILD } from "./offline/build-mode";
 import { PriceTrendChart } from "./PriceTrendChart";
+
+type PriceHistoryFailureNotice = { kind: "error"; message: string };
 
 type PublicPriceHistoryItem = {
   kind: "part" | "accessory";
@@ -27,11 +27,6 @@ type QuoteTrendRow = {
 
 function onlinePriceHistoryFailureNotice(): PriceHistoryFailureNotice {
   return { kind: "error", message: "가격 이력을 불러오지 못했습니다. 현재 합계만 표시합니다." };
-}
-
-function apiFailureCode(error: unknown) {
-  if (!(error instanceof ApiError) || !error.details || typeof error.details !== "object" || Array.isArray(error.details)) return undefined;
-  return (error.details as Record<string, unknown>).code;
 }
 
 function formatWon(value: number | undefined) {
@@ -97,18 +92,9 @@ export function BuildPriceTrendPanel({ build, partMap, accessoryMap, snapshot }:
         if (cancelled) return;
         setHistories(Object.fromEntries(payload.items.map((item) => [`${item.kind}:${item.itemId}`, item])));
       })
-      .catch(async (reason: unknown) => {
+      .catch(() => {
         if (cancelled) return;
-        if (!LOCAL_OFFLINE_BUILD) {
-          setError(onlinePriceHistoryFailureNotice());
-          return;
-        }
-        try {
-          const { buildPriceHistoryFailureNoticeFor } = await import("./offline/price-history-notice");
-          if (!cancelled) setError(buildPriceHistoryFailureNoticeFor(apiFailureCode(reason)));
-        } catch {
-          if (!cancelled) setError(onlinePriceHistoryFailureNotice());
-        }
+        setError(onlinePriceHistoryFailureNotice());
       })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; controller.abort(); };

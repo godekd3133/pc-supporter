@@ -800,8 +800,9 @@ function parseSpecs(category: PartCategory, name: string, description: string, r
     specs.supportedSockets = [...new Set(sockets)];
     specs.maxCoolingW = parseNumber(text, /(?:최대\s*)?(?:지원\s*)?(?:TDP|발열량)\s*[:：]?\s*([\d,]+)\s*W/i);
     if (specs.coolerType === "liquid") {
-      specs.radiatorSizeMm = parseNumber(text, /(?:라디에이터|RAD)[^\d]{0,20}(120|240|280|360|420)\s*mm/i)
+      const radiatorSizeMm = parseNumber(text, /(?:라디에이터|RAD)[^\d]{0,20}(120|240|280|360|420)\s*mm/i)
         ?? Number(text.match(/(?:DN-|RT|A|B|C|D)?(120|240|280|360|420)(?:D|S|GT|X)?\b/i)?.[1] ?? NaN);
+      if (Number.isFinite(radiatorSizeMm)) specs.radiatorSizeMm = radiatorSizeMm;
       specs.radiatorPosition = radiatorPositionFromText(text);
     } else {
       specs.maxCoolerHeightMm = parseNumber(text, /(?:높이|쿨러 높이)\s*[:：]?\s*([\d,.]+)\s*mm/i);

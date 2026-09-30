@@ -1,4 +1,3 @@
-import { LOCAL_OFFLINE_BUILD } from "./offline/build-mode";
 import { Capacitor } from "@capacitor/core";
 
 export type OwnerSessionLocation = {
@@ -8,8 +7,8 @@ export type OwnerSessionLocation = {
   origin?: string;
 };
 
-export function ownerSessionModeSupportedFor(location: OwnerSessionLocation, options: { offline?: boolean; native?: boolean; apiOrigin?: string } = {}) {
-  if (options.offline || options.native) return false;
+export function ownerSessionModeSupportedFor(location: OwnerSessionLocation, options: { native?: boolean; apiOrigin?: string } = {}) {
+  if (options.native) return false;
   if (options.apiOrigin && (!location.origin || options.apiOrigin !== location.origin)) return false;
   if (location.protocol === "https:") return true;
   return location.protocol === "http:"
@@ -18,7 +17,7 @@ export function ownerSessionModeSupportedFor(location: OwnerSessionLocation, opt
 }
 
 export function ownerSessionModeSupported() {
-  if (LOCAL_OFFLINE_BUILD || typeof window === "undefined") return false;
+  if (typeof window === "undefined") return false;
   const pageOrigin = window.location.origin;
   const configuredApiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? "").trim().replace(/\/+$/, "");
   let apiOrigin = pageOrigin;
@@ -27,5 +26,5 @@ export function ownerSessionModeSupported() {
   } catch {
     return false;
   }
-  return ownerSessionModeSupportedFor(window.location, { offline: LOCAL_OFFLINE_BUILD, native: Capacitor.isNativePlatform(), apiOrigin });
+  return ownerSessionModeSupportedFor(window.location, { native: Capacitor.isNativePlatform(), apiOrigin });
 }

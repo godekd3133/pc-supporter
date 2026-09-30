@@ -1,6 +1,5 @@
 import "dotenv/config";
 import { createHash, createHmac, randomUUID } from "node:crypto";
-import { resolve } from "node:path";
 import { Pool, type PoolClient } from "pg";
 import { isOwnerSessionResourceType, OWNER_SESSION_RESOURCE_TYPES } from "../shared/owner-session-contract";
 import type { OwnerSessionResourceType as OwnerShareResourceType } from "../shared/owner-session-contract";
@@ -31,30 +30,6 @@ import { savedBuildOriginFromUnknown } from "../shared/saved-build-origin";
 import type { SavedWatchlistAlertState } from "./watchlist-alert-state";
 import type { UsageEventName } from "./usage-events";
 
-import {
-  DATA_DIR,
-  BUILDS_PATH,
-  SAVED_BUILD_VERSION_BACKUP_PATH,
-  SAVED_BUILD_VERSION_LEASE_PATH,
-  SAVED_BUILD_MONITOR_LEASE_PATH,
-  BENCHMARK_OVERRIDES_PATH,
-  CATALOG_SPEC_OVERRIDES_PATH,
-  CATALOG_PATH,
-  COMPARISONS_PATH,
-  VERSION_COMPARISONS_PATH,
-  BUDGET_LADDERS_PATH,
-  GENERATOR_VARIANTS_PATH,
-  OWNER_SESSION_STORE_PATH,
-  M2_SLOT_OVERRIDES_PATH,
-  WATCHLIST_ALERT_STATES_PATH,
-  WATCHLISTS_PATH,
-  ensureDataDirectory,
-  filePersistenceIsReady,
-  readJson as readStoredJson,
-  withSerializedFileMutation,
-  writeJson as writeStoredJson
-} from "./storage";
-import { withFileLease as acquireFileLease } from "./lease";
 import { initializePostgresSchemaWithClient, postgresSchemaInitializationModeForNodeEnv } from "./postgres-schema-contract";
 
 export { OWNER_SESSION_RESOURCE_TYPES as OWNER_SHARE_RESOURCE_TYPES };
@@ -396,33 +371,14 @@ function markDatabaseUnavailable(operation: string, error: unknown) {
   console.warn(`PostgreSQL ${operation} failed: ${postgresErrorMessage(error)}`);
 }
 
-function assertFilePersistenceSelected() {
-  if (configuredDatabaseUrl) {
-    throw new Error("File persistence is disabled while DATABASE_URL is configured.");
-  }
-}
-
-async function readFileJson<T>(path: string, fallback: T): Promise<T> {
-  assertFilePersistenceSelected();
-  return readStoredJson<T>(path, fallback);
-}
-
-async function writeFileJson<T>(path: string, value: T) {
-  assertFilePersistenceSelected();
-  await writeStoredJson(path, value);
-}
-
-async function withFilePersistenceLease<T>(path: string, operation: () => Promise<T>) {
-  assertFilePersistenceSelected();
-  return acquireFileLease(path, operation);
-}
-
 export type SavedBuildMonitorLeaseResult<T> =
-  | { backend: "postgres" | "file"; acquired: true; value: T }
-  | { backend: "postgres" | "file"; acquired: false };
+  | { backend: "postgres"; acquired: true; value: T }
+  | { backend: "postgres"; acquired: false };
 
-async function ensureDatabase() {
-  if (!configuredDatabaseUrl) return false;
+async function ensureDatabase(): Promise<boolean> {
+  if (!configuredDatabaseUrl) {
+    throw new Error("DATABASE_URL is required; the JSON file persistence mode has been removed.");
+  }
   if (!pool) {
     throw new Error(`PostgreSQL is configured but its connection pool could not be created: ${postgresErrorMessage(poolCreationError)}`);
   }
@@ -480,17 +436,10 @@ export interface OwnerShareSessionGrantReference {
   ownerTokenHash: string;
 }
 
-const OWNER_SHARE_SESSION_STORE_VERSION = 1 as const;
 export const OWNER_SHARE_SESSION_GRANT_MAX_PRUNE_BATCH = 500;
 export const OWNER_SHARE_SESSION_MAX_PRUNE_BATCH = 500;
 const OWNER_SHARE_SHA256_PATTERN = /^[0-9a-f]{64}$/;
 const OWNER_SHARE_ISO_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
-
-type OwnerShareSessionStore = {
-  schemaVersion: typeof OWNER_SHARE_SESSION_STORE_VERSION;
-  sessions: OwnerShareSession[];
-  grants: OwnerShareSessionGrant[];
-};
 
 function ownerShareRecordFromUnknown(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
@@ -559,40 +508,6 @@ function ownerShareSessionFromUnknown(value: unknown): OwnerShareSession {
   return session;
 }
 
-function ownerShareSessionGrantKey(grant: OwnerShareSessionGrant) {
-  return JSON.stringify([grant.sessionHash, grant.resourceType, grant.resourceId, grant.ownerTokenHash]);
-}
-
-function ownerShareSessionStoreFromUnknown(value: unknown): OwnerShareSessionStore {
-  const record = ownerShareRecordFromUnknown(value);
-  if (!record || record.schemaVersion !== OWNER_SHARE_SESSION_STORE_VERSION || !Array.isArray(record.grants)
-    || (record.sessions !== undefined && !Array.isArray(record.sessions))) {
-    throw new Error("Owner session store has an unsupported or invalid schema; its original content was preserved.");
-  }
-  // Older pending grant-only JSON is retained, but it cannot authorize access without an issued session record.
-  const sessions = (record.sessions ?? []).map(ownerShareSessionFromUnknown);
-  const grants = record.grants.map(ownerShareSessionGrantFromUnknown);
-  const sessionHashes = sessions.map(({ sessionHash }) => sessionHash);
-  const grantKeys = grants.map(ownerShareSessionGrantKey);
-  if (new Set(sessionHashes).size !== sessionHashes.length || new Set(grantKeys).size !== grantKeys.length) {
-    throw new Error("Owner session store contains duplicate records; its original content was preserved.");
-  }
-  return { schemaVersion: OWNER_SHARE_SESSION_STORE_VERSION, sessions, grants };
-}
-
-async function readOwnerShareSessionStore() {
-  const emptyStore: OwnerShareSessionStore = { schemaVersion: OWNER_SHARE_SESSION_STORE_VERSION, sessions: [], grants: [] };
-  return ownerShareSessionStoreFromUnknown(await readFileJson<unknown>(OWNER_SESSION_STORE_PATH, emptyStore));
-}
-
-function ownerShareSessionIsActiveInStore(store: OwnerShareSessionStore, sessionHash: string, now: { iso: string; time: number }) {
-  return store.sessions.some((session) => session.sessionHash === sessionHash && Date.parse(session.expiresAt) > now.time);
-}
-
-function ownerShareGrantIsUnexpired(grant: OwnerShareSessionGrant, now: { iso: string; time: number }) {
-  return grant.expiresAt === undefined || Date.parse(grant.expiresAt) > now.time;
-}
-
 function ownerShareGrantReferenceFromUnknown(value: unknown): OwnerShareSessionGrantReference {
   const record = ownerShareRecordFromUnknown(value);
   if (!record) throw new Error("Owner session grant query returned an invalid row.");
@@ -605,75 +520,49 @@ function ownerShareGrantReferenceFromUnknown(value: unknown): OwnerShareSessionG
 
 export async function createOwnerShareSession(input: OwnerShareSession): Promise<void> {
   const session = ownerShareSessionFromUnknown(input);
-  if (await ensureDatabase()) {
-    let created = false;
-    try {
-      const result = await pool!.query(
-        `INSERT INTO owner_sessions (session_hash, created_at, expires_at)
-         SELECT $1, $2::timestamptz, $3::timestamptz
-         WHERE NOT EXISTS (SELECT 1 FROM owner_session_grants WHERE session_hash = $1)
-         ON CONFLICT (session_hash) DO NOTHING
-         RETURNING session_hash`,
-        [session.sessionHash, session.createdAt, session.expiresAt]
-      );
-      created = result.rows.length > 0;
-    } catch (error: unknown) {
-      markDatabaseUnavailable("owner session create", error);
-      throw error;
-    }
-    if (!created) throw new Error("Owner session hash already exists or conflicts with a pending grant.");
-    return;
+  await ensureDatabase();
+  let created = false;
+  try {
+    const result = await pool!.query(
+      `INSERT INTO owner_sessions (session_hash, created_at, expires_at)
+       SELECT $1, $2::timestamptz, $3::timestamptz
+       WHERE NOT EXISTS (SELECT 1 FROM owner_session_grants WHERE session_hash = $1)
+       ON CONFLICT (session_hash) DO NOTHING
+       RETURNING session_hash`,
+      [session.sessionHash, session.createdAt, session.expiresAt]
+    );
+    created = result.rows.length > 0;
+  } catch (error: unknown) {
+    markDatabaseUnavailable("owner session create", error);
+    throw error;
   }
-
-  await withSerializedFileMutation(OWNER_SESSION_STORE_PATH, async () => {
-    const store = await readOwnerShareSessionStore();
-    if (store.sessions.some((existing) => existing.sessionHash === session.sessionHash)
-      || store.grants.some((grant) => grant.sessionHash === session.sessionHash)) {
-      throw new Error("Owner session hash already exists or conflicts with a pending grant.");
-    }
-    store.sessions.push(session);
-    await writeFileJson(OWNER_SESSION_STORE_PATH, store);
-  });
+  if (!created) throw new Error("Owner session hash already exists or conflicts with a pending grant.");
 }
 
 export async function ownerShareSessionIsActive(sessionHashValue: string, nowValue?: Date | string): Promise<boolean> {
   const sessionHash = ownerShareHash(sessionHashValue, "session hash");
   const now = ownerShareNow(nowValue);
-  if (await ensureDatabase()) {
-    try {
-      const result = await pool!.query(
-        "SELECT 1 AS active FROM owner_sessions WHERE session_hash = $1 AND expires_at > $2::timestamptz LIMIT 1",
-        [sessionHash, now.iso]
-      );
-      return result.rows.length > 0;
-    } catch (error: unknown) {
-      markDatabaseUnavailable("owner session active check", error);
-      throw error;
-    }
+  await ensureDatabase();
+  try {
+    const result = await pool!.query(
+      "SELECT 1 AS active FROM owner_sessions WHERE session_hash = $1 AND expires_at > $2::timestamptz LIMIT 1",
+      [sessionHash, now.iso]
+    );
+    return result.rows.length > 0;
+  } catch (error: unknown) {
+    markDatabaseUnavailable("owner session active check", error);
+    throw error;
   }
-
-  const store = await readOwnerShareSessionStore();
-  return ownerShareSessionIsActiveInStore(store, sessionHash, now);
 }
 
 export async function deleteOwnerShareSession(sessionHashValue: string): Promise<boolean> {
   const sessionHash = ownerShareHash(sessionHashValue, "session hash");
-  if (await ensureDatabase()) {
-    return withPostgresTransaction("owner session revoke", async (client) => {
-      const sessionResult = await client.query("DELETE FROM owner_sessions WHERE session_hash = $1 RETURNING session_hash", [sessionHash]);
-      // The FK cascade handles normal rows. This second delete also clears pre-lifecycle orphaned grants.
-      const grantResult = await client.query("DELETE FROM owner_session_grants WHERE session_hash = $1 RETURNING session_hash", [sessionHash]);
-      return (sessionResult.rowCount ?? sessionResult.rows.length) > 0 || (grantResult.rowCount ?? grantResult.rows.length) > 0;
-    });
-  }
-
-  return withSerializedFileMutation(OWNER_SESSION_STORE_PATH, async () => {
-    const store = await readOwnerShareSessionStore();
-    const sessions = store.sessions.filter((session) => session.sessionHash !== sessionHash);
-    const grants = store.grants.filter((grant) => grant.sessionHash !== sessionHash);
-    const changed = sessions.length !== store.sessions.length || grants.length !== store.grants.length;
-    if (changed) await writeFileJson(OWNER_SESSION_STORE_PATH, { ...store, sessions, grants });
-    return changed;
+  await ensureDatabase();
+  return withPostgresTransaction("owner session revoke", async (client) => {
+    const sessionResult = await client.query("DELETE FROM owner_sessions WHERE session_hash = $1 RETURNING session_hash", [sessionHash]);
+    // The FK cascade handles normal rows. This second delete also clears pre-lifecycle orphaned grants.
+    const grantResult = await client.query("DELETE FROM owner_session_grants WHERE session_hash = $1 RETURNING session_hash", [sessionHash]);
+    return (sessionResult.rowCount ?? sessionResult.rows.length) > 0 || (grantResult.rowCount ?? grantResult.rows.length) > 0;
   });
 }
 
@@ -686,90 +575,47 @@ export async function pruneExpiredOwnerShareSessions(limit = OWNER_SHARE_SESSION
   const boundedLimit = ownerShareSessionPruneLimit(limit);
   if (boundedLimit === 0) return 0;
   const now = ownerShareNow(nowValue);
-  if (await ensureDatabase()) {
-    try {
-      const result = await pool!.query(
-        `WITH expired_sessions AS (
-           SELECT session_hash
-           FROM owner_sessions
-           WHERE expires_at <= $2::timestamptz
-           ORDER BY expires_at, session_hash
-           LIMIT $1
-         )
-         DELETE FROM owner_sessions
-         WHERE session_hash IN (SELECT session_hash FROM expired_sessions)
-         RETURNING session_hash`,
-        [boundedLimit, now.iso]
-      );
-      return result.rowCount ?? result.rows.length;
-    } catch (error: unknown) {
-      markDatabaseUnavailable("owner session prune", error);
-      throw error;
-    }
+  await ensureDatabase();
+  try {
+    const result = await pool!.query(
+      `WITH expired_sessions AS (
+         SELECT session_hash
+         FROM owner_sessions
+         WHERE expires_at <= $2::timestamptz
+         ORDER BY expires_at, session_hash
+         LIMIT $1
+       )
+       DELETE FROM owner_sessions
+       WHERE session_hash IN (SELECT session_hash FROM expired_sessions)
+       RETURNING session_hash`,
+      [boundedLimit, now.iso]
+    );
+    return result.rowCount ?? result.rows.length;
+  } catch (error: unknown) {
+    markDatabaseUnavailable("owner session prune", error);
+    throw error;
   }
-
-  return withSerializedFileMutation(OWNER_SESSION_STORE_PATH, async () => {
-    const store = await readOwnerShareSessionStore();
-    const expiredSessions = store.sessions
-      .map((session, index) => ({ session, index }))
-      .filter(({ session }) => Date.parse(session.expiresAt) <= now.time)
-      .sort((left, right) => Date.parse(left.session.expiresAt) - Date.parse(right.session.expiresAt) || left.index - right.index)
-      .slice(0, boundedLimit);
-    if (expiredSessions.length === 0) return 0;
-    const expiredHashes = new Set(expiredSessions.map(({ session }) => session.sessionHash));
-    await writeFileJson(OWNER_SESSION_STORE_PATH, {
-      ...store,
-      sessions: store.sessions.filter((session) => !expiredHashes.has(session.sessionHash)),
-      grants: store.grants.filter((grant) => !expiredHashes.has(grant.sessionHash))
-    });
-    return expiredSessions.length;
-  });
 }
 
 export async function upsertOwnerShareSessionGrant(input: OwnerShareSessionGrant, nowValue?: Date | string): Promise<boolean> {
   const grant = ownerShareSessionGrantFromUnknown(input);
   const now = ownerShareNow(nowValue);
-  if (await ensureDatabase()) {
-    try {
-      const result = await pool!.query(
-        `INSERT INTO owner_session_grants (session_hash, resource_type, resource_id, owner_token_hash, created_at, expires_at)
-         SELECT $1, $2, $3, $4, $5::timestamptz, $6::timestamptz
-         WHERE EXISTS (SELECT 1 FROM owner_sessions WHERE session_hash = $1 AND expires_at > $7::timestamptz)
-         ON CONFLICT (session_hash, resource_type, resource_id, owner_token_hash)
-         DO UPDATE SET expires_at = COALESCE(EXCLUDED.expires_at, owner_session_grants.expires_at)
-         RETURNING session_hash`,
-        [grant.sessionHash, grant.resourceType, grant.resourceId, grant.ownerTokenHash, grant.createdAt, grant.expiresAt ?? null, now.iso]
-      );
-      return result.rows.length > 0;
-    } catch (error: unknown) {
-      markDatabaseUnavailable("owner session grant upsert", error);
-      throw error;
-    }
+  await ensureDatabase();
+  try {
+    const result = await pool!.query(
+      `INSERT INTO owner_session_grants (session_hash, resource_type, resource_id, owner_token_hash, created_at, expires_at)
+       SELECT $1, $2, $3, $4, $5::timestamptz, $6::timestamptz
+       WHERE EXISTS (SELECT 1 FROM owner_sessions WHERE session_hash = $1 AND expires_at > $7::timestamptz)
+       ON CONFLICT (session_hash, resource_type, resource_id, owner_token_hash)
+       DO UPDATE SET expires_at = COALESCE(EXCLUDED.expires_at, owner_session_grants.expires_at)
+       RETURNING session_hash`,
+      [grant.sessionHash, grant.resourceType, grant.resourceId, grant.ownerTokenHash, grant.createdAt, grant.expiresAt ?? null, now.iso]
+    );
+    return result.rows.length > 0;
+  } catch (error: unknown) {
+    markDatabaseUnavailable("owner session grant upsert", error);
+    throw error;
   }
-
-  return withSerializedFileMutation(OWNER_SESSION_STORE_PATH, async () => {
-    const store = await readOwnerShareSessionStore();
-    if (!ownerShareSessionIsActiveInStore(store, grant.sessionHash, now)) return false;
-    const key = ownerShareSessionGrantKey(grant);
-    const existingIndex = store.grants.findIndex((candidate) => ownerShareSessionGrantKey(candidate) === key);
-    if (existingIndex < 0) {
-      store.grants.push(grant);
-    } else {
-      const existing = store.grants[existingIndex];
-      store.grants[existingIndex] = {
-        sessionHash: existing.sessionHash,
-        resourceType: existing.resourceType,
-        resourceId: existing.resourceId,
-        ownerTokenHash: existing.ownerTokenHash,
-        createdAt: existing.createdAt,
-        ...(grant.expiresAt !== undefined
-          ? { expiresAt: grant.expiresAt }
-          : existing.expiresAt === undefined ? {} : { expiresAt: existing.expiresAt })
-      };
-    }
-    await writeFileJson(OWNER_SESSION_STORE_PATH, store);
-    return true;
-  });
 }
 
 export async function ownerShareSessionGrantMatches(input: {
@@ -784,108 +630,73 @@ export async function ownerShareSessionGrantMatches(input: {
   const resourceId = ownerShareResourceId(input.resourceId);
   const ownerTokenHash = ownerShareHash(input.ownerTokenHash, "owner token hash");
   const now = ownerShareNow(input.now);
-  if (await ensureDatabase()) {
-    try {
-      const result = await pool!.query(
-        `SELECT 1 AS present
-         FROM owner_session_grants AS grants
-         JOIN owner_sessions AS sessions ON sessions.session_hash = grants.session_hash
-         WHERE grants.session_hash = $1
-           AND grants.resource_type = $2
-           AND grants.resource_id = $3
-           AND grants.owner_token_hash = $4
-           AND sessions.expires_at > $5::timestamptz
-           AND (grants.expires_at IS NULL OR grants.expires_at > $5::timestamptz)
-         LIMIT 1`,
-        [sessionHash, resourceType, resourceId, ownerTokenHash, now.iso]
-      );
-      return result.rows.length > 0;
-    } catch (error: unknown) {
-      markDatabaseUnavailable("owner session grant match", error);
-      throw error;
-    }
+  await ensureDatabase();
+  try {
+    const result = await pool!.query(
+      `SELECT 1 AS present
+       FROM owner_session_grants AS grants
+       JOIN owner_sessions AS sessions ON sessions.session_hash = grants.session_hash
+       WHERE grants.session_hash = $1
+         AND grants.resource_type = $2
+         AND grants.resource_id = $3
+         AND grants.owner_token_hash = $4
+         AND sessions.expires_at > $5::timestamptz
+         AND (grants.expires_at IS NULL OR grants.expires_at > $5::timestamptz)
+       LIMIT 1`,
+      [sessionHash, resourceType, resourceId, ownerTokenHash, now.iso]
+    );
+    return result.rows.length > 0;
+  } catch (error: unknown) {
+    markDatabaseUnavailable("owner session grant match", error);
+    throw error;
   }
-
-  const store = await readOwnerShareSessionStore();
-  if (!ownerShareSessionIsActiveInStore(store, sessionHash, now)) return false;
-  return store.grants.some((grant) => grant.sessionHash === sessionHash
-    && grant.resourceType === resourceType
-    && grant.resourceId === resourceId
-    && grant.ownerTokenHash === ownerTokenHash
-    && ownerShareGrantIsUnexpired(grant, now));
 }
 
 export async function listOwnerShareSessionGrants(sessionHashValue: string, nowValue?: Date | string): Promise<OwnerShareSessionGrantReference[]> {
   const sessionHash = ownerShareHash(sessionHashValue, "session hash");
   const now = ownerShareNow(nowValue);
-  if (await ensureDatabase()) {
-    try {
-      const result = await pool!.query(
-        `SELECT grants.resource_type, grants.resource_id, grants.owner_token_hash
-         FROM owner_session_grants AS grants
-         JOIN owner_sessions AS sessions ON sessions.session_hash = grants.session_hash
-         WHERE grants.session_hash = $1
-           AND sessions.expires_at > $2::timestamptz
-           AND (grants.expires_at IS NULL OR grants.expires_at > $2::timestamptz)
-         ORDER BY grants.resource_type, grants.resource_id, grants.owner_token_hash`,
-        [sessionHash, now.iso]
-      );
-      return result.rows.map(ownerShareGrantReferenceFromUnknown);
-    } catch (error: unknown) {
-      markDatabaseUnavailable("owner session grant list", error);
-      throw error;
-    }
+  await ensureDatabase();
+  try {
+    const result = await pool!.query(
+      `SELECT grants.resource_type, grants.resource_id, grants.owner_token_hash
+       FROM owner_session_grants AS grants
+       JOIN owner_sessions AS sessions ON sessions.session_hash = grants.session_hash
+       WHERE grants.session_hash = $1
+         AND sessions.expires_at > $2::timestamptz
+         AND (grants.expires_at IS NULL OR grants.expires_at > $2::timestamptz)
+       ORDER BY grants.resource_type, grants.resource_id, grants.owner_token_hash`,
+      [sessionHash, now.iso]
+    );
+    return result.rows.map(ownerShareGrantReferenceFromUnknown);
+  } catch (error: unknown) {
+    markDatabaseUnavailable("owner session grant list", error);
+    throw error;
   }
-
-  const store = await readOwnerShareSessionStore();
-  if (!ownerShareSessionIsActiveInStore(store, sessionHash, now)) return [];
-  return store.grants
-    .filter((grant) => grant.sessionHash === sessionHash && ownerShareGrantIsUnexpired(grant, now))
-    .map(({ resourceType, resourceId, ownerTokenHash }) => ({ resourceType, resourceId, ownerTokenHash }))
-    .sort((left, right) => left.resourceType.localeCompare(right.resourceType) || left.resourceId.localeCompare(right.resourceId) || left.ownerTokenHash.localeCompare(right.ownerTokenHash));
 }
 
 export async function deleteOwnerShareSessionGrantsForResource(resourceTypeValue: OwnerShareResourceType, resourceIdValue: string): Promise<number> {
   const resourceType = ownerShareResourceType(resourceTypeValue);
   const resourceId = ownerShareResourceId(resourceIdValue);
-  if (await ensureDatabase()) {
-    try {
-      const result = await pool!.query("DELETE FROM owner_session_grants WHERE resource_type = $1 AND resource_id = $2", [resourceType, resourceId]);
-      return result.rowCount ?? 0;
-    } catch (error: unknown) {
-      markDatabaseUnavailable("owner session grant resource delete", error);
-      throw error;
-    }
+  await ensureDatabase();
+  try {
+    const result = await pool!.query("DELETE FROM owner_session_grants WHERE resource_type = $1 AND resource_id = $2", [resourceType, resourceId]);
+    return result.rowCount ?? 0;
+  } catch (error: unknown) {
+    markDatabaseUnavailable("owner session grant resource delete", error);
+    throw error;
   }
-
-  return withSerializedFileMutation(OWNER_SESSION_STORE_PATH, async () => {
-    const store = await readOwnerShareSessionStore();
-    const next = store.grants.filter((grant) => grant.resourceType !== resourceType || grant.resourceId !== resourceId);
-    const deletedCount = store.grants.length - next.length;
-    if (deletedCount > 0) await writeFileJson(OWNER_SESSION_STORE_PATH, { ...store, grants: next });
-    return deletedCount;
-  });
 }
 
 export async function deleteOwnerShareSessionGrantsForSession(sessionHashValue: string): Promise<number> {
   const sessionHash = ownerShareHash(sessionHashValue, "session hash");
-  if (await ensureDatabase()) {
-    try {
-      const result = await pool!.query("DELETE FROM owner_session_grants WHERE session_hash = $1", [sessionHash]);
-      return result.rowCount ?? 0;
-    } catch (error: unknown) {
-      markDatabaseUnavailable("owner session grant session delete", error);
-      throw error;
-    }
+  await ensureDatabase();
+  try {
+    const result = await pool!.query("DELETE FROM owner_session_grants WHERE session_hash = $1", [sessionHash]);
+    return result.rowCount ?? 0;
+  } catch (error: unknown) {
+    markDatabaseUnavailable("owner session grant session delete", error);
+    throw error;
   }
-
-  return withSerializedFileMutation(OWNER_SESSION_STORE_PATH, async () => {
-    const store = await readOwnerShareSessionStore();
-    const next = store.grants.filter((grant) => grant.sessionHash !== sessionHash);
-    const deletedCount = store.grants.length - next.length;
-    if (deletedCount > 0) await writeFileJson(OWNER_SESSION_STORE_PATH, { ...store, grants: next });
-    return deletedCount;
-  });
 }
 
 function ownerShareGrantPruneLimit(limit: number) {
@@ -897,40 +708,26 @@ export async function pruneExpiredOwnerShareSessionGrants(limit = OWNER_SHARE_SE
   const boundedLimit = ownerShareGrantPruneLimit(limit);
   if (boundedLimit === 0) return 0;
   const now = ownerShareNow(nowValue);
-  if (await ensureDatabase()) {
-    try {
-      const result = await pool!.query(
-        `WITH expired AS (
-           SELECT ctid
-           FROM owner_session_grants
-           WHERE expires_at IS NOT NULL AND expires_at <= $2::timestamptz
-           ORDER BY expires_at, session_hash, resource_type, resource_id, owner_token_hash
-           LIMIT $1
-         )
-         DELETE FROM owner_session_grants
-         WHERE ctid IN (SELECT ctid FROM expired)
-         RETURNING session_hash`,
-        [boundedLimit, now.iso]
-      );
-      return result.rowCount ?? result.rows.length;
-    } catch (error: unknown) {
-      markDatabaseUnavailable("owner session grant prune", error);
-      throw error;
-    }
+  await ensureDatabase();
+  try {
+    const result = await pool!.query(
+      `WITH expired AS (
+         SELECT ctid
+         FROM owner_session_grants
+         WHERE expires_at IS NOT NULL AND expires_at <= $2::timestamptz
+         ORDER BY expires_at, session_hash, resource_type, resource_id, owner_token_hash
+         LIMIT $1
+       )
+       DELETE FROM owner_session_grants
+       WHERE ctid IN (SELECT ctid FROM expired)
+       RETURNING session_hash`,
+      [boundedLimit, now.iso]
+    );
+    return result.rowCount ?? result.rows.length;
+  } catch (error: unknown) {
+    markDatabaseUnavailable("owner session grant prune", error);
+    throw error;
   }
-
-  return withSerializedFileMutation(OWNER_SESSION_STORE_PATH, async () => {
-    const store = await readOwnerShareSessionStore();
-    const expired = store.grants
-      .map((grant, index) => ({ grant, index }))
-      .filter(({ grant }) => grant.expiresAt !== undefined && Date.parse(grant.expiresAt) <= now.time)
-      .sort((left, right) => Date.parse(left.grant.expiresAt!) - Date.parse(right.grant.expiresAt!) || left.index - right.index)
-      .slice(0, boundedLimit);
-    if (expired.length === 0) return 0;
-    const expiredKeys = new Set(expired.map(({ grant }) => ownerShareSessionGrantKey(grant)));
-    await writeFileJson(OWNER_SESSION_STORE_PATH, { ...store, grants: store.grants.filter((grant) => !expiredKeys.has(ownerShareSessionGrantKey(grant))) });
-    return expired.length;
-  });
 }
 
 export async function initializePersistence() {
@@ -955,9 +752,7 @@ export async function withPostgresTransaction<T>(
   callback: (client: PoolClient) => Promise<T>,
   expectedDomainConflict?: PostgresTransactionErrorClassifier
 ): Promise<T> {
-  if (!await ensureDatabase()) {
-    throw new Error(`PostgreSQL is required for ${operation}; file persistence is not supported.`);
-  }
+  await ensureDatabase();
 
   let client: PoolClient;
   try {
@@ -1005,51 +800,46 @@ export async function withPostgresTransaction<T>(
   }
 }
 
-async function withPersistenceLease<T>(leaseScope: string, fileLeasePath: string, operation: () => Promise<T>): Promise<SavedBuildMonitorLeaseResult<T>> {
-  if (await ensureDatabase()) {
-    let client: PoolClient | undefined;
-    let acquired = false;
+async function withPersistenceLease<T>(leaseScope: string, operation: () => Promise<T>): Promise<SavedBuildMonitorLeaseResult<T>> {
+  await ensureDatabase();
+  let client: PoolClient | undefined;
+  let acquired = false;
+  try {
+    client = await pool!.connect();
+    const result = await client.query<{ acquired: boolean }>(
+      "SELECT pg_try_advisory_lock(hashtextextended($1, 0)) AS acquired",
+      [`pc-supporter:${leaseScope}`]
+    );
+    acquired = result.rows[0]?.acquired === true;
+  } catch (error: unknown) {
+    client?.release(true);
+    markDatabaseUnavailable("background job lease", error);
+    throw error;
+  }
+  if (client && !acquired) {
+    client.release();
+    return { backend: "postgres", acquired: false };
+  }
+  if (client && acquired) {
     try {
-      client = await pool!.connect();
-      const result = await client.query<{ acquired: boolean }>(
-        "SELECT pg_try_advisory_lock(hashtextextended($1, 0)) AS acquired",
-        [`pc-supporter:${leaseScope}`]
-      );
-      acquired = result.rows[0]?.acquired === true;
-    } catch (error: unknown) {
-      client?.release(true);
-      markDatabaseUnavailable("background job lease", error);
-      throw error;
-    }
-    if (client && !acquired) {
-      client.release();
-      return { backend: "postgres", acquired: false };
-    }
-    if (client && acquired) {
+      return { backend: "postgres", acquired: true, value: await operation() };
+    } finally {
+      let discardClient = false;
       try {
-        return { backend: "postgres", acquired: true, value: await operation() };
-      } finally {
-        let discardClient = false;
-        try {
-          const result = await client.query<{ pg_advisory_unlock: boolean }>(
-            "SELECT pg_advisory_unlock(hashtextextended($1, 0))",
-            [`pc-supporter:${leaseScope}`]
-          );
-          discardClient = result.rows[0]?.pg_advisory_unlock !== true;
-          if (discardClient) console.warn("PostgreSQL background-job lease release reported no held lock; discarding the connection.");
-        } catch (error: unknown) {
-          discardClient = true;
-          console.warn(`PostgreSQL background-job lease release failed; discarding the connection: ${error instanceof Error ? error.message : String(error)}`);
-        }
-        client.release(discardClient);
+        const result = await client.query<{ pg_advisory_unlock: boolean }>(
+          "SELECT pg_advisory_unlock(hashtextextended($1, 0))",
+          [`pc-supporter:${leaseScope}`]
+        );
+        discardClient = result.rows[0]?.pg_advisory_unlock !== true;
+        if (discardClient) console.warn("PostgreSQL background-job lease release reported no held lock; discarding the connection.");
+      } catch (error: unknown) {
+        discardClient = true;
+        console.warn(`PostgreSQL background-job lease release failed; discarding the connection: ${error instanceof Error ? error.message : String(error)}`);
       }
+      client.release(discardClient);
     }
   }
-  await ensureDataDirectory();
-  const fileLease = await withFilePersistenceLease(fileLeasePath, operation);
-  return fileLease.acquired
-    ? { backend: "file", acquired: true, value: fileLease.value }
-    : { backend: "file", acquired: false };
+  return { backend: "postgres", acquired: false };
 }
 
 function normalizedLeaseScope(scope: string) {
@@ -1060,19 +850,15 @@ function normalizedLeaseScope(scope: string) {
 
 export async function withBackgroundJobLease<T>(scope: string, operation: () => Promise<T>): Promise<SavedBuildMonitorLeaseResult<T>> {
   const normalized = normalizedLeaseScope(scope);
-  return withPersistenceLease(`background-job:${normalized}`, resolve(DATA_DIR, `background-job-${normalized}.lease`), operation);
+  return withPersistenceLease(`background-job:${normalized}`, operation);
 }
 
 export async function withSavedBuildMonitorLease<T>(operation: () => Promise<T>, scope = "scheduler"): Promise<SavedBuildMonitorLeaseResult<T>> {
-  return withPersistenceLease(`saved-build-monitor:${normalizedLeaseScope(scope)}`, SAVED_BUILD_MONITOR_LEASE_PATH, operation);
-}
-
-export async function persistenceMode(): Promise<"postgres" | "file"> {
-  return configuredDatabaseUrl ? "postgres" : "file";
+  return withPersistenceLease(`saved-build-monitor:${normalizedLeaseScope(scope)}`, operation);
 }
 
 export async function incrementUsageEventInDatabase(dayUtc: string, name: UsageEventName, maxDailyBuckets: number) {
-  if (!await ensureDatabase()) throw new Error("PostgreSQL usage-event persistence is not configured.");
+  await ensureDatabase();
 
   let client: PoolClient;
   try {
@@ -1113,7 +899,7 @@ export async function incrementUsageEventInDatabase(dayUtc: string, name: UsageE
 }
 
 export async function readUsageEventDailyCountsFromDatabase(): Promise<Record<string, Partial<Record<UsageEventName, number>>>> {
-  if (!await ensureDatabase()) throw new Error("PostgreSQL usage-event persistence is not configured.");
+  await ensureDatabase();
   try {
     const result = await pool!.query<{ day_utc: string; counts: Partial<Record<UsageEventName, number>> }>(
       "SELECT day_utc::text AS day_utc, counts FROM usage_event_daily_counts ORDER BY day_utc"
@@ -1127,8 +913,7 @@ export async function readUsageEventDailyCountsFromDatabase(): Promise<Record<st
 
 export async function persistenceDiagnostics(): Promise<PersistenceDiagnostics> {
   if (!configuredDatabaseUrl) {
-    const ready = await filePersistenceIsReady();
-    return { databaseConfigured: false, storageMode: "file", ready, ...(ready ? {} : { unavailableReason: "file_storage_unavailable" as const }) };
+    return { databaseConfigured: false, storageMode: "postgres", ready: false, unavailableReason: "database_unavailable" };
   }
   try {
     await ensureDatabase();
@@ -1142,13 +927,11 @@ export async function persistenceDiagnostics(): Promise<PersistenceDiagnostics> 
 }
 
 export async function consumeRateLimitWindow(scope: string, address: string, policy: RateLimitPolicy, _now = Date.now()): Promise<RateLimitDecision | undefined> {
-  let databaseConfigured: boolean;
   try {
-    databaseConfigured = await ensureDatabase();
+    await ensureDatabase();
   } catch {
     throw new RateLimitStoreUnavailableError("PERSISTENCE_UNAVAILABLE");
   }
-  if (!databaseConfigured) return undefined;
   const secret = rateLimitHmacSecret();
   if (!secret) throw new RateLimitStoreUnavailableError("RATE_LIMIT_KEY_UNCONFIGURED");
   const limit = Math.max(1, Math.floor(policy.limit));
@@ -1195,7 +978,7 @@ export async function consumeRateLimitWindow(scope: string, address: string, pol
 }
 
 export async function pruneRateLimitWindows() {
-  if (!await ensureDatabase()) return 0;
+  await ensureDatabase();
   try {
     const lease = await withBackgroundJobLease("rate-limit-window-prune", async () => {
       const result = await pool!.query(
@@ -1221,64 +1004,60 @@ export async function pruneRateLimitWindows() {
 }
 
 export async function readCatalogRecords(): Promise<Part[]> {
-  if (await ensureDatabase()) {
-    try {
-      const result = await pool!.query<{ payload: Part }>("SELECT payload FROM catalog_parts ORDER BY updated_at DESC");
-      return result.rows.map((row) => row.payload);
-    } catch (error) {
-      markDatabaseUnavailable("catalog read", error);
-      throw error;
-    }
+  await ensureDatabase();
+  try {
+    const result = await pool!.query<{ payload: Part }>("SELECT payload FROM catalog_parts ORDER BY updated_at DESC");
+    return result.rows.map((row) => row.payload);
+  } catch (error) {
+    markDatabaseUnavailable("catalog read", error);
+    throw error;
   }
-  return readFileJson<Part[]>(CATALOG_PATH, []);
 }
 
 export async function writeCatalogRecords(
   parts: Part[],
   options: { replaceDanawaCategories?: PartCategory[] } = {}
 ) {
-  if (await ensureDatabase()) {
-    const client = await pool!.connect();
-    try {
-      await client.query("BEGIN");
-      const replaceCategories = [...new Set(options.replaceDanawaCategories ?? [])];
-      if (replaceCategories.length > 0) {
-        await client.query(
-          "DELETE FROM catalog_parts WHERE source = 'danawa' AND category = ANY($1::text[])",
-          [replaceCategories]
-        );
-      }
-      for (const part of parts) {
-        await client.query(
-          `INSERT INTO catalog_parts (id, category, source, source_product_code, data_quality, payload, updated_at)
-           VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::timestamptz)
-           ON CONFLICT (id) DO UPDATE SET
-             category = EXCLUDED.category,
-             source = EXCLUDED.source,
-             source_product_code = EXCLUDED.source_product_code,
-             data_quality = EXCLUDED.data_quality,
-             payload = EXCLUDED.payload,
-             updated_at = EXCLUDED.updated_at`,
-          [part.id, part.category, part.source, part.sourceProductCode ?? null, part.dataQuality, JSON.stringify(part), part.updatedAt]
-        );
-      }
-      await client.query("COMMIT");
-      return;
-    } catch (error) {
-      await client.query("ROLLBACK").catch(() => undefined);
-      markDatabaseUnavailable("catalog write", error);
-      throw error;
-    } finally {
-      client.release();
+  await ensureDatabase();
+  const client = await pool!.connect();
+  try {
+    await client.query("BEGIN");
+    const replaceCategories = [...new Set(options.replaceDanawaCategories ?? [])];
+    if (replaceCategories.length > 0) {
+      await client.query(
+        "DELETE FROM catalog_parts WHERE source = 'danawa' AND category = ANY($1::text[])",
+        [replaceCategories]
+      );
     }
+    for (const part of parts) {
+      await client.query(
+        `INSERT INTO catalog_parts (id, category, source, source_product_code, data_quality, payload, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::timestamptz)
+         ON CONFLICT (id) DO UPDATE SET
+           category = EXCLUDED.category,
+           source = EXCLUDED.source,
+           source_product_code = EXCLUDED.source_product_code,
+           data_quality = EXCLUDED.data_quality,
+           payload = EXCLUDED.payload,
+           updated_at = EXCLUDED.updated_at`,
+        [part.id, part.category, part.source, part.sourceProductCode ?? null, part.dataQuality, JSON.stringify(part), part.updatedAt]
+      );
+    }
+    await client.query("COMMIT");
+    return;
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    markDatabaseUnavailable("catalog write", error);
+    throw error;
+  } finally {
+    client.release();
   }
-  await writeFileJson(CATALOG_PATH, parts);
 }
 
 export async function patchCatalogPriceRecords(
   patches: Array<{ id: string; sourceProductCode: string; danawaUrl: string; priceWon: number; priceCheckedAt: string }>
 ): Promise<Array<{ before: Part; after: Part }> | undefined> {
-  if (!(await ensureDatabase())) return undefined;
+  await ensureDatabase();
   const client = await pool!.connect();
   const changed: Array<{ before: Part; after: Part }> = [];
   try {
@@ -1351,7 +1130,7 @@ function assertUniqueAccessoryCatalogKeys(items: AccessoryItem[]) {
 }
 
 export async function readAccessoryCatalogRecords(): Promise<AccessoryCatalogSnapshot> {
-  if (!await ensureDatabase()) throw new Error("PostgreSQL accessory catalog persistence is not configured.");
+  await ensureDatabase();
   try {
     const result = await pool!.query<{ payload: AccessoryItem; updated_at: Date | string }>(
       "SELECT payload, updated_at FROM catalog_accessories ORDER BY updated_at DESC, id ASC"
@@ -1374,7 +1153,7 @@ export async function readAccessoryCatalogRecords(): Promise<AccessoryCatalogSna
 export async function mutateAccessoryCatalogRecords(
   mutation: (current: AccessoryItem[]) => AccessoryCatalogMutation
 ): Promise<AccessoryCatalogSnapshot> {
-  if (!await ensureDatabase()) throw new Error("PostgreSQL accessory catalog persistence is not configured.");
+  await ensureDatabase();
 
   let client: PoolClient;
   try {
@@ -1464,7 +1243,7 @@ export async function patchAccessoryCatalogPriceRecords(
   patches: Array<{ id: string; sourceProductCode: string; danawaUrl: string; priceWon: number; priceCheckedAt: string }>
 ): Promise<AccessoryCatalogPricePatchResult> {
   if (patches.length === 0) return { updates: [], updatedAt: "" };
-  if (!await ensureDatabase()) throw new Error("PostgreSQL accessory catalog persistence is not configured.");
+  await ensureDatabase();
 
   let client: PoolClient;
   try {
@@ -1531,7 +1310,7 @@ function coolingFanLoadOverrideMapFromUnknown(value: unknown): CoolingFanLoadOve
 }
 
 export async function readCoolingFanLoadOverrideRecords(): Promise<CoolingFanLoadOverrideSnapshotRecord> {
-  if (!await ensureDatabase()) throw new Error("PostgreSQL cooling-fan override persistence is not configured.");
+  await ensureDatabase();
   try {
     const result = await pool!.query<{ payload: unknown; updated_at: Date | string | null }>(
       "SELECT payload, updated_at FROM cooling_fan_load_overrides WHERE singleton_id = 'current'"
@@ -1554,7 +1333,7 @@ export async function readCoolingFanLoadOverrideRecords(): Promise<CoolingFanLoa
 export async function mutateCoolingFanLoadOverrideRecords(
   mutation: (current: CoolingFanLoadOverrideMapRecord) => CoolingFanLoadOverrideMapRecord
 ): Promise<CoolingFanLoadOverrideMapRecord> {
-  if (!await ensureDatabase()) throw new Error("PostgreSQL cooling-fan override persistence is not configured.");
+  await ensureDatabase();
 
   let client: PoolClient;
   try {
@@ -1614,7 +1393,7 @@ function singletonOverrideMapFromUnknown<T>(value: unknown, label: string): Reco
 }
 
 async function readPostgresSingletonOverrideMap<T>(table: SingletonOverrideTable, label: string): Promise<Record<string, T>> {
-  if (!await ensureDatabase()) throw new Error(`PostgreSQL ${label} persistence is not configured.`);
+  await ensureDatabase();
   try {
     const result = await pool!.query<{ payload: unknown }>(
       `SELECT payload FROM ${table} WHERE singleton_id = 'current'`
@@ -1632,7 +1411,7 @@ async function mutatePostgresSingletonOverrideMap<T, V>(
   label: string,
   mutation: (current: Record<string, T>) => SingletonOverrideMutation<T, V> | Promise<SingletonOverrideMutation<T, V>>
 ): Promise<V> {
-  if (!await ensureDatabase()) throw new Error(`PostgreSQL ${label} persistence is not configured.`);
+  await ensureDatabase();
 
   let client: PoolClient;
   try {
@@ -1677,40 +1456,22 @@ async function mutatePostgresSingletonOverrideMap<T, V>(
 }
 
 export async function readCatalogSpecOverrideRecords(): Promise<CatalogSpecOverrideMapRecord> {
-  if (!await ensureDatabase()) return readFileJson<CatalogSpecOverrideMapRecord>(CATALOG_SPEC_OVERRIDES_PATH, {});
   return readPostgresSingletonOverrideMap<CatalogSpecOverride>("catalog_spec_overrides", "catalog-spec override");
 }
 
 export async function mutateCatalogSpecOverrideRecords<V>(
   mutation: (current: CatalogSpecOverrideMapRecord) => SingletonOverrideMutation<CatalogSpecOverride, V> | Promise<SingletonOverrideMutation<CatalogSpecOverride, V>>
 ): Promise<V> {
-  if (!await ensureDatabase()) {
-    return withSerializedFileMutation(CATALOG_SPEC_OVERRIDES_PATH, async () => {
-      const current = await readFileJson<CatalogSpecOverrideMapRecord>(CATALOG_SPEC_OVERRIDES_PATH, {});
-      const result = await mutation(current);
-      if (result.changed) await writeFileJson(CATALOG_SPEC_OVERRIDES_PATH, result.overrides);
-      return result.value;
-    });
-  }
   return mutatePostgresSingletonOverrideMap("catalog_spec_overrides", "catalog-spec-overrides", "catalog-spec override", mutation);
 }
 
 export async function readM2SlotOverrideRecords(): Promise<M2SlotOverrideMapRecord> {
-  if (!await ensureDatabase()) return readFileJson<M2SlotOverrideMapRecord>(M2_SLOT_OVERRIDES_PATH, {});
   return readPostgresSingletonOverrideMap<M2SlotOverride>("m2_slot_overrides", "M.2 slot override");
 }
 
 export async function mutateM2SlotOverrideRecords<V>(
   mutation: (current: M2SlotOverrideMapRecord) => SingletonOverrideMutation<M2SlotOverride, V> | Promise<SingletonOverrideMutation<M2SlotOverride, V>>
 ): Promise<V> {
-  if (!await ensureDatabase()) {
-    return withSerializedFileMutation(M2_SLOT_OVERRIDES_PATH, async () => {
-      const current = await readFileJson<M2SlotOverrideMapRecord>(M2_SLOT_OVERRIDES_PATH, {});
-      const result = await mutation(current);
-      if (result.changed) await writeFileJson(M2_SLOT_OVERRIDES_PATH, result.overrides);
-      return result.value;
-    });
-  }
   return mutatePostgresSingletonOverrideMap("m2_slot_overrides", "m2-slot-overrides", "M.2 slot override", mutation);
 }
 
@@ -1720,7 +1481,7 @@ export type CatalogOverrideMapUpdatedAtRecord = {
 };
 
 export async function readCatalogOverrideMapUpdatedAtRecords(): Promise<CatalogOverrideMapUpdatedAtRecord> {
-  if (!await ensureDatabase()) throw new Error("PostgreSQL catalog override timestamp persistence is not configured.");
+  await ensureDatabase();
   try {
     const result = await pool!.query<{
       catalog_spec_updated_at: Date | string | null;
@@ -1743,7 +1504,7 @@ export async function readCatalogOverrideMapUpdatedAtRecords(): Promise<CatalogO
 const EMPTY_ACCESSORY_COVERAGE: AccessoryCoverageSnapshot = { updatedAt: "", categories: [] };
 
 export async function readAccessoryCoverageRecord(): Promise<AccessoryCoverageSnapshot> {
-  if (!await ensureDatabase()) throw new Error("PostgreSQL accessory coverage persistence is not configured.");
+  await ensureDatabase();
   try {
     const result = await pool!.query<{ payload: AccessoryCoverageSnapshot }>(
       "SELECT payload FROM accessory_coverage_state WHERE singleton_id = 'current'"
@@ -1758,7 +1519,7 @@ export async function readAccessoryCoverageRecord(): Promise<AccessoryCoverageSn
 export async function mutateAccessoryCoverageRecord(
   mutation: (current: AccessoryCoverageSnapshot) => AccessoryCoverageSnapshot
 ): Promise<AccessoryCoverageSnapshot> {
-  if (!await ensureDatabase()) throw new Error("PostgreSQL accessory coverage persistence is not configured.");
+  await ensureDatabase();
 
   let client: PoolClient;
   try {
@@ -1799,59 +1560,50 @@ export async function mutateAccessoryCoverageRecord(
   }
 }
 
-async function readFileBenchmarkOverrideRecords(): Promise<Record<string, BenchmarkOverride>> {
-  const raw = await readFileJson<unknown>(BENCHMARK_OVERRIDES_PATH, {});
-  return raw && typeof raw === "object" && !Array.isArray(raw) ? raw as Record<string, BenchmarkOverride> : {};
-}
-
 export async function readBenchmarkOverrideRecords(): Promise<Record<string, BenchmarkOverride>> {
-  if (await ensureDatabase()) {
-    try {
-      const result = await pool!.query<{ part_id: string; payload: BenchmarkOverride }>(
-        "SELECT part_id, payload FROM benchmark_overrides ORDER BY updated_at DESC"
-      );
-      if (result.rows.length > 0) return Object.fromEntries(result.rows.map((row) => [row.part_id, row.payload]));
-      return {};
-    } catch (error) {
-      markDatabaseUnavailable("benchmark override read", error);
-      throw error;
-    }
+  await ensureDatabase();
+  try {
+    const result = await pool!.query<{ part_id: string; payload: BenchmarkOverride }>(
+      "SELECT part_id, payload FROM benchmark_overrides ORDER BY updated_at DESC"
+    );
+    if (result.rows.length > 0) return Object.fromEntries(result.rows.map((row) => [row.part_id, row.payload]));
+    return {};
+  } catch (error) {
+    markDatabaseUnavailable("benchmark override read", error);
+    throw error;
   }
-  return readFileBenchmarkOverrideRecords();
 }
 
 export async function writeBenchmarkOverrideRecords(overrides: Record<string, BenchmarkOverride>) {
   const values = Object.values(overrides);
-  if (await ensureDatabase()) {
-    const client = await pool!.connect();
-    try {
-      await client.query("BEGIN");
-      if (values.length === 0) {
-        await client.query("DELETE FROM benchmark_overrides");
-      } else {
-        await client.query("DELETE FROM benchmark_overrides WHERE NOT (part_id = ANY($1::text[]))", [values.map((value) => value.partId)]);
-      }
-      for (const override of values) {
-        await client.query(
-          `INSERT INTO benchmark_overrides (part_id, payload, updated_at)
-           VALUES ($1, $2::jsonb, $3::timestamptz)
-           ON CONFLICT (part_id) DO UPDATE SET
-             payload = EXCLUDED.payload,
-             updated_at = EXCLUDED.updated_at`,
-          [override.partId, JSON.stringify(override), override.updatedAt]
-        );
-      }
-      await client.query("COMMIT");
-      return;
-    } catch (error) {
-      await client.query("ROLLBACK").catch(() => undefined);
-      markDatabaseUnavailable("benchmark override write", error);
-      throw error;
-    } finally {
-      client.release();
+  await ensureDatabase();
+  const client = await pool!.connect();
+  try {
+    await client.query("BEGIN");
+    if (values.length === 0) {
+      await client.query("DELETE FROM benchmark_overrides");
+    } else {
+      await client.query("DELETE FROM benchmark_overrides WHERE NOT (part_id = ANY($1::text[]))", [values.map((value) => value.partId)]);
     }
+    for (const override of values) {
+      await client.query(
+        `INSERT INTO benchmark_overrides (part_id, payload, updated_at)
+         VALUES ($1, $2::jsonb, $3::timestamptz)
+         ON CONFLICT (part_id) DO UPDATE SET
+           payload = EXCLUDED.payload,
+           updated_at = EXCLUDED.updated_at`,
+        [override.partId, JSON.stringify(override), override.updatedAt]
+      );
+    }
+    await client.query("COMMIT");
+    return;
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    markDatabaseUnavailable("benchmark override write", error);
+    throw error;
+  } finally {
+    client.release();
   }
-  await writeFileJson(BENCHMARK_OVERRIDES_PATH, overrides);
 }
 
 const SAVED_BUILD_DATABASE_COLUMNS = "id, name, selection, recommendation_preferences, created_at, updated_at, expires_at, owner_token_hash, recovery_code_hash, my_pc_at, version_group_id, version_number, derived_from_build_id, check_snapshot, check_history, monitor_state, purchase_progress, purchase_price_history, decision_note, origin, metadata_history";
@@ -1971,18 +1723,16 @@ function requiredSavedBuildRecordFromDatabaseRow(row: SavedBuildDatabaseRow | un
 }
 
 export async function readSavedBuilds(): Promise<SavedBuildRecord[]> {
-  if (await ensureDatabase()) {
-    try {
-      const result = await pool!.query<SavedBuildDatabaseRow>(
-        `SELECT ${SAVED_BUILD_DATABASE_COLUMNS} FROM saved_builds ORDER BY updated_at DESC`
-      );
-      return savedBuildRecordsFromUnknownArray(result.rows.map(savedBuildRecordFromDatabaseRow));
-    } catch (error) {
-      markDatabaseUnavailable("build read", error);
-      throw error;
-    }
+  await ensureDatabase();
+  try {
+    const result = await pool!.query<SavedBuildDatabaseRow>(
+      `SELECT ${SAVED_BUILD_DATABASE_COLUMNS} FROM saved_builds ORDER BY updated_at DESC`
+    );
+    return savedBuildRecordsFromUnknownArray(result.rows.map(savedBuildRecordFromDatabaseRow));
+  } catch (error) {
+    markDatabaseUnavailable("build read", error);
+    throw error;
   }
-  return savedBuildRecordsFromUnknownArray(await readFileJson<unknown>(BUILDS_PATH, []));
 }
 
 function savedBuildRecordsFromUnknownArray(value: unknown): SavedBuildRecord[] {
@@ -1993,61 +1743,51 @@ function savedBuildRecordsFromUnknownArray(value: unknown): SavedBuildRecord[] {
 }
 
 export async function writeSavedBuilds(builds: SavedBuildRecord[]) {
-  if (await ensureDatabase()) {
-    const client = await pool!.connect();
-    try {
-      await client.query("BEGIN");
-      if (builds.length === 0) {
-        await client.query("DELETE FROM saved_builds");
-      } else {
-        await client.query("DELETE FROM saved_builds WHERE NOT (id = ANY($1::text[]))", [builds.map((build) => build.id)]);
-      }
-      for (const build of builds) {
-        await client.query(
-          `INSERT INTO saved_builds (id, name, decision_note, origin, selection, recommendation_preferences, created_at, updated_at, expires_at, owner_token_hash, recovery_code_hash, my_pc_at, version_group_id, version_number, derived_from_build_id, check_snapshot, check_history, monitor_state, purchase_progress, purchase_price_history, metadata_history)
-           VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7::timestamptz, $8::timestamptz, $9::timestamptz, $10, $11, $12::timestamptz, $13, $14, $15, $16::jsonb, $17::jsonb, $18::jsonb, $19::jsonb, $20::jsonb, $21::jsonb)
-           ON CONFLICT (id) DO UPDATE SET
-             name = EXCLUDED.name,
-             decision_note = EXCLUDED.decision_note,
-             origin = EXCLUDED.origin,
-             selection = EXCLUDED.selection,
-             recommendation_preferences = EXCLUDED.recommendation_preferences,
-             updated_at = EXCLUDED.updated_at,
-             expires_at = EXCLUDED.expires_at,
-             owner_token_hash = EXCLUDED.owner_token_hash,
-             my_pc_at = EXCLUDED.my_pc_at,
-             recovery_code_hash = EXCLUDED.recovery_code_hash,
-             version_group_id = EXCLUDED.version_group_id,
-             version_number = EXCLUDED.version_number,
-             derived_from_build_id = EXCLUDED.derived_from_build_id,
-             check_snapshot = EXCLUDED.check_snapshot,
-             check_history = EXCLUDED.check_history,
-             monitor_state = EXCLUDED.monitor_state,
-             purchase_progress = EXCLUDED.purchase_progress,
-             purchase_price_history = EXCLUDED.purchase_price_history,
-             metadata_history = EXCLUDED.metadata_history`,
-          [build.id, build.name, build.decisionNote ?? null, build.origin ? JSON.stringify(build.origin) : null, JSON.stringify(build.selection), build.recommendationPreferences ? JSON.stringify(build.recommendationPreferences) : null, build.createdAt, build.updatedAt, build.expiresAt ?? null, build.ownerTokenHash ?? null, build.recoveryCodeHash ?? null, build.myPcAt ?? null, build.versionGroupId ?? null, build.versionNumber ?? null, build.derivedFromBuildId ?? null, build.checkSnapshot ? JSON.stringify(build.checkSnapshot) : null, build.checkHistory ? JSON.stringify(build.checkHistory) : null, build.monitorState ? JSON.stringify(build.monitorState) : null, build.purchaseProgress ? JSON.stringify(build.purchaseProgress) : null, build.purchasePriceHistory ? JSON.stringify(build.purchasePriceHistory) : null, build.metadataHistory ? JSON.stringify(build.metadataHistory) : null]
-        );
-      }
-      await client.query("COMMIT");
-      return;
-    } catch (error) {
-      await client.query("ROLLBACK").catch(() => undefined);
-      markDatabaseUnavailable("build write", error);
-      throw error;
-    } finally {
-      client.release();
+  await ensureDatabase();
+  const client = await pool!.connect();
+  try {
+    await client.query("BEGIN");
+    if (builds.length === 0) {
+      await client.query("DELETE FROM saved_builds");
+    } else {
+      await client.query("DELETE FROM saved_builds WHERE NOT (id = ANY($1::text[]))", [builds.map((build) => build.id)]);
     }
+    for (const build of builds) {
+      await client.query(
+        `INSERT INTO saved_builds (id, name, decision_note, origin, selection, recommendation_preferences, created_at, updated_at, expires_at, owner_token_hash, recovery_code_hash, my_pc_at, version_group_id, version_number, derived_from_build_id, check_snapshot, check_history, monitor_state, purchase_progress, purchase_price_history, metadata_history)
+         VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7::timestamptz, $8::timestamptz, $9::timestamptz, $10, $11, $12::timestamptz, $13, $14, $15, $16::jsonb, $17::jsonb, $18::jsonb, $19::jsonb, $20::jsonb, $21::jsonb)
+         ON CONFLICT (id) DO UPDATE SET
+           name = EXCLUDED.name,
+           decision_note = EXCLUDED.decision_note,
+           origin = EXCLUDED.origin,
+           selection = EXCLUDED.selection,
+           recommendation_preferences = EXCLUDED.recommendation_preferences,
+           updated_at = EXCLUDED.updated_at,
+           expires_at = EXCLUDED.expires_at,
+           owner_token_hash = EXCLUDED.owner_token_hash,
+           my_pc_at = EXCLUDED.my_pc_at,
+           recovery_code_hash = EXCLUDED.recovery_code_hash,
+           version_group_id = EXCLUDED.version_group_id,
+           version_number = EXCLUDED.version_number,
+           derived_from_build_id = EXCLUDED.derived_from_build_id,
+           check_snapshot = EXCLUDED.check_snapshot,
+           check_history = EXCLUDED.check_history,
+           monitor_state = EXCLUDED.monitor_state,
+           purchase_progress = EXCLUDED.purchase_progress,
+           purchase_price_history = EXCLUDED.purchase_price_history,
+           metadata_history = EXCLUDED.metadata_history`,
+        [build.id, build.name, build.decisionNote ?? null, build.origin ? JSON.stringify(build.origin) : null, JSON.stringify(build.selection), build.recommendationPreferences ? JSON.stringify(build.recommendationPreferences) : null, build.createdAt, build.updatedAt, build.expiresAt ?? null, build.ownerTokenHash ?? null, build.recoveryCodeHash ?? null, build.myPcAt ?? null, build.versionGroupId ?? null, build.versionNumber ?? null, build.derivedFromBuildId ?? null, build.checkSnapshot ? JSON.stringify(build.checkSnapshot) : null, build.checkHistory ? JSON.stringify(build.checkHistory) : null, build.monitorState ? JSON.stringify(build.monitorState) : null, build.purchaseProgress ? JSON.stringify(build.purchaseProgress) : null, build.purchasePriceHistory ? JSON.stringify(build.purchasePriceHistory) : null, build.metadataHistory ? JSON.stringify(build.metadataHistory) : null]
+      );
+    }
+    await client.query("COMMIT");
+    return;
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    markDatabaseUnavailable("build write", error);
+    throw error;
+  } finally {
+    client.release();
   }
-  await writeFileJson(BUILDS_PATH, builds);
-}
-
-function savedBuildWithNextVersionFor(build: SavedBuildRecord, existingBuilds: SavedBuildRecord[]) {
-  const versionGroupId = savedBuildVersionGroupIdFor(build);
-  const maxVersion = existingBuilds
-    .filter((existing) => savedBuildVersionGroupIdFor(existing) === versionGroupId)
-    .reduce((max, existing) => Math.max(max, savedBuildVersionNumberFor(existing)), 0);
-  return { ...build, versionGroupId, versionNumber: maxVersion + 1 } satisfies SavedBuildRecord;
 }
 
 async function appendSavedBuildToDatabase(build: SavedBuildRecord, max: number) {
@@ -2082,22 +1822,13 @@ async function appendSavedBuildToDatabase(build: SavedBuildRecord, max: number) 
 
 export async function appendSavedBuild(build: SavedBuildRecord, max = 100) {
   const boundedMax = Math.max(1, Math.floor(max));
-  if (await ensureDatabase()) {
-    try {
-      return await appendSavedBuildToDatabase(build, boundedMax);
-    } catch (error: unknown) {
-      markDatabaseUnavailable("versioned build write", error);
-      throw error;
-    }
+  await ensureDatabase();
+  try {
+    return await appendSavedBuildToDatabase(build, boundedMax);
+  } catch (error: unknown) {
+    markDatabaseUnavailable("versioned build write", error);
+    throw error;
   }
-  const fileLease = await withSerializedFileMutation(BUILDS_PATH, () => withFilePersistenceLease(SAVED_BUILD_VERSION_LEASE_PATH, async () => {
-    const builds = await readSavedBuilds();
-    const next = savedBuildWithNextVersionFor(build, builds);
-    await writeFileJson(BUILDS_PATH, [next, ...builds].slice(0, boundedMax));
-    return next;
-  }));
-  if (!fileLease.acquired) throw new Error("다른 저장 요청이 버전 번호를 발급 중입니다. 잠시 후 다시 시도해 주세요.");
-  return fileLease.value;
 }
 
 export type SavedBuildMetadataUpdateResult =
@@ -2106,65 +1837,41 @@ export type SavedBuildMetadataUpdateResult =
 
 export async function updateSavedBuildMetadata(id: string, name: string, decisionNote?: string): Promise<SavedBuildMetadataUpdateResult> {
   const updatedAt = new Date().toISOString();
-  if (await ensureDatabase()) {
-    const client = await pool!.connect();
-    try {
-      await client.query("BEGIN");
-      const currentResult = await client.query<{ name: string; decision_note: string | null; metadata_history: unknown }>(
-        "SELECT name, decision_note, metadata_history FROM saved_builds WHERE id = $1 FOR UPDATE",
-        [id]
-      );
-      const current = currentResult.rows[0];
-      if (!current) {
-        await client.query("COMMIT");
-        return { status: "not-found" };
-      }
-      const metadataHistory = savedBuildMetadataHistoryWithNextEntryFor(
-        savedBuildMetadataHistoryFromUnknown(current.metadata_history),
-        savedBuildMetadataHistoryEntryFor(
-          { name: current.name, ...(current.decision_note ? { decisionNote: current.decision_note } : {}) },
-          { name, ...(decisionNote ? { decisionNote } : {}) },
-          updatedAt
-        )
-      );
-      const updatedResult = await client.query<SavedBuildDatabaseRow>(
-        `UPDATE saved_builds SET name = $2, decision_note = $3, updated_at = $4::timestamptz, metadata_history = $5::jsonb WHERE id = $1 RETURNING ${SAVED_BUILD_DATABASE_COLUMNS}`,
-        [id, name, decisionNote ?? null, updatedAt, JSON.stringify(metadataHistory)]
-      );
-      const updated = requiredSavedBuildRecordFromDatabaseRow(updatedResult.rows[0]);
+  await ensureDatabase();
+  const client = await pool!.connect();
+  try {
+    await client.query("BEGIN");
+    const currentResult = await client.query<{ name: string; decision_note: string | null; metadata_history: unknown }>(
+      "SELECT name, decision_note, metadata_history FROM saved_builds WHERE id = $1 FOR UPDATE",
+      [id]
+    );
+    const current = currentResult.rows[0];
+    if (!current) {
       await client.query("COMMIT");
-      return { status: "updated", build: updated };
-    } catch (error: unknown) {
-      await client.query("ROLLBACK").catch(() => undefined);
-      markDatabaseUnavailable("saved build metadata update", error);
-      throw error;
-    } finally {
-      client.release();
+      return { status: "not-found" };
     }
-  }
-  return withSerializedFileMutation(BUILDS_PATH, async () => {
-    const builds = await readSavedBuilds();
-    const current = builds.find((build) => build.id === id);
-    if (!current) return { status: "not-found" } as const;
-    const { decisionNote: _currentDecisionNote, ...withoutDecisionNote } = current;
     const metadataHistory = savedBuildMetadataHistoryWithNextEntryFor(
-      current.metadataHistory,
+      savedBuildMetadataHistoryFromUnknown(current.metadata_history),
       savedBuildMetadataHistoryEntryFor(
-        current,
+        { name: current.name, ...(current.decision_note ? { decisionNote: current.decision_note } : {}) },
         { name, ...(decisionNote ? { decisionNote } : {}) },
         updatedAt
       )
     );
-    const next: SavedBuildRecord = {
-      ...withoutDecisionNote,
-      name,
-      updatedAt,
-      ...(decisionNote ? { decisionNote } : {}),
-      ...(metadataHistory.length > 0 ? { metadataHistory } : {})
-    };
-    await writeSavedBuilds(builds.map((build) => build.id === id ? next : build));
-    return { status: "updated", build: next } as const;
-  });
+    const updatedResult = await client.query<SavedBuildDatabaseRow>(
+      `UPDATE saved_builds SET name = $2, decision_note = $3, updated_at = $4::timestamptz, metadata_history = $5::jsonb WHERE id = $1 RETURNING ${SAVED_BUILD_DATABASE_COLUMNS}`,
+      [id, name, decisionNote ?? null, updatedAt, JSON.stringify(metadataHistory)]
+    );
+    const updated = requiredSavedBuildRecordFromDatabaseRow(updatedResult.rows[0]);
+    await client.query("COMMIT");
+    return { status: "updated", build: updated };
+  } catch (error: unknown) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    markDatabaseUnavailable("saved build metadata update", error);
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 type SavedBuildVersionBackup = {
@@ -2198,17 +1905,6 @@ function savedBuildVersionBackupFromUnknown(value: unknown): SavedBuildVersionBa
   return builds.length === candidate.builds.length ? { id: candidate.id, createdAt: candidate.createdAt, sourceFingerprint: candidate.sourceFingerprint, resultingFingerprint: candidate.resultingFingerprint, changedCount, builds } : undefined;
 }
 
-function savedBuildVersionBackupsFromUnknown(value: unknown): SavedBuildVersionBackup[] {
-  const rawItems = Array.isArray(value)
-    ? value
-    : value && typeof value === "object" && Array.isArray((value as { items?: unknown }).items)
-      ? (value as { items: unknown[] }).items
-      : value === undefined
-        ? []
-        : [value];
-  return rawItems.map(savedBuildVersionBackupFromUnknown).filter((backup): backup is SavedBuildVersionBackup => backup !== undefined);
-}
-
 function savedBuildVersionBackupSummaryFor(backup: SavedBuildVersionBackup, currentFingerprint: string): SavedBuildVersionBackupSummary {
   return { backupId: backup.id, createdAt: backup.createdAt, totalBuilds: backup.builds.length, changedCount: backup.changedCount, sourceFingerprint: backup.sourceFingerprint, resultingFingerprint: backup.resultingFingerprint, rollbackAvailable: currentFingerprint === backup.resultingFingerprint };
 }
@@ -2218,24 +1914,18 @@ function savedBuildVersionBackupDetailFor(backup: SavedBuildVersionBackup, curre
 }
 
 export async function readSavedBuildVersionBackups(): Promise<SavedBuildVersionBackupSummary[]> {
-  if (await ensureDatabase()) {
-    try {
-      const result = await pool!.query<{ id: string; created_at: Date; source_fingerprint: string; resulting_fingerprint: string; changed_count: number | string; total_builds: number | string }>(
-        "SELECT id, created_at, source_fingerprint, resulting_fingerprint, changed_count, jsonb_array_length(builds) AS total_builds FROM saved_build_version_backups ORDER BY created_at DESC LIMIT $1",
-        [SAVED_BUILD_VERSION_BACKUP_RETENTION]
-      );
-      const currentFingerprint = savedBuildVersionSnapshotFingerprintFor(await readSavedBuilds());
-      return result.rows.map((row) => ({ backupId: row.id, createdAt: new Date(row.created_at).toISOString(), totalBuilds: Number(row.total_builds), changedCount: Number(row.changed_count), sourceFingerprint: row.source_fingerprint, resultingFingerprint: row.resulting_fingerprint, rollbackAvailable: currentFingerprint === row.resulting_fingerprint }));
-    } catch (error: unknown) {
-      markDatabaseUnavailable("version backup read", error);
-      throw error;
-    }
+  await ensureDatabase();
+  try {
+    const result = await pool!.query<{ id: string; created_at: Date; source_fingerprint: string; resulting_fingerprint: string; changed_count: number | string; total_builds: number | string }>(
+      "SELECT id, created_at, source_fingerprint, resulting_fingerprint, changed_count, jsonb_array_length(builds) AS total_builds FROM saved_build_version_backups ORDER BY created_at DESC LIMIT $1",
+      [SAVED_BUILD_VERSION_BACKUP_RETENTION]
+    );
+    const currentFingerprint = savedBuildVersionSnapshotFingerprintFor(await readSavedBuilds());
+    return result.rows.map((row) => ({ backupId: row.id, createdAt: new Date(row.created_at).toISOString(), totalBuilds: Number(row.total_builds), changedCount: Number(row.changed_count), sourceFingerprint: row.source_fingerprint, resultingFingerprint: row.resulting_fingerprint, rollbackAvailable: currentFingerprint === row.resulting_fingerprint }));
+  } catch (error: unknown) {
+    markDatabaseUnavailable("version backup read", error);
+    throw error;
   }
-  const backups = savedBuildVersionBackupsFromUnknown(await readFileJson<unknown>(SAVED_BUILD_VERSION_BACKUP_PATH, undefined))
-    .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
-  if (backups.length === 0) return [];
-  const currentFingerprint = savedBuildVersionSnapshotFingerprintFor(await readSavedBuilds());
-  return backups.slice(0, SAVED_BUILD_VERSION_BACKUP_RETENTION).map((backup) => savedBuildVersionBackupSummaryFor(backup, currentFingerprint));
 }
 
 export async function readLatestSavedBuildVersionBackup(): Promise<SavedBuildVersionBackupSummary | undefined> {
@@ -2243,26 +1933,22 @@ export async function readLatestSavedBuildVersionBackup(): Promise<SavedBuildVer
 }
 
 export async function readSavedBuildVersionBackupDetail(backupId: string): Promise<SavedBuildVersionBackupDetail | undefined> {
-  if (await ensureDatabase()) {
-    try {
-      const result = await pool!.query<{ id: string; created_at: Date; source_fingerprint: string; resulting_fingerprint: string; changed_count: number | string; builds: unknown }>(
-        "SELECT id, created_at, source_fingerprint, resulting_fingerprint, changed_count, builds FROM saved_build_version_backups WHERE id = $1",
-        [backupId]
-      );
-      const row = result.rows[0];
-      if (!row) return undefined;
-      const backup = savedBuildVersionBackupFromUnknown({ id: row.id, createdAt: new Date(row.created_at).toISOString(), sourceFingerprint: row.source_fingerprint, resultingFingerprint: row.resulting_fingerprint, changedCount: Number(row.changed_count), builds: row.builds });
-      if (!backup) return undefined;
-      const currentFingerprint = savedBuildVersionSnapshotFingerprintFor(await readSavedBuilds());
-      return savedBuildVersionBackupDetailFor(backup, currentFingerprint);
-    } catch (error: unknown) {
-      markDatabaseUnavailable("version backup detail read", error);
-      throw error;
-    }
+  await ensureDatabase();
+  try {
+    const result = await pool!.query<{ id: string; created_at: Date; source_fingerprint: string; resulting_fingerprint: string; changed_count: number | string; builds: unknown }>(
+      "SELECT id, created_at, source_fingerprint, resulting_fingerprint, changed_count, builds FROM saved_build_version_backups WHERE id = $1",
+      [backupId]
+    );
+    const row = result.rows[0];
+    if (!row) return undefined;
+    const backup = savedBuildVersionBackupFromUnknown({ id: row.id, createdAt: new Date(row.created_at).toISOString(), sourceFingerprint: row.source_fingerprint, resultingFingerprint: row.resulting_fingerprint, changedCount: Number(row.changed_count), builds: row.builds });
+    if (!backup) return undefined;
+    const currentFingerprint = savedBuildVersionSnapshotFingerprintFor(await readSavedBuilds());
+    return savedBuildVersionBackupDetailFor(backup, currentFingerprint);
+  } catch (error: unknown) {
+    markDatabaseUnavailable("version backup detail read", error);
+    throw error;
   }
-  const backup = savedBuildVersionBackupsFromUnknown(await readFileJson<unknown>(SAVED_BUILD_VERSION_BACKUP_PATH, undefined)).find((candidate) => candidate.id === backupId);
-  if (!backup) return undefined;
-  return savedBuildVersionBackupDetailFor(backup, savedBuildVersionSnapshotFingerprintFor(await readSavedBuilds()));
 }
 
 async function readSavedBuildsWithDatabaseClient(client: PoolClient) {
@@ -2356,79 +2042,47 @@ async function rollbackSavedBuildVersionsInDatabase(backupId: string, expectedFi
 }
 
 export async function migrateSavedBuildVersions(expectedFingerprint: string): Promise<SavedBuildVersionMigrationOperation> {
-  if (await ensureDatabase()) return migrateSavedBuildVersionsInDatabase(expectedFingerprint);
-  const fileLease = await withSerializedFileMutation(BUILDS_PATH, () => withFilePersistenceLease(SAVED_BUILD_VERSION_LEASE_PATH, async () => {
-    const builds = await readSavedBuilds();
-    const sourceFingerprint = savedBuildVersionSnapshotFingerprintFor(builds);
-    if (sourceFingerprint !== expectedFingerprint) return { status: "conflict", expectedFingerprint, actualFingerprint: sourceFingerprint, totalBuilds: builds.length } satisfies SavedBuildVersionMigrationOperation;
-    const preview = savedBuildVersionMigrationPreviewFor(builds);
-    if (preview.status !== "ready") return { status: "blocked", sourceFingerprint, preview } satisfies SavedBuildVersionMigrationOperation;
-    const migrated = savedBuildVersionMigratedBuildsFor(builds);
-    if (!migrated || preview.changedCount === 0) return { status: "noop", totalBuilds: builds.length, changedCount: 0, sourceFingerprint, resultingFingerprint: sourceFingerprint } satisfies SavedBuildVersionMigrationOperation;
-    const backupId = randomUUID();
-    const createdAt = new Date().toISOString();
-    const resultingFingerprint = savedBuildVersionSnapshotFingerprintFor(migrated);
-    const backup: SavedBuildVersionBackup = { id: backupId, createdAt, sourceFingerprint, resultingFingerprint, changedCount: preview.changedCount, builds };
-    const existingBackups = savedBuildVersionBackupsFromUnknown(await readFileJson<unknown>(SAVED_BUILD_VERSION_BACKUP_PATH, undefined));
-    await writeFileJson(SAVED_BUILD_VERSION_BACKUP_PATH, [backup, ...existingBackups].slice(0, SAVED_BUILD_VERSION_BACKUP_RETENTION));
-    await writeFileJson(BUILDS_PATH, migrated);
-    return { status: "applied", backupId, totalBuilds: builds.length, changedCount: preview.changedCount, sourceFingerprint, resultingFingerprint } satisfies SavedBuildVersionMigrationOperation;
-  }));
-  if (!fileLease.acquired) throw new Error("다른 저장 요청이 버전 번호를 발급 중입니다. 잠시 후 다시 시도해 주세요.");
-  return fileLease.value;
+  await ensureDatabase();
+  return migrateSavedBuildVersionsInDatabase(expectedFingerprint);
 }
 
 export async function rollbackSavedBuildVersions(backupId: string, expectedFingerprint: string): Promise<SavedBuildVersionRollbackOperation> {
-  if (await ensureDatabase()) return rollbackSavedBuildVersionsInDatabase(backupId, expectedFingerprint);
-  const fileLease = await withSerializedFileMutation(BUILDS_PATH, () => withFilePersistenceLease(SAVED_BUILD_VERSION_LEASE_PATH, async () => {
-    const backup = savedBuildVersionBackupsFromUnknown(await readFileJson<unknown>(SAVED_BUILD_VERSION_BACKUP_PATH, undefined)).find((candidate) => candidate.id === backupId);
-    if (!backup) return { status: "not_found", backupId } satisfies SavedBuildVersionRollbackOperation;
-    const builds = await readSavedBuilds();
-    const actualFingerprint = savedBuildVersionSnapshotFingerprintFor(builds);
-    if (actualFingerprint !== expectedFingerprint || actualFingerprint !== backup.resultingFingerprint) return { status: "conflict", backupId, expectedFingerprint, actualFingerprint } satisfies SavedBuildVersionRollbackOperation;
-    await writeFileJson(BUILDS_PATH, backup.builds);
-    return { status: "rolled_back", backupId, totalBuilds: backup.builds.length, changedCount: backup.changedCount, sourceFingerprint: backup.sourceFingerprint, resultingFingerprint: backup.sourceFingerprint } satisfies SavedBuildVersionRollbackOperation;
-  }));
-  if (!fileLease.acquired) throw new Error("다른 저장 요청이 진행 중입니다. 잠시 후 다시 시도해 주세요.");
-  return fileLease.value;
+  await ensureDatabase();
+  return rollbackSavedBuildVersionsInDatabase(backupId, expectedFingerprint);
 }
 
 export async function appendSavedBuildCheck(id: string, snapshot: SavedBuildCheckSnapshot, max = 20) {
-  return withSerializedFileMutation(BUILDS_PATH, async () => {
-    const builds = await readSavedBuilds();
-    const current = builds.find((build) => build.id === id);
-    if (!current) return undefined;
-    const existingHistory = current.checkHistory ?? (current.checkSnapshot ? [current.checkSnapshot] : []);
-    const nextSnapshot = snapshot.assemblyVerification || !current.checkSnapshot?.assemblyVerification
-      ? snapshot
-      : {
-          ...snapshot,
-          assemblyVerification: current.checkSnapshot.assemblyVerification,
-          ...(current.checkSnapshot.assemblyVerificationHistory ? { assemblyVerificationHistory: current.checkSnapshot.assemblyVerificationHistory } : {})
-        };
-    const checkHistory = appendSavedBuildCheckHistory(existingHistory, nextSnapshot, max);
-    const next = { ...current, checkSnapshot: nextSnapshot, checkHistory };
-    await writeSavedBuilds(builds.map((build) => build.id === id ? next : build));
-    return next;
-  });
+  const builds = await readSavedBuilds();
+  const current = builds.find((build) => build.id === id);
+  if (!current) return undefined;
+  const existingHistory = current.checkHistory ?? (current.checkSnapshot ? [current.checkSnapshot] : []);
+  const nextSnapshot = snapshot.assemblyVerification || !current.checkSnapshot?.assemblyVerification
+    ? snapshot
+    : {
+        ...snapshot,
+        assemblyVerification: current.checkSnapshot.assemblyVerification,
+        ...(current.checkSnapshot.assemblyVerificationHistory ? { assemblyVerificationHistory: current.checkSnapshot.assemblyVerificationHistory } : {})
+      };
+  const checkHistory = appendSavedBuildCheckHistory(existingHistory, nextSnapshot, max);
+  const next = { ...current, checkSnapshot: nextSnapshot, checkHistory };
+  await writeSavedBuilds(builds.map((build) => build.id === id ? next : build));
+  return next;
 }
 
 export async function updateSavedBuildAssemblyVerification(id: string, verification: AssemblyVerificationSavedSnapshot, verificationHistory: AssemblyVerificationSavedSnapshot[] = [verification]) {
-  return withSerializedFileMutation(BUILDS_PATH, async () => {
-    const builds = await readSavedBuilds();
-    const current = builds.find((build) => build.id === id);
-    if (!current) return undefined;
-    const existingHistory = current.checkHistory ?? (current.checkSnapshot ? [current.checkSnapshot] : []);
-    const currentSnapshot = current.checkSnapshot ?? existingHistory.at(-1);
-    if (!currentSnapshot) return undefined;
-    const nextSnapshot = { ...currentSnapshot, assemblyVerification: verification, assemblyVerificationHistory: verificationHistory };
-    const checkHistory = existingHistory.length > 0
-      ? existingHistory.map((snapshot, index) => index === existingHistory.length - 1 ? { ...snapshot, assemblyVerification: verification, assemblyVerificationHistory: verificationHistory } : snapshot)
-      : [nextSnapshot];
-    const next = { ...current, checkSnapshot: nextSnapshot, checkHistory };
-    await writeSavedBuilds(builds.map((build) => build.id === id ? next : build));
-    return next;
-  });
+  const builds = await readSavedBuilds();
+  const current = builds.find((build) => build.id === id);
+  if (!current) return undefined;
+  const existingHistory = current.checkHistory ?? (current.checkSnapshot ? [current.checkSnapshot] : []);
+  const currentSnapshot = current.checkSnapshot ?? existingHistory.at(-1);
+  if (!currentSnapshot) return undefined;
+  const nextSnapshot = { ...currentSnapshot, assemblyVerification: verification, assemblyVerificationHistory: verificationHistory };
+  const checkHistory = existingHistory.length > 0
+    ? existingHistory.map((snapshot, index) => index === existingHistory.length - 1 ? { ...snapshot, assemblyVerification: verification, assemblyVerificationHistory: verificationHistory } : snapshot)
+    : [nextSnapshot];
+  const next = { ...current, checkSnapshot: nextSnapshot, checkHistory };
+  await writeSavedBuilds(builds.map((build) => build.id === id ? next : build));
+  return next;
 }
 
 export type SavedBuildPurchaseProgressUpdateResult =
@@ -2440,48 +2094,35 @@ export type SavedBuildPurchaseProgressRestoreResult = SavedBuildPurchaseProgress
   | { status: "history-unavailable"; currentProgress?: SavedBuildPurchaseProgress };
 
 export async function updateSavedBuildPurchaseProgress(id: string, purchaseProgress: SavedBuildPurchaseProgress, expectedRevision: number | null = null): Promise<SavedBuildPurchaseProgressUpdateResult> {
-  if (await ensureDatabase()) {
-    const client = await pool!.connect();
-    try {
-      await client.query("BEGIN");
-      const currentResult = await client.query<{ purchase_progress: unknown }>("SELECT purchase_progress FROM saved_builds WHERE id = $1 FOR UPDATE", [id]);
-      if (currentResult.rows.length === 0) {
-        await client.query("COMMIT");
-        return { status: "not-found" };
-      }
-      const currentProgress = savedBuildPurchaseProgressFromUnknown(currentResult.rows[0].purchase_progress);
-      if (!savedBuildPurchaseProgressRevisionMatchesFor(currentProgress, expectedRevision)) {
-        await client.query("COMMIT");
-        return { status: "conflict", ...(currentProgress ? { currentProgress } : {}) };
-      }
-      const nextPurchaseProgress = savedBuildPurchaseProgressWithNextRevisionFor(purchaseProgress, currentProgress);
-      const updatedResult = await client.query<SavedBuildDatabaseRow>(
-        `UPDATE saved_builds SET purchase_progress = $2::jsonb WHERE id = $1 RETURNING ${SAVED_BUILD_DATABASE_COLUMNS}`,
-        [id, JSON.stringify(nextPurchaseProgress)]
-      );
-      const build = requiredSavedBuildRecordFromDatabaseRow(updatedResult.rows[0]);
+  await ensureDatabase();
+  const client = await pool!.connect();
+  try {
+    await client.query("BEGIN");
+    const currentResult = await client.query<{ purchase_progress: unknown }>("SELECT purchase_progress FROM saved_builds WHERE id = $1 FOR UPDATE", [id]);
+    if (currentResult.rows.length === 0) {
       await client.query("COMMIT");
-      return { status: "updated", build, purchaseProgress: nextPurchaseProgress };
-    } catch (error: unknown) {
-      await client.query("ROLLBACK").catch(() => undefined);
-      markDatabaseUnavailable("purchase progress update", error);
-      throw error;
-    } finally {
-      client.release();
+      return { status: "not-found" };
     }
+    const currentProgress = savedBuildPurchaseProgressFromUnknown(currentResult.rows[0].purchase_progress);
+    if (!savedBuildPurchaseProgressRevisionMatchesFor(currentProgress, expectedRevision)) {
+      await client.query("COMMIT");
+      return { status: "conflict", ...(currentProgress ? { currentProgress } : {}) };
+    }
+    const nextPurchaseProgress = savedBuildPurchaseProgressWithNextRevisionFor(purchaseProgress, currentProgress);
+    const updatedResult = await client.query<SavedBuildDatabaseRow>(
+      `UPDATE saved_builds SET purchase_progress = $2::jsonb WHERE id = $1 RETURNING ${SAVED_BUILD_DATABASE_COLUMNS}`,
+      [id, JSON.stringify(nextPurchaseProgress)]
+    );
+    const build = requiredSavedBuildRecordFromDatabaseRow(updatedResult.rows[0]);
+    await client.query("COMMIT");
+    return { status: "updated", build, purchaseProgress: nextPurchaseProgress };
+  } catch (error: unknown) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    markDatabaseUnavailable("purchase progress update", error);
+    throw error;
+  } finally {
+    client.release();
   }
-  return withSerializedFileMutation(BUILDS_PATH, async () => {
-    const builds = await readSavedBuilds();
-    const current = builds.find((build) => build.id === id);
-    if (!current) return { status: "not-found" } as const;
-    if (!savedBuildPurchaseProgressRevisionMatchesFor(current.purchaseProgress, expectedRevision)) {
-      return { status: "conflict", ...(current.purchaseProgress ? { currentProgress: current.purchaseProgress } : {}) } as const;
-    }
-    const nextPurchaseProgress = savedBuildPurchaseProgressWithNextRevisionFor(purchaseProgress, current.purchaseProgress);
-    const next = { ...current, purchaseProgress: nextPurchaseProgress };
-    await writeSavedBuilds(builds.map((build) => build.id === id ? next : build));
-    return { status: "updated", build: next, purchaseProgress: nextPurchaseProgress } as const;
-  });
 }
 
 export type SavedBuildPurchasePriceHistoryUpdateResult =
@@ -2490,187 +2131,129 @@ export type SavedBuildPurchasePriceHistoryUpdateResult =
   | { status: "conflict"; currentPriceHistory?: SavedBuildPurchasePriceHistory };
 
 export async function updateSavedBuildPurchasePriceHistory(id: string, purchasePriceHistory: SavedBuildPurchasePriceHistorySnapshot, expectedRevision: number | null = null): Promise<SavedBuildPurchasePriceHistoryUpdateResult> {
-  if (await ensureDatabase()) {
-    const client = await pool!.connect();
-    try {
-      await client.query("BEGIN");
-      const currentResult = await client.query<{ purchase_price_history: unknown }>("SELECT purchase_price_history FROM saved_builds WHERE id = $1 FOR UPDATE", [id]);
-      if (currentResult.rows.length === 0) {
-        await client.query("COMMIT");
-        return { status: "not-found" };
-      }
-      const currentPriceHistory = savedBuildPurchasePriceHistoryFromUnknown(currentResult.rows[0].purchase_price_history);
-      if (!savedBuildPurchasePriceHistoryRevisionMatchesFor(currentPriceHistory, expectedRevision)) {
-        await client.query("COMMIT");
-        return { status: "conflict", ...(currentPriceHistory ? { currentPriceHistory } : {}) };
-      }
-      const nextPriceHistory = savedBuildPurchasePriceHistoryWithNextRevisionFor(purchasePriceHistory, currentPriceHistory);
-      const updatedResult = await client.query<SavedBuildDatabaseRow>(
-        `UPDATE saved_builds SET purchase_price_history = $2::jsonb WHERE id = $1 RETURNING ${SAVED_BUILD_DATABASE_COLUMNS}`,
-        [id, JSON.stringify(nextPriceHistory)]
-      );
-      const build = requiredSavedBuildRecordFromDatabaseRow(updatedResult.rows[0]);
+  await ensureDatabase();
+  const client = await pool!.connect();
+  try {
+    await client.query("BEGIN");
+    const currentResult = await client.query<{ purchase_price_history: unknown }>("SELECT purchase_price_history FROM saved_builds WHERE id = $1 FOR UPDATE", [id]);
+    if (currentResult.rows.length === 0) {
       await client.query("COMMIT");
-      return { status: "updated", build, purchasePriceHistory: nextPriceHistory };
-    } catch (error: unknown) {
-      await client.query("ROLLBACK").catch(() => undefined);
-      markDatabaseUnavailable("purchase price history update", error);
-      throw error;
-    } finally {
-      client.release();
+      return { status: "not-found" };
     }
+    const currentPriceHistory = savedBuildPurchasePriceHistoryFromUnknown(currentResult.rows[0].purchase_price_history);
+    if (!savedBuildPurchasePriceHistoryRevisionMatchesFor(currentPriceHistory, expectedRevision)) {
+      await client.query("COMMIT");
+      return { status: "conflict", ...(currentPriceHistory ? { currentPriceHistory } : {}) };
+    }
+    const nextPriceHistory = savedBuildPurchasePriceHistoryWithNextRevisionFor(purchasePriceHistory, currentPriceHistory);
+    const updatedResult = await client.query<SavedBuildDatabaseRow>(
+      `UPDATE saved_builds SET purchase_price_history = $2::jsonb WHERE id = $1 RETURNING ${SAVED_BUILD_DATABASE_COLUMNS}`,
+      [id, JSON.stringify(nextPriceHistory)]
+    );
+    const build = requiredSavedBuildRecordFromDatabaseRow(updatedResult.rows[0]);
+    await client.query("COMMIT");
+    return { status: "updated", build, purchasePriceHistory: nextPriceHistory };
+  } catch (error: unknown) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    markDatabaseUnavailable("purchase price history update", error);
+    throw error;
+  } finally {
+    client.release();
   }
-  return withSerializedFileMutation(BUILDS_PATH, async () => {
-    const builds = await readSavedBuilds();
-    const current = builds.find((build) => build.id === id);
-    if (!current) return { status: "not-found" } as const;
-    if (!savedBuildPurchasePriceHistoryRevisionMatchesFor(current.purchasePriceHistory, expectedRevision)) {
-      return { status: "conflict", ...(current.purchasePriceHistory ? { currentPriceHistory: current.purchasePriceHistory } : {}) } as const;
-    }
-    const nextPriceHistory = savedBuildPurchasePriceHistoryWithNextRevisionFor(purchasePriceHistory, current.purchasePriceHistory);
-    const next = { ...current, purchasePriceHistory: nextPriceHistory };
-    await writeFileJson(BUILDS_PATH, builds.map((build) => build.id === id ? next : build));
-    return { status: "updated", build: next, purchasePriceHistory: nextPriceHistory } as const;
-  });
 }
 
 export type SavedBuildPurchasePriceHistoryRestoreResult = SavedBuildPurchasePriceHistoryUpdateResult
   | { status: "history-unavailable"; currentPriceHistory?: SavedBuildPurchasePriceHistory };
 
 export async function restoreSavedBuildPurchasePriceHistory(id: string, targetRevision: number, expectedRevision: number | null = null, expectedFingerprint?: string, expectedRowKeys: string[] = []): Promise<SavedBuildPurchasePriceHistoryRestoreResult> {
-  if (await ensureDatabase()) {
-    const client = await pool!.connect();
-    try {
-      await client.query("BEGIN");
-      const currentResult = await client.query<{ purchase_price_history: unknown }>("SELECT purchase_price_history FROM saved_builds WHERE id = $1 FOR UPDATE", [id]);
-      if (currentResult.rows.length === 0) {
-        await client.query("COMMIT");
-        return { status: "not-found" };
-      }
-      const currentPriceHistory = savedBuildPurchasePriceHistoryFromUnknown(currentResult.rows[0].purchase_price_history);
-      if (!savedBuildPurchasePriceHistoryRevisionMatchesFor(currentPriceHistory, expectedRevision)) {
-        await client.query("COMMIT");
-        return { status: "conflict", ...(currentPriceHistory ? { currentPriceHistory } : {}) };
-      }
-      const target = savedBuildPurchasePriceHistoryHistoryTargetFor(currentPriceHistory, targetRevision);
-      const rowKeysMatch = expectedRowKeys.length === 0 || (target ? target.rowKeys.length === expectedRowKeys.length && target.rowKeys.every((key) => expectedRowKeys.includes(key)) : false);
-      if (!target || (expectedFingerprint && target.inputFingerprint !== expectedFingerprint) || !rowKeysMatch) {
-        await client.query("COMMIT");
-        return { status: "history-unavailable", ...(currentPriceHistory ? { currentPriceHistory } : {}) };
-      }
-      const nextPriceHistory = savedBuildPurchasePriceHistoryWithNextRevisionFor(target, currentPriceHistory);
-      const updatedResult = await client.query<SavedBuildDatabaseRow>(
-        `UPDATE saved_builds SET purchase_price_history = $2::jsonb WHERE id = $1 RETURNING ${SAVED_BUILD_DATABASE_COLUMNS}`,
-        [id, JSON.stringify(nextPriceHistory)]
-      );
-      const build = requiredSavedBuildRecordFromDatabaseRow(updatedResult.rows[0]);
+  await ensureDatabase();
+  const client = await pool!.connect();
+  try {
+    await client.query("BEGIN");
+    const currentResult = await client.query<{ purchase_price_history: unknown }>("SELECT purchase_price_history FROM saved_builds WHERE id = $1 FOR UPDATE", [id]);
+    if (currentResult.rows.length === 0) {
       await client.query("COMMIT");
-      return { status: "updated", build, purchasePriceHistory: nextPriceHistory };
-    } catch (error: unknown) {
-      await client.query("ROLLBACK").catch(() => undefined);
-      markDatabaseUnavailable("purchase price history restore", error);
-      throw error;
-    } finally {
-      client.release();
+      return { status: "not-found" };
     }
-  }
-  return withSerializedFileMutation(BUILDS_PATH, async () => {
-    const builds = await readSavedBuilds();
-    const current = builds.find((build) => build.id === id);
-    if (!current) return { status: "not-found" } as const;
-    if (!savedBuildPurchasePriceHistoryRevisionMatchesFor(current.purchasePriceHistory, expectedRevision)) {
-      return { status: "conflict", ...(current.purchasePriceHistory ? { currentPriceHistory: current.purchasePriceHistory } : {}) } as const;
+    const currentPriceHistory = savedBuildPurchasePriceHistoryFromUnknown(currentResult.rows[0].purchase_price_history);
+    if (!savedBuildPurchasePriceHistoryRevisionMatchesFor(currentPriceHistory, expectedRevision)) {
+      await client.query("COMMIT");
+      return { status: "conflict", ...(currentPriceHistory ? { currentPriceHistory } : {}) };
     }
-    const target = savedBuildPurchasePriceHistoryHistoryTargetFor(current.purchasePriceHistory, targetRevision);
+    const target = savedBuildPurchasePriceHistoryHistoryTargetFor(currentPriceHistory, targetRevision);
     const rowKeysMatch = expectedRowKeys.length === 0 || (target ? target.rowKeys.length === expectedRowKeys.length && target.rowKeys.every((key) => expectedRowKeys.includes(key)) : false);
     if (!target || (expectedFingerprint && target.inputFingerprint !== expectedFingerprint) || !rowKeysMatch) {
-      return { status: "history-unavailable", ...(current.purchasePriceHistory ? { currentPriceHistory: current.purchasePriceHistory } : {}) } as const;
+      await client.query("COMMIT");
+      return { status: "history-unavailable", ...(currentPriceHistory ? { currentPriceHistory } : {}) };
     }
-    const nextPriceHistory = savedBuildPurchasePriceHistoryWithNextRevisionFor(target, current.purchasePriceHistory);
-    const next = { ...current, purchasePriceHistory: nextPriceHistory };
-    await writeFileJson(BUILDS_PATH, builds.map((build) => build.id === id ? next : build));
-    return { status: "updated", build: next, purchasePriceHistory: nextPriceHistory } as const;
-  });
+    const nextPriceHistory = savedBuildPurchasePriceHistoryWithNextRevisionFor(target, currentPriceHistory);
+    const updatedResult = await client.query<SavedBuildDatabaseRow>(
+      `UPDATE saved_builds SET purchase_price_history = $2::jsonb WHERE id = $1 RETURNING ${SAVED_BUILD_DATABASE_COLUMNS}`,
+      [id, JSON.stringify(nextPriceHistory)]
+    );
+    const build = requiredSavedBuildRecordFromDatabaseRow(updatedResult.rows[0]);
+    await client.query("COMMIT");
+    return { status: "updated", build, purchasePriceHistory: nextPriceHistory };
+  } catch (error: unknown) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    markDatabaseUnavailable("purchase price history restore", error);
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function restoreSavedBuildPurchaseProgress(id: string, targetRevision: number, expectedRevision: number | null = null, expectedFingerprint?: string, expectedRowKeys: string[] = []): Promise<SavedBuildPurchaseProgressRestoreResult> {
-  if (await ensureDatabase()) {
-    const client = await pool!.connect();
-    try {
-      await client.query("BEGIN");
-      const currentResult = await client.query<{ purchase_progress: unknown }>("SELECT purchase_progress FROM saved_builds WHERE id = $1 FOR UPDATE", [id]);
-      if (currentResult.rows.length === 0) {
-        await client.query("COMMIT");
-        return { status: "not-found" };
-      }
-      const currentProgress = savedBuildPurchaseProgressFromUnknown(currentResult.rows[0].purchase_progress);
-      if (!savedBuildPurchaseProgressRevisionMatchesFor(currentProgress, expectedRevision)) {
-        await client.query("COMMIT");
-        return { status: "conflict", ...(currentProgress ? { currentProgress } : {}) };
-      }
-      const target = savedBuildPurchaseProgressHistoryTargetFor(currentProgress, targetRevision);
-      const rowKeysMatch = expectedRowKeys.length === 0 || (target ? target.rowKeys.length === expectedRowKeys.length && target.rowKeys.every((key) => expectedRowKeys.includes(key)) : false);
-      if (!target || (expectedFingerprint && target.inputFingerprint !== expectedFingerprint) || !rowKeysMatch) {
-        await client.query("COMMIT");
-        return { status: "history-unavailable", ...(currentProgress ? { currentProgress } : {}) };
-      }
-      const nextPurchaseProgress = savedBuildPurchaseProgressWithNextRevisionFor(target, currentProgress);
-      const updatedResult = await client.query<SavedBuildDatabaseRow>(
-        `UPDATE saved_builds SET purchase_progress = $2::jsonb WHERE id = $1 RETURNING ${SAVED_BUILD_DATABASE_COLUMNS}`,
-        [id, JSON.stringify(nextPurchaseProgress)]
-      );
-      const build = requiredSavedBuildRecordFromDatabaseRow(updatedResult.rows[0]);
+  await ensureDatabase();
+  const client = await pool!.connect();
+  try {
+    await client.query("BEGIN");
+    const currentResult = await client.query<{ purchase_progress: unknown }>("SELECT purchase_progress FROM saved_builds WHERE id = $1 FOR UPDATE", [id]);
+    if (currentResult.rows.length === 0) {
       await client.query("COMMIT");
-      return { status: "updated", build, purchaseProgress: nextPurchaseProgress };
-    } catch (error: unknown) {
-      await client.query("ROLLBACK").catch(() => undefined);
-      markDatabaseUnavailable("purchase progress restore", error);
-      throw error;
-    } finally {
-      client.release();
+      return { status: "not-found" };
     }
-  }
-  return withSerializedFileMutation(BUILDS_PATH, async () => {
-    const builds = await readSavedBuilds();
-    const current = builds.find((build) => build.id === id);
-    if (!current) return { status: "not-found" } as const;
-    if (!savedBuildPurchaseProgressRevisionMatchesFor(current.purchaseProgress, expectedRevision)) {
-      return { status: "conflict", ...(current.purchaseProgress ? { currentProgress: current.purchaseProgress } : {}) } as const;
+    const currentProgress = savedBuildPurchaseProgressFromUnknown(currentResult.rows[0].purchase_progress);
+    if (!savedBuildPurchaseProgressRevisionMatchesFor(currentProgress, expectedRevision)) {
+      await client.query("COMMIT");
+      return { status: "conflict", ...(currentProgress ? { currentProgress } : {}) };
     }
-    const target = savedBuildPurchaseProgressHistoryTargetFor(current.purchaseProgress, targetRevision);
+    const target = savedBuildPurchaseProgressHistoryTargetFor(currentProgress, targetRevision);
     const rowKeysMatch = expectedRowKeys.length === 0 || (target ? target.rowKeys.length === expectedRowKeys.length && target.rowKeys.every((key) => expectedRowKeys.includes(key)) : false);
     if (!target || (expectedFingerprint && target.inputFingerprint !== expectedFingerprint) || !rowKeysMatch) {
-      return { status: "history-unavailable", ...(current.purchaseProgress ? { currentProgress: current.purchaseProgress } : {}) } as const;
+      await client.query("COMMIT");
+      return { status: "history-unavailable", ...(currentProgress ? { currentProgress } : {}) };
     }
-    const nextPurchaseProgress = savedBuildPurchaseProgressWithNextRevisionFor(target, current.purchaseProgress);
-    const next = { ...current, purchaseProgress: nextPurchaseProgress };
-    await writeSavedBuilds(builds.map((build) => build.id === id ? next : build));
-    return { status: "updated", build: next, purchaseProgress: nextPurchaseProgress } as const;
-  });
+    const nextPurchaseProgress = savedBuildPurchaseProgressWithNextRevisionFor(target, currentProgress);
+    const updatedResult = await client.query<SavedBuildDatabaseRow>(
+      `UPDATE saved_builds SET purchase_progress = $2::jsonb WHERE id = $1 RETURNING ${SAVED_BUILD_DATABASE_COLUMNS}`,
+      [id, JSON.stringify(nextPurchaseProgress)]
+    );
+    const build = requiredSavedBuildRecordFromDatabaseRow(updatedResult.rows[0]);
+    await client.query("COMMIT");
+    return { status: "updated", build, purchaseProgress: nextPurchaseProgress };
+  } catch (error: unknown) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    markDatabaseUnavailable("purchase progress restore", error);
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function updateSavedBuildMonitorState(id: string, monitorState: SavedBuildMonitorSubscription) {
-  if (await ensureDatabase()) {
-    try {
-      const result = await pool!.query<SavedBuildDatabaseRow>(
-        `UPDATE saved_builds SET monitor_state = $2::jsonb WHERE id = $1 RETURNING ${SAVED_BUILD_DATABASE_COLUMNS}`,
-        [id, JSON.stringify(monitorState)]
-      );
-      const row = result.rows[0];
-      return row ? requiredSavedBuildRecordFromDatabaseRow(row) : undefined;
-    } catch (error) {
-      markDatabaseUnavailable("build monitor update", error);
-      throw error;
-    }
+  await ensureDatabase();
+  try {
+    const result = await pool!.query<SavedBuildDatabaseRow>(
+      `UPDATE saved_builds SET monitor_state = $2::jsonb WHERE id = $1 RETURNING ${SAVED_BUILD_DATABASE_COLUMNS}`,
+      [id, JSON.stringify(monitorState)]
+    );
+    const row = result.rows[0];
+    return row ? requiredSavedBuildRecordFromDatabaseRow(row) : undefined;
+  } catch (error) {
+    markDatabaseUnavailable("build monitor update", error);
+    throw error;
   }
-  return withSerializedFileMutation(BUILDS_PATH, async () => {
-    const builds = await readSavedBuilds();
-    const current = builds.find((build) => build.id === id);
-    if (!current) return undefined;
-    const next = { ...current, monitorState };
-    await writeSavedBuilds(builds.map((build) => build.id === id ? next : build));
-    return next;
-  });
 }
 
 export async function updateSavedBuildShareCredentials(
@@ -2679,70 +2262,43 @@ export async function updateSavedBuildShareCredentials(
   recoveryCodeHash: string,
   expectedRecoveryCodeHash: string | undefined
 ): Promise<{ id: string } | undefined> {
-  if (await ensureDatabase()) {
-    try {
-      const result = await pool!.query(
-        "UPDATE saved_builds SET owner_token_hash = $2, recovery_code_hash = $3 WHERE id = $1 AND recovery_code_hash IS NOT DISTINCT FROM $4 RETURNING id",
-        [id, ownerTokenHash, recoveryCodeHash, expectedRecoveryCodeHash ?? null]
-      );
-      return result.rows[0]?.id ? { id: result.rows[0].id as string } : undefined;
-    } catch (error) {
-      markDatabaseUnavailable("build credential update", error);
-      throw error;
-    }
+  await ensureDatabase();
+  try {
+    const result = await pool!.query(
+      "UPDATE saved_builds SET owner_token_hash = $2, recovery_code_hash = $3 WHERE id = $1 AND recovery_code_hash IS NOT DISTINCT FROM $4 RETURNING id",
+      [id, ownerTokenHash, recoveryCodeHash, expectedRecoveryCodeHash ?? null]
+    );
+    return result.rows[0]?.id ? { id: result.rows[0].id as string } : undefined;
+  } catch (error) {
+    markDatabaseUnavailable("build credential update", error);
+    throw error;
   }
-  return withSerializedFileMutation(BUILDS_PATH, async () => {
-    const builds = await readSavedBuilds();
-    const current = builds.find((build) => build.id === id);
-    if (!current || current.recoveryCodeHash !== expectedRecoveryCodeHash) return undefined;
-    const next = { ...current, ownerTokenHash, recoveryCodeHash };
-    await writeSavedBuilds(builds.map((build) => build.id === id ? next : build));
-    return { id: next.id };
-  });
 }
 
 export async function updateSavedBuildMyPc(id: string, myPcAt: string | null, monitorState?: SavedBuildMonitorSubscription) {
-  if (await ensureDatabase()) {
-    try {
-      const result = await pool!.query<SavedBuildDatabaseRow>(
-        `UPDATE saved_builds SET my_pc_at = $2::timestamptz, monitor_state = COALESCE($3::jsonb, monitor_state) WHERE id = $1 RETURNING ${SAVED_BUILD_DATABASE_COLUMNS}`,
-        [id, myPcAt, monitorState ? JSON.stringify(monitorState) : null]
-      );
-      const row = result.rows[0];
-      return row ? requiredSavedBuildRecordFromDatabaseRow(row) : undefined;
-    } catch (error) {
-      markDatabaseUnavailable("build my-pc update", error);
-      throw error;
-    }
+  await ensureDatabase();
+  try {
+    const result = await pool!.query<SavedBuildDatabaseRow>(
+      `UPDATE saved_builds SET my_pc_at = $2::timestamptz, monitor_state = COALESCE($3::jsonb, monitor_state) WHERE id = $1 RETURNING ${SAVED_BUILD_DATABASE_COLUMNS}`,
+      [id, myPcAt, monitorState ? JSON.stringify(monitorState) : null]
+    );
+    const row = result.rows[0];
+    return row ? requiredSavedBuildRecordFromDatabaseRow(row) : undefined;
+  } catch (error) {
+    markDatabaseUnavailable("build my-pc update", error);
+    throw error;
   }
-  return withSerializedFileMutation(BUILDS_PATH, async () => {
-    const builds = await readSavedBuilds();
-    const current = builds.find((build) => build.id === id);
-    if (!current) return undefined;
-    const { myPcAt: _oldMyPcAt, ...rest } = current;
-    const next = { ...rest, ...(myPcAt ? { myPcAt } : {}), ...(monitorState ? { monitorState } : {}) };
-    await writeSavedBuilds(builds.map((build) => build.id === id ? next : build));
-    return next;
-  });
 }
 
 export async function deleteSavedBuild(id: string) {
-  return withSerializedFileMutation(BUILDS_PATH, async () => {
-    if (await ensureDatabase()) {
-      try {
-        const result = await pool!.query("DELETE FROM saved_builds WHERE id = $1", [id]);
-        return (result.rowCount ?? 0) > 0;
-      } catch (error) {
-        markDatabaseUnavailable("build delete", error);
-        throw error;
-      }
-    }
-    const builds = await readSavedBuilds();
-    const next = builds.filter((build) => build.id !== id);
-    if (next.length === builds.length) return false;
-    await writeFileJson(BUILDS_PATH, next);
-    return true;
-  });
+  await ensureDatabase();
+  try {
+    const result = await pool!.query("DELETE FROM saved_builds WHERE id = $1", [id]);
+    return (result.rowCount ?? 0) > 0;
+  } catch (error) {
+    markDatabaseUnavailable("build delete", error);
+    throw error;
+  }
 }
 
 function savedWatchlistRecordFromUnknown(value: unknown): SavedCatalogWatchlistRecord | undefined {
@@ -2754,130 +2310,102 @@ function savedWatchlistRecordFromUnknown(value: unknown): SavedCatalogWatchlistR
 }
 
 export async function readSavedWatchlists(): Promise<SavedCatalogWatchlistRecord[]> {
-  if (await ensureDatabase()) {
-    try {
-      const result = await pool!.query<{ id: string; name: string; entries: SavedCatalogWatchlistRecord["entries"]; near_low_threshold_percent: 5 | 10 | 20; alert_preferences: SavedWatchlistAlertPreferences | null; created_at: Date; updated_at: Date; expires_at: Date | null; owner_token_hash: string | null }>(
-        "SELECT id, name, entries, near_low_threshold_percent, alert_preferences, created_at, updated_at, expires_at, owner_token_hash FROM saved_watchlists ORDER BY updated_at DESC"
-      );
-      return result.rows.map((row) => ({ id: row.id, name: row.name, entries: row.entries, nearLowThresholdPercent: row.near_low_threshold_percent, createdAt: new Date(row.created_at).toISOString(), updatedAt: new Date(row.updated_at).toISOString(), ...(row.alert_preferences ? { alertPreferences: savedWatchlistAlertPreferencesFromUnknown(row.alert_preferences) } : {}), ...(row.expires_at ? { expiresAt: new Date(row.expires_at).toISOString() } : {}), ...(row.owner_token_hash ? { ownerTokenHash: row.owner_token_hash } : {}) }));
-    } catch (error) {
-      markDatabaseUnavailable("watchlist read", error);
-      throw error;
-    }
+  await ensureDatabase();
+  try {
+    const result = await pool!.query<{ id: string; name: string; entries: SavedCatalogWatchlistRecord["entries"]; near_low_threshold_percent: 5 | 10 | 20; alert_preferences: SavedWatchlistAlertPreferences | null; created_at: Date; updated_at: Date; expires_at: Date | null; owner_token_hash: string | null }>(
+      "SELECT id, name, entries, near_low_threshold_percent, alert_preferences, created_at, updated_at, expires_at, owner_token_hash FROM saved_watchlists ORDER BY updated_at DESC"
+    );
+    return result.rows.map((row) => ({ id: row.id, name: row.name, entries: row.entries, nearLowThresholdPercent: row.near_low_threshold_percent, createdAt: new Date(row.created_at).toISOString(), updatedAt: new Date(row.updated_at).toISOString(), ...(row.alert_preferences ? { alertPreferences: savedWatchlistAlertPreferencesFromUnknown(row.alert_preferences) } : {}), ...(row.expires_at ? { expiresAt: new Date(row.expires_at).toISOString() } : {}), ...(row.owner_token_hash ? { ownerTokenHash: row.owner_token_hash } : {}) }));
+  } catch (error) {
+    markDatabaseUnavailable("watchlist read", error);
+    throw error;
   }
-  const raw = await readFileJson<unknown[]>(WATCHLISTS_PATH, []);
-  return raw.map(savedWatchlistRecordFromUnknown).filter((value): value is SavedCatalogWatchlistRecord => value !== undefined);
 }
 
 export async function writeSavedWatchlists(watchlists: SavedCatalogWatchlistRecord[]) {
-  if (await ensureDatabase()) {
-    const client = await pool!.connect();
-    try {
-      await client.query("BEGIN");
-      if (watchlists.length === 0) {
-        await client.query("DELETE FROM saved_watchlists");
-      } else {
-        await client.query("DELETE FROM saved_watchlists WHERE NOT (id = ANY($1::text[]))", [watchlists.map((watchlist) => watchlist.id)]);
-      }
-      for (const watchlist of watchlists) {
-        await client.query(
-          `INSERT INTO saved_watchlists (id, name, entries, near_low_threshold_percent, alert_preferences, created_at, updated_at, expires_at, owner_token_hash)
-           VALUES ($1, $2, $3::jsonb, $4, $5::jsonb, $6::timestamptz, $7::timestamptz, $8::timestamptz, $9)
-           ON CONFLICT (id) DO UPDATE SET
-             name = EXCLUDED.name,
-             entries = EXCLUDED.entries,
-             near_low_threshold_percent = EXCLUDED.near_low_threshold_percent,
-             alert_preferences = EXCLUDED.alert_preferences,
-             updated_at = EXCLUDED.updated_at,
-             expires_at = EXCLUDED.expires_at,
-             owner_token_hash = EXCLUDED.owner_token_hash`,
-          [watchlist.id, watchlist.name, JSON.stringify(watchlist.entries), watchlist.nearLowThresholdPercent, watchlist.alertPreferences ? JSON.stringify(watchlist.alertPreferences) : null, watchlist.createdAt, watchlist.updatedAt, watchlist.expiresAt ?? null, watchlist.ownerTokenHash ?? null]
-        );
-      }
-      await client.query("COMMIT");
-      return;
-    } catch (error) {
-      await client.query("ROLLBACK").catch(() => undefined);
-      markDatabaseUnavailable("watchlist write", error);
-      throw error;
-    } finally {
-      client.release();
+  await ensureDatabase();
+  const client = await pool!.connect();
+  try {
+    await client.query("BEGIN");
+    if (watchlists.length === 0) {
+      await client.query("DELETE FROM saved_watchlists");
+    } else {
+      await client.query("DELETE FROM saved_watchlists WHERE NOT (id = ANY($1::text[]))", [watchlists.map((watchlist) => watchlist.id)]);
     }
+    for (const watchlist of watchlists) {
+      await client.query(
+        `INSERT INTO saved_watchlists (id, name, entries, near_low_threshold_percent, alert_preferences, created_at, updated_at, expires_at, owner_token_hash)
+         VALUES ($1, $2, $3::jsonb, $4, $5::jsonb, $6::timestamptz, $7::timestamptz, $8::timestamptz, $9)
+         ON CONFLICT (id) DO UPDATE SET
+           name = EXCLUDED.name,
+           entries = EXCLUDED.entries,
+           near_low_threshold_percent = EXCLUDED.near_low_threshold_percent,
+           alert_preferences = EXCLUDED.alert_preferences,
+           updated_at = EXCLUDED.updated_at,
+           expires_at = EXCLUDED.expires_at,
+           owner_token_hash = EXCLUDED.owner_token_hash`,
+        [watchlist.id, watchlist.name, JSON.stringify(watchlist.entries), watchlist.nearLowThresholdPercent, watchlist.alertPreferences ? JSON.stringify(watchlist.alertPreferences) : null, watchlist.createdAt, watchlist.updatedAt, watchlist.expiresAt ?? null, watchlist.ownerTokenHash ?? null]
+      );
+    }
+    await client.query("COMMIT");
+    return;
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    markDatabaseUnavailable("watchlist write", error);
+    throw error;
+  } finally {
+    client.release();
   }
-  await writeFileJson(WATCHLISTS_PATH, watchlists);
 }
 
 export async function appendSavedWatchlist(watchlist: SavedCatalogWatchlistRecord, max = 100) {
-  return withSerializedFileMutation(WATCHLISTS_PATH, async () => {
-    const watchlists = await readSavedWatchlists();
-    await writeSavedWatchlists([watchlist, ...watchlists].slice(0, max));
-  });
+  const watchlists = await readSavedWatchlists();
+  await writeSavedWatchlists([watchlist, ...watchlists].slice(0, max));
 }
 
 export async function updateSavedWatchlist(watchlist: SavedCatalogWatchlistRecord) {
-  if (await ensureDatabase()) {
-    try {
-      const result = await pool!.query(
-        `UPDATE saved_watchlists
-         SET name = $2,
-             entries = $3::jsonb,
-             near_low_threshold_percent = $4,
-             alert_preferences = $5::jsonb,
-             updated_at = $6::timestamptz,
-             expires_at = $7::timestamptz
-         WHERE id = $1`,
-        [watchlist.id, watchlist.name, JSON.stringify(watchlist.entries), watchlist.nearLowThresholdPercent, watchlist.alertPreferences ? JSON.stringify(watchlist.alertPreferences) : null, watchlist.updatedAt, watchlist.expiresAt ?? null]
-      );
-      return (result.rowCount ?? 0) > 0;
-    } catch (error) {
-      markDatabaseUnavailable("watchlist update", error);
-      throw error;
-    }
+  await ensureDatabase();
+  try {
+    const result = await pool!.query(
+      `UPDATE saved_watchlists
+       SET name = $2,
+           entries = $3::jsonb,
+           near_low_threshold_percent = $4,
+           alert_preferences = $5::jsonb,
+           updated_at = $6::timestamptz,
+           expires_at = $7::timestamptz
+       WHERE id = $1`,
+      [watchlist.id, watchlist.name, JSON.stringify(watchlist.entries), watchlist.nearLowThresholdPercent, watchlist.alertPreferences ? JSON.stringify(watchlist.alertPreferences) : null, watchlist.updatedAt, watchlist.expiresAt ?? null]
+    );
+    return (result.rowCount ?? 0) > 0;
+  } catch (error) {
+    markDatabaseUnavailable("watchlist update", error);
+    throw error;
   }
-  return withSerializedFileMutation(WATCHLISTS_PATH, async () => {
-    const watchlists = await readSavedWatchlists();
-    const index = watchlists.findIndex((current) => current.id === watchlist.id);
-    if (index < 0) return false;
-    const next = [...watchlists];
-    next[index] = watchlist;
-    await writeSavedWatchlists(next);
-    return true;
-  });
 }
 
 export async function deleteSavedWatchlist(id: string) {
-  return withSerializedFileMutation(WATCHLISTS_PATH, async () => {
-    if (await ensureDatabase()) {
-      try {
-        const result = await pool!.query("DELETE FROM saved_watchlists WHERE id = $1", [id]);
-        return (result.rowCount ?? 0) > 0;
-      } catch (error) {
-        markDatabaseUnavailable("watchlist delete", error);
-        throw error;
-      }
-    }
-    const watchlists = await readSavedWatchlists();
-    const next = watchlists.filter((watchlist) => watchlist.id !== id);
-    if (next.length === watchlists.length) return false;
-    await writeFileJson(WATCHLISTS_PATH, next);
-    return true;
-  });
+  await ensureDatabase();
+  try {
+    const result = await pool!.query("DELETE FROM saved_watchlists WHERE id = $1", [id]);
+    return (result.rowCount ?? 0) > 0;
+  } catch (error) {
+    markDatabaseUnavailable("watchlist delete", error);
+    throw error;
+  }
 }
 
 export async function readSavedComparisons(): Promise<SavedAlternativeComparisonRecord[]> {
-  if (await ensureDatabase()) {
-    try {
-      const result = await pool!.query<SavedAlternativeComparisonDatabaseRow>(
-        "SELECT id, name, category, current_part_name, current_part_summary, current_part_price, catalog_snapshot_at, engine_version, candidates, created_at, updated_at, expires_at, owner_token_hash FROM saved_comparisons ORDER BY updated_at DESC"
-      );
-      return result.rows.map(savedAlternativeComparisonFromDatabaseRow);
-    } catch (error) {
-      markDatabaseUnavailable("comparison read", error);
-      throw error;
-    }
+  await ensureDatabase();
+  try {
+    const result = await pool!.query<SavedAlternativeComparisonDatabaseRow>(
+      "SELECT id, name, category, current_part_name, current_part_summary, current_part_price, catalog_snapshot_at, engine_version, candidates, created_at, updated_at, expires_at, owner_token_hash FROM saved_comparisons ORDER BY updated_at DESC"
+    );
+    return result.rows.map(savedAlternativeComparisonFromDatabaseRow);
+  } catch (error) {
+    markDatabaseUnavailable("comparison read", error);
+    throw error;
   }
-  const raw = await readFileJson<unknown[]>(COMPARISONS_PATH, []);
-  return raw.map(savedAlternativeComparisonFromUnknown).filter((value): value is SavedAlternativeComparisonRecord => value !== undefined);
 }
 
 type SavedAlternativeComparisonDatabaseRow = {
@@ -2915,71 +2443,59 @@ export function savedAlternativeComparisonFromDatabaseRow(row: SavedAlternativeC
 }
 
 export async function writeSavedComparisons(comparisons: SavedAlternativeComparisonRecord[]) {
-  if (await ensureDatabase()) {
-    const client = await pool!.connect();
-    try {
-      await client.query("BEGIN");
-      if (comparisons.length === 0) {
-        await client.query("DELETE FROM saved_comparisons");
-      } else {
-        await client.query("DELETE FROM saved_comparisons WHERE NOT (id = ANY($1::text[]))", [comparisons.map((comparison) => comparison.id)]);
-      }
-      for (const comparison of comparisons) {
-        await client.query(
-          `INSERT INTO saved_comparisons (id, name, category, current_part_name, current_part_summary, current_part_price, catalog_snapshot_at, engine_version, candidates, created_at, updated_at, expires_at, owner_token_hash)
-           VALUES ($1, $2, $3, $4, $5, $6, $7::timestamptz, $8, $9::jsonb, $10::timestamptz, $11::timestamptz, $12::timestamptz, $13)
-           ON CONFLICT (id) DO UPDATE SET
-             name = EXCLUDED.name,
-             category = EXCLUDED.category,
-             current_part_name = EXCLUDED.current_part_name,
-             current_part_summary = EXCLUDED.current_part_summary,
-             current_part_price = EXCLUDED.current_part_price,
-             catalog_snapshot_at = EXCLUDED.catalog_snapshot_at,
-             engine_version = EXCLUDED.engine_version,
-             candidates = EXCLUDED.candidates,
-             updated_at = EXCLUDED.updated_at,
-             expires_at = EXCLUDED.expires_at,
-             owner_token_hash = EXCLUDED.owner_token_hash`,
-          [comparison.id, comparison.name, comparison.category ?? null, comparison.currentPartName ?? null, comparison.currentPartSummary ?? null, comparison.currentPartPrice ?? null, comparison.catalogSnapshotAt ?? null, comparison.engineVersion ?? null, JSON.stringify(comparison.candidates), comparison.createdAt, comparison.updatedAt, comparison.expiresAt ?? null, comparison.ownerTokenHash ?? null]
-        );
-      }
-      await client.query("COMMIT");
-      return;
-    } catch (error) {
-      await client.query("ROLLBACK").catch(() => undefined);
-      markDatabaseUnavailable("comparison write", error);
-      throw error;
-    } finally {
-      client.release();
+  await ensureDatabase();
+  const client = await pool!.connect();
+  try {
+    await client.query("BEGIN");
+    if (comparisons.length === 0) {
+      await client.query("DELETE FROM saved_comparisons");
+    } else {
+      await client.query("DELETE FROM saved_comparisons WHERE NOT (id = ANY($1::text[]))", [comparisons.map((comparison) => comparison.id)]);
     }
+    for (const comparison of comparisons) {
+      await client.query(
+        `INSERT INTO saved_comparisons (id, name, category, current_part_name, current_part_summary, current_part_price, catalog_snapshot_at, engine_version, candidates, created_at, updated_at, expires_at, owner_token_hash)
+         VALUES ($1, $2, $3, $4, $5, $6, $7::timestamptz, $8, $9::jsonb, $10::timestamptz, $11::timestamptz, $12::timestamptz, $13)
+         ON CONFLICT (id) DO UPDATE SET
+           name = EXCLUDED.name,
+           category = EXCLUDED.category,
+           current_part_name = EXCLUDED.current_part_name,
+           current_part_summary = EXCLUDED.current_part_summary,
+           current_part_price = EXCLUDED.current_part_price,
+           catalog_snapshot_at = EXCLUDED.catalog_snapshot_at,
+           engine_version = EXCLUDED.engine_version,
+           candidates = EXCLUDED.candidates,
+           updated_at = EXCLUDED.updated_at,
+           expires_at = EXCLUDED.expires_at,
+           owner_token_hash = EXCLUDED.owner_token_hash`,
+        [comparison.id, comparison.name, comparison.category ?? null, comparison.currentPartName ?? null, comparison.currentPartSummary ?? null, comparison.currentPartPrice ?? null, comparison.catalogSnapshotAt ?? null, comparison.engineVersion ?? null, JSON.stringify(comparison.candidates), comparison.createdAt, comparison.updatedAt, comparison.expiresAt ?? null, comparison.ownerTokenHash ?? null]
+      );
+    }
+    await client.query("COMMIT");
+    return;
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    markDatabaseUnavailable("comparison write", error);
+    throw error;
+  } finally {
+    client.release();
   }
-  await writeFileJson(COMPARISONS_PATH, comparisons);
 }
 
 export async function appendSavedComparison(comparison: SavedAlternativeComparisonRecord, max = 100) {
-  return withSerializedFileMutation(COMPARISONS_PATH, async () => {
-    const comparisons = await readSavedComparisons();
-    await writeSavedComparisons([comparison, ...comparisons].slice(0, max));
-  });
+  const comparisons = await readSavedComparisons();
+  await writeSavedComparisons([comparison, ...comparisons].slice(0, max));
 }
 
 export async function deleteSavedComparison(id: string) {
-  return withSerializedFileMutation(COMPARISONS_PATH, async () => {
-    if (await ensureDatabase()) {
-      try {
-        const result = await pool!.query("DELETE FROM saved_comparisons WHERE id = $1", [id]);
-        return (result.rowCount ?? 0) > 0;
-      } catch (error) {
-        markDatabaseUnavailable("comparison delete", error);
-        throw error;
-      }
-    }
-    const comparisons = await readSavedComparisons();
-    const next = comparisons.filter((comparison) => comparison.id !== id);
-    if (next.length === comparisons.length) return false;
-    await writeFileJson(COMPARISONS_PATH, next);
-    return true;
-  });
+  await ensureDatabase();
+  try {
+    const result = await pool!.query("DELETE FROM saved_comparisons WHERE id = $1", [id]);
+    return (result.rowCount ?? 0) > 0;
+  } catch (error) {
+    markDatabaseUnavailable("comparison delete", error);
+    throw error;
+  }
 }
 
 type SavedBuildVersionComparisonDatabaseRow = {
@@ -3009,83 +2525,68 @@ function savedBuildVersionComparisonRecordFromDatabaseRow(row: SavedBuildVersion
 }
 
 export async function readSavedBuildVersionComparisons(): Promise<SavedBuildVersionComparisonShareRecord[]> {
-  if (await ensureDatabase()) {
-    try {
-      const result = await pool!.query<SavedBuildVersionComparisonDatabaseRow>(
-        "SELECT id, name, payload, source_before_build_id, source_after_build_id, created_at, updated_at, expires_at, owner_token_hash FROM saved_version_comparisons ORDER BY updated_at DESC"
-      );
-      return result.rows.map(savedBuildVersionComparisonRecordFromDatabaseRow).filter((value): value is SavedBuildVersionComparisonShareRecord => value !== undefined);
-    } catch (error) {
-      markDatabaseUnavailable("saved version comparison read", error);
-      throw error;
-    }
+  await ensureDatabase();
+  try {
+    const result = await pool!.query<SavedBuildVersionComparisonDatabaseRow>(
+      "SELECT id, name, payload, source_before_build_id, source_after_build_id, created_at, updated_at, expires_at, owner_token_hash FROM saved_version_comparisons ORDER BY updated_at DESC"
+    );
+    return result.rows.map(savedBuildVersionComparisonRecordFromDatabaseRow).filter((value): value is SavedBuildVersionComparisonShareRecord => value !== undefined);
+  } catch (error) {
+    markDatabaseUnavailable("saved version comparison read", error);
+    throw error;
   }
-  const raw = await readFileJson<unknown[]>(VERSION_COMPARISONS_PATH, []);
-  return raw.map(savedBuildVersionComparisonFromUnknown).filter((value): value is SavedBuildVersionComparisonShareRecord => value !== undefined);
 }
 
 export async function writeSavedBuildVersionComparisons(comparisons: SavedBuildVersionComparisonShareRecord[]) {
-  if (await ensureDatabase()) {
-    const client = await pool!.connect();
-    try {
-      await client.query("BEGIN");
-      if (comparisons.length === 0) {
-        await client.query("DELETE FROM saved_version_comparisons");
-      } else {
-        await client.query("DELETE FROM saved_version_comparisons WHERE NOT (id = ANY($1::text[]))", [comparisons.map((comparison) => comparison.id)]);
-      }
-      for (const comparison of comparisons) {
-        await client.query(
-          `INSERT INTO saved_version_comparisons (id, name, payload, source_before_build_id, source_after_build_id, created_at, updated_at, expires_at, owner_token_hash)
-           VALUES ($1, $2, $3::jsonb, $4, $5, $6::timestamptz, $7::timestamptz, $8::timestamptz, $9)
-           ON CONFLICT (id) DO UPDATE SET
-             name = EXCLUDED.name,
-             payload = EXCLUDED.payload,
-             source_before_build_id = EXCLUDED.source_before_build_id,
-             source_after_build_id = EXCLUDED.source_after_build_id,
-             updated_at = EXCLUDED.updated_at,
-             expires_at = EXCLUDED.expires_at,
-             owner_token_hash = EXCLUDED.owner_token_hash`,
-          [comparison.id, comparison.name, JSON.stringify(comparison.payload), comparison.sourceBeforeBuildId, comparison.sourceAfterBuildId, comparison.createdAt, comparison.updatedAt, comparison.expiresAt ?? null, comparison.ownerTokenHash ?? null]
-        );
-      }
-      await client.query("COMMIT");
-      return;
-    } catch (error) {
-      await client.query("ROLLBACK").catch(() => undefined);
-      markDatabaseUnavailable("saved version comparison write", error);
-      throw error;
-    } finally {
-      client.release();
+  await ensureDatabase();
+  const client = await pool!.connect();
+  try {
+    await client.query("BEGIN");
+    if (comparisons.length === 0) {
+      await client.query("DELETE FROM saved_version_comparisons");
+    } else {
+      await client.query("DELETE FROM saved_version_comparisons WHERE NOT (id = ANY($1::text[]))", [comparisons.map((comparison) => comparison.id)]);
     }
+    for (const comparison of comparisons) {
+      await client.query(
+        `INSERT INTO saved_version_comparisons (id, name, payload, source_before_build_id, source_after_build_id, created_at, updated_at, expires_at, owner_token_hash)
+         VALUES ($1, $2, $3::jsonb, $4, $5, $6::timestamptz, $7::timestamptz, $8::timestamptz, $9)
+         ON CONFLICT (id) DO UPDATE SET
+           name = EXCLUDED.name,
+           payload = EXCLUDED.payload,
+           source_before_build_id = EXCLUDED.source_before_build_id,
+           source_after_build_id = EXCLUDED.source_after_build_id,
+           updated_at = EXCLUDED.updated_at,
+           expires_at = EXCLUDED.expires_at,
+           owner_token_hash = EXCLUDED.owner_token_hash`,
+        [comparison.id, comparison.name, JSON.stringify(comparison.payload), comparison.sourceBeforeBuildId, comparison.sourceAfterBuildId, comparison.createdAt, comparison.updatedAt, comparison.expiresAt ?? null, comparison.ownerTokenHash ?? null]
+      );
+    }
+    await client.query("COMMIT");
+    return;
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    markDatabaseUnavailable("saved version comparison write", error);
+    throw error;
+  } finally {
+    client.release();
   }
-  await writeFileJson(VERSION_COMPARISONS_PATH, comparisons);
 }
 
 export async function appendSavedBuildVersionComparison(comparison: SavedBuildVersionComparisonShareRecord, max = 100) {
-  return withSerializedFileMutation(VERSION_COMPARISONS_PATH, async () => {
-    const comparisons = await readSavedBuildVersionComparisons();
-    await writeSavedBuildVersionComparisons([comparison, ...comparisons].slice(0, Math.max(1, Math.floor(max))));
-  });
+  const comparisons = await readSavedBuildVersionComparisons();
+  await writeSavedBuildVersionComparisons([comparison, ...comparisons].slice(0, Math.max(1, Math.floor(max))));
 }
 
 export async function deleteSavedBuildVersionComparison(id: string) {
-  return withSerializedFileMutation(VERSION_COMPARISONS_PATH, async () => {
-    if (await ensureDatabase()) {
-      try {
-        const result = await pool!.query("DELETE FROM saved_version_comparisons WHERE id = $1", [id]);
-        return (result.rowCount ?? 0) > 0;
-      } catch (error) {
-        markDatabaseUnavailable("saved version comparison delete", error);
-        throw error;
-      }
-    }
-    const comparisons = await readSavedBuildVersionComparisons();
-    const next = comparisons.filter((comparison) => comparison.id !== id);
-    if (next.length === comparisons.length) return false;
-    await writeSavedBuildVersionComparisons(next);
-    return true;
-  });
+  await ensureDatabase();
+  try {
+    const result = await pool!.query("DELETE FROM saved_version_comparisons WHERE id = $1", [id]);
+    return (result.rowCount ?? 0) > 0;
+  } catch (error) {
+    markDatabaseUnavailable("saved version comparison delete", error);
+    throw error;
+  }
 }
 
 function savedBudgetLadderRecordFromDatabaseRow(row: SavedBudgetLadderDatabaseRow) {
@@ -3106,86 +2607,71 @@ function savedBudgetLadderRecordFromDatabaseRow(row: SavedBudgetLadderDatabaseRo
 }
 
 export async function readSavedBudgetLadders(): Promise<SavedBudgetLadderRecord[]> {
-  if (await ensureDatabase()) {
-    try {
-      const result = await pool!.query<SavedBudgetLadderDatabaseRow>(
-        "SELECT id, name, payload, request, parent_id, lineage_id, version_number, catalog_snapshot_at, created_at, updated_at, expires_at, owner_token_hash FROM saved_budget_ladders ORDER BY updated_at DESC"
-      );
-      return result.rows.map(savedBudgetLadderRecordFromDatabaseRow).filter((value): value is SavedBudgetLadderRecord => value !== undefined);
-    } catch (error) {
-      markDatabaseUnavailable("budget ladder read", error);
-      throw error;
-    }
+  await ensureDatabase();
+  try {
+    const result = await pool!.query<SavedBudgetLadderDatabaseRow>(
+      "SELECT id, name, payload, request, parent_id, lineage_id, version_number, catalog_snapshot_at, created_at, updated_at, expires_at, owner_token_hash FROM saved_budget_ladders ORDER BY updated_at DESC"
+    );
+    return result.rows.map(savedBudgetLadderRecordFromDatabaseRow).filter((value): value is SavedBudgetLadderRecord => value !== undefined);
+  } catch (error) {
+    markDatabaseUnavailable("budget ladder read", error);
+    throw error;
   }
-  const raw = await readFileJson<unknown[]>(BUDGET_LADDERS_PATH, []);
-  return raw.map(savedBudgetLadderFromUnknown).filter((value): value is SavedBudgetLadderRecord => value !== undefined);
 }
 
 export async function writeSavedBudgetLadders(ladders: SavedBudgetLadderRecord[]) {
-  if (await ensureDatabase()) {
-    const client = await pool!.connect();
-    try {
-      await client.query("BEGIN");
-      if (ladders.length === 0) {
-        await client.query("DELETE FROM saved_budget_ladders");
-      } else {
-        await client.query("DELETE FROM saved_budget_ladders WHERE NOT (id = ANY($1::text[]))", [ladders.map((ladder) => ladder.id)]);
-      }
-      for (const ladder of ladders) {
-        await client.query(
-          `INSERT INTO saved_budget_ladders (id, name, payload, request, parent_id, lineage_id, version_number, catalog_snapshot_at, created_at, updated_at, expires_at, owner_token_hash)
-           VALUES ($1, $2, $3::jsonb, $4::jsonb, $5, $6, $7, $8::timestamptz, $9::timestamptz, $10::timestamptz, $11::timestamptz, $12)
-           ON CONFLICT (id) DO UPDATE SET
-             name = EXCLUDED.name,
-             payload = EXCLUDED.payload,
-             request = EXCLUDED.request,
-             parent_id = EXCLUDED.parent_id,
-             lineage_id = EXCLUDED.lineage_id,
-             version_number = EXCLUDED.version_number,
-             catalog_snapshot_at = EXCLUDED.catalog_snapshot_at,
-             updated_at = EXCLUDED.updated_at,
-             expires_at = EXCLUDED.expires_at,
-             owner_token_hash = EXCLUDED.owner_token_hash`,
-          [ladder.id, ladder.name, JSON.stringify(ladder.payload), ladder.request ? JSON.stringify(ladder.request) : null, ladder.parentId ?? null, ladder.lineageId ?? ladder.id, ladder.versionNumber ?? 1, ladder.catalogSnapshotAt, ladder.createdAt, ladder.updatedAt, ladder.expiresAt ?? null, ladder.ownerTokenHash ?? null]
-        );
-      }
-      await client.query("COMMIT");
-      return;
-    } catch (error) {
-      await client.query("ROLLBACK").catch(() => undefined);
-      markDatabaseUnavailable("budget ladder write", error);
-      throw error;
-    } finally {
-      client.release();
+  await ensureDatabase();
+  const client = await pool!.connect();
+  try {
+    await client.query("BEGIN");
+    if (ladders.length === 0) {
+      await client.query("DELETE FROM saved_budget_ladders");
+    } else {
+      await client.query("DELETE FROM saved_budget_ladders WHERE NOT (id = ANY($1::text[]))", [ladders.map((ladder) => ladder.id)]);
     }
+    for (const ladder of ladders) {
+      await client.query(
+        `INSERT INTO saved_budget_ladders (id, name, payload, request, parent_id, lineage_id, version_number, catalog_snapshot_at, created_at, updated_at, expires_at, owner_token_hash)
+         VALUES ($1, $2, $3::jsonb, $4::jsonb, $5, $6, $7, $8::timestamptz, $9::timestamptz, $10::timestamptz, $11::timestamptz, $12)
+         ON CONFLICT (id) DO UPDATE SET
+           name = EXCLUDED.name,
+           payload = EXCLUDED.payload,
+           request = EXCLUDED.request,
+           parent_id = EXCLUDED.parent_id,
+           lineage_id = EXCLUDED.lineage_id,
+           version_number = EXCLUDED.version_number,
+           catalog_snapshot_at = EXCLUDED.catalog_snapshot_at,
+           updated_at = EXCLUDED.updated_at,
+           expires_at = EXCLUDED.expires_at,
+           owner_token_hash = EXCLUDED.owner_token_hash`,
+        [ladder.id, ladder.name, JSON.stringify(ladder.payload), ladder.request ? JSON.stringify(ladder.request) : null, ladder.parentId ?? null, ladder.lineageId ?? ladder.id, ladder.versionNumber ?? 1, ladder.catalogSnapshotAt, ladder.createdAt, ladder.updatedAt, ladder.expiresAt ?? null, ladder.ownerTokenHash ?? null]
+      );
+    }
+    await client.query("COMMIT");
+    return;
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    markDatabaseUnavailable("budget ladder write", error);
+    throw error;
+  } finally {
+    client.release();
   }
-  await writeFileJson(BUDGET_LADDERS_PATH, ladders);
 }
 
 export async function appendSavedBudgetLadder(ladder: SavedBudgetLadderRecord, max = 100) {
-  return withSerializedFileMutation(BUDGET_LADDERS_PATH, async () => {
-    const ladders = await readSavedBudgetLadders();
-    await writeSavedBudgetLadders([ladder, ...ladders].slice(0, Math.max(1, Math.floor(max))));
-  });
+  const ladders = await readSavedBudgetLadders();
+  await writeSavedBudgetLadders([ladder, ...ladders].slice(0, Math.max(1, Math.floor(max))));
 }
 
 export async function deleteSavedBudgetLadder(id: string) {
-  return withSerializedFileMutation(BUDGET_LADDERS_PATH, async () => {
-    if (await ensureDatabase()) {
-      try {
-        const result = await pool!.query("DELETE FROM saved_budget_ladders WHERE id = $1", [id]);
-        return (result.rowCount ?? 0) > 0;
-      } catch (error) {
-        markDatabaseUnavailable("budget ladder delete", error);
-        throw error;
-      }
-    }
-    const ladders = await readSavedBudgetLadders();
-    const next = ladders.filter((ladder) => ladder.id !== id);
-    if (next.length === ladders.length) return false;
-    await writeFileJson(BUDGET_LADDERS_PATH, next);
-    return true;
-  });
+  await ensureDatabase();
+  try {
+    const result = await pool!.query("DELETE FROM saved_budget_ladders WHERE id = $1", [id]);
+    return (result.rowCount ?? 0) > 0;
+  } catch (error) {
+    markDatabaseUnavailable("budget ladder delete", error);
+    throw error;
+  }
 }
 
 function savedGeneratorVariantsRecordFromDatabaseRow(row: SavedGeneratorVariantsDatabaseRow) {
@@ -3203,159 +2689,131 @@ function savedGeneratorVariantsRecordFromDatabaseRow(row: SavedGeneratorVariants
 }
 
 export async function readSavedGeneratorVariants(): Promise<SavedGeneratorVariantsRecord[]> {
-  if (await ensureDatabase()) {
-    try {
-      const result = await pool!.query<SavedGeneratorVariantsDatabaseRow>(
-        "SELECT id, name, payload, request, catalog_snapshot_at, created_at, updated_at, expires_at, owner_token_hash FROM saved_generator_variants ORDER BY updated_at DESC"
-      );
-      return result.rows.map(savedGeneratorVariantsRecordFromDatabaseRow).filter((value): value is SavedGeneratorVariantsRecord => value !== undefined);
-    } catch (error) {
-      markDatabaseUnavailable("generator variants read", error);
-      throw error;
-    }
+  await ensureDatabase();
+  try {
+    const result = await pool!.query<SavedGeneratorVariantsDatabaseRow>(
+      "SELECT id, name, payload, request, catalog_snapshot_at, created_at, updated_at, expires_at, owner_token_hash FROM saved_generator_variants ORDER BY updated_at DESC"
+    );
+    return result.rows.map(savedGeneratorVariantsRecordFromDatabaseRow).filter((value): value is SavedGeneratorVariantsRecord => value !== undefined);
+  } catch (error) {
+    markDatabaseUnavailable("generator variants read", error);
+    throw error;
   }
-  const raw = await readFileJson<unknown[]>(GENERATOR_VARIANTS_PATH, []);
-  return raw.map(savedGeneratorVariantsFromUnknown).filter((value): value is SavedGeneratorVariantsRecord => value !== undefined);
 }
 
 export async function writeSavedGeneratorVariants(records: SavedGeneratorVariantsRecord[]) {
-  if (await ensureDatabase()) {
-    const client = await pool!.connect();
-    try {
-      await client.query("BEGIN");
-      if (records.length === 0) {
-        await client.query("DELETE FROM saved_generator_variants");
-      } else {
-        await client.query("DELETE FROM saved_generator_variants WHERE NOT (id = ANY($1::text[]))", [records.map((record) => record.id)]);
-      }
-      for (const record of records) {
-        await client.query(
-          `INSERT INTO saved_generator_variants (id, name, payload, request, catalog_snapshot_at, created_at, updated_at, expires_at, owner_token_hash)
-           VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::timestamptz, $6::timestamptz, $7::timestamptz, $8::timestamptz, $9)
-           ON CONFLICT (id) DO UPDATE SET
-             name = EXCLUDED.name,
-             payload = EXCLUDED.payload,
-             request = EXCLUDED.request,
-             catalog_snapshot_at = EXCLUDED.catalog_snapshot_at,
-             updated_at = EXCLUDED.updated_at,
-             expires_at = EXCLUDED.expires_at,
-             owner_token_hash = EXCLUDED.owner_token_hash`,
-          [record.id, record.name, JSON.stringify(record.payload), record.request ? JSON.stringify(record.request) : null, record.catalogSnapshotAt, record.createdAt, record.updatedAt, record.expiresAt ?? null, record.ownerTokenHash ?? null]
-        );
-      }
-      await client.query("COMMIT");
-      return;
-    } catch (error) {
-      await client.query("ROLLBACK").catch(() => undefined);
-      markDatabaseUnavailable("generator variants write", error);
-      throw error;
-    } finally {
-      client.release();
+  await ensureDatabase();
+  const client = await pool!.connect();
+  try {
+    await client.query("BEGIN");
+    if (records.length === 0) {
+      await client.query("DELETE FROM saved_generator_variants");
+    } else {
+      await client.query("DELETE FROM saved_generator_variants WHERE NOT (id = ANY($1::text[]))", [records.map((record) => record.id)]);
     }
+    for (const record of records) {
+      await client.query(
+        `INSERT INTO saved_generator_variants (id, name, payload, request, catalog_snapshot_at, created_at, updated_at, expires_at, owner_token_hash)
+         VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::timestamptz, $6::timestamptz, $7::timestamptz, $8::timestamptz, $9)
+         ON CONFLICT (id) DO UPDATE SET
+           name = EXCLUDED.name,
+           payload = EXCLUDED.payload,
+           request = EXCLUDED.request,
+           catalog_snapshot_at = EXCLUDED.catalog_snapshot_at,
+           updated_at = EXCLUDED.updated_at,
+           expires_at = EXCLUDED.expires_at,
+           owner_token_hash = EXCLUDED.owner_token_hash`,
+        [record.id, record.name, JSON.stringify(record.payload), record.request ? JSON.stringify(record.request) : null, record.catalogSnapshotAt, record.createdAt, record.updatedAt, record.expiresAt ?? null, record.ownerTokenHash ?? null]
+      );
+    }
+    await client.query("COMMIT");
+    return;
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    markDatabaseUnavailable("generator variants write", error);
+    throw error;
+  } finally {
+    client.release();
   }
-  await writeFileJson(GENERATOR_VARIANTS_PATH, records);
 }
 
 export async function appendSavedGeneratorVariants(record: SavedGeneratorVariantsRecord, max = 100) {
-  return withSerializedFileMutation(GENERATOR_VARIANTS_PATH, async () => {
-    const records = await readSavedGeneratorVariants();
-    await writeSavedGeneratorVariants([record, ...records].slice(0, Math.max(1, Math.floor(max))));
-  });
+  const records = await readSavedGeneratorVariants();
+  await writeSavedGeneratorVariants([record, ...records].slice(0, Math.max(1, Math.floor(max))));
 }
 
 export async function deleteSavedGeneratorVariants(id: string) {
-  return withSerializedFileMutation(GENERATOR_VARIANTS_PATH, async () => {
-    if (await ensureDatabase()) {
-      try {
-        const result = await pool!.query("DELETE FROM saved_generator_variants WHERE id = $1", [id]);
-        return (result.rowCount ?? 0) > 0;
-      } catch (error) {
-        markDatabaseUnavailable("generator variants delete", error);
-        throw error;
-      }
-    }
-    const records = await readSavedGeneratorVariants();
-    const next = records.filter((record) => record.id !== id);
-    if (next.length === records.length) return false;
-    await writeFileJson(GENERATOR_VARIANTS_PATH, next);
-    return true;
-  });
+  await ensureDatabase();
+  try {
+    const result = await pool!.query("DELETE FROM saved_generator_variants WHERE id = $1", [id]);
+    return (result.rowCount ?? 0) > 0;
+  } catch (error) {
+    markDatabaseUnavailable("generator variants delete", error);
+    throw error;
+  }
 }
 
 export async function readSavedWatchlistAlertStates(): Promise<SavedWatchlistAlertState[]> {
-  if (await ensureDatabase()) {
-    try {
-      const result = await pool!.query<{ watchlist_id: string; alert_id: string; read_at: Date | null; dismissed_at: Date | null; updated_at: Date }>(
-        "SELECT watchlist_id, alert_id, read_at, dismissed_at, updated_at FROM saved_watchlist_alert_states ORDER BY updated_at DESC"
-      );
-      return result.rows.map((row) => ({ watchlistId: row.watchlist_id, alertId: row.alert_id, ...(row.read_at ? { readAt: new Date(row.read_at).toISOString() } : {}), ...(row.dismissed_at ? { dismissedAt: new Date(row.dismissed_at).toISOString() } : {}), updatedAt: new Date(row.updated_at).toISOString() }));
-    } catch (error) {
-      markDatabaseUnavailable("watchlist alert state read", error);
-      throw error;
-    }
+  await ensureDatabase();
+  try {
+    const result = await pool!.query<{ watchlist_id: string; alert_id: string; read_at: Date | null; dismissed_at: Date | null; updated_at: Date }>(
+      "SELECT watchlist_id, alert_id, read_at, dismissed_at, updated_at FROM saved_watchlist_alert_states ORDER BY updated_at DESC"
+    );
+    return result.rows.map((row) => ({ watchlistId: row.watchlist_id, alertId: row.alert_id, ...(row.read_at ? { readAt: new Date(row.read_at).toISOString() } : {}), ...(row.dismissed_at ? { dismissedAt: new Date(row.dismissed_at).toISOString() } : {}), updatedAt: new Date(row.updated_at).toISOString() }));
+  } catch (error) {
+    markDatabaseUnavailable("watchlist alert state read", error);
+    throw error;
   }
-  const raw = await readFileJson<unknown[]>(WATCHLIST_ALERT_STATES_PATH, []);
-  return raw.map(savedWatchlistAlertStateFromUnknown).filter((value): value is SavedWatchlistAlertState => value !== undefined);
 }
 
 export async function writeSavedWatchlistAlertStates(states: SavedWatchlistAlertState[]) {
-  if (await ensureDatabase()) {
-    const client = await pool!.connect();
-    try {
-      await client.query("BEGIN");
-      if (states.length === 0) {
-        await client.query("DELETE FROM saved_watchlist_alert_states");
-      } else {
-        await client.query("DELETE FROM saved_watchlist_alert_states WHERE NOT (watchlist_id || ':' || alert_id = ANY($1::text[]))", [states.map((state) => state.watchlistId + ":" + state.alertId)]);
-      }
-      for (const state of states) {
-        await client.query(
-          `INSERT INTO saved_watchlist_alert_states (watchlist_id, alert_id, read_at, dismissed_at, updated_at)
-           VALUES ($1, $2, $3::timestamptz, $4::timestamptz, $5::timestamptz)
-           ON CONFLICT (watchlist_id, alert_id) DO UPDATE SET
-             read_at = EXCLUDED.read_at,
-             dismissed_at = EXCLUDED.dismissed_at,
-             updated_at = EXCLUDED.updated_at`,
-          [state.watchlistId, state.alertId, state.readAt ?? null, state.dismissedAt ?? null, state.updatedAt]
-        );
-      }
-      await client.query("COMMIT");
-      return;
-    } catch (error) {
-      await client.query("ROLLBACK").catch(() => undefined);
-      markDatabaseUnavailable("watchlist alert state write", error);
-      throw error;
-    } finally {
-      client.release();
+  await ensureDatabase();
+  const client = await pool!.connect();
+  try {
+    await client.query("BEGIN");
+    if (states.length === 0) {
+      await client.query("DELETE FROM saved_watchlist_alert_states");
+    } else {
+      await client.query("DELETE FROM saved_watchlist_alert_states WHERE NOT (watchlist_id || ':' || alert_id = ANY($1::text[]))", [states.map((state) => state.watchlistId + ":" + state.alertId)]);
     }
+    for (const state of states) {
+      await client.query(
+        `INSERT INTO saved_watchlist_alert_states (watchlist_id, alert_id, read_at, dismissed_at, updated_at)
+         VALUES ($1, $2, $3::timestamptz, $4::timestamptz, $5::timestamptz)
+         ON CONFLICT (watchlist_id, alert_id) DO UPDATE SET
+           read_at = EXCLUDED.read_at,
+           dismissed_at = EXCLUDED.dismissed_at,
+           updated_at = EXCLUDED.updated_at`,
+        [state.watchlistId, state.alertId, state.readAt ?? null, state.dismissedAt ?? null, state.updatedAt]
+      );
+    }
+    await client.query("COMMIT");
+    return;
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    markDatabaseUnavailable("watchlist alert state write", error);
+    throw error;
+  } finally {
+    client.release();
   }
-  await writeFileJson(WATCHLIST_ALERT_STATES_PATH, states);
 }
 
 export async function updateSavedWatchlistAlertStates(watchlistId: string, alertIds: string[], patch: "read" | "dismiss", updatedAt: string) {
-  return withSerializedFileMutation(WATCHLIST_ALERT_STATES_PATH, async () => {
-    const states = await readSavedWatchlistAlertStates();
-    const next = upsertSavedWatchlistAlertStates(states, watchlistId, alertIds, patch, updatedAt);
-    await writeSavedWatchlistAlertStates(next);
-    return next.filter((state) => state.watchlistId === watchlistId);
-  });
+  const states = await readSavedWatchlistAlertStates();
+  const next = upsertSavedWatchlistAlertStates(states, watchlistId, alertIds, patch, updatedAt);
+  await writeSavedWatchlistAlertStates(next);
+  return next.filter((state) => state.watchlistId === watchlistId);
 }
 
 export async function deleteSavedWatchlistAlertStates(watchlistId: string) {
-  return withSerializedFileMutation(WATCHLIST_ALERT_STATES_PATH, async () => {
-    if (await ensureDatabase()) {
-      try {
-        await pool!.query("DELETE FROM saved_watchlist_alert_states WHERE watchlist_id = $1", [watchlistId]);
-        return;
-      } catch (error) {
-        markDatabaseUnavailable("watchlist alert state delete", error);
-        throw error;
-      }
-    }
-    const states = await readSavedWatchlistAlertStates();
-    const next = states.filter((state) => state.watchlistId !== watchlistId);
-    if (next.length !== states.length) await writeSavedWatchlistAlertStates(next);
-  });
+  await ensureDatabase();
+  try {
+    await pool!.query("DELETE FROM saved_watchlist_alert_states WHERE watchlist_id = $1", [watchlistId]);
+    return;
+  } catch (error) {
+    markDatabaseUnavailable("watchlist alert state delete", error);
+    throw error;
+  }
 }
 
 export async function closePersistence() {

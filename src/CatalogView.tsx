@@ -12,6 +12,7 @@ import { classifyDataFreshness } from "../shared/data-freshness";
 import { catalogMissingFieldLabelFor } from "../shared/catalog-spec-coverage";
 import type { CatalogSpecCoverageMissingField } from "../shared/catalog-spec-coverage";
 import { compatibilityFilterPresetFor } from "../shared/compatibility-filter-preset";
+import { quoteBrandOptionsFor } from "../shared/domain/listing";
 import { safeExternalUrl } from "../shared/safe-source-url";
 import { ApiError, api } from "./api";
 import { safeHttpsUrl } from "./safe-source-url";
@@ -996,7 +997,7 @@ export function CatalogView({ meta, build, partMap, profile, gamingResolution, g
         ? "현재 견적과 호환되는 부품이 없어요. 다른 사양을 선택해 보세요."
         : "현재 견적에 맞는 부품이 없어요.";
 
-  const brandOptions = meta?.catalogBrandCounts?.[category] ?? [];
+  const brandOptions = quoteBrandOptionsFor(category, meta?.catalogBrandCounts?.[category] ?? []);
 
   return <div className={filtersOpen ? "catalog-page filters-open" : "catalog-page"}>
     <div className="workspace-heading"><div><button className="back-link" type="button" onClick={onBack}><FiArrowLeft /> 홈으로</button><p className="eyebrow">부품 목록</p><h1>부품 찾기</h1></div><div className="catalog-heading-actions"><button className="button button-light catalog-filter-toggle" type="button" onClick={() => setFiltersOpen((current) => !current)}><FiSearch /> {filtersOpen ? "조건 접기" : "상세 조건"}</button><button className="button button-secondary" type="button" onClick={onOpenBuild}><FiActivity /> 현재 견적 보기</button></div></div>

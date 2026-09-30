@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Part } from "../shared/types";
-import { inferListingType, isListingAllowed } from "./listing";
+import { inferListingType, isListingAllowed, isQuoteBrandAllowed, quoteBrandOptionsFor } from "./listing";
 
 function part(overrides: Partial<Part>): Part {
   return {
@@ -55,5 +55,36 @@ describe("listing policy", () => {
     expect(isListingAllowed(embedded, "include_bulk")).toBe(false);
     expect(isListingAllowed(embedded, "all")).toBe(false);
     expect(isListingAllowed(oldBoard, "all")).toBe(true);
+  });
+});
+
+describe("quote brand policy", () => {
+  it("allows only Samsung and SK hynix for ssd and memory in both spelling variants", () => {
+    for (const category of ["ssd", "memory"] as const) {
+      expect(isQuoteBrandAllowed(category, "삼성전자")).toBe(true);
+      expect(isQuoteBrandAllowed(category, "Samsung")).toBe(true);
+      expect(isQuoteBrandAllowed(category, "SK하이닉스")).toBe(true);
+      expect(isQuoteBrandAllowed(category, "SK hynix")).toBe(true);
+      expect(isQuoteBrandAllowed(category, "G.SKILL")).toBe(false);
+      expect(isQuoteBrandAllowed(category, "마이크론")).toBe(false);
+      expect(isQuoteBrandAllowed(category, "PC Supporter")).toBe(false);
+      expect(isQuoteBrandAllowed(category, undefined)).toBe(false);
+    }
+  });
+
+  it("allows only Seasonic and Micronics for psu", () => {
+    expect(isQuoteBrandAllowed("psu", "시소닉")).toBe(true);
+    expect(isQuoteBrandAllowed("psu", "Seasonic")).toBe(true);
+    expect(isQuoteBrandAllowed("psu", "마이크로닉스")).toBe(true);
+    expect(isQuoteBrandAllowed("psu", "Micronics")).toBe(true);
+    expect(isQuoteBrandAllowed("psu", "SuperFlower")).toBe(false);
+    expect(isQuoteBrandAllowed("psu", "잘만")).toBe(false);
+  });
+
+  it("leaves unrestricted categories untouched and trims the brand options", () => {
+    expect(isQuoteBrandAllowed("cpu", "AMD")).toBe(true);
+    expect(isQuoteBrandAllowed("case", "앱코")).toBe(true);
+    expect(quoteBrandOptionsFor("cpu", [{ brand: "AMD", count: 2 }])).toEqual([{ brand: "AMD", count: 2 }]);
+    expect(quoteBrandOptionsFor("memory", [{ brand: "삼성전자", count: 20 }, { brand: "G.SKILL", count: 101 }])).toEqual([{ brand: "삼성전자", count: 20 }]);
   });
 });

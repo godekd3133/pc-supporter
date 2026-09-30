@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { BuildSelection, M2SlotProfile, MemoryProfile, Part, PciePowerConnectorKind, PciePowerRequirement } from "../shared/types";
 import type { GamingPerformanceEvidenceRecord } from "../shared/gaming-performance-evidence";
-import { BuildGenerationError, assessAlternativePart, alternativeRiskForPart, buildGenerationRecoveryOptionsFor, candidateFixesFinding, candidateSimilarityForBuild, compareCandidateSimilarity, compareCandidateValue, evaluateBuild, generateBuildDraft, isSafeAlternativePart } from "./engine";
+import { BuildGenerationError, assessAlternativePart, alternativeRiskForPart, buildGenerationRecoveryOptionsFor, candidateFixesFinding, candidateSimilarityForBuild, compareCandidateSimilarity, compareCandidateValue, evaluateBuild, generateBuildDraft, isSafeAlternativePart, minimumFeasibleBuildPriceFor } from "./engine";
+import { isQuoteBrandAllowed } from "./listing";
 import { seedCatalog } from "./seed-catalog";
 
 const compatibleBuild = (): BuildSelection => ({
@@ -3246,7 +3247,70 @@ describe("compatibility engine", () => {
     expect(beamSearchDraft.selection.cpu?.partId).toBe(compatibleExpensiveCpu.id);
   });
 
-  it("uses a case with unknown HDD bays when HDD is not requested, but rejects it when HDD is requested", () => {
+  it("keeps a cheaper oversized SSD in the pool when the request capacity is smaller", () => {
+    const ssdSata1tb = seedCatalog.find((part) => part.id === "ssd-sata-1tb")!;
+    const expensiveSmallSsd: Part = {
+      ...ssdSata1tb,
+      id: "ssd-generator-small-expensive",
+      name: "고가 소용량 SATA SSD",
+      priceWon: 130_000,
+      specs: { ...ssdSata1tb.specs, capacityGb: 500 }
+    };
+    const catalog = seedCatalog.concat(expensiveSmallSsd);
+    const base = { profile: "office" as const, includeGpu: false, memoryCapacityGb: 16, hddCount: 0, listingPolicy: "retail_only" as const };
+    const floor500 = minimumFeasibleBuildPriceFor(catalog, { ...base, budgetWon: 5_000_000, storageCapacityGb: 500 });
+    const floor1000 = minimumFeasibleBuildPriceFor(catalog, { ...base, budgetWon: 5_000_000, storageCapacityGb: 1_000 });
+    // 요청 용량의 1.5배를 넘는 부품을 후보에서 빼면 500GB 요청이 오히려 더 비싼
+    // 소용량 SSD만 골라 최저 구성가가 올라간다.
+    expect(floor500).toBeDefined();
+    expect(floor500).toBe(floor1000);
+  });
+
+  it("reports the catalog floor so a failed request can suggest a viable budget", () => {
+    const request = {
+      profile: "office" as const,
+      priority: "balanced" as const,
+      budgetWon: 1_000_000,
+      includeGpu: false,
+      memoryCapacityGb: 16,
+      storageCapacityGb: 500,
+      hddCount: 0,
+      listingPolicy: "retail_only" as const
+    };
+    const floor = minimumFeasibleBuildPriceFor(seedCatalog, request);
+    expect(floor).toBeDefined();
+    // 실측 최저가 아래에서는 구성이 실패하고, 그 예산에서는 반드시 성공해야 한다.
+    expect(() => generateBuildDraft(seedCatalog, { ...request, budgetWon: floor! - 1 })).toThrow();
+    const draft = generateBuildDraft(seedCatalog, { ...request, budgetWon: floor! });
+    expect(draft.totalPriceWon).toBeLessThanOrEqual(floor!);
+    expect(draft.status).not.toBe("incompatible");
+
+    const options = buildGenerationRecoveryOptionsFor(seedCatalog, request);
+    const viableBudget = options.find((option) => option.id === "budget-minimum-viable");
+    expect(viableBudget?.request.budgetWon).toBeGreaterThanOrEqual(floor!);
+    expect(viableBudget?.preview.withinBudget).toBe(true);
+  });
+
+  it("offers a combined relaxation when no single-field relaxation fits the budget", () => {
+    const request = {
+      profile: "office" as const,
+      priority: "balanced" as const,
+      budgetWon: 1_400_000,
+      includeGpu: true,
+      memoryCapacityGb: 32,
+      storageCapacityGb: 1_000,
+      hddCount: 0,
+      listingPolicy: "retail_only" as const
+    };
+    const options = buildGenerationRecoveryOptionsFor(seedCatalog, request);
+    const combined = options.find((option) => option.id === "minimal-combination");
+    expect(combined?.request.includeGpu).toBe(false);
+    expect(combined?.request.memoryCapacityGb).toBe(16);
+    expect(combined?.request.storageCapacityGb).toBe(500);
+    expect(combined?.preview.withinBudget).toBe(true);
+  });
+
+  it("excludes a case with missing spec data from generated drafts regardless of HDD requests", () => {
     const baseCase = seedCatalog.find((part) => part.id === "case-full-airflow")!;
     const caseWithoutHddEvidence: Part = {
       ...baseCase,
@@ -3257,11 +3321,10 @@ describe("compatibility engine", () => {
       specs: { ...baseCase.specs, hddBays: undefined }
     };
     const catalog = seedCatalog.filter((part) => part.category !== "case").concat(caseWithoutHddEvidence);
-    const noHddDraft = generateBuildDraft(catalog, { profile: "office", budgetWon: 1_500_000, includeGpu: false, hddCount: 0 });
 
-    expect(noHddDraft.selection.case?.partId).toBe(caseWithoutHddEvidence.id);
-    expect(noHddDraft.status).toBe("compatible");
-    expect(noHddDraft.unknownCount).toBe(0);
+    // 견적에는 사양 정보가 완비된 부품만 올린다 — 빠진 필드가 현재 요청과 무관해도
+    // 스펙 미등록 부품은 후보에서 제외하고, 대체 케이스가 없으면 후보 없음으로 실패한다.
+    expect(() => generateBuildDraft(catalog, { profile: "office", budgetWon: 1_500_000, includeGpu: false, hddCount: 0 })).toThrow(/케이스/);
     expect(() => generateBuildDraft(catalog, { profile: "office", budgetWon: 1_500_000, includeGpu: false, hddCount: 1, hddCapacityGb: 4000 })).toThrow(/케이스/);
   });
 
@@ -3324,10 +3387,9 @@ describe("compatibility engine", () => {
     const catalog = seedCatalog.filter((part) => part.category !== "case").concat(currentCase, reviewCase);
     const result = evaluateBuild(build, catalog);
     const suggestions = result.findings.find((item) => item.ruleId === "gpu-case-length")?.suggestions ?? [];
-    const suggestion = suggestions.find((item) => item.part.id === reviewCase.id);
 
-    expect(suggestion).toMatchObject({ candidateRisk: "review", fixesCurrentIssue: true });
-    expect(suggestion?.candidateReasons).toContain("필수 스펙 미확인: HDD 베이");
+    // 스펙 미등록 부품은 적용할 수 없으므로 견적 제안 후보에서도 제외한다.
+    expect(suggestions.some((item) => item.part.id === reviewCase.id)).toBe(false);
   });
 
   it("keeps a verified case candidate when incomplete cases fill the bounded pool", () => {
@@ -3533,7 +3595,7 @@ describe("compatibility engine", () => {
     expect(selectedIds.every((partId) => partId.endsWith("-live"))).toBe(true);
   });
 
-  it("keeps a sourced motherboard with unknown VRM capacity as a review item", () => {
+  it("keeps a sourced motherboard missing a single spec field out of generated drafts", () => {
     const baseBoard = seedCatalog.find((part) => part.id === "mb-b650-4x3")!;
     const sourcedBoard: Part = {
       ...baseBoard,
@@ -3553,10 +3615,11 @@ describe("compatibility engine", () => {
       includeGpu: false
     });
 
-    expect(draft.selection.motherboard?.partId).toBe(sourcedBoard.id);
-    expect(draft.status).toBe("needs_review");
-    expect(draft.unknownCount).toBeGreaterThan(0);
-    expect(draft.warnings.join(" ")).toContain("전원부");
+    // 스펙 미등록(incomplete) 부품은 견적 후보에서 제외한다 — 대체 가능한 완전
+    // 데이터 보드가 있으면 그쪽으로 구성한다. live 데이터가 있으나 개별 필드만
+    // 비어 있는 보드의 "확인 필요" 항목은 평가 단계의 리뷰 결과로 남는다.
+    expect(draft.selection.motherboard?.partId).toBe("mb-b650-4x3");
+    expect(draft.lines.every((line) => line.partId !== sourcedBoard.id)).toBe(true);
   });
 
   it("honors the requested RAM capacity in an automatic draft", () => {
@@ -4650,5 +4713,28 @@ describe("generator quote reliability regressions", () => {
     });
     const psu = draft.lines.find((line) => line.category === "psu");
     expect(psu?.priceWon ?? 0).toBeLessThan(150_000);
+  });
+
+  it("selects only quote-allowed brands for ssd, memory, and psu", () => {
+    const foreignMemory: Part = withSpecs(baseMemory, { capacityGb: 16, speedMhz: 5600 }, 5_000);
+    foreignMemory.id = "memory-foreign-cheap";
+    foreignMemory.brand = "G.SKILL";
+    const foreignSsd: Part = withSpecs(baseSsd, {}, 5_000);
+    foreignSsd.id = "ssd-foreign-cheap";
+    foreignSsd.brand = "ADATA";
+    const foreignPsu: Part = withSpecs(psu650, {}, 5_000);
+    foreignPsu.id = "psu-foreign-cheap";
+    foreignPsu.brand = "SuperFlower";
+
+    const catalog = fixtureCatalog({ memory: [foreignMemory, baseMemory], psus: [foreignPsu, psu650, psu1000] }).concat(foreignSsd);
+    const draft = generateBuildDraft(catalog, { profile: "office", budgetWon: 1_500_000, includeGpu: false });
+    const selectedPart = (id: string | undefined) => catalog.find((part) => part.id === id)!;
+
+    expect(draft.selection.memory.every((selection) => isQuoteBrandAllowed("memory", selectedPart(selection.partId).brand))).toBe(true);
+    expect(draft.selection.ssd.every((selection) => isQuoteBrandAllowed("ssd", selectedPart(selection.partId).brand))).toBe(true);
+    expect(isQuoteBrandAllowed("psu", selectedPart(draft.selection.psu?.partId).brand)).toBe(true);
+    expect(draft.selection.memory.map((selection) => selection.partId)).not.toContain(foreignMemory.id);
+    expect(draft.selection.ssd.map((selection) => selection.partId)).not.toContain(foreignSsd.id);
+    expect(draft.selection.psu?.partId).not.toBe(foreignPsu.id);
   });
 });

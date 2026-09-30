@@ -15,8 +15,7 @@ const firstRouteBudget = {
 };
 // Lazy route/feature chunks should stay individually small enough for mobile cold loads;
 // a single chunk ballooning past this budget means a new heavyweight view needs splitting.
-const maxLazyChunkBytes = process.env.PC_SUPPORTER_BUILD_MODE === "local-offline" ? 320_000 : 160_000;
-const maxOfflineCatalogAssetBytes = 32 * 1024 * 1024;
+const maxLazyChunkBytes = 160_000;
 const requiredDomainChunks = ["catalog-change-domain-", "saved-build-domain-", "purchase-domain-"];
 const requiredLazyRoutes = [
   { source: "src/AdminView.tsx", label: "AdminView" },
@@ -70,7 +69,7 @@ function getHtmlLocalAssets(indexHtml, tagName, attributeName, predicate = () =>
   return assets;
 }
 
-export function assertContentSecurityPolicy(indexHtml, localOfflineBuild = false) {
+export function assertContentSecurityPolicy(indexHtml) {
   const cspTags = [...indexHtml.matchAll(/<meta\b[^>]*>/gi)]
     .map((match) => ({ index: match.index ?? -1, attributes: readAttributes(match[0]) }))
     .filter(({ attributes }) => attributes.get("http-equiv")?.toLowerCase() === "content-security-policy");
@@ -105,15 +104,10 @@ export function assertContentSecurityPolicy(indexHtml, localOfflineBuild = false
   if (directives.has("frame-ancestors")) {
     throw new Error("frame-ancestors must be delivered as an HTTP response header, not in a CSP meta tag.");
   }
-  if (localOfflineBuild && /https?:\/\/|capacitor:/i.test(policy)) {
-    throw new Error("local-offline Content Security Policy cannot contain remote origins.");
-  }
-  if (!localOfflineBuild) {
-    requireDirective("style-src-elem", "https://fonts.googleapis.com");
-    requireDirective("font-src", "https://fonts.gstatic.com");
-    requireDirective("img-src", "https://img.danawa.com");
-    requireDirective("img-src", "https://img.danuri.io");
-  }
+  requireDirective("style-src-elem", "https://fonts.googleapis.com");
+  requireDirective("font-src", "https://fonts.gstatic.com");
+  requireDirective("img-src", "https://img.danawa.com");
+  requireDirective("img-src", "https://img.danuri.io");
   return policy;
 }
 
@@ -310,95 +304,18 @@ async function runBuildVerifier() {
   const buildOutputDirectory = process.env.PC_SUPPORTER_BUILD_OUT_DIR?.trim() || "dist";
   const buildRootDirectory = resolve(process.cwd(), buildOutputDirectory);
   const distDirectory = join(buildRootDirectory, "assets");
-  const localOfflineBuild = process.env.PC_SUPPORTER_BUILD_MODE === "local-offline";
-  const offlineBuildRevision = process.env.PC_SUPPORTER_OFFLINE_BUILD_REVISION?.trim() ?? "";
-  let offlineCatalogRevision = "";
   const indexHtml = await readFile(join(buildRootDirectory, "index.html"), "utf8");
   const manifest = JSON.parse(await readFile(join(buildRootDirectory, ".vite/manifest.json"), "utf8"));
-  assertContentSecurityPolicy(indexHtml, localOfflineBuild);
+  assertContentSecurityPolicy(indexHtml);
 
-  if (!localOfflineBuild) {
-    const fontPreconnect = indexHtml.indexOf('<link rel="preconnect" href="https://fonts.googleapis.com">');
-    const fontStylesheet = indexHtml.indexOf('<link rel="stylesheet" href="https://fonts.googleapis.com/css2?');
-    const fontAssetPreconnect = indexHtml.indexOf('<link rel="preconnect" href="https://fonts.gstatic.com"');
-    if (fontPreconnect < 0 || fontAssetPreconnect < 0 || fontStylesheet < 0 || fontPreconnect > fontStylesheet || fontAssetPreconnect > fontStylesheet) {
-      throw new Error("remote build must preconnect to Google Fonts before requesting the stylesheet from the document head.");
-    }
+  const fontPreconnect = indexHtml.indexOf('<link rel="preconnect" href="https://fonts.googleapis.com">');
+  const fontStylesheet = indexHtml.indexOf('<link rel="stylesheet" href="https://fonts.googleapis.com/css2?');
+  const fontAssetPreconnect = indexHtml.indexOf('<link rel="preconnect" href="https://fonts.gstatic.com"');
+  if (fontPreconnect < 0 || fontAssetPreconnect < 0 || fontStylesheet < 0 || fontPreconnect > fontStylesheet || fontAssetPreconnect > fontStylesheet) {
+    throw new Error("remote build must preconnect to Google Fonts before requesting the stylesheet from the document head.");
   }
 
   const assetNames = await readdir(distDirectory);
-  if (localOfflineBuild && assetNames.some((name) => name.endsWith(".map"))) {
-    throw new Error("local-offline 빌드에는 bundled snapshot이 들어갈 수 있는 source map을 포함하지 않습니다.");
-  }
-  if (localOfflineBuild) {
-    const snapshotPath = join(buildRootDirectory, "offline-catalog.json");
-    const snapshotInfo = await stat(snapshotPath).catch(() => undefined);
-    if (!snapshotInfo?.isFile()) throw new Error("local-offline build must contain the installed offline-catalog.json asset.");
-    if (snapshotInfo.size > maxOfflineCatalogAssetBytes) {
-      throw new Error(`offline-catalog.json exceeds its ${maxOfflineCatalogAssetBytes}-byte installed asset budget: ${snapshotInfo.size} bytes`);
-    }
-    const bundledCatalog = JSON.parse(await readFile(snapshotPath, "utf8"));
-    offlineCatalogRevision = bundledCatalog?.manifest?.revision ?? "";
-    if (!/^catalog-\d+-[a-f0-9]{16}$/.test(offlineCatalogRevision)) {
-      throw new Error("local-offline catalog must expose a valid embedded revision.");
-    }
-    if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(offlineBuildRevision)) {
-      throw new Error("local-offline build must expose a unique client build revision.");
-    }
-    const workerSource = await readFile(join(buildRootDirectory, "service-worker.js"), "utf8");
-    const workerBuildRevision = workerSource.match(/^const LOCAL_OFFLINE_BUILD_REVISION = "([^"]+)";$/m)?.[1];
-    const workerCatalogRevision = workerSource.match(/^const LOCAL_OFFLINE_CATALOG_REVISION = "([^"]+)";$/m)?.[1];
-    const workerShellMatch = workerSource.match(/^const LOCAL_OFFLINE_SHELL_URLS = (\[[^\n]*\]);$/m);
-    if (workerBuildRevision !== offlineBuildRevision || workerCatalogRevision !== offlineCatalogRevision || !workerShellMatch) {
-      throw new Error("local-offline service worker must match its client build and catalog revisions.");
-    }
-    const workerShellUrls = JSON.parse(workerShellMatch[1]);
-    if (!Array.isArray(workerShellUrls) || !workerShellUrls.includes("/index.html") || !workerShellUrls.includes("/offline-catalog.json")) {
-      throw new Error("local-offline service worker must precache the app shell and its catalog.");
-    }
-    const requiredPrecachePaths = new Set(["/index.html", "/offline-catalog.json"]);
-    for (const entry of Object.values(manifest)) {
-      for (const path of [entry?.file, ...(Array.isArray(entry?.css) ? entry.css : []), ...(Array.isArray(entry?.assets) ? entry.assets : [])]) {
-        if (typeof path === "string") requiredPrecachePaths.add(`/${normalizeAssetPath(path)}`);
-      }
-    }
-    const missingPrecachePaths = [...requiredPrecachePaths].filter((path) => !workerShellUrls.includes(path));
-    if (missingPrecachePaths.length > 0) throw new Error(`local-offline service worker omitted built app assets: ${missingPrecachePaths.join(", ")}`);
-    for (const url of workerShellUrls) {
-      if (typeof url !== "string" || !url.startsWith("/") || url.startsWith("//")) {
-        throw new Error("local-offline service worker precache must contain same-origin root-relative URLs only.");
-      }
-      if (url !== "/" && !(await stat(join(buildRootDirectory, normalizeAssetPath(url))).catch(() => undefined))?.isFile()) {
-        throw new Error(`local-offline service worker precache asset is missing: ${url}`);
-      }
-    }
-    const localInstallStart = workerSource.indexOf("async function installLocalOfflineCache");
-    const localInstallEnd = workerSource.indexOf('self.addEventListener("install"', localInstallStart);
-    const localInstallSource = localInstallStart >= 0 && localInstallEnd > localInstallStart
-      ? workerSource.slice(localInstallStart, localInstallEnd)
-      : "";
-    if (!localInstallSource.includes("await cache.addAll(LOCAL_OFFLINE_SHELL_URLS)")
-      || !localInstallSource.includes("catalog?.manifest?.revision !== LOCAL_OFFLINE_CATALOG_REVISION")
-      || localInstallSource.includes("skipWaiting")) {
-      throw new Error("local-offline service worker must verify and atomically stage its revisioned shell and catalog.");
-    }
-    const localFetchStart = workerSource.indexOf("if (LOCAL_OFFLINE_MODE) {");
-    const localFetchEnd = workerSource.indexOf("event.respondWith(\n    fetch(request)", localFetchStart);
-    const localFetchSource = localFetchStart >= 0 && localFetchEnd > localFetchStart
-      ? workerSource.slice(localFetchStart, localFetchEnd)
-      : "";
-    if (!localFetchSource.includes("cache.match(request, { ignoreVary: true })")) {
-      throw new Error("local-offline service worker must ignore host Vary headers for its same-origin precache.");
-    }
-    const cssAssets = assetNames.filter((name) => name.endsWith(".css"));
-    const cssContents = await Promise.all(cssAssets.map((name) => readFile(join(distDirectory, name), "utf8")));
-    if (cssContents.some((css) => /fonts\.googleapis\.com|fonts\.gstatic\.com/i.test(css))) {
-      throw new Error("local-offline CSS cannot request remote web fonts.");
-    }
-    if (/fonts\.googleapis\.com|fonts\.gstatic\.com/i.test(indexHtml)) {
-      throw new Error("local-offline HTML cannot request remote web fonts.");
-    }
-  }
 
   const htmlModuleAssets = getHtmlLocalAssets(indexHtml, "script", "src", (attributes) => attributes.get("type")?.toLowerCase() === "module");
   if (htmlModuleAssets.length !== 1) {
@@ -449,20 +366,12 @@ async function runBuildVerifier() {
   if (oversizedChunks.length > 0) {
     throw new Error(`lazy chunk가 ${maxLazyChunkBytes}바이트 예산을 초과했습니다: ${oversizedChunks.join(", ")}`);
   }
-  if (localOfflineBuild && (!browserJavaScript.some((asset) => asset.includes(offlineBuildRevision))
-    || !browserJavaScript.some((asset) => asset.includes(offlineCatalogRevision)))) {
-    throw new Error("local-offline client JavaScript must embed its build and snapshot revisions.");
-  }
-
-  if (!localOfflineBuild) {
-    const snapshotInfo = await stat(join(buildRootDirectory, "offline-catalog.json")).catch(() => undefined);
-    if (snapshotInfo) throw new Error("remote build must not contain the offline-catalog.json asset.");
-    const remoteBuildMarkers = ["OFFLINE_FEATURE_UNAVAILABLE", "OFFLINE_SNAPSHOT_UNAVAILABLE", "OFFLINE_FILTER_UNAVAILABLE", "pc-supporter-offline-catalog"];
-    const leakedMarkers = remoteBuildMarkers.filter((marker) => browserJavaScript.some((asset) => asset.includes(marker)));
-    const offlineRuntimeChunks = assetNames.filter((name) => /offline-api-|offline-catalog-|compatibility-evaluator-|accessory-compatibility-|accessory-recommendations-|public-api-projection-/.test(name));
-    if (leakedMarkers.length > 0 || offlineRuntimeChunks.length > 0) {
-      throw new Error(`remote 빌드에 로컬 전용 코드가 포함되었습니다: ${[...leakedMarkers, ...offlineRuntimeChunks].join(", ")}`);
-    }
+  const snapshotInfo = await stat(join(buildRootDirectory, "offline-catalog.json")).catch(() => undefined);
+  if (snapshotInfo) throw new Error("remote build must not contain the offline-catalog.json asset.");
+  const remoteBuildMarkers = ["OFFLINE_FEATURE_UNAVAILABLE", "OFFLINE_SNAPSHOT_UNAVAILABLE", "OFFLINE_FILTER_UNAVAILABLE", "pc-supporter-offline-catalog"];
+  const leakedMarkers = remoteBuildMarkers.filter((marker) => browserJavaScript.some((asset) => asset.includes(marker)));
+  if (leakedMarkers.length > 0) {
+    throw new Error(`remote 빌드에 로컬 전용 코드가 포함되었습니다: ${leakedMarkers.join(", ")}`);
   }
 
   const staticClosure = await measureStaticImportClosure({
@@ -491,7 +400,6 @@ async function runBuildVerifier() {
     lazyCssAssets,
     maxLazyCssBytes,
     requiredDomainChunks,
-    localOfflineBuild,
     maxLazyChunkBytes,
     firstRouteStaticClosure: {
       manifest: ".vite/manifest.json",

@@ -201,7 +201,7 @@ if (dryRun) {
 
 const { catalogMeta, upsertCatalog } = await import("../server/catalog");
 const { loadAccessories, upsertAccessories } = await import("../server/accessories");
-const { persistenceMode } = await import("../server/repository");
+const { persistenceDiagnostics } = await import("../server/repository");
 const { withCatalogIngestionLease } = await import("../server/catalog-ingestion-coordinator");
 const { before, merged, mergedAccessories, mergedCoolingFanOverrides, after } = await withCatalogIngestionLease(async () => {
   const before = await catalogMeta();
@@ -240,7 +240,7 @@ console.log(JSON.stringify({
   includeAccessories,
   replaceAccessories,
   includeCoolingFanOverrides,
-  targetStorageMode: await persistenceMode(),
+  targetStorageMode: (await persistenceDiagnostics()).storageMode,
   before: { catalogCount: before.catalogCount, categoryCounts: before.categoryCounts, qualityCounts: before.qualityCounts },
   after: { catalogCount: after.catalogCount, categoryCounts: after.categoryCounts, qualityCounts: after.qualityCounts },
   mergedRecords: merged.length,

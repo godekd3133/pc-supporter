@@ -235,6 +235,26 @@ describe("quote-onboarding estimates", () => {
     expect(gamingTargetShortfall(work)).toBeNull();
   });
 
+  it("raises the displayed floor to the catalog minimum instead of promising headroom", () => {
+    // 가벼운 게임 FHD·60Hz 참고 범위(50~60만원대)가 카탈로그 실측 최저가보다
+    // 낮으면 "예산 여유" 안내는 거짓이 된다 — 하한을 실측 최저가로 올려 잡는다.
+    const floors = { gaming: { "1080p": 936_330 } };
+    const range = requiredGamingBudgetFor("1080p", 60, ["league"], {}, 936_330);
+    expect(range.minWon).toBe(1_000_000);
+    expect(range.maxWon).toBeGreaterThanOrEqual(range.minWon);
+
+    const state = stateWith({ usecase: "gaming", games: ["league"], resolution: "1080p", refreshRate: 60, budgetWon: 800_000 });
+    expect(gamingTargetShortfall(state, floors)?.minWon).toBe(1_000_000);
+    expect(targetBudgetRangeFor(state, floors)?.minWon).toBe(1_000_000);
+    expect(targetBudgetRangeFor(stateWith({ ...state, budgetWon: 1_000_000 }), floors)?.minWon).toBe(1_000_000);
+  });
+
+  it("keeps the static range when the catalog floor is below it", () => {
+    const range = requiredGamingBudgetFor("4k", 144, ["cyberpunk"], {}, 936_330);
+    expect(range.minWon).toBe(requiredGamingBudgetFor("4k", 144, ["cyberpunk"]).minWon);
+    expect(targetBudgetRangeFor(stateWith({ usecase: "work", works: ["threed"], intensity: "heavy" }), { discreteGpu: 936_330 })).toEqual(requiredWorkBudgetFor(["threed"], "heavy"));
+  });
+
   it("clamps the budget control range", () => {
     expect(clampBudget(100_000)).toBe(800_000);
     expect(clampBudget(9_000_000)).toBe(8_000_000);
@@ -254,6 +274,19 @@ describe("quote-onboarding recommend params", () => {
     expect(params.gamingRayTracing).toBe(true);
     expect(params.gamingUpscaling).toBe("quality");
     expect(params.budgetWon).toBe(2_000_000);
+  });
+
+  it("carries the low gaming budget tier's displayed memory and storage into the request", () => {
+    // 예산 티어 추정이 16GB·500GB로 안내하는 구간에서 요청도 같은 조건을 보낸다 —
+    // 32GB·1TB 고정 요청은 표시된 추정과 어긋나 최저가를 크게 올린다.
+    const low = recommendParamsFor(stateWith({ usecase: "gaming", games: ["league"], resolution: "1080p", refreshRate: 60, budgetWon: 800_000 }));
+    expect(low.memoryCapacityGb).toBe(16);
+    expect(low.storageCapacityGb).toBe(500);
+    expect(low.includeGpu).toBe(true);
+
+    const mid = recommendParamsFor(stateWith({ usecase: "gaming", games: ["league"], budgetWon: 1_200_000 }));
+    expect(mid.memoryCapacityGb).toBe(32);
+    expect(mid.storageCapacityGb).toBe(1000);
   });
 
   it("maps work selections to profiles and GPU inclusion", () => {

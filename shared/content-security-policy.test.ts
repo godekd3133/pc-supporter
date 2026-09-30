@@ -66,7 +66,6 @@ describe("Content Security Policy", () => {
   it("keeps remote document sources scoped to the app's actual dependencies", () => {
     const policy = createContentSecurityPolicy({
       connectOrigins: ["https://api.example.com"],
-      allowRemoteAssets: true,
       includeFrameAncestors: true
     });
 
@@ -85,15 +84,5 @@ describe("Content Security Policy", () => {
     expect(policy).toContain("connect-src 'self' https://api.example.com");
     expect(policy).toContain("frame-ancestors 'none'");
     expect(policy).toContain("object-src 'none'");
-  });
-
-  it("omits external origins from local-offline documents", () => {
-    const policy = createContentSecurityPolicy({ allowRemoteAssets: false });
-
-    expect(policy).toContain("default-src 'none'");
-    expect(policy).toContain("connect-src 'self'");
-    expect(policy).not.toMatch(/https?:\/\/|capacitor:/);
-    expect(policy).not.toContain("fonts.googleapis.com");
-    expect(policy).not.toContain("img.danawa.com");
   });
 });

@@ -67,7 +67,7 @@ import { OBJECTIVE_BENCHMARK_DIMENSION_KEYS, OBJECTIVE_SCORE_MODEL_VERSION, obje
 import type { ObjectiveScore, ObjectiveScoreExtraTerm } from "../objective-score";
 import { gamingPerformanceAssessmentFor } from "../gaming-performance-evidence";
 import type { GamingPerformanceEvidenceRecord } from "../gaming-performance-evidence";
-import { isListingAllowed } from "./listing";
+import { isListingAllowed, isQuoteBrandAllowed, isQuoteSelectable } from "./listing";
 import { scoreCachedByIdentity } from "../generator-score-cache";
 import { classifyDataFreshness } from "./data-health";
 import { compareRecommendationTrust, recommendationTrustFor } from "./recommendation-trust";
@@ -1860,7 +1860,8 @@ export function buildUpgradeRecommendations(
       .filter((candidate) => candidate.category === category
         && !currentPartIds.has(candidate.id)
         && candidate.dataQuality !== "incomplete"
-        && isKnownPrice(candidate.priceWon))
+        && isKnownPrice(candidate.priceWon)
+        && isQuoteBrandAllowed(category, candidate.brand))
       .filter((candidate) => isListingAllowed(candidate, listingPolicy))
       .map((candidate) => ({ candidate, assessment: upgradeAssessmentFor(current, candidate, profile, gamingResolution, gamingRefreshRate) }))
       .filter((entry): entry is { candidate: Part; assessment: UpgradeAssessment } => Boolean(entry.assessment))
@@ -2217,7 +2218,8 @@ function candidateSuggestions(
   const comparison = performanceComparisonFor(currentTarget, catalog);
   const candidates = catalog
     .filter((part) => part.category === targetCategory && !currentPartIds.has(part.id))
-    .filter((part) => isKnownPrice(part.priceWon))
+    .filter((part) => isQuoteSelectable(part))
+    .filter((part) => isQuoteBrandAllowed(targetCategory, part.brand))
     .filter((part) => isListingAllowed(part, listingPolicy))
     .filter((part) => candidateIsPlausible(finding, build, part, catalog, targetCategory));
   const evaluatedSuggestions = candidateEvaluationPoolFor(
@@ -4651,15 +4653,15 @@ export function evaluateBuild(
 }
 
 const GENERATOR_REQUIRED_FIELDS: Partial<Record<PartCategory, string[]>> = {
-  cpu: ["socket", "memoryType", "tdpW"],
-  motherboard: ["socket", "memoryType", "maxMemoryGb", "memorySlots", "maxMemorySpeedMhz", "m2Slots", "sataPorts", "formFactor"],
+  cpu: ["socket", "memoryType", "tdpW", "maxMemorySpeedMhz"],
+  motherboard: ["socket", "memoryType", "maxMemoryGb", "memorySlots", "maxMemorySpeedMhz", "m2Slots", "sataPorts", "formFactor", "vrmCapacityW"],
   memory: ["memoryType", "capacityGb", "speedMhz", "formFactor"],
   cooler: ["supportedSockets", "maxCoolingW", "maxCoolerHeightMm"],
-  gpu: ["powerW", "recommendedPsuW", "lengthMm"],
+  gpu: ["powerW", "recommendedPsuW", "lengthMm", "thicknessMm"],
   ssd: ["interface", "formFactor", "capacityGb"],
   hdd: ["interface", "formFactor", "capacityGb"],
   case: ["maxGpuLengthMm", "maxCoolerHeightMm", "hddBays", "motherboardFormFactors"],
-  psu: ["wattageW"]
+  psu: ["wattageW", "psuDepthMm", "psuFormFactor"]
 };
 
 // Direct performance-tier requests narrow the candidate pools first: GPUs use a
@@ -5097,7 +5099,6 @@ function generatorCandidatePool(
   gamingResolution: GamingResolution = DEFAULT_GAMING_RESOLUTION,
   gamingRefreshRate: GamingRefreshRate = DEFAULT_GAMING_REFRESH_RATE,
   requiredFields: string[] = GENERATOR_REQUIRED_FIELDS[category] ?? [],
-  allowIncomplete = false,
   gamingAdvisoryTuning?: GamingAdvisoryTuning,
   gpuVendorPreference?: GpuVendor,
   nowMilliseconds = Date.now(),
@@ -5106,8 +5107,8 @@ function generatorCandidatePool(
   const catalogCandidates = catalog
     .filter((part) => part.category === category)
     .filter((part) => part.listingType !== "accessory")
-    .filter((part) => allowIncomplete || part.dataQuality !== "incomplete")
-    .filter((part) => isKnownPrice(part.priceWon))
+    .filter((part) => isQuoteBrandAllowed(category, part.brand))
+    .filter((part) => isQuoteSelectable(part))
     .filter((part) => generatorHasFields(part, requiredFields))
     .filter((part) => isListingAllowed(part, listingPolicy))
     .filter(predicate);
@@ -5149,9 +5150,12 @@ function preferNamedParts(parts: Part[]) {
 function generatorStoragePool(catalog: Part[], category: "ssd" | "hdd", profile: RecommendationProfile, requestedCapacityGb: number, listingPolicy: ListingPolicy, gamingResolution: GamingResolution = DEFAULT_GAMING_RESOLUTION, gamingRefreshRate: GamingRefreshRate = DEFAULT_GAMING_REFRESH_RATE, nowMilliseconds = Date.now()) {
   const preferred = generatorCandidatePool(catalog, category, profile, (part) => {
     const capacity = part.specs.capacityGb;
-    return capacity !== undefined && capacity >= requestedCapacityGb && capacity <= requestedCapacityGb * 1.5;
-  }, listingPolicy, gamingResolution, gamingRefreshRate, undefined, false, undefined, undefined, nowMilliseconds);
-  return preferred.parts.length > 0 ? preferred : generatorCandidatePool(catalog, category, profile, () => true, listingPolicy, gamingResolution, gamingRefreshRate, undefined, false, undefined, undefined, nowMilliseconds);
+    // 확장 단계의 preferRequestedCapacity와 같은 2배 폭으로 둔다 — 더 좁은
+    // 상한은 "요청보다 크지만 더 싼" 부품(예: 500GB 요청에 더 저렴한 1TB)을
+    // 풀에서 빼버려 오히려 총액이 올라가는 경우를 만든다.
+    return capacity !== undefined && capacity >= requestedCapacityGb && capacity <= requestedCapacityGb * 2;
+  }, listingPolicy, gamingResolution, gamingRefreshRate, undefined, undefined, undefined, nowMilliseconds);
+  return preferred.parts.length > 0 ? preferred : generatorCandidatePool(catalog, category, profile, () => true, listingPolicy, gamingResolution, gamingRefreshRate, undefined, undefined, undefined, nowMilliseconds);
 }
 
 function generatorMemoryPool(catalog: Part[], profile: RecommendationProfile, requestedCapacityGb: number, listingPolicy: ListingPolicy, gamingResolution: GamingResolution, gamingRefreshRate: GamingRefreshRate = DEFAULT_GAMING_REFRESH_RATE, nowMilliseconds = Date.now()) {
@@ -5163,9 +5167,9 @@ function generatorMemoryPool(catalog: Part[], profile: RecommendationProfile, re
     const totalGb = capacityGb * memoryKitQuantityFor(part, requestedCapacityGb);
     return totalGb >= requestedCapacityGb && totalGb <= requestedCapacityGb * overshootRatio;
   };
-  const tight = generatorCandidatePool(catalog, "memory", profile, (part) => fitsRequest(part, 1.25), listingPolicy, gamingResolution, gamingRefreshRate, undefined, undefined, undefined, undefined, nowMilliseconds);
+  const tight = generatorCandidatePool(catalog, "memory", profile, (part) => fitsRequest(part, 1.25), listingPolicy, gamingResolution, gamingRefreshRate, undefined, undefined, undefined, nowMilliseconds);
   if (tight.parts.length > 0) return tight;
-  return generatorCandidatePool(catalog, "memory", profile, (part) => fitsRequest(part, 2), listingPolicy, gamingResolution, gamingRefreshRate, undefined, undefined, undefined, undefined, nowMilliseconds);
+  return generatorCandidatePool(catalog, "memory", profile, (part) => fitsRequest(part, 2), listingPolicy, gamingResolution, gamingRefreshRate, undefined, undefined, undefined, nowMilliseconds);
 }
 
 function generatorCaseRequiredFields(includeGpu: boolean, hddCount: number) {
@@ -5502,6 +5506,17 @@ function preferRequestedCapacity(parts: Part[], requestedCapacityGb: number, max
   return nearCandidates.length > 0 ? nearCandidates : parts;
 }
 
+// 렌더링·컴파일처럼 올코어 지속부하는 쿨러를 최대치까지 쓴다 — 최대 냉각이
+// 발열과 같은 쿨러는 지속부하에서 쓰로틀·소음으로 무너진다. 지속부하 프로필이나
+// 고발열 CPU에는 25% 여유 쿨러를 우선하고, 없으면 그대로 둔다.
+function preferCoolerHeadroom(parts: Part[], cpu: Part, profile: RecommendationProfile) {
+  const cpuHeatW = cpu.specs.pptW ?? cpu.specs.tdpW ?? 0;
+  const sustainedLoad = profile === "creator" || profile === "development";
+  if (cpuHeatW <= 0 || (!sustainedLoad && cpuHeatW < 150)) return parts;
+  const roomy = parts.filter((part) => (part.specs.maxCoolingW ?? 0) >= cpuHeatW * 1.25);
+  return roomy.length > 0 ? roomy : parts;
+}
+
 function generatedPartSpecSummary(part: Part) {
   const specs = part.specs;
   const values: Array<string | undefined> = part.category === "cpu"
@@ -5587,8 +5602,38 @@ function buildGeneratedLines(state: GeneratorState, request: BuildGenerationRequ
   });
 }
 
-export function generateBuildDraft(catalog: Part[], request: BuildGenerationRequest, gamingPerformanceEvidence: readonly GamingPerformanceEvidenceRecord[] = [], clockOptions: EngineClockOptions = {}): BuildGenerationResult {
-  const nowMilliseconds = engineNowMilliseconds(clockOptions.now);
+type GeneratorCandidatePoolResult = ReturnType<typeof generatorCandidatePool>;
+
+type GeneratorSearchContext = {
+  profile: RecommendationProfile;
+  priority: RecommendationPriority;
+  memoryCapacityGb: number;
+  storageCapacityGb: number;
+  hddCount: number;
+  hddCapacityGb: number;
+  performanceTier: RecommendationPerformanceTier | undefined;
+  listingPolicy: ListingPolicy;
+  includeNonRetail: boolean;
+  gamingResolution: GamingResolution;
+  gamingRefreshRate: GamingRefreshRate;
+  gamingAdvisoryTuning: ReturnType<typeof gamingAdvisoryTuningFor> | undefined;
+  cpuPool: GeneratorCandidatePoolResult;
+  motherboardPool: GeneratorCandidatePoolResult;
+  memoryPool: GeneratorCandidatePoolResult;
+  coolerPool: GeneratorCandidatePoolResult;
+  casePool: GeneratorCandidatePoolResult;
+  ssdPool: GeneratorCandidatePoolResult;
+  hddPool: GeneratorCandidatePoolResult | undefined;
+  psuPool: GeneratorCandidatePoolResult;
+  gpuVendorPreference: GpuVendor | undefined;
+  minimumGpuVramGb: number;
+  gamingVramReferenceGate: boolean;
+  gpuPool: GeneratorCandidatePoolResult | undefined;
+  gamingGpuVramThresholdMiss: boolean;
+  missingPools: string[];
+};
+
+function generatorSearchContextFor(catalog: Part[], request: BuildGenerationRequest, nowMilliseconds: number): GeneratorSearchContext {
   if (!Number.isFinite(request.budgetWon) || !Number.isInteger(request.budgetWon) || request.budgetWon <= 0) {
     throw new Error("예산은 1원 이상의 정수여야 합니다.");
   }
@@ -5625,19 +5670,24 @@ export function generateBuildDraft(catalog: Part[], request: BuildGenerationRequ
   }
   const performanceTier = request.performanceTier === "entry" || request.performanceTier === "high" || request.performanceTier === "top" ? request.performanceTier : undefined;
   const cpuPool = filterGeneratorPoolByMinScore(
-    generatorCandidatePool(catalog, "cpu", profile, request.includeGpu ? undefined : (part) => part.specs.integratedGraphics === true, listingPolicy, gamingResolution, gamingRefreshRate, undefined, undefined, undefined, undefined, nowMilliseconds),
+    generatorCandidatePool(catalog, "cpu", profile, request.includeGpu ? undefined : (part) => part.specs.integratedGraphics === true, listingPolicy, gamingResolution, gamingRefreshRate, undefined, undefined, undefined, nowMilliseconds),
     performanceTier ? GENERATOR_PERFORMANCE_TIER_CPU_MIN_SCORE[performanceTier] : 0
   );
-  // Unknown VRM capacity must remain visible as a review finding. Filtering it
-  // here made every sourced board in the current catalog disappear, so a
-  // starter reference-price board could be recommended as if it were for sale.
-  const motherboardPool = generatorCandidatePool(catalog, "motherboard", profile, undefined, listingPolicy, gamingResolution, gamingRefreshRate, GENERATOR_REQUIRED_FIELDS.motherboard, true, undefined, undefined, nowMilliseconds);
+  // 견적 판매 정책으로 스펙 미등록(incomplete) 부품은 후보에서 제외하고,
+  // 메인보드는 vrmCapacityW까지 필수로 둔다 — 전원부 용량이 없는 보드는
+  // CPU 전력 확인이 불가능해 "확인 필요" 결과를 만들기 때문이다.
+  const motherboardPool = generatorCandidatePool(catalog, "motherboard", profile, undefined, listingPolicy, gamingResolution, gamingRefreshRate, GENERATOR_REQUIRED_FIELDS.motherboard, undefined, undefined, nowMilliseconds);
   const memoryPool = generatorMemoryPool(catalog, profile, memoryCapacityGb, listingPolicy, gamingResolution, gamingRefreshRate, nowMilliseconds);
-  const coolerPool = generatorCandidatePool(catalog, "cooler", profile, undefined, listingPolicy, gamingResolution, gamingRefreshRate, undefined, undefined, undefined, undefined, nowMilliseconds);
-  const casePool = generatorCandidatePool(catalog, "case", profile, undefined, listingPolicy, gamingResolution, gamingRefreshRate, generatorCaseRequiredFields(request.includeGpu, hddCount), true, undefined, undefined, nowMilliseconds);
+  // 수랭 쿨러는 라디에이터 규격·장착 위치가 없으면 케이스 호환 검증이 불가능하다.
+  const coolerPool = generatorCandidatePool(catalog, "cooler", profile,
+    (part) => part.specs.coolerType !== "liquid" || (part.specs.radiatorSizeMm !== undefined && part.specs.radiatorPosition !== undefined),
+    listingPolicy, gamingResolution, gamingRefreshRate, undefined, undefined, undefined, nowMilliseconds);
+  const casePool = generatorCandidatePool(catalog, "case", profile, undefined, listingPolicy, gamingResolution, gamingRefreshRate, generatorCaseRequiredFields(request.includeGpu, hddCount), undefined, undefined, nowMilliseconds);
   const ssdPool = generatorStoragePool(catalog, "ssd", profile, storageCapacityGb, listingPolicy, gamingResolution, gamingRefreshRate, nowMilliseconds);
   const hddPool = hddCount > 0 ? generatorStoragePool(catalog, "hdd", profile, hddCapacityGb, listingPolicy, gamingResolution, gamingRefreshRate, nowMilliseconds) : undefined;
-  const psuPool = generatorCandidatePool(catalog, "psu", profile, undefined, listingPolicy, gamingResolution, gamingRefreshRate, undefined, undefined, undefined, undefined, nowMilliseconds);
+  // GPU 보조전원 단자 정보가 없는 파워는 GPU 견적의 커넥터 검증을 할 수 없다.
+  const psuPool = generatorCandidatePool(catalog, "psu", profile, undefined, listingPolicy, gamingResolution, gamingRefreshRate,
+    request.includeGpu ? [...(GENERATOR_REQUIRED_FIELDS.psu ?? []), "pciePowerConnectors"] : undefined, undefined, undefined, nowMilliseconds);
   const gpuVendorPreference: GpuVendor | undefined = request.includeGpu && (
     (profile === "gaming" && request.gamingRayTracing === true)
       || profile === "creator"
@@ -5653,12 +5703,13 @@ export function generateBuildDraft(catalog: Part[], request: BuildGenerationRequ
         catalog,
         "gpu",
         profile,
-        undefined,
+        // 보조전원이 필요 없는 카드는 pciePowerOptions가 빈 배열로 선언되므로
+        // 존재 여부만 확인한다 — 빈 배열도 유효한 데이터다.
+        (part) => part.specs.pciePowerOptions !== undefined,
         listingPolicy,
         gamingResolution,
         gamingRefreshRate,
         GENERATOR_REQUIRED_FIELDS.gpu ?? [],
-        false,
         gamingAdvisoryTuning,
         gpuVendorPreference,
         nowMilliseconds,
@@ -5686,7 +5737,66 @@ export function generateBuildDraft(catalog: Part[], request: BuildGenerationRequ
     ["파워서플라이", psuPool.parts.length],
     ...(hddCount > 0 ? [["HDD", hddPool?.parts.length ?? 0]] : []),
     ...(request.includeGpu ? [["그래픽카드", gpuPool?.parts.length ?? 0]] : [])
-  ].filter(([, count]) => count === 0).map(([label]) => label);
+  ].filter(([, count]) => count === 0).map(([label]) => String(label));
+  return {
+    profile,
+    priority,
+    memoryCapacityGb,
+    storageCapacityGb,
+    hddCount,
+    hddCapacityGb,
+    performanceTier,
+    listingPolicy,
+    includeNonRetail,
+    gamingResolution,
+    gamingRefreshRate,
+    gamingAdvisoryTuning,
+    cpuPool,
+    motherboardPool,
+    memoryPool,
+    coolerPool,
+    casePool,
+    ssdPool,
+    hddPool,
+    psuPool,
+    gpuVendorPreference,
+    minimumGpuVramGb,
+    gamingVramReferenceGate,
+    gpuPool,
+    gamingGpuVramThresholdMiss,
+    missingPools
+  };
+}
+
+export function generateBuildDraft(catalog: Part[], request: BuildGenerationRequest, gamingPerformanceEvidence: readonly GamingPerformanceEvidenceRecord[] = [], clockOptions: EngineClockOptions = {}): BuildGenerationResult {
+  const nowMilliseconds = engineNowMilliseconds(clockOptions.now);
+  const {
+    profile,
+    priority,
+    memoryCapacityGb,
+    storageCapacityGb,
+    hddCount,
+    hddCapacityGb,
+    performanceTier,
+    listingPolicy,
+    includeNonRetail,
+    gamingResolution,
+    gamingRefreshRate,
+    gamingAdvisoryTuning,
+    cpuPool,
+    motherboardPool,
+    memoryPool,
+    coolerPool,
+    casePool,
+    ssdPool,
+    hddPool,
+    psuPool,
+    gpuVendorPreference,
+    minimumGpuVramGb,
+    gpuPool,
+    gamingGpuVramThresholdMiss,
+    missingPools
+  } = generatorSearchContextFor(catalog, request, nowMilliseconds);
   if (missingPools.length > 0) {
     const hasMissingPoolsApartFromGpu = missingPools.some((label) => label !== "그래픽카드");
     const diagnostics: BuildGenerationDiagnostic[] = [];
@@ -5815,16 +5925,6 @@ export function generateBuildDraft(catalog: Part[], request: BuildGenerationRequ
     return cpu ? preferBudgetCandidates(preferCoolerHeadroom(coolerPool.parts.filter((part) => generatorCoolerCanUseCpu(part, cpu)), cpu, profile), request.budgetWon, 0.1) : [];
   }, coolerPool.scores, profile, request.budgetWon, undefined, 160, remainingGeneratorCostAfter("cooler"));
 
-// 렌더링·컴파일처럼 올코어 지속부하는 쿨러를 최대치까지 쓴다 — 최대 냉각이
-// 발열과 같은 쿨러는 지속부하에서 쓰로틀·소음으로 무너진다. 지속부하 프로필이나
-// 고발열 CPU에는 25% 여유 쿨러를 우선하고, 없으면 그대로 둔다.
-function preferCoolerHeadroom(parts: Part[], cpu: Part, profile: RecommendationProfile) {
-  const cpuHeatW = cpu.specs.pptW ?? cpu.specs.tdpW ?? 0;
-  const sustainedLoad = profile === "creator" || profile === "development";
-  if (cpuHeatW <= 0 || (!sustainedLoad && cpuHeatW < 150)) return parts;
-  const roomy = parts.filter((part) => (part.specs.maxCoolingW ?? 0) >= cpuHeatW * 1.25);
-  return roomy.length > 0 ? roomy : parts;
-}
   // 번들 쿨러가 있는 저발열 CPU는 사제 쿨러를 사지 않는 경로도 남긴다.
   const stockCoolerStates = statesBeforeCooler.filter((state) => {
     const cpu = state.parts.cpu;
@@ -6140,6 +6240,168 @@ function preferCoolerHeadroom(parts: Part[], cpu: Part, profile: RecommendationP
   };
 }
 
+// 빔 탐색 없이 후보 풀 안에서 만들 수 있는 가장 저렴한 호환 조합의 총액을 구한다.
+// 목표별 예산 안내와 실패 시 "예산을 얼마나 올려야 하는지" 복구 제안이 같은
+// 실측 하한을 공유하도록, 풀 구성·호환 게이트·우선 후보 필터를 생성기와 동일하게 적용한다.
+export function minimumFeasibleBuildPriceFor(catalog: Part[], request: BuildGenerationRequest, clockOptions: EngineClockOptions = {}): number | undefined {
+  const context = generatorSearchContextFor(catalog, request, engineNowMilliseconds(clockOptions.now));
+  if (context.missingPools.length > 0) return undefined;
+  const {
+    profile,
+    memoryCapacityGb,
+    storageCapacityGb,
+    hddCount,
+    hddCapacityGb,
+    cpuPool,
+    motherboardPool,
+    memoryPool,
+    coolerPool,
+    casePool,
+    ssdPool,
+    hddPool,
+    psuPool,
+    gpuVendorPreference,
+    gpuPool
+  } = context;
+  const unboundedBudget = Number.MAX_SAFE_INTEGER;
+  const kitQuantity = (part: Part) => memoryKitQuantityFor(part, memoryCapacityGb);
+  const minCost = (parts: Part[], quantityFor: (part: Part) => number = () => 1) => {
+    let min = Number.POSITIVE_INFINITY;
+    for (const part of parts) {
+      if (!isKnownPrice(part.priceWon)) continue;
+      const cost = part.priceWon * quantityFor(part);
+      if (cost < min) min = cost;
+    }
+    return min;
+  };
+
+  const psuStateFor = (cpu: Part | undefined, gpu: Part | undefined): GeneratorState => ({
+    selection: { memory: [], ssd: [], hdd: [], useIntegratedGraphics: gpu === undefined },
+    parts: { ...(cpu ? { cpu } : {}), ...(gpu ? { gpu } : {}) },
+    priceWon: 0,
+    capabilityScore: 0,
+    rankingPriority: "balanced"
+  });
+  const psuCostCache = new Map<string, number>();
+  const minPsuCostFor = (cpu: Part | undefined, gpu: Part | undefined) => {
+    const key = `${cpu?.id ?? ""}|${gpu?.id ?? ""}`;
+    const cached = psuCostCache.get(key);
+    if (cached !== undefined) return cached;
+    const compatible = psuPool.parts.filter((part) => generatorPsuCanUseGpu(part, gpu));
+    const adequate = preferBudgetCandidates(preferAdequatePsu(compatible, psuStateFor(cpu, gpu)), unboundedBudget, 0.25);
+    const cost = minCost(adequate);
+    psuCostCache.set(key, cost);
+    return cost;
+  };
+
+  const gpuCandidates = gpuPool === undefined
+    ? []
+    : (() => {
+        const vendorMatched = gpuVendorPreference ? preferGpuVendor(gpuPool.parts, gpuVendorPreference) : gpuPool.parts;
+        const vramMatched = profile === "creator" || profile === "development" ? preferMinGpuVram(vendorMatched, 12) : vendorMatched;
+        return preferBudgetCandidates(vramMatched, unboundedBudget, 0.6);
+      })();
+
+  const cpuCandidates = cpuPool.parts.filter((part) => request.includeGpu || part.specs.integratedGraphics === true);
+  let best = Number.POSITIVE_INFINITY;
+  for (const cpu of cpuCandidates) {
+    if (!isKnownPrice(cpu.priceWon)) continue;
+    for (const motherboard of motherboardPool.parts) {
+      if (!isKnownPrice(motherboard.priceWon) || !generatorCpuCanUseMotherboard(cpu, motherboard)) continue;
+      const memoryCandidates = preferBudgetCandidates(
+        preferMatchingMemoryProfile(preferDualChannelMemory(preferUsableMemorySpeed(memoryPool.parts.filter((part) => generatorMemoryCanUseMotherboard(part, motherboard, cpu, memoryCapacityGb)), motherboard, cpu), memoryCapacityGb), cpu),
+        unboundedBudget,
+        0.16,
+        kitQuantity
+      );
+      const minMemoryCost = minCost(memoryCandidates, kitQuantity);
+      if (!Number.isFinite(minMemoryCost)) continue;
+      const stockCoolerAvailable = cpu.specs.coolerIncluded === true && (cpu.specs.pptW ?? cpu.specs.tdpW ?? 999) <= 100;
+      const coolerCandidates = preferBudgetCandidates(
+        preferCoolerHeadroom(coolerPool.parts.filter((part) => generatorCoolerCanUseCpu(part, cpu)), cpu, profile),
+        unboundedBudget,
+        0.1
+      );
+      const coolerOptions: (Part | undefined)[] = stockCoolerAvailable ? [undefined, ...coolerCandidates] : coolerCandidates;
+      if (coolerOptions.length === 0) continue;
+      const ssdCandidates = preferBudgetCandidates(
+        preferRequestedCapacity(
+          ssdPool.parts.filter((part) => (part.specs.capacityGb ?? 0) >= storageCapacityGb && generatorStorageCanUseMotherboard(part, motherboard, undefined, hddCount)),
+          storageCapacityGb
+        ),
+        unboundedBudget,
+        0.15
+      );
+      if (ssdCandidates.length === 0) continue;
+      let minStorageCost = Number.POSITIVE_INFINITY;
+      for (const ssd of ssdCandidates) {
+        if (!isKnownPrice(ssd.priceWon)) continue;
+        let hddCost = 0;
+        if (hddCount > 0 && hddPool !== undefined) {
+          const hddCandidates = preferBudgetCandidates(
+            preferRequestedCapacity(
+              hddPool.parts.filter((part) => (part.specs.capacityGb ?? 0) >= hddCapacityGb && generatorStorageCanUseMotherboard(part, motherboard, ssd, hddCount)),
+              hddCapacityGb
+            ),
+            unboundedBudget,
+            0.3,
+            hddCount
+          );
+          const minHddCost = minCost(hddCandidates, () => hddCount);
+          if (!Number.isFinite(minHddCost)) continue;
+          hddCost = minHddCost;
+        }
+        minStorageCost = Math.min(minStorageCost, ssd.priceWon + hddCost);
+      }
+      if (!Number.isFinite(minStorageCost)) continue;
+      const baseCost = cpu.priceWon + motherboard.priceWon + minMemoryCost + minStorageCost;
+      for (const cooler of coolerOptions) {
+        const coolerCost = isKnownPrice(cooler?.priceWon) ? cooler.priceWon : cooler === undefined ? 0 : Number.POSITIVE_INFINITY;
+        if (!Number.isFinite(coolerCost)) continue;
+        const caseCompatible = casePool.parts.filter((part) => generatorCaseCanUseParts(part, motherboard, cooler, undefined, hddCount));
+        if (gpuPool === undefined) {
+          const caseCost = minCost(preferBudgetCandidates(preferCooledCase(caseCompatible, undefined), unboundedBudget, 0.15));
+          const psuCost = minPsuCostFor(cpu, undefined);
+          if (Number.isFinite(caseCost) && Number.isFinite(psuCost)) best = Math.min(best, baseCost + coolerCost + caseCost + psuCost);
+        } else {
+          for (const gpu of gpuCandidates) {
+            if (!isKnownPrice(gpu.priceWon)) continue;
+            const caseCost = minCost(preferBudgetCandidates(preferCooledCase(caseCompatible.filter((part) => generatorCaseCanUseParts(part, motherboard, cooler, gpu, hddCount)), gpu), unboundedBudget, 0.15));
+            const psuCost = minPsuCostFor(cpu, gpu);
+            if (Number.isFinite(caseCost) && Number.isFinite(psuCost)) best = Math.min(best, baseCost + coolerCost + gpu.priceWon + caseCost + psuCost);
+          }
+        }
+      }
+    }
+  }
+  return Number.isFinite(best) ? best : undefined;
+}
+
+// 온보딩의 목표별 가격대가 "실제로 만들 수 있는 최저 견적" 아래를 약속하지
+// 않도록, 카탈로그 기준 최저 합계를 메타에 함께보낸다. 최저가를 재는
+// probe 요청의 budgetWon은 풀 구성에 영향이 없으므로 임의의 유효 정수면 된다.
+export function recommendationFloorWonFor(catalog: Part[], clockOptions: EngineClockOptions = {}): { integrated?: number; discreteGpu?: number; gaming?: Partial<Record<GamingResolution, number>> } {
+  const probe = (overrides: Partial<BuildGenerationRequest>) => minimumFeasibleBuildPriceFor(catalog, {
+    profile: "general",
+    budgetWon: 10_000_000,
+    includeGpu: true,
+    memoryCapacityGb: 16,
+    storageCapacityGb: 500,
+    hddCount: 0,
+    listingPolicy: "retail_only",
+    ...overrides
+  }, clockOptions);
+  return {
+    integrated: probe({ includeGpu: false }),
+    discreteGpu: probe({}),
+    gaming: {
+      "1080p": probe({ profile: "gaming", gamingResolution: "1080p", gamingRefreshRate: 60 }),
+      "1440p": probe({ profile: "gaming", gamingResolution: "1440p", gamingRefreshRate: 60 }),
+      "4k": probe({ profile: "gaming", gamingResolution: "4k", gamingRefreshRate: 60 })
+    }
+  };
+}
+
 export function buildGenerationRecoveryOptionsFor(catalog: Part[], request: BuildGenerationRequest): BuildGenerationRecoveryOption[] {
   const candidates: Array<Pick<BuildGenerationRecoveryOption, "id" | "label" | "summary" | "changedFields"> & { request: BuildGenerationRequest }> = [];
   const addCandidate = (candidate: typeof candidates[number]) => {
@@ -6213,6 +6475,58 @@ export function buildGenerationRecoveryOptionsFor(catalog: Part[], request: Buil
       changedFields: ["HDD 제외"],
       request: { ...request, hddCount: 0 }
     });
+  }
+  // 항목을 하나만 낮춰도 예산에 못 미치는 요청에는 여러 조건을 함께 낮춘
+  // 조합을 제안한다 — 개별 완화만으로는 탈출구가 없는 실패를 막기 위해서다.
+  const minimalChanges: string[] = [];
+  if (request.includeGpu) minimalChanges.push("외장 그래픽카드 제외");
+  if ((request.memoryCapacityGb ?? 32) > 16) minimalChanges.push("RAM 목표: 16GB");
+  if ((request.storageCapacityGb ?? 1000) > 500) minimalChanges.push("SSD 목표: 500GB");
+  if ((request.hddCount ?? 0) > 0) minimalChanges.push("HDD 제외");
+  if (minimalChanges.length > 1) {
+    addCandidate({
+      id: "minimal-combination",
+      label: "최소 조건 조합으로 다시 찾기",
+      summary: "여러 조건을 함께 낮춰 현재 예산 안에 들어갈 수 있는 구성을 탐색합니다.",
+      changedFields: minimalChanges,
+      request: {
+        ...request,
+        ...(request.includeGpu ? { includeGpu: false } : {}),
+        memoryCapacityGb: Math.min(request.memoryCapacityGb ?? 32, 16),
+        storageCapacityGb: Math.min(request.storageCapacityGb ?? 1000, 500),
+        hddCount: 0
+      }
+    });
+    if ((request.listingPolicy === "retail_only" || (request.listingPolicy === undefined && !request.includeNonRetail))) {
+      addCandidate({
+        id: "minimal-combination-all-listings",
+        label: "최소 조건 + 전체 유통 조건으로 다시 찾기",
+        summary: "조건을 함께 낮추고 벌크·병행수입·해외구매·중고까지 포함해 다시 탐색합니다.",
+        changedFields: [...minimalChanges, "구매 조건: 전체 조건"],
+        request: {
+          ...request,
+          listingPolicy: "all",
+          includeNonRetail: true,
+          ...(request.includeGpu ? { includeGpu: false } : {}),
+          memoryCapacityGb: Math.min(request.memoryCapacityGb ?? 32, 16),
+          storageCapacityGb: Math.min(request.storageCapacityGb ?? 1000, 500),
+          hddCount: 0
+        }
+      });
+    }
+  }
+  const minimumFeasiblePrice = minimumFeasibleBuildPriceFor(catalog, request);
+  if (minimumFeasiblePrice !== undefined && minimumFeasiblePrice > request.budgetWon) {
+    const viableBudget = Math.min(100_000_000, Math.ceil(minimumFeasiblePrice * 1.05 / 10_000) * 10_000);
+    if (viableBudget > request.budgetWon) {
+      addCandidate({
+        id: "budget-minimum-viable",
+        label: `최소 구성 가능 예산으로 다시 찾기`,
+        summary: `현재 조건의 가장 저렴한 호환 조합이 약 ${minimumFeasiblePrice.toLocaleString("ko-KR")}원입니다. 예산을 ${viableBudget.toLocaleString("ko-KR")}원으로 올려 다시 탐색합니다.`,
+        changedFields: [`목표 예산: ${viableBudget.toLocaleString("ko-KR")}원`],
+        request: { ...request, budgetWon: viableBudget }
+      });
+    }
   }
   if (request.budgetWon < 100_000_000) {
     const expandedBudget = Math.min(100_000_000, Math.ceil(request.budgetWon * 1.2 / 10_000) * 10_000);

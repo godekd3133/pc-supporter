@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CatalogWatchEntry } from "../shared/catalog-watchlist";
 import type { Part } from "../shared/types";
-import { priceWatchDecisionCountsFor, priceWatchEntriesFor, priceWatchSnapshotDateFor, priceWatchlistCapabilitiesFor, priceWatchlistStatusForMode, readPriceWatchCatalogPrices } from "./price-watchlist-view";
+import { priceWatchDecisionCountsFor, priceWatchEntriesFor, priceWatchlistCapabilitiesFor, priceWatchlistStatusForMode, readPriceWatchCatalogPrices } from "./price-watchlist-view";
 
 const entries: CatalogWatchEntry[] = [
   { itemId: "cpu-1", itemName: "테스트 CPU", category: "cpu", kind: "part", addedAt: "2026-08-28T01:00:00.000Z", targetPriceWon: 100000 },
@@ -16,17 +16,8 @@ const observations = {
 };
 
 describe("price watchlist view", () => {
-  it("keeps local catalog search, snapshot prices, and browser edits available without remote-only features", () => {
-    expect(priceWatchlistCapabilitiesFor(true)).toEqual({
-      catalogSearch: true,
-      catalogSnapshotPrices: true,
-      browserLocalWatchlist: true,
-      priceHistory: false,
-      automaticRefresh: false,
-      alerts: false,
-      serverSharing: false
-    });
-    expect(priceWatchlistCapabilitiesFor(false)).toEqual({
+  it("enables catalog search, history, refresh, alerts, and sharing for the remote-backed view", () => {
+    expect(priceWatchlistCapabilitiesFor()).toEqual({
       catalogSearch: true,
       catalogSnapshotPrices: true,
       browserLocalWatchlist: true,
@@ -37,20 +28,11 @@ describe("price watchlist view", () => {
     });
   });
 
-  it("uses separate snapshot dates for core parts and accessories", () => {
-    const dates = { part: "2026-09-27T00:00:00.000Z", accessory: "2026-09-26T00:00:00.000Z" };
-    expect(priceWatchSnapshotDateFor("part", dates)).toBe(dates.part);
-    expect(priceWatchSnapshotDateFor("accessory", dates)).toBe(dates.accessory);
-    expect(priceWatchSnapshotDateFor("part", undefined)).toBeUndefined();
-  });
-
-  it("does not retain alert or history-only filters when opening offline", () => {
-    const offlineCapabilities = priceWatchlistCapabilitiesFor(true);
-    expect(priceWatchlistStatusForMode("alerts", offlineCapabilities)).toBe("all");
-    expect(priceWatchlistStatusForMode("buy", offlineCapabilities)).toBe("all");
-    expect(priceWatchlistStatusForMode("wait", offlineCapabilities)).toBe("all");
-    expect(priceWatchlistStatusForMode("observe", offlineCapabilities)).toBe("all");
-    expect(priceWatchlistStatusForMode("target", offlineCapabilities)).toBe("target");
+  it("retains alert and history filters with the current capabilities", () => {
+    const capabilities = priceWatchlistCapabilitiesFor();
+    expect(priceWatchlistStatusForMode("alerts", capabilities)).toBe("alerts");
+    expect(priceWatchlistStatusForMode("buy", capabilities)).toBe("buy");
+    expect(priceWatchlistStatusForMode("target", capabilities)).toBe("target");
   });
 
   it("filters by query and current observation status without mutating the source", () => {

@@ -938,6 +938,21 @@ describe("Danawa parser", () => {
     expect(part.missingFields).toEqual([]);
   });
 
+  it("leaves unknown liquid cooler radiator size absent instead of emitting NaN", () => {
+    const item = {
+      name: "Unknown Liquid Cooler",
+      url: "https://prod.danawa.com/info/?pcode=36002&cate=11347549",
+      sourceProductCode: "36002"
+    };
+    const html = `<meta name="description" content="CPU 쿨러 / 수랭 / 높이: 52mm" />`;
+    const part = parseDanawaProductPage("cooler", item, html, "11347549");
+
+    expect(part.specs.coolerType).toBe("liquid");
+    expect(part.specs.radiatorSizeMm).toBeUndefined();
+    expect(Number.isNaN(part.specs.radiatorSizeMm)).toBe(false);
+    expect(part.missingFields).toContain("radiatorSizeMm");
+  });
+
   it("reports page-level progress and successful page telemetry", async () => {
     const fetchMock = vi.fn(async (input: string | URL) => {
       const url = String(input);

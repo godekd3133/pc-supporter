@@ -101,7 +101,7 @@ import { savedBuildDecisionNoteFromUnknown, savedBuildNameFromUnknown, SAVED_BUI
 import { savedBuildOriginFromUnknown } from "../shared/saved-build-origin";
 import { parseSavedBuildPurchaseProgress, parseSavedBuildPurchaseProgressExpectedRevision, parseSavedBuildPurchaseProgressRevision } from "./purchase-progress";
 import { parseSavedBuildPurchasePriceHistory, parseSavedBuildPurchasePriceHistoryExpectedRevision, parseSavedBuildPurchasePriceHistoryRevision } from "./purchase-price-history";
-import { isListingAllowed } from "./listing";
+import { isListingAllowed, isQuoteSelectable } from "./listing";
 import { catalogSeedPreviewFor } from "../shared/catalog-seed-preview";
 import { catalogSeedMappingIdentityCompatibleFor, catalogSeedMappingPreviewFor } from "../shared/catalog-seed-mapping";
 import { catalogSeedCollectionQueueFor } from "../shared/catalog-seed-collection-queue";
@@ -113,7 +113,7 @@ import { publicSavedBuildVersionComparisonShare, parseSavedBuildVersionCompariso
 import { BUILD_INPUT_MAX_ID_LENGTH, BUILD_INPUT_MAX_M2_SLOTS, BUILD_INPUT_MAX_SELECTIONS_PER_LIST } from "../shared/build-input-limits";
 import { eul } from "../shared/josa";
 import { readPriceRefreshStatus, runPriceRefreshJob } from "./price-refresh";
-import { priceRefreshIntervalMsFromEnv, priceRefreshOptionsFromEnv, startDurablePriceRefreshScheduler, startPriceRefreshScheduler, waitForPriceRefreshStart } from "./price-refresh-scheduler";
+import { priceRefreshIntervalMsFromEnv, priceRefreshOptionsFromEnv, startDurablePriceRefreshScheduler, startPriceRefreshScheduler } from "./price-refresh-scheduler";
 import { BackgroundJobActiveConflictError, BackgroundJobIdempotencyConflictError, backgroundJobStore, type BackgroundJob } from "./background-job-store";
 import { startPriceRefreshQueueWorker } from "./price-refresh-worker";
 import { requestTelemetry } from "./request-telemetry";
@@ -127,9 +127,8 @@ const processRole = process.env.PC_SUPPORTER_PROCESS_ROLE?.trim() || "combined";
 if (processRole !== "combined" && processRole !== "api" && processRole !== "worker") {
   throw new Error("PC_SUPPORTER_PROCESS_ROLE must be combined, api, or worker.");
 }
-const postgresConfigured = Boolean(process.env.DATABASE_URL?.trim());
-if (processRole !== "combined" && !postgresConfigured) {
-  throw new Error(`PC_SUPPORTER_PROCESS_ROLE=${processRole} requires DATABASE_URL; file-backed state requires one combined process.`);
+if (!process.env.DATABASE_URL?.trim()) {
+  throw new Error("DATABASE_URL is required; the JSON file persistence mode has been removed.");
 }
 let catalogSeedMappingPreviewCache: { key: string; value: ReturnType<typeof catalogSeedMappingPreviewFor> } | undefined;
 let catalogSeedMappingPreviewCacheEpoch = 0;
@@ -449,6 +448,7 @@ type CompatiblePartAssessmentRow = {
 type CompatiblePartAssessmentCacheValue = {
   intentFinding?: Finding;
   assessedParts: CompatiblePartAssessmentRow[];
+  policyExcludedParts: Part[];
   priceExcludedCount: number;
   freshnessExcludedCount: number;
   specExcludedCount: number;
@@ -848,7 +848,7 @@ const savedBuildMonitorSchedulerStats: {
   lastAcquiredAt?: string;
   lastSkippedAt?: string;
   lastFinishedAt?: string;
-  lastBackend?: "postgres" | "file";
+  lastBackend?: "postgres";
   lastProcessedCount: number;
   skippedCount: number;
   lastError?: string;
@@ -1105,7 +1105,11 @@ app.get("/api/parts", publicCatalogReadRateLimit, async (request, response) => {
     return;
   }
   const catalog = await loadCatalog();
-  const baseOptions = { ...(partId ? { partId } : {}), ...(brand ? { brand } : {}), ...(missingField ? { missingField } : {}), quality, sort, listingPolicy };
+  // partId 조회는 목록 탐색이 아니라 부품 상세 확인용이라 브랜드 제한을 걸지 않는다.
+  // 견적 후보 목록에서는 가격·사양 정보가 없는 부품을 뺀다 — 스펙 미등록 부품을
+  // 일부러 찾는 관리용 질의(quality=incomplete·missingField·가격 미확인 모두 보기)는 예외다.
+  const quoteSellableOnly = partId === undefined && quality !== "incomplete" && missingField === undefined && priceAvailability === "known";
+  const baseOptions = { ...(partId ? { partId } : {}), ...(brand ? { brand } : {}), ...(missingField ? { missingField } : {}), quality, sort, listingPolicy, quoteBrandRestricted: partId === undefined, quoteSellableOnly };
   const priceOptions = { ...baseOptions, priceAvailability };
   const freshnessOptions = { ...priceOptions, freshness };
   const benchmarkOptions = { ...freshnessOptions, benchmarkAvailability };
@@ -1429,7 +1433,7 @@ app.post("/api/parts/compatible", publicCandidateRateLimit, async (request, resp
   const catalogFingerprint = catalog.reduce((latest, part) => part.updatedAt > latest ? part.updatedAt : latest, "");
   const catalogSort = sort === "similarity" || sort === "value" ? "price_asc" : sort;
   const assessmentCacheKey = `compatible-parts:${createHash("sha256").update(JSON.stringify({
-    version: 9,
+    version: 10,
     engineVersion: ENGINE_VERSION,
     catalogRevision: currentCatalogRuntimeRevision(),
     catalogSnapshotAt,
@@ -1454,8 +1458,8 @@ app.post("/api/parts/compatible", publicCandidateRateLimit, async (request, resp
     const intentFinding = requestedFindingRuleId
       ? evaluateBuild(parsed.build, catalog, { includeSuggestions: false }).findings.find((finding) => finding.ruleId === requestedFindingRuleId)
       : undefined;
-    if (requestedFindingRuleId && !intentFinding) return { intentFinding, assessedParts: [], priceExcludedCount: 0, freshnessExcludedCount: 0, specExcludedCount: 0, specFilterDiagnostics: [] };
-    const baseOptions = { ...(brand ? { brand } : {}), quality, sort: catalogSort, listingPolicy };
+    if (requestedFindingRuleId && !intentFinding) return { intentFinding, assessedParts: [], policyExcludedParts: [], priceExcludedCount: 0, freshnessExcludedCount: 0, specExcludedCount: 0, specFilterDiagnostics: [] };
+    const baseOptions = { ...(brand ? { brand } : {}), quality, sort: catalogSort, listingPolicy, quoteBrandRestricted: true, quoteSellableOnly: true };
     const priceOptions = { ...baseOptions, priceAvailability };
     const options = { ...priceOptions, freshness };
     const baseCount = countParts(catalog, category, query, baseOptions);
@@ -1463,6 +1467,9 @@ app.post("/api/parts/compatible", publicCandidateRateLimit, async (request, resp
     const searchedParts = searchParts(catalog, category, query, catalog.length, options, 0);
     const specFilteredParts = searchedParts.filter(partSpecFilterMatcherFor(parsedSpecFilter.filter));
     const specFilterDiagnostics = partSpecFilterDiagnosticsFor(searchedParts, parsedSpecFilter.filter);
+    // 판매 정책으로 빠진 부품(스펙 미등록·가격 미확인)도 안내 문구를 위해 따로 센다.
+    const policyExcludedParts = searchParts(catalog, category, query, catalog.length, { ...options, quoteSellableOnly: false }, 0)
+      .filter((part) => !isQuoteSelectable(part));
     const assessedParts = specFilteredParts
       .map((part) => {
         const assessment = assessAlternativePart(parsed.build, catalog, category, part, intentFinding);
@@ -1500,6 +1507,7 @@ app.post("/api/parts/compatible", publicCandidateRateLimit, async (request, resp
     return {
       intentFinding,
       assessedParts,
+      policyExcludedParts,
       priceExcludedCount: baseCount - priceCount,
       freshnessExcludedCount: priceCount - searchedParts.length,
       specExcludedCount: searchedParts.length - specFilteredParts.length,
@@ -1513,13 +1521,16 @@ app.post("/api/parts/compatible", publicCandidateRateLimit, async (request, resp
     return;
   }
   response.setHeader("X-PC-Supporter-Compatible-Cache", assessedCache.lookup === "COALESCED" ? "COALESCED" : assessedCache.lookup);
-  const { priceExcludedCount, freshnessExcludedCount, specExcludedCount, specFilterDiagnostics } = assessedCache.value;
-  const intentParts = intentFinding
+  const { priceExcludedCount, freshnessExcludedCount, specExcludedCount, specFilterDiagnostics, policyExcludedParts } = assessedCache.value;
+  // 견적에는 현재 구성에서 호환 확인이 끝난 부품만 올린다 — 정보 부족(review)이나
+  // 비호환(unsafe) 후보는 위험도 집계에만 남기고 선택 목록에서 제외한다.
+  const intentEligibleParts = intentFinding
     ? assessedParts.filter(({ assessment }) => assessment.fixesCurrentIssue === true)
     : assessedParts;
+  const intentParts = intentEligibleParts.filter(({ assessment }) => assessment.risk === "safe");
   const recommendationTrustCounts = recommendationTrustCountsFor(intentParts.map(({ recommendationTrust }) => recommendationTrust));
   const riskCounts: AlternativeRiskCounts = { safe: 0, review: 0, unsafe: 0 };
-  for (const { assessment } of intentParts) riskCounts[assessment.risk] += 1;
+  for (const { assessment } of intentEligibleParts) riskCounts[assessment.risk] += 1;
   const compatibleParts = intentParts
     .filter(({ assessment }) => mode === "safe" ? assessment.risk === "safe" : mode === "no_blocker" ? assessment.risk !== "unsafe" : true);
   const selectedPartIds = new Set([
@@ -1533,9 +1544,9 @@ app.post("/api/parts/compatible", publicCandidateRateLimit, async (request, resp
     ...parsed.build.ssd.map((selection) => selection.partId),
     ...parsed.build.hdd.map((selection) => selection.partId)
   ].filter((partId): partId is string => Boolean(partId)));
-  const incompleteCandidateCount = intentParts.filter(({ part }) => part.dataQuality === "incomplete" && !selectedPartIds.has(part.id)).length;
-  const incompleteExcludedCount = mode === "safe" ? incompleteCandidateCount : 0;
-  const incompleteMissingFields = catalogMissingFieldCountsFor(intentParts.filter(({ part }) => part.dataQuality === "incomplete" && !selectedPartIds.has(part.id)).map(({ part }) => part), 5);
+  const incompleteParts = policyExcludedParts.filter((part) => part.dataQuality === "incomplete" && !selectedPartIds.has(part.id));
+  const incompleteExcludedCount = incompleteParts.length;
+  const incompleteMissingFields = catalogMissingFieldCountsFor(incompleteParts, 5);
   const riskFilteredParts = riskFilter === "all" ? compatibleParts : compatibleParts.filter(({ assessment }) => assessment.risk === riskFilter);
   const riskExcludedCount = compatibleParts.length - riskFilteredParts.length;
   const performanceFilteredParts = riskFilteredParts.filter(({ similarity }) => alternativePerformanceMatches(performanceFilter, similarity));
@@ -3388,10 +3399,6 @@ app.get("/api/admin/crawl/status", requireAdmin, async (_request, response) => {
 });
 
 app.get("/api/admin/prices/refresh/status", requireAdmin, async (request, response) => {
-  if (!postgresConfigured) {
-    response.json({ enabled: priceRefreshSchedulerEnabled(), ...(await readPriceRefreshStatus()) });
-    return;
-  }
   if (request.query.jobId !== undefined && typeof request.query.jobId !== "string") {
     response.status(400).json({ error: "가격 갱신 작업 ID가 하나만 제공되어야 합니다.", code: "PRICE_REFRESH_JOB_ID_INVALID" });
     return;
@@ -3441,70 +3448,39 @@ app.post("/api/admin/prices/refresh", requireAdmin, async (request, response) =>
     return;
   }
   const limits = { ...configuredLimits, coreLimit, accessoryLimit, delayMs };
-  if (postgresConfigured) {
-    const suppliedKey = request.header("Idempotency-Key");
-    if (suppliedKey !== undefined && (suppliedKey.length < 1 || suppliedKey.length > 128 || !/^[A-Za-z0-9][A-Za-z0-9._:-]*$/.test(suppliedKey))) {
-      response.status(400).json({ error: "Idempotency-Key 헤더 형식이 올바르지 않습니다.", code: "IDEMPOTENCY_KEY_INVALID" });
+  const suppliedKey = request.header("Idempotency-Key");
+  if (suppliedKey !== undefined && (suppliedKey.length < 1 || suppliedKey.length > 128 || !/^[A-Za-z0-9][A-Za-z0-9._:-]*$/.test(suppliedKey))) {
+    response.status(400).json({ error: "Idempotency-Key 헤더 형식이 올바르지 않습니다.", code: "IDEMPOTENCY_KEY_INVALID" });
+    return;
+  }
+  const idempotencyKey = suppliedKey
+    ? `price-refresh:manual:${createHash("sha256").update(suppliedKey).digest("hex")}`
+    : undefined;
+  let job: BackgroundJob;
+  try {
+    job = await backgroundJobStore.enqueue({
+      kind: "price-refresh",
+      payload: { ...limits, dryRun },
+      ...(idempotencyKey ? { idempotencyKey } : { deduplicateActive: true })
+    });
+  } catch (error) {
+    if (error instanceof BackgroundJobIdempotencyConflictError) {
+      response.status(409).json({ error: "같은 Idempotency-Key가 다른 가격 갱신 조건에 이미 사용되었습니다.", code: "IDEMPOTENCY_KEY_REUSED" });
       return;
     }
-    const idempotencyKey = suppliedKey
-      ? `price-refresh:manual:${createHash("sha256").update(suppliedKey).digest("hex")}`
-      : undefined;
-    let job: BackgroundJob;
-    try {
-      job = await backgroundJobStore.enqueue({
-        kind: "price-refresh",
-        payload: { ...limits, dryRun },
-        ...(idempotencyKey ? { idempotencyKey } : { deduplicateActive: true })
+    if (error instanceof BackgroundJobActiveConflictError) {
+      const active = await backgroundJobStore.getActiveByKind("price-refresh");
+      response.status(409).json({
+        error: "다른 조건의 가격 갱신 작업이 이미 대기 중이거나 실행 중입니다.",
+        code: "PRICE_REFRESH_ALREADY_ACTIVE",
+        job: priceRefreshJobProjection(active)
       });
-    } catch (error) {
-      if (error instanceof BackgroundJobIdempotencyConflictError) {
-        response.status(409).json({ error: "같은 Idempotency-Key가 다른 가격 갱신 조건에 이미 사용되었습니다.", code: "IDEMPOTENCY_KEY_REUSED" });
-        return;
-      }
-      if (error instanceof BackgroundJobActiveConflictError) {
-        const active = await backgroundJobStore.getActiveByKind("price-refresh");
-        response.status(409).json({
-          error: "다른 조건의 가격 갱신 작업이 이미 대기 중이거나 실행 중입니다.",
-          code: "PRICE_REFRESH_ALREADY_ACTIVE",
-          job: priceRefreshJobProjection(active)
-        });
-        return;
-      }
-      throw error;
+      return;
     }
-    const statusUrl = `/api/admin/prices/refresh/status?jobId=${encodeURIComponent(job.id)}`;
-    response.status(202).json({ accepted: true, dryRun, limits, jobId: job.id, status: job.status, statusUrl });
-    return;
+    throw error;
   }
-  let markStarted!: () => void;
-  const started = new Promise<void>((resolve) => {
-    markStarted = resolve;
-  });
-  const refresh = priceRefreshScheduler.tryRunOnce({ ...limits, dryRun, onStarted: markStarted });
-  if (!refresh) {
-    await conflict();
-    return;
-  }
-  const finished = refresh.then(
-    () => ({ kind: "finished" as const }),
-    (error: unknown) => ({ kind: "failed" as const, error })
-  );
-  const outcome = await waitForPriceRefreshStart(started, refresh);
-  if (outcome.kind === "failed") {
-    const busy = outcome.error instanceof Error && outcome.error.message.includes("이미 실행 중입니다.");
-    if (busy) await conflict(outcome.error);
-    else response.status(500).json({ error: "가격 갱신 작업을 시작하지 못했습니다." });
-    return;
-  }
-  if (outcome.kind === "finished") {
-    response.status(500).json({ error: "가격 갱신 작업이 시작 상태를 알리지 않고 종료되었습니다." });
-    return;
-  }
-  void finished.then((result) => {
-    if (result.kind === "failed") console.error("Admin price refresh failed", result.error);
-  });
-  response.status(202).json({ accepted: true, dryRun, limits });
+  const statusUrl = `/api/admin/prices/refresh/status?jobId=${encodeURIComponent(job.id)}`;
+  response.status(202).json({ accepted: true, dryRun, limits, jobId: job.id, status: job.status, statusUrl });
 });
 
 app.get("/api/admin/crawl/resume-preview", requireAdmin, async (request, response) => {
@@ -4773,9 +4749,8 @@ async function start() {
     await initializePersistence();
     await loadCatalog();
   } catch (error: unknown) {
-    if (!process.env.DATABASE_URL?.trim()) throw error;
     const persistence = await persistenceDiagnostics();
-    if (persistence.ready) throw error;
+    if (!persistence.databaseConfigured || persistence.ready) throw error;
     console.error(`Configured PostgreSQL is unavailable; starting API to report readiness: ${error instanceof Error ? error.message : String(error)}`);
   }
   let apiServer: HttpServer | undefined;
@@ -4792,7 +4767,7 @@ async function start() {
     });
   }
 
-  if (postgresConfigured && processRole !== "api") {
+  if (processRole !== "api") {
     trackBackgroundTimer(setTimeout(() => {
       void pruneRateLimitWindows().catch((error: unknown) => console.warn("공유 rate-limit 만료 항목 정리에 실패했습니다.", error));
     }, 10_000));
@@ -4808,7 +4783,7 @@ async function start() {
 
   const priceRefreshEnabled = priceRefreshSchedulerEnabled();
   const ownsBackgroundWork = processRole !== "api";
-  const runsDurableWorker = ownsBackgroundWork && postgresConfigured;
+  const runsDurableWorker = ownsBackgroundWork;
   if (runsDurableWorker) {
     priceRefreshWorker = startPriceRefreshQueueWorker();
     void priceRefreshWorker.start().catch((error: unknown) => {
@@ -4820,12 +4795,6 @@ async function start() {
     durablePriceRefreshScheduler.start();
     trackBackgroundTimer(setTimeout(() => {
       void durablePriceRefreshScheduler.enqueueCurrentSlot()?.catch((error) => console.error("Initial price-refresh enqueue failed", error));
-    }, 5_000));
-  } else if (priceRefreshEnabled && ownsBackgroundWork && !postgresConfigured) {
-    const intervalMs = priceRefreshIntervalMsFromEnv();
-    priceRefreshScheduler.start(intervalMs);
-    trackBackgroundTimer(setTimeout(() => {
-      void priceRefreshScheduler.runOnce(priceRefreshOptionsFromEnv()).catch((error) => console.error("Initial price refresh failed", error));
     }, 5_000));
   }
 

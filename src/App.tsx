@@ -136,6 +136,7 @@ import { buildDraftSyncFor, parseBuildDraftStorage, recommendationPreferencesSyn
 import { buildScenarioComparisonFor } from "../shared/build-scenario";
 import { catalogRefreshFindingImpactsFor } from "../shared/catalog-refresh-impact";
 import { classifyDataFreshness } from "../shared/data-freshness";
+import { isQuoteBrandAllowed, isQuoteSelectable, quoteBrandOptionsFor, quoteBrandPolicyLabelFor } from "../shared/domain/listing";
 import { mergeCatalogRecords } from "../shared/catalog-record-merge";
 import { valueScoreText } from "../shared/value-score";
 import { repairPlanBuildFor } from "../shared/repair-plan-build";
@@ -200,8 +201,6 @@ import type { AlternativeComparisonSnapshot } from "../shared/alternative-compar
 import type { SavedBuildVersionComparisonShareSnapshot } from "../shared/saved-build-version-share";
 import { ApiError, api, apiStatusDetailsSnapshot, subscribeApiStatus } from "./api";
 import type { ApiStatusDetails } from "./api";
-import { LOCAL_OFFLINE_BUILD } from "./offline/build-mode";
-import "./offline/offline.css";
 import type { CatalogRefreshProgress } from "./AppHeader";
 import { useModalAccessibility } from "./use-modal-accessibility";
 import { RetryAfterButton } from "./RetryAfterButton";
@@ -804,7 +803,6 @@ function forgetSavedBuild(id: string) {
 }
 
 function App() {
-  const localOfflineMode = LOCAL_OFFLINE_BUILD;
   const ownerSessionResources = useSyncExternalStore(subscribeOwnerSessionResources, ownerSessionResourcesSnapshot, ownerSessionResourcesSnapshot);
   const [initialDraftLoad] = useState(() => parseBuildDraftStorage(readBuildDraftStorageRaw()));
   const localStorageHealth = useSyncExternalStore(subscribeLocalStorageHealth, getLocalStorageHealth, getLocalStorageHealth);
@@ -971,8 +969,8 @@ function App() {
   useEffect(() => subscribeApiStatus(setApiStatusDetails), []);
 
   useEffect(() => {
-    if (!localOfflineMode) trackUsageEvent("app_open");
-  }, [localOfflineMode]);
+    trackUsageEvent("app_open");
+  }, []);
 
   useEffect(() => {
     if (view !== "editor" || new URLSearchParams(window.location.search).get("entry") !== "shared-generator") return;
@@ -1487,7 +1485,7 @@ function App() {
     if (!requestedResource || requestedResource === "meta") {
       tasks.push(loadResource("meta", "견적 기준", api<ServiceMeta>("/api/meta"), setMeta));
     }
-    if (!localOfflineMode && (!requestedResource || requestedResource === "savedBuilds")) {
+    if (!requestedResource || requestedResource === "savedBuilds") {
       tasks.push(loadResource("savedBuilds", "저장 견적", loadSavedBuildsForBrowser(), (payload) => {
         writeSavedBuildIds(payload.items.map((item) => item.id));
         setSavedBuilds(payload.items);
@@ -1497,16 +1495,16 @@ function App() {
       if (!cancelled) setBootstrapLoading(false);
     });
     return () => { cancelled = true; };
-  }, [bootstrapRetryRequest, localOfflineMode]);
+  }, [bootstrapRetryRequest]);
 
   useEffect(() => {
     const routeSequence = routeRequestSequenceRef.current;
-    if (localOfflineMode || view !== "history" || routeSequence === 0 || historySavedBuildRefreshRouteSequenceRef.current === routeSequence) return;
+    if (view !== "history" || routeSequence === 0 || historySavedBuildRefreshRouteSequenceRef.current === routeSequence) return;
     historySavedBuildRefreshRouteSequenceRef.current = routeSequence;
     void refreshSavedBuildsForBrowser().catch(() => {
       // Keep the last visible history if the service is temporarily unavailable.
     });
-  }, [localOfflineMode, locationKey, view]);
+  }, [locationKey, view]);
 
   useEffect(() => {
     const hydrationController = new AbortController();
@@ -2821,7 +2819,24 @@ function App() {
     if (view === "result") navigate("/build", "editor");
   }
 
+  function quoteBrandSelectionMessageFor(category: PartCategory) {
+    const label = quoteBrandPolicyLabelFor(category);
+    return label === undefined ? undefined : `${CATEGORY_LABELS[category]}는 ${label} 제품만 선택할 수 있어요.`;
+  }
+
+  function quoteSelectionMessageFor(category: PartCategory, part: Part) {
+    const brandMessage = quoteBrandSelectionMessageFor(category);
+    if (brandMessage !== undefined && !isQuoteBrandAllowed(category, part.brand)) return brandMessage;
+    if (!isQuoteSelectable(part)) return "가격 또는 사양 정보가 없는 부품은 견적에 담을 수 없어요.";
+    return undefined;
+  }
+
   function addCatalogPart(part: Part) {
+    const message = quoteSelectionMessageFor(part.category, part);
+    if (message !== undefined) {
+      setToast(message);
+      return;
+    }
     const current = selectionList(build, part.category);
     if (current.some((selection) => selection.partId === part.id) && !["memory", "ssd", "hdd"].includes(part.category)) {
       setToast(`${CATEGORY_LABELS[part.category]} · ${eun(part.name)} 이미 현재 견적에 선택되어 있습니다.`);
@@ -2833,6 +2848,11 @@ function App() {
 
   function selectPickerPart(part: Part) {
     if (!picker) return;
+    const message = quoteSelectionMessageFor(picker.category, part);
+    if (message !== undefined) {
+      setToast(message);
+      return;
+    }
     const pickerPart = part as PickerPart;
     const candidateEvidence: CandidateApplicationEvidence = {
       ...(pickerPart.candidateRisk ? { risk: pickerPart.candidateRisk } : {}),
@@ -2863,6 +2883,11 @@ function App() {
   }
 
   function applySuggestion(category: PartCategory, part: Part, quantity?: number, affectedPartIds: string[] = [], candidateEvidence?: CandidateApplicationEvidence) {
+    const message = quoteSelectionMessageFor(category, part);
+    if (message !== undefined) {
+      setToast(message);
+      return;
+    }
     if (candidateApplicationBlockedFor(candidateEvidence)) {
       setToast("현재 견적과 호환되지 않는 부품은 추가할 수 없어요. 다른 부품을 골라 주세요.");
       return;
@@ -3127,7 +3152,12 @@ function App() {
       setShareId(saved.id);
       setShareExpiresAt(saved.expiresAt ?? null);
       setShareOwnerToken(readSavedBuildOwnerToken(saved.id) ?? null);
-      navigate(focus === "purchase-list" ? "/result#purchase-list" : "/result", "result", { resultFindingRuleId });
+      const resultRoute = focus === "purchase-list"
+        ? "/result#purchase-list"
+        : resultFindingRuleId
+          ? `/result?findingRule=${encodeURIComponent(resultFindingRuleId)}#findings`
+          : "/result";
+      navigate(resultRoute, "result", { resultFindingRuleId });
       setToast(null);
       return true;
     } catch (error: unknown) {
@@ -3407,6 +3437,7 @@ function App() {
         onUpgrade={() => { navigate("/build?entry=upgrade", "editor"); setToast("업그레이드할 부품을 선택한 뒤 호환 결과를 확인하세요."); }}
         onSkip={() => navigate("/", "home")}
         onHome={() => navigate("/", "home")}
+        floors={meta?.recommendationFloorWon}
       />
     </Suspense>
   ) : view === "generator" ? (
@@ -3476,7 +3507,7 @@ function App() {
   ) : view === "accessories" ? (
     <Suspense fallback={<div className="accessory-page accessory-page-loading" role="status"><FiLoader className="spin" /> 주변 부품 카탈로그를 불러오는 중...</div>}><LazyAccessoryView meta={meta} accessoryItems={accessoryItems} selectedAccessories={accessorySelections(build)} onAddAccessory={(item) => void addAccessory(item)} onWatchAccessory={watchAccessory} isAccessoryWatched={accessoryIsWatched} onOpenWatchlist={() => navigate("/watchlist", "pricewatchlist")} onOpenBuild={() => navigate("/build", "editor")} onBack={() => navigate("/", "home")} onToast={setToast} formatWon={formatWon} AccessoryVisual={AccessoryVisual} /></Suspense>
   ) : view === "pricewatchlist" ? (
-    <Suspense fallback={<div className="shared-build-state"><FiLoader className="spin" /><span>가격 추적 화면을 불러오는 중...</span></div>}><PriceWatchlistView onBack={() => navigate("/", "home")} onToast={setToast} offlineMode={localOfflineMode} /></Suspense>
+    <Suspense fallback={<div className="shared-build-state"><FiLoader className="spin" /><span>가격 추적 화면을 불러오는 중...</span></div>}><PriceWatchlistView onBack={() => navigate("/", "home")} onToast={setToast} /></Suspense>
   ) : view === "budget" ? (
     <Suspense fallback={<div className="shared-budget-ladder-state"><FiLoader className="spin" /> 공유 예산 비교 화면을 불러오는 중...</div>}><LazySharedBudgetLadderView onBack={() => navigate("/", "home")} onToast={setToast} onApplyDraft={applyGeneratedDraft} onApplyMergedSelection={applyMergedGeneratedSelection} onPreviewMergedSelection={previewMergedGeneratedSelection} onBudgetLadderShareSaved={rememberBudgetLadderShare} onBudgetLadderShareRevoked={forgetBudgetLadderShare} /></Suspense>
   ) : view === "generator-variants" ? (
@@ -3493,12 +3524,6 @@ function App() {
       onMetaRefresh={refreshMeta}
       onToast={setToast}
     /></Suspense>
-  ) : view === "history" && localOfflineMode ? (
-    <section className="offline-history-unavailable" role="status" aria-label="로컬 저장 견적 안내">
-      <strong>저장한 견적은 이 설치판에서 열 수 없습니다.</strong>
-      <p>현재 편집 중인 견적은 이 기기에 자동 저장됩니다. 서버에 저장한 견적과 공유 기능은 원격 서비스가 필요합니다.</p>
-      <button className="button button-small button-primary" type="button" onClick={() => navigate("/build", "editor")}>현재 견적 보기</button>
-    </section>
   ) : view === "history" ? (
     <Suspense fallback={<div className="shared-build-state"><FiLoader className="spin" /><span>저장된 견적을 불러오는 중...</span></div>}><LazyHistoryView
       builds={savedBuilds}
@@ -3646,22 +3671,7 @@ function App() {
       <Suspense fallback={<AppHeaderLoadingFallback />}><LazyAppHeader view={view} networkOnline={networkOnline} apiStatus={apiStatusDetails} bootstrapLoading={bootstrapLoading} bootstrapErrorCount={bootstrapIssues.length} savedBuildUnreadAlertCount={savedBuildUnreadAlertCount} watchlistUnreadAlertCount={watchlistUnreadAlertCount} catalogRefreshProgress={catalogRefreshProgress} onHome={() => navigate("/", "home")} onBuild={() => navigate("/build", "editor")} onGenerate={() => openGenerator()} onCatalog={() => navigate("/catalog", "catalog")} onAccessories={() => navigate("/accessories", "accessories")} onPriceWatchlist={() => navigate("/watchlist", "pricewatchlist")} onHistory={() => navigate("/history", "history")} /></Suspense>
       {localStorageNotice}
       {draftOverwriteNotice}
-      <main className="page-container" id="main-content" tabIndex={-1}>{(incomingDraft || incomingPreferences) && <DraftSyncNotice build={incomingDraft ?? undefined} preferences={incomingPreferences ?? undefined} onApply={() => { skipNextHistoryRef.current = true; if (incomingDraft) setBuild(incomingDraft); if (incomingPreferences) setRecommendationPreferences(incomingPreferences); setResult(null); setCheckedInputFingerprint(null); setChangeHistory([]); setIncomingDraft(null); setIncomingPreferences(null); setToast("다른 탭에서 바뀐 견적을 불러왔어요. 호환 결과를 새로 확인해 주세요."); }} onDismiss={() => { setIncomingDraft(null); setIncomingPreferences(null); }} />}{localOfflineMode ? (
-        <section className="offline-local-mode-banner" role="status" aria-label="로컬 설치 모드 안내">
-          <div className="offline-local-mode-banner-header">
-            <strong>로컬 설치 모드</strong>
-            <div className="offline-local-mode-meta">
-              <span>{localStorageHealth.persistence === "persistent" ? "이 기기에 저장" : "이 세션에서만 유지"}</span>
-              {meta?.catalogUpdatedAt && <span>기준일 {new Date(meta.catalogUpdatedAt).toLocaleDateString("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit" })}</span>}
-            </div>
-          </div>
-          <p className="offline-local-mode-features">부품 탐색 · 견적 편집 · 호환 확인 · 자동 구성</p>
-          <details className="offline-local-mode-details">
-            <summary>지원 범위와 제한</summary>
-            <p>벤치마크·게임 FPS 데이터는 포함되지 않아 자동 구성은 설치된 부품 사양을 기준으로 합니다. 서버 저장·공유, 최신 가격 확인, 성능·출처 확인 필터, 관리자와 데이터 수집 기능은 사용할 수 없어요.</p>
-          </details>
-        </section>
-      ) : (bootstrapIssues.length > 0 || !networkOnline || apiStatusDetails.status === "offline" || apiStatusDetails.status === "degraded") ? <BootstrapNotice issues={bootstrapIssues} online={networkOnline} apiStatus={apiStatusDetails} onRetry={(resource) => setBootstrapRetryRequest((current) => ({ resource, nonce: current.nonce + 1 }))} onRetryAll={() => setBootstrapRetryRequest((current) => ({ resource: null, nonce: current.nonce + 1 }))} retryingResource={bootstrapLoading ? bootstrapRetryRequest.resource : null} retryingAll={bootstrapLoading && bootstrapRetryRequest.resource === null} /> : null}<div className={`route-stage route-stage-${view}`} key={view}>{content}</div></main>
+      <main className="page-container" id="main-content" tabIndex={-1}>{(incomingDraft || incomingPreferences) && <DraftSyncNotice build={incomingDraft ?? undefined} preferences={incomingPreferences ?? undefined} onApply={() => { skipNextHistoryRef.current = true; if (incomingDraft) setBuild(incomingDraft); if (incomingPreferences) setRecommendationPreferences(incomingPreferences); setResult(null); setCheckedInputFingerprint(null); setChangeHistory([]); setIncomingDraft(null); setIncomingPreferences(null); setToast("다른 탭에서 바뀐 견적을 불러왔어요. 호환 결과를 새로 확인해 주세요."); }} onDismiss={() => { setIncomingDraft(null); setIncomingPreferences(null); }} />}{(bootstrapIssues.length > 0 || !networkOnline || apiStatusDetails.status === "offline" || apiStatusDetails.status === "degraded") ? <BootstrapNotice issues={bootstrapIssues} online={networkOnline} apiStatus={apiStatusDetails} onRetry={(resource) => setBootstrapRetryRequest((current) => ({ resource, nonce: current.nonce + 1 }))} onRetryAll={() => setBootstrapRetryRequest((current) => ({ resource: null, nonce: current.nonce + 1 }))} retryingResource={bootstrapLoading ? bootstrapRetryRequest.resource : null} retryingAll={bootstrapLoading && bootstrapRetryRequest.resource === null} /> : null}<div className={`route-stage route-stage-${view}`} key={view}>{content}</div></main>
       {candidateScenarioComparison && result && <Suspense fallback={<div className="modal-backdrop" role="presentation"><section className="candidate-scenario-dialog candidate-scenario-dialog-loading" role="dialog" aria-modal="true" aria-label="부품 미리 비교 불러오는 중"><FiLoader className="spin" /> 선택한 부품을 전체 구성에 적용하는 중...</section></div>}><LazyCandidateScenarioComparisonPanel state={candidateScenarioComparison} currentResult={result} onApply={applyCandidateScenario} onSave={saveCandidateScenario} onRetry={(itemId) => void retryCandidateScenario(itemId)} onClose={() => { scenarioRequestSequenceRef.current += 1; setCandidateScenarioComparison(null); }} onWatchPart={watchPart} onShareComparison={shareAlternativeComparison} onRevokeComparison={revokeAlternativeComparison} onToast={setToast} formatWon={formatWon} /></Suspense>}
       {picker && (
         <Suspense fallback={<div className="modal-backdrop" role="presentation"><section className="save-build-dialog" role="status" aria-label="부품 선택기를 불러오는 중"><FiLoader className="spin" /></section></div>}>
@@ -3675,7 +3685,7 @@ function App() {
             gamingResolution={recommendationPreferences.gamingResolution}
             gamingRefreshRate={recommendationPreferences.gamingRefreshRate}
             benchmarkCoverage={meta?.benchmarkCoverage}
-            brandOptions={meta?.catalogBrandCounts?.[picker.category] ?? []}
+            brandOptions={quoteBrandOptionsFor(picker.category, meta?.catalogBrandCounts?.[picker.category] ?? [])}
             findingRuleId={picker.findingRuleId}
             findingTitle={picker.findingTitle}
             initialCandidateMode={picker.initialCandidateMode}

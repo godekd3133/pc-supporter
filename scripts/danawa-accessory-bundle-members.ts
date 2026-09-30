@@ -80,6 +80,12 @@ export type BundleCaptureRequestEvidence = {
   responseContentType: string;
 };
 
+export type DetailIdentityDisposition = {
+  status: "verified" | "quarantined" | "hard-stop";
+  reason: string;
+  evidence: ReturnType<typeof detailPagePCodeEvidence>;
+};
+
 export function isDanawaPCode(value: unknown): value is string {
   return typeof value === "string" && /^\d{5,16}$/.test(value);
 }
@@ -454,8 +460,7 @@ export function detailPagePCodeEvidence(html: string) {
       if (colon >= 0) scanFlightFrame(line.slice(colon + 1));
     }
   }
-  const jsonLdText = $("script[type='application/ld+json']").first().contents().text();
-  let jsonLdProductOfferShape: {
+  let jsonLdFirstRootShape: {
     source: "json-ld-product-offer";
     path: "json-ld[0]";
     productTypes: string[];
@@ -469,7 +474,9 @@ export function detailPagePCodeEvidence(html: string) {
     offersUrlPCode?: string;
     offersUrlCategoryId?: string;
   } | undefined;
+  const jsonLdScripts = $("script[type='application/ld+json']");
   try {
+    const jsonLdText = jsonLdScripts.first().contents().text();
     const parsed = JSON.parse(jsonLdText) as unknown;
     const root = Array.isArray(parsed) ? parsed[0] : parsed;
     if (root && typeof root === "object" && !Array.isArray(root)) {
@@ -482,7 +489,7 @@ export function detailPagePCodeEvidence(html: string) {
       const offersUrl = extractDetailUrl(typeof offers?.url === "string" ? offers.url : undefined);
       const productIsProduct = productTypes.some((type) => type === "Product" || type.endsWith("/Product"));
       const offersIsAggregateOffer = offersTypes.some((type) => type === "AggregateOffer" || type.endsWith("/AggregateOffer"));
-      jsonLdProductOfferShape = {
+      jsonLdFirstRootShape = {
         source: "json-ld-product-offer",
         path: "json-ld[0]",
         productTypes,
@@ -517,10 +524,14 @@ export function detailPagePCodeEvidence(html: string) {
     ...(ogUrl?.origin ? { ogUrlOrigin: ogUrl.origin } : {}),
     ...(ogUrl?.pathname ? { ogUrlPath: ogUrl.pathname } : {}),
     ...(ogUrl?.categoryId ? { ogUrlCategoryId: ogUrl.categoryId } : {}),
+    documentTitle: $("title").first().text().replace(/\s+/g, " ").trim().slice(0, 240),
+    challengeDetected: /접근이 제한|비정상적인 접근|자동입력 방지|보안문자|로봇이 아닙니다|captcha/i.test(html),
+    nextFlightChunkCount: decodedFlightChunks.length,
+    jsonLdScriptCount: jsonLdScripts.length,
     primaryProductCount: primaryProductIdentities.length,
     primaryProductIdentities,
     rscPrimaryProductShapes,
-    ...(jsonLdProductOfferShape ? { jsonLdProductOfferShape } : {})
+    ...(jsonLdFirstRootShape ? { jsonLdFirstRootShape } : {})
   };
 }
 
@@ -537,45 +548,63 @@ export function safeDetailPCodeSourceObjects(html: string, expectedPCode: string
       matchingUrlFields: evidence.primaryProductIdentities.filter((identity) => identity.source === shape.source && identity.urlPCode === expectedPCode).map(() => "url"),
       matchedProductCode: expectedPCode
     })),
-    ...(evidence.jsonLdProductOfferShape ? [{
-      source: evidence.jsonLdProductOfferShape.source,
-      path: evidence.jsonLdProductOfferShape.path,
-      keys: evidence.jsonLdProductOfferShape.productKeys,
-      offersKeys: evidence.jsonLdProductOfferShape.offersKeys,
-      productTypes: evidence.jsonLdProductOfferShape.productTypes,
-      offersTypes: evidence.jsonLdProductOfferShape.offersTypes,
-      offersUrlOrigin: evidence.jsonLdProductOfferShape.offersUrlOrigin,
-      offersUrlPath: evidence.jsonLdProductOfferShape.offersUrlPath,
-      offersUrlPCode: evidence.jsonLdProductOfferShape.offersUrlPCode,
-      matchedProductCode: evidence.jsonLdProductOfferShape.offersUrlPCode === expectedPCode ? expectedPCode : undefined
+    ...(evidence.jsonLdFirstRootShape ? [{
+      source: evidence.jsonLdFirstRootShape.source,
+      path: evidence.jsonLdFirstRootShape.path,
+      keys: evidence.jsonLdFirstRootShape.productKeys,
+      offersKeys: evidence.jsonLdFirstRootShape.offersKeys,
+      productTypes: evidence.jsonLdFirstRootShape.productTypes,
+      offersTypes: evidence.jsonLdFirstRootShape.offersTypes,
+      offersUrlOrigin: evidence.jsonLdFirstRootShape.offersUrlOrigin,
+      offersUrlPath: evidence.jsonLdFirstRootShape.offersUrlPath,
+      offersUrlPCode: evidence.jsonLdFirstRootShape.offersUrlPCode,
+      matchedProductCode: evidence.jsonLdFirstRootShape.offersUrlPCode === expectedPCode ? expectedPCode : undefined
     }] : [])
   ];
 }
 
 export function detailPageMatchesPCode(html: string, expectedPCode: string, expectedCategoryId?: string) {
-  if (!isDanawaPCode(expectedPCode)) return false;
+  return classifyDetailPageIdentity(html, expectedPCode, expectedCategoryId).status === "verified";
+}
+
+export function classifyDetailPageIdentity(html: string, expectedPCode: string, expectedCategoryId?: string): DetailIdentityDisposition {
   const evidence = detailPagePCodeEvidence(html);
-  const jsonLdProductIdentity = evidence.primaryProductIdentities.filter((identity) => identity.source === "json-ld-product-offer");
-  const rscPrimaryProductIdentities = evidence.primaryProductIdentities.filter((identity) => identity.source === "next-flight-primaryProduct");
-  return evidence.canonicalPCode === expectedPCode
-    && evidence.canonicalPath === "/info/"
-    && evidence.canonicalOrigin === "https://prod.danawa.com"
-    && (evidence.ogUrlPCode === undefined || evidence.ogUrlPCode === expectedPCode)
-    && (evidence.ogUrlOrigin === undefined || evidence.ogUrlOrigin === "https://prod.danawa.com")
-    && (evidence.ogUrlPath === undefined || evidence.ogUrlPath === "/info/")
-    && (expectedCategoryId === undefined || (evidence.canonicalCategoryId === undefined || evidence.canonicalCategoryId === expectedCategoryId))
-    && (expectedCategoryId === undefined || (evidence.ogUrlCategoryId === undefined || evidence.ogUrlCategoryId === expectedCategoryId))
-    && evidence.jsonLdProductOfferShape?.productIsProduct === true
-    && evidence.jsonLdProductOfferShape?.offersIsAggregateOffer === true
-    && jsonLdProductIdentity.length === 1
-    && jsonLdProductIdentity.every((primary) => primary.code === expectedPCode
-      && primary.urlPCode === expectedPCode
-      && primary.urlOrigin === "https://prod.danawa.com"
-      && primary.urlPath === "/info/"
-      && (expectedCategoryId === undefined || primary.urlCategoryId === undefined || primary.urlCategoryId === expectedCategoryId))
-    && rscPrimaryProductIdentities.every((primary) => primary.code === expectedPCode
-      && primary.urlPCode === expectedPCode
-      && primary.urlOrigin === "https://prod.danawa.com"
-      && primary.urlPath === "/info/"
-      && (expectedCategoryId === undefined || primary.urlCategoryId === undefined || primary.urlCategoryId === expectedCategoryId));
+  const verdict = (status: DetailIdentityDisposition["status"], reason: string): DetailIdentityDisposition => ({ status, reason, evidence });
+  if (!isDanawaPCode(expectedPCode)) return verdict("hard-stop", "invalid-requested-pcode");
+  if (evidence.challengeDetected) return verdict("hard-stop", "access-challenge");
+  if (!evidence.canonicalPCode) return verdict("quarantined", "canonical-pcode-metadata-missing");
+  if (evidence.canonicalPCode !== expectedPCode || evidence.canonicalOrigin !== "https://prod.danawa.com" || evidence.canonicalPath !== "/info/") {
+    return verdict("hard-stop", "canonical-identity-mismatch");
+  }
+  if (expectedCategoryId && evidence.canonicalCategoryId && evidence.canonicalCategoryId !== expectedCategoryId) {
+    return verdict("hard-stop", "canonical-category-mismatch");
+  }
+  if (evidence.ogUrlPCode && evidence.ogUrlPCode !== expectedPCode) return verdict("hard-stop", "og-url-pcode-mismatch");
+  if (evidence.ogUrlPCode && (evidence.ogUrlOrigin !== "https://prod.danawa.com" || evidence.ogUrlPath !== "/info/")) {
+    return verdict("hard-stop", "og-url-source-mismatch");
+  }
+  if (expectedCategoryId && evidence.ogUrlCategoryId && evidence.ogUrlCategoryId !== expectedCategoryId) {
+    return verdict("hard-stop", "og-url-category-mismatch");
+  }
+
+  const productOffer = evidence.jsonLdFirstRootShape;
+  if (!productOffer) return verdict("quarantined", evidence.jsonLdScriptCount === 0 ? "json-ld-primary-metadata-missing" : "json-ld-root-metadata-unsupported");
+  if (!productOffer.productIsProduct) return verdict("quarantined", "json-ld-primary-product-type-unsupported");
+  if (!productOffer.offersIsAggregateOffer) return verdict("quarantined", "json-ld-primary-aggregate-offer-missing");
+  if (!productOffer.offersUrlPCode) return verdict("quarantined", "json-ld-primary-offer-url-missing");
+  if (productOffer.offersUrlPCode !== expectedPCode || productOffer.offersUrlOrigin !== "https://prod.danawa.com" || productOffer.offersUrlPath !== "/info/") {
+    return verdict("hard-stop", "json-ld-primary-offer-identity-mismatch");
+  }
+  if (expectedCategoryId && productOffer.offersUrlCategoryId && productOffer.offersUrlCategoryId !== expectedCategoryId) {
+    return verdict("hard-stop", "json-ld-primary-offer-category-mismatch");
+  }
+  const mismatchedRscPrimary = evidence.primaryProductIdentities
+    .filter((primary) => primary.source === "next-flight-primaryProduct")
+    .some((primary) => (primary.code !== undefined && primary.code !== expectedPCode)
+      || (primary.urlPCode !== undefined && primary.urlPCode !== expectedPCode)
+      || (primary.urlOrigin !== undefined && primary.urlOrigin !== "https://prod.danawa.com")
+      || (primary.urlPath !== undefined && primary.urlPath !== "/info/")
+      || (expectedCategoryId !== undefined && primary.urlCategoryId !== undefined && primary.urlCategoryId !== expectedCategoryId));
+  if (mismatchedRscPrimary) return verdict("hard-stop", "rsc-primary-product-identity-mismatch");
+  return verdict("verified", "primary-product-identity-verified");
 }

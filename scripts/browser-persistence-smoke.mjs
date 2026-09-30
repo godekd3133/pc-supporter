@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
@@ -6,6 +6,17 @@ import { join } from "node:path";
 
 const workspaceDir = process.cwd();
 const timeoutMs = Number(process.env.BROWSER_PERSISTENCE_SMOKE_TIMEOUT_MS ?? 120_000);
+const isolatedServerDistDir = process.env.BROWSER_PERSISTENCE_SMOKE_DIST_DIR?.trim();
+const apiRequestAudit = [];
+const nativeFetch = globalThis.fetch;
+globalThis.fetch = async (input, init) => {
+  const requestUrl = new URL(typeof input === "string" ? input : input.url);
+  const method = String(init?.method ?? (typeof input === "string" ? "GET" : input.method ?? "GET")).toUpperCase();
+  const startedAt = Date.now();
+  const response = await nativeFetch(input, init);
+  if (requestUrl.pathname.startsWith("/api/")) apiRequestAudit.push({ at: startedAt, method, path: requestUrl.pathname.replace(/\/api\/builds\/[^/]+/g, "/api/builds/:id"), status: response.status, limit: response.headers.get("x-ratelimit-limit"), remaining: response.headers.get("x-ratelimit-remaining"), reset: response.headers.get("x-ratelimit-reset"), retryAfter: response.headers.get("retry-after") });
+  return response;
+};
 
 function signalProcessGroup(child, signal) {
   if (!child.pid) return;
@@ -46,17 +57,20 @@ const {
   waitForValue
 } = await import("./browser-smoke.mjs");
 
-function managedProcess(command, args, env) {
-  const child = spawn(command, args, { cwd: workspaceDir, env, stdio: ["ignore", "pipe", "pipe"] });
+function managedProcess(command, args, env, cwd = workspaceDir) {
+  const child = spawn(command, args, { cwd, env, stdio: ["ignore", "pipe", "pipe"] });
   let output = "";
   const capture = (chunk) => { output = `${output}${String(chunk)}`.slice(-12_000); };
   child.stdout.on("data", capture);
   child.stderr.on("data", capture);
   let exited = false;
-  const exitPromise = new Promise((resolve) => child.once("exit", () => { exited = true; resolve(); }));
+  let exitCode = null;
+  const exitPromise = new Promise((resolve) => child.once("exit", (code) => { exited = true; exitCode = code; resolve(); }));
   return {
     child,
     output: () => output,
+    isExited: () => exited,
+    exitCode: () => exitCode,
     async stop() {
       if (exited) return;
       child.kill("SIGTERM");
@@ -69,9 +83,10 @@ function managedProcess(command, args, env) {
   };
 }
 
-async function waitForHttp(url, label) {
+async function waitForHttp(url, label, managed = null) {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
+    if (managed?.isExited()) throw new Error(`${label} 프로세스가 health 응답 전에 종료됐습니다(exit=${managed.exitCode()}). startup=${managed.output().slice(-3_000)}`);
     try {
       const response = await fetch(url);
       if (response.ok) return await response.json();
@@ -272,13 +287,21 @@ async function main() {
     BUILD_MONITOR_SCHEDULER_ENABLED: "false",
     VITE_API_PROXY_TARGET: apiUrl
   };
-  const apiServer = managedProcess(process.execPath, ["node_modules/tsx/dist/cli.mjs", "server/index.ts"], env);
+  let apiWorkingDirectory = workspaceDir;
+  let apiArguments = ["node_modules/tsx/dist/cli.mjs", "server/index.ts"];
+  if (isolatedServerDistDir) {
+    apiWorkingDirectory = join(dataDir, "api-cwd");
+    await mkdir(apiWorkingDirectory, { recursive: true });
+    await symlink(isolatedServerDistDir, join(apiWorkingDirectory, "dist"), "dir");
+    apiArguments = [join(workspaceDir, "node_modules/tsx/dist/cli.mjs"), join(workspaceDir, "server/index.ts")];
+  }
+  const apiServer = managedProcess(process.execPath, apiArguments, env, apiWorkingDirectory);
   const webServer = managedProcess(process.execPath, ["node_modules/vite/bin/vite.js", "--host", "127.0.0.1", "--port", String(webPort)], env);
   let browser;
   let secondClient;
   try {
-    const apiHealth = await waitForHttp(`${apiUrl}/api/health`, "격리 API");
-    await waitForHttp(`${webUrl}/api/health`, "격리 Vite proxy");
+    const apiHealth = await waitForHttp(`${apiUrl}/api/health`, "격리 API", apiServer);
+    await waitForHttp(`${webUrl}/api/health`, "격리 Vite proxy", webServer);
     const catalogRateLimitProbe = await fetch(`${apiUrl}/api/parts?category=cpu&limit=1`);
     await catalogRateLimitProbe.arrayBuffer();
     assert(catalogRateLimitProbe.ok && catalogRateLimitProbe.headers.get("x-ratelimit-limit") === "180" && catalogRateLimitProbe.headers.has("x-ratelimit-remaining"), "카탈로그 조회 rate limit 헤더가 없습니다.");
@@ -569,9 +592,41 @@ async function main() {
     if (firstPurchaseAction === "data-review" || firstPurchaseAction === "price-review") assert((await clickSelector(client, '[data-testid="purchase-list-filter-all"]', 1)) === 1, "구매 다음 행동 가격 필터 초기화를 클릭하지 못했습니다.");
     else assert((await clickSelector(client, '[data-testid="purchase-list-status-filter-all"]', 1)) === 1, "구매 다음 행동 단계 필터 초기화를 클릭하지 못했습니다.");
     await waitForValue(client, "document.querySelector('[data-testid=\"purchase-list-server-sync\"]') !== null && [...document.querySelectorAll('[data-testid=\"purchase-list-server-sync\"] button')].some((button) => !button.disabled && (button.textContent ?? '').includes('현재 상태 저장'))", "이력에서 연 저장 견적의 구매 진행률 서버 저장 버튼");
+    await secondClient.evaluate(`(() => {
+      window.__pcPurchaseProgressAudit = [];
+      const originalFetch = window.fetch;
+      window.fetch = async (input, init) => {
+        const requestUrl = new URL(typeof input === "string" ? input : input.url, location.href);
+        const method = String(init?.method ?? (typeof input === "string" ? "GET" : input.method ?? "GET")).toUpperCase();
+        const response = await originalFetch(input, init);
+        if (requestUrl.pathname.startsWith("/api/builds/")) window.__pcPurchaseProgressAudit.push({ method, path: requestUrl.pathname.replace(/\\/api\\/builds\\/[^/]+/g, "/api/builds/:id"), status: response.status, limit: response.headers.get("x-ratelimit-limit"), remaining: response.headers.get("x-ratelimit-remaining"), reset: response.headers.get("x-ratelimit-reset"), retryAfter: response.headers.get("retry-after") });
+        return response;
+      };
+      return true;
+    })()`);
     await navigate(secondClient, `${webUrl}/share/${encodeURIComponent(candidateSavedId)}`, "두 번째 탭 구매 목록 route");
     await openResultDetails(secondClient);
-    await waitForValue(secondClient, "document.querySelector('[data-testid=\"purchase-list-panel\"]') !== null && (document.body?.innerText ?? '').includes('저장된 진행률이 없어요.')", "두 번째 탭의 오래된 구매 진행률");
+    const secondTabProgressProbe = await secondClient.evaluate(`(async () => {
+      const startedAt = Date.now();
+      let statusText = "";
+      while (Date.now() - startedAt < 10_000) {
+        const panel = document.querySelector('[data-testid="purchase-list-panel"]');
+        statusText = panel?.querySelector('[data-testid="purchase-list-server-sync"] small')?.textContent?.trim() ?? "";
+        if (panel && statusText && !statusText.includes("불러오는 중")) break;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      const keys = Object.keys(localStorage).filter((key) => key.startsWith("pc-supporter-purchase-list:")).map((key) => {
+        let envelope;
+        try { envelope = JSON.parse(localStorage.getItem(key) ?? "null"); } catch {}
+        return { key, envelopeType: envelope?.type ?? null, schemaVersion: envelope?.schemaVersion ?? null, storageKey: envelope?.storageKey ?? null, itemCount: Array.isArray(envelope?.items) ? envelope.items.length : null, itemStatuses: Array.isArray(envelope?.items) ? envelope.items.map((item) => item.status) : [] };
+      });
+      return { href: location.href, panel: Boolean(document.querySelector('[data-testid="purchase-list-panel"]')), statusText, audit: window.__pcPurchaseProgressAudit ?? [], keys, progressText: document.querySelector('[data-testid="purchase-list-progress"]')?.textContent?.trim() ?? "", consoleErrors: window.__pcSupporterSmokeErrors ?? [] };
+    })()`);
+    const candidateServerProbeResponse = await fetch(`${apiUrl}/api/builds/${encodeURIComponent(candidateSavedId)}`);
+    const candidateServerProbe = await candidateServerProbeResponse.json().catch(() => null);
+    const candidateProgressSummary = candidateServerProbe?.purchaseProgress ? { revision: candidateServerProbe.purchaseProgress.revision, inputFingerprint: candidateServerProbe.purchaseProgress.inputFingerprint, rowKeyCount: candidateServerProbe.purchaseProgress.rowKeys?.length ?? null, checkedIdCount: candidateServerProbe.purchaseProgress.checkedIds?.length ?? null, itemStateCount: candidateServerProbe.purchaseProgress.itemStates?.length ?? null, updatedAt: candidateServerProbe.purchaseProgress.updatedAt } : null;
+    const settledProgressIsEmpty = secondTabProgressProbe.panel && secondTabProgressProbe.statusText.startsWith("저장된 진행률이 없어요.");
+    assert(settledProgressIsEmpty, `두 번째 탭에서 후보 견적의 빈 구매 진행률 상태가 확인되지 않았습니다. diagnostic=${JSON.stringify({ browser: secondTabProgressProbe, server: { status: candidateServerProbeResponse.status, limit: candidateServerProbeResponse.headers.get("x-ratelimit-limit"), remaining: candidateServerProbeResponse.headers.get("x-ratelimit-remaining"), retryAfter: candidateServerProbeResponse.headers.get("retry-after"), purchaseProgress: candidateProgressSummary } })}`);
     await waitForValue(client, "document.querySelector('[data-testid=\"purchase-list-status-board\"]') !== null && document.querySelectorAll('.purchase-list-status-select').length > 0", "구매 단계 보드");
     const stagedStatusChanged = await client.evaluate("(() => { const select = document.querySelector('.purchase-list-status-select'); if (!(select instanceof HTMLSelectElement)) return false; const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set; setter?.call(select, 'ordered'); select.dispatchEvent(new Event('change', { bubbles: true })); return select.value === 'ordered'; })()");
     assert(stagedStatusChanged, "첫 구매 항목의 주문 완료 단계를 선택하지 못했습니다.");
@@ -589,7 +644,17 @@ async function main() {
     assert(Array.isArray(savedProgressPayload?.purchaseProgress?.itemStates) && savedProgressPayload.purchaseProgress.itemStates.some((item) => item.status === 'received'), "서버 구매 진행률에 단계별 itemStates가 저장되지 않았습니다. payload=" + JSON.stringify({ savedId: candidateSavedId, purchaseProgress: savedProgressPayload?.purchaseProgress }));
     await waitForValue(secondClient, "[...document.querySelectorAll('button')].some((button) => !button.disabled && (button.textContent ?? '').includes('현재 상태 저장'))", "두 번째 탭의 오래된 구매 진행률 저장 버튼");
     assert(await clickText(secondClient, "현재 상태 저장"), "두 번째 탭 구매 진행률 서버 저장 버튼을 찾지 못했습니다.");
-    await waitForValue(secondClient, "(document.body?.innerText ?? '').includes('서버 구매 진행률이 먼저 변경되어 저장을 막았습니다')", "구매 진행률 revision 충돌 안내");
+    const conflictStartedAt = Date.now();
+    while (Date.now() - conflictStartedAt < 10_000) {
+      if (await secondClient.evaluate("(document.body?.innerText ?? '').includes('서버 구매 진행률이 먼저 변경되어 저장을 막았습니다')")) break;
+      await sleep(100);
+    }
+    const progressConflictUi = await secondClient.evaluate("({ href: location.href, actionMessage: document.querySelector('.purchase-list-action-message')?.textContent?.trim() ?? '', audit: window.__pcPurchaseProgressAudit ?? [], errors: window.__pcSupporterSmokeErrors ?? [] })");
+    const latestServerProgressResponse = await fetch(`${apiUrl}/api/builds/${encodeURIComponent(candidateSavedId)}`);
+    const latestServerBuild = await latestServerProgressResponse.json().catch(() => null);
+    const latestProgress = latestServerBuild?.purchaseProgress;
+    const progressConflictState = { ui: progressConflictUi, server: { status: latestServerProgressResponse.status, limit: latestServerProgressResponse.headers.get("x-ratelimit-limit"), remaining: latestServerProgressResponse.headers.get("x-ratelimit-remaining"), retryAfter: latestServerProgressResponse.headers.get("retry-after"), purchaseProgress: latestProgress ? { revision: latestProgress.revision, inputFingerprint: latestProgress.inputFingerprint, rowKeyCount: latestProgress.rowKeys?.length ?? null, checkedIdCount: latestProgress.checkedIds?.length ?? null, itemStateCount: latestProgress.itemStates?.length ?? null, updatedAt: latestProgress.updatedAt } : null } };
+    assert(progressConflictUi.actionMessage.includes("서버 구매 진행률이 먼저 변경되어 저장을 막았습니다"), "구매 진행률 revision 충돌 안내가 확인되지 않았습니다. diagnostic=" + JSON.stringify(progressConflictState));
 
     await client.evaluate("Object.keys(localStorage).filter((key) => key.startsWith('pc-supporter-purchase-list:')).forEach((key) => localStorage.removeItem(key))");
     await navigate(client, `${webUrl}/share/${encodeURIComponent(candidateSavedId)}`, "서버 진행률 재조회 route");
@@ -642,11 +707,34 @@ async function main() {
     await waitForValue(client, "(document.body?.innerText ?? '').includes('저장된 가격 이력 버전 1 상태를 불러왔습니다.')", "가격 이력 서버 복원");
     await waitForValue(client, "document.querySelector('[data-testid=\"purchase-list-price-history-overview\"]') !== null", "가격 이력 복원 요약");
 
-    await client.evaluate(`(() => { const key = 'pc-supporter-saved-build-owner-tokens'; const tokens = JSON.parse(localStorage.getItem(key) ?? '{}'); delete tokens[${JSON.stringify(originalSavedId)}]; localStorage.setItem(key, JSON.stringify(tokens)); return true; })()`);
+    await client.evaluate(`(() => {
+      window.__pcSupporterApiRequestAudit = [];
+      const originalFetch = window.fetch;
+      window.fetch = async (input, init) => {
+        const requestUrl = new URL(typeof input === "string" ? input : input.url, location.href);
+        const method = String(init?.method ?? (typeof input === "string" ? "GET" : input.method ?? "GET")).toUpperCase();
+        const startedAt = Date.now();
+        const response = await originalFetch(input, init);
+        if (requestUrl.pathname.startsWith("/api/")) window.__pcSupporterApiRequestAudit.push({ at: startedAt, method, path: requestUrl.pathname.replace(/\\/api\\/builds\\/[^/]+/g, "/api/builds/:id"), status: response.status, limit: response.headers.get("x-ratelimit-limit"), remaining: response.headers.get("x-ratelimit-remaining"), reset: response.headers.get("x-ratelimit-reset"), retryAfter: response.headers.get("retry-after") });
+        return response;
+      };
+      const key = 'pc-supporter-saved-build-owner-tokens'; const tokens = JSON.parse(localStorage.getItem(key) ?? '{}'); delete tokens[${JSON.stringify(originalSavedId)}]; localStorage.setItem(key, JSON.stringify(tokens)); return true;
+    })()`);
     await navigate(client, `${webUrl}/share/${encodeURIComponent(originalSavedId)}`, "공유 견적 외부 사용자 복제 route");
     await waitForValue(client, "document.querySelector('[data-testid=\"shared-build-clone\"]') !== null", "공유 견적 내 견적으로 복제 액션");
     assert(await clickSelector(client, '[data-testid="shared-build-clone"]', 1) === 1, "공유 견적 내 견적으로 복제 버튼을 클릭하지 못했습니다.");
-    await waitForValue(client, "location.pathname === '/build' && document.querySelector('.workspace-page') !== null && document.querySelector('.result-hero') === null", "공유 견적 새 초안 복제");
+    try {
+      const cloneStartedAt = Date.now();
+      while (Date.now() - cloneStartedAt < 10_000) {
+        if (await client.evaluate("location.pathname === '/build' && document.querySelector('.workspace-page') !== null && document.querySelector('.result-hero') === null")) break;
+        await sleep(100);
+      }
+      assert(await client.evaluate("location.pathname === '/build' && document.querySelector('.workspace-page') !== null && document.querySelector('.result-hero') === null"), "공유 견적 새 초안 복제 상태가 10초 내 준비되지 않았습니다.");
+    } catch (error) {
+      const diagnostic = await client.evaluate("({ href: location.href, audit: window.__pcSupporterApiRequestAudit ?? [], body: (document.body?.innerText ?? '').slice(-1200) })");
+      const recentNodeRequests = apiRequestAudit.filter((entry) => entry.at >= Date.now() - 60_000);
+      throw new Error(`${error instanceof Error ? error.message : String(error)}\nclone diagnostic=${JSON.stringify({ browser: diagnostic, nodeLast60s: recentNodeRequests })}`);
+    }
     const cloneProbe = await client.evaluate("({ draft: Boolean(localStorage.getItem('pc-supporter-draft')), savedIds: JSON.parse(localStorage.getItem('pc-supporter-saved-build-ids') ?? '[]'), cloneButton: Boolean(document.querySelector('[data-testid=\"shared-build-clone\"]')), result: Boolean(document.querySelector('.result-hero')) })");
     assert(cloneProbe.draft && cloneProbe.savedIds.includes(originalSavedId) && !cloneProbe.cloneButton && !cloneProbe.result, "공유 견적 복제가 원본 기록과 결과 상태를 분리하지 못했습니다. probe=" + JSON.stringify(cloneProbe));
     await client.evaluate(`(() => { const key = 'pc-supporter-saved-build-owner-tokens'; const tokens = JSON.parse(localStorage.getItem(key) ?? '{}'); tokens[${JSON.stringify(originalSavedId)}] = ${JSON.stringify(ownerTokens[originalSavedId])}; localStorage.setItem(key, JSON.stringify(tokens)); return true; })()`);

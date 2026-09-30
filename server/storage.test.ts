@@ -2,9 +2,9 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { filePersistenceIsReady, readJson, withSerializedFileMutation } from "./storage";
+import { readJson, withSerializedFileMutation, writeJson } from "./storage";
 
-describe("JSON file persistence", () => {
+describe("JSON file helpers", () => {
   it("uses the fallback only when the file does not exist", async () => {
     const directory = await mkdtemp(join(tmpdir(), "pc-supporter-storage-missing-"));
     const path = join(directory, "builds.json");
@@ -28,10 +28,17 @@ describe("JSON file persistence", () => {
       })).rejects.toThrow(SyntaxError);
 
       await expect(readFile(path, "utf8")).resolves.toBe(original);
-      await expect(filePersistenceIsReady()).resolves.toBe(false);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
 
-      await writeFile(path, "{\"savedBuilds\":[]}\n", "utf8");
-      await expect(filePersistenceIsReady()).resolves.toBe(true);
+  it("writes JSON atomically under the data directory", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "pc-supporter-storage-write-"));
+    const path = join(directory, "artifact.json");
+    try {
+      await writeJson(path, { ok: true });
+      await expect(readJson<{ ok: boolean }>(path, { ok: false })).resolves.toEqual({ ok: true });
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
@@ -45,9 +52,6 @@ describe("JSON file persistence", () => {
 
       const inaccessiblePath = join(blocker, "builds.json");
       await expect(readJson(inaccessiblePath, [])).rejects.toMatchObject({ code: "ENOTDIR" });
-      await expect(filePersistenceIsReady()).resolves.toBe(false);
-      await rm(blocker);
-      await expect(filePersistenceIsReady()).resolves.toBe(true);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

@@ -61,20 +61,18 @@ export function contentSecurityPolicyMetaFromHtml(html: string) {
 
 export function createContentSecurityPolicy(options: {
   connectOrigins?: readonly string[];
-  allowRemoteAssets?: boolean;
   includeFrameAncestors?: boolean;
 } = {}) {
   const connectOrigins = parseCspConnectOrigins(options.connectOrigins?.join(","));
-  const allowRemoteAssets = options.allowRemoteAssets ?? true;
   const directives = [
     "default-src 'none'",
     `script-src 'self' '${THEME_SCRIPT_CSP_HASH}' '${BOOTSTRAP_FAILURE_SCRIPT_CSP_HASH}'`,
     "script-src-attr 'none'",
-    `style-src 'self' 'unsafe-inline'${allowRemoteAssets ? ` ${remoteFontStyleSource}` : ""}`,
-    `style-src-elem 'self' '${BOOTSTRAP_STYLE_CSP_HASH}'${allowRemoteAssets ? ` ${remoteFontStyleSource}` : ""}`,
+    `style-src 'self' 'unsafe-inline' ${remoteFontStyleSource}`,
+    `style-src-elem 'self' '${BOOTSTRAP_STYLE_CSP_HASH}' ${remoteFontStyleSource}`,
     "style-src-attr 'unsafe-inline'",
-    `font-src 'self'${allowRemoteAssets ? ` ${remoteFontAssetSource}` : ""}`,
-    `img-src 'self'${allowRemoteAssets ? ` ${remoteImageSources.join(" ")}` : ""}`,
+    `font-src 'self' ${remoteFontAssetSource}`,
+    `img-src 'self' ${remoteImageSources.join(" ")}`,
     `connect-src 'self'${connectOrigins.length > 0 ? ` ${connectOrigins.join(" ")}` : ""}`,
     "base-uri 'self'",
     "object-src 'none'",

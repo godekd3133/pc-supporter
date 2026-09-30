@@ -3,6 +3,7 @@ import {
   BUNDLE_MEMBERS_SOURCE,
   bundleProductEvidenceEdges,
   canonicalAccessoryDetailUrl,
+  classifyDetailPageIdentity,
   createBundlePageObservation,
   detailPageMatchesPCode,
   detailPagePCodeEvidence,
@@ -193,6 +194,24 @@ describe("Danawa accessory bundle member evidence", () => {
     expect(detailPageMatchesPCode(relatedProductOnly, "105679607", "11336858")).toBe(false);
     const missingPrimary = `<link rel="canonical" href="https://prod.danawa.com/info/?pcode=105679607"><meta name="pcode" content="105679607">`;
     expect(detailPageMatchesPCode(missingPrimary, "105679607", "11336858")).toBe(false);
+  });
+
+  it("separates explicit identity contradictions from missing primary metadata", () => {
+    const missingPrimary = `<link rel="canonical" href="https://prod.danawa.com/info/?pcode=124076184"><title>Sample product</title>`;
+    expect(classifyDetailPageIdentity(missingPrimary, "124076184", "11336858")).toMatchObject({
+      status: "quarantined",
+      reason: "json-ld-primary-metadata-missing"
+    });
+
+    const productOffer = (code: string) => ({ "@type": "Product", offers: { "@type": "AggregateOffer", url: `https://prod.danawa.com/info/?pcode=${code}&cate=11336858` } });
+    const mismatch = `<link rel="canonical" href="https://prod.danawa.com/info/?pcode=105679532&cate=11336858"><script type="application/ld+json">${JSON.stringify(productOffer("105679607"))}</script>`;
+    expect(classifyDetailPageIdentity(mismatch, "105679607", "11336858")).toMatchObject({ status: "hard-stop", reason: "canonical-identity-mismatch" });
+
+    const challenge = `<title>접근이 제한되었습니다</title><link rel="canonical" href="https://prod.danawa.com/info/?pcode=105679607"><script type="application/ld+json">${JSON.stringify(productOffer("105679607"))}</script>`;
+    expect(classifyDetailPageIdentity(challenge, "105679607", "11336858")).toMatchObject({ status: "hard-stop", reason: "access-challenge" });
+
+    const missingOfferUrl = `<link rel="canonical" href="https://prod.danawa.com/info/?pcode=105679607"><script type="application/ld+json">${JSON.stringify({ "@type": "Product", offers: { "@type": "AggregateOffer" } })}</script>`;
+    expect(classifyDetailPageIdentity(missingOfferUrl, "105679607", "11336858")).toMatchObject({ status: "quarantined", reason: "json-ld-primary-offer-url-missing" });
   });
 
   it("reports safe Product/AggregateOffer schema keys without values", () => {

@@ -172,8 +172,8 @@ export const seedCatalog: Part[] = [
   seed({
     id: "memory-ddr5-32-7200",
     category: "memory",
-    name: "G.SKILL DDR5-7200 32GB",
-    brand: "G.SKILL",
+    name: "SK하이닉스 DDR5-7200 32GB",
+    brand: "SK하이닉스",
     model: "DDR5-7200 32GB",
     priceWon: 169000,
     specs: {
@@ -336,9 +336,9 @@ export const seedCatalog: Part[] = [
   seed({
     id: "psu-1300w",
     category: "psu",
-    name: "SuperFlower LEADEX VII 1300W",
-    brand: "SuperFlower",
-    model: "LEADEX VII 1300W",
+    name: "시소닉 PRIME TX-1300",
+    brand: "시소닉",
+    model: "PRIME TX-1300",
     priceWon: 319000,
     specs: {
       wattageW: 1300,

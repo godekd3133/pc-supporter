@@ -5,7 +5,7 @@ import type { IconType } from "react-icons";
 import { FiActivity, FiAlertTriangle, FiArrowLeft, FiArrowRight, FiBox, FiBriefcase, FiCheck, FiClock, FiCode, FiDatabase, FiFileText, FiFilm, FiInfo, FiMinus, FiMonitor, FiMusic, FiPlay, FiPlus, FiRadio, FiSearch, FiSliders, FiTarget, FiZap } from "react-icons/fi";
 import "./quote-onboarding.css";
 import { GAMING_GRAPHICS_PRESET_LABELS, GAMING_UPSCALING_LABELS } from "../shared/types";
-import type { GamingGraphicsPreset, GamingRefreshRate, GamingResolution, GamingUpscaling } from "../shared/types";
+import type { GamingGraphicsPreset, GamingRefreshRate, GamingResolution, GamingUpscaling, RecommendationFloorWon } from "../shared/types";
 import {
   BUDGET_STEP_WON,
   BUDGET_STOPS_WON,
@@ -149,8 +149,8 @@ function BudgetRangeCard({ range, budgetWon, compact = false, gaming = false, on
   );
 }
 
-function GamingTargetContract({ state, showBudgetHint = false }: { state: OnboardingState; showBudgetHint?: boolean }) {
-  const range = showBudgetHint ? targetBudgetRangeFor(state) : null;
+function GamingTargetContract({ state, showBudgetHint = false, floors }: { state: OnboardingState; showBudgetHint?: boolean; floors?: RecommendationFloorWon }) {
+  const range = showBudgetHint ? targetBudgetRangeFor(state, floors) : null;
   return (
     <section className="onboarding-target-contract" aria-label="게이밍 성능 목표 기준">
       <div className="onboarding-target-contract-heading"><div><span>희망 주사율</span><strong>{state.refreshRate}Hz</strong></div><FiTarget aria-hidden="true" /></div>
@@ -221,7 +221,7 @@ function ChipRow({ name, label, options, value, onChange }: { name: string; labe
   );
 }
 
-export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome }: { onFinish: (query: string) => void; onUpgrade: () => void; onSkip: () => void; onHome: () => void }) {
+export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome, floors }: { onFinish: (query: string) => void; onUpgrade: () => void; onSkip: () => void; onHome: () => void; floors?: RecommendationFloorWon }) {
   const [storedOnboarding] = useState(readStoredOnboarding);
   const [state, setState] = useState<OnboardingState>(storedOnboarding.state);
   const headingRef = useRef<HTMLHeadingElement | null>(null);
@@ -300,7 +300,7 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome }: { o
     : state.usecase === "work"
       ? workEstimateFor(state.works, state.intensity)
     : budgetEstimateForSelectedTarget(state);
-  const targetBudgetRange = targetBudgetRangeFor(state);
+  const targetBudgetRange = targetBudgetRangeFor(state, floors);
   const primaryWork = primaryWorkFor(state.works);
   const estimateRows: [IconType, string, string][] = [
     [FiActivity, "목표 성능", estimate.performance],
@@ -443,7 +443,7 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome }: { o
           onClick={() => update({ rayTracing: !state.rayTracing })}
         />
         {state.rayTracing && <p className="onboarding-warning"><FiAlertTriangle /> 레이 트레이싱은 같은 주사율 목표에서도 더 높은 GPU 등급이 필요할 수 있어요.</p>}
-        <GamingTargetContract state={state} showBudgetHint />
+        <GamingTargetContract state={state} showBudgetHint floors={floors} />
 
       </>
     );

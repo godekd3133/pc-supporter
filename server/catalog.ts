@@ -5,20 +5,13 @@ import { catalogSpecCoverageFor } from "../shared/catalog-spec-coverage";
 import { isKnownPrice, PART_CATEGORIES } from "../shared/types";
 import { starterCatalog } from "./seed-catalog-starter";
 import {
-  CATALOG_PATH,
-  CATALOG_SPEC_OVERRIDES_PATH,
-  ACCESSORY_COVERAGE_PATH,
-  BENCHMARK_OVERRIDES_PATH,
   CASE_RGB_LOAD_OVERRIDES_PATH,
   GPU_PHYSICAL_OVERRIDES_PATH,
-  M2_SLOT_OVERRIDES_PATH,
-  fileUpdatedAt,
-  readJson,
-  writeJson,
-  withSerializedFileMutation
+  fileUpdatedAt
 } from "./storage";
-import { patchCatalogPriceRecords, persistenceMode, readCatalogOverrideMapUpdatedAtRecords, readCatalogRecords, writeCatalogRecords } from "./repository";
-import { inferListingType, isListingAllowed } from "./listing";
+import { patchCatalogPriceRecords, readAccessoryCoverageRecord, readCatalogOverrideMapUpdatedAtRecords, readCatalogRecords, readBenchmarkOverrideRecords, writeCatalogRecords } from "./repository";
+import { inferListingType, isListingAllowed, isQuoteBrandAllowed, isQuoteSelectable } from "./listing";
+import { recommendationFloorWonFor } from "../shared/domain/engine";
 import { accessoryMeta, loadAccessories, readAccessoryCoverage } from "./accessories";
 import { reparseDanawaPart } from "./danawa";
 import { applyM2SlotOverrides, readM2SlotOverrides, stripM2SlotOverride } from "./m2-overrides";
@@ -32,22 +25,15 @@ import { pcieCompatibleSlotInventoryFor, pcieSlotWidthFromUnknown, type PcieSlot
 import { brandCountsFor } from "../shared/brand-counts";
 
 let catalogCache: Part[] | null = null;
-let catalogMtime: string | null = null;
-let m2OverrideMtime: string | null = null;
-let benchmarkOverrideMtime: string | null = null;
-let gpuPhysicalOverrideMtime: string | null = null;
-let caseRgbLoadOverrideMtime: string | null = null;
-let catalogSpecOverrideMtime: string | null = null;
 let catalogRuntimeRevision = 0;
 let catalogLoadInFlight: Promise<Part[]> | null = null;
-let baseCatalogCache: { mtime: string; value: Part[] } | null = null;
 
-type CatalogMeta = Pick<ServiceMeta, "catalogCount" | "catalogEligibleCount" | "catalogExcludedNonCoreCount" | "catalogCategoryIntegrity" | "catalogBrandCounts" | "catalogEligibleQualityCounts" | "catalogEligiblePriceCoverage" | "accessoryCount" | "accessoryCategoryCounts" | "accessoryBrandCounts" | "accessoryCategoryQualityCounts" | "accessoryQualityCounts" | "accessoryPriceCoverage" | "accessoryUpdatedAt" | "accessoryCoverage" | "benchmarkCoverage" | "catalogSpecCoverage" | "categoryCounts" | "qualityCounts" | "priceCoverage" | "catalogUpdatedAt">;
+type CatalogMeta = Pick<ServiceMeta, "catalogCount" | "catalogEligibleCount" | "catalogExcludedNonCoreCount" | "catalogCategoryIntegrity" | "catalogBrandCounts" | "catalogEligibleQualityCounts" | "catalogEligiblePriceCoverage" | "accessoryCount" | "accessoryCategoryCounts" | "accessoryBrandCounts" | "accessoryCategoryQualityCounts" | "accessoryQualityCounts" | "accessoryPriceCoverage" | "accessoryUpdatedAt" | "accessoryCoverage" | "benchmarkCoverage" | "catalogSpecCoverage" | "categoryCounts" | "qualityCounts" | "priceCoverage" | "catalogUpdatedAt" | "recommendationFloorWon">;
 
 let catalogMetaCache: {
   catalog: Part[];
   accessories: Awaited<ReturnType<typeof loadAccessories>>;
-  accessoryCoverageMtime: string;
+  accessoryCoverageUpdatedAt: string;
   catalogSpecCoverageValidUntil: number;
   catalogUpdatedAt: string;
   accessoryUpdatedAt: string;
@@ -129,39 +115,12 @@ export function mergeDanawaSnapshot(base: Part[], incoming: Part[], categories: 
 }
 
 async function loadCatalogUncoalesced() {
-  const mode = await persistenceMode();
-  if (mode === "postgres") {
-    const persisted = await readCatalogRecords();
-    const overrideMaps = await readCatalogOverrideMaps();
-    catalogCache = applyCatalogOverrideMaps(
-      mergeCatalog(seedBaseFor(persisted), persisted.map((part) => reparseDanawaPart(part))),
-      overrideMaps
-    );
-    return catalogCache;
-  }
-  const persistedMtime = await fileUpdatedAt(CATALOG_PATH, "");
-  const currentM2OverrideMtime = await fileUpdatedAt(M2_SLOT_OVERRIDES_PATH, "");
-  const currentBenchmarkOverrideMtime = await fileUpdatedAt(BENCHMARK_OVERRIDES_PATH, "");
-  const currentGpuPhysicalOverrideMtime = await fileUpdatedAt(GPU_PHYSICAL_OVERRIDES_PATH, "");
-  const currentCaseRgbLoadOverrideMtime = await fileUpdatedAt(CASE_RGB_LOAD_OVERRIDES_PATH, "");
-  const currentCatalogSpecOverrideMtime = await fileUpdatedAt(CATALOG_SPEC_OVERRIDES_PATH, "");
-  if (catalogCache && catalogMtime === persistedMtime && m2OverrideMtime === currentM2OverrideMtime && benchmarkOverrideMtime === currentBenchmarkOverrideMtime && gpuPhysicalOverrideMtime === currentGpuPhysicalOverrideMtime && caseRgbLoadOverrideMtime === currentCaseRgbLoadOverrideMtime && catalogSpecOverrideMtime === currentCatalogSpecOverrideMtime) return catalogCache;
-  let baseCatalog = baseCatalogCache?.mtime === persistedMtime ? baseCatalogCache.value : undefined;
-  if (!baseCatalog) {
-    const persisted = await readJson<Part[]>(CATALOG_PATH, []);
-    baseCatalog = mergeCatalog(seedBaseFor(persisted), persisted.map((part) => reparseDanawaPart(part)));
-    if (persisted.length === 0) await writeJson(CATALOG_PATH, baseCatalog);
-  }
-  const effectiveCatalogMtime = await fileUpdatedAt(CATALOG_PATH, persistedMtime);
-  baseCatalogCache = { mtime: effectiveCatalogMtime, value: baseCatalog };
+  const persisted = await readCatalogRecords();
   const overrideMaps = await readCatalogOverrideMaps();
-  catalogCache = applyCatalogOverrideMaps(baseCatalog, overrideMaps);
-  catalogMtime = effectiveCatalogMtime;
-  m2OverrideMtime = currentM2OverrideMtime;
-  benchmarkOverrideMtime = currentBenchmarkOverrideMtime;
-  gpuPhysicalOverrideMtime = currentGpuPhysicalOverrideMtime;
-  caseRgbLoadOverrideMtime = currentCaseRgbLoadOverrideMtime;
-  catalogSpecOverrideMtime = currentCatalogSpecOverrideMtime;
+  catalogCache = applyCatalogOverrideMaps(
+    mergeCatalog(seedBaseFor(persisted), persisted.map((part) => reparseDanawaPart(part))),
+    overrideMaps
+  );
   return catalogCache;
 }
 
@@ -179,12 +138,6 @@ export async function loadCatalog() {
 export function invalidateCatalogCache() {
   catalogLoadInFlight = null;
   catalogCache = null;
-  catalogMtime = null;
-  m2OverrideMtime = null;
-  benchmarkOverrideMtime = null;
-  gpuPhysicalOverrideMtime = null;
-  caseRgbLoadOverrideMtime = null;
-  catalogSpecOverrideMtime = null;
   catalogRuntimeRevision += 1;
 }
 
@@ -203,15 +156,6 @@ export async function saveCatalog(parts: Part[]) {
   const overrideMaps = await readCatalogOverrideMaps();
   catalogCache = applyCatalogOverrideMaps(baseCatalog, overrideMaps);
   catalogRuntimeRevision += 1;
-  if (await persistenceMode() === "file") {
-    catalogMtime = await fileUpdatedAt(CATALOG_PATH, "");
-    baseCatalogCache = { mtime: catalogMtime, value: baseCatalog };
-    m2OverrideMtime = await fileUpdatedAt(M2_SLOT_OVERRIDES_PATH, "");
-    benchmarkOverrideMtime = await fileUpdatedAt(BENCHMARK_OVERRIDES_PATH, "");
-    gpuPhysicalOverrideMtime = await fileUpdatedAt(GPU_PHYSICAL_OVERRIDES_PATH, "");
-    caseRgbLoadOverrideMtime = await fileUpdatedAt(CASE_RGB_LOAD_OVERRIDES_PATH, "");
-    catalogSpecOverrideMtime = await fileUpdatedAt(CATALOG_SPEC_OVERRIDES_PATH, "");
-  }
   return catalogCache;
 }
 
@@ -229,15 +173,6 @@ async function upsertCatalogUnlocked(
   const overrideMaps = await readCatalogOverrideMaps();
   catalogCache = applyCatalogOverrideMaps(baseCatalog, overrideMaps);
   catalogRuntimeRevision += 1;
-  if (await persistenceMode() === "file") {
-    catalogMtime = await fileUpdatedAt(CATALOG_PATH, "");
-    baseCatalogCache = { mtime: catalogMtime, value: baseCatalog };
-    m2OverrideMtime = await fileUpdatedAt(M2_SLOT_OVERRIDES_PATH, "");
-    benchmarkOverrideMtime = await fileUpdatedAt(BENCHMARK_OVERRIDES_PATH, "");
-    gpuPhysicalOverrideMtime = await fileUpdatedAt(GPU_PHYSICAL_OVERRIDES_PATH, "");
-    caseRgbLoadOverrideMtime = await fileUpdatedAt(CASE_RGB_LOAD_OVERRIDES_PATH, "");
-    catalogSpecOverrideMtime = await fileUpdatedAt(CATALOG_SPEC_OVERRIDES_PATH, "");
-  }
   return catalogCache;
 }
 
@@ -245,7 +180,7 @@ export async function upsertCatalog(
   parts: Part[],
   options: { replaceDanawaCategories?: PartCategory[] } = {}
 ) {
-  return withSerializedFileMutation(CATALOG_PATH, () => upsertCatalogUnlocked(parts, options));
+  return upsertCatalogUnlocked(parts, options);
 }
 
 export interface CatalogPricePatch {
@@ -258,31 +193,11 @@ export interface CatalogPricePatch {
 
 export async function patchCatalogPrices(patches: CatalogPricePatch[]) {
   if (patches.length === 0) return [];
-  return withSerializedFileMutation(CATALOG_PATH, async () => {
-    if (await persistenceMode() === "postgres") {
-      const patched = await patchCatalogPriceRecords(patches);
-      if (patched) {
-        invalidateCatalogCache();
-        await loadCatalog();
-        return patched;
-      }
-    }
-    const current = await readJson<Part[]>(CATALOG_PATH, []);
-    const patchesById = new Map(patches.map((patch) => [patch.id, patch]));
-    const updates: Array<{ before: Part; after: Part }> = [];
-    const persisted = current.map((before) => {
-      const patch = patchesById.get(before.id);
-      if (!patch || before.source !== "danawa" || before.sourceProductCode !== patch.sourceProductCode || before.danawaUrl !== patch.danawaUrl) return before;
-      const after = { ...before, priceWon: patch.priceWon, priceCheckedAt: patch.priceCheckedAt };
-      updates.push({ before, after });
-      return after;
-    });
-    if (updates.length === 0) return [];
-    await writeCatalogRecords(persisted);
-    invalidateCatalogCache();
-    await loadCatalog();
-    return updates;
-  });
+  const patched = await patchCatalogPriceRecords(patches);
+  if (!patched) return [];
+  invalidateCatalogCache();
+  await loadCatalog();
+  return patched;
 }
 
 export function findPart(catalog: Part[], partId: string) {
@@ -554,6 +469,8 @@ export type PartSearchOptions = {
   listingPolicy?: ListingPolicy;
   missingField?: string;
   specFilter?: PartSpecFilter;
+  quoteBrandRestricted?: boolean;
+  quoteSellableOnly?: boolean;
 };
 
 function partSearchPredicateFor(
@@ -567,6 +484,8 @@ function partSearchPredicateFor(
   return (part: Part) => {
     if (options.partId && part.id !== options.partId) return false;
     if (category && part.category !== category) return false;
+    if (options.quoteBrandRestricted && !isQuoteBrandAllowed(part.category, part.brand)) return false;
+    if (options.quoteSellableOnly && !isQuoteSelectable(part)) return false;
     if (normalizedBrand && !(part.brand ?? "").toLocaleLowerCase("ko-KR").includes(normalizedBrand)) return false;
     if (options.quality && options.quality !== "all" && part.dataQuality !== options.quality) return false;
     if (options.freshness && options.freshness !== "all" && classifyDataFreshness(part.updatedAt, options.now) !== options.freshness) return false;
@@ -754,27 +673,23 @@ export function catalogEligibilitySummaryFor(catalog: Part[]): CatalogEligibilit
 }
 
 export async function catalogUpdatedAtFor(catalog: Part[]) {
-  const mode = await persistenceMode();
-  if (mode === "file" && catalogUpdatedAtCache?.catalog === catalog) return catalogUpdatedAtCache.value;
-  const movedOverrideTimes = mode === "postgres"
-    ? Object.values(await readCatalogOverrideMapUpdatedAtRecords())
-    : [];
+  if (catalogUpdatedAtCache?.catalog === catalog) return catalogUpdatedAtCache.value;
+  const [overrideTimes, benchmarkOverrides] = await Promise.all([
+    readCatalogOverrideMapUpdatedAtRecords(),
+    readBenchmarkOverrideRecords()
+  ]);
   const fileBackedTimes = await Promise.all([
-    ...(mode === "file" ? [
-      fileUpdatedAt(CATALOG_PATH, ""),
-      fileUpdatedAt(M2_SLOT_OVERRIDES_PATH, ""),
-      fileUpdatedAt(CATALOG_SPEC_OVERRIDES_PATH, "")
-    ] : []),
-    fileUpdatedAt(BENCHMARK_OVERRIDES_PATH, ""),
     fileUpdatedAt(GPU_PHYSICAL_OVERRIDES_PATH, ""),
     fileUpdatedAt(CASE_RGB_LOAD_OVERRIDES_PATH, "")
   ]);
-  // Benchmark, GPU physical, and case RGB overrides remain file-backed; only
-  // catalog-spec and M.2 override timestamps move with their shared DB rows.
+  // GPU physical and case RGB overrides remain file-backed artifacts; benchmark,
+  // catalog-spec, and M.2 override timestamps come from their shared DB rows.
+  const benchmarkUpdatedAt = Object.values(benchmarkOverrides).reduce((latest, override) => override.updatedAt > latest ? override.updatedAt : latest, "");
   const value = [
     catalog.reduce((latest, part) => part.updatedAt > latest ? part.updatedAt : latest, ""),
     ...fileBackedTimes,
-    ...movedOverrideTimes
+    benchmarkUpdatedAt,
+    ...Object.values(overrideTimes)
   ].filter(Boolean).sort().at(-1) ?? new Date().toISOString();
   catalogUpdatedAtCache = { catalog, value };
   return value;
@@ -784,22 +699,21 @@ async function buildCatalogMeta(snapshot?: CatalogSnapshot): Promise<CatalogMeta
   const now = Date.now();
   let catalog: Part[];
   let accessories: Awaited<ReturnType<typeof loadAccessories>>;
-  let accessoryCoverageMtime: string;
+  let accessoryCoverageUpdatedAt: string;
   if (snapshot) {
     catalog = snapshot.catalog;
     accessories = snapshot.accessories;
-    accessoryCoverageMtime = await fileUpdatedAt(ACCESSORY_COVERAGE_PATH, "");
+    accessoryCoverageUpdatedAt = (await readAccessoryCoverageRecord()).updatedAt;
   } else {
-    [catalog, accessories, accessoryCoverageMtime] = await Promise.all([
-      loadCatalog(),
-      loadAccessories(),
-      fileUpdatedAt(ACCESSORY_COVERAGE_PATH, "")
-    ]);
+    const coverage = await Promise.all([loadCatalog(), loadAccessories(), readAccessoryCoverageRecord()]);
+    catalog = coverage[0];
+    accessories = coverage[1];
+    accessoryCoverageUpdatedAt = coverage[2].updatedAt;
   }
   if (catalogMetaCache
     && catalogMetaCache.catalog === catalog
     && catalogMetaCache.accessories === accessories
-    && catalogMetaCache.accessoryCoverageMtime === accessoryCoverageMtime
+    && catalogMetaCache.accessoryCoverageUpdatedAt === accessoryCoverageUpdatedAt
     && (!snapshot || (catalogMetaCache.catalogUpdatedAt === snapshot.catalogUpdatedAt && catalogMetaCache.accessoryUpdatedAt === snapshot.accessoryUpdatedAt))
     && now < catalogMetaCache.catalogSpecCoverageValidUntil) {
     return catalogMetaCache.value;
@@ -858,12 +772,13 @@ async function buildCatalogMeta(snapshot?: CatalogSnapshot): Promise<CatalogMeta
       priced: catalog.filter((part) => isKnownPrice(part.priceWon)).length,
       unpriced: catalog.filter((part) => !isKnownPrice(part.priceWon)).length
     },
-    catalogUpdatedAt
+    catalogUpdatedAt,
+    recommendationFloorWon: recommendationFloorWonFor(catalog)
   };
   catalogMetaCache = {
     catalog,
     accessories,
-    accessoryCoverageMtime,
+    accessoryCoverageUpdatedAt,
     catalogSpecCoverageValidUntil,
     catalogUpdatedAt,
     accessoryUpdatedAt,

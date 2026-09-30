@@ -92,6 +92,23 @@ describe("catalog merge", () => {
     expect(merged.map((item) => item.name)).toEqual(["유지할 CPU", "현재 쿨러"]);
   });
 
+  it("limits restricted categories to quote-allowed brands when the policy flag is set", () => {
+    const catalog = [
+      part({ sourceProductCode: "s1", category: "ssd", name: "삼성 SSD", brand: "삼성전자" }),
+      part({ sourceProductCode: "s2", category: "ssd", name: "하이닉스 SSD", brand: "SK하이닉스" }),
+      part({ sourceProductCode: "s3", category: "ssd", name: "타사 SSD", brand: "ADATA" }),
+      part({ sourceProductCode: "p1", category: "psu", name: "시소닉 파워", brand: "시소닉" }),
+      part({ sourceProductCode: "p2", category: "psu", name: "타사 파워", brand: "잘만" }),
+      part({ sourceProductCode: "c1", category: "cpu", name: "CPU", brand: "AMD" })
+    ];
+
+    expect(searchParts(catalog, "ssd", undefined, 10, { quoteBrandRestricted: true }).map((item) => item.sourceProductCode)).toEqual(["s1", "s2"]);
+    expect(searchParts(catalog, "psu", undefined, 10, { quoteBrandRestricted: true }).map((item) => item.sourceProductCode)).toEqual(["p1"]);
+    expect(searchParts(catalog, "cpu", undefined, 10, { quoteBrandRestricted: true }).map((item) => item.sourceProductCode)).toEqual(["c1"]);
+    expect(countParts(catalog, "ssd", undefined, { quoteBrandRestricted: true })).toBe(2);
+    expect(searchParts(catalog, "ssd", undefined, 10, {}).map((item) => item.sourceProductCode)).toEqual(["s1", "s2", "s3"]);
+  });
+
   it("returns stable pages for the picker without changing sort order", () => {
     const catalog = [
       part({ sourceProductCode: "1", name: "CPU A", priceWon: 10000 }),

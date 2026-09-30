@@ -22,7 +22,6 @@ export type ApiRequestInit = RequestInit & {
 export type ApiStatus = "unknown" | "online" | "offline" | "degraded";
 export type ApiStatusDetails = { status: ApiStatus; lastSuccessAt?: string; fallbackAt?: string; fallbackPath?: string; fallbackCachedAt?: string };
 
-import { LOCAL_OFFLINE_BUILD } from "./offline/build-mode";
 import { ownerSessionModeSupported } from "./owner-session-mode";
 
 const API_PUBLIC_READ_CACHE_PREFIX = "pc-supporter-api-cache:v2:";
@@ -36,9 +35,6 @@ const API_REQUEST_TIMEOUT_MS = 20_000;
 const configuredApiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? "").trim().replace(/\/+$/, "");
 
 export function apiRequestUrl(path: string) {
-  if (LOCAL_OFFLINE_BUILD) {
-    throw new ApiError("로컬 설치 모드에서는 원격 API 주소를 사용할 수 없습니다.", 503, { code: "OFFLINE_NETWORK_DISABLED", path });
-  }
   if (!configuredApiBaseUrl || /^https?:\/\//i.test(path)) return path;
   return new URL(path, `${configuredApiBaseUrl}/`).toString();
 }
@@ -441,17 +437,6 @@ async function requestApi<T>(path: string, init?: ApiRequestInit): Promise<T> {
 }
 
 export function api<T>(path: string, init?: ApiRequestInit): Promise<T> {
-  if (LOCAL_OFFLINE_BUILD) {
-    return import("./offline/offline-api").then(async (offlineApi) => {
-      const { bundledOfflineCatalogSnapshot } = await import("./offline/bundled-catalog");
-      try {
-        return await offlineApi.offlineApiRequest<T>(path, init, await bundledOfflineCatalogSnapshot());
-      } catch (error: unknown) {
-        if (error instanceof offlineApi.OfflineApiError) throw new ApiError(error.message, error.status, error.payload);
-        throw error;
-      }
-    });
-  }
   const key = inFlightReadRequestKey(path, init);
   if (!key) return requestApi<T>(path, init);
   const existing = inFlightReadRequests.get(key);

@@ -17,7 +17,6 @@ function contentSecurityPolicyHeader() {
   const apiOrigin = apiBaseUrlCspOrigin(process.env.VITE_API_BASE_URL);
   return createContentSecurityPolicy({
     connectOrigins: apiOrigin ? [apiOrigin] : [],
-    allowRemoteAssets: true,
     includeFrameAncestors: true
   });
 }

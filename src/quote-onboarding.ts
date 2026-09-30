@@ -1,5 +1,5 @@
 import { GAMING_GRAPHICS_PRESET_LABELS, GAMING_UPSCALING_LABELS, RECOMMENDATION_PERFORMANCE_TIER_LABELS } from "../shared/types";
-import type { GamingGraphicsPreset, GamingRefreshRate, GamingResolution, GamingUpscaling, RecommendationPerformanceTier, RecommendationPriority, RecommendationProfile } from "../shared/types";
+import type { GamingGraphicsPreset, GamingRefreshRate, GamingResolution, GamingUpscaling, RecommendationFloorWon, RecommendationPerformanceTier, RecommendationPriority, RecommendationProfile } from "../shared/types";
 import { GAMING_GAME_CATEGORY_LABELS, GAMING_GAMES, gamingAdvisoryTuningFor } from "../shared/gaming-catalog";
 import type { GamingGameCategory, GamingGameId, GamingGameOption } from "../shared/gaming-catalog";
 
@@ -468,19 +468,32 @@ function roundTo100k(won: number): number {
   return Math.round(won / 100_000) * 100_000;
 }
 
-export function requiredGamingBudgetFor(resolution: GamingResolution, refreshRate: GamingRefreshRate, games: readonly OnboardingGame[], options: GamingBudgetOptions = {}): RequiredBudgetRange {
-  const tuning = gamingAdvisoryTuningFor(resolution, { gameIds: games, ...options });
-  const required = roundTo100k(BASE_REQUIRED_BUDGET_WON[resolution][refreshRate] * tuning.demandMultiplier);
-  return { minWon: roundTo100k(required * 0.92), maxWon: roundTo100k(required * 1.08) };
+// 카탈로그에서 실제로 만들 수 있는 최저 호환 구성이 참고 하한보다 비싸면
+// 하한을 실측 최저가로 올린다 — 부품 풀로 만들 수 없는 목표를 "예산 여유"로
+// 안내하면 온보딩에서 낮춘 예산이 자동 구성에서 반드시 실패한다.
+function floorBoundedBudgetRange(range: RequiredBudgetRange, floorWon: number | undefined): RequiredBudgetRange {
+  if (floorWon === undefined || !Number.isFinite(floorWon)) return range;
+  const floorMinWon = Math.ceil(floorWon / BUDGET_STEP_WON) * BUDGET_STEP_WON;
+  if (floorMinWon <= range.minWon) return range;
+  return {
+    minWon: floorMinWon,
+    maxWon: Math.max(range.maxWon, Math.ceil(floorMinWon * 1.1 / BUDGET_STEP_WON) * BUDGET_STEP_WON)
+  };
 }
 
-export function gamingTargetShortfall(state: OnboardingState): RequiredBudgetRange | null {
+export function requiredGamingBudgetFor(resolution: GamingResolution, refreshRate: GamingRefreshRate, games: readonly OnboardingGame[], options: GamingBudgetOptions = {}, floorWon?: number): RequiredBudgetRange {
+  const tuning = gamingAdvisoryTuningFor(resolution, { gameIds: games, ...options });
+  const required = roundTo100k(BASE_REQUIRED_BUDGET_WON[resolution][refreshRate] * tuning.demandMultiplier);
+  return floorBoundedBudgetRange({ minWon: roundTo100k(required * 0.92), maxWon: roundTo100k(required * 1.08) }, floorWon);
+}
+
+export function gamingTargetShortfall(state: OnboardingState, floors?: RecommendationFloorWon): RequiredBudgetRange | null {
   if (state.usecase !== "gaming") return null;
   const required = requiredGamingBudgetFor(state.resolution, state.refreshRate, state.games, {
     graphicsPreset: state.graphicsPreset,
     rayTracing: state.rayTracing,
     upscaling: state.upscaling
-  });
+  }, floors?.gaming?.[state.resolution] ?? floors?.discreteGpu);
   return state.budgetWon < required.minWon ? required : null;
 }
 
@@ -494,31 +507,34 @@ const WORK_REQUIRED_BUDGET_WON: Record<OnboardingWork, Record<OnboardingIntensit
   office: { light: 800_000, balanced: 1_000_000, heavy: 1_400_000 }
 };
 
-export function requiredSpecBudgetFor(specTier: OnboardingSpecTier, includeGpu: boolean, memoryGb: number, storageGb: number): RequiredBudgetRange {
+export function requiredSpecBudgetFor(specTier: OnboardingSpecTier, includeGpu: boolean, memoryGb: number, storageGb: number, floorWon?: number): RequiredBudgetRange {
   const tierBase = { entry: 900_000, high: 1_600_000, top: 2_700_000 }[specTier];
   const gpuCost = includeGpu ? 600_000 : 0;
   const memoryCost = memoryGb >= 128 ? 800_000 : memoryGb >= 64 ? 300_000 : 0;
   const storageCost = storageGb >= 4000 ? 500_000 : storageGb >= 2000 ? 200_000 : 0;
   const base = tierBase + gpuCost + memoryCost + storageCost;
-  return { minWon: roundTo100k(base * 0.9), maxWon: roundTo100k(base * 1.15) };
+  return floorBoundedBudgetRange({ minWon: roundTo100k(base * 0.9), maxWon: roundTo100k(base * 1.15) }, floorWon);
 }
 
-export function requiredWorkBudgetFor(works: readonly OnboardingWork[], intensity: OnboardingIntensity | undefined): RequiredBudgetRange {
+export function requiredWorkBudgetFor(works: readonly OnboardingWork[], intensity: OnboardingIntensity | undefined, floorWon?: number): RequiredBudgetRange {
   const primary = primaryWorkFor(works)?.id ?? "office";
   const base = WORK_REQUIRED_BUDGET_WON[primary][intensity ?? "balanced"];
-  return { minWon: roundTo100k(base * 0.9), maxWon: roundTo100k(base * 1.15) };
+  return floorBoundedBudgetRange({ minWon: roundTo100k(base * 0.9), maxWon: roundTo100k(base * 1.15) }, floorWon);
 }
 
-export function targetBudgetRangeFor(state: OnboardingState): RequiredBudgetRange | null {
+export function targetBudgetRangeFor(state: OnboardingState, floors?: RecommendationFloorWon): RequiredBudgetRange | null {
   if (state.usecase === "gaming") {
     return requiredGamingBudgetFor(state.resolution, state.refreshRate, state.games, {
       graphicsPreset: state.graphicsPreset,
       rayTracing: state.rayTracing,
       upscaling: state.upscaling
-    });
+    }, floors?.gaming?.[state.resolution] ?? floors?.discreteGpu);
   }
-  if (state.usecase === "work") return requiredWorkBudgetFor(state.works, state.intensity);
-  if (state.mode === "spec") return requiredSpecBudgetFor(state.specTier, state.specIncludeGpu, state.memoryGb, state.storageGb);
+  if (state.usecase === "work") {
+    const floorWon = workEstimateFor(state.works, state.intensity).gpu === "내장 그래픽" ? floors?.integrated : floors?.discreteGpu;
+    return requiredWorkBudgetFor(state.works, state.intensity, floorWon);
+  }
+  if (state.mode === "spec") return requiredSpecBudgetFor(state.specTier, state.specIncludeGpu, state.memoryGb, state.storageGb, state.specIncludeGpu ? floors?.discreteGpu : floors?.integrated);
   return null;
 }
 
@@ -554,6 +570,8 @@ export interface RecommendParams {
 
 export function recommendParamsFor(state: OnboardingState): RecommendParams {
   if (state.usecase === "gaming") {
+    // 요약 화면에 표시한 예산 티어 추정(저예산은 16GB·500GB)과 같은 구성을 보낸다.
+    const estimate = budgetEstimateFor(state.budgetWon, "gaming");
     return {
       profile: "gaming",
       priority: "performance",
@@ -565,9 +583,8 @@ export function recommendParamsFor(state: OnboardingState): RecommendParams {
       gamingGraphicsPreset: state.graphicsPreset,
       gamingRayTracing: state.rayTracing,
       gamingUpscaling: state.upscaling,
-      // 64GB는 3.8M 최상위 게이밍 티어에서만 나온다 — 표시 라벨을 역산하지 않고 티어 경계를 직접 둔다.
-      memoryCapacityGb: state.budgetWon >= 3_800_000 ? 64 : 32,
-      storageCapacityGb: state.budgetWon >= 3_000_000 ? 2000 : 1000
+      memoryCapacityGb: capacityGbFromEstimateLabel(estimate.memory),
+      storageCapacityGb: capacityGbFromEstimateLabel(estimate.storage)
     };
   }
   if (state.usecase === "work") {

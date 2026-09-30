@@ -13,17 +13,6 @@ try {
   applyTheme("light");
 }
 
-function registerOfflineShell() {
-  if (!import.meta.env.PROD || typeof window === "undefined" || !("serviceWorker" in navigator)) return;
-  window.addEventListener("load", () => {
-    void navigator.serviceWorker.register("/service-worker.js").catch((error: unknown) => {
-      console.warn("[PC Supporter] offline shell registration failed", error);
-    });
-  });
-}
-
-registerOfflineShell();
-
 let printOpenedDetails: HTMLDetailsElement[] = [];
 window.addEventListener("beforeprint", () => {
   printOpenedDetails = Array.from(document.querySelectorAll<HTMLDetailsElement>("details:not([open])"));

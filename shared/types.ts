@@ -2217,9 +2217,9 @@ export type BenchmarkOverrideOperation = "create" | "update" | "unchanged";
 
 export interface PersistenceDiagnostics {
   databaseConfigured: boolean;
-  storageMode: "postgres" | "file";
+  storageMode: "postgres";
   ready: boolean;
-  unavailableReason?: "database_unavailable" | "file_storage_unavailable" | "rate_limit_key_unconfigured";
+  unavailableReason?: "database_unavailable" | "rate_limit_key_unconfigured";
 }
 
 export interface BenchmarkOverride {
@@ -2385,6 +2385,15 @@ export interface Benchmark3DMarkReviewWorkPackage {
   items: Benchmark3DMarkReviewWorkItem[];
 }
 
+export interface RecommendationFloorWon {
+  /** 내장 그래픽 최소 구성(RAM 16GB·SSD 500GB 기준)의 최저 호환 합계. */
+  integrated?: number;
+  /** 외장 GPU 포함 최소 구성의 최저 호환 합계 (게임 VRAM 참고 기준 미적용). */
+  discreteGpu?: number;
+  /** 게이밍 요청의 해상도별 VRAM 참고 기준을 적용한 최소 구성 합계. */
+  gaming?: Partial<Record<GamingResolution, number>>;
+}
+
 export interface ServiceMeta {
   catalogCount: number;
   catalogEligibleCount?: number;
@@ -2417,9 +2426,10 @@ export interface ServiceMeta {
     unpriced: number;
   };
   catalogUpdatedAt: string;
+  recommendationFloorWon?: RecommendationFloorWon;
   crawler: CrawlStatus;
   engineVersion: string;
-  storageMode: "postgres" | "file";
+  storageMode: "postgres";
   adminAuthEnabled: boolean;
   /** Present only when this request carries a valid admin session. */
   adminSessionAuthenticated?: boolean;

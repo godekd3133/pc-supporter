@@ -8,8 +8,7 @@ describe("owner session browser mode", () => {
     expect(ownerSessionModeSupportedFor({ protocol: "http:", hostname: "127.0.0.1", port: "5173" })).toBe(true);
   });
 
-  it("keeps offline, native, Capacitor and unsupported HTTP origins out of session-v1", () => {
-    expect(ownerSessionModeSupportedFor({ protocol: "https:", hostname: "pc.example.com", port: "" }, { offline: true })).toBe(false);
+  it("keeps native, Capacitor and unsupported HTTP origins out of session-v1", () => {
     expect(ownerSessionModeSupportedFor({ protocol: "https:", hostname: "pc.example.com", port: "" }, { native: true })).toBe(false);
     expect(ownerSessionModeSupportedFor({ protocol: "capacitor:", hostname: "localhost", port: "" })).toBe(false);
     expect(ownerSessionModeSupportedFor({ protocol: "http:", hostname: "localhost", port: "4173" })).toBe(false);

@@ -21,16 +21,15 @@ export interface PriceWatchlistCapabilities {
   serverSharing: boolean;
 }
 
-export function priceWatchlistCapabilitiesFor(offlineMode: boolean): PriceWatchlistCapabilities {
-  const remoteFeaturesEnabled = !offlineMode;
+export function priceWatchlistCapabilitiesFor(): PriceWatchlistCapabilities {
   return {
     catalogSearch: true,
     catalogSnapshotPrices: true,
     browserLocalWatchlist: true,
-    priceHistory: remoteFeaturesEnabled,
-    automaticRefresh: remoteFeaturesEnabled,
-    alerts: remoteFeaturesEnabled,
-    serverSharing: remoteFeaturesEnabled
+    priceHistory: true,
+    automaticRefresh: true,
+    alerts: true,
+    serverSharing: true
   };
 }
 
@@ -38,15 +37,6 @@ export function priceWatchlistStatusForMode(status: PriceWatchStatusFilter, capa
   if (status === "alerts" && !capabilities.alerts) return "all";
   if (["buy", "wait", "observe"].includes(status) && !capabilities.priceHistory) return "all";
   return status;
-}
-
-export interface PriceWatchSnapshotDates {
-  part?: string;
-  accessory?: string;
-}
-
-export function priceWatchSnapshotDateFor(kind: CatalogWatchEntry["kind"], dates: PriceWatchSnapshotDates | undefined) {
-  return kind === "accessory" ? dates?.accessory : dates?.part;
 }
 
 export interface PriceWatchViewObservation {

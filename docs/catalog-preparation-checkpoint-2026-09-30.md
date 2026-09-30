@@ -1,54 +1,44 @@
 # 카탈로그 준비 체크포인트 — 2026-09-30
 
-## 현재 판정
+## 마감 판정
 
-핵심 부품과 주변 부품을 모두 로컬에서 확보하고 빌드 데이터까지 만드는 목표는 **진행 중**입니다. 이 문서는 100% 확보나 목표 완료를 뜻하지 않습니다.
+이번 실행에서 현재 작업 트리의 `npm run build:local-bundle`과 `npm test`를 순서대로 마쳤습니다. 빌드는 exit 0, 테스트는 327개 파일·1,772개 테스트 통과입니다. 이번 기록은 현재 빌드와 테스트 결과를 고정한 마감 요약이며, 카탈로그 준비 목표의 완료를 뜻하지 않습니다.
 
-상품 식별, 판매 중 표시, 가격, 이미지 URL, 데이터 행 수는 필수 사양이 전부 확인됐다는 증거가 아닙니다. 주변 부품 manifest의 선언 수 충돌이 해소될 때까지 수집 상태는 `partial`로 유지합니다.
+원본 주변 부품의 전체 관측 RootScope는 여전히 `partial`입니다. 주변 부품 source 4,484개와 core 5,648개가 빌드에 반영됐고, 미완료 수집·사양 확인 및 목록 manifest count conflict가 남아 있습니다. 추가 수집이나 개발은 이번 마감 범위에 포함하지 않습니다.
 
-## 현재 카탈로그 근거
+## 현재 빌드와 카탈로그 근거
 
-| 범위 | 현재 근거 | 해석 |
+| 범위 | 현재 결과 | 해석 |
 | --- | --- | --- |
-| 핵심 카탈로그 | 5,648개. 필수 필드 기준 4,115개 확인, 1,533개 확인 필요. | 총 행 수가 아니라 필수 사양이 남은 SKU를 기준으로 계속 보강합니다. |
-| 주변 부품 | 4,181개: `live` 4,018개, `incomplete` 121개, `seed` 42개. 사양 평가 상태는 완료 3,003개, 일부 확인 301개, 미평가 877개입니다. | `live`는 판매 목록의 상세를 수집했다는 뜻입니다. 모든 장착 조건을 확인했다는 뜻은 아닙니다. |
-| 주변 부품 가격 | 4,172개에 가격 근거가 있고, 3,903개를 확인했습니다. | 가격 재확인 상태는 상품 식별 및 사양 완성도와 별도로 관리합니다. |
-| 주변 부품 이미지 | 실제 이미지 URL 4,139개, 수동 아이콘 42개. | URL이 있다는 사실만으로 화면 렌더링과 상품 식별까지 확인했다고 보지 않습니다. |
-| 주변 부품 기본 목록 | 선언 상품 3,647개 중 고유 관측 3,463개. 보충 목록을 합치면 고유 관측 3,911개입니다. 선언 수보다 264개 많습니다. | `partial` 상태를 유지합니다. 원본 선언 수를 임의로 바꾸거나 충돌을 없애지 않습니다. |
-| 주변 부품 bundle 목록 | 66페이지를 수집했습니다. 고유 parent 2,521개, 고유 member 1,241개입니다. parent가 없는 member 400개, member가 없는 parent 97개입니다. | 서로 겹치지 않는 누락 식별자 수는 아직 계산하지 않았습니다. 400과 97을 단순 합산하지 않습니다. |
+| 핵심 카탈로그 | 5,648개: 필수 필드 완료 4,115개, 추가 확인 1,533개. | 원본 핵심 inventory는 complete로 표기되지만 필수 사양 확인은 남아 있습니다. |
+| 주변 부품 source/build | 4,484개: `live` 4,321개, `incomplete` 121개, `seed` 42개. 사양 평가는 완료 3,301개, 일부 확인 306개, 미평가 877개입니다. | `live`는 판매 목록 상세 수집 상태이며, 모든 장착 조건 확인을 뜻하지 않습니다. 원본 관측 범위는 `partial`입니다. |
+| 주변 부품 가격·이미지 | 가격 있음 4,474개, 가격 없음 10개. 이미지 URL 있음 4,442개, Danawa 이미지 URL 누락 0개, 수동 아이콘 42개. | 이미지 URL 존재는 화면 렌더링 확인을 뜻하지 않습니다. |
+| 정합성 | 중복 PCode 0개, core와의 중복 0개. | 현재 source 검사 결과입니다. 목록 원본의 선언 수 충돌은 별도로 남아 있습니다. |
+| 기본 주변 부품 목록 | manifest 선언 3,647개, 고유 관측 3,463개. 보충 관측을 합치면 3,911개로 선언 수보다 264개 많습니다. | manifest의 count conflict 때문에 accessory inventory는 `partial`로 유지합니다. 선언 수를 임의로 고치지 않습니다. |
+| Bundle 상세 import | 292개 imported, 102개 quarantined: fetch failed 101개, abort 1개. | 격리 원인은 상세 fetch 실패/중단입니다. 이를 metadata 부재로 설명하지 않습니다. 전체 import 완료를 뜻하지 않습니다. |
+| 11개 source pilot | canonical identity 확인 후 11개 적용 완료. 가격 확인 10/11, 가격 미확인 1/11, 실제 이미지 URL 11/11, 필수 사양 필드 확인 11/11. | pilot 결과이며 전체 미확인 SKU 해결이나 전체 import 완료를 뜻하지 않습니다. |
 
-`BEST`, `HIGH_PRICE`, `LOW_PRICE` 정렬 범위의 1~22페이지 관측은 근거 파일로만 보존합니다. 원본 수집 결과와 정렬 순서를 그대로 두고 로컬 카탈로그 순서에 맞춰 정렬하거나 덮어쓰지 않습니다.
+빌드 manifest는 public `core.json`, `accessories.json` 두 파일을 생성했고, private sidecar file count는 26입니다. 출력 디렉터리의 실제 파일은 public 쪽 manifest 포함 3개, `dist-local/data` 쪽은 번들된 catalog와 bundle manifest를 포함해 28개입니다. 빌드 상태는 `local-catalog-included-partial`입니다.
 
-## 상품 식별 및 가져오기 기준
+## 가져오기와 원본 경계
 
-주변 부품 가져오기는 canonical identity 근거를 요구합니다. Open Graph 상품 식별이 없고 기존 primary identity도 없을 때는 JSON-LD의 `@type: Product`, `offers`의 `@type: AggregateOffer`, PCode를 포함한 상품 URL, 그리고 URL PCode와의 일치를 함께 확인한 경우에만 통과시킵니다.
+주변 부품 가져오기는 canonical identity 근거를 요구합니다. pilot 11개는 해당 기준으로 확인하고 적용했습니다. 이 결과를 전체 주변 부품에 일반화하지 않습니다. parent의 publisher/geo 값을 자식에 상속하지 않고, 원본 목록과 정렬은 변경하지 않습니다.
 
-페이지네이션 actor 수정은 pilot에서 동작을 확인 중입니다. 전체 가져오기에 적용하지 않았습니다. pilot 수집 결과를 반영하기 전까지 `noApply`를 유지합니다.
+기본 목록과 보충 목록을 합친 관측은 manifest 선언 수보다 264개 많습니다. bundle 관측은 66페이지, 고유 parent 2,521개, 고유 member 1,241개이며, parent 없는 member 400개와 member 없는 parent 97개가 보고돼 있습니다. 두 누락 수의 중복 없는 합집합은 아직 계산·검증되지 않았습니다.
 
-## 이미 확인된 코드 및 화면 검증
+## 코드 및 화면 검증 상태
 
-- 추천 엔진은 후보를 줄이기 전에 남은 필수 부품의 낙관적 최저 비용을 예산과 비교하고, HDD 부품 ID를 조합 중복 키에 포함합니다. 관련 테스트가 통과했습니다. 앞선 전체 테스트는 285개 파일·1,521개 테스트 통과였지만 이후 코드와 테스트가 추가되어 최종 개수로 재사용하면 안 됩니다.
-- 결과 화면의 진행 맥락 관련 수정 3건과 같은 견적 재검사 경로가 앞선 검증에서 통과했습니다.
-- 처음 여는 lazy `PartPicker`를 `src/App.tsx`의 로컬 Suspense 경계 안에 뒀습니다. 수정 전 브라우저 근거에서는 picker chunk 로딩 중 `.app-shell` 전체가 숨겨지고 finding 버튼의 포커스가 사라졌습니다. 수정 후에는 앱 shell과 trigger가 유지되고 Esc 뒤 같은 finding 버튼으로 포커스가 돌아옵니다. 최신 full browser smoke가 통과했습니다.
-- 지연된 finding 상세 chunk에서 persistence deep link 포커스 시점 문제가 별도로 확인됐습니다. 기존 결과 화면은 lazy 카드가 나타나기 전에 pending finding focus를 완료 처리했고, 약 2초 재시도 뒤에는 포커스 시도를 멈췄습니다. observer 기반 보정이 진행 중이며 persistence 확인은 남아 있습니다. 이 문제는 picker Suspense 수정과 분리해서 추적합니다.
-- 가장 최근 공유된 전체 테스트 기록은 286개 파일·1,525개 테스트입니다. 그 뒤 CDN 및 identity 테스트가 추가됐지만, 현 작업 트리의 최종 전체 개수는 아직 확인하지 않았습니다. 다음 전체 실행의 실제 결과를 보고하고 과거 수치를 최종값으로 재사용하지 않습니다.
+- 현재 작업 트리 `npm run build:local-bundle`: 성공. 로그는 `/tmp/pc-supporter-close-build.log`에 있습니다.
+- 현재 작업 트리 `npm test`: 327개 파일·1,772개 테스트 통과. 로그는 `/tmp/pc-supporter-close-test.log`에 있습니다.
+- 최근 full browser smoke에서는 picker 열기 및 닫기(Esc) 후 기존 trigger 복귀 경로가 통과했습니다.
+- persistence 검증은 전체 통과가 아닙니다. revision 경합을 포함한 focus timing 문제를 진단했고, 전체 persistence smoke의 최종 0-pass 또는 성공 주장을 하지 않습니다. isolated 결과를 전체 persistence 통과로 확대하지 않습니다.
+- 이 마감 실행은 위 build와 test만 수행했습니다. 별도 demo/API metadata readback이나 persistence 전체 검증 결과로 해석하지 않습니다.
 
-## 다음 체크포인트
+## 완료되지 않은 범위
 
-1. 다음 11-SKU source pilot에서 미확인 SKU를 정렬하고 parent/member 식별을 확인합니다. 원본 목록 캡처는 변경하지 않습니다.
-2. parent와 member 누락 식별자의 중복 없는 합집합을 계산하고 manifest와 대조합니다. 264개 선언 수 충돌을 추정으로 해소하지 않습니다.
-3. pilot을 승인한 뒤 source identity 및 pagination 기준을 전체 주변 부품 가져오기에 적용합니다. 승인된 원본으로 핵심 부품과 주변 부품 data pack을 다시 빌드합니다.
-4. 새 데이터로 전체 unit test, typecheck, build/data pack, 브라우저 검수를 진행합니다. 지연 chunk persistence focus와 picker Esc 복귀 경로를 포함합니다.
-5. 완료를 주장하기 전에 필수 사양 최신성 및 누락 목록을 다시 확인합니다.
+- 원본 주변 부품 전체 관측과 manifest count conflict는 `partial`입니다.
+- Bundle import에는 102개 quarantined 항목이 남아 있고, parent/member 누락 식별자의 합집합은 미검증입니다.
+- 주변 부품 미평가 877개와 핵심 사양 추가 확인 1,533개가 남아 있습니다.
+- 전체 persistence browser smoke는 완료로 판정하지 않습니다.
 
-## 작업공간 및 QA 경계
-
-- `main.tsx`, `HistoryView.tsx`, `SavedBuildDialogs.tsx`, iOS 프로젝트 파일의 기존 작업을 보존합니다. 다른 작업자가 수정 중인 dirty 파일과 미추적 파일도 유지합니다.
-- 이 체크포인트 작업으로 공유 worktree를 stage, commit, push, reset, clean 하지 않습니다.
-- 격리 QA 설정 파일은 `/tmp/pc-supporter-final-qa-config.json`입니다. 비밀번호와 session 값은 이 문서, 명령, 로그에 복사하지 않습니다.
-- 이번 작업에서 소유한 helper, demo, QA 프로세스(관리 helper 42644, demo 42647, QA 58178/58179)는 해당 실행의 정리 절차로만 종료합니다. 사용자 소유 5173/4174 서비스와 다른 기존 서버는 건드리지 않습니다.
-- 화면 근거는 `docs/evidence/demo-readiness-2026-09-30/`에 있습니다. 이미지가 있더라도 최종 재빌드 데이터의 persistence 검수 완료를 대신하지 않습니다.
-
-## 완료로 판정하지 않는 조건
-
-필수 핵심 사양 미확인, 주변 부품 식별 미조정, parent/member 누락 합집합 미계산, 전체 가져오기 미적용, 최종 재빌드 데이터의 full QA 미완료 중 하나라도 남아 있으면 목표를 완료로 표시하지 않습니다. 남은 수량과 검증되지 않은 lane을 분리해 보고합니다.
+따라서 현재 결과는 빌드 및 자동 테스트 통과이며 카탈로그 확보 목표 100% 완료가 아닙니다.
