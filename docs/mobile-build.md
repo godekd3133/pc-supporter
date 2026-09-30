@@ -116,6 +116,10 @@ npm run build
 
 배포 스크립트는 production admin 인증값이 없으면 public deployment를 거부하고, Caddy 설정을 먼저 백업한 뒤 별도 site block만 추가합니다. 첫 기동에서 `tsx`가 저사양 Lightsail 인스턴스의 cold compile에 시간을 사용할 수 있으므로 내부 `/api/health`는 기본 240초 동안 systemd 상태와 함께 반복 확인합니다. `PC_SUPPORTER_INTERNAL_HEALTH_TIMEOUT_SECONDS`로 이 대기 시간을 조정할 수 있습니다. 외부 `/api/health`는 `https://localhost` native origin을 함께 보내 CORS header까지 확인한 뒤 성공으로 종료합니다. AWS session이 만료됐거나 SSH가 `Permission denied (publickey)`이면 bundle dry-run까지만 수행하고 배포 성공으로 기록하지 않습니다.
 
+### main push 자동 배포
+
+`main`에 push하면 `.github/workflows/ci.yml`의 `deploy` job이 `verify`, `browser-smoke`, `container-smoke`를 모두 통과한 뒤 `ubuntu-24.04` runner에서 위 스크립트를 `--preserve-env`로 실행합니다. 배포용 SSH private key는 repo secret `LIGHTSAIL_DEPLOY_SSH_KEY`(전용 ed25519 키, `ubuntu`의 `authorized_keys`에 등록됨)를 사용하고, 호스트 키는 워크플로우에 고정합니다. 배포를 건너뛰려면 PR에만 커밋하거나 `main` 외 브랜치에 push합니다.
+
 ## iOS Simulator와 archive
 
 Simulator 검증은 Xcode에서 `ios/App/App.xcodeproj`의 `App` scheme을 열어 실행합니다. CLI에서 web assets를 먼저 갱신한 뒤 `xcodebuild`로 simulator build를 실행할 수 있습니다. 실제 기기용 archive는 Apple Developer Team ID와 자동 서명이 필요합니다.
