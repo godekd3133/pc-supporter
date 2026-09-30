@@ -17,9 +17,50 @@
         if (localStorage.getItem("pc-supporter-theme") === "dark") document.documentElement.dataset.theme = "dark";
       } catch {}
     </script>
+    <style>
+      html, body, #root { min-height: 100%; margin: 0; background: #f9fafb; }
+      html[data-theme="dark"] { color-scheme: dark; background: #0f1218; color: #f4f6f8; }
+      html[data-theme="dark"] body, html[data-theme="dark"] #root { background: #0f1218; color: #f4f6f8; }
+      #root { min-height: 100vh; min-height: 100dvh; }
+      .app-bootstrap-fallback {
+        box-sizing: border-box; display: grid; min-height: 100vh; min-height: 100dvh;
+        place-content: center; justify-items: center; gap: 12px; padding: 24px;
+        color: #566b7d; background: #f9fafb; font: 600 14px/1.5 system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+        text-align: center;
+      }
+      html[data-theme="dark"] .app-bootstrap-fallback { color: #a5afbd; background: #0f1218; }
+      .app-bootstrap-spinner {
+        width: 24px; height: 24px; border: 3px solid #dbe5ee; border-top-color: #3182f6;
+        border-radius: 50%; animation: app-bootstrap-spin 800ms linear infinite;
+      }
+      html[data-theme="dark"] .app-bootstrap-spinner { border-color: #2b3441; border-top-color: #8dbdff; }
+      @keyframes app-bootstrap-spin { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) { .app-bootstrap-spinner { animation-duration: 2s; } }
+    </style>
+    <script>
+      (() => {
+        const showStartupFailure = () => {
+          const note = document.getElementById("app-bootstrap-fallback-note");
+          if (!note) return;
+          note.textContent = "화면을 불러오지 못했습니다. 인터넷 연결을 확인하고 앱을 다시 열어 주세요.";
+          note.parentElement?.setAttribute("role", "alert");
+        };
+        window.addEventListener("error", (event) => {
+          const target = event.target;
+          if (target instanceof Element && (target.tagName === "SCRIPT" || target.tagName === "LINK")) showStartupFailure();
+        }, true);
+        window.addEventListener("unhandledrejection", showStartupFailure);
+        window.setTimeout(showStartupFailure, 15000);
+      })();
+    </script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div id="app-bootstrap-fallback" class="app-bootstrap-fallback" role="status" aria-live="polite">
+        <span class="app-bootstrap-spinner" aria-hidden="true"></span>
+        <span id="app-bootstrap-fallback-note">PC Supporter를 불러오고 있어요.</span>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { apiBaseUrlCspOrigin, contentSecurityPolicyMetaFromHtml, createContentSecurityPolicy, parseCspConnectOrigins, THEME_SCRIPT_CSP_HASH } from "./content-security-policy";
+import { apiBaseUrlCspOrigin, BOOTSTRAP_FAILURE_SCRIPT_CSP_HASH, BOOTSTRAP_STYLE_CSP_HASH, contentSecurityPolicyMetaFromHtml, createContentSecurityPolicy, parseCspConnectOrigins, THEME_SCRIPT_CSP_HASH } from "./content-security-policy";
 import { SAFE_EXTERNAL_SOURCE_HOSTS } from "./safe-source-url";
 
 describe("Content Security Policy", () => {
@@ -10,6 +10,35 @@ describe("Content Security Policy", () => {
     const script = html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
     expect(script).toBeTruthy();
     expect(`sha256-${createHash("sha256").update(script!).digest("base64")}`).toBe(THEME_SCRIPT_CSP_HASH);
+  });
+
+  it("allows only the exact inline bootstrap scripts and style in source and built HTML", () => {
+    const sourceHtml = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+    const builtHtmlUrl = new URL("../dist/index.html", import.meta.url);
+    const documents = [sourceHtml];
+    if (existsSync(builtHtmlUrl)) documents.push(readFileSync(builtHtmlUrl, "utf8"));
+
+    for (const html of documents) {
+      const inlineScripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/gi)].map((match) => match[1]);
+      const inlineStyles = [...html.matchAll(/<style>([\s\S]*?)<\/style>/gi)].map((match) => match[1]);
+      const scriptHashes = inlineScripts.map((script) => `sha256-${createHash("sha256").update(script).digest("base64")}`);
+      const styleHashes = inlineStyles.map((style) => `sha256-${createHash("sha256").update(style).digest("base64")}`);
+      const policy = contentSecurityPolicyMetaFromHtml(html) ?? createContentSecurityPolicy();
+      const directives = new Map(policy.split(";").map((directive) => {
+        const [name, ...sources] = directive.trim().split(/\s+/);
+        return [name, sources];
+      }));
+      const scriptSources = directives.get("script-src") ?? [];
+      const styleElementSources = directives.get("style-src-elem") ?? [];
+
+      expect(scriptHashes).toEqual([THEME_SCRIPT_CSP_HASH, BOOTSTRAP_FAILURE_SCRIPT_CSP_HASH]);
+      expect(styleHashes).toEqual([BOOTSTRAP_STYLE_CSP_HASH]);
+      expect(scriptSources).toContain(`'${THEME_SCRIPT_CSP_HASH}'`);
+      expect(scriptSources).toContain(`'${BOOTSTRAP_FAILURE_SCRIPT_CSP_HASH}'`);
+      expect(scriptSources).not.toContain("'unsafe-inline'");
+      expect(styleElementSources).toContain(`'${BOOTSTRAP_STYLE_CSP_HASH}'`);
+      expect(styleElementSources).not.toContain("'unsafe-inline'");
+    }
   });
 
   it("reduces an API base URL to its HTTP(S) origin and rejects unsafe schemes", () => {
@@ -46,7 +75,7 @@ describe("Content Security Policy", () => {
     expect(policy).toContain("default-src 'none'");
     expect(policy).toContain("script-src-attr 'none'");
     expect(policy).toContain("style-src 'self' 'unsafe-inline' https://fonts.googleapis.com");
-    expect(policy).toContain("style-src-elem 'self' https://fonts.googleapis.com");
+    expect(policy).toContain(`style-src-elem 'self' '${BOOTSTRAP_STYLE_CSP_HASH}' https://fonts.googleapis.com`);
     expect(policy).toContain("style-src-attr 'unsafe-inline'");
     expect(policy).toContain("font-src 'self' https://fonts.gstatic.com");
     for (const host of SAFE_EXTERNAL_SOURCE_HOSTS) {

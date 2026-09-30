@@ -164,6 +164,7 @@ function scenarioStatusLabel(status: NonNullable<AlternativeComparisonCandidate[
 }
 
 function dataQualityLabel(value: string) {
+  if (value === "다나와 최신") return DATA_QUALITY_LABELS.live;
   return DATA_QUALITY_LABELS[value as DataQuality] ?? value;
 }
 

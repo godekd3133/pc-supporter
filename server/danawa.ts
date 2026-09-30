@@ -777,7 +777,9 @@ function parseSpecs(category: PartCategory, name: string, description: string, r
     specs.boostClockGhz = parseNumber(text, /최대\s*클럭\s*[:：]?\s*([\d.]+)\s*GHz/i);
     specs.cinebenchR23Single = parseNumber(text, /시네벤치\s*R23\s*\(\s*싱글\s*\)\s*[:：]?\s*([\d,]+)/i);
     specs.cinebenchR23Multi = parseNumber(text, /시네벤치\s*R23\s*\(\s*멀티\s*\)\s*[:：]?\s*([\d,]+)/i);
-    specs.tdpW = parseNumber(text, /TDP\s*[:：]?\s*([\d,]+)\s*W/i);
+    // Danawa sometimes presents Intel base/max power as a TDP range. Keep the
+    // explicitly leading base value in tdpW; do not relabel the upper bound as PPT.
+    specs.tdpW = parseNumber(text, /TDP\s*[:：]?\s*([\d,]+)(?:\s*(?:~|～|−|–|—|-)\s*[\d,]+)?\s*W/i);
     specs.pptW = parseNumber(text, /PPT\s*[:：]?\s*([\d,]+)\s*W/i);
     specs.tdpW = specs.tdpW
       ?? parseNumber(text, /PBP-MTP\s*[:：]?\s*([\d,]+)(?:\s*-\s*[\d,]+)?\s*W/i);
@@ -908,8 +910,13 @@ function parseSpecs(category: PartCategory, name: string, description: string, r
     specs.powerW = parseGpuPowerW(text);
     specs.recommendedPsuW = parseNumber(text, /(?:권장\s*파워|권장\s*PSU)\s*[:：]?\s*([\d,]+)\s*W/i)
       ?? parseNumber(text, /([\d,]{3,5})\s*W\s*이상/i);
-    specs.vramGb = parseNumber(text, /(?:VRAM|비디오\s*메모리|그래픽\s*메모리)\s*[:：]?\s*(?!대역폭)[^/\d]{0,24}([\d,]+)\s*GB(?!\s*\/\s*s)/i)
-      ?? parseNumber(name, /([\d,]+)\s*GB/i);
+    const explicitVram = text.match(/(?:VRAM|비디오\s*메모리|그래픽\s*메모리)\s*[:：]?\s*(?!대역폭)[^/\d]{0,24}([\d,.]+)\s*(GB|MB)\b(?!\s*\/\s*s)/i);
+    const namedVram = name.match(/([\d,.]+)\s*(GB|MB)\b(?!\s*\/\s*s)/i);
+    const vramMatch = explicitVram ?? namedVram;
+    const vramAmount = vramMatch ? Number(vramMatch[1].replace(/,/g, "")) : Number.NaN;
+    if (Number.isFinite(vramAmount) && vramAmount > 0) {
+      specs.vramGb = vramMatch?.[2].toUpperCase() === "MB" ? vramAmount / 1024 : vramAmount;
+    }
     specs.gpuBoostClockMhz = parseNumber(text, /부스트\s*클럭\s*[:：]?\s*([\d,]+)\s*MHz/i);
     specs.gpuStreamProcessors = parseNumber(text, /(?:스트림\s*프로세서|CUDA\s*코어|쿠다\s*코어)\s*[:：]?\s*([\d,]+)/i);
     specs.gpuMemoryBandwidthGbps = parseNumber(text, /VRAM\s*대역폭\s*[:：]?\s*([\d,.]+)\s*GB\s*\/\s*s/i);

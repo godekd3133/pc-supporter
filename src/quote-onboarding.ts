@@ -371,7 +371,7 @@ const WORK_BUDGET_TIERS: readonly { minWon: number; estimate: BudgetEstimate }[]
 
 const GENERAL_BUDGET_TIERS: readonly { minWon: number; estimate: BudgetEstimate }[] = [
   { minWon: 3_000_000, estimate: { performance: "상급 일반 구성", gpu: "상급 GPU", memory: "64GB", storage: "2TB SSD" } },
-  { minWon: 2_000_000, estimate: { performance: "균형형 일반 구성", gpu: "외장 GPU 포함", memory: "32GB", storage: "1TB SSD" } },
+  { minWon: 2_000_000, estimate: { performance: "균형형 일반 구성", gpu: "상급 GPU", memory: "32GB", storage: "1TB SSD" } },
   { minWon: 1_200_000, estimate: { performance: "기본형 일반 구성", gpu: "입문 GPU", memory: "32GB", storage: "1TB SSD" } },
   { minWon: 0, estimate: { performance: "실속형 일반 구성", gpu: "내장 그래픽 또는 입문 GPU", memory: "16GB", storage: "500GB SSD" } }
 ];
@@ -417,6 +417,13 @@ const WORK_ESTIMATES: Record<OnboardingWork, Record<OnboardingIntensity, BudgetE
 export function budgetEstimateFor(budgetWon: number, usecase: OnboardingUsecase | undefined): BudgetEstimate {
   const tiers = usecase === "gaming" ? GAMING_BUDGET_TIERS : usecase === "work" ? WORK_BUDGET_TIERS : GENERAL_BUDGET_TIERS;
   return tiers.find((tier) => budgetWon >= tier.minWon)?.estimate ?? tiers[tiers.length - 1].estimate;
+}
+
+function generalBudgetPerformanceTierFor(budgetWon: number): RecommendationPerformanceTier | undefined {
+  // At 2M and above the budget estimate promises an upper-tier GPU. Carry that
+  // existing expectation into candidate ranking so the budget cap alone cannot
+  // turn a balanced/upper general build into an old entry-level GPU draft.
+  return budgetWon >= 2_000_000 ? "high" : undefined;
 }
 
 export function budgetEstimateForSelectedTarget(state: OnboardingState): BudgetEstimate {
@@ -593,6 +600,7 @@ export function recommendParamsFor(state: OnboardingState): RecommendParams {
   return {
     profile: "general",
     priority: "balanced",
+    performanceTier: generalBudgetPerformanceTierFor(state.budgetWon),
     budgetWon: state.budgetWon,
     includeGpu: budgetEstimate.gpu.includes("GPU"),
     memoryCapacityGb: capacityGbFromEstimateLabel(budgetEstimate.memory),
@@ -616,7 +624,7 @@ export function recommendQueryFor(state: OnboardingState): string {
     if (params.gamingRayTracing) search.set("rt", "1");
     if (params.gamingUpscaling) search.set("upscaling", params.gamingUpscaling);
   }
-  if (params.profile === "general" && state.mode === "spec" && params.performanceTier) search.set("tier", params.performanceTier);
+  if (params.profile === "general" && params.performanceTier) search.set("tier", params.performanceTier);
   if (params.workType && params.workIntensity) {
     search.set("work", params.workType);
     search.set("intensity", params.workIntensity);

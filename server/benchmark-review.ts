@@ -48,7 +48,7 @@ function reviewItemFor(part: Part, now: string | number): BenchmarkReviewItem | 
   if (benchmarkFreshness === "unknown") reviewPriorityScore += 8;
   const missingLabel = missingScores.length > 0 ? `${missingScores.map((key) => scoreLabels[key]).join("·")} 미확인` : "완전 세트";
   const freshnessReason = status === "stale" ? `벤치마크 ${benchmarkFreshness === "unknown" ? "시점 불명" : "갱신 필요"}` : undefined;
-  const reviewReason = [missingLabel, freshnessReason, part.dataQuality === "live" ? "다나와 최신" : part.dataQuality === "manual" ? "직접 확인" : part.dataQuality === "seed" ? "기본 정보" : "일부 스펙 부족"].filter(Boolean).join(" · ");
+  const reviewReason = [missingLabel, freshnessReason, part.dataQuality === "live" ? "다나와 상세 수집" : part.dataQuality === "manual" ? "직접 확인" : part.dataQuality === "seed" ? "기본 정보" : "일부 스펙 부족"].filter(Boolean).join(" · ");
   return {
     partId: part.id,
     partName: part.name,

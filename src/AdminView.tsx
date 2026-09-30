@@ -1327,6 +1327,7 @@ export function AdminView({ meta, onMetaRefresh, onToast }: { meta: ServiceMeta 
       closeBackupDetail();
       setCatalogChanges([]);
       setCatalogChangesError(null);
+      onMetaRefresh();
       onToast("관리자 세션을 종료했습니다.");
     } catch (error: unknown) {
       if (isCurrent()) onToast(error instanceof Error ? error.message : "관리자 로그아웃에 실패했습니다.");

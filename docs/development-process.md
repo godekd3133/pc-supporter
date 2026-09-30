@@ -202,7 +202,7 @@ owner token이 없는 공유 견적 결과에는 `내 견적으로 복제`만 �
 
 ### 7. UI와 운영 패널
 
-Vite가 브라우저 번들을 만들고 React 화면이 API 계약을 소비합니다. 초기 편집기 shell과 관리자·후보·가격 추적·공유·비교 화면은 lazy chunk로 분리되어, 운영 패널을 사용하지 않는 첫 화면의 로딩 경계를 유지합니다. 결과·이력 전용 순수 계산은 `catalog-change-domain`·`saved-build-domain`·`purchase-domain`으로 별도 manual chunk에 두어 앱 entry의 parse/cache 단위를 줄이고, 해당 분리는 판정 순서·API·데이터 계약을 변경하지 않습니다. `scripts/verify-client-bundle.mjs`는 build 후 entry 600,000바이트 예산과 세 도메인 chunk 생성을 검사해 이 경계를 회귀 방지 gate로 유지합니다. 결과 화면 상단의 lazy `ResultQuickNav`는 최종 구매 판단·우선 조치·상세 판정·구매 전 체크·구매 목록으로 이동하는 탐색만 담당하며, 대상 패널이 늦게 로드되어도 bounded retry로 포커스를 복원합니다. 결과 요약 카드도 심각도 필터와 상세 목록 이동을 결합해 숫자 요약이 다음 행동으로 이어지도록 합니다. 관리자 저장 작업은 auth·rate limit·source URL 검증·재조회로 보호됩니다.
+Vite가 브라우저 번들을 만들고 React 화면이 API 계약을 소비합니다. 초기 편집기 shell과 관리자·후보·가격 추적·공유·비교 화면은 lazy chunk로 분리되어, 운영 패널을 사용하지 않는 첫 화면의 로딩 경계를 유지합니다. 결과·이력 전용 순수 계산은 `catalog-change-domain`·`saved-build-domain`·`purchase-domain`으로 별도 manual chunk에 두어 앱 entry의 parse/cache 단위를 줄이고, 해당 분리는 판정 순서·API·데이터 계약을 변경하지 않습니다. `scripts/verify-client-bundle.mjs`는 entry와 App shell 합계 600,000바이트, first-route 정적 JS/CSS/전체 closure, 개별 lazy chunk 예산, 세 도메인 chunk 생성을 함께 검사해 이 경계를 회귀 방지 gate로 유지합니다. 결과 화면 상단의 lazy `ResultQuickNav`는 최종 구매 판단·우선 조치·상세 판정·구매 전 체크·구매 목록으로 이동하는 탐색만 담당하며, 대상 패널이 늦게 로드되어도 bounded retry로 포커스를 복원합니다. 결과 요약 카드도 심각도 필터와 상세 목록 이동을 결합해 숫자 요약이 다음 행동으로 이어지도록 합니다. 관리자 저장 작업은 auth·rate limit·source URL 검증·재조회로 보호됩니다.
 
 공유 가격 추적 snapshot은 일반 가격 추적 화면과 분리된 lazy route에서 저장 기준·현재 가격·가격 이력·결정 상태를 표시하며, 일시적인 API 오류에서는 같은 route 재시도를 제공합니다. 공유받은 사용자의 확인은 읽기 전용으로 유지됩니다.
 

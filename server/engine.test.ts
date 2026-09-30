@@ -3265,6 +3265,43 @@ describe("compatibility engine", () => {
     expect(() => generateBuildDraft(catalog, { profile: "office", budgetWon: 1_500_000, includeGpu: false, hddCount: 1, hddCapacityGb: 4000 })).toThrow(/케이스/);
   });
 
+  it("keeps the lower-priced HDD combination distinct through budget pruning when requested in multiples", () => {
+    const baseHdd = seedCatalog.find((part) => part.id === "hdd-seagate-4tb")!;
+    const affordableHdd: Part = {
+      ...baseHdd,
+      id: "hdd-generator-budget-4tb",
+      name: "예산 내 4TB HDD",
+      priceWon: 119_000,
+      specs: { ...baseHdd.specs, capacityGb: 4_000 }
+    };
+    const higherCapacityHdd: Part = {
+      ...baseHdd,
+      id: "hdd-generator-budget-6tb",
+      name: "상위 용량 6TB HDD",
+      priceWon: 250_000,
+      specs: { ...baseHdd.specs, capacityGb: 6_000, sequentialReadMbps: 300, sequentialWriteMbps: 300 }
+    };
+    const catalog = seedCatalog.filter((part) => part.category !== "hdd").concat(affordableHdd, higherCapacityHdd);
+    const request = {
+      profile: "office" as const,
+      priority: "balanced" as const,
+      budgetWon: 1_670_000,
+      includeGpu: false,
+      memoryCapacityGb: 32,
+      storageCapacityGb: 1_000,
+      hddCount: 2,
+      hddCapacityGb: 4_000
+    };
+
+    const draft = generateBuildDraft(catalog, request);
+    const hddLine = draft.lines.find((line) => line.category === "hdd");
+
+    expect(draft.totalPriceWon).toBeLessThanOrEqual(request.budgetWon);
+    expect(draft.totalPriceWon).toBe(1_501_000);
+    expect(hddLine).toMatchObject({ partId: affordableHdd.id, quantity: 2, priceWon: affordableHdd.priceWon });
+    expect(draft.status).toBe("compatible");
+  });
+
   it("offers a case with unrelated missing HDD evidence as a review alternative", () => {
     const baseCase = seedCatalog.find((part) => part.id === "case-full-airflow")!;
     const currentCase: Part = {
@@ -4461,6 +4498,89 @@ describe("generator quote reliability regressions", () => {
     baseCase,
     ...(parts.psus ?? [psu650, psu1000])
   ];
+
+  it("preserves the best in-budget QHD gaming path when stronger GPU states cannot afford the required 2TB SSD", () => {
+    const cpuReference = seedCatalog.find((part) => part.id === "cpu-7800x3d")!;
+    const gpuReference = seedCatalog.find((part) => part.id === "gpu-rtx-4060")!;
+    const highGpuReference = seedCatalog.find((part) => part.id === "gpu-rtx-5090")!;
+    const ssdReference = seedCatalog.find((part) => part.id === "ssd-nvme-1tb")!;
+    const sourced = (part: Part, id: string, name: string, priceWon: number, specs: Part["specs"] = {}): Part => ({
+      ...part,
+      id,
+      name,
+      priceWon,
+      source: "danawa",
+      sourceProductCode: id,
+      listingType: "retail",
+      dataQuality: "live",
+      missingFields: [],
+      specs: { ...part.specs, ...specs }
+    });
+    const cpus = Array.from({ length: 20 }, (_value, index) => sourced(cpuReference, `cpu-prune-pressure-${index}`, `CPU 후보 ${index}`, 400_000, {
+      cores: 16,
+      threads: 32,
+      boostClockGhz: 5.4,
+      l3CacheMb: 96,
+      cinebenchR23Single: 2_200,
+      cinebenchR23Multi: 30_000
+    }));
+    const motherboards = Array.from({ length: 10 }, (_value, index) => sourced(baseMotherboard, `mb-prune-pressure-${index}`, `메인보드 후보 ${index}`, 200_000));
+    const memories = Array.from({ length: 10 }, (_value, index) => sourced(baseMemory, `memory-prune-pressure-${index}`, `RAM 후보 ${index}`, 400_000, {
+      capacityGb: 32,
+      speedMhz: 5_600,
+      memoryCasLatency: 28,
+      memoryModuleCountPerKit: 2
+    }));
+    const coolers = Array.from({ length: 6 }, (_value, index) => sourced(baseCooler, `cooler-prune-pressure-${index}`, `쿨러 후보 ${index}`, 50_000, { maxCoolingW: 200 }));
+    const cheapGpus = Array.from({ length: 20 }, (_value, index) => sourced(gpuReference, `gpu-prune-cheap-${index}`, `예산형 GPU ${index}`, 100_000, {
+      vramGb: 8,
+      gpu3dmarkTimeSpyScore: 1_000,
+      gpu3dmarkPortRoyalScore: 600,
+      gpuStreamProcessors: 1_000,
+      gpuMemoryBandwidthGbps: 100,
+      gpuBoostClockMhz: 1_200,
+      powerW: 80,
+      recommendedPsuW: 400,
+      lengthMm: 160
+    }));
+    const middleGpu = sourced(gpuReference, "gpu-prune-middle-16gb", "예산 내 QHD GPU 16GB", 790_000, {
+      vramGb: 16,
+      gpu3dmarkTimeSpyScore: 11_000,
+      gpu3dmarkPortRoyalScore: 7_000,
+      gpuStreamProcessors: 5_000,
+      gpuMemoryBandwidthGbps: 450,
+      gpuBoostClockMhz: 2_500,
+      powerW: 200,
+      recommendedPsuW: 650,
+      lengthMm: 260
+    });
+    const highGpus = Array.from({ length: 20 }, (_value, index) => sourced(highGpuReference, `gpu-prune-high-${index}`, `고성능 GPU ${index}`, 1_790_000, { vramGb: 16 }));
+    const twoTbSsd = sourced(ssdReference, "ssd-prune-2tb", "2TB SSD", 428_980, { capacityGb: 2_000 });
+    const replacedCategories = new Set(["cpu", "motherboard", "memory", "cooler", "gpu", "ssd"]);
+    const catalog = seedCatalog.filter((part) => !replacedCategories.has(part.category))
+      .concat(...cpus, ...motherboards, ...memories, ...coolers, ...cheapGpus, middleGpu, ...highGpus, twoTbSsd);
+    const request = {
+      profile: "gaming" as const,
+      priority: "balanced" as const,
+      budgetWon: 3_000_000,
+      includeGpu: true,
+      gamingResolution: "1440p" as const,
+      gamingRefreshRate: 144 as const,
+      gamingGameIds: ["cyberpunk"],
+      gamingGraphicsPreset: "high" as const,
+      storageCapacityGb: 2_000
+    };
+
+    const draft = generateBuildDraft(catalog, request);
+
+    expect(draft.totalPriceWon).toBe(2_499_980);
+    expect(draft.totalPriceWon).toBeLessThanOrEqual(request.budgetWon);
+    expect(draft.lines.find((line) => line.category === "gpu")?.partId).toBe(middleGpu.id);
+    expect(draft.lines.find((line) => line.category === "ssd")?.partId).toBe(twoTbSsd.id);
+    expect(draft.gpuTarget).toMatchObject({ targetVramGb: 15, currentVramGb: 16, currentFit: "met" });
+    expect(draft.gamingPerformanceAssessment?.status).toBe("not_recorded");
+    expect(draft.status).toBe("compatible");
+  });
 
   it("does not let a non-blocking warning veto a much stronger build", () => {
     const thinGpu: Part = withSpecs(baseGpu, { thicknessMm: 40, gpu3dmarkTimeSpyScore: 8000, vramGb: 8, powerW: 115, recommendedPsuW: 550, lengthMm: 221 }, 300_000);

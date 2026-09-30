@@ -21,6 +21,7 @@ export interface PriceWatchDecisionInput {
   currentStatus: "available" | "unavailable" | "error" | "unknown";
   currentPriceWon?: number;
   targetPriceWon?: number;
+  trackingEnabled?: boolean;
   nearLowThresholdPercent?: number;
   history?: PriceWatchDecisionHistory;
 }
@@ -64,6 +65,9 @@ export function priceWatchDecisionFor(input: PriceWatchDecisionInput): PriceWatc
 
   if (input.targetPriceWon !== undefined && Number.isFinite(input.targetPriceWon) && input.targetPriceWon > 0 && input.currentPriceWon > input.targetPriceWon) {
     return { state: "tracking", label: "목표가 관찰 중", summary: `저장 가격이 목표가보다 ${won(input.currentPriceWon - input.targetPriceWon)} 높습니다.` };
+  }
+  if (input.trackingEnabled === false) {
+    return { state: "observe", label: "추적 등록 전", summary: "가격 추적을 등록하면 목표가와 가격 변동을 함께 확인할 수 있어요." };
   }
   return { state: "tracking", label: "가격 추적 중", summary: "저장 가격과 변경 이력을 비교합니다." };
 }

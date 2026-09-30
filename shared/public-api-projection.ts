@@ -86,6 +86,7 @@ const INTERNAL_SIGNAL_TEXT_KEYS = new Set([
   "performanceSummary",
   "specSummary",
   "selectionReason",
+  "candidateReasons",
   "rationale",
   "warnings",
   "summary",

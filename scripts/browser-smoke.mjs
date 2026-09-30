@@ -874,6 +874,7 @@ async function main() {
       assert(incompleteNoticeProbe?.verified === true, "호환 후보 데이터 부족 안내가 없는데 안전 범위에서 제외된 미완료 후보가 남아 있습니다. probe=" + JSON.stringify(incompleteNoticeProbe));
     }
     await client.send("Page.navigate", { url: `${baseUrl}/catalog?category=cpu&quality=seed&priceStatus=known` });
+    await waitForValue(client, "document.querySelector('[data-testid^=\"catalog-price-evidence-\"]')?.textContent?.trim() === '예시 가격'", "seed 가격의 예시 표기");
     await waitForValue(client, "document.querySelector('[data-testid^=\"catalog-price-evidence-\"]') !== null", "카탈로그 가격 근거 표시");
     const catalogPriceEvidenceProbe = await client.evaluate("(() => { const evidence = document.querySelector('[data-testid^=\"catalog-price-evidence-\"]')?.textContent ?? ''; const body = document.body?.innerText ?? ''; return { evidence, hasPriceLabel: evidence.trim() === '가격' || evidence.includes('기준 가격') || evidence.includes('다나와 가격'), distinguishesReferencePrice: /실제 판매가|실제 결제 금액/.test(body) && /다를 수|뜻하지 않습니다|달라질 수/.test(body), bodyTail: body.slice(-900) }; })()");
     assert(catalogPriceEvidenceProbe.hasPriceLabel && catalogPriceEvidenceProbe.distinguishesReferencePrice, "카탈로그 가격이 기준 참고액인지 실제 판매가인지 구분되지 않습니다. probe=" + JSON.stringify(catalogPriceEvidenceProbe));

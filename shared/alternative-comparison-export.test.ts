@@ -71,7 +71,7 @@ describe("alternative comparison export", () => {
     const text = alternativeComparisonTextFor(candidates);
     expect(text).toContain("[부품 1] 테스트, 부품");
     expect(text).toContain("가격: 1,200,000원 · 추천 수량 1개");
-    expect(text).toContain("가격 확인: 확인됨");
+    expect(text).toContain("가격 확인: 최근 확인");
     expect(text).toContain("구매 조건: 다나와 수집가 · 신품·정식 유통");
     expect(text).toContain("가격: -");
     expect(text).not.toContain("성능 유사도");
@@ -83,7 +83,7 @@ describe("alternative comparison export", () => {
     expect(text).toContain("설치 공간 확인: 확인 필요 · GPU·케이스 장착 정보를 구매 전 확인해야 합니다.");
     expect(text).toContain("비교 결론: 추천 부품 · 현재 문제 해결 · 새 차단 없음");
     expect(text).toContain("설치 안내: GPU · GPU-TEST-1 · rev-A · 확인 2026-09-01: GPU 제조사 설치 가이드 (https://vendor.example/gpu)");
-    expect(text).toContain("부품 정보: 다나와 최신 · 확인한 지 오래됨 · 갱신 2026-08-28");
+    expect(text).toContain("부품 정보: 다나와 상세 수집 · 확인한 지 오래됨 · 갱신 2026-08-28");
     expect(text).toContain("https://prod.danawa.com/info/?pcode=123");
   });
 
@@ -92,7 +92,7 @@ describe("alternative comparison export", () => {
     expect(csv.startsWith("\uFEFF부품명,범주,부품 ID,핵심 스펙,가격,공유 당시 가격(원),가격 확인")).toBe(true);
     expect(csv).toContain('"테스트, 부품"');
     expect(csv).toContain('"미등록 부품\nCPU"');
-    expect(csv).toContain("\"1,200,000원\",1200000,확인됨,다나와 수집가 · 신품·정식 유통,1,VRAM 32GB → 12GB (-62.5%),호환 확인,추천 부품 · 현재 문제 해결 · 새 차단 없음,,확인 필요 · GPU·케이스 장착 정보를 구매 전 확인해야 합니다.,GPU · GPU-TEST-1 · rev-A · 확인 2026-09-01: GPU 제조사 설치 가이드 (https://vendor.example/gpu),다나와 최신,확인한 지 오래됨,2026-08-28,https://prod.danawa.com/info/?pcode=123");
+    expect(csv).toContain("\"1,200,000원\",1200000,최근 확인,다나와 수집가 · 신품·정식 유통,1,VRAM 32GB → 12GB (-62.5%),호환 확인,추천 부품 · 현재 문제 해결 · 새 차단 없음,,확인 필요 · GPU·케이스 장착 정보를 구매 전 확인해야 합니다.,GPU · GPU-TEST-1 · rev-A · 확인 2026-09-01: GPU 제조사 설치 가이드 (https://vendor.example/gpu),다나와 상세 수집,확인한 지 오래됨,2026-08-28,https://prod.danawa.com/info/?pcode=123");
     expect(csv).not.toContain("성능 유사도");
     expect(csv).not.toContain("144Hz");
     expect(csv).not.toContain("높음 92점");
@@ -244,16 +244,22 @@ describe("alternative comparison export", () => {
     const valuedCandidate: AlternativeComparisonCandidate = { ...candidates[0], scenario };
     const text = alternativeComparisonTextFor([valuedCandidate]);
     const csv = alternativeComparisonCsvFor([valuedCandidate]);
-    const jsonEnvelope = JSON.parse(alternativeComparisonJsonFor([valuedCandidate]));
+    const jsonEnvelope = JSON.parse(alternativeComparisonJsonFor([valuedCandidate])) as { items: Array<{ scenario?: Record<string, unknown> }> };
     const json = JSON.stringify(jsonEnvelope);
 
     expect(text).toContain("부품을 교체할 경우: 호환 결과: 구매 전 확인 필요 · 호환 불가 0 · 주의 1 · 확인 필요 2 · 가격 변화 +45,000원 · 구매 안내: 확인 후 구매 · 주의·확인 필요를 확인한 뒤 구매하세요. · 가격 이력 30일 4회 · 최저 100,000원 · 구매 전 확인 항목 2개 · 완료 1 · 추가 확인 1 · 진행 보류 0");
     expect(csv).toContain("부품 교체 시");
+    const csvHeader = csv.split(/\r?\n/, 1)[0].replace(/^\uFEFF/, "");
+    expect(csvHeader).not.toContain("analysisScore");
+    expect(csvHeader).not.toContain("analysisConfidence");
+    expect(csvHeader).not.toContain("분석 점수");
+    expect(csvHeader).not.toContain("신뢰도 점수");
     expect(csv).not.toContain("analysisScore");
     expect(csv).not.toContain("analysisConfidence");
     expect(json).not.toContain("analysisScore");
     expect(json).not.toContain("analysisConfidence");
     expect(jsonEnvelope.items[0].scenario).not.toHaveProperty("analysisScore");
+    expect(jsonEnvelope.items[0].scenario).not.toHaveProperty("analysisScoreLabel");
     expect(jsonEnvelope.items[0].scenario).not.toHaveProperty("analysisConfidence");
     expect(jsonEnvelope.items[0].scenario).not.toHaveProperty("analysisScoreDelta");
     expect(json).toContain("45000");

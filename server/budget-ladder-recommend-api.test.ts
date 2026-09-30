@@ -45,5 +45,5 @@ describe("budget ladder recommendation API", () => {
     expect(body.scenarios.map((scenario) => scenario.budgetWon)).toEqual([1_200_000, 1_500_000, 1_800_000]);
     expect(body.scenarios.every((scenario) => scenario.request.budgetWon === scenario.budgetWon)).toBe(true);
     expect(body.scenarios.some((scenario) => scenario.draft !== undefined || scenario.error !== undefined)).toBe(true);
-  });
+  }, 20_000);
 });

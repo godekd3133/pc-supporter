@@ -49,6 +49,33 @@ type Snapshot = {
   }>;
 };
 
+type SortSupplementPage = {
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  totalCount: number;
+  codes: string[];
+  products: ListedProduct[];
+  fetchedAt: string;
+  rowCountMismatch?: { expected: number; received: number };
+  sortMethod: string;
+  sourcePath: "/list/";
+  requestMethod: "POST";
+  responseStatus?: number;
+  responseContentType?: string;
+};
+
+type SortSupplementSnapshot = {
+  schemaVersion: 1;
+  source: "robots-allowed Danawa accessory list UI sort pages";
+  updatedAt: string;
+  categories: Record<string, {
+    category: AccessoryCategory;
+    categoryId: string;
+    pagesBySort: Record<string, Record<string, SortSupplementPage>>;
+  }>;
+};
+
 type Candidate = {
   category: AccessoryCategory;
   categoryId: string;
@@ -102,6 +129,7 @@ if (!values.all && (!Number.isSafeInteger(configuredLimit) || configuredLimit < 
 }
 
 const manifestPath = join(DATA_DIR, "danawa-accessory-all-pages.json");
+const sortSupplementPath = join(DATA_DIR, "danawa-accessory-sort-pages.json");
 const statePath = join(DATA_DIR, "accessory-detail-import-state.json");
 const MIN_DELAY_MS = 900;
 const BATCH_SIZE = 25;
@@ -204,12 +232,63 @@ function uniqueListedProducts(snapshotCategory: Snapshot["categories"][string]) 
   return { pages, products };
 }
 
-const [manifest, accessories] = await Promise.all([
+function validateSortSupplement(categoryId: string, expectedProductCount: number, entry?: SortSupplementSnapshot["categories"][string]) {
+  if (!entry) return [] as ListedProduct[];
+  const expectedCategory = DANAWA_ACCESSORY_CATEGORIES.find((config) => config.categoryId === categoryId)?.category;
+  if (entry.categoryId !== categoryId || entry.category !== expectedCategory) {
+    throw new Error(`Supplement category identity does not match configured source ${categoryId}.`);
+  }
+  const supplements: ListedProduct[] = [];
+  for (const [sortMethod, pages] of Object.entries(entry.pagesBySort)) {
+    if (!["BEST", "LOW_PRICE", "HIGH_PRICE", "NEW", "REVIEW"].includes(sortMethod)) {
+      throw new Error(`${entry.category}: unsupported supplemental sort ${sortMethod}.`);
+    }
+    for (const [pageKey, page] of Object.entries(pages)) {
+      const pageNumber = Number(pageKey);
+      if (!Number.isSafeInteger(pageNumber) || pageNumber < 1 || page.page !== pageNumber || page.sortMethod !== sortMethod) {
+        throw new Error(`${entry.category}: supplemental page identity mismatch for ${sortMethod}/${pageKey}.`);
+      }
+      if (page.sourcePath !== "/list/" || page.requestMethod !== "POST" || page.responseStatus !== 200 || !page.responseContentType?.includes("text/x-component")) {
+        throw new Error(`${entry.category}: supplemental page ${sortMethod}/${pageNumber} lacks public UI request/response evidence.`);
+      }
+      if (page.totalCount !== expectedProductCount || ![30, 60, 90].includes(page.pageSize)
+        || page.totalPages !== Math.ceil(page.totalCount / page.pageSize) || pageNumber > page.totalPages) {
+        throw new Error(`${entry.category}: supplemental page ${sortMethod}/${pageNumber} has a different source total or invalid page size.`);
+      }
+      if (page.rowCountMismatch) throw new Error(`${entry.category}: refusing supplemental page ${sortMethod}/${pageNumber} with a source row-count mismatch.`);
+      const expectedRows = Math.min(page.pageSize, Math.max(0, expectedProductCount - (pageNumber - 1) * page.pageSize));
+      if (page.products.length !== expectedRows || page.codes.length !== page.products.length) {
+        throw new Error(`${entry.category}: supplemental page ${sortMethod}/${pageNumber} does not contain its exact expected rows.`);
+      }
+      const pageCodes = new Set<string>();
+      for (let index = 0; index < page.products.length; index += 1) {
+        const product = page.products[index];
+        if (!/^\d+$/.test(product.productCode) || !product.name.trim() || page.codes[index] !== product.productCode) {
+          throw new Error(`${entry.category}: invalid supplemental product identity on ${sortMethod}/${pageNumber}.`);
+        }
+        if (pageCodes.has(product.productCode)) {
+          throw new Error(`${entry.category}: duplicate product ${product.productCode} inside supplemental page ${sortMethod}/${pageNumber}.`);
+        }
+        pageCodes.add(product.productCode);
+        canonicalDetailUrl(product, categoryId);
+      }
+      if (!Number.isFinite(Date.parse(page.fetchedAt))) throw new Error(`${entry.category}: supplemental page ${sortMethod}/${pageNumber} has no valid fetch timestamp.`);
+      supplements.push(...page.products);
+    }
+  }
+  return supplements;
+}
+
+const [manifest, sortSupplement, accessories] = await Promise.all([
   readRequiredJson<Snapshot>(manifestPath),
+  readRequiredJson<SortSupplementSnapshot>(sortSupplementPath),
   readJson<AccessoryItem[]>(ACCESSORIES_PATH, [])
 ]);
 if (manifest.schemaVersion !== 1 || !manifest.source.includes("Danawa public accessory list pages")) {
   throw new Error("Unsupported public accessory list manifest.");
+}
+if (sortSupplement.schemaVersion !== 1 || sortSupplement.source !== "robots-allowed Danawa accessory list UI sort pages") {
+  throw new Error("Unsupported public accessory UI sort supplement.");
 }
 
 const accessoryByCode = new Map<string, AccessoryItem[]>();
@@ -228,9 +307,16 @@ for (const config of DANAWA_ACCESSORY_CATEGORIES.filter((entry) => !categoryFilt
     throw new Error(`Missing or mismatched list manifest for ${config.category}.`);
   }
   const unique = uniqueListedProducts(sourceCategory);
-  const manifestCodes = new Set(unique.products.map(({ product }) => product.productCode));
+  const basePages = unique.pages.map(({ page }) => page);
+  const baseExpectedCount = basePages.at(-1)?.totalCount ?? sourceCategory.uniqueProductCount;
+  const listedByCode = new Map(unique.products.map(({ product }) => [product.productCode, product]));
+  for (const product of validateSortSupplement(config.categoryId, baseExpectedCount, sortSupplement.categories[config.categoryId])) {
+    if (!listedByCode.has(product.productCode)) listedByCode.set(product.productCode, product);
+  }
+  const listedProducts = [...listedByCode.values()];
+  const manifestCodes = new Set(listedProducts.map((product) => product.productCode));
   manifestCodesByCategory.set(config.category, manifestCodes);
-  for (const { product } of unique.products) {
+  for (const product of listedProducts) {
     canonicalDetailUrl(product, config.categoryId);
     const matches = accessoryByCode.get(product.productCode) ?? [];
     if (matches.length > 1) throw new Error(`Accessory catalog contains duplicate PCode ${product.productCode}.`);

@@ -171,6 +171,18 @@ describe("Danawa parser", () => {
     expect(part.priceWon).toBe(477200);
   });
 
+  it("parses the base TDP from a Danawa CPU TDP range without inferring PPT", () => {
+    const part = parseDanawaProductPage("cpu", {
+      name: "인텔 코어i5-12세대 12400F (엘더레이크) (정품)",
+      url: "https://prod.danawa.com/info/?pcode=16101353&cate=112747",
+      sourceProductCode: "16101353"
+    }, `<title>인텔 코어i5-12세대 12400F : 다나와 가격비교</title><meta name="description" content="인텔(소켓1700) / 6코어 / 12스레드 / TDP: 65~117W" />`, "112747");
+
+    expect(part.specs.tdpW).toBe(65);
+    expect(part.specs.pptW).toBeUndefined();
+    expect(part.missingFields).toEqual([]);
+  });
+
   it("does not treat an explicit no-integrated-graphics label as graphics support", () => {
     const part = parseDanawaProductPage("cpu", {
       name: "Intel Core KF",
@@ -497,6 +509,17 @@ describe("Danawa parser", () => {
     ]);
     expect(gpu.specs.pciePowerAdapterOptions).toEqual([[{ kind: "pcie_8pin_6plus2", count: 2 }]]);
     expect(gpu.specs.thicknessMm).toBe(50);
+  });
+
+  it("converts VRAM stated in MB in a GPU product name to GB", () => {
+    const gpu = parseDanawaProductPage("gpu", {
+      name: "AFOX 지포스 G210 D3 512MB LP 디앤디컴",
+      url: "https://prod.danawa.com/info/?pcode=14077739&cate=11339045",
+      sourceProductCode: "14077739"
+    }, `<title>AFOX 지포스 G210 D3 512MB LP 디앤디컴 : 다나와 가격비교</title><meta name="description" content="G210 / PCIe2.0x16 / 300W 이상 / 가로(길이): 150mm / 베이스클럭: 589 / 스트림 프로세서: 16 / DDR3(DDR3) / 사용전력: 최대 30.5W / 두께: 30mm" />`, "112753");
+
+    expect(gpu.specs.vramGb).toBe(0.5);
+    expect(gpu.missingFields).toEqual([]);
   });
 
   it("parses maximum GPU usage power without confusing recommended PSU wattage", () => {

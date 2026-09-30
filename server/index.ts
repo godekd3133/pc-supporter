@@ -905,12 +905,21 @@ app.get("/api/admin/meta", requireAdmin, async (request, response) => {
 });
 
 app.get("/api/meta", async (request, response) => {
+  const mayReadInternalMeta = requestCanViewAdminMeta(request);
   const [meta, crawler, persistence] = await Promise.all([
     loadCatalogSnapshot().then((snapshot) => catalogMeta(snapshot)),
     readCrawlStatus(),
     persistenceDiagnostics()
   ]);
-  sendJsonWithEtag(request, response, { ...meta, crawler: publicCrawlStatusFor(crawler as CrawlStatus), engineVersion: ENGINE_VERSION, storageMode: persistence.storageMode, persistence, adminAuthEnabled: adminAuthEnabled() }, undefined, !requestCanViewAdminMeta(request));
+  sendJsonWithEtag(request, response, {
+    ...meta,
+    crawler: publicCrawlStatusFor(crawler as CrawlStatus),
+    engineVersion: ENGINE_VERSION,
+    storageMode: persistence.storageMode,
+    persistence,
+    adminAuthEnabled: adminAuthEnabled(),
+    ...(mayReadInternalMeta ? { adminSessionAuthenticated: true } : {})
+  }, undefined, !mayReadInternalMeta);
 });
 
 // 클라이언트는 app_open만 전송할 수 있다 — check/save/share/recommend는

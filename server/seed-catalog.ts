@@ -292,12 +292,12 @@ export const seedCatalog: Part[] = [
     brand: "Fractal Design",
     model: "Pop XL Air",
     priceWon: 159000,
-    rawSpecText: "제조사 사양: 전용 3.5인치 HDD 장착부 4개, 3.5/2.5인치 겸용 장착부 2개. 최대 3.5인치 HDD 6개. https://www.fractal-design.com/products/cases/pop/pop-xl-air/rgb-black-tg-clear",
+    rawSpecText: "제조사 주요 사양은 HDD 최대 4개입니다. 현재 제품 페이지의 전용·겸용 장착부 표기와 제품 시트의 장착부 분류가 서로 달라 개별 장착부 합산값은 확정하지 않았습니다. HDD 최대 지원 수 4개를 사용합니다. https://www.fractal-design.com/products/cases/pop/pop-xl-air/rgb-black-tg-clear https://www.fractal-design.com/app/uploads/2022/06/Pop-XL-Air-RGB_Product-Sheet_EN.pdf",
     specs: {
       maxGpuLengthMm: 420,
       maxCoolerHeightMm: 185,
       maxPsuLengthMm: 220,
-      hddBays: 6,
+      hddBays: 4,
       ssdBays: 4,
       motherboardFormFactors: ["ATX", "mATX", "ITX"],
       supportedPsuFormFactors: ["ATX", "SFX"]

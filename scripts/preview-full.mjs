@@ -23,7 +23,7 @@ if (process.exitCode !== 1) {
       env: { ...process.env, PORT: apiPort, SERVER_HOST: apiHost, DANAWA_CRAWL_ON_START: crawlOnStart },
       stdio: "inherit"
     }),
-    spawn(npmCommand, ["run", "preview", "--", "--port", previewPort, "--host", previewHost], {
+    spawn(npmCommand, ["run", "preview", "--", "--port", previewPort, "--host", previewHost, "--strictPort"], {
       env: { ...process.env, VITE_API_PROXY_TARGET: apiTarget },
       stdio: "inherit"
     })

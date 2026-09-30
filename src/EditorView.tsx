@@ -31,8 +31,8 @@ export function MobileEditorSurface({ build, partMap, accessoryMap, checking, ch
   onExportBuild: () => void;
   onImportBuild: (raw: string) => void;
   onReset: () => void;
-  onRefreshCatalogItem: (target: RefreshTarget) => void;
-  onRefreshAllCatalogItems: (targets: RefreshTarget[]) => void;
+  onRefreshCatalogItem?: (target: RefreshTarget) => void;
+  onRefreshAllCatalogItems?: (targets: RefreshTarget[]) => void;
   refreshingPartId: string | null;
   onToast: (message: string) => void;
 }) {
@@ -158,7 +158,7 @@ export function EditorView({
   return (
     <div className="workspace-page">
       {upgradeEntry && <UpgradeEntryBanner />}
-      <MobileEditorSurface build={build} partMap={partMap} accessoryMap={accessoryMap} checking={checking} checkError={checkError} hasLastResult={hasLastResult} recommendationPreferences={recommendationPreferences} onRecommendationPreferencesChange={onRecommendationPreferencesChange} onOpenPicker={onOpenPicker} onCheck={onCheck} onExportBuild={onExportBuild} onImportBuild={onImportBuild} onReset={onReset} onRefreshCatalogItem={onRefreshCatalogItem} onRefreshAllCatalogItems={onRefreshAllCatalogItems} refreshingPartId={refreshingPartId} onToast={onToast} />
+      <MobileEditorSurface build={build} partMap={partMap} accessoryMap={accessoryMap} checking={checking} checkError={checkError} hasLastResult={hasLastResult} recommendationPreferences={recommendationPreferences} onRecommendationPreferencesChange={onRecommendationPreferencesChange} onOpenPicker={onOpenPicker} onCheck={onCheck} onExportBuild={onExportBuild} onImportBuild={onImportBuild} onReset={onReset} onRefreshCatalogItem={meta?.adminAuthEnabled === false || meta?.adminSessionAuthenticated === true ? onRefreshCatalogItem : undefined} onRefreshAllCatalogItems={meta?.adminAuthEnabled === false || meta?.adminSessionAuthenticated === true ? onRefreshAllCatalogItems : undefined} refreshingPartId={refreshingPartId} onToast={onToast} />
       <div className="desktop-editor-surface">
       <div className="workspace-heading">
         <div><button className="back-link" onClick={onBack}><FiArrowLeft /> 홈으로</button><h1>내 견적 구성</h1><p>필수 부품을 선택한 뒤 호환 여부를 확인하세요.</p></div>
@@ -186,8 +186,8 @@ export function EditorView({
               <summary><span><FiActivity /> 추천·가격·부품 정보</span><FiChevronDown /></summary>
               <div className="desktop-summary-details-body">
                 <RecommendationControls preferences={recommendationPreferences} onChange={onRecommendationPreferencesChange} disabled={checking} />
-                <BuildPriceSummaryPanel snapshot={buildPriceSnapshotFor(build, partMap, accessoryMap)} budgetWon={recommendationPreferences.budgetWon} unknownItems={unknownPriceItemsFor(build, partMap, accessoryMap)} onRefresh={onRefreshCatalogItem} refreshingItemId={refreshingPartId} />
-                <BuildPreflightPanel preflight={preflight} onRefresh={onRefreshCatalogItem} onRefreshAll={onRefreshAllCatalogItems} refreshingPartId={refreshingPartId} />
+                <BuildPriceSummaryPanel snapshot={buildPriceSnapshotFor(build, partMap, accessoryMap)} budgetWon={recommendationPreferences.budgetWon} unknownItems={unknownPriceItemsFor(build, partMap, accessoryMap)} onRefresh={meta?.adminAuthEnabled === false || meta?.adminSessionAuthenticated === true ? onRefreshCatalogItem : undefined} refreshingItemId={refreshingPartId} />
+                <BuildPreflightPanel preflight={preflight} onRefresh={meta?.adminAuthEnabled === false || meta?.adminSessionAuthenticated === true ? onRefreshCatalogItem : undefined} onRefreshAll={meta?.adminAuthEnabled === false || meta?.adminSessionAuthenticated === true ? onRefreshAllCatalogItems : undefined} refreshingPartId={refreshingPartId} />
               </div>
             </details>
             <button className="button button-primary full-width" onClick={onCheck} disabled={checking}>{checking ? <><FiLoader className="spin" /> 호환 확인 중...</> : <><FiActivity /> 호환 확인하기</>}</button>
@@ -200,7 +200,7 @@ export function EditorView({
   );
 }
 
-export function BuildPreflightPanel({ preflight, onRefresh, onRefreshAll, refreshingPartId }: { preflight: BuildPreflight; onRefresh: (target: RefreshTarget) => void; onRefreshAll: (targets: RefreshTarget[]) => void; refreshingPartId: string | null }) {
+export function BuildPreflightPanel({ preflight, onRefresh, onRefreshAll, refreshingPartId }: { preflight: BuildPreflight; onRefresh?: (target: RefreshTarget) => void; onRefreshAll?: (targets: RefreshTarget[]) => void; refreshingPartId: string | null }) {
   const statusCopy: Record<BuildPreflight["status"], string> = {
     ready: "견적 준비 완료",
     needs_selection: "필수 부품 선택 필요",
@@ -213,9 +213,9 @@ export function BuildPreflightPanel({ preflight, onRefresh, onRefreshAll, refres
     price: "가격"
   };
   return <section className={`build-preflight ${preflight.status}`} aria-label="견적에 필요한 부품 정보">
-    <div className="build-preflight-heading"><div><strong>부품 정보</strong></div><div className="build-preflight-heading-actions"><span className="build-preflight-status">{statusCopy[preflight.status]}</span>{preflight.refreshTargets.length > 0 && <button className="text-button build-preflight-refresh-all" type="button" onClick={() => onRefreshAll(preflight.refreshTargets)} disabled={refreshingPartId !== null}>{refreshingPartId !== null ? <><FiLoader className="spin" /> 불러오는 중...</> : <><FiRefreshCw /> 가격·사양 새로 불러오기 {preflight.refreshTargets.length}개</>}</button>}</div></div>
+    <div className="build-preflight-heading"><div><strong>부품 정보</strong></div><div className="build-preflight-heading-actions"><span className="build-preflight-status">{statusCopy[preflight.status]}</span>{onRefreshAll && preflight.refreshTargets.length > 0 && <button className="text-button build-preflight-refresh-all" type="button" onClick={() => onRefreshAll(preflight.refreshTargets)} disabled={refreshingPartId !== null}>{refreshingPartId !== null ? <><FiLoader className="spin" /> 불러오는 중...</> : <><FiRefreshCw /> 가격·사양 새로 불러오기 {preflight.refreshTargets.length}개</>}</button>}</div></div>
     <div className="build-preflight-stats"><div><span>필수 선택</span><strong>{preflight.requiredSelectedCount} / {preflight.requiredTotal}</strong></div><div><span>선택 부품</span><strong>{preflight.selectedPartCount + preflight.selectedAccessoryCount}개</strong></div><div><span>사양 정보 부족</span><strong>{preflight.dataReviewCount}개</strong></div><div><span>가격 없는 부품</span><strong>{preflight.unpricedCount}개</strong></div></div>
-    {preflight.issues.length > 0 ? <div className="build-preflight-issues">{preflight.issues.slice(0, 4).map((issue) => <div className="build-preflight-issue" key={issue.id}><span>{issueKindCopy[issue.kind]}</span><div><strong>{issue.label}</strong><small>{issue.message}</small></div>{issue.target && <button className="text-button build-preflight-refresh" type="button" onClick={() => onRefresh(issue.target!)} disabled={refreshingPartId !== null}>{refreshingPartId === issue.target.id ? <><FiLoader className="spin" /> 불러오는 중...</> : <><FiRefreshCw /> 가격·사양 업데이트</>}</button>}</div>)}{preflight.issues.length > 4 && <small className="build-preflight-more">그 외 {preflight.issues.length - 4}개 부품 정보는 호환 결과에서 확인할 수 있어요.</small>}</div> : <p className="build-preflight-clear"><FiCheckCircle /> 선택한 부품 정보를 불러왔어요.</p>}
+    {preflight.issues.length > 0 ? <div className="build-preflight-issues">{preflight.issues.slice(0, 4).map((issue) => <div className="build-preflight-issue" key={issue.id}><span>{issueKindCopy[issue.kind]}</span><div><strong>{issue.label}</strong><small>{issue.message}</small></div>{onRefresh && issue.target && <button className="text-button build-preflight-refresh" type="button" onClick={() => onRefresh(issue.target!)} disabled={refreshingPartId !== null}>{refreshingPartId === issue.target.id ? <><FiLoader className="spin" /> 불러오는 중...</> : <><FiRefreshCw /> 가격·사양 업데이트</>}</button>}</div>)}{preflight.issues.length > 4 && <small className="build-preflight-more">그 외 {preflight.issues.length - 4}개 부품 정보는 호환 결과에서 확인할 수 있어요.</small>}</div> : <p className="build-preflight-clear"><FiCheckCircle /> 선택한 부품 정보를 불러왔어요.</p>}
     <p className="build-preflight-note"><FiInfo /> 필수 부품을 선택한 뒤 호환 결과를 확인해 주세요.</p>
   </section>;
 }

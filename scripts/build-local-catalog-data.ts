@@ -3,6 +3,7 @@ import { copyFile, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { ACCESSORY_CATEGORIES, type AccessoryCategory, type AccessoryItem, type Part, type PartCategory } from "../shared/types";
 import { assessAccessorySpecProfile } from "../server/accessory-spec-coverage";
+import { BUNDLE_MEMBERS_SOURCE, canonicalAccessoryDetailUrl, validateBundlePageObservation, type BundleMembersArtifact } from "./danawa-accessory-bundle-members";
 
 type SourceProduct = { productCode?: string | number };
 type SourcePage = { totalCount?: number; totalPages?: number; products?: SourceProduct[] };
@@ -14,6 +15,13 @@ type SourceCategory = {
   pages?: Record<string, SourcePage>;
 };
 type SourceManifest = { categories?: Record<string, SourceCategory> };
+type SortSupplementPage = { page?: number; products?: SourceProduct[] };
+type SortSupplementCategory = {
+  category?: string;
+  categoryId?: string;
+  pagesBySort?: Record<string, Record<string, SortSupplementPage>>;
+};
+type SortSupplementManifest = { categories?: Record<string, SortSupplementCategory> };
 type InventoryCheckpoint = { entries?: Record<string, { status?: string; reason?: string }> };
 
 const projectRoot = process.cwd();
@@ -39,6 +47,8 @@ const privateSourceAllowlist = [
   "danawa-pc9-all-pages.json",
   "danawa-pc9-detail-checkpoint.json",
   "danawa-accessory-all-pages.json",
+  "danawa-accessory-sort-pages.json",
+  "danawa-accessory-bundle-members.json",
   "accessory-coverage.json",
   "accessory-crawl-manifest.json",
   "accessory-crawl-state.json",
@@ -178,6 +188,132 @@ function sourceProductKeys(manifest: SourceManifest, selectedCategoryIds?: Set<s
   return keys;
 }
 
+function accessorySortSupplementSummary(supplement: SortSupplementManifest, baseManifest: SourceManifest) {
+  const sourceKeys = new Set<string>();
+  let observedPages = 0;
+  let observedRows = 0;
+  let uniqueProducts = 0;
+  let newUniqueProducts = 0;
+  const categories = Object.entries(supplement.categories ?? {}).map(([categoryId, category]) => {
+    const base = baseManifest.categories?.[categoryId];
+    const productCategory = category.category ?? base?.category ?? "unknown";
+    const baseCodes = new Set(Object.values(base?.pages ?? {}).flatMap((page) => (page.products ?? []).flatMap((product) => {
+      const code = String(product.productCode ?? "");
+      return /^\d+$/.test(code) ? [code] : [];
+    })));
+    const codes = new Set<string>();
+    const sortMethods = Object.entries(category.pagesBySort ?? {});
+    let categoryPages = 0;
+    let categoryRows = 0;
+    for (const [, pages] of sortMethods) {
+      for (const page of Object.values(pages)) {
+        categoryPages += 1;
+        const products = page.products ?? [];
+        categoryRows += products.length;
+        for (const product of products) {
+          const code = String(product.productCode ?? "");
+          if (!/^\d+$/.test(code)) continue;
+          codes.add(code);
+          sourceKeys.add(productCategory + ":" + code);
+        }
+      }
+    }
+    const newCodes = [...codes].filter((code) => !baseCodes.has(code));
+    observedPages += categoryPages;
+    observedRows += categoryRows;
+    uniqueProducts += codes.size;
+    newUniqueProducts += newCodes.length;
+    return {
+      category: productCategory,
+      categoryId,
+      sortMethods: sortMethods.map(([sortMethod]) => sortMethod).sort(),
+      observedPages: categoryPages,
+      observedRows: categoryRows,
+      uniqueProducts: codes.size,
+      newUniqueProducts: newCodes.length
+    };
+  });
+  return {
+    sourceKeys,
+    report: {
+      source: "robots-allowed Danawa public list UI sort pages",
+      observedPages,
+      observedRows,
+      uniqueProducts,
+      newUniqueProducts,
+      categories
+    }
+  };
+}
+
+function accessoryBundleMemberEvidenceSummary(artifact: BundleMembersArtifact) {
+  if (artifact.schemaVersion !== 1 || artifact.source !== BUNDLE_MEMBERS_SOURCE || !Number.isFinite(Date.parse(artifact.updatedAt))) {
+    throw new Error("Unsupported Danawa accessory bundle member evidence artifact.");
+  }
+  const uniqueMemberCodesByCategory = new Map<string, Set<string>>();
+  let observedPages = 0;
+  let observedParentRows = 0;
+  let observedMemberRows = 0;
+  let unresolvedMemberRows = 0;
+  const unresolvedMemberSourceFields: Record<string, number> = { price: 0, image: 0 };
+  const categories = Object.entries(artifact.categories ?? {}).map(([categoryId, category]) => {
+    if (category.categoryId !== categoryId || !category.category) throw new Error(`Bundle evidence category identity mismatch at ${categoryId}.`);
+    const uniqueCodes = new Set<string>();
+    let categoryPages = 0;
+    let categoryParents = 0;
+    let categoryMembers = 0;
+    let categoryUnresolved = 0;
+    const categoryUnresolvedFields: Record<string, number> = { price: 0, image: 0 };
+    for (const [sortMethod, pages] of Object.entries(category.pagesBySort ?? {})) {
+      for (const [pageKey, page] of Object.entries(pages)) {
+        const pageNumber = Number(pageKey);
+        validateBundlePageObservation(page, sortMethod, pageNumber, categoryId);
+        categoryPages += 1;
+        categoryParents += page.parentProductCount;
+        categoryUnresolved += page.unresolvedMemberCount;
+        for (const parent of page.parents) {
+          categoryMembers += parent.members.length;
+          for (const member of parent.members) {
+            if (member.canonicalDetailUrl !== canonicalAccessoryDetailUrl(member.memberProductCode, categoryId)) {
+              throw new Error(`Bundle evidence canonical URL mismatch for ${member.memberProductCode}.`);
+            }
+            uniqueCodes.add(member.memberProductCode);
+            for (const field of member.unresolvedSourceFields ?? []) {
+              categoryUnresolvedFields[field] = (categoryUnresolvedFields[field] ?? 0) + 1;
+              unresolvedMemberSourceFields[field] = (unresolvedMemberSourceFields[field] ?? 0) + 1;
+            }
+          }
+        }
+      }
+    }
+    observedPages += categoryPages;
+    observedParentRows += categoryParents;
+    observedMemberRows += categoryMembers;
+    unresolvedMemberRows += categoryUnresolved;
+    uniqueMemberCodesByCategory.set(categoryId, uniqueCodes);
+    return {
+      category: category.category,
+      categoryId,
+      observedPages: categoryPages,
+      observedParentRows: categoryParents,
+      observedMemberRows: categoryMembers,
+      uniqueMemberProductCodes: uniqueCodes.size,
+      unresolvedMemberRows: categoryUnresolved,
+      unresolvedMemberSourceFields: categoryUnresolvedFields
+    };
+  });
+  return {
+    source: BUNDLE_MEMBERS_SOURCE,
+    observedPages,
+    observedParentRows,
+    observedMemberRows,
+    uniqueMemberProductCodes: [...uniqueMemberCodesByCategory.values()].reduce((count, codes) => count + codes.size, 0),
+    unresolvedMemberRows,
+    unresolvedMemberSourceFields,
+    categories
+  };
+}
+
 function productCodeFromSourceKey(key: string) {
   const separatorIndex = key.indexOf(":");
   return separatorIndex < 0 ? "" : key.slice(separatorIndex + 1);
@@ -245,15 +381,28 @@ if (missingRequiredFiles.length > 0) {
   ]);
   const coreManifest = await readJson<SourceManifest>(join(sourceDataDirectory, "danawa-pc9-all-pages.json")).catch(() => ({ categories: {} }));
   const accessoryManifest = await readJson<SourceManifest>(join(sourceDataDirectory, "danawa-accessory-all-pages.json")).catch(() => ({ categories: {} }));
+  const accessorySortSupplement = await readJson<SortSupplementManifest>(join(sourceDataDirectory, "danawa-accessory-sort-pages.json")).catch(() => ({ categories: {} }));
+  const accessorySortEvidence = accessorySortSupplementSummary(accessorySortSupplement, accessoryManifest);
+  const accessoryBundleMembers = await readJson<BundleMembersArtifact>(join(sourceDataDirectory, "danawa-accessory-bundle-members.json")).catch(() => ({
+    schemaVersion: 1 as const,
+    source: BUNDLE_MEMBERS_SOURCE,
+    updatedAt: new Date(0).toISOString(),
+    categories: {}
+  }));
+  const accessoryBundleMemberEvidence = accessoryBundleMemberEvidenceSummary(accessoryBundleMembers);
   const coreCheckpoint = await readJson<InventoryCheckpoint>(join(sourceDataDirectory, "danawa-pc9-detail-checkpoint.json")).catch(() => ({ entries: {} }));
   const coreSourceInventory = sourceInventorySummary(coreManifest, coreCategoryIds);
   const accessorySourceInventory = sourceInventorySummary(accessoryManifest);
+  const accessoryObservedIncludingSupplements = accessorySourceInventory.observedUniqueProducts + accessorySortEvidence.report.newUniqueProducts;
+  const accessoryRemainingByDeclaredCount = Math.max(0, accessorySourceInventory.expectedProducts - accessoryObservedIncludingSupplements);
+  const accessoryOverDeclaredProducts = Math.max(0, accessoryObservedIncludingSupplements - accessorySourceInventory.expectedProducts);
+  const accessoryCountConflict = accessoryOverDeclaredProducts > 0;
 
   const coreDanawaCodes = new Set(core.filter((part) => part.source === "danawa" && part.sourceProductCode).map((part) => `${part.category}:${part.sourceProductCode}`));
   const accessoryDanawaCodes = new Set(accessories.filter((item) => item.source === "danawa" && item.sourceProductCode).map((item) => `${item.category}:${item.sourceProductCode}`));
   const accessoryDanawaProductCodes = new Set(accessories.filter((item) => item.source === "danawa" && item.sourceProductCode).map((item) => item.sourceProductCode!));
   const coreSourceKeys = sourceProductKeys(coreManifest, coreCategoryIds);
-  const accessorySourceKeys = sourceProductKeys(accessoryManifest);
+  const accessorySourceKeys = new Set([...sourceProductKeys(accessoryManifest), ...accessorySortEvidence.sourceKeys]);
   const coreMatchedKeys = new Set([...coreSourceKeys].filter((key) => coreDanawaCodes.has(key)));
   const coreAlsoInAccessoryKeys = new Set([...coreSourceKeys].filter((key) => accessoryDanawaProductCodes.has(productCodeFromSourceKey(key))));
   const coreRejectedEntries = Object.entries(coreCheckpoint.entries ?? {}).filter(([key, entry]) => coreSourceKeys.has(key) && entry.status === "rejected");
@@ -268,8 +417,9 @@ if (missingRequiredFiles.length > 0) {
   const accessoryMatchedKeys = new Set([...accessorySourceKeys].filter((key) => accessoryDanawaCodes.has(key)));
   const coreSourceMatched = coreMatchedKeys.size;
   const accessorySourceMatched = accessoryMatchedKeys.size;
+  const accessoryAllObservedCodesMatched = accessorySourceMatched === accessorySourceKeys.size;
   const coreSourceReconciliationComplete = coreSourceInventory.listComplete && coreUnresolvedSourceProducts === 0;
-  const accessorySourceReconciliationComplete = accessorySourceInventory.listComplete && accessorySourceMatched === accessorySourceKeys.size;
+  const accessorySourceReconciliationComplete = accessorySourceInventory.listComplete && accessoryAllObservedCodesMatched;
 
   const privateFiles: Array<{ name: string; bytes: number; sha256: string }> = [];
   for (const filename of privateSourceAllowlist) {
@@ -336,9 +486,15 @@ if (missingRequiredFiles.length > 0) {
       qualityCounts: qualityCounts(accessories),
       sourceInventory: {
         ...accessorySourceInventory,
+        supplementalSortEvidence: accessorySortEvidence.report,
+        bundleMemberEvidence: accessoryBundleMemberEvidence,
+        observedUniqueIncludingSupplements: accessoryObservedIncludingSupplements,
+        countConflict: accessoryCountConflict,
+        overDeclaredProducts: accessoryOverDeclaredProducts,
+        unobservedByDeclaredCountIncludingSupplements: accessoryRemainingByDeclaredCount,
         matchedToLocalCatalog: accessorySourceMatched,
-        unmatchedObservedProducts: Math.max(0, accessorySourceInventory.observedUniqueProducts - accessorySourceMatched),
-        allObservedCodesMatched: accessorySourceReconciliationComplete
+        unmatchedObservedProducts: Math.max(0, accessorySourceKeys.size - accessorySourceMatched),
+        allObservedCodesMatched: accessoryAllObservedCodesMatched
       }
     }
   };

@@ -2421,6 +2421,8 @@ export interface ServiceMeta {
   engineVersion: string;
   storageMode: "postgres" | "file";
   adminAuthEnabled: boolean;
+  /** Present only when this request carries a valid admin session. */
+  adminSessionAuthenticated?: boolean;
 }
 
 export interface BrandCountOption {

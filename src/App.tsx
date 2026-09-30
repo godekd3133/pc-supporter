@@ -2714,7 +2714,7 @@ function App() {
     if (ownership.ownerToken && ownerSessionModeSupported()) void retryOwnerSessionMigration().catch(() => undefined);
     invalidateSavedBuildReads();
     void refreshSavedBuildsForBrowser();
-    setToast("이 브라우저에서 견적 소유권을 되찾았습니다.");
+    setToast("견적을 불러왔습니다.");
     if (recoveryCode) setRecoveryCodeNotice({ code: recoveryCode, buildName: recoverOwnershipTarget !== "open" && recoverOwnershipTarget?.name ? recoverOwnershipTarget.name : id });
   }
 
@@ -3541,7 +3541,7 @@ function App() {
     <div className="shared-build-state"><FiLoader className="spin" /><span>공유 견적을 불러오는 중...</span></div>
   ) : shareLoadError ? (
     <SharedBuildErrorView message={shareLoadError} onRetry={() => setShareLoadRetryNonce((current) => current + 1)} onBack={() => navigate("/", "home")} />
-  ) : (
+      ) : (
     <LazyResultView
       dependencies={resultViewDependencies}
       build={build}
@@ -3594,6 +3594,7 @@ function App() {
       onCopyReport={() => void copyCompatibilityReport()}
       onDownloadReport={downloadCompatibilityReport}
       catalogRefreshReport={catalogRefreshReport}
+      catalogRefreshAllowed={meta?.adminAuthEnabled === false || meta?.adminSessionAuthenticated === true}
       onRefreshCatalogItem={(target) => void refreshCatalogItem(target)}
       onRefreshAll={(targets) => void refreshAllCatalogItems(targets)}
       refreshingPartId={refreshingPartId}
@@ -3663,38 +3664,40 @@ function App() {
       ) : (bootstrapIssues.length > 0 || !networkOnline || apiStatusDetails.status === "offline" || apiStatusDetails.status === "degraded") ? <BootstrapNotice issues={bootstrapIssues} online={networkOnline} apiStatus={apiStatusDetails} onRetry={(resource) => setBootstrapRetryRequest((current) => ({ resource, nonce: current.nonce + 1 }))} onRetryAll={() => setBootstrapRetryRequest((current) => ({ resource: null, nonce: current.nonce + 1 }))} retryingResource={bootstrapLoading ? bootstrapRetryRequest.resource : null} retryingAll={bootstrapLoading && bootstrapRetryRequest.resource === null} /> : null}<div className={`route-stage route-stage-${view}`} key={view}>{content}</div></main>
       {candidateScenarioComparison && result && <Suspense fallback={<div className="modal-backdrop" role="presentation"><section className="candidate-scenario-dialog candidate-scenario-dialog-loading" role="dialog" aria-modal="true" aria-label="부품 미리 비교 불러오는 중"><FiLoader className="spin" /> 선택한 부품을 전체 구성에 적용하는 중...</section></div>}><LazyCandidateScenarioComparisonPanel state={candidateScenarioComparison} currentResult={result} onApply={applyCandidateScenario} onSave={saveCandidateScenario} onRetry={(itemId) => void retryCandidateScenario(itemId)} onClose={() => { scenarioRequestSequenceRef.current += 1; setCandidateScenarioComparison(null); }} onWatchPart={watchPart} onShareComparison={shareAlternativeComparison} onRevokeComparison={revokeAlternativeComparison} onToast={setToast} formatWon={formatWon} /></Suspense>}
       {picker && (
-        <PartPicker
-          key={`${picker.category}-${picker.findingRuleId ?? "catalog"}`}
-          category={picker.category}
-          build={build}
-          partMap={partMap}
-          profile={recommendationPreferences.profile}
-          recommendationListingPolicy={recommendationPreferences.listingPolicy}
-          gamingResolution={recommendationPreferences.gamingResolution}
-          gamingRefreshRate={recommendationPreferences.gamingRefreshRate}
-          benchmarkCoverage={meta?.benchmarkCoverage}
-          brandOptions={meta?.catalogBrandCounts?.[picker.category] ?? []}
-          findingRuleId={picker.findingRuleId}
-          findingTitle={picker.findingTitle}
-          initialCandidateMode={picker.initialCandidateMode}
-          affectedPartIds={picker.affectedPartIds}
-          selected={selectionList(build, picker.category)}
-          onClose={() => setPicker(null)}
-          onSelect={selectPickerPart}
-          onToast={setToast}
-          onWatchPart={watchPart}
-          onShareComparison={shareAlternativeComparison}
-          onRevokeComparison={revokeAlternativeComparison}
-          onPreview={view === "result" && result && !resultIsStale ? previewSuggestion : undefined}
-          onCompareScenarios={view === "result" && result && !resultIsStale ? comparePickerScenarios : undefined}
-          partSummary={partSummary}
-          formatWon={formatWon}
-          formatSpecValue={formatSpecValue}
-          similarityEvidenceText={similarityEvidenceText}
-          PartVisual={PartVisual}
-          PartEvidence={PartEvidence}
-          PartWatchButton={PartWatchButton}
-        />
+        <Suspense fallback={<div className="modal-backdrop" role="presentation"><section className="save-build-dialog" role="status" aria-label="부품 선택기를 불러오는 중"><FiLoader className="spin" /></section></div>}>
+          <PartPicker
+            key={`${picker.category}-${picker.findingRuleId ?? "catalog"}`}
+            category={picker.category}
+            build={build}
+            partMap={partMap}
+            profile={recommendationPreferences.profile}
+            recommendationListingPolicy={recommendationPreferences.listingPolicy}
+            gamingResolution={recommendationPreferences.gamingResolution}
+            gamingRefreshRate={recommendationPreferences.gamingRefreshRate}
+            benchmarkCoverage={meta?.benchmarkCoverage}
+            brandOptions={meta?.catalogBrandCounts?.[picker.category] ?? []}
+            findingRuleId={picker.findingRuleId}
+            findingTitle={picker.findingTitle}
+            initialCandidateMode={picker.initialCandidateMode}
+            affectedPartIds={picker.affectedPartIds}
+            selected={selectionList(build, picker.category)}
+            onClose={() => setPicker(null)}
+            onSelect={selectPickerPart}
+            onToast={setToast}
+            onWatchPart={watchPart}
+            onShareComparison={shareAlternativeComparison}
+            onRevokeComparison={revokeAlternativeComparison}
+            onPreview={view === "result" && result && !resultIsStale ? previewSuggestion : undefined}
+            onCompareScenarios={view === "result" && result && !resultIsStale ? comparePickerScenarios : undefined}
+            partSummary={partSummary}
+            formatWon={formatWon}
+            formatSpecValue={formatSpecValue}
+            similarityEvidenceText={similarityEvidenceText}
+            PartVisual={PartVisual}
+            PartEvidence={PartEvidence}
+            PartWatchButton={PartWatchButton}
+          />
+        </Suspense>
       )}
       {saveDialogOpen && <Suspense fallback={<div className="modal-backdrop" role="presentation"><section className="save-build-dialog" role="status"><FiLoader className="spin" /></section></div>}><LazySaveBuildDialog name={saveName} decisionNote={saveDecisionNote} targetLabel={saveBuildTarget?.label} targetKind={saveBuildTarget?.kind} saving={saving} expiryDays={saveExpiryDays} onChange={setSaveName} onDecisionNoteChange={setSaveDecisionNote} onExpiryChange={setSaveExpiryDays} onClose={() => { setSaveDialogOpen(false); setSaveBuildTarget(null); }} onSubmit={() => void saveBuild()} /></Suspense>}
       {recoveryCodeNotice && <Suspense fallback={<div className="modal-backdrop" role="presentation"><section className="save-build-dialog" role="status"><FiLoader className="spin" /></section></div>}><LazyRecoveryCodeDialog code={recoveryCodeNotice.code} buildName={recoveryCodeNotice.buildName} onClose={() => setRecoveryCodeNotice(null)} /></Suspense>}

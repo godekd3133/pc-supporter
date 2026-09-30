@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { gzipSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 import { createContentSecurityPolicy } from "../shared/content-security-policy";
-import { assertContentSecurityPolicy, assertFirstRouteBudget, assertNoFirstRouteOnboardingSelectors, measureStaticImportClosure, resolveStaticImportClosure } from "./verify-client-bundle.mjs";
+import { assertClientShellBudget, assertContentSecurityPolicy, assertFirstRouteBudget, assertNoFirstRouteOnboardingSelectors, measureStaticImportClosure, resolveStaticImportClosure } from "./verify-client-bundle.mjs";
 
 const indexHtml = `<!doctype html><html><head>
   <link rel="stylesheet" href="/assets/root.css">
@@ -14,11 +14,13 @@ const indexHtml = `<!doctype html><html><head>
 
 const staticContents: Record<string, string> = {
   "assets/index.js": "first route entry javascript",
+  "assets/App-fixture.js": "lazy App shell javascript",
   "assets/left.js": "left static import javascript",
   "assets/right.js": "right static import javascript",
   "assets/shared.js": "deduplicated shared static javascript",
   "assets/home.js": "first rendered Home route javascript",
   "assets/root.css": "html root stylesheet",
+  "assets/app.css": "App shell stylesheet",
   "assets/feature.css": "shared feature stylesheet",
   "assets/home.css": "Home route stylesheet"
 };
@@ -30,12 +32,13 @@ function createManifest() {
       src: "index.html",
       isEntry: true,
       imports: ["_left.js", "_right.js"],
-      dynamicImports: ["src/HomeView.tsx", "src/AdminView.tsx", "src/HistoryView.tsx", "src/PriceWatchlistView.tsx", "src/SharedWatchlistView.tsx", "src/QuoteOnboardingView.tsx"],
+      dynamicImports: ["src/App.tsx"],
       css: ["assets/root.css"]
     },
     "_left.js": { file: "assets/left.js", imports: ["_shared.js"], css: ["assets/feature.css"] },
     "_right.js": { file: "assets/right.js", imports: ["_shared.js"], css: ["assets/feature.css"] },
     "_shared.js": { file: "assets/shared.js", imports: [] },
+    "src/App.tsx": { file: "assets/App-fixture.js", isDynamicEntry: true, imports: ["_left.js"], dynamicImports: ["src/HomeView.tsx", "src/AdminView.tsx", "src/HistoryView.tsx", "src/PriceWatchlistView.tsx", "src/SharedWatchlistView.tsx", "src/QuoteOnboardingView.tsx"], css: ["assets/app.css"] },
     "src/HomeView.tsx": { file: "assets/home.js", src: "src/HomeView.tsx", isDynamicEntry: true, imports: ["_left.js"], dynamicImports: ["src/HomeLazyPanel.tsx"], css: ["assets/home.css"] },
     "src/HomeLazyPanel.tsx": { file: "assets/home-lazy-panel.js", src: "src/HomeLazyPanel.tsx", isDynamicEntry: true, imports: [] },
     "src/AdminView.tsx": { file: "assets/AdminView.js", src: "src/AdminView.tsx", isDynamicEntry: true, imports: ["index.html"], css: ["assets/AdminView.css"] },
@@ -96,8 +99,8 @@ describe("first-route client asset closure", () => {
         assetDirectory: outputDirectory
       });
 
-      const expectedJsFiles = ["assets/home.js", "assets/index.js", "assets/left.js", "assets/right.js", "assets/shared.js"];
-      const expectedCssFiles = ["assets/feature.css", "assets/home.css", "assets/root.css"];
+      const expectedJsFiles = ["assets/App-fixture.js", "assets/home.js", "assets/index.js", "assets/left.js", "assets/right.js", "assets/shared.js"];
+      const expectedCssFiles = ["assets/app.css", "assets/feature.css", "assets/home.css", "assets/root.css"];
       const expectedBytes = (files: string[]) => files.reduce((sum, file) => sum + Buffer.byteLength(staticContents[file]), 0);
       const expectedGzipBytes = (files: string[]) => files.reduce((sum, file) => sum + gzipSync(staticContents[file]).byteLength, 0);
 
@@ -132,10 +135,16 @@ describe("first-route client asset closure", () => {
     expect(() => resolveStaticImportClosure(manifest, indexHtml)).toThrow("references a missing entry: _missing.js");
   });
 
-  it("requires the Home route to remain reachable as a dynamic route from the HTML entry", () => {
+  it("requires the App shell to remain reachable as a dynamic route from the HTML entry", () => {
     const manifest = createManifest();
-    manifest["index.html"].dynamicImports = manifest["index.html"].dynamicImports.filter((key) => key !== "src/HomeView.tsx");
-    expect(() => resolveStaticImportClosure(manifest, indexHtml)).toThrow("first rendered route must be reachable from the HTML entry's dynamic imports");
+    manifest["index.html"].dynamicImports = [];
+    expect(() => resolveStaticImportClosure(manifest, indexHtml)).toThrow("App shell must be reachable from the HTML entry's dynamic imports");
+  });
+
+  it("requires Home to remain reachable as a dynamic route from the App shell", () => {
+    const manifest = createManifest();
+    manifest["src/App.tsx"].dynamicImports = manifest["src/App.tsx"].dynamicImports.filter((key) => key !== "src/HomeView.tsx");
+    expect(() => resolveStaticImportClosure(manifest, indexHtml)).toThrow("first rendered route must be reachable from the App shell's dynamic imports");
   });
 
   it("fails on cyclic static manifest references", () => {
@@ -166,5 +175,10 @@ describe("first-route client asset closure", () => {
       css: { bytes: 925_757, gzipBytes: 127_509 },
       total: { bytes: 1_705_205, gzipBytes: 334_209 }
     })).not.toThrow();
+  });
+
+  it("enforces the entry plus App shell byte budget", () => {
+    expect(() => assertClientShellBudget(600_001)).toThrow("client shell exceeds 600000 bytes");
+    expect(() => assertClientShellBudget(600_000)).not.toThrow();
   });
 });

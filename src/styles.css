@@ -1265,6 +1265,7 @@ p, li { word-break: keep-all; overflow-wrap: break-word; }
 .generator-work-context-tags span { padding: 4px 6px; border: 1px solid #d4e4ef; border-radius: 999px; color: #5c7d91; background: rgba(255, 255, 255, .7); font-size: 8px; font-weight: 700; }
 .generator-work-context p { margin: 8px 0 0; color: #6f8797; font-size: 9px; line-height: 1.5; }
 .generator-work-context small { display: block; margin-top: 5px; color: #8ba0ac; font-size: 8px; line-height: 1.45; }
+.generator-gaming-fit-warning { margin: 8px 0 0 !important; padding: 8px 9px; border: 1px solid #eed7a8; border-radius: 7px; color: #7e6121 !important; background: #fff7e3; font-size: 8.5px !important; font-weight: 700; line-height: 1.45; }
 
 .generator-analysis { margin: 0 0 14px; padding: 11px; border: 1px solid #e5e8eb; border-radius: 9px; background: #f9fafb; }
 
@@ -2193,11 +2194,21 @@ html[data-theme="dark"] .shared-generator-variants-state { color: var(--muted) !
 
 .accessory-detail-empty svg, .accessory-detail-missing svg, .accessory-detail-note svg { flex: 0 0 auto; margin-top: 1px; }
 
+.accessory-detail-fit-notice { display: flex; align-items: flex-start; gap: 9px; padding: 12px; border: 1px solid #f0d8a9; border-radius: 10px; color: #705620; background: #fffaf0; font-size: 12px; line-height: 1.5; }
+
+.accessory-detail-fit-notice > svg { flex: 0 0 auto; margin-top: 2px; }
+
+.accessory-detail-fit-notice strong { display: block; margin-bottom: 3px; font-weight: 700; }
+
+.accessory-detail-fit-notice p { margin: 0; }
+
 .accessory-detail-raw { padding-top: 9px; border-top: 1px solid #efecf4; }
 
 .accessory-detail-raw summary { color: #786e9e; cursor: pointer; font-size: 8px; font-weight: 700; }
 
-.accessory-detail-raw p { max-height: 160px; overflow: auto; margin: 7px 0 0; padding: 8px; border-radius: 6px; color: #85809b; background: #faf9fd; font-size: 7px; line-height: 1.5; white-space: pre-wrap; }
+.accessory-detail-raw p { max-height: 160px; overflow: auto; margin: 7px 0 0; padding: 8px; border-radius: 6px; color: #6d6884; background: #faf9fd; font-size: 10px; line-height: 1.55; white-space: pre-wrap; }
+
+.accessory-detail-raw small { display: block; margin-top: 6px; color: #8f8aa2; font-size: 9px; line-height: 1.5; }
 
 .accessory-detail-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 
@@ -16097,7 +16108,7 @@ html[data-theme="dark"] .generator-total > small { color: var(--muted); }
 
 html[data-theme="dark"] .generator-work-context {
   border-color: var(--line);
-  background: var(--canvas);
+  background: var(--surface);
 }
 
 html[data-theme="dark"] .generator-work-context-heading .eyebrow { color: var(--teal-deep); }
@@ -16123,8 +16134,33 @@ html[data-theme="dark"] .generator-line small { color: var(--muted); }
 
 html[data-theme="dark"] .generator-line {
   border-color: var(--line);
-  background: var(--canvas);
+  background: var(--surface);
 }
+
+html[data-theme="dark"] .generator-gaming-fit-warning {
+  border-color: var(--line) !important;
+  color: var(--yellow) !important;
+  background: var(--yellow-soft) !important;
+}
+
+html[data-theme="dark"] .accessory-detail-fit-notice {
+  border-color: var(--line);
+  color: var(--yellow);
+  background: var(--yellow-soft);
+}
+
+html[data-theme="dark"] .accessory-detail-raw {
+  border-top-color: var(--line);
+}
+
+html[data-theme="dark"] .accessory-detail-raw summary { color: var(--teal-deep); }
+
+html[data-theme="dark"] .accessory-detail-raw p {
+  color: var(--muted);
+  background: var(--surface);
+}
+
+html[data-theme="dark"] .accessory-detail-raw small { color: var(--muted); }
 
 html[data-theme="dark"] .generator-warnings > strong,
 html[data-theme="dark"] .generator-warnings p { color: var(--yellow); }
@@ -16155,6 +16191,10 @@ html[data-theme="dark"] .mobile-bottom-nav {
   border-color: var(--line) !important;
   background: rgba(15, 18, 24, .94) !important;
   box-shadow: 0 -8px 24px rgba(0, 0, 0, .2);
+}
+
+html[data-theme="dark"] .mobile-editor-submit {
+  background: linear-gradient(180deg, transparent 0%, var(--mobile-canvas) 28%, var(--mobile-canvas) 100%);
 }
 
 html[data-theme="dark"] .mobile-more-scrim { background: rgba(0, 0, 0, .62) !important; }

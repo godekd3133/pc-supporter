@@ -1,10 +1,11 @@
 import { safeLocalStorage } from "./safe-storage";
-import { StrictMode } from "react";
+import { StrictMode, Suspense, lazy } from "react";
 import { createRoot } from "react-dom/client";
-import App from "./App";
 import { AppErrorBoundary } from "./AppErrorBoundary";
 import { applyTheme, THEME_STORAGE_KEY, themeModeFromStorage } from "./theme";
 import "./styles.css";
+
+const App = lazy(() => import("./App"));
 
 try {
   applyTheme(themeModeFromStorage(safeLocalStorage.getItem(THEME_STORAGE_KEY)));
@@ -45,7 +46,9 @@ if (nativeWindow.Capacitor?.isNativePlatform?.() === true) {
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <AppErrorBoundary>
-      <App />
+      <Suspense fallback={<div className="app-bootstrap-fallback" role="status" aria-live="polite"><span className="app-bootstrap-spinner" aria-hidden="true" /><span>PC Supporter를 불러오고 있어요.</span></div>}>
+        <App />
+      </Suspense>
     </AppErrorBoundary>
   </StrictMode>
 );

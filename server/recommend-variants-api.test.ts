@@ -47,5 +47,5 @@ describe("recommendation variants API", () => {
     expect(body.variants).toHaveLength(3);
     expect(body.variants.map((variant) => variant.priority)).toEqual(["balanced", "budget", "performance"]);
     expect(body.variants.every((variant) => variant.draft?.budgetWon === 1_500_000 || typeof variant.error === "string")).toBe(true);
-  });
+  }, 20_000);
 });

@@ -54,6 +54,56 @@ type Snapshot = {
   updatedAt: string;
   categories: Record<string, SnapshotCategory>;
 };
+type SortSupplementPage = {
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  totalCount: number;
+  codes: string[];
+  products: ListedProduct[];
+  fetchedAt: string;
+  rowCountMismatch?: { expected: number; received: number };
+  sortMethod: string;
+  sourcePath: "/list/";
+  requestMethod: "POST";
+  responseStatus?: number;
+  responseContentType?: string;
+};
+type SortSupplementSnapshot = {
+  schemaVersion: 1;
+  source: "robots-allowed Danawa accessory list UI sort pages";
+  updatedAt: string;
+  categories: Record<string, {
+    category: AccessoryCategory;
+    categoryId: string;
+    pagesBySort: Record<string, Record<string, SortSupplementPage>>;
+  }>;
+};
+type SortSupplementPage = {
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  totalCount: number;
+  codes: string[];
+  products: ListedProduct[];
+  fetchedAt: string;
+  rowCountMismatch?: { expected: number; received: number };
+  sortMethod: string;
+  sourcePath: "/list/";
+  requestMethod: "POST";
+  responseStatus?: number;
+  responseContentType?: string;
+};
+type SortSupplementSnapshot = {
+  schemaVersion: 1;
+  source: "robots-allowed Danawa accessory list UI sort pages";
+  updatedAt: string;
+  categories: Record<string, {
+    category: AccessoryCategory;
+    categoryId: string;
+    pagesBySort: Record<string, Record<string, SortSupplementPage>>;
+  }>;
+};
 
 type ReconciliationCategory = {
   category: AccessoryCategory;
@@ -64,6 +114,10 @@ type ReconciliationCategory = {
   pagesVisited: number;
   listedProducts: number;
   uniqueProducts: number;
+  supplementalPagesObserved?: number;
+  supplementalProductsObserved?: number;
+  supplementalNewUniqueProducts?: number;
+  supplementalSortMethods?: string[];
   missingFromCapturedList: number;
   matchedExisting: number;
   inserted: number;
@@ -91,16 +145,20 @@ const { values, positionals } = parseArgs({
     apply: { type: "boolean", default: false },
     "include-partial": { type: "boolean", default: false },
     "move-core-overlaps": { type: "boolean", default: false },
-    category: { type: "string" }
+    category: { type: "string" },
+    "product-code": { type: "string" }
   },
   strict: true,
   allowPositionals: true
 });
 
-if (positionals.length > 0) throw new Error("Use only --apply, --include-partial, --move-core-overlaps, and --category=ACCESSORY_CATEGORY.");
+if (positionals.length > 0) throw new Error("Use only --apply, --include-partial, --move-core-overlaps, --category=ACCESSORY_CATEGORY, and --product-code=PCODE.");
 if (process.env.DATABASE_URL?.trim()) throw new Error("This list reconciliation is file-backed only; unset DATABASE_URL before running it.");
 
 const categoryFilter = values.category as AccessoryCategory | undefined;
+const productCodeFilter = values["product-code"];
+if (productCodeFilter !== undefined && !/^\d{5,}$/.test(productCodeFilter)) throw new Error("--product-code must be a numeric Danawa PCode with at least five digits.");
+if (productCodeFilter && !categoryFilter) throw new Error("--product-code requires --category so source identity remains explicit.");
 if (categoryFilter && !DANAWA_ACCESSORY_CATEGORIES.some((entry) => entry.category === categoryFilter)) {
   throw new Error(`Unknown accessory category: ${categoryFilter}`);
 }
@@ -171,6 +229,48 @@ function validateCategorySnapshot(categoryId: string, entry: SnapshotCategory) {
   };
 }
 
+function validateSortSupplement(categoryId: string, expectedProductCount: number, entry?: SortSupplementSnapshot["categories"][string]) {
+  if (!entry) return [] as Array<{ product: ListedProduct; fetchedAt: string; sortMethod: string; page: number }>;
+  const expectedCategory = DANAWA_ACCESSORY_CATEGORIES.find((config) => config.categoryId === categoryId)?.category;
+  if (entry.categoryId !== categoryId || entry.category !== expectedCategory) throw new Error("Supplement category identity does not match configured source " + categoryId + ".");
+  const supplements: Array<{ product: ListedProduct; fetchedAt: string; sortMethod: string; page: number }> = [];
+  for (const [sortMethod, pages] of Object.entries(entry.pagesBySort)) {
+    if (!["BEST", "LOW_PRICE", "HIGH_PRICE", "NEW", "REVIEW"].includes(sortMethod)) throw new Error(entry.category + ": unsupported supplemental sort " + sortMethod + ".");
+    for (const [pageKey, page] of Object.entries(pages)) {
+      const pageNumber = Number(pageKey);
+      if (!Number.isSafeInteger(pageNumber) || page.page !== pageNumber || page.sortMethod !== sortMethod) {
+        throw new Error(entry.category + ": supplemental page identity mismatch for " + sortMethod + "/" + pageKey + ".");
+      }
+      if (page.sourcePath !== "/list/" || page.requestMethod !== "POST" || page.responseStatus !== 200 || !page.responseContentType?.includes("text/x-component")) {
+        throw new Error(entry.category + ": supplemental page " + sortMethod + "/" + pageNumber + " lacks public UI request/response evidence.");
+      }
+      if (page.page !== pageNumber || pageNumber < 1 || page.totalCount !== expectedProductCount || ![30, 60, 90].includes(page.pageSize)
+        || !Number.isSafeInteger(page.totalPages) || pageNumber > page.totalPages
+        || page.totalPages !== Math.ceil(page.totalCount / page.pageSize)) {
+        throw new Error(entry.category + ": supplemental page " + sortMethod + "/" + pageNumber + " has a different source total or invalid page size.");
+      }
+      if (page.rowCountMismatch) throw new Error(entry.category + ": refusing supplemental page " + sortMethod + "/" + pageNumber + " with a source row-count mismatch.");
+      const expectedRows = Math.min(page.pageSize, Math.max(0, expectedProductCount - (pageNumber - 1) * page.pageSize));
+      if (page.products.length !== expectedRows || page.codes.length !== page.products.length) {
+        throw new Error(entry.category + ": supplemental page " + sortMethod + "/" + pageNumber + " does not contain its exact expected rows.");
+      }
+      const pageCodes = new Set<string>();
+      for (let index = 0; index < page.products.length; index += 1) {
+        const product = page.products[index];
+        if (!/^\d+$/.test(product.productCode) || !product.name.trim() || page.codes[index] !== product.productCode) {
+          throw new Error(entry.category + ": invalid supplemental product identity on " + sortMethod + "/" + pageNumber + ".");
+        }
+        if (pageCodes.has(product.productCode)) throw new Error(entry.category + ": duplicate product " + product.productCode + " inside supplemental page " + sortMethod + "/" + pageNumber + ".");
+        pageCodes.add(product.productCode);
+        canonicalProductUrl(product, categoryId);
+      }
+      if (!Number.isFinite(Date.parse(page.fetchedAt))) throw new Error(entry.category + ": supplemental page " + sortMethod + "/" + pageNumber + " has no valid fetch timestamp.");
+      supplements.push(...page.products.map((product) => ({ product, fetchedAt: page.fetchedAt, sortMethod, page: pageNumber })));
+    }
+  }
+  return supplements;
+}
+
 function mergeListedProduct(existing: AccessoryItem, product: ListedProduct, categoryId: string, fetchedAt: string): AccessoryItem {
   const parsedSpecs = definedSpecs(parseAccessorySpecs(existing.category, `${product.name} ${product.spec ?? ""}`));
   const wasCreatedFromListOnlyAtThisSnapshot = existing.updatedAt === fetchedAt
@@ -223,6 +323,16 @@ const manifest = await readRequiredJson<Snapshot>(manifestPath);
 if (manifest.schemaVersion !== 1 || !manifest.source.includes("Danawa public accessory list pages")) {
   throw new Error("Unsupported accessory list manifest schema or source.");
 }
+const sortSupplementPath = join(DATA_DIR, "danawa-accessory-sort-pages.json");
+const sortSupplement = await readJson<SortSupplementSnapshot>(sortSupplementPath, {
+  schemaVersion: 1,
+  source: "robots-allowed Danawa accessory list UI sort pages",
+  updatedAt: "",
+  categories: {}
+});
+if (sortSupplement.schemaVersion !== 1 || sortSupplement.source !== "robots-allowed Danawa accessory list UI sort pages") {
+  throw new Error("Unsupported accessory sort supplement schema or source.");
+}
 
 const configs = DANAWA_ACCESSORY_CATEGORIES.filter((config) => !categoryFilter || config.category === categoryFilter);
 const selected = configs.flatMap((config) => {
@@ -233,10 +343,19 @@ const selected = configs.flatMap((config) => {
   return [{ config, entry, ...validated }];
 });
 if (selected.length === 0) throw new Error("No categories selected. Partial list snapshots require --include-partial.");
+const supplementalByCategory = new Map<string, ReturnType<typeof validateSortSupplement>>();
+for (const source of selected) {
+  supplementalByCategory.set(source.config.categoryId, validateSortSupplement(
+    source.config.categoryId,
+    source.expectedProductCount,
+    sortSupplement.categories[source.config.categoryId]
+  ));
+}
 
 const selectedProductsByCode = new Map<string, { category: AccessoryCategory; categoryId: string; product: ListedProduct; fetchedAt: string }>();
 for (const source of selected) {
   for (const product of source.products) {
+    if (productCodeFilter && product.productCode !== productCodeFilter) continue;
     const existing = selectedProductsByCode.get(product.productCode);
     if (existing && existing.category !== source.config.category) {
       throw new Error(`Product ${product.productCode} appears in multiple accessory categories; refusing ambiguous assignment.`);
@@ -248,6 +367,24 @@ for (const source of selected) {
       fetchedAt: source.sourceFetchedAt
     });
   }
+}
+for (const source of selected) {
+  for (const observation of supplementalByCategory.get(source.config.categoryId) ?? []) {
+    if (productCodeFilter && observation.product.productCode !== productCodeFilter) continue;
+    const existing = selectedProductsByCode.get(observation.product.productCode);
+    if (existing && existing.category !== source.config.category) {
+      throw new Error("Supplemental product " + observation.product.productCode + " appears in multiple accessory categories; refusing ambiguous assignment.");
+    }
+    if (!existing) selectedProductsByCode.set(observation.product.productCode, {
+      category: source.config.category,
+      categoryId: source.config.categoryId,
+      product: observation.product,
+      fetchedAt: observation.fetchedAt
+    });
+  }
+}
+if (productCodeFilter && !selectedProductsByCode.has(productCodeFilter)) {
+  throw new Error(`Product ${productCodeFilter} was not found in the captured ${categoryFilter} source list or its verified supplemental pages.`);
 }
 
 const [existingAccessories, coreParts] = await Promise.all([
@@ -294,7 +431,23 @@ const changeRecords = [];
 const categoryResults: ReconciliationCategory[] = [];
 
 for (const source of selected) {
-  const sourceCodeSet = new Set(source.products.map(({ productCode }) => productCode));
+  const primaryCodeSet = new Set(source.products.map(({ productCode }) => productCode));
+  const supplementalRows = supplementalByCategory.get(source.config.categoryId) ?? [];
+  const supplementalByCode = new Map<string, (typeof supplementalRows)[number]>();
+  for (const observation of supplementalRows) {
+    if (!supplementalByCode.has(observation.product.productCode)) supplementalByCode.set(observation.product.productCode, observation);
+  }
+  const supplementalNewUniqueProducts = [...supplementalByCode.keys()].filter((code) => !primaryCodeSet.has(code)).length;
+  const combinedUniqueProducts = source.uniqueProducts + supplementalNewUniqueProducts;
+  const combinedListedProducts = source.listedProducts + supplementalRows.length;
+  const combinedListComplete = source.complete || combinedUniqueProducts === source.expectedProductCount;
+  const sourceCodeSet = new Set([...primaryCodeSet, ...supplementalByCode.keys()]);
+  const supplementalPagesObserved = new Set(supplementalRows.map((item) => item.sortMethod + ":" + item.page)).size;
+  const supplementalSortMethods = [...new Set(supplementalRows.map((item) => item.sortMethod))].sort();
+  const latestSupplementFetchedAt = supplementalRows.map((item) => item.fetchedAt).sort().at(-1);
+  const latestFetchedAt = latestSupplementFetchedAt && Date.parse(latestSupplementFetchedAt) > Date.parse(source.sourceFetchedAt)
+    ? latestSupplementFetchedAt
+    : source.sourceFetchedAt;
   let matchedExisting = 0;
   let inserted = 0;
   let sourceCategoryUpdated = 0;
@@ -305,6 +458,7 @@ for (const source of selected) {
   const coreConflictCodes = new Set(coreCatalogOverlaps.map(({ productCode }) => productCode));
 
   for (const product of source.products) {
+    if (productCodeFilter && product.productCode !== productCodeFilter) continue;
     const current = (accessoryRowsByCode.get(product.productCode) ?? [])[0];
     if (coreConflictCodes.has(product.productCode) && !values["move-core-overlaps"]) continue;
     if (product.priceWon !== undefined) priceObserved += 1;
@@ -328,22 +482,49 @@ for (const source of selected) {
     if (changedFields.length > 0) changeRecords.push(catalogChangeRecord("accessory", current, updated, changedFields, { changedAt: source.sourceFetchedAt }));
   }
 
+  for (const [productCode, observation] of supplementalByCode) {
+    if (productCodeFilter && productCode !== productCodeFilter) continue;
+    if (primaryCodeSet.has(productCode)) continue;
+    const product = observation.product;
+    const current = (accessoryRowsByCode.get(productCode) ?? [])[0];
+    if (coreConflictCodes.has(productCode) && !values["move-core-overlaps"]) continue;
+    if (product.priceWon !== undefined) priceObserved += 1;
+    if (!current) {
+      const created = newListItem(source.config.category, source.config.categoryId, product, observation.fetchedAt, coreByCode.get(productCode));
+      const existingId = nextById.get(created.id);
+      if (existingId && existingId.sourceProductCode !== created.sourceProductCode) throw new Error("New accessory ID " + created.id + " conflicts with an unrelated existing row.");
+      nextById.set(created.id, created);
+      inserted += 1;
+      incompleteAfterReconcile += 1;
+      continue;
+    }
+    matchedExisting += 1;
+    matchedIds.add(current.id);
+    const updated = mergeListedProduct(current, product, source.config.categoryId, observation.fetchedAt);
+    if (current.sourceCategoryId !== updated.sourceCategoryId) sourceCategoryUpdated += 1;
+    if (current.priceWon !== updated.priceWon) priceChanged += 1;
+    if (updated.missingFields.length > 0) incompleteAfterReconcile += 1;
+    nextById.set(updated.id, updated);
+    const changedFields = meaningfulCatalogChangeFields(current, updated);
+    if (changedFields.length > 0) changeRecords.push(catalogChangeRecord("accessory", current, updated, changedFields, { changedAt: observation.fetchedAt }));
+  }
+
   const retainedExistingNotInSnapshot = existingAccessories.filter((item) => item.source === "danawa" && item.category === source.config.category && item.sourceProductCode && !sourceCodeSet.has(item.sourceProductCode)).length;
   const report: AccessoryCrawlCategoryReport = {
     category: source.config.category,
     categoryId: source.config.categoryId,
     totalProductCount: source.expectedProductCount,
     offset: 0,
-    requestedLimit: source.uniqueProducts,
+    requestedLimit: combinedUniqueProducts,
     pagesExpected: source.expectedPageCount,
     pagesVisited: source.pages.length,
-    listedProducts: source.listedProducts,
-    uniqueProducts: source.uniqueProducts,
+    listedProducts: combinedListedProducts,
+    uniqueProducts: combinedUniqueProducts,
     detailFetched: 0,
     detailFailed: 0,
-    missingProducts: Math.max(0, source.expectedProductCount - source.uniqueProducts),
+    missingProducts: Math.max(0, source.expectedProductCount - combinedUniqueProducts),
     incompleteSpecs: incompleteAfterReconcile,
-    listCoverage: source.complete ? "complete" : "partial",
+    listCoverage: combinedListComplete ? "complete" : "partial",
     coverage: "partial",
     specCoverage: "partial"
   };
@@ -356,6 +537,10 @@ for (const source of selected) {
     pagesVisited: report.pagesVisited,
     listedProducts: report.listedProducts,
     uniqueProducts: report.uniqueProducts,
+    supplementalPagesObserved,
+    supplementalProductsObserved: supplementalRows.length,
+    supplementalNewUniqueProducts,
+    supplementalSortMethods,
     missingFromCapturedList: report.missingProducts,
     matchedExisting,
     inserted,
@@ -365,7 +550,7 @@ for (const source of selected) {
     coreCatalogOverlaps,
     movedFromCore: values["move-core-overlaps"] ? coreCatalogOverlaps.length : 0,
     retainedExistingNotInSnapshot,
-    sourceFetchedAt: source.sourceFetchedAt,
+    sourceFetchedAt: latestFetchedAt,
     report
   });
 }
@@ -411,8 +596,9 @@ const audit = {
   schemaVersion: 1,
   updatedAt: new Date().toISOString(),
   sourceManifest: "data/danawa-accessory-all-pages.json",
+  supplementalSourceManifest: "data/danawa-accessory-sort-pages.json",
   sourceManifestUpdatedAt: manifest.updatedAt,
-  evidenceMeaning: "List membership, listed prices, and list descriptions only; product detail fields and compatibility remain separate checks.",
+  evidenceMeaning: "List membership, listed prices, and list descriptions from the default and explicitly captured public UI sort views only; product detail fields and compatibility remain separate checks.",
   stalePolicy: "Existing products absent from captured lists are retained; partial categories are never treated as exhaustive.",
   categories: [...byCategory.values()].sort((left, right) => left.category.localeCompare(right.category)),
   storedAccessoryCoreOverlapCount: storedAccessoryCoreOverlaps.length,

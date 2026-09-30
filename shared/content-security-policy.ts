@@ -1,6 +1,8 @@
 import { SAFE_EXTERNAL_SOURCE_HOSTS } from "./safe-source-url";
 
 export const THEME_SCRIPT_CSP_HASH = "sha256-vuFNM0XLG+dW1eLJdToNcsE6KfWegxQVYwCHD6Cjmbk=";
+export const BOOTSTRAP_FAILURE_SCRIPT_CSP_HASH = "sha256-+a2ANYx3v8+/v0hkZG57FunixoHvQQX4UNh+K0xRGXk=";
+export const BOOTSTRAP_STYLE_CSP_HASH = "sha256-1BY3L5pvVp4HnnrV+biE+/kMn0A+2bR+WGQ7MxvfM6E=";
 
 const remoteImageSources = SAFE_EXTERNAL_SOURCE_HOSTS.map((host) => `https://${host}`);
 const remoteFontStyleSource = "https://fonts.googleapis.com";
@@ -66,10 +68,10 @@ export function createContentSecurityPolicy(options: {
   const allowRemoteAssets = options.allowRemoteAssets ?? true;
   const directives = [
     "default-src 'none'",
-    `script-src 'self' '${THEME_SCRIPT_CSP_HASH}'`,
+    `script-src 'self' '${THEME_SCRIPT_CSP_HASH}' '${BOOTSTRAP_FAILURE_SCRIPT_CSP_HASH}'`,
     "script-src-attr 'none'",
     `style-src 'self' 'unsafe-inline'${allowRemoteAssets ? ` ${remoteFontStyleSource}` : ""}`,
-    `style-src-elem 'self'${allowRemoteAssets ? ` ${remoteFontStyleSource}` : ""}`,
+    `style-src-elem 'self' '${BOOTSTRAP_STYLE_CSP_HASH}'${allowRemoteAssets ? ` ${remoteFontStyleSource}` : ""}`,
     "style-src-attr 'unsafe-inline'",
     `font-src 'self'${allowRemoteAssets ? ` ${remoteFontAssetSource}` : ""}`,
     `img-src 'self'${allowRemoteAssets ? ` ${remoteImageSources.join(" ")}` : ""}`,

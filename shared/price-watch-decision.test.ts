@@ -44,6 +44,16 @@ describe("price watch decision", () => {
     });
   });
 
+  it("does not call an untracked catalog item a saved price alert", () => {
+    const untracked = priceWatchDecisionFor({ currentStatus: "available", currentPriceWon: 120000, trackingEnabled: false });
+    const tracked = priceWatchDecisionFor({ currentStatus: "available", currentPriceWon: 120000, trackingEnabled: true });
+
+    expect(untracked).toMatchObject({ state: "observe", label: "추적 등록 전" });
+    expect(untracked.summary).toContain("가격 추적을 등록하면");
+    expect(tracked).toMatchObject({ state: "tracking", label: "가격 추적 중" });
+    expect(tracked.summary).toBe("저장 가격과 변경 이력을 비교합니다.");
+  });
+
   it("counts the shared decision distribution without dropping unavailable states", () => {
     expect(priceWatchDecisionCountsFor({ first: "target", second: "buy", third: "unavailable", fourth: "error", fifth: "unavailable" })).toEqual({ target: 1, buy: 1, wait: 0, observe: 0, tracking: 0, unavailable: 2, error: 1 });
   });

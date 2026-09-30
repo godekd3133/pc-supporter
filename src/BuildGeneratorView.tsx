@@ -62,13 +62,13 @@ function formatWon(value: number | undefined) {
 export function generatedDraftSummaryFor(draft: BuildGenerationResult) {
   const gamingResolution = draft.gamingResolution === "1080p" ? "FHD" : draft.gamingResolution === "4k" ? "4K" : "QHD";
   const purpose = draft.profile === "gaming"
-    ? `${gamingResolution} ${draft.gamingRefreshRate ?? 144}Hz 게임용`
+    ? `${gamingResolution} ${draft.gamingRefreshRate ?? 144}Hz 게임 목표`
     : ({ general: "일반용", creator: "작업용", development: "개발용", office: "사무용" } as const)[draft.profile];
   const budget = draft.budgetWon >= 10_000 && draft.budgetWon % 10_000 === 0
     ? `${(draft.budgetWon / 10_000).toLocaleString("ko-KR")}만 원`
     : formatWon(draft.budgetWon);
   return draft.profile === "gaming"
-    ? `${purpose} 목표를 기준으로 부품을 골랐어요. 예산은 ${budget}으로 설정했어요.`
+    ? `${purpose}를 기준으로 부품을 골랐어요. 예산은 ${budget}으로 설정했어요.`
     : `${purpose} 견적이에요. 예산은 ${budget}으로 설정했어요.`;
 }
 
@@ -94,9 +94,13 @@ function GeneratorGamingContext({ draft }: { draft: BuildGenerationResult }) {
   const gameLabel = games.length > 0 ? games.join(" · ") : "일반 게이밍";
   const graphics = GAMING_GRAPHICS_PRESET_LABELS[draft.gamingGraphicsPreset ?? "balanced"];
   const upscaling = GAMING_UPSCALING_LABELS[draft.gamingUpscaling ?? "quality"];
+  const gpuTargetNotice = draft.warnings.find((warning) =>
+    warning.startsWith("선택한 그래픽카드 VRAM ") || warning.startsWith("선택한 해상도의 GPU VRAM ")
+  );
   return <section className="generator-work-context" data-testid="generator-gaming-context" aria-label="게임 견적 기준">
     <div className="generator-work-context-heading"><div><p className="eyebrow">게임 목표</p><strong>{gameLabel}</strong></div><span>선택한 조건</span></div>
     <div className="generator-work-context-tags"><span>{GAMING_RESOLUTION_LABELS[draft.gamingResolution]}</span><span>{draft.gamingRefreshRate}Hz</span><span>{graphics}</span><span>{upscaling}</span>{draft.gamingRayTracing && <span>레이 트레이싱</span>}</div>
+    {gpuTargetNotice && <p className="generator-gaming-fit-warning" role="status" data-testid="generator-gaming-fit-warning">{gpuTargetNotice}</p>}
     <small>해상도와 희망 주사율은 요청한 목표예요. 추천 부품과 가격, 호환 상태는 아래에서 확인해 주세요. 실제 게임 FPS는 부품·게임 설정·사용 환경에 따라 달라요.</small>
   </section>;
 }
@@ -110,7 +114,7 @@ function GeneratorGeneralContext({ draft }: { draft: BuildGenerationResult }) {
   return <section className="generator-work-context" data-testid="generator-general-context" aria-label="일반 견적 조건">
     <div className="generator-work-context-heading"><div><p className="eyebrow">일반 견적 기준</p><strong>{target}</strong></div><span>선택한 조건</span></div>
     <div className="generator-work-context-tags"><span>예산 {draft.budgetWon.toLocaleString("ko-KR")}원</span><span>{draft.memoryCapacityGb}GB</span><span>{storageCapacityLabelFor(draft.storageCapacityGb)}</span><span>{gpuSelected ? "외장 GPU 포함" : "외장 GPU 미포함"}</span></div>
-    <small>아래는 이 기준에 맞춰 고른 추천 부품과 가격, 호환 상태예요.</small>
+    <small>예산은 사용할 수 있는 최대 금액이에요. 목표 성능과 호환 조건을 만족하면 남은 금액을 쓰지 않고 초안을 제안할 수 있어요. 아래 부품·가격과 호환 상태를 함께 확인해 주세요.</small>
   </section>;
 }
 
@@ -755,7 +759,7 @@ export function BuildGeneratorView({ initialProfile, draft, variants, budgetLadd
           <div>
             {profile === "gaming" && <label><span>게임 해상도 <em>게이밍 추천 기준</em></span><select value={gamingResolution} disabled={loading} onChange={(event) => setGamingResolution(event.target.value as GamingResolution)}><option value="1080p">{GAMING_RESOLUTION_LABELS["1080p"]}</option><option value="1440p">{GAMING_RESOLUTION_LABELS["1440p"]}</option><option value="4k">{GAMING_RESOLUTION_LABELS["4k"]}</option></select></label>}
             {profile === "gaming" && <label><span>목표 주사율 <em>원하는 값 선택</em></span><select value={gamingRefreshRate} disabled={loading} onChange={(event) => setGamingRefreshRate(Number(event.target.value) as GamingRefreshRate)}><option value="60">{GAMING_REFRESH_RATE_LABELS[60]}</option><option value="144">{GAMING_REFRESH_RATE_LABELS[144]}</option><option value="240">{GAMING_REFRESH_RATE_LABELS[240]}</option></select></label>}
-            {profile === "general" && performanceTier && <label><span>직접 입력한 성능 등급 <em>선택한 성능</em></span><select value={performanceTier} disabled={loading} onChange={(event) => setPerformanceTier(event.target.value as RecommendationPerformanceTier)}>{Object.entries(RECOMMENDATION_PERFORMANCE_TIER_LABELS).map(([id, label]) => <option value={id} key={id}>{label}</option>)}</select></label>}
+            {profile === "general" && performanceTier && <label><span>목표 성능 등급 <em>후보 조건</em></span><select value={performanceTier} disabled={loading} onChange={(event) => setPerformanceTier(event.target.value as RecommendationPerformanceTier)}>{Object.entries(RECOMMENDATION_PERFORMANCE_TIER_LABELS).map(([id, label]) => <option value={id} key={id}>{label}</option>)}</select></label>}
             {profile === "gaming" && <div className="generator-gaming-advisory-options" data-testid="generator-gaming-advisory-options">
               <div className="generator-gaming-advisory-heading"><span>게임별 추가 조건</span><small>{gamingGameIds.length > 0 ? `${gamingGameIds.length}개 게임 조건 저장됨` : "게임을 선택하지 않은 일반 게이밍 기준"}</small></div>
               <div className="generator-gaming-game-list"><span>선택한 게임</span><div>{gamingGameIds.length > 0 ? gamingGameIds.map((id) => <span className="generator-gaming-game-chip" key={id}>{gameLabelFor(id)}</span>) : <small>특정 게임을 선택하지 않은 일반 기준</small>}</div></div>

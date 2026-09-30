@@ -96,6 +96,10 @@ describe("public API evidence projection", () => {
       priceEvidence: "reference",
       reason: priceReferenceCaution
     });
+    expect(publicApiPayloadProjection({ candidateReasons: [
+      "CPU 벤치마크 기준 성능이 18.2% 높습니다.",
+      "M.2 SSD와 메인보드의 연결 방식을 확인해 주세요."
+    ] })).toEqual({ candidateReasons: ["M.2 SSD와 메인보드의 연결 방식을 확인해 주세요."] });
 
     const projectedUpgradeBundles = publicApiPayloadProjection({
       upgradeBundlePayload: {

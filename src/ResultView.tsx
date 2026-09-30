@@ -23,7 +23,7 @@ import { savedBuildOriginDetailFor, savedBuildOriginLabelFor } from "../shared/s
 import { BuildChangeResultSummary } from "./BuildChangeResultSummary";
 import { BuildPriceTrendPanel } from "./BuildPriceTrendPanel";
 import type { UpgradeBundleScenarioPreviewState } from "./UpgradeBundleScenarioPreview";
-import type { ResultSection } from "./result-view-state";
+import { resultFindingRuleFromSearch, type ResultSection } from "./result-view-state";
 import type { UnknownPriceItem } from "./BuildPriceSummary";
 import { PartVisual, PartWatchButton } from "./part-visuals";
 import { AccessoryRecommendationPanel, BuildHealthPanel, BuildScenarioPreviewPanel, BuildWatchlistPanel, CompatibilityMap, M2SlotAssignmentPanel, RepairPlanPanel, StaleResultView, UpgradeRecommendationDetail, UpgradeRecommendationPanel, upgradeBudgetText, upgradeCompatibilityStatus, upgradeCompatibilityText } from "./ResultPanels";
@@ -121,7 +121,8 @@ export type ResultViewDependencies = {
   PART_CATEGORIES: readonly PartCategory[];
 };
 export type ResultViewSavedVersionContext = { versionNumber: number; parentName?: string; derivedFromBuildId?: string; versionGroupId?: string; delta?: SavedBuildVersionDelta; selectionChanges?: Array<Pick<BuildTransferDiffRow, "label" | "before" | "after">> };
-export type ResultViewProps = { build: BuildSelection; result: CompatibilityResult | null; resultIsStale: boolean; savedCheckHistory: SavedBuildCheckSnapshot[] | null; changeHistory: BuildHistoryEntry[]; onRestoreChange: (entry: BuildHistoryEntry) => void; partMap: Map<string, Part>; accessoryMap: Map<string, AccessoryItem>; shareId: string | null; decisionNote?: string; origin?: SavedBuildOrigin; savedVersionContext?: ResultViewSavedVersionContext; onOpenHistory?: () => void; shareExpiresAt: string | null; shareOwnerToken?: string | null; shareOwnerTokenAvailable: boolean; recordingSavedCheck: boolean; revokingShare: boolean; checking: boolean; checkError: string | null; scenarioPreview: BuildScenarioPreviewState | null; buildChangeResultComparison?: BuildChangeResultComparison | null; onCopyBuildChangeResultComparison?: () => void; onDownloadBuildChangeResultComparison?: () => void; onSaveBuildChangeResultAsDecisionNote?: () => void; purchaseChecklistKey: string; upgradeBundleScenarioPreview: UpgradeBundleScenarioPreviewState | null; onPreviewSuggestion: (category: PartCategory, part: Part, quantity?: number, affectedPartIds?: string[], evidence?: CandidateApplicationEvidence) => void; onCompareSuggestions?: (suggestions: ResultFindingSuggestion[], affectedPartIds: string[]) => void; onDismissScenarioPreview: () => void; onDismissBuildChangeResultComparison?: () => void; onPreviewUpgradeBundle: (bundle: UpgradeBundleRecommendation) => void; onDismissUpgradeBundleScenarioPreview: () => void; onEdit: () => void; upgradeEntry?: boolean; onCloneSharedBuild: () => void; onBack: () => void; onCheck: () => void; initialFindingRuleId?: string | null; onInitialFindingFocus?: () => void; onRecordSavedCheck?: () => void; onAssemblyVerificationSynced?: (saved: SavedBuild) => void; onPurchaseProgressSynced?: (progress?: SavedBuildPurchaseProgress) => void; onPurchasePriceHistorySynced?: (history?: SavedBuildPurchasePriceHistory) => void; onWatchEntry: (target: PurchaseListWatchTarget, targetPriceWon?: number) => boolean; isWatchedEntry: (target: Pick<PurchaseListWatchTarget, "kind" | "itemId">) => boolean; onRevokeShare: () => void; onSave: () => void; onCopyReport: () => void; onCopyResultLink: () => void; onDownloadReport: () => void; catalogRefreshReport?: CatalogRefreshReport | null; onRefreshCatalogItem: (target: RefreshTarget) => void; onRefreshAll: (targets: RefreshTarget[]) => void; refreshingPartId: string | null; onOpenPicker: (category: PartCategory, findingRuleId?: string, findingTitle?: string, affectedPartIds?: string[]) => void; onApplySuggestion: (category: PartCategory, part: Part, quantity?: number, affectedPartIds?: string[], evidence?: CandidateApplicationEvidence) => void; onApplyUpgradeBundle: (bundle: UpgradeBundleRecommendation) => void; onCopyPurchaseList: (checkedIds?: ReadonlySet<string>, rows?: PurchaseListRow[]) => void; onDownloadPurchaseList: (checkedIds?: ReadonlySet<string>, rows?: PurchaseListRow[]) => void; onOpenCatalogItem: (row: PurchaseListRow) => void; onApplyRepairPlan: (plan: RecommendationPlan) => void; onSavePlan: (build: BuildSelection, preferences: RecommendationPreferences, label: string, parentBuildId?: string) => void; onAddAccessory: (item: AccessoryItem) => void; onChangeAccessoryQuantity: (index: number, quantity: number) => void; onChangeAccessoryTarget: (index: number, targetPartId: string | undefined) => void; onChangeAccessoryHubTarget: (index: number, targetAccessoryId: string | undefined) => void; onChangeRgbController: (targetAccessoryId: string | undefined) => void; onRemoveAccessory: (index: number) => void; onToast: (message: string) => void; onWatchPart: PartWatchHandler; onShareComparison: AlternativeComparisonShareHandler; onRevokeComparison: AlternativeComparisonRevokeHandler; recommendationPreferences: RecommendationPreferences; onRecommendationPreferencesChange: (next: RecommendationPreferences) => void; onRecommendationPreferencesCommit: (next: RecommendationPreferences) => void
+type ContextualProgress<T> = { contextKey: string; value: T };
+export type ResultViewProps = { build: BuildSelection; result: CompatibilityResult | null; resultIsStale: boolean; savedCheckHistory: SavedBuildCheckSnapshot[] | null; changeHistory: BuildHistoryEntry[]; onRestoreChange: (entry: BuildHistoryEntry) => void; partMap: Map<string, Part>; accessoryMap: Map<string, AccessoryItem>; shareId: string | null; decisionNote?: string; origin?: SavedBuildOrigin; savedVersionContext?: ResultViewSavedVersionContext; onOpenHistory?: () => void; shareExpiresAt: string | null; shareOwnerToken?: string | null; shareOwnerTokenAvailable: boolean; recordingSavedCheck: boolean; revokingShare: boolean; checking: boolean; checkError: string | null; scenarioPreview: BuildScenarioPreviewState | null; buildChangeResultComparison?: BuildChangeResultComparison | null; onCopyBuildChangeResultComparison?: () => void; onDownloadBuildChangeResultComparison?: () => void; onSaveBuildChangeResultAsDecisionNote?: () => void; purchaseChecklistKey: string; upgradeBundleScenarioPreview: UpgradeBundleScenarioPreviewState | null; onPreviewSuggestion: (category: PartCategory, part: Part, quantity?: number, affectedPartIds?: string[], evidence?: CandidateApplicationEvidence) => void; onCompareSuggestions?: (suggestions: ResultFindingSuggestion[], affectedPartIds: string[]) => void; onDismissScenarioPreview: () => void; onDismissBuildChangeResultComparison?: () => void; onPreviewUpgradeBundle: (bundle: UpgradeBundleRecommendation) => void; onDismissUpgradeBundleScenarioPreview: () => void; onEdit: () => void; upgradeEntry?: boolean; onCloneSharedBuild: () => void; onBack: () => void; onCheck: () => void; initialFindingRuleId?: string | null; onInitialFindingFocus?: () => void; onRecordSavedCheck?: () => void; onAssemblyVerificationSynced?: (saved: SavedBuild) => void; onPurchaseProgressSynced?: (progress?: SavedBuildPurchaseProgress) => void; onPurchasePriceHistorySynced?: (history?: SavedBuildPurchasePriceHistory) => void; onWatchEntry: (target: PurchaseListWatchTarget, targetPriceWon?: number) => boolean; isWatchedEntry: (target: Pick<PurchaseListWatchTarget, "kind" | "itemId">) => boolean; onRevokeShare: () => void; onSave: () => void; onCopyReport: () => void; onCopyResultLink: () => void; onDownloadReport: () => void; catalogRefreshReport?: CatalogRefreshReport | null; catalogRefreshAllowed?: boolean; onRefreshCatalogItem: (target: RefreshTarget) => void; onRefreshAll: (targets: RefreshTarget[]) => void; refreshingPartId: string | null; onOpenPicker: (category: PartCategory, findingRuleId?: string, findingTitle?: string, affectedPartIds?: string[]) => void; onApplySuggestion: (category: PartCategory, part: Part, quantity?: number, affectedPartIds?: string[], evidence?: CandidateApplicationEvidence) => void; onApplyUpgradeBundle: (bundle: UpgradeBundleRecommendation) => void; onCopyPurchaseList: (checkedIds?: ReadonlySet<string>, rows?: PurchaseListRow[]) => void; onDownloadPurchaseList: (checkedIds?: ReadonlySet<string>, rows?: PurchaseListRow[]) => void; onOpenCatalogItem: (row: PurchaseListRow) => void; onApplyRepairPlan: (plan: RecommendationPlan) => void; onSavePlan: (build: BuildSelection, preferences: RecommendationPreferences, label: string, parentBuildId?: string) => void; onAddAccessory: (item: AccessoryItem) => void; onChangeAccessoryQuantity: (index: number, quantity: number) => void; onChangeAccessoryTarget: (index: number, targetPartId: string | undefined) => void; onChangeAccessoryHubTarget: (index: number, targetAccessoryId: string | undefined) => void; onChangeRgbController: (targetAccessoryId: string | undefined) => void; onRemoveAccessory: (index: number) => void; onToast: (message: string) => void; onWatchPart: PartWatchHandler; onShareComparison: AlternativeComparisonShareHandler; onRevokeComparison: AlternativeComparisonRevokeHandler; recommendationPreferences: RecommendationPreferences; onRecommendationPreferencesChange: (next: RecommendationPreferences) => void; onRecommendationPreferencesCommit: (next: RecommendationPreferences) => void
   dependencies: ResultViewDependencies;
 };
 
@@ -175,26 +176,38 @@ function UpgradeEntryResultSummary({ result, bundleCount }: { result: Compatibil
 
 export function ResultView(props: ResultViewProps) {
   const { dependencies, ...view } = props;
-  const { build, result, resultIsStale, savedCheckHistory, changeHistory, onRestoreChange, partMap, accessoryMap, shareId, decisionNote, origin, savedVersionContext, onOpenHistory, shareExpiresAt, shareOwnerToken, shareOwnerTokenAvailable, recordingSavedCheck, revokingShare, checking, checkError, scenarioPreview, buildChangeResultComparison, onCopyBuildChangeResultComparison, onDownloadBuildChangeResultComparison, onSaveBuildChangeResultAsDecisionNote, purchaseChecklistKey, upgradeBundleScenarioPreview, onPreviewSuggestion, onCompareSuggestions, onDismissScenarioPreview, onDismissBuildChangeResultComparison, onPreviewUpgradeBundle, onDismissUpgradeBundleScenarioPreview, onEdit, upgradeEntry, onCloneSharedBuild, onBack, onCheck, initialFindingRuleId, onInitialFindingFocus, onRecordSavedCheck, onAssemblyVerificationSynced, onPurchaseProgressSynced, onPurchasePriceHistorySynced, onWatchEntry, isWatchedEntry, onRevokeShare, onSave, onCopyReport, onCopyResultLink, onDownloadReport, catalogRefreshReport, onRefreshCatalogItem, onRefreshAll, refreshingPartId, onOpenPicker, onApplySuggestion, onApplyUpgradeBundle, onCopyPurchaseList, onDownloadPurchaseList, onOpenCatalogItem, onApplyRepairPlan, onSavePlan, onAddAccessory, onChangeAccessoryQuantity, onChangeAccessoryTarget, onChangeAccessoryHubTarget, onChangeRgbController, onRemoveAccessory, onToast, onWatchPart, onShareComparison, onRevokeComparison, recommendationPreferences, onRecommendationPreferencesChange, onRecommendationPreferencesCommit } = view;
+  const { build, result, resultIsStale, savedCheckHistory, changeHistory, onRestoreChange, partMap, accessoryMap, shareId, decisionNote, origin, savedVersionContext, onOpenHistory, shareExpiresAt, shareOwnerToken, shareOwnerTokenAvailable, recordingSavedCheck, revokingShare, checking, checkError, scenarioPreview, buildChangeResultComparison, onCopyBuildChangeResultComparison, onDownloadBuildChangeResultComparison, onSaveBuildChangeResultAsDecisionNote, purchaseChecklistKey, upgradeBundleScenarioPreview, onPreviewSuggestion, onCompareSuggestions, onDismissScenarioPreview, onDismissBuildChangeResultComparison, onPreviewUpgradeBundle, onDismissUpgradeBundleScenarioPreview, onEdit, upgradeEntry, onCloneSharedBuild, onBack, onCheck, initialFindingRuleId, onInitialFindingFocus, onRecordSavedCheck, onAssemblyVerificationSynced, onPurchaseProgressSynced, onPurchasePriceHistorySynced, onWatchEntry, isWatchedEntry, onRevokeShare, onSave, onCopyReport, onCopyResultLink, onDownloadReport, catalogRefreshReport, catalogRefreshAllowed = true, onRefreshCatalogItem, onRefreshAll, refreshingPartId, onOpenPicker, onApplySuggestion, onApplyUpgradeBundle, onCopyPurchaseList, onDownloadPurchaseList, onOpenCatalogItem, onApplyRepairPlan, onSavePlan, onAddAccessory, onChangeAccessoryQuantity, onChangeAccessoryTarget, onChangeAccessoryHubTarget, onChangeRgbController, onRemoveAccessory, onToast, onWatchPart, onShareComparison, onRevokeComparison, recommendationPreferences, onRecommendationPreferencesChange, onRecommendationPreferencesCommit } = view;
   const { RequestErrorNotice, LazyResultQuickNav, LazySavedBuildRecheckDiffPanel, LazyPurchaseReadinessPanel, LazyBuildActionCenterPanel, LazyAssemblyPlanPanel, LazyUpgradeBundleScenarioPreviewPanel, LazyPurchaseChecklistPanel, LazyAssemblyVerificationPanel, LazyRecommendationSearchNotice, LazyBuildResourceSummaryPanel, LazyBuildConnectivityPanel, LazyGpuFitSummaryPanel, LazyPurchaseListPanel, LazyUpgradeBundlePanel, LazyAccessoryCartPanel, ResultFindingCard, BuildPriceSummaryPanel, RecommendationControls, ChangeHistoryPanel, AccessoryVisual, PartEvidence, CategoryIcon, purchaseListRowsFor, selectionList, accessorySelections, unknownPriceItemsFor, buildPriceSnapshotFor, upgradeBundlesFromPayload, formatWon, formatPriceDelta, formatSignedPercent, formatSpecValue, partSummary, similarityEvidenceText, suggestionSpecRows, resultFindingFilterFromSearch, resultSectionFromHash, resultSectionTargetIds, resultViewUrlFor, findingFilterCounts, filteredFindingsFor, FINDING_FILTERS, RULE_GUIDES, CATEGORY_LABELS, LISTING_TYPE_LABELS, PART_CATEGORIES } = dependencies;
 
 const [findingFilter, setFindingFilter] = useState<FindingFilter>(() => resultFindingFilterFromSearch(window.location.search));
-const [purchaseChecklistProgress, setPurchaseChecklistProgress] = useState<PurchaseChecklistProgress | null>(null);
-const [purchaseListProgress, setPurchaseListProgress] = useState<PurchaseListExecutionProgress | null>(null);
+const [purchaseChecklistProgressState, setPurchaseChecklistProgressState] = useState<ContextualProgress<PurchaseChecklistProgress> | null>(null);
+const [purchaseListProgressState, setPurchaseListProgressState] = useState<ContextualProgress<PurchaseListExecutionProgress> | null>(null);
 const [purchaseListFocusStatus, setPurchaseListFocusStatus] = useState<PurchaseItemStatus | null>(null);
 const [purchaseFocusRowKey, setPurchaseFocusRowKey] = useState<string | undefined>(undefined);
-  const [assemblyVerificationSummary, setAssemblyVerificationSummary] = useState<AssemblyVerificationSurfaceSummary | null>(null);
+  const [assemblyVerificationSummaryState, setAssemblyVerificationSummaryState] = useState<ContextualProgress<AssemblyVerificationSurfaceSummary> | null>(null);
+const initialFindingFocusAckRef = useRef(onInitialFindingFocus);
+initialFindingFocusAckRef.current = onInitialFindingFocus;
   const [originAvailability, setOriginAvailability] = useState<"none" | "checking" | "active" | "unavailable">("none");
   const originSourceShareId = origin?.kind === "shared_generator_variants" ? origin.sourceShareId : undefined;
+const progressContextKey = JSON.stringify([purchaseChecklistKey, result?.checkedAt ?? null]);
+const purchaseChecklistProgress = purchaseChecklistProgressState?.contextKey === progressContextKey ? purchaseChecklistProgressState.value : null;
+const purchaseListProgress = purchaseListProgressState?.contextKey === progressContextKey ? purchaseListProgressState.value : null;
+const assemblyVerificationSummary = assemblyVerificationSummaryState?.contextKey === progressContextKey ? assemblyVerificationSummaryState.value : null;
+const onPurchaseChecklistProgressChange = useCallback((value: PurchaseChecklistProgress) => {
+  setPurchaseChecklistProgressState({ contextKey: progressContextKey, value });
+}, [progressContextKey]);
 const onPurchaseListProgressChange = useCallback((progress: PurchaseListExecutionProgress) => {
-  setPurchaseListProgress(progress);
-}, []);
+  setPurchaseListProgressState({ contextKey: progressContextKey, value: progress });
+}, [progressContextKey]);
+const onAssemblyVerificationSummaryChange = useCallback((value: AssemblyVerificationSurfaceSummary) => {
+  setAssemblyVerificationSummaryState({ contextKey: progressContextKey, value });
+}, [progressContextKey]);
 const savedVerificationHistory = useMemo(() => {
   const latestSnapshot = savedCheckHistory?.at(-1);
   return latestSnapshot?.assemblyVerificationHistory ?? (latestSnapshot?.assemblyVerification ? [latestSnapshot.assemblyVerification] : undefined);
 }, [savedCheckHistory]);
 useEffect(() => { setFindingFilter(resultFindingFilterFromSearch(window.location.search)); }, [result?.checkedAt]);
-  useEffect(() => { setPurchaseChecklistProgress(null); setPurchaseListProgress(null); setPurchaseListFocusStatus(null); setAssemblyVerificationSummary(null); }, [purchaseChecklistKey, result?.checkedAt]);
+  useEffect(() => { setPurchaseListFocusStatus(null); }, [purchaseChecklistKey, result?.checkedAt]);
   useEffect(() => {
     if (!originSourceShareId) {
       setOriginAvailability("none");
@@ -248,7 +261,11 @@ useEffect(() => {
   const focusHashTarget = () => {
     const section = resultSectionFromHash(window.location.hash);
     const targetId = section ? resultSectionTargetIds[section] : undefined;
-    if (targetId) focusSection(targetId);
+    const routeFindingRuleId = resultFindingRuleFromSearch(window.location.search);
+    const requestedFindingMatchesCurrentResult = section === "findings"
+      && Boolean(routeFindingRuleId)
+      && result.findings.some((finding) => finding.ruleId === routeFindingRuleId);
+    if (targetId && !requestedFindingMatchesCurrentResult) focusSection(targetId);
   };
   const onPopState = () => {
     setFindingFilter(resultFindingFilterFromSearch(window.location.search));
@@ -257,12 +274,30 @@ useEffect(() => {
   window.addEventListener("popstate", onPopState);
   focusHashTarget();
   return () => window.removeEventListener("popstate", onPopState);
-}, [result?.checkedAt, resultIsStale]);
+}, [initialFindingRuleId, result, resultIsStale]);
 useEffect(() => {
   if (!result || resultIsStale || !initialFindingRuleId) return;
-  focusFinding(initialFindingRuleId);
-  onInitialFindingFocus?.();
-}, [initialFindingRuleId, result?.checkedAt, resultIsStale]);
+  if (!result.findings.some((finding) => finding.ruleId === initialFindingRuleId)) {
+    // The requested rule is absent from this result snapshot, so its card cannot mount.
+    initialFindingFocusAckRef.current?.();
+    return;
+  }
+  selectFindingFilter("all");
+  const routePath = window.location.pathname;
+  const routeSearch = new URLSearchParams(window.location.search);
+  routeSearch.delete("finding");
+  const routeContextSearch = routeSearch.toString();
+  const routeHash = window.location.hash;
+  const hasCurrentRouteIntent = () => {
+    if (window.location.pathname !== routePath || window.location.hash !== routeHash) return false;
+    const currentSearch = new URLSearchParams(window.location.search);
+    currentSearch.delete("finding");
+    return currentSearch.toString() === routeContextSearch;
+  };
+  return focusInitialFinding(initialFindingRuleId, hasCurrentRouteIntent, () => {
+    if (hasCurrentRouteIntent()) initialFindingFocusAckRef.current?.();
+  });
+}, [initialFindingRuleId, result, resultIsStale]);
 const findingCounts = result ? findingFilterCounts(result.findings) : { all: 0, blocker: 0, warning: 0, unknown: 0, info: 0 };
 const visibleFindings = result ? filteredFindingsFor(result.findings, findingFilter) : [];
 const findingFilterLabels: Record<FindingFilter, string> = { all: "전체", blocker: "호환 불가", warning: "주의", unknown: "정보 부족", info: "참고" };
@@ -294,6 +329,58 @@ function focusFinding(ruleId: string) {
     window.setTimeout(focusTarget, 50);
   };
   window.setTimeout(focusTarget, 0);
+}
+
+function focusInitialFinding(ruleId: string, hasCurrentRouteIntent: () => boolean, onFocused: () => void) {
+  let cancelled = false;
+  let animationFrame = 0;
+  let observer: MutationObserver | undefined;
+
+  const cleanup = () => {
+    if (cancelled) return;
+    cancelled = true;
+    if (animationFrame) window.cancelAnimationFrame(animationFrame);
+    observer?.disconnect();
+    document.removeEventListener("pointerdown", cancelForUserInput, true);
+    document.removeEventListener("keydown", cancelForUserInput, true);
+    document.removeEventListener("wheel", cancelForUserInput, true);
+  };
+  const cancelForUserInput = () => cleanup();
+  const scheduleFocusAttempt = () => {
+    if (cancelled || animationFrame) return;
+    animationFrame = window.requestAnimationFrame(focusTarget);
+  };
+  const focusTarget = () => {
+    animationFrame = 0;
+    if (cancelled) return;
+    if (!hasCurrentRouteIntent()) {
+      cleanup();
+      return;
+    }
+
+    const target = document.getElementById(`finding-${ruleId}`);
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+      target.focus({ preventScroll: true });
+      if (document.activeElement === target) {
+        cleanup();
+        onFocused();
+        return;
+      }
+    }
+
+    if (!observer) {
+      const targetRoot = document.querySelector<HTMLElement>('[data-testid="result-findings"]') ?? document.body;
+      observer = new MutationObserver(scheduleFocusAttempt);
+      observer.observe(targetRoot, { childList: true, subtree: true });
+    }
+  };
+
+  document.addEventListener("pointerdown", cancelForUserInput, true);
+  document.addEventListener("keydown", cancelForUserInput, true);
+  document.addEventListener("wheel", cancelForUserInput, true);
+  focusTarget();
+  return cleanup;
 }
 function focusResultSection(targetId: string) {
   const section = (Object.entries(resultSectionTargetIds).find(([, candidate]) => candidate === targetId)?.[0] ?? undefined) as ResultSection | undefined;
@@ -452,7 +539,7 @@ return (
           <summary><span><FiInfo /> 세부 정보·구매 도구</span><FiMoreHorizontal /></summary>
           <div className="result-more-details-body">
         <Suspense fallback={<div className="purchase-readiness-panel loading" aria-label="구매 전 확인 정보 로딩" role="status"><FiLoader className="spin" /> 구매 전 확인 정보를 준비하는 중...</div>}><LazyPurchaseReadinessPanel result={result} onEdit={onEdit} build={build} onChangeAccessoryHubTarget={onChangeAccessoryHubTarget} checklistProgress={purchaseChecklistProgress ?? undefined} purchaseProgress={purchaseListProgress ?? undefined} assemblyVerification={assemblyVerificationSummary ?? undefined} onFocusChecklist={() => focusResultSection("purchase-checklist")} onFocusPurchaseList={(status: PurchaseItemStatus | undefined) => { setPurchaseListFocusStatus(status ?? null); focusResultSection("purchase-list-panel"); }} onFocusAssemblyVerification={() => focusResultSection("assembly-verification-panel")} /></Suspense>
-        <Suspense fallback={<div className="purchase-checklist-panel loading" aria-label="구매 전 체크리스트 로딩" role="status"><FiLoader className="spin" /> 구매 전 체크리스트를 준비하는 중...</div>}><LazyPurchaseChecklistPanel build={build} result={result} partMap={partMap} storageKey={`pc-supporter-purchase-checklist:${purchaseChecklistKey}:${result.engineVersion}:${result.catalogSnapshotAt}`} onFocusFinding={focusFinding} onFocusSection={focusResultSection} onProgressChange={setPurchaseChecklistProgress} /></Suspense>
+        <Suspense fallback={<div className="purchase-checklist-panel loading" aria-label="구매 전 체크리스트 로딩" role="status"><FiLoader className="spin" /> 구매 전 체크리스트를 준비하는 중...</div>}><LazyPurchaseChecklistPanel build={build} result={result} partMap={partMap} storageKey={`pc-supporter-purchase-checklist:${purchaseChecklistKey}:${result.engineVersion}:${result.catalogSnapshotAt}`} onFocusFinding={focusFinding} onFocusSection={focusResultSection} onProgressChange={onPurchaseChecklistProgressChange} /></Suspense>
 
         {savedCheckHistory && savedCheckHistory.length > 0 && <SavedBuildCheckTimeline history={savedCheckHistory} partMap={partMap} accessoryMap={accessoryMap} canRecord={shareOwnerTokenAvailable && Boolean(shareId)} recording={recordingSavedCheck} onRecordCheck={onRecordSavedCheck} />}
         <RecommendationControls preferences={recommendationPreferences} onChange={onRecommendationPreferencesChange} onCommit={onRecommendationPreferencesCommit} commitOnChange={false} compact disabled={checking} />
@@ -464,7 +551,7 @@ return (
         {result.metrics.m2SlotAssignments && result.metrics.m2SlotAssignments.length > 0 && <M2SlotAssignmentPanel assignments={result.metrics.m2SlotAssignments} mode={result.metrics.m2SlotAssignmentMode} />}
 
         <Suspense fallback={<div className="purchase-list-panel loading" aria-label="구매 목록 로딩" role="status"><FiLoader className="spin" /> 구매 목록을 준비하는 중...</div>}><LazyPurchaseListPanel rows={purchaseListRowsFor(build, partMap, accessoryMap)} storageKey={`pc-supporter-purchase-list:${purchaseChecklistKey}:${result.engineVersion}:${result.catalogSnapshotAt}`} inputFingerprint={purchaseChecklistKey} budgetWon={recommendationPreferences.budgetWon} savedBuildId={shareId ?? undefined} savedBuildOwnerToken={shareOwnerToken ?? undefined} onCopy={onCopyPurchaseList} onDownload={onDownloadPurchaseList} focusStatus={purchaseListFocusStatus ?? undefined} focusRowKey={purchaseFocusRowKey} onProgressChange={onPurchaseListProgressChange} onServerProgressChange={onPurchaseProgressSynced} onServerPriceHistoryChange={onPurchasePriceHistorySynced} onWatchEntry={onWatchEntry} isWatchedEntry={isWatchedEntry} onOpenCatalogItem={onOpenCatalogItem} onRefreshAll={onRefreshAll} refreshingItemId={refreshingPartId} catalogRefreshReport={catalogRefreshReport} /></Suspense>
-        <Suspense fallback={<div className="assembly-verification-panel loading" aria-label="조립 확인 기록 로딩" role="status"><FiLoader className="spin" /> 조립 확인 기록을 준비하는 중...</div>}><LazyAssemblyVerificationPanel storageKey={`pc-supporter-assembly-verification:${purchaseChecklistKey}`} savedBuildId={shareId ?? undefined} savedBuildOwnerToken={shareOwnerToken ?? undefined} savedVerificationHistory={savedVerificationHistory} onServerSync={onAssemblyVerificationSynced} onSummaryChange={setAssemblyVerificationSummary} /></Suspense>
+        <Suspense fallback={<div className="assembly-verification-panel loading" aria-label="조립 확인 기록 로딩" role="status"><FiLoader className="spin" /> 조립 확인 기록을 준비하는 중...</div>}><LazyAssemblyVerificationPanel storageKey={`pc-supporter-assembly-verification:${purchaseChecklistKey}`} savedBuildId={shareId ?? undefined} savedBuildOwnerToken={shareOwnerToken ?? undefined} savedVerificationHistory={savedVerificationHistory} onServerSync={onAssemblyVerificationSynced} onSummaryChange={onAssemblyVerificationSummaryChange} /></Suspense>
         <BuildWatchlistPanel build={build} partMap={partMap} accessoryMap={accessoryMap} onToast={onToast} />
         <ChangeHistoryPanel entries={changeHistory} onRestore={onRestoreChange} restoring={checking} />
         {result.upgradeRecommendations && result.upgradeRecommendations.length > 0 && <UpgradeRecommendationPanel recommendations={result.upgradeRecommendations} onApply={(recommendation: UpgradeRecommendation) => onApplySuggestion(recommendation.category, recommendation.part, undefined, [recommendation.currentPartId])} onPreview={(recommendation: UpgradeRecommendation) => onPreviewSuggestion(recommendation.category, recommendation.part, undefined, [recommendation.currentPartId])} onWatchPart={onWatchPart} />}
@@ -477,7 +564,7 @@ return (
         </details>
         {result.findings.length === 0 ? <div className="success-empty" data-testid="result-findings" tabIndex={-1}><FiCheckCircle /><h2>호환 문제가 없어요.</h2><button className="button button-secondary" onClick={onEdit}>부품 구성 다시 보기</button></div> : <div className="findings-list" data-testid="result-findings" tabIndex={-1}><div className="section-title-row"><div><p className="eyebrow">호환 상세</p><h2>호환 결과 상세</h2></div><span className="muted-count">{visibleFindings.length} / {result.findings.length}개 항목</span></div><div className="finding-filter-controls" role="group" aria-label="호환 결과 필터">{FINDING_FILTERS.map((filter: FindingFilter) => <button className={findingFilter === filter ? "finding-filter-button selected" : "finding-filter-button"} type="button" aria-pressed={findingFilter === filter} disabled={filter !== "all" && findingCounts[filter] === 0} onClick={() => selectFindingFilter(filter)} key={filter}>{findingFilterLabels[filter]} <strong>{findingCounts[filter]}</strong></button>)}</div>{visibleFindings.length === 0 ? <div className="finding-filter-empty"><FiInfo /><span>선택한 중요도의 결과 항목이 없습니다.</span><button className="text-button" type="button" onClick={() => selectFindingFilter("all")}>전체 보기</button></div> : visibleFindings.map((finding: Finding) => <Suspense key={`${result.checkedAt}-${finding.id}`} fallback={<div className="finding-card-loading" aria-busy="true"><FiLoader className="spin" /> 결과 상세를 불러오는 중...</div>}><ResultFindingCard finding={finding} partMap={partMap} onOpenPicker={onOpenPicker} onEdit={onEdit} onApplySuggestion={onApplySuggestion} onPreviewSuggestion={onPreviewSuggestion} onCompareSuggestions={onCompareSuggestions} onFocusRepairPlans={focusRepairPlans} onToast={onToast} onWatchPart={onWatchPart} onShareComparison={onShareComparison} onRevokeComparison={onRevokeComparison} disabled={checking} ruleGuides={RULE_GUIDES} partSummary={partSummary} formatWon={formatWon} formatPriceDelta={formatPriceDelta} formatSignedPercent={formatSignedPercent} formatSpecValue={formatSpecValue} similarityEvidenceText={similarityEvidenceText} suggestionSpecRows={suggestionSpecRows} PartVisual={PartVisual} PartWatchButton={PartWatchButton} /></Suspense>)}</div>}
       </section>
-      <aside className="result-sidebar"><div className="sticky-summary"><div className="summary-header"><div><p className="eyebrow">현재 견적</p><h2>선택한 견적</h2></div><span className="summary-pulse"><FiCpu /></span></div><div className="build-mini-list">{PART_CATEGORIES.map((category: PartCategory) => { const selections = selectionList(build, category) as PartSelection[]; return <div className="build-mini-row" key={category}><span className="mini-category-icon"><CategoryIcon category={category} /></span><div><strong>{CATEGORY_LABELS[category]}</strong><span>{selections.length === 0 ? "미선택" : selections.map((selection: PartSelection) => `${partMap.get(selection.partId)?.name ?? selection.partId}${selection.quantity > 1 ? ` ×${selection.quantity}` : ""}`).join(", ")}</span></div></div>; })}{accessorySelections(build).length > 0 && <div className="build-mini-row"><span className="mini-category-icon"><FiTool /></span><div><strong>주변 부품</strong><span>{accessorySelections(build).length}종 · {accessorySelections(build).reduce((total: number, selection: AccessorySelection) => total + selection.quantity, 0)}개</span></div></div>}</div><div className="summary-divider" /><BuildPriceSummaryPanel snapshot={resultPriceSnapshot} budgetWon={recommendationPreferences.budgetWon} unknownItems={unknownPriceItemsFor(build, partMap, accessoryMap)} onRefresh={onRefreshCatalogItem} refreshingItemId={refreshingPartId} compact testId="result-price-summary" /><button className="button button-primary full-width" onClick={onEdit}><FiEdit3 /> 견적 수정하기</button><button className="button button-light full-width" onClick={onCheck} disabled={checking}>{checking ? <><FiLoader className="spin" /> 호환 결과 계산 중...</> : <><FiRefreshCw /> 호환 결과 새로 보기</>}</button></div></aside>
+      <aside className="result-sidebar"><div className="sticky-summary"><div className="summary-header"><div><p className="eyebrow">현재 견적</p><h2>선택한 견적</h2></div><span className="summary-pulse"><FiCpu /></span></div><div className="build-mini-list">{PART_CATEGORIES.map((category: PartCategory) => { const selections = selectionList(build, category) as PartSelection[]; return <div className="build-mini-row" key={category}><span className="mini-category-icon"><CategoryIcon category={category} /></span><div><strong>{CATEGORY_LABELS[category]}</strong><span>{selections.length === 0 ? "미선택" : selections.map((selection: PartSelection) => `${partMap.get(selection.partId)?.name ?? selection.partId}${selection.quantity > 1 ? ` ×${selection.quantity}` : ""}`).join(", ")}</span></div></div>; })}{accessorySelections(build).length > 0 && <div className="build-mini-row"><span className="mini-category-icon"><FiTool /></span><div><strong>주변 부품</strong><span>{accessorySelections(build).length}종 · {accessorySelections(build).reduce((total: number, selection: AccessorySelection) => total + selection.quantity, 0)}개</span></div></div>}</div><div className="summary-divider" /><BuildPriceSummaryPanel snapshot={resultPriceSnapshot} budgetWon={recommendationPreferences.budgetWon} unknownItems={unknownPriceItemsFor(build, partMap, accessoryMap)} onRefresh={catalogRefreshAllowed ? onRefreshCatalogItem : undefined} refreshingItemId={refreshingPartId} compact testId="result-price-summary" /><button className="button button-primary full-width" onClick={onEdit}><FiEdit3 /> 견적 수정하기</button><button className="button button-light full-width" onClick={onCheck} disabled={checking}>{checking ? <><FiLoader className="spin" /> 호환 결과 계산 중...</> : <><FiRefreshCw /> 호환 결과 새로 보기</>}</button></div></aside>
     </div>
   </div>
 );

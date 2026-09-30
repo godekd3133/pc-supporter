@@ -161,7 +161,7 @@ describe("quote-onboarding estimates", () => {
 
   it("uses a general PC tier when the user chooses budget without a use case", () => {
     const estimate = budgetEstimateFor(2_000_000, undefined);
-    expect(estimate).toMatchObject({ performance: "균형형 일반 구성", gpu: "외장 GPU 포함", memory: "32GB", storage: "1TB SSD" });
+    expect(estimate).toMatchObject({ performance: "균형형 일반 구성", gpu: "상급 GPU", memory: "32GB", storage: "1TB SSD" });
     expect(estimate.performance).not.toContain("작업");
   });
 
@@ -336,7 +336,14 @@ describe("quote-onboarding recommend params", () => {
 
   it("carries the generic budget tier's expected memory and storage into the generator request", () => {
     const budget = recommendParamsFor(stateWith({ mode: "budget", budgetWon: 4_000_000 }));
-    expect(budget).toMatchObject({ profile: "general", budgetWon: 4_000_000, includeGpu: true, memoryCapacityGb: 64, storageCapacityGb: 2000 });
+    expect(budget).toMatchObject({ profile: "general", performanceTier: "high", budgetWon: 4_000_000, includeGpu: true, memoryCapacityGb: 64, storageCapacityGb: 2000 });
+  });
+
+  it("carries the balanced general budget's upper GPU target into the candidate request", () => {
+    const balanced = recommendParamsFor(stateWith({ mode: "budget", budgetWon: 2_000_000 }));
+    const basic = recommendParamsFor(stateWith({ mode: "budget", budgetWon: 1_500_000 }));
+    expect(balanced).toMatchObject({ performanceTier: "high", includeGpu: true, memoryCapacityGb: 32, storageCapacityGb: 1000 });
+    expect(basic.performanceTier).toBeUndefined();
   });
 
   it("serializes to the generator query format with autorun", () => {
@@ -358,6 +365,13 @@ describe("quote-onboarding recommend params", () => {
     expect(params.get("gpu")).toBe("0");
     expect(params.get("ram")).toBe("64");
     expect(params.get("ssd")).toBe("2000");
+  });
+
+  it("serializes the budget-derived general performance target for the generator", () => {
+    const params = new URLSearchParams(recommendQueryFor(stateWith({ mode: "budget", budgetWon: 2_000_000 })));
+    expect(params.get("profile")).toBe("general");
+    expect(params.get("tier")).toBe("high");
+    expect(params.get("budget")).toBe("2000000");
   });
 
   it("serializes gaming advisory options without claiming FPS evidence", () => {

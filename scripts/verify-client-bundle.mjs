@@ -1,6 +1,6 @@
 import { readFile, readdir, stat } from "node:fs/promises";
 import { createHash } from "node:crypto";
-import { extname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { basename, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { gzipSync } from "node:zlib";
 import { pathToFileURL } from "node:url";
 
@@ -24,6 +24,7 @@ const requiredLazyRoutes = [
   { source: "src/PriceWatchlistView.tsx", label: "PriceWatchlistView" },
   { source: "src/SharedWatchlistView.tsx", label: "SharedWatchlistView" }
 ];
+const appShellSource = "src/App.tsx";
 const firstRouteSource = "src/HomeView.tsx";
 const optionalLazyRoutes = [
   { source: "src/QuoteOnboardingView.tsx", label: "QuoteOnboardingView" }
@@ -164,16 +165,37 @@ export function resolveStaticImportClosure(manifest, indexHtml) {
       entryDynamicRouteKeys.add(dynamicKey);
     }
   }
+  const appShellCandidates = [...entryDynamicRouteKeys].filter((key) => {
+    const record = manifest[key];
+    return record?.src === appShellSource || (record?.isDynamicEntry === true && /^App-[^/]+\.js$/.test(basename(record.file ?? "")));
+  });
+  if (appShellCandidates.length !== 1) {
+    throw new Error(`the App shell must be reachable from the HTML entry's dynamic imports: ${appShellSource}`);
+  }
+  const [appShellKey] = appShellCandidates;
+  if (manifest[appShellKey]?.isDynamicEntry !== true) {
+    throw new Error(`the App shell must remain a Vite dynamic entry: ${appShellSource}`);
+  }
+  visit(appShellKey);
+  const appShellStaticKeys = new Set(visitedKeys);
+  const firstRouteDynamicKeys = new Set();
+  for (const key of appShellStaticKeys) {
+    const record = manifest[key];
+    for (const dynamicKey of record.dynamicImports ?? []) {
+      if (!manifest[dynamicKey]) throw new Error(`App shell dynamic import references a missing entry: ${dynamicKey}`);
+      firstRouteDynamicKeys.add(dynamicKey);
+    }
+  }
   const firstRouteKey = Object.keys(manifest).find((key) => manifest[key]?.src === firstRouteSource);
-  if (!firstRouteKey || !entryDynamicRouteKeys.has(firstRouteKey)) {
-    throw new Error(`the first rendered route must be reachable from the HTML entry's dynamic imports: ${firstRouteSource}`);
+  if (!firstRouteKey || !firstRouteDynamicKeys.has(firstRouteKey)) {
+    throw new Error(`the first rendered route must be reachable from the App shell's dynamic imports: ${firstRouteSource}`);
   }
   if (manifest[firstRouteKey]?.isDynamicEntry !== true) {
     throw new Error(`the first rendered route must remain a Vite dynamic entry: ${firstRouteSource}`);
   }
   visit(firstRouteKey);
 
-  const dynamicRouteKeys = new Set(entryDynamicRouteKeys);
+  const dynamicRouteKeys = new Set([...entryDynamicRouteKeys, ...firstRouteDynamicKeys]);
   for (const key of visitedKeys) {
     const record = manifest[key];
     for (const dynamicKey of record.dynamicImports ?? []) {
@@ -269,6 +291,10 @@ export function assertNoFirstRouteOnboardingSelectors(cssAssets) {
 
 function assertBudget(label, actual, limit) {
   if (actual > limit) throw new Error(`${label} exceeds ${limit} bytes: ${actual} bytes`);
+}
+
+export function assertClientShellBudget(shellBytes, budget = maxEntryBytes) {
+  assertBudget("client shell", shellBytes, budget);
 }
 
 export function assertFirstRouteBudget(closure, budget = firstRouteBudget) {
@@ -374,20 +400,26 @@ async function runBuildVerifier() {
     }
   }
 
-  const entryNames = assetNames.filter((name) => /^index-[^/]+\.js$/.test(name));
-  if (entryNames.length !== 1) {
-    throw new Error(`클라이언트 entry chunk를 정확히 1개 찾을 수 없습니다: ${entryNames.join(", ") || "없음"}`);
+  const htmlModuleAssets = getHtmlLocalAssets(indexHtml, "script", "src", (attributes) => attributes.get("type")?.toLowerCase() === "module");
+  if (htmlModuleAssets.length !== 1) {
+    throw new Error(`클라이언트 HTML module entry를 정확히 1개 찾을 수 없습니다: ${htmlModuleAssets.join(", ") || "없음"}`);
   }
-
-  const entryName = entryNames[0];
+  const entryName = basename(htmlModuleAssets[0]);
+  if (!assetNames.includes(entryName)) throw new Error(`클라이언트 HTML module entry asset을 찾을 수 없습니다: ${entryName}`);
   const entryBytes = (await stat(join(distDirectory, entryName))).size;
-  if (entryBytes > maxEntryBytes) {
-    throw new Error(`클라이언트 entry가 ${maxEntryBytes}바이트 예산을 초과했습니다: ${entryName} = ${entryBytes}바이트`);
+  const appNames = assetNames.filter((name) => /^App-[^/]+\.js$/.test(name));
+  if (appNames.length > 1) {
+    throw new Error(`App shell chunk를 1개 이하로 찾을 수 없습니다: ${appNames.join(", ")}`);
   }
+  const shellChunks = [entryName, ...appNames];
+  const shellBytes = entryBytes + (appNames[0] ? (await stat(join(distDirectory, appNames[0]))).size : 0);
+  assertClientShellBudget(shellBytes);
 
   const cssAssetNames = assetNames.filter((name) => name.endsWith(".css"));
-  const entryCssName = cssAssetNames.find((name) => /^index-[^/]+\.css$/.test(name));
-  if (!entryCssName) throw new Error("초기 화면 CSS entry chunk를 찾을 수 없습니다.");
+  const htmlStylesheets = getHtmlLocalAssets(indexHtml, "link", "href", (attributes) => attributes.get("rel")?.toLowerCase().split(/\s+/).includes("stylesheet"));
+  if (htmlStylesheets.length !== 1) throw new Error(`초기 화면 CSS asset을 정확히 1개 찾을 수 없습니다: ${htmlStylesheets.join(", ") || "없음"}`);
+  const entryCssName = basename(htmlStylesheets[0]);
+  if (!cssAssetNames.includes(entryCssName)) throw new Error(`초기 화면 CSS asset을 찾을 수 없습니다: ${entryCssName}`);
   const entryCssBytes = (await stat(join(distDirectory, entryCssName))).size;
   if (entryCssBytes > maxEntryCssBytes) {
     throw new Error(`초기 화면 CSS가 ${maxEntryCssBytes}바이트 예산을 초과했습니다: ${entryCssName} = ${entryCssBytes}바이트`);
@@ -410,7 +442,7 @@ async function runBuildVerifier() {
   for (const name of assetNames) {
     if (!name.endsWith(".js")) continue;
     browserJavaScript.push(await readFile(join(distDirectory, name), "utf8"));
-    if (name === entryName || name.startsWith("react-vendor-")) continue;
+    if (shellChunks.includes(name) || name.startsWith("react-vendor-")) continue;
     const bytes = (await stat(join(distDirectory, name))).size;
     if (bytes > maxLazyChunkBytes) oversizedChunks.push(`${name} = ${bytes}바이트`);
   }
@@ -449,6 +481,9 @@ async function runBuildVerifier() {
     ok: true,
     entry: entryName,
     entryBytes,
+    shellChunks,
+    shellBytes,
+    maxShellBytes: maxEntryBytes,
     maxEntryBytes,
     entryCss: entryCssName,
     entryCssBytes,

@@ -1,4 +1,5 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { createServer } from "node:http";
 import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -81,6 +82,55 @@ async function waitForHttp(url, label) {
     await sleep(100);
   }
   throw new Error(`${label}을(를) ${timeoutMs}ms 안에 확인하지 못했습니다.`);
+}
+
+async function findingChunkDelayProxy(webUrl, apiUrl) {
+  const delays = [];
+  const server = createServer((request, response) => {
+    void (async () => {
+      const requestPath = request.url ?? "/";
+      const pathname = new URL(requestPath, "http://localhost").pathname;
+      const isApiRequest = pathname === "/api" || pathname.startsWith("/api/");
+      const upstreamOrigin = isApiRequest ? apiUrl : webUrl;
+      const headers = Object.fromEntries(Object.entries(request.headers).filter(([name]) => !["host", "connection", "content-length", "accept-encoding"].includes(name.toLowerCase())));
+      headers["accept-encoding"] = "identity";
+      if (isApiRequest) headers["x-forwarded-for"] = "198.51.100.228";
+      const init = { method: request.method, headers };
+      if (request.method !== "GET" && request.method !== "HEAD") {
+        const chunks = [];
+        for await (const chunk of request) chunks.push(Buffer.from(chunk));
+        init.body = Buffer.concat(chunks);
+        init.duplex = "half";
+      }
+      const upstream = await fetch(`${upstreamOrigin}${requestPath}`, init);
+      const body = request.method === "HEAD" ? Buffer.alloc(0) : Buffer.from(await upstream.arrayBuffer());
+      if (/\/src\/ResultFindings\.tsx$/.test(pathname)) {
+        const startedAt = Date.now();
+        await sleep(3_000);
+        delays.push({ path: requestPath, delayMs: Date.now() - startedAt });
+      }
+      for (const [name, value] of upstream.headers.entries()) {
+        if (["connection", "content-encoding", "content-length", "transfer-encoding"].includes(name.toLowerCase())) continue;
+        response.setHeader(name, value);
+      }
+      response.setHeader("Content-Length", String(body.length));
+      response.writeHead(upstream.status);
+      response.end(body);
+    })().catch((error) => {
+      response.writeHead(502, { "Content-Type": "text/plain; charset=utf-8" });
+      response.end(error instanceof Error ? error.message : String(error));
+    });
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("Finding delay proxy did not bind a TCP port.");
+  return {
+    url: `http://127.0.0.1:${address.port}`,
+    delays,
+    async close() {
+      await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    }
+  };
 }
 
 async function waitForChromePage(port, predicate, label) {
@@ -330,9 +380,24 @@ async function main() {
     await waitForValue(secondClient, "document.querySelector('[data-testid=\"saved-build-monitor-alerts\"]') !== null", "두 번째 탭 알림함 lazy load");
     await waitForValue(secondClient, "document.querySelector('.history-monitor-alert-finding-link') !== null", "알림 영향 finding 표시");
     assert(await clickSelector(secondClient, ".history-monitor-alert-finding-link", 1) === 1, "알림 영향 finding 상세 이동 버튼을 찾지 못했습니다.");
-    await waitForValue(secondClient, "location.pathname === '/result' && document.activeElement?.id?.startsWith('finding-') === true", "알림에서 finding 상세 이동");
-    await navigate(secondClient, `${webUrl}/share/${encodeURIComponent(originalSavedId)}?findingRule=${encodeURIComponent(monitorFindingRuleId)}#findings`, "finding deep link 공유 route");
-    await waitForValue(secondClient, "location.search.startsWith('?findingRule=') && location.hash === '#findings' && document.activeElement?.id?.startsWith('finding-') === true", "finding deep link 공유 route 포커스");
+    await waitForValue(secondClient, "location.pathname === '/result' && document.activeElement?.id?.startsWith('finding-') === true", "알림에서 finding 상세 이동", 10_000, `JSON.stringify({ href: location.href, activeElement: document.activeElement ? { tag: document.activeElement.tagName, id: document.activeElement.id ?? '' } : null, findingRuleIds: [...document.querySelectorAll('.finding-card')].map((card) => card.id), errors: window.__pcSupporterSmokeErrors ?? [] })`);
+    const findingDeepLinkUrl = `${webUrl}/share/${encodeURIComponent(originalSavedId)}?findingRule=${encodeURIComponent(monitorFindingRuleId)}#findings`;
+    const findingDelayProxy = await findingChunkDelayProxy(webUrl, apiUrl);
+    let delayedFindingClient;
+    try {
+      delayedFindingClient = await openAdditionalPage(client, browser.port, `${findingDelayProxy.url}/history`);
+      await delayedFindingClient.send("Network.enable");
+      await delayedFindingClient.send("Network.setCacheDisabled", { cacheDisabled: true });
+      await navigate(delayedFindingClient, `${findingDelayProxy.url}/share/${encodeURIComponent(originalSavedId)}?findingRule=${encodeURIComponent(monitorFindingRuleId)}#findings`, "finding deep link 공유 route");
+      await waitForValue(delayedFindingClient, "document.querySelector('.result-page') !== null && document.querySelector('[data-testid=\"result-findings\"]') !== null", "finding deep link 공유 결과 화면", 15_000);
+      await waitForValue(delayedFindingClient, `document.getElementById(${JSON.stringify(`finding-${monitorFindingRuleId}`)}) !== null`, "finding deep link 대상 상세 카드", 15_000);
+      assert(findingDelayProxy.delays.some((entry) => entry.delayMs >= 3_000), "finding deep link regression proxy did not delay the lazy finding module. delays=" + JSON.stringify(findingDelayProxy.delays));
+      await waitForValue(delayedFindingClient, `document.activeElement?.id === ${JSON.stringify(`finding-${monitorFindingRuleId}`)}`, "finding deep link 공유 route 포커스", 10_000, `JSON.stringify({ href: location.href, routeRule: new URLSearchParams(location.search).get('findingRule'), hash: location.hash, targetPresent: Boolean(document.getElementById(${JSON.stringify(`finding-${monitorFindingRuleId}`)})), activeElement: document.activeElement ? { tag: document.activeElement.tagName, id: document.activeElement.id ?? '' } : null, findingRuleIds: [...document.querySelectorAll('.finding-card')].map((card) => card.id), errors: window.__pcSupporterSmokeErrors ?? [] })`);
+    } finally {
+      try { await delayedFindingClient?.send("Page.close"); } catch {}
+      delayedFindingClient?.close();
+      await findingDelayProxy.close();
+    }
 
     const sharedWatchlistCreated = await fetch(`${apiUrl}/api/watchlists`, {
       method: "POST",
