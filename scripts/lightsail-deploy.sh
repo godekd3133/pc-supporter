@@ -183,6 +183,7 @@ BUNDLE="$TMP_DIR/pc-supporter-$RELEASE_ID.tar.gz"
     shared \
     db/schema.sql \
     scripts/import-private-catalog.ts \
+    scripts/import-file-runtime-state.ts \
     scripts/migrate-postgres.ts \
     scripts/bootstrap-postgres-runtime-role.mjs \
     scripts/postgres-runtime-role-smoke.mjs
@@ -192,6 +193,7 @@ echo "pc_supporter_bundle=status=ok release=$RELEASE_ID"
 tar -tzf "$BUNDLE" | sed -n '1,36p'
 for required_file in \
   db/schema.sql \
+  scripts/import-file-runtime-state.ts \
   scripts/migrate-postgres.ts \
   scripts/bootstrap-postgres-runtime-role.mjs \
   scripts/postgres-runtime-role-smoke.mjs; do
@@ -403,7 +405,7 @@ if sudo grep -Eq '^DATABASE_URL=[^[:space:]]+' "$ENV_PATH"; then
   HAS_POSTGRES=true
   SERVICE_PROCESS_ROLE=api
   if ! sudo grep -Eq '^PC_SUPPORTER_POSTGRES_DATA_MIGRATION_CONFIRMED=true$' "$ENV_PATH"; then
-    echo "DATABASE_URL switches repositories away from file-backed saved user state. Confirm its separate migration and readback before enabling PostgreSQL on Lightsail." >&2
+    echo "DATABASE_URL switches repositories away from file-backed saved user state. Set this operator attestation only after reviewing the frozen DATA_DIR manifest, applying each present SQL-backed source, and verifying target readback." >&2
     exit 1
   fi
 fi

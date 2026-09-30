@@ -30,6 +30,12 @@ export function quotePostgresPasswordLiteral(value) {
   return `E'${value.replaceAll("\\", "\\\\").replaceAll("'", "''")}'`;
 }
 
+export function runtimeRoleProvisioningSql(quotedRole, passwordLiteral, roleExists) {
+  return roleExists
+    ? `ALTER ROLE ${quotedRole} WITH LOGIN INHERIT PASSWORD ${passwordLiteral}`
+    : `CREATE ROLE ${quotedRole} WITH LOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD ${passwordLiteral}`;
+}
+
 export function parseCanonicalRuntimeTableNames(schemaSql) {
   if (typeof schemaSql !== "string" || schemaSql.length === 0) throw new Error("Canonical PostgreSQL schema is empty.");
   const declarations = [...schemaSql.matchAll(/^\s*CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+([A-Za-z_][A-Za-z0-9_$]*)\s*\(/gim)]
@@ -161,9 +167,7 @@ async function provisionRuntimeRole(client, schemaSql, schemaSha256, runtimeRole
       throw new Error("DATABASE_RUNTIME_ROLE owns the database, schema, or a canonical table; use a separate DML role.");
     }
 
-    await client.query(existingRole
-      ? `ALTER ROLE ${quotedRole} WITH LOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD ${passwordLiteral}`
-      : `CREATE ROLE ${quotedRole} WITH LOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD ${passwordLiteral}`);
+    await client.query(runtimeRoleProvisioningSql(quotedRole, passwordLiteral, Boolean(existingRole)));
 
     const databaseName = String(current.database_name);
     const quotedDatabase = quotePostgresIdentifier(databaseName);

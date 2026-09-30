@@ -36,6 +36,7 @@
     "crawl:dry": "tsx server/crawler.ts --dry-run --limit 8",
     "import:private-catalog": "tsx scripts/import-private-catalog.ts",
     "import:catalog-overrides": "tsx scripts/import-catalog-overrides.ts",
+    "import:file-runtime-state": "tsx scripts/import-file-runtime-state.ts",
     "db:backup:local": "node scripts/pg-operations.mjs backup",
     "db:restore:rehearsal": "node scripts/pg-operations.mjs restore",
     "db:migrate": "tsx scripts/migrate-postgres.ts",
@@ -98,6 +99,7 @@
     "test:postgres:saved-build": "node scripts/postgres-saved-build-smoke.mjs",
     "test:postgres:price-refresh": "tsx scripts/postgres-price-refresh-worker-smoke.ts",
     "test:pg-operations": "node --test scripts/pg-operations.node-test.mjs server/postgres-schema-parity.node-test.mjs",
+    "test:postgres-file-runtime-state": "vitest run scripts/import-file-runtime-state.test.ts scripts/bootstrap-postgres-runtime-role.test.mjs --maxWorkers=1 --minWorkers=1 --pool=threads --poolOptions.threads.singleThread=true",
     "test:watch": "vitest"
   },
   "dependencies": {

@@ -6,6 +6,7 @@ import {
   parseCanonicalRuntimeTableNames,
   quotePostgresIdentifier,
   quotePostgresPasswordLiteral,
+  runtimeRoleProvisioningSql,
   readRuntimeBootstrapConfig,
   runPostgresRuntimeRoleBootstrap
 } from "./bootstrap-postgres-runtime-role.mjs";
@@ -42,6 +43,15 @@ describe("PostgreSQL runtime-role bootstrap", () => {
     expect(quotePostgresIdentifier('runtime"role')).toBe('"runtime""role"');
     expect(quotePostgresPasswordLiteral(`${"p".repeat(32)}'\\; SELECT 1 --`)).toContain("''");
     expect(() => quotePostgresIdentifier("runtime\u0000role")).toThrow(/identifier/);
+  });
+
+  it("replays an already-checked non-superuser role without altering superuser-only attributes", () => {
+    const existingRoleSql = runtimeRoleProvisioningSql('"pcsupporter_runtime"', "'runtime-password'", true);
+    expect(existingRoleSql).toBe('ALTER ROLE "pcsupporter_runtime" WITH LOGIN INHERIT PASSWORD \'runtime-password\'');
+    expect(existingRoleSql).not.toMatch(/NOSUPERUSER|NOCREATEDB|NOCREATEROLE|NOREPLICATION|NOBYPASSRLS/);
+
+    const createRoleSql = runtimeRoleProvisioningSql('"pcsupporter_runtime"', "'runtime-password'", false);
+    expect(createRoleSql).toContain("WITH LOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS");
   });
 
   it("connects using the migration URL only and never echoes credentials on failure", async () => {
