@@ -190,19 +190,21 @@ BUNDLE="$TMP_DIR/pc-supporter-$RELEASE_ID.tar.gz"
 )
 
 echo "pc_supporter_bundle=status=ok release=$RELEASE_ID"
-tar -tzf "$BUNDLE" | sed -n '1,36p'
+BUNDLE_LISTING="$TMP_DIR/pc-supporter-$RELEASE_ID.list"
+tar -tzf "$BUNDLE" > "$BUNDLE_LISTING"
+sed -n '1,36p' "$BUNDLE_LISTING"
 for required_file in \
   db/schema.sql \
   scripts/import-file-runtime-state.ts \
   scripts/migrate-postgres.ts \
   scripts/bootstrap-postgres-runtime-role.mjs \
   scripts/postgres-runtime-role-smoke.mjs; do
-  if ! tar -tzf "$BUNDLE" | rg -qx "$required_file"; then
+  if ! rg -qx "$required_file" "$BUNDLE_LISTING"; then
     echo "Deployment bundle is missing the PostgreSQL startup file: $required_file" >&2
     exit 1
   fi
 done
-tar -tzf "$BUNDLE" | rg '^(db/schema.sql|scripts/migrate-postgres.ts|scripts/bootstrap-postgres-runtime-role.mjs|scripts/postgres-runtime-role-smoke.mjs)$'
+rg '^(db/schema.sql|scripts/migrate-postgres.ts|scripts/bootstrap-postgres-runtime-role.mjs|scripts/postgres-runtime-role-smoke.mjs)$' "$BUNDLE_LISTING"
 
 if [[ "$DRY_RUN" == "true" ]]; then
   echo "pc_supporter_deploy=status=ok mode=dry-run release=$RELEASE_ID domain=$DOMAIN"
