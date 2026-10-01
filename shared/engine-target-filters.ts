@@ -126,6 +126,12 @@ export interface EngineCategoryTargetFilter {
    * 선택이 우선한다는 의미로 우회한다.
    */
   namePatterns?: string[];
+  /**
+   * 범주 안에서도 부품 단위로 제외할 id 목록 — 허용 조건을 통과해도 여기
+   * 있으면 무조건 후보에서 빠진다. 재고 품질이 나쁜 특정 상품, 단종 직전
+   * 라이브 행 같은 것을 관리자가 직접 찍어 빼는 용도다.
+   */
+  excludePartIds?: string[];
 }
 
 export type EngineTargetFilters = Partial<Record<PartCategory, EngineCategoryTargetFilter>>;
@@ -144,7 +150,9 @@ export const ENGINE_TARGET_FILTER_LIMITS = {
   maxRangesPerField: 20,
   maxPriceWon: 1_000_000_000,
   maxNamePatterns: 30,
-  maxNamePatternLength: 160
+  maxNamePatternLength: 160,
+  maxExcludedPartIds: 500,
+  maxExcludedPartIdLength: 160
 } as const;
 
 export function emptyEngineTargetFiltersConfig(): EngineTargetFiltersConfig {
@@ -185,6 +193,7 @@ export function engineCategoryTargetFilterIsEmpty(rule: EngineCategoryTargetFilt
   if (rule.brands && rule.brands.length > 0) return false;
   if (rule.priceWon && (rule.priceWon.min !== undefined || rule.priceWon.max !== undefined)) return false;
   if (rule.namePatterns && rule.namePatterns.length > 0) return false;
+  if (rule.excludePartIds && rule.excludePartIds.length > 0) return false;
   if (rule.specValues && Object.values(rule.specValues).some((values) => values !== undefined && values.length > 0)) return false;
   if (rule.numericRanges && Object.values(rule.numericRanges).some((ranges) => ranges !== undefined && ranges.length > 0)) return false;
   if (rule.flags && Object.values(rule.flags).some((value) => value !== undefined)) return false;
@@ -196,6 +205,7 @@ export function engineTargetFilterActiveFacetCount(rule: EngineCategoryTargetFil
   let count = 0;
   if (rule.brands && rule.brands.length > 0) count += 1;
   if (rule.namePatterns && rule.namePatterns.length > 0) count += 1;
+  if (rule.excludePartIds && rule.excludePartIds.length > 0) count += 1;
   if (rule.priceWon && (rule.priceWon.min !== undefined || rule.priceWon.max !== undefined)) count += 1;
   if (rule.specValues) count += Object.values(rule.specValues).filter((values) => values !== undefined && values.length > 0).length;
   if (rule.numericRanges) count += Object.values(rule.numericRanges).filter((ranges) => ranges !== undefined && ranges.length > 0).length;
@@ -220,6 +230,8 @@ function namePatternMatches(part: Part, patterns: string[]) {
 
 export function engineTargetFilterRuleAllowsPart(part: Part, rule: EngineCategoryTargetFilter | undefined) {
   if (!rule || engineCategoryTargetFilterIsEmpty(rule)) return true;
+  // 부품 단위 제외는 모든 허용 조건보다 먼저 — 이 목록에 있으면 무조건 뺀다.
+  if (rule.excludePartIds?.includes(part.id)) return false;
   if (rule.namePatterns && rule.namePatterns.length > 0 && !namePatternMatches(part, rule.namePatterns)) return false;
   if (rule.brands && rule.brands.length > 0) {
     const brand = normalizedFilterText(part.brand);
@@ -298,6 +310,9 @@ export function engineTargetFilterRuleForCategory(rule: EngineCategoryTargetFilt
   // namePatterns는 facet 선언이 아니라 관리자 지정 허용목록 — 범위를 좁히는
   // 용도이므로 어떤 범주에서도 그대로 통과시킨다.
   if (rule.namePatterns && rule.namePatterns.length > 0) scoped.namePatterns = rule.namePatterns;
+  // 부품 제외 목록도 facet이 아닌 관리자 지정 조건 — 부품 id 자체가 범주를
+  // 담으므로 같은 범주에서만 의미가 있지만, 통과시켜도 다른 범주에선 무해하다.
+  if (rule.excludePartIds && rule.excludePartIds.length > 0) scoped.excludePartIds = rule.excludePartIds;
   return engineCategoryTargetFilterIsEmpty(scoped) ? undefined : scoped;
 }
 
@@ -540,7 +555,42 @@ export function engineTargetFilterRuleFromUnknown(raw: unknown, category: PartCa
   if (priceWon) rule.priceWon = priceWon;
   const namePatterns = normalizedNamePatterns(candidate.namePatterns, label, errors);
   if (namePatterns) rule.namePatterns = namePatterns;
+  const excludePartIds = normalizedExcludedPartIds(candidate.excludePartIds, label, errors);
+  if (excludePartIds) rule.excludePartIds = excludePartIds;
   return engineCategoryTargetFilterIsEmpty(rule) ? undefined : rule;
+}
+
+// 제외 부품 id 목록 — 카탈로그 부품 id(danawa-{범주}-{상품코드} 또는 seed/수동
+// 등록 id)를 그대로 저장한다. 재크롤 후에도 상품코드가 같으면 id가 유지되므로
+// 이름보다 끈적하게 동작한다.
+function normalizedExcludedPartIds(raw: unknown, label: string, errors: string[]) {
+  if (raw === undefined || raw === null) return undefined;
+  if (!Array.isArray(raw)) {
+    errors.push(`${label}의 제외 부품 목록은 배열이어야 합니다.`);
+    return undefined;
+  }
+  if (raw.length > ENGINE_TARGET_FILTER_LIMITS.maxExcludedPartIds) {
+    errors.push(`${label}의 제외 부품은 최대 ${ENGINE_TARGET_FILTER_LIMITS.maxExcludedPartIds}개까지 지정할 수 있습니다.`);
+    return undefined;
+  }
+  const values: string[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    if (typeof item !== "string") {
+      errors.push(`${label}의 제외 부품 id는 문자열이어야 합니다.`);
+      continue;
+    }
+    const value = item.trim();
+    if (!value) continue;
+    if (value.length > ENGINE_TARGET_FILTER_LIMITS.maxExcludedPartIdLength) {
+      errors.push(`${label}의 제외 부품 id는 ${ENGINE_TARGET_FILTER_LIMITS.maxExcludedPartIdLength}자 이하여야 합니다.`);
+      continue;
+    }
+    if (seen.has(value)) continue;
+    seen.add(value);
+    values.push(value);
+  }
+  return values.length > 0 ? values : undefined;
 }
 
 // 이름 패턴은 정규식으로 저장되므로 파싱 시점에 컴파일 가능성까지 검증한다.

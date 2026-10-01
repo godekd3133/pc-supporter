@@ -23,10 +23,22 @@ export type EngineTargetFilterValueOption = {
   count: number;
 };
 
+// 관리자 패널의 "부품 직접 제외" 선택지 — 제외는 부품 id로 저장되므로
+// 카탈로그 전체 행을 id와 함께 내려보낸다(관리자 전용 단발 조회).
+export type EngineTargetFilterPartOption = {
+  id: string;
+  name: string;
+  brand?: string;
+  priceWon?: number;
+};
+
 export type EngineTargetFilterCategoryFacetOptions = {
   partCount: number;
   brandOptions: EngineTargetFilterValueOption[];
   facetOptions: Partial<Record<string, { options: EngineTargetFilterValueOption[]; missingCount: number }>>;
+  // 부품 선택 목록 — 관리자 견적 필터 편집용. 공개 카탈로그 facet 경로에는
+  // 싣지 않는다(응답 크기·노출 범위를 기존 그대로 유지하기 위해).
+  parts?: EngineTargetFilterPartOption[];
 };
 
 type EngineTargetFiltersCache = { path: string; mtimeMs: number; config: EngineTargetFiltersConfig } | undefined;
@@ -122,7 +134,7 @@ export function engineTargetFilterFacetOptionsFor(catalog: Part[]): Record<PartC
   const result = {} as Record<PartCategory, EngineTargetFilterCategoryFacetOptions>;
   for (const category of PART_CATEGORIES) {
     const parts = catalog.filter((part) => part.category === category && part.listingType !== "accessory");
-    result[category] = facetOptionsForParts(parts, category);
+    result[category] = facetOptionsForParts(parts, category, true);
   }
   return result;
 }
@@ -143,7 +155,7 @@ export function catalogPartFacetOptionsFor(parts: Part[], category: PartCategory
   };
 }
 
-function facetOptionsForParts(parts: Part[], category: PartCategory): EngineTargetFilterCategoryFacetOptions {
+function facetOptionsForParts(parts: Part[], category: PartCategory, includeParts = false): EngineTargetFilterCategoryFacetOptions {
   const brands = new Map<string, { value: string; count: number }>();
   const facetOptions: EngineTargetFilterCategoryFacetOptions["facetOptions"] = {};
   const facets = ENGINE_TARGET_FILTER_FACETS[category];
@@ -168,10 +180,16 @@ function facetOptionsForParts(parts: Part[], category: PartCategory): EngineTarg
   for (const [facetId, collector] of collectors) {
     facetOptions[facetId] = { options: sortedOptions(collector.options), missingCount: collector.missingCount };
   }
+  const partOptions = includeParts
+    ? [...parts]
+        .sort((left, right) => (left.brand ?? "").localeCompare(right.brand ?? "", "ko-KR") || left.name.localeCompare(right.name, "ko-KR"))
+        .map((part) => ({ id: part.id, name: part.name, ...(part.brand ? { brand: part.brand } : {}), ...(isKnownPrice(part.priceWon) ? { priceWon: part.priceWon } : {}) }))
+    : undefined;
   return {
     partCount: parts.length,
     brandOptions: sortedOptions(brands),
-    facetOptions
+    facetOptions,
+    ...(partOptions ? { parts: partOptions } : {})
   };
 }
 

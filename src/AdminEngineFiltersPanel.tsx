@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { FiAlertTriangle, FiFilter, FiLoader, FiRefreshCw, FiRotateCcw, FiSave } from "react-icons/fi";
+import { FiAlertTriangle, FiFilter, FiLoader, FiRefreshCw, FiRotateCcw, FiSave, FiXCircle } from "react-icons/fi";
 import { emptyEngineTargetFiltersConfig, engineCategoryTargetFilterIsEmpty, engineFilterOptionLabelFor, engineFilterRangeEqual, engineTargetFilterActiveFacetCount, ENGINE_TARGET_FILTER_FACETS } from "../shared/engine-target-filters";
 import type { EngineCategoryTargetFilter, EngineFilterRange, EngineTargetFiltersConfig, EngineTargetFilterFacet } from "../shared/engine-target-filters";
 import { CATEGORY_LABELS, PART_CATEGORIES } from "../shared/types";
@@ -22,7 +22,10 @@ type EngineFilterCategoryFacetOptions = {
   partCount: number;
   brandOptions: EngineFilterValueOption[];
   facetOptions: Partial<Record<string, { options: EngineFilterValueOption[]; missingCount: number }>>;
+  parts?: EngineFilterPartOption[];
 };
+
+type EngineFilterPartOption = { id: string; name: string; brand?: string; priceWon?: number };
 
 type EngineGenerationBoundarySummary = {
   line: string;
@@ -69,6 +72,7 @@ function compactRule(rule: EngineCategoryTargetFilter | undefined): EngineCatego
     if (entries.length > 0) next.flags = Object.fromEntries(entries) as EngineCategoryTargetFilter["flags"];
   }
   if (rule.priceWon && (rule.priceWon.min !== undefined || rule.priceWon.max !== undefined)) next.priceWon = rule.priceWon;
+  if (rule.excludePartIds && rule.excludePartIds.length > 0) next.excludePartIds = rule.excludePartIds;
   return engineCategoryTargetFilterIsEmpty(next) ? undefined : next;
 }
 
@@ -121,6 +125,7 @@ export function AdminEngineFiltersPanel({ onToast }: { onToast: (message: string
   const [previewSummary, setPreviewSummary] = useState<EngineFilterSummary | null>(null);
   const [facetOptions, setFacetOptions] = useState<EngineFilterFacetsResponse["categories"]>({});
   const [selectedCategory, setSelectedCategory] = useState<PartCategory>("ssd");
+  const [partSearch, setPartSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -160,6 +165,10 @@ export function AdminEngineFiltersPanel({ onToast }: { onToast: (message: string
       });
     return () => { cancelled = true; };
   }, [refreshKey]);
+
+  useEffect(() => {
+    setPartSearch("");
+  }, [selectedCategory]);
 
   const dirty = useMemo(() => config !== null && JSON.stringify(compactConfig(config)) !== savedConfigJson, [config, savedConfigJson]);
   const displaySummary = previewSummary ?? summary;
@@ -342,6 +351,48 @@ export function AdminEngineFiltersPanel({ onToast }: { onToast: (message: string
     </div>;
   };
 
+  // 부품 단위 제외 — 허용 조건과 무관하게 체크된 부품 id는 항상 후보에서 빠진다.
+  // 선택된 항목은 검색 결과 위로 고정하고, 카탈로그에서 사라진 id(단종·수집 중단)도
+  // 목록에 남겨 해제할 수 있게 한다.
+  const renderExcludedPartsRow = () => {
+    const rule = selectedRule ?? {};
+    const partOptions = selectedFacetOptions?.parts ?? [];
+    const excluded = new Set(rule.excludePartIds ?? []);
+    const query = partSearch.trim().toLocaleLowerCase("ko-KR");
+    const matched = query === ""
+      ? partOptions
+      : partOptions.filter((option) => `${option.brand ?? ""} ${option.name} ${option.id}`.toLocaleLowerCase("ko-KR").includes(query));
+    const pinned = matched.filter((option) => excluded.has(option.id));
+    const rest = matched.filter((option) => !excluded.has(option.id));
+    const visible = [...pinned, ...rest].slice(0, 200);
+    const missingExcluded = [...excluded].filter((id) => !partOptions.some((option) => option.id === id));
+    const toggleExcluded = (id: string) => updateRule(selectedCategory, (current) => ({ ...current, excludePartIds: toggleStringList(current.excludePartIds, id) }));
+    return <div className="engine-filter-row">
+      <div className="engine-filter-row-label"><FiXCircle /><span>부품 직접 제외</span></div>
+      <div className="engine-filter-row-body">
+        <input type="search" className="engine-filter-part-search" placeholder="부품 이름·제조사·id 검색" value={partSearch} onChange={(event) => setPartSearch(event.target.value)} />
+        <div className="engine-filter-options">
+          {missingExcluded.map((id) => (
+            <label key={id} className="engine-filter-option excluded checked">
+              <input type="checkbox" checked onChange={() => toggleExcluded(id)} />
+              <span>{id} · 카탈로그에 없음</span>
+            </label>
+          ))}
+          {visible.map((option) => {
+            const checked = excluded.has(option.id);
+            return <label key={option.id} className={`engine-filter-option excluded${checked ? " checked" : ""}`} title={option.id}>
+              <input type="checkbox" checked={checked} onChange={() => toggleExcluded(option.id)} />
+              <span>{option.brand ? `${option.brand} ` : ""}{option.name}</span>
+              {option.priceWon !== undefined && <em>{Math.round(option.priceWon / 10_000)}만</em>}
+            </label>;
+          })}
+        </div>
+        {matched.length > visible.length && <p className="engine-filter-missing">검색 결과가 많아 일부만 표시합니다 — 검색어를 더 입력해 좁혀 주세요.</p>}
+        {excluded.size > 0 && <p className="engine-filter-missing">이 범주에서 {excluded.size}개 부품을 견적 후보에서 제외합니다.</p>}
+      </div>
+    </div>;
+  };
+
   return <section className="admin-card engine-filters-card" aria-busy={loading}>
     <div className="admin-card-heading">
       <div><p className="eyebrow">견적 생성 엔진</p><h3>자동 견적 타겟 필터</h3></div>
@@ -408,6 +459,7 @@ export function AdminEngineFiltersPanel({ onToast }: { onToast: (message: string
         {filterDisabled && <p className="engine-filter-warning muted"><FiAlertTriangle /> 타겟 필터가 해제되어 있어 조건을 저장해도 견적에는 적용되지 않습니다.</p>}
         <div className="engine-filter-rows">
           {ENGINE_TARGET_FILTER_FACETS[selectedCategory].map(renderFacetRow)}
+          {renderExcludedPartsRow()}
         </div>
       </div>
     </div>

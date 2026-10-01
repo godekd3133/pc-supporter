@@ -791,6 +791,14 @@ html[data-theme="dark"] .admin-page .m2-coverage-empty {
 
 .engine-filter-missing { margin: 7px 0 0; color: #b26a00; font-size: 8px; }
 
+.engine-filter-part-search { display: block; width: 100%; max-width: 320px; margin: 0 0 8px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 7px; font-size: 10px; }
+
+.engine-filter-part-search:focus { border-color: var(--teal); outline: none; }
+
+.engine-filter-option.excluded.checked { border-color: #c0392b; color: #8e2b1f; background: #fdf0ee; }
+
+.engine-filter-option.excluded.checked em { color: #c0392b; }
+
 @media (max-width: 760px) {
   .engine-filter-layout { grid-template-columns: 1fr; }
   .engine-filter-nav { display: flex; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid var(--line); }
