@@ -1192,3 +1192,12 @@ html[data-theme="dark"] .admin-page .usage-analytics-table td { border-color: #2
   .usage-analytics-funnel-row { grid-template-columns: 80px minmax(0, 1fr) 52px 40px 50px; }
   .usage-analytics-step { grid-template-columns: 62px minmax(0, 1fr) 38px 34px; }
 }
+
+/* 재참여 루프 지표 */
+.usage-analytics-loop-grid { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+.usage-analytics-loop-row { display: grid; grid-template-columns: 108px minmax(0, 1fr) 60px 96px; align-items: center; gap: 8px; }
+.usage-analytics-loop-label { color: var(--ink); font-size: 9px; font-weight: 600; white-space: nowrap; }
+.usage-analytics-loop-bar { height: 10px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.usage-analytics-loop-bar > i { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #8b5cf6, #22c58b); }
+.usage-analytics-loop-count { color: var(--ink); font-family: "DM Mono", monospace; font-size: 9px; text-align: right; }
+.usage-analytics-loop-share { color: var(--muted); font-family: "DM Mono", monospace; font-size: 8px; text-align: right; }

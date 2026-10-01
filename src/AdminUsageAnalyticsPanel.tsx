@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { FiActivity, FiAlertTriangle, FiBarChart2, FiLoader, FiRefreshCw, FiRepeat, FiTrendingDown, FiUsers } from "react-icons/fi";
+import { FiActivity, FiAlertTriangle, FiBarChart2, FiDownload, FiLoader, FiRefreshCw, FiRepeat, FiTrendingDown, FiUsers } from "react-icons/fi";
 import { api } from "./api";
 
 type UsageAnalyticsDailyRow = { day: string; events: number; visitors: number; sessions: number; appOpens: number };
@@ -8,6 +8,22 @@ type UsageAnalyticsOnboardingRow = { step: string; label: string; visitors: numb
 type UsageAnalyticsViewRow = { view: string; label: string; events: number; visitors: number };
 type UsageAnalyticsEventRow = { event: string; count: number; visitors: number };
 type UsageAnalyticsCohortRow = { day: string; size: number; day1: number; day7: number; day30: number };
+type UsageAnalyticsLoopRow = {
+  saversTotal: number;
+  returningVisitors: number;
+  returningRate: number;
+  multiQuoteVisitors: number;
+  savedBuildOpens: number;
+  savedBuildOpenVisitors: number;
+  buildCompares: number;
+  compareVisitors: number;
+  watchlistAdds: number;
+  watchlistVisitors: number;
+  priceTrendViews: number;
+  trendVisitors: number;
+  saverReactivation: number;
+  nextStepClicks: Array<{ step: string; label: string; count: number }>;
+};
 
 export type UsageAnalyticsResponse = {
   generatedAt: string;
@@ -30,6 +46,7 @@ export type UsageAnalyticsResponse = {
   views: UsageAnalyticsViewRow[];
   events: UsageAnalyticsEventRow[];
   retention: { cohorts: UsageAnalyticsCohortRow[] };
+  loop?: UsageAnalyticsLoopRow;
   sessions: { count: number; avgEventsPerSession: number; avgSessionMinutes: number; bounceRate: number };
 };
 
@@ -76,6 +93,19 @@ export function AdminUsageAnalyticsPanel({ onToast }: { onToast: (message: strin
       }
     : null;
 
+  function downloadDailyCsv() {
+    if (!data || data.daily.length === 0) return;
+    const header = "day,visitors,sessions,appOpens,events";
+    const lines = data.daily.map((row) => `${row.day},${row.visitors},${row.sessions},${row.appOpens},${row.events}`);
+    const blob = new Blob([["﻿", header, ...lines].join("\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `pc-supporter-usage-daily-${data.rangeDays}d.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
   return <section className="admin-card usage-analytics-card" data-testid="admin-usage-analytics">
     <div className="admin-card-heading">
       <div><p className="eyebrow">데이터 드리븐</p><h3>사용자 흐름 통계</h3></div>
@@ -84,6 +114,7 @@ export function AdminUsageAnalyticsPanel({ onToast }: { onToast: (message: strin
           {RANGE_OPTIONS.map((option) => <button key={option} className={`usage-analytics-range-button${days === option ? " on" : ""}`} type="button" onClick={() => setDays(option)}>{option}일</button>)}
         </div>
         <button className="button button-light button-small" type="button" onClick={() => void load(days)} disabled={loading}>{loading ? <FiLoader className="spin" /> : <FiRefreshCw />} 새로고침</button>
+        <button className="button button-light button-small" type="button" data-testid="usage-analytics-csv" onClick={downloadDailyCsv} disabled={!data || data.daily.length === 0}><FiDownload /> CSV</button>
       </div>
     </div>
     <p className="admin-card-description">
@@ -141,6 +172,30 @@ export function AdminUsageAnalyticsPanel({ onToast }: { onToast: (message: strin
                 </table>
               </div>
             </div>
+
+            {data.loop && <div className="usage-analytics-block" data-testid="usage-analytics-loop">
+              <h4><FiRepeat /> 재참여 루프 <small>저장 이후 활동 · 방문자 기준 · 저장자 {data.loop.saversTotal.toLocaleString("ko-KR")}명 대비</small></h4>
+              <div className="usage-analytics-loop-grid">
+                {([
+                  { key: "returning", label: "재방문 (활동일 2일+)", visitors: data.loop.returningVisitors, shareOf: data.totals.visitors },
+                  { key: "multi-quote", label: "견적 2개 이상 생성", visitors: data.loop.multiQuoteVisitors, shareOf: data.totals.visitors },
+                  { key: "reopen", label: "저장 견적 다시 열기", visitors: data.loop.savedBuildOpenVisitors, events: data.loop.savedBuildOpens, shareOf: data.loop.saversTotal },
+                  { key: "compare", label: "저장 견적 비교", visitors: data.loop.compareVisitors, events: data.loop.buildCompares, shareOf: data.loop.saversTotal },
+                  { key: "watchlist", label: "가격 추적 등록", visitors: data.loop.watchlistVisitors, events: data.loop.watchlistAdds, shareOf: data.loop.saversTotal },
+                  { key: "trend", label: "가격 추이 조회", visitors: data.loop.trendVisitors, events: data.loop.priceTrendViews, shareOf: data.loop.saversTotal }
+                ]).map((row) => <div className="usage-analytics-loop-row" key={row.key}>
+                  <span className="usage-analytics-loop-label">{row.label}</span>
+                  <span className="usage-analytics-loop-bar"><i style={{ width: `${Math.max(0, Math.min(100, (row.shareOf > 0 ? row.visitors / row.shareOf : 0) * 100))}%` }} /></span>
+                  <span className="usage-analytics-loop-count">{row.visitors.toLocaleString("ko-KR")}명</span>
+                  <span className="usage-analytics-loop-share">{percentText(row.shareOf > 0 ? row.visitors / row.shareOf : 0)}{row.events !== undefined ? ` · ${row.events.toLocaleString("ko-KR")}건` : ""}</span>
+                </div>)}
+              </div>
+              <p className="usage-analytics-empty">저장자 재참여율 {percentText(data.loop.saverReactivation)} · 재방문율 {percentText(data.loop.returningRate)}</p>
+              {data.loop.nextStepClicks.length > 0 && <table className="usage-analytics-table">
+                <thead><tr><th>다음 단계 CTA</th><th>클릭</th></tr></thead>
+                <tbody>{data.loop.nextStepClicks.map((item) => <tr key={item.step}><td>{item.label}</td><td>{item.count.toLocaleString("ko-KR")}</td></tr>)}</tbody>
+              </table>}
+            </div>}
 
             <div className="usage-analytics-block">
               <h4>일별 방문 추이 <small>고유 방문자 · 앱 열기 이벤트</small></h4>

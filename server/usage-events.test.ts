@@ -182,6 +182,8 @@ describe("usage events", () => {
       events: [
         { name: "view", at: "2026-09-29T00:00:00.000Z", path: "/start", props: { view: "start" } },
         { name: "onboarding_step", props: { step: "budget", usecase: "gaming", BAD: "drop", nested: { a: 1 } } },
+        { name: "build_compare", props: { count: 2 } },
+        { name: "next_step_click", props: { step: "watching", surface: "home" } },
         { name: "save" },
         { name: "totally_made_up" },
         "not-an-event"
@@ -189,7 +191,7 @@ describe("usage events", () => {
     });
     expect(batch).toBeDefined();
     expect(batch!.visitorId).toBe("visitor-12345678");
-    expect(batch!.events.map((event) => event.name)).toEqual(["view", "onboarding_step"]);
+    expect(batch!.events.map((event) => event.name)).toEqual(["view", "onboarding_step", "build_compare", "next_step_click"]);
     expect(batch!.events[0].props).toEqual({ view: "start" });
     expect(batch!.events[1].props).toEqual({ step: "budget", usecase: "gaming" });
     expect(Number.isNaN(batch!.events[1].at.getTime())).toBe(false);
@@ -298,6 +300,70 @@ describe("usage events", () => {
     expect(cohort.size).toBe(2);
     expect(cohort.day1).toBe(0.5);
     expect(cohort.day7).toBe(0);
+  });
+
+  it("aggregates post-save loop engagement metrics and the engaged funnel stage", async () => {
+    directory = await mkdtemp(join(tmpdir(), "pc-supporter-usage-loop-"));
+    process.env.PC_SUPPORTER_DATA_DIR = directory;
+    process.env.ADMIN_PASSWORD = "usage-loop-test-password";
+
+    const repository = await import("./repository");
+    await repository.initializePersistence();
+    await truncatePostgresTables();
+    const { recordClientUsageEvents, usageAnalyticsFor } = await import("./usage-events");
+
+    const base = Date.now() - 4 * 24 * 60 * 60 * 1_000;
+    const at = (offsetMs: number) => new Date(base + offsetMs);
+    const day = (offsetDays: number) => new Date(base + offsetDays * 24 * 60 * 60 * 1_000);
+
+    // visitor A: 저장 이후 루프 전체(재열람·비교·추적·추이·다음 단계) + 다음날 재방문·두 번째 생성
+    await recordClientUsageEvents({
+      visitorId: "visitor-loop-a01", sessionId: "session-loop-a01",
+      events: [
+        { name: "app_open", at: at(0), path: "/" },
+        { name: "recommend_request", at: at(1_000), path: "/recommend" },
+        { name: "recommend_success", at: at(2_000), path: "/recommend" },
+        { name: "build_save", at: at(3_000), path: "/result" },
+        { name: "saved_build_open", at: at(4_000), path: "/history" },
+        { name: "build_compare", at: at(5_000), path: "/history", props: { count: 2 } },
+        { name: "watchlist_add", at: at(6_000), path: "/result", props: { kind: "part" } },
+        { name: "price_trend_view", at: at(7_000), path: "/result", props: { surface: "result" } },
+        { name: "next_step_click", at: at(8_000), path: "/", props: { step: "watching", surface: "home" } },
+        { name: "share_link", at: at(9_000), path: "/result" }
+      ]
+    });
+    await recordClientUsageEvents({
+      visitorId: "visitor-loop-a01", sessionId: "session-loop-a02",
+      events: [
+        { name: "app_open", at: day(2), path: "/" },
+        { name: "recommend_request", at: new Date(day(2).getTime() + 500), path: "/recommend" },
+        { name: "recommend_success", at: new Date(day(2).getTime() + 1_000), path: "/recommend" }
+      ]
+    });
+    // visitor B: 방문 + 저장만 — 재참여 없음
+    await recordClientUsageEvents({
+      visitorId: "visitor-loop-b02", sessionId: "session-loop-b02",
+      events: [
+        { name: "app_open", at: at(0), path: "/" },
+        { name: "build_save", at: at(1_000), path: "/result" }
+      ]
+    });
+
+    const analytics = await usageAnalyticsFor(90);
+    const funnel = Object.fromEntries(analytics.funnel.map((stage) => [stage.key, stage.visitors]));
+    expect(funnel.engaged).toBe(1);
+    expect(funnel.shared).toBe(1);
+
+    expect(analytics.loop.saversTotal).toBe(2);
+    expect(analytics.loop.returningVisitors).toBe(1);
+    expect(analytics.loop.multiQuoteVisitors).toBe(1);
+    expect(analytics.loop.savedBuildOpenVisitors).toBe(1);
+    expect(analytics.loop.savedBuildOpens).toBe(1);
+    expect(analytics.loop.compareVisitors).toBe(1);
+    expect(analytics.loop.watchlistVisitors).toBe(1);
+    expect(analytics.loop.trendVisitors).toBe(1);
+    expect(analytics.loop.saverReactivation).toBe(0.5);
+    expect(analytics.loop.nextStepClicks).toEqual([{ step: "watching", label: "가격 추적하기", count: 1 }]);
   });
 
   it("ingests client batches through POST /api/events and protects the analytics endpoint", async () => {

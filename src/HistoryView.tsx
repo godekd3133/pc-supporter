@@ -1,4 +1,6 @@
 import { safeLocalStorage } from "./safe-storage";
+import { markEngagementFlag } from "./user-journey";
+import { trackUsageEvent } from "./usage-events";
 import "./history-view.css";
 // Extracted from App.tsx to keep the entry chunk lean. Loaded lazily.
 import { buildCompatibilityInputFingerprint } from "../shared/build-fingerprint";
@@ -694,9 +696,16 @@ export function HistoryView({ builds, currentBuild, currentPreferences, partMap,
   }
 
   function toggleCompare(id: string) {
-    setCompareIds((current) => current.includes(id)
-      ? current.filter((itemId) => itemId !== id)
-      : current.length >= 3 ? current : [...current, id]);
+    setCompareIds((current) => {
+      if (current.includes(id)) return current.filter((itemId) => itemId !== id);
+      if (current.length >= 3) return current;
+      const next = [...current, id];
+      if (next.length >= 2) {
+        markEngagementFlag("comparedAt");
+        trackUsageEvent("build_compare", { count: next.length });
+      }
+      return next;
+    });
   }
 
   async function refreshPurchaseProgress() {

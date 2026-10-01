@@ -108,6 +108,7 @@ import type {
 import { ACCESSORY_CATEGORIES, ACCESSORY_CATEGORY_LABELS, ACCESSORY_PRICE_FILTER_LABELS, BENCHMARK_SOURCE_KIND_LABELS, CATEGORY_LABELS, DATA_FRESHNESS_LABELS, DATA_QUALITY_LABELS, GAMING_REFRESH_RATE_LABELS, GAMING_RESOLUTION_LABELS, GAMING_RESOLUTION_VRAM_TARGETS, isCatalogDataQualityChangeField, isKnownPrice, LISTING_POLICY_LABELS, LISTING_TYPE_LABELS, PART_CATEGORIES, RECOMMENDATION_PRIORITY_DESCRIPTIONS, RECOMMENDATION_PRIORITY_LABELS, RECOMMENDATION_PROFILE_LABELS, RECOMMENDATION_VARIANT_PRIORITIES } from "../shared/types";
 import { m2ReviewTemplatesToCsv, parseM2ReviewCsv } from "../shared/m2-csv";
 import { trackUsageEvent } from "./usage-events";
+import type { JourneyActionKind } from "./user-journey";
 import { benchmarkOverridesToCsv, benchmarkReviewItemsToCsv, parseBenchmarkOverridesCsv } from "../shared/benchmark-csv";
 import { similarityBasisLabelFor, similarityReferenceUsedCategoryFor } from "../shared/similarity-evidence";
 import { CATALOG_PRICE_EVIDENCE_LABELS, catalogPriceEvidenceDescriptionFor, catalogPriceEvidenceFor, catalogPriceEvidenceLabelFor } from "../shared/catalog-price-evidence";
@@ -1738,6 +1739,32 @@ function App() {
     window.scrollTo({ top: 0, behavior: "auto" });
   }
 
+  // 홈 여정 카드·결과 다음 단계의 CTA를 실제 라우트 이동으로 연결한다.
+  function handleJourneyAction(action: JourneyActionKind) {
+    switch (action) {
+      case "start":
+        navigate("/start", "start");
+        break;
+      case "resume":
+      case "save":
+        navigate("/build", "editor");
+        break;
+      case "history":
+        navigate("/history", "history");
+        break;
+      case "watchlist":
+        navigate("/watchlist", "pricewatchlist");
+        break;
+      case "result":
+        navigate("/result", "result");
+        break;
+      case "result-trend":
+        navigate("/result", "result");
+        window.setTimeout(() => document.getElementById("build-price-trend")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+        break;
+    }
+  }
+
   function openGenerator(priority?: RecommendationPriority) {
     generatorRequestRef.current += 1;
     setGenerating(false);
@@ -2706,7 +2733,7 @@ function App() {
       setSaveBuildTarget(null);
       const url = savedBuildShareUrlFor(window.location.origin, saved.id, compatibilityReportViewStateForLocation());
       if (target) {
-        const opened = await openSavedBuild(publicSaved);
+        const opened = await openSavedBuild(publicSaved, undefined, { track: false });
         if (!opened && !isCurrent()) return;
         const continuationRequestVersion = saveBuildRequestRef.current;
         const continuationRouteRequestSequence = routeRequestSequenceRef.current;
@@ -3168,7 +3195,7 @@ function App() {
     setToast(`${entry.label} 전 구성으로 복원하고 호환 결과를 새로 계산했어요.`);
   }
 
-  async function openSavedBuild(saved: SavedBuild, focus?: SavedBuildOpenFocus) {
+  async function openSavedBuild(saved: SavedBuild, focus?: SavedBuildOpenFocus, options?: { track?: boolean }) {
     if (openingSavedBuildIdRef.current) return false;
     const requestVersion = ++openingSavedBuildRequestRef.current;
     abortSelectionHydration();
@@ -3209,6 +3236,7 @@ function App() {
           ? `/result?findingRule=${encodeURIComponent(resultFindingRuleId)}#findings`
           : "/result";
       navigate(resultRoute, "result", { resultFindingRuleId });
+      if (options?.track !== false) trackUsageEvent("saved_build_open", { from: view });
       setToast(null);
       return true;
     } catch (error: unknown) {
@@ -3292,6 +3320,7 @@ function App() {
         ...(targetPriceWon !== undefined ? { targetPriceWon } : {})
       });
       safeLocalStorage.setItem(CATALOG_WATCHLIST_STORAGE_KEY, catalogWatchlistToJson(next));
+      if (!alreadyWatched) trackUsageEvent("watchlist_add", { kind: target.kind });
       setToast(alreadyWatched
         ? (targetPriceWon !== undefined ? "가격 추적 중인 부품의 목표가를 갱신했습니다." : "이미 가격 추적 중인 부품입니다. 가격 추적 화면에서 목표가를 설정할 수 있습니다.")
         : "가격 추적에 등록했습니다. 가격 추적 화면에서 목표가와 알림 조건을 설정할 수 있습니다.");
@@ -3458,6 +3487,9 @@ function App() {
       alertUnreadCount={homeUnreadAlertCount}
       hasBuildAlerts={homeHasBuildAlerts}
       hasWatchlistAlerts={homeHasWatchlistAlerts}
+      savedBuilds={savedBuilds}
+      onJourneyAction={handleJourneyAction}
+      onOpenSavedBuild={(saved) => void openSavedBuild(saved)}
       onStart={() => navigate("/build", "editor")}
       onGuidedStart={() => navigate("/start", "start")}
       onGenerate={() => openGenerator()}
@@ -3657,6 +3689,8 @@ function App() {
       upgradeEntry={view === "result" && routeHasUpgradeEntry}
       onCloneSharedBuild={cloneSharedBuildToDraft}
       onStartNew={() => navigate("/start", "start")}
+      savedBuildCount={savedBuilds.length}
+      onOpenWatchlist={() => navigate("/watchlist", "pricewatchlist")}
       onBack={() => navigate("/", "home")}
       onCheck={() => void checkBuild()}
       initialFindingRuleId={pendingResultFindingRuleId}

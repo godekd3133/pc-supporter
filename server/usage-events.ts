@@ -29,7 +29,12 @@ export const CLIENT_USAGE_EVENT_NAMES = [
   "part_picker_open",
   "part_select",
   "build_save",
-  "share_link"
+  "share_link",
+  "saved_build_open",
+  "build_compare",
+  "watchlist_add",
+  "price_trend_view",
+  "next_step_click"
 ] as const;
 export type ClientUsageEventName = (typeof CLIENT_USAGE_EVENT_NAMES)[number];
 
@@ -228,8 +233,24 @@ const FUNNEL_STAGES: FunnelStage[] = [
   { key: "generated", label: "생성·검사 성공", match: (row) => row.event === "recommend_success" || row.event === "check_success" },
   { key: "result", label: "결과 열람", match: (row) => row.event === "view" && propString(row, "view") === "result" },
   { key: "saved", label: "견적 저장", match: (row) => row.event === "build_save" },
+  {
+    key: "engaged",
+    label: "재참여 활동",
+    match: (row) => row.event === "saved_build_open" || row.event === "build_compare" || row.event === "watchlist_add" || row.event === "price_trend_view" || row.event === "next_step_click"
+  },
   { key: "shared", label: "공유", match: (row) => row.event === "share_link" }
 ];
+
+const NEXT_STEP_CLICK_LABELS: Record<string, string> = {
+  saved_build_open: "저장 견적 다시 열기",
+  first_build: "견적 만들기",
+  watching: "가격 추적하기",
+  trend: "가격 추이 확인",
+  loop: "새 견적 만들기 (루프 재시작)",
+  saved: "견적 저장·공유",
+  compared: "저장 견적 비교",
+  second_build: "한 번 더 구성"
+};
 
 function dayKeyOf(date: Date) {
   return date.toISOString().slice(0, 10);
@@ -256,6 +277,21 @@ export async function usageAnalyticsFor(days: number) {
   let checkSuccessCount = 0;
   let saveCount = 0;
   let shareCount = 0;
+  // 재참여 루프 지표 — 저장 이후의 활동을 방문자 단위로 센다.
+  const saverVisitors = new Set<string>();
+  const recommendSuccessVisitorCounts = new Map<string, number>();
+  const loopVisitors = {
+    savedBuildOpen: new Set<string>(),
+    compare: new Set<string>(),
+    watchlist: new Set<string>(),
+    trend: new Set<string>(),
+    engaged: new Set<string>()
+  };
+  const nextStepClickCounts = new Map<string, number>();
+  let savedBuildOpenCount = 0;
+  let buildCompareCount = 0;
+  let watchlistAddCount = 0;
+  let priceTrendViewCount = 0;
 
   for (const row of rows) {
     const at = row.occurred_at instanceof Date ? row.occurred_at : new Date(row.occurred_at);
@@ -302,10 +338,37 @@ export async function usageAnalyticsFor(days: number) {
     }
 
     if (row.event === "recommend_request") recommendRequestCount += 1;
-    if (row.event === "recommend_success") recommendSuccessCount += 1;
+    if (row.event === "recommend_success") {
+      recommendSuccessCount += 1;
+      if (visitor) recommendSuccessVisitorCounts.set(visitor, (recommendSuccessVisitorCounts.get(visitor) ?? 0) + 1);
+    }
     if (row.event === "check_success") checkSuccessCount += 1;
-    if (row.event === "build_save") saveCount += 1;
+    if (row.event === "build_save") {
+      saveCount += 1;
+      if (visitor) saverVisitors.add(visitor);
+    }
     if (row.event === "share_link") shareCount += 1;
+    if (row.event === "saved_build_open") {
+      savedBuildOpenCount += 1;
+      if (visitor) { loopVisitors.savedBuildOpen.add(visitor); loopVisitors.engaged.add(visitor); }
+    }
+    if (row.event === "build_compare") {
+      buildCompareCount += 1;
+      if (visitor) { loopVisitors.compare.add(visitor); loopVisitors.engaged.add(visitor); }
+    }
+    if (row.event === "watchlist_add") {
+      watchlistAddCount += 1;
+      if (visitor) { loopVisitors.watchlist.add(visitor); loopVisitors.engaged.add(visitor); }
+    }
+    if (row.event === "price_trend_view") {
+      priceTrendViewCount += 1;
+      if (visitor) { loopVisitors.trend.add(visitor); loopVisitors.engaged.add(visitor); }
+    }
+    if (row.event === "next_step_click") {
+      if (visitor) loopVisitors.engaged.add(visitor);
+      const step = propString(row, "step") ?? "unknown";
+      nextStepClickCounts.set(step, (nextStepClickCounts.get(step) ?? 0) + 1);
+    }
 
     if (session) {
       const stats = sessionRows.get(session) ?? { events: 0, firstAt: atMs, lastAt: atMs };
@@ -428,6 +491,22 @@ export async function usageAnalyticsFor(days: number) {
       visitors: bucket.visitors.size
     })),
     retention: { cohorts },
+    loop: {
+      saversTotal: saverVisitors.size,
+      returningVisitors: [...visitorDays.values()].filter((days) => days.size >= 2).length,
+      returningRate: visitors.size > 0 ? [...visitorDays.values()].filter((days) => days.size >= 2).length / visitors.size : 0,
+      multiQuoteVisitors: [...recommendSuccessVisitorCounts.values()].filter((count) => count >= 2).length,
+      savedBuildOpens: savedBuildOpenCount,
+      savedBuildOpenVisitors: loopVisitors.savedBuildOpen.size,
+      buildCompares: buildCompareCount,
+      compareVisitors: loopVisitors.compare.size,
+      watchlistAdds: watchlistAddCount,
+      watchlistVisitors: loopVisitors.watchlist.size,
+      priceTrendViews: priceTrendViewCount,
+      trendVisitors: loopVisitors.trend.size,
+      saverReactivation: saverVisitors.size > 0 ? [...saverVisitors].filter((visitor) => loopVisitors.engaged.has(visitor)).length / saverVisitors.size : 0,
+      nextStepClicks: [...nextStepClickCounts.entries()].sort((left, right) => right[1] - left[1]).map(([step, count]) => ({ step, label: NEXT_STEP_CLICK_LABELS[step] ?? step, count }))
+    },
     sessions: {
       count: completedSessions,
       avgEventsPerSession,

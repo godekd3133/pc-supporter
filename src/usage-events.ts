@@ -19,7 +19,12 @@ export const CLIENT_USAGE_EVENT_NAMES = [
   "part_picker_open",
   "part_select",
   "build_save",
-  "share_link"
+  "share_link",
+  "saved_build_open",
+  "build_compare",
+  "watchlist_add",
+  "price_trend_view",
+  "next_step_click"
 ] as const;
 export type ClientUsageEventName = (typeof CLIENT_USAGE_EVENT_NAMES)[number];
 
@@ -132,7 +137,7 @@ export function trackUsageEvent(name: ClientUsageEventName, props?: UsageEventPr
       safeSessionStorage.setItem(APP_OPEN_SESSION_KEY, "1");
     }
     eventQueue.push({ name, at: new Date().toISOString(), path: window.location.pathname, ...(props ? { props } : {}) });
-    if (eventQueue.length >= FLUSH_BATCH_SIZE || name === "app_open" || name === "onboarding_complete" || name === "build_save" || name === "share_link") flushUsageEvents();
+    if (eventQueue.length >= FLUSH_BATCH_SIZE || name === "app_open" || name === "onboarding_complete" || name === "build_save" || name === "share_link" || name === "watchlist_add" || name === "build_compare") flushUsageEvents();
     else scheduleUsageEventFlush();
   } catch {
     // 추적 실패는 앱 동작에 영향을 주지 않는다
