@@ -163,6 +163,31 @@ function normalizedFilterText(value: unknown) {
   return typeof value === "string" ? value.trim().toLocaleLowerCase("ko-KR").replace(/\s+/g, "") : "";
 }
 
+// 같은 제조사를 가리키는 한/영 표기를 하나로 묶는다 — 카탈로그에
+// "삼성전자"와 "Samsung"이 섞여 있어 문자열 동등 비교만으로는
+// 관리자가 고른 브랜드가 절반의 부품을 놓친다.
+const FILTER_BRAND_ALIASES: Record<string, string[]> = {
+  samsung: ["samsung", "삼성전자"],
+  skhynix: ["skhynix", "sk하이닉스", "skhynixinc", "에스케이하이닉스"],
+  seasonic: ["seasonic", "시소닉"],
+  micronics: ["micronics", "마이크로닉스"],
+  amd: ["amd", "amd코리아"],
+  intel: ["intel", "인텔"],
+  lgg: ["lg전자", "lgelectronics"],
+  corsair: ["corsair", "커세어"],
+  essencore: ["essencore", "에센코어", "klevv", "클레브"]
+};
+
+const FILTER_BRAND_CANONICAL = new Map<string, string>();
+for (const [canonical, aliases] of Object.entries(FILTER_BRAND_ALIASES)) {
+  for (const alias of aliases) FILTER_BRAND_CANONICAL.set(alias, canonical);
+}
+
+function canonicalFilterBrand(value: unknown) {
+  const normalized = normalizedFilterText(value);
+  return FILTER_BRAND_CANONICAL.get(normalized) ?? normalized;
+}
+
 function specFilterValuesFor(part: Part, field: string): Array<string | number> {
   const raw = part.specs[field as keyof PartSpecs];
   if (raw === undefined || raw === null) return [];
@@ -234,8 +259,8 @@ export function engineTargetFilterRuleAllowsPart(part: Part, rule: EngineCategor
   if (rule.excludePartIds?.includes(part.id)) return false;
   if (rule.namePatterns && rule.namePatterns.length > 0 && !namePatternMatches(part, rule.namePatterns)) return false;
   if (rule.brands && rule.brands.length > 0) {
-    const brand = normalizedFilterText(part.brand);
-    if (!brand || !rule.brands.some((option) => normalizedFilterText(option) === brand)) return false;
+    const brand = canonicalFilterBrand(part.brand);
+    if (!brand || !rule.brands.some((option) => canonicalFilterBrand(option) === brand)) return false;
   }
   if (rule.specValues) {
     for (const [field, options] of Object.entries(rule.specValues)) {

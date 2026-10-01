@@ -62,7 +62,8 @@ describe("catalog detail filter API", () => {
     expect(either.total).toBeGreaterThanOrEqual(nvme.total);
 
     const sataBrands = await fetch(`${baseUrl}/api/parts?category=ssd&db=삼성전자&limit=100`).then((response) => response.json()) as { items: Array<{ brand?: string }>; total: number };
-    expect(sataBrands.items.every((item) => (item.brand ?? "").replace(/\s+/g, "") === "삼성전자")).toBe(true);
+    // 브랜드 필터는 한/영 별칭을 묶어 비교한다 — 삼성전자/Samsung은 같은 제조사로 매칭된다.
+    expect(sataBrands.items.every((item) => ["삼성전자", "samsung"].includes((item.brand ?? "").replace(/\s+/g, "").toLowerCase()))).toBe(true);
 
     const priced = await fetch(`${baseUrl}/api/parts?category=ssd&dprice=-50000&limit=100`).then((response) => response.json()) as { items: Array<{ priceWon: number }>; total: number };
     expect(priced.items.every((item) => item.priceWon <= 50000)).toBe(true);
