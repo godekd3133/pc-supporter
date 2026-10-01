@@ -3748,7 +3748,7 @@ function App() {
       {metadataEditTarget && <Suspense fallback={<div className="modal-backdrop" role="presentation"><section className="save-build-dialog" role="status"><FiLoader className="spin" /></section></div>}><LazyEditSavedBuildMetadataDialog name={metadataEditName} decisionNote={metadataEditDecisionNote} saving={metadataSaving} onChange={setMetadataEditName} onDecisionNoteChange={setMetadataEditDecisionNote} onClose={() => { metadataMutationRequestRef.current += 1; setMetadataEditTarget(null); }} onSubmit={() => void updateSavedBuildMetadata()} /></Suspense>}
       {buildImportPreview && <BuildImportPreviewDialog envelope={buildImportPreview} currentBuild={build} currentPreferences={recommendationPreferences} partMap={partMap} accessoryMap={accessoryMap} onClose={() => setBuildImportPreview(null)} onConfirm={applyImportedBuild} />}
       {pendingBuildChange && (BuildChangeDialog ? <BuildChangeDialog change={pendingBuildChange} checking={checking} onClose={() => setPendingBuildChange(null)} onConfirm={() => void confirmBuildChange()} formatPriceDelta={formatPriceDelta} /> : <div className="modal-backdrop" role="presentation"><section className="shared-build-state" role="status" data-testid="build-change-dialog-loading"><FiLoader className="spin" /> 변경 미리보기를 준비하는 중...</section></div>)}
-      {toast && <div className="toast" role="status">{toast}</div>}
+      {toast && <div className="toast" role="status"><span>{toast}</span><button className="toast-dismiss" type="button" aria-label="알림 닫기" onClick={() => setToast(null)}>×</button></div>}
     </div>
   );
 }

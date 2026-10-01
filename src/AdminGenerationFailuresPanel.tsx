@@ -39,11 +39,23 @@ type CacheStats = {
   evictions: number;
 };
 
+type HttpRouteMetric = {
+  route: string;
+  count: number;
+  errors: number;
+  clientErrors: number;
+  avgMs: number;
+  p50Ms: number;
+  p95Ms: number;
+  maxMs: number;
+};
+
 type MonitorStatus = {
   scheduler: { enabled: boolean; batchLimit: number; lastProcessedCount: number; skippedCount: number };
   compatibilityCache: CacheStats;
   savedBuildCheckPreviewCache: CacheStats;
   compatiblePartAssessmentCache: CacheStats;
+  httpMetrics?: { startedAt: string; totalRequests: number; totalErrors: number; routes: HttpRouteMetric[] };
 };
 
 type GenerationFailuresResponse = { failures: GenerationFailureRecord[] };
@@ -109,6 +121,26 @@ export function AdminGenerationFailuresPanel({ onToast }: { onToast: (message: s
       <span>견적 검사 캐시 <strong>{monitorStatus.savedBuildCheckPreviewCache.size.toLocaleString("ko-KR")}개</strong> · 적중률 {cacheHitRate(monitorStatus.savedBuildCheckPreviewCache)}</span>
       <span>후보 평가 캐시 <strong>{monitorStatus.compatiblePartAssessmentCache.size.toLocaleString("ko-KR")}개</strong> · 적중률 {cacheHitRate(monitorStatus.compatiblePartAssessmentCache)}</span>
     </div>}
+    {monitorStatus?.httpMetrics && <div className="generation-failure-metrics" data-testid="admin-http-metrics">
+      <div className="generation-failure-metrics-head">
+        <span>요청 지표 <strong>{monitorStatus.httpMetrics.totalRequests.toLocaleString("ko-KR")}건</strong></span>
+        <span>서버 오류 <strong className={monitorStatus.httpMetrics.totalErrors > 0 ? "warn" : ""}>{monitorStatus.httpMetrics.totalErrors.toLocaleString("ko-KR")}건</strong></span>
+        <span>시작 {new Date(monitorStatus.httpMetrics.startedAt).toLocaleTimeString("ko-KR")} 이후</span>
+      </div>
+      {monitorStatus.httpMetrics.routes.length > 0 && <div className="generation-failure-metrics-table-wrap"><table className="generation-failure-metrics-table">
+        <thead><tr><th>라우트</th><th>요청</th><th>오류</th><th>평균</th><th>p95</th><th>최대</th></tr></thead>
+        <tbody>
+          {monitorStatus.httpMetrics.routes.slice(0, 10).map((metric) => <tr key={metric.route} className={metric.errors > 0 ? "has-error" : ""}>
+            <td>{metric.route.replace("/api/", "")}</td>
+            <td>{metric.count.toLocaleString("ko-KR")}</td>
+            <td className={metric.errors > 0 ? "warn" : ""}>{metric.errors.toLocaleString("ko-KR")}{metric.clientErrors > 0 ? `+${metric.clientErrors}` : ""}</td>
+            <td>{metric.avgMs}ms</td>
+            <td>{metric.p95Ms}ms</td>
+            <td>{metric.maxMs}ms</td>
+          </tr>)}
+        </tbody>
+      </table></div>}
+    </div>}
     {loading && failures.length === 0
       ? <p className="generation-failure-state"><FiLoader className="spin" /> 실패 기록을 불러오는 중...</p>
       : error && failures.length === 0
@@ -116,7 +148,7 @@ export function AdminGenerationFailuresPanel({ onToast }: { onToast: (message: s
         : failures.length === 0
           ? <p className="generation-failure-state"><FiActivity /> 기록된 자동 구성 실패가 없습니다.</p>
           : <div className="generation-failure-list" role="list">
-            {failures.map((failure, index) => <article className="generation-failure-item" key={`${failure.at}-${failure.requestId ?? index}`}>
+            {failures.map((failure, index) => <article className="generation-failure-item" key={`${failure.at}-${failure.requestId ?? "none"}-${failure.context ?? index}`}>
               <div className="generation-failure-item-top">
                 <span className={`generation-failure-status ${failure.statusCode >= 500 ? "server" : "client"}`}>{failure.statusCode}</span>
                 <strong>{failure.route.replace("/api/builds/", "")}{failure.context ? ` · ${failure.context}` : ""}</strong>

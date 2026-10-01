@@ -979,3 +979,118 @@ html[data-theme="dark"] .admin-page .crawl-engine-manifest { background: var(--c
 html[data-theme="dark"] .admin-page .crawl-engine-table td { border-color: #262b34 !important; }
 
 html[data-theme="dark"] .admin-page .crawl-engine-failure-list li { border-color: #262b34 !important; }
+
+/* 견적 생성 엔진 모듈 밴드 */
+.admin-module-band { margin: 26px 0 12px; padding: 16px 18px; border: 1px solid #cfe3de; border-radius: 14px; background: linear-gradient(135deg, #f0faf7 0%, #f6fafd 100%); }
+
+.admin-module-band .eyebrow { display: flex; align-items: center; gap: 6px; margin: 0 0 4px; color: var(--teal-deep); font-weight: 700; }
+
+.admin-module-band h2 { margin: 0; color: var(--ink); font-size: 16px; }
+
+.admin-module-band p:last-child { margin: 5px 0 0; color: var(--muted); font-size: 10px; }
+
+/* 견적 생성 엔진 패널 */
+.quotation-engine-card .admin-card-description { margin: -4px 0 12px; }
+
+.quotation-engine-state { display: flex; align-items: center; gap: 8px; margin: 0; padding: 14px 0; color: var(--muted); font-size: 11px; }
+
+.quotation-engine-state.error { color: #d64550; }
+
+.quotation-engine-registry { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 9px; margin-bottom: 14px; }
+
+.quotation-engine-module { display: flex; align-items: center; gap: 9px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: #f9fafb; }
+
+.quotation-engine-module > svg:last-child { margin-left: auto; color: var(--muted); }
+
+.quotation-engine-module strong { display: block; color: var(--ink); font-size: 10px; }
+
+.quotation-engine-module small { display: block; margin-top: 2px; color: var(--muted); font-size: 8px; }
+
+.engine-state-dot { flex: 0 0 auto; width: 9px; height: 9px; border-radius: 50%; background: #b6c2cc; }
+
+.engine-state-dot.running { background: var(--teal); box-shadow: 0 0 0 3px rgba(49, 130, 246, .15); animation: admin-pulse 1.4s ease-in-out infinite; }
+
+.engine-state-dot.filtered { background: #b07514; box-shadow: 0 0 0 3px rgba(176, 117, 20, .15); }
+
+.engine-state-dot.failed { background: #d64550; box-shadow: 0 0 0 3px rgba(214, 69, 80, .15); }
+
+@keyframes admin-pulse { 50% { opacity: .55; } }
+
+.quotation-engine-options { display: grid; gap: 14px; padding: 13px; border: 1px solid var(--line); border-radius: 11px; background: #fff; }
+
+.quotation-engine-option-group { display: grid; gap: 8px; }
+
+.quotation-engine-option-label { display: grid; gap: 3px; color: var(--ink); font-size: 10px; font-weight: 700; }
+
+.quotation-engine-option-label svg { margin-right: 5px; vertical-align: -1px; }
+
+.quotation-engine-option-label small { color: var(--muted); font-weight: 400; font-size: 9px; }
+
+.quotation-engine-priorities { display: flex; flex-wrap: wrap; gap: 7px; }
+
+.quotation-engine-priority { display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; border: 1px solid var(--line); border-radius: 8px; color: var(--muted); background: #fff; font-size: 9px; font-weight: 600; cursor: pointer; transition: border-color 120ms ease, background-color 120ms ease; }
+
+.quotation-engine-priority input { position: absolute; opacity: 0; pointer-events: none; }
+
+.quotation-engine-priority.checked { border-color: var(--teal); color: var(--teal-deep); background: #ecf8f4; }
+
+.quotation-engine-ladder { display: flex; flex-wrap: wrap; gap: 10px; }
+
+.quotation-engine-ladder label { display: grid; gap: 5px; color: var(--muted); font-size: 9px; font-weight: 600; }
+
+.quotation-engine-input-with-unit { display: inline-flex; align-items: center; gap: 6px; }
+
+.quotation-engine-input-with-unit input { width: 74px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 7px; color: var(--ink); font-family: "DM Mono", monospace; font-size: 11px; }
+
+.quotation-engine-input-with-unit input:focus { border-color: var(--teal); outline: none; }
+
+.quotation-engine-input-with-unit input:disabled { color: var(--muted); background: #f1f4f8; }
+
+.quotation-engine-input-with-unit em { font-style: normal; color: var(--muted); font-size: 9px; }
+
+.quotation-engine-validation { margin: 0; padding: 0; list-style: none; display: grid; gap: 5px; }
+
+.quotation-engine-validation li { display: flex; align-items: center; gap: 6px; color: #d64550; font-size: 9px; }
+
+.quotation-engine-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding-top: 11px; border-top: 1px solid var(--line); }
+
+.quotation-engine-toolbar > span { color: var(--muted); font-size: 9px; }
+
+.quotation-engine-toolbar > div { display: inline-flex; gap: 7px; }
+
+html[data-theme="dark"] .admin-page .admin-module-band { border-color: #1e3a34 !important; background: linear-gradient(135deg, #12201d 0%, #141c24 100%) !important; }
+
+html[data-theme="dark"] .admin-page .quotation-engine-module,
+html[data-theme="dark"] .admin-page .quotation-engine-input-with-unit input:disabled { background: #20242c !important; }
+
+html[data-theme="dark"] .admin-page .quotation-engine-options,
+html[data-theme="dark"] .admin-page .quotation-engine-priority { background: var(--card-bg, #1b1f27) !important; }
+
+html[data-theme="dark"] .admin-page .quotation-engine-input-with-unit input { background: #14181f !important; border-color: #262b34 !important; }
+
+/* HTTP 요청 지표 */
+.generation-failure-metrics { margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: #f9fafb; }
+
+.generation-failure-metrics-head { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 8px; color: var(--muted); font-size: 9px; }
+
+.generation-failure-metrics-head strong { color: var(--ink); font-family: "DM Mono", monospace; }
+
+.generation-failure-metrics-head strong.warn { color: #d64550; }
+
+.generation-failure-metrics-table-wrap { overflow-x: auto; }
+
+.generation-failure-metrics-table { width: 100%; border-collapse: collapse; font-size: 9px; }
+
+.generation-failure-metrics-table th { padding: 4px 8px; color: var(--muted); font-size: 8px; font-weight: 600; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; }
+
+.generation-failure-metrics-table td { padding: 4px 8px; color: var(--ink); border-bottom: 1px solid #f1f3f6; font-family: "DM Mono", monospace; white-space: nowrap; }
+
+.generation-failure-metrics-table td:first-child { font-family: inherit; }
+
+.generation-failure-metrics-table tr:last-child td { border-bottom: 0; }
+
+.generation-failure-metrics-table td.warn { color: #d64550; }
+
+html[data-theme="dark"] .admin-page .generation-failure-metrics { background: #20242c !important; }
+
+html[data-theme="dark"] .admin-page .generation-failure-metrics-table td { border-color: #262b34 !important; }

@@ -28,6 +28,8 @@ describe("admin crawl read boundary", () => {
     "/api/admin/crawl/status",
     "/api/admin/crawl/manifest",
     "/api/admin/crawl/engine",
+    "/api/admin/engines",
+    "/api/admin/engine-options",
     "/api/admin/accessories/crawl/status",
     "/api/admin/accessories/crawl/manifest",
     "/api/admin/accessories/coverage"

@@ -349,7 +349,19 @@ if (configuredDatabaseUrl) {
   try {
     pool = sharedPools.get(configuredDatabaseUrl) ?? null;
     if (!pool) {
-      pool = new Pool({ connectionString: configuredDatabaseUrl, max: 5, connectionTimeoutMillis: 2_000 });
+      // 트래픽 규모에 맞게 풀을 조정한다 — 동시 요청이 풀 한계를 넘으면
+      // 큐잉되므로 idle 커넥션은 빠르게 반납하고 연결 생성에는 제한을 둔다.
+      pool = new Pool({
+        connectionString: configuredDatabaseUrl,
+        max: Math.max(1, Number(process.env.PC_SUPPORTER_DB_POOL_MAX ?? 10)),
+        idleTimeoutMillis: Math.max(1_000, Number(process.env.PC_SUPPORTER_DB_POOL_IDLE_MS ?? 30_000)),
+        connectionTimeoutMillis: Math.max(500, Number(process.env.PC_SUPPORTER_DB_CONNECT_TIMEOUT_MS ?? 2_000)),
+        // 길어지는 쿼리가 풀 커넥션을 무한히 잡아두지 못하게 쿼리·유휴 트랜잭션
+        // 제한을 둔다 — 백그라운드 작업은 advisory lease로 이미 직렬화된다.
+        statement_timeout: Math.max(1_000, Number(process.env.PC_SUPPORTER_DB_STATEMENT_TIMEOUT_MS ?? 15_000)),
+        idle_in_transaction_session_timeout: Math.max(1_000, Number(process.env.PC_SUPPORTER_DB_IDLE_TX_TIMEOUT_MS ?? 10_000)),
+        keepAlive: true
+      });
       sharedPools.set(configuredDatabaseUrl, pool);
     }
   } catch (error: unknown) {

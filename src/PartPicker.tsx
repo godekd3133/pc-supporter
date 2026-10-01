@@ -14,6 +14,9 @@ import { safeExternalUrl } from "./safe-source-url";
 import { useModalAccessibility } from "./use-modal-accessibility";
 import { RetryAfterButton } from "./RetryAfterButton";
 import { catalogMissingFieldLabelFor } from "../shared/catalog-spec-coverage";
+import type { EngineCategoryTargetFilter } from "../shared/engine-target-filters";
+import { CatalogDetailFilterPanel, catalogDetailFilterParamsFor, catalogDetailFilterScopedFor } from "./catalog-detail-filter";
+import type { CatalogDetailFilterDiagnostic, CatalogFacetOptions, CatalogFacetsResponse } from "./catalog-detail-filter";
 import { CATALOG_PICKER_CACHE_STORAGE_KEY, catalogPickerCacheSnapshotFromJson, catalogPickerCacheToJson, catalogPickerCachedFallbackFor, mergeCatalogPickerCache } from "../shared/catalog-picker-cache";
 import { CATALOG_CACHE_CHANGED_EVENT } from "../shared/catalog-cache-status";
 import { catalogPriceEvidenceFor, catalogPriceEvidenceLabelFor } from "../shared/catalog-price-evidence";
@@ -99,6 +102,8 @@ type PickerPartsResponse = {
   incompleteMissingFields?: Array<{ field: string; count: number }>;
   specExcludedCount?: number;
   specFilterDiagnostics?: PickerSpecFilterDiagnostic[];
+  detailExcludedCount?: number;
+  detailFilterDiagnostics?: CatalogDetailFilterDiagnostic[];
 };
 
 type PickerSelectOption = readonly [string, string];
@@ -416,6 +421,13 @@ export function PartPicker({ category, build, partMap, profile, recommendationLi
   const [physicalEvidenceFilter, setPhysicalEvidenceFilter] = useState<PickerPhysicalEvidenceFilter>("all");
   const [candidateBudget, setCandidateBudget] = useState("");
   const [specFilter, setSpecFilter] = useState<PickerSpecFilter>({ ...EMPTY_PICKER_SPEC_FILTER });
+  const [detailFilter, setDetailFilter] = useState<EngineCategoryTargetFilter>({});
+  const [facetOptions, setFacetOptions] = useState<CatalogFacetOptions | null>(null);
+  const [facetsLoading, setFacetsLoading] = useState(true);
+  const [facetsError, setFacetsError] = useState<string | null>(null);
+  const [facetsNonce, setFacetsNonce] = useState(0);
+  const [detailExcludedCount, setDetailExcludedCount] = useState(0);
+  const [detailFilterDiagnostics, setDetailFilterDiagnostics] = useState<CatalogDetailFilterDiagnostic[]>([]);
   const [expandedPickerId, setExpandedPickerId] = useState<string | null>(null);
   const [comparePickerIds, setComparePickerIds] = useState<string[]>([]);
   const [items, setItems] = useState<PickerPart[]>([]);
@@ -504,6 +516,7 @@ export function PartPicker({ category, build, partMap, profile, recommendationLi
 
   function clearSpecFilters() {
     setSpecFilter({ ...EMPTY_PICKER_SPEC_FILTER });
+    setDetailFilter({});
     setPresetMessage(null);
   }
 
@@ -514,15 +527,17 @@ export function PartPicker({ category, build, partMap, profile, recommendationLi
     setPhysicalEvidenceFilter("all");
     setCandidateBudget("");
     setSpecFilter({ ...EMPTY_PICKER_SPEC_FILTER });
+    setDetailFilter({});
     setPresetMessage("카테고리·검색어·구매 조건은 유지하고 부품 필터만 완화했어요.");
   }
 
   function requestParts(offset: number, limit: number, signal = requestAbortControllerRef.current?.signal) {
     const specFilterPayload = pickerSpecFilterPayloadFor(category, specFilter);
+    const detailFilterPayload = catalogDetailFilterParamsFor(category, detailFilter);
     if (candidateMode !== "all") {
       return api<PickerPartsResponse>("/api/parts/compatible", {
         method: "POST",
-        body: JSON.stringify({ category, build, profile, gamingResolution, gamingRefreshRate, findingRuleId, q: query, brand: brand.trim(), quality, priceStatus, freshness, sort, listingPolicy, mode: candidateMode, riskFilter, performanceFilter: "all", physicalEvidenceFilter, recommendationTrustFilter: "all", specFilter: specFilterPayload, ...(candidateBudget.trim() ? { budgetWon: candidateBudget.trim() } : {}), offset, limit }),
+        body: JSON.stringify({ category, build, profile, gamingResolution, gamingRefreshRate, findingRuleId, q: query, brand: brand.trim(), quality, priceStatus, freshness, sort, listingPolicy, mode: candidateMode, riskFilter, performanceFilter: "all", physicalEvidenceFilter, recommendationTrustFilter: "all", specFilter: specFilterPayload, detailFilter: catalogDetailFilterScopedFor(category, detailFilter), ...(candidateBudget.trim() ? { budgetWon: candidateBudget.trim() } : {}), offset, limit }),
         retry: 2,
         retryOnRateLimit: true,
         ...(signal ? { signal } : {})
@@ -530,8 +545,27 @@ export function PartPicker({ category, build, partMap, profile, recommendationLi
     }
     const params = new URLSearchParams({ category, q: query, brand: brand.trim(), quality, priceStatus, freshness, sort, listingPolicy, offset: String(offset), limit: String(limit) });
     Object.entries(specFilterPayload).forEach(([key, value]) => params.set(key, value));
+    Object.entries(detailFilterPayload).forEach(([key, value]) => params.set(key, value));
     return api<PickerPartsResponse>(`/api/parts?${params.toString()}`, signal ? { signal } : undefined);
   }
+
+  // 세부 조건 패널의 범주별 선택지 — 카탈로그 페이지와 같은 /api/parts/facets를 쓴다.
+  useEffect(() => {
+    let cancelled = false;
+    const controller = new AbortController();
+    setFacetsLoading(true);
+    setFacetsError(null);
+    void api<CatalogFacetsResponse>(`/api/parts/facets?category=${category}`, { retry: 1, signal: controller.signal })
+      .then((payload) => { if (!cancelled) setFacetOptions(payload.options ?? null); })
+      .catch((reason: unknown) => { if (!cancelled) { setFacetOptions(null); setFacetsError(reason instanceof Error ? reason.message : "세부 조건 선택지를 불러오지 못했습니다."); } })
+      .finally(() => { if (!cancelled) setFacetsLoading(false); });
+    return () => { cancelled = true; controller.abort(); };
+  }, [category, facetsNonce]);
+
+  // 선택 모달이 다른 범주로 열리면 세부 조건도 새 범주 facet으로 다시 고르게 초기화한다.
+  useEffect(() => {
+    setDetailFilter({});
+  }, [category]);
 
   useEffect(() => {
     let cancelled = false;
@@ -540,9 +574,9 @@ export function PartPicker({ category, build, partMap, profile, recommendationLi
     requestAbortControllerRef.current?.abort();
     requestAbortControllerRef.current = controller;
     const timer = window.setTimeout(() => {
-      setLoading(true); setItems([]); setTotal(0); setRiskCounts(null); setRiskExcludedCount(0); setBudgetExcludedCount(0); setPhysicalEvidenceExcludedCount(0); setFreshnessExcludedCount(0); setIncompleteExcludedCount(0); setIncompleteMissingFields([]); setPriceExcludedCount(0); setSpecExcludedCount(0); setSpecFilterDiagnostics([]); setExpandedPickerId(null); setComparePickerIds([]); setLoadingMore(false); setLoadMoreError(null); setError(null);
+      setLoading(true); setItems([]); setTotal(0); setRiskCounts(null); setRiskExcludedCount(0); setBudgetExcludedCount(0); setPhysicalEvidenceExcludedCount(0); setFreshnessExcludedCount(0); setIncompleteExcludedCount(0); setIncompleteMissingFields([]); setPriceExcludedCount(0); setSpecExcludedCount(0); setSpecFilterDiagnostics([]); setDetailExcludedCount(0); setDetailFilterDiagnostics([]); setExpandedPickerId(null); setComparePickerIds([]); setLoadingMore(false); setLoadMoreError(null); setError(null);
       void requestParts(0, 50, controller.signal)
-        .then((payload) => { if (!cancelled && requestVersionRef.current === requestVersion) { rememberPickerItems(payload.items); const shouldFallbackToReview = shouldAutoFallbackToReviewCandidates({ findingRuleId, initialCandidateMode, candidateMode, attempted: autoFallbackAttemptedRef.current, total: payload.total, riskCounts: payload.riskCounts }); if (shouldFallbackToReview) { autoFallbackAttemptedRef.current = true; setPresetMessage("호환 여부를 확인하지 못한 부품도 표시합니다. 적용 전 주요 사양을 확인해 주세요."); setCandidateMode("no_blocker"); return; } setItems(payload.items); setTotal(payload.total); setRiskCounts(payload.riskCounts ?? null); setRiskExcludedCount(payload.riskExcludedCount ?? 0); setBudgetExcludedCount(payload.budgetExcludedCount ?? 0); setPhysicalEvidenceExcludedCount(payload.physicalEvidenceExcludedCount ?? 0); setFreshnessExcludedCount(payload.freshnessExcludedCount ?? 0); setIncompleteExcludedCount(payload.incompleteExcludedCount ?? 0); setIncompleteMissingFields(payload.incompleteMissingFields ?? []); setPriceExcludedCount(payload.priceExcludedCount ?? 0); setSpecExcludedCount(payload.specExcludedCount ?? 0); setSpecFilterDiagnostics(payload.specFilterDiagnostics ?? []); setError(null); } })
+        .then((payload) => { if (!cancelled && requestVersionRef.current === requestVersion) { rememberPickerItems(payload.items); const shouldFallbackToReview = shouldAutoFallbackToReviewCandidates({ findingRuleId, initialCandidateMode, candidateMode, attempted: autoFallbackAttemptedRef.current, total: payload.total, riskCounts: payload.riskCounts }); if (shouldFallbackToReview) { autoFallbackAttemptedRef.current = true; setPresetMessage("호환 여부를 확인하지 못한 부품도 표시합니다. 적용 전 주요 사양을 확인해 주세요."); setCandidateMode("no_blocker"); return; } setItems(payload.items); setTotal(payload.total); setRiskCounts(payload.riskCounts ?? null); setRiskExcludedCount(payload.riskExcludedCount ?? 0); setBudgetExcludedCount(payload.budgetExcludedCount ?? 0); setPhysicalEvidenceExcludedCount(payload.physicalEvidenceExcludedCount ?? 0); setFreshnessExcludedCount(payload.freshnessExcludedCount ?? 0); setIncompleteExcludedCount(payload.incompleteExcludedCount ?? 0); setIncompleteMissingFields(payload.incompleteMissingFields ?? []); setPriceExcludedCount(payload.priceExcludedCount ?? 0); setSpecExcludedCount(payload.specExcludedCount ?? 0); setSpecFilterDiagnostics(payload.specFilterDiagnostics ?? []); setDetailExcludedCount(payload.detailExcludedCount ?? 0); setDetailFilterDiagnostics(payload.detailFilterDiagnostics ?? []); setError(null); } })
         .catch((reason: unknown) => { if (!cancelled && requestVersionRef.current === requestVersion) setError(reason instanceof Error ? reason.message : "부품을 불러오지 못했습니다."); })
         .finally(() => { if (!cancelled && requestVersionRef.current === requestVersion) setLoading(false); });
     }, 220);
@@ -554,7 +588,7 @@ export function PartPicker({ category, build, partMap, profile, recommendationLi
         requestAbortControllerRef.current = null;
       }
     };
-  }, [category, build, profile, gamingResolution, gamingRefreshRate, query, brand, quality, priceStatus, freshness, sort, listingPolicy, candidateMode, riskFilter, physicalEvidenceFilter, candidateBudget, specFilter, retryNonce, findingRuleId, initialCandidateMode]);
+  }, [category, build, profile, gamingResolution, gamingRefreshRate, query, brand, quality, priceStatus, freshness, sort, listingPolicy, candidateMode, riskFilter, physicalEvidenceFilter, candidateBudget, specFilter, detailFilter, retryNonce, findingRuleId, initialCandidateMode]);
 
   useEffect(() => {
     setItems([]);
@@ -563,7 +597,7 @@ export function PartPicker({ category, build, partMap, profile, recommendationLi
     setError(null);
     setExpandedPickerId(null);
     setComparePickerIds([]);
-  }, [brand, candidateBudget, candidateMode, freshness, physicalEvidenceFilter, priceStatus, query, quality, riskFilter, sort, specFilter]);
+  }, [brand, candidateBudget, candidateMode, freshness, physicalEvidenceFilter, priceStatus, query, quality, riskFilter, sort, specFilter, detailFilter]);
 
   async function loadMore() {
     if (loadingMore || items.length >= total) return;
@@ -575,7 +609,7 @@ export function PartPicker({ category, build, partMap, profile, recommendationLi
       if (!mountedRef.current || requestVersionRef.current !== requestVersion) return;
       rememberPickerItems(payload.items);
       setItems((current) => { const known = new Set(current.map((part) => part.id)); return [...current, ...payload.items.filter((part) => !known.has(part.id))]; });
-      setTotal(payload.total); setRiskCounts(payload.riskCounts ?? null); setRiskExcludedCount(payload.riskExcludedCount ?? 0); setBudgetExcludedCount(payload.budgetExcludedCount ?? 0); setPhysicalEvidenceExcludedCount(payload.physicalEvidenceExcludedCount ?? 0); setFreshnessExcludedCount(payload.freshnessExcludedCount ?? 0); setIncompleteExcludedCount(payload.incompleteExcludedCount ?? 0); setIncompleteMissingFields(payload.incompleteMissingFields ?? []); setPriceExcludedCount(payload.priceExcludedCount ?? 0); setSpecExcludedCount(payload.specExcludedCount ?? 0); setSpecFilterDiagnostics(payload.specFilterDiagnostics ?? []);
+      setTotal(payload.total); setRiskCounts(payload.riskCounts ?? null); setRiskExcludedCount(payload.riskExcludedCount ?? 0); setBudgetExcludedCount(payload.budgetExcludedCount ?? 0); setPhysicalEvidenceExcludedCount(payload.physicalEvidenceExcludedCount ?? 0); setFreshnessExcludedCount(payload.freshnessExcludedCount ?? 0); setIncompleteExcludedCount(payload.incompleteExcludedCount ?? 0); setIncompleteMissingFields(payload.incompleteMissingFields ?? []); setPriceExcludedCount(payload.priceExcludedCount ?? 0); setSpecExcludedCount(payload.specExcludedCount ?? 0); setSpecFilterDiagnostics(payload.specFilterDiagnostics ?? []); setDetailExcludedCount(payload.detailExcludedCount ?? 0); setDetailFilterDiagnostics(payload.detailFilterDiagnostics ?? []);
     } catch (reason: unknown) {
       if (mountedRef.current && requestVersionRef.current === requestVersion) setLoadMoreError(reason instanceof Error ? reason.message : "추가 부품을 불러오지 못했습니다.");
     } finally {
@@ -679,6 +713,7 @@ export function PartPicker({ category, build, partMap, profile, recommendationLi
       <div className="picker-brand-filter-panel" aria-label="부품 선택기 제조사 필터" data-testid="picker-brand-filter"><label><span>제조사</span><input aria-label="부품 선택기 제조사 필터" list="picker-brand-options" type="search" value={brand} onChange={(event) => setBrand(event.target.value.slice(0, 80))} placeholder="예: ASUS · AMD · GIGABYTE" /></label><datalist id="picker-brand-options">{brandOptions.map((option) => <option value={option.brand} label={`${option.count}개`} key={option.brand} />)}</datalist>{brandOptions.length > 0 && <div className="picker-brand-suggestions" role="group" aria-label="부품 선택기 제조사 빠른 선택">{brandOptions.slice(0, 6).map((option) => <button className={brand.trim().toLocaleLowerCase("ko-KR") === option.brand.toLocaleLowerCase("ko-KR") ? "selected" : ""} type="button" aria-pressed={brand.trim().toLocaleLowerCase("ko-KR") === option.brand.toLocaleLowerCase("ko-KR")} onClick={() => setBrand(option.brand)} key={option.brand}>{option.brand}<small>{option.count}</small></button>)}</div>}{brand.trim() && <button className="text-button" type="button" onClick={() => setBrand("")}>제조사 초기화</button>}</div>
       <div className="picker-filters"><label><span>구매 조건</span><select value={listingPolicy} onChange={(event) => setListingPolicy(event.target.value as ListingPolicy)}><option value="retail_only">{LISTING_POLICY_LABELS.retail_only}</option><option value="include_bulk">벌크 포함</option><option value="all">{LISTING_POLICY_LABELS.all}</option></select></label><label><span>정렬</span><select value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}><option value="price_asc">가격 낮은 순</option><option value="price_desc">가격 높은 순</option><option value="name">이름 순</option>{candidateMode !== "all" && <></>}</select></label><label><span>부품</span><select value={candidateMode} onChange={(event) => { const next = event.target.value as typeof candidateMode; setCandidateMode(next); if (next === "all" && (sort === "similarity" || sort === "value")) setSort("price_asc"); }}><option value="all">전체 카탈로그</option><option value="precision">전체 부품 검사</option><option value="no_blocker">호환 문제가 없는 부품</option><option value="safe">호환 가능 부품</option></select></label><label className="picker-risk-filter"><span>호환 상태</span><select aria-label="부품 호환 상태" value={riskFilter} disabled={candidateMode === "all"} onChange={(event) => setRiskFilter(event.target.value as PickerRiskFilter)}><option value="all">전체</option><option value="safe">호환 가능</option><option value="review">정보 부족</option><option value="unsafe">호환 불가</option></select></label><label className="picker-budget-filter"><span>교체 예산 <em>선택</em></span><input type="number" min="1" step="10000" value={candidateBudget} disabled={candidateMode === "all"} onChange={(event) => setCandidateBudget(event.target.value)} placeholder="예: 300000" /></label>{category === "gpu" && <label className="picker-spec-filter"><span>최소 VRAM</span><PickerSpecSelect ariaLabel="부품 선택기 최소 VRAM" value={specFilter.minVramGb} options={GPU_VRAM_FILTER_OPTIONS} onChange={(value) => setSpecFilter((current) => ({ ...current, minVramGb: value }))} /></label>}{(category === "memory" || category === "ssd" || category === "hdd") && <label className="picker-spec-filter"><span>{category === "memory" ? "최소 모듈 용량" : "최소 용량"}</span><PickerSpecSelect ariaLabel="부품 선택기 최소 용량" value={specFilter.minCapacityGb} options={category === "memory" ? MEMORY_CAPACITY_FILTER_OPTIONS : STORAGE_CAPACITY_FILTER_OPTIONS} onChange={(value) => setSpecFilter((current) => ({ ...current, minCapacityGb: value }))} /></label>}{category === "memory" && <label className="picker-spec-filter"><span>최소 속도</span><PickerSpecSelect ariaLabel="부품 선택기 최소 메모리 속도" value={specFilter.minMemorySpeedMhz} options={MEMORY_SPEED_FILTER_OPTIONS} onChange={(value) => setSpecFilter((current) => ({ ...current, minMemorySpeedMhz: value }))} /></label>}{category === "psu" && <label className="picker-spec-filter"><span>최소 정격</span><PickerSpecSelect ariaLabel="부품 선택기 최소 정격 출력" value={specFilter.minWattageW} options={PSU_WATTAGE_FILTER_OPTIONS} onChange={(value) => setSpecFilter((current) => ({ ...current, minWattageW: value }))} /></label>}{(category === "ssd" || category === "hdd") && <label className="picker-spec-filter"><span>연결 방식</span><PickerSpecSelect ariaLabel="부품 선택기 연결 방식" value={specFilter.storageInterface} options={STORAGE_INTERFACE_FILTER_OPTIONS} onChange={(value) => setSpecFilter((current) => ({ ...current, storageInterface: value as PickerSpecFilter["storageInterface"] }))} /></label>}</div>
       <div className="picker-compatibility-filters" aria-label="호환 핵심 스펙 필터"><div className="picker-compatibility-filter-heading"><div><strong>호환 핵심 조건</strong><small>비워 두면 조건을 적용하지 않습니다.</small></div><div className="picker-compatibility-filter-actions"><button className="text-button picker-preset-button" type="button" onClick={clearSpecFilters} disabled={!hasActiveSpecFilter}>조건 초기화</button><button className="text-button picker-preset-button" type="button" onClick={applyCompatibilityPreset} disabled={compatibilityPreset.labels.length === 0}>현재 구성 기준 적용</button></div></div>{presetMessage && <p className="picker-preset-message" role="status">{presetMessage}</p>}{["cpu", "cooler", "motherboard"].includes(category) && <label className="picker-spec-filter"><span>소켓</span><PickerSpecTextInput ariaLabel="부품 선택기 소켓" value={specFilter.socket} placeholder="예: AM5" onChange={(value) => setSpecFilter((current) => ({ ...current, socket: value }))} /></label>}{["cpu", "motherboard", "memory"].includes(category) && <label className="picker-spec-filter"><span>메모리 세대</span><PickerSpecTextInput ariaLabel="부품 선택기 메모리 세대" value={specFilter.memoryType} placeholder="예: DDR5" onChange={(value) => setSpecFilter((current) => ({ ...current, memoryType: value }))} /></label>}{["case", "motherboard", "memory", "ssd", "psu"].includes(category) && <label className="picker-spec-filter"><span>폼팩터</span><PickerSpecTextInput ariaLabel="부품 선택기 폼팩터" value={specFilter.formFactor} placeholder="예: ATX · DIMM" onChange={(value) => setSpecFilter((current) => ({ ...current, formFactor: value }))} /></label>}{category === "motherboard" && <><label className="picker-spec-filter"><span>PCIe 슬롯 정보</span><PickerSpecSelect ariaLabel="부품 선택기 PCIe 슬롯 사양" value={specFilter.pcieSlotInfo} options={PCIE_SLOT_INFO_FILTER_OPTIONS} onChange={(value) => setSpecFilter((current) => ({ ...current, pcieSlotInfo: value as PickerSpecFilter["pcieSlotInfo"] }))} /></label><label className="picker-spec-filter"><span>PCIe 슬롯 폭</span><PickerSpecSelect ariaLabel="부품 선택기 PCIe 슬롯 폭" value={specFilter.pcieSlotWidth} options={PCIE_SLOT_WIDTH_FILTER_OPTIONS} onChange={(value) => setSpecFilter((current) => ({ ...current, pcieSlotWidth: value }))} /></label><label className="picker-spec-filter"><span>해당 슬롯 수 ≥</span><PickerSpecNumberInput ariaLabel="부품 선택기 최소 PCIe 슬롯 수" value={specFilter.minPcieSlotCount} placeholder="예: 1" onChange={(value) => setSpecFilter((current) => ({ ...current, minPcieSlotCount: value }))} /></label><label className="picker-spec-filter"><span>RAM 슬롯 ≥</span><PickerSpecNumberInput ariaLabel="부품 선택기 최소 RAM 슬롯" value={specFilter.minMemorySlots} placeholder="예: 4" onChange={(value) => setSpecFilter((current) => ({ ...current, minMemorySlots: value }))} /></label><label className="picker-spec-filter"><span>M.2 슬롯 ≥</span><PickerSpecNumberInput ariaLabel="부품 선택기 최소 M.2 슬롯" value={specFilter.minM2Slots} placeholder="예: 2" onChange={(value) => setSpecFilter((current) => ({ ...current, minM2Slots: value }))} /></label><label className="picker-spec-filter"><span>SATA 포트 ≥</span><PickerSpecNumberInput ariaLabel="부품 선택기 최소 SATA 포트" value={specFilter.minSataPorts} placeholder="예: 4" onChange={(value) => setSpecFilter((current) => ({ ...current, minSataPorts: value }))} /></label></>}{category === "case" && <><label className="picker-spec-filter"><span>GPU 허용 길이 ≥</span><PickerSpecNumberInput ariaLabel="부품 선택기 최소 GPU 허용 길이" value={specFilter.minMaxGpuLengthMm} placeholder="예: 330" onChange={(value) => setSpecFilter((current) => ({ ...current, minMaxGpuLengthMm: value }))} /></label><label className="picker-spec-filter"><span>쿨러 허용 높이 ≥</span><PickerSpecNumberInput ariaLabel="부품 선택기 최소 쿨러 허용 높이" value={specFilter.minMaxCoolerHeightMm} placeholder="예: 160" onChange={(value) => setSpecFilter((current) => ({ ...current, minMaxCoolerHeightMm: value }))} /></label><label className="picker-spec-filter"><span>HDD 베이 ≥</span><PickerSpecNumberInput ariaLabel="부품 선택기 최소 HDD 베이" value={specFilter.minHddBays} placeholder="예: 2" onChange={(value) => setSpecFilter((current) => ({ ...current, minHddBays: value }))} /></label><label className="picker-spec-filter"><span>PSU 허용 길이 ≥</span><PickerSpecNumberInput ariaLabel="부품 선택기 최소 PSU 허용 길이" value={specFilter.minMaxPsuLengthMm} placeholder="예: 180" onChange={(value) => setSpecFilter((current) => ({ ...current, minMaxPsuLengthMm: value }))} /></label></>}{category === "cooler" && <label className="picker-spec-filter"><span>냉각 용량 ≥</span><PickerSpecNumberInput ariaLabel="부품 선택기 최소 냉각 용량" value={specFilter.minCoolingW} placeholder="예: 180" onChange={(value) => setSpecFilter((current) => ({ ...current, minCoolingW: value }))} /></label>}{category === "gpu" && <label className="picker-spec-filter"><span>GPU 길이 ≤</span><PickerSpecNumberInput ariaLabel="부품 선택기 최대 GPU 길이" value={specFilter.maxLengthMm} placeholder="예: 300" onChange={(value) => setSpecFilter((current) => ({ ...current, maxLengthMm: value }))} /></label>}{category === "psu" && <label className="picker-spec-filter"><span>PSU 깊이 ≤</span><PickerSpecNumberInput ariaLabel="부품 선택기 최대 PSU 깊이" value={specFilter.maxPsuDepthMm} placeholder="예: 160" onChange={(value) => setSpecFilter((current) => ({ ...current, maxPsuDepthMm: value }))} /></label>}{compatibilityPreset.omitted.length > 0 && <p className="picker-preset-omitted">적용하지 않은 조건: {compatibilityPreset.omitted.join(" · ")}</p>}</div>
+      <CatalogDetailFilterPanel category={category} filter={detailFilter} facetOptions={facetOptions} loading={facetsLoading} error={facetsError} detailExcludedCount={detailExcludedCount} detailDiagnostics={detailFilterDiagnostics} onChange={setDetailFilter} onReset={() => setDetailFilter({})} onRetry={() => setFacetsNonce((current) => current + 1)} />
       {canOfferReviewCandidates && <button className="button button-small picker-review-candidates-action" type="button" onClick={() => { setCandidateMode("no_blocker"); setPresetMessage("호환 여부를 확인하지 못한 부품도 표시합니다."); }}>정보가 부족한 부품도 보기 · {riskCounts?.review.toLocaleString("ko-KR")}개</button>}
 
 

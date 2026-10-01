@@ -607,13 +607,43 @@ function partSearchPredicateFor(
   };
 }
 
+// 요청 핫패스용 카탈로그 인덱스 — 배열 참조를 키로 한 WeakMap이라 카탈로그가
+// 재로드돼 새 배열로 교체되면 자동으로 무효화된다. 범주 버킷으로 전수 스캔을
+// 범주 슬라이스 스캔으로 줄인다.
+type CatalogIndex = {
+  byCategory: Map<PartCategory, Part[]>;
+};
+
+const catalogIndexCache = new WeakMap<Part[], CatalogIndex>();
+
+function catalogIndexFor(catalog: Part[]): CatalogIndex {
+  const cached = catalogIndexCache.get(catalog);
+  if (cached) return cached;
+  const byCategory = new Map<PartCategory, Part[]>();
+  for (const part of catalog) {
+    const bucket = byCategory.get(part.category);
+    if (bucket) bucket.push(part);
+    else byCategory.set(part.category, [part]);
+  }
+  const index: CatalogIndex = { byCategory };
+  catalogIndexCache.set(catalog, index);
+  return index;
+}
+
+// 범주가 주어지면 인덱스의 범주 버킷만 평가한다 — 범주 조건은 버킷 구성 시
+// 이미 적용됐으므로 predicate의 범주 검사는 버킷 안에서 항상 참이다.
+export function catalogCandidatesFor(catalog: Part[], category: PartCategory | undefined): Part[] {
+  if (!category) return catalog;
+  return catalogIndexFor(catalog).byCategory.get(category) ?? [];
+}
+
 export function filterParts(
   catalog: Part[],
   category: PartCategory | undefined,
   query: string | undefined,
   options: PartSearchOptions = {}
 ) {
-  return catalog.filter(partSearchPredicateFor(category, query, options));
+  return catalogCandidatesFor(catalog, category).filter(partSearchPredicateFor(category, query, options));
 }
 
 function sortParts(parts: Part[], category: PartCategory | undefined, sort: PartSearchOptions["sort"]) {
@@ -714,7 +744,7 @@ export function catalogSearchTotalsFor(
     coreCandidateTotal: 0,
     categoryMismatchExcludedCount: 0
   };
-  for (const part of catalog) {
+  for (const part of catalogCandidatesFor(catalog, category)) {
     if (predicates.base(part)) totals.baseTotal += 1;
     if (predicates.price(part)) totals.priceTotal += 1;
     if (predicates.freshness(part)) totals.freshnessTotal += 1;

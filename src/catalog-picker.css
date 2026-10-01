@@ -355,7 +355,12 @@ html[data-theme="dark"] .catalog-part-card-copy strong { color: var(--ink); }
 
 .catalog-pagination span { color: #7e9399; font-family: "DM Mono", monospace; font-size: 8px; }
 
-.catalog-state { display: flex; align-items: center; justify-content: center; gap: 7px; min-height: 180px; color: #82969c; font-size: 9px; }
+.catalog-state { display: flex; align-items: center; justify-content: center; gap: 7px; min-height: 180px; color: #82969c; font-size: 9px; text-align: center; }
+
+/* 조건을 좁혀 0건이 된 경우 바로 되돌아갈 동선을 제공한다 */
+.catalog-empty-copy { display: grid; justify-items: center; gap: 9px; max-width: 340px; }
+
+.catalog-empty-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 7px; }
 
 .catalog-state svg { flex: 0 0 auto; color: #78a194; }
 

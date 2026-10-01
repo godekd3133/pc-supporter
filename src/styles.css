@@ -1185,6 +1185,11 @@ p, li { word-break: keep-all; overflow-wrap: break-word; }
 
 .generator-request-error { display: flex; align-items: flex-start; gap: 6px; margin-top: 12px; padding: 9px; border: 1px solid #f0d5d5; border-radius: 8px; color: #a06060; background: #fffafa; font-size: 8px; line-height: 1.45; }
 
+/* 오류 기록 ID 같은 긴 토큰이 카드 폭을 밀어내지 않게 한다 */
+.generator-request-error > div { min-width: 0; }
+
+.generator-request-error code { overflow-wrap: anywhere; font-family: "DM Mono", monospace; font-size: 7px; }
+
 .generator-request-error strong { display: flex; align-items: center; gap: 4px; margin-bottom: 3px; color: #985858; font-size: 9px; }
 
 .generator-request-error strong svg { flex: 0 0 auto; }
@@ -1217,7 +1222,8 @@ p, li { word-break: keep-all; overflow-wrap: break-word; }
 
 .generator-diagnostics article > small { display: block; margin-top: 5px; color: #9c8359; font-size: 7px; line-height: 1.4; }
 
-.generator-recovery-options { display: grid; gap: 5px; margin-top: 9px; padding-top: 8px; border-top: 1px solid #f1dddd; }
+/* auto 트랙은 버튼의 min-content(긴 조건 나열)만큼 늘어나 좁은 화면을 넘치므로 minmax(0,1fr)로 묶는다 */
+.generator-recovery-options { display: grid; grid-template-columns: minmax(0, 1fr); gap: 5px; min-width: 0; margin-top: 9px; padding-top: 8px; border-top: 1px solid #f1dddd; }
 
 .generator-recovery-options > strong { color: #8f6060; font-size: 8px; }
 
@@ -1236,6 +1242,12 @@ p, li { word-break: keep-all; overflow-wrap: break-word; }
 .generator-recovery-option small { color: #ad8585; font-size: 7px; font-weight: 400; }
 
 .generator-recovery-option em { flex: 0 0 auto; max-width: 44%; color: #b28a8a; font-size: 6px; font-style: normal; }
+
+/* 좁은 화면에서는 예상 금액을 다음 줄로 내려 잘리지 않게 한다 */
+@media (max-width: 640px) {
+  .generator-recovery-option { flex-wrap: wrap; }
+  .generator-recovery-option em { flex: 1 1 100%; max-width: none; }
+}
 
 .generator-recovery-preview { display: flex; align-items: flex-start; gap: 4px; margin: 8px 0 0; color: #a47777; font-size: 7px; line-height: 1.45; }
 
@@ -9238,7 +9250,13 @@ button.metric-card:disabled { cursor: not-allowed; }
 
 .modal-footer > span { display: inline-flex; align-items: center; gap: 5px; }
 
-.toast { position: fixed; z-index: 30; right: 25px; bottom: 24px; max-width: min(420px, calc(100% - 50px)); padding: 13px 16px; border: 1px solid #cce7e2; border-radius: 10px; color: #fff; background: var(--navy); box-shadow: var(--shadow); font-size: 11px; line-height: 1.5; animation: toast-in 220ms cubic-bezier(.22, 1, .36, 1) both; }
+.toast { position: fixed; z-index: 30; right: 25px; bottom: 24px; display: flex; align-items: flex-start; gap: 10px; max-width: min(420px, calc(100% - 50px)); padding: 13px 16px; border: 1px solid #cce7e2; border-radius: 10px; color: #fff; background: var(--navy); box-shadow: var(--shadow); font-size: 11px; line-height: 1.5; animation: toast-in 220ms cubic-bezier(.22, 1, .36, 1) both; }
+
+.toast > span { min-width: 0; }
+
+.toast-dismiss { flex: 0 0 auto; display: grid; place-items: center; width: 20px; height: 20px; margin: -1px -4px -1px 0; padding: 0; border: 0; border-radius: 999px; color: rgba(255, 255, 255, .72); background: transparent; font-size: 13px; line-height: 1; cursor: pointer; }
+
+.toast-dismiss:hover { color: #fff; background: rgba(255, 255, 255, .16); }
 
 .auth-card { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(230px, 330px); align-items: center; gap: 18px; padding: 25px; border: 1px solid #dcd5f3; border-radius: 15px; background: #fbfaff; }
 
@@ -14764,7 +14782,7 @@ button.metric-card:disabled { cursor: not-allowed; }
   .modal-backdrop { align-items: flex-end; padding: 0; animation: mobile-scrim-in 200ms ease-out both; }
 
   .modal-backdrop > [role="dialog"],
-  .modal-backdrop > section { width: 100%; max-height: 88svh; overflow: auto; border-radius: 24px 24px 0 0; animation: mobile-sheet-in 340ms cubic-bezier(.22, 1, .36, 1) both; }
+  .modal-backdrop > section { width: 100%; max-height: 88svh; padding-bottom: env(safe-area-inset-bottom); overflow: auto; border-radius: 24px 24px 0 0; animation: mobile-sheet-in 340ms cubic-bezier(.22, 1, .36, 1) both; }
 
   /* The sheet scrolls as a whole, so flex children must keep their natural
      height instead of shrinking into a 0-height inner scrollport. */

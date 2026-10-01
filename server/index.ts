@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express, { type NextFunction, type Request, type RequestHandler, type Response } from "express";
+import compression from "compression";
 import type { Server as HttpServer } from "node:http";
 import { existsSync } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
@@ -96,7 +97,8 @@ import { clearCompatibilityEngineCaches, compatiblePartAssessmentCache } from ".
 import { crawlerEngineSnapshot } from "./engines/crawler-engine";
 import { engineModulesStatus } from "./engines";
 import { ENGINE_GENERATION_OPTION_DEFAULTS, engineGenerationLadderMultipliersFor, engineGenerationOptionsPath, engineGenerationVariantPrioritiesFor, loadEngineGenerationOptions, normalizeEngineGenerationOptions, quotationEngineFloorFor, saveEngineGenerationOptions } from "./engines/quotation-engine";
-import { catalogPartFacetOptionsFor, engineTargetFilterFacetOptionsFor, engineTargetFilterSummaryFor, engineTargetFiltersPath, loadEngineTargetFiltersConfig, normalizeEngineTargetFiltersInput, saveEngineTargetFiltersConfig } from "./engine-target-filters";
+import { engineTargetFilterFacetOptionsFor, engineTargetFilterSummaryFor, engineTargetFiltersPath, loadEngineTargetFiltersConfig, normalizeEngineTargetFiltersInput, saveEngineTargetFiltersConfig } from "./engine-target-filters";
+import { catalogFacetOptionsCachedFor } from "./catalog-facet-options";
 import { engineTargetFilterFacetDiagnosticsFor, engineTargetFilterRuleAllowsPart, engineTargetFilterRuleForCategory, engineTargetFilterRuleFromUnknown, ENGINE_TARGET_FILTER_FACETS } from "../shared/engine-target-filters";
 import { gamingPerformanceEvidenceBatchValidationFor } from "../shared/gaming-performance-evidence";
 import { candidateDecisionSummaryFor } from "../shared/candidate-decision";
@@ -124,6 +126,7 @@ import { priceRefreshIntervalMsFromEnv, priceRefreshOptionsFromEnv, startDurable
 import { BackgroundJobActiveConflictError, BackgroundJobIdempotencyConflictError, backgroundJobStore, type BackgroundJob } from "./background-job-store";
 import { startPriceRefreshQueueWorker } from "./price-refresh-worker";
 import { requestTelemetry } from "./request-telemetry";
+import { httpMetricsSnapshot, recordHttpRequestMetric } from "./request-metrics";
 import { securityHeaders } from "./security-headers";
 
 const app = express();
@@ -205,7 +208,10 @@ function isLoopbackProxyAddress(address: string) {
 app.set("trust proxy", isLoopbackProxyAddress);
 
 app.use(securityHeaders());
-app.use(requestTelemetry());
+app.use(requestTelemetry((record) => {
+  recordHttpRequestMetric(record);
+  console.log(JSON.stringify(record));
+}));
 
 function isApiPath(path: string) {
   return path === "/api" || path.startsWith("/api/");
@@ -257,6 +263,9 @@ app.use((request, response, next) => {
   next();
 });
 
+// JSON 응답을 gzip으로 압축한다 — 카탈로그 목록·견적 검사 결과처럼 큰
+// 본문의 전송량을 줄인다. SSE 스트림은 없으므로 전체 라우트에 적용한다.
+app.use(compression());
 app.use(express.json({ limit: "1mb" }));
 
 app.use((request, response, next) => {
@@ -953,7 +962,8 @@ app.get("/api/admin/monitor/status", requireAdmin, (_request, response) => {
     },
     compatibilityCache: compatibilityResultCache.stats(),
     savedBuildCheckPreviewCache: savedBuildCheckPreviewCache.stats(),
-    compatiblePartAssessmentCache: compatiblePartAssessmentCache.stats()
+    compatiblePartAssessmentCache: compatiblePartAssessmentCache.stats(),
+    httpMetrics: httpMetricsSnapshot()
   });
 });
 
@@ -1180,11 +1190,10 @@ app.get("/api/parts/facets", publicCatalogReadRateLimit, async (request, respons
     return;
   }
   const catalog = await loadCatalog();
-  const parts = filterParts(catalog, category, undefined, { quoteBrandRestricted: true, quoteSellableOnly: true });
   sendJsonWithEtag(request, response, {
     category,
     facets: ENGINE_TARGET_FILTER_FACETS[category],
-    options: catalogPartFacetOptionsFor(parts, category)
+    options: catalogFacetOptionsCachedFor(catalog, category)
   });
 });
 
@@ -3655,7 +3664,7 @@ app.get("/api/admin/engines", requireAdmin, async (_request, response) => {
 // 조정한다. 저장은 파일 기반 운영 아티팩트(data/engine-generation-options.json).
 app.get("/api/admin/engine-options", requireAdmin, async (_request, response) => {
   const options = loadEngineGenerationOptions();
-  const updatedAt = await fileUpdatedAt(engineGenerationOptionsPath());
+  const updatedAt = existsSync(engineGenerationOptionsPath()) ? await fileUpdatedAt(engineGenerationOptionsPath()) : null;
   response.json({ options, defaults: ENGINE_GENERATION_OPTION_DEFAULTS, updatedAt });
 });
 
@@ -4963,6 +4972,11 @@ async function start() {
     apiServer = app.listen(port, serverHost, () => {
       console.log(`PC Supporter API listening on http://127.0.0.1:${port} (${processRole})`);
     });
+    // 소켓 계층 타임아웃 — 프록시/로드밸런서 idle 제한(60s)보다 길게 잡아
+    // 연결이 먼저 끊기지 않게 하고, 붙은 요청이 워커를 무한히 잡지 않게 한다.
+    apiServer.keepAliveTimeout = 65_000;
+    apiServer.headersTimeout = 66_000;
+    apiServer.requestTimeout = Math.max(30_000, Number(process.env.PC_SUPPORTER_REQUEST_TIMEOUT_MS ?? 120_000));
   }
 
   if (processRole !== "api") {

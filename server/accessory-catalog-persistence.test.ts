@@ -49,6 +49,16 @@ vi.mock("pg", () => ({
         const hasOverrides = Object.keys(fakeDatabase.coolingFanOverrides).length > 0;
         return { rows: hasOverrides ? [{ payload: structuredClone(fakeDatabase.coolingFanOverrides), updated_at: fakeDatabase.coolingFanOverrideUpdatedAt }] : [], rowCount: hasOverrides ? 1 : 0 };
       }
+      // readAccessoryVersionStamp — accessories + cooling_fan override 스탬프를
+      // 가짜 상태로 다시 계산해 replica 변경 감지 시나리오가 실제로 캐시를 무효화한다.
+      if (sql.includes("count(*) FROM catalog_accessories") && sql.includes("AS stamp")) {
+        const accessoryMax = fakeDatabase.rows.length > 0
+          ? new Date(Math.max(...fakeDatabase.rows.map((row) => new Date(row.updated_at).getTime()))).toISOString()
+          : "-";
+        const overrideCount = Object.keys(fakeDatabase.coolingFanOverrides).length;
+        const overrideMax = fakeDatabase.coolingFanOverrideUpdatedAt ? new Date(fakeDatabase.coolingFanOverrideUpdatedAt).toISOString() : "-";
+        return { rows: [{ stamp: `${fakeDatabase.rows.length}:${accessoryMax}:${overrideCount}:${overrideMax}` }], rowCount: 1 };
+      }
       throw new Error(`Unexpected synthetic PostgreSQL pool query: ${sql.slice(0, 140)}`);
     }
 

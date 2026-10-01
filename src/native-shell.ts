@@ -8,7 +8,7 @@ import { THEME_CHANGE_EVENT, type ThemeMode } from "./theme";
 
 const LIGHT_STATUS_BAR_COLOR = "#f9fafb";
 const DARK_STATUS_BAR_COLOR = "#0f1218";
-const HAPTIC_SELECTOR = ".button-primary, .mobile-primary-action, .picker-item";
+const HAPTIC_SELECTOR = ".button-primary, .mobile-primary-action, .picker-item, .catalog-facet-option, .catalog-detail-filter-chip";
 
 async function configureStatusBar(mode: ThemeMode) {
   try {
