@@ -84,6 +84,12 @@ const smokeExpression = `(${async function runQuoteOnboardingSmoke() {
     clickButton(option);
     await waitForCta();
   };
+  // 단일 선택 스텝은 선택 즉시 자동 진행한다 — CTA 활성화를 기다리는 대신
+  // 다음 스텝 화면을 바로 기다린다.
+  const chooseAutoOption = async (option, nextStep, nextLabel) => {
+    clickButton(option);
+    await waitForStep(nextStep, nextLabel);
+  };
   const assertHydratedResult = (branch) => {
     const result = document.querySelector(".generator-result");
     const lines = [...document.querySelectorAll(".generator-result .generator-line")];
@@ -105,47 +111,27 @@ const smokeExpression = `(${async function runQuoteOnboardingSmoke() {
   const chooseNewTaskGaming = async () => {
     await waitForStep("intent", "첫 선택 화면");
     assert(bodyText().includes("새 PC 견적 보기") && bodyText().includes("쓰던 PC 업그레이드하기") && bodyText().includes("나중에 하기"), "첫 화면에 새 견적·업그레이드·나중에 선택지가 모두 표시되지 않았습니다.");
-    await chooseOption("새 PC 견적 보기");
-    clickCta();
-    await waitForStep("mode", "새 견적 기준 화면");
+    await chooseAutoOption("새 PC 견적 보기", "mode", "새 견적 기준 화면");
     assert(bodyText().includes("예산을 기준으로 고르기") && bodyText().includes("게임·작업을 기준으로 고르기") && bodyText().includes("원하는 사양 직접 입력하기"), "새 견적 기준 선택지가 모두 표시되지 않았습니다.");
     assert(bodyText().includes("성능 등급과 그래픽·메모리·저장공간"), "성능을 직접 고르는 방식의 설명이 없습니다.");
-    await chooseOption("게임·작업을 기준으로 고르기");
-    clickCta();
-    await waitForStep("usecase", "용도 선택 화면");
-    await chooseOption("게임");
-    clickCta();
-    await waitForStep("games", "게임 선택 화면");
+    await chooseAutoOption("게임·작업을 기준으로 고르기", "usecase", "용도 선택 화면");
+    await chooseAutoOption("게임", "games", "게임 선택 화면");
   };
   const chooseNewTaskWork = async () => {
     await waitForStep("intent", "첫 선택 화면");
-    await chooseOption("새 PC 견적 보기");
-    clickCta();
-    await waitForStep("mode", "새 견적 기준 화면");
-    await chooseOption("게임·작업을 기준으로 고르기");
-    clickCta();
-    await waitForStep("usecase", "용도 선택 화면");
-    await chooseOption("작업");
-    clickCta();
-    await waitForStep("works", "작업 선택 화면");
+    await chooseAutoOption("새 PC 견적 보기", "mode", "새 견적 기준 화면");
+    await chooseAutoOption("게임·작업을 기준으로 고르기", "usecase", "용도 선택 화면");
+    await chooseAutoOption("작업", "works", "작업 선택 화면");
   };
   const chooseNewBudget = async () => {
     await waitForStep("intent", "첫 선택 화면");
-    await chooseOption("새 PC 견적 보기");
-    clickCta();
-    await waitForStep("mode", "새 견적 기준 화면");
-    await chooseOption("예산을 기준으로 고르기");
-    clickCta();
-    await waitForStep("budget", "예산 중심 화면");
+    await chooseAutoOption("새 PC 견적 보기", "mode", "새 견적 기준 화면");
+    await chooseAutoOption("예산을 기준으로 고르기", "budget", "예산 중심 화면");
   };
   const chooseNewSpec = async () => {
     await waitForStep("intent", "첫 선택 화면");
-    await chooseOption("새 PC 견적 보기");
-    clickCta();
-    await waitForStep("mode", "새 견적 기준 화면");
-    await chooseOption("원하는 사양 직접 입력하기");
-    clickCta();
-    await waitForStep("spec", "직접 성능 입력 화면");
+    await chooseAutoOption("새 PC 견적 보기", "mode", "새 견적 기준 화면");
+    await chooseAutoOption("원하는 사양 직접 입력하기", "spec", "직접 성능 입력 화면");
   };
 
   await waitFor(() => location.pathname === "/start" && document.querySelector(".onboarding-page") !== null, "온보딩 초기 화면");
@@ -278,9 +264,7 @@ const smokeExpression = `(${async function runQuoteOnboardingSmoke() {
   await waitFor(() => currentStep() === "intensity" || text(document.querySelector(".onboarding-title")).includes("영상 편집은 어느 정도 규모인가요?"), "작업 강도 화면");
   const intensityText = bodyText();
   assert(intensityText.includes("FHD·가벼운 컷 편집") && intensityText.includes("4K 편집·일반 효과") && intensityText.includes("4K·6K 편집·고급 효과") && intensityText.includes("64GB") && intensityText.includes("2TB SSD"), "작업 강도별 구체적인 예상 작업·사양이 표시되지 않았습니다.");
-  await chooseOption("heavy");
-  clickButton("다음 · 예산 정하기");
-  await waitForStep("budget", "작업 예산 화면");
+  await chooseAutoOption("heavy", "budget", "작업 예산 화면");
   const workEstimateText = text(document.querySelector(".onboarding-estimate"));
   assert(workEstimateText.includes("4K·6K 편집·고급 효과") && workEstimateText.includes("64GB") && workEstimateText.includes("2TB SSD"), "작업 종류·강도에 맞는 구체적인 예상 사양이 없습니다.");
   clickButton("300만원");
@@ -378,7 +362,8 @@ const smokeExpression = `(${async function runQuoteOnboardingSmoke() {
 
   await navigateStart();
   await waitForStep("intent", "업그레이드 초기 화면");
-  await chooseOption("쓰던 PC 업그레이드하기");
+  clickButton("쓰던 PC 업그레이드하기");
+  await waitFor(() => currentStep() === "upgrade", "업그레이드 안내 자동 진행");
   clickButton("다음");
   await waitFor(() => document.querySelector(".onboarding-steps-list") !== null, "업그레이드 안내 화면");
   clickButton("현재 부품 고르기");
