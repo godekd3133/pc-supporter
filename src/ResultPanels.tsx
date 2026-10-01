@@ -5,6 +5,7 @@ import { buildScenarioComparisonFor } from "../shared/build-scenario";
 import { CATALOG_PRICE_EVIDENCE_LABELS, catalogPriceEvidenceDescriptionFor, catalogPriceEvidenceFor, catalogPriceEvidenceLabelFor } from "../shared/catalog-price-evidence";
 import { type CatalogWatchEntry, CATALOG_WATCHLIST_STORAGE_KEY, addCatalogWatchEntry, catalogWatchEntryKey, catalogWatchlistContains, catalogWatchlistFromJson, catalogWatchlistToJson } from "../shared/catalog-watchlist";
 import { type PriceWatchDecisionHistory, priceWatchDecisionFor } from "../shared/price-watch-decision";
+import { buildPerformanceReportFor, FRAME_STABILITY_LABELS } from "../shared/relative-performance-index";
 import { repairPlanBuildFor } from "../shared/repair-plan-build";
 import { type AccessoryCategory, type AccessoryItem, type AccessoryRecommendation, type AccessorySelection, type BuildSelection, type BuildMetrics, type CompatibilityLink, type CompatibilityResult, type Finding, type M2SlotAssignment, type Part, type PartCategory, type RecommendationPlan, type RecommendationPreferences, type UpgradeCompatibilityEvidence, type UpgradeBudgetEvidence, type UpgradeRecommendation, ACCESSORY_CATEGORIES, ACCESSORY_CATEGORY_LABELS, CATEGORY_LABELS, DATA_FRESHNESS_LABELS, DATA_QUALITY_LABELS, GAMING_REFRESH_RATE_LABELS, GAMING_RESOLUTION_LABELS, GAMING_RESOLUTION_VRAM_TARGETS, isKnownPrice, LISTING_TYPE_LABELS, PART_CATEGORIES } from "../shared/types";
 import type { RepairPlanComparisonViewState } from "./RepairPlanComparison";
@@ -135,6 +136,54 @@ export function BuildHealthPanel({ metrics, gpuSelected, psuSelected, caseSelect
     }
   ];
   return <section className="health-panel" data-testid="data-health-panel"><div className="health-heading"><div><h2>구성 자원 확인</h2></div><span><FiActivity /> 규칙으로 확인</span></div><div className="health-grid">{healthItems.map(({ label, value, detail, Icon, tone }) => <div className={`health-item ${tone}`} key={label}><span className="health-icon"><Icon /></span><div><span>{label}</span><strong>{value}</strong><small>{detail}</small></div></div>)}</div></section>;
+}
+
+const PERFORMANCE_INDEX_TOOLTIPS = {
+  gaming: "선택한 그래픽카드의 상대 게임 성능 지수예요. RTX 5060 Ti를 100으로 잡은 카탈로그 모델 규칙 기준 추정치라 실측 FPS가 아닙니다.",
+  frameStability: "게임 중 프레임 하한선(1% low 체감)이 얼마나 안정적인지에 대한 추정 등급이에요. CPU 싱글코어 성능과 X3D급 대용량 캐시 여부로 판정합니다.",
+  singleCore: "선택한 CPU의 싱글코어 상대 성능이에요. 최상급 싱글코어(R23 2300점급)를 100%로 둔 추정치입니다.",
+  multiCore: "선택한 CPU의 멀티코어 상대 성능이에요. 플래그십급(R23 45000점급)을 100%로 둔 추정치입니다."
+} as const;
+
+function PerformanceMetricHelp({ text, label }: { text: string; label: string }) {
+  return <span className="performance-index-help" title={text} role="img" aria-label={`${label} 설명: ${text}`}><FiInfo /></span>;
+}
+
+export function PerformanceIndexPanel({ build, partMap }: { build: BuildSelection; partMap: ReadonlyMap<string, Part> }) {
+  const cpu = build.cpu ? partMap.get(build.cpu.partId) : undefined;
+  const gpu = build.gpu ? partMap.get(build.gpu.partId) : undefined;
+  const report = buildPerformanceReportFor({ cpu, gpu });
+  const metrics = [
+    {
+      key: "gaming",
+      label: "게임 성능",
+      value: report.gamingIndex === undefined ? "미측정" : `${report.gamingIndex}%`,
+      detail: gpu ? "RTX 5060 Ti = 100" : cpu ? "내장 그래픽 기준" : "부품 미선택",
+      tooltip: PERFORMANCE_INDEX_TOOLTIPS.gaming
+    },
+    {
+      key: "frame-stability",
+      label: "프레임 안정성",
+      value: report.frameStability === undefined ? "미측정" : FRAME_STABILITY_LABELS[report.frameStability],
+      detail: "CPU 싱글코어·캐시 기준",
+      tooltip: PERFORMANCE_INDEX_TOOLTIPS.frameStability
+    },
+    {
+      key: "single-core",
+      label: "싱글코어",
+      value: report.singleCorePercent === undefined ? "미측정" : `${report.singleCorePercent}%`,
+      detail: "R23 2300점급 = 100%",
+      tooltip: PERFORMANCE_INDEX_TOOLTIPS.singleCore
+    },
+    {
+      key: "multi-core",
+      label: "멀티코어",
+      value: report.multiCorePercent === undefined ? "미측정" : `${report.multiCorePercent}%`,
+      detail: "R23 45000점급 = 100%",
+      tooltip: PERFORMANCE_INDEX_TOOLTIPS.multiCore
+    }
+  ];
+  return <section className="performance-index-panel" data-testid="performance-index-panel" aria-label="성능 지수 요약"><div className="performance-index-heading"><div><h2>성능 지수</h2><p>카탈로그 모델 규칙 기반 추정치예요. 실측 벤치마크가 아닙니다.</p></div><FiCpu /></div><div className="performance-index-grid">{metrics.map((metric) => <div className="performance-index-item" key={metric.key}><div className="performance-index-item-label"><span>{metric.label}</span><PerformanceMetricHelp label={metric.label} text={metric.tooltip} /></div><strong>{metric.value}</strong><small>{metric.detail}</small></div>)}</div></section>;
 }
 
 export function M2SlotAssignmentPanel({ assignments, mode }: { assignments: M2SlotAssignment[]; mode?: BuildMetrics["m2SlotAssignmentMode"] }) {

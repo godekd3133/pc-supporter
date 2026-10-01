@@ -27,7 +27,7 @@ import { resultFindingRuleFromSearch, type ResultSection } from "./result-view-s
 import { ResultNextSteps } from "./ResultNextSteps";
 import type { UnknownPriceItem } from "./BuildPriceSummary";
 import { PartVisual, PartWatchButton } from "./part-visuals";
-import { AccessoryRecommendationPanel, BuildHealthPanel, BuildScenarioPreviewPanel, BuildWatchlistPanel, CompatibilityMap, M2SlotAssignmentPanel, RepairPlanPanel, StaleResultView, UpgradeRecommendationDetail, UpgradeRecommendationPanel, upgradeBudgetText, upgradeCompatibilityStatus, upgradeCompatibilityText } from "./ResultPanels";
+import { AccessoryRecommendationPanel, BuildHealthPanel, BuildScenarioPreviewPanel, BuildWatchlistPanel, CompatibilityMap, M2SlotAssignmentPanel, PerformanceIndexPanel, RepairPlanPanel, StaleResultView, UpgradeRecommendationDetail, UpgradeRecommendationPanel, upgradeBudgetText, upgradeCompatibilityStatus, upgradeCompatibilityText } from "./ResultPanels";
 import { SavedBuildCheckTimeline } from "./SavedCheckTimeline";
 import { api } from "./api";
 import { GENERATOR_VARIANTS_LOCAL_SHARES_STORAGE_KEY } from "../shared/generator-variants-local-share";
@@ -530,6 +530,7 @@ return (
     <div className="result-layout">
       <section className="findings-section">
         <div className="result-metrics">{metricCards.map((metric) => <button className={`metric-card ${metric.tone}${findingFilter === metric.filter ? " selected" : ""}`} type="button" aria-label={`${metric.label} ${metric.count}개. 해당 상세 결과 보기`} aria-pressed={findingFilter === metric.filter} disabled={metric.count === 0} onClick={() => focusFindingFilter(metric.filter)} key={metric.filter}><span>{metric.label}</span><strong>{metric.count}</strong></button>)}</div>
+        <PerformanceIndexPanel build={build} partMap={partMap} />
         <details className="result-assembly-details">
           <summary><span>구매·조립 순서</span><FiMoreHorizontal /></summary>
           <div className="result-assembly-details-body">
