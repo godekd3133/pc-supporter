@@ -1924,6 +1924,9 @@ app.post("/api/builds/recommend", publicRecommendationRateLimit, async (request,
   let catalog: Part[] | undefined;
   try {
     catalog = await loadCatalog();
+    // 관리자 generationDepth(세대 게이트) 설정은 프로세스 전역에 반영되므로
+    // 요청마다 로드해 재시작 후에도 저장값과 맞춘다.
+    loadEngineGenerationOptions();
     trackUsageEvent("recommend", { path: "/api/builds/recommend" });
     response.json(generateBuildDraft(catalog, parsed.request, loadGamingPerformanceEvidence(), { targetFilters: loadEngineTargetFiltersConfig() }));
   } catch (error: unknown) {
