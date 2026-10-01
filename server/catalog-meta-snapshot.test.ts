@@ -31,6 +31,7 @@ vi.mock("./repository", () => ({
 }));
 
 vi.mock("./storage", () => ({
+  DATA_DIR: "/fixture",
   CASE_RGB_LOAD_OVERRIDES_PATH: "/fixture/case-rgb-load-overrides.json",
   GPU_PHYSICAL_OVERRIDES_PATH: "/fixture/gpu-physical-overrides.json",
   fileUpdatedAt: async () => fake.fileUpdatedAt,

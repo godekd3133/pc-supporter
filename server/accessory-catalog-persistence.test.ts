@@ -276,6 +276,9 @@ describe("PostgreSQL accessory persistence", () => {
       fakeDatabase.rows.push(databaseRow(writtenByAnotherReplica));
       expect((await accessories.loadAccessories()).some((item) => item.id === writtenByAnotherReplica.id)).toBe(true);
 
+      // 캐시가 따뜻할 때는 버전 스탬프가 같으면 payload 읽기를 시도하지 않는다 —
+      // 읽기 실패 전파를 검증하려면 스탬프를 바꿔 실제 읽기를 강제한다.
+      fakeDatabase.rows.push(databaseRow(accessory({ id: "stamp-buster-fan", sourceProductCode: "stamp-buster-pcode" })));
       fakeDatabase.failAccessoryRead = true;
       await expect(accessories.loadAccessories()).rejects.toThrow("synthetic PostgreSQL accessory read outage");
       await expect(readFile(strayLocalJson, "utf8")).resolves.toBe("{ deliberately invalid local JSON");

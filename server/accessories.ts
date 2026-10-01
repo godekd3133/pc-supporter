@@ -109,6 +109,15 @@ export async function loadAccessories() {
   }
 }
 
+// 인스턴스 이벤트 버스가 다른 노드의 주변 부품 쓰기를 알릴 때 로컬 캐시를
+// 비운다 — 다음 loadAccessories()가 스탬프와 함께 최신 상태를 다시 읽는다.
+export function invalidateAccessoryCache() {
+  accessoryLoadInFlight = null;
+  accessoryCache = null;
+  accessoryCacheStamp = null;
+  accessoryStateRevision += 1;
+}
+
 export function findAccessory(items: AccessoryItem[], id: string) {
   return items.find((item) => item.id === id);
 }
