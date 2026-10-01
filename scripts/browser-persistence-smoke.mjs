@@ -628,6 +628,10 @@ async function main() {
     })()`);
     await navigate(secondClient, `${webUrl}/share/${encodeURIComponent(candidateSavedId)}`, "두 번째 탭 구매 목록 route");
     await openResultDetails(secondClient);
+    // 공유 데이터 도착 후 재렌더로 details가 닫힐 수 있어 다시 연다 —
+    // 이후 단계의 innerText·actionMessage 검사가 닫힌 패널을 보지 못한다.
+    await waitForValue(secondClient, "document.querySelector('[data-testid=\"purchase-list-panel\"]') !== null", "두 번째 탭 구매 목록 패널");
+    await openResultDetails(secondClient);
     const secondTabProgressProbe = await secondClient.evaluate(`(async () => {
       const startedAt = Date.now();
       let statusText = "";
@@ -682,6 +686,9 @@ async function main() {
     await navigate(client, `${webUrl}/share/${encodeURIComponent(candidateSavedId)}`, "서버 진행률 재조회 route");
     await openResultDetails(client);
     await waitForValue(client, "document.querySelector('[data-testid=\"purchase-list-panel\"]') !== null", "서버 진행률 구매 목록");
+    // 서버 진행률 응답 도착 후 결과 뷰가 다시 렌더되면서 details가 접힐 수 있다 —
+    // innerText 기반 검사 전에 다시 펼친다.
+    await openResultDetails(client);
     const serverProgressSyncProbe = await client.evaluate("(() => { const node = document.querySelector('[data-testid=\"purchase-list-server-sync\"]'); return { syncText: node?.textContent?.trim() ?? null, audit: window.__pcSupporterApiRequestAudit?.filter((entry) => /purchase-progress|builds\\//.test(entry.path))?.slice(-6) ?? [] }; })()");
     if (!(serverProgressSyncProbe.syncText ?? "").includes("서버 저장")) {
       for (let i = 0; i < 240; i += 1) {
