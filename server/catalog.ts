@@ -14,6 +14,7 @@ import { inferListingType, isListingAllowed, isQuoteBrandAllowed, isQuoteSelecta
 import { recommendationFloorWonFor } from "../shared/domain/engine";
 import { accessoryMeta, loadAccessories, readAccessoryCoverage } from "./accessories";
 import { reparseDanawaPart } from "./danawa";
+import { syncSeedPartPricesFromLive } from "../shared/domain/seed-anchor";
 import { applyM2SlotOverrides, readM2SlotOverrides, stripM2SlotOverride } from "./m2-overrides";
 import { applyBenchmarkOverrides, readBenchmarkOverrides } from "./benchmark-overrides";
 import { applyGpuPhysicalOverrides, readGpuPhysicalOverrides, stripGpuPhysicalOverrides } from "./gpu-physical-overrides";
@@ -128,10 +129,10 @@ async function loadCatalogUncoalesced() {
     if (catalogCache && catalogCacheStamp === stampBefore) return catalogCache;
     const persisted = await readCatalogRecords();
     const overrideMaps = await readCatalogOverrideMaps();
-    catalogCache = applyCatalogOverrideMaps(
+    catalogCache = syncSeedPartPricesFromLive(applyCatalogOverrideMaps(
       mergeCatalog(seedBaseFor(persisted), persisted.map((part) => reparseDanawaPart(part))),
       overrideMaps
-    );
+    ));
     catalogCacheStamp = stampBefore;
     return catalogCache;
   } catch (error) {
@@ -172,7 +173,7 @@ export async function saveCatalog(parts: Part[]) {
   const baseCatalog = mergeCatalog([], parts.map((part) => stripCatalogSpecOverride(stripCaseRgbLoadOverride(stripGpuPhysicalOverrides(stripM2SlotOverride(part))))));
   await writeCatalogRecords(baseCatalog);
   const overrideMaps = await readCatalogOverrideMaps();
-  catalogCache = applyCatalogOverrideMaps(baseCatalog, overrideMaps);
+  catalogCache = syncSeedPartPricesFromLive(applyCatalogOverrideMaps(baseCatalog, overrideMaps));
   catalogCacheStamp = null;
   catalogRuntimeRevision += 1;
   return catalogCache;

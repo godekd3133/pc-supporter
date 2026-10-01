@@ -2232,7 +2232,7 @@ function candidateSuggestions(
   const candidates = catalog
     .filter((part) => part.category === targetCategory && !currentPartIds.has(part.id))
     // seed 기준 부품은 이름 패턴이 없는 참고 항목이라 세대 게이트를 건너뛴다.
-    .filter((part) => (part.dataQuality === "seed" ? isQuotePurchasable(part) : isQuoteSelectable(part, catalog)))
+    .filter((part) => (part.dataQuality === "seed" ? isQuotePurchasable(part, catalog) : isQuoteSelectable(part, catalog)))
     .filter((part) => isQuoteBrandAllowed(targetCategory, part.brand))
     .filter((part) => isListingAllowed(part, listingPolicy))
     .filter((part) => candidateIsPlausible(finding, build, part, catalog, targetCategory));
@@ -5266,7 +5266,7 @@ function generatorCandidatePool(
     // 명시 허용목록(namePatterns) 범주와 seed 기준 부품은 세대 정책을 적용하지
     // 않는다 — seed는 관리자가 만든 참고 부품이고, 라이브 커버리지가 충분한
     // 범주에서는 아래 thin-coverage 규칙으로 어차피 빠진다.
-    .filter((part) => (bypassBrandPolicy || part.dataQuality === "seed") ? isQuotePurchasable(part) : isQuoteSelectable(part, catalog))
+    .filter((part) => (bypassBrandPolicy || part.dataQuality === "seed") ? isQuotePurchasable(part, catalog) : isQuoteSelectable(part, catalog))
     .filter((part) => engineTargetFiltersAllowPart(part, targetFilters))
     .filter((part) => generatorHasFields(part, requiredFields))
     .filter((part) => isListingAllowed(part, listingPolicy))

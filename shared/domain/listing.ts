@@ -1,5 +1,6 @@
 import type { ListingPolicy, ListingType, Part, PartCategory } from "../types";
 import { isKnownPrice } from "../types";
+import { seedLiveTwinsFor } from "./seed-anchor";
 import { catalogCategoryMismatchFor } from "../catalog-category-integrity";
 
 const STORAGE_ACCESSORY_PATTERN = /(컨버터|변환|어댑터|케이블|도킹|리더기|복제기|하드랙|브라켓|외장\s*케이스|디스크\s*케이스|보관(?:함|케이스)?|보호케이스|하드\s*케이스|USB\s*(?:3|2)\.0\s*to\s*SATA)/i;
@@ -345,7 +346,17 @@ export function isCurrentGenerationPart(part: Part, catalog?: readonly Part[]) {
 // (delistedAt)은 구할 수 없고, 구세대 CPU·GPU는 단종 취급이므로 견적 후보에서
 // 모두 제외한다.
 export function isQuoteSelectable(part: Part, catalog?: readonly Part[]) {
-  return isKnownPrice(part.priceWon) && part.dataQuality !== "incomplete" && !part.delistedAt && isCurrentGenerationPart(part, catalog);
+  return isKnownPrice(part.priceWon) && part.dataQuality !== "incomplete" && !part.delistedAt && isCurrentGenerationPart(part, catalog)
+    && !seedSupersededByLiveTwin(part, catalog);
+}
+
+// 같은 제품의 retail live 매물이 팔리고 있으면 seed 참고행은 견적에서 숨긴다 —
+// 실구매 링크·가격 이력이 있는 live 매물이 그 제품을 대신한다. 벌크·병행수입
+// 매물만 남은 제품은 seed가 기준 부품으로 계속 서며(sync된 시장가로 표시),
+// 트윈이 전부 사라지면 얇은 커버리지 폴백으로 돌아온다.
+function seedSupersededByLiveTwin(part: Part, catalog: readonly Part[] | undefined): boolean {
+  return part.dataQuality === "seed" && catalog !== undefined
+    && seedLiveTwinsFor(part, catalog).some((twin) => inferListingType(twin) === "retail" && isQuotePurchasable(twin));
 }
 
 /**
@@ -384,6 +395,7 @@ export function cpuHasIntegratedGraphics(part: Pick<Part, "name" | "specs" | "ca
  * 같은 지정 구형 부품을 세대 게이트가 다시 걸러내지 않게 한다).
  * 가격 확인·미완료 스펙·단종(delistedAt) 제외는 그대로 적용한다.
  */
-export function isQuotePurchasable(part: Part) {
-  return isKnownPrice(part.priceWon) && part.dataQuality !== "incomplete" && !part.delistedAt;
+export function isQuotePurchasable(part: Part, catalog?: readonly Part[]): boolean {
+  return isKnownPrice(part.priceWon) && part.dataQuality !== "incomplete" && !part.delistedAt
+    && !seedSupersededByLiveTwin(part, catalog);
 }
