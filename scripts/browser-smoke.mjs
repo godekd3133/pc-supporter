@@ -442,13 +442,11 @@ async function main() {
     await client.send("Page.navigate", { url: `${baseUrl}/start` });
     await waitForValue(client, "(document.body?.innerText ?? '').includes('어떤 PC 견적을 볼까요?')", "온보딩 intent 화면");
     assert(await clickText(client, "새 PC 견적 보기", ".onboarding-option-radio-row"), "온보딩 새 견적 intent 선택을 클릭하지 못했습니다.");
-    assert(await clickText(client, "새 견적 시작하기"), "온보딩 intent CTA를 클릭하지 못했습니다.");
-    await waitForValue(client, "(document.body?.innerText ?? '').includes('어떤 기준으로 부품을 고를까요?')", "온보딩 mode 화면");
+    // 단일 선택 스텝은 선택 즉시 다음 스텝으로 자동 진행한다 — CTA 클릭 대신 화면 전환을 기다린다.
+    await waitForValue(client, "(document.body?.innerText ?? '').includes('어떤 기준으로 부품을 고를까요?')", "온보딩 intent 선택 후 mode 자동 진행");
     assert(await clickText(client, "게임·작업을 기준으로 고르기", ".onboarding-option-radio-row"), "온보딩 task 방식을 선택하지 못했습니다.");
-    assert(await clickText(client, "이 기준으로 계속"), "온보딩 mode CTA를 클릭하지 못했습니다.");
-    await waitForValue(client, "(document.body?.innerText ?? '').includes('어떤 용도로 쓸 PC인가요?')", "온보딩 usecase 화면");
+    await waitForValue(client, "(document.body?.innerText ?? '').includes('어떤 용도로 쓸 PC인가요?')", "온보딩 mode 선택 후 usecase 자동 진행");
     assert(await clickText(client, "게임", ".onboarding-option-radio-row"), "온보딩 게임 용도를 선택하지 못했습니다.");
-    assert(await clickText(client, "다음"), "온보딩 usecase CTA를 클릭하지 못했습니다.");
     await waitForValue(client, "(document.body?.innerText ?? '').includes('주로 할 게임을 골라주세요') && document.querySelector('input[aria-label=\"게임 이름 검색\"]') !== null", "온보딩 games 화면");
     assert(await setInputValue(client, 'input[aria-label="게임 이름 검색"]', "cyber"), "온보딩 게임 검색창을 찾지 못했습니다.");
     assert(await clickText(client, "사이버펑크 2077"), "온보딩에서 사이버펑크 2077을 선택하지 못했습니다.");
