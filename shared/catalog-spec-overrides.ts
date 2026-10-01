@@ -54,6 +54,8 @@ export type CatalogSpecOverrideFieldKey =
   | "maxPsuLengthMm"
   | "hddBays"
   | "fanCount"
+  | "lowProfileOnly"
+  | "lowProfileBracket"
   | "wattageW"
   | "psuFormFactor"
   | "psuDepthMm"
@@ -97,6 +99,8 @@ const FIELD_TYPES: Partial<Record<CatalogSpecOverrideFieldKey, CatalogSpecOverri
   maxPsuLengthMm: "number",
   hddBays: "number",
   fanCount: "number",
+  lowProfileOnly: "boolean",
+  lowProfileBracket: "boolean",
   wattageW: "number",
   psuFormFactor: "string",
   psuDepthMm: "number",
@@ -108,10 +112,10 @@ const CATEGORY_FIELDS: Record<PartCategory, CatalogSpecOverrideFieldKey[]> = {
   cooler: ["supportedSockets", "maxCoolingW", "coolerType", "radiatorSizeMm"],
   motherboard: ["socket", "memoryType", "m2Slots", "pcieX16Slots", "pcieX8Slots", "pcieX4Slots", "pcieX1Slots", "maxMemoryGb", "memorySlots", "sataPorts", "motherboardFormFactors"],
   memory: ["memoryType", "capacityGb", "speedMhz", "memoryFormFactor", "memoryModuleCountPerKit", "memoryProfiles"],
-  gpu: ["powerW", "recommendedPsuW", "lengthMm", "widthMm", "thicknessMm", "vramGb"],
+  gpu: ["powerW", "recommendedPsuW", "lengthMm", "widthMm", "thicknessMm", "vramGb", "lowProfileBracket"],
   ssd: ["interface", "capacityGb", "formFactor", "m2PcieGeneration", "lengthMm"],
   hdd: ["interface", "capacityGb", "formFactor", "lengthMm"],
-  case: ["maxGpuLengthMm", "maxCoolerHeightMm", "maxPsuLengthMm", "motherboardFormFactors", "hddBays", "fanCount"],
+  case: ["maxGpuLengthMm", "maxCoolerHeightMm", "maxPsuLengthMm", "motherboardFormFactors", "hddBays", "fanCount", "lowProfileOnly"],
   psu: ["wattageW", "psuFormFactor", "psuDepthMm", "efficiency"]
 };
 

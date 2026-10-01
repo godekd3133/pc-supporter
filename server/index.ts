@@ -19,7 +19,7 @@ export type { BuildParseResult, BuildGenerationRequestParseResult } from "../sha
 import { compatibilityResultForPublicTransport, evaluateBuildWithAccessories as evaluateBuildWithSharedDomain } from "../shared/domain/compatibility-evaluator";
 import { loadSavedBuildPresentationContext, savedBuildPresentationFor, savedBuildPresentationsFor } from "./saved-build-presentation";
 import { savedBuildAlternativeAlertsFor } from "./saved-build-alternatives";
-import { recordUsageEvent, trackUsageEvent, usageEventSummaryFor } from "./usage-events";
+import { clientUsageEventsFromRequest, recordClientUsageEvents, recordUsageEvent, trackUsageEvent, usageAnalyticsFor, usageEventSummaryFor } from "./usage-events";
 import { classifyDataFreshness } from "./data-health";
 import { isAccessoryCrawlRunning, readAccessoryCrawlManifest, readAccessoryCrawlStatus, runAccessoryCrawlJob } from "./engines/crawler-engine";
 import { BuildGenerationError, ENGINE_VERSION, assessAlternativePart, buildGenerationRecoveryOptionsFor, candidateSimilarityForBuild, compareCandidateSimilarity, compareCandidateValue, evaluateBuild, generateBuildDraft } from "./engine";
@@ -129,6 +129,7 @@ import { startPriceRefreshQueueWorker } from "./price-refresh-worker";
 import { requestTelemetry } from "./request-telemetry";
 import { httpMetricsSnapshot, recordHttpRequestMetric } from "./request-metrics";
 import { INSTANCE_ID, instanceEventBusReady, startInstanceEventBus, stopInstanceEventBus } from "./instance-events";
+import { syncAllRuntimeConfigsFromDatabase, syncRuntimeConfigFromDatabase } from "./runtime-config-sync";
 import { securityHeaders } from "./security-headers";
 
 const app = express();
@@ -933,24 +934,32 @@ app.get("/api/meta", async (request, response) => {
   }, undefined, !mayReadInternalMeta);
 });
 
-// 클라이언트는 app_open만 전송할 수 있다 — check/save/share/recommend는
-// 서버 route handler에서 직접 계수해 이중 계수를 막는다.
+// 클라이언트는 퍼널 이벤트 화이트리스트만 전송할 수 있다 — check/save/share/
+// recommend는 서버 route handler에서 직접 계수해 이중 계수를 막는다.
+// 단일 {name} 형태와 {visitorId, sessionId, events:[...]} 배치를 모두 받는다.
 app.post("/api/events", usageEventRateLimit, async (request, response) => {
-  const name = typeof request.body?.name === "string" ? request.body.name.trim() : "";
-  if (name !== "app_open") {
+  const batch = clientUsageEventsFromRequest(request.body);
+  if (!batch) {
     response.status(400).json({ error: "지원하지 않는 이벤트입니다.", code: "USAGE_EVENT_INVALID" });
     return;
   }
   try {
-    await recordUsageEvent("app_open");
+    await recordClientUsageEvents(batch);
   } catch {
-    // 카운터 실패는 비컨 응답을 막지 않는다
+    // 이벤트 저장 실패는 비컨 응답을 막지 않는다
   }
   response.status(204).end();
 });
 
 app.get("/api/admin/usage-events", requireAdmin, async (_request, response) => {
   response.json(await usageEventSummaryFor());
+});
+
+// 퍼널·리텐션·세부 지표 — usage_events 원시 로그를 기간별로 집계한다.
+app.get("/api/admin/usage-analytics", requireAdmin, async (request, response) => {
+  const rawDays = Number(request.query.days);
+  const days = Number.isInteger(rawDays) ? rawDays : 30;
+  response.json(await usageAnalyticsFor(days));
 });
 
 // 자동 구성 실패는 422 응답만으로는 원인을 알기 어렵다 — 최근 실패를 요청
@@ -1902,7 +1911,7 @@ app.post("/api/compatibility/check", publicCompatibilityRateLimit, async (reques
   response.setHeader("Content-Type", "application/json; charset=utf-8");
   const publicBody = JSON.stringify(publicApiPayloadProjection(outcome.value.result));
   response.setHeader("Content-Length", String(Buffer.byteLength(publicBody)));
-  trackUsageEvent("check");
+  trackUsageEvent("check", { path: "/api/compatibility/check" });
   response.end(publicBody);
 });
 
@@ -1915,13 +1924,13 @@ app.post("/api/builds/recommend", publicRecommendationRateLimit, async (request,
   let catalog: Part[] | undefined;
   try {
     catalog = await loadCatalog();
-    trackUsageEvent("recommend");
+    trackUsageEvent("recommend", { path: "/api/builds/recommend" });
     response.json(generateBuildDraft(catalog, parsed.request, loadGamingPerformanceEvidence(), { targetFilters: loadEngineTargetFiltersConfig() }));
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "현재 데이터로 자동 견적을 생성하지 못했습니다.";
     const recoveryOptions = catalog ? buildGenerationRecoveryOptionsFor(catalog, parsed.request) : [];
     const diagnostics = error instanceof BuildGenerationError ? error.diagnostics : [];
-    trackUsageEvent("recommend_failed");
+    trackUsageEvent("recommend_failed", { path: "/api/builds/recommend" });
     recordGenerationFailure({
       route: "/api/builds/recommend",
       statusCode: 422,
@@ -1944,7 +1953,7 @@ function buildGenerationVariantResultsFor(catalog: Part[], request: BuildGenerat
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "이 기준의 자동 구성을 만들지 못했습니다.";
       const diagnostics = error instanceof BuildGenerationError ? error.diagnostics : [];
-      trackUsageEvent("recommend_failed");
+      trackUsageEvent("recommend_failed", { path: "/api/builds/recommend/variants" });
       recordGenerationFailure({
         route: "/api/builds/recommend/variants",
         statusCode: 200,
@@ -1996,13 +2005,13 @@ app.post("/api/builds/recommend/variants", publicRecommendationRateLimit, async 
   try {
     catalog = await loadCatalog();
     const variants = buildGenerationVariantResultsFor(catalog, parsed.request, response.locals.requestId as string | undefined);
-    trackUsageEvent("recommend");
+    trackUsageEvent("recommend", { path: "/api/builds/recommend/variants" });
     response.json({ variants });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "세 가지 자동 구성 결과를 만들지 못했습니다.";
     const recoveryOptions = catalog ? buildGenerationRecoveryOptionsFor(catalog, parsed.request) : [];
     const diagnostics = error instanceof BuildGenerationError ? error.diagnostics : [];
-    trackUsageEvent("recommend_failed");
+    trackUsageEvent("recommend_failed", { path: "/api/builds/recommend/variants" });
     recordGenerationFailure({
       route: "/api/builds/recommend/variants",
       statusCode: 422,
@@ -2045,13 +2054,13 @@ app.post("/api/builds/recommend/budget-ladder", publicRecommendationRateLimit, a
         return { ...scenario, error: message, ...(diagnostics.length > 0 ? { diagnostics } : {}) };
       }
     });
-    trackUsageEvent("recommend");
+    trackUsageEvent("recommend", { path: "/api/builds/recommend/budget-ladder" });
     response.json({ scenarios: outcomes });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "예산 구간 자동 견적을 생성하지 못했습니다.";
     const recoveryOptions = catalog ? buildGenerationRecoveryOptionsFor(catalog, parsed.request) : [];
     const diagnostics = error instanceof BuildGenerationError ? error.diagnostics : [];
-    trackUsageEvent("recommend_failed");
+    trackUsageEvent("recommend_failed", { path: "/api/builds/recommend/budget-ladder" });
     recordGenerationFailure({
       route: "/api/builds/recommend/budget-ladder",
       statusCode: 422,
@@ -2167,7 +2176,7 @@ app.post("/api/builds", buildCreateRateLimit, privateNoStore, async (request, re
   };
   const created = await persistOwnerShareResource(request, response, "build", saved, () => appendSavedBuild(saved), () => deleteSavedBuild(id));
   if (!created) return;
-  trackUsageEvent("save");
+  trackUsageEvent("save", { path: "/api/builds" });
   response.status(201).json({
     ...ownerManagedShareResponse(savedBuildPresentationFor(created.persisted, { catalog, accessories }), ownerCredential.token, created.ownerManaged),
     recoveryCode: recoveryCredential.code
@@ -2189,7 +2198,7 @@ app.post("/api/watchlists", watchlistCreateRateLimit, privateNoStore, async (req
     return saved;
   }, () => deleteSavedWatchlist(saved.id));
   if (!created) return;
-  trackUsageEvent("share");
+  trackUsageEvent("share", { path: "/api/watchlists" });
   response.status(201).json(ownerManagedShareResponse(publicSavedCatalogWatchlist(created.persisted), ownerCredential.token, created.ownerManaged));
 });
 
@@ -2222,7 +2231,7 @@ app.post("/api/comparisons", comparisonCreateRateLimit, privateNoStore, async (r
     return saved;
   }, () => deleteSavedComparison(saved.id));
   if (!created) return;
-  trackUsageEvent("share");
+  trackUsageEvent("share", { path: "/api/comparisons" });
   response.status(201).json(ownerManagedShareResponse(publicAlternativeComparison(created.persisted), ownerCredential.token, created.ownerManaged));
 });
 
@@ -2316,7 +2325,7 @@ app.post("/api/version-comparisons", versionComparisonCreateRateLimit, privateNo
     return saved;
   }, () => deleteSavedBuildVersionComparison(saved.id));
   if (!created) return;
-  trackUsageEvent("share");
+  trackUsageEvent("share", { path: "/api/version-comparisons" });
   response.status(201).json(ownerManagedShareResponse(publicSavedBuildVersionComparisonShare(created.persisted), ownerCredential.token, created.ownerManaged));
 });
 
@@ -2393,7 +2402,7 @@ app.post("/api/budget-ladders", budgetLadderCreateRateLimit, privateNoStore, asy
     return saved;
   }, () => deleteSavedBudgetLadder(saved.id));
   if (!created) return;
-  trackUsageEvent("share");
+  trackUsageEvent("share", { path: "/api/budget-ladders" });
   response.status(201).json(ownerManagedShareResponse(publicBudgetLadderShare(created.persisted, catalogSnapshotAt), ownerCredential.token, created.ownerManaged));
 });
 
@@ -2480,7 +2489,7 @@ app.post("/api/generator-variants", generatorVariantsCreateRateLimit, privateNoS
     return saved;
   }, () => deleteSavedGeneratorVariants(saved.id));
   if (!created) return;
-  trackUsageEvent("share");
+  trackUsageEvent("share", { path: "/api/generator-variants" });
   response.status(201).json(ownerManagedShareResponse(publicGeneratorVariantsShare(created.persisted, catalogSnapshotAt), ownerCredential.token, created.ownerManaged));
 });
 
@@ -4968,6 +4977,9 @@ async function start() {
   await ensureDataDirectory();
   try {
     await initializePersistence();
+    // 공유 설정을 DB에서 내려 로컬 파일 복제본을 맞춘 뒤 카탈로그를 읽는다 —
+    // 오버라이드 복제본이 카탈로드 로드 전에 반영돼야 첫 요청부터 최신 스펙이 나간다.
+    await syncAllRuntimeConfigsFromDatabase();
     await loadCatalog();
   } catch (error: unknown) {
     const persistence = await persistenceDiagnostics();
@@ -5024,24 +5036,11 @@ async function start() {
       appendGenerationFailureRecord(event.data as Parameters<typeof appendGenerationFailureRecord>[0]);
       return;
     }
-    // 다른 인스턴스가 저장한 파일 설정 — 본문이 실려 있으면 로컬 파일에
-    // 기록하고 mtime 캐시를 비워 다음 읽기가 새 값을 적용한다. 본문이 없으면
-    // (페이로드 한도 초과) 캐시만 비운다.
+    // 다른 인스턴스가 저장한 설정 — 공유 원본(runtime_configs)에서 가져와
+    // 로컬 파일 복제본에 기록한다. 자신이 발행한 이벤트의 루프백은 건너뛴다.
     if (event.kind === "config:file" && event.source !== INSTANCE_ID) {
-      const data = event.data as { name?: string; content?: unknown } | undefined;
-      if (data?.name === "engine-generation-options") {
-        if (data.content !== undefined) {
-          const { options } = normalizeEngineGenerationOptions(data.content);
-          void applyReceivedEngineGenerationOptions(options);
-        } else invalidateEngineGenerationOptionsCache();
-        return;
-      }
-      if (data?.name === "engine-target-filters") {
-        if (data.content !== undefined) {
-          const parsed = engineTargetFilterConfigFromUnknown(data.content);
-          void applyReceivedEngineTargetFiltersConfig(parsed.config);
-        } else invalidateEngineTargetFiltersCache();
-      }
+      const name = (event.data as { name?: string } | undefined)?.name;
+      if (name) void syncRuntimeConfigFromDatabase(name);
     }
   });
 

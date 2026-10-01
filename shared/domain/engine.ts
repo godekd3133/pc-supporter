@@ -1167,6 +1167,8 @@ function candidateIsPlausible(finding: Finding, build: BuildSelection, candidate
   if (finding.ruleId === "case-cooler-height" && targetCategory === "cooler" && computerCase?.specs.maxCoolerHeightMm !== undefined) return candidate.specs.maxCoolerHeightMm !== undefined && candidate.specs.maxCoolerHeightMm <= computerCase.specs.maxCoolerHeightMm;
   if (finding.ruleId === "gpu-case-length" && targetCategory === "case" && gpu?.specs.lengthMm !== undefined) return candidate.specs.maxGpuLengthMm !== undefined && candidate.specs.maxGpuLengthMm >= gpu.specs.lengthMm;
   if (finding.ruleId === "gpu-case-length" && targetCategory === "gpu" && computerCase?.specs.maxGpuLengthMm !== undefined) return candidate.specs.lengthMm !== undefined && candidate.specs.lengthMm <= computerCase.specs.maxGpuLengthMm;
+  if (finding.ruleId === "gpu-case-low-profile" && targetCategory === "gpu") return candidate.specs.lowProfileBracket === true;
+  if (finding.ruleId === "gpu-case-low-profile" && targetCategory === "case") return candidate.specs.lowProfileOnly !== true;
   if (finding.ruleId === "psu-case-length" && targetCategory === "case" && psu?.specs.psuDepthMm !== undefined) return candidate.specs.maxPsuLengthMm !== undefined && candidate.specs.maxPsuLengthMm >= psu.specs.psuDepthMm;
   if (finding.ruleId === "psu-case-length" && targetCategory === "psu" && computerCase?.specs.maxPsuLengthMm !== undefined) return candidate.specs.psuDepthMm !== undefined && candidate.specs.psuDepthMm <= computerCase.specs.maxPsuLengthMm;
   if (finding.ruleId === "psu-case-form-factor" && targetCategory === "case" && psu?.specs.psuFormFactor) return candidate.specs.supportedPsuFormFactors !== undefined && candidate.specs.supportedPsuFormFactors.includes(psu.specs.psuFormFactor);
@@ -3124,7 +3126,7 @@ function buildCompatibilityLinks(findings: Finding[], parts: LinkPartSet): Compa
       fromCategory: "gpu",
       toCategory: "case",
       label: "그래픽카드 길이 · 두께",
-      ruleIds: ["gpu-case-length", "gpu-thickness"],
+      ruleIds: ["gpu-case-length", "gpu-thickness", "gpu-case-low-profile"],
       active: Boolean(parts.gpu && parts.computerCase),
       compatibleSummary: "그래픽카드 길이와 두께 정보 기준을 확인했습니다."
     }),
@@ -4305,6 +4307,37 @@ export function evaluateBuild(
         [replaceAction("case"), replaceAction("gpu")]
       );
     }
+    if (computerCase.specs.lowProfileOnly === true) {
+      if (gpu.specs.lowProfileBracket === false) {
+        addFinding(
+          findings,
+          "gpu-case-low-profile",
+          "blocker",
+          "로우프로파일 브라켓이 없는 그래픽카드입니다.",
+          "슬림(LP 전용) 케이스에는 로우프로파일 브라켓이 있는 그래픽카드만 장착할 수 있습니다.",
+          partIds(gpu, computerCase),
+          [
+            { label: "케이스 슬롯 규격", expected: "로우프로파일 전용" },
+            { label: "그래픽카드 LP 브라켓", actual: "없음" }
+          ],
+          [replaceAction("case"), replaceAction("gpu")]
+        );
+      } else if (gpu.specs.lowProfileBracket === undefined) {
+        addFinding(
+          findings,
+          "gpu-case-low-profile",
+          "warning",
+          "슬림 케이스 — 그래픽카드 LP 브라켓 여부를 확인해 주세요.",
+          "선택한 케이스는 로우프로파일 슬롯 전용인데, 이 그래픽카드의 LP 브라켓 포함 여부가 등록되어 있지 않습니다.",
+          partIds(gpu, computerCase),
+          [
+            { label: "케이스 슬롯 규격", actual: "로우프로파일 전용" },
+            { label: "그래픽카드 LP 브라켓", actual: "확인 필요" }
+          ],
+          [action("verify_spec", "GPU LP 브라켓 포함 여부 확인", "gpu"), replaceAction("gpu")]
+        );
+      }
+    }
     const gpuThickness = gpu.specs.thicknessMm;
     if (gpuThickness === undefined) {
       addUnknown(
@@ -5396,7 +5429,9 @@ function generatorCaseCanUseParts(computerCase: Part, motherboard: Part, cooler:
     && computerCase.specs.maxCoolerHeightMm !== undefined
     && cooler.specs.maxCoolerHeightMm <= computerCase.specs.maxCoolerHeightMm))
     && (hddCount === 0 || (computerCase.specs.hddBays !== undefined && computerCase.specs.hddBays >= hddCount))
-    && (!gpu || (gpu.specs.lengthMm !== undefined && computerCase.specs.maxGpuLengthMm !== undefined && gpu.specs.lengthMm <= computerCase.specs.maxGpuLengthMm));
+    && (!gpu || (gpu.specs.lengthMm !== undefined && computerCase.specs.maxGpuLengthMm !== undefined && gpu.specs.lengthMm <= computerCase.specs.maxGpuLengthMm))
+    // LP 전용 케이스는 LP 브라켓이 확인된 그래픽카드만 받는다.
+    && (!gpu || computerCase.specs.lowProfileOnly !== true || gpu.specs.lowProfileBracket === true);
 }
 
 function generatorStorageCanUseMotherboard(storage: Part, motherboard: Part, existingSsd: Part | undefined, hddCount: number) {
@@ -5536,13 +5571,13 @@ function generatedPartSpecSummary(part: Part) {
         : part.category === "memory"
           ? [specs.capacityGb !== undefined ? `${specs.capacityGb}GB/킷` : undefined, specs.speedMhz !== undefined ? `${specs.speedMhz}MHz` : undefined, specs.memoryCasLatency !== undefined ? `CL${specs.memoryCasLatency}` : undefined, specs.formFactor]
           : part.category === "gpu"
-            ? [specs.vramGb !== undefined ? `VRAM ${specs.vramGb}GB` : undefined, specs.powerW !== undefined ? `소비 ${specs.powerW}W` : undefined, specs.lengthMm !== undefined ? `길이 ${specs.lengthMm}mm` : undefined, specs.pcieSlotWidth !== undefined ? `PCIe x${specs.pcieSlotWidth}` : undefined]
+            ? [specs.vramGb !== undefined ? `VRAM ${specs.vramGb}GB` : undefined, specs.powerW !== undefined ? `소비 ${specs.powerW}W` : undefined, specs.lengthMm !== undefined ? `길이 ${specs.lengthMm}mm` : undefined, specs.lowProfileBracket === true ? "LP 브라켓" : undefined, specs.pcieSlotWidth !== undefined ? `PCIe x${specs.pcieSlotWidth}` : undefined]
             : part.category === "ssd"
               ? [specs.interface, specs.formFactor, specs.capacityGb !== undefined ? `${specs.capacityGb}GB` : undefined, specs.m2PcieGeneration !== undefined ? `PCIe ${specs.m2PcieGeneration.toFixed(1)}` : undefined, specs.sequentialReadMbps !== undefined ? `읽기 ${specs.sequentialReadMbps.toLocaleString("ko-KR")}MB/s` : undefined]
               : part.category === "hdd"
                 ? [specs.interface, specs.formFactor, specs.capacityGb !== undefined ? `${specs.capacityGb}GB` : undefined]
                 : part.category === "case"
-                  ? [specs.motherboardFormFactors && specs.motherboardFormFactors.length > 0 ? `보드 ${specs.motherboardFormFactors.join("/")}` : undefined, specs.maxGpuLengthMm !== undefined ? `GPU ≤${specs.maxGpuLengthMm}mm` : undefined, specs.maxCoolerHeightMm !== undefined ? `쿨러 ≤${specs.maxCoolerHeightMm}mm` : undefined, specs.hddBays !== undefined ? `HDD 베이 ${specs.hddBays}개` : undefined]
+                  ? [specs.motherboardFormFactors && specs.motherboardFormFactors.length > 0 ? `보드 ${specs.motherboardFormFactors.join("/")}` : undefined, specs.maxGpuLengthMm !== undefined ? `GPU ≤${specs.maxGpuLengthMm}mm` : undefined, specs.maxCoolerHeightMm !== undefined ? `쿨러 ≤${specs.maxCoolerHeightMm}mm` : undefined, specs.hddBays !== undefined ? `HDD 베이 ${specs.hddBays}개` : undefined, specs.lowProfileOnly === true ? "LP 슬롯 전용" : undefined]
                   : [specs.wattageW !== undefined ? `${specs.wattageW}W` : undefined, specs.psuFormFactor, specs.efficiency];
   return values.filter((value): value is string => Boolean(value && value.trim())).join(" · ");
 }

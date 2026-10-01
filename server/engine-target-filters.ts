@@ -6,7 +6,8 @@ import { isKnownPrice, PART_CATEGORIES } from "../shared/types";
 import type { Part, PartCategory } from "../shared/types";
 import { isQuoteBrandAllowed, isQuoteSelectable } from "./listing";
 import { DATA_DIR, fileUpdatedAt, withSerializedFileMutation, writeJson } from "./storage";
-import { publishConfigFileReplication } from "./instance-events";
+import { publishInstanceEvent } from "./instance-events";
+import { pushRuntimeConfigToDatabase } from "./runtime-config-store";
 
 export type EngineTargetFilterCategorySummary = {
   totalCount: number;
@@ -65,8 +66,9 @@ async function persistEngineTargetFiltersConfig(config: EngineTargetFiltersConfi
 export async function saveEngineTargetFiltersConfig(config: EngineTargetFiltersConfig) {
   const path = engineTargetFiltersPath();
   await persistEngineTargetFiltersConfig(config);
-  // 다른 인스턴스에도 복제 — 수신자는 로컬 파일에 기록하고 mtime 캐시를 비운다.
-  void publishConfigFileReplication("engine-target-filters", config);
+  // 공유 원본(runtime_configs)에 올리고 다른 인스턴스에 무효화만 알린다.
+  await pushRuntimeConfigToDatabase("engine-target-filters", config);
+  void publishInstanceEvent("config:file", { name: "engine-target-filters" });
   return { config: loadEngineTargetFiltersConfig(), updatedAt: await fileUpdatedAt(path) };
 }
 

@@ -93,7 +93,9 @@ export const ENGINE_FILTER_FLAG_FIELDS = [
   "wifi",
   "m2LaneSharing",
   "coolerIncluded",
-  "rgbControllerIncluded"
+  "rgbControllerIncluded",
+  "lowProfileBracket",
+  "lowProfileOnly"
 ] as const;
 
 export type EngineFilterSpecValueField = (typeof ENGINE_FILTER_SPEC_VALUE_FIELDS)[number];
@@ -590,6 +592,7 @@ export const ENGINE_TARGET_FILTER_FACETS: Record<PartCategory, EngineTargetFilte
     { id: "gpuMemoryType", kind: "values", label: "메모리 타입" },
     { id: "gpuBoostClockMhz", kind: "range", label: "부스트 클럭", unit: "MHz" },
     { id: "lengthMm", kind: "range", label: "카드 길이", unit: "mm" },
+    { id: "lowProfileBracket", kind: "flag", label: "로우프로파일", optionLabel: "LP 브라켓 포함만" },
     { id: "powerW", kind: "range", label: "소비 전력", unit: "W" },
     { id: "recommendedPsuW", kind: "range", label: "권장 파워", unit: "W" },
     PRICE_FACET
@@ -621,6 +624,7 @@ export const ENGINE_TARGET_FILTER_FACETS: Record<PartCategory, EngineTargetFilte
     { id: "maxCoolerHeightMm", kind: "range", label: "쿨러 허용 높이", unit: "mm" },
     { id: "maxPsuLengthMm", kind: "range", label: "파워 허용 길이", unit: "mm" },
     { id: "hddBays", kind: "range", label: "HDD 베이", unit: "개" },
+    { id: "lowProfileOnly", kind: "flag", label: "슬롯 규격", optionLabel: "LP(슬림) 전용만" },
     PRICE_FACET
   ],
   psu: [

@@ -10,6 +10,10 @@ import {
   POSTGRES_SCHEMA_ADVISORY_LOCK,
   POSTGRES_SCHEMA_REVISION_TABLE,
   POSTGRES_SCHEMA_SHA256,
+  POSTGRES_SCHEMA_V1_SHA256,
+  POSTGRES_SCHEMA_V1_TO_V2_SQL,
+  POSTGRES_SCHEMA_V2_SHA256S,
+  POSTGRES_SCHEMA_V2_TO_V3_SQL,
   POSTGRES_SCHEMA_VERSION,
   postgresSchemaInitializationModeForNodeEnv,
   validatePostgresSchemaWithClient
@@ -190,6 +194,24 @@ class FakeSchemaClient {
       state.revision = { schema_version: Number(values?.[0]), schema_sha256: String(values?.[1]) };
       return { rows: [] };
     }
+    if (sql.startsWith(`UPDATE ${POSTGRES_SCHEMA_REVISION_TABLE}`)) {
+      state.revision = { schema_version: Number(values?.[0]), schema_sha256: String(values?.[1]) };
+      return { rows: [], rowCount: 1 };
+    }
+    if (sql.startsWith("CREATE TABLE IF NOT EXISTS runtime_configs") || sql.startsWith("CREATE TABLE IF NOT EXISTS usage_events")) {
+      // 버전 델타 — canonical 계약에서 새 테이블 부분만 상태에 반영한다.
+      const deltaTable = sql.includes("runtime_configs") ? "runtime_configs" : "usage_events";
+      const canonicalState = schemaStateWithCanonicalShape(canonicalSchemaContract);
+      for (const [key, column] of canonicalState.columns) {
+        if (key.startsWith(`${deltaTable}\0`)) state.columns.set(key, column);
+      }
+      for (const [indexName, index] of canonicalState.indexes) {
+        if (index.tableName === deltaTable) state.indexes.set(indexName, structuredClone(index));
+      }
+      state.keyConstraints = [...state.keyConstraints, ...canonicalState.keyConstraints.filter((constraint) => constraint.tableName === deltaTable)];
+      state.countedConstraints = [...state.countedConstraints, ...canonicalState.countedConstraints.filter((constraint) => constraint.tableName === deltaTable)];
+      return { rows: [] };
+    }
     throw new Error(`Unexpected fake schema query: ${sql.slice(0, 100)}`);
   }
 }
@@ -251,13 +273,74 @@ describe("PostgreSQL schema contract", () => {
     expect(client.queries.at(-1)?.sql).toBe("COMMIT");
   });
 
+  it("upgrades a known v1 revision through the recorded migration path", async () => {
+    const v1State = schemaStateWithCanonicalShape(canonicalSchemaContract);
+    // v1에는 runtime_configs·usage_events가 모두 없었다 — canonical v3 상태에서 두 테이블을 빼고 시작한다.
+    for (const key of [...v1State.columns.keys()]) {
+      if (key.startsWith("runtime_configs\0") || key.startsWith("usage_events\0")) v1State.columns.delete(key);
+    }
+    v1State.indexes = new Map([...v1State.indexes.entries()].filter(([, index]) => index.tableName !== "runtime_configs" && index.tableName !== "usage_events"));
+    v1State.keyConstraints = v1State.keyConstraints.filter((constraint) => constraint.tableName !== "runtime_configs" && constraint.tableName !== "usage_events");
+    v1State.countedConstraints = v1State.countedConstraints.filter((constraint) => constraint.tableName !== "runtime_configs" && constraint.tableName !== "usage_events");
+
+    const client = new FakeSchemaClient({
+      revisionTableExists: true,
+      revision: { schema_version: 1, schema_sha256: POSTGRES_SCHEMA_V1_SHA256 },
+      columns: v1State.columns,
+      indexes: v1State.indexes,
+      keyConstraints: v1State.keyConstraints,
+      countedConstraints: v1State.countedConstraints
+    });
+
+    const outcome = await migratePostgresSchemaWithClient(client.asPoolClient(), canonicalSchemaSql, POSTGRES_SCHEMA_SHA256);
+
+    expect(outcome).toBe("applied");
+    expect(client.state.revision).toEqual({ schema_version: POSTGRES_SCHEMA_VERSION, schema_sha256: POSTGRES_SCHEMA_SHA256 });
+    // 전체 canonical DDL 대신 델타만 실행한다 — v1→v2→v3 체인이 순서대로 적용된다.
+    expect(client.queries.some(({ sql }) => sql === POSTGRES_SCHEMA_V1_TO_V2_SQL)).toBe(true);
+    expect(client.queries.some(({ sql }) => sql === POSTGRES_SCHEMA_V2_TO_V3_SQL)).toBe(true);
+    expect(client.queries.some(({ sql }) => sql === canonicalSchemaSql)).toBe(false);
+    expect(client.queries.some(({ sql }) => sql.startsWith(`UPDATE ${POSTGRES_SCHEMA_REVISION_TABLE}`))).toBe(true);
+    expect(client.queries.at(-1)?.sql).toBe("COMMIT");
+  });
+
+  it("upgrades a known v2 revision to v3 with only the usage_events delta", async () => {
+    const v2State = schemaStateWithCanonicalShape(canonicalSchemaContract);
+    // v2에는 usage_events가 없었다 — canonical v3 상태에서 그 테이블만 빼고 시작한다.
+    for (const key of [...v2State.columns.keys()]) {
+      if (key.startsWith("usage_events\0")) v2State.columns.delete(key);
+    }
+    v2State.indexes = new Map([...v2State.indexes.entries()].filter(([, index]) => index.tableName !== "usage_events"));
+    v2State.keyConstraints = v2State.keyConstraints.filter((constraint) => constraint.tableName !== "usage_events");
+    v2State.countedConstraints = v2State.countedConstraints.filter((constraint) => constraint.tableName !== "usage_events");
+
+    for (const v2Sha256 of POSTGRES_SCHEMA_V2_SHA256S) {
+      const client = new FakeSchemaClient({
+        revisionTableExists: true,
+        revision: { schema_version: 2, schema_sha256: v2Sha256 },
+        columns: new Map(v2State.columns),
+        indexes: new Map(v2State.indexes),
+        keyConstraints: structuredClone(v2State.keyConstraints),
+        countedConstraints: structuredClone(v2State.countedConstraints)
+      });
+
+      const outcome = await migratePostgresSchemaWithClient(client.asPoolClient(), canonicalSchemaSql, POSTGRES_SCHEMA_SHA256);
+
+      expect(outcome).toBe("applied");
+      expect(client.state.revision).toEqual({ schema_version: POSTGRES_SCHEMA_VERSION, schema_sha256: POSTGRES_SCHEMA_SHA256 });
+      expect(client.queries.some(({ sql }) => sql === POSTGRES_SCHEMA_V2_TO_V3_SQL)).toBe(true);
+      expect(client.queries.some(({ sql }) => sql === POSTGRES_SCHEMA_V1_TO_V2_SQL || sql === canonicalSchemaSql)).toBe(false);
+      expect(client.queries.at(-1)?.sql).toBe("COMMIT");
+    }
+  });
+
   it("fails closed on a ledger version or checksum mismatch without applying canonical DDL", async () => {
     const client = new FakeSchemaClient({
       revisionTableExists: true,
       revision: { schema_version: POSTGRES_SCHEMA_VERSION, schema_sha256: "0".repeat(64) }
     });
 
-    await expect(migratePostgresSchemaWithClient(client.asPoolClient(), canonicalSchemaSql, POSTGRES_SCHEMA_SHA256)).rejects.toThrow(/checksum mismatch/);
+    await expect(migratePostgresSchemaWithClient(client.asPoolClient(), canonicalSchemaSql, POSTGRES_SCHEMA_SHA256)).rejects.toThrow(/does not match any known contract version/);
 
     expect(client.queries.some(({ sql }) => sql === canonicalSchemaSql)).toBe(false);
     expect(client.queries.at(-1)?.sql).toBe("ROLLBACK");

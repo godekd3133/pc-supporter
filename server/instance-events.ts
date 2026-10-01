@@ -68,24 +68,10 @@ export async function publishInstanceEvent(kind: InstanceEventKind, data?: unkno
   }
 }
 
-// pg_notify 페이로드 제한(~8KB) 안쪽에서만 본문을 복제한다.
-export const INSTANCE_EVENT_PAYLOAD_LIMIT_BYTES = 7_000;
-
-// 본문이 한도를 넘으면 content를 빼 무효화 신호만 남긴다.
-export function configFileReplicationPayloadFor(name: string, content: unknown): { name: string; content?: unknown } {
-  if (content === undefined) return { name };
-  const serialized = JSON.stringify(content);
-  if (serialized.length > INSTANCE_EVENT_PAYLOAD_LIMIT_BYTES) return { name };
-  return { name, content };
-}
-
-export function publishConfigFileReplication(name: string, content: unknown) {
-  const payload = configFileReplicationPayloadFor(name, content);
-  if (payload.content === undefined && content !== undefined) {
-    console.warn(`[instance-events] ${name} 설정이 복제 한도를 넘어 본문 대신 무효화만 발행합니다.`);
-  }
-  return publishInstanceEvent("config:file", payload);
-}
+// 파일 설정은 본문을 싣지 않는다 — 본문은 runtime_configs 테이블에 올라가고
+// 이벤트는 이름만 실어 수신자가 DB에서 읽어 오게 한다(pg_notify ~8KB 제한을
+// 우회하면서 큰 오버라이드 맵도 복제할 수 있다).
+export type ConfigFileEvent = { name: string };
 
 export function startInstanceEventBus(handler: InstanceEventHandler) {
   if (!process.env.DATABASE_URL?.trim()) return;

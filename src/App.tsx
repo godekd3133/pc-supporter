@@ -502,6 +502,7 @@ const RULE_GUIDES: Record<string, string> = {
   "gpu-motherboard-pcie": "그래픽카드 장착 폭과 메인보드 슬롯이 맞지 않아요.",
   "gpu-thickness": "그래픽카드 두께가 55mm 이상이라 옆 슬롯에 닿을 수 있어요.",
   "gpu-case-length": "그래픽카드가 케이스에 들어가지 않을 수 있어요.",
+  "gpu-case-low-profile": "슬림 케이스에는 LP 브라켓 그래픽카드만 장착할 수 있어요.",
   "gpu-cable-clearance": "GPU 전원 케이블과 케이스 측면 공간이 맞지 않을 수 있어요.",
   "gpu-psu-power": "그래픽카드와 CPU에 필요한 전력보다 파워 용량이 부족해요.",
   "gpu-psu-connector": "그래픽카드와 파워의 전원 커넥터가 맞지 않아요.",

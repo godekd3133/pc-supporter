@@ -966,6 +966,47 @@ describe("compatibility engine", () => {
     expect(result.links.find((link) => link.id === "gpu-case")?.status).toBe("unknown");
   });
 
+  it("blocks a non-LP GPU in an LP-only case and warns when bracket evidence is missing", () => {
+    const baseCase = seedCatalog.find((part) => part.id === "case-full-airflow")!;
+    const slimCase: Part = { ...baseCase, id: "case-lp-only", specs: { ...baseCase.specs, lowProfileOnly: true } };
+    const baseGpu = seedCatalog.find((part) => part.id === "gpu-rtx-4060")!;
+    const noLpGpu: Part = { ...baseGpu, id: "gpu-no-lp", specs: { ...baseGpu.specs, lowProfileBracket: false } };
+    const lpGpu: Part = { ...baseGpu, id: "gpu-with-lp", specs: { ...baseGpu.specs, lowProfileBracket: true } };
+    const catalog = seedCatalog.filter((part) => part.category !== "case" && part.category !== "gpu").concat(slimCase, noLpGpu, lpGpu);
+    const build = compatibleBuild();
+    build.case = { partId: slimCase.id, quantity: 1 };
+
+    build.gpu = { partId: noLpGpu.id, quantity: 1 };
+    const blocked = evaluateBuild(build, catalog, { includeSuggestions: false });
+    const blocker = blocked.findings.find((item) => item.ruleId === "gpu-case-low-profile");
+    expect(blocker?.severity).toBe("blocker");
+
+    build.gpu = { partId: baseGpu.id, quantity: 1 };
+    const unverified = evaluateBuild(build, [...catalog, baseGpu], { includeSuggestions: false });
+    expect(unverified.findings.find((item) => item.ruleId === "gpu-case-low-profile")?.severity).toBe("warning");
+
+    build.gpu = { partId: lpGpu.id, quantity: 1 };
+    const ok = evaluateBuild(build, catalog, { includeSuggestions: false });
+    expect(ok.findings.find((item) => item.ruleId === "gpu-case-low-profile")).toBeUndefined();
+  });
+
+  it("offers LP-bracket GPUs as fixes for an LP-only case finding", () => {
+    const baseCase = seedCatalog.find((part) => part.id === "case-full-airflow")!;
+    const slimCase: Part = { ...baseCase, id: "case-lp-only-fix", specs: { ...baseCase.specs, lowProfileOnly: true } };
+    const baseGpu = seedCatalog.find((part) => part.id === "gpu-rtx-4060")!;
+    const lpGpu: Part = { ...baseGpu, id: "gpu-with-lp-fix", specs: { ...baseGpu.specs, lowProfileBracket: true } };
+    const catalog = seedCatalog.filter((part) => part.category !== "case" && part.category !== "gpu").concat(slimCase, baseGpu, lpGpu);
+    const build = compatibleBuild();
+    build.case = { partId: slimCase.id, quantity: 1 };
+    build.gpu = { partId: baseGpu.id, quantity: 1 };
+    const result = evaluateBuild(build, catalog);
+    const finding = result.findings.find((item) => item.ruleId === "gpu-case-low-profile");
+    const suggestion = finding?.suggestions?.find((item) => item.part.id === lpGpu.id);
+
+    expect(finding?.severity).toBe("warning");
+    expect(suggestion?.fixesCurrentIssue).toBe(true);
+  });
+
   it("blocks a manually verified GPU cable bend conflict without deriving it from card thickness", () => {
     const baseGpu = seedCatalog.find((part) => part.id === "gpu-rtx-4060")!;
     const baseCase = seedCatalog.find((part) => part.id === "case-full-airflow")!;

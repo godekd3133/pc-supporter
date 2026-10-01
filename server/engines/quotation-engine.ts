@@ -11,7 +11,8 @@ import { loadEngineTargetFiltersConfig } from "../engine-target-filters";
 import { engineTargetFilterActiveFacetCount } from "../../shared/engine-target-filters";
 import { recentGenerationFailures } from "../generation-failure-log";
 import { DATA_DIR, fileUpdatedAt, withSerializedFileMutation, writeJson } from "../storage";
-import { publishConfigFileReplication } from "../instance-events";
+import { publishInstanceEvent } from "../instance-events";
+import { pushRuntimeConfigToDatabase } from "../runtime-config-store";
 
 // ---------- 견적 생성 옵션(관리자 조정 가능) ----------
 
@@ -123,8 +124,10 @@ async function persistEngineGenerationOptions(options: EngineGenerationOptions) 
 export async function saveEngineGenerationOptions(options: EngineGenerationOptions) {
   const path = engineGenerationOptionsPath();
   await persistEngineGenerationOptions(options);
-  // 다른 인스턴스에도 복제 — 수신자는 로컬 파일에 기록하고 mtime 캐시를 비운다.
-  void publishConfigFileReplication("engine-generation-options", options);
+  // 공유 원본(runtime_configs)에 올리고 다른 인스턴스에 무효화만 알린다 —
+  // 수신자는 DB에서 읽어 로컬 파일 복제본을 갱신한다.
+  await pushRuntimeConfigToDatabase("engine-generation-options", options);
+  void publishInstanceEvent("config:file", { name: "engine-generation-options" });
   return { options: loadEngineGenerationOptions(), updatedAt: await fileUpdatedAt(path) };
 }
 

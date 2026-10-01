@@ -1,5 +1,7 @@
 import type { GpuPhysicalOverride, Part, PhysicalSourceCheck } from "../shared/types";
 import { GPU_PHYSICAL_OVERRIDES_PATH, readJson, writeJson } from "./storage";
+import { publishInstanceEvent } from "./instance-events";
+import { pushRuntimeConfigToDatabase } from "./runtime-config-store";
 
 export type GpuPhysicalOverrideMap = Record<string, GpuPhysicalOverride>;
 
@@ -239,7 +241,12 @@ async function withOverrideWriteLock<T>(mutate: (overrides: GpuPhysicalOverrideM
   const operation = overrideWriteQueue.then(async () => {
     const overrides = await readGpuPhysicalOverrides();
     const result = await mutate(overrides);
-    if (result.changed) await writeJson(GPU_PHYSICAL_OVERRIDES_PATH, overrides);
+    if (result.changed) {
+      await writeJson(GPU_PHYSICAL_OVERRIDES_PATH, overrides);
+      // 공유 원본에도 올려 다른 인스턴스가 이 오버라이드를 물려받게 한다.
+      await pushRuntimeConfigToDatabase("gpu-physical-overrides", overrides);
+      void publishInstanceEvent("config:file", { name: "gpu-physical-overrides" });
+    }
     return result.value;
   });
   overrideWriteQueue = operation.then(() => undefined, () => undefined);

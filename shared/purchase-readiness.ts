@@ -32,7 +32,7 @@ export function purchaseReadinessFor(result: CompatibilityResult): PurchaseReadi
   const healthState: PurchaseReadinessItemState = !health || health.overall !== "verified" || health.unpricedCount > 0 ? "review" : "pass";
   const budgetWon = result.recommendationPreferences?.budgetWon;
   const budgetState: PurchaseReadinessItemState = budgetWon === undefined ? "neutral" : !result.priceComplete ? "review" : result.totalPriceWon > budgetWon ? "review" : "pass";
-  const physicalRuleIds = new Set(["gpu-case-length", "gpu-thickness", "gpu-cable-clearance", "gpu-psu-power", "gpu-psu-connector", "gpu-psu-cable-topology", "case-cooler-height", "case-radiator-support", "psu-case-length", "psu-case-form-factor", "m2-lane-sharing", "m2-pcie-lane-sharing", "case-fan-headers", "case-rgb-headers", "case-rgb-voltage"]);
+  const physicalRuleIds = new Set(["gpu-case-length", "gpu-thickness", "gpu-case-low-profile", "gpu-cable-clearance", "gpu-psu-power", "gpu-psu-connector", "gpu-psu-cable-topology", "case-cooler-height", "case-radiator-support", "psu-case-length", "psu-case-form-factor", "m2-lane-sharing", "m2-pcie-lane-sharing", "case-fan-headers", "case-rgb-headers", "case-rgb-voltage"]);
   const physicalFindings = result.findings.filter((finding) => physicalRuleIds.has(finding.ruleId));
   const gpuPurchaseEvidence = result.gpuFit ? gpuPurchaseEvidenceFor(result.gpuFit) : undefined;
   const resourceSummary = buildResourceSummaryFor(result.metrics);

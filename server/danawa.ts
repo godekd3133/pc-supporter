@@ -930,6 +930,14 @@ function parseSpecs(category: PartCategory, name: string, description: string, r
     specs.lengthMm = parseNumber(text, /(?:가로\s*\(길이\)|GPU\s*길이|길이)\s*[:：]?\s*([\d,.]+)\s*mm/i);
     specs.widthMm = parseNumber(text, /(?:가로)\s*[:：]?\s*([\d,.]+)\s*mm/i);
     specs.thicknessMm = parseNumber(text, /(?:두께)\s*[:：]?\s*([\d,.]+)\s*mm/i);
+    // 로우프로파일 브라켓 — 슬림(LP 전용) 케이스 호환 판별에 쓴다. 이름의 LP
+    // 토큰("GT1030 LP")은 로우프로파일 카드를 뜻하고 LP 브라켓이 동봉된다.
+    if (/(?:로우\s*프로파일|로우프로파일|저프로파일|Low[-\s]?Profile|\bLP\b)\s*브라?켓?/i.test(text)
+      || /(?:로우\s*프로파일|Low[-\s]?Profile)[^\n/]{0,16}(?:동봉|포함|지원)/i.test(text)
+      || /(?:^|[\s/])LP(?=[\s/]|$)/i.test(name)
+      || /로우\s*프로파일|로우프로파일|저프로파일/i.test(name)) {
+      specs.lowProfileBracket = true;
+    }
   }
 
   if (category === "ssd") {
@@ -1000,6 +1008,12 @@ function parseSpecs(category: PartCategory, name: string, description: string, r
       .filter(([pattern]) => (pattern as RegExp).test(supportedPsuText))
       .map(([, form]) => form as string);
     if (supportedPsuFormFactors.length > 0) specs.supportedPsuFormFactors = [...new Set(supportedPsuFormFactors)];
+    // LP 전용(슬림) 케이스 — 확장 슬롯이 로우프로파일 브라켓만 받는다.
+    // 스펙에 로우프로파일 브라켓이 직접 언급된 경우만 true로 둔다.
+    if (/(?:로우\s*프로파일|로우프로파일|Low[-\s]?Profile)\s*브라?켓?/i.test(text)
+      || /(?:슬롯|브라?켓|슬림)[^\n/]{0,24}(?:로우\s*프로파일|로우프로파일|Low[-\s]?Profile|\bLP\b)/i.test(text)) {
+      specs.lowProfileOnly = true;
+    }
   }
 
   if (category === "psu") {

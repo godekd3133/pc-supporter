@@ -690,6 +690,8 @@ export interface PartSpecs {
   thicknessMm?: number;
   gpuSlotOccupancy?: number;
   gpuCableBendClearanceMm?: number;
+  /** 로우프로파일 브래킷 포함 — 슬림(LP 전용) 케이스에 장착 가능한지 판단한다. */
+  lowProfileBracket?: boolean;
   /** Runtime-only provenance applied from the physical review store. */
   physicalEvidenceSourceNote?: string;
   physicalEvidenceSourceUrl?: string;
@@ -709,6 +711,8 @@ export interface PartSpecs {
   hddBays?: number;
   ssdBays?: number;
   supportedFormFactors?: string[];
+  /** 슬림 케이스 — 확장 슬롯이 로우프로파일 브라켓만 받는다. */
+  lowProfileOnly?: boolean;
   maxCoolingW?: number;
   wattageW?: number;
   psuDepthMm?: number;

@@ -155,6 +155,7 @@ const IMPACTS_BY_CATEGORY: Record<string, Record<string, ImpactDefinition>> = {
     recommendedPsuW: { kind: "compatibility", label: "GPU·PSU 전력", summary: "GPU 권장 파워와 PSU 용량을 다시 검사합니다.", ruleIds: ["gpu-psu-power"] },
     lengthMm: { kind: "compatibility", label: "GPU·케이스 길이", summary: "그래픽카드 길이와 케이스 허용 길이를 다시 검사합니다.", ruleIds: ["gpu-case-length"] },
     thicknessMm: { kind: "compatibility", label: "GPU 두께·슬롯 간섭", summary: "두꺼운 GPU의 인접 슬롯·케이스 간섭 경고를 다시 검사합니다.", ruleIds: ["gpu-thickness"] },
+    lowProfileBracket: { kind: "compatibility", label: "GPU LP 브라켓", summary: "로우프로파일 전용 케이스와 GPU 브라켓 규격을 다시 검사합니다.", ruleIds: ["gpu-case-low-profile"] },
     vramGb: { kind: "analysis", label: "해상도별 GPU VRAM 분석", summary: "게이밍 해상도 권장 VRAM 충족 여부를 다시 계산합니다.", ruleIds: ["gpu-target-vram", "gpu-target-vram-unknown"] }
   },
   ssd: {
@@ -177,7 +178,8 @@ const IMPACTS_BY_CATEGORY: Record<string, Record<string, ImpactDefinition>> = {
     rgbDeviceVoltage: { kind: "compatibility", label: "RGB 전압", summary: "케이스 RGB 전압과 메인보드 헤더 전압을 다시 검사합니다.", ruleIds: ["case-rgb-voltage"] },
     radiatorSizesMm: { kind: "compatibility", label: "라디에이터 장착", summary: "케이스가 수랭 라디에이터 크기를 지원하는지 다시 검사합니다.", ruleIds: ["case-radiator-support"] },
     radiatorSupports: { kind: "compatibility", label: "라디에이터 장착", summary: "케이스의 위치별 수랭 라디에이터 지원 크기를 다시 검사합니다.", ruleIds: ["case-radiator-support"] },
-    caseSidePanelClearanceMm: { kind: "compatibility", label: "GPU 케이블 측면 여유", summary: "케이스 측면 케이블 공간과 GPU 케이블 굽힘 요구를 다시 검사합니다.", ruleIds: ["gpu-cable-clearance"] }
+    caseSidePanelClearanceMm: { kind: "compatibility", label: "GPU 케이블 측면 여유", summary: "케이스 측면 케이블 공간과 GPU 케이블 굽힘 요구를 다시 검사합니다.", ruleIds: ["gpu-cable-clearance"] },
+    lowProfileOnly: { kind: "compatibility", label: "케이스 LP 전용 여부", summary: "슬림(LP 전용) 케이스와 GPU 브라켓 규격을 다시 검사합니다.", ruleIds: ["gpu-case-low-profile"] }
   },
   psu: {
     wattageW: { kind: "compatibility", label: "GPU·PSU 전력", summary: "GPU 권장 파워와 PSU 용량을 다시 검사합니다.", ruleIds: ["gpu-psu-power"] },

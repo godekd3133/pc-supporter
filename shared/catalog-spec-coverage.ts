@@ -91,6 +91,8 @@ const CATALOG_MISSING_FIELD_LABELS: Record<string, string> = {
   motherboardFormFactors: "지원 메인보드 규격",
   maxGpuLengthMm: "GPU 허용 길이",
   hddBays: "HDD 베이",
+  lowProfileOnly: "LP 전용 여부",
+  lowProfileBracket: "LP 브라켓 포함",
   wattageW: "정격 출력",
   psuFormFactor: "PSU 폼팩터",
   psuDepthMm: "PSU 깊이",
@@ -157,7 +159,11 @@ const CATALOG_CHANGE_SPEC_FIELD_PREFIX = "정규화 스펙 · ";
 export function catalogChangeFieldLabelFor(field: string) {
   if (field === "원문 스펙") return "수집된 스펙";
   if (field === "정규화 스펙") return "스펙 정보";
-  if (field.startsWith(CATALOG_CHANGE_SPEC_FIELD_PREFIX)) return `스펙 · ${field.slice(CATALOG_CHANGE_SPEC_FIELD_PREFIX.length)}`;
+  if (field.startsWith(CATALOG_CHANGE_SPEC_FIELD_PREFIX)) {
+    const key = field.slice(CATALOG_CHANGE_SPEC_FIELD_PREFIX.length);
+    // 라벨 맵에 등록된 키만 한글로 바꾸고, 나머지는 원래 필드명을 보여 준다.
+    return `스펙 · ${key in CATALOG_MISSING_FIELD_LABELS ? CATALOG_MISSING_FIELD_LABELS[key] : key}`;
+  }
   return field;
 }
 

@@ -213,6 +213,21 @@ CREATE TABLE IF NOT EXISTS usage_event_daily_counts (
   counts JSONB NOT NULL DEFAULT '{}'::jsonb
 );
 
+-- 클라이언트 퍼널/리텐션 분석용 원시 이벤트 로그 — 익명 visitor/session 키는
+-- HMAC으로 해시돼 저장되고 props는 정제된 스칼라만 허용한다.
+CREATE TABLE IF NOT EXISTS usage_events (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  occurred_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp(),
+  event TEXT NOT NULL,
+  visitor_key TEXT,
+  session_key TEXT,
+  path TEXT,
+  props JSONB NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(props) = 'object')
+);
+CREATE INDEX IF NOT EXISTS usage_events_occurred_idx ON usage_events(occurred_at);
+CREATE INDEX IF NOT EXISTS usage_events_event_idx ON usage_events(event, occurred_at);
+CREATE INDEX IF NOT EXISTS usage_events_visitor_idx ON usage_events(visitor_key, occurred_at);
+
 CREATE TABLE IF NOT EXISTS api_rate_limit_buckets (
   scope TEXT NOT NULL,
   client_key_hash TEXT NOT NULL,
@@ -302,6 +317,13 @@ CREATE INDEX IF NOT EXISTS owner_session_grants_resource_idx
 CREATE INDEX IF NOT EXISTS owner_session_grants_expiry_idx
   ON owner_session_grants(expires_at)
   WHERE expires_at IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS runtime_configs (
+  config_key TEXT PRIMARY KEY CHECK (length(config_key) BETWEEN 1 AND 120),
+  payload JSONB NOT NULL CHECK (jsonb_typeof(payload) IN ('object', 'array')),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp(),
+  updated_by TEXT
+);
 
 CREATE TABLE IF NOT EXISTS pc_supporter_schema_revision (
   singleton_id TEXT PRIMARY KEY CHECK (singleton_id = 'current'),

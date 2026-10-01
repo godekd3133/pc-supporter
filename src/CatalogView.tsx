@@ -154,7 +154,9 @@ function compactSummary(part: Part) {
     part.specs.vramGb !== undefined ? `VRAM ${part.specs.vramGb}GB` : undefined,
     part.specs.wattageW !== undefined ? `${part.specs.wattageW}W` : undefined,
     part.specs.formFactor,
-    part.specs.interface
+    part.specs.interface,
+    part.specs.lowProfileBracket === true ? "LP 브라켓" : undefined,
+    part.specs.lowProfileOnly === true ? "LP 전용" : undefined
   ].filter((value): value is string => typeof value === "string");
   return values.slice(0, 4).join(" · ") || "주요 사양 정보 없음";
 }
@@ -224,6 +226,7 @@ function specRowsFor(part: Part) {
   add("GPU 폭", specs.widthMm, "mm");
   add("GPU 두께", specs.thicknessMm, "mm");
   add("GPU 슬롯 점유", specs.gpuSlotOccupancy, "slot");
+  add("LP 브라켓 포함", specs.lowProfileBracket === true ? "예" : specs.lowProfileBracket === false ? "아니요" : undefined);
   add("메인보드 규격", specs.motherboardFormFactors);
   add("M.2 슬롯", specs.m2Slots, "개");
   add("SATA 포트", specs.sataPorts, "개");
@@ -236,6 +239,7 @@ function specRowsFor(part: Part) {
   add("최대 PSU 길이", specs.maxPsuLengthMm, "mm");
   add("HDD 베이", specs.hddBays, "개");
   add("SSD 베이", specs.ssdBays, "개");
+  add("슬롯 규격", specs.lowProfileOnly === true ? "LP 전용" : specs.lowProfileOnly === false ? "표준" : undefined);
   add("최대 냉각 용량", specs.maxCoolingW, "W");
   add("PSU 규격", specs.psuFormFactor);
   add("PSU 깊이", specs.psuDepthMm, "mm");

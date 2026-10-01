@@ -226,6 +226,18 @@ CREATE TABLE IF NOT EXISTS usage_event_daily_counts (
   day_utc DATE PRIMARY KEY,
   counts JSONB NOT NULL DEFAULT '{}'::jsonb
 );
+CREATE TABLE IF NOT EXISTS usage_events (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  occurred_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp(),
+  event TEXT NOT NULL,
+  visitor_key TEXT,
+  session_key TEXT,
+  path TEXT,
+  props JSONB NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(props) = 'object')
+);
+CREATE INDEX IF NOT EXISTS usage_events_occurred_idx ON usage_events(occurred_at);
+CREATE INDEX IF NOT EXISTS usage_events_event_idx ON usage_events(event, occurred_at);
+CREATE INDEX IF NOT EXISTS usage_events_visitor_idx ON usage_events(visitor_key, occurred_at);
 CREATE TABLE IF NOT EXISTS api_rate_limit_buckets (
   scope TEXT NOT NULL,
   client_key_hash TEXT NOT NULL,
@@ -305,6 +317,12 @@ CREATE INDEX IF NOT EXISTS owner_session_grants_resource_idx
 CREATE INDEX IF NOT EXISTS owner_session_grants_expiry_idx
   ON owner_session_grants(expires_at)
   WHERE expires_at IS NOT NULL;
+CREATE TABLE IF NOT EXISTS runtime_configs (
+  config_key TEXT PRIMARY KEY CHECK (length(config_key) BETWEEN 1 AND 120),
+  payload JSONB NOT NULL CHECK (jsonb_typeof(payload) IN ('object', 'array')),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp(),
+  updated_by TEXT
+);
 CREATE TABLE IF NOT EXISTS pc_supporter_schema_revision (
   singleton_id TEXT PRIMARY KEY CHECK (singleton_id = 'current'),
   schema_version INTEGER NOT NULL CHECK (schema_version > 0),
@@ -937,6 +955,85 @@ export async function readUsageEventDailyCountsFromDatabase(): Promise<Record<st
   }
 }
 
+// 클라이언트가 보낸 익명 ID는 DB에 원문으로 남기지 않는다 — rate-limit과 같은
+// HMAC 비밀키로 해시해 "같은 방문자"만 구분할 수 있게 한다.
+function usageEventIdentityKey(kind: "visitor" | "session", raw: string | undefined) {
+  if (!raw) return null;
+  const secret = rateLimitHmacSecret() ?? "pc-supporter-usage-event-identity";
+  return createHmac("sha256", secret).update(`usage-event\0${kind}\0${raw}`).digest("hex");
+}
+
+export type UsageEventInsertRow = {
+  event: string;
+  occurredAt: Date;
+  visitorId?: string;
+  sessionId?: string;
+  path?: string;
+  props?: Record<string, unknown>;
+};
+
+export type UsageEventAnalyticsRow = {
+  event: string;
+  visitor_key: string | null;
+  session_key: string | null;
+  path: string | null;
+  props: Record<string, unknown> | null;
+  occurred_at: Date;
+};
+
+const USAGE_EVENT_RETENTION_MS = 95 * 24 * 60 * 60 * 1_000;
+const USAGE_EVENT_PRUNE_INTERVAL_MS = 24 * 60 * 60 * 1_000;
+const USAGE_EVENT_ANALYTICS_ROW_LIMIT = 250_000;
+let lastUsageEventPruneAt = 0;
+
+export async function insertUsageEventsInDatabase(rows: UsageEventInsertRow[]) {
+  if (rows.length === 0) return;
+  await ensureDatabase();
+  try {
+    await pool!.query(
+      `INSERT INTO usage_events (occurred_at, event, visitor_key, session_key, path, props)
+       SELECT occurred_at, event, visitor_key, session_key, path, props
+       FROM unnest(
+         $1::timestamptz[], $2::text[], $3::text[], $4::text[], $5::text[], $6::jsonb[]
+       ) AS inserted(occurred_at, event, visitor_key, session_key, path, props)`,
+      [
+        rows.map((row) => row.occurredAt.toISOString()),
+        rows.map((row) => row.event),
+        rows.map((row) => usageEventIdentityKey("visitor", row.visitorId)),
+        rows.map((row) => usageEventIdentityKey("session", row.sessionId)),
+        rows.map((row) => row.path ?? null),
+        rows.map((row) => JSON.stringify(row.props ?? {}))
+      ]
+    );
+    // 이벤트 로그는 95일만 보존한다 — 인스턴스당 하루 한 번만 정리한다.
+    if (Date.now() - lastUsageEventPruneAt >= USAGE_EVENT_PRUNE_INTERVAL_MS) {
+      lastUsageEventPruneAt = Date.now();
+      await pool!.query("DELETE FROM usage_events WHERE occurred_at < $1::timestamptz", [new Date(Date.now() - USAGE_EVENT_RETENTION_MS).toISOString()]);
+    }
+  } catch (error: unknown) {
+    markDatabaseUnavailable("usage-event raw insert", error);
+    throw error;
+  }
+}
+
+export async function readUsageEventRowsForAnalytics(since: Date): Promise<UsageEventAnalyticsRow[]> {
+  await ensureDatabase();
+  try {
+    const result = await pool!.query<UsageEventAnalyticsRow>(
+      `SELECT event, visitor_key, session_key, path, props, occurred_at
+       FROM usage_events
+       WHERE occurred_at >= $1::timestamptz
+       ORDER BY occurred_at ASC
+       LIMIT $2`,
+      [since.toISOString(), USAGE_EVENT_ANALYTICS_ROW_LIMIT]
+    );
+    return result.rows;
+  } catch (error: unknown) {
+    markDatabaseUnavailable("usage-event analytics read", error);
+    throw error;
+  }
+}
+
 export async function persistenceDiagnostics(): Promise<PersistenceDiagnostics> {
   if (!configuredDatabaseUrl) {
     return { databaseConfigured: false, storageMode: "postgres", ready: false, unavailableReason: "database_unavailable" };
@@ -1060,6 +1157,59 @@ export async function readCatalogVersionStamp(): Promise<string> {
     return result.rows[0]?.stamp ?? "";
   } catch (error) {
     markDatabaseUnavailable("catalog version stamp", error);
+    throw error;
+  }
+}
+
+// 인스턴스 간 공유되는 운영 설정 — 파일 복제본이 아닌 DB가 원본이다.
+export type RuntimeConfigRecord = { key: string; payload: unknown; updatedAt: string; updatedBy: string | null };
+
+export async function readRuntimeConfigRecord(key: string): Promise<RuntimeConfigRecord | null> {
+  await ensureDatabase();
+  try {
+    const result = await pool!.query<{ config_key: string; payload: unknown; updated_at: Date | string; updated_by: string | null }>(
+      "SELECT config_key, payload, updated_at, updated_by FROM runtime_configs WHERE config_key = $1",
+      [key]
+    );
+    const row = result.rows[0];
+    if (!row) return null;
+    return { key: row.config_key, payload: row.payload, updatedAt: typeof row.updated_at === "string" ? row.updated_at : row.updated_at.toISOString(), updatedBy: row.updated_by };
+  } catch (error) {
+    markDatabaseUnavailable("runtime config read", error);
+    throw error;
+  }
+}
+
+export async function writeRuntimeConfigRecord(key: string, payload: unknown, updatedBy?: string): Promise<RuntimeConfigRecord> {
+  await ensureDatabase();
+  try {
+    const result = await pool!.query<{ config_key: string; payload: unknown; updated_at: Date | string; updated_by: string | null }>(
+      `INSERT INTO runtime_configs (config_key, payload, updated_at, updated_by)
+       VALUES ($1, $2::jsonb, statement_timestamp(), $3)
+       ON CONFLICT (config_key) DO UPDATE SET
+         payload = EXCLUDED.payload,
+         updated_at = statement_timestamp(),
+         updated_by = EXCLUDED.updated_by
+       RETURNING config_key, payload, updated_at, updated_by`,
+      [key, JSON.stringify(payload), updatedBy ?? null]
+    );
+    const row = result.rows[0];
+    return { key: row.config_key, payload: row.payload, updatedAt: typeof row.updated_at === "string" ? row.updated_at : row.updated_at.toISOString(), updatedBy: row.updated_by };
+  } catch (error) {
+    markDatabaseUnavailable("runtime config write", error);
+    throw error;
+  }
+}
+
+export async function listRuntimeConfigRecords(): Promise<RuntimeConfigRecord[]> {
+  await ensureDatabase();
+  try {
+    const result = await pool!.query<{ config_key: string; payload: unknown; updated_at: Date | string; updated_by: string | null }>(
+      "SELECT config_key, payload, updated_at, updated_by FROM runtime_configs ORDER BY config_key"
+    );
+    return result.rows.map((row) => ({ key: row.config_key, payload: row.payload, updatedAt: typeof row.updated_at === "string" ? row.updated_at : row.updated_at.toISOString(), updatedBy: row.updated_by }));
+  } catch (error) {
+    markDatabaseUnavailable("runtime config list", error);
     throw error;
   }
 }
