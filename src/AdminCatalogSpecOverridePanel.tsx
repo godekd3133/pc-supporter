@@ -130,7 +130,7 @@ export function AdminCatalogSpecOverridePanel({ onToast }: { onToast: (message: 
     return () => { cancelled = true; };
   }, [overrideRefreshNonce]);
 
-  const editableFields = useMemo(() => selectedPart ? catalogSpecReviewFieldsFor(selectedPart.category).filter((field) => selectedPart.missingFields.includes(field.field) && catalogSpecOverrideFieldTypeFor(selectedPart.category, field.field) !== undefined) : [], [selectedPart]);
+  const editableFields = useMemo(() => selectedPart ? catalogSpecReviewFieldsFor(selectedPart.category).filter((field) => (selectedPart.missingFields.includes(field.field) || (selectedPart.specs as Record<string, unknown>)[field.field] === undefined) && catalogSpecOverrideFieldTypeFor(selectedPart.category, field.field) !== undefined) : [], [selectedPart]);
 
   function resetSourceBatchProgress() {
     setSourceBatchNextOffset(null);
