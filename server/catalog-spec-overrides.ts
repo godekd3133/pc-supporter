@@ -163,7 +163,7 @@ export function validateCatalogSpecOverrideBatch(input: unknown, catalog: Part[]
           itemErrors.push(`${field}은 ${CATEGORY_LABELS[part.category]}에서 지원하지 않는 보강 필드입니다.`);
           continue;
         }
-        if (!allowedMissingFields.has(field)) {
+        if (!allowedMissingFields.has(field) && part.specs[field as keyof typeof part.specs] !== undefined) {
           itemErrors.push(`${field}은 현재 누락 필드가 아니므로 override로 덮어쓸 수 없습니다.`);
           continue;
         }
@@ -203,7 +203,7 @@ export function applyCatalogSpecOverrides(parts: Part[], overrides: CatalogSpecO
     const baseSpecValues: Record<string, unknown> = {};
     for (const [field, rawValue] of Object.entries(override.fields)) {
       const fieldType = catalogSpecOverrideFieldTypeFor(part.category, field);
-      if (!fieldType || !part.missingFields.includes(field)) continue;
+      if (!fieldType || (!part.missingFields.includes(field) && part.specs[field as keyof typeof part.specs] !== undefined)) continue;
       const value = fieldValueFor(part.category, field, rawValue);
       if (value === undefined) continue;
       const specKey = field as keyof typeof specs;
