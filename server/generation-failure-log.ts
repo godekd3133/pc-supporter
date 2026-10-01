@@ -1,4 +1,5 @@
 import type { BuildGenerationDiagnostic, BuildGenerationRequest } from "../shared/types";
+import { publishInstanceEvent } from "./instance-events";
 
 // 자동 구성 실패를 구조화 로그 + 최근 기록 링 버퍼에 남긴다.
 // 목적: 사용자가 "실패했다"고만 보고해도 서버 로그/관리자 조회로
@@ -109,6 +110,16 @@ export function recordGenerationFailure(
   } catch {
     // Logging must never change the result of an application request.
   }
+  // 다른 인스턴스의 관리자 화면에도 같은 기록이 보이도록 버스로 브로드캐스트한다.
+  void publishInstanceEvent("generation-failure", record);
+  return record;
+}
+
+// 다른 인스턴스가 버스로 보낸 기록을 그대로 붙인다 — 다시 발행하면 순환하므로
+// 여기서는 목록에만 추가한다.
+export function appendGenerationFailureRecord(record: GenerationFailureRecord) {
+  recentFailures.push(record);
+  if (recentFailures.length > MAX_RECENT_FAILURES) recentFailures.splice(0, recentFailures.length - MAX_RECENT_FAILURES);
   return record;
 }
 

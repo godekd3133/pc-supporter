@@ -78,7 +78,7 @@ vi.mock("pg", () => ({
             transactionCoolingFanOverrideUpdatedAt = fakeDatabase.coolingFanOverrideUpdatedAt;
             return { rows: [], rowCount: 0 };
           }
-          if (sql === "ROLLBACK" || sql.includes("pg_advisory_xact_lock") || sql.includes("CREATE TABLE IF NOT EXISTS catalog_parts")) {
+          if (sql === "ROLLBACK" || sql.includes("pg_advisory_xact_lock") || sql.includes("CREATE TABLE IF NOT EXISTS catalog_parts") || sql.startsWith("SELECT pg_notify")) {
             return { rows: [], rowCount: 0 };
           }
           if (sql === "COMMIT") {

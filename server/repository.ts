@@ -9,6 +9,7 @@ import { RateLimitStoreUnavailableError, type RateLimitDecision, type RateLimitP
 import { appendSavedBuildCheckHistory, savedBuildCheckHistoryFromUnknown, savedBuildCheckSnapshotFromUnknown, SAVED_BUILD_CHECK_HISTORY_LIMIT } from "../shared/saved-build-check";
 import type { SavedBuildCheckSnapshot } from "../shared/types";
 import { savedBuildMonitorSubscriptionFromUnknown } from "../shared/saved-build-monitor-subscription";
+import { publishInstanceEventTransactional } from "./instance-events";
 import type { SavedBuildMonitorSubscription } from "../shared/saved-build-monitor-subscription";
 import { savedBuildVersionBackupDiffFor, savedBuildVersionGroupIdFor, savedBuildVersionMigratedBuildsFor, savedBuildVersionMigrationPreviewFor, savedBuildVersionNumberFor } from "../shared/saved-build-version";
 import type { SavedBuildVersionBackupDetail, SavedBuildVersionBackupSummary, SavedBuildVersionMigrationPreview, SavedBuildVersionMigrationMutationResult, SavedBuildVersionMigrationRollbackResult } from "../shared/saved-build-version";
@@ -1116,6 +1117,7 @@ export async function writeCatalogRecords(
         [part.id, part.category, part.source, part.sourceProductCode ?? null, part.dataQuality, JSON.stringify(part), part.updatedAt]
       );
     }
+    await publishInstanceEventTransactional(client, "cache-invalidate:catalog");
     await client.query("COMMIT");
     return;
   } catch (error) {
@@ -1156,6 +1158,7 @@ export async function patchCatalogPriceRecords(
       );
       if (result.rows[0]) changed.push({ before: result.rows[0].before_payload, after: result.rows[0].after_payload });
     }
+    await publishInstanceEventTransactional(client, "cache-invalidate:catalog");
     await client.query("COMMIT");
     return changed;
   } catch (error) {
@@ -1307,6 +1310,7 @@ export async function mutateAccessoryCatalogRecords(
     const timestampResult = await client.query<{ updated_at: Date | string | null }>(
       "SELECT MAX(updated_at) AS updated_at FROM catalog_accessories"
     );
+    await publishInstanceEventTransactional(client, "cache-invalidate:accessories");
     await client.query("COMMIT");
     return { items: next.items, updatedAt: accessoryCatalogTimestamp(timestampResult.rows[0]?.updated_at) };
   } catch (error: unknown) {
@@ -1363,6 +1367,7 @@ export async function patchAccessoryCatalogPriceRecords(
       if (result.rows[0]) changed.push({ before: result.rows[0].before_payload, after: result.rows[0].after_payload });
     }
     const timestampResult = await client.query<{ updated_at: Date | string | null }>("SELECT MAX(updated_at) AS updated_at FROM catalog_accessories");
+    await publishInstanceEventTransactional(client, "cache-invalidate:accessories");
     await client.query("COMMIT");
     return { updates: changed, updatedAt: accessoryCatalogTimestamp(timestampResult.rows[0]?.updated_at) };
   } catch (error: unknown) {

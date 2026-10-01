@@ -8,7 +8,7 @@ import { resolve } from "node:path";
 import type { AccessoryCategory, AccessoryPriceFilter, AccessoryRefreshResponse, AccessorySelection, AlternativeRisk, AlternativeRiskCounts, BuildGenerationRequest, BuildGenerationVariantResult, BuildSelection, CatalogChangeKind, CatalogChangeRecord, CompatibilityResult, CrawlResumePreview, CrawlStatus, DataFreshness, DataQuality, Finding, GpuPhysicalOverride, ListingPolicy, M2CoverageFilter, M2MappingStatus, M2SlotCoverage, M2SlotCoverageBucket, M2SlotCoverageItem, M2SlotOverride, M2SlotReviewTemplate, M2SlotReviewTemplateItem, Part, PartCategory, PartRefreshResponse, PriceAvailabilityFilter, RecommendationPreferences, RecommendationProfile, SavedBuild, SavedBuildCheckSnapshot } from "../shared/types";
 import { ACCESSORY_CATEGORIES, PART_CATEGORIES } from "../shared/types";
 import { catalogEligibilitySummaryFor, catalogMeta, catalogSearchTotalsFor, catalogUpdatedAtFor, countParts, currentCatalogRuntimeRevision, filterParts, findPart, invalidateCatalogCache, loadCatalog, parseCatalogDetailFilterQuery, parseCatalogMissingField, parsePartSpecFilter, partSpecFilterDiagnosticsFor, partSpecFilterMatcherFor, searchParts, upsertCatalog } from "./catalog";
-import { countAccessories, currentAccessoryUpdatedAt, findAccessory, loadAccessories, readAccessoryCoverage, searchAccessories, upsertAccessories } from "./accessories";
+import { countAccessories, currentAccessoryUpdatedAt, findAccessory, invalidateAccessoryCache, loadAccessories, readAccessoryCoverage, searchAccessories, upsertAccessories } from "./accessories";
 import { loadCatalogSnapshot, loadCatalogSnapshotTimestamp } from "./catalog-snapshot";
 import { validateAccessoryTargetPartIds, validateBuildPartIds, validateBuildSelection } from "./build-validation";
 export { validateAccessoryTargetPartIds, validateBuildPartIds, validateBuildSelection } from "./build-validation";
@@ -23,7 +23,7 @@ import { recordUsageEvent, trackUsageEvent, usageEventSummaryFor } from "./usage
 import { classifyDataFreshness } from "./data-health";
 import { isAccessoryCrawlRunning, readAccessoryCrawlManifest, readAccessoryCrawlStatus, runAccessoryCrawlJob } from "./engines/crawler-engine";
 import { BuildGenerationError, ENGINE_VERSION, assessAlternativePart, buildGenerationRecoveryOptionsFor, candidateSimilarityForBuild, compareCandidateSimilarity, compareCandidateValue, evaluateBuild, generateBuildDraft } from "./engine";
-import { recordGenerationFailure, recentGenerationFailures } from "./generation-failure-log";
+import { appendGenerationFailureRecord, recordGenerationFailure, recentGenerationFailures } from "./generation-failure-log";
 import { cancelCrawlPageRetryBatch, crawlPageRetryBatchPlanFor, crawlPageRetryPlanFor, crawlResumePlanFor, isCrawlPageRetryBatchRunning, isCrawlRunning, readCrawlStatus, runCrawlJob, runCrawlPageRetryBatchJob, runCrawlPageRetryJob } from "./engines/crawler-engine";
 import { CRAWL_MANIFEST_PATH, ensureDataDirectory, fileUpdatedAt, readJson } from "./storage";
 import type { CrawlManifest } from "../shared/types";
@@ -127,6 +127,7 @@ import { BackgroundJobActiveConflictError, BackgroundJobIdempotencyConflictError
 import { startPriceRefreshQueueWorker } from "./price-refresh-worker";
 import { requestTelemetry } from "./request-telemetry";
 import { httpMetricsSnapshot, recordHttpRequestMetric } from "./request-metrics";
+import { INSTANCE_ID, instanceEventBusReady, startInstanceEventBus, stopInstanceEventBus } from "./instance-events";
 import { securityHeaders } from "./security-headers";
 
 const app = express();
@@ -895,11 +896,17 @@ async function runDueSavedBuildMonitors(now = new Date().toISOString()) {
   }
 }
 
+// LB 헬스 체크용 가벼운 liveness — DB·보안 진단 없이 프로세스 생존만 답한다.
+// 준비 상태(readiness)는 아래 /api/health가 담당한다.
+app.get("/api/health/live", (_request, response) => {
+  response.json({ ok: true, service: "pc-supporter", instanceId: INSTANCE_ID });
+});
+
 app.get("/api/health", async (_request, response) => {
   const persistence = await persistenceDiagnostics();
   const adminSecurity = adminSecurityStatus();
   const ok = persistence.ready && adminSecurity.productionReady;
-  response.status(ok ? 200 : 503).json({ ok, service: "pc-supporter", engineVersion: ENGINE_VERSION, persistence, adminSecurity });
+  response.status(ok ? 200 : 503).json({ ok, service: "pc-supporter", engineVersion: ENGINE_VERSION, instanceId: INSTANCE_ID, persistence, adminSecurity });
 });
 
 app.get("/api/admin/meta", requireAdmin, async (request, response) => {
@@ -963,7 +970,13 @@ app.get("/api/admin/monitor/status", requireAdmin, (_request, response) => {
     compatibilityCache: compatibilityResultCache.stats(),
     savedBuildCheckPreviewCache: savedBuildCheckPreviewCache.stats(),
     compatiblePartAssessmentCache: compatiblePartAssessmentCache.stats(),
-    httpMetrics: httpMetricsSnapshot()
+    httpMetrics: httpMetricsSnapshot(),
+    instance: {
+      instanceId: INSTANCE_ID,
+      eventBusReady: instanceEventBusReady(),
+      memory: process.memoryUsage(),
+      uptimeSeconds: Math.floor(process.uptime())
+    }
   });
 });
 
@@ -4993,6 +5006,24 @@ async function start() {
     trackBackgroundTimer(setInterval(() => void runDueSavedBuildMonitors(), 60_000));
   }
 
+  // 인스턴스 이벤트 버스 — 다른 노드의 카탈로그/주변 부품 쓰기가 알려지면
+  // 로컬 인메모리 캐시를 비우고, 견적 실패 기록은 모든 노드의 로그에 합친다.
+  startInstanceEventBus((event) => {
+    if (event.kind === "cache-invalidate:catalog") {
+      invalidateCatalogCache();
+      clearCompatibilityEngineCaches();
+      return;
+    }
+    if (event.kind === "cache-invalidate:accessories") {
+      invalidateAccessoryCache();
+      clearCompatibilityEngineCaches();
+      return;
+    }
+    if (event.kind === "generation-failure" && event.source !== INSTANCE_ID) {
+      appendGenerationFailureRecord(event.data as Parameters<typeof appendGenerationFailureRecord>[0]);
+    }
+  });
+
   const priceRefreshEnabled = priceRefreshSchedulerEnabled();
   const ownsBackgroundWork = processRole !== "api";
   const runsDurableWorker = ownsBackgroundWork;
@@ -5042,6 +5073,7 @@ async function start() {
           apiServer!.closeIdleConnections?.();
         });
       }
+      await stopInstanceEventBus();
       await priceRefreshScheduler.waitForIdle();
       await durablePriceRefreshScheduler.waitForIdle();
       if (priceRefreshWorker) await priceRefreshWorker.stop();
