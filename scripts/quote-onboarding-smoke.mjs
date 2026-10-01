@@ -363,9 +363,7 @@ const smokeExpression = `(${async function runQuoteOnboardingSmoke() {
   await navigateStart();
   await waitForStep("intent", "업그레이드 초기 화면");
   clickButton("쓰던 PC 업그레이드하기");
-  await waitFor(() => currentStep() === "upgrade", "업그레이드 안내 자동 진행");
-  clickButton("다음");
-  await waitFor(() => document.querySelector(".onboarding-steps-list") !== null, "업그레이드 안내 화면");
+  await waitFor(() => currentStep() === "upgrade" && document.querySelector(".onboarding-steps-list") !== null, "업그레이드 안내 자동 진행");
   clickButton("현재 부품 고르기");
   await waitFor(() => location.pathname === "/build" && new URLSearchParams(location.search).get("entry") === "upgrade", "업그레이드 편집기 handoff");
   const upgrade = { path: location.pathname + location.search, entry: "upgrade" };
