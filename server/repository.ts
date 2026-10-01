@@ -1447,6 +1447,7 @@ export async function mutateCoolingFanLoadOverrideRecords(
          updated_at = statement_timestamp()`,
       [JSON.stringify(next)]
     );
+    await publishInstanceEventTransactional(client, "cache-invalidate:accessories");
     await client.query("COMMIT");
     return next;
   } catch (error: unknown) {
@@ -1527,6 +1528,7 @@ async function mutatePostgresSingletonOverrideMap<T, V>(
            updated_at = statement_timestamp()`,
         [JSON.stringify(result.overrides)]
       );
+      await publishInstanceEventTransactional(client, "cache-invalidate:catalog");
     }
     await client.query("COMMIT");
     return result.value;
@@ -1683,6 +1685,7 @@ export async function writeBenchmarkOverrideRecords(overrides: Record<string, Be
         [override.partId, JSON.stringify(override), override.updatedAt]
       );
     }
+    await publishInstanceEventTransactional(client, "cache-invalidate:catalog");
     await client.query("COMMIT");
     return;
   } catch (error) {

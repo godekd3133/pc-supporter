@@ -305,6 +305,25 @@ export function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+// 뷰포트 너비를 넘는 본문 overflow를 찾아 실패 메시지에 요소 목록을 포함한다.
+export async function assertNoMobileOverflow(client, label) {
+  const report = await client.evaluate(`(() => {
+    const vw = document.documentElement.clientWidth;
+    const found = [];
+    for (const el of document.querySelectorAll("body *")) {
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) continue;
+      if (r.right > vw + 0.5 || r.left < -0.5) {
+        if (el.closest("svg")) continue;
+        found.push((typeof el.className === "string" ? el.className : el.tagName) + "@left=" + Math.round(r.left) + ",right=" + Math.round(r.right));
+        if (found.length >= 12) break;
+      }
+    }
+    return { innerWidth: vw, body: document.body?.scrollWidth ?? 0, document: document.documentElement?.scrollWidth ?? 0, offenders: found };
+  })()`);
+  assert(report.body <= report.innerWidth + 1 && report.document <= report.innerWidth + 1, `${label} innerWidth=${report.innerWidth}, body=${report.body}, document=${report.document} · offenders: ${report.offenders.join(" | ") || "없음"}`);
+}
+
 async function main() {
   assertRouteHistoryManifest();
   const healthResponse = await fetch(`${baseUrl}/api/health`).catch(() => undefined);
@@ -2103,33 +2122,26 @@ async function main() {
     await waitForValue(client, "document.querySelector('#save-build-decision-note') === null", "적용 후 비교 선택 이유 첨부 취소");
 
     await client.send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
-    const appliedResultWidth = await client.evaluate("({ innerWidth, body: document.body?.scrollWidth ?? 0, document: document.documentElement?.scrollWidth ?? 0 })");
-    assert(appliedResultWidth.body <= appliedResultWidth.innerWidth + 1 && appliedResultWidth.document <= appliedResultWidth.innerWidth + 1, `적용 후 검사 비교 패널에 모바일 가로 overflow가 있습니다. innerWidth=${appliedResultWidth.innerWidth}, body=${appliedResultWidth.body}, document=${appliedResultWidth.document}`);
+    await assertNoMobileOverflow(client, "적용 후 검사 비교 패널에 모바일 가로 overflow가 있습니다.");
     await client.send("Page.navigate", { url: `${baseUrl}/` });
     await waitForHomeDemoButtons(client, "모바일 홈 화면");
-    const homeWidth = await client.evaluate("({ innerWidth, body: document.body?.scrollWidth ?? 0, document: document.documentElement?.scrollWidth ?? 0 })");
-    assert(homeWidth.body <= homeWidth.innerWidth + 1 && homeWidth.document <= homeWidth.innerWidth + 1, `모바일 홈 가로 overflow가 있습니다. innerWidth=${homeWidth.innerWidth}, body=${homeWidth.body}, document=${homeWidth.document}`);
+    await assertNoMobileOverflow(client, "모바일 홈 가로 overflow가 있습니다.");
     await client.send("Page.navigate", { url: `${baseUrl}/build` });
     await waitForValue(client, "document.querySelector('.workspace-page') !== null && ((document.body?.innerText ?? '').includes('나의 PC 견적 구성') || (document.body?.innerText ?? '').includes('견적 구성'))", "모바일 견적 편집기");
-    const buildWidth = await client.evaluate("({ innerWidth, body: document.body?.scrollWidth ?? 0, document: document.documentElement?.scrollWidth ?? 0 })");
-    assert(buildWidth.body <= buildWidth.innerWidth + 1 && buildWidth.document <= buildWidth.innerWidth + 1, `모바일 견적 편집기 가로 overflow가 있습니다. innerWidth=${buildWidth.innerWidth}, body=${buildWidth.body}, document=${buildWidth.document}`);
+    await assertNoMobileOverflow(client, "모바일 견적 편집기 가로 overflow가 있습니다.");
     await client.send("Page.navigate", { url: `${baseUrl}/catalog?category=cpu&benchmarkStatus=incomplete` });
     await waitForValue(client, "document.querySelector('[aria-label=\"카탈로그 성능 근거 상태\"]') === null && document.querySelector('[data-testid=\"catalog-benchmark-filter-summary\"]') === null && document.querySelector('.catalog-part-list [data-testid^=\"catalog-part-\"]') !== null", "모바일 카탈로그 내부 성능 필터 비노출");
-    const catalogWidth = await client.evaluate("({ innerWidth, body: document.body?.scrollWidth ?? 0, document: document.documentElement?.scrollWidth ?? 0 })");
-    assert(catalogWidth.body <= catalogWidth.innerWidth + 1 && catalogWidth.document <= catalogWidth.innerWidth + 1, `모바일 카탈로그 가로 overflow가 있습니다. innerWidth=${catalogWidth.innerWidth}, body=${catalogWidth.body}, document=${catalogWidth.document}`);
+    await assertNoMobileOverflow(client, "모바일 카탈로그 가로 overflow가 있습니다.");
     await client.send("Page.navigate", { url: `${baseUrl}/recommend?profile=gaming` });
     await waitForValue(client, "(document.body?.innerText ?? '').includes('PC 견적 만들기')", "모바일 자동 구성 화면");
-    const generatorWidth = await client.evaluate("({ innerWidth, body: document.body?.scrollWidth ?? 0, document: document.documentElement?.scrollWidth ?? 0 })");
-    assert(generatorWidth.body <= generatorWidth.innerWidth + 1 && generatorWidth.document <= generatorWidth.innerWidth + 1, `모바일 자동 구성 가로 overflow가 있습니다. innerWidth=${generatorWidth.innerWidth}, body=${generatorWidth.body}, document=${generatorWidth.document}`);
+    await assertNoMobileOverflow(client, "모바일 자동 구성 가로 overflow가 있습니다.");
     assert(await setTextValue(client, '[data-testid="generator-brief-input"]', "게이밍 200만원"), "모바일 보완 안내 입력창을 찾지 못했습니다.");
     assert(await clickText(client, "입력 내용 보기"), "모바일 보완 안내 입력 내용 보기 버튼을 찾지 못했습니다.");
     await waitForValue(client, "document.querySelector('[data-testid=\"generator-brief-guidance\"]') !== null", "모바일 요구사항 보완 안내");
-    const guidanceWidth = await client.evaluate("({ innerWidth, body: document.body?.scrollWidth ?? 0, document: document.documentElement?.scrollWidth ?? 0 })");
-    assert(guidanceWidth.body <= guidanceWidth.innerWidth + 1 && guidanceWidth.document <= guidanceWidth.innerWidth + 1, `모바일 요구사항 보완 안내 가로 overflow가 있습니다. innerWidth=${guidanceWidth.innerWidth}, body=${guidanceWidth.body}, document=${guidanceWidth.document}`);
+    await assertNoMobileOverflow(client, "모바일 요구사항 보완 안내 가로 overflow가 있습니다.");
     await client.send("Page.navigate", { url: `${baseUrl}/admin` });
     await waitForValue(client, "(document.body?.innerText ?? '').includes('부품 데이터 센터')", "모바일 관리자 화면");
-    const adminWidth = await client.evaluate("({ innerWidth, body: document.body?.scrollWidth ?? 0, document: document.documentElement?.scrollWidth ?? 0 })");
-    assert(adminWidth.body <= adminWidth.innerWidth + 1 && adminWidth.document <= adminWidth.innerWidth + 1, `모바일 관리자 화면 가로 overflow가 있습니다. innerWidth=${adminWidth.innerWidth}, body=${adminWidth.body}, document=${adminWidth.document}`);
+    await assertNoMobileOverflow(client, "모바일 관리자 화면 가로 overflow가 있습니다.");
     await client.send("Emulation.clearDeviceMetricsOverride");
 
     await client.send("Page.navigate", { url: `${baseUrl}/watchlist` });

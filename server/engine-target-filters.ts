@@ -6,6 +6,7 @@ import { isKnownPrice, PART_CATEGORIES } from "../shared/types";
 import type { Part, PartCategory } from "../shared/types";
 import { isQuoteBrandAllowed, isQuoteSelectable } from "./listing";
 import { DATA_DIR, fileUpdatedAt, withSerializedFileMutation, writeJson } from "./storage";
+import { publishConfigFileReplication } from "./instance-events";
 
 export type EngineTargetFilterCategorySummary = {
   totalCount: number;
@@ -53,13 +54,25 @@ export function invalidateEngineTargetFiltersCache() {
   cache = undefined;
 }
 
-export async function saveEngineTargetFiltersConfig(config: EngineTargetFiltersConfig) {
+async function persistEngineTargetFiltersConfig(config: EngineTargetFiltersConfig) {
   const path = engineTargetFiltersPath();
   await withSerializedFileMutation(path, async () => {
     await writeJson(path, config);
     invalidateEngineTargetFiltersCache();
   });
+}
+
+export async function saveEngineTargetFiltersConfig(config: EngineTargetFiltersConfig) {
+  const path = engineTargetFiltersPath();
+  await persistEngineTargetFiltersConfig(config);
+  // 다른 인스턴스에도 복제 — 수신자는 로컬 파일에 기록하고 mtime 캐시를 비운다.
+  void publishConfigFileReplication("engine-target-filters", config);
   return { config: loadEngineTargetFiltersConfig(), updatedAt: await fileUpdatedAt(path) };
+}
+
+// 다른 인스턴스가 버스로 복제해온 설정 — 로컬 파일에만 기록하고 재발행하지 않는다.
+export async function applyReceivedEngineTargetFiltersConfig(config: EngineTargetFiltersConfig) {
+  await persistEngineTargetFiltersConfig(config);
 }
 
 // 생성기 후보 풀의 기준 게이트(범주·비핵심 상품·견적 브랜드·가격/스펙 완결)와

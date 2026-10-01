@@ -96,8 +96,9 @@ import { gamingPerformanceEvidencePath, loadGamingPerformanceEvidence, saveGamin
 import { clearCompatibilityEngineCaches, compatiblePartAssessmentCache } from "./engines/compatibility-engine";
 import { crawlerEngineSnapshot } from "./engines/crawler-engine";
 import { engineModulesStatus } from "./engines";
-import { ENGINE_GENERATION_OPTION_DEFAULTS, engineGenerationLadderMultipliersFor, engineGenerationOptionsPath, engineGenerationVariantPrioritiesFor, loadEngineGenerationOptions, normalizeEngineGenerationOptions, quotationEngineFloorFor, saveEngineGenerationOptions } from "./engines/quotation-engine";
-import { engineTargetFilterFacetOptionsFor, engineTargetFilterSummaryFor, engineTargetFiltersPath, loadEngineTargetFiltersConfig, normalizeEngineTargetFiltersInput, saveEngineTargetFiltersConfig } from "./engine-target-filters";
+import { applyReceivedEngineGenerationOptions, ENGINE_GENERATION_OPTION_DEFAULTS, engineGenerationLadderMultipliersFor, engineGenerationOptionsPath, engineGenerationVariantPrioritiesFor, invalidateEngineGenerationOptionsCache, loadEngineGenerationOptions, normalizeEngineGenerationOptions, quotationEngineFloorFor, saveEngineGenerationOptions } from "./engines/quotation-engine";
+import { applyReceivedEngineTargetFiltersConfig, engineTargetFilterFacetOptionsFor, engineTargetFilterSummaryFor, engineTargetFiltersPath, invalidateEngineTargetFiltersCache, loadEngineTargetFiltersConfig, normalizeEngineTargetFiltersInput, saveEngineTargetFiltersConfig } from "./engine-target-filters";
+import { engineTargetFilterConfigFromUnknown } from "../shared/engine-target-filters";
 import { catalogFacetOptionsCachedFor } from "./catalog-facet-options";
 import { engineTargetFilterFacetDiagnosticsFor, engineTargetFilterRuleAllowsPart, engineTargetFilterRuleForCategory, engineTargetFilterRuleFromUnknown, ENGINE_TARGET_FILTER_FACETS } from "../shared/engine-target-filters";
 import { gamingPerformanceEvidenceBatchValidationFor } from "../shared/gaming-performance-evidence";
@@ -5021,6 +5022,26 @@ async function start() {
     }
     if (event.kind === "generation-failure" && event.source !== INSTANCE_ID) {
       appendGenerationFailureRecord(event.data as Parameters<typeof appendGenerationFailureRecord>[0]);
+      return;
+    }
+    // 다른 인스턴스가 저장한 파일 설정 — 본문이 실려 있으면 로컬 파일에
+    // 기록하고 mtime 캐시를 비워 다음 읽기가 새 값을 적용한다. 본문이 없으면
+    // (페이로드 한도 초과) 캐시만 비운다.
+    if (event.kind === "config:file" && event.source !== INSTANCE_ID) {
+      const data = event.data as { name?: string; content?: unknown } | undefined;
+      if (data?.name === "engine-generation-options") {
+        if (data.content !== undefined) {
+          const { options } = normalizeEngineGenerationOptions(data.content);
+          void applyReceivedEngineGenerationOptions(options);
+        } else invalidateEngineGenerationOptionsCache();
+        return;
+      }
+      if (data?.name === "engine-target-filters") {
+        if (data.content !== undefined) {
+          const parsed = engineTargetFilterConfigFromUnknown(data.content);
+          void applyReceivedEngineTargetFiltersConfig(parsed.config);
+        } else invalidateEngineTargetFiltersCache();
+      }
     }
   });
 

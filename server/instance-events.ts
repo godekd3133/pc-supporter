@@ -21,7 +21,14 @@ export const INSTANCE_ID = `${hostname()}-${process.pid}-${randomUUID().slice(0,
 
 export const INSTANCE_EVENTS_CHANNEL = "pc_supporter_instance_events";
 
-export type InstanceEventKind = "cache-invalidate:catalog" | "cache-invalidate:accessories" | "generation-failure";
+export type InstanceEventKind =
+  | "cache-invalidate:catalog"
+  | "cache-invalidate:accessories"
+  | "generation-failure"
+  // 파일 기반 설정 복제 — 본문을 실어 각 노드가 로컬 파일에 기록한다.
+  // pg_notify 페이로드는 ~8KB 제한이라, 큰 설정 본문은 복제하지 않고
+  // 무효화 신호만 낸다(수신자는 다음 읽기에서 로컬 파일을 다시 읽는다).
+  | "config:file";
 
 export type InstanceEvent = {
   kind: InstanceEventKind;
@@ -61,6 +68,25 @@ export async function publishInstanceEvent(kind: InstanceEventKind, data?: unkno
   }
 }
 
+// pg_notify 페이로드 제한(~8KB) 안쪽에서만 본문을 복제한다.
+export const INSTANCE_EVENT_PAYLOAD_LIMIT_BYTES = 7_000;
+
+// 본문이 한도를 넘으면 content를 빼 무효화 신호만 남긴다.
+export function configFileReplicationPayloadFor(name: string, content: unknown): { name: string; content?: unknown } {
+  if (content === undefined) return { name };
+  const serialized = JSON.stringify(content);
+  if (serialized.length > INSTANCE_EVENT_PAYLOAD_LIMIT_BYTES) return { name };
+  return { name, content };
+}
+
+export function publishConfigFileReplication(name: string, content: unknown) {
+  const payload = configFileReplicationPayloadFor(name, content);
+  if (payload.content === undefined && content !== undefined) {
+    console.warn(`[instance-events] ${name} 설정이 복제 한도를 넘어 본문 대신 무효화만 발행합니다.`);
+  }
+  return publishInstanceEvent("config:file", payload);
+}
+
 export function startInstanceEventBus(handler: InstanceEventHandler) {
   if (!process.env.DATABASE_URL?.trim()) return;
   stopped = false;
@@ -81,7 +107,7 @@ export function startInstanceEventBus(handler: InstanceEventHandler) {
       if (message.channel !== INSTANCE_EVENTS_CHANNEL || !message.payload) return;
       try {
         const event = JSON.parse(message.payload) as InstanceEvent;
-        if (event.kind === "cache-invalidate:catalog" || event.kind === "cache-invalidate:accessories" || event.kind === "generation-failure") {
+        if (event.kind === "cache-invalidate:catalog" || event.kind === "cache-invalidate:accessories" || event.kind === "generation-failure" || event.kind === "config:file") {
           handler(event);
         }
       } catch {

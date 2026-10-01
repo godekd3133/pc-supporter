@@ -11,6 +11,7 @@ import { loadEngineTargetFiltersConfig } from "../engine-target-filters";
 import { engineTargetFilterActiveFacetCount } from "../../shared/engine-target-filters";
 import { recentGenerationFailures } from "../generation-failure-log";
 import { DATA_DIR, fileUpdatedAt, withSerializedFileMutation, writeJson } from "../storage";
+import { publishConfigFileReplication } from "../instance-events";
 
 // ---------- 견적 생성 옵션(관리자 조정 가능) ----------
 
@@ -111,13 +112,26 @@ export function invalidateEngineGenerationOptionsCache() {
   optionsCache = undefined;
 }
 
-export async function saveEngineGenerationOptions(options: EngineGenerationOptions) {
+async function persistEngineGenerationOptions(options: EngineGenerationOptions) {
   const path = engineGenerationOptionsPath();
   await withSerializedFileMutation(path, async () => {
     await writeJson(path, options);
     invalidateEngineGenerationOptionsCache();
   });
+}
+
+export async function saveEngineGenerationOptions(options: EngineGenerationOptions) {
+  const path = engineGenerationOptionsPath();
+  await persistEngineGenerationOptions(options);
+  // 다른 인스턴스에도 복제 — 수신자는 로컬 파일에 기록하고 mtime 캐시를 비운다.
+  void publishConfigFileReplication("engine-generation-options", options);
   return { options: loadEngineGenerationOptions(), updatedAt: await fileUpdatedAt(path) };
+}
+
+// 다른 인스턴스가 버스로 복제해온 설정 — 로컬 파일에만 기록하고 재발행하지
+// 않는다(재발행하면 모든 노드에서 순환한다).
+export async function applyReceivedEngineGenerationOptions(options: EngineGenerationOptions) {
+  await persistEngineGenerationOptions(options);
 }
 
 export function engineGenerationVariantPrioritiesFor(): RecommendationPriority[] {

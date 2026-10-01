@@ -850,6 +850,8 @@ html[data-theme="dark"] .catalog-part-card-copy strong { color: var(--ink); }
   .catalog-results-heading > span { max-width: none; text-align: left; }
   .catalog-page .workspace-heading > .button { width: 100%; }
   .catalog-part-card-copy span { white-space: normal; overflow-wrap: anywhere; }
+  /* 부품명은 카드에서 가장 중요한 텍스트 — 한 줄 말줄임 대신 두 줄까지 보여준다 */
+  .catalog-part-card-copy strong { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; white-space: normal; overflow-wrap: anywhere; }
 }
 
 @media (max-width: 500px) {

@@ -14092,6 +14092,10 @@ button.metric-card:disabled { cursor: not-allowed; }
 
   body { font-family: "Noto Sans KR", "Manrope", sans-serif; }
 
+  /* 한국어는 기본이 음절 단위 개행이라 "확인하/고"처럼 단어 중간에서 끊긴다 —
+     단어 단위로 끊되, 공백 없는 긴 토큰은 여전히 넘침 없이 감싼다 */
+  .app-shell { word-break: keep-all; overflow-wrap: break-word; }
+
   button,
   input,
   select { font-size: 14px; }
@@ -15969,25 +15973,25 @@ html[data-theme="dark"] .catalog-comparison-bar { border-color: var(--line) !imp
 }
 
 @media (max-width: 760px) {
-  .app-shell :where(div, section, article, nav, label, p, button, input, select, textarea, small, em, strong, a, span, li, th, td) { font-size: max(12px, 1em) !important; }
+  .app-shell :where(div, section, article, nav, label, p, button, input, select, textarea, small, em, strong, a, span, li, th, td) { font-size: max(11px, 1em) !important; }
 
-  .app-shell h1 { font-size: 34px !important; }
+  .app-shell h1 { font-size: 30px !important; }
 
-  .app-shell h2 { font-size: 24px !important; }
+  .app-shell h2 { font-size: 21px !important; }
 
-  .app-shell h3 { font-size: 18px !important; }
+  .app-shell h3 { font-size: 16px !important; }
 
-  .app-shell h4 { font-size: 16px !important; }
+  .app-shell h4 { font-size: 15px !important; }
 
-  .app-shell .eyebrow, .app-shell .panel-kicker, .app-shell .mini-label, .app-shell .mobile-kicker { font-size: 11px !important; }
+  .app-shell .eyebrow, .app-shell .panel-kicker, .app-shell .mini-label, .app-shell .mobile-kicker { font-size: 10px !important; }
 
-  .app-shell .button { font-size: 15px !important; }
+  .app-shell .button { font-size: 14px !important; }
 
-  .app-shell .button-small { font-size: 13px !important; }
+  .app-shell .button-small { font-size: 12px !important; }
 
-  .app-shell .mobile-bottom-nav-item { font-size: 12px !important; }
+  .app-shell .mobile-bottom-nav-item { font-size: 11px !important; }
 
-  .app-shell .mobile-result-metric strong { font-size: 26px !important; }
+  .app-shell .mobile-result-metric strong { font-size: 23px !important; }
 }
 
 .result-quick-nav-disclosure,

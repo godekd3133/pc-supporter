@@ -2,6 +2,7 @@ import type { PoolClient, QueryResultRow } from "pg";
 import { PART_CATEGORIES } from "../shared/types";
 import { catalogSpecOverrideFieldTypeFor } from "../shared/catalog-spec-overrides";
 import { physicalSourceCheckFromUnknown } from "./physical-source-check-history";
+import { publishInstanceEventTransactional } from "./instance-events";
 
 export type CatalogSpecOverrideMap = Record<string, Record<string, unknown>>;
 export type M2SlotOverrideMap = Record<string, Record<string, unknown>>;
@@ -245,6 +246,7 @@ export async function importCatalogOverrideMapsWithClient(client: PoolClient, ma
         [JSON.stringify(maps.m2SlotOverrides)]
       );
     }
+    await publishInstanceEventTransactional(client, "cache-invalidate:catalog");
     await client.query("COMMIT");
     transactionStarted = false;
     return { catalogSpecOverrides: catalogPlan, m2SlotOverrides: m2Plan };
