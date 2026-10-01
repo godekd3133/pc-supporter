@@ -751,6 +751,10 @@ async function main() {
       };
       const key = 'pc-supporter-saved-build-owner-tokens'; const tokens = JSON.parse(localStorage.getItem(key) ?? '{}'); delete tokens[${JSON.stringify(originalSavedId)}]; localStorage.setItem(key, JSON.stringify(tokens)); return true;
     })()`);
+    // 외부 사용자 관점을 만들려면 HttpOnly owner-session 쿠키까지 끊어야 한다 —
+    // localStorage의 legacy 토큰만 지우면 세션 쿠키가 비동기로 소유권을 되살려
+    // "내 견적으로 복제" 버튼이 렌더 도중 사라지는 경합이 생긴다.
+    await client.send("Network.deleteCookies", { name: "pc_supporter_owner_session", url: apiUrl, path: "/api" }).catch(() => undefined);
     await navigate(client, `${webUrl}/share/${encodeURIComponent(originalSavedId)}`, "공유 견적 외부 사용자 복제 route");
     await waitForValue(client, "document.querySelector('[data-testid=\"shared-build-clone\"]') !== null", "공유 견적 내 견적으로 복제 액션");
     assert(await clickSelector(client, '[data-testid="shared-build-clone"]', 1) === 1, "공유 견적 내 견적으로 복제 버튼을 클릭하지 못했습니다.");
