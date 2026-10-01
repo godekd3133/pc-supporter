@@ -74,9 +74,9 @@
 
 .catalog-detail-facet-label span { display: block; color: #5b7975; font-size: 8px; font-weight: 700; line-height: 1.35; }
 
-.catalog-detail-facet-body { display: grid; gap: 5px; min-width: 0; }
+.catalog-detail-facet-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 5px; min-width: 0; }
 
-.catalog-detail-facet-options { display: flex; flex-wrap: wrap; gap: 4px; }
+.catalog-detail-facet-options { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
 
 .catalog-facet-option { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid #dbeae6; border-radius: 999px; color: #4f6d66; background: #fff; font-size: 8px; line-height: 1.3; cursor: pointer; transition: border-color 120ms ease, background-color 120ms ease, color 120ms ease; }
 
@@ -92,9 +92,9 @@
 
 .catalog-facet-option.flag { border-radius: 7px; }
 
-.catalog-detail-facet-range-inputs { display: flex; align-items: center; gap: 6px; }
+.catalog-detail-facet-range-inputs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
 
-.catalog-detail-facet-range-inputs input { width: 92px; height: 28px; padding: 0 7px; border: 1px solid #dbeae6; border-radius: 5px; outline: 0; color: #607f78; background: #fff; font-size: 8px; }
+.catalog-detail-facet-range-inputs input { width: 92px; min-width: 0; height: 28px; padding: 0 7px; border: 1px solid #dbeae6; border-radius: 5px; outline: 0; color: #607f78; background: #fff; font-size: 8px; }
 
 .catalog-detail-facet-range-inputs input:focus { border-color: #8abeb2; box-shadow: 0 0 0 3px #edf9f6; }
 
