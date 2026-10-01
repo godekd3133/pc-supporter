@@ -97,6 +97,7 @@ class FakeOverrideClient {
       return { rows: [] };
     }
     if (sql.includes("pg_advisory_xact_lock")) return { rows: [] };
+    if (sql.includes("pg_notify")) return { rows: [] };
 
     const table = sql.includes("catalog_spec_overrides") ? "catalog_spec_overrides" : sql.includes("m2_slot_overrides") ? "m2_slot_overrides" : undefined;
     if (!table) throw new Error(`unexpected fake SQL: ${sql}`);

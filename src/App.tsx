@@ -983,6 +983,11 @@ function App() {
     trackUsageEvent("app_open");
   }, []);
 
+  // 퍼널 분석용 화면 전환 추적 — 라우트 뷰가 바뀔 때마다 기록한다.
+  useEffect(() => {
+    trackUsageEvent("view", { view });
+  }, [view]);
+
   useEffect(() => {
     if (view !== "editor" || new URLSearchParams(window.location.search).get("entry") !== "shared-generator") return;
     let raw: string | null = null;
@@ -1885,6 +1890,7 @@ function App() {
     try {
       await rememberBuildSelection(nextBuild, hydrationController.signal);
       if (checkRequestSequenceRef.current !== requestSequence || routeRequestSequenceRef.current !== routeRequestSequence) return;
+      trackUsageEvent("check_request", { source: "editor" });
       const checked = await api<CompatibilityResult>("/api/compatibility/check", {
         method: "POST",
         body: JSON.stringify({ ...nextBuild, recommendationPreferences: nextPreferences }),
@@ -1899,11 +1905,13 @@ function App() {
       setCheckedInputFingerprint(buildCompatibilityInputFingerprint(nextBuild, nextPreferences));
       setCheckError(null);
       setChecking(false);
+      trackUsageEvent("check_success", { source: "editor" });
       const upgradeEntry = new URLSearchParams(window.location.search).get("entry") === "upgrade";
       navigate(upgradeEntry ? "/result?entry=upgrade" : "/result", "result", { preservePendingCheck: true, preserveCatalogRefresh: options.catalogRefreshRequest !== undefined });
       return checked;
     } catch (error: unknown) {
       if (checkRequestSequenceRef.current !== requestSequence || routeRequestSequenceRef.current !== routeRequestSequence) return;
+      trackUsageEvent("check_fail", { source: "editor", status: error instanceof ApiError ? error.status : 0 });
       const message = error instanceof Error ? error.message : "검사에 실패했습니다.";
       setCheckError(message);
       setToast(message);
@@ -2140,6 +2148,7 @@ function App() {
     try {
       await navigator.clipboard.writeText(url);
       if (!isCurrent()) return;
+      trackUsageEvent("share_link", { kind: "result" });
       setToast("현재 결과 링크를 클립보드에 복사했습니다.");
     } catch {
       if (isCurrent()) setToast(`결과 링크를 복사하지 못했습니다. 주소를 직접 복사해 주세요: ${url}`);
@@ -2326,6 +2335,7 @@ function App() {
     setGeneratorRequestId(null);
     setGeneratorDiagnostics([]);
     setGeneratorRecoveryOptions([]);
+    trackUsageEvent("recommend_request", { source: "recommend", profile: request.profile, ...(request.budgetWon !== undefined ? { budgetWon: request.budgetWon } : {}) });
     try {
       const draft = await api<BuildGenerationResult>("/api/builds/recommend", {
         method: "POST",
@@ -2335,9 +2345,11 @@ function App() {
       });
       await rememberBuildSelection(draft.selection);
       if (!isCurrent()) return;
+      trackUsageEvent("recommend_success", { source: "recommend", profile: draft.profile });
       setGeneratorDraft(draft);
     } catch (error: unknown) {
       if (!isCurrent()) return;
+      trackUsageEvent("recommend_fail", { source: "recommend", status: error instanceof ApiError ? error.status : 0 });
       const message = error instanceof Error ? error.message : "자동 견적을 생성하지 못했습니다.";
       setGeneratorError(message);
       setGeneratorRequestId(requestIdFromError(error));
@@ -2360,6 +2372,7 @@ function App() {
     setGeneratorRequestId(null);
     setGeneratorDiagnostics([]);
     setGeneratorRecoveryOptions([]);
+    trackUsageEvent("recommend_request", { source: "variants", profile: request.profile, ...(request.budgetWon !== undefined ? { budgetWon: request.budgetWon } : {}) });
     try {
       const payload = await api<{ variants: GeneratorVariantResult[] }>("/api/builds/recommend/variants", {
         method: "POST",
@@ -2377,10 +2390,12 @@ function App() {
         }
       }));
       if (!isCurrent()) return;
+      trackUsageEvent("recommend_success", { source: "variants" });
       setGeneratorVariants(variants);
       if (isCurrent() && variants.every((variant) => !variant.draft)) setToast("세 가지 기준에서 모두 자동 구성을 만들지 못했습니다.");
     } catch (error: unknown) {
       if (!isCurrent()) return;
+      trackUsageEvent("recommend_fail", { source: "variants", status: error instanceof ApiError ? error.status : 0 });
       const message = error instanceof Error ? error.message : "세 가지 자동 구성 결과를 만들지 못했습니다.";
       setGeneratorError(message);
       setGeneratorRequestId(requestIdFromError(error));
@@ -2403,6 +2418,7 @@ function App() {
     setGeneratorRequestId(null);
     setGeneratorDiagnostics([]);
     setGeneratorRecoveryOptions([]);
+    trackUsageEvent("recommend_request", { source: "budget-ladder", profile: request.profile, ...(request.budgetWon !== undefined ? { budgetWon: request.budgetWon } : {}) });
     try {
       const payload = await api<{ scenarios: GeneratorBudgetResult[] }>("/api/builds/recommend/budget-ladder", {
         method: "POST",
@@ -2415,10 +2431,12 @@ function App() {
         return scenario;
       }));
       if (!isCurrent()) return;
+      trackUsageEvent("recommend_success", { source: "budget-ladder" });
       setGeneratorBudgetLadder(results);
       if (isCurrent() && results.every((scenario) => !scenario.draft)) setToast("세 예산 구간에서 모두 자동 구성을 만들지 못했습니다.");
     } catch (error: unknown) {
       if (!isCurrent()) return;
+      trackUsageEvent("recommend_fail", { source: "budget-ladder", status: error instanceof ApiError ? error.status : 0 });
       const message = error instanceof Error ? error.message : "예산 구간별 자동 구성을 만들지 못했습니다.";
       setGeneratorError(message);
       setGeneratorRequestId(requestIdFromError(error));
@@ -2663,6 +2681,7 @@ function App() {
         body: JSON.stringify({ name, selection: targetBuild, recommendationPreferences: targetPreferences, expiresInDays: saveExpiryDays === "never" ? undefined : saveExpiryDays, ...(decisionNote ? { decisionNote } : {}), ...(saveOrigin ? { origin: saveOrigin } : {}), ...(refreshReport ? { catalogRefreshReport: refreshReport } : {}), ...(parentCanManage && target?.parentBuildId ? { parentBuildId: target.parentBuildId } : {}) })
       });
       rememberSavedBuildId(saved.id);
+      trackUsageEvent("build_save", { kind: target?.kind ?? "draft" });
       if (saved.ownerManaged) markOwnerSessionResource("build", saved.id);
       if (saved.ownerToken) rememberSavedBuildOwnerToken(saved.id, saved.ownerToken);
       if (saved.ownerToken && ownerSessionModeSupported()) void retryOwnerSessionMigration().catch(() => undefined);
@@ -2847,6 +2866,7 @@ function App() {
     setCheckError(null);
     setBuild((current) => withSelectedPart(current, category, selection));
     setPicker(null);
+    trackUsageEvent("part_select", { category });
     if (view === "result") navigate("/build", "editor");
   }
 
@@ -3510,7 +3530,7 @@ function App() {
       changeHistory={changeHistory}
       onRecommendationPreferencesChange={setRecommendationPreferences}
       onRestoreChange={(entry) => void restoreBuildHistory(entry)}
-      onOpenPicker={(category) => setPicker({ category })}
+      onOpenPicker={(category) => { trackUsageEvent("part_picker_open", { category, via: "editor" }); setPicker({ category }); }}
       onChangeAccessoryQuantity={(index, quantity) => void changeAccessoryQuantity(index, quantity)}
       onChangeAccessoryTarget={(index, targetPartId) => void changeAccessoryTarget(index, targetPartId)}
       onChangeAccessoryHubTarget={(index, targetAccessoryId) => void changeAccessoryHubTarget(index, targetAccessoryId)}
@@ -3657,7 +3677,7 @@ function App() {
       onRefreshCatalogItem={(target) => void refreshCatalogItem(target)}
       onRefreshAll={(targets) => void refreshAllCatalogItems(targets)}
       refreshingPartId={refreshingPartId}
-      onOpenPicker={(category, findingRuleId, findingTitle, affectedPartIds) => setPicker({ category, findingRuleId: findingRuleId?.replace(/^precision:/, ""), findingTitle, affectedPartIds, ...(findingRuleId?.startsWith("precision:") ? { initialCandidateMode: "precision" as const } : {}) })}
+      onOpenPicker={(category, findingRuleId, findingTitle, affectedPartIds) => { trackUsageEvent("part_picker_open", { category, via: "result" }); setPicker({ category, findingRuleId: findingRuleId?.replace(/^precision:/, ""), findingTitle, affectedPartIds, ...(findingRuleId?.startsWith("precision:") ? { initialCandidateMode: "precision" as const } : {}) }); }}
       onApplySuggestion={(category, part, quantity, affectedPartIds, evidence) => void applySuggestion(category, part, quantity, affectedPartIds, evidence)}
       onApplyUpgradeBundle={(bundle) => void applyUpgradeBundle(bundle)}
       onApplyRepairPlan={(plan) => void applyRepairPlan(plan)}

@@ -945,8 +945,8 @@ app.post("/api/events", usageEventRateLimit, async (request, response) => {
   }
   try {
     await recordClientUsageEvents(batch);
-  } catch {
-    // 이벤트 저장 실패는 비컨 응답을 막지 않는다
+  } catch (eventError) {
+    console.warn(JSON.stringify({ event: "usage-event.persist-failed", error: eventError instanceof Error ? eventError.message : String(eventError) }));
   }
   response.status(204).end();
 });

@@ -1,5 +1,6 @@
 import { safeSessionStorage } from "./safe-storage";
 import { useEffect, useRef, useState } from "react";
+import { trackUsageEvent } from "./usage-events";
 import type { ReactNode } from "react";
 import type { IconType } from "react-icons";
 import { FiActivity, FiAlertTriangle, FiArrowLeft, FiArrowRight, FiBox, FiBriefcase, FiCheck, FiClock, FiCode, FiDatabase, FiFileText, FiFilm, FiInfo, FiMinus, FiMonitor, FiMusic, FiPlay, FiPlus, FiRadio, FiSearch, FiSliders, FiTarget, FiZap } from "react-icons/fi";
@@ -301,6 +302,20 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome, floor
     headingRef.current?.focus({ preventScroll: true });
   }, [state.step, showResume]);
 
+  // 온보딩 퍼널 — 스텝 진입과 작성 재개 화면 도달을 익명 이벤트로 기록한다.
+  useEffect(() => {
+    if (showResume) {
+      trackUsageEvent("onboarding_resume", { step: state.step });
+      return;
+    }
+    trackUsageEvent("onboarding_step", {
+      step: state.step,
+      ...(state.intent ? { intent: state.intent } : {}),
+      ...(state.usecase ? { usecase: state.usecase } : {}),
+      ...(state.mode ? { mode: state.mode } : {})
+    });
+  }, [state.step, showResume]);
+
   const indicator = showResume ? { eyebrow: "작성 중", index: 1, total: 1 } : stepIndicatorFor(state);
   const update = (patch: Partial<OnboardingState>) => setState((current) => ({ ...current, ...patch }));
   const toggleGame = (id: OnboardingGame) => {
@@ -327,16 +342,20 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome, floor
   });
 
   function goBack() {
-    if (showResume) { onHome(); return; }
-    if (state.step === "intent") onHome();
+    if (showResume) { trackUsageEvent("onboarding_exit", { step: state.step, reason: "home" }); onHome(); return; }
+    if (state.step === "intent") { trackUsageEvent("onboarding_exit", { step: "intent", reason: "home" }); onHome(); }
     else setState((current) => backOnboarding(current));
   }
 
   function goNext() {
     if (showResume) { setShowResume(false); return; }
-    if (state.step === "intent" && state.intent === "later") { onSkip(); return; }
-    if (state.step === "upgrade") { onUpgrade(); return; }
-    if (state.step === "summary") { onFinish(recommendQueryFor(state)); return; }
+    if (state.step === "intent" && state.intent === "later") { trackUsageEvent("onboarding_exit", { step: "intent", reason: "skip" }); onSkip(); return; }
+    if (state.step === "upgrade") { trackUsageEvent("onboarding_exit", { step: "upgrade", reason: "upgrade" }); onUpgrade(); return; }
+    if (state.step === "summary") {
+      trackUsageEvent("onboarding_complete", { ...(state.intent ? { intent: state.intent } : {}), ...(state.usecase ? { usecase: state.usecase } : {}), ...(state.mode ? { mode: state.mode } : {}) });
+      onFinish(recommendQueryFor(state));
+      return;
+    }
     setState((current) => advanceOnboarding(current));
   }
 

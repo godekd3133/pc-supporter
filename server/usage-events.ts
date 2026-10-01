@@ -350,7 +350,7 @@ export async function usageAnalyticsFor(days: number) {
       visitors: count,
       conversionFromStart: funnelCounts[0] > 0 ? count / funnelCounts[0] : 0,
       conversionFromPrev: index === 0 ? 1 : previous > 0 ? count / previous : 0,
-      dropFromPrev: index === 0 ? 0 : previous > 0 ? 1 - count / previous : 0,
+      dropFromPrev: index === 0 ? 0 : previous > 0 ? Math.max(0, 1 - count / previous) : 0,
       exitedHere: deepestStageCounts[index]
     };
   });
