@@ -713,6 +713,10 @@ html[data-theme="dark"] .admin-page .m2-coverage-empty {
 
 .engine-filter-preview-note { display: flex; align-items: center; gap: 6px; margin: 0 0 12px; padding: 8px 11px; border: 1px solid #cfe1f8; border-radius: 8px; color: var(--teal); background: #f0f7ff; font-size: 9px; }
 
+.engine-filter-generation-note { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 0 0 12px; font-size: 9px; color: var(--muted); }
+.engine-filter-generation-chip { display: inline-flex; align-items: baseline; gap: 4px; padding: 3px 8px; border: 1px solid var(--line); border-radius: 999px; background: #fff; font-weight: 600; color: var(--ink); }
+.engine-filter-generation-chip em { font-style: normal; font-weight: 400; color: var(--muted); }
+
 .engine-filter-layout { display: grid; grid-template-columns: 176px minmax(0, 1fr); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin-bottom: 18px; }
 
 .engine-filter-nav { border-right: 1px solid var(--line); background: #f6f7f9; }

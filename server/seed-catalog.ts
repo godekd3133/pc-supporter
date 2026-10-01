@@ -15,13 +15,14 @@ export const seedCatalog: Part[] = [
   seed({
     id: "cpu-7800x3d",
     category: "cpu",
-    name: "AMD 라이젠7-5세대 7800X3D",
+    name: "AMD 라이젠7-6세대 9800X3D",
     brand: "AMD",
-    model: "7800X3D",
+    model: "9800X3D",
     priceWon: 499000,
     specs: {
       socket: "AM5",
       memoryType: "DDR5",
+      cpuSeries: "Ryzen 9000",
       tdpW: 120,
       pptW: 162,
       integratedGraphics: true,
@@ -32,13 +33,14 @@ export const seedCatalog: Part[] = [
   seed({
     id: "cpu-7500f",
     category: "cpu",
-    name: "AMD 라이젠5-5세대 7500F",
+    name: "AMD 라이젠5-6세대 9500F",
     brand: "AMD",
-    model: "7500F",
+    model: "9500F",
     priceWon: 182000,
     specs: {
       socket: "AM5",
       memoryType: "DDR5",
+      cpuSeries: "Ryzen 9000",
       tdpW: 65,
       pptW: 88,
       integratedGraphics: false,
@@ -49,13 +51,14 @@ export const seedCatalog: Part[] = [
   seed({
     id: "cpu-i7-14700k",
     category: "cpu",
-    name: "인텔 코어 i7-14세대 14700K",
+    name: "인텔 코어 울트라7 시리즈2 265K (애로우레이크)",
     brand: "Intel",
-    model: "i7-14700K",
+    model: "Core Ultra 7 265K",
     priceWon: 541000,
     specs: {
-      socket: "LGA1700",
+      socket: "LGA1851",
       memoryType: "DDR5",
+      cpuSeries: "Core Ultra 200",
       tdpW: 125,
       pptW: 253,
       integratedGraphics: true,
@@ -71,7 +74,7 @@ export const seedCatalog: Part[] = [
     model: "AK620",
     priceWon: 69000,
     specs: {
-      supportedSockets: ["AM5", "AM4", "LGA1700", "LGA1200"],
+      supportedSockets: ["AM5", "AM4", "LGA1851", "LGA1700", "LGA1200"],
       maxCoolingW: 260,
       maxCoolerHeightMm: 160
     }
@@ -136,12 +139,12 @@ export const seedCatalog: Part[] = [
   seed({
     id: "mb-b760-intel",
     category: "motherboard",
-    name: "GIGABYTE B760M AORUS ELITE AX",
+    name: "GIGABYTE B860M AORUS ELITE AX",
     brand: "GIGABYTE",
-    model: "B760M AORUS ELITE AX",
+    model: "B860M AORUS ELITE AX",
     priceWon: 189000,
     specs: {
-      socket: "LGA1700",
+      socket: "LGA1851",
       memoryType: "DDR5",
       maxMemoryGb: 192,
       memorySlots: 4,
@@ -205,6 +208,7 @@ export const seedCatalog: Part[] = [
     model: "RTX 5090 Gaming Trio",
     priceWon: 3490000,
     specs: {
+      gpuArchitectureFamily: "RTX 50",
       powerW: 575,
       recommendedPsuW: 1000,
       lengthMm: 359,
@@ -216,11 +220,12 @@ export const seedCatalog: Part[] = [
   seed({
     id: "gpu-rtx-4060",
     category: "gpu",
-    name: "ZOTAC GeForce RTX 4060 Twin Edge",
+    name: "ZOTAC GeForce RTX 5060 Twin Edge",
     brand: "ZOTAC",
-    model: "RTX 4060 Twin Edge",
+    model: "RTX 5060 Twin Edge",
     priceWon: 439000,
     specs: {
+      gpuArchitectureFamily: "RTX 50",
       powerW: 115,
       recommendedPsuW: 550,
       lengthMm: 221,

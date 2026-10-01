@@ -396,7 +396,7 @@ describe("compatibility engine", () => {
 
     expect(result.analysis.profile).toBe("gaming");
     expect(result.analysis.scoreBasis).toContain("고정 기준");
-    expect(result.analysis.scoreModelVersion).toBe("objective-index-v1");
+    expect(result.analysis.scoreModelVersion).toBe("objective-index-v2");
     expect(result.analysis.factors.some((factor) => factor.category === "gpu")).toBe(true);
     expect(["상위권", "균형형", "보완 권장", "계산 불가"]).toContain(result.analysis.scoreLabel);
   });
@@ -2057,7 +2057,10 @@ describe("compatibility engine", () => {
     expect(noProfileResult.findings.some((finding) => finding.ruleId === "memory-speed")).toBe(false);
 
     const unknownCpuResult = evaluateBuild({ ...build, cpu: { partId: unknownCpu.id, quantity: 1 } }, catalog, { includeSuggestions: false });
-    expect(unknownCpuResult.findings.find((finding) => finding.ruleId === "memory-speed")?.severity).toBe("unknown");
+    // CPU·보드 상한 데이터가 없을 때는 unknown이 아니라 warning으로 내린다 —
+    // 크롤링 스펙에 상한이 없는 부품이 대부분이라 unknown으로 두면 모든 견적이
+    // needs_review가 되어 유효 조합이 사라졌다.
+    expect(unknownCpuResult.findings.find((finding) => finding.ruleId === "memory-speed")?.severity).toBe("warning");
 
     const boardLimitedMotherboard = {
       ...motherboard,
@@ -2625,11 +2628,13 @@ describe("compatibility engine", () => {
     const baseCpu = seedCatalog.find((part) => part.id === "cpu-i7-14700k")!;
     const referenceCpu: Part = {
       ...currentCpu,
-      id: "cpu-7500f-performance-reference",
-      name: "확인된 Ryzen 5 7500F 계열 참조 모델",
-      model: "AMD Ryzen 5 7500F Reference",
+      id: "cpu-9500f-performance-reference",
+      // seed cpu-7500f 슬롯은 현재 9500F로 채워져 있으므로 같은 모델 계열이어야
+      // 참조로 잡힌다.
+      name: "확인된 Ryzen 5 9500F 계열 참조 모델",
+      model: "AMD Ryzen 5 9500F Reference",
       source: "danawa",
-      sourceProductCode: "reference-7500f",
+      sourceProductCode: "reference-9500f",
       dataQuality: "live",
       specs: {
         ...currentCpu.specs,
@@ -2690,8 +2695,8 @@ describe("compatibility engine", () => {
     const x3dReferenceCpu: Part = {
       ...referenceCpu,
       id: "cpu-7800x3d-performance-reference",
-      name: "확인된 Ryzen 7 7800X3D 계열 참조 모델",
-      model: "AMD Ryzen 7 7800X3D Reference",
+      name: "확인된 Ryzen 7 9800X3D 계열 참조 모델",
+      model: "AMD Ryzen 7 9800X3D Reference",
       sourceProductCode: "reference-7800x3d",
       specs: { ...referenceCpu.specs, cores: 8, threads: 16, boostClockGhz: 5, cinebenchR23Single: 1788, cinebenchR23Multi: 18208 }
     };
@@ -3774,7 +3779,7 @@ describe("compatibility engine", () => {
     expect(error).toMatchObject({
       diagnostics: [expect.objectContaining({
         id: "gaming-gpu-vram-target",
-        facts: expect.arrayContaining([{ label: "요청 조건 VRAM 참고 기준", value: "22GB" }])
+        facts: expect.arrayContaining([{ label: "권장 VRAM 참고 기준", value: "22GB" }])
       })]
     });
   });
@@ -3887,7 +3892,7 @@ describe("compatibility engine", () => {
       diagnostics: [expect.objectContaining({
         id: "gaming-gpu-vram-target",
         facts: expect.arrayContaining([
-          { label: "요청 조건 VRAM 참고 기준", value: "12GB" },
+          { label: "권장 VRAM 참고 기준", value: "12GB" },
           { label: "기준 충족 GPU", value: "0개" }
         ])
       })]
@@ -3991,7 +3996,7 @@ describe("compatibility engine", () => {
     expect(error).toMatchObject({
       diagnostics: [expect.objectContaining({
         id: "gaming-gpu-vram-target",
-        facts: expect.arrayContaining([{ label: "요청 조건 VRAM 참고 기준", value: "19GB" }])
+        facts: expect.arrayContaining([{ label: "권장 VRAM 참고 기준", value: "19GB" }])
       })]
     });
   });
@@ -4273,7 +4278,7 @@ describe("compatibility engine", () => {
     expect(error).toMatchObject({
       diagnostics: [expect.objectContaining({
         id: "gaming-gpu-vram-target",
-        facts: expect.arrayContaining([{ label: "요청 조건 VRAM 참고 기준", value: "16GB" }])
+        facts: expect.arrayContaining([{ label: "권장 VRAM 참고 기준", value: "16GB" }])
       })]
     });
   });
@@ -4502,8 +4507,10 @@ describe("compatibility engine", () => {
   });
 
   it("does not pass an iGPU-only build when the CPU graphics field is unknown", () => {
+    // 이름으로도 내장 그래픽 유무를 추론할 수 없는 부품이어야 '미확인' 경고가 뜬다
+    // — 알려진 모델명(7800X3D 등)은 이름 기반 추론이 이미 답을 준다.
     const catalog = seedCatalog.map((part) => part.id === "cpu-7800x3d"
-      ? { ...part, specs: { ...part.specs, integratedGraphics: undefined } }
+      ? { ...part, name: "테스트 무표기 프로세서", specs: { ...part.specs, integratedGraphics: undefined } }
       : part);
     const build = compatibleBuild();
     build.gpu = undefined;

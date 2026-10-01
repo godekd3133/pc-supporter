@@ -111,7 +111,7 @@ import { savedBuildDecisionNoteFromUnknown, savedBuildNameFromUnknown, SAVED_BUI
 import { savedBuildOriginFromUnknown } from "../shared/saved-build-origin";
 import { parseSavedBuildPurchaseProgress, parseSavedBuildPurchaseProgressExpectedRevision, parseSavedBuildPurchaseProgressRevision } from "./purchase-progress";
 import { parseSavedBuildPurchasePriceHistory, parseSavedBuildPurchasePriceHistoryExpectedRevision, parseSavedBuildPurchasePriceHistoryRevision } from "./purchase-price-history";
-import { isListingAllowed, isQuoteSelectable } from "./listing";
+import { isListingAllowed, isQuoteSelectable, quoteGenerationSummaryFor } from "./listing";
 import { catalogSeedPreviewFor } from "../shared/catalog-seed-preview";
 import { catalogSeedMappingIdentityCompatibleFor, catalogSeedMappingPreviewFor } from "../shared/catalog-seed-mapping";
 import { catalogSeedCollectionQueueFor } from "../shared/catalog-seed-collection-queue";
@@ -1541,7 +1541,7 @@ app.post("/api/parts/compatible", publicCandidateRateLimit, async (request, resp
     const detailFilteredParts = detailRule ? specFilteredParts.filter((part) => engineTargetFilterRuleAllowsPart(part, detailRule)) : specFilteredParts;
     // 판매 정책으로 빠진 부품(스펙 미등록·가격 미확인)도 안내 문구를 위해 따로 센다.
     const policyExcludedParts = searchParts(catalog, category, query, catalog.length, { ...options, quoteSellableOnly: false }, 0)
-      .filter((part) => !isQuoteSelectable(part));
+      .filter((part) => !isQuoteSelectable(part, catalog));
     const assessedParts = detailFilteredParts
       .map((part) => {
         const assessment = assessAlternativePart(parsed.build, catalog, category, part, intentFinding);
@@ -4390,9 +4390,14 @@ app.get("/api/admin/engine-filters", requireAdmin, async (_request, response) =>
   const config = loadEngineTargetFiltersConfig();
   const catalog = await loadCatalog();
   const path = engineTargetFiltersPath();
+  const generationDepth = loadEngineGenerationOptions().generationDepth;
   response.json({
     config,
     summary: engineTargetFilterSummaryFor(catalog, config),
+    // 크롤러가 수집한 카탈로그에서 계산된 라인별 세대 경계 — 신세대 상품이
+    // 판매 중으로 쌓이면 자동으로 올라간다. generationDepth=0이면 게이트 꺼짐.
+    generations: generationDepth === 0 ? [] : quoteGenerationSummaryFor(catalog, generationDepth),
+    generationGate: { enabled: generationDepth !== 0, depth: generationDepth },
     pathConfigured: Boolean(process.env.ENGINE_TARGET_FILTERS_PATH?.trim()),
     ...(existsSync(path) ? { updatedAt: await fileUpdatedAt(path) } : {})
   });

@@ -2,6 +2,7 @@ import * as cheerio from "cheerio";
 import type { CrawlPageFailure, M2LaneSharingScope, MemoryProfile, Part, PartCategory, PartSpecs, PciePowerConnectorKind, PciePowerRequirement, RadiatorMountPosition, RadiatorSupport } from "../shared/types";
 import { CATEGORY_LABELS } from "../shared/types";
 import { inferListingType } from "./listing";
+import { cpuHasIntegratedGraphics, cpuSeriesLabelFor } from "../shared/domain/listing";
 
 export const DANAWA_CATEGORIES: Array<{
   category: PartCategory;
@@ -754,6 +755,30 @@ function parseCpuMemorySpeed(text: string) {
   return parseNumber(text.slice(memoryStart, memoryStart + 240), /\b([\d,]{4,6})\s*MHz\b/i);
 }
 
+// 다나와 CPU 스펙에는 메모리 지원 속도가 없는 경우가 많다. 소켓·세대별로
+// 공식 네이티브(JEDEC) 지원 속도를 채운다 — OC 상한이 아니라 모든 보드가
+// 보장하는 공식 스펙이라 안전한 하한값이다.
+export function cpuNativeMemorySpeedMhz(name: string, socket: string | undefined, memoryType: string | undefined): number | undefined {
+  const type = memoryType?.toUpperCase();
+  if (socket === "AM5") {
+    // 그래니트 릿지(라이젠 9000)는 DDR5-5600, 라파엘(7000)·피닉스(8000G)는 5200.
+    return /6세대|그래니트|\b9[0-9]{3}[XF]?\b/i.test(name) ? 5600 : 5200;
+  }
+  if (socket === "AM4") return type === "DDR4" ? 3200 : undefined;
+  if (socket === "LGA1851") return 6400;
+  if (socket === "LGA1700") {
+    const twelfthGen = /12세대|엘더레이크|\b12[0-9]{3}\w*/i.test(name);
+    return type === "DDR4" ? 3200 : twelfthGen ? 4800 : 5600;
+  }
+  if (socket === "LGA1200") return 3200;
+  if (socket === "LGA1151" || socket === "AM3" || socket === "FM2") return type === "DDR3" ? 1600 : 2666;
+  if (type === "DDR5") return 4800;
+  if (type === "DDR4") return 3200;
+  if (type === "DDR3") return 1600;
+  if (type === "DDR2") return 800;
+  return undefined;
+}
+
 export function parseGpuPowerW(text: string) {
   return parseNumber(text, /(?:최대\s*)?(?:소비전력|사용전력|TDP)\s*[:：]?\s*(?:최대\s*)?([\d,]+(?:\.\d+)?)\s*W/i);
 }
@@ -795,7 +820,15 @@ function parseSpecs(category: PartCategory, name: string, description: string, r
       : /라데온\s*그래픽|인텔\s*그래픽스|UHD\s*Graphics|Xe\s*LPG|그래픽\s*탑재/i.test(text)
         ? true
         : undefined;
+    if (specs.integratedGraphics === undefined) {
+      // 스펙 텍스트가 비어 있으면 모델 번호로 추론한다 — 라이젠 G/GT는 APU,
+      // Zen4+(5/6세대)·인텔 비-F 모델은 iGPU 탑재가 기본이다.
+      specs.integratedGraphics = cpuHasIntegratedGraphics({ name, specs, category });
+    }
     specs.coolerIncluded = /쿨러\s*:\s*(?!미포함|없음)[^/]*(?:포함|기본)/i.test(text);
+    // 정규 세대 라벨(Ryzen 9000·Core Ultra 200 등) — 견적의 최신 세대
+    // 판정과 관리자 세대 필터가 이 값을 신뢰한다.
+    specs.cpuSeries = cpuSeriesLabelFor(name);
   }
 
   if (category === "cooler") {
@@ -901,13 +934,27 @@ function parseSpecs(category: PartCategory, name: string, description: string, r
       specs.gpuVendor = "intel";
     }
     const gpuFamilyMatch = text.match(/\b(RTX|GTX|RX)\s*([0-9]{2})[0-9]{2}\b/i);
-    const arcFamilyMatch = text.match(/\bARC\s*([AB])\d+/i);
+    const arcFamilyMatch = text.match(/\bARC\s*(?:PRO\s*)?([AB])\d+/i);
+    const radeonProMatch = text.match(/\bR9\d{3}\b/i);
+    // 워크스테이션·쿼드로 명칭의 숫자는 GeForce 세대 번호가 아니다 — "RTX 6000
+    // Ada"가 RTX 60 시리즈로, "RTX 5000 Ada"가 RTX 50으로 오인되지 않게 이름에
+    // 있는 아키텍처 코드네임을 우선 기록한다.
+    const workstationLike = /쿼드로|Quadro|RTX\s*PRO|RTX\s*A\d|Ada\s*Generation|NV\s*링크|NVLink|PRO\s*Sync|Radeon\s*PRO|AI\s*PRO|워크스테이션/i.test(text);
+    const workstationArch = /Blackwell/i.test(text)
+      ? "Blackwell"
+      : /Ada\b/i.test(text)
+        ? "Ada Lovelace"
+        : /Turing/i.test(text)
+          ? "Turing"
+          : undefined;
     specs.gpuMemoryType = text.match(/\b(GDDR[345567]X?|HBM[23](?:E)?)\b/i)?.[1].toUpperCase();
-    specs.gpuArchitectureFamily = gpuFamilyMatch
-      ? `${gpuFamilyMatch[1].toUpperCase()} ${gpuFamilyMatch[2]}`
-      : arcFamilyMatch
-        ? `ARC ${arcFamilyMatch[1].toUpperCase()}`
-        : undefined;
+    specs.gpuArchitectureFamily = arcFamilyMatch
+      ? `ARC ${arcFamilyMatch[1].toUpperCase()}`
+      : workstationLike
+        ? (radeonProMatch ? "RX 90" : workstationArch)
+        : gpuFamilyMatch
+          ? `${gpuFamilyMatch[1].toUpperCase()} ${gpuFamilyMatch[2]}`
+          : undefined;
     const pcieWidth = text.match(/PCIe(?:\s*[\d.]+)?\s*x(16|8|4|1)(?:\s*\([^)]*\))?/i)?.[1];
     specs.pcieSlotWidth = pcieWidth ? Number(pcieWidth) : undefined;
     specs.pciePowerOptions = parsePciePowerOptions(text);
@@ -1138,9 +1185,13 @@ export function reparseDanawaPart(part: Part): Part {
     if (parsedSpecs.gpu3dmarkPortRoyalScore === undefined) delete specs.gpu3dmarkPortRoyalScore;
   }
   if (part.category === "cpu") {
+    if (parsedSpecs.cpuSeries === undefined) delete specs.cpuSeries;
     if (parsedSpecs.cinebenchR23Single === undefined) delete specs.cinebenchR23Single;
     if (parsedSpecs.cinebenchR23Multi === undefined) delete specs.cinebenchR23Multi;
-    if (parsedSpecs.maxMemorySpeedMhz === undefined) delete specs.maxMemorySpeedMhz;
+    // 다나와 목록 스펙에는 메모리 지원 속도가 없어 이 필드가 비는 게 보통이다.
+    // 비면 견적 생성기의 필수 스펙 게이트가 모든 live CPU를 탈락시켜 seed
+    // 참고 부품만 남으므로, 플랫폼 네이티브(JEDEC) 값으로 채운다.
+    specs.maxMemorySpeedMhz = parsedSpecs.maxMemorySpeedMhz ?? cpuNativeMemorySpeedMhz(part.name, specs.socket, specs.memoryType);
   }
   if (part.category === "ssd") {
     if (parsedSpecs.ssdController === undefined) delete specs.ssdController;

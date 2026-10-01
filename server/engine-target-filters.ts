@@ -1,10 +1,10 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
-import { emptyEngineTargetFiltersConfig, engineTargetFilterActiveFacetCount, engineTargetFilterConfigFromUnknown, engineTargetFiltersAllowPart, ENGINE_TARGET_FILTER_FACETS } from "../shared/engine-target-filters";
+import { emptyEngineTargetFiltersConfig, engineTargetFilterActiveFacetCount, engineTargetFilterBypassesBrandPolicy, engineTargetFilterConfigFromUnknown, engineTargetFiltersAllowPart, ENGINE_TARGET_FILTER_FACETS } from "../shared/engine-target-filters";
 import type { EngineTargetFiltersConfig } from "../shared/engine-target-filters";
 import { isKnownPrice, PART_CATEGORIES } from "../shared/types";
 import type { Part, PartCategory } from "../shared/types";
-import { isQuoteBrandAllowed, isQuoteSelectable } from "./listing";
+import { isQuoteBrandAllowed, isQuotePurchasable, isQuoteSelectable } from "./listing";
 import { DATA_DIR, fileUpdatedAt, withSerializedFileMutation, writeJson } from "./storage";
 import { publishInstanceEvent } from "./instance-events";
 import { pushRuntimeConfigToDatabase } from "./runtime-config-store";
@@ -79,18 +79,19 @@ export async function applyReceivedEngineTargetFiltersConfig(config: EngineTarge
 
 // 생성기 후보 풀의 기준 게이트(범주·비핵심 상품·견적 브랜드·가격/스펙 완결)와
 // 동일한 선행 조건으로 미리보기 수를 계산해, 저장 전 영향이 실제와 다르지 않게 한다.
-function enginePoolBaseAllowsPart(part: Part, category: PartCategory) {
+function enginePoolBaseAllowsPart(part: Part, category: PartCategory, catalog: Part[], config?: EngineTargetFiltersConfig) {
+  const bypassBrandPolicy = engineTargetFilterBypassesBrandPolicy(config, category);
   return part.category === category
     && part.listingType !== "accessory"
-    && isQuoteBrandAllowed(category, part.brand)
-    && isQuoteSelectable(part);
+    && (bypassBrandPolicy || isQuoteBrandAllowed(category, part.brand))
+    && ((bypassBrandPolicy || part.dataQuality === "seed") ? isQuotePurchasable(part) : isQuoteSelectable(part, catalog));
 }
 
 export function engineTargetFilterSummaryFor(catalog: Part[], config: EngineTargetFiltersConfig): EngineTargetFilterSummary {
   const summary: EngineTargetFilterSummary = {};
   for (const category of PART_CATEGORIES) {
     const parts = catalog.filter((part) => part.category === category && part.listingType !== "accessory");
-    const eligible = parts.filter((part) => enginePoolBaseAllowsPart(part, category));
+    const eligible = parts.filter((part) => enginePoolBaseAllowsPart(part, category, catalog, config));
     const rule = config.categories[category];
     const matching = eligible.filter((part) => engineTargetFiltersAllowPart(part, config));
     summary[category] = {

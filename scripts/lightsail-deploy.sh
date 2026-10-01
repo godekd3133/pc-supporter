@@ -5,6 +5,9 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SSH_TARGET="${PC_SUPPORTER_SSH_TARGET:-ubuntu@3.39.79.1}"
 SSH_KEY="${PC_SUPPORTER_SSH_KEY:-}"
+if [[ -z "$SSH_KEY" && -f "$HOME/.ssh/pc-supporter-deploy" ]]; then
+  SSH_KEY="$HOME/.ssh/pc-supporter-deploy"
+fi
 SSH_CERTIFICATE="${PC_SUPPORTER_SSH_CERTIFICATE:-}"
 ENV_FILE=""
 MIGRATION_ENV_FILE=""
@@ -27,8 +30,11 @@ Usage:
 
 Options:
   --host                 SSH target. Default: ubuntu@3.39.79.1.
-  --ssh-key              SSH private key path.
-  --ssh-certificate      Temporary OpenSSH certificate path from Lightsail.
+  --ssh-key              SSH private key path. Default: ~/.ssh/pc-supporter-deploy
+                         when that permanent key exists.
+  --ssh-certificate      Emergency-only OpenSSH certificate path minted via the
+                         pc-supporter AWS IAM profile (aws lightsail
+                         get-instance-access-details). Not used by default.
   --env-file             Production backend env file. The first deployment can
                          omit this; the remote host then generates admin auth
                          secrets without printing them. It is loaded by API/worker.

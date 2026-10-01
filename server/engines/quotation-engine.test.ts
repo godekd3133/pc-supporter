@@ -32,7 +32,8 @@ describe("engine generation options", () => {
     await saveEngineGenerationOptions({
       variantPriorities: ["performance", "reliability"],
       budgetLadderDownMultiplier: 0.7,
-      budgetLadderUpMultiplier: 1.4
+      budgetLadderUpMultiplier: 1.4,
+      generationDepth: 1
     });
     expect(engineGenerationVariantPrioritiesFor()).toEqual(["performance", "reliability"]);
     expect(engineGenerationLadderMultipliersFor()).toEqual({ down: 0.7, up: 1.4 });
@@ -50,6 +51,10 @@ describe("engine generation options", () => {
     expect(normalizeEngineGenerationOptions({ budgetLadderDownMultiplier: 3 }).errors.length).toBeGreaterThan(0);
     expect(normalizeEngineGenerationOptions({ budgetLadderUpMultiplier: 0.9 }).errors.length).toBeGreaterThan(0);
     expect(normalizeEngineGenerationOptions("text").errors.length).toBeGreaterThan(0);
+    expect(normalizeEngineGenerationOptions({ generationDepth: -1 }).errors.length).toBeGreaterThan(0);
+    expect(normalizeEngineGenerationOptions({ generationDepth: 1.5 }).errors.length).toBeGreaterThan(0);
+    expect(normalizeEngineGenerationOptions({ generationDepth: 2 }).options.generationDepth).toBe(2);
+    expect(normalizeEngineGenerationOptions({ generationDepth: 0 }).options.generationDepth).toBe(0);
   });
 
   it("중복 우선순위를 제거하고 알려진 우선순위를 그대로 유지한다", () => {

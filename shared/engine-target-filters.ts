@@ -31,6 +31,7 @@ export const ENGINE_FILTER_SPEC_VALUE_FIELDS = [
   "gpuVendor",
   "gpuArchitectureFamily",
   "gpuMemoryType",
+  "cpuSeries",
   "efficiency",
   "psuCableType",
   "psuRailType",
@@ -118,6 +119,13 @@ export interface EngineCategoryTargetFilter {
   numericRanges?: Partial<Record<EngineFilterNumericField, EngineFilterRange[]>>;
   flags?: Partial<Record<EngineFilterFlagField, boolean>>;
   priceWon?: EngineFilterRange;
+  /**
+   * 부품 이름과 매칭되는 정규식 목록(OR) — "이 4개 보드만", "RTX 50 시리즈만"
+   * 같은 테스트 베드/명시 허용목록 표현용. 이 목록이 있으면 내장 견적 브랜드
+   * 정책(SSD/RAM 삼성·하이닉스, PSU 시소닉·마이크로닉스)은 관리자의 명시
+   * 선택이 우선한다는 의미로 우회한다.
+   */
+  namePatterns?: string[];
 }
 
 export type EngineTargetFilters = Partial<Record<PartCategory, EngineCategoryTargetFilter>>;
@@ -134,7 +142,9 @@ export const ENGINE_TARGET_FILTER_LIMITS = {
   maxValuesPerField: 200,
   maxValueLength: 120,
   maxRangesPerField: 20,
-  maxPriceWon: 1_000_000_000
+  maxPriceWon: 1_000_000_000,
+  maxNamePatterns: 30,
+  maxNamePatternLength: 160
 } as const;
 
 export function emptyEngineTargetFiltersConfig(): EngineTargetFiltersConfig {
@@ -174,6 +184,7 @@ export function engineCategoryTargetFilterIsEmpty(rule: EngineCategoryTargetFilt
   if (!rule) return true;
   if (rule.brands && rule.brands.length > 0) return false;
   if (rule.priceWon && (rule.priceWon.min !== undefined || rule.priceWon.max !== undefined)) return false;
+  if (rule.namePatterns && rule.namePatterns.length > 0) return false;
   if (rule.specValues && Object.values(rule.specValues).some((values) => values !== undefined && values.length > 0)) return false;
   if (rule.numericRanges && Object.values(rule.numericRanges).some((ranges) => ranges !== undefined && ranges.length > 0)) return false;
   if (rule.flags && Object.values(rule.flags).some((value) => value !== undefined)) return false;
@@ -184,6 +195,7 @@ export function engineTargetFilterActiveFacetCount(rule: EngineCategoryTargetFil
   if (!rule) return 0;
   let count = 0;
   if (rule.brands && rule.brands.length > 0) count += 1;
+  if (rule.namePatterns && rule.namePatterns.length > 0) count += 1;
   if (rule.priceWon && (rule.priceWon.min !== undefined || rule.priceWon.max !== undefined)) count += 1;
   if (rule.specValues) count += Object.values(rule.specValues).filter((values) => values !== undefined && values.length > 0).length;
   if (rule.numericRanges) count += Object.values(rule.numericRanges).filter((ranges) => ranges !== undefined && ranges.length > 0).length;
@@ -196,8 +208,19 @@ export function engineTargetFiltersActiveCategories(config: EngineTargetFiltersC
   return PART_CATEGORIES.filter((category) => !engineCategoryTargetFilterIsEmpty(config.categories[category]));
 }
 
+function namePatternMatches(part: Part, patterns: string[]) {
+  return patterns.some((pattern) => {
+    try {
+      return new RegExp(pattern, "i").test(part.name);
+    } catch {
+      return false;
+    }
+  });
+}
+
 export function engineTargetFilterRuleAllowsPart(part: Part, rule: EngineCategoryTargetFilter | undefined) {
   if (!rule || engineCategoryTargetFilterIsEmpty(rule)) return true;
+  if (rule.namePatterns && rule.namePatterns.length > 0 && !namePatternMatches(part, rule.namePatterns)) return false;
   if (rule.brands && rule.brands.length > 0) {
     const brand = normalizedFilterText(part.brand);
     if (!brand || !rule.brands.some((option) => normalizedFilterText(option) === brand)) return false;
@@ -237,6 +260,18 @@ export function engineTargetFiltersAllowPart(part: Part, config: EngineTargetFil
   return engineTargetFilterRuleAllowsPart(part, config.categories[part.category]);
 }
 
+/**
+ * 관리자가 namePatterns로 부품을 직접 지명한 범주는 내장 견적 브랜드 정책
+ * (SSD/RAM 삼성·하이닉스, PSU 시소닉·마이크로닉스)을 우회한다 — 명시
+ * 허용목록이 기본 정책보다 우선한다. 브랜드·수치 facet만 있는 규칙은
+ * 우회하지 않는다(의도하지 않은 개방을 막기 위해).
+ */
+export function engineTargetFilterBypassesBrandPolicy(config: EngineTargetFiltersConfig | undefined, category: PartCategory) {
+  if (!config || config.enabled !== true) return false;
+  const rule = config.categories[category];
+  return (rule?.namePatterns?.length ?? 0) > 0;
+}
+
 // 범주 facet에 선언된 필드만 남긴다 — 다른 범주 링크를 재사용해도 선언되지
 // 않은 조건이 결과를 좁히지 않는다.
 export function engineTargetFilterRuleForCategory(rule: EngineCategoryTargetFilter | undefined, category: PartCategory): EngineCategoryTargetFilter | undefined {
@@ -260,6 +295,9 @@ export function engineTargetFilterRuleForCategory(rule: EngineCategoryTargetFilt
     if (entries.length > 0) scoped.flags = Object.fromEntries(entries) as EngineCategoryTargetFilter["flags"];
   }
   if (rule.priceWon && facets.some((facet) => facet.kind === "price")) scoped.priceWon = rule.priceWon;
+  // namePatterns는 facet 선언이 아니라 관리자 지정 허용목록 — 범위를 좁히는
+  // 용도이므로 어떤 범주에서도 그대로 통과시킨다.
+  if (rule.namePatterns && rule.namePatterns.length > 0) scoped.namePatterns = rule.namePatterns;
   return engineCategoryTargetFilterIsEmpty(scoped) ? undefined : scoped;
 }
 
@@ -500,7 +538,46 @@ export function engineTargetFilterRuleFromUnknown(raw: unknown, category: PartCa
   if (flags) rule.flags = flags;
   const priceWon = normalizedRange(candidate.priceWon, `${label} 가격대`, errors);
   if (priceWon) rule.priceWon = priceWon;
+  const namePatterns = normalizedNamePatterns(candidate.namePatterns, label, errors);
+  if (namePatterns) rule.namePatterns = namePatterns;
   return engineCategoryTargetFilterIsEmpty(rule) ? undefined : rule;
+}
+
+// 이름 패턴은 정규식으로 저장되므로 파싱 시점에 컴파일 가능성까지 검증한다.
+function normalizedNamePatterns(raw: unknown, label: string, errors: string[]) {
+  if (raw === undefined || raw === null) return undefined;
+  if (!Array.isArray(raw)) {
+    errors.push(`${label}의 이름 패턴 목록은 배열이어야 합니다.`);
+    return undefined;
+  }
+  if (raw.length > ENGINE_TARGET_FILTER_LIMITS.maxNamePatterns) {
+    errors.push(`${label}의 이름 패턴은 최대 ${ENGINE_TARGET_FILTER_LIMITS.maxNamePatterns}개까지 지정할 수 있습니다.`);
+    return undefined;
+  }
+  const values: string[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    if (typeof item !== "string") {
+      errors.push(`${label}의 이름 패턴 값은 문자열이어야 합니다.`);
+      continue;
+    }
+    const value = item.trim();
+    if (!value) continue;
+    if (value.length > ENGINE_TARGET_FILTER_LIMITS.maxNamePatternLength) {
+      errors.push(`${label}의 이름 패턴은 ${ENGINE_TARGET_FILTER_LIMITS.maxNamePatternLength}자 이하여야 합니다.`);
+      continue;
+    }
+    try {
+      new RegExp(value, "i");
+    } catch {
+      errors.push(`${label}의 이름 패턴이 올바른 정규식이 아닙니다: ${value}`);
+      continue;
+    }
+    if (seen.has(value)) continue;
+    seen.add(value);
+    values.push(value);
+  }
+  return values.length > 0 ? values : undefined;
 }
 
 export function engineTargetFilterConfigFromUnknown(raw: unknown): EngineTargetFiltersParseResult {

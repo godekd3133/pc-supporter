@@ -10,6 +10,12 @@ import { migratePostgresSchemaWithClient } from "../postgres-schema-contract";
 import { TEST_POSTGRES_PORT } from "./postgres-url";
 
 const require = createRequire(import.meta.url);
+const { unhookEmbeddedPostgresExitMask } = require("../../scripts/async-exit-hook-fix.cjs") as { unhookEmbeddedPostgresExitMask(): void };
+
+// See scripts/async-exit-hook-fix.cjs: embedded-postgres' exit handlers rewrite
+// or corrupt the real exit code — Vitest reports failures via exitCode = 1 and
+// would exit 0 anyway. Vitest's teardown stops the cluster explicitly.
+unhookEmbeddedPostgresExitMask();
 const DATA_DIRECTORY = resolve(process.cwd(), "node_modules/.cache/pc-supporter-test-pg");
 const TEST_DATABASE = "pcsupporter_test";
 const ADMIN_CONNECTION = {

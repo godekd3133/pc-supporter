@@ -2905,7 +2905,7 @@ function App() {
   function quoteSelectionMessageFor(category: PartCategory, part: Part) {
     const brandMessage = quoteBrandSelectionMessageFor(category);
     if (brandMessage !== undefined && !isQuoteBrandAllowed(category, part.brand)) return brandMessage;
-    if (!isQuoteSelectable(part)) return "가격 또는 사양 정보가 없는 부품은 견적에 담을 수 없어요.";
+    if (!isQuoteSelectable(part, parts)) return "가격 또는 사양 정보가 없는 부품은 견적에 담을 수 없어요.";
     return undefined;
   }
 

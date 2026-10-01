@@ -43,6 +43,7 @@ function aggregateValue(parts: Part[], field: SpecField) {
 const fieldsByCategory: Record<PartCategory, SpecField[]> = {
   cpu: [
     { key: "socket", label: "소켓", get: (part) => part.specs.socket },
+    { key: "cpuSeries", label: "세대", get: (part) => part.specs.cpuSeries },
     { key: "cores", label: "코어", get: (part) => part.specs.cores, suffix: "코어" },
     { key: "threads", label: "스레드", get: (part) => part.specs.threads, suffix: "스레드" },
     { key: "boostClockGhz", label: "부스트", get: (part) => part.specs.boostClockGhz, suffix: "GHz" },

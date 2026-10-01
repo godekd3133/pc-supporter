@@ -652,6 +652,8 @@ export interface PartSpecs {
   tdpW?: number;
   pptW?: number;
   integratedGraphics?: boolean;
+  /** 정규화된 CPU 세대 계열 — "Ryzen 9000"·"Core Ultra 200"·"Core 14" 등. */
+  cpuSeries?: string;
   vrmCapacityW?: number;
   m2Slots?: number;
   m2Interfaces?: Array<"NVMe" | "SATA">;

@@ -4,7 +4,7 @@ import { parseArgs } from "node:util";
 import type { CrawlCategoryReport, CrawlManifest, CrawlPageFailure, CrawlPageRetryBatchProgress, CrawlPageRetryRecord, CrawlStatus, Part, PartCategory } from "../shared/types";
 import { DANAWA_CATEGORIES, crawlDanawaCategory, retryDanawaCategoryPage, type DanawaPageRetryResult } from "./danawa";
 import { loadCatalog, upsertCatalog } from "./catalog";
-import { inferListingType, isListingAllowed, isQuoteBrandAllowed, isQuoteSelectable } from "./listing";
+import { inferListingType, isCurrentGenerationPart, isListingAllowed, isQuoteBrandAllowed, isQuoteSelectable, partQuoteGenerationFor, quoteGenerationBoundaryFor } from "./listing";
 import { LISTING_TYPE_LABELS, isKnownPrice } from "../shared/types";
 import { CRAWL_LOCK_PATH, CRAWL_MANIFEST_PATH, CRAWL_STATE_PATH, createExclusiveFile, ensureDataDirectory, readJson, removeGeneratedFile, writeJson } from "./storage";
 import { CATALOG_DELISTED_CHANGE_FIELD_LABEL, CATALOG_RELISTED_CHANGE_FIELD_LABEL, appendCatalogChangeRecords, catalogChangeRecord, catalogChangeSummary, catalogItemAddedRecord, catalogItemKey, meaningfulCatalogChangeFields } from "./catalog-change-log";
@@ -170,13 +170,23 @@ export function crawlPartChangeRecords(beforeCatalog: Part[], afterCatalog: Part
   });
 }
 
-function quoteInclusionNoteFor(part: Part) {
-  if (!isQuoteSelectable(part)) return isKnownPrice(part.priceWon) ? "견적 제외 · 스펙 미확인" : "견적 제외 · 가격 미확인";
+// 신규 상품 라벨은 "수집 후" 카탈로그(기존 + 이번 수집분) 기준으로 매긴다 —
+// 크롤러가 모은 신세대 부품이 임계 수를 넘으면 같은 배치에서 바로 경계가 올라가
+// 이전 세대 신규 상품이 "구세대"로 표시된다. 신세대 여부는 수집 전 카탈로그의
+// 최신 세대와 비교한다.
+function quoteInclusionNoteFor(part: Part, catalog: readonly Part[], beforeCatalog: readonly Part[]) {
+  if ((part.category === "cpu" || part.category === "gpu") && !isCurrentGenerationPart(part, catalog)) return "견적 제외 · 구세대";
+  if (!isQuoteSelectable(part, catalog)) return isKnownPrice(part.priceWon) ? "견적 제외 · 스펙 미확인" : "견적 제외 · 가격 미확인";
   const listingType = inferListingType(part);
   if (!isListingAllowed(part, "retail_only")) {
     return listingType === "retail" ? "견적 제외 · 카탈로그 분류 불일치" : `견적 제외 · ${LISTING_TYPE_LABELS[listingType]}`;
   }
   if (!isQuoteBrandAllowed(part.category, part.brand ?? part.name.split(" ")[0])) return "견적 제외 · 견적 브랜드 제한";
+  const generation = partQuoteGenerationFor(part);
+  if (generation && generation.line !== "workstation") {
+    const previousTop = quoteGenerationBoundaryFor(beforeCatalog).get(generation.line)?.topRank;
+    if (previousTop === undefined || generation.rank > previousTop) return `견적 포함 · 신세대(${generation.label})`;
+  }
   return "견적 포함";
 }
 
@@ -185,11 +195,20 @@ function quoteInclusionNoteFor(part: Part) {
 // 중단 표시됐던 상품이 다시 수집된 경우다.
 export function crawlPresenceChangeRecords(beforeCatalog: Part[], collected: Part[], delisted: Part[], changedAt: string) {
   const beforeByKey = new Map(beforeCatalog.map((part) => [catalogItemKey(part), part]));
+  // 수집 후 카탈로그 — 이번 수집분 + 단종된 항목 제외 기존 목록. 경계 계산에
+  // 쓰일 때 단종 부품은 delistedAt이 있어 어차피 세지 않지만, 수집으로 같은
+  // 키가 다시 들어오면 수집본을 우선해 중복 집계를 막는다.
+  const collectedKeys = new Set(collected.map(catalogItemKey));
+  const delistedKeys = new Set(delisted.map(catalogItemKey));
+  const mergedCatalog = collected.concat(beforeCatalog.filter((part) => {
+    const key = catalogItemKey(part);
+    return !collectedKeys.has(key) && !delistedKeys.has(key);
+  }));
   const records: ReturnType<typeof catalogChangeRecord>[] = [];
   for (const part of collected) {
     const before = beforeByKey.get(catalogItemKey(part));
     if (!before) {
-      records.push(catalogItemAddedRecord("part", part, { changedAt, quoteNote: quoteInclusionNoteFor(part) }));
+      records.push(catalogItemAddedRecord("part", part, { changedAt, quoteNote: quoteInclusionNoteFor(part, mergedCatalog, beforeCatalog) }));
     } else if (before.delistedAt) {
       records.push(catalogChangeRecord("part", before, part, [CATALOG_RELISTED_CHANGE_FIELD_LABEL], { changedAt }));
     }

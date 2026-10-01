@@ -24,9 +24,21 @@ type EngineFilterCategoryFacetOptions = {
   facetOptions: Partial<Record<string, { options: EngineFilterValueOption[]; missingCount: number }>>;
 };
 
+type EngineGenerationBoundarySummary = {
+  line: string;
+  topRank: number;
+  topLabel: string;
+  topCount: number;
+  thresholdRank: number;
+  thresholdLabel: string;
+  activeGenerations: number;
+};
+
 type EngineFiltersResponse = {
   config: EngineTargetFiltersConfig;
   summary: EngineFilterSummary;
+  generations?: EngineGenerationBoundarySummary[];
+  generationGate?: { enabled: boolean; depth: number };
   updatedAt?: string;
 };
 
@@ -104,6 +116,8 @@ export function AdminEngineFiltersPanel({ onToast }: { onToast: (message: string
   const [config, setConfig] = useState<EngineTargetFiltersConfig | null>(null);
   const [savedConfigJson, setSavedConfigJson] = useState("");
   const [summary, setSummary] = useState<EngineFilterSummary>({});
+  const [generations, setGenerations] = useState<EngineGenerationBoundarySummary[]>([]);
+  const [generationGate, setGenerationGate] = useState<{ enabled: boolean; depth: number } | null>(null);
   const [previewSummary, setPreviewSummary] = useState<EngineFilterSummary | null>(null);
   const [facetOptions, setFacetOptions] = useState<EngineFilterFacetsResponse["categories"]>({});
   const [selectedCategory, setSelectedCategory] = useState<PartCategory>("ssd");
@@ -130,6 +144,8 @@ export function AdminEngineFiltersPanel({ onToast }: { onToast: (message: string
         setConfig(normalized);
         setSavedConfigJson(JSON.stringify(normalized));
         setSummary(filtersResponse.summary ?? {});
+        setGenerations(filtersResponse.generations ?? []);
+        setGenerationGate(filtersResponse.generationGate ?? null);
         setPreviewSummary(null);
         setUpdatedAt(filtersResponse.updatedAt ?? null);
         setFacetOptions(facetsResponse.categories ?? {});
@@ -332,6 +348,17 @@ export function AdminEngineFiltersPanel({ onToast }: { onToast: (message: string
       <span className={`job-status ${config?.enabled ? "completed" : "idle"}`}>{config?.enabled ? "필터 사용 중" : "필터 해제됨"}</span>
     </div>
     <p className="admin-card-description">자동 견적 생성에 쓸 부품 후보를 범주별로 제한합니다. 같은 조건 안의 선택값은 OR, 서로 다른 조건은 AND로 적용되고, 선택하지 않은 조건은 제한하지 않습니다.</p>
+    {generationGate && !generationGate.enabled && <p className="engine-filter-preview-note"><FiAlertTriangle /> 세대 게이트가 해제되어 있어 CPU·GPU의 구세대 부품도 견적 후보에 포함됩니다.</p>}
+    {generations.length > 0 && (
+      <p className="engine-filter-generation-note" title="카탈로그에 판매 중인 상품으로 자동 계산된 견적 허용 세대입니다. 신세대가 수집되면 자동으로 올라갑니다.">
+        세대 경계(자동): {generations.map((entry) => (
+          <span key={entry.line} className="engine-filter-generation-chip">
+            {entry.thresholdRank === entry.topRank ? `${entry.topLabel}+` : `${entry.thresholdLabel}~${entry.topLabel}`}
+            <em>{entry.topCount.toLocaleString("ko-KR")}</em>
+          </span>
+        ))}
+      </p>
+    )}
     <div className="engine-filter-toolbar">
       <label className="engine-filter-master">
         <input type="checkbox" checked={config?.enabled ?? true} disabled={!config || loading} onChange={(event) => { setConfig((current) => current ? { ...current, enabled: event.target.checked } : current); setPreviewSummary(null); }} />

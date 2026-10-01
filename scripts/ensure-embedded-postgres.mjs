@@ -11,6 +11,24 @@ import pg from "pg";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const require = createRequire(import.meta.url);
+const { unhookEmbeddedPostgresExitMask } = require("./async-exit-hook-fix.cjs");
+
+// See async-exit-hook-fix.cjs: embedded-postgres' exit handlers rewrite or
+// corrupt the real exit code, so they are removed. Live clusters are still
+// stopped here — 'beforeExit' awaits them (bounded) on a natural exit and
+// 'exit' sends their SIGINT synchronously on an explicit process.exit().
+unhookEmbeddedPostgresExitMask();
+const liveClusters = new Set();
+process.on("beforeExit", (code) => {
+  if (liveClusters.size === 0) return;
+  const pending = [...liveClusters].map((cluster) => cluster.stop().catch(() => undefined));
+  liveClusters.clear();
+  const force = setTimeout(() => process.exit(code || 0), 10_000);
+  Promise.allSettled(pending).then(() => clearTimeout(force));
+});
+process.on("exit", () => {
+  for (const cluster of liveClusters) void cluster.stop().catch(() => undefined);
+});
 const DATA_DIRECTORY = resolve(ROOT, "node_modules/.cache/pc-supporter-test-pg");
 export const EMBEDDED_POSTGRES_PORT = 55439;
 const ADMIN_CONNECTION = {
@@ -75,6 +93,7 @@ export async function ensureEmbeddedPostgres(database) {
       onLog: () => undefined,
       onError: () => undefined
     });
+    liveClusters.add(cluster);
     if (!existsSync(resolve(DATA_DIRECTORY, "PG_VERSION"))) {
       rmSync(DATA_DIRECTORY, { recursive: true, force: true });
       await cluster.initialise();
@@ -96,6 +115,7 @@ export async function ensureEmbeddedPostgres(database) {
   return {
     url: embeddedPostgresUrl(database),
     async stop() {
+      liveClusters.delete(cluster);
       const admin = new pg.Client({ ...ADMIN_CONNECTION, connectionTimeoutMillis: 5_000 });
       await admin.connect().catch(() => undefined);
       try {

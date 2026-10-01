@@ -318,6 +318,9 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome, floor
 
   const indicator = showResume ? { eyebrow: "작성 중", index: 1, total: 1 } : stepIndicatorFor(state);
   const update = (patch: Partial<OnboardingState>) => setState((current) => ({ ...current, ...patch }));
+  // 단일 선택(라디오) 스텝은 고르는 즉시 다음으로 진행한다 — 굳이 "다음" 버튼을
+  // 두 번 누르게 할 필요가 없다.
+  const selectAndAdvance = (patch: Partial<OnboardingState>) => setState((current) => advanceOnboarding({ ...current, ...patch }));
   const toggleGame = (id: OnboardingGame) => {
     if (state.games.includes(id)) {
       setGameLimitReached(false);
@@ -424,7 +427,14 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome, floor
     body = (
       <div className="onboarding-options" role="radiogroup" aria-labelledby="onboarding-title">
         {INTENT_OPTIONS.map((option) => (
-          <RadioOptionRow key={option.id} name="onboarding-intent" value={option.id} title={option.title} description={option.description} Icon={option.Icon} selected={state.intent === option.id} onChange={() => update({ intent: option.id })} />
+          <RadioOptionRow key={option.id} name="onboarding-intent" value={option.id} title={option.title} description={option.description} Icon={option.Icon} selected={state.intent === option.id} onChange={() => {
+            if (option.id === "later") {
+              trackUsageEvent("onboarding_exit", { step: "intent", reason: "skip" });
+              onSkip();
+              return;
+            }
+            selectAndAdvance({ intent: option.id });
+          }} />
         ))}
       </div>
     );
@@ -433,7 +443,7 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome, floor
     body = (
       <div className="onboarding-options" role="radiogroup" aria-labelledby="onboarding-title">
         {MODE_OPTIONS.map((option) => (
-          <RadioOptionRow key={option.id} name="onboarding-mode" value={option.id} title={option.title} description={option.description} Icon={option.Icon} selected={state.mode === option.id} onChange={() => update({ mode: option.id })} />
+          <RadioOptionRow key={option.id} name="onboarding-mode" value={option.id} title={option.title} description={option.description} Icon={option.Icon} selected={state.mode === option.id} onChange={() => selectAndAdvance({ mode: option.id })} />
         ))}
       </div>
     );
@@ -454,7 +464,7 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome, floor
     body = (
       <div className="onboarding-options" role="radiogroup" aria-labelledby="onboarding-title">
         {USECASE_OPTIONS.map((option) => (
-          <RadioOptionRow key={option.id} name="onboarding-usecase" value={option.id} title={option.title} description={option.description} Icon={option.Icon} selected={state.usecase === option.id} onChange={() => update({ usecase: option.id })} />
+          <RadioOptionRow key={option.id} name="onboarding-usecase" value={option.id} title={option.title} description={option.description} Icon={option.Icon} selected={state.usecase === option.id} onChange={() => selectAndAdvance({ usecase: option.id })} />
         ))}
       </div>
     );
@@ -558,7 +568,7 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome, floor
               selected={state.intensity === option.id}
               recommended={option.recommended}
               checkStyle
-              onChange={() => update({ intensity: option.id })}
+              onChange={() => selectAndAdvance({ intensity: option.id })}
             />;
           })}
         </div>

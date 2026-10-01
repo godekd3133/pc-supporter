@@ -566,6 +566,7 @@ export type PartSearchOptions = {
 };
 
 function partSearchPredicateFor(
+  catalog: Part[],
   category: PartCategory | undefined,
   query: string | undefined,
   options: PartSearchOptions = {}
@@ -577,7 +578,7 @@ function partSearchPredicateFor(
     if (options.partId && part.id !== options.partId) return false;
     if (category && part.category !== category) return false;
     if (options.quoteBrandRestricted && !isQuoteBrandAllowed(part.category, part.brand)) return false;
-    if (options.quoteSellableOnly && !isQuoteSelectable(part)) return false;
+    if (options.quoteSellableOnly && !isQuoteSelectable(part, catalog)) return false;
     if (normalizedBrand && !(part.brand ?? "").toLocaleLowerCase("ko-KR").includes(normalizedBrand)) return false;
     if (options.quality && options.quality !== "all" && part.dataQuality !== options.quality) return false;
     if (options.freshness && options.freshness !== "all" && classifyDataFreshness(part.updatedAt, options.now) !== options.freshness) return false;
@@ -643,7 +644,7 @@ export function filterParts(
   query: string | undefined,
   options: PartSearchOptions = {}
 ) {
-  return catalogCandidatesFor(catalog, category).filter(partSearchPredicateFor(category, query, options));
+  return catalogCandidatesFor(catalog, category).filter(partSearchPredicateFor(catalog, category, query, options));
 }
 
 function sortParts(parts: Part[], category: PartCategory | undefined, sort: PartSearchOptions["sort"]) {
@@ -726,13 +727,13 @@ export function catalogSearchTotalsFor(
   }
 ): CatalogSearchTotals {
   const predicates = {
-    base: partSearchPredicateFor(category, query, optionSets.base),
-    price: partSearchPredicateFor(category, query, optionSets.price),
-    freshness: partSearchPredicateFor(category, query, optionSets.freshness),
-    benchmark: partSearchPredicateFor(category, query, optionSets.benchmark),
-    final: partSearchPredicateFor(category, query, optionSets.final),
-    unfiltered: partSearchPredicateFor(category, query, optionSets.unfiltered),
-    coreCandidate: partSearchPredicateFor(category, query, optionSets.coreCandidate)
+    base: partSearchPredicateFor(catalog, category, query, optionSets.base),
+    price: partSearchPredicateFor(catalog, category, query, optionSets.price),
+    freshness: partSearchPredicateFor(catalog, category, query, optionSets.freshness),
+    benchmark: partSearchPredicateFor(catalog, category, query, optionSets.benchmark),
+    final: partSearchPredicateFor(catalog, category, query, optionSets.final),
+    unfiltered: partSearchPredicateFor(catalog, category, query, optionSets.unfiltered),
+    coreCandidate: partSearchPredicateFor(catalog, category, query, optionSets.coreCandidate)
   };
   const totals: CatalogSearchTotals = {
     baseTotal: 0,
