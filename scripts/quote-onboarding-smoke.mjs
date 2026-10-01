@@ -355,8 +355,8 @@ const smokeExpression = `(${async function runQuoteOnboardingSmoke() {
 
   await navigateStart();
   await waitForStep("intent", "나중에 선택 초기 화면");
-  await chooseOption("나중에 하기");
-  clickButton("홈으로 돌아가기");
+  // "나중에 하기"는 선택 즉시 홈으로 돌아간다 — 별도 CTA가 없다.
+  clickButton("나중에 하기");
   await waitFor(() => location.pathname === "/" && document.querySelector(".home-page") !== null, "나중에 선택 후 홈 이동");
   const later = { path: location.pathname, home: true };
 

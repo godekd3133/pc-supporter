@@ -24,7 +24,7 @@ describe("catalog merge", () => {
     const livePart = part({ id: "danawa-cpu-live", sourceProductCode: "live-1" });
 
     expect(seedBaseFor([livePart])).toBe(starterCatalog);
-    expect(seedBaseFor([livePart])).toHaveLength(115);
+    expect(seedBaseFor([livePart])).toHaveLength(119);
     expect(seedBaseFor([livePart]).length).toBeGreaterThan(seedCatalog.length);
   });
 
