@@ -486,6 +486,7 @@ const FIELD_DEFINITIONS: Record<PartCategory, FieldDefinition[]> = {
     { field: "memorySlots", label: "메모리 슬롯", weight: 24, instruction: "물리 DIMM 슬롯 수를 확인합니다." },
     { field: "sataPorts", label: "SATA 포트", weight: 22, instruction: "사용 가능한 SATA 포트 수를 확인합니다." },
     { field: "motherboardFormFactors", label: "지원 메인보드 규격", weight: 18, instruction: "메인보드 자체 규격을 실제 페이지에서 확인합니다." },
+    { field: "vrmCapacityW", label: "전원부 용량", weight: 30, instruction: "VCore 페이즈 수×전류 정격과 방열판 유무로 CPU 지속 전력 허용치(W)를 추정합니다. 제조사 페이지의 전원부 구성을 출처 메모에 남깁니다." },
     { field: "pcieX16Slots", label: "PCIe x16 슬롯", weight: 38, instruction: "확장 슬롯 페이지에서 PCIe x16 슬롯 수를 확인합니다. 표기가 없으면 0개로 추정하지 않습니다." },
     { field: "pcieX8Slots", label: "PCIe x8 슬롯", weight: 36, instruction: "확장 슬롯 페이지에서 PCIe x8 슬롯 수를 확인합니다. 표기가 없으면 0개로 추정하지 않습니다." },
     { field: "pcieX4Slots", label: "PCIe x4 슬롯", weight: 34, instruction: "확장 슬롯 페이지에서 PCIe x4 슬롯 수를 확인합니다. 표기가 없으면 0개로 추정하지 않습니다." },

@@ -35,6 +35,7 @@ export type CatalogSpecOverrideFieldKey =
   | "memorySlots"
   | "sataPorts"
   | "motherboardFormFactors"
+  | "vrmCapacityW"
   | "capacityGb"
   | "speedMhz"
   | "memoryFormFactor"
@@ -80,6 +81,7 @@ const FIELD_TYPES: Partial<Record<CatalogSpecOverrideFieldKey, CatalogSpecOverri
   memorySlots: "number",
   sataPorts: "number",
   motherboardFormFactors: "string_list",
+  vrmCapacityW: "number",
   capacityGb: "number",
   speedMhz: "number",
   memoryFormFactor: "string",
@@ -110,7 +112,7 @@ const FIELD_TYPES: Partial<Record<CatalogSpecOverrideFieldKey, CatalogSpecOverri
 const CATEGORY_FIELDS: Record<PartCategory, CatalogSpecOverrideFieldKey[]> = {
   cpu: ["socket", "tdpW", "cores", "threads"],
   cooler: ["supportedSockets", "maxCoolingW", "coolerType", "radiatorSizeMm"],
-  motherboard: ["socket", "memoryType", "m2Slots", "pcieX16Slots", "pcieX8Slots", "pcieX4Slots", "pcieX1Slots", "maxMemoryGb", "memorySlots", "sataPorts", "motherboardFormFactors"],
+  motherboard: ["socket", "memoryType", "m2Slots", "pcieX16Slots", "pcieX8Slots", "pcieX4Slots", "pcieX1Slots", "maxMemoryGb", "memorySlots", "sataPorts", "motherboardFormFactors", "vrmCapacityW"],
   memory: ["memoryType", "capacityGb", "speedMhz", "memoryFormFactor", "memoryModuleCountPerKit", "memoryProfiles"],
   gpu: ["powerW", "recommendedPsuW", "lengthMm", "widthMm", "thicknessMm", "vramGb", "lowProfileBracket"],
   ssd: ["interface", "capacityGb", "formFactor", "m2PcieGeneration", "lengthMm"],
