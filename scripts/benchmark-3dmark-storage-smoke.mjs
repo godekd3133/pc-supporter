@@ -48,7 +48,7 @@ async function main() {
     "--remote-allow-origins=*",
     `--remote-debugging-port=${port}`,
     `--user-data-dir=${profileDir}`,
-    `${baseUrl}/admin#admin-benchmark-review`
+    `${baseUrl}/admin/evidence#admin-benchmark-review`
   ], { detached: process.platform !== "win32", stdio: ["ignore", "ignore", "pipe"] });
   let client;
   try {

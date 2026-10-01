@@ -6,11 +6,11 @@ import type { UsageEventInsertRow } from "./repository";
 // Phase 1 퍼널 분석: 클라이언트 이벤트는 `usage_events` 원시 로그에 기록하고
 // 일별 카운터는 기존 서버 계수 이벤트(app_open 포함)만 유지한다.
 
-export const USAGE_EVENT_NAMES = ["app_open", "check", "recommend", "recommend_failed", "save", "share"] as const;
+export const USAGE_EVENT_NAMES = ["app_open", "check", "recommend", "recommend_failed", "save", "share", "adjust"] as const;
 export type UsageEventName = (typeof USAGE_EVENT_NAMES)[number];
 
 // 서버 route handler가 직접 계수하는 이벤트 — 클라이언트가 보낼 수 없다.
-const SERVER_OWNED_EVENT_NAMES = new Set<string>(["check", "recommend", "recommend_failed", "save", "share"]);
+const SERVER_OWNED_EVENT_NAMES = new Set<string>(["check", "recommend", "recommend_failed", "save", "share", "adjust"]);
 
 // 클라이언트가 /api/events로 보낼 수 있는 퍼널 이벤트 화이트리스트.
 export const CLIENT_USAGE_EVENT_NAMES = [

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { FiAlertTriangle, FiFilter, FiLoader, FiRefreshCw, FiRotateCcw, FiSave, FiXCircle } from "react-icons/fi";
-import { emptyEngineTargetFiltersConfig, engineCategoryTargetFilterIsEmpty, engineFilterOptionLabelFor, engineFilterRangeEqual, engineTargetFilterActiveFacetCount, ENGINE_TARGET_FILTER_FACETS } from "../shared/engine-target-filters";
+import { emptyEngineTargetFiltersConfig, engineCategoryTargetFilterIsEmpty, engineFilterOptionLabelFor, engineFilterRangeEqual, engineTargetFilterActiveFacetCount, ENGINE_TARGET_FILTER_FACETS, ENGINE_TARGET_FILTER_LIMITS } from "../shared/engine-target-filters";
 import type { EngineCategoryTargetFilter, EngineFilterRange, EngineTargetFiltersConfig, EngineTargetFilterFacet } from "../shared/engine-target-filters";
 import { CATEGORY_LABELS, PART_CATEGORIES } from "../shared/types";
 import type { PartCategory } from "../shared/types";
@@ -126,6 +126,7 @@ export function AdminEngineFiltersPanel({ onToast }: { onToast: (message: string
   const [facetOptions, setFacetOptions] = useState<EngineFilterFacetsResponse["categories"]>({});
   const [selectedCategory, setSelectedCategory] = useState<PartCategory>("ssd");
   const [partSearch, setPartSearch] = useState("");
+  const [excludedOnly, setExcludedOnly] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -168,6 +169,7 @@ export function AdminEngineFiltersPanel({ onToast }: { onToast: (message: string
 
   useEffect(() => {
     setPartSearch("");
+    setExcludedOnly(false);
   }, [selectedCategory]);
 
   const dirty = useMemo(() => config !== null && JSON.stringify(compactConfig(config)) !== savedConfigJson, [config, savedConfigJson]);
@@ -352,43 +354,78 @@ export function AdminEngineFiltersPanel({ onToast }: { onToast: (message: string
   };
 
   // 부품 단위 제외 — 허용 조건과 무관하게 체크된 부품 id는 항상 후보에서 빠진다.
-  // 선택된 항목은 검색 결과 위로 고정하고, 카탈로그에서 사라진 id(단종·수집 중단)도
-  // 목록에 남겨 해제할 수 있게 한다.
+  // 위에는 "제외된 부품" 요약 블록을 항상 열어 두고, 아래에는 검색+스크롤 목록을 둬
+  // 수백 개 부품 중에서도 찾아 넣고/빼기 쉽게 한다. 카탈로그에서 사라진 id
+  // (단종·수집 중단)도 요약 블록에 남겨 해제할 수 있게 한다.
   const renderExcludedPartsRow = () => {
     const rule = selectedRule ?? {};
     const partOptions = selectedFacetOptions?.parts ?? [];
     const excluded = new Set(rule.excludePartIds ?? []);
-    const query = partSearch.trim().toLocaleLowerCase("ko-KR");
+    const normalize = (text: string) => text.toLocaleLowerCase("ko-KR").replace(/\s+/g, "");
+    const query = normalize(partSearch.trim());
     const matched = query === ""
       ? partOptions
-      : partOptions.filter((option) => `${option.brand ?? ""} ${option.name} ${option.id}`.toLocaleLowerCase("ko-KR").includes(query));
-    const pinned = matched.filter((option) => excluded.has(option.id));
-    const rest = matched.filter((option) => !excluded.has(option.id));
-    const visible = [...pinned, ...rest].slice(0, 200);
+      : partOptions.filter((option) => normalize(`${option.brand ?? ""} ${option.name} ${option.id}`).includes(query));
+    const listed = excludedOnly ? matched.filter((option) => excluded.has(option.id)) : matched;
+    const visible = listed.slice(0, 500);
+    const excludedOptions = partOptions.filter((option) => excluded.has(option.id));
     const missingExcluded = [...excluded].filter((id) => !partOptions.some((option) => option.id === id));
     const toggleExcluded = (id: string) => updateRule(selectedCategory, (current) => ({ ...current, excludePartIds: toggleStringList(current.excludePartIds, id) }));
+    const excludeAllMatched = () => updateRule(selectedCategory, (current) => ({
+      ...current,
+      excludePartIds: [...new Set([...(current.excludePartIds ?? []), ...matched.map((option) => option.id)])].slice(0, ENGINE_TARGET_FILTER_LIMITS.maxExcludedPartIds)
+    }));
+    const clearExcluded = () => updateRule(selectedCategory, (current) => ({ ...current, excludePartIds: [] }));
+    const unaddedCount = matched.filter((option) => !excluded.has(option.id)).length;
     return <div className="engine-filter-row">
       <div className="engine-filter-row-label"><FiXCircle /><span>부품 직접 제외</span></div>
       <div className="engine-filter-row-body">
-        <input type="search" className="engine-filter-part-search" placeholder="부품 이름·제조사·id 검색" value={partSearch} onChange={(event) => setPartSearch(event.target.value)} />
-        <div className="engine-filter-options">
-          {missingExcluded.map((id) => (
-            <label key={id} className="engine-filter-option excluded checked">
-              <input type="checkbox" checked onChange={() => toggleExcluded(id)} />
-              <span>{id} · 카탈로그에 없음</span>
-            </label>
-          ))}
-          {visible.map((option) => {
-            const checked = excluded.has(option.id);
-            return <label key={option.id} className={`engine-filter-option excluded${checked ? " checked" : ""}`} title={option.id}>
-              <input type="checkbox" checked={checked} onChange={() => toggleExcluded(option.id)} />
-              <span>{option.brand ? `${option.brand} ` : ""}{option.name}</span>
-              {option.priceWon !== undefined && <em>{Math.round(option.priceWon / 10_000)}만</em>}
-            </label>;
-          })}
+        {excluded.size > 0 && (
+          <div className="engine-filter-excluded-list">
+            <div className="engine-filter-excluded-head">
+              <strong>제외 {excluded.size}개</strong>
+              <button type="button" className="text-button" onClick={clearExcluded}>전체 해제</button>
+            </div>
+            <div className="engine-filter-options">
+              {excludedOptions.map((option) => (
+                <label key={option.id} className="engine-filter-option excluded checked" title={option.id}>
+                  <input type="checkbox" checked onChange={() => toggleExcluded(option.id)} />
+                  <span>{option.brand ? `${option.brand} ` : ""}{option.name}</span>
+                  {option.priceWon !== undefined && <em>{Math.round(option.priceWon / 10_000)}만</em>}
+                </label>
+              ))}
+              {missingExcluded.map((id) => (
+                <label key={id} className="engine-filter-option excluded checked">
+                  <input type="checkbox" checked onChange={() => toggleExcluded(id)} />
+                  <span>{id} · 카탈로그에 없음</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+        <div className="engine-filter-part-toolbar">
+          <input type="search" className="engine-filter-part-search" placeholder="부품 이름·제조사·id 검색" value={partSearch} onChange={(event) => setPartSearch(event.target.value)} />
+          <label className="engine-filter-part-only">
+            <input type="checkbox" checked={excludedOnly} onChange={(event) => setExcludedOnly(event.target.checked)} />
+            <span>제외만</span>
+          </label>
+          <button type="button" className="text-button" disabled={unaddedCount === 0} onClick={excludeAllMatched}>결과 전체 제외</button>
+          <span className="engine-filter-part-count">전체 {partOptions.length.toLocaleString("ko-KR")}개 · 표시 {listed.length.toLocaleString("ko-KR")}개</span>
         </div>
-        {matched.length > visible.length && <p className="engine-filter-missing">검색 결과가 많아 일부만 표시합니다 — 검색어를 더 입력해 좁혀 주세요.</p>}
-        {excluded.size > 0 && <p className="engine-filter-missing">이 범주에서 {excluded.size}개 부품을 견적 후보에서 제외합니다.</p>}
+        <div className="engine-filter-part-list">
+          <div className="engine-filter-options">
+            {visible.map((option) => {
+              const checked = excluded.has(option.id);
+              return <label key={option.id} className={`engine-filter-option excluded${checked ? " checked" : ""}`} title={option.id}>
+                <input type="checkbox" checked={checked} onChange={() => toggleExcluded(option.id)} />
+                <span>{option.brand ? `${option.brand} ` : ""}{option.name}</span>
+                {option.priceWon !== undefined && <em>{Math.round(option.priceWon / 10_000)}만</em>}
+              </label>;
+            })}
+          </div>
+          {listed.length === 0 && <p className="engine-filter-empty">{excludedOnly ? "제외된 부품이 없습니다." : "검색과 일치하는 부품이 없습니다."}</p>}
+        </div>
+        {listed.length > visible.length && <p className="engine-filter-missing">결과가 많아 500개만 표시합니다 — 검색어를 더 입력해 좁혀 주세요.</p>}
       </div>
     </div>;
   };

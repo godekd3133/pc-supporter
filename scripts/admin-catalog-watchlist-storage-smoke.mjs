@@ -48,7 +48,7 @@ async function main() {
     "--remote-allow-origins=*",
     `--remote-debugging-port=${port}`,
     `--user-data-dir=${profileDir}`,
-    `${baseUrl}/admin`
+    `${baseUrl}/admin/catalog`
   ], { detached: process.platform !== "win32", stdio: ["ignore", "ignore", "pipe"] });
   let client;
   try {
@@ -97,7 +97,7 @@ async function main() {
         await wait(100);
       }
     })()`);
-    assert(probe?.stage === "checked" && probe.tracked === true && probe.threshold === "5" && probe.path === "/admin" && probe.hash === "#admin-catalog-change-log", "focused admin catalog watch-list storage probe failed: " + JSON.stringify(probe));
+    assert(probe?.stage === "checked" && probe.tracked === true && probe.threshold === "5" && probe.path === "/admin/catalog" && probe.hash === "#admin-catalog-change-log", "focused admin catalog watch-list storage probe failed: " + JSON.stringify(probe));
     console.log(JSON.stringify({ ok: true, probe }, null, 2));
   } finally {
     client?.close();

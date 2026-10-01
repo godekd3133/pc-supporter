@@ -155,6 +155,16 @@ describe("generateBuildDraft with target filters", () => {
     }
   });
 
+  it("테스트 베드 부품은 일반 생성에선 브랜드 정책에 걸리고 namePatterns 지정 시 선택된다", () => {
+    const unfiltered = generateBuildDraft(seedCatalog, request);
+    const memoryIds = (unfiltered.selection.memory ?? []).map((entry) => entry.partId);
+    expect(memoryIds).not.toContain("memory-klevv-fitv-ddr5-6000");
+    expect(memoryIds).not.toContain("memory-patriot-viper-ddr5-5600");
+    const targetFilters = { schemaVersion: 1 as const, enabled: true, categories: { memory: { namePatterns: ["KLEVV|PATRIOT"] } } };
+    const filtered = generateBuildDraft(seedCatalog, request, [], { targetFilters });
+    expect((filtered.selection.memory ?? []).map((entry) => entry.partId)).toContain("memory-klevv-fitv-ddr5-6000");
+  });
+
   it("최소 실행 가능 견적가도 같은 필터를 적용한다", () => {
     const unfiltered = minimumFeasibleBuildPriceFor(seedCatalog, request);
     const sataOnly = minimumFeasibleBuildPriceFor(seedCatalog, request, {

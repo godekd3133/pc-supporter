@@ -130,6 +130,8 @@ const CPU_INDEX_RULES: readonly { pattern: RegExp; single: number; multi: number
   { pattern: /9800X3D/i, single: 2150, multi: 23500 },
   { pattern: /9700X\b/i, single: 2200, multi: 23000 },
   { pattern: /9600X\b/i, single: 2160, multi: 17500 },
+  { pattern: /9600\b/i, single: 2050, multi: 15500 },
+  { pattern: /9500F\b/i, single: 1950, multi: 15000 },
   // AMD Zen4 (7000/8000)
   { pattern: /7950X3D/i, single: 2050, multi: 36000 },
   { pattern: /7950X\b/i, single: 2050, multi: 38000 },

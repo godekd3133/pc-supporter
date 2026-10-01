@@ -488,6 +488,7 @@ async function main() {
     if (crawlResumePreview.available) {
       await waitForValue(client, "document.querySelector('[data-testid=\"admin-crawl-resume-control\"]') !== null && document.querySelector('[data-testid=\"admin-crawl-resume\"]') !== null", "중단된 카탈로그 수집 재개 컨트롤");
     }
+    await client.send("Page.navigate", { url: `${baseUrl}/admin/evidence` });
     await waitForValue(client, "document.getElementById('admin-seed-catalog-preview-panel') !== null", "starter 기준 anchor");
     await client.evaluate("(() => { const target = document.getElementById('admin-seed-catalog-preview-panel'); target?.scrollIntoView({ block: 'center', behavior: 'auto' }); target?.focus({ preventScroll: true }); return Boolean(target); })()");
     await waitForValue(client, "document.querySelector('[data-testid=\"admin-seed-catalog-preview\"]') !== null && (document.body?.innerText ?? '').includes('기본 정보 기준값 비교')", "기본 정보 기준값 비교 패널");
@@ -510,6 +511,7 @@ async function main() {
     assert(categoryCrawlButton?.category, "starter 수집 큐의 카테고리 수집 버튼을 찾지 못했습니다.");
     const categoryCrawlStatus = await client.evaluate("fetch('/api/admin/crawl/status').then((response) => response.json())");
     assert(typeof categoryCrawlStatus?.pageRetries === 'number' && Array.isArray(categoryCrawlStatus?.failedPages), "카탈로그 페이지 telemetry 필드가 없습니다. probe=" + JSON.stringify(categoryCrawlStatus));
+    await client.send("Page.navigate", { url: `${baseUrl}/admin` });
     if (categoryCrawlStatus?.currentPage !== undefined || categoryCrawlStatus?.currentCategory || categoryCrawlStatus?.failedPages?.length > 0) {
       await waitForValue(client, "document.querySelector('[data-testid=\"admin-crawl-progress-detail\"]') !== null && (document.body?.innerText ?? '').includes('화면 통계')", "카탈로그 페이지 telemetry 패널");
     }
@@ -533,6 +535,9 @@ async function main() {
         await waitForValue(client, "document.querySelector('[data-testid=\"admin-crawl-retry-history\"]') !== null", "카탈로그 페이지 재시도 이력");
       }
     }
+    await client.send("Page.navigate", { url: `${baseUrl}/admin/evidence` });
+    await waitForValue(client, "document.getElementById('admin-seed-catalog-mapping-panel') !== null", "starter 매핑 anchor 복귀");
+    await client.evaluate("(() => { const target = document.getElementById('admin-seed-catalog-mapping-panel'); target?.scrollIntoView({ block: 'center', behavior: 'auto' }); target?.focus({ preventScroll: true }); return Boolean(target); })()");
     if (categoryCrawlStatus?.status === 'running') {
       assert(categoryCrawlButton.disabled === true, "기존 카탈로그 수집 중 범주 수집 버튼이 비활성화되지 않았습니다.");
     } else {
@@ -542,13 +547,15 @@ async function main() {
       // This probe deliberately mocks the POST response, so the component remains
       // in its optimistic `running` state. Reload before testing the next action
       // to avoid making the following button look disabled for a fake job.
-      await client.send("Page.navigate", { url: `${baseUrl}/admin` });
+      await client.send("Page.navigate", { url: `${baseUrl}/admin/evidence` });
+      await client.evaluate("(() => { const target = document.getElementById('admin-seed-catalog-mapping-panel'); target?.scrollIntoView({ block: 'center', behavior: 'auto' }); target?.focus({ preventScroll: true }); return Boolean(target); })()");
       await waitForValue(client, "(document.body?.innerText ?? '').includes('부품 데이터 센터') && document.querySelector('[data-testid=\"admin-seed-collection-queue\"]') !== null", "mock 수집 이후 관리자 상태 복구");
       await waitForValue(client, "document.querySelector('[data-testid=\"admin-seed-collection-queue-focus-mapping\"]') !== null", "자동 재계산 후 매핑 큐 렌더링");
     }
     const focusedStarterId = await client.evaluate("(() => { const button = document.querySelector('[data-testid=\"admin-seed-collection-queue-focus-mapping\"]'); if (!button) return undefined; const starterId = button.getAttribute('data-starter-id'); button.click(); return starterId; })()");
     assert(typeof focusedStarterId === 'string' && focusedStarterId.length > 0, "starter 수집 큐의 매핑 이동 버튼을 찾지 못했습니다.");
     await waitForValue(client, `document.querySelector('.admin-seed-mapping-search input')?.value === ${JSON.stringify(focusedStarterId)} && document.getElementById(${JSON.stringify(`admin-seed-mapping-item-${focusedStarterId}`)}) !== null`, "starter 수집 큐에서 매핑 입력으로 이동");
+    await client.send("Page.navigate", { url: `${baseUrl}/admin/catalog` });
     await waitForValue(client, "document.querySelector('[data-testid=\"admin-catalog-spec-coverage\"]') !== null && (document.body?.innerText ?? '').includes('스펙 완성도·보강 우선순위')", "관리자 카탈로그 스펙 coverage");
     await client.evaluate("(() => { const hash = '#admin-catalog-change-log'; if (location.hash !== hash) { history.replaceState({}, '', location.pathname + location.search + hash); window.dispatchEvent(new HashChangeEvent('hashchange')); } document.getElementById('admin-catalog-change-log')?.scrollIntoView({ block: 'center' }); })()");
     await waitForValue(client, "document.querySelector('.catalog-change-card') !== null", "관리자 카탈로그 변경 이력 관심 목록");
@@ -581,7 +588,7 @@ async function main() {
         await wait(100);
       }
     })()`);
-    assert(adminCatalogWatchlistStorageProbe?.stage === "checked" && adminCatalogWatchlistStorageProbe.tracked === true && adminCatalogWatchlistStorageProbe.threshold === "5" && adminCatalogWatchlistStorageProbe.path === "/admin", "관리자 카탈로그 변경 이력 화면이 다른 탭의 관심 가격 목록·근접 기준 변경을 반영하지 못했습니다. probe=" + JSON.stringify(adminCatalogWatchlistStorageProbe));
+    assert(adminCatalogWatchlistStorageProbe?.stage === "checked" && adminCatalogWatchlistStorageProbe.tracked === true && adminCatalogWatchlistStorageProbe.threshold === "5" && adminCatalogWatchlistStorageProbe.path === "/admin/catalog", "관리자 카탈로그 변경 이력 화면이 다른 탭의 관심 가격 목록·근접 기준 변경을 반영하지 못했습니다. probe=" + JSON.stringify(adminCatalogWatchlistStorageProbe));
     const adminCatalogWatchlistMutationContextProbe = await client.evaluate(`(async () => {
       const watchlistKey = "pc-supporter-catalog-watchlist";
       const originalWatchlist = localStorage.getItem(watchlistKey);
@@ -628,7 +635,7 @@ async function main() {
     assert(adminCatalogWatchlistMutationContextProbe?.stage === "checked" && adminCatalogWatchlistMutationContextProbe.postCalls === 1 && adminCatalogWatchlistMutationContextProbe.currentEntry === true && adminCatalogWatchlistMutationContextProbe.staleLink === false, "관리자 카탈로그 관심 목록 저장 중 이전 payload의 stale 공유 링크가 현재 입력에 남았습니다. probe=" + JSON.stringify(adminCatalogWatchlistMutationContextProbe));
     await waitForValue(client, "document.querySelector('[data-testid=\"admin-catalog-pcie-coverage\"]') !== null && (document.body?.innerText ?? '').includes('메인보드 PCIe 슬롯 정보') && (document.body?.innerText ?? '').includes('x4 이상 조건')", "관리자 PCIe evidence coverage");
     const pcieCoverageProbe = await client.evaluate("(async () => { const meta = await fetch('/api/meta').then((response) => response.json()); const coverage = meta?.catalogSpecCoverage?.pcieSlotCoverage; const integrity = meta?.catalogCategoryIntegrity; const total = coverage?.total; const rawTotal = coverage?.rawTotal ?? total; const excludedCategoryMismatchCount = coverage?.excludedCategoryMismatchCount ?? 0; return { total, rawTotal, excludedCategoryMismatchCount, x4: coverage?.byRequiredWidth?.[4], integrityMismatchCount: integrity?.mismatchCount, integrityPanel: document.querySelector('[data-testid=\"admin-catalog-category-integrity\"]') !== null, rendered: document.querySelectorAll('[data-testid=\"admin-catalog-pcie-coverage\"] [role=\"progressbar\"]').length, missingHref: document.querySelector('[data-testid=\"admin-catalog-pcie-open-missing\"]')?.getAttribute('href'), reviewHref: document.querySelector('[data-testid=\"admin-catalog-pcie-open-review\"]')?.getAttribute('href') }; })()");
-    assert(pcieCoverageProbe.total > 0 && pcieCoverageProbe.rawTotal >= pcieCoverageProbe.total && pcieCoverageProbe.excludedCategoryMismatchCount === pcieCoverageProbe.rawTotal - pcieCoverageProbe.total && pcieCoverageProbe.integrityMismatchCount === pcieCoverageProbe.excludedCategoryMismatchCount && pcieCoverageProbe.integrityPanel && pcieCoverageProbe.x4?.missing > 0 && pcieCoverageProbe.rendered === 4 && pcieCoverageProbe.missingHref === '/catalog?category=motherboard&pcieSlotInfo=missing' && pcieCoverageProbe.reviewHref === '/admin?reviewEvidence=pcie#admin-catalog-spec-review', "관리자 PCIe evidence coverage 또는 카테고리 정합성 경계가 실제 메타데이터와 일치하지 않습니다. probe=" + JSON.stringify(pcieCoverageProbe));
+    assert(pcieCoverageProbe.total > 0 && pcieCoverageProbe.rawTotal >= pcieCoverageProbe.total && pcieCoverageProbe.excludedCategoryMismatchCount === pcieCoverageProbe.rawTotal - pcieCoverageProbe.total && pcieCoverageProbe.integrityMismatchCount === pcieCoverageProbe.excludedCategoryMismatchCount && pcieCoverageProbe.integrityPanel && pcieCoverageProbe.x4?.missing > 0 && pcieCoverageProbe.rendered === 4 && pcieCoverageProbe.missingHref === '/catalog?category=motherboard&pcieSlotInfo=missing' && pcieCoverageProbe.reviewHref === '/admin/catalog?reviewEvidence=pcie#admin-catalog-spec-review', "관리자 PCIe evidence coverage 또는 카테고리 정합성 경계가 실제 메타데이터와 일치하지 않습니다. probe=" + JSON.stringify(pcieCoverageProbe));
     if (pcieCoverageProbe.excludedCategoryMismatchCount > 0) {
       await waitForValue(client, "document.querySelector('[data-testid=\"admin-catalog-category-integrity-review\"]') !== null && document.querySelectorAll('[data-testid=\"admin-catalog-category-integrity-item\"]').length > 0", "분리 원본 검수 큐 렌더링");
       const categoryIntegrityReviewProbe = await client.evaluate("fetch('/api/admin/catalog-category-integrity/review-package?limit=2').then((response) => response.json())");
@@ -659,7 +666,7 @@ async function main() {
     const priorityActionProbe = await client.evaluate("(() => ({ benchmark: Boolean(document.querySelector('[data-testid=\"admin-catalog-work-priority-benchmark-gpu\"]')), spec: Boolean(document.querySelector('[data-testid=\"admin-catalog-work-priority-spec-case\"]') || document.querySelector('[data-testid=\"admin-catalog-work-priority-spec-ssd\"]')), pcie: Boolean(document.querySelector('[data-testid=\"admin-catalog-work-priority-pcie-motherboard\"]')), accessory: document.querySelectorAll('[data-testid^=\"admin-catalog-work-priority-accessory-\"]').length, actions: [...document.querySelectorAll('[data-testid^=\"admin-catalog-work-priority-\"]')].map((node) => node.getAttribute('data-testid')).filter(Boolean) }))()");
     assert(priorityActionProbe.spec && priorityActionProbe.pcie && priorityActionProbe.accessory > 0, "카탈로그 다음 보강 작업 패널이 PCIe·스펙·주변 부품 보강 대상을 표시하지 않습니다. probe=" + JSON.stringify(priorityActionProbe));
     const pciePriorityProbe = await client.evaluate("(() => { const card = document.querySelector('[data-testid=\"admin-catalog-work-priority-pcie-motherboard\"]'); const link = card?.querySelector('[data-testid=\"admin-catalog-work-priority-open-missing\"]'); const reviewLink = card?.querySelector('[data-testid=\"admin-catalog-work-priority-open-review\"]'); return { href: link?.getAttribute('href'), reviewHref: reviewLink?.getAttribute('href'), text: card?.textContent ?? '' }; })()");
-    assert(pciePriorityProbe.href === '/catalog?category=motherboard&pcieSlotInfo=missing' && pciePriorityProbe.reviewHref === '/admin?reviewEvidence=pcie#admin-catalog-spec-review' && pciePriorityProbe.text.includes('PCIe 정보 부족 보드 보기'), "PCIe evidence 우선 작업의 누락 보드·전용 보강 큐 이동 링크가 올바르지 않습니다. probe=" + JSON.stringify(pciePriorityProbe));
+    assert(pciePriorityProbe.href === '/catalog?category=motherboard&pcieSlotInfo=missing' && pciePriorityProbe.reviewHref === '/admin/catalog?reviewEvidence=pcie#admin-catalog-spec-review' && pciePriorityProbe.text.includes('PCIe 정보 부족 보드 보기'), "PCIe evidence 우선 작업의 누락 보드·전용 보강 큐 이동 링크가 올바르지 않습니다. probe=" + JSON.stringify(pciePriorityProbe));
     const accessoryPriorityProbe = await client.evaluate("(() => { const card = document.querySelector('[data-testid^=\"admin-catalog-work-priority-accessory-\"]'); const link = card?.querySelector('[data-testid=\"admin-catalog-work-priority-open-accessory\"]'); const button = card?.querySelector('[data-testid=\"admin-catalog-work-priority-start-accessory\"]'); return { href: link?.getAttribute('href'), category: button?.getAttribute('data-category') }; })()");
     assert(typeof accessoryPriorityProbe.href === 'string' && accessoryPriorityProbe.href.startsWith('/accessories?category=') && accessoryPriorityProbe.href.includes('quality=incomplete') && typeof accessoryPriorityProbe.category === 'string' && accessoryPriorityProbe.category.length > 0, "주변 부품 우선 작업 카드의 미완료 목록 링크·범주 보강 액션이 올바르지 않습니다. probe=" + JSON.stringify(accessoryPriorityProbe));
     await waitForValue(client, "document.querySelector('[data-testid=\"admin-accessory-spec-coverage\"]') !== null && document.querySelectorAll('[data-testid=\"admin-accessory-spec-open-incomplete\"]').length > 0", "주변 부품 전체 coverage 패널");
@@ -812,6 +819,7 @@ async function main() {
       }
     })()`);
     assert(benchmarkSaveRefreshProbe?.stage === 'refreshed' && benchmarkSaveRefreshProbe.saved === true && benchmarkSaveRefreshProbe.packageEmpty === true && benchmarkSaveRefreshProbe.packageRequests > benchmarkSaveRefreshProbe.before.packageRequests && benchmarkSaveRefreshProbe.reviewRequests > benchmarkSaveRefreshProbe.before.reviewRequests, "벤치마크 저장 성공 후 일반 검수 큐·3DMark 작업 패키지가 최신 상태로 갱신되지 않았습니다. probe=" + JSON.stringify(benchmarkSaveRefreshProbe));
+    await client.send("Page.navigate", { url: `${baseUrl}/admin/catalog` });
     await waitForValue(client, "document.getElementById('admin-catalog-spec-review') !== null", "카탈로그 스펙 보강 큐 lazy anchor");
     await client.evaluate("(() => { const node = document.getElementById('admin-catalog-spec-review'); node?.scrollIntoView({ block: 'center' }); node?.focus({ preventScroll: true }); return Boolean(node); })()");
     await waitForValue(client, "document.querySelector('[data-testid=\"admin-catalog-spec-review\"]') !== null && (document.body?.innerText ?? '').includes('카탈로그 스펙 보강 작업 패키지')", "카탈로그 스펙 보강 큐");
@@ -1705,6 +1713,8 @@ async function main() {
     assert(await setInputValue(client, "#admin-password", loginRaceRecoveryPassword), "관리자 로그인 race probe 이후 복구 비밀번호를 입력하지 못했습니다.");
     assert(await clickText(client, "로그인"), "관리자 로그인 race probe 이후 복구 로그인을 클릭하지 못했습니다.");
     await waitForValue(client, "(document.body?.innerText ?? '').includes('부품 데이터 센터') && document.querySelector('#admin-password') === null", "관리자 로그인 race probe 이후 복구");
+    await client.send("Page.navigate", { url: `${baseUrl}/admin` });
+    await waitForValue(client, "(document.body?.innerText ?? '').includes('부품 데이터 센터') && document.querySelector('button[aria-label=\"저장 견적 버전 상태 새로고침\"]') !== null", "백업 상세 probe용 운영 페이지");
     const adminBackupDetailRecoveryPassword = adminPassword ?? "browser-smoke-backup-detail-race";
     const adminBackupDetailLatestResponseProbe = await client.evaluate(`(async () => {
       const originalFetch = window.fetch;
@@ -1754,6 +1764,8 @@ async function main() {
       }
     })()`);
     assert(adminBackupDetailLatestResponseProbe?.stage === "checked" && adminBackupDetailLatestResponseProbe.detailCalls === 1 && adminBackupDetailLatestResponseProbe.staleAfterRelogin === false && adminBackupDetailLatestResponseProbe.loginScreen === false && adminBackupDetailLatestResponseProbe.adminScreen === true, "관리자 인증 만료 뒤 늦은 backup 상세 응답이 재로그인 화면에 stale diff를 되살렸습니다. probe=" + JSON.stringify(adminBackupDetailLatestResponseProbe));
+    await client.send("Page.navigate", { url: `${baseUrl}/admin/catalog` });
+    await waitForValue(client, "document.querySelector('[data-testid=\"admin-catalog-spec-coverage\"]') !== null", "수집 kickoff probe용 카탈로그 페이지");
     const adminCrawlMutationLatestResponseProbe = await client.evaluate(`(async () => {
       const originalFetch = window.fetch;
       const originalConfirm = window.confirm;
@@ -1789,11 +1801,13 @@ async function main() {
         window.confirm = originalConfirm;
       }
     })()`);
-    assert(adminCrawlMutationLatestResponseProbe?.stage === "checked" && adminCrawlMutationLatestResponseProbe.crawlCalls === 1 && adminCrawlMutationLatestResponseProbe.login === true && adminCrawlMutationLatestResponseProbe.staleToast === false && adminCrawlMutationLatestResponseProbe.path === "/admin", "관리자 세션 만료 이후 늦은 카탈로그 수집 kickoff 또는 stale 관리자 이벤트가 로그인 화면에 상태를 남겼습니다. probe=" + JSON.stringify(adminCrawlMutationLatestResponseProbe));
+    assert(adminCrawlMutationLatestResponseProbe?.stage === "checked" && adminCrawlMutationLatestResponseProbe.crawlCalls === 1 && adminCrawlMutationLatestResponseProbe.login === true && adminCrawlMutationLatestResponseProbe.staleToast === false && adminCrawlMutationLatestResponseProbe.path === "/admin/catalog", "관리자 세션 만료 이후 늦은 카탈로그 수집 kickoff 또는 stale 관리자 이벤트가 로그인 화면에 상태를 남겼습니다. probe=" + JSON.stringify(adminCrawlMutationLatestResponseProbe));
     const crawlRecoveryPassword = adminPassword ?? "browser-smoke-recovery";
     assert(await setInputValue(client, "#admin-password", crawlRecoveryPassword), "카탈로그 수집 kickoff probe 이후 관리자 재로그인 비밀번호를 입력하지 못했습니다.");
     assert(await clickText(client, "로그인"), "카탈로그 수집 kickoff probe 이후 관리자 재로그인 버튼을 클릭하지 못했습니다.");
     await waitForValue(client, "(document.body?.innerText ?? '').includes('부품 데이터 센터') && document.querySelector('#admin-password') === null", "카탈로그 수집 kickoff probe 이후 관리자 재로그인");
+    await client.send("Page.navigate", { url: `${baseUrl}/admin/compatibility` });
+    await waitForValue(client, "document.getElementById('admin-accessory-card') !== null", "호환 정보 페이지 진입");
     const adminLoadOverrideMutationLatestResponseProbe = await client.evaluate(`(async () => {
       const originalFetch = window.fetch;
       const headers = { "Content-Type": "application/json" };
@@ -1869,7 +1883,7 @@ async function main() {
         window.fetch = originalFetch;
       }
     })()`);
-    assert(adminLoadOverrideMutationLatestResponseProbe?.stage === "checked" && adminLoadOverrideMutationLatestResponseProbe.searchCalls === 1 && adminLoadOverrideMutationLatestResponseProbe.mutationCalls === 1 && adminLoadOverrideMutationLatestResponseProbe.login === true && adminLoadOverrideMutationLatestResponseProbe.staleToast === false && adminLoadOverrideMutationLatestResponseProbe.path === "/admin", "관리자 세션 만료 이후 늦은 RGB 부하 저장 응답이 로그인 화면에 stale toast를 남겼습니다. probe=" + JSON.stringify(adminLoadOverrideMutationLatestResponseProbe));
+    assert(adminLoadOverrideMutationLatestResponseProbe?.stage === "checked" && adminLoadOverrideMutationLatestResponseProbe.searchCalls === 1 && adminLoadOverrideMutationLatestResponseProbe.mutationCalls === 1 && adminLoadOverrideMutationLatestResponseProbe.login === true && adminLoadOverrideMutationLatestResponseProbe.staleToast === false && adminLoadOverrideMutationLatestResponseProbe.path === "/admin/compatibility", "관리자 세션 만료 이후 늦은 RGB 부하 저장 응답이 로그인 화면에 stale toast를 남겼습니다. probe=" + JSON.stringify(adminLoadOverrideMutationLatestResponseProbe));
     assert(await setInputValue(client, "#admin-password", crawlRecoveryPassword), "RGB 부하 저장 ownership probe 이후 관리자 재로그인 비밀번호를 입력하지 못했습니다.");
     assert(await clickText(client, "로그인"), "RGB 부하 저장 ownership probe 이후 관리자 재로그인 버튼을 클릭하지 못했습니다.");
     await waitForValue(client, "(document.body?.innerText ?? '').includes('부품 데이터 센터') && document.querySelector('#admin-password') === null", "RGB 부하 저장 ownership probe 이후 관리자 재로그인");
@@ -1941,7 +1955,7 @@ async function main() {
         window.fetch = originalFetch;
       }
     })()`);
-    assert(adminGpuPhysicalMutationLatestResponseProbe?.stage === "checked" && adminGpuPhysicalMutationLatestResponseProbe.searchCalls === 1 && adminGpuPhysicalMutationLatestResponseProbe.mutationCalls === 1 && adminGpuPhysicalMutationLatestResponseProbe.login === true && adminGpuPhysicalMutationLatestResponseProbe.staleToast === false && adminGpuPhysicalMutationLatestResponseProbe.path === "/admin", "관리자 세션 만료 이후 늦은 GPU 물리 저장 응답이 로그인 화면에 stale toast를 남겼습니다. probe=" + JSON.stringify(adminGpuPhysicalMutationLatestResponseProbe));
+    assert(adminGpuPhysicalMutationLatestResponseProbe?.stage === "checked" && adminGpuPhysicalMutationLatestResponseProbe.searchCalls === 1 && adminGpuPhysicalMutationLatestResponseProbe.mutationCalls === 1 && adminGpuPhysicalMutationLatestResponseProbe.login === true && adminGpuPhysicalMutationLatestResponseProbe.staleToast === false && adminGpuPhysicalMutationLatestResponseProbe.path === "/admin/compatibility", "관리자 세션 만료 이후 늦은 GPU 물리 저장 응답이 로그인 화면에 stale toast를 남겼습니다. probe=" + JSON.stringify(adminGpuPhysicalMutationLatestResponseProbe));
     assert(await setInputValue(client, "#admin-password", crawlRecoveryPassword), "GPU 물리 저장 ownership probe 이후 관리자 재로그인 비밀번호를 입력하지 못했습니다.");
     assert(await clickText(client, "로그인"), "GPU 물리 저장 ownership probe 이후 관리자 재로그인 버튼을 클릭하지 못했습니다.");
     await waitForValue(client, "(document.body?.innerText ?? '').includes('부품 데이터 센터') && document.querySelector('#admin-password') === null", "GPU 물리 저장 ownership probe 이후 관리자 재로그인");
@@ -1991,10 +2005,12 @@ async function main() {
         return { stage: "checked", searchCalls, mutationCalls, login: Boolean(document.querySelector("#admin-password")), staleToast: body.includes("M.2 슬롯 매핑을 저장했습니다"), path: location.pathname };
       } finally { window.fetch = originalFetch; }
     })()`);
-    assert(adminM2MutationLatestResponseProbe?.stage === "checked" && adminM2MutationLatestResponseProbe.searchCalls === 1 && adminM2MutationLatestResponseProbe.mutationCalls === 1 && adminM2MutationLatestResponseProbe.login === true && adminM2MutationLatestResponseProbe.staleToast === false && adminM2MutationLatestResponseProbe.path === "/admin", "관리자 세션 만료 이후 늦은 M.2 저장 응답이 로그인 화면에 stale toast를 남겼습니다. probe=" + JSON.stringify(adminM2MutationLatestResponseProbe));
+    assert(adminM2MutationLatestResponseProbe?.stage === "checked" && adminM2MutationLatestResponseProbe.searchCalls === 1 && adminM2MutationLatestResponseProbe.mutationCalls === 1 && adminM2MutationLatestResponseProbe.login === true && adminM2MutationLatestResponseProbe.staleToast === false && adminM2MutationLatestResponseProbe.path === "/admin/compatibility", "관리자 세션 만료 이후 늦은 M.2 저장 응답이 로그인 화면에 stale toast를 남겼습니다. probe=" + JSON.stringify(adminM2MutationLatestResponseProbe));
     assert(await setInputValue(client, "#admin-password", crawlRecoveryPassword), "M.2 저장 ownership probe 이후 관리자 재로그인 비밀번호를 입력하지 못했습니다.");
     assert(await clickText(client, "로그인"), "M.2 저장 ownership probe 이후 관리자 재로그인 버튼을 클릭하지 못했습니다.");
     await waitForValue(client, "(document.body?.innerText ?? '').includes('부품 데이터 센터') && document.querySelector('#admin-password') === null", "M.2 저장 ownership probe 이후 관리자 재로그인");
+    await client.send("Page.navigate", { url: `${baseUrl}/admin/evidence` });
+    await waitForValue(client, "document.getElementById('admin-benchmark-review') !== null", "근거 데이터 페이지 진입");
     const adminBenchmarkMutationLatestResponseProbe = await client.evaluate(`(async () => {
       const originalFetch = window.fetch;
       const headers = { "Content-Type": "application/json" };
@@ -2039,7 +2055,7 @@ async function main() {
         return { stage: "checked", validateCalls, mutationCalls, login: Boolean(document.querySelector("#admin-password")), staleToast: body.includes("벤치마크 보강 데이터를 저장했습니다"), path: location.pathname };
       } finally { window.fetch = originalFetch; }
     })()`);
-    assert(adminBenchmarkMutationLatestResponseProbe?.stage === "checked" && adminBenchmarkMutationLatestResponseProbe.validateCalls === 1 && adminBenchmarkMutationLatestResponseProbe.mutationCalls === 1 && adminBenchmarkMutationLatestResponseProbe.login === true && adminBenchmarkMutationLatestResponseProbe.staleToast === false && adminBenchmarkMutationLatestResponseProbe.path === "/admin", "관리자 세션 만료 이후 늦은 benchmark 저장 응답이 로그인 화면에 stale toast를 남겼습니다. probe=" + JSON.stringify(adminBenchmarkMutationLatestResponseProbe));
+    assert(adminBenchmarkMutationLatestResponseProbe?.stage === "checked" && adminBenchmarkMutationLatestResponseProbe.validateCalls === 1 && adminBenchmarkMutationLatestResponseProbe.mutationCalls === 1 && adminBenchmarkMutationLatestResponseProbe.login === true && adminBenchmarkMutationLatestResponseProbe.staleToast === false && adminBenchmarkMutationLatestResponseProbe.path === "/admin/evidence", "관리자 세션 만료 이후 늦은 benchmark 저장 응답이 로그인 화면에 stale toast를 남겼습니다. probe=" + JSON.stringify(adminBenchmarkMutationLatestResponseProbe));
     assert(await setInputValue(client, "#admin-password", crawlRecoveryPassword), "benchmark 저장 ownership probe 이후 관리자 재로그인 비밀번호를 입력하지 못했습니다.");
     assert(await clickText(client, "로그인"), "benchmark 저장 ownership probe 이후 관리자 재로그인 버튼을 클릭하지 못했습니다.");
     await waitForValue(client, "(document.body?.innerText ?? '').includes('부품 데이터 센터') && document.querySelector('#admin-password') === null", "benchmark 저장 ownership probe 이후 관리자 재로그인");

@@ -112,6 +112,7 @@ import { savedBuildOriginFromUnknown } from "../shared/saved-build-origin";
 import { parseSavedBuildPurchaseProgress, parseSavedBuildPurchaseProgressExpectedRevision, parseSavedBuildPurchaseProgressRevision } from "./purchase-progress";
 import { parseSavedBuildPurchasePriceHistory, parseSavedBuildPurchasePriceHistoryExpectedRevision, parseSavedBuildPurchasePriceHistoryRevision } from "./purchase-price-history";
 import { isListingAllowed, isQuoteSelectable, quoteGenerationSummaryFor } from "./listing";
+import { ADJUSTABLE_CATEGORIES, suggestPartAdjustment } from "../shared/part-adjustment";
 import { catalogSeedPreviewFor } from "../shared/catalog-seed-preview";
 import { catalogSeedMappingIdentityCompatibleFor, catalogSeedMappingPreviewFor } from "../shared/catalog-seed-mapping";
 import { catalogSeedCollectionQueueFor } from "../shared/catalog-seed-collection-queue";
@@ -1972,6 +1973,51 @@ function buildGenerationVariantResultsFor(catalog: Part[], request: BuildGenerat
 }
 
 
+
+// 결과 화면 +/− 버튼: 특정 카테고리 부품을 한 단계 강화/약화한 호환 대안을 제안한다.
+app.post("/api/builds/adjust", publicCompatibilityRateLimit, async (request, response) => {
+  const parsed = parseBuild(request.body?.build ?? request.body?.selection ?? request.body);
+  if (parsed.errors.length > 0) {
+    response.status(400).json({ error: "견적 입력 형식이 올바르지 않습니다.", details: parsed.errors });
+    return;
+  }
+  const category = request.body?.category;
+  const direction = request.body?.direction;
+  if (typeof category !== "string" || !(ADJUSTABLE_CATEGORIES as readonly string[]).includes(category)) {
+    response.status(400).json({ error: "조정할 부품 카테고리가 올바르지 않습니다." });
+    return;
+  }
+  if (direction !== "upgrade" && direction !== "downgrade") {
+    response.status(400).json({ error: "direction은 upgrade 또는 downgrade여야 합니다." });
+    return;
+  }
+  try {
+    const catalog = await loadCatalog();
+    const result = suggestPartAdjustment(catalog, parsed.build, category as PartCategory, direction);
+    trackUsageEvent("adjust", { path: "/api/builds/adjust" });
+    if (!result.suggestion) {
+      response.status(200).json({ ok: false, reason: result.reason });
+      return;
+    }
+    const { suggestion, alternatives } = result;
+    response.json({
+      ok: true,
+      suggestion: {
+        category: suggestion.category,
+        direction: suggestion.direction,
+        part: suggestion.part,
+        selection: suggestion.selection,
+        beforePriceWon: suggestion.beforePriceWon,
+        afterPriceWon: suggestion.afterPriceWon,
+        status: suggestion.status
+      },
+      alternatives: alternatives.map((part) => ({ id: part.id, name: part.name, priceWon: part.priceWon }))
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "부품 조정을 처리하지 못했습니다.";
+    response.status(422).json({ error: message });
+  }
+});
 
 // 온보딩·복구 제안이 "이 요청 그대로 만들 수 있는 최저 견적"을 표시하도록
 // 요청 형태 그대로의 실측 최저가를 반환한다 — 프로필 평균이 아니라 요청과 같은

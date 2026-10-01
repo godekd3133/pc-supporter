@@ -337,7 +337,7 @@ async function main() {
     await navigate(client, `${webUrl}/catalog?category=gpu&partId=${encodeURIComponent(provenancePart.id)}`, "수동 provenance 카탈로그 상세");
     await waitForValue(client, "document.querySelector('[data-testid=\"catalog-part-detail\"]') !== null && (document.body?.innerText ?? '').includes('GPU 소비전력') && (document.body?.innerText ?? '').includes('320W')", "수동 스펙 보강 적용");
     assert((await bodyText(client)).includes("GPU 소비전력") && (await bodyText(client)).includes("320W"), "제조사 수동 보강값이 카탈로그 상세 사양에 적용되지 않았습니다.");
-    await navigate(client, `${webUrl}/admin`, "수동 override 관리자 화면");
+    await navigate(client, `${webUrl}/admin/catalog`, "수동 override 관리자 화면");
     await waitForValue(client, "(document.body?.innerText ?? '').includes('부품 데이터 센터')", "수동 override 관리자 화면 확인");
     await waitForValue(client, "document.getElementById('admin-catalog-spec-override') !== null", "제조사 정보 수동 스펙 보강 anchor");
     await client.evaluate("(() => { const node = document.getElementById('admin-catalog-spec-override'); node?.scrollIntoView({ block: 'center', behavior: 'auto' }); node?.focus({ preventScroll: true }); return Boolean(node); })()");

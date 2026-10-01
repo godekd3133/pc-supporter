@@ -23,6 +23,10 @@ export const seedCatalog: Part[] = [
       socket: "AM5",
       memoryType: "DDR5",
       cpuSeries: "Ryzen 9000",
+      cores: 8,
+      threads: 16,
+      boostClockGhz: 5.2,
+      l3CacheMb: 96,
       tdpW: 120,
       pptW: 162,
       integratedGraphics: true,
@@ -41,6 +45,10 @@ export const seedCatalog: Part[] = [
       socket: "AM5",
       memoryType: "DDR5",
       cpuSeries: "Ryzen 9000",
+      cores: 6,
+      threads: 12,
+      boostClockGhz: 5.0,
+      l3CacheMb: 32,
       tdpW: 65,
       pptW: 88,
       integratedGraphics: false,
@@ -59,6 +67,10 @@ export const seedCatalog: Part[] = [
       socket: "LGA1851",
       memoryType: "DDR5",
       cpuSeries: "Core Ultra 200",
+      cores: 20,
+      threads: 20,
+      boostClockGhz: 5.5,
+      l3CacheMb: 30,
       tdpW: 125,
       pptW: 253,
       integratedGraphics: true,
@@ -367,5 +379,72 @@ export const seedCatalog: Part[] = [
     }),
     dataQuality: "incomplete",
     missingFields: ["efficiency", "12V output", "connectors"]
-  }
+  },
+  // 관리자 테스트 베드용 큐레이션 부품 — namePatterns 허용목록·세대 우회와 함께
+  // 실제 다나와 판매 상품명에 맞춘 사양으로 둔다.
+  seed({
+    id: "cooler-nautilus-360rs",
+    category: "cooler",
+    name: "CORSAIR NAUTILUS 360 RS ARGB",
+    brand: "CORSAIR",
+    model: "NAUTILUS 360 RS",
+    priceWon: 149000,
+    specs: {
+      coolerType: "liquid",
+      radiatorSizeMm: 360,
+      radiatorPosition: "top",
+      supportedSockets: ["AM5", "AM4", "LGA1851", "LGA1700"],
+      maxCoolingW: 300,
+      maxCoolerHeightMm: 50
+    }
+  }),
+  seed({
+    id: "memory-klevv-fitv-ddr5-6000",
+    category: "memory",
+    name: "ESSENCORE KLEVV FIT V DDR5-6000 CL30 16GB",
+    brand: "KLEVV",
+    model: "FIT V DDR5-6000",
+    priceWon: 59900,
+    specs: {
+      memoryType: "DDR5",
+      capacityGb: 16,
+      speedMhz: 6000,
+      formFactor: "DIMM",
+      memoryCasLatency: 30
+    }
+  }),
+  seed({
+    id: "memory-patriot-viper-ddr5-5600",
+    category: "memory",
+    name: "PATRIOT VIPER VENOM DDR5-5600 CL36 16GB",
+    brand: "PATRIOT",
+    model: "VIPER VENOM DDR5-5600",
+    priceWon: 49900,
+    specs: {
+      memoryType: "DDR5",
+      capacityGb: 16,
+      speedMhz: 5600,
+      formFactor: "DIMM",
+      memoryCasLatency: 36
+    }
+  }),
+  seed({
+    id: "gpu-afox-rx580-8gb",
+    category: "gpu",
+    name: "AFOX 라데온 RX 580 D5 8GB",
+    brand: "AFOX",
+    model: "RX 580",
+    priceWon: 99000,
+    specs: {
+      gpuVendor: "amd",
+      gpuArchitectureFamily: "RX 500",
+      vramGb: 8,
+      powerW: 185,
+      recommendedPsuW: 500,
+      lengthMm: 230,
+      thicknessMm: 40,
+      pcieSlotWidth: 16,
+      pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 1 }]]
+    }
+  })
 ];

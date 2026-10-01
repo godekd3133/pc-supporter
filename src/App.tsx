@@ -880,6 +880,7 @@ function App() {
   const [buildChangeDialogComponent, setBuildChangeDialogComponent] = useState<ComponentType<BuildChangeDialogProps> | null>(null);
   const [buildChangeResultComparison, setBuildChangeResultComparison] = useState<BuildChangeResultComparison | null>(null);
   const [scenarioPreview, setScenarioPreview] = useState<BuildScenarioPreviewState | null>(null);
+  const [adjustingPartKey, setAdjustingPartKey] = useState<string | null>(null);
   const [upgradeBundleScenarioPreview, setUpgradeBundleScenarioPreview] = useState<UpgradeBundleScenarioPreviewState | null>(null);
   const [candidateScenarioComparison, setCandidateScenarioComparison] = useState<CandidateScenarioCompareState | null>(null);
   const [saveName, setSaveName] = useState("나의 PC 견적");
@@ -2977,6 +2978,27 @@ function App() {
     openBuildChangePreview("대체 부품 적용", `${part.name}${quantityText}을 적용합니다. 적용 후 전체 견적의 호환 결과를 계산합니다.`, nextBuild, [part], candidateEvidence);
   }
 
+  async function adjustPart(category: PartCategory, direction: "upgrade" | "downgrade") {
+    setAdjustingPartKey(`${category}:${direction}`);
+    try {
+      const response = await api<{ ok: boolean; suggestion?: { part: Part; selection: BuildSelection }; reason?: string }>("/api/builds/adjust", {
+        method: "POST",
+        body: JSON.stringify({ build, category, direction }),
+        retry: 1,
+        retryOnRateLimit: true
+      });
+      if (!response.ok || !response.suggestion) {
+        setToast(direction === "upgrade" ? "지금보다 강한 호환 부품이 없어요." : "지금보다 저렴한 호환 부품이 없어요.");
+        return;
+      }
+      applySuggestion(category, response.suggestion.part);
+    } catch {
+      setToast("부품 조정을 불러오지 못했어요.");
+    } finally {
+      setAdjustingPartKey(null);
+    }
+  }
+
   async function previewSuggestion(category: PartCategory, part: Part, quantity?: number, affectedPartIds: string[] = [], candidateEvidence?: CandidateApplicationEvidence) {
     setPicker(null);
     setCandidateScenarioComparison(null);
@@ -3608,6 +3630,7 @@ function App() {
       meta={meta}
       onMetaRefresh={refreshMeta}
       onToast={setToast}
+      onNavigate={(path) => navigate(path, "admin")}
     /></Suspense>
   ) : view === "history" ? (
     <Suspense fallback={<div className="shared-build-state"><FiLoader className="spin" /><span>저장된 견적을 불러오는 중...</span></div>}><LazyHistoryView
@@ -3713,6 +3736,8 @@ function App() {
       refreshingPartId={refreshingPartId}
       onOpenPicker={(category, findingRuleId, findingTitle, affectedPartIds) => { trackUsageEvent("part_picker_open", { category, via: "result" }); setPicker({ category, findingRuleId: findingRuleId?.replace(/^precision:/, ""), findingTitle, affectedPartIds, ...(findingRuleId?.startsWith("precision:") ? { initialCandidateMode: "precision" as const } : {}) }); }}
       onApplySuggestion={(category, part, quantity, affectedPartIds, evidence) => void applySuggestion(category, part, quantity, affectedPartIds, evidence)}
+      onAdjustPart={adjustPart}
+      adjustingPartKey={adjustingPartKey}
       onApplyUpgradeBundle={(bundle) => void applyUpgradeBundle(bundle)}
       onApplyRepairPlan={(plan) => void applyRepairPlan(plan)}
       onSavePlan={(nextBuild, nextPreferences, label, parentBuildId) => requestSaveBuild({ build: nextBuild, preferences: nextPreferences, label, ...(parentBuildId ? { parentBuildId } : {}) })}

@@ -691,7 +691,7 @@ describe("compatibility engine", () => {
     expect(bundle).toBeDefined();
     expect(bundle?.changes).toHaveLength(2);
     expect(new Set(bundle?.changes.map((change) => change.category)).size).toBe(2);
-    expect(bundle?.totalPriceDeltaWon).toBe(304000);
+    expect(bundle?.totalPriceDeltaWon).toBe(303000);
     expect(bundle?.expansionEvidence).toMatchObject({
       baselineScore: expect.any(Number),
       candidateScore: expect.any(Number),
@@ -701,7 +701,7 @@ describe("compatibility engine", () => {
     });
     expect(bundle?.compatibilityEvidence).toEqual({ blockerCount: 0, warningCount: 0, unknownCount: 0 });
     expect(bundle?.budgetEvidence).toMatchObject({ budgetWon, priceComplete: true, withinBudget: true });
-    expect(bundle?.budgetEvidence?.afterCoreTotalPriceWon).toBe(baseline.totalPriceWon + 304000);
+    expect(bundle?.budgetEvidence?.afterCoreTotalPriceWon).toBe(baseline.totalPriceWon + 303000);
     expect(result.upgradeBundleSearch).toMatchObject({
       candidateCount: expect.any(Number),
       candidateCategoryCount: expect.any(Number),
@@ -2267,8 +2267,8 @@ describe("compatibility engine", () => {
     const completeSuggestion = finding?.suggestions?.find((suggestion) => suggestion.part.id === completeCpu.id);
     const limitedSuggestion = finding?.suggestions?.find((suggestion) => suggestion.part.id === limitedCpu.id);
 
-    expect(completeSuggestion?.similarityEvidence).toMatchObject({ comparedDimensions: 3, totalDimensions: 3, confidence: "high" });
-    expect(limitedSuggestion?.similarityEvidence).toMatchObject({ comparedDimensions: 1, totalDimensions: 3, confidence: "limited" });
+    expect(completeSuggestion?.similarityEvidence).toMatchObject({ comparedDimensions: 4, totalDimensions: 4, confidence: "high" });
+    expect(limitedSuggestion?.similarityEvidence).toMatchObject({ comparedDimensions: 2, totalDimensions: 4, confidence: "limited" });
     expect(completeSuggestion?.similarityLabel).toBe("동급");
     expect(limitedSuggestion?.similarityLabel).toBe("유사");
 
@@ -2279,7 +2279,7 @@ describe("compatibility engine", () => {
     ]);
     const limitedPlan = limitedOnlyResult.repairPlans?.find((plan) => plan.changes.some((change) => change.toPart.id === limitedCpu.id));
     expect(limitedPlan?.similarityLabel).toBe("유사");
-    expect(limitedPlan?.similarityEvidence).toMatchObject({ comparedDimensions: 1, totalDimensions: 3, confidence: "limited" });
+    expect(limitedPlan?.similarityEvidence).toMatchObject({ comparedDimensions: 2, totalDimensions: 4, confidence: "limited" });
   });
 
   it("does not recommend a candidate that resolves one issue by introducing a new unknown", () => {
@@ -2380,7 +2380,7 @@ describe("compatibility engine", () => {
     const farSuggestion = suggestions.find((suggestion) => suggestion.part.id === farCpu.id);
 
     expect(closeSuggestion?.similarityScore).toBeGreaterThan(farSuggestion?.similarityScore ?? -1);
-    expect(closeSuggestion?.similarityEvidence).toMatchObject({ comparedDimensions: 5, totalDimensions: 5, confidence: "high" });
+    expect(closeSuggestion?.similarityEvidence).toMatchObject({ comparedDimensions: 6, totalDimensions: 6, confidence: "high" });
     expect(closeSuggestion?.performanceSummary).toContain("%");
     expect(closeSuggestion?.similarityEvidence.dimensions).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: "cinebenchR23Multi", label: "R23 멀티", weight: 7 })
@@ -2685,7 +2685,7 @@ describe("compatibility engine", () => {
     const result = evaluateBuild(build, catalog, { recommendationPreferences: { profile: "general", priority: "performance" } });
     const suggestion = result.findings.find((item) => item.ruleId === "cpu-motherboard-socket")?.suggestions?.find((item) => item.part.id === closeCpu.id);
 
-    expect(closeSimilarity.similarityEvidence).toMatchObject({ comparedDimensions: 4, totalDimensions: 4, confidence: "high", basis: "mixed" });
+    expect(closeSimilarity.similarityEvidence).toMatchObject({ comparedDimensions: 6, totalDimensions: 6, confidence: "high", basis: "mixed" });
     expect(closeSimilarity.similarityEvidence.notes?.[0]).toContain("동일 CPU 모델 계열의 확인된 카탈로그 참조");
     expect(closeSimilarity.performanceSummary).toContain("동일 CPU 모델 계열 참조 기준");
     expect(suggestion).toBeDefined();
@@ -2831,7 +2831,7 @@ describe("compatibility engine", () => {
     build.cpu = { partId: currentCpu.id, quantity: 1 };
     const similarity = candidateSimilarityForBuild(build, [...seedCatalog, currentCpu, referenceCpu, candidateCpu], "cpu", candidateCpu, "general");
 
-    expect(similarity.similarityEvidence).toMatchObject({ comparedDimensions: 5, totalDimensions: 5, confidence: "high" });
+    expect(similarity.similarityEvidence).toMatchObject({ comparedDimensions: 6, totalDimensions: 6, confidence: "high" });
     expect(similarity.similarityEvidence.reference).toMatchObject({ partId: referenceCpu.id, transferredDimensions: expect.arrayContaining(["threads", "cinebenchR23Single", "cinebenchR23Multi"]) });
     expect(similarity.similarityEvidence.dimensions).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: "cores", currentValue: "20코어", source: "selected" }),
@@ -3545,7 +3545,7 @@ describe("compatibility engine", () => {
 
     expect(result.recommendationSearch).toMatchObject({ mode: "bounded", evaluatedCandidateCount: expect.any(Number) });
     expect(cpuSuggestions[0]?.part.id).toBe(completeCandidate.id);
-    expect(cpuSuggestions[0]?.similarityEvidence).toMatchObject({ comparedDimensions: 5, totalDimensions: 5, confidence: "high" });
+    expect(cpuSuggestions[0]?.similarityEvidence).toMatchObject({ comparedDimensions: 6, totalDimensions: 6, confidence: "high" });
   });
 
   it("honors budget and performance priority when generating a draft", () => {
@@ -4124,9 +4124,12 @@ describe("compatibility engine", () => {
   });
 
   it("does not call a matching GPU measurement verified when average FPS misses the target", () => {
-    const catalog = seedCatalog.map((part) => part.category === "gpu"
-      ? { ...part, specs: { ...part.specs, vramGb: 24 } }
-      : part);
+    const catalog = seedCatalog
+      // 테스트 베드 시드(RX 580)는 미측정 대체 후보로 떠 실측 회피를 유발하므로 이 검증에서는 제외한다.
+      .filter((part) => part.id !== "gpu-afox-rx580-8gb")
+      .map((part) => part.category === "gpu"
+        ? { ...part, specs: { ...part.specs, vramGb: 24 } }
+        : part);
     const request = {
       profile: "gaming" as const,
       budgetWon: 3_000_000,
