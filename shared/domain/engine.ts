@@ -5544,15 +5544,64 @@ function expandGeneratorStates(
   scoreAdjustmentForState?: (state: GeneratorState, part: Part) => number
 ) {
   const expanded: GeneratorState[] = [];
+  let producedBeforeBudgetCut = 0;
   for (const state of states) {
     for (const part of candidatesForState(state)) {
       const score = (scores.get(part.id) ?? 50) + (scoreAdjustmentForState?.(state, part) ?? 0);
-      expanded.push(addGeneratorPart(state, category, part, score, profile, typeof quantity === "function" ? quantity(part) : quantity));
+      const next = addGeneratorPart(state, category, part, score, profile, typeof quantity === "function" ? quantity(part) : quantity);
+      // 이미 초과 확정인 상태는 자리만 차지한다 — 이후 단계는 비용을 더하기만
+      // 하므로 `현재 합계 + 남은 최소 비용 > 예산`이면 여기서 끊는다. 상한이
+      // 아니라 하한으로 자르는 것이라 고사양 조합은 여전히 예산 내에서 산다.
+      producedBeforeBudgetCut += 1;
+      if (next.priceWon + Math.max(0, remainingCostForState(next)) <= budgetWon) {
+        expanded.push(next);
+      }
     }
   }
-  const pruned = pruneGeneratorStates(expanded, budgetWon, pruneLimit, remainingCostForState);
-  generatorDebugLog(category, pruned, budgetWon);
-  return pruned;
+  // 하한 컷으로 전멸했으면 진짜 원인은 예산이다 — 단계별 "부품을 찾지 못했
+  // 습니다"가 아니라 budget-infeasible로 보고해야 내장그래픽 폴백·예산 조정
+  // 안내가 발동한다. 후보 자체가 없던 전멸(호환성)은 기존 단계별 오류가 담당한다.
+  if (expanded.length === 0 && producedBeforeBudgetCut > 0) {
+    const minCompletion = Math.min(...states.map((state) => state.priceWon + Math.max(0, remainingCostForState(state))));
+    const budgetLabel = Number.isFinite(minCompletion) ? `${Math.round(minCompletion).toLocaleString("ko-KR")}원` : null;
+    throw new BuildGenerationError(
+      `요청 예산 ${budgetWon.toLocaleString("ko-KR")}원으로는 남은 필수 부품까지 갖춘 구성을 만들 수 없습니다.${budgetLabel ? ` 가장 낮은 후보 합계는 ${budgetLabel}입니다.` : ""}`,
+      [{
+        id: "budget-infeasible",
+        title: "요청 예산 안에 자동 구성이 없습니다.",
+        summary: "남은 필수 부품의 최저가까지 반영해도 예산을 넘는 조합뿐입니다.",
+        facts: [
+          { label: "요청 예산", value: `${budgetWon.toLocaleString("ko-KR")}원` },
+          ...(budgetLabel ? [{ label: "가장 낮은 후보 합계", value: budgetLabel }] : [])
+        ]
+      }]
+    );
+  }
+  // 부품별 최저가 상태를 1개씩 보존한다 — 상위 슬롯이 고사양 조합으로 가득 차면
+  // (예: 9800X3D+RTX 5080) 저예산 조합(저가 CPU+같은 GPU)이 잘려 뒤 단계에서
+  // 해당 부품 자체가 사라진다. 부품당 가장 싼 조합은 완주 여유가 가장 크다.
+  const cheapestPerPart = new Map<string, GeneratorState>();
+  for (const state of expanded) {
+    const partId = state.parts[category]?.id;
+    if (partId === undefined) continue;
+    const existing = cheapestPerPart.get(partId);
+    if (!existing || state.priceWon < existing.priceWon) cheapestPerPart.set(partId, state);
+  }
+  const pruned = pruneGeneratorStates(expanded, budgetWon, Math.max(1, pruneLimit - cheapestPerPart.size), remainingCostForState);
+  const merged = new Map<string, GeneratorState>();
+  const stateKey = (state: GeneratorState) => (["cpu", "gpu", "motherboard", "memory", "cooler", "case", "ssd", "hdd", "psu"] as PartCategory[])
+    .map((key) => `${key}:${state.parts[key]?.id ?? ""}`)
+    .join("|");
+  const spread = [...cheapestPerPart.values()]
+    .sort((a, b) => a.priceWon - b.priceWon)
+    .slice(0, pruneLimit);
+  for (const state of [...spread, ...pruned]) {
+    const key = stateKey(state);
+    if (!merged.has(key)) merged.set(key, state);
+  }
+  const keptStates = [...merged.values()];
+  generatorDebugLog(category, keptStates, budgetWon);
+  return keptStates;
 }
 
 function requireGeneratorStates(states: GeneratorState[], message: string, diagnostics: BuildGenerationDiagnostic[] = []) {
@@ -6163,6 +6212,15 @@ function generateBuildDraftCore(catalog: Part[], request: BuildGenerationRequest
         const stockCoolerAvailable = cpu?.specs.coolerIncluded === true
           && (cpu.specs.pptW ?? cpu.specs.tdpW ?? 999) <= 100;
         if (stockCoolerAvailable) return total;
+      }
+      if (category === "psu") {
+        // 파워 하한은 이 상태의 GPU가 요구하는 최소 용량으로 잰다 — 대형 카드는
+        // 전역 최저가(보조전원 없는 저용량)로 추정하면 완주 불가 조합이 끝까지
+        // 살아남아 자리만 차지한다. 호환 PSU가 없는 GPU는 완주 불가로 처리.
+        const gpu = state.parts.gpu;
+        if (!gpu) return total + (minimumRemainingPartCost.psu ?? 0);
+        const floor = minimumPositiveGeneratorCost(psuPool.parts.filter((part) => generatorPsuCanUseGpu(part, gpu)));
+        return total + (floor > 0 ? floor : Number.POSITIVE_INFINITY);
       }
       return total + (minimumRemainingPartCost[category] ?? 0);
     }, 0);
