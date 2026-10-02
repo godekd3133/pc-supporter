@@ -25,6 +25,7 @@ export type CatalogSpecOverrideFieldKey =
   | "maxCoolingW"
   | "coolerType"
   | "radiatorSizeMm"
+  | "radiatorPosition"
   | "memoryType"
   | "m2Slots"
   | "pcieX16Slots"
@@ -71,6 +72,7 @@ const FIELD_TYPES: Partial<Record<CatalogSpecOverrideFieldKey, CatalogSpecOverri
   maxCoolingW: "number",
   coolerType: "string",
   radiatorSizeMm: "number",
+  radiatorPosition: "string",
   memoryType: "string",
   m2Slots: "number",
   pcieX16Slots: "number",
@@ -111,7 +113,7 @@ const FIELD_TYPES: Partial<Record<CatalogSpecOverrideFieldKey, CatalogSpecOverri
 
 const CATEGORY_FIELDS: Record<PartCategory, CatalogSpecOverrideFieldKey[]> = {
   cpu: ["socket", "tdpW", "cores", "threads"],
-  cooler: ["supportedSockets", "maxCoolingW", "coolerType", "radiatorSizeMm"],
+  cooler: ["supportedSockets", "maxCoolingW", "coolerType", "radiatorSizeMm", "radiatorPosition", "maxCoolerHeightMm"],
   motherboard: ["socket", "memoryType", "m2Slots", "pcieX16Slots", "pcieX8Slots", "pcieX4Slots", "pcieX1Slots", "maxMemoryGb", "memorySlots", "sataPorts", "motherboardFormFactors", "vrmCapacityW"],
   memory: ["memoryType", "capacityGb", "speedMhz", "memoryFormFactor", "memoryModuleCountPerKit", "memoryProfiles"],
   gpu: ["powerW", "recommendedPsuW", "lengthMm", "widthMm", "thicknessMm", "vramGb", "lowProfileBracket"],

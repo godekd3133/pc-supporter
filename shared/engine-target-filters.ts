@@ -309,6 +309,18 @@ export function engineTargetFilterBypassesBrandPolicy(config: EngineTargetFilter
   return (rule?.namePatterns?.length ?? 0) > 0;
 }
 
+/**
+ * 부품이 이 범주의 namePatterns에 명시적으로 지명됐는가 — seed 참고 부품의
+ * 생성기 진입·선택 우회처럼 "관리자가 이름으로 직접 지명했다" 의미를 필요로
+ * 하는 곳에서 쓴다. 규칙 전체 통과(engineTargetFilterRuleAllowsPart)와 달리
+ * 다른 facet 조건은 보지 않는다.
+ */
+export function engineTargetFilterNamesPart(part: Part, config: EngineTargetFiltersConfig | undefined) {
+  if (!config || config.enabled !== true) return false;
+  const patterns = config.categories[part.category]?.namePatterns;
+  return patterns !== undefined && patterns.length > 0 && namePatternMatches(part, patterns);
+}
+
 // 범주 facet에 선언된 필드만 남긴다 — 다른 범주 링크를 재사용해도 선언되지
 // 않은 조건이 결과를 좁히지 않는다.
 export function engineTargetFilterRuleForCategory(rule: EngineCategoryTargetFilter | undefined, category: PartCategory): EngineCategoryTargetFilter | undefined {

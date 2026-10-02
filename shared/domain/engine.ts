@@ -69,7 +69,7 @@ import type { ObjectiveScore, ObjectiveScoreExtraTerm } from "../objective-score
 import { gamingPerformanceAssessmentFor } from "../gaming-performance-evidence";
 import type { GamingPerformanceEvidenceRecord } from "../gaming-performance-evidence";
 import { cpuHasIntegratedGraphics, isListingAllowed, isQuoteBrandAllowed, isQuotePurchasable, isQuoteSelectable } from "./listing";
-import { engineTargetFilterBypassesBrandPolicy, engineTargetFiltersAllowPart } from "../engine-target-filters";
+import { engineTargetFilterBypassesBrandPolicy, engineTargetFilterNamesPart, engineTargetFiltersAllowPart } from "../engine-target-filters";
 import type { EngineTargetFiltersConfig } from "../engine-target-filters";
 import { REFERENCE_BUILDS, referenceBuildBudgetWeight } from "../reference-builds";
 import type { ReferenceBuild } from "../reference-builds";
@@ -5274,7 +5274,9 @@ function generatorCandidatePool(
   // longer sold. They are useful only while a category lacks real inventory —
   // so seeds join the pool only when live/manual coverage is thin (<20).
   // With fuller coverage a stale seed price would beat purchasable parts.
-  const sourcedCandidates = catalogCandidates.filter((part) => part.dataQuality !== "seed");
+  // 예외: 관리자가 namePatterns로 직접 지명한 seed(테스트 베드 허용목록)는
+  // 커버리지와 무관하게 유지한다.
+  const sourcedCandidates = catalogCandidates.filter((part) => part.dataQuality !== "seed" || engineTargetFilterNamesPart(part, targetFilters));
   const candidatesBeforeShortlistFilter = sourcedCandidates.length >= GENERATOR_SEED_MIN_LIVE_COVERAGE ? sourcedCandidates : catalogCandidates;
   // Some request constraints must be applied to the full eligible source pool,
   // before capability, price, and reliability slices are built. Otherwise a
@@ -5350,6 +5352,12 @@ function generatorCaseRequiredFields(includeGpu: boolean, hddCount: number) {
 }
 
 const GENERATOR_WARNING_SCORE_PENALTY = 40;
+// 장착 미확인(라디에이터 지원·쿨러 높이 등)은 "데이터가 없어 검증 불가"라는
+// 의미다. 점수에서 무조건 탈락시키면 크롤링 스펙이 얇은 부품 조합(예: 수랭
+// 쿨러 + 라디에이터 정보 미기재 케이스)이 구조적으로 선택될 수 없고, 반대로
+// 완전 무시하면 확인이 필요한 조합이 깨끗한 대안을 밀어낸다. 경고보다 무겁게
+// 보는 점수 감점으로 다루고, 최종 상태는 needs_review로 유지한다.
+const GENERATOR_FIT_UNKNOWN_SCORE_PENALTY = 120;
 // 장착·전원이 아닌 팬/RGB 헤더 수·전압 같은 장식성 확인 항목은
 // 생성기 순위의 hard gate에서 제외한다. 누락 스펙이 실제 호환 위험이면 계속 gate가 된다.
 // 장착·동작에 실질 리스크가 없는 "확인용" 데이터 공백이다 — 케이스 팬/RGB 헤더
@@ -5545,6 +5553,9 @@ function expandGeneratorStates(
 ) {
   const expanded: GeneratorState[] = [];
   let producedBeforeBudgetCut = 0;
+  // 예산에 못 맞춰 컷된 완성 추정치 중 가장 낮은 값 — 진단 메시지가 "현재
+  // 부품을 넣기 전" 합계를 보고하면 예산보다 낮은 값이 나와 혼란을 준다.
+  let minRejectedCompletion = Number.POSITIVE_INFINITY;
   for (const state of states) {
     for (const part of candidatesForState(state)) {
       const score = (scores.get(part.id) ?? 50) + (scoreAdjustmentForState?.(state, part) ?? 0);
@@ -5553,8 +5564,11 @@ function expandGeneratorStates(
       // 하므로 `현재 합계 + 남은 최소 비용 > 예산`이면 여기서 끊는다. 상한이
       // 아니라 하한으로 자르는 것이라 고사양 조합은 여전히 예산 내에서 산다.
       producedBeforeBudgetCut += 1;
-      if (next.priceWon + Math.max(0, remainingCostForState(next)) <= budgetWon) {
+      const completionEstimate = next.priceWon + Math.max(0, remainingCostForState(next));
+      if (completionEstimate <= budgetWon) {
         expanded.push(next);
+      } else if (completionEstimate < minRejectedCompletion) {
+        minRejectedCompletion = completionEstimate;
       }
     }
   }
@@ -5562,7 +5576,9 @@ function expandGeneratorStates(
   // 습니다"가 아니라 budget-infeasible로 보고해야 내장그래픽 폴백·예산 조정
   // 안내가 발동한다. 후보 자체가 없던 전멸(호환성)은 기존 단계별 오류가 담당한다.
   if (expanded.length === 0 && producedBeforeBudgetCut > 0) {
-    const minCompletion = Math.min(...states.map((state) => state.priceWon + Math.max(0, remainingCostForState(state))));
+    const minCompletion = Number.isFinite(minRejectedCompletion)
+      ? minRejectedCompletion
+      : Math.min(...states.map((state) => state.priceWon + Math.max(0, remainingCostForState(state))));
     const budgetLabel = Number.isFinite(minCompletion) ? `${Math.round(minCompletion).toLocaleString("ko-KR")}원` : null;
     throw new BuildGenerationError(
       `요청 예산 ${budgetWon.toLocaleString("ko-KR")}원으로는 남은 필수 부품까지 갖춘 구성을 만들 수 없습니다.${budgetLabel ? ` 가장 낮은 후보 합계는 ${budgetLabel}입니다.` : ""}`,
@@ -5630,7 +5646,7 @@ function generatorCpuCanUseMotherboard(cpu: Part, motherboard: Part) {
     && (motherboard.specs.vrmCapacityW === undefined || motherboard.specs.vrmCapacityW >= cpuPower);
 }
 
-function generatorMemoryCanUseMotherboard(memory: Part, motherboard: Part, cpu: Part | undefined, requestedCapacityGb: number) {
+function generatorMemoryCanUseMotherboard(memory: Part, motherboard: Part, cpu: Part | undefined, requestedCapacityGb: number, namedPart = false) {
   const profileKnown = (memory.specs.memoryProfiles?.length ?? 0) > 0;
   const confirmedSpeedLimits = [
     motherboard.specs.maxMemorySpeedMhz,
@@ -5653,9 +5669,13 @@ function generatorMemoryCanUseMotherboard(memory: Part, motherboard: Part, cpu: 
   // 스펙에 상한이 없는 보드가 대부분이라, 강제하면 모든 live 보드×RAM 조합이
   // 실패하고 seed 보드만 남는다. 상한이 있는 쪽은 그대로 적용해 초고속 킷의
   // 낭비를 막고, 미확인은 부팅 불가가 아니라 JEDEC 기본 속도로 동작할 뿐이다.
-  const speedCompatible = effectiveSpeedLimit === undefined
+  // 관리자 지명 부품(namedPart)은 초고속 EXPO/XMP 킷처럼 네이티브 상한을 넘어도
+  // 실제 플랫폼에서 동작하는 경우가 있어 속도 게이트를 면제한다.
+  const speedCompatible = namedPart
     ? memory.specs.speedMhz !== undefined
-    : memory.specs.speedMhz !== undefined && memory.specs.speedMhz <= effectiveSpeedLimit;
+    : effectiveSpeedLimit === undefined
+      ? memory.specs.speedMhz !== undefined
+      : memory.specs.speedMhz !== undefined && memory.specs.speedMhz <= effectiveSpeedLimit;
   return formFactorCompatible
     && profileOverlap
     && memory.specs.memoryType === motherboard.specs.memoryType
@@ -5788,12 +5808,15 @@ function filterGeneratorGpuPoolByMinVram<T extends { parts: Part[] }>(pool: T, m
 
 // JEDEC 상한을 크게 넘는 고클럭 킷은 플랫폼이 못 쓰는 속도에 돈을 쓰는 것이다.
 // CPU 네이티브 상한 +25%와 보드 상한 안쪽 킷을 우선하고, 없으면 전체 후보를 쓴다.
-function preferUsableMemorySpeed(parts: Part[], motherboard: Part, cpu?: Part) {
+// 단, 관리자가 namePatterns로 지명한 메모리(테스트 베드 허용목록)는 속도 선호
+// 컷에서 면제한다 — DDR5-8000급 EXPO 킷처럼 실제로는 플랫폼에서 돌지만 네이티브
+// 상한을 넘는 지명 부품이 조용히 사라지는 것을 막기 위해서다.
+function preferUsableMemorySpeed(parts: Part[], motherboard: Part, cpu?: Part, targetFilters?: EngineTargetFiltersConfig) {
   const cpuLimit = cpu?.specs.maxMemorySpeedMhz !== undefined ? cpu.specs.maxMemorySpeedMhz * 1.25 : Number.POSITIVE_INFINITY;
   const boardLimit = motherboard.specs.maxMemorySpeedMhz ?? Number.POSITIVE_INFINITY;
   const platformLimit = Math.min(cpuLimit, boardLimit);
   if (!Number.isFinite(platformLimit)) return parts;
-  const usable = parts.filter((part) => (part.specs.speedMhz ?? 0) <= platformLimit);
+  const usable = parts.filter((part) => (part.specs.speedMhz ?? 0) <= platformLimit || engineTargetFilterNamesPart(part, targetFilters));
   return usable.length > 0 ? usable : parts;
 }
 
@@ -6019,7 +6042,9 @@ function generatorSearchContextFor(catalog: Part[], request: BuildGenerationRequ
         profile,
         // 보조전원이 필요 없는 카드는 pciePowerOptions가 빈 배열로 선언되므로
         // 존재 여부만 확인한다 — 빈 배열도 유효한 데이터다.
-        (part) => part.specs.pciePowerOptions !== undefined,
+        // 단, 관리자가 이름으로 직접 지명한 부품(테스트 베드)은 커넥터 데이터가
+        // 없어도 후보에 남기고 평가 단계가 "확인 필요"로 표시하게 한다.
+        (part) => part.specs.pciePowerOptions !== undefined || engineTargetFilterNamesPart(part, targetFilters),
         listingPolicy,
         gamingResolution,
         gamingRefreshRate,
@@ -6254,7 +6279,7 @@ function generateBuildDraftCore(catalog: Part[], request: BuildGenerationRequest
   states = expandGeneratorStates(states, "memory", (state) => {
     const motherboard = state.parts.motherboard;
     const cpu = state.parts.cpu;
-    return motherboard ? preferBudgetCandidates(preferMatchingMemoryProfile(preferDualChannelMemory(preferUsableMemorySpeed(memoryPool.parts.filter((part) => generatorMemoryCanUseMotherboard(part, motherboard, cpu, memoryCapacityGb)), motherboard, cpu), memoryCapacityGb), cpu), request.budgetWon, 0.16, (part) => memoryKitQuantityFor(part, memoryCapacityGb)) : [];
+    return motherboard ? preferBudgetCandidates(preferMatchingMemoryProfile(preferDualChannelMemory(preferUsableMemorySpeed(memoryPool.parts.filter((part) => generatorMemoryCanUseMotherboard(part, motherboard, cpu, memoryCapacityGb, engineTargetFilterNamesPart(part, options.targetFilters))), motherboard, cpu, options.targetFilters), memoryCapacityGb), cpu), request.budgetWon, 0.16, (part) => memoryKitQuantityFor(part, memoryCapacityGb)) : [];
   }, memoryPool.scores, profile, request.budgetWon, (part) => memoryKitQuantityFor(part, memoryCapacityGb), 160, remainingGeneratorCostAfter("memory"));
   requireGeneratorStates(states, `${memoryCapacityGb}GB 이상이며 메인보드와 규격·용량·속도가 맞는 RAM 부품을 찾지 못했습니다.`, [{
     id: "memory-motherboard-fit",
@@ -6415,25 +6440,29 @@ function generateBuildDraftCore(catalog: Part[], request: BuildGenerationRequest
     }
   };
   const ranked = evaluated.sort((a, b) => {
-    const aValid = a.evaluation.blockerCount === 0 && a.fitUnknownCount === 0;
-    const bValid = b.evaluation.blockerCount === 0 && b.fitUnknownCount === 0;
+    // 장착 미확인(fitUnknown)은 유효성에서 분리해 점수 감점으로만 반영한다.
+    // 크롤링 스펙이 얇은 조합(수랭 쿨러 + 라디에이터 정보 없는 케이스)이
+    // 단 한 번의 미확인으로 훨씬 나은 구성 아래로 구조적으로 밀려나는 걸 막고,
+    // 최종 상태는 fitUnknownCount가 남아 needs_review로 표시된다.
+    const aValid = a.evaluation.blockerCount === 0;
+    const bValid = b.evaluation.blockerCount === 0;
     // 예산을 넘는 구성은 순위와 관계없이 최종 견적으로 반환하지 않는다.
     const aWithin = a.state.priceWon <= request.budgetWon;
     const bWithin = b.state.priceWon <= request.budgetWon;
     const overBudgetPenalty = (entry: typeof a) => Math.max(0, entry.state.priceWon - request.budgetWon) / Math.max(request.budgetWon, 1) * 2000;
-    // 호환 경고는 점수 페널티로 반영한다. lexicographic 거부로 두면 경고 1개가
-    // 훨씬 나은 구성을 무조건 밀어내, 예산 대부분을 쓰지 않는 하위 견적이 선택됐다.
+    // 호환 경고·장착 미확인은 점수 페널티로 반영한다. lexicographic 거부로 두면
+    // 경고 1개가 훨씬 나은 구성을 무조건 밀어내, 예산 대부분을 쓰지 않는 하위
+    // 견적이 선택됐다.
     const priorityValue = (entry: typeof a) => (priority === "budget"
       ? -entry.state.priceWon / 10_000 - overBudgetPenalty(entry)
       : priority === "performance"
         ? entry.state.capabilityScore - overBudgetPenalty(entry)
         : priority === "reliability"
           ? generatorStateReliabilityScoreFor(entry.state) - overBudgetPenalty(entry)
-          : generatorStateScore(entry.state, request.budgetWon)) - entry.evaluation.warningCount * GENERATOR_WARNING_SCORE_PENALTY;
+          : generatorStateScore(entry.state, request.budgetWon)) - entry.evaluation.warningCount * GENERATOR_WARNING_SCORE_PENALTY - entry.fitUnknownCount * GENERATOR_FIT_UNKNOWN_SCORE_PENALTY;
     return Number(bValid) - Number(aValid)
       || Number(bWithin) - Number(aWithin)
       || a.evaluation.blockerCount - b.evaluation.blockerCount
-      || a.fitUnknownCount - b.fitUnknownCount
       || gamingEvidenceRank(b.gamingEvidence?.status) - gamingEvidenceRank(a.gamingEvidence?.status)
       || priorityValue(b) - priorityValue(a)
       || a.evaluation.warningCount - b.evaluation.warningCount
