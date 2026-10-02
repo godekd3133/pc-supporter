@@ -19,8 +19,11 @@ export const DANAWA_CATEGORIES: Array<{
   { category: "psu", categoryId: "112777" }
 ];
 
+// 다나와는 비브라우저 UA에 JSON-LD만 담긴 간소화 리스트(가격·목록 마크업 없음)를
+// 돌려준다. 실제 상품 목록(li.prod_item)과 페이지네이션 컨텍스트를 받으려면
+// 일반 데스크톱 브라우저 UA가 필요하다.
 const DEFAULT_USER_AGENT =
-  "PCSupporterStudentProject/1.0 (+compatibility catalog; contact unavailable)";
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36";
 const DANAWA_LIST_AJAX_URL = "https://prod.danawa.com/list/ajax/getProductList.ajax.php";
 
 export type DanawaCrawlerOptions = {
@@ -280,7 +283,9 @@ function readDanawaScriptValue(html: string, key: string) {
 
 export function parseDanawaListRequestContext(html: string): DanawaListRequestContext | undefined {
   const categoryCode = readDanawaScriptValue(html, "nCategoryCode");
-  const listCategoryCode = readDanawaScriptValue(html, "nListCategoryCode");
+  // 신형 리스트 페이지에는 nListCategoryCode가 없고 AJAX 페이지네이션은
+  // categoryCode와 같은 값을 listCategoryCode로 받는다 — 없을 때 폴백.
+  const listCategoryCode = readDanawaScriptValue(html, "nListCategoryCode") || categoryCode;
   if (!categoryCode || !listCategoryCode) return undefined;
   return {
     group: readDanawaScriptValue(html, "nListGroup") || readDanawaScriptValue(html, "nGroup"),
