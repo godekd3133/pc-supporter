@@ -5746,18 +5746,43 @@ function estimateSystemPowerW(state: GeneratorState) {
   return cpuW + gpuW + 150;
 }
 
-// 상한은 필요량×1.6(+200W)까지만 둔다 — transient 스파이크 여유를 넘는
-// 과잉 용량은 가격만 올리고 실효 이익이 없다(400W급에 800W가 고르지 않게).
+// 상한은 필요량×1.25 또는 GPU 권장+50W까지로 둔다 — transient 스파이크
+// 여유를 넘는 과잉 용량(400W급 구성에 800W)은 가격만 올리고 실효 이익이 없다.
+// 같은 "충분한 용량" 대역 안에서는 최저가 부근만 남긴다 — 효율이 비슷한데
+// 와트수가 큰 파워가 capability 점수로 이기는 걸 막는다.
 function preferAdequatePsu(parts: Part[], state: GeneratorState) {
   const needW = estimateSystemPowerW(state);
-  // GPU가 요구하는 권장 전원이 천장보다 크면(예: 9070 권장 750W) 유효 PSU가 전부
-  // 걸러져 다시 와트수 경쟁이 된다 — 천장은 최소 유효 용량보다 +150W 위에 둔다.
   const gpuMinW = state.parts.gpu?.specs.recommendedPsuW ?? 0;
-  // 상한: 필요량의 ~1.6배 + 300W — 그 이상은 돈만 들이는 과대 용량이다.
-  // 하한 650W: 저전력 iGPU 견적도 표준 판매 용량(550~700W)은 쓸 수 있어야 한다.
-  const ceilingW = Math.max(needW * 1.6, needW + 300, 650, gpuMinW + 150);
-  const adequate = parts.filter((part) => (part.specs.wattageW ?? Number.MAX_SAFE_INTEGER) <= ceilingW);
-  return adequate.length > 0 ? adequate : parts;
+  const ceilingW = Math.max(needW * 1.25, gpuMinW + 50, 500);
+  const adequate = parts.filter((part) => {
+    const wattage = part.specs.wattageW;
+    return wattage !== undefined && wattage <= ceilingW;
+  });
+  const pool = adequate.length > 0 ? adequate : parts;
+  const cheapest = Math.min(...pool.map((part) => isKnownPrice(part.priceWon) ? part.priceWon! : Number.MAX_SAFE_INTEGER));
+  if (!Number.isFinite(cheapest)) return pool;
+  const value = pool.filter((part) => !isKnownPrice(part.priceWon) || part.priceWon <= cheapest * 1.4);
+  return value.length > 0 ? value : pool;
+}
+
+// 장착 요건(폼팩터·GPU 길이·쿨러 높이)을 통과한 케이스는 크기·베이 같은
+// capability 지수가 큰 쪽이 이기기 쉬워 예산이 남으면 케이스부터 비싸진다.
+// 호환 후보 안에서는 최저가 대역을 우선해 여유 예산이 GPU/CPU로 먼저 간다.
+function preferValueCase(parts: Part[]) {
+  const cheapest = Math.min(...parts.map((part) => isKnownPrice(part.priceWon) ? part.priceWon! : Number.MAX_SAFE_INTEGER));
+  if (!Number.isFinite(cheapest)) return parts;
+  const value = parts.filter((part) => !isKnownPrice(part.priceWon) || part.priceWon <= cheapest * 1.8);
+  return value.length > 0 ? value : parts;
+}
+
+// 요청 용량을 채운 SSD 사이에서 순차읽기·PCIe 세대 같은 capability 지수가
+// 큰 쪽(990 PRO·9100 PRO급 플래그십)이 저예산 게임 빌드에서도 이긴다.
+// 용량 조건을 만족한 후보 안에서는 최저가 대역을 우선한다.
+function preferValueStorage(parts: Part[]) {
+  const cheapest = Math.min(...parts.map((part) => isKnownPrice(part.priceWon) ? part.priceWon! : Number.MAX_SAFE_INTEGER));
+  if (!Number.isFinite(cheapest)) return parts;
+  const value = parts.filter((part) => !isKnownPrice(part.priceWon) || part.priceWon <= cheapest * 1.3);
+  return value.length > 0 ? value : parts;
 }
 
 function preferBudgetCandidates(parts: Part[], budgetWon: number, share: number, quantity: number | ((part: Part) => number) = 1) {
@@ -5906,10 +5931,18 @@ function generatedPartSelectionReason(category: PartCategory, part: Part, state:
       return `기본 SSD ${request.storageCapacityGb ?? 1000}GB 이상을 맞추고 ${part.specs.interface ?? "인터페이스 확인 필요"}·${part.specs.formFactor ?? "규격 확인 필요"}를 메인보드 슬롯과 확인했습니다.`;
     case "hdd":
       return `HDD ${request.hddCount ?? 0}개·${request.hddCapacityGb ?? 4000}GB 이상 요청을 맞추고, ${valueOrCheck(part.specs.capacityGb, "GB")} 용량과 SATA 연결을 확인했습니다.`;
-    case "case":
-      return `${valueOrCheck(motherboard?.specs.formFactor)} 메인보드와 GPU ${valueOrCheck(gpu?.specs.lengthMm, "mm")}, 쿨러 ${valueOrCheck(cooler?.specs.maxCoolerHeightMm, "mm")} 장착 조건${request.hddCount ? `·HDD 베이 ${valueOrCheck(part.specs.hddBays, "개")}` : ""}을 함께 통과했습니다.`;
+    case "case": {
+      const fitParts = [
+        `${valueOrCheck(motherboard?.specs.formFactor)} 메인보드`,
+        gpu ? `GPU ${valueOrCheck(gpu.specs.lengthMm, "mm")}` : undefined,
+        cooler ? `쿨러 ${valueOrCheck(cooler.specs.maxCoolerHeightMm, "mm")}` : undefined
+      ].filter((value): value is string => value !== undefined);
+      return `${fitParts.join("·")} 장착 조건${request.hddCount ? `·HDD 베이 ${valueOrCheck(part.specs.hddBays, "개")}` : ""}을 함께 통과했습니다.`;
+    }
     case "psu":
-      return `GPU 권장 파워 ${valueOrCheck(gpu?.specs.recommendedPsuW, "W")} 이상을 만족하는 ${valueOrCheck(part.specs.wattageW, "W")} 정격과 ${part.specs.efficiency ?? "효율 확인 필요"}를 반영했습니다.`;
+      return gpu
+        ? `GPU 권장 파워 ${valueOrCheck(gpu.specs.recommendedPsuW, "W")} 이상을 만족하는 ${valueOrCheck(part.specs.wattageW, "W")} 정격과 ${part.specs.efficiency ?? "효율 확인 필요"}를 반영했습니다.`
+        : `시스템 예상 부하에 맞는 ${valueOrCheck(part.specs.wattageW, "W")} 정격과 ${part.specs.efficiency ?? "효율 확인 필요"}를 반영했습니다.`;
     default:
       return `${profileLabel}·${priorityLabel} 기준으로 호환·가격 조건을 확인했습니다.`;
   }
@@ -6053,7 +6086,7 @@ function generatorSearchContextFor(catalog: Part[], request: BuildGenerationRequ
         gpuVendorPreference,
         nowMilliseconds,
         gamingVramReferenceGate
-          ? (part) => typeof part.specs.vramGb === "number" && part.specs.vramGb >= gamingGpuVramFloorGb
+          ? (part) => (typeof part.specs.vramGb === "number" && part.specs.vramGb >= gamingGpuVramFloorGb) || engineTargetFilterNamesPart(part, targetFilters)
           : undefined,
         targetFilters
       )
@@ -6293,16 +6326,22 @@ function generateBuildDraftCore(catalog: Part[], request: BuildGenerationRequest
     recommendation: "RAM 목표 용량·속도 조건을 낮추거나 메인보드 부품을 바꿔 다시 시도해 주세요."
   }]);
   const statesBeforeCooler = states;
-  states = expandGeneratorStates(states, "cooler", (state) => {
-    const cpu = state.parts.cpu;
-    return cpu ? preferBudgetCandidates(preferCoolerHeadroom(coolerPool.parts.filter((part) => generatorCoolerCanUseCpu(part, cpu)), cpu, profile), request.budgetWon, 0.1) : [];
-  }, coolerPool.scores, profile, request.budgetWon, undefined, 160, remainingGeneratorCostAfter("cooler"));
-
   // 번들 쿨러가 있는 저발열 CPU는 사제 쿨러를 사지 않는 경로도 남긴다.
+  // 예산 컷 throw가 스톡 병합보다 먼저 일어나면(쿨러 후보 전멸) 스톡 경로가
+  // 영영 막히므로, 예산 전멸 오류만 스톡 경로가 존재할 때 넘긴다.
   const stockCoolerStates = statesBeforeCooler.filter((state) => {
     const cpu = state.parts.cpu;
     return cpu?.specs.coolerIncluded === true && (cpu.specs.pptW ?? cpu.specs.tdpW ?? 999) <= 100;
   });
+  try {
+    states = expandGeneratorStates(states, "cooler", (state) => {
+      const cpu = state.parts.cpu;
+      return cpu ? preferBudgetCandidates(preferCoolerHeadroom(coolerPool.parts.filter((part) => generatorCoolerCanUseCpu(part, cpu)), cpu, profile), request.budgetWon, 0.1) : [];
+    }, coolerPool.scores, profile, request.budgetWon, undefined, 160, remainingGeneratorCostAfter("cooler"));
+  } catch (error) {
+    if (!(error instanceof BuildGenerationError) || error.diagnostics[0]?.id !== "budget-infeasible" || stockCoolerStates.length === 0) throw error;
+    states = [];
+  }
   if (stockCoolerStates.length > 0) {
     states = pruneGeneratorStates([...states, ...stockCoolerStates], request.budgetWon, 160, remainingGeneratorCostAfter("cooler"));
   }
@@ -6341,7 +6380,7 @@ function generateBuildDraftCore(catalog: Part[], request: BuildGenerationRequest
   states = expandGeneratorStates(states, "case", (state) => {
     const motherboard = state.parts.motherboard;
     if (!motherboard) return [];
-    return preferBudgetCandidates(preferCooledCase(casePool.parts.filter((part) => generatorCaseCanUseParts(part, motherboard, state.parts.cooler, state.parts.gpu, hddCount)), state.parts.gpu), request.budgetWon, 0.15);
+    return preferBudgetCandidates(preferValueCase(preferCooledCase(casePool.parts.filter((part) => generatorCaseCanUseParts(part, motherboard, state.parts.cooler, state.parts.gpu, hddCount)), state.parts.gpu)), request.budgetWon, 0.15);
   }, casePool.scores, profile, request.budgetWon, undefined, 160, remainingGeneratorCostAfter("case"));
   requireGeneratorStates(states, "메인보드·쿨러·저장장치·GPU가 들어가는 케이스 부품을 찾지 못했습니다.", [{
     id: "case-fit",
@@ -6358,7 +6397,7 @@ function generateBuildDraftCore(catalog: Part[], request: BuildGenerationRequest
   states = expandGeneratorStates(states, "ssd", (state) => {
     const motherboard = state.parts.motherboard;
     return motherboard
-      ? preferBudgetCandidates(preferRequestedCapacity(ssdPool.parts.filter((part) => part.specs.capacityGb !== undefined && part.specs.capacityGb >= storageCapacityGb && generatorStorageCanUseMotherboard(part, motherboard, undefined, hddCount)), storageCapacityGb), request.budgetWon, 0.15)
+      ? preferBudgetCandidates(preferValueStorage(preferRequestedCapacity(ssdPool.parts.filter((part) => part.specs.capacityGb !== undefined && part.specs.capacityGb >= storageCapacityGb && generatorStorageCanUseMotherboard(part, motherboard, undefined, hddCount)), storageCapacityGb)), request.budgetWon, 0.15)
       : [];
   }, ssdPool.scores, profile, request.budgetWon, undefined, 160, remainingGeneratorCostAfter("ssd"));
   requireGeneratorStates(states, `${storageCapacityGb.toLocaleString("ko-KR")}GB 이상 SSD를 포함한 호환 조합을 찾지 못했습니다.`, [{

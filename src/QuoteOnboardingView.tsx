@@ -209,7 +209,7 @@ function OptionRow({ title, description, Icon, selected, recommended, checkStyle
 function RadioOptionRow({ name, value, title, description, Icon, selected, recommended, checkStyle, onChange }: { name: string; value: string; title: string; description?: string; Icon?: IconType; selected: boolean; recommended?: boolean; checkStyle?: boolean; onChange: () => void }) {
   return (
     <label className={`onboarding-option onboarding-option-radio-row${selected ? " selected" : ""}`}>
-      <input className="onboarding-radio-input onboarding-option-radio" type="radio" name={name} value={value} checked={selected} onChange={onChange} />
+      <input className="onboarding-radio-input onboarding-option-radio" type="radio" name={name} value={value} checked={selected} onChange={onChange} onClick={() => { if (selected) onChange(); }} />
       {Icon && <span className="onboarding-option-icon" aria-hidden="true"><Icon /></span>}
       <span className="onboarding-option-copy">
         <strong>{title}{recommended && <em className="onboarding-recommend">추천</em>}</strong>
@@ -230,7 +230,7 @@ function ChipRow({ name, label, options, value, onChange }: { name: string; labe
       <div className="onboarding-chip-row" role="radiogroup" aria-labelledby={labelId}>
         {options.map((option) => (
           <label key={option.id} className={`onboarding-chip onboarding-chip-radio-row${value === option.id ? " selected" : ""}`}>
-            <input className="onboarding-radio-input onboarding-chip-radio" type="radio" name={name} value={option.id} checked={value === option.id} onChange={() => onChange(option.id)} />
+            <input className="onboarding-radio-input onboarding-chip-radio" type="radio" name={name} value={option.id} checked={value === option.id} onChange={() => onChange(option.id)} onClick={() => { if (value === option.id) onChange(option.id); }} />
             <span className={`onboarding-check${value === option.id ? " on" : ""}`} aria-hidden="true">{value === option.id && <FiCheck />}</span>
             <span>{option.label}</span>
           </label>
@@ -321,6 +321,25 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome, floor
   // 단일 선택(라디오) 스텝은 고르는 즉시 다음으로 진행한다 — 굳이 "다음" 버튼을
   // 두 번 누르게 할 필요가 없다.
   const selectAndAdvance = (patch: Partial<OnboardingState>) => setState((current) => advanceOnboarding({ ...current, ...patch }));
+  // 여러 선택지가 있는 단계도 사용자가 필수 항목을 전부 직접 골랐다면 바로
+  // 다음으로 진행한다 — 하나만 고치고 기본값을 쓰는 사용자는 "다음"을 누른다.
+  const touchedControlsRef = useRef<Partial<Record<OnboardingStep, Set<string>>>>({});
+  const MULTI_PICK_STEPS: Partial<Record<OnboardingStep, readonly string[]>> = {
+    performance: ["resolution", "refreshRate"],
+    graphics: ["graphicsPreset", "upscaling"],
+    spec: ["specTier", "memoryGb", "storageGb"]
+  };
+  const pickOnStep = (control: string, patch: Partial<OnboardingState>) => {
+    const required = MULTI_PICK_STEPS[state.step];
+    const touched = new Set(touchedControlsRef.current[state.step] ?? []);
+    touched.add(control);
+    touchedControlsRef.current[state.step] = touched;
+    if (required !== undefined && required.every((id) => touched.has(id))) {
+      selectAndAdvance(patch);
+      return;
+    }
+    update(patch);
+  };
   const toggleGame = (id: OnboardingGame) => {
     if (state.games.includes(id)) {
       setGameLimitReached(false);
@@ -368,6 +387,7 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome, floor
     setGameCategory("all");
     setGameLimitReached(false);
     setShowResume(false);
+    touchedControlsRef.current = {};
   }
 
   function editSummaryStep(step: OnboardingStep) {
@@ -506,8 +526,8 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome, floor
     body = (
       <>
         <p className="onboarding-callout"><FiInfo /> 해상도와 주사율은 견적 목표로 반영돼요. 실제 게임 프레임은 게임 설정과 사용 환경에 따라 달라질 수 있어요.</p>
-        <ChipRow name="onboarding-resolution" label="해상도" options={RESOLUTION_OPTIONS.map((option) => ({ id: option.id, label: option.label }))} value={state.resolution} onChange={(id) => update({ resolution: id as GamingResolution })} />
-        <ChipRow name="onboarding-refresh-rate" label="희망 주사율" options={REFRESH_OPTIONS.map((option) => ({ id: String(option.id), label: option.label }))} value={String(state.refreshRate)} onChange={(id) => update({ refreshRate: Number(id) as GamingRefreshRate })} />
+        <ChipRow name="onboarding-resolution" label="해상도" options={RESOLUTION_OPTIONS.map((option) => ({ id: option.id, label: option.label }))} value={state.resolution} onChange={(id) => pickOnStep("resolution", { resolution: id as GamingResolution })} />
+        <ChipRow name="onboarding-refresh-rate" label="희망 주사율" options={REFRESH_OPTIONS.map((option) => ({ id: String(option.id), label: option.label }))} value={String(state.refreshRate)} onChange={(id) => pickOnStep("refreshRate", { refreshRate: Number(id) as GamingRefreshRate })} />
         <p className="onboarding-pill"><FiPlay /> {gamesSummaryFor(state.games)} · {resolutionLabelFor(state.resolution)} · 희망 주사율 {state.refreshRate}Hz</p>
         <GamingTargetContract state={state} />
       </>
@@ -517,9 +537,9 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome, floor
     body = (
       <>
         <p className="onboarding-pill"><FiPlay /> {gamesSummaryFor(state.games)} · {resolutionLabelFor(state.resolution)} · 희망 주사율 {state.refreshRate}Hz</p>
-        <ChipRow name="onboarding-graphics-preset" label="그래픽 품질" options={Object.entries(GAMING_GRAPHICS_PRESET_LABELS).map(([id, label]) => ({ id, label }))} value={state.graphicsPreset} onChange={(id) => update({ graphicsPreset: id as GamingGraphicsPreset })} />
+        <ChipRow name="onboarding-graphics-preset" label="그래픽 품질" options={Object.entries(GAMING_GRAPHICS_PRESET_LABELS).map(([id, label]) => ({ id, label }))} value={state.graphicsPreset} onChange={(id) => pickOnStep("graphicsPreset", { graphicsPreset: id as GamingGraphicsPreset })} />
         <p className="onboarding-choice-note"><FiInfo /> {GAMING_GRAPHICS_GUIDANCE[state.graphicsPreset]}</p>
-        <ChipRow name="onboarding-upscaling" label="업스케일링" options={Object.entries(GAMING_UPSCALING_LABELS).map(([id, label]) => ({ id, label }))} value={state.upscaling} onChange={(id) => update({ upscaling: id as GamingUpscaling })} />
+        <ChipRow name="onboarding-upscaling" label="업스케일링" options={Object.entries(GAMING_UPSCALING_LABELS).map(([id, label]) => ({ id, label }))} value={state.upscaling} onChange={(id) => pickOnStep("upscaling", { upscaling: id as GamingUpscaling })} />
         <p className="onboarding-choice-note"><FiInfo /> {GAMING_UPSCALING_GUIDANCE[state.upscaling]}</p>
         <OptionRow
           title="레이 트레이싱"
@@ -578,10 +598,10 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome, floor
   } else if (state.step === "spec") {
     body = (
       <>
-        <ChipRow name="onboarding-spec-tier" label="원하는 성능 등급" options={SPEC_TIER_OPTIONS} value={state.specTier} onChange={(id) => update({ specTier: id as OnboardingSpecTier })} />
+        <ChipRow name="onboarding-spec-tier" label="원하는 성능 등급" options={SPEC_TIER_OPTIONS} value={state.specTier} onChange={(id) => pickOnStep("specTier", { specTier: id as OnboardingSpecTier })} />
         <OptionRow title="외장 그래픽카드 포함" description="게임·3D·GPU 가속 작업을 함께 고려해요." Icon={FiMonitor} selected={state.specIncludeGpu} checkStyle onClick={() => update({ specIncludeGpu: !state.specIncludeGpu })} />
-        <ChipRow name="onboarding-memory" label="메모리" options={MEMORY_OPTIONS.map((gb) => ({ id: String(gb), label: `${gb}GB` }))} value={String(state.memoryGb)} onChange={(id) => update({ memoryGb: Number(id) })} />
-        <ChipRow name="onboarding-storage" label="저장공간" options={STORAGE_OPTIONS.map((gb) => ({ id: String(gb), label: storageLabel(gb) }))} value={String(state.storageGb)} onChange={(id) => update({ storageGb: Number(id) })} />
+        <ChipRow name="onboarding-memory" label="메모리" options={MEMORY_OPTIONS.map((gb) => ({ id: String(gb), label: `${gb}GB` }))} value={String(state.memoryGb)} onChange={(id) => pickOnStep("memoryGb", { memoryGb: Number(id) })} />
+        <ChipRow name="onboarding-storage" label="저장공간" options={STORAGE_OPTIONS.map((gb) => ({ id: String(gb), label: storageLabel(gb) }))} value={String(state.storageGb)} onChange={(id) => pickOnStep("storageGb", { storageGb: Number(id) })} />
         <p className="onboarding-note">선택한 성능 등급과 부품 정보가 추천에 반영돼요.</p>
       </>
     );
