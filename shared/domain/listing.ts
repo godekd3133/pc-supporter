@@ -369,9 +369,10 @@ function liveCoverageByCategoryFor(catalog: readonly Part[]) {
   if (!counts) {
     counts = new Map<string, number>();
     for (const part of catalog) {
-      // "범주에 실매물이 있는가" 판정 — 스펙이 덜 채워진 live 레코드도 크롤된
-      // 매물이므로 시장 존재로 센다. 단종(delistedAt)·무가격은 시장 부재다.
-      if (part.source === "seed" || part.delistedAt || !isKnownPrice(part.priceWon)) continue;
+      // "범주에 실매물이 있는가" 판정 — 견적에 설 수 있는 매물만 센다. 스펙이
+      // 덜 채워진 incomplete 레코드는 단종 추정의 근거가 될 만큼 유효한 대안이
+      // 아니다(있으면 견적에서 대신 쓰일 수 없음). 단종·무가격은 시장 부재다.
+      if (part.source === "seed" || part.delistedAt || !isKnownPrice(part.priceWon) || part.dataQuality === "incomplete") continue;
       counts.set(part.category, (counts.get(part.category) ?? 0) + 1);
     }
     quoteSeedCategoryLiveCoverage.set(catalog, counts);
