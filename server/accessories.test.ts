@@ -378,4 +378,19 @@ describe("accessory catalog", () => {
 
     expect(merged.map((item) => item.name)).toEqual(["유지할 UPS", "현재 팬"]);
   });
+
+  it("hides seed placeholder accessories from catalog results when the category has live listings", () => {
+    const seedFan = accessory({ id: "seed-fan", category: "cooling_fan", source: "manual", dataQuality: "seed", name: "120mm PWM 시스템 팬" });
+    const liveFan = accessory({ id: "live-fan", category: "cooling_fan", name: "대장 케이스 팬" });
+    const liveUps = accessory({ id: "live-ups", category: "ups", name: "실매물 UPS" });
+
+    expect(searchAccessories([seedFan, liveFan], undefined, 40, { category: "cooling_fan" }).map((item) => item.id)).toEqual(["live-fan"]);
+    expect(countAccessories([seedFan, liveFan], undefined, { category: "cooling_fan" })).toBe(1);
+    // seed가 다른 범주의 live 존재에는 영향받지 않는다.
+    expect(searchAccessories([seedFan, liveUps], undefined, 40, { category: "cooling_fan" }).map((item) => item.id)).toEqual(["seed-fan"]);
+    // live가 전혀 없는 범주는 seed가 카탈로그를 채우도록 둔다.
+    expect(searchAccessories([seedFan], undefined, 40, { category: "cooling_fan" }).map((item) => item.id)).toEqual(["seed-fan"]);
+    // 관리자가 seed만 명시하면 플레이스홀더도 그대로 본다.
+    expect(searchAccessories([seedFan, liveFan], undefined, 40, { category: "cooling_fan", quality: "seed" }).map((item) => item.id)).toEqual(["seed-fan"]);
+  });
 });

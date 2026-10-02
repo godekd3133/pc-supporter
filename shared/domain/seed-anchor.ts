@@ -92,7 +92,18 @@ function gpuChipTokenFor(part: Part) {
 }
 
 // 제품 식별을 위한 그룹 키 — 시그니처 경로(cpu·gpu·memory)는 모델/스펙으로
-// 묶고, 나머지 범주는 벤더 접힌 정규 이름 일치로만 묶는다(보수적).
+// 묶고, ssd·hdd는 용량 버킷으로 먼저 나눠 스캔 폭을 줄인다. 그 외 범주는 범주
+// 단위 버킷으로 묶은 뒤 nameIdentityCompatibleFor가 이름 토큰으로 판정한다
+// — 정규 이름 완전 일치는 "SATA", 괄호 용량, 유통사 접미(STCOM·서린씨앤아이)
+// 같은 표기 차이로 같은 제품을 놓친다.
+function capacityBucketFor(capacityGb: number | undefined) {
+  if (capacityGb === undefined || !Number.isFinite(capacityGb) || capacityGb <= 0) return "na";
+  const buckets = [256, 512, 1024, 2048, 4096, 8192, 16384];
+  let nearest = buckets[0];
+  for (const bucket of buckets) if (Math.abs(bucket - capacityGb) < Math.abs(nearest - capacityGb)) nearest = bucket;
+  return `${nearest}`;
+}
+
 function twinGroupKeyFor(part: Part) {
   switch (part.category) {
     case "cpu": {
@@ -110,6 +121,14 @@ function twinGroupKeyFor(part: Part) {
       if (memoryType && capacityGb && speedMhz) return `memory|${memoryType}|${capacityGb}|${speedMhz}|${formFactor ?? ""}`;
       break;
     }
+    case "ssd":
+    case "hdd":
+      return `${part.category}|${capacityBucketFor(part.specs.capacityGb)}`;
+    case "motherboard":
+    case "psu":
+    case "cooler":
+    case "case":
+      return part.category;
   }
   const nameKey = normalizedProductName(part.name ?? "");
   return nameKey ? `${part.category}|name|${nameKey}` : undefined;
@@ -132,9 +151,83 @@ function specCompatible(seed: Part, live: Part) {
   return keys.every((key) => {
     const seedValue = (seed.specs as Record<string, unknown>)[key];
     const liveValue = (live.specs as Record<string, unknown>)[key];
-    return seedValue === undefined || liveValue === undefined || JSON.stringify(seedValue) === JSON.stringify(liveValue);
+    if (seedValue === undefined || liveValue === undefined) return true;
+    // 저장장치 용량은 1000/1024 같은 표기 차이를 버킷으로 흡수한다.
+    if ((key === "capacityGb") && (seed.category === "ssd" || seed.category === "hdd")) {
+      return capacityBucketFor(Number(seedValue)) === capacityBucketFor(Number(liveValue));
+    }
+    return JSON.stringify(seedValue) === JSON.stringify(liveValue);
   });
 }
+
+// 이름에서 벤더(별칭 fold)와 무의미 토큰(용량·인터페이스·폼팩터·유통/포장
+// 수식어)을 떼고 남는 모델 토큰 — "삼성전자 870 EVO (1TB)"와 "Samsung 870 EVO
+// SATA 1TB"는 둘 다 {870, evo}가 남아 같은 제품으로 묶인다.
+const NAME_NOISE_TOKENS = new Set([
+  // 유통사·포장 접미
+  "서린씨앤아이", "씨앤아이", "국민전자", "대원씨티에스", "stcom", "코잇", "피씨디렉트", "인텍앤컴퍼니", "웨이코스", "오름정보", "아이티엘", "디지탈그린텍", "제이웍스",
+  "new", "정품", "병행수입", "멀티팩", "패키지", "국내", "유통", "정발", "정식", "벌크", "oem", "무상보증", "무상", "보증",
+  // 인터페이스·폼팩터·타입 수식어
+  "sata", "nvme", "pcie", "gen3", "gen4", "gen5", "m2", "2280", "22110", "atx", "matx", "e-atx", "eatx", "itx", "sfx", "sfxl", "dimm", "udimm", "so-dimm", "sodimm", "ddr3", "ddr4", "ddr5",
+  // 외형·색상·쿨링 수식어
+  "풀모듈러", "세미모듈러", "모듈러", "리버스", "듀얼타워", "타워형", "타워", "화이트", "블랙", "white", "black", "argb", "rgb", "gold", "platinum", "bronze", "윈도우", "강화유리", "메쉬", "mesh", "시스템", "쿨링", "팬",
+]);
+
+const CAPACITY_TOKEN_RE = /^\d+(?:tb|gb|g|t|w|va)$/;
+const DIM_TOKEN_RE = /^\d{2,4}mm$/;
+const FORM_FACTOR_TOKEN_RE = /^(?:atx|matx|eatx|e-atx|itx|sfx|sfxl|dtx)\d*(?:\.\d+)?$/;
+const INTERFACE_TOKEN_RE = /^(?:sata|nvme|pcie|gen\d|ddr\d|d6x|g?ddr\d+|x4|x8|x16)$/;
+
+function nameIdentityTokensFor(part: Part) {
+  const folded = VENDOR_FOLDS.reduce((text, [pattern]) => text.replace(pattern, " "), part.name ?? "");
+  const tokens = folded
+    .toLocaleLowerCase("ko-KR")
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((token) => (token.length > 1 || /^\p{L}$/u.test(token))
+      && !NAME_NOISE_TOKENS.has(token)
+      && !CAPACITY_TOKEN_RE.test(token)
+      && !DIM_TOKEN_RE.test(token)
+      && !FORM_FACTOR_TOKEN_RE.test(token)
+      && !INTERFACE_TOKEN_RE.test(token));
+  return new Set(tokens);
+}
+
+// 모델 식별에 도움이 되는 토큰 — 숫자를 포함하거나 4자 이상의 토큰. "870"·"evo"
+// 같은 식별 토큰이 없는 지나치게 일반적인 이름의 비교를 막는다.
+function isModelLikeToken(token: string) {
+  return /\d/.test(token) || token.length >= 4;
+}
+
+// 토큰 범주(ssd·hdd·mb·psu·cooler·case)의 정체성 판정 — 한쪽이 다른 쪽의
+// 부분집합이어도 같은 제품으로 본다("AK620" ⊂ "AK620 듀얼타워"). 단, 큰 쪽에만
+// 있는 추가 토큰은 모두 무의미 토큰에서 이미 걸러져 있으므로 남은 토큰은 전부
+// 식별 토큰이다 — "870 EVO" ⊂ "870 EVO PLUS"처럼 판별 토큰(plus)이 남으면
+// 부분집합이어도 다른 제품으로 본다.
+const DISCRIMINATING_TOKENS = new Set(["pro", "plus", "max", "ultra", "lite", "mini", "xtx", "xt", "gre", "se", "ti", "super", "hx", "kf", "v2", "v3", "mk2", "ii", "iii", "rev", "sn", "signature", "viper", "venom", "trident", "lancer", "elite", "pro4", "evo", "play", "classic"]);
+
+function nameIdentityCompatibleFor(seed: Part, live: Part) {
+  const seedTokens = nameIdentityTokensFor(seed);
+  const liveTokens = nameIdentityTokensFor(live);
+  if (seedTokens.size === 0 || liveTokens.size === 0) return false;
+  const seedModelTokens = [...seedTokens].filter(isModelLikeToken);
+  const liveModelTokens = [...liveTokens].filter(isModelLikeToken);
+  if (seedModelTokens.length === 0 || liveModelTokens.length === 0) return false;
+  const seedInLive = [...seedTokens].every((token) => liveTokens.has(token));
+  const liveInSeed = [...liveTokens].every((token) => seedTokens.has(token));
+  if (seedInLive && liveInSeed) return true;
+  // 부분집합 허용: 큰 쪽의 추가 토큰이 판별 토큰이면 다른 SKU다.
+  if (seedInLive) {
+    const extras = [...liveTokens].filter((token) => !seedTokens.has(token));
+    return extras.every((token) => !isModelLikeToken(token) && !DISCRIMINATING_TOKENS.has(token));
+  }
+  if (liveInSeed) {
+    const extras = [...seedTokens].filter((token) => !liveTokens.has(token));
+    return extras.every((token) => !isModelLikeToken(token) && !DISCRIMINATING_TOKENS.has(token));
+  }
+  return false;
+}
+
+const TOKEN_MATCH_CATEGORIES = new Set<Part["category"]>(["ssd", "hdd", "motherboard", "psu", "cooler", "case"]);
 
 function intersects(left: Set<string>, right: Set<string>) {
   for (const value of left) if (right.has(value)) return true;
@@ -181,8 +274,19 @@ export function seedLiveTwinsFor(seed: Part, catalogOrIndex: readonly Part[] | S
   if (!key) return [];
   const index = catalogOrIndex instanceof Map ? catalogOrIndex : seedLiveTwinIndexFor(catalogOrIndex);
   const seedVendors = vendorKeysFor(seed);
+  const needsNameTokens = TOKEN_MATCH_CATEGORIES.has(seed.category);
+  // 메모리는 타입·용량·속도 시그니처로 먼저 묶지만, 양쪽에 시리즈 토큰이 있으면
+  // 한 번 더 비교한다 — 같은 벤더의 다른 라인(VIPER VENOM vs SIGNATURE)이
+  // 스펙만 같다고 서로의 가격을 물려받으면 안 된다. 시리즈 없는 제네릭 이름
+  // ("삼성전자 DDR5-5600 (16GB)")은 토큰이 비어 시그니처로만 판정한다.
+  const seedHasModelTokens = seed.category === "memory" && [...nameIdentityTokensFor(seed)].some(isModelLikeToken);
   return (index.get(key) ?? []).filter(
-    (live: Part) => vendorsMatch(seedVendors, vendorKeysFor(live)) && specCompatible(seed, live)
+    (live: Part) => vendorsMatch(seedVendors, vendorKeysFor(live))
+      && specCompatible(seed, live)
+      && (!needsNameTokens || nameIdentityCompatibleFor(seed, live))
+      && (!seedHasModelTokens
+        || ![...nameIdentityTokensFor(live)].some(isModelLikeToken)
+        || nameIdentityCompatibleFor(seed, live))
   );
 }
 

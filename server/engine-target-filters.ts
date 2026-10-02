@@ -96,7 +96,7 @@ function enginePoolBaseAllowsPart(part: Part, category: PartCategory, catalog: P
   return part.category === category
     && part.listingType !== "accessory"
     && (bypassBrandPolicy || isQuoteBrandAllowed(category, part.brand))
-    && ((bypassBrandPolicy || part.dataQuality === "seed") ? isQuotePurchasable(part, catalog) : isQuoteSelectable(part, catalog));
+    && (bypassBrandPolicy ? isQuotePurchasable(part, catalog) : isQuoteSelectable(part, catalog));
 }
 
 export function engineTargetFilterSummaryFor(catalog: Part[], config: EngineTargetFiltersConfig): EngineTargetFilterSummary {

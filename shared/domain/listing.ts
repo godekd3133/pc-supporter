@@ -154,7 +154,11 @@ export function cpuSeriesLabelFor(name: string) {
 }
 
 function cpuQuoteGenerationFor(part: Part): PartQuoteGeneration | undefined {
-  const series = part.specs.cpuSeries ?? cpuSeriesLabelFor(part.name);
+  // seed는 이름·모델이 제품 정체성이다 — 오래된 스냅샷은 스펙만 신제품으로
+  // 갱신되고 이름이 남은 깨진 조합이 있어서 이름 유도 세대를 우선한다.
+  const series = part.dataQuality === "seed"
+    ? cpuSeriesLabelFor(`${part.name} ${part.model ?? ""}`) ?? part.specs.cpuSeries
+    : part.specs.cpuSeries ?? cpuSeriesLabelFor(part.name);
   if (!series) return undefined;
   const normalized = normalizeQuoteBrand(series); // "ryzen9000" · "coreultra200" · "core14"
   const ryzen = normalized.match(/^ryzen(\d+)$/);
@@ -191,7 +195,8 @@ const GPU_ARCH_NAME_GENERATION: Record<string, { line: QuoteGenerationLine; rank
 };
 
 function gpuQuoteGenerationFor(part: Part): PartQuoteGeneration | undefined {
-  const text = `${part.name} ${part.rawSpecText ?? ""}`;
+  // seed는 이름·모델이 정체성 — rawSpecText도 오래될 수 있어 seed에서는 제외.
+  const text = part.dataQuality === "seed" ? `${part.name} ${part.model ?? ""}` : `${part.name} ${part.rawSpecText ?? ""}`;
   // "RTX 5000 Ada Generation" 같은 워크스테이션 명칭은 GeForce 세대 번호가
   // 아니므로 세대 패턴보다 먼저 걸러낸다.
   if (GPU_LEGACY_WORKSTATION_PATTERN.test(text)) return undefined;
@@ -352,11 +357,33 @@ export function isQuoteSelectable(part: Part, catalog?: readonly Part[]) {
 
 // 같은 제품의 retail live 매물이 팔리고 있으면 seed 참고행은 견적에서 숨긴다 —
 // 실구매 링크·가격 이력이 있는 live 매물이 그 제품을 대신한다. 벌크·병행수입
-// 매물만 남은 제품은 seed가 기준 부품으로 계속 서며(sync된 시장가로 표시),
-// 트윈이 전부 사라지면 얇은 커버리지 폴백으로 돌아온다.
+// 매물만 남은 제품은 seed가 기준 부품으로 계속 서며(sync된 시장가로 표시).
+// 라이브 트윈이 아예 없는데 같은 범주에 다나와 매물이 충분히 쌓여 있다면
+// 다나와에서 빠진 제품으로 보고(단종 추정) seed도 견적에서 제외한다 — 범주
+// 커버리지가 얇으면 크롤 미비일 수 있으므로 폴백으로 남겨둔다.
+const SEED_OFF_MARKET_MIN_LIVE_COVERAGE = 20;
+const quoteSeedCategoryLiveCoverage = new WeakMap<readonly Part[], Map<string, number>>();
+
+function liveCoverageByCategoryFor(catalog: readonly Part[]) {
+  let counts = quoteSeedCategoryLiveCoverage.get(catalog);
+  if (!counts) {
+    counts = new Map<string, number>();
+    for (const part of catalog) {
+      // "범주에 실매물이 있는가" 판정 — 스펙이 덜 채워진 live 레코드도 크롤된
+      // 매물이므로 시장 존재로 센다. 단종(delistedAt)·무가격은 시장 부재다.
+      if (part.source === "seed" || part.delistedAt || !isKnownPrice(part.priceWon)) continue;
+      counts.set(part.category, (counts.get(part.category) ?? 0) + 1);
+    }
+    quoteSeedCategoryLiveCoverage.set(catalog, counts);
+  }
+  return counts;
+}
+
 function seedSupersededByLiveTwin(part: Part, catalog: readonly Part[] | undefined): boolean {
-  return part.dataQuality === "seed" && catalog !== undefined
-    && seedLiveTwinsFor(part, catalog).some((twin) => inferListingType(twin) === "retail" && isQuotePurchasable(twin));
+  if (part.dataQuality !== "seed" || catalog === undefined) return false;
+  const twins = seedLiveTwinsFor(part, catalog);
+  if (twins.length > 0) return twins.some((twin) => inferListingType(twin) === "retail" && isQuotePurchasable(twin));
+  return (liveCoverageByCategoryFor(catalog).get(part.category) ?? 0) >= SEED_OFF_MARKET_MIN_LIVE_COVERAGE;
 }
 
 /**

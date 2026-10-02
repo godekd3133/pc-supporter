@@ -191,7 +191,7 @@ async function upsertCatalogUnlocked(
     : mergeCatalog(current, incoming);
   await writeCatalogRecords(baseCatalog, { replaceDanawaCategories });
   const overrideMaps = await readCatalogOverrideMaps();
-  catalogCache = applyCatalogOverrideMaps(baseCatalog, overrideMaps);
+  catalogCache = syncSeedPartPricesFromLive(applyCatalogOverrideMaps(baseCatalog, overrideMaps));
   catalogCacheStamp = null;
   catalogRuntimeRevision += 1;
   return catalogCache;

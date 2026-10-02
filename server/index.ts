@@ -5,10 +5,11 @@ import type { Server as HttpServer } from "node:http";
 import { existsSync } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { resolve } from "node:path";
-import type { AccessoryCategory, AccessoryPriceFilter, AccessoryRefreshResponse, AccessorySelection, AlternativeRisk, AlternativeRiskCounts, BuildGenerationRequest, BuildGenerationVariantResult, BuildSelection, CatalogChangeKind, CatalogChangeRecord, CompatibilityResult, CrawlResumePreview, CrawlStatus, DataFreshness, DataQuality, Finding, GpuPhysicalOverride, ListingPolicy, M2CoverageFilter, M2MappingStatus, M2SlotCoverage, M2SlotCoverageBucket, M2SlotCoverageItem, M2SlotOverride, M2SlotReviewTemplate, M2SlotReviewTemplateItem, Part, PartCategory, PartRefreshResponse, PriceAvailabilityFilter, RecommendationPreferences, RecommendationProfile, SavedBuild, SavedBuildCheckSnapshot } from "../shared/types";
+import type { AccessoryCategory, AccessoryItem, AccessoryPriceFilter, AccessoryRefreshResponse, AccessorySelection, AlternativeRisk, AlternativeRiskCounts, BuildGenerationRequest, BuildGenerationVariantResult, BuildSelection, CatalogChangeKind, CatalogChangeRecord, CompatibilityResult, CrawlResumePreview, CrawlStatus, DataFreshness, DataQuality, Finding, GpuPhysicalOverride, ListingPolicy, M2CoverageFilter, M2MappingStatus, M2SlotCoverage, M2SlotCoverageBucket, M2SlotCoverageItem, M2SlotOverride, M2SlotReviewTemplate, M2SlotReviewTemplateItem, Part, PartCategory, PartRefreshResponse, PriceAvailabilityFilter, RecommendationPreferences, RecommendationProfile, SavedBuild, SavedBuildCheckSnapshot } from "../shared/types";
 import { ACCESSORY_CATEGORIES, PART_CATEGORIES } from "../shared/types";
 import { catalogEligibilitySummaryFor, catalogMeta, catalogSearchTotalsFor, catalogUpdatedAtFor, countParts, currentCatalogRuntimeRevision, filterParts, findPart, invalidateCatalogCache, loadCatalog, parseCatalogDetailFilterQuery, parseCatalogMissingField, parsePartSpecFilter, partSpecFilterDiagnosticsFor, partSpecFilterMatcherFor, searchParts, upsertCatalog } from "./catalog";
 import { countAccessories, currentAccessoryUpdatedAt, findAccessory, invalidateAccessoryCache, loadAccessories, readAccessoryCoverage, searchAccessories, upsertAccessories } from "./accessories";
+import { noteStaleServedPrices } from "./stale-price-refresh";
 import { loadCatalogSnapshot, loadCatalogSnapshotTimestamp } from "./catalog-snapshot";
 import { validateAccessoryTargetPartIds, validateBuildPartIds, validateBuildSelection } from "./build-validation";
 export { validateAccessoryTargetPartIds, validateBuildPartIds, validateBuildSelection } from "./build-validation";
@@ -1173,8 +1174,10 @@ app.get("/api/parts", publicCatalogReadRateLimit, async (request, response) => {
   // 두 단계로 나눠 센다 — detailExcludedCount는 legacy 조건까지 통과한 풀 기준이다.
   const specInputParts = (specFilterApplied || detailApplied) ? filterParts(catalog, category, query, benchmarkOptions) : [];
   const detailInputParts = detailApplied ? specInputParts.filter(partSpecFilterMatcherFor(parsedSpecFilter.filter)) : [];
+  const servedParts = searchParts(catalog, category, query, limit, options, offset);
+  noteStaleServedPrices(servedParts);
   const payload = {
-    items: searchParts(catalog, category, query, limit, options, offset).map((part) => ({ ...part, dataFreshness: classifyDataFreshness(part.updatedAt) })),
+    items: servedParts.map((part) => ({ ...part, dataFreshness: classifyDataFreshness(part.updatedAt) })),
     total,
     ...(brand ? { brand } : {}),
     ...(partId ? { partId } : {}),
@@ -1200,6 +1203,7 @@ app.get("/api/parts/batch", publicCatalogBatchRateLimit, async (request, respons
   const catalog = await loadCatalog();
   const byId = new Map(catalog.map((part) => [part.id, part]));
   const payload = { items: parsed.ids.map((id) => byId.get(id)).filter((part): part is Part => part !== undefined).map((part) => ({ ...part, dataFreshness: classifyDataFreshness(part.updatedAt) })), missingIds: parsed.ids.filter((id) => !byId.has(id)) };
+  noteStaleServedPrices(payload.items);
   const lastModified = payload.items.reduce<string | undefined>((latest, part) => !latest || part.updatedAt > latest ? part.updatedAt : latest, undefined);
   sendJsonWithEtag(request, response, payload, lastModified);
 });
@@ -1229,6 +1233,7 @@ app.get("/api/parts/:id", publicCatalogDetailRateLimit, async (request, response
     response.status(404).json({ error: "부품을 찾을 수 없습니다." });
     return;
   }
+  noteStaleServedPrices([part]);
   sendJsonWithEtag(request, response, { ...part, dataFreshness: classifyDataFreshness(part.updatedAt) }, part.updatedAt);
 });
 
@@ -1241,6 +1246,7 @@ app.post("/api/parts/batch", publicCatalogBatchRateLimit, async (request, respon
   const catalog = await loadCatalog();
   const byId = new Map(catalog.map((part) => [part.id, part]));
   const items = parsed.ids.map((id) => byId.get(id)).filter((part): part is Part => part !== undefined).map((part) => ({ ...part, dataFreshness: classifyDataFreshness(part.updatedAt) }));
+  noteStaleServedPrices(items);
   response.json({ items, missingIds: parsed.ids.filter((id) => !byId.has(id)) });
 });
 
@@ -1713,8 +1719,10 @@ app.get("/api/accessories", publicAccessoryReadRateLimit, async (request, respon
   const baseTotal = countAccessories(accessories, query, baseOptions);
   const freshnessTotal = countAccessories(accessories, query, freshnessOptions);
   const total = freshnessTotal;
+  const servedAccessories = searchAccessories(accessories, query, limit, freshnessOptions, offset);
+  noteStaleServedPrices(servedAccessories);
   const payload = {
-    items: searchAccessories(accessories, query, limit, freshnessOptions, offset).map((item) => ({ ...item, dataFreshness: classifyDataFreshness(item.updatedAt) })),
+    items: servedAccessories.map((item) => ({ ...item, dataFreshness: classifyDataFreshness(item.updatedAt) })),
     total,
     category,
     ...(brand ? { brand } : {}),
@@ -1733,6 +1741,7 @@ app.get("/api/accessories/:id", publicAccessoryDetailRateLimit, async (request, 
     response.status(404).json({ error: "주변 부품을 찾을 수 없습니다." });
     return;
   }
+  noteStaleServedPrices([accessory]);
   response.json({ ...accessory, dataFreshness: classifyDataFreshness(accessory.updatedAt) });
 });
 
@@ -1745,6 +1754,7 @@ app.post("/api/accessories/batch", publicAccessoryBatchRateLimit, async (request
   const accessories = await loadAccessories();
   const byId = new Map(accessories.map((item) => [item.id, item]));
   const items = parsed.ids.map((id) => byId.get(id)).filter((item): item is Awaited<ReturnType<typeof loadAccessories>>[number] => item !== undefined).map((item) => ({ ...item, dataFreshness: classifyDataFreshness(item.updatedAt) }));
+  noteStaleServedPrices(items);
   response.json({ items, missingIds: parsed.ids.filter((id) => !byId.has(id)) });
 });
 
@@ -1929,7 +1939,9 @@ app.post("/api/builds/recommend", publicRecommendationRateLimit, async (request,
     // 요청마다 로드해 재시작 후에도 저장값과 맞춘다.
     loadEngineGenerationOptions();
     trackUsageEvent("recommend", { path: "/api/builds/recommend" });
-    response.json(generateBuildDraft(catalog, parsed.request, loadGamingPerformanceEvidence(), { targetFilters: loadEngineTargetFiltersConfig() }));
+    const draft = generateBuildDraft(catalog, parsed.request, loadGamingPerformanceEvidence(), { targetFilters: loadEngineTargetFiltersConfig() });
+    noteStaleServedPrices(await servedItemsFor(draft.selection, catalog));
+    response.json(draft);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "현재 데이터로 자동 견적을 생성하지 못했습니다.";
     const recoveryOptions = catalog ? buildGenerationRecoveryOptionsFor(catalog, parsed.request) : [];
@@ -1948,12 +1960,27 @@ app.post("/api/builds/recommend", publicRecommendationRateLimit, async (request,
   }
 });
 
+async function servedItemsFor(selection: BuildSelection, catalog: Part[]): Promise<(Part | AccessoryItem)[]> {
+  const byId = new Map(catalog.map((part) => [part.id, part]));
+  const parts = PART_CATEGORIES.flatMap((category) => {
+    if (category === "memory" || category === "ssd" || category === "hdd") return selection[category].map((entry) => entry.partId);
+    const entry = selection[category];
+    return entry ? [entry.partId] : [];
+  }).map((id) => byId.get(id)).filter((part): part is Part => part !== undefined);
+  const accessoryIds = (selection.accessories ?? []).map((entry) => entry.accessoryId);
+  if (accessoryIds.length === 0) return parts;
+  const accessoryById = new Map((await loadAccessories()).map((item) => [item.id, item]));
+  return [...parts, ...accessoryIds.map((id) => accessoryById.get(id)).filter((item): item is AccessoryItem => item !== undefined)];
+}
+
 function buildGenerationVariantResultsFor(catalog: Part[], request: BuildGenerationRequest, requestId?: string): BuildGenerationVariantResult[] {
   const gamingPerformanceEvidence = loadGamingPerformanceEvidence();
   const targetFilters = loadEngineTargetFiltersConfig();
   return engineGenerationVariantPrioritiesFor().map((priority) => {
     try {
-      return { priority, draft: generateBuildDraft(catalog, { ...request, priority }, gamingPerformanceEvidence, { targetFilters }) };
+      const draft = generateBuildDraft(catalog, { ...request, priority }, gamingPerformanceEvidence, { targetFilters });
+      void servedItemsFor(draft.selection, catalog).then(noteStaleServedPrices).catch(() => undefined);
+      return { priority, draft };
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "이 기준의 자동 구성을 만들지 못했습니다.";
       const diagnostics = error instanceof BuildGenerationError ? error.diagnostics : [];

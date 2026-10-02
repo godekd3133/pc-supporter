@@ -113,4 +113,70 @@ describe("seed live twin anchoring", () => {
     const catalog = [samsungRamSeed(), samsungRamLive(0)];
     expect(isQuotePurchasable(catalog[0], catalog)).toBe(true);
   });
+
+  it("matches an ssd seed to a live listing with naming drift (870 EVO)", () => {
+    const ssdSeed = seed({ category: "ssd", name: "Samsung 870 EVO SATA 1TB", brand: "Samsung", model: "870 EVO 1TB", priceWon: 99000, specs: { capacityGb: 1024, interface: "SATA", formFactor: "2.5인치" } });
+    const live = part({ category: "ssd", name: "삼성전자 870 EVO (1TB)", brand: "삼성전자", priceWon: 423200, specs: { capacityGb: 1000, interface: "SATA", formFactor: "2.5인치" } });
+    // 용량 표기 차이(1024 vs 1000)는 버킷으로 흡수하고 이름 토큰 {870,evo}로 묶인다.
+    const synced = syncSeedPartPricesFromLive([ssdSeed, live]);
+    expect(synced.find((p) => p.dataQuality === "seed")?.priceWon).toBe(423200);
+  });
+
+  it("rejects discriminating variants even when one name contains the other", () => {
+    const ssdSeed = seed({ category: "ssd", name: "WD_BLACK SN770 1TB", brand: "Western Digital", priceWon: 99000, specs: { capacityGb: 1000 } });
+    const mVariant = part({ category: "ssd", name: "Western Digital WD BLACK SN770M M.2 2230 (1TB)", brand: "Western Digital", priceWon: 180000, specs: { capacityGb: 1000 } });
+    const proVariant = part({ category: "ssd", name: "Western Digital WD BLACK SN770 PRO (1TB)", brand: "Western Digital", priceWon: 180000, specs: { capacityGb: 1000 } });
+    expect(seedLiveTwinsFor(ssdSeed, [mVariant])).toHaveLength(0);
+    expect(seedLiveTwinsFor(ssdSeed, [proVariant])).toHaveLength(0);
+  });
+
+  it("matches a psu seed by series tokens while rejecting a different wattage", () => {
+    const psuSeed = seed({ category: "psu", name: "Seasonic FOCUS GX-1000", brand: "Seasonic", priceWon: 229000, specs: { wattageW: 1000 } });
+    const same = part({ category: "psu", name: "시소닉 NEW FOCUS GX-1000 GOLD 풀모듈러 ATX3.0", brand: "시소닉", priceWon: 279000, specs: { wattageW: 1000 } });
+    const lowerWatt = part({ category: "psu", name: "시소닉 NEW FOCUS GX-850 GOLD 풀모듈러 ATX3.0", brand: "시소닉", priceWon: 150000, specs: { wattageW: 850 } });
+    const synced = syncSeedPartPricesFromLive([psuSeed, same, lowerWatt]);
+    expect(synced.find((p) => p.dataQuality === "seed")?.priceWon).toBe(279000);
+  });
+
+  it("matches a motherboard seed through distributor suffixes", () => {
+    const mbSeed = seed({ category: "motherboard", name: "ASUS TUF Gaming B650M-PLUS WIFI", brand: "ASUS", model: "B650M-PLUS WIFI", priceWon: 219000, specs: { socket: "AM5", memoryType: "DDR5", formFactor: "M-ATX" } });
+    const live = part({ category: "motherboard", name: "ASUS TUF Gaming B650M-PLUS WIFI STCOM", brand: "ASUS", priceWon: 234560, specs: { socket: "AM5", memoryType: "DDR5", formFactor: "M-ATX" } });
+    const synced = syncSeedPartPricesFromLive([mbSeed, live]);
+    expect(synced.find((p) => p.dataQuality === "seed")?.priceWon).toBe(234560);
+  });
+
+  it("excludes a twinless seed from quotes when its category is well covered by live listings", () => {
+    const twinless = seed({ category: "memory", name: "PATRIOT VIPER VENOM DDR5-5600 CL36 16GB", brand: "PATRIOT", priceWon: 49900, specs: { memoryType: "DDR5", capacityGb: 16, speedMhz: 5600, formFactor: "DIMM" } });
+    // 같은 범주에 구매 가능한 live 매물이 충분하면 트윈이 없는 seed는
+    // 다나와에서 빠진(단종 추정) 제품으로 보고 견적에서 제외한다.
+    const liveParts = Array.from({ length: 20 }, (_value, index) =>
+      part({ id: `live-mem-${index}`, category: "memory", name: `브랜드${index} DDR5-5600 (16GB)`, priceWon: 50000 + index, dataQuality: "live", specs: { memoryType: "DDR5", capacityGb: 16, speedMhz: 5600, formFactor: "DIMM" } }));
+    const catalog = [twinless, ...liveParts];
+    expect(isQuotePurchasable(twinless, catalog)).toBe(false);
+    expect(isQuoteSelectable(twinless, catalog)).toBe(false);
+    // 범위 밖 호출(카탈로그 없음)은 기존 동작을 유지한다.
+    expect(isQuotePurchasable(twinless)).toBe(true);
+  });
+
+  it("keeps a twinless seed purchasable while its category coverage is thin", () => {
+    const twinless = seed({ category: "memory", name: "PATRIOT VIPER VENOM DDR5-5600 CL36 16GB", brand: "PATRIOT", priceWon: 49900, specs: { memoryType: "DDR5", capacityGb: 16, speedMhz: 5600, formFactor: "DIMM" } });
+    const fewLive = Array.from({ length: 5 }, (_value, index) =>
+      part({ id: `live-mem-${index}`, category: "memory", name: `브랜드${index} DDR5-5600 (16GB)`, priceWon: 50000, dataQuality: "live", specs: { memoryType: "DDR5", capacityGb: 16, speedMhz: 5600, formFactor: "DIMM" } }));
+    // 크롤이 아직 이 범주를 못 채웠다면 seed 부재=단종으로 단정할 수 없다 → 폴백 유지.
+    expect(isQuotePurchasable(twinless, [twinless, ...fewLive])).toBe(true);
+  });
+
+  it("keeps a seed purchasable when only non-retail twins exist", () => {
+    // 병행수입·벌크 매물만 남은 실제품은 시장에 존재하므로 seed가
+    // sync된 최저가로 계속 견적에 선다(구매 링크는 트윈이 제공).
+    const catalog = [samsungRamSeed(), samsungRamLive(349910, { listingType: "parallel_import" })];
+    expect(isQuotePurchasable(catalog[0], catalog)).toBe(true);
+    expect(catalog[0].priceWon).toBe(58000); // sync는 호출자가 적용
+  });
+
+  it("does not let a generic seed absorb an unrelated live price", () => {
+    const generic = seed({ category: "psu", name: "650W 기준 파워", brand: "PC Supporter", priceWon: 72000, specs: { wattageW: 650 } });
+    const live = part({ category: "psu", name: "마이크로닉스 Classic II 650W", brand: "마이크로닉스", priceWon: 40000, specs: { wattageW: 650 } });
+    expect(syncSeedPartPricesFromLive([generic, live]).find((p) => p.dataQuality === "seed")?.priceWon).toBe(72000);
+  });
 });

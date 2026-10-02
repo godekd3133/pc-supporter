@@ -45,8 +45,8 @@ function selectionWithReplacement(selection: BuildSelection, category: PartCateg
 function adjustmentCandidatesFor(catalog: readonly Part[], category: PartCategory, current: Part | undefined): Part[] {
   return catalog
     .filter((part) => part.category === category && part.id !== current?.id)
-    .filter((part) => (part.dataQuality === "seed" ? isQuotePurchasable(part) : isQuoteSelectable(part, catalog)))
-    .filter((part) => part.dataQuality === "seed" || isCurrentGenerationPart(part, catalog))
+    .filter((part) => isQuoteSelectable(part, catalog))
+    .filter((part) => isCurrentGenerationPart(part, catalog))
     .filter((part) => part.priceWon !== undefined && part.priceWon > 0)
     .sort((a, b) => (a.priceWon ?? 0) - (b.priceWon ?? 0));
 }
