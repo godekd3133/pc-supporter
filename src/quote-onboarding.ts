@@ -160,7 +160,7 @@ export function initialOnboardingState(): OnboardingState {
     graphicsPreset: "high",
     rayTracing: false,
     upscaling: "quality",
-    memoryGb: 32,
+    memoryGb: 16,
     storageGb: 1000,
     specTier: "high",
     specIncludeGpu: true,

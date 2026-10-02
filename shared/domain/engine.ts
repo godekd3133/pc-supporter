@@ -5811,7 +5811,7 @@ function generatedPartSelectionReason(category: PartCategory, part: Part, state:
     case "motherboard":
       return `CPU ${valueOrCheck(cpu?.specs.socket, " 소켓")}·${part.specs.memoryType ?? "메모리 규격 확인 필요"}를 맞추고 M.2 ${valueOrCheck(part.specs.m2Slots, "개")}·SATA ${valueOrCheck(part.specs.sataPorts, "개")} 확장 경로를 확인했습니다.`;
     case "memory":
-      return `RAM ${request.memoryCapacityGb ?? 32}GB 이상을 맞추는 ${valueOrCheck(part.specs.capacityGb, "GB/킷")} ${selectedMemory?.quantity ?? 2}개 구성으로, ${part.specs.memoryType ?? "규격 확인 필요"}·${valueOrCheck(part.specs.speedMhz, "MHz")}를 CPU·메인보드와 확인했습니다.`;
+      return `RAM ${request.memoryCapacityGb ?? 16}GB 이상을 맞추는 ${valueOrCheck(part.specs.capacityGb, "GB/킷")} ${selectedMemory?.quantity ?? 2}개 구성으로, ${part.specs.memoryType ?? "규격 확인 필요"}·${valueOrCheck(part.specs.speedMhz, "MHz")}를 CPU·메인보드와 확인했습니다.`;
     case "gpu": {
       const games = request.gamingGameIds?.length ? request.gamingGameIds.map((gameId) => gamingGameOptionFor(gameId)?.label ?? gameId).join("·") : "일반 게이밍";
       const gamingTargetResolution = request.gamingResolution ?? DEFAULT_GAMING_RESOLUTION;
@@ -5898,7 +5898,7 @@ function generatorSearchContextFor(catalog: Part[], request: BuildGenerationRequ
     throw new Error("자동 구성 우선순위는 balanced, budget, performance, reliability 중 하나여야 합니다.");
   }
   const priority = request.priority ?? "balanced";
-  const memoryCapacityGb = request.memoryCapacityGb ?? 32;
+  const memoryCapacityGb = request.memoryCapacityGb ?? 16;
   if (![16, 32, 64, 128].includes(memoryCapacityGb)) {
     throw new Error("RAM 목표 용량은 16, 32, 64, 128GB 중 하나여야 합니다.");
   }

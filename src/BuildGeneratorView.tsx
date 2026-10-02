@@ -210,7 +210,7 @@ type GeneratorPreset = GeneratorPresetConfig & {
 
 const GENERATOR_PRESETS: GeneratorPreset[] = [
   { id: "office", label: "사무·일반", summary: "내장 그래픽 · 16GB · 80만원", profile: "office", priority: "budget", gamingResolution: "1440p", gamingRefreshRate: 144, memoryCapacityGb: 16, budgetWon: 800_000, includeGpu: false, storageCapacityGb: 500, hddCount: 0, hddCapacityGb: 4_000, listingPolicy: "retail_only" },
-  { id: "fhd-gaming", label: "FHD 게이밍", summary: "1080p · 144Hz · 150만원", profile: "gaming", priority: "balanced", gamingResolution: "1080p", gamingRefreshRate: 144, memoryCapacityGb: 32, budgetWon: 1_500_000, includeGpu: true, storageCapacityGb: 1_000, hddCount: 0, hddCapacityGb: 4_000, listingPolicy: "retail_only" },
+  { id: "fhd-gaming", label: "FHD 게이밍", summary: "1080p · 144Hz · 150만원", profile: "gaming", priority: "balanced", gamingResolution: "1080p", gamingRefreshRate: 144, memoryCapacityGb: 16, budgetWon: 1_500_000, includeGpu: true, storageCapacityGb: 1_000, hddCount: 0, hddCapacityGb: 4_000, listingPolicy: "retail_only" },
   { id: "qhd-gaming", label: "QHD 게이밍", summary: "1440p · 144Hz · 220만원", profile: "gaming", priority: "performance", gamingResolution: "1440p", gamingRefreshRate: 144, memoryCapacityGb: 32, budgetWon: 2_200_000, includeGpu: true, storageCapacityGb: 1_000, hddCount: 0, hddCapacityGb: 4_000, listingPolicy: "retail_only" },
   { id: "4k-gaming", label: "4K 게이밍", summary: "4K · 60Hz · 350만원", profile: "gaming", priority: "performance", gamingResolution: "4k", gamingRefreshRate: 60, memoryCapacityGb: 64, budgetWon: 3_500_000, includeGpu: true, storageCapacityGb: 2_000, hddCount: 0, hddCapacityGb: 4_000, listingPolicy: "retail_only" },
   { id: "development-ai", label: "개발·AI", summary: "64GB · GPU 포함 · 250만원", profile: "development", priority: "balanced", gamingResolution: "1440p", gamingRefreshRate: 144, memoryCapacityGb: 64, budgetWon: 2_500_000, includeGpu: true, storageCapacityGb: 2_000, hddCount: 0, hddCapacityGb: 4_000, listingPolicy: "retail_only" }
@@ -254,7 +254,7 @@ export function BuildGeneratorView({ initialProfile, draft, variants, budgetLadd
   const [gamingUpscaling, setGamingUpscaling] = useState<GamingUpscaling>(initialGeneratorUpscaling);
   const [workType, setWorkType] = useState<OnboardingWork | undefined>(initialGeneratorWorkType);
   const [workIntensity, setWorkIntensity] = useState<OnboardingIntensity | undefined>(initialGeneratorWorkIntensity);
-  const [memoryCapacityGb, setMemoryCapacityGb] = useState(() => initialGeneratorChoice("ram", ["16", "32", "64", "128"], "32"));
+  const [memoryCapacityGb, setMemoryCapacityGb] = useState(() => initialGeneratorChoice("ram", ["16", "32", "64", "128"], "16"));
   const [budget, setBudget] = useState(initialGeneratorBudget);
   const [includeGpu, setIncludeGpu] = useState(initialGeneratorIncludeGpu);
   const [storageCapacityGb, setStorageCapacityGb] = useState(() => initialGeneratorChoice("ssd", ["500", "1000", "2000", "4000"], "1000"));
