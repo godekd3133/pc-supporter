@@ -4788,4 +4788,49 @@ describe("generator quote reliability regressions", () => {
     expect(draft.selection.ssd.map((selection) => selection.partId)).not.toContain(foreignSsd.id);
     expect(draft.selection.psu?.partId).not.toBe(foreignPsu.id);
   });
+
+  it("exposes tier adjacency and regenerates with pinned parts for balance adjustments", () => {
+    const cpuMid: Part = withSpecs(baseCpu, { cores: 6, threads: 12, boostClockGhz: 4.4, integratedGraphics: false, cinebenchR23Single: 1500, cinebenchR23Multi: 11000 });
+    cpuMid.id = "cpu-mid";
+    cpuMid.name = "AMD 라이젠5-4세대 5600 (버미어)";
+    const cpuHigh: Part = withSpecs(baseCpu, { cores: 8, threads: 16, boostClockGhz: 5.5, integratedGraphics: false, cinebenchR23Single: 2200, cinebenchR23Multi: 21000 });
+    cpuHigh.id = "cpu-high";
+    cpuHigh.name = "AMD 라이젠7-6세대 9700X (그래니트 릿지)";
+    const gpuLow: Part = withSpecs(baseGpu, { gpu3dmarkTimeSpyScore: 9000, vramGb: 8, powerW: 130, recommendedPsuW: 550 });
+    gpuLow.id = "gpu-low";
+    gpuLow.name = "지포스 RTX 5050 저가형";
+    const gpuHigh: Part = withSpecs(baseGpu, { gpu3dmarkTimeSpyScore: 16000, vramGb: 16, powerW: 180, recommendedPsuW: 600 });
+    gpuHigh.id = "gpu-high";
+    gpuHigh.name = "지포스 RTX 5060 Ti 고급형";
+    const catalog = fixtureCatalog({ cpus: [cpuMid, cpuHigh], gpus: [gpuLow, gpuHigh] });
+    const request = { profile: "gaming" as const, budgetWon: 2_500_000, includeGpu: true };
+    const draft = generateBuildDraft(catalog, request);
+
+    expect(draft.performanceMetrics?.gamingIndex).toBeDefined();
+    expect(draft.performanceMetrics?.frameStability).toBeDefined();
+    expect(draft.performanceMetrics?.singleCorePercent).toBeGreaterThan(0);
+    const cpuAdjacency = draft.partTiers?.cpu;
+    expect(cpuAdjacency?.upId ?? cpuAdjacency?.downId).toBeDefined();
+    expect(draft.partTiers?.gpu?.upId ?? draft.partTiers?.gpu?.downId).toBeDefined();
+
+    const neighborId = cpuAdjacency!.upId ?? cpuAdjacency!.downId!;
+    const adjusted = generateBuildDraft(catalog, { ...request, pinnedParts: { cpu: neighborId } });
+    expect(adjusted.selection.cpu?.partId).toBe(neighborId);
+    expect(adjusted.lines.find((line) => line.category === "cpu")?.partId).toBe(neighborId);
+  });
+
+  it("returns pinned over-budget adjustments instead of failing the draft", () => {
+    const premiumGpu: Part = withSpecs(baseGpu, { gpu3dmarkTimeSpyScore: 36000, vramGb: 16, powerW: 350, recommendedPsuW: 1000 });
+    premiumGpu.id = "gpu-premium";
+    premiumGpu.name = "지포스 RTX 5080 프리미엄";
+    premiumGpu.priceWon = 9_000_000;
+    const catalog = fixtureCatalog({ gpus: [baseGpu, premiumGpu] });
+    const draft = generateBuildDraft(catalog, { profile: "gaming", budgetWon: 1_500_000, includeGpu: true, pinnedParts: { gpu: premiumGpu.id } });
+    expect(draft.selection.gpu?.partId).toBe("gpu-premium");
+    expect(draft.withinBudget).toBe(false);
+    expect(draft.totalPriceWon).toBeGreaterThan(1_500_000);
+    // 카탈로그에 없는 핀은 무시하고 정상 생성한다.
+    const ghostPinned = generateBuildDraft(catalog, { profile: "gaming", budgetWon: 1_500_000, includeGpu: true, pinnedParts: { gpu: premiumGpu.id, cpu: "cpu-does-not-exist" } });
+    expect(ghostPinned.selection.gpu?.partId).toBe("gpu-premium");
+  });
 });

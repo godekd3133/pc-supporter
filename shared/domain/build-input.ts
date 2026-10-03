@@ -19,6 +19,8 @@ const RESOLUTIONS = ["1080p", "1440p", "4k"] as const;
 const REFRESH_RATES = [60, 144, 240] as const;
 const GRAPHICS_PRESETS = ["competitive", "balanced", "high"] as const;
 const UPSCALING_MODES = ["native", "quality", "balanced"] as const;
+const GPU_VENDORS = ["nvidia", "amd", "intel"] as const;
+const PINNABLE_CATEGORIES = ["cpu", "cooler", "motherboard", "memory", "gpu", "ssd", "hdd", "case", "psu"] as const;
 
 export function emptyBuild(): BuildSelection {
   return { memory: [], ssd: [], hdd: [], accessories: [], useIntegratedGraphics: true };
@@ -247,6 +249,26 @@ export function parseBuildGenerationRequest(value: unknown): BuildGenerationRequ
   if (!Number.isInteger(hddCount) || hddCount < 0 || hddCount > 8) errors.push("hddCount는 0부터 8 사이의 정수여야 합니다.");
   const hddCapacityGb = Number(value.hddCapacityGb ?? 4000);
   if (!Number.isInteger(hddCapacityGb) || hddCapacityGb <= 0 || hddCapacityGb > 100_000) errors.push("hddCapacityGb는 1부터 100,000 사이의 정수여야 합니다.");
+  if (value.gpuVendorPreference !== undefined && !GPU_VENDORS.includes(value.gpuVendorPreference as typeof GPU_VENDORS[number])) errors.push("gpuVendorPreference는 nvidia, amd, intel 중 하나여야 합니다.");
+  let pinnedParts: BuildGenerationRequest["pinnedParts"];
+  if (value.pinnedParts !== undefined) {
+    if (!record(value.pinnedParts)) {
+      errors.push("pinnedParts는 카테고리별 부품 ID 객체여야 합니다.");
+    } else {
+      pinnedParts = {};
+      for (const [category, partId] of Object.entries(value.pinnedParts)) {
+        if (!PINNABLE_CATEGORIES.includes(category as typeof PINNABLE_CATEGORIES[number])) {
+          errors.push(`pinnedParts 카테고리 '${category}'는 지원하지 않습니다.`);
+          continue;
+        }
+        if (typeof partId !== "string" || partId.trim().length === 0 || partId.trim().length > BUILD_INPUT_MAX_ID_LENGTH) {
+          errors.push(`pinnedParts.${category}는 비어 있지 않은 ${BUILD_INPUT_MAX_ID_LENGTH}자 이하 부품 ID여야 합니다.`);
+          continue;
+        }
+        pinnedParts[category as typeof PINNABLE_CATEGORIES[number]] = partId.trim();
+      }
+    }
+  }
   if (errors.length > 0) return { errors };
   return {
     request: {
@@ -266,7 +288,9 @@ export function parseBuildGenerationRequest(value: unknown): BuildGenerationRequ
       hddCapacityGb,
       hddCount,
       includeNonRetail: listingPolicyRaw === "all",
-      listingPolicy: listingPolicyRaw as BuildGenerationRequest["listingPolicy"]
+      listingPolicy: listingPolicyRaw as BuildGenerationRequest["listingPolicy"],
+      ...(pinnedParts !== undefined && Object.keys(pinnedParts).length > 0 ? { pinnedParts } : {}),
+      ...(GPU_VENDORS.includes(value.gpuVendorPreference as typeof GPU_VENDORS[number]) ? { gpuVendorPreference: value.gpuVendorPreference as BuildGenerationRequest["gpuVendorPreference"] } : {})
     },
     errors: []
   };

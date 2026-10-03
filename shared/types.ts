@@ -1128,6 +1128,10 @@ export interface BuildGenerationRequest {
   hddCount?: number;
   includeNonRetail?: boolean;
   listingPolicy?: ListingPolicy;
+  /** ± 밸런스 조정용 — 지정 카테고리는 해당 부품으로 고정하고 나머지를 다시 맞춘다. */
+  pinnedParts?: Partial<Record<PartCategory, string>>;
+  /** GPU 제조사 선호 — 게이밍 기본(NVIDIA)을 사용자가 직접 바꿀 때 지정한다. */
+  gpuVendorPreference?: GpuVendor;
 }
 
 export interface BuildGenerationDiagnosticFact {
@@ -1171,6 +1175,23 @@ export interface GeneratedBuildLine {
   selectionReason?: string;
 }
 
+export interface BuildPerformanceMetrics {
+  /** 외장 GPU 상대 게임 지수(RTX 5060 Ti = 100) 또는 내장 그래픽 지수. */
+  gamingIndex?: number;
+  frameStability?: "low" | "medium" | "high" | "very_high";
+  /** 싱글코어 상대 성능 % (최상급 = 100). */
+  singleCorePercent?: number;
+  /** 멀티코어 상대 성능 % (플래그십 = 100). */
+  multiCorePercent?: number;
+  modelVersion?: string;
+}
+
+/** 같은 부품군에서 성능 점수 기준 한 단계 위/아래 후보 부품 ID. */
+export interface GeneratedPartTierAdjacency {
+  upId?: string;
+  downId?: string;
+}
+
 export interface BuildGenerationResult {
   selection: BuildSelection;
   profile: RecommendationProfile;
@@ -1203,6 +1224,8 @@ export interface BuildGenerationResult {
   lines: GeneratedBuildLine[];
   rationale: string[];
   warnings: string[];
+  performanceMetrics?: BuildPerformanceMetrics;
+  partTiers?: Partial<Record<PartCategory, GeneratedPartTierAdjacency>>;
 }
 
 export interface BuildGenerationVariantResult {

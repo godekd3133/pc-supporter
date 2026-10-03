@@ -298,6 +298,35 @@ describe("build request validation", () => {
     expect(invalid.errors).toContain("performanceTier는 entry, high, top 중 하나여야 합니다.");
   });
 
+  it("accepts pinned parts and a GPU vendor preference for balance adjustments", () => {
+    const parsed = parseBuildGenerationRequest({
+      profile: "gaming",
+      budgetWon: 2_000_000,
+      gpuVendorPreference: "amd",
+      pinnedParts: { cpu: "danawa-cpu-1", gpu: "gpu-x" }
+    });
+
+    expect(parsed.errors).toHaveLength(0);
+    expect(parsed.request?.gpuVendorPreference).toBe("amd");
+    expect(parsed.request?.pinnedParts).toEqual({ cpu: "danawa-cpu-1", gpu: "gpu-x" });
+  });
+
+  it("rejects malformed pinned parts and GPU vendor values", () => {
+    const parsed = parseBuildGenerationRequest({
+      profile: "gaming",
+      budgetWon: 2_000_000,
+      gpuVendorPreference: "intel-arc-pro",
+      pinnedParts: { keyboard: "part-1", gpu: "" }
+    });
+
+    expect(parsed.request).toBeUndefined();
+    expect(parsed.errors).toEqual(expect.arrayContaining([
+      "gpuVendorPreference는 nvidia, amd, intel 중 하나여야 합니다.",
+      "pinnedParts 카테고리 'keyboard'는 지원하지 않습니다.",
+      expect.stringContaining("pinnedParts.gpu")
+    ]));
+  });
+
   it("rejects an unsupported RAM target capacity", () => {
     const parsed = parseBuildGenerationRequest({ profile: "gaming", budgetWon: 2_000_000, memoryCapacityGb: 48 });
 

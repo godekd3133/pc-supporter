@@ -2,8 +2,8 @@ import { safeLocalStorage } from "./safe-storage";
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type { IconType } from "react-icons";
-import { FiActivity, FiAlertTriangle, FiArrowLeft, FiBox, FiCheck, FiChevronDown, FiCopy, FiCpu, FiDatabase, FiDownload, FiEdit3, FiHardDrive, FiInfo, FiLayers, FiLoader, FiMonitor, FiSave, FiShare2, FiSliders, FiTool, FiTrash2, FiUpload, FiXCircle, FiZap } from "react-icons/fi";
-import type { BuildGenerationDiagnostic, BuildGenerationRecoveryOption, BuildGenerationRequest, BuildGenerationResult, BuildGenerationVariantResult, BuildSelection, GamingGraphicsPreset, GamingRefreshRate, GamingResolution, GamingUpscaling, PartCategory, RecommendationPerformanceTier, RecommendationPriority, RecommendationProfile, ListingPolicy } from "../shared/types";
+import { FiActivity, FiAlertTriangle, FiArrowLeft, FiBox, FiCheck, FiChevronDown, FiCopy, FiCpu, FiDatabase, FiDownload, FiEdit3, FiHardDrive, FiInfo, FiLayers, FiLoader, FiMinus, FiMonitor, FiPlus, FiSave, FiShare2, FiSliders, FiTool, FiTrash2, FiUpload, FiXCircle, FiZap } from "react-icons/fi";
+import type { BuildGenerationDiagnostic, BuildGenerationRecoveryOption, BuildGenerationRequest, BuildGenerationResult, BuildGenerationVariantResult, BuildSelection, GamingGraphicsPreset, GamingRefreshRate, GamingResolution, GamingUpscaling, GpuVendor, PartCategory, RecommendationPerformanceTier, RecommendationPriority, RecommendationProfile, ListingPolicy } from "../shared/types";
 import { budgetLadderBaseRequestFor, budgetLadderChangeFor, budgetLadderCsvFor, budgetLadderExportPayloadFor, budgetLadderJsonFor, budgetLadderTextFor } from "../shared/budget-ladder";
 import type { BudgetLadderOutcome } from "../shared/budget-ladder";
 import { budgetLadderTradeoffFor } from "../shared/budget-ladder-tradeoff";
@@ -24,6 +24,7 @@ import { CATEGORY_LABELS, GAMING_GRAPHICS_PRESET_LABELS, GAMING_REFRESH_RATE_LAB
 import { generatorBriefInterpretationFor } from "../shared/generator-brief";
 import type { GeneratorBriefConfig, GeneratorBriefInterpretation } from "../shared/generator-brief";
 import { api, ApiError } from "./api";
+import { PerformanceIndexMetricsPanel } from "./ResultPanels";
 import { hasStoredOwnerCredentials, markOwnerSessionResource, ownerCredentialAvailable, ownerRequestOptions, ownerSessionCreateOptions, ownerSessionModeSupported, removeOwnerSessionResource, retryOwnerSessionMigration } from "./owner-session";
 import { budgetEstimateFor, gameLabelFor, intensityOptionFor, ONBOARDING_WORKS, workEstimateFor } from "./quote-onboarding";
 import type { OnboardingIntensity, OnboardingWork } from "./quote-onboarding";
@@ -257,6 +258,7 @@ export function BuildGeneratorView({ initialProfile, draft, variants, budgetLadd
   const [memoryCapacityGb, setMemoryCapacityGb] = useState(() => initialGeneratorChoice("ram", ["16", "32", "64", "128"], "16"));
   const [budget, setBudget] = useState(initialGeneratorBudget);
   const [includeGpu, setIncludeGpu] = useState(initialGeneratorIncludeGpu);
+  const [gpuVendor, setGpuVendor] = useState<GpuVendor>(() => initialGeneratorChoice("gpuVendor", ["nvidia", "amd"], "nvidia") as GpuVendor);
   const [storageCapacityGb, setStorageCapacityGb] = useState(() => initialGeneratorChoice("ssd", ["500", "1000", "2000", "4000"], "1000"));
   const [hddCount, setHddCount] = useState(() => initialGeneratorChoice("hdd", ["0", "1", "2", "4"], "0"));
   const [hddCapacityGb, setHddCapacityGb] = useState(() => initialGeneratorChoice("hddCapacity", ["2000", "4000", "8000", "16000"], "4000"));
@@ -336,6 +338,7 @@ export function BuildGeneratorView({ initialProfile, draft, variants, budgetLadd
     if (memoryCapacityGb !== "32") params.set("ram", memoryCapacityGb);
     if (budget !== "1500000") params.set("budget", budget);
     if (!includeGpu) params.set("gpu", "0");
+    if (includeGpu && gpuVendor !== "nvidia") params.set("gpuVendor", gpuVendor);
     if (storageCapacityGb !== "1000") params.set("ssd", storageCapacityGb);
     if (hddCount !== "0") params.set("hdd", hddCount);
     if (hddCount !== "0" && hddCapacityGb !== "4000") params.set("hddCapacity", hddCapacityGb);
@@ -378,7 +381,7 @@ export function BuildGeneratorView({ initialProfile, draft, variants, budgetLadd
     }
     previousGeneratorUrlRef.current = nextUrl;
     previousGeneratorBudgetRef.current = budget;
-  }, [budget, gamingGameIds, gamingGraphicsPreset, gamingRayTracing, gamingRefreshRate, gamingResolution, gamingUpscaling, hddCapacityGb, hddCount, includeGpu, initialProfile, listingPolicy, memoryCapacityGb, performanceTier, priority, profile, storageCapacityGb, workIntensity, workType]);
+  }, [budget, gamingGameIds, gamingGraphicsPreset, gamingRayTracing, gamingRefreshRate, gamingResolution, gamingUpscaling, gpuVendor, hddCapacityGb, hddCount, includeGpu, initialProfile, listingPolicy, memoryCapacityGb, performanceTier, priority, profile, storageCapacityGb, workIntensity, workType]);
 
   useEffect(() => {
     const onPopState = () => {
@@ -590,7 +593,56 @@ export function BuildGeneratorView({ initialProfile, draft, variants, budgetLadd
       return undefined;
     }
     setError(null);
-    return { profile, priority, performanceTier: profile === "general" ? performanceTier : undefined, budgetWon, includeGpu, gamingResolution, gamingRefreshRate, gamingGameIds, gamingGraphicsPreset, gamingRayTracing, gamingUpscaling, memoryCapacityGb: requestedMemoryCapacityGb, storageCapacityGb: requestedStorageCapacityGb, hddCapacityGb: requestedHddCapacityGb, hddCount: requestedHddCount, listingPolicy };
+    return { profile, priority, performanceTier: profile === "general" ? performanceTier : undefined, budgetWon, includeGpu, gamingResolution, gamingRefreshRate, gamingGameIds, gamingGraphicsPreset, gamingRayTracing, gamingUpscaling, memoryCapacityGb: requestedMemoryCapacityGb, storageCapacityGb: requestedStorageCapacityGb, hddCapacityGb: requestedHddCapacityGb, hddCount: requestedHddCount, listingPolicy, ...(includeGpu ? { gpuVendorPreference: gpuVendor } : {}) };
+  }
+
+  function requestFromGeneratedDraft(current: BuildGenerationResult, pinnedParts: Partial<Record<PartCategory, string>>): BuildGenerationRequest {
+    return {
+      profile: current.profile,
+      priority: current.priority,
+      ...(current.performanceTier ? { performanceTier: current.performanceTier } : {}),
+      budgetWon: current.budgetWon,
+      includeGpu: current.selection.useIntegratedGraphics !== true || current.lines.some((line) => line.category === "gpu"),
+      gamingResolution: current.gamingResolution,
+      gamingRefreshRate: current.gamingRefreshRate,
+      ...(current.gamingGameIds ? { gamingGameIds: current.gamingGameIds } : {}),
+      ...(current.gamingGraphicsPreset ? { gamingGraphicsPreset: current.gamingGraphicsPreset } : {}),
+      ...(current.gamingRayTracing !== undefined ? { gamingRayTracing: current.gamingRayTracing } : {}),
+      ...(current.gamingUpscaling ? { gamingUpscaling: current.gamingUpscaling } : {}),
+      memoryCapacityGb: current.memoryCapacityGb,
+      storageCapacityGb: current.storageCapacityGb,
+      ...(current.hddCapacityGb !== undefined ? { hddCapacityGb: current.hddCapacityGb } : {}),
+      hddCount: current.hddCount,
+      listingPolicy: current.listingPolicy,
+      ...(includeGpu ? { gpuVendorPreference: gpuVendor } : {}),
+      ...(Object.keys(pinnedParts).length > 0 ? { pinnedParts } : {})
+    };
+  }
+
+  // 옮긴 부품 외에는 현재 선택을 핀으로 유지하고, 그 부품이 의존하는
+  // 부품(소켓·램·냉각·전력·장착)만 다시 맞춘다 — "5600 → 7500F 업글 시
+  // 보드·램을 따라 바꾼다"는 균형 조정 의도 그대로다.
+  const TIER_ADJUST_RELEASES: Partial<Record<PartCategory, PartCategory[]>> = {
+    cpu: ["motherboard", "memory", "cooler", "psu"],
+    gpu: ["psu", "case"],
+    motherboard: ["memory", "ssd", "cooler"],
+    cooler: ["case", "psu"],
+    hdd: ["case"]
+  };
+
+  async function adjustPartTier(category: PartCategory, direction: "up" | "down") {
+    if (!draft || loading) return;
+    const tier = draft.partTiers?.[category];
+    const target = direction === "up" ? tier?.upId : tier?.downId;
+    if (!target) return;
+    const released = new Set<PartCategory>([category, ...(TIER_ADJUST_RELEASES[category] ?? [])]);
+    const pins: Partial<Record<PartCategory, string>> = {};
+    for (const line of draft.lines) {
+      if (released.has(line.category)) continue;
+      pins[line.category] = line.partId;
+    }
+    pins[category] = target;
+    await onGenerate(requestFromGeneratedDraft(draft, pins));
   }
 
   async function generateFromForm() {
@@ -798,6 +850,13 @@ export function BuildGeneratorView({ initialProfile, draft, variants, budgetLadd
             <label><span>기본 SSD 용량</span><select value={storageCapacityGb} disabled={loading} onChange={(event) => setStorageCapacityGb(event.target.value)}><option value="500">500GB 이상</option><option value="1000">1TB 이상</option><option value="2000">2TB 이상</option><option value="4000">4TB 이상</option></select></label>
             <div className="generator-storage-grid"><label><span>HDD 개수</span><select value={hddCount} disabled={loading} onChange={(event) => setHddCount(event.target.value)}><option value="0">사용하지 않음</option><option value="1">1개</option><option value="2">2개</option><option value="4">4개</option></select></label><label><span>HDD 용량</span><select value={hddCapacityGb} disabled={loading || hddCount === "0"} onChange={(event) => setHddCapacityGb(event.target.value)}><option value="2000">2TB 이상</option><option value="4000">4TB 이상</option><option value="8000">8TB 이상</option><option value="16000">16TB 이상</option></select></label></div>
             <label className="generator-checkbox"><input type="checkbox" checked={includeGpu} disabled={loading} onChange={(event) => setIncludeGpu(event.target.checked)} /><span><strong>외장 그래픽카드 포함</strong><small>끄면 CPU 내장 그래픽을 사용해요.</small></span></label>
+            {includeGpu && <div className="generator-vendor-toggle" data-testid="generator-vendor-toggle">
+              <span>GPU 제조사</span>
+              <div className="generator-vendor-options" role="radiogroup" aria-label="GPU 제조사 선호">
+                {([["nvidia", "NVIDIA"], ["amd", "AMD"]] as const).map(([id, label]) => <button type="button" key={id} className={`generator-vendor-option${gpuVendor === id ? " selected" : ""}`} aria-pressed={gpuVendor === id} disabled={loading} onClick={() => setGpuVendor(id)}>{label}</button>)}
+                <span className="generator-vendor-help" title="AMD는 가성비가 좋지만, 드라이버 안정성과 레이 트레이싱, AI 범용성이 떨어집니다. 콘솔게임 위주로 플레이하는 경우 선택해주세요." role="img" aria-label="GPU 제조사 설명: AMD는 가성비가 좋지만, 드라이버 안정성과 레이 트레이싱, AI 범용성이 떨어집니다. 콘솔게임 위주로 플레이하는 경우 선택해주세요."><FiInfo /></span>
+              </div>
+            </div>}
             <label><span>구매 조건</span><select value={listingPolicy} disabled={loading} onChange={(event) => setListingPolicy(event.target.value as ListingPolicy)}><option value="retail_only">{LISTING_POLICY_LABELS.retail_only}</option><option value="include_bulk">{LISTING_POLICY_LABELS.include_bulk}</option><option value="all">{LISTING_POLICY_LABELS.all}</option></select></label>
           </div>
         </details>
@@ -813,7 +872,7 @@ export function BuildGeneratorView({ initialProfile, draft, variants, budgetLadd
         </details>
 
       </form>
-      {budgetLadder.length > 0 ? <GeneratorBudgetLadderPanel scenarios={budgetLadder} loading={loading} onApply={onApply} onSave={onSave} onCopy={copyBudgetLadder} onDownload={downloadBudgetLadder} share={budgetLadderShare} onShare={() => void shareBudgetLadder()} onRevoke={() => void revokeBudgetLadder()} /> : variants.length > 0 ? <GeneratorVariantsPanel variants={variants} loading={loading} onApply={onApply} onSave={onSave} onAdjustConditions={adjustGeneratorConditions} onCopy={copyGeneratorVariants} onDownload={downloadGeneratorVariants} /> : draft ? <section className="generator-result"><div className="generator-result-top"><div><p className="eyebrow">견적 결과</p><h2>{statusLabel}</h2><p>{generatedDraftSummaryFor(draft)}</p></div><span className={`generator-status ${draft.withinBudget ? "within" : "over"}`}>{draft.withinBudget ? "예산 내" : "예산 초과"}</span></div><div className="generator-total"><span>합계</span><strong>{formatWon(draft.totalPriceWon)}</strong><small>{draft.withinBudget ? `${Math.abs(draft.budgetDeltaWon).toLocaleString("ko-KR")}원 여유` : `${draft.budgetDeltaWon.toLocaleString("ko-KR")}원 초과`}</small></div>{generatorTargetContext}<div className="generator-lines">{draft.lines.map((line) => <div className="generator-line" key={line.category}><span><CategoryIcon category={line.category} /> {CATEGORY_LABELS[line.category]}</span><div><strong>{line.name}</strong><small>{line.specSummary ? `${line.specSummary} · ` : ""}{line.quantity > 1 ? `수량 ${line.quantity}개 · ` : ""}{formatWon(line.priceWon * line.quantity)}</small></div></div>)}</div>{draft.warnings.length > 0 && <div className="generator-warnings"><strong><FiAlertTriangle /> 구매 전 확인할 점</strong>{draft.warnings.map((item) => <p key={item}>{item}</p>)}</div>}<div className="generator-actions"><button className="button button-secondary" onClick={() => void onApply(draft, false)} disabled={loading}><FiEdit3 /> 편집기로 가져가기</button><button className="button button-primary" onClick={() => void onApply(draft, true)} disabled={loading}><FiActivity /> 호환성 확인</button>{onSave && <button className="button button-light generator-save-button" onClick={() => onSave(draft)} disabled={loading}><FiSave /> 새 견적으로 저장</button>}</div></section> : <section className="generator-empty"><h2>추천 결과</h2><p>조건을 정한 뒤 자동 견적을 생성하세요.</p></section>}
+      {budgetLadder.length > 0 ? <GeneratorBudgetLadderPanel scenarios={budgetLadder} loading={loading} onApply={onApply} onSave={onSave} onCopy={copyBudgetLadder} onDownload={downloadBudgetLadder} share={budgetLadderShare} onShare={() => void shareBudgetLadder()} onRevoke={() => void revokeBudgetLadder()} /> : variants.length > 0 ? <GeneratorVariantsPanel variants={variants} loading={loading} onApply={onApply} onSave={onSave} onAdjustConditions={adjustGeneratorConditions} onCopy={copyGeneratorVariants} onDownload={downloadGeneratorVariants} /> : draft ? <section className="generator-result"><div className="generator-result-top"><div><p className="eyebrow">견적 결과</p><h2>{statusLabel}</h2><p>{generatedDraftSummaryFor(draft)}</p></div><span className={`generator-status ${draft.withinBudget ? "within" : "over"}`}>{draft.withinBudget ? "예산 내" : "예산 초과"}</span></div><div className="generator-total"><span>합계</span><strong>{formatWon(draft.totalPriceWon)}</strong><small>{draft.withinBudget ? `${Math.abs(draft.budgetDeltaWon).toLocaleString("ko-KR")}원 여유` : `${draft.budgetDeltaWon.toLocaleString("ko-KR")}원 초과`}</small></div>{generatorTargetContext}{draft.performanceMetrics && (draft.performanceMetrics.gamingIndex !== undefined || draft.performanceMetrics.singleCorePercent !== undefined || draft.performanceMetrics.frameStability !== undefined) ? <PerformanceIndexMetricsPanel report={draft.performanceMetrics} hasGpu={Boolean(draft.selection.gpu)} /> : null}<div className="generator-lines">{draft.lines.map((line) => { const tier = draft.partTiers?.[line.category]; return <div className="generator-line" key={line.category}>{tier?.downId ? <button className="generator-line-adjust" type="button" title="한 단계 아래 부품으로 바꾸기" aria-label={`${CATEGORY_LABELS[line.category]} 한 단계 아래 부품으로`} disabled={loading} onClick={() => void adjustPartTier(line.category, "down")}><FiMinus /></button> : <span className="generator-line-adjust spacer" aria-hidden="true" />}<span><CategoryIcon category={line.category} /> {CATEGORY_LABELS[line.category]}</span><div><strong>{line.name}</strong><small>{line.specSummary ? `${line.specSummary} · ` : ""}{line.quantity > 1 ? `수량 ${line.quantity}개 · ` : ""}{formatWon(line.priceWon * line.quantity)}</small></div>{tier?.upId ? <button className="generator-line-adjust" type="button" title="한 단계 위 부품으로 바꾸기" aria-label={`${CATEGORY_LABELS[line.category]} 한 단계 위 부품으로`} disabled={loading} onClick={() => void adjustPartTier(line.category, "up")}><FiPlus /></button> : <span className="generator-line-adjust spacer" aria-hidden="true" />}</div>; })}</div>{draft.warnings.length > 0 && <div className="generator-warnings"><strong><FiAlertTriangle /> 구매 전 확인할 점</strong>{draft.warnings.map((item) => <p key={item}>{item}</p>)}</div>}<div className="generator-actions"><button className="button button-secondary" onClick={() => void onApply(draft, false)} disabled={loading}><FiEdit3 /> 편집기로 가져가기</button><button className="button button-primary" onClick={() => void onApply(draft, true)} disabled={loading}><FiActivity /> 호환성 확인</button>{onSave && <button className="button button-light generator-save-button" onClick={() => onSave(draft)} disabled={loading}><FiSave /> 새 견적으로 저장</button>}</div></section> : <section className="generator-empty"><h2>추천 결과</h2><p>조건을 정한 뒤 자동 견적을 생성하세요.</p></section>}
     </div>
   </div>;
 }

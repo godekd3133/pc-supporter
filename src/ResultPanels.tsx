@@ -6,6 +6,7 @@ import { CATALOG_PRICE_EVIDENCE_LABELS, catalogPriceEvidenceDescriptionFor, cata
 import { type CatalogWatchEntry, CATALOG_WATCHLIST_STORAGE_KEY, addCatalogWatchEntry, catalogWatchEntryKey, catalogWatchlistContains, catalogWatchlistFromJson, catalogWatchlistToJson } from "../shared/catalog-watchlist";
 import { type PriceWatchDecisionHistory, priceWatchDecisionFor } from "../shared/price-watch-decision";
 import { buildPerformanceReportFor, FRAME_STABILITY_LABELS } from "../shared/relative-performance-index";
+import type { BuildPerformanceReport } from "../shared/relative-performance-index";
 import { repairPlanBuildFor } from "../shared/repair-plan-build";
 import { type AccessoryCategory, type AccessoryItem, type AccessoryRecommendation, type AccessorySelection, type BuildSelection, type BuildMetrics, type CompatibilityLink, type CompatibilityResult, type Finding, type M2SlotAssignment, type Part, type PartCategory, type RecommendationPlan, type RecommendationPreferences, type UpgradeCompatibilityEvidence, type UpgradeBudgetEvidence, type UpgradeRecommendation, ACCESSORY_CATEGORIES, ACCESSORY_CATEGORY_LABELS, CATEGORY_LABELS, DATA_FRESHNESS_LABELS, DATA_QUALITY_LABELS, GAMING_REFRESH_RATE_LABELS, GAMING_RESOLUTION_LABELS, GAMING_RESOLUTION_VRAM_TARGETS, isKnownPrice, LISTING_TYPE_LABELS, PART_CATEGORIES } from "../shared/types";
 import type { RepairPlanComparisonViewState } from "./RepairPlanComparison";
@@ -149,16 +150,13 @@ function PerformanceMetricHelp({ text, label }: { text: string; label: string })
   return <span className="performance-index-help" title={text} role="img" aria-label={`${label} 설명: ${text}`}><FiInfo /></span>;
 }
 
-export function PerformanceIndexPanel({ build, partMap }: { build: BuildSelection; partMap: ReadonlyMap<string, Part> }) {
-  const cpu = build.cpu ? partMap.get(build.cpu.partId) : undefined;
-  const gpu = build.gpu ? partMap.get(build.gpu.partId) : undefined;
-  const report = buildPerformanceReportFor({ cpu, gpu });
+export function PerformanceIndexMetricsPanel({ report, hasGpu }: { report: Pick<BuildPerformanceReport, "gamingIndex" | "frameStability" | "singleCorePercent" | "multiCorePercent">; hasGpu: boolean }) {
   const metrics = [
     {
       key: "gaming",
       label: "게임 성능",
       value: report.gamingIndex === undefined ? "미측정" : `${report.gamingIndex}%`,
-      detail: gpu ? "RTX 5060 Ti = 100" : cpu ? "내장 그래픽 기준" : "부품 미선택",
+      detail: hasGpu ? "RTX 5060 Ti = 100" : "내장 그래픽 기준",
       tooltip: PERFORMANCE_INDEX_TOOLTIPS.gaming
     },
     {
@@ -184,6 +182,13 @@ export function PerformanceIndexPanel({ build, partMap }: { build: BuildSelectio
     }
   ];
   return <section className="performance-index-panel" data-testid="performance-index-panel" aria-label="성능 지수 요약"><div className="performance-index-heading"><div><h2>성능 지수</h2><p>카탈로그 모델 규칙 기반 추정치예요. 실측 벤치마크가 아닙니다.</p></div><FiCpu /></div><div className="performance-index-grid">{metrics.map((metric) => <div className="performance-index-item" key={metric.key}><div className="performance-index-item-label"><span>{metric.label}</span><PerformanceMetricHelp label={metric.label} text={metric.tooltip} /></div><strong>{metric.value}</strong><small>{metric.detail}</small></div>)}</div></section>;
+}
+
+export function PerformanceIndexPanel({ build, partMap }: { build: BuildSelection; partMap: ReadonlyMap<string, Part> }) {
+  const cpu = build.cpu ? partMap.get(build.cpu.partId) : undefined;
+  const gpu = build.gpu ? partMap.get(build.gpu.partId) : undefined;
+  const report = buildPerformanceReportFor({ cpu, gpu });
+  return <PerformanceIndexMetricsPanel report={report} hasGpu={Boolean(gpu)} />;
 }
 
 export function M2SlotAssignmentPanel({ assignments, mode }: { assignments: M2SlotAssignment[]; mode?: BuildMetrics["m2SlotAssignmentMode"] }) {
