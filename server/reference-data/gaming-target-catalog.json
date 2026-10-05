@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 1,
+  "refreshedAt": "2026-10-04T22:15:58.919Z",
+  "parts": [
+    {
+      "id": "danawa-gpu-93704792",
+      "category": "gpu",
+      "name": "GIGABYTE 지포스 RTX 5060 Ti WINDFORCE MAX OC D7 16GB 피씨디렉트",
+      "brand": "GIGABYTE",
+      "model": "GIGABYTE 지포스 RTX 5060 Ti WINDFORCE MAX OC D7 16GB 피씨디렉트",
+      "imageUrl": "https://img.danuri.io/catalog-image/792/704/093/d4611b8152e240d9aca448ee3d19fa52.jpg?shrink=160:160&_v=20261004080443",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=93704792",
+      "source": "danawa",
+      "sourceProductCode": "93704792",
+      "sourceCategoryId": "112753",
+      "listingType": "retail",
+      "priceWon": 719200,
+      "rawSpecText": "RTX 5060 Ti / PCIe5.0x16(at x8) / 650W 이상 / 전원 포트: 8핀 x1 / 가로(길이): 208mm / 베이스클럭: 2407 / 부스트클럭: 2587MHz / 스트림 프로세서: 4608 / 최대 AI TOPS: 759(FP4) / GDDR7 / VRAM 대역폭: 448 GB/s / 출력단자: HDMI2.1 , DP2.1 / 지원정보: 8K 지원 , HDR 지원 , HDCP 2.3 / 2팬 / 두께: 40mm / 제로팬(0-dB기술) / 백플레이트 / A/S 3년",
+      "specs": {
+        "gpuVendor": "nvidia",
+        "gpuMemoryType": "GDDR7",
+        "gpuArchitectureFamily": "RTX 50",
+        "pcieSlotWidth": 16,
+        "pciePowerOptions": [
+          [
+            {
+              "kind": "pcie_8pin_6plus2",
+              "count": 1
+            }
+          ]
+        ],
+        "recommendedPsuW": 650,
+        "vramGb": 16,
+        "gpuBoostClockMhz": 2587,
+        "gpuStreamProcessors": 4608,
+        "gpuMemoryBandwidthGbps": 448,
+        "lengthMm": 208,
+        "thicknessMm": 40
+      },
+      "dataQuality": "incomplete",
+      "missingFields": [
+        "powerW"
+      ],
+      "updatedAt": "2026-10-04T22:15:58.431Z",
+      "priceCheckedAt": "2026-10-04T22:15:58.431Z"
+    },
+    {
+      "id": "danawa-gpu-81715985",
+      "category": "gpu",
+      "name": "GIGABYTE 지포스 RTX 5060 Ti WINDFORCE OC D7 16GB 피씨디렉트",
+      "brand": "GIGABYTE",
+      "model": "GIGABYTE 지포스 RTX 5060 Ti WINDFORCE OC D7 16GB 피씨디렉트",
+      "imageUrl": "https://img.danuri.io/catalog-image/985/715/081/c3233e476af84546a2b5c1a4cb5efc27.jpg?shrink=160:160&_v=20261004080404",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=81715985",
+      "source": "danawa",
+      "sourceProductCode": "81715985",
+      "sourceCategoryId": "112753",
+      "listingType": "retail",
+      "priceWon": 900000,
+      "rawSpecText": "RTX 5060 Ti / PCIe5.0x16(at x8) / 650W 이상 / 전원 포트: 8핀 x1 / 가로(길이): 208mm / 베이스클럭: 2407 / 부스트클럭: 2587MHz / 스트림 프로세서: 4608 / 최대 AI TOPS: 759(FP4) / GDDR7 / VRAM 대역폭: 448 GB/s / 출력단자: HDMI2.1 , DP2.1 / 지원정보: 8K 지원 , HDR 지원 , HDCP 2.3 / 2팬 / 두께: 40mm / 제로팬(0-dB기술) / 백플레이트 / A/S 3년",
+      "specs": {
+        "gpuVendor": "nvidia",
+        "gpuMemoryType": "GDDR7",
+        "gpuArchitectureFamily": "RTX 50",
+        "pcieSlotWidth": 16,
+        "pciePowerOptions": [
+          [
+            {
+              "kind": "pcie_8pin_6plus2",
+              "count": 1
+            }
+          ]
+        ],
+        "recommendedPsuW": 650,
+        "vramGb": 16,
+        "gpuBoostClockMhz": 2587,
+        "gpuStreamProcessors": 4608,
+        "gpuMemoryBandwidthGbps": 448,
+        "lengthMm": 208,
+        "thicknessMm": 40
+      },
+      "dataQuality": "incomplete",
+      "missingFields": [
+        "powerW"
+      ],
+      "updatedAt": "2026-10-04T22:15:58.917Z",
+      "priceCheckedAt": "2026-10-04T22:15:58.917Z"
+    }
+  ]
+}

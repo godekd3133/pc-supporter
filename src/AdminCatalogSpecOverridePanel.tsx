@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { FiAlertTriangle, FiCheckCircle, FiDatabase, FiEdit3, FiExternalLink, FiInfo, FiLoader, FiSave, FiSearch, FiTrash2, FiXCircle } from "react-icons/fi";
-import type { CatalogSpecOverride, CatalogSpecOverrideValueType } from "../shared/catalog-spec-overrides";
-import { catalogSpecOverrideFieldTypeFor } from "../shared/catalog-spec-overrides";
+import type { CatalogSpecOverride, CatalogSpecOverrideValue, CatalogSpecOverrideValueType } from "../shared/catalog-spec-overrides";
+import { catalogCaseSupportOverrideValueFor, catalogSpecOverrideFieldIsMissing, catalogSpecOverrideFieldTypeFor } from "../shared/catalog-spec-overrides";
 import { catalogSpecReviewFieldsFor } from "../shared/catalog-spec-review";
 import { catalogMissingFieldLabelFor } from "../shared/catalog-spec-coverage";
 import { physicalSourceCheckFreshness } from "../shared/physical-source-check";
@@ -36,7 +36,7 @@ function qualityText(part: Part) {
   return DATA_QUALITY_LABELS[part.dataQuality] ?? part.dataQuality;
 }
 
-function parseFieldValue(type: CatalogSpecOverrideValueType, raw: string): string | number | boolean | string[] | undefined {
+export function parseCatalogSpecOverrideFieldValue(type: CatalogSpecOverrideValueType, raw: string): CatalogSpecOverrideValue | undefined {
   const value = raw.trim();
   if (!value) return undefined;
   if (type === "number") {
@@ -52,11 +52,30 @@ function parseFieldValue(type: CatalogSpecOverrideValueType, raw: string): strin
     const values = value.split(",").map((item) => item.trim()).filter(Boolean);
     return values.length > 0 ? values : undefined;
   }
+  if (type === "number_list") {
+    const entries = value.split(",").map((item) => item.trim());
+    if (entries.some((item) => !item)) return undefined;
+    return catalogCaseSupportOverrideValueFor("radiatorSizesMm", entries.map(Number));
+  }
+  if (type === "radiator_support_list") {
+    try {
+      return catalogCaseSupportOverrideValueFor("radiatorSupports", JSON.parse(value));
+    } catch {
+      return undefined;
+    }
+  }
   return value;
 }
 
 function fieldInputValue(type: CatalogSpecOverrideValueType) {
   return type === "number" ? "number" : "text";
+}
+
+export function catalogSpecOverrideInputPlaceholder(type: CatalogSpecOverrideValueType, field: string) {
+  if (type === "radiator_support_list") return '[{"position":"top","sizesMm":[240],"requirements":[{"maxAssemblyThicknessMm":55}]}]';
+  if (type === "number_list") return "예: 120, 240, 360";
+  if (field === "supportedPsuFormFactors") return "예: ATX, SFX, SFX-L";
+  return type === "string_list" ? "쉼표로 구분" : type === "number" ? "숫자 입력" : "페이지 값 입력";
 }
 
 function formatDate(value: string) {
@@ -130,7 +149,7 @@ export function AdminCatalogSpecOverridePanel({ onToast }: { onToast: (message: 
     return () => { cancelled = true; };
   }, [overrideRefreshNonce]);
 
-  const editableFields = useMemo(() => selectedPart ? catalogSpecReviewFieldsFor(selectedPart.category).filter((field) => (selectedPart.missingFields.includes(field.field) || (selectedPart.specs as Record<string, unknown>)[field.field] === undefined) && catalogSpecOverrideFieldTypeFor(selectedPart.category, field.field) !== undefined) : [], [selectedPart]);
+  const editableFields = useMemo(() => selectedPart ? catalogSpecReviewFieldsFor(selectedPart.category).filter((field) => (catalogSpecOverrideFieldIsMissing(selectedPart.specs, field.field) || selectedPart.specs.catalogSpecProvenance?.fields.includes(field.field)) && catalogSpecOverrideFieldTypeFor(selectedPart.category, field.field) !== undefined) : [], [selectedPart]);
 
   function resetSourceBatchProgress() {
     setSourceBatchNextOffset(null);
@@ -190,7 +209,9 @@ export function AdminCatalogSpecOverridePanel({ onToast }: { onToast: (message: 
     const fields: Record<string, unknown> = {};
     for (const field of editableFields) {
       const type = catalogSpecOverrideFieldTypeFor(selectedPart.category, field.field);
-      const value = type ? parseFieldValue(type, fieldValues[field.field] ?? "") : undefined;
+      const rawValue = fieldValues[field.field] ?? "";
+      const value = type ? parseCatalogSpecOverrideFieldValue(type, rawValue) : undefined;
+      if (rawValue.trim() && value === undefined) return undefined;
       if (value !== undefined) fields[field.field] = value;
     }
     return { items: [{ partId: selectedPart.id, category: selectedPart.category, fields, manufacturerModel, sourceNote, sourceUrl }] };
@@ -203,7 +224,7 @@ export function AdminCatalogSpecOverridePanel({ onToast }: { onToast: (message: 
   async function validateSingle() {
     const input = singleInput();
     if (!input) {
-      onToast("수동으로 보완할 부품을 먼저 선택해 주세요.");
+      onToast("수동으로 보완할 부품과 입력값을 확인해 주세요.");
       return;
     }
     const serialized = jsonForInput(input);
@@ -425,7 +446,7 @@ export function AdminCatalogSpecOverridePanel({ onToast }: { onToast: (message: 
     <div className="admin-card-heading catalog-spec-override-heading"><div><h3>제조사 사양 직접 보완</h3><p>상품 페이지에 없는 호환 정보를 제조사 자료에서 확인해 입력합니다. 비어 있는 항목만 채우며 기존 사양은 바꾸지 않습니다.</p></div><span className="catalog-spec-override-icon"><FiEdit3 /></span></div>
     <form className="catalog-spec-override-search" onSubmit={searchParts}><label><span>범주</span><select aria-label="수동 스펙 보강 부품 범주" value={partCategory} onChange={(event) => { clearPartSearchEditor(); setPartSearching(false); setPartCategory(event.target.value as PartCategory); }} disabled={saving}><option value="gpu">그래픽카드</option><option value="case">케이스</option><option value="ssd">SSD</option><option value="motherboard">메인보드</option><option value="cpu">CPU</option><option value="memory">RAM</option><option value="psu">파워서플라이</option><option value="cooler">CPU 쿨러</option><option value="hdd">HDD</option></select></label><label className="catalog-spec-override-search-query"><span>부품 검색</span><input aria-label="수동 스펙 보강 부품 검색" value={partQuery} onChange={(event) => setPartQuery(event.target.value)} placeholder="모델명·브랜드·상품코드" disabled={saving} /></label><button className="button button-secondary button-small" type="submit" disabled={partSearching || saving}>{partSearching ? <><FiLoader className="spin" /> 검색 중...</> : <><FiSearch /> 검색</>}</button></form>
     {partResults.length > 0 && <div className="catalog-spec-override-search-results">{partResults.map((part) => <button type="button" className={selectedPart?.id === part.id ? "selected" : ""} onClick={() => selectPart(part)} key={part.id}><strong>{part.name}</strong><small>{part.id} · {qualityText(part)} · 누락 {part.missingFields.length > 0 ? part.missingFields.map((field) => catalogMissingFieldLabelFor(field)).join(" · ") : "없음"}</small></button>)}</div>}
-    {selectedPart && <div className="catalog-spec-override-editor"><div className="catalog-spec-override-selected"><div><strong>{selectedPart.name}</strong><small>{CATEGORY_LABELS[selectedPart.category]} · {selectedPart.id} · 현재 누락 {selectedPart.missingFields.length > 0 ? selectedPart.missingFields.map((field) => catalogMissingFieldLabelFor(field)).join(" · ") : "없음"}</small></div><button className="text-button" type="button" onClick={() => setSelectedPart(null)} disabled={saving}>선택 해제</button></div>{editableFields.length === 0 ? <p className="catalog-spec-override-state"><FiInfo /> 입력할 수 있는 누락 항목이 없습니다. 사양을 다시 확인하거나 이미 저장한 보완값을 확인해 주세요.</p> : <div className="catalog-spec-override-fields">{editableFields.map((field) => { const type = catalogSpecOverrideFieldTypeFor(selectedPart.category, field.field)!; return <label key={field.field}><span>{field.label}<small>{field.instruction}</small></span><input type={fieldInputValue(type)} value={fieldValues[field.field] ?? ""} onChange={(event) => { setFieldValues((current) => ({ ...current, [field.field]: event.target.value })); setValidation(null); setValidatedInput(""); }} placeholder={type === "string_list" ? "쉼표로 구분" : type === "number" ? "숫자 입력" : "페이지 값 입력"} disabled={saving} /></label>; })}</div>}<div className="catalog-spec-override-provenance"><label><span>제조사 모델/SKU</span><input aria-label="수동 스펙 보강 제조사 모델" value={manufacturerModel} onChange={(event) => { setManufacturerModel(event.target.value); setValidation(null); setValidatedInput(""); }} maxLength={160} disabled={saving} /></label><label><span>확인 정보 메모</span><textarea aria-label="수동 스펙 보강 출처 메모" value={sourceNote} onChange={(event) => { setSourceNote(event.target.value); setValidation(null); setValidatedInput(""); }} maxLength={500} placeholder="예: 제조사 공식 사양서 4쪽, 모델명 표기 확인" disabled={saving} /></label><label><span>HTTPS 페이지 URL</span><input aria-label="수동 스펙 보강 페이지 URL" type="url" value={sourceUrl} onChange={(event) => { setSourceUrl(event.target.value); setValidation(null); setValidatedInput(""); }} maxLength={1000} placeholder="https://..." disabled={saving} /></label></div><div className="catalog-spec-override-actions"><button className="button button-secondary button-small" type="button" onClick={() => void validateSingle()} disabled={saving || editableFields.length === 0}><FiCheckCircle /> JSON 확인</button><button className="button button-primary button-small" type="button" onClick={() => void saveSingle()} disabled={saving || !singleReady}>{saving ? <><FiLoader className="spin" /> 저장 중...</> : <><FiSave /> 확인값 저장</>}</button></div>{validation && <div className={validation.invalidCount === 0 ? "catalog-spec-override-validation valid" : "catalog-spec-override-validation invalid"} role="status"><strong>{validation.invalidCount === 0 ? <><FiCheckCircle /> 저장 가능</> : <><FiXCircle /> 저장 중단</>} · {validation.validCount}개 통과 · {validation.invalidCount}개 수정 필요</strong>{validation.items.flatMap((item) => item.errors).slice(0, 6).map((error) => <small key={error}>{error}</small>)}</div>}</div>}
+    {selectedPart && <div className="catalog-spec-override-editor"><div className="catalog-spec-override-selected"><div><strong>{selectedPart.name}</strong><small>{CATEGORY_LABELS[selectedPart.category]} · {selectedPart.id} · 입력 가능한 사양 {editableFields.length}개</small></div><button className="text-button" type="button" onClick={() => setSelectedPart(null)} disabled={saving}>선택 해제</button></div>{editableFields.length === 0 ? <p className="catalog-spec-override-state"><FiInfo /> 입력할 수 있는 누락 항목이 없습니다. 사양을 다시 확인하거나 이미 저장한 보완값을 확인해 주세요.</p> : <div className="catalog-spec-override-fields">{editableFields.map((field) => { const type = catalogSpecOverrideFieldTypeFor(selectedPart.category, field.field)!; return <label key={field.field}><span>{field.label}<small>{field.instruction}</small></span><input type={fieldInputValue(type)} value={fieldValues[field.field] ?? ""} onChange={(event) => { setFieldValues((current) => ({ ...current, [field.field]: event.target.value })); setValidation(null); setValidatedInput(""); }} placeholder={catalogSpecOverrideInputPlaceholder(type, field.field)} disabled={saving} /></label>; })}</div>}<div className="catalog-spec-override-provenance"><label><span>제조사 모델/SKU</span><input aria-label="수동 스펙 보강 제조사 모델" value={manufacturerModel} onChange={(event) => { setManufacturerModel(event.target.value); setValidation(null); setValidatedInput(""); }} maxLength={160} disabled={saving} /></label><label><span>확인 정보 메모</span><textarea aria-label="수동 스펙 보강 출처 메모" value={sourceNote} onChange={(event) => { setSourceNote(event.target.value); setValidation(null); setValidatedInput(""); }} maxLength={500} placeholder="예: 제조사 공식 사양서 4쪽, 모델명 표기 확인" disabled={saving} /></label><label><span>HTTPS 페이지 URL</span><input aria-label="수동 스펙 보강 페이지 URL" type="url" value={sourceUrl} onChange={(event) => { setSourceUrl(event.target.value); setValidation(null); setValidatedInput(""); }} maxLength={1000} placeholder="https://..." disabled={saving} /></label></div><div className="catalog-spec-override-actions"><button className="button button-secondary button-small" type="button" onClick={() => void validateSingle()} disabled={saving || editableFields.length === 0}><FiCheckCircle /> JSON 확인</button><button className="button button-primary button-small" type="button" onClick={() => void saveSingle()} disabled={saving || !singleReady}>{saving ? <><FiLoader className="spin" /> 저장 중...</> : <><FiSave /> 확인값 저장</>}</button></div>{validation && <div className={validation.invalidCount === 0 ? "catalog-spec-override-validation valid" : "catalog-spec-override-validation invalid"} role="status"><strong>{validation.invalidCount === 0 ? <><FiCheckCircle /> 저장 가능</> : <><FiXCircle /> 저장 중단</>} · {validation.validCount}개 통과 · {validation.invalidCount}개 수정 필요</strong>{validation.items.flatMap((item) => item.errors).slice(0, 6).map((error) => <small key={error}>{error}</small>)}</div>}</div>}
     <div className="catalog-spec-override-bulk"><button className="button button-light button-small" type="button" onClick={() => setBulkOpen((current) => !current)} aria-expanded={bulkOpen}><FiDatabase /> {bulkOpen ? "JSON 일괄 보강 닫기" : "JSON 일괄 보강"}</button>{bulkOpen && <div className="catalog-spec-override-bulk-body"><textarea aria-label="수동 사양 보완 JSON" value={bulkJson} onChange={(event) => { setBulkJson(event.target.value); setBulkValidation(null); setBulkValidatedInput(""); }} placeholder='{"items":[{"partId":"danawa-gpu-...","category":"gpu","fields":{"powerW":320},"manufacturerModel":"MODEL-SKU","sourceNote":"제조사 사양서 4쪽","sourceUrl":"https://..."}]}' disabled={saving} /><div className="catalog-spec-override-actions"><button className="button button-secondary button-small" type="button" onClick={() => void validateBulk()} disabled={saving || !bulkJson.trim()}><FiCheckCircle /> JSON 확인</button><button className="button button-primary button-small" type="button" onClick={() => void saveBulk()} disabled={saving || !bulkValidation || bulkValidation.invalidCount > 0 || bulkValidatedInput !== jsonForInput((() => { try { return JSON.parse(bulkJson); } catch { return undefined; } })())}><FiSave /> 일괄 저장</button></div>{bulkValidation && <div className={bulkValidation.invalidCount === 0 ? "catalog-spec-override-validation valid" : "catalog-spec-override-validation invalid"} role="status"><strong>{bulkValidation.invalidCount === 0 ? "일괄 저장 가능" : "일괄 저장 중단"} · {bulkValidation.validCount}개 통과 · {bulkValidation.invalidCount}개 수정 필요</strong>{bulkValidation.items.flatMap((item) => item.errors).slice(0, 8).map((error) => <small key={error}>{error}</small>)}</div>}</div>}</div>
     <AdminCatalogSpecOverrideList items={overrides} loading={overridesLoading} error={overridesError} onRefresh={refreshOverrides} onDelete={(partId) => void removeOverride(partId)} onCheckSource={(partId) => void checkSource(partId)} onCheckSourcesBatch={() => void checkSourcesBatch()} sourceBatchNextOffset={sourceBatchNextOffset} sourceBatchResult={sourceBatchResult} sourceCheckingPartId={sourceCheckingPartId} sourceHistoryPartId={sourceHistoryPartId} sourceHistory={sourceHistory} sourceHistoryLoading={sourceHistoryLoading} sourceHistoryError={sourceHistoryError} onToggleHistory={(partId) => void toggleSourceHistory(partId)} />
     <p className="catalog-spec-override-note"><FiInfo /> 수동 보완값은 기본 카탈로그 정보와 따로 저장됩니다. 여기서 입력한 항목만 호환성 검사에 반영됩니다. 제조사 안내에서 확인한 값만 입력해 주세요.</p>

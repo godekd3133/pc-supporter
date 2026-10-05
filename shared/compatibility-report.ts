@@ -9,6 +9,7 @@ import { buildActionCenterFor } from "./build-action-center";
 import { buildConnectivitySummaryFor } from "./build-connectivity";
 import { assemblyPlanFor } from "./assembly-plan";
 import { safeHttpsUrl } from "./safe-source-url";
+import { applyCheckedPartPriceSnapshot, checkedPartPriceSnapshotFromUnknown } from "./checked-part-price-snapshot";
 
 export type CompatibilityReportSection = "findings" | "purchase-list" | "purchase-checklist" | "purchase-decision" | "actions";
 
@@ -79,18 +80,20 @@ function preferenceLines(preferences: RecommendationPreferences | undefined) {
 const PRIVATE_PUBLIC_EXPORT_KEY = /benchmark|cinebench|3dmark|time.?spy|port.?royal|fps|trust|score|confidence|analysisChanged|improvementPercent|performanceSummary|gamingPerformanceAssessment|^weight$/i;
 const PRIVATE_PUBLIC_EXPORT_TEXT = /cinebench|time\s*spy|port\s*royal|3dmark|benchmark|벤치마크|recommendation.?trust|trust\s*score|추천\s*신뢰|신뢰도|(?:카탈로그|성능)\s*분석(?:\s*점수)?\s*[:：]?\s*\d+|\bfps\b|초당\s*프레임/i;
 
-function publicReportValue(value: unknown, parentKey = ""): unknown {
-  if (PRIVATE_PUBLIC_EXPORT_KEY.test(parentKey)) return undefined;
-  if (typeof value === "string") return PRIVATE_PUBLIC_EXPORT_TEXT.test(value) ? undefined : value;
-  if (Array.isArray(value)) return value.map((item) => publicReportValue(item, parentKey)).filter((item) => item !== undefined);
+function publicReportValue(value: unknown, parentKey = "", targetScope = false): unknown {
+  targetScope ||= parentKey === "gamingTargetAssessment";
+  const allowedFpsKey = (key: string) => targetScope && ["targetFps", "averageFps", "onePercentLowFps", "sourceAverageFps", "sourceOnePercentLowFps", "referenceTargetRatio", "minimumTargetRatio"].includes(key);
+  if (PRIVATE_PUBLIC_EXPORT_KEY.test(parentKey) && !allowedFpsKey(parentKey)) return undefined;
+  if (typeof value === "string") return !targetScope && PRIVATE_PUBLIC_EXPORT_TEXT.test(value) ? undefined : value;
+  if (Array.isArray(value)) return value.map((item) => publicReportValue(item, parentKey, targetScope)).filter((item) => item !== undefined);
   if (value && typeof value === "object") {
     const record = value as Record<string, unknown>;
     if (parentKey === "analysis") return { nextActions: publicReportValue(record.nextActions ?? [], "nextActions") };
     if (parentKey === "dimensions" && typeof record.key === "string" && /cinebench|time\s*spy|port\s*royal|3dmark/i.test(record.key)) return undefined;
     const publicEntries: Array<[string, unknown]> = [];
     for (const [key, entry] of Object.entries(record)) {
-      if (PRIVATE_PUBLIC_EXPORT_KEY.test(key)) continue;
-      const safeValue = publicReportValue(entry, key);
+      if (PRIVATE_PUBLIC_EXPORT_KEY.test(key) && !allowedFpsKey(key)) continue;
+      const safeValue = publicReportValue(entry, key, targetScope);
       if (safeValue !== undefined) publicEntries.push([key, safeValue]);
     }
     return Object.fromEntries(publicEntries);
@@ -391,7 +394,7 @@ function repairPlanLines(result: CompatibilityResult) {
     }
     if (plan.resolvedFindingTitles.length > 0) lines.push(`- 해결 범위 상세: ${plan.resolvedFindingTitles.join(" · ")}`);
     if (plan.remainingFindingTitles && plan.remainingFindingTitles.length > 0) lines.push(`- 적용 후 남는 항목: ${plan.remainingFindingTitles.join(" · ")}`);
-    if (plan.remainingFindingRuleIds && plan.remainingFindingRuleIds.length > 0) lines.push(`- 잔여 규칙 ID: ${plan.remainingFindingRuleIds.join(" · ")}`);
+    if (plan.remainingFindingRuleIds?.length && !plan.remainingFindingTitles?.length) lines.push(`- 아직 확인할 항목: ${plan.remainingFindingRuleIds.length}개`);
     if (plan.changes.length > 0) {
       lines.push("변경 부품:", ...plan.changes.map(repairPlanChangeLine));
     } else {
@@ -475,6 +478,9 @@ function assemblyPlanLines(build: BuildSelection, result: CompatibilityResult) {
 }
 
 export function compatibilityReportTextFor(inputResult: CompatibilityResult, build: BuildSelection, partMap: ReadonlyMap<string, Part>, accessoryMap: ReadonlyMap<string, AccessoryItem>, viewState?: CompatibilityReportViewState, savedCheckSnapshot?: SavedBuildCheckSnapshot) {
+  const checkedPrices = checkedPartPriceSnapshotFromUnknown(inputResult.partPriceSnapshot);
+  if (checkedPrices) partMap = new Map(applyCheckedPartPriceSnapshot([...partMap.values()], checkedPrices).map((part) => [part.id, part]));
+
   const result = publicReportValue(inputResult) as CompatibilityResult;
   const publicSavedCheckSnapshot = savedCheckSnapshot ? publicReportValue(savedCheckSnapshot) as SavedBuildCheckSnapshot : undefined;
   const coreTotal = result.coreTotalPriceWon ?? result.totalPriceWon - (result.accessoryTotalPriceWon ?? 0);
@@ -493,7 +499,7 @@ export function compatibilityReportTextFor(inputResult: CompatibilityResult, bui
     ...viewStateLines(viewState),
     ...(publicSavedCheckSnapshot ? savedBuildRecheckLines(publicSavedCheckSnapshot, result) : []),
     "",
-    "[추천 기준]",
+    "[견적 조건]",
     ...preferenceLines(result.recommendationPreferences),
     "",
     "[선택한 핵심 부품]"
@@ -517,6 +523,17 @@ export function compatibilityReportTextFor(inputResult: CompatibilityResult, bui
     `- 주변 부품: ${accessoryComplete ? priceText(accessoryTotal) : "-"}`,
     `- 전체 합계: ${result.priceComplete ? priceText(result.totalPriceWon) : "-"}`,
     "",
+    ...(result.gamingTargetAssessment ? [
+      "[게임 FPS 테스트 결과]",
+      `목표: ${result.gamingTargetAssessment.targetFps} FPS · ${result.gamingTargetAssessment.resolution}`,
+      result.gamingTargetAssessment.note,
+      ...result.gamingTargetAssessment.measurements.flatMap((measurement) => [
+        `${measurement.gameId}: 테스트 PC 평균 ${measurement.sourceAverageFps} FPS${measurement.sourceOnePercentLowFps !== undefined ? ` · 1% low ${measurement.sourceOnePercentLowFps} FPS` : ""}`,
+        `테스트 PC: ${measurement.sourceConditions.cpuModel} · ${measurement.sourceConditions.gpuModel} ${measurement.sourceConditions.gpuVramGb}GB · ${measurement.sourceConditions.sourcePreset} · ${measurement.sourceConditions.memoryType}-${measurement.sourceConditions.memorySpeedMhz}`,
+        ...measurement.differences, measurement.sourceConditions.sourceUrl
+      ]),
+      ...result.gamingTargetAssessment.missingGameIds.map((id) => `${id}: 같은 설정의 FPS 테스트 없음`), ""
+    ] : []),
     ...gpuFitLines(result),
     ...connectivityLines(build, partMap),
     ...actionCenterLines(result, build, partMap),

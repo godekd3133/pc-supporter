@@ -774,6 +774,40 @@ describe("compatibility engine", () => {
     expect(result.analysis.nextActions.some((action) => action.includes("파워"))).toBe(true);
   });
 
+  it("blocks a 500W PSU below a confirmed 650W GPU recommendation even when GPU consumption is missing", () => {
+    const build = compatibleBuild();
+    build.psu = { partId: "psu-650w", quantity: 1 };
+    const catalog = seedCatalog.map((part): Part => part.id === "gpu-rtx-4060"
+      ? { ...part, specs: { ...part.specs, powerW: undefined, recommendedPsuW: 650 } }
+      : part.id === "psu-650w" ? { ...part, specs: { ...part.specs, wattageW: 500 } } : part);
+    const result = evaluateBuild(build, catalog, { includeSuggestions: false });
+    const finding = result.findings.find((item) => item.ruleId === "gpu-psu-power");
+    expect(finding?.severity).toBe("blocker");
+    expect(finding?.facts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: "권장 파워 용량", expected: "650W" }),
+      expect.objectContaining({ label: "선택한 파워 용량", actual: "500W" })
+    ]));
+    expect(finding?.facts.some((fact) => fact.label === "그래픽카드 소비전력")).toBe(false);
+    expect(result.gpuFit?.power.status).toBe("incompatible");
+    expect(catalog.find((part) => part.id === "gpu-rtx-4060")?.specs.powerW).toBeUndefined();
+  });
+
+  it("reports only missing GPU consumption while preserving a confirmed 650W recommendation and 700W PSU", () => {
+    const build = compatibleBuild();
+    build.psu = { partId: "psu-650w", quantity: 1 };
+    const catalog = seedCatalog.map((part): Part => part.id === "gpu-rtx-4060"
+      ? { ...part, specs: { ...part.specs, powerW: undefined, recommendedPsuW: 650 } }
+      : part.id === "psu-650w" ? { ...part, specs: { ...part.specs, wattageW: 700 } } : part);
+    const finding = evaluateBuild(build, catalog, { includeSuggestions: false }).findings.find((item) => item.ruleId === "gpu-psu-power");
+    expect(finding?.severity).toBe("unknown");
+    expect(finding?.facts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: "권장 파워 용량", expected: "650W" }),
+      expect.objectContaining({ label: "선택한 파워 용량", actual: "700W" })
+    ]));
+    expect(finding?.facts.filter((fact) => fact.label === "누락된 정보")).toHaveLength(1);
+    expect(finding?.facts.filter((fact) => fact.label === "누락된 정보")[0].actual).toBe("GPU 소비전력");
+  });
+
   it("keeps multi-target replacement suggestions representative of each replacement category", () => {
     const build = compatibleBuild();
     build.gpu = { partId: "gpu-rtx-5090", quantity: 1 };
@@ -4790,16 +4824,18 @@ describe("generator quote reliability regressions", () => {
   });
 
   it("exposes tier adjacency and regenerates with pinned parts for balance adjustments", () => {
-    const cpuMid: Part = withSpecs(baseCpu, { cores: 6, threads: 12, boostClockGhz: 4.4, integratedGraphics: false, cinebenchR23Single: 1500, cinebenchR23Multi: 11000 });
+    const cpuMid: Part = withSpecs(baseCpu, { cores: 6, threads: 12, boostClockGhz: 4.4, integratedGraphics: false, cinebenchR23Single: 1500, cinebenchR23Multi: 11000 }, 200_000);
     cpuMid.id = "cpu-mid";
-    cpuMid.name = "AMD 라이젠5-4세대 5600 (버미어)";
-    const cpuHigh: Part = withSpecs(baseCpu, { cores: 8, threads: 16, boostClockGhz: 5.5, integratedGraphics: false, cinebenchR23Single: 2200, cinebenchR23Multi: 21000 });
+    // Both fixtures must be eligible under the current-generation catalog
+    // policy, and have distinct prices for a price-directional ± neighbor.
+    cpuMid.name = "AMD 라이젠5-6세대 9600X (그래니트 릿지)";
+    const cpuHigh: Part = withSpecs(baseCpu, { cores: 8, threads: 16, boostClockGhz: 5.5, integratedGraphics: false, cinebenchR23Single: 2200, cinebenchR23Multi: 21000 }, 390_000);
     cpuHigh.id = "cpu-high";
     cpuHigh.name = "AMD 라이젠7-6세대 9700X (그래니트 릿지)";
-    const gpuLow: Part = withSpecs(baseGpu, { gpu3dmarkTimeSpyScore: 9000, vramGb: 8, powerW: 130, recommendedPsuW: 550 });
+    const gpuLow: Part = withSpecs(baseGpu, { gpu3dmarkTimeSpyScore: 9000, vramGb: 8, powerW: 130, recommendedPsuW: 550 }, 280_000);
     gpuLow.id = "gpu-low";
     gpuLow.name = "지포스 RTX 5050 저가형";
-    const gpuHigh: Part = withSpecs(baseGpu, { gpu3dmarkTimeSpyScore: 16000, vramGb: 16, powerW: 180, recommendedPsuW: 600 });
+    const gpuHigh: Part = withSpecs(baseGpu, { gpu3dmarkTimeSpyScore: 16000, vramGb: 16, powerW: 180, recommendedPsuW: 600 }, 550_000);
     gpuHigh.id = "gpu-high";
     gpuHigh.name = "지포스 RTX 5060 Ti 고급형";
     const catalog = fixtureCatalog({ cpus: [cpuMid, cpuHigh], gpus: [gpuLow, gpuHigh] });

@@ -1,5 +1,6 @@
 import type { BuildSelection, RecommendationPreferences } from "./types";
 import { parseBuildTransfer } from "./build-transfer";
+import { recommendationPreferencesFingerprintFieldsFor } from "./build-fingerprint";
 
 export type BuildDraftLoadStatus = "empty" | "valid" | "recovered";
 
@@ -48,14 +49,7 @@ function buildDraftKeyFor(build: BuildSelection) {
 }
 
 function recommendationPreferencesKeyFor(preferences: RecommendationPreferences) {
-  return JSON.stringify({
-    profile: preferences.profile,
-    priority: preferences.priority,
-    listingPolicy: preferences.listingPolicy ?? "retail_only",
-    budgetWon: preferences.budgetWon ?? null,
-    gamingResolution: preferences.gamingResolution ?? null,
-    gamingRefreshRate: preferences.profile === "gaming" ? preferences.gamingRefreshRate ?? 144 : null
-  });
+  return JSON.stringify(recommendationPreferencesFingerprintFieldsFor(preferences));
 }
 
 export function parseBuildDraftStorage(raw: string | null | undefined): BuildDraftLoadResult {

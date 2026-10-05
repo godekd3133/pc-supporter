@@ -11,8 +11,9 @@ import { repairPlanBuildFor } from "../shared/repair-plan-build";
 import { type AccessoryCategory, type AccessoryItem, type AccessoryRecommendation, type AccessorySelection, type BuildSelection, type BuildMetrics, type CompatibilityLink, type CompatibilityResult, type Finding, type M2SlotAssignment, type Part, type PartCategory, type RecommendationPlan, type RecommendationPreferences, type UpgradeCompatibilityEvidence, type UpgradeBudgetEvidence, type UpgradeRecommendation, ACCESSORY_CATEGORIES, ACCESSORY_CATEGORY_LABELS, CATEGORY_LABELS, DATA_FRESHNESS_LABELS, DATA_QUALITY_LABELS, GAMING_REFRESH_RATE_LABELS, GAMING_RESOLUTION_LABELS, GAMING_RESOLUTION_VRAM_TARGETS, isKnownPrice, LISTING_TYPE_LABELS, PART_CATEGORIES } from "../shared/types";
 import type { RepairPlanComparisonViewState } from "./RepairPlanComparison";
 import { api } from "./api";
-import { safeExternalUrl } from "./safe-source-url";
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
+import { safeExternalUrl, safeHttpsUrl } from "./safe-source-url";
+import { Suspense, lazy, useEffect, useId, useMemo, useRef, useState } from "react";
+import "./performance-metrics.css";
 import type { IconType } from "react-icons";
 import { FiActivity, FiArrowLeft, FiBox, FiCheck, FiCheckCircle, FiChevronDown, FiClock, FiCpu, FiDatabase, FiEdit3, FiExternalLink, FiHardDrive, FiInfo, FiLayers, FiLoader, FiMonitor, FiPlus, FiRefreshCw, FiSearch, FiShare2, FiTool, FiXCircle, FiZap } from "react-icons/fi";
 import { formatPriceDelta, formatSpecValue, formatWon, similarityEvidenceText, suggestionSpecRows } from "./app-format";
@@ -101,7 +102,7 @@ export function BuildHealthPanel({ metrics, gpuSelected, psuSelected, caseSelect
       tone: metrics.powerHeadroomW !== undefined && metrics.powerHeadroomW < 0 ? "danger" : metrics.powerHeadroomW !== undefined && metrics.powerHeadroomW < 120 ? "warning" : "good"
     },
     {
-      label: "메모리 사용",
+      label: "메모리 용량",
       value: metrics.totalMemoryGb === undefined ? "정보 부족" : `${metrics.totalMemoryGb}GB`,
       detail: metrics.memorySlotsUsed !== undefined && metrics.memorySlotsTotal !== undefined ? `${metrics.memorySlotsUsed} / ${metrics.memorySlotsTotal} 슬롯` : "메모리 슬롯 수 정보 부족",
       Icon: FiDatabase,
@@ -116,15 +117,15 @@ export function BuildHealthPanel({ metrics, gpuSelected, psuSelected, caseSelect
     },
     {
       label: "GPU 장착 길이",
-      value: metrics.gpuLengthMm === undefined ? "미선택" : `${metrics.gpuLengthMm}mm`,
+      value: metrics.gpuLengthMm === undefined ? gpuSelected ? "길이 정보 없음" : "외장 GPU 없음" : `${metrics.gpuLengthMm}mm`,
       detail: metrics.gpuLengthMm !== undefined && metrics.maxGpuLengthMm !== undefined ? `케이스 허용 ${metrics.maxGpuLengthMm}mm` : "그래픽카드·케이스 길이 정보 부족",
       Icon: FiMonitor,
-      tone: metrics.gpuLengthMm !== undefined && metrics.maxGpuLengthMm !== undefined && metrics.gpuLengthMm > metrics.maxGpuLengthMm ? "danger" : "good"
+      tone: metrics.gpuLengthMm !== undefined && metrics.maxGpuLengthMm !== undefined && metrics.gpuLengthMm > metrics.maxGpuLengthMm ? "danger" : gpuSelected && (metrics.gpuLengthMm === undefined || metrics.maxGpuLengthMm === undefined) ? "warning" : "good"
     },
     {
       label: "GPU 두께",
       value: metrics.gpuThicknessMm === undefined ? gpuSelected ? "정보 부족" : "미선택" : `${metrics.gpuThicknessMm}mm`,
-      detail: metrics.gpuThicknessMm === undefined ? "그래픽카드 두께 정보 부족" : metrics.gpuThicknessMm >= 55 ? "두꺼운 GPU · 주변 슬롯 간섭 확인" : "55mm 주의 기준 미만 · 실제 간섭은 정보 부족",
+      detail: metrics.gpuThicknessMm === undefined ? "그래픽카드 두께 정보 없음" : metrics.gpuThicknessMm >= 55 ? "주변 슬롯과 부딪히지 않는지 확인하세요" : "GPU 두께 외에 슬롯 위치와 케이스 공간도 확인하세요",
       Icon: FiLayers,
       tone: gpuSelected && (metrics.gpuThicknessMm === undefined || metrics.gpuThicknessMm >= 55) ? "warning" : "good"
     },
@@ -136,52 +137,74 @@ export function BuildHealthPanel({ metrics, gpuSelected, psuSelected, caseSelect
       tone: metrics.psuClearanceMm !== undefined && metrics.psuClearanceMm < 0 ? "danger" : psuSelected && caseSelected && metrics.psuClearanceMm === undefined ? "warning" : "good"
     }
   ];
-  return <section className="health-panel" data-testid="data-health-panel"><div className="health-heading"><div><h2>구성 자원 확인</h2></div><span><FiActivity /> 규칙으로 확인</span></div><div className="health-grid">{healthItems.map(({ label, value, detail, Icon, tone }) => <div className={`health-item ${tone}`} key={label}><span className="health-icon"><Icon /></span><div><span>{label}</span><strong>{value}</strong><small>{detail}</small></div></div>)}</div></section>;
+  return <section className="health-panel" data-testid="data-health-panel"><div className="health-heading"><div><h2>전력·용량·장착 공간</h2></div><span><FiActivity /> 부품 사양 비교</span></div><div className="health-grid">{healthItems.map(({ label, value, detail, Icon, tone }) => <div className={`health-item ${tone}`} key={label}><span className="health-icon"><Icon /></span><div><span>{label}</span><strong>{value}</strong><small>{detail}</small></div></div>)}</div></section>;
 }
 
 const PERFORMANCE_INDEX_TOOLTIPS = {
-  gaming: "선택한 그래픽카드의 상대 게임 성능 지수예요. RTX 5060 Ti를 100으로 잡은 카탈로그 모델 규칙 기준 추정치라 실측 FPS가 아닙니다.",
-  frameStability: "게임 중 프레임 하한선(1% low 체감)이 얼마나 안정적인지에 대한 추정 등급이에요. CPU 싱글코어 성능과 X3D급 대용량 캐시 여부로 판정합니다.",
-  singleCore: "선택한 CPU의 싱글코어 상대 성능이에요. 최상급 싱글코어(R23 2300점급)를 100%로 둔 추정치입니다.",
-  multiCore: "선택한 CPU의 멀티코어 상대 성능이에요. 플래그십급(R23 45000점급)을 100%로 둔 추정치입니다."
+  gaming: "참고 영상의 QHD 게임 테스트에서 RTX 5060 Ti 16GB를 100%로 두고 비교한 값입니다. 실제 FPS는 게임·옵션·CPU에 따라 달라져요.",
+  frameStability: "CPU 싱글코어 성능과 캐시 용량으로 비교한 예상 등급입니다. 게임별 1% low를 직접 측정한 결과는 아니에요.",
+  singleCore: "한 코어를 사용하는 작업의 상대 성능입니다. Core i5-13600K를 100%로 비교해요. 이 모델은 참고 영상에 없어 추정값을 표시합니다.",
+  multiCore: "여러 코어를 함께 사용하는 작업의 상대 성능입니다. Core i5-14600K를 100%로 비교해요. 이 모델은 참고 영상에 없어 추정값을 표시합니다."
 } as const;
 
 function PerformanceMetricHelp({ text, label }: { text: string; label: string }) {
-  return <span className="performance-index-help" title={text} role="img" aria-label={`${label} 설명: ${text}`}><FiInfo /></span>;
+  const tooltipId = useId();
+  const [open, setOpen] = useState(false);
+  return <span className="performance-metric-help" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
+    <button type="button" className="performance-metric-help-button" aria-label={`${label} 설명`} aria-describedby={open ? tooltipId : undefined} aria-expanded={open} onFocus={(event) => { if (event.currentTarget.matches(":focus-visible")) setOpen(true); }} onBlur={() => setOpen(false)} onClick={() => setOpen(true)} onKeyDown={(event) => { if (event.key === "Escape") { setOpen(false); event.stopPropagation(); } }}>?</button>
+    <span id={tooltipId} className="performance-metric-tooltip" role="tooltip" hidden={!open}>{text}</span>
+  </span>;
 }
 
-export function PerformanceIndexMetricsPanel({ report, hasGpu }: { report: Pick<BuildPerformanceReport, "gamingIndex" | "frameStability" | "singleCorePercent" | "multiCorePercent">; hasGpu: boolean }) {
+type DisplayPerformanceMetrics = Pick<BuildPerformanceReport, "gamingIndex" | "frameStability" | "singleCorePercent" | "multiCorePercent"> & {
+  gamingEvidenceKind?: string;
+  gamingSource?: string | { url: string };
+  cpuEvidenceKind?: string;
+  cpuSource?: string | { url: string };
+};
+
+export function PerformanceIndexMetricsPanel({ report, hasGpu }: { report: DisplayPerformanceMetrics; hasGpu: boolean }) {
+  const gamingVideoVerified = report.gamingEvidenceKind === "verified_video" || report.gamingEvidenceKind === "video_table";
+  const cpuVideoVerified = report.cpuEvidenceKind === "verified_video" || report.cpuEvidenceKind === "video_table";
+  const videoUrlFor = (source: string | { url: string } | undefined) => {
+    const url = safeHttpsUrl(typeof source === "string" ? source : source?.url);
+    if (!url) return undefined;
+    const parsed = new URL(url);
+    return !parsed.username && !parsed.password && !parsed.port && ["youtu.be", "youtube.com", "www.youtube.com"].includes(parsed.hostname) ? url : undefined;
+  };
+  const gamingSourceUrl = videoUrlFor(report.gamingSource);
+  const cpuSourceUrl = videoUrlFor(report.cpuSource);
   const metrics = [
     {
       key: "gaming",
       label: "게임 성능",
-      value: report.gamingIndex === undefined ? "미측정" : `${report.gamingIndex}%`,
-      detail: hasGpu ? "RTX 5060 Ti = 100" : "내장 그래픽 기준",
-      tooltip: PERFORMANCE_INDEX_TOOLTIPS.gaming
+      value: report.gamingIndex === undefined ? "자료 없음" : `${report.gamingIndex}%`,
+      detail: report.gamingIndex === undefined ? "비교할 성능 자료가 없어요" : gamingVideoVerified ? "QHD · RTX 5060 Ti 16GB = 100%" : hasGpu ? "모델별 추정값" : "내장 그래픽 추정값",
+      tooltip: report.gamingIndex === undefined ? "이 부품의 게임 성능을 비교할 자료가 없어요." : gamingVideoVerified ? PERFORMANCE_INDEX_TOOLTIPS.gaming : "이 모델은 참고 영상에 없어 추정값을 표시합니다. RTX 5060 Ti 16GB를 100%로 비교하며, 실제 FPS는 게임·옵션·CPU에 따라 달라져요."
     },
     {
       key: "frame-stability",
       label: "프레임 안정성",
-      value: report.frameStability === undefined ? "미측정" : FRAME_STABILITY_LABELS[report.frameStability],
-      detail: "CPU 싱글코어·캐시 기준",
-      tooltip: PERFORMANCE_INDEX_TOOLTIPS.frameStability
+      value: report.frameStability === undefined ? "자료 없음" : FRAME_STABILITY_LABELS[report.frameStability],
+      detail: report.frameStability === undefined ? "비교할 CPU 자료가 없어요" : "CPU 성능·캐시로 추정",
+      tooltip: report.frameStability === undefined ? "프레임 안정성을 비교할 CPU 성능 자료가 없어요." : PERFORMANCE_INDEX_TOOLTIPS.frameStability
     },
     {
       key: "single-core",
-      label: "싱글코어",
-      value: report.singleCorePercent === undefined ? "미측정" : `${report.singleCorePercent}%`,
-      detail: "R23 2300점급 = 100%",
-      tooltip: PERFORMANCE_INDEX_TOOLTIPS.singleCore
+      label: "싱글코어 성능",
+      value: report.singleCorePercent === undefined ? "자료 없음" : `${report.singleCorePercent}%`,
+      detail: report.singleCorePercent === undefined ? "비교할 CPU 자료가 없어요" : cpuVideoVerified ? "Core i5-13600K = 100%" : "Core i5-13600K = 100% · 추정",
+      tooltip: report.singleCorePercent === undefined ? "이 CPU의 싱글코어 성능을 비교할 자료가 없어요." : cpuVideoVerified ? "참고 영상의 Cinebench R23 싱글코어 결과입니다. Core i5-13600K를 100%로 두며, 한 코어를 사용하는 작업의 처리 속도를 비교할 수 있어요." : PERFORMANCE_INDEX_TOOLTIPS.singleCore
     },
     {
       key: "multi-core",
-      label: "멀티코어",
-      value: report.multiCorePercent === undefined ? "미측정" : `${report.multiCorePercent}%`,
-      detail: "R23 45000점급 = 100%",
-      tooltip: PERFORMANCE_INDEX_TOOLTIPS.multiCore
+      label: "멀티코어 성능",
+      value: report.multiCorePercent === undefined ? "자료 없음" : `${report.multiCorePercent}%`,
+      detail: report.multiCorePercent === undefined ? "비교할 CPU 자료가 없어요" : cpuVideoVerified ? "Core i5-14600K = 100%" : "Core i5-14600K = 100% · 추정",
+      tooltip: report.multiCorePercent === undefined ? "이 CPU의 멀티코어 성능을 비교할 자료가 없어요." : cpuVideoVerified ? "참고 영상의 Cinebench R23 멀티코어 결과입니다. Core i5-14600K를 100%로 두며, 여러 코어를 함께 쓰는 렌더링·인코딩 속도를 비교할 수 있어요." : PERFORMANCE_INDEX_TOOLTIPS.multiCore
     }
   ];
-  return <section className="performance-index-panel" data-testid="performance-index-panel" aria-label="성능 지수 요약"><div className="performance-index-heading"><div><h2>성능 지수</h2><p>카탈로그 모델 규칙 기반 추정치예요. 실측 벤치마크가 아닙니다.</p></div><FiCpu /></div><div className="performance-index-grid">{metrics.map((metric) => <div className="performance-index-item" key={metric.key}><div className="performance-index-item-label"><span>{metric.label}</span><PerformanceMetricHelp label={metric.label} text={metric.tooltip} /></div><strong>{metric.value}</strong><small>{metric.detail}</small></div>)}</div></section>;
+  return <section className="performance-index-panel" data-testid="performance-index-panel" aria-label="게임·CPU 성능 비교"><div className="performance-index-heading"><div><h2>성능 비교</h2><p>게임·CPU 성능은 기준 모델을 100%로 비교합니다. ?에서 계산 기준을 확인할 수 있어요.</p></div><FiCpu /></div><div className="performance-index-grid">{metrics.map((metric) => <div className="performance-index-item" key={metric.key}><div className="performance-index-item-label"><span>{metric.label}</span><PerformanceMetricHelp label={metric.label} text={metric.tooltip} /></div><strong>{metric.value}</strong><small>{metric.detail}</small></div>)}</div>{(gamingSourceUrl || cpuSourceUrl) && <p className="performance-metric-sources">{gamingVideoVerified && gamingSourceUrl && <a href={gamingSourceUrl} target="_blank" rel="noreferrer">GPU 테스트 영상</a>}{cpuVideoVerified && cpuSourceUrl && <a href={cpuSourceUrl} target="_blank" rel="noreferrer">CPU 테스트 영상</a>}</p>}</section>;
 }
 
 export function PerformanceIndexPanel({ build, partMap }: { build: BuildSelection; partMap: ReadonlyMap<string, Part> }) {
@@ -192,9 +215,9 @@ export function PerformanceIndexPanel({ build, partMap }: { build: BuildSelectio
 }
 
 export function M2SlotAssignmentPanel({ assignments, mode }: { assignments: M2SlotAssignment[]; mode?: BuildMetrics["m2SlotAssignmentMode"] }) {
-  const connectionLabels: Record<string, string> = { cpu: "CPU 직결", chipset: "칩셋", unknown: "연결 주체 확인" };
+  const connectionLabels: Record<string, string> = { cpu: "CPU 직결", chipset: "칩셋", unknown: "CPU·칩셋 연결 정보 없음" };
   const isManual = mode === "manual";
-  return <section className="m2-assignment-panel"><div className="m2-assignment-heading"><div><p className="eyebrow">M.2 슬롯</p><h2>{isManual ? "수동 지정 슬롯 배치" : "자동 계산 슬롯 배치"}</h2><p>{isManual ? "선택한 SSD를 지정한 M.2 슬롯에 배치했어요." : "메인보드의 M.2 슬롯 규격에 맞는 SSD 연결 위치예요."}</p></div><FiHardDrive /></div><div className="m2-assignment-list">{assignments.map((assignment) => <div className="m2-assignment-row" key={`${assignment.slotId}-${assignment.partId}`}><span className="m2-assignment-slot">{assignment.slotId}</span><div><strong>{assignment.partName}</strong><small>{assignment.interface ?? "인터페이스 확인"} · 슬롯 PCIe {assignment.slotPcieGeneration?.toFixed(1) ?? "정보 부족"} · 실제 링크 PCIe {assignment.linkGeneration?.toFixed(1) ?? "정보 부족"} · {assignment.connection ? connectionLabels[assignment.connection] ?? assignment.connection : "연결 주체 확인"}</small><small>{assignment.sharedWith && assignment.sharedWith.length > 0 ? `공유 대상: ${assignment.sharedWith.join(", ")}` : "공유 대상 없음으로 등록"}</small></div></div>)}</div><p className="m2-assignment-note"><FiInfo /> 슬롯 위치는 메인보드와 SSD 사양에 따라 달라질 수 있어요.</p></section>;
+  return <section className="m2-assignment-panel"><div className="m2-assignment-heading"><div><p className="eyebrow">M.2 슬롯</p><h2>{isManual ? "수동 지정 슬롯 배치" : "자동 계산 슬롯 배치"}</h2><p>{isManual ? "선택한 SSD를 지정한 M.2 슬롯에 배치했어요." : "메인보드의 M.2 슬롯 규격에 맞는 SSD 연결 위치예요."}</p></div><FiHardDrive /></div><div className="m2-assignment-list">{assignments.map((assignment) => <div className="m2-assignment-row" key={`${assignment.slotId}-${assignment.partId}`}><span className="m2-assignment-slot">{assignment.slotId}</span><div><strong>{assignment.partName}</strong><small>{assignment.interface ?? "인터페이스 확인"} · 슬롯 PCIe {assignment.slotPcieGeneration?.toFixed(1) ?? "정보 부족"} · 실제 링크 PCIe {assignment.linkGeneration?.toFixed(1) ?? "정보 부족"} · {assignment.connection ? connectionLabels[assignment.connection] ?? assignment.connection : "CPU·칩셋 연결 정보 없음"}</small><small>{assignment.sharedWith && assignment.sharedWith.length > 0 ? `대역폭 공유: ${assignment.sharedWith.join(", ")}` : assignment.sharedWith ? "다른 슬롯과 대역폭 공유 없음" : "대역폭 공유 정보 없음"}</small></div></div>)}</div><p className="m2-assignment-note"><FiInfo /> 슬롯 위치는 메인보드와 SSD 사양에 따라 달라질 수 있어요.</p></section>;
 }
 
 export function BuildWatchlistPanel({ build, partMap, accessoryMap, onToast }: { build: BuildSelection; partMap: ReadonlyMap<string, Part>; accessoryMap: ReadonlyMap<string, AccessoryItem>; onToast: (message: string) => void }) {
@@ -238,15 +261,15 @@ export function BuildWatchlistPanel({ build, partMap, accessoryMap, onToast }: {
       const parts: string[] = [`새로 등록 ${addedCount}개`];
       if (alreadyTrackedCount > 0) parts.push(`이미 추적 중 ${alreadyTrackedCount}개`);
       if (omittedCount > 0) parts.push(`목록 한도로 제외 ${omittedCount}개`);
-      if (unpricedCount > 0) parts.push(`가격 미확인 ${unpricedCount}개`);
-      if (unknownCatalogCount > 0) parts.push(`카탈로그 미확인 ${unknownCatalogCount}개`);
+      if (unpricedCount > 0) parts.push(`가격 없는 부품 ${unpricedCount}개`);
+      if (unknownCatalogCount > 0) parts.push(`정보가 없는 부품 ${unknownCatalogCount}개`);
       onToast(`${parts.join(" · ")} · 가격 추적 화면에서 목표가와 알림 조건을 설정해 주세요.`);
     } catch {
       onToast("견적 전체를 가격 추적에 등록하지 못했습니다.");
     }
   }
 
-  return <section className="build-watchlist-panel" aria-label="견적 전체 가격 추적"><div><h2>견적 전체 가격 추적</h2><p>선택한 부품을 한 번에 관심 목록에 담고 가격 변화를 지켜볼 수 있어요.</p><small>{coreCount}개 핵심 부품{accessoryCount > 0 ? ` · ${accessoryCount}개 주변 부품` : ""}{unpricedCount > 0 ? ` · 가격 미확인 ${unpricedCount}개도 추적 가능` : ""}</small></div><button className="button button-secondary" type="button" onClick={watchAll}><FiClock /> 전체 추적 등록</button></section>;
+  return <section className="build-watchlist-panel" aria-label="견적 전체 가격 추적"><div><h2>견적 전체 가격 추적</h2><p>선택한 부품을 한 번에 관심 목록에 담고 가격 변화를 지켜볼 수 있어요.</p><small>{coreCount}개 핵심 부품{accessoryCount > 0 ? ` · ${accessoryCount}개 주변 부품` : ""}{unpricedCount > 0 ? ` · 가격 없는 부품 ${unpricedCount}개 포함` : ""}</small></div><button className="button button-secondary" type="button" onClick={watchAll}><FiClock /> 전체 추적 등록</button></section>;
 }
 
 export function upgradeCompatibilityText(evidence: UpgradeCompatibilityEvidence) {
@@ -268,7 +291,7 @@ export function upgradeCompatibilityStatus(evidence: UpgradeCompatibilityEvidenc
   if (evidence.blockerCount > 0) return `호환 불가 ${evidence.blockerCount}개`;
   if (evidence.unknownCount > 0) return `정보 부족 ${evidence.unknownCount}개`;
   if (evidence.warningCount > 0) return `주의 ${evidence.warningCount}개`;
-  return "호환 상태 유지";
+  return "추가 호환 문제 없음";
 }
 
 export function upgradeBudgetText(evidence: UpgradeBudgetEvidence | undefined) {
@@ -579,7 +602,7 @@ export function CompatibilityMap({ links, findings = [], onFocusFinding }: { lin
 
   return <section className="compatibility-map" data-testid="compatibility-map" tabIndex={-1}>
     <div className="compatibility-map-heading">
-      <div><h2>부품 연결 상태</h2><p>추천 부품을 고를 때 영향을 주는 연결 관계를 규칙별로 요약해요.</p></div>
+      <div><h2>부품 연결 상태</h2><p>부품끼리 소켓·규격·전원이 맞는지 확인할 수 있어요.</p></div>
       <span className="compatibility-map-icon"><FiShare2 /></span>
     </div>
     <div className="compatibility-link-grid">

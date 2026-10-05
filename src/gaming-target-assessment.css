@@ -1,0 +1,33 @@
+.gaming-target-assessment { margin: 24px 0; padding: 24px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.gaming-target-assessment-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.gaming-target-assessment-heading p { margin: 0 0 5px; font-size: 12px; color: var(--muted); }
+.gaming-target-assessment-heading h2 { margin: 0; font-size: 26px; }
+.gaming-target-assessment-status { padding: 6px 10px; border-radius: 7px; background: var(--soft, #f4f5f7); color: var(--muted); font-size: 12px; }
+.gaming-target-assessment-status.status-verified { color: var(--teal); }
+.gaming-target-assessment-status.status-target_not_met { color: #b2493d; }
+.gaming-target-assessment-note { margin: 14px 0; color: var(--muted); font-size: 13px; line-height: 1.65; }
+.gaming-target-measurement { padding: 18px 0; border-top: 1px solid var(--line); }
+.gaming-target-measurement-heading { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 14px; }
+.gaming-target-measurement-heading span { color: var(--muted); font-size: 12px; }
+.gaming-target-fps-values { display: flex; flex-wrap: wrap; gap: 28px; margin: 16px 0; }
+.gaming-target-fps-values div { display: grid; gap: 5px; }
+.gaming-target-fps-values span { color: var(--muted); font-size: 12px; }
+.gaming-target-fps-values strong { font-size: 22px; letter-spacing: -.5px; }
+.gaming-target-source-note { margin: 8px 0; color: var(--muted); font-size: 12px; line-height: 1.7; }
+.gaming-target-source-conditions { margin-top: 14px; font-size: 12px; }
+.gaming-target-source-conditions summary { cursor: pointer; padding: 10px 0; font-weight: 600; }
+.gaming-target-source-conditions summary:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
+.gaming-target-source-conditions dl { display: grid; gap: 8px; margin: 8px 0; }
+.gaming-target-source-conditions dl div { display: grid; grid-template-columns: 65px minmax(0, 1fr); gap: 12px; }
+.gaming-target-source-conditions dt { color: var(--muted); }
+.gaming-target-source-conditions dd { margin: 0; overflow-wrap: anywhere; line-height: 1.6; }
+.gaming-target-source-conditions p { color: var(--muted); line-height: 1.6; }
+.gaming-target-source-conditions a { color: var(--teal); overflow-wrap: anywhere; }
+.gaming-target-condition-differences { margin: 14px 0; }
+.gaming-target-condition-differences ul { margin: 8px 0 0; padding-left: 18px; color: var(--muted); line-height: 1.7; overflow-wrap: anywhere; }
+.gaming-target-missing-games { margin-top: 16px; padding: 16px; background: var(--soft, #f4f5f7); border-radius: 9px; font-size: 13px; }
+.gaming-target-missing-games p { margin: 8px 0; line-height: 1.6; }
+.gaming-target-missing-games small { color: var(--muted); line-height: 1.6; }
+.gaming-target-edit-conditions { margin-top: 16px; min-height: 44px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface, #fff); color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.gaming-target-edit-conditions:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
+@media (max-width: 600px) { .gaming-target-assessment { padding: 20px 0; } .gaming-target-assessment-heading h2 { font-size: 24px; } }

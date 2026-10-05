@@ -1,0 +1,169 @@
+{
+  "schemaVersion": 1,
+  "refreshedAt": "2026-10-04T22:10:38.773Z",
+  "parts": [
+    {
+      "id": "danawa-gpu-95985854",
+      "category": "gpu",
+      "name": "ASUS DUAL 라데온 RX 9060 D6 8GB 대원씨티에스",
+      "brand": "ASUS",
+      "model": "ASUS DUAL 라데온 RX 9060 D6 8GB 대원씨티에스",
+      "imageUrl": "https://img.danuri.io/catalog-image/854/985/095/3e9f66134e144fb1b8561f4daba5c14e.jpeg?shrink=160:160&_v=20261005043852",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=95985854",
+      "source": "danawa",
+      "sourceProductCode": "95985854",
+      "sourceCategoryId": "112753",
+      "listingType": "retail",
+      "priceWon": 364700,
+      "rawSpecText": "RX 9060 / PCIe5.0x16 / 550W 이상 / 전원 포트: 8핀 x1 / 가로(길이): 202mm / 베이스클럭: 1520 / 부스트클럭: 2990MHz / OC클럭: 3000MHz / 스트림 프로세서: 1792 / 최대 AI TOPS: 343(INT4) / GDDR6 / 출력단자: HDMI2.1 , DP2.1 / 지원정보: 8K 지원 / 사용전력: 132W / 2팬 / 두께: 49mm / 제로팬(0-dB기술) / 백플레이트 / Dual BIOS / GPU Tweak3 / A/S 3년",
+      "specs": {
+        "gpuVendor": "amd",
+        "gpuMemoryType": "GDDR6",
+        "gpuArchitectureFamily": "RX 90",
+        "pcieSlotWidth": 16,
+        "pciePowerOptions": [
+          [
+            {
+              "kind": "pcie_8pin_6plus2",
+              "count": 1
+            }
+          ]
+        ],
+        "powerW": 132,
+        "recommendedPsuW": 550,
+        "vramGb": 8,
+        "gpuBoostClockMhz": 2990,
+        "gpuStreamProcessors": 1792,
+        "lengthMm": 202,
+        "thicknessMm": 49
+      },
+      "dataQuality": "live",
+      "missingFields": [],
+      "updatedAt": "2026-10-04T22:10:36.917Z",
+      "priceCheckedAt": "2026-10-04T22:10:36.917Z"
+    },
+    {
+      "id": "danawa-gpu-91909571",
+      "category": "gpu",
+      "name": "SAPPHIRE 라데온 RX 9060 XT PULSE OC D6 16GB",
+      "brand": "SAPPHIRE",
+      "model": "SAPPHIRE 라데온 RX 9060 XT PULSE OC D6 16GB",
+      "imageUrl": "https://img.danuri.io/catalog-image/571/909/091/87f5413db20d43e6a87ec2445ecf58c1.jpg?shrink=160:160&_v=20261005045705",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=91909571",
+      "source": "danawa",
+      "sourceProductCode": "91909571",
+      "sourceCategoryId": "112753",
+      "listingType": "retail",
+      "priceWon": 821000,
+      "rawSpecText": "RX 9060 XT / PCIe5.0x16 / 450W 이상 / 전원 포트: 8핀 x1 / 가로(길이): 240mm / 부스트클럭: 3290MHz / 스트림 프로세서: 2048 / 최대 AI TOPS: 821(INT4) / GDDR6 / VRAM 대역폭: 320 GB/s / 출력단자: HDMI2.1 , DP2.1 / 지원정보: 멀티VGA 지원 , 8K 지원 / 사용전력: 170W / 2팬 / 두께: 46.1mm / 제로팬(0-dB기술) / 백플레이트 / A/S 3년",
+      "specs": {
+        "gpuVendor": "amd",
+        "gpuMemoryType": "GDDR6",
+        "gpuArchitectureFamily": "RX 90",
+        "pcieSlotWidth": 16,
+        "pciePowerOptions": [
+          [
+            {
+              "kind": "pcie_8pin_6plus2",
+              "count": 1
+            }
+          ]
+        ],
+        "powerW": 170,
+        "recommendedPsuW": 450,
+        "vramGb": 16,
+        "gpuBoostClockMhz": 3290,
+        "gpuStreamProcessors": 2048,
+        "gpuMemoryBandwidthGbps": 320,
+        "lengthMm": 240,
+        "thicknessMm": 46.1
+      },
+      "dataQuality": "live",
+      "missingFields": [],
+      "updatedAt": "2026-10-04T22:10:37.634Z",
+      "priceCheckedAt": "2026-10-04T22:10:37.634Z"
+    },
+    {
+      "id": "danawa-gpu-77382623",
+      "category": "gpu",
+      "name": "SAPPHIRE 라데온 RX 9070 PURE OC D6 16GB",
+      "brand": "SAPPHIRE",
+      "model": "SAPPHIRE 라데온 RX 9070 PURE OC D6 16GB",
+      "imageUrl": "https://img.danuri.io/catalog-image/623/382/077/2f270ed0c024475bacbcbdec2dd41cff.jpg?shrink=160:160&_v=20261004080404",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=77382623",
+      "source": "danawa",
+      "sourceProductCode": "77382623",
+      "sourceCategoryId": "112753",
+      "listingType": "retail",
+      "priceWon": 1129000,
+      "rawSpecText": "RX 9070 / PCIe5.0x16 / 650W 이상 / 전원 포트: 8핀 x2 / 가로(길이): 320mm / 부스트클럭: 2700MHz / 스트림 프로세서: 3584 / 최대 AI TOPS: 1165(INT4) / GDDR6 / VRAM 대역폭: 640 GB/s / 출력단자: HDMI2.1 , DP2.1 / 지원정보: 8K 지원 , HDR 지원 / 사용전력: 245W / 3팬 / 두께: 61.6mm / 제로팬(0-dB기술) / 백플레이트 / LED 라이트 / 구성품: VGA지지대 / A/S 3년",
+      "specs": {
+        "gpuVendor": "amd",
+        "gpuMemoryType": "GDDR6",
+        "gpuArchitectureFamily": "RX 90",
+        "pcieSlotWidth": 16,
+        "pciePowerOptions": [
+          [
+            {
+              "kind": "pcie_8pin_6plus2",
+              "count": 2
+            }
+          ]
+        ],
+        "powerW": 245,
+        "recommendedPsuW": 650,
+        "vramGb": 16,
+        "gpuBoostClockMhz": 2700,
+        "gpuStreamProcessors": 3584,
+        "gpuMemoryBandwidthGbps": 640,
+        "lengthMm": 320,
+        "thicknessMm": 61.6
+      },
+      "dataQuality": "live",
+      "missingFields": [],
+      "updatedAt": "2026-10-04T22:10:38.109Z",
+      "priceCheckedAt": "2026-10-04T22:10:38.109Z"
+    },
+    {
+      "id": "danawa-gpu-77378039",
+      "category": "gpu",
+      "name": "SAPPHIRE 라데온 RX 9070 XT PULSE D6 16GB",
+      "brand": "SAPPHIRE",
+      "model": "SAPPHIRE 라데온 RX 9070 XT PULSE D6 16GB",
+      "imageUrl": "https://img.danuri.io/catalog-image/039/378/077/bdee314b483b40879868bf000c2116fa.jpg?shrink=160:160&_v=20261005045802",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=77378039",
+      "source": "danawa",
+      "sourceProductCode": "77378039",
+      "sourceCategoryId": "112753",
+      "listingType": "retail",
+      "priceWon": 1451000,
+      "rawSpecText": "RX 9070 XT / PCIe5.0x16 / 750W 이상 / 전원 포트: 8핀 x2 / 가로(길이): 320mm / 부스트클럭: 2970MHz / 스트림 프로세서: 4096 / 최대 AI TOPS: 1557(INT4) / GDDR6 / VRAM 대역폭: 640 GB/s / 출력단자: HDMI2.1 , DP2.1 / 지원정보: 8K 지원 , HDR 지원 / 사용전력: 304W / 3팬 / 두께: 61.6mm / 제로팬(0-dB기술) / 백플레이트 / 구성품: VGA지지대 / A/S 3년",
+      "specs": {
+        "gpuVendor": "amd",
+        "gpuMemoryType": "GDDR6",
+        "gpuArchitectureFamily": "RX 90",
+        "pcieSlotWidth": 16,
+        "pciePowerOptions": [
+          [
+            {
+              "kind": "pcie_8pin_6plus2",
+              "count": 2
+            }
+          ]
+        ],
+        "powerW": 304,
+        "recommendedPsuW": 750,
+        "vramGb": 16,
+        "gpuBoostClockMhz": 2970,
+        "gpuStreamProcessors": 4096,
+        "gpuMemoryBandwidthGbps": 640,
+        "lengthMm": 320,
+        "thicknessMm": 61.6
+      },
+      "dataQuality": "live",
+      "missingFields": [],
+      "updatedAt": "2026-10-04T22:10:38.773Z",
+      "priceCheckedAt": "2026-10-04T22:10:38.773Z"
+    }
+  ]
+}

@@ -1,30 +1,131 @@
 import type { Part, PartCategory } from "./types";
 
 /**
- * 상대 성능 지수(v1) — 외부 벤치마크가 없는 카탈로그 부품의 게임/CPU 성능을
- * 모델명 기준으로 추정한다.
+ * 상대 성능 지수 — 영상에서 직접 확인한 값과 기존 모델 추정을 구분한다.
  *
- * - GPU 게임 지수: RTX 5060 Ti 16GB = 100. 레스터라이제이션 평균 기준의
- *   공개 상대 성능표(TechPowerUp relative performance 등)를 5060 Ti에 맞춰
- *   재정규화한 값이다. 제품 간 실제 체감은 해상도·게임에 따라 다르다.
+ * - RTX 50 GPU 게임 지수: 사장님이 지정한 영상의 QHD 평균 게임 성능 표.
+ *   RTX 5060 Ti 16GB = 100. 8GB 모델은 QHD에서 97.4로 구분한다.
+ * - 나머지 GPU/내장 그래픽은 기존 추정값이며 해당 영상에서 검증하지 않았다.
  * - CPU 지수: Cinebench R23 계열 공개 값을 싱글/멀티로 나눠 기록한다.
  *   specs에 실측 cinebenchR23 값이 있으면 그것을 우선 사용한다.
  *
  * 값이 바뀌거나 패턴이 추가되면 RELATIVE_PERFORMANCE_INDEX_VERSION을 올린다.
  */
-export const RELATIVE_PERFORMANCE_INDEX_VERSION = "relative-index-v1";
+export const RELATIVE_PERFORMANCE_INDEX_VERSION = "relative-index-v3-video-qhd-amd-2026-10-05";
+
+export const GPU_VIDEO_PERFORMANCE_SOURCE = {
+  kind: "video_table" as const,
+  url: "https://youtu.be/iVL3KqqzlhM?t=500",
+  referenceModel: "RTX 5060 Ti 16GB",
+  referencePercent: 100,
+  resolution: "QHD" as const,
+  reviewedAt: "2026-10-04",
+  screenshotPath: "artifacts/phase1-evidence/gpu-video-500s.png",
+  screenshotPaths: ["artifacts/phase1-evidence/gpu-video-251s.png", "artifacts/phase1-evidence/gpu-video-500s.png", "artifacts/phase1-evidence/gpu-video-725s.png"]
+};
+
+export const GPU_VIDEO_PERFORMANCE_ROWS = [
+  { model: "RTX 5090", fhd: 223.0, qhd: 265.5, uhd: 315.2 },
+  { model: "RTX 5080", fhd: 174.5, qhd: 191.7, uhd: 208.2 },
+  { model: "RTX 5070 Ti", fhd: 159.4, qhd: 171.1, uhd: 179.9 },
+  { model: "RTX 5070", fhd: 135.2, qhd: 139.3, uhd: 143.0 },
+  { model: "RTX 5060 Ti 16GB", fhd: 100.0, qhd: 100.0, uhd: 100.0 },
+  { model: "RTX 5060 Ti 8GB", fhd: 100.0, qhd: 97.4, uhd: 88.5 },
+  { model: "RTX 5060", fhd: 87.4, qhd: 84.3, uhd: 76.0 },
+  { model: "RTX 5050", fhd: 68.5, qhd: 71.1, uhd: 64.3 },
+  { model: "RTX 3050 6GB", fhd: 35.0, qhd: 34.4, uhd: 31.3 },
+  { model: "RX 580 2048SP", fhd: 28.2, qhd: 27.7, uhd: 24.3 },
+  { model: "RX 9070 XT", fhd: 152.2, qhd: 161.3, uhd: 168.6 },
+  { model: "RX 9070", fhd: 140.9, qhd: 146.9, uhd: 151.8 },
+  { model: "RX 9060 XT 16GB", fhd: 92.0, qhd: 94.7, uhd: 88.6 },
+  { model: "RX 9060 XT 8GB", fhd: 87.6, qhd: 89.8, uhd: 81.3 },
+  { model: "RX 9060", fhd: 78.9, qhd: 80.5, uhd: 71.5 }
+] as const;
+
+export const CPU_VIDEO_PERFORMANCE_SOURCE = {
+  kind: "video_table" as const,
+  url: "https://youtu.be/6NoegO2rlkE?t=180",
+  benchmark: "Cinebench R23",
+  referenceLabel: "싱글코어: Core i5-13600K = 100%, 멀티코어: Core i5-14600K = 100%",
+  singleReferenceModel: "Core i5-13600K",
+  multiReferenceModel: "Core i5-14600K",
+  reviewedAt: "2026-10-04",
+  screenshotPaths: ["artifacts/phase1-evidence/cpu-video-181s.png", "artifacts/phase1-evidence/cpu-video-851s.png", "artifacts/phase1-evidence/cpu-video-839s.png"]
+};
+
+/** Percentages transcribed from the supplied video, not inferred R23 scores. */
+export const CPU_VIDEO_PERFORMANCE_ROWS = [
+  { model: "9950X3D2", single: 115.8, multi: 179.3 },
+  { model: "9850X3D", single: 115.6, multi: 95.0 },
+  { model: "9800X3D", single: 107.1, multi: 94.4 },
+  { model: "9950X3D", single: 116.2, multi: 173.0 },
+  { model: "9900X3D", single: 111.9, multi: 132.6 },
+  { model: "7800X3D", single: 91.8, multi: 74.9 },
+  { model: "7700X3D", single: 88.4, multi: 71.9 },
+  { model: "7950X3D", single: 99.1, multi: 148.8 },
+  { model: "7900X3D", single: 97.5, multi: 114.1 },
+  { model: "7500X3D", single: 80.8, multi: 53.7 },
+  { model: "7950X", single: 101.7, multi: 160.0 },
+  { model: "7900X", single: 100.5, multi: 119.5 },
+  { model: "7700X", single: 97.3, multi: 82.6 },
+  { model: "7900", single: 97.4, multi: 104.3 },
+  { model: "7700", single: 93.9, multi: 77.5 },
+  { model: "7600X", single: 97.4, multi: 63.6 },
+  { model: "7600", single: 92.4, multi: 60.0 },
+  { model: "5700X3D", single: 66.4, multi: 57.0 },
+  { model: "9500F", single: 99.9, multi: 64.8 },
+  { model: "9700X", single: 109.7, multi: 92.7 },
+  { model: "9950X", single: 112.6, multi: 175.2 },
+  { model: "9900X", single: 110.8, multi: 138.4 },
+  { model: "9600X", single: 107.9, multi: 70.1 },
+  { model: "9600", single: 103.9, multi: 67.4 },
+  { model: "5600", single: 75.2, multi: 45.8 },
+  { model: "5500GT", single: 73.4, multi: 45.7 },
+  { model: "5600GT", single: 77.7, multi: 46.7 },
+  { model: "5600G", single: 74.1, multi: 46.2 },
+  { model: "5700G", single: 78.4, multi: 62.2 },
+  { model: "5800X3D", single: 73.5, multi: 60.7 },
+  { model: "5500", single: 70.6, multi: 45.2 },
+  { model: "5300G", single: 72.4, multi: 32.1 }
+] as const;
+
+export function cpuVideoPerformanceRowFor(part: Pick<Part, "name" | "model" | "category">) {
+  if (part.category !== "cpu") return undefined;
+  const text = `${part.model ?? ""} ${part.name}`;
+  // Complete model boundaries distinguish 9950X3D2, 9950X3D, 9950X and 9950.
+  return CPU_VIDEO_PERFORMANCE_ROWS.find((row) => new RegExp(`\\b${row.model}\\b`, "i").test(text));
+}
+
+type GpuPerformancePart = Pick<Part, "name" | "model" | "category"> & { specs?: Pick<Part["specs"], "vramGb"> };
+
+export function gpuVideoPerformanceRowFor(part: GpuPerformancePart) {
+  if (part.category !== "gpu") return undefined;
+  const text = `${part.model ?? ""} ${part.name}`;
+  if (/RX\s*90\d{2}\s*(?:GRE|XTX)\b/i.test(text)) return undefined;
+  const radeon = text.match(/\bRX\s*(90\d{2})(?:\s*(XT))?\b/i);
+  if (radeon) {
+    const vram = part.specs?.vramGb ?? Number(text.match(/\b(8|16)\s*GB\b/i)?.[1]);
+    const model = `RX ${radeon[1]}${radeon[2] ? " XT" : ""}${radeon[1] === "9060" && radeon[2] ? ` ${vram}GB` : ""}`;
+    return GPU_VIDEO_PERFORMANCE_ROWS.find((row) => row.model === model);
+  }
+  if (/RTX\s*3050\b/i.test(text) && (part.specs?.vramGb === 6 || /\b6\s*GB\b/i.test(text))) return GPU_VIDEO_PERFORMANCE_ROWS[8];
+  if (/RX\s*580\s*2048\s*SP\b/i.test(text)) return GPU_VIDEO_PERFORMANCE_ROWS[9];
+  const match = /RTX\s*(5090|5080|5070\s*Ti|5070|5060\s*Ti|5060|5050)\b/i.exec(text);
+  if (!match) return undefined;
+  const model = match[1].replace(/\s*/g, "").toUpperCase();
+  if (model === "5060TI") {
+    const vram = part.specs?.vramGb ?? (/\b8\s*GB\b/i.test(text) ? 8 : /\b16\s*GB\b/i.test(text) ? 16 : undefined);
+    if (vram === 8) return GPU_VIDEO_PERFORMANCE_ROWS[5];
+    if (vram === 16) return GPU_VIDEO_PERFORMANCE_ROWS[4];
+    return undefined;
+  }
+  return GPU_VIDEO_PERFORMANCE_ROWS.find((row) => row.model.replace(/RTX|\s/g, "").toUpperCase() === model);
+}
 
 // 표기 순서가 곧 우선순위다 — Ti/Super/XT 같은 파생형이 앞에 와야
 // "RTX 5060 Ti"가 5060 규칙에 먹히지 않는다.
 const GPU_GAMING_RULES: readonly { pattern: RegExp; index: number }[] = [
-  // RTX 50
-  { pattern: /RTX\s*5090\b/i, index: 250 },
-  { pattern: /RTX\s*5080\b/i, index: 178 },
-  { pattern: /RTX\s*5070\s*Ti\b/i, index: 156 },
-  { pattern: /RTX\s*5070\b/i, index: 128 },
-  { pattern: /RTX\s*5060\s*Ti\b/i, index: 100 },
-  { pattern: /RTX\s*5060\b/i, index: 78 },
-  { pattern: /RTX\s*5050\b/i, index: 57 },
+  // RTX 50 values are read from the verified QHD video table above.
   // RTX 40
   { pattern: /RTX\s*4090\b/i, index: 218 },
   { pattern: /RTX\s*4080\s*(?:S|SUPER|슈퍼)\b/i, index: 172 },
@@ -108,8 +209,10 @@ const GPU_GAMING_RULES: readonly { pattern: RegExp; index: number }[] = [
  * GPU의 상대 게임 성능 지수(RTX 5060 Ti = 100). 카탈로그 이름에서 모델을 찾아
  * 돌려준다. 알 수 없는 모델이면 undefined.
  */
-export function gpuGamingIndexFor(part: Pick<Part, "name" | "model" | "category">): number | undefined {
+export function gpuGamingIndexFor(part: GpuPerformancePart): number | undefined {
   if (part.category !== "gpu") return undefined;
+  const verified = gpuVideoPerformanceRowFor(part);
+  if (verified) return verified.qhd;
   const text = `${part.model ?? ""} ${part.name}`;
   for (const rule of GPU_GAMING_RULES) {
     if (rule.pattern.test(text)) return rule.index;
@@ -236,10 +339,10 @@ function estimatedMultiIndex(part: Pick<Part, "specs" | "name" | "model" | "cate
   return Math.round(single * cores * (1 + Math.max(0, threads - cores) / cores * 0.3) * 0.88);
 }
 
-/** 싱글코어 지수가 몇 %인지(최상급 데스크탑 = 100). */
-export const CPU_SINGLE_REFERENCE = 2300;
-/** 멀티코어 지수가 몇 %인지(플래그십 24코어급 = 100). */
-export const CPU_MULTI_REFERENCE = 45000;
+/** Fallback estimates use the model-table 13600K single score as 100%. */
+export const CPU_SINGLE_REFERENCE = 2000;
+/** Fallback estimates use the model-table 14600K multi score as 100%. */
+export const CPU_MULTI_REFERENCE = 25000;
 
 export type FrameStabilityLevel = "low" | "medium" | "high" | "very_high";
 
@@ -262,7 +365,7 @@ export function frameStabilityLevelFor(cpu: Pick<Part, "name" | "model" | "categ
   const cacheMb = cpu.specs.l3CacheMb ?? 0;
   if (single === undefined) return undefined;
   if (/X3D/i.test(`${cpu.model ?? ""} ${cpu.name}`) || cacheMb >= 64) return "very_high";
-  if (single >= 1900 && cores >= 6) return "high";
+  if (single >= 1750 && cores >= 6) return "high";
   if (single >= 1450 && cores >= 6) return "medium";
   if (single >= 1200 && cores >= 4) return "medium";
   return "low";
@@ -280,11 +383,15 @@ export interface BuildPerformanceReport {
   /** 외장 GPU 상대 게임 지수(RTX 5060 Ti = 100) 또는 내장 그래픽 지수. */
   gamingIndex?: number;
   frameStability?: FrameStabilityLevel;
-  /** 싱글코어 % (2300급 최상급 = 100). */
+  /** 싱글코어 % (13600K = 100); 영상 직접 수치와 모델 추정을 구분한다. */
   singleCorePercent?: number;
-  /** 멀티코어 % (45000급 플래그십 = 100). */
+  /** 멀티코어 % (14600K = 100); 영상 직접 수치와 모델 추정을 구분한다. */
   multiCorePercent?: number;
   modelVersion: typeof RELATIVE_PERFORMANCE_INDEX_VERSION;
+  gamingSource?: string;
+  gamingEvidenceKind?: "video_table" | "model_estimate";
+  cpuSource?: string;
+  cpuEvidenceKind?: "video_table" | "model_estimate";
 }
 
 /** 선택된 부품들로 표시용 상대 성능 보고서를 만든다. 측정값이 아닌 추정치다. */
@@ -292,11 +399,16 @@ export function buildPerformanceReportFor(parts: Partial<Record<PartCategory, Pa
   const cpu = parts.cpu;
   const gpu = parts.gpu;
   const cpuIndex = cpu ? cpuRelativeIndexFor(cpu) : undefined;
+  const cpuVideo = cpu ? cpuVideoPerformanceRowFor(cpu) : undefined;
   return {
     modelVersion: RELATIVE_PERFORMANCE_INDEX_VERSION,
+    gamingSource: gpu && gpuVideoPerformanceRowFor(gpu) ? GPU_VIDEO_PERFORMANCE_SOURCE.url : undefined,
+    gamingEvidenceKind: gpu && gpuVideoPerformanceRowFor(gpu) ? "video_table" : gpu ? gpuGamingIndexFor(gpu) === undefined ? undefined : "model_estimate" : cpu ? "model_estimate" : undefined,
+    cpuSource: cpuVideo ? CPU_VIDEO_PERFORMANCE_SOURCE.url : undefined,
+    cpuEvidenceKind: cpuVideo ? "video_table" : cpuIndex ? "model_estimate" : undefined,
     gamingIndex: gpu ? gpuGamingIndexFor(gpu) : cpu ? integratedGpuIndexFor(cpu) : undefined,
     frameStability: cpu ? frameStabilityLevelFor(cpu) : undefined,
-    singleCorePercent: cpuIndex ? Math.round((cpuIndex.single / CPU_SINGLE_REFERENCE) * 100) : undefined,
-    multiCorePercent: cpuIndex ? Math.round((cpuIndex.multi / CPU_MULTI_REFERENCE) * 100) : undefined
+    singleCorePercent: cpuVideo?.single ?? (cpuIndex ? Math.round((cpuIndex.single / CPU_SINGLE_REFERENCE) * 100) : undefined),
+    multiCorePercent: cpuVideo?.multi ?? (cpuIndex ? Math.round((cpuIndex.multi / CPU_MULTI_REFERENCE) * 100) : undefined)
   };
 }

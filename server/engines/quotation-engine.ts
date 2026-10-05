@@ -1,3 +1,5 @@
+import { gamingCpuModelFor } from "../../shared/gaming-target-assessment";
+import { loadGamingFpsReferences } from "../gaming-fps-reference";
 // 견적 생성 엔진 모듈 — 자동 견적 생성(variants·budget ladder·floor 계산)의
 // 운영 옵션과 인메모리 캐시를 소유한다. 도메인 계산 자체는
 // shared/domain/engine.ts가 담당하고, 이 모듈은 관리자가 조정 가능한
@@ -6,7 +8,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { RECOMMENDATION_PRIORITY_VALUES, RECOMMENDATION_VARIANT_PRIORITIES } from "../../shared/types";
 import type { BuildGenerationRequest, Part, RecommendationPriority } from "../../shared/types";
-import { minimumFeasibleBuildPriceFor, ENGINE_VERSION } from "../engine";
+import { generateBuildDraft, minimumFeasibleBuildPriceFor, ENGINE_VERSION } from "../engine";
 import { configureQuoteGenerationGate } from "../listing";
 import { loadEngineTargetFiltersConfig } from "../engine-target-filters";
 import { engineTargetFilterActiveFacetCount } from "../../shared/engine-target-filters";
@@ -197,7 +199,13 @@ export function quotationEngineFloorFor(catalog: Part[], request: BuildGeneratio
     generationFloorCache.set(catalog, byRequest);
   }
   if (byRequest.has(key)) return byRequest.get(key) ?? null;
-  const value = minimumFeasibleBuildPriceFor(catalog, request, { targetFilters }) ?? null;
+  let value: number | null = null;
+  if (request.gamingMode === "target_fps") {
+    try {
+      const draft = generateBuildDraft(catalog, { ...request, budgetWon: 100_000_000 }, [], { targetFilters, gamingTestbedPhase1: request.gamingTestbedPhase1, gamingFpsReferences: loadGamingFpsReferences() });
+      if (draft.gamingTargetAssessment?.referenceTargetMet && draft.gamingTargetAssessment.measurements.every(({sourceConditions}) => gamingCpuModelFor(draft.gamingTargetAssessment!.cpuName) === gamingCpuModelFor(sourceConditions.cpuModel))) value = draft.totalPriceWon;
+    } catch { /* No complete, eligible measured-model configuration. */ }
+  } else value = minimumFeasibleBuildPriceFor(catalog, request, { targetFilters, gamingTestbedPhase1: request.gamingTestbedPhase1 }) ?? null;
   if (byRequest.size >= 300) byRequest.clear();
   byRequest.set(key, value);
   return value;

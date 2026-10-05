@@ -110,13 +110,14 @@ function isRestrictedPublicApiKey(key: string) {
  * The input is copied so the engine, cache, and admin evidence routes retain
  * the original records and ranking signals.
  */
-export function publicApiPayloadProjection(value: unknown, parentKey?: string): unknown {
+export function publicApiPayloadProjection(value: unknown, parentKey?: string, targetScope = false): unknown {
+  targetScope ||= parentKey === "gamingTargetAssessment";
   if (typeof value === "string") {
-    return parentKey && INTERNAL_SIGNAL_TEXT_KEYS.has(parentKey) && INTERNAL_SIGNAL_TEXT.test(value) ? undefined : value;
+    return !targetScope && parentKey && INTERNAL_SIGNAL_TEXT_KEYS.has(parentKey) && INTERNAL_SIGNAL_TEXT.test(value) ? undefined : value;
   }
   if (Array.isArray(value)) {
     return value.flatMap((item) => {
-      const projected = publicApiPayloadProjection(item, parentKey);
+      const projected = publicApiPayloadProjection(item, parentKey, targetScope);
       return projected === undefined ? [] : [projected];
     });
   }
@@ -124,8 +125,8 @@ export function publicApiPayloadProjection(value: unknown, parentKey?: string): 
 
   const projected: Record<string, unknown> = {};
   for (const [key, item] of Object.entries(value)) {
-    if (isRestrictedPublicApiKey(key)) continue;
-    const next = publicApiPayloadProjection(item, key);
+    if (isRestrictedPublicApiKey(key) && !(targetScope && ["averageFps", "onePercentLowFps", "targetFps"].includes(key))) continue;
+    const next = publicApiPayloadProjection(item, key, targetScope);
     if (next !== undefined) projected[key] = next;
   }
   return projected;

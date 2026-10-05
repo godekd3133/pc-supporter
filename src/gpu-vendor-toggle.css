@@ -1,0 +1,30 @@
+.gpu-vendor-choice { position: relative; display: grid; gap: 10px; margin: 18px 0; }
+.gpu-vendor-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 14px; }
+.gpu-vendor-help { display: inline-flex; }
+.gpu-vendor-help-button { width: 22px; height: 22px; padding: 0; border: 1px solid var(--muted); border-radius: 50%; background: transparent; color: var(--muted); font: inherit; font-size: 12px; cursor: help; }
+.gpu-vendor-help-button:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
+.gpu-vendor-tooltip { position: absolute; z-index: 40; right: 0; top: 32px; width: min(320px, 86vw); padding: 13px 15px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface, #fff); color: var(--ink); box-shadow: 0 6px 20px rgb(0 0 0 / .12); font-size: 13px; font-weight: 400; line-height: 1.6; white-space: normal; }
+.gpu-vendor-tooltip[hidden] { display: none; }
+.gpu-vendor-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border-radius: 10px; background: var(--soft, #f4f5f7); }
+.gpu-vendor-toggle button { min-height: 44px; padding: 10px 14px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); font: inherit; font-weight: 700; cursor: pointer; }
+.gpu-vendor-toggle button.selected { background: var(--surface, #fff); color: var(--ink); box-shadow: 0 1px 4px rgb(0 0 0 / .08); }
+.gpu-vendor-toggle button:focus-visible { outline: 2px solid var(--teal); outline-offset: 1px; }
+.gpu-vendor-toggle button:disabled { cursor: default; opacity: .55; }
+.onboarding-target-fps-input { display: grid; gap: 8px; margin: 20px 0; color: var(--ink); font-size: 14px; }
+.onboarding-target-fps-input input { width: 100%; box-sizing: border-box; padding: 14px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface, #fff); color: var(--ink); font: inherit; }
+.generator-game-target-controls { display: grid; gap: 14px; margin: 16px 0; }
+.generator-game-target-controls fieldset { display: grid; gap: 9px; margin: 0; padding: 12px 0; border: 0; border-top: 1px solid var(--line); }
+.generator-game-target-controls legend { padding-top: 12px; font-size: 13px; font-weight: 600; }
+.generator-game-target-list { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; max-height: 220px; overflow-y: auto; padding: 3px; }
+.generator-game-target-list label { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 12px; }
+.generator-game-target-list label span { min-width: 0; overflow-wrap: anywhere; }
+.generator-game-target-list input { width: 18px; height: 18px; margin: 0; flex-shrink: 0; }
+.generator-game-target-selection { color: var(--muted); font-size: 12px; line-height: 1.6; }
+.generator-game-target-setting-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.generator-game-target-controls .generator-game-target-setting-grid label { min-width: 0; margin: 0; }
+@media (max-width: 600px) {
+  .gpu-vendor-help-button { position: relative; width: 44px; height: 44px; border: 0; }
+  .gpu-vendor-help-button::before { position: absolute; inset: 9px; border: 1px solid var(--muted); border-radius: 50%; content: ""; }
+  .gpu-vendor-tooltip { top: 46px; }
+  .generator-game-target-list { grid-template-columns: 1fr; }
+}

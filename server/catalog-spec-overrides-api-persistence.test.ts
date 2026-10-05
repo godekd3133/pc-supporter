@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { Part } from "../shared/types";
-import { truncatePostgresTables } from "./testkit/postgres";
+import { truncatePostgresTables, withPostgresStore } from "./testkit/postgres";
 
 const { checkPhysicalSourceUrlMock } = vi.hoisted(() => ({ checkPhysicalSourceUrlMock: vi.fn() }));
 
@@ -15,6 +15,46 @@ async function closeServer(server: { close(callback: (error?: Error) => void): v
 }
 
 describe("catalog spec override API persistence", () => {
+  it("round-trips case mounting conditions through PostgreSQL and restores empty base arrays", async () => {
+    const previousAdminPassword = process.env.ADMIN_PASSWORD;
+    process.env.ADMIN_PASSWORD = "";
+    try {
+      await withPostgresStore(async ({ repository }) => {
+        const basePart: Part = { id: "api-radiator-case", category: "case", name: "장착 조건 검증 케이스", source: "manual", specs: { radiatorSizesMm: [], radiatorSupports: [], supportedPsuFormFactors: [] }, dataQuality: "manual", missingFields: [], updatedAt: "2026-10-04T00:00:00Z" };
+        await repository.writeCatalogRecords([basePart]);
+        const { app } = await import("./index");
+        const server = app.listen(0, "127.0.0.1");
+        try {
+          await new Promise<void>((resolve, reject) => { server.once("listening", resolve); server.once("error", reject); });
+          const address = server.address();
+          if (!address || typeof address === "string") throw new Error("Missing isolated API port");
+          const baseUrl = `http://127.0.0.1:${address.port}`;
+          const fields = { radiatorSizesMm: [360], radiatorSupports: [{ position: "top", sizesMm: [360], requirements: [{ maxRadiatorThicknessMm: 30 }, { configurationNote: "후면 I/O 간섭과 브래킷 배치를 확인" }] }, { position: "psu_shroud", sizesMm: [360], requirements: [{ configurationNote: "파워 커버 브래킷 제거 필요" }] }], supportedPsuFormFactors: ["ATX"], ssdBays: 0 };
+          const input = { items: [{ partId: basePart.id, category: "case", fields, manufacturerModel: "API-CASE", sourceNote: "격리된 API/저장 회귀용 사양", sourceUrl: "https://vendor.example/api-case" }] };
+          const save = await fetch(`${baseUrl}/api/admin/catalog-spec-overrides/batch`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
+          expect(save.status).toBe(200);
+          const stored = await repository.readCatalogSpecOverrideRecords();
+          expect(stored[basePart.id]).toMatchObject({ fields });
+          const publicPart = await (await fetch(`${baseUrl}/api/parts/${basePart.id}`)).json() as Part;
+          expect(publicPart.specs).toMatchObject(fields);
+          expect(publicPart.specs).not.toHaveProperty("catalogSpecProvenance");
+          expect((await repository.readCatalogRecords()).find((part) => part.id === basePart.id)).toEqual(basePart);
+          const deleted = await fetch(`${baseUrl}/api/admin/catalog-spec-overrides/${basePart.id}`, { method: "DELETE" });
+          expect(deleted.status).toBe(200);
+          const restored = await (await fetch(`${baseUrl}/api/parts/${basePart.id}`)).json() as Part;
+          expect(restored.specs).toEqual(basePart.specs);
+          expect(restored.specs.ssdBays).toBeUndefined();
+          expect(await repository.readCatalogSpecOverrideRecords()).toEqual({});
+        } finally {
+          await closeServer(server);
+        }
+      });
+    } finally {
+      if (previousAdminPassword === undefined) delete process.env.ADMIN_PASSWORD;
+      else process.env.ADMIN_PASSWORD = previousAdminPassword;
+    }
+  });
+
   it("validates, stores, applies, lists, and removes an override without changing the base catalog", async () => {
     const directory = await mkdtemp(join(tmpdir(), "pc-supporter-catalog-spec-override-api-"));
     const previousDataDirectory = process.env.PC_SUPPORTER_DATA_DIR;

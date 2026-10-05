@@ -1,9 +1,14 @@
+import { applyGamingStorageCatalogSnapshot } from "./gaming-storage-catalog";
+import { applyGamingSupportCatalogSnapshot } from "./gaming-support-catalog";
+import { applyGamingTargetCatalogSnapshot } from "./gaming-target-catalog";
+import { applyGamingAmdCatalogSnapshot } from "./gaming-amd-catalog";
 import type { BenchmarkAvailabilityFilter, BenchmarkSourceCoverage, CatalogBenchmarkCoverage, BrandCountOption, DataFreshness, DataQuality, ListingPolicy, Part, PartCategory, PriceAvailabilityFilter, ServiceMeta } from "../shared/types";
 import type { CatalogSnapshot } from "./catalog-snapshot";
 import { catalogCategoryIntegritySummaryFor, catalogCategoryMismatchFor } from "../shared/catalog-category-integrity";
 import { catalogSpecCoverageFor } from "../shared/catalog-spec-coverage";
 import { isKnownPrice, PART_CATEGORIES } from "../shared/types";
 import { starterCatalog } from "./seed-catalog-starter";
+import { applyPhase1CatalogSnapshot } from "./phase1-catalog";
 import {
   CASE_RGB_LOAD_OVERRIDES_PATH,
   GPU_PHYSICAL_OVERRIDES_PATH,
@@ -130,7 +135,7 @@ async function loadCatalogUncoalesced() {
     const persisted = await readCatalogRecords();
     const overrideMaps = await readCatalogOverrideMaps();
     catalogCache = syncSeedPartPricesFromLive(applyCatalogOverrideMaps(
-      mergeCatalog(seedBaseFor(persisted), persisted.map((part) => reparseDanawaPart(part))),
+      applyGamingStorageCatalogSnapshot(applyGamingTargetCatalogSnapshot(applyGamingSupportCatalogSnapshot(applyGamingAmdCatalogSnapshot(applyPhase1CatalogSnapshot(mergeCatalog(seedBaseFor(persisted), persisted.map((part) => reparseDanawaPart(part)))))))),
       overrideMaps
     ));
     catalogCacheStamp = stampBefore;

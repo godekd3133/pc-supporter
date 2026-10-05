@@ -38,3 +38,13 @@ describe("build draft storage", () => {
     expect(recommendationPreferencesSyncFor({ profile: "general", priority: "balanced", listingPolicy: "retail_only" }, "broken")).toMatchObject({ status: "invalid" });
   });
 });
+
+
+describe("game-target criteria sync", () => {
+  it("detects a custom FPS change with the same hardware and retains the whole incoming request", () => {
+    const current = { profile: "gaming" as const, priority: "performance" as const, gamingMode: "target_fps" as const, gamingTargetFps: 120, gamingRefreshRate: 144 as const, gamingResolution: "1440p" as const, gpuVendorPreference: "amd" as const, gamingGameIds: ["pubg"], gamingGraphicsPreset: "high" as const, gamingRayTracing: false, gamingUpscaling: "native" as const };
+    const incoming = { ...current, gamingTargetFps: 144 };
+    expect(recommendationPreferencesSyncFor(current, JSON.stringify(incoming))).toMatchObject({ status: "changed", preferences: incoming });
+    expect(recommendationPreferencesSyncFor(incoming, JSON.stringify(incoming))).toEqual({ status: "same" });
+  });
+});

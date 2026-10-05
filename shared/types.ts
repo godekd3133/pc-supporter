@@ -114,6 +114,8 @@ export const RECOMMENDATION_PERFORMANCE_TIER_LABELS: Record<RecommendationPerfor
 };
 
 export type GamingResolution = "1080p" | "1440p" | "4k";
+export type GamingMode = "budget" | "target_fps";
+export type GpuVendorPreference = "nvidia" | "amd";
 
 export const GAMING_RESOLUTION_LABELS: Record<GamingResolution, string> = {
   "1080p": "FHD",
@@ -148,8 +150,8 @@ export type GamingUpscaling = "native" | "quality" | "balanced";
 
 export const GAMING_UPSCALING_LABELS: Record<GamingUpscaling, string> = {
   native: "업스케일링 없음",
-  quality: "DLSS·품질 참고",
-  balanced: "DLSS·균형 참고"
+  quality: "업스케일링·품질",
+  balanced: "업스케일링·균형"
 };
 
 export type GpuTargetFit = "met" | "partial" | "unknown";
@@ -199,6 +201,9 @@ export interface GamingPerformanceAssessment {
 }
 
 export interface RecommendationPreferences {
+  gamingMode?: GamingMode;
+  gamingTargetFps?: number;
+  gpuVendorPreference?: GpuVendor;
   priority: RecommendationPriority;
   profile: RecommendationProfile;
   budgetWon?: number;
@@ -592,11 +597,24 @@ export type GpuVendor = "nvidia" | "amd" | "intel";
 
 export type MemoryProfile = "XMP" | "EXPO";
 
-export type RadiatorMountPosition = "front" | "top" | "bottom" | "side" | "rear";
+export type RadiatorMountPosition = "front" | "top" | "bottom" | "side" | "rear" | "psu_shroud";
+
+export interface RadiatorMountRequirement {
+  sizesMm?: number[];
+  maxRadiatorThicknessMm?: number;
+  maxAssemblyThicknessMm?: number;
+  maxMemoryHeightMm?: number;
+  maxRadiatorWidthMm?: number;
+  maxRadiatorLengthMm?: number;
+  maxGpuLengthMm?: number;
+  exclusiveUpperBound?: boolean;
+  configurationNote?: string;
+}
 
 export interface RadiatorSupport {
   position: RadiatorMountPosition;
   sizesMm: number[];
+  requirements?: RadiatorMountRequirement[];
 }
 
 export interface PartSpecs {
@@ -655,6 +673,8 @@ export interface PartSpecs {
   /** 정규화된 CPU 세대 계열 — "Ryzen 9000"·"Core Ultra 200"·"Core 14" 등. */
   cpuSeries?: string;
   vrmCapacityW?: number;
+  /** Manufacturer phase count; a stated range uses its minimum, without inferring watt capacity. */
+  vrmPhaseCount?: number;
   m2Slots?: number;
   m2Interfaces?: Array<"NVMe" | "SATA">;
   m2PcieGenerations?: number[];
@@ -707,6 +727,11 @@ export interface PartSpecs {
   maxPsuLengthMm?: number;
   coolerType?: "air" | "liquid";
   radiatorSizeMm?: number;
+  radiatorThicknessMm?: number;
+  radiatorFanThicknessMm?: number;
+  radiatorWidthMm?: number;
+  radiatorLengthMm?: number;
+  memoryHeightMm?: number;
   radiatorSizesMm?: number[];
   radiatorPosition?: RadiatorMountPosition;
   radiatorSupports?: RadiatorSupport[];
@@ -1111,6 +1136,10 @@ export interface BuildSelection {
 }
 
 export interface BuildGenerationRequest {
+  gamingMode?: GamingMode;
+  gamingTargetFps?: number;
+  /** 지정된 국내 신품으로 GPU 예산을 우선 배분하는 1차 게임 견적. */
+  gamingTestbedPhase1?: boolean;
   profile: RecommendationProfile;
   budgetWon: number;
   includeGpu: boolean;
@@ -1179,20 +1208,40 @@ export interface BuildPerformanceMetrics {
   /** 외장 GPU 상대 게임 지수(RTX 5060 Ti = 100) 또는 내장 그래픽 지수. */
   gamingIndex?: number;
   frameStability?: "low" | "medium" | "high" | "very_high";
-  /** 싱글코어 상대 성능 % (최상급 = 100). */
+  /** 싱글코어 상대 성능 % (Core i5-13600K = 100). */
   singleCorePercent?: number;
-  /** 멀티코어 상대 성능 % (플래그십 = 100). */
+  /** 멀티코어 상대 성능 % (Core i5-14600K = 100). */
   multiCorePercent?: number;
   modelVersion?: string;
+  gamingSource?: string;
+  gamingEvidenceKind?: "video_table" | "model_estimate";
+  cpuSource?: string;
+  cpuEvidenceKind?: "video_table" | "model_estimate";
 }
 
-/** 같은 부품군에서 성능 점수 기준 한 단계 위/아래 후보 부품 ID. */
+/** 같은 부품군의 게임 역할·실제 용량 기준 한 단계 위/아래 후보. */
 export interface GeneratedPartTierAdjacency {
   upId?: string;
   downId?: string;
+  /** RAM retail kit ID can remain unchanged while its selected quantity grows. */
+  upMemoryCapacityGb?: number;
+  downMemoryCapacityGb?: number;
+  /** Storage steps change each drive's capacity, never the drive count. */
+  upStorageCapacityGb?: number;
+  downStorageCapacityGb?: number;
+  upHddCapacityGb?: number;
+  downHddCapacityGb?: number;
+  downUseIncludedCooler?: boolean;
 }
 
 export interface BuildGenerationResult {
+  gamingMode?: GamingMode;
+  gamingTargetFps?: number;
+  gpuVendorPreference?: GpuVendor;
+  gamingTargetAssessment?: import("./gaming-target-assessment").GamingTargetAssessment;
+  gamingSupportRequirements?: import("./gaming-part-tiers").GamingSupportRequirements;
+  partTierSuitability?: Partial<Record<PartCategory, import("./gaming-part-tiers").GamingPartSuitability>>;
+  gamingTestbedPhase1?: boolean;
   selection: BuildSelection;
   profile: RecommendationProfile;
   priority: RecommendationPriority;
@@ -1771,6 +1820,11 @@ export interface RecommendationSearchSummary {
 }
 
 export interface CompatibilityResult {
+  gamingTargetAssessment?: import("./gaming-target-assessment").GamingTargetAssessment;
+  gamingSupportRequirements?: import("./gaming-part-tiers").GamingSupportRequirements;
+  partTierSuitability?: Partial<Record<PartCategory, import("./gaming-part-tiers").GamingPartSuitability>>;
+  /** Unit prices from the exact catalog snapshot used for this check. */
+  partPriceSnapshot?: import("./checked-part-price-snapshot").CheckedPartPriceSnapshotEntry[];
   status: "compatible" | "incompatible" | "needs_review";
   blockerCount: number;
   warningCount: number;

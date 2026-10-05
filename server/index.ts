@@ -1,3 +1,6 @@
+import { gamingTierAssessmentFor } from "../shared/gaming-part-tiers";
+import { loadGamingFpsReferences } from "./gaming-fps-reference";
+import { gamingTargetAssessmentForBuild } from "../shared/gaming-target-build";
 import "dotenv/config";
 import express, { type NextFunction, type Request, type RequestHandler, type Response } from "express";
 import compression from "compression";
@@ -24,6 +27,7 @@ import { clientUsageEventsFromRequest, recordClientUsageEvents, recordUsageEvent
 import { classifyDataFreshness } from "./data-health";
 import { isAccessoryCrawlRunning, readAccessoryCrawlManifest, readAccessoryCrawlStatus, runAccessoryCrawlJob } from "./engines/crawler-engine";
 import { BuildGenerationError, ENGINE_VERSION, assessAlternativePart, buildGenerationRecoveryOptionsFor, candidateSimilarityForBuild, compareCandidateSimilarity, compareCandidateValue, evaluateBuild, generateBuildDraft } from "./engine";
+import { checkedPartPriceSnapshotFor } from "../shared/checked-part-price-snapshot";
 import { appendGenerationFailureRecord, recordGenerationFailure, recentGenerationFailures } from "./generation-failure-log";
 import { cancelCrawlPageRetryBatch, crawlPageRetryBatchPlanFor, crawlPageRetryPlanFor, crawlResumePlanFor, isCrawlPageRetryBatchRunning, isCrawlRunning, readCrawlStatus, runCrawlJob, runCrawlPageRetryBatchJob, runCrawlPageRetryJob } from "./engines/crawler-engine";
 import { CRAWL_MANIFEST_PATH, ensureDataDirectory, fileUpdatedAt, readJson } from "./storage";
@@ -333,13 +337,17 @@ function evaluateBuildWithAccessories(
   recommendationPreferences: RecommendationPreferences,
   includeSuggestions = true
 ): CompatibilityResult {
-  return evaluateBuildWithSharedDomain(build, catalog, accessories, {
+  const result = evaluateBuildWithSharedDomain(build, catalog, accessories, {
     catalogSnapshotAt,
     recommendationPreferences,
     gamingPerformanceEvidence: loadGamingPerformanceEvidence(),
     includeSuggestions,
     now: new Date().toISOString()
   });
+  const gamingTargetAssessment = gamingTargetAssessmentForBuild(build, catalog, recommendationPreferences, loadGamingFpsReferences());
+  const selected = Object.fromEntries(catalog.filter((part) => Object.values(build).flat().some((item) => item && typeof item === "object" && "partId" in item && item.partId === part.id)).map((part) => [part.category, part]));
+  const tierAssessment = recommendationPreferences.gamingMode ? gamingTierAssessmentFor(selected, { memoryCapacityGb: 16, actualMemoryCapacityGb: build.memory.reduce((sum, item) => sum + (catalog.find((part) => part.id === item.partId)?.specs.capacityGb ?? 0) * item.quantity, 0), actualMemoryModuleCount: build.memory.every((item) => catalog.find((part) => part.id === item.partId)?.specs.memoryModuleCountPerKit !== undefined) ? build.memory.reduce((sum,item) => sum+(catalog.find((part) => part.id === item.partId)!.specs.memoryModuleCountPerKit!) * item.quantity,0) : undefined, memoryQuantity: build.memory.reduce((sum,item) => sum+item.quantity,0), hddCount: build.hdd.reduce((sum,item) => sum+item.quantity,0) }) : undefined;
+  return { ...result, partPriceSnapshot: checkedPartPriceSnapshotFor(build, catalog), ...(gamingTargetAssessment ? { gamingTargetAssessment } : {}), ...(tierAssessment ? { gamingSupportRequirements: tierAssessment.requirements, partTierSuitability: tierAssessment.categories } : {}) };
 }
 
 function catalogRefreshReportForRequest(value: unknown, build: BuildSelection, preferences: RecommendationPreferences): { report?: CatalogRefreshReport; error?: string } {
@@ -1939,12 +1947,12 @@ app.post("/api/builds/recommend", publicRecommendationRateLimit, async (request,
     // 요청마다 로드해 재시작 후에도 저장값과 맞춘다.
     loadEngineGenerationOptions();
     trackUsageEvent("recommend", { path: "/api/builds/recommend" });
-    const draft = generateBuildDraft(catalog, parsed.request, loadGamingPerformanceEvidence(), { targetFilters: loadEngineTargetFiltersConfig() });
+    const draft = generateBuildDraft(catalog, parsed.request, loadGamingPerformanceEvidence(), { targetFilters: loadEngineTargetFiltersConfig(), gamingTestbedPhase1: parsed.request.gamingTestbedPhase1, gamingFpsReferences: loadGamingFpsReferences() });
     noteStaleServedPrices(await servedItemsFor(draft.selection, catalog));
     response.json(draft);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "현재 데이터로 자동 견적을 생성하지 못했습니다.";
-    const recoveryOptions = catalog ? buildGenerationRecoveryOptionsFor(catalog, parsed.request) : [];
+    const recoveryOptions = catalog ? buildGenerationRecoveryOptionsFor(catalog, parsed.request, { targetFilters: loadEngineTargetFiltersConfig(), gamingFpsReferences: loadGamingFpsReferences() }) : [];
     const diagnostics = error instanceof BuildGenerationError ? error.diagnostics : [];
     trackUsageEvent("recommend_failed", { path: "/api/builds/recommend" });
     recordGenerationFailure({
@@ -1978,7 +1986,7 @@ function buildGenerationVariantResultsFor(catalog: Part[], request: BuildGenerat
   const targetFilters = loadEngineTargetFiltersConfig();
   return engineGenerationVariantPrioritiesFor().map((priority) => {
     try {
-      const draft = generateBuildDraft(catalog, { ...request, priority }, gamingPerformanceEvidence, { targetFilters });
+      const draft = generateBuildDraft(catalog, { ...request, priority }, gamingPerformanceEvidence, { targetFilters, gamingTestbedPhase1: request.gamingTestbedPhase1, gamingFpsReferences: loadGamingFpsReferences() });
       void servedItemsFor(draft.selection, catalog).then(noteStaleServedPrices).catch(() => undefined);
       return { priority, draft };
     } catch (error: unknown) {
@@ -2085,7 +2093,7 @@ app.post("/api/builds/recommend/variants", publicRecommendationRateLimit, async 
     response.json({ variants });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "세 가지 자동 구성 결과를 만들지 못했습니다.";
-    const recoveryOptions = catalog ? buildGenerationRecoveryOptionsFor(catalog, parsed.request) : [];
+    const recoveryOptions = catalog ? buildGenerationRecoveryOptionsFor(catalog, parsed.request, { targetFilters: loadEngineTargetFiltersConfig(), gamingFpsReferences: loadGamingFpsReferences() }) : [];
     const diagnostics = error instanceof BuildGenerationError ? error.diagnostics : [];
     trackUsageEvent("recommend_failed", { path: "/api/builds/recommend/variants" });
     recordGenerationFailure({
@@ -2114,7 +2122,7 @@ app.post("/api/builds/recommend/budget-ladder", publicRecommendationRateLimit, a
     const targetFilters = loadEngineTargetFiltersConfig();
     const outcomes = scenarios.map((scenario) => {
       try {
-        return { ...scenario, draft: generateBuildDraft(catalog!, scenario.request, loadGamingPerformanceEvidence(), { targetFilters }) };
+        return { ...scenario, draft: generateBuildDraft(catalog!, scenario.request, loadGamingPerformanceEvidence(), { targetFilters, gamingTestbedPhase1: scenario.request.gamingTestbedPhase1, gamingFpsReferences: loadGamingFpsReferences() }) };
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "이 예산 구간의 자동 구성을 만들지 못했습니다.";
         const diagnostics = error instanceof BuildGenerationError ? error.diagnostics : [];
@@ -2134,7 +2142,7 @@ app.post("/api/builds/recommend/budget-ladder", publicRecommendationRateLimit, a
     response.json({ scenarios: outcomes });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "예산 구간 자동 견적을 생성하지 못했습니다.";
-    const recoveryOptions = catalog ? buildGenerationRecoveryOptionsFor(catalog, parsed.request) : [];
+    const recoveryOptions = catalog ? buildGenerationRecoveryOptionsFor(catalog, parsed.request, { targetFilters: loadEngineTargetFiltersConfig(), gamingFpsReferences: loadGamingFpsReferences() }) : [];
     const diagnostics = error instanceof BuildGenerationError ? error.diagnostics : [];
     trackUsageEvent("recommend_failed", { path: "/api/builds/recommend/budget-ladder" });
     recordGenerationFailure({

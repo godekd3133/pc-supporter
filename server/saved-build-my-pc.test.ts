@@ -10,6 +10,10 @@ import { savedBuildAlternativeAlertsFor } from "./saved-build-alternatives";
 import { truncatePostgresTables } from "./testkit/postgres";
 import type { SavedBuildRecord } from "./build-share";
 
+// This ownership/monitor fixture controls its two comparison CPUs. Domestic
+// testbed market additions are covered separately and must not replace them.
+vi.mock("./phase1-catalog", () => ({ applyPhase1CatalogSnapshot: (catalog: Part[]) => catalog }));
+
 const selection = { memory: [], ssd: [], hdd: [], accessories: [], useIntegratedGraphics: true };
 
 async function closeServer(server: Server) {

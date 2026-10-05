@@ -131,6 +131,40 @@ describe("catalog override map contracts", () => {
     expect(() => catalogSpecOverrideMapFromUnknown({ item: { ...catalogOverrides["cpu-fixture"], partId: "item", sourceCheck: { ...catalogOverrides["cpu-fixture"].sourceCheck, status: "unknown" } } })).toThrow(/sourceCheck 형식/);
   });
 
+  it("accepts the new case support contract without changing the stored map", () => {
+    const override = { ...clone(catalogOverrides["cpu-fixture"]), partId: "case-fixture", category: "case", fields: { radiatorSizesMm: [120, 240, 360], radiatorSupports: [{ position: "top", sizesMm: [120, 240] }, { position: "front", sizesMm: [360] }], supportedPsuFormFactors: ["ATX", "SFX", "SFX-L"], ssdBays: 0 } };
+    const input = { [override.partId]: override };
+    expect(catalogSpecOverrideMapFromUnknown(input)).toBe(input);
+    expect(input[override.partId]).toEqual(override);
+  });
+
+  it("preserves conditional radiator support and fractional component geometry in private import", () => {
+    const input = { "case-fixture": { ...clone(catalogOverrides["cpu-fixture"]), partId: "case-fixture", category: "case", fields: { radiatorSupports: [{ position: "psu_shroud", sizesMm: [240, 280], requirements: [{ sizesMm: [240], maxAssemblyThicknessMm: 55.5, maxMemoryHeightMm: 35, exclusiveUpperBound: true }, { sizesMm: [280], configurationNote: "HDD 케이지 분리" }] }] } }, "cooler-fixture": { ...clone(catalogOverrides["cpu-fixture"]), partId: "cooler-fixture", category: "cooler", fields: { radiatorThicknessMm: 27.5, radiatorFanThicknessMm: 25, radiatorWidthMm: 120.5, radiatorLengthMm: 277.5 } }, "memory-fixture": { ...clone(catalogOverrides["cpu-fixture"]), partId: "memory-fixture", category: "memory", fields: { memoryHeightMm: 34.5 } } };
+    expect(catalogSpecOverrideMapFromUnknown(input)).toBe(input);
+  });
+
+  it.each([
+    { sizesMm: [360], maxAssemblyThicknessMm: 55 },
+    { maxAssemblyThicknessMm: 55, unknownLimit: 30 },
+    { configurationNote: "HDD 케이지 분리", exclusiveUpperBound: true }
+  ])("rejects invalid nested mounting conditions in private import: %j", (requirement) => {
+    expect(() => catalogSpecOverrideMapFromUnknown({ "case-fixture": { ...clone(catalogOverrides["cpu-fixture"]), partId: "case-fixture", category: "case", fields: { radiatorSupports: [{ position: "top", sizesMm: [240], requirements: [requirement] }] } } })).toThrow(/값의 형식 또는 범위/);
+  });
+
+  it.each([
+    { radiatorSizesMm: [] },
+    { radiatorSizesMm: [240, 240] },
+    { radiatorSizesMm: ["240"] },
+    { radiatorSupports: [{ position: "top", sizesMm: [240], unreviewed: true }] },
+    { radiatorSupports: [{ position: "top", sizesMm: [] }] },
+    { radiatorSupports: [{ position: "roof", sizesMm: [240] }] },
+    { radiatorSupports: [{ position: "top", sizesMm: [240] }, { position: "top", sizesMm: [360] }] },
+    { supportedPsuFormFactors: ["ATX", "SFX", "TFX"] },
+    { ssdBays: 0.5 }
+  ])("rejects invalid case support in private full-map import: %j", (fields) => {
+    expect(() => catalogSpecOverrideMapFromUnknown({ "case-fixture": { ...clone(catalogOverrides["cpu-fixture"]), partId: "case-fixture", category: "case", fields } })).toThrow(/값의 형식 또는 범위/);
+  });
+
   it("accepts valid stored full maps above the per-request API batch limit", () => {
     const catalogMap = Object.fromEntries(Array.from({ length: 501 }, (_value, index) => {
       const partId = `cpu-${index}`;

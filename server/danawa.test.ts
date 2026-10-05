@@ -357,6 +357,94 @@ describe("Danawa parser", () => {
     expect(part.missingFields).toEqual([]);
   });
 
+  it.each([
+    ["PCIe5.0, PCIe4.0, SATA", ["NVMe", "SATA"]],
+    ["PCIe4.0, SATA", ["NVMe", "SATA"]],
+    ["SATA , PCIe", ["NVMe", "SATA"]],
+    ["PCIe", ["NVMe"]]
+  ])("reads M.2 PCIe connection %s as NVMe support", (connection, expected) => {
+    const part = parseDanawaProductPage("motherboard", {
+      name: "저장장치 인터페이스 보드",
+      url: "https://prod.danawa.com/info/?pcode=270031&cate=112751",
+      sourceProductCode: "270031"
+    }, `<title>저장장치 인터페이스 보드 : 다나와 가격비교</title><meta name="description" content="AMD(소켓AM5) / DDR5 / M.2: 2개 / M.2 연결: ${connection} / SATA3: 4개" />`, "112751");
+
+    expect(part.specs.m2Interfaces).toEqual(expected);
+  });
+
+  it.each([
+    ["M.2 연결: SATA / [확장슬롯] PCIe버전: PCIe5.0 / PCIex16: 1개", ["SATA"]],
+    ["[확장슬롯] PCIe버전: PCIe5.0 / PCIex16: 1개 / M.2: 2개", undefined]
+  ])("keeps PCIe outside the M.2 connection out of M.2 interfaces", (rawSpecText, expected) => {
+    const part = parseDanawaProductPage("motherboard", {
+      name: "확장 슬롯 보드",
+      url: "https://prod.danawa.com/info/?pcode=270032&cate=112751",
+      sourceProductCode: "270032"
+    }, `<title>확장 슬롯 보드 : 다나와 가격비교</title><meta name="description" content="AMD(소켓AM5) / DDR5 / ${rawSpecText}" />`, "112751");
+
+    expect(part.specs.m2Interfaces).toEqual(expected);
+  });
+
+  it.each(["~", "∼", "～", "-", "−", "–", "—"])("uses the minimum motherboard VRM phase count from a %s range", (separator) => {
+    const part = parseDanawaProductPage("motherboard", {
+      name: "범위 표기 보드",
+      url: "https://prod.danawa.com/info/?pcode=270033&cate=112751",
+      sourceProductCode: "270033"
+    }, `<title>범위 표기 보드 : 다나와 가격비교</title><meta name="description" content="AMD(소켓AM5) / DDR5 / 전원부: 11 ${separator} 12페이즈" />`, "112751");
+
+    expect(part.specs.vrmPhaseCount).toBe(11);
+    expect(part.specs.vrmCapacityW).toBeUndefined();
+  });
+
+  it.each([
+    ["전원부: 12페이즈", 12],
+    ["전원부: 16+2+1페이즈", 19],
+    ["전원부: 16 + 2 + 1 페이즈", 19],
+    ["전원부: 12~11페이즈", 11],
+    ["전원부 방열판", undefined],
+    ["전원부: 11~페이즈", undefined]
+  ])("reads only explicit motherboard VRM phases from %s", (rawSpecText, expected) => {
+    const part = parseDanawaProductPage("motherboard", {
+      name: "전원 회로 보드",
+      url: "https://prod.danawa.com/info/?pcode=270034&cate=112751",
+      sourceProductCode: "270034"
+    }, `<title>전원 회로 보드 : 다나와 가격비교</title><meta name="description" content="AMD(소켓AM5) / DDR5 / ${rawSpecText}" />`, "112751");
+
+    expect(part.specs.vrmPhaseCount).toBe(expected);
+    expect(part.specs.vrmCapacityW).toBeUndefined();
+  });
+
+  it.each([
+    ["zero count", "0"],
+    ["zero range endpoint", "0~12"],
+    ["zero additive term", "12+0"],
+    ["unsafe integer", "9007199254740993"],
+    ["unsafe sum", "9007199254740991+1"],
+    ["infinite range endpoint", `11~${"9".repeat(310)}`]
+  ])("rejects invalid VRM phase data: %s", (_label, phaseText) => {
+    const part = parseDanawaProductPage("motherboard", {
+      name: "전원 회로 보드",
+      url: "https://prod.danawa.com/info/?pcode=270036&cate=112751",
+      sourceProductCode: "270036"
+    }, `<title>전원 회로 보드 : 다나와 가격비교</title><meta name="description" content="AMD(소켓AM5) / DDR5 / 전원부: ${phaseText}페이즈" />`, "112751");
+
+    expect(part.specs.vrmPhaseCount).toBeUndefined();
+  });
+
+  it("refreshes VRM phase evidence and removes stale counts when the raw source no longer states phases", () => {
+    const part = parseDanawaProductPage("motherboard", {
+      name: "전원 회로 보드",
+      url: "https://prod.danawa.com/info/?pcode=270035&cate=112751",
+      sourceProductCode: "270035"
+    }, `<title>전원 회로 보드 : 다나와 가격비교</title><meta name="description" content="AMD(소켓AM5) / DDR5 / 전원부: 11~12페이즈" />`, "112751");
+    const stored = { ...part, specs: { ...part.specs, vrmPhaseCount: 32, vrmCapacityW: 200 } };
+
+    expect(reparseDanawaPart(stored).specs).toMatchObject({ vrmPhaseCount: 11, vrmCapacityW: 200 });
+    const refreshed = reparseDanawaPart({ ...stored, rawSpecText: "AMD(소켓AM5) / DDR5 / 전원부 방열판" });
+    expect(refreshed.specs.vrmPhaseCount).toBeUndefined();
+    expect(refreshed.specs.vrmCapacityW).toBe(200);
+  });
+
   it("normalizes desktop and laptop memory slot form factors", () => {
     const desktop = parseDanawaProductPage("motherboard", {
       name: "데스크톱 DIMM 보드",

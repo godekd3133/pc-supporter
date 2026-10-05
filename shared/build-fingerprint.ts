@@ -30,6 +30,27 @@ function normalizeSlotSelection(selection: Record<string, string> | undefined) {
     .map(([slotId, partId]) => [slotId, partId]);
 }
 
+/** Canonical recommendation inputs used by local sync and compatibility freshness. */
+export function recommendationPreferencesFingerprintFieldsFor(preferences: RecommendationPreferences) {
+  const gaming = preferences.profile === "gaming";
+  return {
+    profile: preferences.profile,
+    priority: preferences.priority,
+    performanceTier: preferences.performanceTier ?? null,
+    listingPolicy: preferences.listingPolicy ?? "retail_only",
+    budgetWon: preferences.budgetWon ?? null,
+    gamingResolution: preferences.gamingResolution ?? null,
+    gamingRefreshRate: gaming ? preferences.gamingRefreshRate ?? 144 : null,
+    gamingMode: gaming ? preferences.gamingMode ?? null : null,
+    gamingTargetFps: gaming ? preferences.gamingTargetFps ?? null : null,
+    gpuVendorPreference: gaming ? preferences.gpuVendorPreference ?? null : null,
+    gamingGameIds: gaming ? [...new Set(preferences.gamingGameIds ?? [])].sort() : [],
+    gamingGraphicsPreset: gaming ? preferences.gamingGraphicsPreset ?? null : null,
+    gamingRayTracing: gaming ? preferences.gamingRayTracing ?? false : null,
+    gamingUpscaling: gaming ? preferences.gamingUpscaling ?? null : null
+  };
+}
+
 /**
  * Returns a deterministic key for the exact inputs that affect a compatibility check.
  * It intentionally includes recommendation preferences because they change the
@@ -52,13 +73,6 @@ export function buildCompatibilityInputFingerprint(build: BuildSelection, prefer
       rgbControllerAccessoryId: build.rgbControllerAccessoryId ?? null,
       useIntegratedGraphics: build.useIntegratedGraphics
     },
-    recommendationPreferences: {
-      profile: preferences.profile,
-      priority: preferences.priority,
-      listingPolicy: preferences.listingPolicy ?? "retail_only",
-      budgetWon: preferences.budgetWon ?? null,
-      gamingResolution: preferences.gamingResolution ?? null,
-      gamingRefreshRate: preferences.profile === "gaming" ? preferences.gamingRefreshRate ?? 144 : null
-    }
+    recommendationPreferences: recommendationPreferencesFingerprintFieldsFor(preferences)
   });
 }

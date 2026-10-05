@@ -1,6 +1,6 @@
 import type { PoolClient, QueryResultRow } from "pg";
 import { PART_CATEGORIES } from "../shared/types";
-import { catalogSpecOverrideFieldTypeFor } from "../shared/catalog-spec-overrides";
+import { catalogCaseSupportOverrideValueFor, catalogSpecOverrideFieldTypeFor, isCatalogCaseSupportOverrideField } from "../shared/catalog-spec-overrides";
 import { physicalSourceCheckFromUnknown } from "./physical-source-check-history";
 import { publishInstanceEventTransactional } from "./instance-events";
 
@@ -67,6 +67,10 @@ function assertOptionalNote(value: unknown, label: string, fieldName: string, re
 function assertCatalogSpecValue(category: string, field: string, value: unknown, label: string) {
   const valueType = catalogSpecOverrideFieldTypeFor(category as never, field);
   if (!valueType) throw new Error(`${label}.fields에 지원되지 않는 사양 필드가 있습니다.`);
+  if (isCatalogCaseSupportOverrideField(field)) {
+    if (catalogCaseSupportOverrideValueFor(field, value) === undefined) throw new Error(`${label}.fields.${field} 값의 형식 또는 범위가 올바르지 않습니다.`);
+    return;
+  }
 
   if (valueType === "number") {
     const allowZero = field === "hddBays";

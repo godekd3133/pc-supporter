@@ -77,7 +77,7 @@ export function AppHeader({ view, networkOnline, apiStatus, bootstrapLoading, bo
   const fallbackCachedAtLabel = apiStatus.fallbackCachedAt && Number.isFinite(Date.parse(apiStatus.fallbackCachedAt))
     ? new Date(apiStatus.fallbackCachedAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })
     : undefined;
-  const statusLabel = apiStatus.status === "offline" && fallbackCachedAtLabel ? `저장된 정보 · ${fallbackCachedAtLabel}` : !networkOnline ? "오프라인" : apiStatus.status === "offline" ? "서버 연결이 끊겼어요" : apiStatus.status === "degraded" ? "연결이 원활하지 않아요" : bootstrapErrorCount > 0 ? "일부 견적 정보를 불러오지 못했어요" : bootstrapLoading ? "불러오는 중" : "연결됨";
+  const statusLabel = apiStatus.status === "offline" && fallbackCachedAtLabel ? `저장된 정보 · ${fallbackCachedAtLabel}` : !networkOnline ? "오프라인" : apiStatus.status === "offline" ? "서버 연결이 끊겼어요" : apiStatus.status === "degraded" ? "연결 오류" : bootstrapErrorCount > 0 ? "일부 정보 없음" : bootstrapLoading ? "불러오는 중" : "연결됨";
   const statusClass = !networkOnline || apiStatus.status === "offline" || apiStatus.status === "degraded" || bootstrapErrorCount > 0 ? "degraded" : bootstrapLoading ? "loading" : "";
   const showStatus = Boolean(statusClass || bootstrapLoading);
   const refreshTotal = Math.max(1, catalogRefreshProgress?.requestedCount ?? 1);

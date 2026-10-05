@@ -1,0 +1,1224 @@
+{
+  "schemaVersion": 1,
+  "refreshedAt": "2026-10-04T14:47:26.660Z",
+  "parts": [
+    {
+      "id": "danawa-cpu-54218171",
+      "category": "cpu",
+      "name": "AMD 라이젠5-4세대 5500GT (세잔) (멀티팩 정품)",
+      "brand": "AMD",
+      "model": "AMD 라이젠5-4세대 5500GT (세잔) (멀티팩 정품)",
+      "imageUrl": "https://img.danuri.io/catalog-image/171/218/054/897e8c2c8f4b459eb9972f5f9a0bf661.jpg?shrink=160:160&_v=20261004170248",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=54218171",
+      "source": "danawa",
+      "sourceProductCode": "54218171",
+      "sourceCategoryId": "112747",
+      "listingType": "retail",
+      "priceWon": 197840,
+      "rawSpecText": "AMD(소켓AM4) / 6코어 / 12스레드 / 메모리 규격: DDR4 / 탑재 / 4세대(Zen3) / 7nm / 기본 클럭: 3.6GHz / 최대 클럭: 4.4GHz / L2 캐시: 3MB / L3 캐시: 16MB / TDP: 65W / PCIe3.0 / 3200MHz / AMD 라데온 그래픽 / 기술 지원: AMD Ryzen Master, SMT(하이퍼스레딩) , SenseMI / 쿨러: Wraith Stealth 포함 / 시네벤치R23(멀티): 6905",
+      "specs": {
+        "socket": "AM4",
+        "memoryType": "DDR4",
+        "cores": 6,
+        "threads": 12,
+        "boostClockGhz": 4.4,
+        "cinebenchR23Multi": 6905,
+        "tdpW": 65,
+        "maxMemorySpeedMhz": 3200,
+        "integratedGraphics": true,
+        "coolerIncluded": true,
+        "cpuSeries": "Ryzen 5000"
+      },
+      "dataQuality": "live",
+      "missingFields": [],
+      "updatedAt": "2026-10-04T14:20:21.920Z",
+      "priceCheckedAt": "2026-10-04T14:20:21.920Z"
+    },
+    {
+      "id": "danawa-cpu-16741211",
+      "category": "cpu",
+      "name": "AMD 라이젠5-4세대 5600 (버미어) (멀티팩 정품)",
+      "brand": "AMD",
+      "model": "AMD 라이젠5-4세대 5600 (버미어) (멀티팩 정품)",
+      "imageUrl": "https://img.danuri.io/catalog-image/211/741/016/adc88269a44341158839cad040af7b1c.jpg?shrink=160:160&_v=20261004080450",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=16741211",
+      "source": "danawa",
+      "sourceProductCode": "16741211",
+      "sourceCategoryId": "112747",
+      "listingType": "retail",
+      "priceWon": 158810,
+      "rawSpecText": "AMD(소켓AM4) / 6코어 / 12스레드 / 메모리 규격: DDR4 / 미탑재 / 4세대(Zen3) / 7nm / 기본 클럭: 3.5GHz / 최대 클럭: 4.4GHz / L2 캐시: 3MB / L3 캐시: 32MB / TDP: 65W / PCIe4.0 / 3200MHz / 기술 지원: AMD Ryzen Master, StoreMI , VR Ready 프리미엄, SMT(하이퍼스레딩) / 쿨러: Wraith Stealth 포함 / 시네벤치R23(싱글): 1460 / 시네벤치R23(멀티): 10906 / 출시가: 199달러(VAT별도)",
+      "specs": {
+        "socket": "AM4",
+        "memoryType": "DDR4",
+        "cores": 6,
+        "threads": 12,
+        "boostClockGhz": 4.4,
+        "cinebenchR23Single": 1460,
+        "cinebenchR23Multi": 10906,
+        "tdpW": 65,
+        "maxMemorySpeedMhz": 3200,
+        "integratedGraphics": false,
+        "coolerIncluded": true,
+        "cpuSeries": "Ryzen 5000"
+      },
+      "dataQuality": "live",
+      "missingFields": [],
+      "updatedAt": "2026-10-04T14:20:22.520Z",
+      "priceCheckedAt": "2026-10-04T14:20:22.520Z"
+    },
+    {
+      "id": "danawa-cpu-21694499",
+      "category": "cpu",
+      "name": "AMD 라이젠5-5세대 7500F (라파엘) (멀티팩 정품)",
+      "brand": "AMD",
+      "model": "AMD 라이젠5-5세대 7500F (라파엘) (멀티팩 정품)",
+      "imageUrl": "https://img.danuri.io/catalog-image/499/694/021/def25f4b749f47b499d21a4023537502.jpg?shrink=160:160&_v=20261004080635",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=21694499",
+      "source": "danawa",
+      "sourceProductCode": "21694499",
+      "sourceCategoryId": "112747",
+      "listingType": "retail",
+      "priceWon": 173090,
+      "rawSpecText": "AMD(소켓AM5) / 6코어 / 12스레드 / 메모리 규격: DDR5 / 미탑재 / 5세대(Zen4) / 5nm / 기본 클럭: 3.7GHz / 최대 클럭: 5.0GHz / L2 캐시: 6MB / L3 캐시: 32MB / TDP: 65W / PPT: 88W / PCIe5.0 / 5200MHz / 기술 지원: SMT(하이퍼스레딩) / 쿨러: Wraith Stealth 포함 / 시네벤치R23(싱글): 1824 / 시네벤치R23(멀티): 13824 / 출시가: 179달러(VAT별도)",
+      "specs": {
+        "socket": "AM5",
+        "memoryType": "DDR5",
+        "cores": 6,
+        "threads": 12,
+        "boostClockGhz": 5,
+        "cinebenchR23Single": 1824,
+        "cinebenchR23Multi": 13824,
+        "tdpW": 65,
+        "pptW": 88,
+        "maxMemorySpeedMhz": 5200,
+        "integratedGraphics": false,
+        "coolerIncluded": true,
+        "cpuSeries": "Ryzen 7000"
+      },
+      "dataQuality": "live",
+      "missingFields": [],
+      "updatedAt": "2026-10-04T14:20:23.409Z",
+      "priceCheckedAt": "2026-10-04T14:20:23.409Z"
+    },
+    {
+      "id": "danawa-cpu-19627934",
+      "category": "cpu",
+      "name": "AMD 라이젠7-5세대 7800X3D (라파엘) (멀티팩 정품)",
+      "brand": "AMD",
+      "model": "AMD 라이젠7-5세대 7800X3D (라파엘) (멀티팩 정품)",
+      "imageUrl": "https://img.danuri.io/catalog-image/934/627/019/06dbb694db084f5b8ddca38ffa95d717.jpg?shrink=160:160&_v=20261004215558",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=19627934",
+      "source": "danawa",
+      "sourceProductCode": "19627934",
+      "sourceCategoryId": "112747",
+      "listingType": "retail",
+      "priceWon": 427890,
+      "rawSpecText": "AMD(소켓AM5) / 8코어 / 16스레드 / 메모리 규격: DDR5 / 탑재 / 5세대(Zen4) / 5nm / 기본 클럭: 4.2GHz / 최대 클럭: 5.0GHz / L2 캐시: 8MB / L3 캐시: 96MB / TDP: 120W / PPT: 162W / PCIe5.0 / 5200MHz / AMD 라데온 그래픽 / 기술 지원: AMD Ryzen Master, AMD 3D V캐시 , SMT(하이퍼스레딩) / 쿨러: 미포함 / 시네벤치R23(싱글): 1788 / 시네벤치R23(멀티): 18208",
+      "specs": {
+        "socket": "AM5",
+        "memoryType": "DDR5",
+        "cores": 8,
+        "threads": 16,
+        "boostClockGhz": 5,
+        "cinebenchR23Single": 1788,
+        "cinebenchR23Multi": 18208,
+        "tdpW": 120,
+        "pptW": 162,
+        "maxMemorySpeedMhz": 5200,
+        "integratedGraphics": true,
+        "coolerIncluded": false,
+        "cpuSeries": "Ryzen 7000"
+      },
+      "dataQuality": "live",
+      "missingFields": [],
+      "updatedAt": "2026-10-04T14:20:24.268Z",
+      "priceCheckedAt": "2026-10-04T14:20:24.268Z"
+    },
+    {
+      "id": "danawa-cpu-62794082",
+      "category": "cpu",
+      "name": "AMD 라이젠7-6세대 9700X (그래니트 릿지) (멀티팩 정품)",
+      "brand": "AMD",
+      "model": "AMD 라이젠7-6세대 9700X (그래니트 릿지) (멀티팩 정품)",
+      "imageUrl": "https://img.danuri.io/catalog-image/082/794/062/87e11a2d022646898224f79f01fc402b.jpg?shrink=160:160&_v=20261004215553",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=62794082",
+      "source": "danawa",
+      "sourceProductCode": "62794082",
+      "sourceCategoryId": "112747",
+      "listingType": "retail",
+      "priceWon": 392790,
+      "rawSpecText": "AMD(소켓AM5) / 8코어 / 16스레드 / 메모리 규격: DDR5 / 탑재 / 6세대(Zen5) / TSMC 4nm / 기본 클럭: 3.8GHz / 최대 클럭: 5.5GHz / L2 캐시: 8MB / L3 캐시: 32MB / TDP: 65W / PPT: 88W / PCIe5.0 / 5600MHz / AMD 라데온 그래픽 / 기술 지원: AMD Ryzen Master, SMT(하이퍼스레딩) / 쿨러: Wraith Stealth 포함 / 시네벤치R23(싱글): 2260 / 시네벤치R23(멀티): 21436 / 출시가: 359달러(VAT별도)",
+      "specs": {
+        "socket": "AM5",
+        "memoryType": "DDR5",
+        "cores": 8,
+        "threads": 16,
+        "boostClockGhz": 5.5,
+        "cinebenchR23Single": 2260,
+        "cinebenchR23Multi": 21436,
+        "tdpW": 65,
+        "pptW": 88,
+        "maxMemorySpeedMhz": 5600,
+        "integratedGraphics": true,
+        "coolerIncluded": true,
+        "cpuSeries": "Ryzen 9000"
+      },
+      "dataQuality": "live",
+      "missingFields": [],
+      "updatedAt": "2026-10-04T14:20:24.799Z",
+      "priceCheckedAt": "2026-10-04T14:20:24.799Z"
+    },
+    {
+      "id": "danawa-cpu-70531547",
+      "category": "cpu",
+      "name": "AMD 라이젠7-6세대 9800X3D (그래니트 릿지) (멀티팩 정품)",
+      "brand": "AMD",
+      "model": "AMD 라이젠7-6세대 9800X3D (그래니트 릿지) (멀티팩 정품)",
+      "imageUrl": "https://img.danuri.io/catalog-image/547/531/070/749fd202aa5d4ebaac1438998c3addd2.jpeg?shrink=160:160&_v=20261004215638",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=70531547",
+      "source": "danawa",
+      "sourceProductCode": "70531547",
+      "sourceCategoryId": "112747",
+      "listingType": "retail",
+      "priceWon": 635790,
+      "rawSpecText": "AMD(소켓AM5) / 8코어 / 16스레드 / 메모리 규격: DDR5 / 탑재 / 6세대(Zen5) / TSMC 4nm / 기본 클럭: 4.7GHz / 최대 클럭: 5.2GHz / L2 캐시: 8MB / L3 캐시: 96MB / TDP: 120W / PCIe5.0 / 5600MHz / AMD 라데온 그래픽 / 기술 지원: AMD Ryzen Master, AMD 3D V캐시 , SMT(하이퍼스레딩) / 쿨러: 미포함 / 시네벤치R23(싱글): 2073 / 시네벤치R23(멀티): 23334 / 출시가: 479달러(VAT별도)",
+      "specs": {
+        "socket": "AM5",
+        "memoryType": "DDR5",
+        "cores": 8,
+        "threads": 16,
+        "boostClockGhz": 5.2,
+        "cinebenchR23Single": 2073,
+        "cinebenchR23Multi": 23334,
+        "tdpW": 120,
+        "maxMemorySpeedMhz": 5600,
+        "integratedGraphics": true,
+        "coolerIncluded": false,
+        "cpuSeries": "Ryzen 9000"
+      },
+      "dataQuality": "live",
+      "missingFields": [],
+      "updatedAt": "2026-10-04T14:20:25.275Z",
+      "priceCheckedAt": "2026-10-04T14:20:25.275Z"
+    },
+    {
+      "id": "danawa-cpu-77790914",
+      "category": "cpu",
+      "name": "AMD 라이젠9-6세대 9950X3D (그래니트 릿지) (멀티팩 정품)",
+      "brand": "AMD",
+      "model": "AMD 라이젠9-6세대 9950X3D (그래니트 릿지) (멀티팩 정품)",
+      "imageUrl": "https://img.danuri.io/catalog-image/914/790/077/f80e6f0109e4459da565e989f77c7c8a.jpg?shrink=160:160&_v=20261004202614",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=77790914",
+      "source": "danawa",
+      "sourceProductCode": "77790914",
+      "sourceCategoryId": "112747",
+      "listingType": "retail",
+      "priceWon": 938990,
+      "rawSpecText": "AMD(소켓AM5) / 16코어 / 32스레드 / 메모리 규격: DDR5 / 탑재 / 6세대(Zen5) / TSMC 4nm / 기본 클럭: 4.3GHz / 최대 클럭: 5.7GHz / L2 캐시: 16MB / L3 캐시: 128MB / TDP: 170W / PCIe5.0 / 5600MHz / AMD 라데온 그래픽 / 기술 지원: AMD Ryzen Master, AMD 3D V캐시 , SMT(하이퍼스레딩) / 쿨러: 미포함 / 시네벤치R23(싱글): 2242 / 시네벤치R23(멀티): 42377 / 출시가: 699달러(VAT별도)",
+      "specs": {
+        "socket": "AM5",
+        "memoryType": "DDR5",
+        "cores": 16,
+        "threads": 32,
+        "boostClockGhz": 5.7,
+        "cinebenchR23Single": 2242,
+        "cinebenchR23Multi": 42377,
+        "tdpW": 170,
+        "maxMemorySpeedMhz": 5600,
+        "integratedGraphics": true,
+        "coolerIncluded": false,
+        "cpuSeries": "Ryzen 9000"
+      },
+      "dataQuality": "live",
+      "missingFields": [],
+      "updatedAt": "2026-10-04T14:20:25.701Z",
+      "priceCheckedAt": "2026-10-04T14:20:25.701Z"
+    },
+    {
+      "id": "danawa-motherboard-77706989",
+      "category": "motherboard",
+      "name": "ASRock A520M-HVS 대원씨티에스",
+      "brand": "ASRock",
+      "model": "ASRock A520M-HVS 대원씨티에스",
+      "imageUrl": "https://img.danuri.io/catalog-image/989/706/077/2a94e07972ee4c81ab449bd11ac22678.jpg?shrink=160:160&_v=20261004160104",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=77706989",
+      "source": "danawa",
+      "sourceProductCode": "77706989",
+      "sourceCategoryId": "112751",
+      "listingType": "retail",
+      "priceWon": 52730,
+      "rawSpecText": "AMD(소켓AM4) / AMD A520 / DDR4 / VGA 연결: PCIe3.0 x16 / M-ATX (23.0x20.1cm) / 전원부: 4+2페이즈 / 50A / Vcore출력합계: 200 / 메모리 4733MHz (PC4-37800) / 2개 / 메모리 용량: 최대 128GB / XMP / 확장슬롯 PCIe버전: PCIe3.0 / PCIex16: 1개 / PCIex1: 1개 / 저장장치 SATA3: 4개 / M.2: 1개 / M.2 연결: PCIe , NVMe , SATA / 후면단자 HDMI / D-SUB / USB3.x 5Gbps / USB 2.0 / RJ-45 / 오디오잭 / PS/2 / USB A타입: 6개 / 랜/오디오 유선랜 칩셋: Realtek RTL8111H / 1Gbps / RJ-45: 1개 / 오디오 칩셋: Realtek ALC887 / 7.1채널(8ch) / 내부I/O USB/팬 헤더: USB3.0 헤더 , USB2.0 헤더 / 시스템팬 4핀: 2개 / I/O 헤더: TPM 헤더, 프론트오디오AAFP 헤더 , 침입감지 헤더 , COM포트 헤더 / 특징 UEFI",
+      "specs": {
+        "socket": "AM4",
+        "memoryType": "DDR4",
+        "memoryProfiles": [
+          "XMP"
+        ],
+        "maxMemoryGb": 128,
+        "memorySlots": 2,
+        "vrmPhaseCount": 6,
+        "m2Slots": 1,
+        "m2Interfaces": [
+          "NVMe",
+          "SATA"
+        ],
+        "pcieX16Slots": 1,
+        "pcieX8Slots": 0,
+        "pcieX4Slots": 0,
+        "pcieX1Slots": 1,
+        "sataPorts": 4,
+        "fanPortCount": 2,
+        "formFactor": "mATX"
+      },
+      "dataQuality": "live",
+      "missingFields": [],
+      "updatedAt": "2026-10-04T14:20:26.272Z",
+      "priceCheckedAt": "2026-10-04T14:20:26.272Z"
+    },
+    {
+      "id": "danawa-motherboard-11571368",
+      "category": "motherboard",
+      "name": "ASUS TUF Gaming B550M-PLUS STCOM",
+      "brand": "ASUS",
+      "model": "ASUS TUF Gaming B550M-PLUS STCOM",
+      "imageUrl": "https://img.danuri.io/catalog-image/368/571/011/2c90536df0e74012bf1668d9e427c763.jpg?shrink=160:160&_v=20261004194253",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=11571368",
+      "source": "danawa",
+      "sourceProductCode": "11571368",
+      "sourceCategoryId": "112751",
+      "listingType": "retail",
+      "priceWon": 154930,
+      "rawSpecText": "AMD(소켓AM4) / AMD B550 / DDR4 / VGA 연결: PCIe4.0 x16 / M-ATX (24.4x24.4cm) / 전원부: 8+2페이즈 / 50A / Vcore출력합계: 400 / 메모리 4800MHz (PC4-38400) / 4개 / 메모리 용량: 최대 128GB / 확장슬롯 PCIe버전: PCIe4.0, PCIe3.0 / PCIex16: 1개 / PCIex16(at x4): 1개 / PCIex1: 1개 / CrossFire X / 저장장치 SATA3: 4개 / M.2: 2개 / M.2 연결: PCIe , NVMe , SATA / 후면단자 HDMI / DP / USB3.x 10Gbps / USB3.x 5Gbps / USB 2.0 / RJ-45 / S/PDIF / 오디오잭 / PS/2 / USB A타입: 7개 / USB C타입: 1개 / 랜/오디오 유선랜 칩셋: Realtek RTL8125B / 2.5Gbps / RJ-45: 1개 / 오디오 칩셋: Realtek ALC S1200A / 7.1채널(8ch) / 내부I/O USB/팬 헤더: USB3.0 헤더 , USB2.0 헤더 , RGB 12V 4핀 헤더 , ARGB 5V 3핀 헤더 / 시스템팬 4핀: 2개 / I/O 헤더: TPM 헤더 / 특징 DrMOS / M.2 히트싱크 / LED라이트 / UEFI",
+      "specs": {
+        "socket": "AM4",
+        "memoryType": "DDR4",
+        "maxMemoryGb": 128,
+        "memorySlots": 4,
+        "vrmPhaseCount": 10,
+        "m2Slots": 2,
+        "m2Interfaces": [
+          "NVMe",
+          "SATA"
+        ],
+        "pcieX16Slots": 1,
+        "pcieX8Slots": 0,
+        "pcieX4Slots": 0,
+        "pcieX1Slots": 1,
+        "sataPorts": 4,
+        "fanPortCount": 2,
+        "rgbPortCount": 2,
+        "rgb5vPortCount": 1,
+        "rgb12vPortCount": 1,
+        "formFactor": "mATX"
+      },
+      "dataQuality": "live",
+      "missingFields": [],
+      "updatedAt": "2026-10-04T14:20:26.783Z",
+      "priceCheckedAt": "2026-10-04T14:20:26.783Z"
+    },
+    {
+      "id": "danawa-motherboard-122697197",
+      "category": "motherboard",
+      "name": "GIGABYTE B850M GAMING X WIFI6E 제이씨현",
+      "brand": "GIGABYTE",
+      "model": "GIGABYTE B850M GAMING X WIFI6E 제이씨현",
+      "imageUrl": "https://img.danuri.io/catalog-image/197/697/122/8c2152c5c6144a0a8b54e189fedfbff5.png?shrink=160:160&_v=20261004080635",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=122697197",
+      "source": "danawa",
+      "sourceProductCode": "122697197",
+      "sourceCategoryId": "112751",
+      "listingType": "retail",
+      "priceWon": 188070,
+      "rawSpecText": "AMD(소켓AM5) / AMD B850 / DDR5 / VGA 연결: PCIe5.0 x16 / M-ATX (24.4x24.4cm) / 전원부: 10+2+2페이즈 / 60A / Vcore출력합계: 600 / 메모리 8200MHz (PC5-65600) / 4개 / 메모리 용량: 최대 256GB / XMP / EXPO / 확장슬롯 PCIe버전: PCIe5.0, PCIe3.0 / PCIex16: 1개 / PCIex16(at x4): 1개 / 저장장치 SATA3: 4개 / M.2: 2개 / M.2 연결: PCIe5.0, PCIe4.0, NVMe / 후면단자 HDMI / DP / USB3.x 10Gbps / USB3.x 5Gbps / USB 2.0 / RJ-45 / 오디오잭 / BIOS플래시백 / USB A타입: 7개 / USB C타입: 1개 / 랜/오디오 유선랜 칩셋: Realtek / 2.5Gbps / RJ-45: 1개 / Realtek RTL8852CE / 무선랜(Wi-Fi) / 블루투스 / 오디오 칩셋: Realtek / 7.1채널(8ch) / [내부I/O] USB/팬 헤더: USB3.0 헤더 , USB2.0 헤더 , USB3.2 Type C 헤더, RGB 12V 4핀 헤더 , ARGB 5V 3핀 헤더 , CPU추가팬(OPT) 헤더, 펌프전용 헤더 / 시스템팬 4핀: 1개 / I/O 헤더: TPM 헤더, 프론트오디오AAFP 헤더 / 특징 M.2 히트싱크 / UEFI",
+      "specs": {
+        "socket": "AM5",
+        "memoryType": "DDR5",
+        "memoryProfiles": [
+          "EXPO",
+          "XMP"
+        ],
+        "maxMemoryGb": 256,
+        "memorySlots": 4,
+        "vrmPhaseCount": 14,
+        "m2Slots": 2,
+        "m2Interfaces": [
+          "NVMe"
+        ],
+        "m2PcieGenerations": [
+          5,
+          4
+        ],
+        "pcieX16Slots": 1,
+        "pcieX8Slots": 0,
+        "pcieX4Slots": 0,
+        "pcieX1Slots": 0,
+        "sataPorts": 4,
+        "fanPortCount": 2,
+        "rgbPortCount": 2,
+        "rgb5vPortCount": 1,
+        "rgb12vPortCount": 1,
+        "formFactor": "mATX"
+      },
+      "dataQuality": "live",
+      "missingFields": [],
+      "updatedAt": "2026-10-04T14:20:27.178Z",
+      "priceCheckedAt": "2026-10-04T14:20:27.178Z"
+    },
+    {
+      "id": "danawa-motherboard-75857021",
+      "category": "motherboard",
+      "name": "MSI MAG X870E 토마호크 WIFI",
+      "brand": "MSI",
+      "model": "MSI MAG X870E 토마호크 WIFI",
+      "imageUrl": "https://img.danuri.io/catalog-image/021/857/075/ae02013247374dbcaab99e6ca477ac02.jpg?shrink=160:160&_v=20261004085648",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=75857021",
+      "source": "danawa",
+      "sourceProductCode": "75857021",
+      "sourceCategoryId": "112751",
+      "listingType": "retail",
+      "priceWon": 449730,
+      "rawSpecText": "AMD(소켓AM5) / AMD X870E / DDR5 / VGA 연결: PCIe5.0 x16 / ATX (30.5x24.4cm) / 전원부: 14+2+1페이즈 / 80A / Vcore출력합계: 1120 / 메모리 8400MHz (PC5-67200) / 4개 / 메모리 용량: 최대 256GB / XMP / EXPO / 확장슬롯 PCIe버전: PCIe5.0, PCIe4.0, PCIe3.0 / PCIex16: 1개 / PCIex16(at x4): 1개 / PCIex16(at x1): 1개 / 저장장치 SATA3: 4개 / M.2: 4개 / M.2 연결: PCIe5.0, PCIe4.0, NVMe , USB4 레인공유 / 후면단자 HDMI / Type-C / USB4 40Gbps / USB3.x 10Gbps / USB3.x 5Gbps / USB 2.0 / RJ-45 / S/PDIF / 오디오잭 / BIOS플래시백 / 클리어CMOS / USB A타입: 9개 / USB C타입: 3개 / 랜/오디오 유선랜 칩셋: Realtek 8126 / 5Gbps / RJ-45: 1개 / 무선랜(Wi-Fi) / 블루투스 / 오디오 칩셋: Realtek ALC4080 / 7.1채널(8ch) / 내부I/O USB/팬 헤더: USB3.0 헤더 , USB2.0 헤더 , USB3.2 Type C 헤더, RGB 12V 4핀 헤더 , ARGB 5V 3핀 헤더 , CPU추가팬(OPT) 헤더 / 시스템팬 4핀: 6개 / I/O 헤더: TPM 헤더, 디버그LED, 프론트오디오AAFP 헤더 , 침입감지 헤더 / 특징 SPS(DrMOS) / 전원부 방열판 / M.2 히트싱크 / 일체형IO실드 / UEFI",
+      "specs": {
+        "socket": "AM5",
+        "memoryType": "DDR5",
+        "memoryProfiles": [
+          "EXPO",
+          "XMP"
+        ],
+        "maxMemoryGb": 256,
+        "memorySlots": 4,
+        "vrmPhaseCount": 17,
+        "m2Slots": 4,
+        "m2Interfaces": [
+          "NVMe"
+        ],
+        "m2PcieGenerations": [
+          5,
+          4
+        ],
+        "m2LaneSharingScopes": [
+          "usb4"
+        ],
+        "m2LaneSharingNote": "M.2 연결: PCIe5.0, PCIe4.0, NVMe , USB4 레인공유",
+        "pcieX16Slots": 1,
+        "pcieX8Slots": 0,
+        "pcieX4Slots": 0,
+        "pcieX1Slots": 0,
+        "sataPorts": 4,
+        "fanPortCount": 7,
+        "rgbPortCount": 2,
+        "rgb5vPortCount": 1,
+        "rgb12vPortCount": 1,
+        "formFactor": "ATX"
+      },
+      "dataQuality": "live",
+      "missingFields": [],
+      "updatedAt": "2026-10-04T14:20:27.804Z",
+      "priceCheckedAt": "2026-10-04T14:20:27.804Z"
+    },
+    {
+      "id": "danawa-cooler-106047347",
+      "category": "cooler",
+      "name": "DEEPCOOL AG400 G2 (블랙)",
+      "brand": "DEEPCOOL",
+      "model": "DEEPCOOL AG400 G2 (블랙)",
+      "imageUrl": "https://img.danuri.io/catalog-image/347/047/106/716ba88a085542d1a1e93c62a9fcf88f.jpeg?shrink=160:160&_v=20261004080443",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=106047347",
+      "source": "danawa",
+      "sourceProductCode": "106047347",
+      "sourceCategoryId": "11347549",
+      "listingType": "retail",
+      "priceWon": 21640,
+      "rawSpecText": "CPU 쿨러 / 공랭 / 싱글타워형 / 팬 쿨러 / TDP: 230W / A/S기간: 2년 / [호환/크기] 인텔 소켓: LGA1700, LGA1851 / AMD 소켓: AM4 , AM5 / 가로: 125mm / 세로: 92mm / 높이: 154.5mm / 무게: 631g / [쿨링팬] 팬 크기: 120mm / 팬 개수: 1개 / 25T / 4핀 / 베어링: Hydro(유체) / 2200 RPM / 최대 풍량: 70.09 CFM / 풍압(정압): 2.49mmH₂O / 최대 팬소음: 29.22dBA / non-LED / PWM 지원 / [구성품/기타] 24년 11월부로 1851소켓 지원 추가",
+      "specs": {
+        "coolerType": "air",
+        "supportedSockets": [
+          "LGA1700",
+          "LGA1851",
+          "AM4",
+          "AM5"
+        ],
+        "maxCoolingW": 230,
+        "maxCoolerHeightMm": 154.5
+      },
+      "dataQuality": "live",
+      "missingFields": [],
+      "updatedAt": "2026-10-04T14:20:28.178Z",
+      "priceCheckedAt": "2026-10-04T14:20:28.178Z"
+    },
+    {
+      "id": "danawa-cooler-16525058",
+      "category": "cooler",
+      "name": "Thermalright Peerless Assassin 120 SE 서린",
+      "brand": "Thermalright",
+      "model": "Thermalright Peerless Assassin 120 SE 서린",
+      "imageUrl": "https://img.danuri.io/catalog-image/058/525/016/30c05d7764404b5692dbcab24ecc44da.jpg?shrink=160:160&_v=20261004222653",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=16525058",
+      "source": "danawa",
+      "sourceProductCode": "16525058",
+      "sourceCategoryId": "11347549",
+      "listingType": "retail",
+      "priceWon": 36200,
+      "rawSpecText": "CPU 쿨러 / 공랭 / 듀얼타워형 / 팬 쿨러 / TDP: 260W / A/S기간: 3년 / [호환/크기] 인텔 소켓: LGA1200, LGA115x , LGA1700 / AMD 소켓: AM5, AM4 / 가로: 125mm / 세로: 135mm / 높이: 155mm / 무게: 850g / [쿨링팬] 팬 크기: 120mm / 팬 개수: 2개 / 25T / 4핀 / 베어링: S-FDB(유체) / 1550 RPM / 최대 풍량: 66.17 CFM / 풍압(정압): 1.53mmH₂O / 최대 팬소음: 25.6dBA / non-LED / PWM 지원 / [구성품/기타] 써멀컴파운드 / 써멀유형: 주사기형 / 열전도율: 12.8W/(m·K) / 23년 11월부로 AM5 소켓 호환 추가",
+      "specs": {
+        "coolerType": "air",
+        "supportedSockets": [
+          "LGA1200",
+          "LGA1700",
+          "AM5",
+          "AM4"
+        ],
+        "maxCoolingW": 260,
+        "maxCoolerHeightMm": 155
+      },
+      "dataQuality": "live",
+      "missingFields": [],
+      "updatedAt": "2026-10-04T14:20:28.589Z",
+      "priceCheckedAt": "2026-10-04T14:20:28.589Z"
+    },
+    {
+      "id": "danawa-memory-11787091",
+      "category": "memory",
+      "name": "ESSENCORE KLEVV DDR4-3200 CL22 파인인포 (16GB)",
+      "brand": "ESSENCORE",
+      "model": "ESSENCORE KLEVV DDR4-3200 CL22 파인인포 (16GB)",
+      "imageUrl": "https://img.danuri.io/catalog-image/091/787/011/c695e1a1e23f43beb0d1cf8a4ab2dc41.jpg?shrink=160:160&_v=20261004080503",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=11787091",
+      "source": "danawa",
+      "sourceProductCode": "11787091",
+      "sourceCategoryId": "112752",
+      "listingType": "retail",
+      "priceWon": 179350,
+      "rawSpecText": "데스크탑용 / DDR4 / 3200MHz (PC4-25600) / 램타이밍: CL22-22-22-51 / 1.20V / 램개수: 1개 / 히트싱크: 미포함 / 모듈제조사: SK하이닉스",
+      "specs": {
+        "memoryType": "DDR4",
+        "memoryModuleCountPerKit": 1,
+        "memoryTiming": "CL22-22-22-51",
+        "memoryCasLatency": 22,
+        "memoryRcdLatency": 22,
+        "memoryTrpLatency": 22,
+        "memoryTrasLatency": 51,
+        "memoryVoltageV": 1.2,
+        "capacityGb": 16,
+        "speedMhz": 3200,
+        "memoryEffectiveLatencyNs": 13.75,
+        "formFactor": "DIMM"
+      },
+      "dataQuality": "live",
+      "missingFields": [],
+      "updatedAt": "2026-10-04T14:20:29.089Z",
+      "priceCheckedAt": "2026-10-04T14:20:29.089Z"
+    },
+    {
+      "id": "danawa-memory-18965774",
+      "category": "memory",
+      "name": "ESSENCORE KLEVV DDR5-5600 CL46 파인인포 (16GB)",
+      "brand": "ESSENCORE",
+      "model": "ESSENCORE KLEVV DDR5-5600 CL46 파인인포 (16GB)",
+      "imageUrl": "https://img.danuri.io/catalog-image/774/965/018/ac99721b271747c59acec2f3ad07483e.jpg?shrink=160:160&_v=20261004080351",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=18965774",
+      "source": "danawa",
+      "sourceProductCode": "18965774",
+      "sourceCategoryId": "112752",
+      "listingType": "retail",
+      "priceWon": 334350,
+      "rawSpecText": "데스크탑용 / DDR5 / 5600MHz (PC5-44800) / 램타이밍: CL46-46-46-90 / 1.10V / 램개수: 1개 / 온다이ECC / 히트싱크: 미포함 / 높이: 31.25mm / 모듈제조사: SK하이닉스",
+      "specs": {
+        "memoryType": "DDR5",
+        "memoryModuleCountPerKit": 1,
+        "memoryTiming": "CL46-46-46-90",
+        "memoryCasLatency": 46,
+        "memoryRcdLatency": 46,
+        "memoryTrpLatency": 46,
+        "memoryTrasLatency": 90,
+        "memoryVoltageV": 1.1,
+        "capacityGb": 16,
+        "speedMhz": 5600,
+        "memoryEffectiveLatencyNs": 16.43,
+        "formFactor": "DIMM"
+      },
+      "dataQuality": "live",
+      "missingFields": [],
+      "updatedAt": "2026-10-04T14:20:30.071Z",
+      "priceCheckedAt": "2026-10-04T14:20:30.071Z"
+    },
+    {
+      "id": "danawa-memory-95057837",
+      "category": "memory",
+      "name": "PATRIOT DDR5-8000 CL38 VIPER Xtreme5 RGB 패키지 (32GB(16Gx2))",
+      "brand": "PATRIOT",
+      "model": "PATRIOT DDR5-8000 CL38 VIPER Xtreme5 RGB 패키지 (32GB(16Gx2))",
+      "imageUrl": "https://img.danuri.io/catalog-image/837/057/095/ec76cbffc8054aff83cdafd43836f757.jpg?shrink=160:160&_v=20261004080448",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=95057837",
+      "source": "danawa",
+      "sourceProductCode": "95057837",
+      "sourceCategoryId": "112752",
+      "listingType": "retail",
+      "priceWon": 849980,
+      "rawSpecText": "데스크탑용 / DDR5 / 8000MHz (PC5-64000) / 램타이밍: CL38 / 1.45V / 램개수: 2개 / LED 라이트 / XMP3.0 / EXPO / 온다이ECC / 히트싱크: 방열판 / 방열판 색상: 블랙 / LED색상: RGB / LED 시스템: AURA SYNC , MYSTIC LIGHT , RGB FUSION , POLYCHROME / 높이: 44mm",
+      "specs": {
+        "memoryType": "DDR5",
+        "memoryProfiles": [
+          "EXPO",
+          "XMP"
+        ],
+        "memoryModuleCountPerKit": 2,
+        "memoryTiming": "CL38",
+        "memoryCasLatency": 38,
+        "memoryVoltageV": 1.45,
+        "capacityGb": 32,
+        "speedMhz": 8000,
+        "memoryEffectiveLatencyNs": 9.5,
+        "formFactor": "DIMM"
+      },
+      "dataQuality": "live",
+      "missingFields": [],
+      "updatedAt": "2026-10-04T14:20:30.992Z",
+      "priceCheckedAt": "2026-10-04T14:20:30.992Z"
+    },
+    {
+      "id": "danawa-gpu-71010053",
+      "category": "gpu",
+      "name": "MSI 지포스 RTX 3050 벤투스 2X E OC D6 6GB",
+      "brand": "MSI",
+      "model": "MSI 지포스 RTX 3050 벤투스 2X E OC D6 6GB",
+      "imageUrl": "https://img.danuri.io/catalog-image/053/010/071/c8e27636ed75494997136bdcacf22b1a.jpg?shrink=160:160&_v=20261004080404",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=71010053",
+      "source": "danawa",
+      "sourceProductCode": "71010053",
+      "sourceCategoryId": "112753",
+      "listingType": "retail",
+      "priceWon": 375000,
+      "rawSpecText": "RTX 3050 / PCIe4.0x16 / 300W 이상 / 가로(길이): 189mm / 베이스클럭: 1042 / 부스트클럭: 1492MHz / 스트림 프로세서: 2304 / GDDR6 / 출력단자: HDMI2.1 , DP1.4 / 지원정보: HDCP 지원 , 8K 지원 / 사용전력: 70W / 2팬 / 두께: 42mm",
+      "specs": {
+        "gpuVendor": "nvidia",
+        "gpuMemoryType": "GDDR6",
+        "gpuArchitectureFamily": "RTX 30",
+        "pcieSlotWidth": 16,
+        "powerW": 70,
+        "recommendedPsuW": 300,
+        "vramGb": 6,
+        "gpuBoostClockMhz": 1492,
+        "gpuStreamProcessors": 2304,
+        "lengthMm": 189,
+        "thicknessMm": 42
+      },
+      "dataQuality": "live",
+      "missingFields": [],
+      "updatedAt": "2026-10-04T14:20:31.975Z",
+      "priceCheckedAt": "2026-10-04T14:20:31.975Z"
+    },
+    {
+      "id": "danawa-gpu-78306452",
+      "category": "gpu",
+      "name": "AFOX 라데온 RX 580 2048SP D5 8GB 디앤디컴",
+      "brand": "AFOX",
+      "model": "AFOX 라데온 RX 580 2048SP D5 8GB 디앤디컴",
+      "imageUrl": "https://img.danuri.io/catalog-image/452/306/078/c1ed42d188884abea9ab8a5e6f9211f3.jpg?shrink=160:160&_v=20261003142533",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=78306452",
+      "source": "danawa",
+      "sourceProductCode": "78306452",
+      "sourceCategoryId": "112753",
+      "listingType": "retail",
+      "priceWon": 185990,
+      "rawSpecText": "RX 580 2048SP / PCIe3.0x16 / 400W 이상 / 전원 포트: 8핀 x1 / 부스트클럭: 1244MHz / 스트림 프로세서: 2048 / GDDR5 / 출력단자: DP1.4 , HDMI2.0 / 2팬 / A/S 3년",
+      "specs": {
+        "gpuVendor": "amd",
+        "gpuMemoryType": "GDDR5",
+        "pcieSlotWidth": 16,
+        "pciePowerOptions": [
+          [
+            {
+              "kind": "pcie_8pin_6plus2",
+              "count": 1
+            }
+          ]
+        ],
+        "recommendedPsuW": 400,
+        "vramGb": 8,
+        "gpuBoostClockMhz": 1244,
+        "gpuStreamProcessors": 2048
+      },
+      "dataQuality": "incomplete",
+      "missingFields": [
+        "powerW",
+        "lengthMm"
+      ],
+      "updatedAt": "2026-10-04T14:20:32.472Z",
+      "priceCheckedAt": "2026-10-04T14:20:32.472Z"
+    },
+    {
+      "id": "danawa-gpu-93501767",
+      "category": "gpu",
+      "name": "갤럭시 GALAZ 지포스 RTX 5050 BLACK OC D6 8GB DUAL HDMI",
+      "brand": "갤럭시",
+      "model": "갤럭시 GALAZ 지포스 RTX 5050 BLACK OC D6 8GB DUAL HDMI",
+      "imageUrl": "https://img.danuri.io/catalog-image/767/501/093/fcefed29400947a6b6f3bf194395240c.jpg?shrink=160:160&_v=20261004080456",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=93501767",
+      "source": "danawa",
+      "sourceProductCode": "93501767",
+      "sourceCategoryId": "112753",
+      "listingType": "retail",
+      "priceWon": 372800,
+      "rawSpecText": "RTX 5050 / PCIe5.0x16(at x8) / 550W 이상 / 전원 포트: 8핀 x1 / 가로(길이): 225mm / 베이스클럭: 2317 / 부스트클럭: 2587MHz / 스트림 프로세서: 2560 / 최대 AI TOPS: 421(FP4) / GDDR6 / 출력단자: DP2.1 , HDMI2.1 / 지원정보: 8K 지원 , HDCP 2.3 , HDR 지원 / 사용전력: 130W / 2팬 / 두께: 40mm / LED온오프스위치 / LED 라이트 / 백플레이트 / A/S 3년",
+      "specs": {
+        "gpuVendor": "nvidia",
+        "gpuMemoryType": "GDDR6",
+        "gpuArchitectureFamily": "RTX 50",
+        "pcieSlotWidth": 16,
+        "pciePowerOptions": [
+          [
+            {
+              "kind": "pcie_8pin_6plus2",
+              "count": 1
+            }
+          ]
+        ],
+        "powerW": 130,
+        "recommendedPsuW": 550,
+        "vramGb": 8,
+        "gpuBoostClockMhz": 2587,
+        "gpuStreamProcessors": 2560,
+        "lengthMm": 225,
+        "thicknessMm": 40
+      },
+      "dataQuality": "live",
+      "missingFields": [],
+      "updatedAt": "2026-10-04T14:20:33.426Z",
+      "priceCheckedAt": "2026-10-04T14:20:33.426Z"
+    },
+    {
+      "id": "danawa-gpu-90887702",
+      "category": "gpu",
+      "name": "PNY 지포스 RTX 5060 OC D7 8GB Dual Fan STCOM",
+      "brand": "PNY",
+      "model": "PNY 지포스 RTX 5060 OC D7 8GB Dual Fan STCOM",
+      "imageUrl": "https://img.danuri.io/catalog-image/702/887/090/fa3b42f8fcb6431381f3899601880eaf.jpg?shrink=160:160&_v=20261004080351",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=90887702",
+      "source": "danawa",
+      "sourceProductCode": "90887702",
+      "sourceCategoryId": "112753",
+      "listingType": "retail",
+      "priceWon": 537580,
+      "rawSpecText": "RTX 5060 / PCIe5.0x16(at x8) / 550W 이상 / 전원 포트: 8핀 x1 / 가로(길이): 200mm / 베이스클럭: 2280 / 부스트클럭: 2535MHz / 스트림 프로세서: 3840 / 최대 AI TOPS: 614(FP4) / GDDR7 / 출력단자: HDMI2.1 , DP2.1 / 지원정보: HDCP 2.3 , HDR 지원 , 8K 지원 / 2팬 / 두께: 39.8mm / 백플레이트 / 제로팬(0-dB기술) / VELOCITY X",
+      "specs": {
+        "gpuVendor": "nvidia",
+        "gpuMemoryType": "GDDR7",
+        "gpuArchitectureFamily": "RTX 50",
+        "pcieSlotWidth": 16,
+        "pciePowerOptions": [
+          [
+            {
+              "kind": "pcie_8pin_6plus2",
+              "count": 1
+            }
+          ]
+        ],
+        "recommendedPsuW": 550,
+        "vramGb": 8,
+        "gpuBoostClockMhz": 2535,
+        "gpuStreamProcessors": 3840,
+        "lengthMm": 200,
+        "thicknessMm": 39.8
+      },
+      "dataQuality": "incomplete",
+      "missingFields": [
+        "powerW"
+      ],
+      "updatedAt": "2026-10-04T14:20:34.419Z",
+      "priceCheckedAt": "2026-10-04T14:20:34.419Z"
+    },
+    {
+      "id": "danawa-gpu-98779298",
+      "category": "gpu",
+      "name": "갤럭시 GALAZ 지포스 RTX 5060 Ti BLACK OC Classic D7 8GB",
+      "brand": "갤럭시",
+      "model": "갤럭시 GALAZ 지포스 RTX 5060 Ti BLACK OC Classic D7 8GB",
+      "imageUrl": "https://img.danuri.io/catalog-image/298/779/098/153a9c4085134894b49015e91eaffbe3.jpg?shrink=160:160&_v=20261004080351",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=98779298",
+      "source": "danawa",
+      "sourceProductCode": "98779298",
+      "sourceCategoryId": "112753",
+      "listingType": "retail",
+      "priceWon": 536000,
+      "rawSpecText": "RTX 5060 Ti / PCIe5.0x16(at x8) / 600W 이상 / 전원 포트: 8핀 x1 / 가로(길이): 238mm / 베이스클럭: 2407 / 부스트클럭: 2587MHz / 스트림 프로세서: 4608 / 최대 AI TOPS: 759(FP4) / GDDR7 / 출력단자: HDMI2.1 , DP2.1 / 지원정보: 8K 지원 , HDCP 2.3 , HDR 지원 / 사용전력: 180W / 2팬 / 두께: 40mm / 백플레이트 / LED온오프스위치 / 제로팬(0-dB기술) / LED 라이트 / XTREME TUNER / A/S 3년",
+      "specs": {
+        "gpuVendor": "nvidia",
+        "gpuMemoryType": "GDDR7",
+        "gpuArchitectureFamily": "RTX 50",
+        "pcieSlotWidth": 16,
+        "pciePowerOptions": [
+          [
+            {
+              "kind": "pcie_8pin_6plus2",
+              "count": 1
+            }
+          ]
+        ],
+        "powerW": 180,
+        "recommendedPsuW": 600,
+        "vramGb": 8,
+        "gpuBoostClockMhz": 2587,
+        "gpuStreamProcessors": 4608,
+        "lengthMm": 238,
+        "thicknessMm": 40
+      },
+      "dataQuality": "live",
+      "missingFields": [],
+      "updatedAt": "2026-10-04T14:20:35.199Z",
+      "priceCheckedAt": "2026-10-04T14:20:35.199Z"
+    },
+    {
+      "id": "danawa-gpu-77382785",
+      "category": "gpu",
+      "name": "GAINWARD 지포스 RTX 5070 피닉스 D7 12GB",
+      "brand": "GAINWARD",
+      "model": "GAINWARD 지포스 RTX 5070 피닉스 D7 12GB",
+      "imageUrl": "https://img.danuri.io/catalog-image/785/382/077/cf4f4aa89bd846e9ab39d12a1cfe75c0.jpg?shrink=160:160&_v=20261004080456",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=77382785",
+      "source": "danawa",
+      "sourceProductCode": "77382785",
+      "sourceCategoryId": "112753",
+      "listingType": "retail",
+      "priceWon": 1043890,
+      "rawSpecText": "RTX 5070 / PCIe5.0x16 / 700W 이상 / 전원 포트: 16핀(12VHPWR) x1 / 가로(길이): 331.9mm / 베이스클럭: 2325 / 부스트클럭: 2512MHz / 스트림 프로세서: 6144 / 최대 AI TOPS: 988(FP4) / GDDR7 / VRAM 대역폭: 672 GB/s / 출력단자: HDMI2.1 , DP2.1 / 지원정보: 8K 지원 , HDR 지원 , HDCP 2.3 / 사용전력: 250W / 3팬 / 두께: 60mm / 제로팬(0-dB기술) / 백플레이트 / LED 라이트 / Dual BIOS / A/S 3년",
+      "specs": {
+        "gpuVendor": "nvidia",
+        "gpuMemoryType": "GDDR7",
+        "gpuArchitectureFamily": "RTX 50",
+        "pcieSlotWidth": 16,
+        "pciePowerOptions": [
+          [
+            {
+              "kind": "12vhpwr",
+              "count": 1
+            }
+          ]
+        ],
+        "powerW": 250,
+        "recommendedPsuW": 700,
+        "vramGb": 12,
+        "gpuBoostClockMhz": 2512,
+        "gpuStreamProcessors": 6144,
+        "gpuMemoryBandwidthGbps": 672,
+        "lengthMm": 331.9,
+        "thicknessMm": 60
+      },
+      "dataQuality": "live",
+      "missingFields": [],
+      "updatedAt": "2026-10-04T14:20:36.225Z",
+      "priceCheckedAt": "2026-10-04T14:20:36.225Z"
+    },
+    {
+      "id": "danawa-gpu-99892193",
+      "category": "gpu",
+      "name": "갤럭시 GALAZ 지포스 RTX 5070 Ti BLACK 2X OC D7 16GB",
+      "brand": "갤럭시",
+      "model": "갤럭시 GALAZ 지포스 RTX 5070 Ti BLACK 2X OC D7 16GB",
+      "imageUrl": "https://img.danuri.io/catalog-image/193/892/099/5008e0d884544f4eaddcaa8ad761931b.jpg?shrink=160:160&_v=20261004080455",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=99892193",
+      "source": "danawa",
+      "sourceProductCode": "99892193",
+      "sourceCategoryId": "112753",
+      "listingType": "retail",
+      "priceWon": 1513930,
+      "rawSpecText": "RTX 5070 Ti / PCIe5.0x16 / 750W 이상 / 전원 포트: 16핀(12V2x6) x1 / 가로(길이): 239mm / 베이스클럭: 2295 / 부스트클럭: 2467MHz / 스트림 프로세서: 8960 / 최대 AI TOPS: 1406(FP4) / GDDR7 / VRAM 대역폭: 896 GB/s / 출력단자: HDMI2.1 , DP2.1 / 지원정보: 8K 지원 , HDR 지원 , HDCP 2.3 / 사용전력: 300W / 2팬 / 두께: 45mm / 제로팬(0-dB기술) / 백플레이트 / LED 라이트 / LED온오프스위치 / XTREME TUNER / 구성품: VGA지지대, 3x8핀 to 16핀 커넥터 / A/S 3년",
+      "specs": {
+        "gpuVendor": "nvidia",
+        "gpuMemoryType": "GDDR7",
+        "gpuArchitectureFamily": "RTX 50",
+        "pcieSlotWidth": 16,
+        "pciePowerOptions": [
+          [
+            {
+              "kind": "12v2x6",
+              "count": 1
+            }
+          ],
+          [
+            {
+              "kind": "pcie_8pin_6plus2",
+              "count": 3
+            }
+          ]
+        ],
+        "pciePowerAdapterOptions": [
+          [
+            {
+              "kind": "pcie_8pin_6plus2",
+              "count": 3
+            }
+          ]
+        ],
+        "powerW": 300,
+        "recommendedPsuW": 750,
+        "vramGb": 16,
+        "gpuBoostClockMhz": 2467,
+        "gpuStreamProcessors": 8960,
+        "gpuMemoryBandwidthGbps": 896,
+        "lengthMm": 239,
+        "thicknessMm": 45
+      },
+      "dataQuality": "live",
+      "missingFields": [],
+      "updatedAt": "2026-10-04T14:20:37.659Z",
+      "priceCheckedAt": "2026-10-04T14:20:37.659Z"
+    },
+    {
+      "id": "danawa-gpu-75601394",
+      "category": "gpu",
+      "name": "GAINWARD 지포스 RTX 5080 피닉스 D7 16GB",
+      "brand": "GAINWARD",
+      "model": "GAINWARD 지포스 RTX 5080 피닉스 D7 16GB",
+      "imageUrl": "https://img.danuri.io/catalog-image/394/601/075/af2f57c8607141f788ccf535ae353b9d.jpg?shrink=160:160&_v=20261004080448",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=75601394",
+      "source": "danawa",
+      "sourceProductCode": "75601394",
+      "sourceCategoryId": "112753",
+      "listingType": "retail",
+      "priceWon": 2279000,
+      "rawSpecText": "RTX 5080 / PCIe5.0x16 / 850W 이상 / 전원 포트: 16핀(12VHPWR) x1 / 가로(길이): 331.9mm / 베이스클럭: 2295 / 부스트클럭: 2617MHz / 스트림 프로세서: 10752 / 최대 AI TOPS: 1801(FP4) / GDDR7 / VRAM 대역폭: 960 GB/s / 출력단자: HDMI2.1 , DP2.1 / 지원정보: 8K 지원 , HDR 지원 , HDCP 2.3 / 사용전력: 360W / 3팬 / 두께: 60mm / 제로팬(0-dB기술) / 백플레이트 / LED 라이트 / Dual BIOS / 구성품: 3x8핀 to 16핀 커넥터 / A/S 3년",
+      "specs": {
+        "gpuVendor": "nvidia",
+        "gpuMemoryType": "GDDR7",
+        "gpuArchitectureFamily": "RTX 50",
+        "pcieSlotWidth": 16,
+        "pciePowerOptions": [
+          [
+            {
+              "kind": "12vhpwr",
+              "count": 1
+            }
+          ],
+          [
+            {
+              "kind": "pcie_8pin_6plus2",
+              "count": 3
+            }
+          ]
+        ],
+        "pciePowerAdapterOptions": [
+          [
+            {
+              "kind": "pcie_8pin_6plus2",
+              "count": 3
+            }
+          ]
+        ],
+        "powerW": 360,
+        "recommendedPsuW": 850,
+        "vramGb": 16,
+        "gpuBoostClockMhz": 2617,
+        "gpuStreamProcessors": 10752,
+        "gpuMemoryBandwidthGbps": 960,
+        "lengthMm": 331.9,
+        "thicknessMm": 60
+      },
+      "dataQuality": "live",
+      "missingFields": [],
+      "updatedAt": "2026-10-04T14:20:39.286Z",
+      "priceCheckedAt": "2026-10-04T14:20:39.286Z"
+    },
+    {
+      "id": "danawa-gpu-75656861",
+      "category": "gpu",
+      "name": "MANLI 지포스 RTX 5090 Gallardo OC D7 32GB 인텍앤컴퍼니",
+      "brand": "MANLI",
+      "model": "MANLI 지포스 RTX 5090 Gallardo OC D7 32GB 인텍앤컴퍼니",
+      "imageUrl": "https://img.danuri.io/catalog-image/861/656/075/646dd4a3940348f5ae4f5876f8f72af0.jpg?shrink=160:160&_v=20261004080503",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=75656861",
+      "source": "danawa",
+      "sourceProductCode": "75656861",
+      "sourceCategoryId": "112753",
+      "listingType": "retail",
+      "priceWon": 6344790,
+      "rawSpecText": "RTX 5090 / PCIe5.0x16 / 전원 포트: 16핀(12V2x6) x1 / 가로(길이): 359mm / 베이스클럭: 2017 / 부스트클럭: 2482MHz / 스트림 프로세서: 21760 / 최대 AI TOPS: 3352(FP4, sparsity) / GDDR7 / VRAM 대역폭: 1792 GB/s / 출력단자: HDMI2.1 , DP2.1 / 지원정보: 8K 지원 , HDR 지원 , HDCP 2.3 / 사용전력: 575W / 3팬 / 두께: 69mm / 제로팬(0-dB기술) / 백플레이트 / LED 라이트 / A/S 3년",
+      "specs": {
+        "gpuVendor": "nvidia",
+        "gpuMemoryType": "GDDR7",
+        "gpuArchitectureFamily": "RTX 50",
+        "pcieSlotWidth": 16,
+        "pciePowerOptions": [
+          [
+            {
+              "kind": "12v2x6",
+              "count": 1
+            }
+          ]
+        ],
+        "powerW": 575,
+        "vramGb": 32,
+        "gpuBoostClockMhz": 2482,
+        "gpuStreamProcessors": 21760,
+        "gpuMemoryBandwidthGbps": 1792,
+        "lengthMm": 359,
+        "thicknessMm": 69
+      },
+      "dataQuality": "incomplete",
+      "missingFields": [
+        "recommendedPsuW"
+      ],
+      "updatedAt": "2026-10-04T14:20:40.974Z",
+      "priceCheckedAt": "2026-10-04T14:20:40.974Z"
+    },
+    {
+      "id": "danawa-cooler-70003022",
+      "category": "cooler",
+      "name": "CORSAIR NAUTILUS 360 RS",
+      "brand": "CORSAIR",
+      "model": "CORSAIR NAUTILUS 360 RS",
+      "imageUrl": "https://img.danuri.io/catalog-image/022/003/070/a7874b3e81c14711ac290eb40d519fc3.jpg?shrink=160:160&_v=20261004080451",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=70003022",
+      "source": "danawa",
+      "sourceProductCode": "70003022",
+      "sourceCategoryId": "11347549",
+      "listingType": "retail",
+      "priceWon": 124330,
+      "rawSpecText": "CPU 쿨러 / 수랭 / 팬 쿨러 / A/S기간: 5년 / [호환/크기] 인텔 소켓: LGA1851 , LGA1700 / AMD 소켓: AM5, AM4 / 무게: 1.59kg / [수랭] 라디에이터: 3열 / 라디에이터 길이: 396mm / 라디에이터 두께: 27mm / 호스 길이: 450mm / [쿨링팬] 팬 크기: 120mm / 팬 개수: 3개 / 25T / 4핀 / 베어링: Magnetic Dome / 2100 RPM / 최대 풍량: 72.8 CFM / 풍압(정압): 4.15mmH₂O / 최대 팬소음: 36dBA / 작동전압: 팬 12V / [부가기능] non-LED / PWM 지원 / 제로팬(0-dB기술) / 데이지체인",
+      "specs": {
+        "coolerType": "liquid",
+        "supportedSockets": [
+          "LGA1851",
+          "LGA1700",
+          "AM5",
+          "AM4"
+        ],
+        "radiatorSizeMm": 360
+      },
+      "dataQuality": "live",
+      "missingFields": [],
+      "updatedAt": "2026-10-04T14:23:27.840Z",
+      "priceCheckedAt": "2026-10-04T14:23:27.840Z"
+    },
+    {
+      "id": "danawa-case-96308750",
+      "category": "case",
+      "name": "앱코 C10M 컴팩트 (블랙)",
+      "brand": "앱코",
+      "model": "앱코 C10M 컴팩트 (블랙)",
+      "imageUrl": "https://img.danuri.io/catalog-image/750/308/096/cd36892bc6c64d558efb4a6c74d3a79e.jpg?shrink=160:160&_v=20261004080503",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=96308750",
+      "source": "danawa",
+      "sourceProductCode": "96308750",
+      "sourceCategoryId": "112775",
+      "listingType": "retail",
+      "priceWon": 17900,
+      "rawSpecText": "M-ATX 케이스 / 지원보드규격: M-ATX , M-ITX / VGA 길이: 230mm / CPU쿨러 높이: 145mm / 미니타워 / [패널] 전면 패널 타입: 일반(솔리드) / 측면 패널 타입: 통풍구 / [쿨러/튜닝] 쿨링팬: 총1개 / 후면: 80mm x1 / [크기] 너비(W): 168mm / 높이(H): 340mm / 깊이(D): 258mm / [호환성] 지원파워규격: 표준-ATX / 파워 장착 길이: 160mm / 파워 위치: 상단",
+      "specs": {
+        "maxGpuLengthMm": 230,
+        "maxCoolerHeightMm": 145,
+        "maxPsuLengthMm": 160,
+        "fanCount": 1,
+        "radiatorSizesMm": [],
+        "radiatorSupports": [],
+        "motherboardFormFactors": [
+          "mATX",
+          "ITX"
+        ],
+        "supportedPsuFormFactors": [
+          "ATX"
+        ]
+      },
+      "dataQuality": "incomplete",
+      "missingFields": [
+        "hddBays"
+      ],
+      "updatedAt": "2026-10-04T14:36:12.018Z",
+      "priceCheckedAt": "2026-10-04T14:36:12.018Z"
+    },
+    {
+      "id": "danawa-ssd-18041081",
+      "category": "ssd",
+      "name": "PNY CS900 제이씨현 (1TB)",
+      "brand": "PNY",
+      "model": "PNY CS900 제이씨현 (1TB)",
+      "imageUrl": "https://img.danuri.io/catalog-image/081/041/018/d50d2d1f7cf8404bb0025c393be441be.jpg?shrink=160:160&_v=20261004080404",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=18041081",
+      "source": "danawa",
+      "sourceProductCode": "18041081",
+      "sourceCategoryId": "112760",
+      "listingType": "retail",
+      "priceWon": 212090,
+      "rawSpecText": "6.4cm(2.5형) / SATA3 (6Gb/s) / 컨트롤러: 기타 / [성능] 순차읽기: 535MB/s / 순차쓰기: 515MB/s / [지원기능] TRIM / S.M.A.R.T / SLC캐싱 / ECC / DEVSLP / [환경특성] MTBF: 200만 / A/S기간: 3년 , 제한보증 / 두께: 7mm / 45g / [기타] 24년 10월부로 제조사 요청에 의한 컨트롤러,메모리타입 정보 삭제",
+      "specs": {
+        "capacityGb": 1000,
+        "interface": "SATA",
+        "formFactor": "2.5인치",
+        "sequentialReadMbps": 535,
+        "sequentialWriteMbps": 515,
+        "ssdController": "기타"
+      },
+      "dataQuality": "live",
+      "missingFields": [],
+      "updatedAt": "2026-10-04T14:36:16.020Z",
+      "priceCheckedAt": "2026-10-04T14:36:16.020Z"
+    },
+    {
+      "id": "danawa-psu-98760803",
+      "category": "psu",
+      "name": "마이크로닉스 COOLMAX ELITE II 500W",
+      "brand": "마이크로닉스",
+      "model": "마이크로닉스 COOLMAX ELITE II 500W",
+      "imageUrl": "https://img.danuri.io/catalog-image/803/760/098/48a1c866618d436a847ba64e52a6326f.jpg?shrink=160:160&_v=20261004085719",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=98760803",
+      "source": "danawa",
+      "sourceProductCode": "98760803",
+      "sourceCategoryId": "112777",
+      "listingType": "retail",
+      "priceWon": 38880,
+      "rawSpecText": "ATX 파워 / 500W / 케이블연결: 케이블일체형 / 전압변동: ±0.3% / +12V 싱글레일 / +12V 가용률: 100% / 120mm 팬 / 깊이: 140mm / 무상 5년 / [커넥터] 메인전원: 24핀(20+4) / 보조전원: (4+4)핀x1 / PCIe 8핀(6+2): 2개 / SATA: 4개 / IDE 4핀: 3개 / [부가기능] 대기전력 1W 미만",
+      "specs": {
+        "pciePowerConnectors": {
+          "pcie_8pin_6plus2": 2
+        },
+        "wattageW": 500,
+        "psuDepthMm": 140,
+        "psuCableType": "fixed",
+        "psuRailType": "single",
+        "psuFormFactor": "ATX"
+      },
+      "dataQuality": "live",
+      "missingFields": [],
+      "updatedAt": "2026-10-04T14:36:18.204Z",
+      "priceCheckedAt": "2026-10-04T14:36:18.204Z"
+    },
+    {
+      "id": "danawa-case-91348970",
+      "category": "case",
+      "name": "앱코 UD20M 미니웨일 (블랙)",
+      "brand": "앱코",
+      "model": "앱코 UD20M 미니웨일 (블랙)",
+      "imageUrl": "https://img.danuri.io/catalog-image/970/348/091/3ee04a03650e4167941e291ff12389c8.jpg?shrink=160:160&_v=20261004085424",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=91348970",
+      "source": "danawa",
+      "sourceProductCode": "91348970",
+      "sourceCategoryId": "112775",
+      "listingType": "retail",
+      "priceWon": 25700,
+      "rawSpecText": "M-ATX 케이스 / 지원보드규격: M-ATX , M-ITX / VGA 길이: 325mm / CPU쿨러 높이: 155mm / 미니타워 / [패널] 전면 패널 타입: 강화유리 / 측면 패널 타입: 강화유리 / [쿨러/튜닝] 쿨링팬: 총3개 / LED팬: 3개 / 후면: 120mm LED x1 / 하단: 120mm LED x2 / [크기] 너비(W): 335mm / 깊이(D): 275mm / 높이(H): 353mm / [호환성] 지원파워규격: 표준-ATX / 파워 장착 길이: 210mm / 파워 위치: 하단후면 / [부가기능] LED 색상: RGB",
+      "specs": {
+        "maxGpuLengthMm": 325,
+        "maxCoolerHeightMm": 155,
+        "maxPsuLengthMm": 210,
+        "fanCount": 3,
+        "rgbDeviceCount": 3,
+        "rgbDeviceVoltage": "12V",
+        "radiatorSizesMm": [],
+        "radiatorSupports": [],
+        "motherboardFormFactors": [
+          "mATX",
+          "ITX"
+        ],
+        "supportedPsuFormFactors": [
+          "ATX"
+        ]
+      },
+      "dataQuality": "incomplete",
+      "missingFields": [
+        "hddBays"
+      ],
+      "updatedAt": "2026-10-04T14:47:26.660Z",
+      "priceCheckedAt": "2026-10-04T14:47:26.660Z"
+    },
+    {
+      "id": "danawa-cpu-97705328",
+      "category": "cpu",
+      "name": "AMD 라이젠5-5세대 7400F (라파엘) (멀티팩 정품)",
+      "brand": "AMD",
+      "model": "AMD 라이젠5-5세대 7400F (라파엘) (멀티팩 정품)",
+      "imageUrl": "https://img.danuri.io/catalog-image/328/705/097/a43ab1d1050847c085ff1a78c3547a25.jpg?shrink=160:160&_v=20260923124123",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=97705328&cate=11344988",
+      "source": "danawa",
+      "sourceProductCode": "97705328",
+      "sourceCategoryId": "11344988",
+      "listingType": "retail",
+      "priceWon": 169260,
+      "rawSpecText": "AMD(소켓AM5) / 6코어 / 12스레드 / 메모리 규격: DDR5 / 미탑재 / 5세대(Zen4) / 5nm / 기본 클럭: 3.7GHz / 최대 클럭: 4.7GHz / L2 캐시: 6MB / L3 캐시: 32MB / TDP: 65W / PPT: 88W / PCIe5.0 / 5200MHz / 기술 지원: VR Ready 프리미엄, SMT(하이퍼스레딩) / 쿨러: Wraith Stealth 포함 / 시네벤치R23(싱글): 1646 / 시네벤치R23(멀티): 13508",
+      "specs": {
+        "socket": "AM5",
+        "memoryType": "DDR5",
+        "cores": 6,
+        "threads": 12,
+        "boostClockGhz": 4.7,
+        "tdpW": 65,
+        "pptW": 88,
+        "maxMemorySpeedMhz": 5200,
+        "coolerIncluded": true,
+        "integratedGraphics": false,
+        "cpuSeries": "Ryzen 7000"
+      },
+      "dataQuality": "live",
+      "missingFields": [],
+      "updatedAt": "2026-09-23T08:00:46.276Z",
+      "priceCheckedAt": "2026-09-23T08:00:46.276Z"
+    },
+    {
+      "id": "danawa-ssd-90116603",
+      "category": "ssd",
+      "name": "SK하이닉스 Silver S32 (1TB)",
+      "brand": "SK하이닉스",
+      "model": "SK하이닉스 Silver S32 (1TB)",
+      "imageUrl": "https://img.danuri.io/catalog-image/603/116/090/e98f04612b1b4ba2bc182e7abf760bb7.jpg?shrink=160:160&_v=20260923080356",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=90116603",
+      "source": "danawa",
+      "sourceProductCode": "90116603",
+      "sourceCategoryId": "112760",
+      "listingType": "retail",
+      "priceWon": 269990,
+      "rawSpecText": "6.4cm(2.5형) / SATA3 (6Gb/s) / TLC / 컨트롤러: 실리콘모션 SM2259XT / [성능] 순차읽기: 560MB/s / 순차쓰기: 510MB/s / 읽기IOPS: 65K / 쓰기IOPS: 65K / [지원기능] GC / S.M.A.R.T / SLC캐싱 / TRIM / DEVSLP / 전용 S/W / [환경특성] MTBF: 150만 / TBW: 600TB / A/S기간: 5년 , 제한보증 / 두께: 7mm / 34g",
+      "specs": {
+        "capacityGb": 1000,
+        "interface": "SATA",
+        "formFactor": "2.5인치",
+        "sequentialReadMbps": 560,
+        "sequentialWriteMbps": 510,
+        "ssdController": "실리콘모션 SM2259XT",
+        "ssdNandType": "TLC",
+        "ssdTbwTb": 600,
+        "ssdReadIops": 65000,
+        "ssdWriteIops": 65000
+      },
+      "dataQuality": "live",
+      "missingFields": [],
+      "updatedAt": "2026-09-23T10:01:48.650Z",
+      "priceCheckedAt": "2026-09-23T10:01:48.650Z"
+    },
+    {
+      "id": "danawa-case-98780594",
+      "category": "case",
+      "name": "투민시스템 TM40 (블랙)",
+      "brand": "투민시스템",
+      "model": "투민시스템 TM40 (블랙)",
+      "imageUrl": "https://img.danuri.io/catalog-image/594/780/098/3ca6a19cfe5548adbf2d1da657f594c8.jpg?shrink=160:160&_v=20260923190143",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=98780594",
+      "source": "danawa",
+      "sourceProductCode": "98780594",
+      "sourceCategoryId": "112775",
+      "listingType": "retail",
+      "priceWon": 12770,
+      "rawSpecText": "M-ATX 케이스 / 지원보드규격: M-ATX , M-ITX / VGA 길이: 260mm / CPU쿨러 높이: 145mm / 미니타워 / [패널] 전면 패널 타입: 일반(솔리드) / 측면 패널 타입: 통풍구 / [쿨러/튜닝] 쿨링팬: 총1개 / 후면: 80mm x1 / [크기] 너비(W): 165mm / 높이(H): 345mm / 깊이(D): 270mm / [호환성] 지원파워규격: 표준-ATX / 파워 장착 길이: 160mm / 파워 위치: 상단",
+      "specs": {
+        "maxGpuLengthMm": 260,
+        "maxCoolerHeightMm": 145,
+        "maxPsuLengthMm": 160,
+        "fanCount": 1,
+        "radiatorSizesMm": [],
+        "radiatorSupports": [],
+        "motherboardFormFactors": [
+          "mATX",
+          "ITX"
+        ],
+        "supportedPsuFormFactors": [
+          "ATX"
+        ]
+      },
+      "dataQuality": "incomplete",
+      "missingFields": [
+        "hddBays"
+      ],
+      "updatedAt": "2026-09-23T10:09:35.407Z",
+      "priceCheckedAt": "2026-09-23T10:09:35.407Z"
+    }
+  ]
+}

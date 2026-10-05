@@ -124,3 +124,26 @@ describe("build transfer JSON", () => {
     ]));
   });
 });
+
+
+describe("game-target JSON transfer", () => {
+  it("preserves all target conditions and keeps custom FPS independent of monitor refresh", () => {
+    const target: RecommendationPreferences = { ...preferences, gamingMode: "target_fps", gamingTargetFps: 120, gpuVendorPreference: "amd", gamingGameIds: ["pubg", "cyberpunk"], gamingGraphicsPreset: "high", gamingRayTracing: true, gamingUpscaling: "native" };
+    const parsed = parseBuildTransfer(buildTransferJsonFor(selection, target));
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.envelope?.recommendationPreferences).toEqual(target);
+  });
+
+  it("rejects overlong game lists, broken flags, noninteger FPS and unsupported vendors before normalization", () => {
+    for (const change of [
+      { gamingGameIds: Array(6).fill("pubg") }, { gamingGameIds: ["x".repeat(161)] }, { gamingGameIds: [" "] },
+      { gamingTargetFps: 29 }, { gamingTargetFps: 501 }, { gamingTargetFps: 60.5 },
+      { gamingMode: "missing" }, { gpuVendorPreference: "unknown" }, { gamingGraphicsPreset: "ultra" }, { gamingUpscaling: "custom" }, { gamingRayTracing: "false" }
+    ]) expect(parseBuildTransfer({ selection, recommendationPreferences: { ...preferences, ...change } }).envelope).toBeUndefined();
+  });
+
+  it("normalizes game IDs and retains legacy Intel vendor metadata", () => {
+    const parsed = parseBuildTransfer({ selection, recommendationPreferences: { ...preferences, gpuVendorPreference: "intel", gamingGameIds: [" pubg ", "pubg"] } });
+    expect(parsed.envelope?.recommendationPreferences).toMatchObject({ gpuVendorPreference: "intel", gamingGameIds: ["pubg"] });
+  });
+});

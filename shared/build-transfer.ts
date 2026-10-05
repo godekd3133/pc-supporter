@@ -130,6 +130,23 @@ function recommendationPreferencesFromUnknown(value: unknown, errors: string[]):
   const listingPolicy = record.listingPolicy;
   const gamingResolution = record.gamingResolution;
   const gamingRefreshRate = record.gamingRefreshRate;
+  const performanceTier = record.performanceTier;
+  const gamingMode = record.gamingMode;
+  const gamingTargetFps = record.gamingTargetFps;
+  const gpuVendorPreference = record.gpuVendorPreference;
+  const gamingGraphicsPreset = record.gamingGraphicsPreset;
+  const gamingUpscaling = record.gamingUpscaling;
+  const gamingGameIds = record.gamingGameIds;
+  const gameIdsValid = gamingGameIds === undefined || Array.isArray(gamingGameIds) && gamingGameIds.length <= 5
+    && gamingGameIds.every((id) => typeof id === "string" && id.trim().length > 0 && id.length <= BUILD_INPUT_MAX_ID_LENGTH);
+  if (performanceTier !== undefined && performanceTier !== "entry" && performanceTier !== "high" && performanceTier !== "top") errors.push("recommendationPreferences.performanceTier가 올바르지 않습니다.");
+  if (gamingMode !== undefined && gamingMode !== "budget" && gamingMode !== "target_fps") errors.push("recommendationPreferences.gamingMode가 올바르지 않습니다.");
+  if (gamingTargetFps !== undefined && (typeof gamingTargetFps !== "number" || !Number.isInteger(gamingTargetFps) || gamingTargetFps < 30 || gamingTargetFps > 500)) errors.push("recommendationPreferences.gamingTargetFps는 30부터 500 사이의 정수여야 합니다.");
+  if (gpuVendorPreference !== undefined && gpuVendorPreference !== "nvidia" && gpuVendorPreference !== "amd" && gpuVendorPreference !== "intel") errors.push("recommendationPreferences.gpuVendorPreference가 올바르지 않습니다.");
+  if (!gameIdsValid) errors.push("recommendationPreferences.gamingGameIds는 160자 이하의 게임 ID를 최대 5개까지 포함해야 합니다.");
+  if (gamingGraphicsPreset !== undefined && gamingGraphicsPreset !== "competitive" && gamingGraphicsPreset !== "balanced" && gamingGraphicsPreset !== "high") errors.push("recommendationPreferences.gamingGraphicsPreset가 올바르지 않습니다.");
+  if (record.gamingRayTracing !== undefined && typeof record.gamingRayTracing !== "boolean") errors.push("recommendationPreferences.gamingRayTracing가 올바르지 않습니다.");
+  if (gamingUpscaling !== undefined && gamingUpscaling !== "native" && gamingUpscaling !== "quality" && gamingUpscaling !== "balanced") errors.push("recommendationPreferences.gamingUpscaling가 올바르지 않습니다.");
   if (priority !== undefined && !isRecommendationPriority(priority)) errors.push("recommendationPreferences.priority가 올바르지 않습니다.");
   if (profile !== undefined && profile !== "general" && profile !== "gaming" && profile !== "creator" && profile !== "development" && profile !== "office") errors.push("recommendationPreferences.profile이 올바르지 않습니다.");
   if (listingPolicy !== undefined && listingPolicy !== "retail_only" && listingPolicy !== "include_bulk" && listingPolicy !== "all") errors.push("recommendationPreferences.listingPolicy가 올바르지 않습니다.");
@@ -144,7 +161,17 @@ function recommendationPreferencesFromUnknown(value: unknown, errors: string[]):
     listingPolicy: listingPolicy === "retail_only" || listingPolicy === "include_bulk" || listingPolicy === "all" ? listingPolicy : defaultPreferences.listingPolicy,
     ...(typeof budget === "number" && Number.isInteger(budget) && budget > 0 && budget <= 100_000_000 ? { budgetWon: budget } : {}),
     gamingResolution: gamingResolution === "1080p" || gamingResolution === "1440p" || gamingResolution === "4k" ? gamingResolution : defaultPreferences.gamingResolution,
-    ...(parsedProfile === "gaming" ? { gamingRefreshRate: gamingRefreshRate === 60 || gamingRefreshRate === 144 || gamingRefreshRate === 240 ? gamingRefreshRate : 144 as const } : {})
+    ...(performanceTier === "entry" || performanceTier === "high" || performanceTier === "top" ? { performanceTier } : {}),
+    ...(parsedProfile === "gaming" ? {
+      gamingRefreshRate: gamingRefreshRate === 60 || gamingRefreshRate === 144 || gamingRefreshRate === 240 ? gamingRefreshRate : 144 as const,
+      ...(gamingMode === "budget" || gamingMode === "target_fps" ? { gamingMode } : {}),
+      ...(typeof gamingTargetFps === "number" && Number.isInteger(gamingTargetFps) && gamingTargetFps >= 30 && gamingTargetFps <= 500 ? { gamingTargetFps } : {}),
+      ...(gpuVendorPreference === "nvidia" || gpuVendorPreference === "amd" || gpuVendorPreference === "intel" ? { gpuVendorPreference } : {}),
+      ...(Array.isArray(gamingGameIds) && gameIdsValid ? { gamingGameIds: [...new Set(gamingGameIds.map((id: string) => id.trim()))] } : {}),
+      ...(gamingGraphicsPreset === "competitive" || gamingGraphicsPreset === "balanced" || gamingGraphicsPreset === "high" ? { gamingGraphicsPreset } : {}),
+      ...(typeof record.gamingRayTracing === "boolean" ? { gamingRayTracing: record.gamingRayTracing } : {}),
+      ...(gamingUpscaling === "native" || gamingUpscaling === "quality" || gamingUpscaling === "balanced" ? { gamingUpscaling } : {})
+    } : {})
   };
 }
 

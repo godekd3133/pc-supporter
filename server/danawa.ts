@@ -446,6 +446,18 @@ function parseSummedNumber(text: string, pattern: RegExp) {
   return Number.isFinite(number) ? number : undefined;
 }
 
+function parseVrmPhaseCount(text: string) {
+  const range = text.match(/전원부\s*[:：]?\s*(\d+)\s*[~∼～−–—-]\s*(\d+)\s*페이즈/i);
+  const phaseValues = (range
+    ? range.slice(1)
+    : text.match(/전원부\s*[:：]?\s*(\d+(?:\s*\+\s*\d+)*)\s*페이즈/i)?.[1].split("+"))?.map(Number);
+  if (!phaseValues || !phaseValues.every((value) => Number.isSafeInteger(value) && value > 0)) return undefined;
+  const phaseCount = range
+    ? Math.min(...phaseValues)
+    : phaseValues.reduce((sum, value) => sum + value, 0);
+  return Number.isSafeInteger(phaseCount) ? phaseCount : undefined;
+}
+
 function parseWon(text: string | undefined) {
   if (!text) return undefined;
   const number = Number(text.replace(/[^\d]/g, ""));
@@ -865,12 +877,15 @@ function parseSpecs(category: PartCategory, name: string, description: string, r
       ?? parseNumber(text, /(?:\[메모리\]|메모리).{0,120}?\b(\d+)\s*개/i);
     specs.maxMemorySpeedMhz = parseNumber(text, /(?:메모리\s*)?(?:속도|클럭)\s*[:：]?\s*([\d,]{4,6})\s*MHz/i)
       ?? parseNumber(text, /\[메모리\]\s*([\d,]{4,6})\s*MHz/i);
+    specs.vrmPhaseCount = parseVrmPhaseCount(text);
     const m2Match = text.match(/M\.2\s*[:：]?\s*(\d+)(?:\s*\+\s*(\d+))?\s*개/i);
     specs.m2Slots = m2Match
       ? Number(m2Match[1]) + Number(m2Match[2] ?? 0)
       : parseNumber(text, /M\.2[^\d]{0,32}(\d+)\s*개/i);
     const m2ConnectionText = text.match(/M\.2\s*연결\s*[:：]?\s*([^/]+)/i)?.[1] ?? "";
-    const m2Interfaces = (["NVMe", "SATA"] as const).filter((interfaceName) => new RegExp(`\\b${interfaceName}\\b`, "i").test(m2ConnectionText));
+    const m2Interfaces = (["NVMe", "SATA"] as const).filter((interfaceName) => interfaceName === "NVMe"
+      ? /\bNVMe\b|\bPCIe(?=\d|\b)/i.test(m2ConnectionText)
+      : /\bSATA\b/i.test(m2ConnectionText));
     if (m2Interfaces.length > 0) specs.m2Interfaces = m2Interfaces;
     const m2PcieGenerations = parsePcieGenerations(m2ConnectionText);
     if (m2PcieGenerations.length > 0) specs.m2PcieGenerations = m2PcieGenerations;
@@ -1054,8 +1069,8 @@ function parseSpecs(category: PartCategory, name: string, description: string, r
     const supportedPsuText = text.match(/지원파워규격\s*[:：]\s*([^/]+)/i)?.[1] ?? "";
     const supportedPsuFormFactors = [
       [/SFX-L/i, "SFX-L"],
-      [/(?:^|[\s,])SFX(?:[\s,]|$)/i, "SFX"],
-      [/ATX|표준-ATX/i, "ATX"]
+      [/\bSFX\b(?!-L)/i, "SFX"],
+      [/(?:^|[\s,(])ATX(?:[\s,)]|$)|표준[-\s]?ATX/i, "ATX"]
     ]
       .filter(([pattern]) => (pattern as RegExp).test(supportedPsuText))
       .map(([, form]) => form as string);
@@ -1243,6 +1258,7 @@ export function reparseDanawaPart(part: Part): Part {
   }
   if (part.category === "motherboard") {
     if (parsedSpecs.memoryProfiles === undefined) delete specs.memoryProfiles;
+    if (parsedSpecs.vrmPhaseCount === undefined) delete specs.vrmPhaseCount;
     if (parsedSpecs.m2Slots === undefined) delete specs.m2Slots;
     if (parsedSpecs.m2Interfaces === undefined) delete specs.m2Interfaces;
     if (parsedSpecs.m2PcieGenerations === undefined) delete specs.m2PcieGenerations;

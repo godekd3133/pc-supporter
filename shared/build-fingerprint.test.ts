@@ -67,3 +67,21 @@ describe("buildCompatibilityInputFingerprint", () => {
     );
   });
 });
+
+
+describe("gaming target freshness", () => {
+  it("invalidates results for every game-target or vendor change with unchanged parts", () => {
+    const base: RecommendationPreferences = { ...preferences, gamingMode: "target_fps", gamingTargetFps: 120, gpuVendorPreference: "nvidia", gamingGameIds: ["pubg"], gamingGraphicsPreset: "high", gamingRayTracing: false, gamingUpscaling: "native" };
+    const key = buildCompatibilityInputFingerprint(build, base);
+    for (const change of [
+      { gamingMode: "budget" as const }, { gamingTargetFps: 144 }, { gpuVendorPreference: "amd" as const },
+      { gamingGameIds: ["cyberpunk"] }, { gamingGraphicsPreset: "balanced" as const }, { gamingRayTracing: true }, { gamingUpscaling: "quality" as const }
+    ]) expect(buildCompatibilityInputFingerprint(build, { ...base, ...change })).not.toBe(key);
+  });
+
+  it("treats game order and duplicate IDs as the same target set", () => {
+    const left = { ...preferences, gamingGameIds: ["pubg", "cyberpunk"] };
+    const right = { ...preferences, gamingGameIds: ["cyberpunk", "pubg", "pubg"] };
+    expect(buildCompatibilityInputFingerprint(build, left)).toBe(buildCompatibilityInputFingerprint(build, right));
+  });
+});
