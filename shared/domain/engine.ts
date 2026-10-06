@@ -5469,6 +5469,12 @@ function pruneGeneratorStates(
   const priority = states[0]?.rankingPriority ?? "balanced";
   const partReliabilityScores = new Map<Part, number>();
   const stateReliabilityScores = new Map<GeneratorState, number>();
+  const stateRemainingCosts = new Map<GeneratorState, number>();
+  const remainingCostFor = (state: GeneratorState) => scoreCachedByIdentity(
+    stateRemainingCosts,
+    state,
+    () => remainingCostForState(state)
+  );
   const reliabilityScoreForState = (state: GeneratorState) => scoreCachedByIdentity(
     stateReliabilityScores,
     state,
@@ -5492,8 +5498,8 @@ function pruneGeneratorStates(
   // whose remaining required parts already make the budget impossible. The
   // bound is optimistic; final compatibility and scoring still run unchanged.
   const sorted = [...unique.values()].sort((a, b) => {
-    const aPotentiallyWithinBudget = a.priceWon + Math.max(0, remainingCostForState(a)) <= budgetWon;
-    const bPotentiallyWithinBudget = b.priceWon + Math.max(0, remainingCostForState(b)) <= budgetWon;
+    const aPotentiallyWithinBudget = a.priceWon + Math.max(0, remainingCostFor(a)) <= budgetWon;
+    const bPotentiallyWithinBudget = b.priceWon + Math.max(0, remainingCostFor(b)) <= budgetWon;
     return Number(bPotentiallyWithinBudget) - Number(aPotentiallyWithinBudget)
       || priorityScore(b) - priorityScore(a)
       || a.priceWon - b.priceWon;
@@ -6510,6 +6516,10 @@ function generateBuildDraftCore(catalog: Part[], request: BuildGenerationRequest
     ...(hddCount > 0 ? ["hdd" as const] : []),
     "psu"
   ];
+  // A request keeps the same PSU pool and GPU objects throughout expansion.
+  // Reuse this exact lower bound instead of scanning PSUs for every state and
+  // again for every pruning comparison. Preserve zero/Infinity unchanged.
+  const minimumPsuCostByGpu = new Map<Part, number>();
   const remainingGeneratorCostAfter = (stage: PartCategory): RemainingGeneratorCostForState => (state) => {
     const stageIndex = generatorStages.indexOf(stage);
     if (stageIndex < 0) return 0;
@@ -6526,7 +6536,11 @@ function generateBuildDraftCore(catalog: Part[], request: BuildGenerationRequest
         // 살아남아 자리만 차지한다. 호환 PSU가 없는 GPU는 완주 불가로 처리.
         const gpu = state.parts.gpu;
         if (!gpu) return total + (minimumRemainingPartCost.psu ?? 0);
-        const floor = minimumPositiveGeneratorCost(psuPool.parts.filter((part) => generatorPsuCanUseGpu(part, gpu)));
+        let floor = minimumPsuCostByGpu.get(gpu);
+        if (floor === undefined) {
+          floor = minimumPositiveGeneratorCost(psuPool.parts.filter((part) => generatorPsuCanUseGpu(part, gpu)));
+          minimumPsuCostByGpu.set(gpu, floor);
+        }
         return total + (floor > 0 ? floor : Number.POSITIVE_INFINITY);
       }
       return total + (minimumRemainingPartCost[category] ?? 0);

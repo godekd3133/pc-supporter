@@ -9,6 +9,7 @@ if [[ -z "$SSH_KEY" && -f "$HOME/.ssh/pc-supporter-deploy" ]]; then
   SSH_KEY="$HOME/.ssh/pc-supporter-deploy"
 fi
 SSH_CERTIFICATE="${PC_SUPPORTER_SSH_CERTIFICATE:-}"
+SSH_KNOWN_HOSTS="${PC_SUPPORTER_SSH_KNOWN_HOSTS:-}"
 ENV_FILE=""
 MIGRATION_ENV_FILE=""
 DOMAIN="${PC_SUPPORTER_API_DOMAIN:-pc-supporter.3-39-79-1.sslip.io}"
@@ -45,6 +46,8 @@ Options:
   --app-dir              Remote application directory.
   PC_SUPPORTER_INTERNAL_HEALTH_TIMEOUT_SECONDS
                          Maximum seconds to wait for the first API start (default: 240).
+  PC_SUPPORTER_SSH_KNOWN_HOSTS
+                         Optional verified host-key file for this deployment.
   --preserve-env         Keep the existing remote /etc/pc-supporter/backend.env.
   --dry-run              Create and inspect the bundle without SSH or AWS writes.
 EOF
@@ -158,6 +161,8 @@ if [[ ! -f "$ROOT_DIR/package.json" || ! -f "$ROOT_DIR/package-lock.json" || ! -
   exit 1
 fi
 
+node "$ROOT_DIR/scripts/build-server-runtime.mjs"
+
 TMP_DIR="$(mktemp -d /tmp/pc-supporter-deploy.XXXXXX)"
 REMOTE_STAGE="$REMOTE_TMP/$(basename "$TMP_DIR")"
 REMOTE_STAGE_CREATED=false
@@ -186,11 +191,13 @@ BUNDLE="$TMP_DIR/pc-supporter-$RELEASE_ID.tar.gz"
     tsconfig.json \
     dist \
     server \
+    server-runtime \
     shared \
     db/schema.sql \
     scripts/import-private-catalog.ts \
     scripts/import-file-runtime-state.ts \
     scripts/migrate-postgres.ts \
+    scripts/build-server-runtime.mjs \
     scripts/bootstrap-postgres-runtime-role.mjs \
     scripts/postgres-runtime-role-smoke.mjs
 )
@@ -200,6 +207,8 @@ BUNDLE_LISTING="$TMP_DIR/pc-supporter-$RELEASE_ID.list"
 tar -tzf "$BUNDLE" > "$BUNDLE_LISTING"
 sed -n '1,36p' "$BUNDLE_LISTING"
 for required_file in \
+  server-runtime/index.js \
+  server-runtime/build-meta.json \
   db/schema.sql \
   scripts/import-file-runtime-state.ts \
   scripts/migrate-postgres.ts \
@@ -217,8 +226,13 @@ if [[ "$DRY_RUN" == "true" ]]; then
   exit 0
 fi
 
-SSH_ARGS=()
-SCP_ARGS=()
+SSH_ARGS=(-o BatchMode=yes -o StrictHostKeyChecking=yes)
+SCP_ARGS=(-o BatchMode=yes -o StrictHostKeyChecking=yes)
+if [[ -n "$SSH_KNOWN_HOSTS" ]]; then
+  [[ -r "$SSH_KNOWN_HOSTS" ]] || { echo "SSH known-hosts file is not readable." >&2; exit 1; }
+  SSH_ARGS+=(-o "UserKnownHostsFile=$SSH_KNOWN_HOSTS")
+  SCP_ARGS+=(-o "UserKnownHostsFile=$SSH_KNOWN_HOSTS")
+fi
 if [[ -n "$SSH_KEY" ]]; then
   SSH_ARGS+=(-i "$SSH_KEY")
   SCP_ARGS+=(-i "$SSH_KEY")
@@ -245,6 +259,7 @@ ssh "${SSH_ARGS[@]}" "$SSH_TARGET" "set -eu; $STAGED_CHMOD"
 ssh "${SSH_ARGS[@]}" "$SSH_TARGET" \
   "RELEASE_ID='$RELEASE_ID' REMOTE_TMP='$REMOTE_STAGE' APP_DIR='$APP_DIR' DOMAIN='$DOMAIN' SERVICE_NAME='$SERVICE_NAME' WORKER_SERVICE_NAME='$WORKER_SERVICE_NAME' PRESERVE_ENV='$PRESERVE_ENV' HAS_ENV='$([[ -n "$ENV_FILE" ]] && echo true || echo false)' HAS_MIGRATION_ENV='$([[ -n "$MIGRATION_ENV_FILE" ]] && echo true || echo false)' INTERNAL_HEALTH_TIMEOUT_SECONDS='$INTERNAL_HEALTH_TIMEOUT_SECONDS' bash -s" <<'REMOTE'
 set -euo pipefail
+export LANG=C.UTF-8 LC_ALL=C.UTF-8
 
 SERVICE_USER="pc-supporter"
 RELEASE_DIR="$APP_DIR/releases/$RELEASE_ID"
@@ -259,7 +274,7 @@ WORKER_UNIT_BACKUP_PATH="$WORKER_UNIT_PATH.rollback-$RELEASE_ID"
 CADDY_BACKUP_PATH="/etc/caddy/Caddyfile.pc-supporter-backup-$RELEASE_ID"
 PREVIOUS_RELEASE="$(readlink -f "$APP_DIR/current" 2>/dev/null || true)"
 PREVIOUS_HAS_POSTGRES=false
-if [[ -f "$ENV_PATH" ]] && sudo grep -Eq '^DATABASE_URL=[^[:space:]]+' "$ENV_PATH"; then
+if sudo test -f "$ENV_PATH" && sudo grep -Eq '^DATABASE_URL=[^[:space:]]+' "$ENV_PATH"; then
   PREVIOUS_HAS_POSTGRES=true
 fi
 ENV_WAS_REPLACED=false
@@ -342,18 +357,18 @@ sudo tar -xzf "$REMOTE_TMP/pc-supporter.tar.gz" -C "$RELEASE_DIR"
 sudo chown -R root:root "$RELEASE_DIR"
 
 if [[ "$PRESERVE_ENV" == "true" ]]; then
-  if [[ ! -f "$ENV_PATH" ]]; then
+  if ! sudo test -f "$ENV_PATH"; then
     echo "Remote env does not exist; refusing --preserve-env deployment." >&2
     exit 1
   fi
 elif [[ "$HAS_ENV" == "true" ]]; then
-  if [[ -f "$ENV_PATH" ]]; then
+  if sudo test -f "$ENV_PATH"; then
     sudo cp -p "$ENV_PATH" "$ENV_BACKUP_PATH"
     ENV_PREVIOUS_EXISTS=true
   fi
   ENV_WAS_REPLACED=true
   sudo install -o root -g "$SERVICE_USER" -m 0640 "$REMOTE_TMP/backend.env" "$ENV_PATH"
-elif [[ ! -f "$ENV_PATH" ]]; then
+elif ! sudo test -f "$ENV_PATH"; then
   admin_password="$(openssl rand -hex 32)"
   admin_session_secret="$(openssl rand -hex 32)"
   rate_limit_hmac_secret="$(openssl rand -hex 32)"
@@ -379,7 +394,7 @@ ENV
 fi
 
 if [[ "$HAS_MIGRATION_ENV" == "true" ]]; then
-  if [[ -f "$MIGRATION_ENV_PATH" ]]; then
+  if sudo test -f "$MIGRATION_ENV_PATH"; then
     sudo cp -p "$MIGRATION_ENV_PATH" "$MIGRATION_ENV_BACKUP_PATH"
     MIGRATION_ENV_PREVIOUS_EXISTS=true
   fi
@@ -424,7 +439,7 @@ if ! sudo grep -Eq '^PC_SUPPORTER_POSTGRES_DATA_MIGRATION_CONFIRMED=true$' "$ENV
 fi
 
 if [[ "$HAS_POSTGRES" == "true" ]]; then
-  if [[ ! -f "$MIGRATION_ENV_PATH" ]]; then
+  if ! sudo test -f "$MIGRATION_ENV_PATH"; then
     echo "PostgreSQL startup requires root-only /etc/pc-supporter/migration.env with the schema-owner URL and runtime-role inputs." >&2
     exit 1
   fi
@@ -472,7 +487,7 @@ fi
 if [[ ! -x "$APP_DIR/shared/node_modules/.bin/tsx" || "$shared_hash" != "$lock_hash" ]]; then
   sudo install -o root -g root -m 0644 "$RELEASE_DIR/package.json" "$APP_DIR/shared/package.json"
   sudo install -o root -g root -m 0644 "$RELEASE_DIR/package-lock.json" "$APP_DIR/shared/package-lock.json"
-  sudo npm ci --prefix "$APP_DIR/shared" --include=dev --no-audit --no-fund
+  sudo node --max-old-space-size=256 "$(command -v npm)" ci --prefix "$APP_DIR/shared" --include=dev --no-audit --no-fund
   printf '%s\n' "$lock_hash" | sudo tee "$APP_DIR/shared/package-lock.sha256" >/dev/null
 fi
 sudo ln -sfn "$APP_DIR/shared/node_modules" "$RELEASE_DIR/node_modules"
@@ -480,6 +495,7 @@ sudo ln -sfn "$RELEASE_DIR" "$APP_DIR/current"
 RELEASE_SWITCHED=true
 
 NPM_BIN="$(command -v npm)"
+NODE_BIN="$(command -v node)"
 if [[ -f "$API_UNIT_PATH" ]]; then
   sudo cp -p "$API_UNIT_PATH" "$API_UNIT_BACKUP_PATH"
   API_UNIT_PREVIOUS_EXISTS=true
@@ -504,7 +520,9 @@ EnvironmentFile=$ENV_PATH
 UnsetEnvironment=DATABASE_MIGRATION_URL DATABASE_RUNTIME_ROLE DATABASE_RUNTIME_PASSWORD POSTGRES_PASSWORD POSTGRES_OWNER_PASSWORD POSTGRES_RUNTIME_PASSWORD
 Environment=PC_SUPPORTER_PROCESS_ROLE=$SERVICE_PROCESS_ROLE
 Environment=NODE_OPTIONS=--max-old-space-size=256
-ExecStart=$NPM_BIN run start
+Environment=PC_SUPPORTER_DB_CONNECT_TIMEOUT_MS=10000
+Environment=PC_SUPPORTER_DB_STATEMENT_TIMEOUT_MS=45000
+ExecStart=$NODE_BIN server-runtime/index.js
 Restart=always
 RestartSec=5
 TimeoutStopSec=120
@@ -531,7 +549,9 @@ EnvironmentFile=$ENV_PATH
 UnsetEnvironment=DATABASE_MIGRATION_URL DATABASE_RUNTIME_ROLE DATABASE_RUNTIME_PASSWORD POSTGRES_PASSWORD POSTGRES_OWNER_PASSWORD POSTGRES_RUNTIME_PASSWORD
 Environment=PC_SUPPORTER_PROCESS_ROLE=worker
 Environment=NODE_OPTIONS=--max-old-space-size=256
-ExecStart=$NPM_BIN run worker
+Environment=PC_SUPPORTER_DB_CONNECT_TIMEOUT_MS=10000
+Environment=PC_SUPPORTER_DB_STATEMENT_TIMEOUT_MS=45000
+ExecStart=$NODE_BIN server-runtime/index.js
 Restart=always
 RestartSec=5
 TimeoutStopSec=120
@@ -564,6 +584,9 @@ fi
 
 sudo caddy validate --config /etc/caddy/Caddyfile
 sudo systemctl daemon-reload
+# Stop only this app while migrating to avoid concurrent cold starts.
+sudo systemctl stop "$WORKER_SERVICE_NAME" 2>/dev/null || true
+sudo systemctl stop "$SERVICE_NAME" 2>/dev/null || true
 if [[ "$HAS_POSTGRES" == "true" ]]; then
   echo "Applying the PostgreSQL schema migration before runtime role provisioning."
   sudo systemd-run \
@@ -594,17 +617,15 @@ if [[ "$HAS_POSTGRES" == "true" ]]; then
     --property=RuntimeMaxSec=60 \
     node scripts/postgres-runtime-role-smoke.mjs
 fi
+# Avoid two concurrent TypeScript/catalog cold starts on the small shared host.
+# PostgreSQL retains queued jobs while the worker is stopped for this rollout.
+if sudo systemctl is-active --quiet "$WORKER_SERVICE_NAME"; then
+  sudo systemctl stop "$WORKER_SERVICE_NAME"
+fi
 sudo systemctl enable "$SERVICE_NAME"
 sudo systemctl restart "$SERVICE_NAME"
-if [[ "$HAS_POSTGRES" == "true" ]]; then
-  sudo systemctl enable "$WORKER_SERVICE_NAME"
-  worker_boot_epoch="$(date +%s)"
-  sudo systemctl restart "$WORKER_SERVICE_NAME"
-else
+if [[ "$HAS_POSTGRES" != "true" ]]; then
   sudo systemctl disable "$WORKER_SERVICE_NAME" 2>/dev/null || true
-  if sudo systemctl is-active --quiet "$WORKER_SERVICE_NAME"; then
-    sudo systemctl stop "$WORKER_SERVICE_NAME"
-  fi
 fi
 sudo systemctl reload caddy
 
@@ -631,6 +652,9 @@ fi
 printf '%s\n' "$health_body"
 sudo systemctl is-active "$SERVICE_NAME"
 if [[ "$HAS_POSTGRES" == "true" ]]; then
+  sudo systemctl enable "$WORKER_SERVICE_NAME"
+  worker_boot_epoch="$(date +%s)"
+  sudo systemctl restart "$WORKER_SERVICE_NAME"
   worker_data_dir="$(sudo sed -n 's/^PC_SUPPORTER_DATA_DIR=//p' "$ENV_PATH" | head -n 1)"
   worker_data_dir="${worker_data_dir%\"}"
   worker_data_dir="${worker_data_dir#\"}"
@@ -639,7 +663,7 @@ if [[ "$HAS_POSTGRES" == "true" ]]; then
   if [[ -z "$worker_data_dir" ]]; then worker_data_dir="$APP_DIR/current/data"; fi
   worker_health_file="$worker_data_dir/.price-refresh-worker-health.json"
   worker_ready=false
-  worker_health_deadline=$((SECONDS + 60))
+  worker_health_deadline=$((SECONDS + INTERNAL_HEALTH_TIMEOUT_SECONDS))
   while (( SECONDS < worker_health_deadline )); do
     if ! sudo systemctl is-active --quiet "$WORKER_SERVICE_NAME"; then break; fi
     if sudo -u "$SERVICE_USER" env PC_SUPPORTER_WORKER_HEALTH_FILE="$worker_health_file" PC_SUPPORTER_WORKER_BOOT_EPOCH="$worker_boot_epoch" node -e 'const fs=require("node:fs");try{const h=JSON.parse(fs.readFileSync(process.env.PC_SUPPORTER_WORKER_HEALTH_FILE,"utf8"));const last=Date.parse(h.lastDatabaseSuccessAt);const started=Date.parse(h.startedAt);const boot=Number(process.env.PC_SUPPORTER_WORKER_BOOT_EPOCH)*1000;if(h.service!=="pc-supporter-price-refresh-worker"||!Number.isFinite(last)||Date.now()-last>45000||!Number.isFinite(started)||started<boot)process.exit(1)}catch{process.exit(1)}'; then

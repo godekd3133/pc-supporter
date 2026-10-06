@@ -172,6 +172,23 @@ describe("phase-one gaming budget test bed", () => {
     expect(adjusted.blockerCount).toBe(0);
   });
 
+  it("preserves integrated graphics through the CPU adjustment request when the new CPU still has a display path", () => {
+    const catalog = testbed();
+    const baseline = generateBuildDraft(catalog, { ...request(800_000), gamingTestbedPhase1: true });
+    expect(baseline.selection.cpu?.partId).toBe("cpu-5500gt");
+    const previousCpu = catalog.find((part) => part.id === baseline.selection.cpu?.partId)!;
+    const nextCpu = { ...previousCpu, id: "cpu-5600g-test", name: "AMD 라이젠5 5600G (정품)", model: "AMD 라이젠5 5600G (정품)", priceWon: 225_000 };
+    const stepped = { ...baseline, partTiers: { ...baseline.partTiers, cpu: { ...baseline.partTiers?.cpu, upId: nextCpu.id } } };
+    const next = generatorPartAdjustmentRequestFor(stepped, "cpu", "up")!;
+    expect(next.includeGpu).toBe(false);
+    const adjusted = generateBuildDraft([...catalog, nextCpu], next);
+    expect(adjusted.selection.cpu?.partId).toBe(nextCpu.id);
+    expect(adjusted.selection.gpu).toBeUndefined();
+    expect(adjusted.selection.useIntegratedGraphics).toBe(true);
+    expect(adjusted.selection.ssd).toEqual(baseline.selection.ssd);
+    expect(adjusted.blockerCount).toBe(0);
+  });
+
   it("adds the necessary discrete display path when upgrading an integrated-only build to a CPU without integrated graphics", () => {
     const adjusted = generateBuildDraft(testbed(), { ...request(800_000), gamingTestbedPhase1: true, includeGpu: false, pinnedParts: { cpu: "cpu-5600" } });
     expect(adjusted.gamingTestbedPhase1).toBe(true);

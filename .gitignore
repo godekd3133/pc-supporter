@@ -32,3 +32,6 @@ ios/App/CapApp-SPM/build/
 /*.png
 output/
 .playwright-cli/
+
+# Generated production server bundles.
+server-runtime/

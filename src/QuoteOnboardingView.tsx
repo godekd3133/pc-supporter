@@ -36,6 +36,7 @@ import {
   onboardingStateFromJson,
   onboardingStateToJson,
   primaryWorkFor,
+  purchaseConditionSummaryFor,
   recommendGenerationRequestFor,
   recommendQueryFor,
   resolutionLabelFor,
@@ -311,7 +312,7 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome, floor
     })();
     return () => { cancelled = true; controller.abort(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [requestFloorApplies, state.budgetWon, state.usecase, state.mode, JSON.stringify(state.games), state.resolution, state.refreshRate, state.targetFps, state.gamingMode, state.gpuVendorPreference, state.graphicsPreset, state.rayTracing, state.upscaling, JSON.stringify(state.works), state.intensity, state.specTier, state.specIncludeGpu, state.memoryGb, state.storageGb]);
+  }, [requestFloorApplies, state.budgetWon, state.usecase, state.mode, JSON.stringify(state.games), state.resolution, state.refreshRate, state.targetFps, state.gamingMode, state.gpuVendorPreference, state.graphicsPreset, state.rayTracing, state.upscaling, JSON.stringify(state.works), state.intensity, state.specTier, state.specIncludeGpu, state.memoryGb, state.storageGb, state.listingPolicy]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "auto" });
@@ -409,7 +410,8 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome, floor
     [FiActivity, "목표 성능", estimate.performance],
     [FiMonitor, "그래픽", estimate.gpu],
     [FiDatabase, "메모리", estimate.memory],
-    [FiZap, "저장공간", estimate.storage]
+    [FiZap, "저장공간", estimate.storage],
+    [FiBox, "구매 조건", purchaseConditionSummaryFor(state)]
   ];
 
   let body: ReactNode = null;
@@ -692,6 +694,7 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome, floor
           <div><h3>선택한 내용</h3><p>예산과 예상 성능은 언제든 바꿀 수 있어요.</p></div>
         </div>
         <div className="onboarding-estimate-rows">
+          <div className="onboarding-estimate-row"><span className="onboarding-estimate-icon"><FiBox /></span><span>구매 조건</span><strong>{purchaseConditionSummaryFor(state)}</strong></div>
           {summaryRows.map(({ Icon, label, value, editStep }) => (
             <div className={`onboarding-estimate-row${editStep ? " editable" : ""}`} key={label}>
               <span className="onboarding-estimate-icon"><Icon /></span><span>{label}</span><strong>{value}</strong>

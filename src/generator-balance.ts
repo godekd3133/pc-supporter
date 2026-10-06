@@ -66,7 +66,9 @@ export function generatorPartAdjustmentRequestFor(draft: BuildGenerationResult, 
   const request = generatorRequestForDraft(draft);
   // Legacy ID-only platform changes keep their old 16GB floor; capacity-aware
   // RAM steps send the new total so changing a kit cannot silently keep 16GB.
-  const rebuildGamingDisplay = category === "gpu" || draft.gamingTestbedPhase1 === true && (category === "cpu" || category === "motherboard" && !samePlatformBoard || category === "memory" && targetMemoryCapacityGb === undefined);
+  // Preserve an iGPU build when its next CPU still provides integrated graphics.
+  // The engine adds a discrete GPU when the pinned CPU actually requires one.
+  const rebuildGamingDisplay = category === "gpu" || draft.gamingTestbedPhase1 === true && (category === "motherboard" && !samePlatformBoard || category === "memory" && targetMemoryCapacityGb === undefined);
   return { ...request, ...(rebuildGamingDisplay ? { includeGpu: true } : {}), ...(category === "memory" ? { memoryCapacityGb: targetMemoryCapacityGb ?? 16 } : {}), ...(targetStorageCapacityGb !== undefined ? { storageCapacityGb: targetStorageCapacityGb } : {}), ...(targetHddCapacityGb !== undefined ? { hddCapacityGb: targetHddCapacityGb } : {}), pinnedParts };
 }
 

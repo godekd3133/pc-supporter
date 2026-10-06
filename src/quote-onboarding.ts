@@ -1,5 +1,5 @@
 import { GAMING_GRAPHICS_PRESET_LABELS, GAMING_UPSCALING_LABELS, RECOMMENDATION_PERFORMANCE_TIER_LABELS } from "../shared/types";
-import type { BuildGenerationRequest, GamingMode, GpuVendorPreference, GamingGraphicsPreset, GamingRefreshRate, GamingResolution, GamingUpscaling, RecommendationFloorWon, RecommendationPerformanceTier, RecommendationPriority, RecommendationProfile } from "../shared/types";
+import type { BuildGenerationRequest, GamingMode, GpuVendorPreference, GamingGraphicsPreset, GamingRefreshRate, GamingResolution, GamingUpscaling, ListingPolicy, RecommendationFloorWon, RecommendationPerformanceTier, RecommendationPriority, RecommendationProfile } from "../shared/types";
 import { GAMING_GAME_CATEGORY_LABELS, GAMING_GAMES, gamingAdvisoryTuningFor } from "../shared/gaming-catalog";
 import type { GamingGameCategory, GamingGameId, GamingGameOption } from "../shared/gaming-catalog";
 import type { GeneratorPresetConfig } from "../shared/generator-preset";
@@ -38,6 +38,7 @@ export interface OnboardingState {
   specTier: OnboardingSpecTier;
   specIncludeGpu: boolean;
   budgetWon: number;
+  listingPolicy?: ListingPolicy;
 }
 
 export const ONBOARDING_STORAGE_KEY = "pc-supporter-quote-onboarding";
@@ -225,6 +226,9 @@ export function onboardingStateFromJson(raw: string | null | undefined): Onboard
       storageGb: STORAGE_OPTIONS.includes(candidate.storageGb as (typeof STORAGE_OPTIONS)[number]) ? Number(candidate.storageGb) : base.storageGb,
       specTier: candidate.specTier && SPEC_TIERS.includes(candidate.specTier) ? candidate.specTier : base.specTier,
       specIncludeGpu: typeof candidate.specIncludeGpu === "boolean" ? candidate.specIncludeGpu : base.specIncludeGpu,
+      // Saved drafts without a purchase condition used the generator's retail-only
+      // default. Keep that condition when resuming or editing the draft.
+      listingPolicy: candidate.listingPolicy === "include_bulk" || candidate.listingPolicy === "all" ? candidate.listingPolicy : "retail_only",
       budgetWon: Number.isInteger(candidate.budgetWon) && Number(candidate.budgetWon) > 0 ? clampBudget(Number(candidate.budgetWon)) : base.budgetWon
     };
   } catch {
@@ -233,7 +237,7 @@ export function onboardingStateFromJson(raw: string | null | undefined): Onboard
 }
 
 // 자동 구성 프리셋을 온보딩 마법사로 가져올 때의 초기 상태.
-// 마법사가 표현하지 못하는 조건(우선순위·HDD·구매 조건)은 주입하지 않고,
+// 마법사가 표현하지 못하는 조건(우선순위·HDD)은 주입하지 않고,
 // 요약 화면에서 예산·성능 조건을 다시 고를 수 있게 summary 단계로 연다.
 const PRESET_WORK_FALLBACK: Record<"office" | "development" | "creator", OnboardingWork> = {
   office: "office",
@@ -242,7 +246,7 @@ const PRESET_WORK_FALLBACK: Record<"office" | "development" | "creator", Onboard
 };
 
 export function onboardingStateForGeneratorPreset(config: GeneratorPresetConfig): OnboardingState {
-  const base = initialOnboardingState();
+  const base = { ...initialOnboardingState(), listingPolicy: config.listingPolicy };
   const budgetWon = clampBudget(config.budgetWon);
   if (config.profile === "gaming") {
     const games = (config.gamingGameIds ?? [])
@@ -338,7 +342,14 @@ export function advanceOnboarding(state: OnboardingState, options: OnboardingFlo
       if (state.mode === "target_fps") return { ...state, gamingMode: "target_fps", usecase: "gaming", step: "games" };
       if (state.mode === "task") return { ...state, usecase: undefined, step: "usecase" };
       if (state.mode === "spec") return { ...state, usecase: undefined, step: "spec" };
-      return { ...state, ...(options.gamingTestbedPhase1 ? { usecase: "gaming" as const } : {}), step: "budget" };
+      return {
+        ...state,
+        ...(options.gamingTestbedPhase1 ? { usecase: "gaming" as const } : {}),
+        // The new budget-game route allows domestic new bulk listings. Explicit
+        // purchase conditions, imported presets and restored drafts stay intact.
+        ...(state.intent === "new" && (state.usecase === "gaming" || options.gamingTestbedPhase1) && state.listingPolicy === undefined ? { listingPolicy: "include_bulk" as const } : {}),
+        step: "budget"
+      };
     case "usecase":
       return { ...state, step: state.usecase === "work" ? "works" : options.gamingTestbedPhase1 ? "budget" : "games" };
     case "games": return { ...state, step: "performance" };
@@ -676,6 +687,17 @@ export interface RecommendParams {
   storageCapacityGb: number;
 }
 
+export function listingPolicyFor(state: OnboardingState): ListingPolicy {
+  return state.listingPolicy ?? "retail_only";
+}
+
+export function purchaseConditionSummaryFor(state: OnboardingState): string {
+  const policy = listingPolicyFor(state);
+  if (policy === "include_bulk") return "국내 신품 · 벌크 포함";
+  if (policy === "all") return "전체 유통 조건";
+  return "신품 · 정식 유통";
+}
+
 export function recommendParamsFor(state: OnboardingState, options: OnboardingFlowOptions = {}): RecommendParams {
   if (state.usecase === "gaming") {
     const mode = gamingModeFor(state, options);
@@ -742,8 +764,11 @@ export function recommendParamsFor(state: OnboardingState, options: OnboardingFl
 // 이 요청의 풀·게이트 그대로를 기준으로 해야 한다.
 export function recommendGenerationRequestFor(state: OnboardingState, options: OnboardingFlowOptions = {}): BuildGenerationRequest {
   const params = recommendParamsFor(state, options);
+  const listingPolicy = listingPolicyFor(state);
   return {
     profile: params.profile,
+    listingPolicy,
+    includeNonRetail: listingPolicy !== "retail_only",
     ...(params.profile === "gaming" ? { gamingTestbedPhase1: true, gamingMode: params.gamingMode, gamingTargetFps: params.gamingTargetFps, gpuVendorPreference: params.gpuVendorPreference } : {}),
     priority: params.priority,
     performanceTier: params.performanceTier,
@@ -764,6 +789,7 @@ export function recommendQueryFor(state: OnboardingState, options: OnboardingFlo
   const params = recommendParamsFor(state, options);
   const search = new URLSearchParams();
   search.set("profile", params.profile);
+  search.set("listingPolicy", listingPolicyFor(state));
   if (params.priority !== "balanced") search.set("priority", params.priority);
   if (params.profile === "gaming") {
     search.set("gamingMode", params.gamingMode ?? "budget");

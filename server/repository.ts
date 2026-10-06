@@ -32,6 +32,7 @@ import type { SavedWatchlistAlertState } from "./watchlist-alert-state";
 import type { UsageEventName } from "./usage-events";
 
 import { initializePostgresSchemaWithClient, postgresSchemaInitializationModeForNodeEnv } from "./postgres-schema-contract";
+import { registerPostgresPoolErrorHandlers } from "./postgres-pool-errors";
 
 export { OWNER_SESSION_RESOURCE_TYPES as OWNER_SHARE_RESOURCE_TYPES };
 export type { OwnerShareResourceType };
@@ -415,6 +416,8 @@ function markDatabaseUnavailable(operation: string, error: unknown) {
   lastDatabaseError = error;
   console.warn(`PostgreSQL ${operation} failed: ${postgresErrorMessage(error)}`);
 }
+
+if (pool) registerPostgresPoolErrorHandlers(pool, (error) => markDatabaseUnavailable("connection", error));
 
 export type SavedBuildMonitorLeaseResult<T> =
   | { backend: "postgres"; acquired: true; value: T }
