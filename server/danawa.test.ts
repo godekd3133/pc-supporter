@@ -476,6 +476,34 @@ describe("Danawa parser", () => {
   });
 
   it.each([
+    ["AMD(소켓AM5) / AMD A620 / DDR5 / M-ATX", "A620"],
+    ["AMD(소켓AM4) / AMD A620A / DDR4", "A620A"],
+    ["인텔(소켓1851) / 인텔 B860 / DDR5", "B860"],
+    ["인텔(소켓1851) / DDR5 / VGA 연결: PCIe5.0 x16", undefined]
+  ])("reads the motherboard chipset from %s", (rawSpecText, expected) => {
+    const part = parseDanawaProductPage("motherboard", {
+      name: "칩셋 보드",
+      url: "https://prod.danawa.com/info/?pcode=270038&cate=112751",
+      sourceProductCode: "270038"
+    }, `<title>칩셋 보드 : 다나와 가격비교</title><meta name="description" content="${rawSpecText}" />`, "112751");
+
+    expect(part.specs.chipset).toBe(expected);
+  });
+
+  it("keeps Intel MTP out of PPT and TDP", () => {
+    const part = parseDanawaProductPage("cpu", {
+      name: "인텔 코어 울트라7 시리즈2 265K",
+      url: "https://prod.danawa.com/info/?pcode=270039&cate=112747",
+      sourceProductCode: "270039"
+    }, `<title>인텔 코어 울트라7 시리즈2 265K : 다나와 가격비교</title><meta name="description" content="인텔(소켓1851) / 20코어 / 20스레드 / PBP-MTP: 125-250W" />`, "112747");
+
+    expect(part.specs.tdpW).toBe(125);
+    expect(part.specs.pptW).toBeUndefined();
+    expect(part.specs.cpuMaxTurboPowerW).toBe(250);
+    expect(reparseDanawaPart({ ...part, rawSpecText: "인텔(소켓1851) / TDP: 125W" }).specs.cpuMaxTurboPowerW).toBeUndefined();
+  });
+
+  it.each([
     ["전원부: 6+1+1+1+1페이즈", 10, 6],
     ["전원부: 11~12페이즈", 11, 11],
     ["전원부: 12+0페이즈", undefined, undefined]

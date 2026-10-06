@@ -84,7 +84,7 @@ import { compareRecommendationTrust, recommendationTrustFor } from "./recommenda
 import { phase1CpuGamingClass, phase1GamingFilters, phase1GamingPartAllowed, phase1GpuGamingClass } from "../phase1-gaming-policy";
 import { phase1CaseSupportsMotherboard, phase1CoolerSupportsCpu, phase1GpuPowerUpperBoundW, phase1MotherboardSupportsCpu } from "../phase1-hardware-evidence";
 
-export const ENGINE_VERSION = "2.62.0";
+export const ENGINE_VERSION = "2.63.0";
 
 function benchmarkFreshnessFor(part: Part) {
   return classifyDataFreshness(part.specs.benchmarkProvenance?.updatedAt ?? part.updatedAt);
@@ -371,43 +371,45 @@ function physicalMemoryModuleCount(memory: SelectionWithPart[]) {
   );
 }
 
-// 확인된 스펙이 없을 때 쓰는 추정 판정 계수 — CompatPC 규칙(311·950)에서 옮긴 값이며
-// 출처가 확인된 제조사 기준이 아니다. 추정값만으로는 차단(blocker)을 내지 않고 warning까지만 낸다.
-const VRM_ESTIMATE_DELIVERY_RATIO = 0.35;
-const VRM_ESTIMATE_AMPS_PER_PHASE = 50;
-const VRM_ESTIMATE_SEVERE_RATIO = 1.1;
 const SYSTEM_BASE_LOAD_W = 100;
 const PSU_LOAD_HEADROOM_RATIO = 1.2;
 const GPU_RECOMMENDED_PSU_SYSTEM_ALLOWANCE_W = 300;
 
-type CapacityEvidence = {
-  capacityW: number;
-  basis: "spec" | "estimate";
-  estimateSource?: "vcore" | "phase";
-  basisLabel: string;
-};
+// 전원부는 페이즈·출력으로 W를 추정하지 않고, "고전력 CPU × 보급형 보드" 조합만 경고한다.
+// 기준값은 실측 보정 전 임시값이다 — docs/vrm-judgement-issue-2026-10-06.md 참고.
+const VRM_HIGH_POWER_CPU_W = 150;
+const VRM_ENTRY_VCORE_OUTPUT_A = 300;
+// 저전력 CPU용으로 나온 칩셋. 제조사가 고전력 CPU의 전력 한도를 낮추는 경우가 많다.
+const VRM_ENTRY_CHIPSETS = new Set(["A320", "A520", "A620", "H310", "H410", "H510", "H610", "H810"]);
+// AMD 데스크톱 CPU의 PPT는 TDP × 1.35로 정의된다.
+const AMD_PPT_PER_TDP = 1.35;
 
-// vrmPhaseCount는 SoC·보조 페이즈까지 합친 전체 수라 Vcore 공급 추정에 쓰지 않는다 — Vcore 페이즈만 쓴다.
-function motherboardPowerDeliveryFor(motherboard: Part): CapacityEvidence | undefined {
-  const { vrmCapacityW, vrmVcoreOutputA, vrmVcorePhaseCount: vrmPhaseCount } = motherboard.specs;
-  if (vrmCapacityW !== undefined) return { capacityW: vrmCapacityW, basis: "spec", basisLabel: "확인된 전원부 용량" };
-  if (vrmVcoreOutputA !== undefined && vrmVcoreOutputA > 0) {
-    return {
-      capacityW: vrmVcoreOutputA * VRM_ESTIMATE_DELIVERY_RATIO,
-      basis: "estimate",
-      estimateSource: "vcore",
-      basisLabel: `Vcore 출력 합계 ${vrmVcoreOutputA}A × ${VRM_ESTIMATE_DELIVERY_RATIO}`
-    };
-  }
-  if (vrmPhaseCount !== undefined && vrmPhaseCount > 0) {
-    return {
-      capacityW: vrmPhaseCount * VRM_ESTIMATE_AMPS_PER_PHASE * VRM_ESTIMATE_DELIVERY_RATIO,
-      basis: "estimate",
-      estimateSource: "phase",
-      basisLabel: `전원부 ${vrmPhaseCount}페이즈 × ${VRM_ESTIMATE_AMPS_PER_PHASE}A × ${VRM_ESTIMATE_DELIVERY_RATIO}`
-    };
-  }
-  return undefined;
+type CpuPeakPower = { watts: number; basisLabel: string };
+
+/** Sustained-peak package power for the VRM rule: PPT, Intel MTP, AMD TDP × 1.35, then TDP. */
+function cpuPeakPowerFor(cpu: Part): CpuPeakPower | undefined {
+  const { pptW, cpuMaxTurboPowerW, tdpW, socket } = cpu.specs;
+  if (pptW !== undefined) return { watts: pptW, basisLabel: "PPT" };
+  if (cpuMaxTurboPowerW !== undefined) return { watts: cpuMaxTurboPowerW, basisLabel: "최대 터보 전력(MTP)" };
+  if (tdpW === undefined) return undefined;
+  if (socket && /^AM\d/i.test(socket)) return { watts: Math.round(tdpW * AMD_PPT_PER_TDP), basisLabel: `TDP ${tdpW}W × ${AMD_PPT_PER_TDP}(AMD PPT 정의)` };
+  return { watts: tdpW, basisLabel: "TDP" };
+}
+
+function motherboardChipsetFor(motherboard: Part) {
+  return motherboard.specs.chipset ?? motherboard.name.match(/\b([ABHQWXZ]\d{3})/)?.[1];
+}
+
+type MotherboardVrmTier = { tier: "entry" | "standard"; reason: string } | { tier: "unknown" };
+
+function motherboardVrmTierFor(motherboard: Part): MotherboardVrmTier {
+  const chipset = motherboardChipsetFor(motherboard);
+  const outputA = motherboard.specs.vrmVcoreOutputA;
+  if (chipset && VRM_ENTRY_CHIPSETS.has(chipset.slice(0, 4).toUpperCase())) return { tier: "entry", reason: `보급형 칩셋 ${chipset}` };
+  if (outputA !== undefined && outputA <= VRM_ENTRY_VCORE_OUTPUT_A) return { tier: "entry", reason: `Vcore 출력 합계 ${outputA}A` };
+  if (outputA !== undefined) return { tier: "standard", reason: `Vcore 출력 합계 ${outputA}A` };
+  if (chipset) return { tier: "standard", reason: `칩셋 ${chipset}` };
+  return { tier: "unknown" };
 }
 
 // 킷당 모듈 수가 없으면 capacityGb가 킷 합계인지 모듈 1개인지 알 수 없어 모듈 용량을 정하지 않는다.
@@ -445,10 +447,6 @@ function twoPointFiveInchMountCapacity(computerCase: Part, hdds: SelectionWithPa
   const hddCount = hdds.reduce((total, { selection }) => total + selection.quantity, 0);
   const spareHddBays = Math.max(0, (computerCase.specs.hddBays ?? 0) - hddCount);
   return (computerCase.specs.ssdBays ?? 0) + spareHddBays;
-}
-
-function formatRatio(value: number) {
-  return value.toFixed(2);
 }
 
 function partIds(...parts: Array<Part | undefined>) {
@@ -1155,9 +1153,10 @@ function candidateIsPlausible(finding: Finding, build: BuildSelection, candidate
     if (targetCategory === "cpu" && motherboard?.specs.socket) return candidate.specs.socket !== undefined && candidate.specs.socket === motherboard.specs.socket;
   }
   if (finding.ruleId === "cpu-motherboard-power") {
-    if (targetCategory === "motherboard" && cpu?.specs.pptW) {
-      const powerDelivery = motherboardPowerDeliveryFor(candidate);
-      return powerDelivery !== undefined && powerDelivery.capacityW >= cpu.specs.pptW;
+    const cpuPower = cpu?.specs.pptW ?? cpu?.specs.tdpW;
+    if (targetCategory === "motherboard" && cpuPower !== undefined) {
+      if (candidate.specs.vrmCapacityW !== undefined) return candidate.specs.vrmCapacityW >= cpuPower;
+      return motherboardVrmTierFor(candidate).tier === "standard";
     }
   }
   if (finding.ruleId === "memory-type") {
@@ -3427,81 +3426,63 @@ export function evaluateBuild(
     }
 
     const cpuPower = cpu.specs.pptW ?? cpu.specs.tdpW;
-    // 확인된 용량(vrmCapacityW)이 있으면 그것으로, 없으면 Vcore 출력·Vcore 페이즈로 추정한다.
-    const powerDelivery = motherboardPowerDeliveryFor(motherboard);
-    if (cpuPower === undefined || powerDelivery === undefined) {
-      // 전원부 용량이 확인된 보드가 카탈로그에 거의 없다 — 추정도 못 하는 보드를 unknown으로
-      // 두면 고발열 CPU 견적이 전부 needs_review가 되어 유효한 최저가 구성만
-      // 남는다. 근거가 없는 경우는 경고로만 두고, 측정된 부족(아래 blocker)만
-      // 구성을 막는다.
-      if (cpuPower !== undefined) {
+    const cpuPeak = cpuPeakPowerFor(cpu);
+    const vrmCapacity = motherboard.specs.vrmCapacityW;
+    if (cpuPower === undefined || cpuPeak === undefined) {
+      addUnknown(
+        findings,
+        "cpu-motherboard-power",
+        "CPU 전력과 메인보드 전원부 용량을 확인해 주세요.",
+        "CPU 전력 정보가 없어 부하가 클 때 메인보드 전원부가 감당할 수 있는지 확인하지 못했어요.",
+        partIds(cpu, motherboard),
+        ["CPU power"],
+        "motherboard"
+      );
+    } else if (vrmCapacity !== undefined) {
+      // 제조사 확인 용량이 있을 때만 차단한다. 차단 기준 전력은 기존과 같이 PPT(없으면 TDP)다.
+      if (cpuPower > vrmCapacity) {
+        addFinding(
+          findings,
+          "cpu-motherboard-power",
+          "blocker",
+          "메인보드 전원부가 CPU 요구 전력을 감당하지 못할 수 있습니다.",
+          "CPU의 최대 전력 요구량이 메인보드 전원부의 확인된 공급 범위를 초과합니다.",
+          partIds(cpu, motherboard),
+          [
+            { label: "CPU 요구 전력", actual: formatNumber(cpuPower, "W") },
+            { label: "메인보드 전원부 기준", expected: formatNumber(vrmCapacity, "W") }
+          ],
+          [replaceAction("motherboard"), replaceAction("cpu")]
+        );
+      }
+    } else if (cpuPeak.watts >= VRM_HIGH_POWER_CPU_W) {
+      // 전원부 부족은 조립 불가가 아니라 고부하 지속 시 VRM 과열에 따른 전력 제한으로 나타난다.
+      // 보급형 보드와 고전력 CPU 조합만 warning, 보드 등급을 모르면 info로만 알린다.
+      const tier = motherboardVrmTierFor(motherboard);
+      const cpuFact = { label: "CPU 최대 전력", actual: `${formatNumber(cpuPeak.watts, "W")} (${cpuPeak.basisLabel})` };
+      if (tier.tier === "entry") {
         addFinding(
           findings,
           "cpu-motherboard-power",
           "warning",
-          "메인보드 전원부 용량이 확인되지 않았습니다.",
-          cpuPower > 105
-            ? "보드 전원부 스펙이 없어 고발열 CPU와의 조합은 제조사 스펙 확인을 권장합니다."
-            : "보드 전원부 스펙이 없지만 이 CPU는 105W 이하라 일반적인 데스크탑 보드에서 무리 없이 동작합니다.",
+          "보급형 메인보드에 고전력 CPU를 조합했습니다.",
+          "고부하가 오래 이어지면 전원부 과열로 CPU 전력이 제한되어 성능이 덜 나올 수 있어요. 메인보드 제조사의 CPU 지원 목록과 전원부 사양을 확인해 주세요.",
           partIds(cpu, motherboard),
-          [
-            { label: "CPU 요구 전력", actual: formatNumber(cpuPower, "W") },
-            { label: "메인보드 전원부 기준", expected: "확인 필요" }
-          ],
-          [action("verify_spec", `${CATEGORY_LABELS.motherboard} 스펙 확인`, "motherboard")]
+          [cpuFact, { label: "메인보드 전원부 등급", actual: tier.reason }],
+          [replaceAction("motherboard"), action("verify_spec", "메인보드 전원부 사양 확인", "motherboard")]
         );
-      } else {
-        addUnknown(
+      } else if (tier.tier === "unknown") {
+        addFinding(
           findings,
           "cpu-motherboard-power",
-          "CPU 전력과 메인보드 전원부 용량을 확인해 주세요.",
-          "CPU 전력이나 메인보드 전원부 용량 정보가 없어 부하가 클 때 전력을 감당할 수 있는지 확인하지 못했어요.",
+          "info",
+          "메인보드 전원부 등급을 확인하지 못했습니다.",
+          "고전력 CPU라 보급형 메인보드라면 고부하에서 전력이 제한될 수 있어요. 칩셋과 전원부 사양을 확인해 주세요.",
           partIds(cpu, motherboard),
-          [cpuPower === undefined ? "CPU power" : "", powerDelivery === undefined ? "VRM capacity" : ""].filter(Boolean),
-          "motherboard"
+          [cpuFact, { label: "메인보드 전원부 등급", expected: "확인 필요" }],
+          [action("verify_spec", "메인보드 전원부 사양 확인", "motherboard")]
         );
       }
-    } else if (powerDelivery.basis === "spec" && cpuPower > powerDelivery.capacityW) {
-      addFinding(
-        findings,
-        "cpu-motherboard-power",
-        "blocker",
-        "메인보드 전원부가 CPU 요구 전력을 감당하지 못할 수 있습니다.",
-        "CPU의 최대 전력 요구량이 메인보드 전원부의 확인된 공급 범위를 초과합니다.",
-        partIds(cpu, motherboard),
-        [
-          { label: "CPU 요구 전력", actual: formatNumber(cpuPower, "W") },
-          { label: "메인보드 전원부 기준", expected: formatNumber(powerDelivery.capacityW, "W") }
-        ],
-        [replaceAction("motherboard"), replaceAction("cpu")]
-      );
-    } else if (powerDelivery.basis === "estimate" && cpuPower > powerDelivery.capacityW) {
-      // 전원부 용량 표기가 없는 보드는 Vcore 출력·페이즈 수로 추정한다. 추정 계수가 보수적이라
-      // 1.1배 미만의 근소한 초과는 참고(info)로만 알리고, 1.1배 이상부터 경고한다. 추정값이므로 차단하지 않는다.
-      const ratio = cpuPower / powerDelivery.capacityW;
-      const severe = ratio >= VRM_ESTIMATE_SEVERE_RATIO;
-      const estimateSourceMessage = powerDelivery.estimateSource === "phase"
-        ? "전원부 용량 표기가 없어 페이즈 수로 추정한 결과예요(페이즈당 전류는 확인되지 않아 실제와 차이가 클 수 있어요)."
-        : "전원부 용량 표기가 없어 Vcore 출력 합계로 추정한 결과예요.";
-      addFinding(
-        findings,
-        "cpu-motherboard-power",
-        severe ? "warning" : "info",
-        severe
-          ? "메인보드 전원부가 CPU 전력을 감당하기 어려울 수 있습니다."
-          : "메인보드 전원부 여유가 크지 않을 수 있습니다.",
-        severe
-          ? `${estimateSourceMessage} 장시간 고부하에서 CPU 성능이 제한될 수 있으니 제조사 전원부 사양을 확인해 주세요.`
-          : `${estimateSourceMessage} 추정 공급량을 근소하게 넘는 수준이라 일반 사용에는 문제가 없을 가능성이 높아요.`,
-        partIds(cpu, motherboard),
-        [
-          { label: "CPU 요구 전력", actual: formatNumber(cpuPower, "W") },
-          { label: "메인보드 전원부 추정", expected: formatEstimatedWatts(powerDelivery.capacityW) },
-          { label: "추정 근거", actual: powerDelivery.basisLabel },
-          { label: "요구 전력 / 추정 공급", actual: formatRatio(ratio) }
-        ],
-        [replaceAction("motherboard"), action("verify_spec", "메인보드 전원부 사양 확인", "motherboard")]
-      );
     }
   }
 

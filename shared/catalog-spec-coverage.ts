@@ -81,6 +81,8 @@ const CATALOG_MISSING_FIELD_LABELS: Record<string, string> = {
   vrmPhaseCount: "전원부 페이즈",
   vrmVcorePhaseCount: "Vcore 페이즈",
   vrmVcoreOutputA: "Vcore 출력 합계",
+  chipset: "칩셋",
+  cpuMaxTurboPowerW: "최대 터보 전력",
   supportedSockets: "지원 소켓",
   maxCoolingW: "냉각 지원",
   radiatorSizeMm: "라디에이터 크기",

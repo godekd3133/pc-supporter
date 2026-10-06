@@ -842,6 +842,8 @@ function parseSpecs(category: PartCategory, name: string, description: string, r
     specs.pptW = parseNumber(text, /PPT\s*[:：]?\s*([\d,]+)\s*W/i);
     specs.tdpW = specs.tdpW
       ?? parseNumber(text, /PBP-MTP\s*[:：]?\s*([\d,]+)(?:\s*-\s*[\d,]+)?\s*W/i);
+    // The MTP upper bound stays in its own field so PSU/cooler rules keep using PPT/TDP.
+    specs.cpuMaxTurboPowerW = parseNumber(text, /PBP-MTP\s*[:：]?\s*[\d,]+\s*-\s*([\d,]+)\s*W/i);
     specs.maxMemorySpeedMhz = parseNumber(text, /(?:메모리|Memory)[^\d]{0,32}([\d,]{4,6})\s*MHz/i)
       ?? parseCpuMemorySpeed(text);
     const integratedGraphicsAbsent = /(?:내장\s*그래픽|내장그래픽|그래픽)\s*[:：]?\s*(?:미\s*탑재|미탑재|미\s*포함|미포함|미지원|없음|없습니다)/i.test(text);
@@ -878,6 +880,8 @@ function parseSpecs(category: PartCategory, name: string, description: string, r
 
   if (category === "motherboard") {
     specs.socket = parseSocket(text);
+    // "AMD(소켓AM5) / AMD B850 / DDR5" — 소켓 다음에 오는 칩셋 표기.
+    specs.chipset = text.match(/(?:AMD|인텔|Intel)\s+([ABHQWXZC]\d{3}[A-Z]?)(?=\s*(?:\/|$))/i)?.[1].toUpperCase();
     specs.memoryType = parseMemoryType(text);
     specs.memoryProfiles = parseMemoryProfiles(text);
     specs.memoryFormFactor = /SO-?DIMM|SODIMM|노트북용/i.test(text)
@@ -1225,6 +1229,7 @@ export function reparseDanawaPart(part: Part): Part {
     if (parsedSpecs.cpuSeries === undefined) delete specs.cpuSeries;
     if (parsedSpecs.cinebenchR23Single === undefined) delete specs.cinebenchR23Single;
     if (parsedSpecs.cinebenchR23Multi === undefined) delete specs.cinebenchR23Multi;
+    if (parsedSpecs.cpuMaxTurboPowerW === undefined) delete specs.cpuMaxTurboPowerW;
     // 다나와 목록 스펙에는 메모리 지원 속도가 없어 이 필드가 비는 게 보통이다.
     // 비면 견적 생성기의 필수 스펙 게이트가 모든 live CPU를 탈락시켜 seed
     // 참고 부품만 남으므로, 플랫폼 네이티브(JEDEC) 값으로 채운다.
@@ -1278,6 +1283,7 @@ export function reparseDanawaPart(part: Part): Part {
     if (parsedSpecs.vrmPhaseCount === undefined) delete specs.vrmPhaseCount;
     if (parsedSpecs.vrmVcorePhaseCount === undefined) delete specs.vrmVcorePhaseCount;
     if (parsedSpecs.vrmVcoreOutputA === undefined) delete specs.vrmVcoreOutputA;
+    if (parsedSpecs.chipset === undefined) delete specs.chipset;
     if (parsedSpecs.m2Slots === undefined) delete specs.m2Slots;
     if (parsedSpecs.m2Interfaces === undefined) delete specs.m2Interfaces;
     if (parsedSpecs.m2PcieGenerations === undefined) delete specs.m2PcieGenerations;

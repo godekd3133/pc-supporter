@@ -632,6 +632,8 @@ export interface PartSpecs {
     baseUpdatedAt: string;
   };
   socket?: string;
+  /** Motherboard chipset as listed (e.g. "A620", "B850", "Z890"). */
+  chipset?: string;
   supportedSockets?: string[];
   memoryType?: string;
   memoryProfiles?: MemoryProfile[];
@@ -669,6 +671,8 @@ export interface PartSpecs {
   ssdWriteIops?: number;
   tdpW?: number;
   pptW?: number;
+  /** Intel Maximum Turbo Power (the upper bound of Danawa "PBP-MTP: 125-250W"). Used only by the VRM rule, not as PPT. */
+  cpuMaxTurboPowerW?: number;
   integratedGraphics?: boolean;
   /** 정규화된 CPU 세대 계열 — "Ryzen 9000"·"Core Ultra 200"·"Core 14" 등. */
   cpuSeries?: string;

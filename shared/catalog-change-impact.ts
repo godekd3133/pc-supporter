@@ -48,6 +48,8 @@ const SPEC_KEY_BY_LABEL: Record<string, string> = {
   "전원부 페이즈": "vrmPhaseCount",
   "Vcore 페이즈": "vrmVcorePhaseCount",
   "Vcore 출력 합계": "vrmVcoreOutputA",
+  "칩셋": "chipset",
+  "최대 터보 전력": "cpuMaxTurboPowerW",
   "최대 메모리": "maxMemoryGb",
   "메모리 슬롯": "memorySlots",
   "M.2 슬롯": "m2Slots",
@@ -105,6 +107,7 @@ const IMPACTS_BY_CATEGORY: Record<string, Record<string, ImpactDefinition>> = {
     socket: { kind: "compatibility", label: "CPU·메인보드 소켓", summary: "CPU와 메인보드의 물리 장착 가능 여부를 다시 검사합니다.", ruleIds: ["cpu-motherboard-socket"] },
     tdpW: { kind: "compatibility", label: "CPU 전력·냉각", summary: "메인보드 전원부와 CPU 쿨러의 전력 여유를 다시 검사합니다.", ruleIds: ["cpu-motherboard-power", "cpu-cooler-capacity", "gpu-psu-power", "psu-system-power"] },
     pptW: { kind: "compatibility", label: "CPU 전력·냉각", summary: "메인보드 전원부와 CPU 쿨러의 전력 여유를 다시 검사합니다.", ruleIds: ["cpu-motherboard-power", "cpu-cooler-capacity", "gpu-psu-power", "psu-system-power"] },
+    cpuMaxTurboPowerW: { kind: "compatibility", label: "CPU 최대 전력", summary: "고전력 CPU와 보급형 메인보드 조합인지 다시 검사합니다.", ruleIds: ["cpu-motherboard-power"] },
     maxMemorySpeedMhz: { kind: "compatibility", label: "메모리 속도 상한", summary: "CPU와 메모리의 공식 지원 속도 조합을 다시 검사합니다.", ruleIds: ["memory-speed"] },
     integratedGraphics: { kind: "compatibility", label: "그래픽 출력", summary: "외장 GPU가 없을 때 CPU 내장 그래픽으로 화면을 출력할 수 있는지 다시 검사합니다.", ruleIds: ["display-output"] }
   },
@@ -119,8 +122,8 @@ const IMPACTS_BY_CATEGORY: Record<string, Record<string, ImpactDefinition>> = {
   motherboard: {
     socket: { kind: "compatibility", label: "CPU·메인보드 소켓", summary: "CPU와 메인보드의 물리 장착 가능 여부를 다시 검사합니다.", ruleIds: ["cpu-motherboard-socket"] },
     vrmCapacityW: { kind: "compatibility", label: "메인보드 전원부", summary: "CPU 요구 전력과 메인보드 전원부 공급 범위를 다시 검사합니다.", ruleIds: ["cpu-motherboard-power"] },
-    vrmVcorePhaseCount: { kind: "compatibility", label: "메인보드 전원부", summary: "전원부 용량 표기가 없을 때 Vcore 페이즈 수로 추정한 공급 여유를 다시 검사합니다.", ruleIds: ["cpu-motherboard-power"] },
-    vrmVcoreOutputA: { kind: "compatibility", label: "메인보드 전원부", summary: "전원부 용량 표기가 없을 때 Vcore 출력 합계로 추정한 공급 여유를 다시 검사합니다.", ruleIds: ["cpu-motherboard-power"] },
+    chipset: { kind: "compatibility", label: "메인보드 전원부 등급", summary: "보급형 칩셋 여부로 고전력 CPU 조합을 다시 검사합니다.", ruleIds: ["cpu-motherboard-power"] },
+    vrmVcoreOutputA: { kind: "compatibility", label: "메인보드 전원부", summary: "Vcore 출력 합계로 보급형 전원부 여부를 다시 판단해 고전력 CPU 조합을 검사합니다.", ruleIds: ["cpu-motherboard-power"] },
     pcieX16Slots: { kind: "compatibility", label: "GPU·PCIe 장착", summary: "그래픽카드·PCIe 어댑터 장착 폭과 메인보드 슬롯을 다시 검사합니다.", ruleIds: ["gpu-motherboard-pcie", "accessory-pcie-slot-capacity", "accessory-pcie-slot-clearance"] },
     pcieX8Slots: { kind: "compatibility", label: "GPU·PCIe 장착", summary: "그래픽카드·PCIe 어댑터 장착 폭과 메인보드 슬롯을 다시 검사합니다.", ruleIds: ["gpu-motherboard-pcie", "accessory-pcie-slot-capacity", "accessory-pcie-slot-clearance"] },
     pcieX4Slots: { kind: "compatibility", label: "PCIe 어댑터 장착", summary: "M.2 PCIe 어댑터의 요구 폭과 메인보드 보조 슬롯을 다시 검사합니다.", ruleIds: ["accessory-pcie-slot-capacity", "accessory-pcie-slot-clearance"] },

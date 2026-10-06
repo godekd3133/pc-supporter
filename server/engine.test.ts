@@ -4905,35 +4905,62 @@ describe("estimated power, cooling and storage-bay rules ported from CompatPC", 
   const findingsFor = (build: BuildSelection, extraParts: Part[], ruleId: string) => evaluateBuild(build, [...seedCatalog, ...extraParts], { includeSuggestions: false })
     .findings.filter((finding) => finding.ruleId === ruleId);
 
-  it("keeps an explicit VRM capacity as the only blocker source and warns on Vcore or phase estimates", () => {
-    const explicitBoard = withSpecs("mb-b650-4x3", "mb-explicit-vrm-150", { vrmCapacityW: 150, vrmVcoreOutputA: 2000 });
-    const vcoreBoard = withSpecs("mb-b650-4x3", "mb-vcore-400", { vrmCapacityW: undefined, vrmVcoreOutputA: 400, vrmVcorePhaseCount: 20 });
-    const roomyVcoreBoard = withSpecs("mb-b650-4x3", "mb-vcore-720", { vrmCapacityW: undefined, vrmVcoreOutputA: 720 });
-    const phaseBoard = withSpecs("mb-b650-4x3", "mb-phase-8", { vrmCapacityW: undefined, vrmVcorePhaseCount: 8 });
-    const unknownBoard = withSpecs("mb-b650-4x3", "mb-vrm-unlisted", { vrmCapacityW: undefined });
-    const parts = [explicitBoard, vcoreBoard, roomyVcoreBoard, phaseBoard, unknownBoard];
+  it("blocks only on a verified VRM capacity and warns on high-power CPUs with entry-tier boards", () => {
+    const board = (id: string, specs: Part["specs"], name?: string): Part => ({ ...withSpecs("mb-b650-4x3", id, { vrmCapacityW: undefined, ...specs }), ...(name ? { name } : {}) });
+    const explicitBoard = withSpecs("mb-b650-4x3", "mb-explicit-vrm-150", { vrmCapacityW: 150, chipset: "A620" });
+    const entryChipsetBoard = board("mb-entry-a620", { chipset: "A620", vrmVcoreOutputA: 720 });
+    const entryOutputBoard = board("mb-entry-vcore-300", { chipset: "B850", vrmVcoreOutputA: 300 });
+    const standardOutputBoard = board("mb-standard-vcore-350", { chipset: "B850", vrmVcoreOutputA: 350 });
+    const standardChipsetBoard = board("mb-standard-b650", {});
+    const unknownBoard = board("mb-vrm-unlisted", {}, "전원부 미표기 보드");
+    const parts = [explicitBoard, entryChipsetBoard, entryOutputBoard, standardOutputBoard, standardChipsetBoard, unknownBoard];
     const withBoard = (boardId: string): BuildSelection => ({ ...compatibleBuild(), motherboard: { partId: boardId, quantity: 1 } });
+    const severitiesFor = (boardId: string) => findingsFor(withBoard(boardId), parts, "cpu-motherboard-power").map((finding) => finding.severity);
 
-    const explicit = findingsFor(withBoard(explicitBoard.id), parts, "cpu-motherboard-power");
-    const vcore = findingsFor(withBoard(vcoreBoard.id), parts, "cpu-motherboard-power");
-    const phase = findingsFor(withBoard(phaseBoard.id), parts, "cpu-motherboard-power");
-
-    expect(explicit.map((finding) => finding.severity)).toEqual(["blocker"]);
-    expect(vcore.map((finding) => finding.severity)).toEqual(["warning"]);
-    expect(vcore[0].title).toContain("감당하기 어려울");
-    expect(vcore[0].facts).toEqual(expect.arrayContaining([
-      { label: "메인보드 전원부 추정", expected: "140W" },
-      { label: "추정 근거", actual: "Vcore 출력 합계 400A × 0.35" }
+    // 9800X3D PPT 162W: 확인된 용량 150W 초과는 차단, 보급형 칩셋·낮은 Vcore 출력은 경고.
+    expect(severitiesFor(explicitBoard.id)).toEqual(["blocker"]);
+    expect(severitiesFor(entryChipsetBoard.id)).toEqual(["warning"]);
+    expect(findingsFor(withBoard(entryChipsetBoard.id), parts, "cpu-motherboard-power")[0].facts).toEqual(expect.arrayContaining([
+      { label: "CPU 최대 전력", actual: "162W (PPT)" },
+      { label: "메인보드 전원부 등급", actual: "보급형 칩셋 A620" }
     ]));
-    expect(phase.map((finding) => finding.severity)).toEqual(["warning"]);
-    expect(phase[0].facts).toEqual(expect.arrayContaining([{ label: "추정 근거", actual: "전원부 8페이즈 × 50A × 0.35" }]));
-    expect(findingsFor(withBoard(roomyVcoreBoard.id), parts, "cpu-motherboard-power")).toEqual([]);
-    // 추정 근거도 없는 보드는 main 정책대로 unknown이 아니라 warning으로만 알린다.
-    expect(findingsFor(withBoard(unknownBoard.id), parts, "cpu-motherboard-power").map((finding) => finding.severity)).toEqual(["warning"]);
-    // 전체 페이즈 합계(vrmPhaseCount)는 Vcore 공급 추정에 쓰지 않는다.
-    const totalPhaseOnlyBoard = withSpecs("mb-b650-4x3", "mb-total-phase-only", { vrmCapacityW: undefined, vrmPhaseCount: 30 });
-    expect(findingsFor(withBoard(totalPhaseOnlyBoard.id), [...parts, totalPhaseOnlyBoard], "cpu-motherboard-power").map((finding) => finding.title))
-      .toEqual(["메인보드 전원부 용량이 확인되지 않았습니다."]);
+    expect(severitiesFor(entryOutputBoard.id)).toEqual(["warning"]);
+    expect(severitiesFor(standardOutputBoard.id)).toEqual([]);
+    expect(severitiesFor(standardChipsetBoard.id)).toEqual([]);
+    expect(severitiesFor(unknownBoard.id)).toEqual(["info"]);
+    // 추정 W·페이즈 수로는 판정하지 않는다.
+    const phaseOnlyBoard = board("mb-phase-only", { chipset: "B850", vrmVcorePhaseCount: 4, vrmPhaseCount: 6 });
+    expect(findingsFor(withBoard(phaseOnlyBoard.id), [...parts, phaseOnlyBoard], "cpu-motherboard-power")).toEqual([]);
+  });
+
+  it("uses Intel MTP and the AMD TDP × 1.35 PPT definition only for the VRM rule", () => {
+    const entryBoard: Part = { ...withSpecs("mb-b650-4x3", "mb-entry-h810", { vrmCapacityW: undefined, chipset: "H810", socket: "AM5" }) };
+    const cpu = (id: string, specs: Part["specs"]) => withSpecs("cpu-7800x3d", id, { pptW: undefined, ...specs });
+    const intelK = cpu("cpu-intel-mtp-250", { tdpW: 125, cpuMaxTurboPowerW: 250, socket: "LGA1851" });
+    const intelNoMtp = cpu("cpu-intel-tdp-125", { tdpW: 125, socket: "LGA1851" });
+    const amdX3d = cpu("cpu-amd-tdp-120", { tdpW: 120, socket: "AM5" });
+    const amdLow = cpu("cpu-amd-tdp-65", { tdpW: 65, socket: "AM5" });
+    const parts = [entryBoard, intelK, intelNoMtp, amdX3d, amdLow];
+    const factsFor = (cpuId: string) => findingsFor({
+      ...compatibleBuild(),
+      cpu: { partId: cpuId, quantity: 1 },
+      motherboard: { partId: entryBoard.id, quantity: 1 }
+    }, parts, "cpu-motherboard-power").map((finding) => `${finding.severity}:${finding.facts[0]?.actual}`);
+
+    expect(factsFor(intelK.id)).toEqual(["warning:250W (최대 터보 전력(MTP))"]);
+    expect(factsFor(intelNoMtp.id)).toEqual([]);
+    expect(factsFor(amdX3d.id)).toEqual(["warning:162W (TDP 120W × 1.35(AMD PPT 정의))"]);
+    expect(factsFor(amdLow.id)).toEqual([]);
+  });
+
+  it("keeps an unknown VRM tier informational so it does not change the build status", () => {
+    const unknownBoard: Part = { ...withSpecs("mb-b650-4x3", "mb-vrm-tier-unknown", { vrmCapacityW: undefined }), name: "전원부 미표기 보드" };
+    const result = evaluateBuild({ ...compatibleBuild(), motherboard: { partId: unknownBoard.id, quantity: 1 } }, [...seedCatalog, unknownBoard], { includeSuggestions: false });
+    const baseline = evaluateBuild(compatibleBuild(), seedCatalog, { includeSuggestions: false });
+
+    expect(result.findings.find((item) => item.ruleId === "cpu-motherboard-power")?.severity).toBe("info");
+    expect(result.warningCount).toBe(baseline.warningCount);
+    expect(result.status).toBe(baseline.status);
   });
 
   it("warns when one RAM module exceeds the board's maximum capacity divided by its slots", () => {
@@ -4997,43 +5024,6 @@ describe("estimated power, cooling and storage-bay rules ported from CompatPC", 
     expect(atRecommendation.map((finding) => finding.severity)).toEqual(["warning"]);
     expect(atRecommendation[0].facts).toEqual(expect.arrayContaining([{ label: "예상 시스템 부하(추정)", expected: "894W" }]));
     expect(findingsFor(flagshipBuild(roomyPsu.id), parts, "gpu-psu-power")).toEqual([]);
-  });
-
-  it("keeps marginal VRM estimate overruns informational and warns from 1.1x without rounding", () => {
-    const vcoreBoard = withSpecs("mb-b650-4x3", "mb-vcore-400-boundary", { vrmCapacityW: undefined, vrmVcoreOutputA: 400 });
-    const fractionalBoard = withSpecs("mb-b650-4x3", "mb-vcore-402-boundary", { vrmCapacityW: undefined, vrmVcoreOutputA: 402 });
-    const cpuAt = (pptW: number) => withSpecs("cpu-7800x3d", `cpu-ppt-${pptW}`, { pptW });
-    const cpus = [cpuAt(140), cpuAt(141), cpuAt(154)];
-    const parts = [vcoreBoard, fractionalBoard, ...cpus];
-    const titlesFor = (boardId: string, pptW: number) => findingsFor({
-      ...compatibleBuild(),
-      cpu: { partId: `cpu-ppt-${pptW}`, quantity: 1 },
-      motherboard: { partId: boardId, quantity: 1 }
-    }, parts, "cpu-motherboard-power").map((finding) => `${finding.severity}:${finding.title}`);
-
-    // 400A × 0.35 = 140W: 정확히 1.0은 통과, 1.0 초과~1.1 미만은 참고(info), 1.1부터 경고.
-    expect(titlesFor(vcoreBoard.id, 140)).toEqual([]);
-    expect(titlesFor(vcoreBoard.id, 141)).toEqual(["info:메인보드 전원부 여유가 크지 않을 수 있습니다."]);
-    expect(titlesFor(vcoreBoard.id, 154)).toEqual(["warning:메인보드 전원부가 CPU 전력을 감당하기 어려울 수 있습니다."]);
-    // 402A × 0.35 = 140.7W는 반올림하지 않고 비교한다(비율 1.0021).
-    expect(titlesFor(fractionalBoard.id, 141)).toEqual(["info:메인보드 전원부 여유가 크지 않을 수 있습니다."]);
-  });
-
-  it("names the VRM estimate source and leaves an informational overrun out of the build status", () => {
-    const phaseBoard = withSpecs("mb-b650-4x3", "mb-phase-7-source", { vrmCapacityW: undefined, vrmVcorePhaseCount: 7 });
-    const cpu125 = withSpecs("cpu-7800x3d", "cpu-ppt-125-source", { pptW: 125 });
-    const parts = [phaseBoard, cpu125];
-    const result = evaluateBuild({
-      ...compatibleBuild(),
-      cpu: { partId: cpu125.id, quantity: 1 },
-      motherboard: { partId: phaseBoard.id, quantity: 1 }
-    }, [...seedCatalog, ...parts], { includeSuggestions: false });
-    const finding = result.findings.find((item) => item.ruleId === "cpu-motherboard-power");
-
-    // 7페이즈 × 50A × 0.35 = 122.5W, 125W / 122.5W = 1.02
-    expect(finding?.severity).toBe("info");
-    expect(finding?.message).toContain("페이즈 수로 추정");
-    expect(result.warningCount).toBe(evaluateBuild(compatibleBuild(), seedCatalog, { includeSuggestions: false }).warningCount);
   });
 
   it("includes the 1.2x PSU headroom boundary and uses the GPU power fallback without a recommended PSU", () => {

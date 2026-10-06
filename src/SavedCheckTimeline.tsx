@@ -165,6 +165,8 @@ export const CATALOG_SPEC_LABELS: Record<string, string> = {
   vrmPhaseCount: "전원부 페이즈",
   vrmVcorePhaseCount: "Vcore 페이즈",
   vrmVcoreOutputA: "Vcore 출력 합계",
+  chipset: "칩셋",
+  cpuMaxTurboPowerW: "최대 터보 전력",
   maxMemoryGb: "최대 메모리",
   memorySlots: "메모리 슬롯",
   m2Slots: "M.2 슬롯",
