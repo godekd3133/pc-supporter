@@ -1,0 +1,42 @@
+{
+  "builtAtUtc": "2026-10-05T15:27:51.041927+00:00",
+  "engineVersion": "2.60.0",
+  "files": {
+    "shared/domain/engine.ts": "b1b762789ff400462ad0230fb66a0cc1ace0541a6c74627f1e71c3ebd4f83690",
+    "server/reference-catalog-merge.ts": "e14b10486f0ec0ef0dcd1ca5087231f916fd8f81393df7c77e9786aca03d57a7",
+    "server/gaming-storage-catalog.ts": "2b2684c7db2cbd1fd3ddb1d89da282ae73b976faa113678bbb744eff51488c60",
+    "shared/gaming-target-build.ts": "7931647e6ea1200ff966f4bb3fd55896b97aa858690807bcd3b6e4c46b3fd971",
+    "src/quote-onboarding.ts": "7f6da423bc688bd590d45e18af7d8ee3ec240b8f9621f46f980fc11fbd03b112",
+    "src/QuoteOnboardingView.tsx": "c49af430c28b361f5121e4c5930f3b66d806263c13e815e84161dfdff06f988a",
+    "src/BuildGeneratorView.tsx": "dbb3a16e46972320d9f71e54c2abed50a4d38377804cbbf2f2c5b19f1f3f2feb",
+    "scripts/lightsail-deploy.sh": "32e8fa1e147c913732878ae3a265d2ee2dc46547c4d5402017998f63aa99fbcc",
+    "scripts/azure-host-bootstrap.sh": "c0c7f77de4a2b99cd79253b71c42e12dc84e40cf44600cc61d6b71efe7a8568a",
+    "scripts/azure-data-export.mjs": "c4a7903c58a463938de8e749cb7936893ebc349c9573bc419eb681bac17b8f8f",
+    "server/repository.ts": "c4b1e867eb8c5d47bfe833f5bcf543203075e0fb504b657ba7aa6b1998aaf191",
+    "server/postgres-pool-errors.ts": "49fbf55097d9453b20cc93f8569c0e6f2ba9e4cc7fce2895079139cb24d1e520",
+    "src/generator-balance.ts": "df0d2041cc06472116b44cba22e65163ffdc9f113a8a5655e58b224c4e7788e0"
+  },
+  "runtimeBuild": "scripts/build-server-runtime.mjs",
+  "deploymentScriptSha256": "32e8fa1e147c913732878ae3a265d2ee2dc46547c4d5402017998f63aa99fbcc",
+  "runtimeBuilderSha256": "599b9092bf90b5a979d7e9e077f6253125b0b9b5e27739f2712343de7a084704",
+  "sourceBaseCommit": "8fecd66f31b54904a54d2bf312e5cc1c03ee8759",
+  "sourcePatchFiles": [
+    "shared/domain/engine.ts",
+    "scripts/lightsail-deploy.sh",
+    "scripts/build-server-runtime.mjs",
+    "src/quote-onboarding.ts",
+    "src/QuoteOnboardingView.tsx",
+    "src/BuildGeneratorView.tsx",
+    "scripts/azure-host-bootstrap.sh",
+    "scripts/azure-data-export.mjs",
+    "server/repository.ts",
+    "server/postgres-pool-errors.ts",
+    "src/generator-balance.ts"
+  ],
+  "provider": "Microsoft Azure for Students",
+  "vmSize": "Standard_B2ats_v2",
+  "region": "koreacentral",
+  "azureHostname": "pc-supporter-71697d83-kc.koreacentral.cloudapp.azure.com",
+  "legacyOriginPreserved": true,
+  "connectionErrorHandling": "checked-out and idle PostgreSQL clients; failed transactions reject"
+}
