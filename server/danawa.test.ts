@@ -357,6 +357,32 @@ describe("Danawa parser", () => {
     expect(part.missingFields).toEqual([]);
   });
 
+  it("reads Vcore phase count and Vcore output total as VRM estimation inputs only", () => {
+    const listed = parseDanawaProductPage("motherboard", {
+      name: "GIGABYTE B850M AORUS ELITE",
+      url: "https://prod.danawa.com/info/?pcode=27020&cate=112751",
+      sourceProductCode: "27020"
+    }, `<title>GIGABYTE B850M AORUS ELITE : 다나와 가격비교</title><meta name="description" content="AMD(소켓AM5) / AMD B850 / DDR5 / M-ATX (24.4x24.4cm) / 전원부: 12+2+2페이즈 / 60A / Vcore출력합계: 720 / 메모리 8200MHz (PC5-65600) / 4개 / 메모리 용량: 최대 256GB / M.2: 2개 / SATA3: 4개 / 특징 DrMOS / 전원부 방열판" />`, "112751");
+    const phaseOnly = parseDanawaProductPage("motherboard", {
+      name: "MSI PRO B760M-A DDR4 II",
+      url: "https://prod.danawa.com/info/?pcode=27021&cate=112751",
+      sourceProductCode: "27021"
+    }, `<title>MSI PRO B760M-A DDR4 II : 다나와 가격비교</title><meta name="description" content="인텔(소켓1700) / 인텔 B760 / DDR4 / M-ATX (24.4x24.4cm) / 전원부: 14페이즈 / 메모리 5333MHz (PC4-42600) / 4개 / 메모리 용량: 최대 128GB / M.2: 2개 / SATA3: 4개" />`, "112751");
+    const unlisted = parseDanawaProductPage("motherboard", {
+      name: "전원부 미표기 보드",
+      url: "https://prod.danawa.com/info/?pcode=27022&cate=112751",
+      sourceProductCode: "27022"
+    }, `<title>전원부 미표기 보드 : 다나와 가격비교</title><meta name="description" content="AMD(소켓AM5) / DDR5 / 4개 / 메모리 용량: 최대 128GB / M.2: 1개 / SATA3: 4개 / 특징 전원부 방열판" />`, "112751");
+
+    expect(listed.specs.vrmPhaseCount).toBe(12);
+    expect(listed.specs.vrmVcoreOutputA).toBe(720);
+    expect(listed.specs.vrmCapacityW).toBeUndefined();
+    expect(phaseOnly.specs.vrmPhaseCount).toBe(14);
+    expect(phaseOnly.specs.vrmVcoreOutputA).toBeUndefined();
+    expect(unlisted.specs.vrmPhaseCount).toBeUndefined();
+    expect(unlisted.specs.vrmVcoreOutputA).toBeUndefined();
+  });
+
   it("normalizes desktop and laptop memory slot form factors", () => {
     const desktop = parseDanawaProductPage("motherboard", {
       name: "데스크톱 DIMM 보드",
@@ -945,6 +971,17 @@ describe("Danawa parser", () => {
     expect(part.specs.radiatorSizeMm).toBe(360);
     expect(part.specs.maxCoolerHeightMm).toBeUndefined();
     expect(part.missingFields).toEqual([]);
+  });
+
+  it("does not invent VRM values from unrelated heatsink wording", () => {
+    const heatsinkOnlyBoard = parseDanawaProductPage("motherboard", {
+      name: "방열판만 표기된 보드",
+      url: "https://prod.danawa.com/info/?pcode=27023&cate=112751",
+      sourceProductCode: "27023"
+    }, `<title>방열판만 표기된 보드 : 다나와 가격비교</title><meta name="description" content="AMD(소켓AM5) / DDR5 / 4개 / 메모리 용량: 최대 128GB / M.2: 1개 / SATA3: 4개 / 특징 DrMOS / 전원부 방열판 / VRM 쿨링" />`, "112751");
+
+    expect(heatsinkOnlyBoard.specs.vrmPhaseCount).toBeUndefined();
+    expect(heatsinkOnlyBoard.specs.vrmVcoreOutputA).toBeUndefined();
   });
 
   it("leaves unknown liquid cooler radiator size absent instead of emitting NaN", () => {

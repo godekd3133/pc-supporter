@@ -45,6 +45,8 @@ const SPEC_KEY_BY_LABEL: Record<string, string> = {
   "메모리 프로파일": "memoryProfiles",
   "메모리 슬롯 규격": "memoryFormFactor",
   "킷당 모듈 수": "memoryModuleCountPerKit",
+  "전원부 페이즈": "vrmPhaseCount",
+  "Vcore 출력 합계": "vrmVcoreOutputA",
   "최대 메모리": "maxMemoryGb",
   "메모리 슬롯": "memorySlots",
   "M.2 슬롯": "m2Slots",
@@ -100,8 +102,8 @@ const SPEC_KEY_BY_LABEL: Record<string, string> = {
 const IMPACTS_BY_CATEGORY: Record<string, Record<string, ImpactDefinition>> = {
   cpu: {
     socket: { kind: "compatibility", label: "CPU·메인보드 소켓", summary: "CPU와 메인보드의 물리 장착 가능 여부를 다시 검사합니다.", ruleIds: ["cpu-motherboard-socket"] },
-    tdpW: { kind: "compatibility", label: "CPU 전력·냉각", summary: "메인보드 전원부와 CPU 쿨러의 전력 여유를 다시 검사합니다.", ruleIds: ["cpu-motherboard-power", "cpu-cooler-capacity", "gpu-psu-power"] },
-    pptW: { kind: "compatibility", label: "CPU 전력·냉각", summary: "메인보드 전원부와 CPU 쿨러의 전력 여유를 다시 검사합니다.", ruleIds: ["cpu-motherboard-power", "cpu-cooler-capacity", "gpu-psu-power"] },
+    tdpW: { kind: "compatibility", label: "CPU 전력·냉각", summary: "메인보드 전원부와 CPU 쿨러의 전력 여유를 다시 검사합니다.", ruleIds: ["cpu-motherboard-power", "cpu-cooler-capacity", "gpu-psu-power", "psu-system-power"] },
+    pptW: { kind: "compatibility", label: "CPU 전력·냉각", summary: "메인보드 전원부와 CPU 쿨러의 전력 여유를 다시 검사합니다.", ruleIds: ["cpu-motherboard-power", "cpu-cooler-capacity", "gpu-psu-power", "psu-system-power"] },
     maxMemorySpeedMhz: { kind: "compatibility", label: "메모리 속도 상한", summary: "CPU와 메모리의 공식 지원 속도 조합을 다시 검사합니다.", ruleIds: ["memory-speed"] },
     integratedGraphics: { kind: "compatibility", label: "그래픽 출력", summary: "외장 GPU가 없을 때 CPU 내장 그래픽으로 화면을 출력할 수 있는지 다시 검사합니다.", ruleIds: ["display-output"] }
   },
@@ -116,14 +118,16 @@ const IMPACTS_BY_CATEGORY: Record<string, Record<string, ImpactDefinition>> = {
   motherboard: {
     socket: { kind: "compatibility", label: "CPU·메인보드 소켓", summary: "CPU와 메인보드의 물리 장착 가능 여부를 다시 검사합니다.", ruleIds: ["cpu-motherboard-socket"] },
     vrmCapacityW: { kind: "compatibility", label: "메인보드 전원부", summary: "CPU 요구 전력과 메인보드 전원부 공급 범위를 다시 검사합니다.", ruleIds: ["cpu-motherboard-power"] },
+    vrmPhaseCount: { kind: "compatibility", label: "메인보드 전원부", summary: "전원부 용량 표기가 없을 때 페이즈 수로 추정한 공급 여유를 다시 검사합니다.", ruleIds: ["cpu-motherboard-power"] },
+    vrmVcoreOutputA: { kind: "compatibility", label: "메인보드 전원부", summary: "전원부 용량 표기가 없을 때 Vcore 출력 합계로 추정한 공급 여유를 다시 검사합니다.", ruleIds: ["cpu-motherboard-power"] },
     pcieX16Slots: { kind: "compatibility", label: "GPU·PCIe 장착", summary: "그래픽카드·PCIe 어댑터 장착 폭과 메인보드 슬롯을 다시 검사합니다.", ruleIds: ["gpu-motherboard-pcie", "accessory-pcie-slot-capacity", "accessory-pcie-slot-clearance"] },
     pcieX8Slots: { kind: "compatibility", label: "GPU·PCIe 장착", summary: "그래픽카드·PCIe 어댑터 장착 폭과 메인보드 슬롯을 다시 검사합니다.", ruleIds: ["gpu-motherboard-pcie", "accessory-pcie-slot-capacity", "accessory-pcie-slot-clearance"] },
     pcieX4Slots: { kind: "compatibility", label: "PCIe 어댑터 장착", summary: "M.2 PCIe 어댑터의 요구 폭과 메인보드 보조 슬롯을 다시 검사합니다.", ruleIds: ["accessory-pcie-slot-capacity", "accessory-pcie-slot-clearance"] },
     pcieX1Slots: { kind: "compatibility", label: "PCIe 어댑터 장착", summary: "M.2 PCIe 어댑터의 요구 폭과 메인보드 보조 슬롯을 다시 검사합니다.", ruleIds: ["accessory-pcie-slot-capacity", "accessory-pcie-slot-clearance"] },
     memoryType: { kind: "compatibility", label: "메모리 규격", summary: "CPU·메인보드와 RAM 세대가 맞는지 다시 검사합니다.", ruleIds: ["memory-type"] },
     memoryFormFactor: { kind: "compatibility", label: "메모리 물리 규격", summary: "RAM DIMM/SO-DIMM 장착 규격을 다시 검사합니다.", ruleIds: ["memory-form-factor"] },
-    maxMemoryGb: { kind: "compatibility", label: "메모리 용량 한도", summary: "선택한 RAM 총 용량이 메인보드 한도를 넘는지 다시 검사합니다.", ruleIds: ["memory-capacity"] },
-    memorySlots: { kind: "compatibility", label: "RAM 슬롯", summary: "RAM 물리 모듈 수와 메인보드 슬롯 수를 다시 검사합니다.", ruleIds: ["memory-slots"] },
+    maxMemoryGb: { kind: "compatibility", label: "메모리 용량 한도", summary: "선택한 RAM 총 용량과 모듈당 용량이 메인보드 한도를 넘는지 다시 검사합니다.", ruleIds: ["memory-capacity", "memory-module-capacity"] },
+    memorySlots: { kind: "compatibility", label: "RAM 슬롯", summary: "RAM 물리 모듈 수와 메인보드 슬롯 수, 슬롯당 용량을 다시 검사합니다.", ruleIds: ["memory-slots", "memory-module-capacity"] },
     maxMemorySpeedMhz: { kind: "compatibility", label: "메모리 속도 상한", summary: "CPU·메인보드와 RAM의 공식 지원 속도 조합을 다시 검사합니다.", ruleIds: ["memory-speed"] },
     memoryProfiles: { kind: "compatibility", label: "메모리 프로파일", summary: "RAM의 XMP/EXPO와 메인보드 지원 프로파일을 다시 검사합니다.", ruleIds: ["memory-profile"] },
     m2Slots: { kind: "compatibility", label: "M.2 슬롯", summary: "선택한 M.2 SSD 수와 메인보드 슬롯 수를 다시 검사합니다.", ruleIds: ["m2-slots"] },
@@ -140,8 +144,8 @@ const IMPACTS_BY_CATEGORY: Record<string, Record<string, ImpactDefinition>> = {
   memory: {
     memoryType: { kind: "compatibility", label: "메모리 규격", summary: "CPU·메인보드와 RAM 세대가 맞는지 다시 검사합니다.", ruleIds: ["memory-type"] },
     formFactor: { kind: "compatibility", label: "메모리 물리 규격", summary: "RAM DIMM/SO-DIMM 장착 규격을 다시 검사합니다.", ruleIds: ["memory-form-factor"] },
-    capacityGb: { kind: "compatibility", label: "메모리 용량", summary: "RAM 총 용량이 메인보드 지원 범위에 맞는지 다시 검사합니다.", ruleIds: ["memory-capacity"] },
-    memoryModuleCountPerKit: { kind: "compatibility", label: "RAM 물리 모듈", summary: "킷당 물리 모듈 수와 메인보드 슬롯 수를 다시 검사합니다.", ruleIds: ["memory-slots"] },
+    capacityGb: { kind: "compatibility", label: "메모리 용량", summary: "RAM 총 용량과 모듈당 용량이 메인보드 지원 범위에 맞는지 다시 검사합니다.", ruleIds: ["memory-capacity", "memory-module-capacity"] },
+    memoryModuleCountPerKit: { kind: "compatibility", label: "RAM 물리 모듈", summary: "킷당 물리 모듈 수와 메인보드 슬롯 수, 모듈당 용량을 다시 검사합니다.", ruleIds: ["memory-slots", "memory-module-capacity"] },
     speedMhz: { kind: "compatibility", label: "RAM 속도", summary: "RAM 속도와 CPU·메인보드 지원 상한을 다시 검사합니다.", ruleIds: ["memory-speed"] },
     memoryProfiles: { kind: "compatibility", label: "메모리 프로파일", summary: "RAM의 XMP/EXPO와 메인보드 지원 프로파일을 다시 검사합니다.", ruleIds: ["memory-profile"] }
   },
@@ -159,7 +163,7 @@ const IMPACTS_BY_CATEGORY: Record<string, Record<string, ImpactDefinition>> = {
   },
   ssd: {
     interface: { kind: "compatibility", label: "SSD 연결 방식", summary: "M.2/SATA SSD와 메인보드 연결 조건을 다시 검사합니다.", ruleIds: ["m2-interface", "sata-ports"] },
-    formFactor: { kind: "compatibility", label: "SSD 장착 규격", summary: "SSD 폼팩터와 M.2 슬롯·케이스 장착 조건을 다시 검사합니다.", ruleIds: ["m2-slots", "m2-interface"] },
+    formFactor: { kind: "compatibility", label: "SSD 장착 규격", summary: "SSD 폼팩터와 M.2 슬롯·케이스 장착 조건을 다시 검사합니다.", ruleIds: ["m2-slots", "m2-interface", "case-ssd-bays"] },
     m2PcieGeneration: { kind: "compatibility", label: "M.2 PCIe 세대", summary: "SSD PCIe 세대와 메인보드 슬롯 링크 상한을 다시 검사합니다.", ruleIds: ["m2-pcie-generation", "m2-slot-pcie-generation"] }
   },
   hdd: {
@@ -172,7 +176,8 @@ const IMPACTS_BY_CATEGORY: Record<string, Record<string, ImpactDefinition>> = {
     maxPsuLengthMm: { kind: "compatibility", label: "PSU·케이스 길이", summary: "파워 깊이와 케이스 허용 길이를 다시 검사합니다.", ruleIds: ["psu-case-length"] },
     supportedPsuFormFactors: { kind: "compatibility", label: "PSU·케이스 규격", summary: "파워 폼팩터와 케이스 지원 규격을 다시 검사합니다.", ruleIds: ["psu-case-form-factor"] },
     motherboardFormFactors: { kind: "compatibility", label: "케이스·메인보드 규격", summary: "메인보드 폼팩터와 케이스 지원 규격을 다시 검사합니다.", ruleIds: ["case-motherboard-form-factor"] },
-    hddBays: { kind: "compatibility", label: "HDD 장착 공간", summary: "선택한 HDD 수와 케이스 베이 수를 다시 검사합니다.", ruleIds: ["case-hdd-bays"] },
+    hddBays: { kind: "compatibility", label: "HDD 장착 공간", summary: "선택한 HDD 수와 케이스 베이 수, 남는 베이를 쓰는 2.5인치 SSD 장착 공간을 다시 검사합니다.", ruleIds: ["case-hdd-bays", "case-ssd-bays"] },
+    ssdBays: { kind: "compatibility", label: "2.5인치 SSD 장착 공간", summary: "선택한 2.5인치 SSD 수와 케이스 SSD 베이·남는 3.5인치 베이 수를 다시 검사합니다.", ruleIds: ["case-ssd-bays"] },
     fanCount: { kind: "compatibility", label: "팬 헤더", summary: "케이스 팬 수와 메인보드 팬 헤더 수를 다시 검사합니다.", ruleIds: ["case-fan-headers"] },
     rgbDeviceVoltage: { kind: "compatibility", label: "RGB 전압", summary: "케이스 RGB 전압과 메인보드 헤더 전압을 다시 검사합니다.", ruleIds: ["case-rgb-voltage"] },
     radiatorSizesMm: { kind: "compatibility", label: "라디에이터 장착", summary: "케이스가 수랭 라디에이터 크기를 지원하는지 다시 검사합니다.", ruleIds: ["case-radiator-support"] },
@@ -180,7 +185,7 @@ const IMPACTS_BY_CATEGORY: Record<string, Record<string, ImpactDefinition>> = {
     caseSidePanelClearanceMm: { kind: "compatibility", label: "GPU 케이블 측면 여유", summary: "케이스 측면 케이블 공간과 GPU 케이블 굽힘 요구를 다시 검사합니다.", ruleIds: ["gpu-cable-clearance"] }
   },
   psu: {
-    wattageW: { kind: "compatibility", label: "GPU·PSU 전력", summary: "GPU 권장 파워와 PSU 용량을 다시 검사합니다.", ruleIds: ["gpu-psu-power"] },
+    wattageW: { kind: "compatibility", label: "GPU·PSU 전력", summary: "GPU 권장 파워 또는 내장 그래픽 구성의 예상 소비전력과 PSU 용량을 다시 검사합니다.", ruleIds: ["gpu-psu-power", "psu-system-power"] },
     psuDepthMm: { kind: "compatibility", label: "PSU·케이스 길이", summary: "파워 깊이와 케이스 허용 길이를 다시 검사합니다.", ruleIds: ["psu-case-length"] },
     pciePowerConnectors: { kind: "compatibility", label: "GPU 보조전원", summary: "GPU 요구 커넥터와 PSU 제공 커넥터를 다시 검사합니다.", ruleIds: ["gpu-psu-connector"] },
     psuCableType: { kind: "data", label: "PSU 전원 구조 정보", summary: "PSU 케이블 구조 표기가 GPU 보조전원 설명에 반영됩니다. 독립 케이블 여부는 별도 확인이 필요합니다.", ruleIds: [] },

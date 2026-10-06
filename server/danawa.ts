@@ -822,6 +822,10 @@ function parseSpecs(category: PartCategory, name: string, description: string, r
       : /(?:^|[\s/])DIMM(?!\s*\.)/i.test(text)
         ? "DIMM"
         : undefined;
+    // "전원부: 12+2+2페이즈 / 60A / Vcore출력합계: 720" — 앞자리가 Vcore 페이즈 수다.
+    // 둘 다 전원부 용량 추정 입력일 뿐 vrmCapacityW(확인된 공급 범위)로 승격하지 않는다.
+    specs.vrmPhaseCount = parseNumber(text, /전원부\s*[:：]?\s*(\d+)(?:\s*\+\s*\d+)*\s*페이즈/i);
+    specs.vrmVcoreOutputA = parseNumber(text, /Vcore\s*출력\s*합계\s*[:：]?\s*([\d,]+)/i);
     specs.maxMemoryGb = parseNumber(text, /(?:메모리\s*용량|용량)\s*[:：]?\s*(?:최대\s*)?([\d,]+)\s*GB/i);
     specs.memorySlots = parseNumber(text, /(?:메모리\s*슬롯|DIMM)\s*[:：]?\s*(\d+)\s*개/i)
       ?? parseNumber(text, /(?:\[메모리\]|메모리).{0,120}?\b(\d+)\s*개/i);

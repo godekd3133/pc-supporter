@@ -653,6 +653,10 @@ export interface PartSpecs {
   pptW?: number;
   integratedGraphics?: boolean;
   vrmCapacityW?: number;
+  /** Vcore power-stage phase count — the leading number of a "12+2+2페이즈" listing. */
+  vrmPhaseCount?: number;
+  /** Danawa "Vcore출력합계" (phase count × per-stage amperage). Estimation input, not a verified capacity. */
+  vrmVcoreOutputA?: number;
   m2Slots?: number;
   m2Interfaces?: Array<"NVMe" | "SATA">;
   m2PcieGenerations?: number[];

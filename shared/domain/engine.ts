@@ -74,7 +74,7 @@ import { scoreCachedByIdentity } from "../generator-score-cache";
 import { classifyDataFreshness } from "./data-health";
 import { compareRecommendationTrust, recommendationTrustFor } from "./recommendation-trust";
 
-export const ENGINE_VERSION = "2.59.0";
+export const ENGINE_VERSION = "2.60.0";
 
 function benchmarkFreshnessFor(part: Part) {
   return classifyDataFreshness(part.specs.benchmarkProvenance?.updatedAt ?? part.updatedAt);
@@ -354,6 +354,85 @@ function physicalMemoryModuleCount(memory: SelectionWithPart[]) {
     (total, { selection, part }) => total + selection.quantity * (part.specs.memoryModuleCountPerKit ?? 1),
     0
   );
+}
+
+// 확인된 스펙이 없을 때 쓰는 추정 판정 계수 — CompatPC 규칙(311·950)에서 옮긴 값이며
+// 출처가 확인된 제조사 기준이 아니다. 추정값만으로는 차단(blocker)을 내지 않고 warning까지만 낸다.
+const VRM_ESTIMATE_DELIVERY_RATIO = 0.35;
+const VRM_ESTIMATE_AMPS_PER_PHASE = 50;
+const VRM_ESTIMATE_SEVERE_RATIO = 1.1;
+const SYSTEM_BASE_LOAD_W = 100;
+const PSU_LOAD_HEADROOM_RATIO = 1.2;
+const GPU_RECOMMENDED_PSU_SYSTEM_ALLOWANCE_W = 300;
+
+type CapacityEvidence = {
+  capacityW: number;
+  basis: "spec" | "estimate";
+  estimateSource?: "vcore" | "phase";
+  basisLabel: string;
+};
+
+function motherboardPowerDeliveryFor(motherboard: Part): CapacityEvidence | undefined {
+  const { vrmCapacityW, vrmVcoreOutputA, vrmPhaseCount } = motherboard.specs;
+  if (vrmCapacityW !== undefined) return { capacityW: vrmCapacityW, basis: "spec", basisLabel: "확인된 전원부 용량" };
+  if (vrmVcoreOutputA !== undefined && vrmVcoreOutputA > 0) {
+    return {
+      capacityW: vrmVcoreOutputA * VRM_ESTIMATE_DELIVERY_RATIO,
+      basis: "estimate",
+      estimateSource: "vcore",
+      basisLabel: `Vcore 출력 합계 ${vrmVcoreOutputA}A × ${VRM_ESTIMATE_DELIVERY_RATIO}`
+    };
+  }
+  if (vrmPhaseCount !== undefined && vrmPhaseCount > 0) {
+    return {
+      capacityW: vrmPhaseCount * VRM_ESTIMATE_AMPS_PER_PHASE * VRM_ESTIMATE_DELIVERY_RATIO,
+      basis: "estimate",
+      estimateSource: "phase",
+      basisLabel: `전원부 ${vrmPhaseCount}페이즈 × ${VRM_ESTIMATE_AMPS_PER_PHASE}A × ${VRM_ESTIMATE_DELIVERY_RATIO}`
+    };
+  }
+  return undefined;
+}
+
+// 킷당 모듈 수가 없으면 capacityGb가 킷 합계인지 모듈 1개인지 알 수 없어 모듈 용량을 정하지 않는다.
+function memoryModuleCapacityGb(part: Part) {
+  const { capacityGb, memoryModuleCountPerKit } = part.specs;
+  if (capacityGb === undefined || memoryModuleCountPerKit === undefined || memoryModuleCountPerKit < 1) return undefined;
+  return capacityGb / memoryModuleCountPerKit;
+}
+
+// 소비자용 ATX·E-ATX·mATX 데스크톱 보드는 사실상 모두 DIMM 슬롯이다. ITX는 Thin Mini-ITX가
+// SO-DIMM을 쓰므로 추론하지 않고, 모바일 CPU 온보드 보드를 거르기 위해 데스크톱 소켓이 확인된 보드만 추론한다.
+const DESKTOP_DIMM_BOARD_FORM_FACTORS = new Set(["ATX", "E-ATX", "mATX"]);
+const DESKTOP_CPU_SOCKET_PATTERN = /^(?:AM\d|LGA\d{4}(?:-V\d+)?|S?TRX?\d|SWRX\d)$/i;
+
+function motherboardMemorySlotFormFactorFor(motherboard: Part): { formFactor?: "DIMM" | "SO-DIMM"; inferred: boolean } {
+  const { memoryFormFactor, formFactor, socket } = motherboard.specs;
+  if (memoryFormFactor) return { formFactor: memoryFormFactor, inferred: false };
+  if (formFactor && DESKTOP_DIMM_BOARD_FORM_FACTORS.has(formFactor) && socket && DESKTOP_CPU_SOCKET_PATTERN.test(socket)) {
+    return { formFactor: "DIMM", inferred: true };
+  }
+  return { inferred: false };
+}
+
+// 추정 비교는 원값으로 하고, 화면에 보이는 W 값만 반올림한다.
+function formatEstimatedWatts(value: number) {
+  return formatNumber(Math.round(value), "W");
+}
+
+function isTwoPointFiveInchStorage(part: Part) {
+  return storageFormFactorFamily(part.specs.formFactor) === "2.5";
+}
+
+// 대부분의 3.5인치 트레이는 2.5인치 나사 구멍을 갖춘 겸용이라, HDD가 쓰지 않는 3.5인치 베이도 2.5인치 장착 공간으로 센다.
+function twoPointFiveInchMountCapacity(computerCase: Part, hdds: SelectionWithPart[]) {
+  const hddCount = hdds.reduce((total, { selection }) => total + selection.quantity, 0);
+  const spareHddBays = Math.max(0, (computerCase.specs.hddBays ?? 0) - hddCount);
+  return (computerCase.specs.ssdBays ?? 0) + spareHddBays;
+}
+
+function formatRatio(value: number) {
+  return value.toFixed(2);
 }
 
 function partIds(...parts: Array<Part | undefined>) {
@@ -1060,7 +1139,10 @@ function candidateIsPlausible(finding: Finding, build: BuildSelection, candidate
     if (targetCategory === "cpu" && motherboard?.specs.socket) return candidate.specs.socket !== undefined && candidate.specs.socket === motherboard.specs.socket;
   }
   if (finding.ruleId === "cpu-motherboard-power") {
-    if (targetCategory === "motherboard" && cpu?.specs.pptW) return candidate.specs.vrmCapacityW !== undefined && candidate.specs.vrmCapacityW >= cpu.specs.pptW;
+    if (targetCategory === "motherboard" && cpu?.specs.pptW) {
+      const powerDelivery = motherboardPowerDeliveryFor(candidate);
+      return powerDelivery !== undefined && powerDelivery.capacityW >= cpu.specs.pptW;
+    }
   }
   if (finding.ruleId === "memory-type") {
     const expected = targetCategory === "motherboard" ? cpu?.specs.memoryType : motherboard?.specs.memoryType;
@@ -1079,11 +1161,22 @@ function candidateIsPlausible(finding: Finding, build: BuildSelection, candidate
     return recommendedMemoryKitQuantity(build, catalog, candidate) !== undefined;
   }
   if (finding.ruleId === "memory-form-factor") {
-    if (targetCategory === "motherboard" && memoryFormFactors.length === 1) return candidate.specs.memoryFormFactor !== undefined && candidate.specs.memoryFormFactor === memoryFormFactors[0];
-    if (targetCategory === "memory" && motherboard?.specs.memoryFormFactor) return candidate.specs.formFactor !== undefined && candidate.specs.formFactor === motherboard.specs.memoryFormFactor;
+    const boardSlotFormFactor = motherboard ? motherboardMemorySlotFormFactorFor(motherboard).formFactor : undefined;
+    if (targetCategory === "motherboard" && memoryFormFactors.length === 1) {
+      const candidateSlotFormFactor = motherboardMemorySlotFormFactorFor(candidate).formFactor;
+      return candidateSlotFormFactor !== undefined && candidateSlotFormFactor === memoryFormFactors[0];
+    }
+    if (targetCategory === "memory" && boardSlotFormFactor) return candidate.specs.formFactor !== undefined && candidate.specs.formFactor === boardSlotFormFactor;
   }
   if (finding.ruleId === "memory-capacity" && targetCategory === "motherboard" && totalMemoryGb !== undefined) return candidate.specs.maxMemoryGb !== undefined && candidate.specs.maxMemoryGb >= totalMemoryGb;
   if (finding.ruleId === "memory-slots" && targetCategory === "motherboard") return candidate.specs.memorySlots !== undefined && candidate.specs.memorySlots >= memoryCount;
+  if (finding.ruleId === "memory-module-capacity" && targetCategory === "motherboard") {
+    const largestModuleGb = Math.max(0, ...memory.map(({ part }) => memoryModuleCapacityGb(part) ?? 0));
+    return candidate.specs.maxMemoryGb !== undefined
+      && candidate.specs.memorySlots !== undefined
+      && candidate.specs.memorySlots > 0
+      && candidate.specs.maxMemoryGb / candidate.specs.memorySlots >= largestModuleGb;
+  }
   if (finding.ruleId === "m2-slots" && targetCategory === "motherboard" && m2Count !== undefined) return candidate.specs.m2Slots !== undefined && candidate.specs.m2Slots >= m2Count;
   if (finding.ruleId === "m2-interface") {
     if (targetCategory === "motherboard" && requiredM2Interfaces.length > 0) {
@@ -1162,6 +1255,12 @@ function candidateIsPlausible(finding: Finding, build: BuildSelection, candidate
     ) === "compatible";
   }
   if (finding.ruleId === "case-hdd-bays" && targetCategory === "case") return candidate.specs.hddBays !== undefined && candidate.specs.hddBays >= hddCount;
+  if (finding.ruleId === "case-ssd-bays" && targetCategory === "case") {
+    const twoPointFiveInchSsdCount = ssds
+      .filter(({ part }) => isTwoPointFiveInchStorage(part))
+      .reduce((total, { selection }) => total + selection.quantity, 0);
+    return candidate.specs.ssdBays !== undefined && twoPointFiveInchMountCapacity(candidate, hdds) >= twoPointFiveInchSsdCount;
+  }
   if (finding.ruleId === "cpu-cooler-socket" && targetCategory === "cooler" && cpu?.specs.socket) return candidate.specs.supportedSockets !== undefined && candidate.specs.supportedSockets.includes(cpu.specs.socket);
   if (finding.ruleId === "case-cooler-height" && targetCategory === "case" && cooler?.specs.maxCoolerHeightMm !== undefined) return candidate.specs.maxCoolerHeightMm !== undefined && candidate.specs.maxCoolerHeightMm >= cooler.specs.maxCoolerHeightMm;
   if (finding.ruleId === "case-cooler-height" && targetCategory === "cooler" && computerCase?.specs.maxCoolerHeightMm !== undefined) return candidate.specs.maxCoolerHeightMm !== undefined && candidate.specs.maxCoolerHeightMm <= computerCase.specs.maxCoolerHeightMm;
@@ -1172,6 +1271,13 @@ function candidateIsPlausible(finding: Finding, build: BuildSelection, candidate
   if (finding.ruleId === "psu-case-form-factor" && targetCategory === "case" && psu?.specs.psuFormFactor) return candidate.specs.supportedPsuFormFactors !== undefined && candidate.specs.supportedPsuFormFactors.includes(psu.specs.psuFormFactor);
   if (finding.ruleId === "psu-case-form-factor" && targetCategory === "psu" && computerCase?.specs.supportedPsuFormFactors) return candidate.specs.psuFormFactor !== undefined && computerCase.specs.supportedPsuFormFactors.includes(candidate.specs.psuFormFactor);
   if (finding.ruleId === "gpu-psu-power" && targetCategory === "psu" && gpu?.specs.recommendedPsuW !== undefined) return candidate.specs.wattageW !== undefined && candidate.specs.wattageW >= gpu.specs.recommendedPsuW;
+  if (finding.ruleId === "psu-system-power" && targetCategory === "psu") {
+    const cpuLoadW = cpu?.specs.pptW ?? cpu?.specs.tdpW;
+    if (cpuLoadW !== undefined) {
+      const estimatedLoadW = PSU_LOAD_HEADROOM_RATIO * (cpuLoadW + SYSTEM_BASE_LOAD_W);
+      return candidate.specs.wattageW !== undefined && candidate.specs.wattageW > estimatedLoadW * PSU_LOAD_HEADROOM_RATIO;
+    }
+  }
   if (finding.ruleId === "gpu-psu-power" && targetCategory === "gpu" && psu?.specs.wattageW !== undefined) return candidate.specs.recommendedPsuW !== undefined && candidate.specs.recommendedPsuW <= psu.specs.wattageW;
   if (finding.ruleId === "case-motherboard-form-factor" && targetCategory === "case" && motherboard?.specs.formFactor) return candidate.specs.motherboardFormFactors !== undefined && candidate.specs.motherboardFormFactors.includes(motherboard.specs.formFactor);
   return true;
@@ -3070,7 +3176,7 @@ function buildCompatibilityLinks(findings: Finding[], parts: LinkPartSet): Compa
       fromCategory: "motherboard",
       toCategory: "memory",
       label: "메인보드 ↔ RAM",
-      ruleIds: ["memory-type", "memory-form-factor", "memory-capacity", "memory-slots", "memory-speed", "memory-profile", "memory-mixing"],
+      ruleIds: ["memory-type", "memory-form-factor", "memory-capacity", "memory-module-capacity", "memory-slots", "memory-speed", "memory-profile", "memory-mixing"],
       active: Boolean(parts.motherboard && parts.memory.length > 0),
       compatibleSummary: "RAM 규격과 용량, 장착 조건을 확인했습니다."
     }),
@@ -3302,18 +3408,18 @@ export function evaluateBuild(
     }
 
     const cpuPower = cpu.specs.pptW ?? cpu.specs.tdpW;
-    const vrmCapacity = motherboard.specs.vrmCapacityW;
-    if (cpuPower === undefined || vrmCapacity === undefined) {
+    const powerDelivery = motherboardPowerDeliveryFor(motherboard);
+    if (cpuPower === undefined || powerDelivery === undefined) {
       addUnknown(
         findings,
         "cpu-motherboard-power",
         "CPU 전력과 메인보드 전원부 용량을 확인해 주세요.",
         "CPU 전력이나 메인보드 전원부 용량 정보가 없어 부하가 클 때 전력을 감당할 수 있는지 확인하지 못했어요.",
         partIds(cpu, motherboard),
-        [cpuPower === undefined ? "CPU power" : "", vrmCapacity === undefined ? "VRM capacity" : ""].filter(Boolean),
+        [cpuPower === undefined ? "CPU power" : "", powerDelivery === undefined ? "VRM capacity" : ""].filter(Boolean),
         "motherboard"
       );
-    } else if (cpuPower > vrmCapacity) {
+    } else if (powerDelivery.basis === "spec" && cpuPower > powerDelivery.capacityW) {
       addFinding(
         findings,
         "cpu-motherboard-power",
@@ -3323,9 +3429,36 @@ export function evaluateBuild(
         partIds(cpu, motherboard),
         [
           { label: "CPU 요구 전력", actual: formatNumber(cpuPower, "W") },
-          { label: "메인보드 전원부 기준", expected: formatNumber(vrmCapacity, "W") }
+          { label: "메인보드 전원부 기준", expected: formatNumber(powerDelivery.capacityW, "W") }
         ],
         [replaceAction("motherboard"), replaceAction("cpu")]
+      );
+    } else if (powerDelivery.basis === "estimate" && cpuPower > powerDelivery.capacityW) {
+      // 전원부 용량 표기가 없는 보드는 Vcore 출력·페이즈 수로 추정한다. 추정 계수가 보수적이라
+      // 1.1배 미만의 근소한 초과는 참고(info)로만 알리고, 1.1배 이상부터 경고한다. 추정값이므로 차단하지 않는다.
+      const ratio = cpuPower / powerDelivery.capacityW;
+      const severe = ratio >= VRM_ESTIMATE_SEVERE_RATIO;
+      const estimateSourceMessage = powerDelivery.estimateSource === "phase"
+        ? "전원부 용량 표기가 없어 페이즈 수로 추정한 결과예요(페이즈당 전류는 확인되지 않아 실제와 차이가 클 수 있어요)."
+        : "전원부 용량 표기가 없어 Vcore 출력 합계로 추정한 결과예요.";
+      addFinding(
+        findings,
+        "cpu-motherboard-power",
+        severe ? "warning" : "info",
+        severe
+          ? "메인보드 전원부가 CPU 전력을 감당하기 어려울 수 있습니다."
+          : "메인보드 전원부 여유가 크지 않을 수 있습니다.",
+        severe
+          ? `${estimateSourceMessage} 장시간 고부하에서 CPU 성능이 제한될 수 있으니 제조사 전원부 사양을 확인해 주세요.`
+          : `${estimateSourceMessage} 추정 공급량을 근소하게 넘는 수준이라 일반 사용에는 문제가 없을 가능성이 높아요.`,
+        partIds(cpu, motherboard),
+        [
+          { label: "CPU 요구 전력", actual: formatNumber(cpuPower, "W") },
+          { label: "메인보드 전원부 추정", expected: formatEstimatedWatts(powerDelivery.capacityW) },
+          { label: "추정 근거", actual: powerDelivery.basisLabel },
+          { label: "요구 전력 / 추정 공급", actual: formatRatio(ratio) }
+        ],
+        [replaceAction("motherboard"), action("verify_spec", "메인보드 전원부 사양 확인", "motherboard")]
       );
     }
   }
@@ -3476,11 +3609,14 @@ export function evaluateBuild(
       );
     }
 
-    const expectedMemoryFormFactor = motherboard.specs.memoryFormFactor;
+    const memorySlotFormFactor = motherboardMemorySlotFormFactorFor(motherboard);
+    const expectedMemoryFormFactor = memorySlotFormFactor.formFactor;
     const memoryFormFactorMismatch = expectedMemoryFormFactor
       ? memory.filter(({ part }) => part.specs.formFactor !== undefined && part.specs.formFactor !== expectedMemoryFormFactor)
       : [];
-    const shouldCheckMemoryFormFactor = expectedMemoryFormFactor !== undefined || memory.some(({ part }) => part.specs.formFactor === "SO-DIMM");
+    // 폼팩터로 추론한 DIMM은 SO-DIMM RAM을 잡는 데만 쓴다. 규격 미기재 RAM에 새 "확인 필요"를 만들지 않는다.
+    const shouldCheckMemoryFormFactor = (expectedMemoryFormFactor !== undefined && !memorySlotFormFactor.inferred)
+      || memory.some(({ part }) => part.specs.formFactor === "SO-DIMM");
     if (shouldCheckMemoryFormFactor && (!expectedMemoryFormFactor || memory.some(({ part }) => part.specs.formFactor === undefined))) {
       addUnknown(
         findings,
@@ -3501,6 +3637,9 @@ export function evaluateBuild(
         partIds(motherboard, ...memoryFormFactorMismatch.map(({ part }) => part)),
         [
           { label: "메인보드 메모리 슬롯", expected: expectedMemoryFormFactor },
+          ...(memorySlotFormFactor.inferred
+            ? [{ label: "슬롯 규격 판단 근거", actual: `${motherboard.specs.formFactor} 폼팩터·${motherboard.specs.socket} 데스크톱 소켓으로 DIMM 판단` }]
+            : []),
           ...memoryFormFactorMismatch.map(({ part }) => ({ label: `${part.name} 규격`, actual: part.specs.formFactor }))
         ],
         [replaceAction("memory"), replaceAction("motherboard")]
@@ -3566,6 +3705,31 @@ export function evaluateBuild(
         ],
         [action("change_quantity", "RAM 수량 줄이기", "memory"), replaceAction("motherboard")]
       );
+    }
+
+    // 슬롯당 상한은 제조사 표기가 아니라 최대 용량 ÷ 슬롯 수로 계산한 값이다. BIOS 업데이트로
+    // 대용량 모듈을 지원하는 보드도 있어 warning까지만 낸다. 입력 누락은 위 용량·슬롯 규칙이 보고한다.
+    if (maxMemoryGb !== undefined && memorySlots !== undefined && memorySlots > 0) {
+      const perSlotLimitGb = maxMemoryGb / memorySlots;
+      const oversizedModules = memory.filter(({ part }) => {
+        const moduleCapacityGb = memoryModuleCapacityGb(part);
+        return moduleCapacityGb !== undefined && moduleCapacityGb > perSlotLimitGb;
+      });
+      if (oversizedModules.length > 0) {
+        addFinding(
+          findings,
+          "memory-module-capacity",
+          "warning",
+          "RAM 모듈 1개 용량이 메인보드 슬롯당 용량보다 큽니다.",
+          "메인보드 최대 용량을 슬롯 수로 나눈 값보다 큰 모듈이라 인식되지 않을 수 있어요. 메인보드의 대용량 모듈 지원(BIOS 버전·QVL)을 확인해 주세요.",
+          partIds(motherboard, ...oversizedModules.map(({ part }) => part)),
+          [
+            ...oversizedModules.map(({ part }) => ({ label: `${part.name} 모듈당 용량`, actual: formatNumber(memoryModuleCapacityGb(part), "GB") })),
+            { label: "메인보드 슬롯당 용량(최대 용량 ÷ 슬롯 수)", expected: formatNumber(perSlotLimitGb, "GB") }
+          ],
+          [replaceAction("memory"), replaceAction("motherboard"), action("verify_spec", "메인보드 대용량 모듈 지원 확인", "motherboard")]
+        );
+      }
     }
 
     if (memoryModuleCount !== 2) {
@@ -3982,6 +4146,44 @@ export function evaluateBuild(
           { label: "케이스 HDD 베이", expected: formatNumber(hddBays, "개") }
         ],
         [action("change_quantity", "HDD 수량 줄이기", "hdd"), replaceAction("case")]
+      );
+    }
+  }
+
+  // 2.5인치 SSD는 트레이 뒷면·3.5인치 겸용 트레이·파워 덮개 위 등 장착 위치가 유연해 공간 부족이
+  // 조립 불가로 이어지지 않는다. 케이스 SSD 베이 수가 확인될 때만, 남는 3.5인치 베이까지 더해 판정하고
+  // 초과해도 warning까지만 낸다. 베이 수가 없으면 판정하지 않는다.
+  const twoPointFiveInchSsds = ssds.filter(({ part }) => isTwoPointFiveInchStorage(part));
+  const unknownFormFactorSsds = ssds.filter(({ part }) => !part.specs.formFactor && part.specs.interface !== "NVMe");
+  const ssdBays = computerCase?.specs.ssdBays;
+  if (computerCase && ssdBays !== undefined && (twoPointFiveInchSsds.length > 0 || unknownFormFactorSsds.length > 0)) {
+    const ssdCount = twoPointFiveInchSsds.reduce((total, { selection }) => total + selection.quantity, 0);
+    const unknownFormFactorCount = unknownFormFactorSsds.reduce((total, { selection }) => total + selection.quantity, 0);
+    const twoPointFiveInchCapacity = twoPointFiveInchMountCapacity(computerCase, hdds);
+    if (ssdCount > twoPointFiveInchCapacity) {
+      addFinding(
+        findings,
+        "case-ssd-bays",
+        "warning",
+        "2.5인치 SSD를 장착할 공간이 부족할 수 있습니다.",
+        "케이스의 SSD 베이와 남는 3.5인치 베이를 합쳐도 선택한 2.5인치 SSD보다 적어요. 변환 브라켓이나 별매 스토리지 키트로 장착할 수 있는지 케이스 제조사에서 확인해 주세요.",
+        partIds(computerCase, ...twoPointFiveInchSsds.map(({ part }) => part)),
+        [
+          { label: "선택한 2.5인치 SSD", actual: formatNumber(ssdCount, "개") },
+          { label: "케이스 SSD 베이", expected: formatNumber(ssdBays, "개") },
+          { label: "2.5인치 장착 가능(남는 3.5인치 베이 포함)", expected: formatNumber(twoPointFiveInchCapacity, "개") }
+        ],
+        [action("change_quantity", "SSD 수량 줄이기", "ssd"), replaceAction("case")]
+      );
+    } else if (ssdCount + unknownFormFactorCount > twoPointFiveInchCapacity) {
+      addUnknown(
+        findings,
+        "case-ssd-bays",
+        "케이스에 2.5인치 SSD를 장착할 공간이 있는지 확인해 주세요.",
+        "SSD의 폼팩터 정보가 없어 2.5인치 베이가 필요한지 확인하지 못했어요.",
+        partIds(computerCase, ...twoPointFiveInchSsds.map(({ part }) => part), ...unknownFormFactorSsds.map(({ part }) => part)),
+        ["SSD form factor"],
+        "ssd"
       );
     }
   }
@@ -4425,9 +4627,50 @@ export function evaluateBuild(
     }
   }
 
+  if (!gpu && psu && cpu) {
+    // 외장 GPU가 없는 구성도 CPU 전력 + 기본 시스템 부하로 파워 용량을 확인한다(CompatPC 950).
+    // 예상 부하는 추정값이라 warning까지만 낸다.
+    const cpuLoadW = cpu.specs.pptW ?? cpu.specs.tdpW;
+    const psuWattage = psu.specs.wattageW;
+    if (cpuLoadW === undefined || psuWattage === undefined) {
+      addUnknown(
+        findings,
+        "psu-system-power",
+        "파워가 시스템 전력을 공급할 수 있는지 확인해 주세요.",
+        "CPU 전력이나 파워 정격 출력 정보가 없어 전력 여유를 확인하지 못했어요.",
+        partIds(cpu, psu),
+        [cpuLoadW === undefined ? "CPU power" : "", psuWattage === undefined ? "PSU wattage" : ""].filter(Boolean),
+        "psu"
+      );
+    } else {
+      // CompatPC처럼 예상 부하의 1.2배 경계값까지 경고 구간에 포함한다.
+      const estimatedLoadW = PSU_LOAD_HEADROOM_RATIO * (cpuLoadW + SYSTEM_BASE_LOAD_W);
+      if (psuWattage <= estimatedLoadW * PSU_LOAD_HEADROOM_RATIO) {
+        addFinding(
+          findings,
+          "psu-system-power",
+          "warning",
+          psuWattage < estimatedLoadW
+            ? "파워 용량이 예상 시스템 전력보다 부족할 수 있습니다."
+            : "파워 용량 여유가 크지 않습니다.",
+          "CPU 전력과 기본 시스템 부하로 추정한 결과예요. 장시간 고부하에서 불안정하거나 소음·발열이 커질 수 있으니 더 높은 정격 출력의 파워를 권장합니다.",
+          partIds(cpu, psu),
+          [
+            { label: "CPU 기준 전력", actual: formatNumber(cpuLoadW, "W") },
+            { label: "예상 시스템 부하(추정)", expected: formatEstimatedWatts(estimatedLoadW) },
+            { label: "추정 근거", actual: `(CPU 전력 + 기본 ${SYSTEM_BASE_LOAD_W}W) × ${PSU_LOAD_HEADROOM_RATIO}` },
+            { label: "선택한 파워 용량", actual: formatNumber(psuWattage, "W") }
+          ],
+          [replaceAction("psu")]
+        );
+      }
+    }
+  }
+
   if (gpu && psu) {
     const gpuPower = gpu.specs.powerW;
     const cpuPower = cpu?.specs.pptW ?? cpu?.specs.tdpW ?? 0;
+    const cpuLoadW = cpu?.specs.pptW ?? cpu?.specs.tdpW;
     const psuWattage = psu.specs.wattageW;
     const recommendedPsu = gpu.specs.recommendedPsuW ?? (gpuPower === undefined ? undefined : gpuPower + cpuPower + 150);
     if (gpuPower === undefined || psuWattage === undefined || recommendedPsu === undefined) {
@@ -4455,6 +4698,37 @@ export function evaluateBuild(
         ],
         [replaceAction("psu"), replaceAction("gpu")]
       );
+    } else if (cpuLoadW !== undefined) {
+      // 권장 파워는 통과했지만 실제 CPU 전력을 반영한 예상 부하 대비 여유가 20% 미만이면 경고한다(CompatPC 950).
+      // GPU 권장 파워에 포함된 기본 시스템 몫(300W)을 빼고 CPU 전력 × 1.2를 더한 추정 부하다.
+      const estimatedLoadW = gpu.specs.recommendedPsuW !== undefined
+        ? gpu.specs.recommendedPsuW - GPU_RECOMMENDED_PSU_SYSTEM_ALLOWANCE_W + cpuLoadW * PSU_LOAD_HEADROOM_RATIO
+        : gpuPower + PSU_LOAD_HEADROOM_RATIO * (cpuLoadW + SYSTEM_BASE_LOAD_W);
+      if (psuWattage <= estimatedLoadW * PSU_LOAD_HEADROOM_RATIO) {
+        addFinding(
+          findings,
+          "gpu-psu-power",
+          "warning",
+          psuWattage < estimatedLoadW
+            ? "CPU 전력을 반영하면 파워 용량이 부족할 수 있습니다."
+            : "파워 용량 여유가 크지 않습니다.",
+          "그래픽카드 권장 파워는 충족하지만 선택한 CPU 전력을 반영해 추정한 부하 대비 여유가 적어요. 장시간 고부하나 오버클럭에서는 더 높은 정격 출력의 파워를 권장합니다.",
+          partIds(gpu, psu, cpu),
+          [
+            { label: "그래픽카드 소비전력", actual: formatNumber(gpuPower, "W") },
+            { label: "CPU 기준 전력", actual: formatNumber(cpuLoadW, "W") },
+            { label: "예상 시스템 부하(추정)", expected: formatEstimatedWatts(estimatedLoadW) },
+            {
+              label: "추정 근거",
+              actual: gpu.specs.recommendedPsuW !== undefined
+                ? `GPU 권장 파워 − ${GPU_RECOMMENDED_PSU_SYSTEM_ALLOWANCE_W}W + CPU 전력 × ${PSU_LOAD_HEADROOM_RATIO}`
+                : `GPU 소비전력 + (CPU 전력 + 기본 ${SYSTEM_BASE_LOAD_W}W) × ${PSU_LOAD_HEADROOM_RATIO}`
+            },
+            { label: "선택한 파워 용량", actual: formatNumber(psuWattage, "W") }
+          ],
+          [replaceAction("psu")]
+        );
+      }
     }
 
     const gpuPowerOptions = gpu.specs.pciePowerOptions;

@@ -162,6 +162,8 @@ export const CATALOG_SPEC_LABELS: Record<string, string> = {
   memoryModuleCountPerKit: "킷당 모듈 수",
   memoryTiming: "메모리 타이밍",
   memoryEffectiveLatencyNs: "실효 CAS 지연",
+  vrmPhaseCount: "전원부 페이즈",
+  vrmVcoreOutputA: "Vcore 출력 합계",
   maxMemoryGb: "최대 메모리",
   memorySlots: "메모리 슬롯",
   m2Slots: "M.2 슬롯",

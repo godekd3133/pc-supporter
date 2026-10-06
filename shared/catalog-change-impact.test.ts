@@ -20,7 +20,16 @@ const record = (overrides: Partial<CatalogChangeRecord> = {}): CatalogChangeReco
 describe("catalog change impact mapping", () => {
   it("maps confirmed CPU power consumers to their engine rules", () => {
     const impacts = catalogChangeImpactsFor(record(), { field: "정규화 스펙 · PPT", previous: "120W", next: "150W" });
-    expect(impacts[0]).toMatchObject({ kind: "compatibility", label: "CPU 전력·냉각", ruleIds: ["cpu-motherboard-power", "cpu-cooler-capacity", "gpu-psu-power"] });
+    expect(impacts[0]).toMatchObject({ kind: "compatibility", label: "CPU 전력·냉각", ruleIds: ["cpu-motherboard-power", "cpu-cooler-capacity", "gpu-psu-power", "psu-system-power"] });
+  });
+
+  it("maps VRM estimation inputs and new storage/memory rules to the rules that consume them", () => {
+    const motherboardRecord = record({ category: "motherboard" });
+    const caseRecord = record({ category: "case" });
+    expect(catalogChangeImpactsFor(motherboardRecord, { field: "정규화 스펙 · Vcore 출력 합계", previous: "600", next: "720" })[0]?.ruleIds).toEqual(["cpu-motherboard-power"]);
+    expect(catalogChangeImpactsFor(motherboardRecord, { field: "정규화 스펙 · 전원부 페이즈", previous: "10", next: "12" })[0]?.ruleIds).toEqual(["cpu-motherboard-power"]);
+    expect(catalogChangeImpactsFor(motherboardRecord, { field: "정규화 스펙 · 메모리 슬롯", previous: "2", next: "4" })[0]?.ruleIds).toEqual(["memory-slots", "memory-module-capacity"]);
+    expect(catalogChangeImpactsFor(caseRecord, { field: "정규화 스펙 · SSD 베이", previous: "2", next: "1" })[0]?.ruleIds).toEqual(["case-ssd-bays"]);
   });
 
   it("maps category-specific storage and board fields", () => {
