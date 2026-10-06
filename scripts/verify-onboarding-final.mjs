@@ -93,10 +93,8 @@ try {
   // ── 1. 예산 모드: budget → summary(4/4) → recommend ──────────────
   await reset();
   await clickBtn("새 PC 견적 보기");
-  await clickBtn("새 견적 시작하기");
   await waitFor("(document.querySelector('.onboarding-title')?.textContent ?? '').includes('기준')", "mode");
   await clickBtn("예산을 기준으로 고르기");
-  await clickBtn("이 기준으로 계속");
   await waitFor("(document.querySelector('.onboarding-title')?.textContent ?? '').includes('예산')", "budget screen");
   await clickBtn("예상 구성 확인");
   await waitFor("(document.querySelector('.onboarding-title')?.textContent ?? '').includes('견적 내용을 확인')", "budget summary");
@@ -127,18 +125,14 @@ try {
   // ── 3. 작업 분기 요약 (7/7) ─────────────────────────────────────
   await reset();
   await clickBtn("새 PC 견적 보기");
-  await clickBtn("새 견적 시작하기");
   await clickBtn("게임·작업을 기준으로 고르기");
-  await clickBtn("이 기준으로 계속");
   await waitFor("(document.querySelector('.onboarding-title')?.textContent ?? '').includes('용도')", "usecase");
   await clickBtn("작업");
-  await clickBtn("다음");
   await waitFor("(document.querySelector('.onboarding-title')?.textContent ?? '').includes('작업을')", "work");
   await clickBtn("개발·빌드");
   await clickBtn("다음");
   await waitFor("(document.querySelector('.onboarding-title')?.textContent ?? '').includes('강도') || (document.body?.innerText ?? '').includes('가볍게')", "intensity");
   await clickBtn("균형");
-  await clickBtn("다음 · 예산 정하기");
   await waitFor("(document.querySelector('.onboarding-title')?.textContent ?? '').includes('예산')", "work budget");
   await clickBtn("예상 구성 확인");
   await waitFor("(document.querySelector('.onboarding-title')?.textContent ?? '').includes('견적 내용을 확인')", "work summary");
@@ -159,9 +153,7 @@ try {
   // ── 4. 성능 분기 요약 (5/5) ─────────────────────────────────────
   await reset();
   await clickBtn("새 PC 견적 보기");
-  await clickBtn("새 견적 시작하기");
   await clickBtn("원하는 사양 직접 입력하기");
-  await clickBtn("이 기준으로 계속");
   await waitFor("(document.querySelector('.onboarding-title')?.textContent ?? '').includes('성능')", "spec");
   await clickBtn("다음");
   await waitFor("(document.querySelector('.onboarding-title')?.textContent ?? '').includes('예산')", "spec budget");
@@ -177,11 +169,8 @@ try {
   // ── 5. 게임 목표 조건의 결과 보존 ───────────────────────────────
   await reset();
   await clickBtn("새 PC 견적 보기");
-  await clickBtn("새 견적 시작하기");
   await clickBtn("게임·작업을 기준으로 고르기");
-  await clickBtn("이 기준으로 계속");
   await clickBtn("게임");
-  await clickBtn("다음");
   await waitFor("(document.querySelector('.onboarding-title')?.textContent ?? '').includes('게임')", "games");
   // 검색으로 사이버펑크 선택
   await ev(`(() => { const i = document.querySelector('input[type="search"], input[placeholder*="검색"], .onboarding-search input, input'); if (!i) return false; const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set; setter.call(i, "사이버펑크"); i.dispatchEvent(new Event("input", { bubbles: true })); return true; })()`);

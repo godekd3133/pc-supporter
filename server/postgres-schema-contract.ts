@@ -2,10 +2,46 @@ import type { PoolClient, QueryResultRow } from "pg";
 import { postgresSchemaContractFromSql } from "./postgres-schema-parser.mjs";
 import type { PostgresSchemaContractManifest } from "./postgres-schema-parser.mjs";
 
-export const POSTGRES_SCHEMA_VERSION = 1;
-export const POSTGRES_SCHEMA_SHA256 = "95e0fc5b0b63ef7d1d308d3b7b4575616c3b1584a5a6d755a32378ef2f48f6f7";
+export const POSTGRES_SCHEMA_VERSION = 3;
+export const POSTGRES_SCHEMA_SHA256 = "2eac909c9efc45e6cf78cab3171ea86e93b199063cad2e9cf69d4cb7e46e0fd6";
 export const POSTGRES_SCHEMA_ADVISORY_LOCK = "pc-supporter:postgres-schema";
 export const POSTGRES_SCHEMA_REVISION_TABLE = "pc_supporter_schema_revision";
+
+// 알려진 이전 리비전 — migrate 시 이전 해시가 확인되면 아래 SQL을 순서대로 적용해
+// 새 버전으로 올린다. 알 수 없는 리비전은 여전히 fail-closed로 거절한다.
+export const POSTGRES_SCHEMA_V1_SHA256 = "95e0fc5b0b63ef7d1d308d3b7b4575616c3b1584a5a6d755a32378ef2f48f6f7";
+export const POSTGRES_SCHEMA_V1_TO_V2_SQL = `CREATE TABLE IF NOT EXISTS runtime_configs (
+  config_key TEXT PRIMARY KEY CHECK (length(config_key) BETWEEN 1 AND 120),
+  payload JSONB NOT NULL CHECK (jsonb_typeof(payload) IN ('object', 'array')),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp(),
+  updated_by TEXT
+)`;
+
+// v2 리비전은 canonical 파일 편집 상태에 따라 두 해시로 기록될 수 있다 —
+// 어느 쪽이든 같은 테이블 집합(runtime_configs 추가)을 가리키므로 둘 다 인정한다.
+export const POSTGRES_SCHEMA_V2_SHA256S = [
+  "43dc9c8be8220a862e226dd32e8e590a5930787f6cd5158ea9bbbc07f0f6f5b0",
+  "899435b2f2658242db12287607f1a700af7b6d363ce8c83f81d63146e8d7f68a"
+] as const;
+export const POSTGRES_SCHEMA_V2_TO_V3_SQL = `CREATE TABLE IF NOT EXISTS usage_events (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  occurred_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp(),
+  event TEXT NOT NULL,
+  visitor_key TEXT,
+  session_key TEXT,
+  path TEXT,
+  props JSONB NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(props) = 'object')
+);
+CREATE INDEX IF NOT EXISTS usage_events_occurred_idx ON usage_events(occurred_at);
+CREATE INDEX IF NOT EXISTS usage_events_event_idx ON usage_events(event, occurred_at);
+CREATE INDEX IF NOT EXISTS usage_events_visitor_idx ON usage_events(visitor_key, occurred_at);`;
+
+// 리비전 체인 — upgradeSql은 "이 버전+해시로 확인된 DB"를 다음 버전으로 올리는 델타다.
+const POSTGRES_SCHEMA_REVISION_CHAIN: { version: number; sha256: readonly string[]; upgradeSql?: string }[] = [
+  { version: 1, sha256: [POSTGRES_SCHEMA_V1_SHA256], upgradeSql: POSTGRES_SCHEMA_V1_TO_V2_SQL },
+  { version: 2, sha256: POSTGRES_SCHEMA_V2_SHA256S, upgradeSql: POSTGRES_SCHEMA_V2_TO_V3_SQL },
+  { version: POSTGRES_SCHEMA_VERSION, sha256: [POSTGRES_SCHEMA_SHA256] }
+];
 
 export const POSTGRES_SCHEMA_REVISION_DDL = `CREATE TABLE IF NOT EXISTS pc_supporter_schema_revision (
   singleton_id TEXT PRIMARY KEY CHECK (singleton_id = 'current'),
@@ -223,9 +259,33 @@ export async function migratePostgresSchemaWithClient(
 
     const revision = await schemaRevisionRow(client);
     if (revision) {
-      assertCurrentRevision(revision);
+      if (Number(revision.schema_version) === POSTGRES_SCHEMA_VERSION && revision.schema_sha256 === POSTGRES_SCHEMA_SHA256) {
+        await assertSchemaShape(client, canonicalSchemaSql);
+        return "already-current";
+      }
+      // 알려진 이전 리비전은 체인을 따라 델타만 순서대로 적용한다(v1→v2→v3).
+      let version = Number(revision.schema_version);
+      let sha256 = revision.schema_sha256;
+      let appliedSteps = 0;
+      while (version !== POSTGRES_SCHEMA_VERSION || sha256 !== POSTGRES_SCHEMA_SHA256) {
+        const step = POSTGRES_SCHEMA_REVISION_CHAIN.find((entry) => entry.version === version && entry.sha256.includes(sha256) && entry.upgradeSql !== undefined);
+        const next = POSTGRES_SCHEMA_REVISION_CHAIN.find((entry) => entry.version === version + 1);
+        if (!step?.upgradeSql || !next || appliedSteps >= POSTGRES_SCHEMA_REVISION_CHAIN.length) {
+          throw new PostgresSchemaContractError("PostgreSQL schema revision does not match any known contract version; refusing to migrate.");
+        }
+        await client.query(step.upgradeSql);
+        appliedSteps += 1;
+        version = next.version;
+        sha256 = next.sha256[0];
+      }
       await assertSchemaShape(client, canonicalSchemaSql);
-      return "already-current";
+      await client.query(
+        `UPDATE ${POSTGRES_SCHEMA_REVISION_TABLE}
+         SET schema_version = $1, schema_sha256 = $2, applied_at = statement_timestamp()
+         WHERE singleton_id = 'current'`,
+        [POSTGRES_SCHEMA_VERSION, POSTGRES_SCHEMA_SHA256]
+      );
+      return "applied";
     }
 
     await client.query(canonicalSchemaSql);

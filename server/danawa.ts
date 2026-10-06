@@ -2,6 +2,7 @@ import * as cheerio from "cheerio";
 import type { CrawlPageFailure, M2LaneSharingScope, MemoryProfile, Part, PartCategory, PartSpecs, PciePowerConnectorKind, PciePowerRequirement, RadiatorMountPosition, RadiatorSupport } from "../shared/types";
 import { CATEGORY_LABELS } from "../shared/types";
 import { inferListingType } from "./listing";
+import { cpuHasIntegratedGraphics, cpuSeriesLabelFor } from "../shared/domain/listing";
 
 export const DANAWA_CATEGORIES: Array<{
   category: PartCategory;
@@ -18,8 +19,11 @@ export const DANAWA_CATEGORIES: Array<{
   { category: "psu", categoryId: "112777" }
 ];
 
+// 다나와는 비브라우저 UA에 JSON-LD만 담긴 간소화 리스트(가격·목록 마크업 없음)를
+// 돌려준다. 실제 상품 목록(li.prod_item)과 페이지네이션 컨텍스트를 받으려면
+// 일반 데스크톱 브라우저 UA가 필요하다.
 const DEFAULT_USER_AGENT =
-  "PCSupporterStudentProject/1.0 (+compatibility catalog; contact unavailable)";
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36";
 const DANAWA_LIST_AJAX_URL = "https://prod.danawa.com/list/ajax/getProductList.ajax.php";
 
 export type DanawaCrawlerOptions = {
@@ -279,7 +283,9 @@ function readDanawaScriptValue(html: string, key: string) {
 
 export function parseDanawaListRequestContext(html: string): DanawaListRequestContext | undefined {
   const categoryCode = readDanawaScriptValue(html, "nCategoryCode");
-  const listCategoryCode = readDanawaScriptValue(html, "nListCategoryCode");
+  // 신형 리스트 페이지에는 nListCategoryCode가 없고 AJAX 페이지네이션은
+  // categoryCode와 같은 값을 listCategoryCode로 받는다 — 없을 때 폴백.
+  const listCategoryCode = readDanawaScriptValue(html, "nListCategoryCode") || categoryCode;
   if (!categoryCode || !listCategoryCode) return undefined;
   return {
     group: readDanawaScriptValue(html, "nListGroup") || readDanawaScriptValue(html, "nGroup"),
@@ -438,6 +444,31 @@ function parseSummedNumber(text: string, pattern: RegExp) {
     .map((value) => Number(value.replace(/[^\d]/g, "")))
     .reduce((sum, value) => sum + value, 0);
   return Number.isFinite(number) ? number : undefined;
+}
+
+function parseVrmPhaseTerms(text: string) {
+  const range = text.match(/전원부\s*[:：]?\s*(\d+)\s*[~∼～−–—-]\s*(\d+)\s*페이즈/i);
+  const phaseValues = (range
+    ? range.slice(1)
+    : text.match(/전원부\s*[:：]?\s*(\d+(?:\s*\+\s*\d+)*)\s*페이즈/i)?.[1].split("+"))?.map(Number);
+  if (!phaseValues || !phaseValues.every((value) => Number.isSafeInteger(value) && value > 0)) return undefined;
+  return { range: Boolean(range), phaseValues };
+}
+
+function parseVrmPhaseCount(text: string) {
+  const terms = parseVrmPhaseTerms(text);
+  if (!terms) return undefined;
+  const phaseCount = terms.range
+    ? Math.min(...terms.phaseValues)
+    : terms.phaseValues.reduce((sum, value) => sum + value, 0);
+  return Number.isSafeInteger(phaseCount) ? phaseCount : undefined;
+}
+
+/** Vcore-only phases: the leading term of "12+2+2페이즈"; a stated range uses its minimum. */
+function parseVrmVcorePhaseCount(text: string) {
+  const terms = parseVrmPhaseTerms(text);
+  if (!terms) return undefined;
+  return terms.range ? Math.min(...terms.phaseValues) : terms.phaseValues[0];
 }
 
 function parseWon(text: string | undefined) {
@@ -754,6 +785,30 @@ function parseCpuMemorySpeed(text: string) {
   return parseNumber(text.slice(memoryStart, memoryStart + 240), /\b([\d,]{4,6})\s*MHz\b/i);
 }
 
+// 다나와 CPU 스펙에는 메모리 지원 속도가 없는 경우가 많다. 소켓·세대별로
+// 공식 네이티브(JEDEC) 지원 속도를 채운다 — OC 상한이 아니라 모든 보드가
+// 보장하는 공식 스펙이라 안전한 하한값이다.
+export function cpuNativeMemorySpeedMhz(name: string, socket: string | undefined, memoryType: string | undefined): number | undefined {
+  const type = memoryType?.toUpperCase();
+  if (socket === "AM5") {
+    // 그래니트 릿지(라이젠 9000)는 DDR5-5600, 라파엘(7000)·피닉스(8000G)는 5200.
+    return /6세대|그래니트|\b9[0-9]{3}[XF]?\b/i.test(name) ? 5600 : 5200;
+  }
+  if (socket === "AM4") return type === "DDR4" ? 3200 : undefined;
+  if (socket === "LGA1851") return 6400;
+  if (socket === "LGA1700") {
+    const twelfthGen = /12세대|엘더레이크|\b12[0-9]{3}\w*/i.test(name);
+    return type === "DDR4" ? 3200 : twelfthGen ? 4800 : 5600;
+  }
+  if (socket === "LGA1200") return 3200;
+  if (socket === "LGA1151" || socket === "AM3" || socket === "FM2") return type === "DDR3" ? 1600 : 2666;
+  if (type === "DDR5") return 4800;
+  if (type === "DDR4") return 3200;
+  if (type === "DDR3") return 1600;
+  if (type === "DDR2") return 800;
+  return undefined;
+}
+
 export function parseGpuPowerW(text: string) {
   return parseNumber(text, /(?:최대\s*)?(?:소비전력|사용전력|TDP)\s*[:：]?\s*(?:최대\s*)?([\d,]+(?:\.\d+)?)\s*W/i);
 }
@@ -795,7 +850,15 @@ function parseSpecs(category: PartCategory, name: string, description: string, r
       : /라데온\s*그래픽|인텔\s*그래픽스|UHD\s*Graphics|Xe\s*LPG|그래픽\s*탑재/i.test(text)
         ? true
         : undefined;
+    if (specs.integratedGraphics === undefined) {
+      // 스펙 텍스트가 비어 있으면 모델 번호로 추론한다 — 라이젠 G/GT는 APU,
+      // Zen4+(5/6세대)·인텔 비-F 모델은 iGPU 탑재가 기본이다.
+      specs.integratedGraphics = cpuHasIntegratedGraphics({ name, specs, category });
+    }
     specs.coolerIncluded = /쿨러\s*:\s*(?!미포함|없음)[^/]*(?:포함|기본)/i.test(text);
+    // 정규 세대 라벨(Ryzen 9000·Core Ultra 200 등) — 견적의 최신 세대
+    // 판정과 관리자 세대 필터가 이 값을 신뢰한다.
+    specs.cpuSeries = cpuSeriesLabelFor(name);
   }
 
   if (category === "cooler") {
@@ -824,19 +887,22 @@ function parseSpecs(category: PartCategory, name: string, description: string, r
         : undefined;
     // "전원부: 12+2+2페이즈 / 60A / Vcore출력합계: 720" — 앞자리가 Vcore 페이즈 수다.
     // 둘 다 전원부 용량 추정 입력일 뿐 vrmCapacityW(확인된 공급 범위)로 승격하지 않는다.
-    specs.vrmPhaseCount = parseNumber(text, /전원부\s*[:：]?\s*(\d+)(?:\s*\+\s*\d+)*\s*페이즈/i);
+    specs.vrmVcorePhaseCount = parseVrmVcorePhaseCount(text);
     specs.vrmVcoreOutputA = parseNumber(text, /Vcore\s*출력\s*합계\s*[:：]?\s*([\d,]+)/i);
     specs.maxMemoryGb = parseNumber(text, /(?:메모리\s*용량|용량)\s*[:：]?\s*(?:최대\s*)?([\d,]+)\s*GB/i);
     specs.memorySlots = parseNumber(text, /(?:메모리\s*슬롯|DIMM)\s*[:：]?\s*(\d+)\s*개/i)
       ?? parseNumber(text, /(?:\[메모리\]|메모리).{0,120}?\b(\d+)\s*개/i);
     specs.maxMemorySpeedMhz = parseNumber(text, /(?:메모리\s*)?(?:속도|클럭)\s*[:：]?\s*([\d,]{4,6})\s*MHz/i)
       ?? parseNumber(text, /\[메모리\]\s*([\d,]{4,6})\s*MHz/i);
+    specs.vrmPhaseCount = parseVrmPhaseCount(text);
     const m2Match = text.match(/M\.2\s*[:：]?\s*(\d+)(?:\s*\+\s*(\d+))?\s*개/i);
     specs.m2Slots = m2Match
       ? Number(m2Match[1]) + Number(m2Match[2] ?? 0)
       : parseNumber(text, /M\.2[^\d]{0,32}(\d+)\s*개/i);
     const m2ConnectionText = text.match(/M\.2\s*연결\s*[:：]?\s*([^/]+)/i)?.[1] ?? "";
-    const m2Interfaces = (["NVMe", "SATA"] as const).filter((interfaceName) => new RegExp(`\\b${interfaceName}\\b`, "i").test(m2ConnectionText));
+    const m2Interfaces = (["NVMe", "SATA"] as const).filter((interfaceName) => interfaceName === "NVMe"
+      ? /\bNVMe\b|\bPCIe(?=\d|\b)/i.test(m2ConnectionText)
+      : /\bSATA\b/i.test(m2ConnectionText));
     if (m2Interfaces.length > 0) specs.m2Interfaces = m2Interfaces;
     const m2PcieGenerations = parsePcieGenerations(m2ConnectionText);
     if (m2PcieGenerations.length > 0) specs.m2PcieGenerations = m2PcieGenerations;
@@ -905,13 +971,27 @@ function parseSpecs(category: PartCategory, name: string, description: string, r
       specs.gpuVendor = "intel";
     }
     const gpuFamilyMatch = text.match(/\b(RTX|GTX|RX)\s*([0-9]{2})[0-9]{2}\b/i);
-    const arcFamilyMatch = text.match(/\bARC\s*([AB])\d+/i);
+    const arcFamilyMatch = text.match(/\bARC\s*(?:PRO\s*)?([AB])\d+/i);
+    const radeonProMatch = text.match(/\bR9\d{3}\b/i);
+    // 워크스테이션·쿼드로 명칭의 숫자는 GeForce 세대 번호가 아니다 — "RTX 6000
+    // Ada"가 RTX 60 시리즈로, "RTX 5000 Ada"가 RTX 50으로 오인되지 않게 이름에
+    // 있는 아키텍처 코드네임을 우선 기록한다.
+    const workstationLike = /쿼드로|Quadro|RTX\s*PRO|RTX\s*A\d|Ada\s*Generation|NV\s*링크|NVLink|PRO\s*Sync|Radeon\s*PRO|AI\s*PRO|워크스테이션/i.test(text);
+    const workstationArch = /Blackwell/i.test(text)
+      ? "Blackwell"
+      : /Ada\b/i.test(text)
+        ? "Ada Lovelace"
+        : /Turing/i.test(text)
+          ? "Turing"
+          : undefined;
     specs.gpuMemoryType = text.match(/\b(GDDR[345567]X?|HBM[23](?:E)?)\b/i)?.[1].toUpperCase();
-    specs.gpuArchitectureFamily = gpuFamilyMatch
-      ? `${gpuFamilyMatch[1].toUpperCase()} ${gpuFamilyMatch[2]}`
-      : arcFamilyMatch
-        ? `ARC ${arcFamilyMatch[1].toUpperCase()}`
-        : undefined;
+    specs.gpuArchitectureFamily = arcFamilyMatch
+      ? `ARC ${arcFamilyMatch[1].toUpperCase()}`
+      : workstationLike
+        ? (radeonProMatch ? "RX 90" : workstationArch)
+        : gpuFamilyMatch
+          ? `${gpuFamilyMatch[1].toUpperCase()} ${gpuFamilyMatch[2]}`
+          : undefined;
     const pcieWidth = text.match(/PCIe(?:\s*[\d.]+)?\s*x(16|8|4|1)(?:\s*\([^)]*\))?/i)?.[1];
     specs.pcieSlotWidth = pcieWidth ? Number(pcieWidth) : undefined;
     specs.pciePowerOptions = parsePciePowerOptions(text);
@@ -934,6 +1014,14 @@ function parseSpecs(category: PartCategory, name: string, description: string, r
     specs.lengthMm = parseNumber(text, /(?:가로\s*\(길이\)|GPU\s*길이|길이)\s*[:：]?\s*([\d,.]+)\s*mm/i);
     specs.widthMm = parseNumber(text, /(?:가로)\s*[:：]?\s*([\d,.]+)\s*mm/i);
     specs.thicknessMm = parseNumber(text, /(?:두께)\s*[:：]?\s*([\d,.]+)\s*mm/i);
+    // 로우프로파일 브라켓 — 슬림(LP 전용) 케이스 호환 판별에 쓴다. 이름의 LP
+    // 토큰("GT1030 LP")은 로우프로파일 카드를 뜻하고 LP 브라켓이 동봉된다.
+    if (/(?:로우\s*프로파일|로우프로파일|저프로파일|Low[-\s]?Profile|\bLP\b)\s*브라?켓?/i.test(text)
+      || /(?:로우\s*프로파일|Low[-\s]?Profile)[^\n/]{0,16}(?:동봉|포함|지원)/i.test(text)
+      || /(?:^|[\s/])LP(?=[\s/]|$)/i.test(name)
+      || /로우\s*프로파일|로우프로파일|저프로파일/i.test(name)) {
+      specs.lowProfileBracket = true;
+    }
   }
 
   if (category === "ssd") {
@@ -998,12 +1086,18 @@ function parseSpecs(category: PartCategory, name: string, description: string, r
     const supportedPsuText = text.match(/지원파워규격\s*[:：]\s*([^/]+)/i)?.[1] ?? "";
     const supportedPsuFormFactors = [
       [/SFX-L/i, "SFX-L"],
-      [/(?:^|[\s,])SFX(?:[\s,]|$)/i, "SFX"],
-      [/ATX|표준-ATX/i, "ATX"]
+      [/\bSFX\b(?!-L)/i, "SFX"],
+      [/(?:^|[\s,(])ATX(?:[\s,)]|$)|표준[-\s]?ATX/i, "ATX"]
     ]
       .filter(([pattern]) => (pattern as RegExp).test(supportedPsuText))
       .map(([, form]) => form as string);
     if (supportedPsuFormFactors.length > 0) specs.supportedPsuFormFactors = [...new Set(supportedPsuFormFactors)];
+    // LP 전용(슬림) 케이스 — 확장 슬롯이 로우프로파일 브라켓만 받는다.
+    // 스펙에 로우프로파일 브라켓이 직접 언급된 경우만 true로 둔다.
+    if (/(?:로우\s*프로파일|로우프로파일|Low[-\s]?Profile)\s*브라?켓?/i.test(text)
+      || /(?:슬롯|브라?켓|슬림)[^\n/]{0,24}(?:로우\s*프로파일|로우프로파일|Low[-\s]?Profile|\bLP\b)/i.test(text)) {
+      specs.lowProfileOnly = true;
+    }
   }
 
   if (category === "psu") {
@@ -1128,9 +1222,13 @@ export function reparseDanawaPart(part: Part): Part {
     if (parsedSpecs.gpu3dmarkPortRoyalScore === undefined) delete specs.gpu3dmarkPortRoyalScore;
   }
   if (part.category === "cpu") {
+    if (parsedSpecs.cpuSeries === undefined) delete specs.cpuSeries;
     if (parsedSpecs.cinebenchR23Single === undefined) delete specs.cinebenchR23Single;
     if (parsedSpecs.cinebenchR23Multi === undefined) delete specs.cinebenchR23Multi;
-    if (parsedSpecs.maxMemorySpeedMhz === undefined) delete specs.maxMemorySpeedMhz;
+    // 다나와 목록 스펙에는 메모리 지원 속도가 없어 이 필드가 비는 게 보통이다.
+    // 비면 견적 생성기의 필수 스펙 게이트가 모든 live CPU를 탈락시켜 seed
+    // 참고 부품만 남으므로, 플랫폼 네이티브(JEDEC) 값으로 채운다.
+    specs.maxMemorySpeedMhz = parsedSpecs.maxMemorySpeedMhz ?? cpuNativeMemorySpeedMhz(part.name, specs.socket, specs.memoryType);
   }
   if (part.category === "ssd") {
     if (parsedSpecs.ssdController === undefined) delete specs.ssdController;
@@ -1177,6 +1275,9 @@ export function reparseDanawaPart(part: Part): Part {
   }
   if (part.category === "motherboard") {
     if (parsedSpecs.memoryProfiles === undefined) delete specs.memoryProfiles;
+    if (parsedSpecs.vrmPhaseCount === undefined) delete specs.vrmPhaseCount;
+    if (parsedSpecs.vrmVcorePhaseCount === undefined) delete specs.vrmVcorePhaseCount;
+    if (parsedSpecs.vrmVcoreOutputA === undefined) delete specs.vrmVcoreOutputA;
     if (parsedSpecs.m2Slots === undefined) delete specs.m2Slots;
     if (parsedSpecs.m2Interfaces === undefined) delete specs.m2Interfaces;
     if (parsedSpecs.m2PcieGenerations === undefined) delete specs.m2PcieGenerations;

@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { FiInfo, FiLoader, FiTrendingUp } from "react-icons/fi";
 import type { AccessoryItem, BuildSelection, Part, PartCategory } from "../shared/types";
 import type { BuildPriceSnapshot } from "../shared/build-price-summary";
 import { CATEGORY_LABELS, PART_CATEGORIES, isKnownPrice } from "../shared/types";
 import { priceTrendFor, type PriceTrendHistoryPoint, type PriceTrendWindow } from "../shared/price-trend";
 import { api } from "./api";
+import { markEngagementFlag } from "./user-journey";
+import { trackUsageEvent } from "./usage-events";
 import { accessorySelections, selectionList } from "./build-edit";
 import { PriceTrendChart } from "./PriceTrendChart";
 
@@ -70,6 +72,7 @@ export function BuildPriceTrendPanel({ build, partMap, accessoryMap, snapshot }:
   const [histories, setHistories] = useState<Record<string, PublicPriceHistoryItem>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<PriceHistoryFailureNotice | null>(null);
+  const trendViewTrackedRef = useRef(false);
   const rows = useMemo(() => selectionsFor(build, partMap, accessoryMap), [accessoryMap, build, partMap]);
   const requestRows = useMemo(() => rows.slice(0, 50), [rows]);
   const ids = useMemo(() => requestRows.map((row) => row.key).join(","), [requestRows]);
@@ -91,6 +94,11 @@ export function BuildPriceTrendPanel({ build, partMap, accessoryMap, snapshot }:
       .then((payload) => {
         if (cancelled) return;
         setHistories(Object.fromEntries(payload.items.map((item) => [`${item.kind}:${item.itemId}`, item])));
+        if (!trendViewTrackedRef.current && payload.items.some((item) => item.points.length > 0)) {
+          trendViewTrackedRef.current = true;
+          markEngagementFlag("trendViewedAt");
+          trackUsageEvent("price_trend_view", { surface: "result" });
+        }
       })
       .catch(() => {
         if (cancelled) return;

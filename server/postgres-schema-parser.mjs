@@ -1,8 +1,41 @@
+// 스키마에 `--` 한 줄 주석이 섞여 있으면 문장 앞부분이 주석으로 시작해
+// 문장 파서가 거절한다. 따옴표 밖의 줄 주석은 공백으로 치환해 건너뛴다.
+function stripLineComments(sql) {
+  let output = "";
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  for (let index = 0; index < sql.length; index += 1) {
+    const char = sql[index];
+    if (inSingleQuote) {
+      output += char;
+      if (char === "'" && sql[index + 1] === "'") output += sql[++index];
+      else if (char === "'") inSingleQuote = false;
+      continue;
+    }
+    if (inDoubleQuote) {
+      output += char;
+      if (char === '"' && sql[index + 1] === '"') output += sql[++index];
+      else if (char === '"') inDoubleQuote = false;
+      continue;
+    }
+    if (char === "'") { output += char; inSingleQuote = true; continue; }
+    if (char === '"') { output += char; inDoubleQuote = true; continue; }
+    if (char === "-" && sql[index + 1] === "-") {
+      while (index < sql.length && sql[index] !== "\n") index += 1;
+      output += " ";
+      continue;
+    }
+    output += char;
+  }
+  return output;
+}
+
 export function statementsFrom(sql) {
   const statements = [];
   let start = 0;
   let inSingleQuote = false;
   let inDoubleQuote = false;
+  sql = stripLineComments(sql);
   for (let index = 0; index < sql.length; index += 1) {
     const char = sql[index];
     if (inSingleQuote) {

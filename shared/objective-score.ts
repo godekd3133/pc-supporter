@@ -12,7 +12,7 @@ import type { PartCategory } from "./types";
  * are versioned with the model. Changing an anchor requires bumping
  * OBJECTIVE_SCORE_MODEL_VERSION so cached scores stay interpretable.
  */
-export const OBJECTIVE_SCORE_MODEL_VERSION = "objective-index-v1";
+export const OBJECTIVE_SCORE_MODEL_VERSION = "objective-index-v2";
 
 /** A dimension index is capped above 100 so halo parts still rank ahead of the
  *  reference part without letting a single runaway spec dominate the average. */
@@ -60,7 +60,9 @@ export const OBJECTIVE_SCORE_ANCHORS: Record<PartCategory, Record<string, Object
   },
   memory: {
     capacityGb: { reference: 64, higherIsBetter: true },
-    speedMhz: { reference: 8_400, higherIsBetter: true },
+    // 클럭이 필요량을 넘으면 체감 이익이 급감한다 — 8400 CUDIMM 프리미엄이
+    // 6000급 표준 킷을 이기며 예산을 삼키는 것을 막는다.
+    speedMhz: { reference: 8_400, higherIsBetter: true, scale: "log" },
     memoryEffectiveLatencyNs: { reference: 9, higherIsBetter: false },
     memoryCasLatency: { reference: 28, higherIsBetter: false },
     memoryRcdLatency: { reference: 30, higherIsBetter: false },
@@ -86,16 +88,22 @@ export const OBJECTIVE_SCORE_ANCHORS: Record<PartCategory, Record<string, Object
     m2Slots: { reference: 5, higherIsBetter: true }
   },
   cooler: {
-    maxCoolingW: { reference: 350, higherIsBetter: true },
-    radiatorSizeMm: { reference: 420, higherIsBetter: true }
+    // 냉각 여유는 CPU 발열을 넘으면 소용이 없다 — 고부하 선호는
+    // preferCoolerHeadroom에서 별도로 처리한다.
+    maxCoolingW: { reference: 350, higherIsBetter: true, scale: "log" },
+    radiatorSizeMm: { reference: 420, higherIsBetter: true, scale: "log" }
   },
   case: {
-    maxGpuLengthMm: { reference: 460, higherIsBetter: true },
-    maxCoolerHeightMm: { reference: 200, higherIsBetter: true },
-    hddBays: { reference: 8, higherIsBetter: true }
+    // 케이스 크기 계열은 필요치를 넘는 여유가 거의 무의미하다 — 대형 케이스가
+    // 길이·베이 수만으로 예산을 크게 쓰는 것을 막는다.
+    maxGpuLengthMm: { reference: 460, higherIsBetter: true, scale: "log" },
+    maxCoolerHeightMm: { reference: 200, higherIsBetter: true, scale: "log" },
+    hddBays: { reference: 8, higherIsBetter: true, scale: "log" }
   },
   psu: {
-    wattageW: { reference: 1_600, higherIsBetter: true },
+    // 와트수는 적정 구간 안에서 효율·가격이 결정해야 한다 — 선형이면
+    // 400W급 구성에서도 800W+ 파워가 점수 우위를 가져간다.
+    wattageW: { reference: 1_600, higherIsBetter: true, scale: "log" },
     efficiency: { reference: 6, higherIsBetter: true }
   }
 };

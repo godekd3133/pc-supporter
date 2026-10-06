@@ -19,38 +19,38 @@ export const extendedSeedCatalog: Part[] = [
   seed({
     id: "cpu-7600",
     category: "cpu",
-    name: "AMD 라이젠5-5세대 7600",
+    name: "AMD 라이젠5-6세대 9600",
     brand: "AMD",
-    model: "7600",
+    model: "9600",
     priceWon: 235000,
-    specs: { socket: "AM5", memoryType: "DDR5", cores: 6, threads: 12, boostClockGhz: 5.1, tdpW: 65, pptW: 88, integratedGraphics: true, coolerIncluded: true, maxMemorySpeedMhz: 5200 }
+    specs: { socket: "AM5", memoryType: "DDR5", cpuSeries: "Ryzen 9000", cores: 6, threads: 12, boostClockGhz: 5.1, tdpW: 65, pptW: 88, integratedGraphics: true, coolerIncluded: true, maxMemorySpeedMhz: 5600 }
   }),
   seed({
     id: "cpu-7950x",
     category: "cpu",
-    name: "AMD 라이젠9-5세대 7950X",
+    name: "AMD 라이젠9-6세대 9950X",
     brand: "AMD",
-    model: "7950X",
+    model: "9950X",
     priceWon: 649000,
-    specs: { socket: "AM5", memoryType: "DDR5", cores: 16, threads: 32, boostClockGhz: 5.7, tdpW: 170, pptW: 230, integratedGraphics: true, coolerIncluded: false, maxMemorySpeedMhz: 5200 }
+    specs: { socket: "AM5", memoryType: "DDR5", cpuSeries: "Ryzen 9000", cores: 16, threads: 32, boostClockGhz: 5.7, tdpW: 170, pptW: 230, integratedGraphics: true, coolerIncluded: false, maxMemorySpeedMhz: 5600 }
   }),
   seed({
     id: "cpu-i5-14600k",
     category: "cpu",
-    name: "인텔 코어 i5-14세대 14600K",
+    name: "인텔 코어 울트라5 시리즈2 245K (애로우레이크)",
     brand: "Intel",
-    model: "i5-14600K",
+    model: "Core Ultra 5 245K",
     priceWon: 359000,
-    specs: { socket: "LGA1700", memoryType: "DDR5", cores: 14, threads: 20, boostClockGhz: 5.3, tdpW: 125, pptW: 181, integratedGraphics: true, coolerIncluded: false, maxMemorySpeedMhz: 5600 }
+    specs: { socket: "LGA1851", memoryType: "DDR5", cpuSeries: "Core Ultra 200", cores: 14, threads: 14, boostClockGhz: 5.2, tdpW: 125, pptW: 159, integratedGraphics: true, coolerIncluded: false, maxMemorySpeedMhz: 6400 }
   }),
   seed({
     id: "cpu-i5-12400f",
     category: "cpu",
-    name: "인텔 코어 i5-12세대 12400F",
+    name: "인텔 코어 울트라5 시리즈2 225F (애로우레이크)",
     brand: "Intel",
-    model: "i5-12400F",
+    model: "Core Ultra 5 225F",
     priceWon: 159000,
-    specs: { socket: "LGA1700", memoryType: "DDR4", cores: 6, threads: 12, boostClockGhz: 4.4, tdpW: 65, pptW: 117, integratedGraphics: false, coolerIncluded: true, maxMemorySpeedMhz: 3200 }
+    specs: { socket: "LGA1851", memoryType: "DDR5", cpuSeries: "Core Ultra 200", cores: 10, threads: 10, boostClockGhz: 4.9, tdpW: 65, pptW: 121, integratedGraphics: false, coolerIncluded: true, maxMemorySpeedMhz: 6400 }
   }),
   seed({
     id: "cooler-air-am5-1700-mid",
@@ -59,7 +59,7 @@ export const extendedSeedCatalog: Part[] = [
     brand: "PC Supporter",
     model: "AIR-180-MULTI",
     priceWon: 39000,
-    specs: { supportedSockets: ["AM5", "AM4", "LGA1700", "LGA1200"], maxCoolingW: 180, maxCoolerHeightMm: 154, coolerType: "air" }
+    specs: { supportedSockets: ["AM5", "AM4", "LGA1851", "LGA1700", "LGA1200"], maxCoolingW: 180, maxCoolerHeightMm: 154, coolerType: "air" }
   }),
   seed({
     id: "cooler-liquid-360-multi",
@@ -68,7 +68,7 @@ export const extendedSeedCatalog: Part[] = [
     brand: "PC Supporter",
     model: "AIO-360-MULTI",
     priceWon: 139000,
-    specs: { supportedSockets: ["AM5", "AM4", "LGA1700", "LGA1200"], maxCoolingW: 300, coolerType: "liquid", radiatorSizeMm: 360, radiatorSizesMm: [360], radiatorPosition: "top" }
+    specs: { supportedSockets: ["AM5", "AM4", "LGA1851", "LGA1700", "LGA1200"], maxCoolingW: 300, coolerType: "liquid", radiatorSizeMm: 360, radiatorSizesMm: [360], radiatorPosition: "top" }
   }),
   seed({
     id: "cooler-low-profile-multi",
@@ -77,7 +77,7 @@ export const extendedSeedCatalog: Part[] = [
     brand: "PC Supporter",
     model: "LP-120-MULTI",
     priceWon: 32000,
-    specs: { supportedSockets: ["AM5", "AM4", "LGA1700"], maxCoolingW: 120, maxCoolerHeightMm: 67, coolerType: "air" }
+    specs: { supportedSockets: ["AM5", "AM4", "LGA1851", "LGA1700"], maxCoolingW: 120, maxCoolerHeightMm: 67, coolerType: "air" }
   }),
   seed({
     id: "mb-x670-atx",
@@ -100,20 +100,20 @@ export const extendedSeedCatalog: Part[] = [
   seed({
     id: "mb-z790-ddr5",
     category: "motherboard",
-    name: "MSI MAG Z790 토마호크 WIFI",
+    name: "MSI MAG Z890 토마호크 WIFI",
     brand: "MSI",
-    model: "MAG Z790 TOMAHAWK WIFI",
+    model: "MAG Z890 TOMAHAWK WIFI",
     priceWon: 329000,
-    specs: { socket: "LGA1700", memoryType: "DDR5", maxMemoryGb: 192, memorySlots: 4, maxMemorySpeedMhz: 7200, m2Slots: 4, m2Interfaces: ["NVMe"], m2PcieGenerations: [4], sataPorts: 6, vrmCapacityW: 260, formFactor: "ATX", pcieX16Slots: 1, pcieX8Slots: 0, fanPortCount: 5, rgb5vPortCount: 2, rgb12vPortCount: 1, rgbPortCount: 3 }
+    specs: { socket: "LGA1851", memoryType: "DDR5", maxMemoryGb: 192, memorySlots: 4, maxMemorySpeedMhz: 7200, m2Slots: 4, m2Interfaces: ["NVMe"], m2PcieGenerations: [4], sataPorts: 6, vrmCapacityW: 260, formFactor: "ATX", pcieX16Slots: 1, pcieX8Slots: 0, fanPortCount: 5, rgb5vPortCount: 2, rgb12vPortCount: 1, rgbPortCount: 3 }
   }),
   seed({
     id: "mb-b760-ddr4",
     category: "motherboard",
-    name: "ASRock B760M Pro RS/D4",
+    name: "ASRock B860M Pro RS",
     brand: "ASRock",
-    model: "B760M Pro RS/D4",
+    model: "B860M Pro RS",
     priceWon: 159000,
-    specs: { socket: "LGA1700", memoryType: "DDR4", maxMemoryGb: 128, memorySlots: 4, maxMemorySpeedMhz: 5333, m2Slots: 2, m2Interfaces: ["NVMe"], m2PcieGenerations: [4], sataPorts: 4, vrmCapacityW: 150, formFactor: "mATX", pcieX16Slots: 1, pcieX8Slots: 0, fanPortCount: 4, rgb5vPortCount: 2, rgb12vPortCount: 1, rgbPortCount: 3 }
+    specs: { socket: "LGA1851", memoryType: "DDR5", maxMemoryGb: 128, memorySlots: 4, maxMemorySpeedMhz: 7200, m2Slots: 2, m2Interfaces: ["NVMe"], m2PcieGenerations: [4], sataPorts: 4, vrmCapacityW: 150, formFactor: "mATX", pcieX16Slots: 1, pcieX8Slots: 0, fanPortCount: 4, rgb5vPortCount: 2, rgb12vPortCount: 1, rgbPortCount: 3 }
   }),
   seed({
     id: "memory-ddr5-32-6000-expo",
@@ -154,38 +154,38 @@ export const extendedSeedCatalog: Part[] = [
   seed({
     id: "gpu-rtx-4070-super",
     category: "gpu",
-    name: "NVIDIA GeForce RTX 4070 SUPER 12GB",
+    name: "NVIDIA GeForce RTX 5070 12GB",
     brand: "NVIDIA",
-    model: "RTX 4070 SUPER",
+    model: "RTX 5070",
     priceWon: 899000,
-    specs: { powerW: 220, recommendedPsuW: 650, vramGb: 12, gpuVendor: "nvidia", gpuArchitectureFamily: "Ada Lovelace", gpuStreamProcessors: 7168, gpuMemoryBandwidthGbps: 504, gpuBoostClockMhz: 2475, gpu3dmarkTimeSpyScore: 21200, gpu3dmarkPortRoyalScore: 13400, lengthMm: 244, thicknessMm: 50, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 1 }], [{ kind: "12v2x6", count: 1 }]] }
+    specs: { powerW: 250, recommendedPsuW: 650, vramGb: 12, gpuVendor: "nvidia", gpuArchitectureFamily: "RTX 50", gpuStreamProcessors: 6144, gpuMemoryBandwidthGbps: 672, gpuBoostClockMhz: 2512, gpu3dmarkTimeSpyScore: 21200, gpu3dmarkPortRoyalScore: 13400, lengthMm: 244, thicknessMm: 50, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 1 }], [{ kind: "12v2x6", count: 1 }]] }
   }),
   seed({
     id: "gpu-rtx-4080-super",
     category: "gpu",
-    name: "NVIDIA GeForce RTX 4080 SUPER 16GB",
+    name: "NVIDIA GeForce RTX 5080 16GB",
     brand: "NVIDIA",
-    model: "RTX 4080 SUPER",
+    model: "RTX 5080",
     priceWon: 1390000,
-    specs: { powerW: 320, recommendedPsuW: 750, vramGb: 16, gpuVendor: "nvidia", gpuArchitectureFamily: "Ada Lovelace", gpuStreamProcessors: 10240, gpuMemoryBandwidthGbps: 736, gpuBoostClockMhz: 2550, gpu3dmarkTimeSpyScore: 28500, gpu3dmarkPortRoyalScore: 18200, lengthMm: 310, thicknessMm: 61, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "12v2x6", count: 1 }], [{ kind: "pcie_8pin_6plus2", count: 3 }]] }
+    specs: { powerW: 360, recommendedPsuW: 850, vramGb: 16, gpuVendor: "nvidia", gpuArchitectureFamily: "RTX 50", gpuStreamProcessors: 10752, gpuMemoryBandwidthGbps: 960, gpuBoostClockMhz: 2617, gpu3dmarkTimeSpyScore: 28500, gpu3dmarkPortRoyalScore: 18200, lengthMm: 310, thicknessMm: 61, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "12v2x6", count: 1 }], [{ kind: "pcie_8pin_6plus2", count: 3 }]] }
   }),
   seed({
     id: "gpu-rx-7900-xtx",
     category: "gpu",
-    name: "AMD Radeon RX 7900 XTX 24GB",
+    name: "AMD Radeon RX 9070 XT 16GB",
     brand: "AMD",
-    model: "RX 7900 XTX",
+    model: "RX 9070 XT",
     priceWon: 1190000,
-    specs: { powerW: 355, recommendedPsuW: 800, vramGb: 24, gpuVendor: "amd", gpuArchitectureFamily: "RDNA 3", gpuStreamProcessors: 6144, gpuMemoryBandwidthGbps: 960, gpuBoostClockMhz: 2500, gpu3dmarkTimeSpyScore: 30100, gpu3dmarkPortRoyalScore: 15900, lengthMm: 344, thicknessMm: 72, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 3 }]] }
+    specs: { powerW: 304, recommendedPsuW: 750, vramGb: 16, gpuVendor: "amd", gpuArchitectureFamily: "RX 90", gpuStreamProcessors: 4096, gpuMemoryBandwidthGbps: 640, gpuBoostClockMhz: 2970, gpu3dmarkTimeSpyScore: 30100, gpu3dmarkPortRoyalScore: 15900, lengthMm: 344, thicknessMm: 72, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 3 }]] }
   }),
   seed({
     id: "gpu-arc-a770",
     category: "gpu",
-    name: "Intel Arc A770 16GB",
+    name: "Intel Arc B580 12GB",
     brand: "Intel",
-    model: "Arc A770",
+    model: "Arc B580",
     priceWon: 429000,
-    specs: { powerW: 225, recommendedPsuW: 600, vramGb: 16, gpuVendor: "intel", gpuArchitectureFamily: "Alchemist", gpuStreamProcessors: 4096, gpuMemoryBandwidthGbps: 560, gpuBoostClockMhz: 2100, gpu3dmarkTimeSpyScore: 13300, gpu3dmarkPortRoyalScore: 7300, lengthMm: 280, thicknessMm: 53, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 1 }]] }
+    specs: { powerW: 190, recommendedPsuW: 600, vramGb: 12, gpuVendor: "intel", gpuArchitectureFamily: "ARC B", gpuStreamProcessors: 2560, gpuMemoryBandwidthGbps: 456, gpuBoostClockMhz: 2670, gpu3dmarkTimeSpyScore: 13300, gpu3dmarkPortRoyalScore: 7300, lengthMm: 280, thicknessMm: 53, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 1 }]] }
   }),
   seed({
     id: "ssd-nvme-2tb-gen4",
@@ -298,11 +298,11 @@ export const extendedSeedCatalog: Part[] = [
   seed({
     id: "cpu-5700x",
     category: "cpu",
-    name: "AMD 라이젠7-4세대 5700X",
+    name: "AMD 라이젠7-6세대 9800X3D",
     brand: "AMD",
-    model: "5700X",
+    model: "9800X3D",
     priceWon: 219000,
-    specs: { socket: "AM4", memoryType: "DDR4", cores: 8, threads: 16, boostClockGhz: 4.6, tdpW: 65, pptW: 88, integratedGraphics: false, coolerIncluded: false, maxMemorySpeedMhz: 3200 }
+    specs: { socket: "AM5", memoryType: "DDR5", cpuSeries: "Ryzen 9000", cores: 8, threads: 16, boostClockGhz: 5.2, tdpW: 120, pptW: 162, integratedGraphics: true, coolerIncluded: false, maxMemorySpeedMhz: 5600 }
   }),
   seed({
     id: "cpu-9600x",
@@ -311,7 +311,7 @@ export const extendedSeedCatalog: Part[] = [
     brand: "AMD",
     model: "9600X",
     priceWon: 329000,
-    specs: { socket: "AM5", memoryType: "DDR5", cores: 6, threads: 12, boostClockGhz: 5.4, tdpW: 65, pptW: 88, integratedGraphics: true, coolerIncluded: false, maxMemorySpeedMhz: 5600 }
+    specs: { socket: "AM5", memoryType: "DDR5", cpuSeries: "Ryzen 9000", cores: 6, threads: 12, boostClockGhz: 5.4, tdpW: 65, pptW: 88, integratedGraphics: true, coolerIncluded: false, maxMemorySpeedMhz: 5600 }
   }),
   seed({
     id: "cpu-9700x",
@@ -320,25 +320,25 @@ export const extendedSeedCatalog: Part[] = [
     brand: "AMD",
     model: "9700X",
     priceWon: 469000,
-    specs: { socket: "AM5", memoryType: "DDR5", cores: 8, threads: 16, boostClockGhz: 5.5, tdpW: 65, pptW: 88, integratedGraphics: true, coolerIncluded: false, maxMemorySpeedMhz: 5600 }
+    specs: { socket: "AM5", memoryType: "DDR5", cpuSeries: "Ryzen 9000", cores: 8, threads: 16, boostClockGhz: 5.5, tdpW: 65, pptW: 88, integratedGraphics: true, coolerIncluded: false, maxMemorySpeedMhz: 5600 }
   }),
   seed({
     id: "cpu-i5-14500",
     category: "cpu",
-    name: "인텔 코어 i5-14세대 14500",
+    name: "인텔 코어 울트라5 시리즈2 235 (애로우레이크)",
     brand: "Intel",
-    model: "i5-14500",
+    model: "Core Ultra 5 235",
     priceWon: 329000,
-    specs: { socket: "LGA1700", memoryType: "DDR5", cores: 14, threads: 20, boostClockGhz: 5.0, tdpW: 65, pptW: 154, integratedGraphics: true, coolerIncluded: true, maxMemorySpeedMhz: 5600 }
+    specs: { socket: "LGA1851", memoryType: "DDR5", cpuSeries: "Core Ultra 200", cores: 14, threads: 14, boostClockGhz: 5.0, tdpW: 65, pptW: 121, integratedGraphics: true, coolerIncluded: true, maxMemorySpeedMhz: 6400 }
   }),
   seed({
     id: "cpu-i3-12100f",
     category: "cpu",
-    name: "인텔 코어 i3-12세대 12100F",
+    name: "인텔 코어 울트라3 시리즈2 205 (애로우레이크)",
     brand: "Intel",
-    model: "i3-12100F",
+    model: "Core Ultra 3 205",
     priceWon: 119000,
-    specs: { socket: "LGA1700", memoryType: "DDR4", cores: 4, threads: 8, boostClockGhz: 4.3, tdpW: 58, pptW: 89, integratedGraphics: false, coolerIncluded: true, maxMemorySpeedMhz: 3200 }
+    specs: { socket: "LGA1851", memoryType: "DDR5", cpuSeries: "Core Ultra 200", cores: 8, threads: 8, boostClockGhz: 4.9, tdpW: 57, pptW: 76, integratedGraphics: false, coolerIncluded: true, maxMemorySpeedMhz: 6400 }
   }),
   seed({
     id: "cooler-air-am4-compact",
@@ -347,7 +347,7 @@ export const extendedSeedCatalog: Part[] = [
     brand: "PC Supporter",
     model: "AIR-155-MULTI",
     priceWon: 35000,
-    specs: { supportedSockets: ["AM5", "AM4", "LGA1700", "LGA1200"], maxCoolingW: 160, maxCoolerHeightMm: 155, coolerType: "air" }
+    specs: { supportedSockets: ["AM5", "AM4", "LGA1851", "LGA1700", "LGA1200"], maxCoolingW: 160, maxCoolerHeightMm: 155, coolerType: "air" }
   }),
   seed({
     id: "cooler-air-premium-multi",
@@ -356,7 +356,7 @@ export const extendedSeedCatalog: Part[] = [
     brand: "PC Supporter",
     model: "AIR-250-DUAL",
     priceWon: 79000,
-    specs: { supportedSockets: ["AM5", "AM4", "LGA1700", "LGA1200"], maxCoolingW: 250, maxCoolerHeightMm: 168, coolerType: "air" }
+    specs: { supportedSockets: ["AM5", "AM4", "LGA1851", "LGA1700", "LGA1200"], maxCoolingW: 250, maxCoolerHeightMm: 168, coolerType: "air" }
   }),
   seed({
     id: "cooler-liquid-240-multi",
@@ -365,7 +365,7 @@ export const extendedSeedCatalog: Part[] = [
     brand: "PC Supporter",
     model: "AIO-240-MULTI",
     priceWon: 99000,
-    specs: { supportedSockets: ["AM5", "AM4", "LGA1700", "LGA1200"], maxCoolingW: 280, coolerType: "liquid", radiatorSizeMm: 240, radiatorSizesMm: [240], radiatorPosition: "top" }
+    specs: { supportedSockets: ["AM5", "AM4", "LGA1851", "LGA1700", "LGA1200"], maxCoolingW: 280, coolerType: "liquid", radiatorSizeMm: 240, radiatorSizesMm: [240], radiatorPosition: "top" }
   }),
   seed({
     id: "mb-b550m-am4",
@@ -451,56 +451,56 @@ export const extendedSeedCatalog: Part[] = [
   seed({
     id: "gpu-rtx-4060-ti",
     category: "gpu",
-    name: "NVIDIA GeForce RTX 4060 Ti 8GB",
+    name: "NVIDIA GeForce RTX 5060 Ti 8GB",
     brand: "NVIDIA",
-    model: "RTX 4060 Ti",
+    model: "RTX 5060 Ti",
     priceWon: 589000,
-    specs: { powerW: 160, recommendedPsuW: 550, vramGb: 8, gpuVendor: "nvidia", gpuArchitectureFamily: "Ada Lovelace", gpuStreamProcessors: 4352, gpuMemoryBandwidthGbps: 288, gpuBoostClockMhz: 2535, gpu3dmarkTimeSpyScore: 13400, gpu3dmarkPortRoyalScore: 8100, lengthMm: 240, thicknessMm: 42, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 1 }]] }
+    specs: { powerW: 180, recommendedPsuW: 550, vramGb: 8, gpuVendor: "nvidia", gpuArchitectureFamily: "RTX 50", gpuStreamProcessors: 4608, gpuMemoryBandwidthGbps: 448, gpuBoostClockMhz: 2572, gpu3dmarkTimeSpyScore: 13400, gpu3dmarkPortRoyalScore: 8100, lengthMm: 240, thicknessMm: 42, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 1 }]] }
   }),
   seed({
     id: "gpu-rtx-4070",
     category: "gpu",
-    name: "NVIDIA GeForce RTX 4070 12GB",
+    name: "NVIDIA GeForce RTX 5060 8GB",
     brand: "NVIDIA",
-    model: "RTX 4070",
+    model: "RTX 5060",
     priceWon: 769000,
-    specs: { powerW: 200, recommendedPsuW: 650, vramGb: 12, gpuVendor: "nvidia", gpuArchitectureFamily: "Ada Lovelace", gpuStreamProcessors: 5888, gpuMemoryBandwidthGbps: 504, gpuBoostClockMhz: 2475, gpu3dmarkTimeSpyScore: 17900, gpu3dmarkPortRoyalScore: 11100, lengthMm: 244, thicknessMm: 42, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 1 }], [{ kind: "12v2x6", count: 1 }]] }
+    specs: { powerW: 145, recommendedPsuW: 550, vramGb: 8, gpuVendor: "nvidia", gpuArchitectureFamily: "RTX 50", gpuStreamProcessors: 3840, gpuMemoryBandwidthGbps: 448, gpuBoostClockMhz: 2497, gpu3dmarkTimeSpyScore: 17900, gpu3dmarkPortRoyalScore: 11100, lengthMm: 244, thicknessMm: 42, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 1 }], [{ kind: "12v2x6", count: 1 }]] }
   }),
   seed({
     id: "gpu-rtx-4070-ti-super",
     category: "gpu",
-    name: "NVIDIA GeForce RTX 4070 Ti SUPER 16GB",
+    name: "NVIDIA GeForce RTX 5070 Ti 16GB",
     brand: "NVIDIA",
-    model: "RTX 4070 Ti SUPER",
+    model: "RTX 5070 Ti",
     priceWon: 1090000,
-    specs: { powerW: 285, recommendedPsuW: 700, vramGb: 16, gpuVendor: "nvidia", gpuArchitectureFamily: "Ada Lovelace", gpuStreamProcessors: 8448, gpuMemoryBandwidthGbps: 672, gpuBoostClockMhz: 2610, gpu3dmarkTimeSpyScore: 24300, gpu3dmarkPortRoyalScore: 15800, lengthMm: 305, thicknessMm: 61, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "12v2x6", count: 1 }], [{ kind: "pcie_8pin_6plus2", count: 2 }]] }
+    specs: { powerW: 300, recommendedPsuW: 750, vramGb: 16, gpuVendor: "nvidia", gpuArchitectureFamily: "RTX 50", gpuStreamProcessors: 8960, gpuMemoryBandwidthGbps: 896, gpuBoostClockMhz: 2452, gpu3dmarkTimeSpyScore: 24300, gpu3dmarkPortRoyalScore: 15800, lengthMm: 305, thicknessMm: 61, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "12v2x6", count: 1 }], [{ kind: "pcie_8pin_6plus2", count: 2 }]] }
   }),
   seed({
     id: "gpu-rx-7800-xt",
     category: "gpu",
-    name: "AMD Radeon RX 7800 XT 16GB",
+    name: "AMD Radeon RX 9070 16GB",
     brand: "AMD",
-    model: "RX 7800 XT",
+    model: "RX 9070",
     priceWon: 699000,
-    specs: { powerW: 263, recommendedPsuW: 700, vramGb: 16, gpuVendor: "amd", gpuArchitectureFamily: "RDNA 3", gpuStreamProcessors: 3840, gpuMemoryBandwidthGbps: 624, gpuBoostClockMhz: 2430, gpu3dmarkTimeSpyScore: 19900, gpu3dmarkPortRoyalScore: 10600, lengthMm: 302, thicknessMm: 52, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 2 }]] }
+    specs: { powerW: 220, recommendedPsuW: 650, vramGb: 16, gpuVendor: "amd", gpuArchitectureFamily: "RX 90", gpuStreamProcessors: 3584, gpuMemoryBandwidthGbps: 640, gpuBoostClockMhz: 2540, gpu3dmarkTimeSpyScore: 19900, gpu3dmarkPortRoyalScore: 10600, lengthMm: 302, thicknessMm: 52, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 2 }]] }
   }),
   seed({
     id: "gpu-rx-7600",
     category: "gpu",
-    name: "AMD Radeon RX 7600 8GB",
+    name: "AMD Radeon RX 9060 XT 8GB",
     brand: "AMD",
-    model: "RX 7600",
+    model: "RX 9060 XT",
     priceWon: 379000,
-    specs: { powerW: 165, recommendedPsuW: 550, vramGb: 8, gpuVendor: "amd", gpuArchitectureFamily: "RDNA 3", gpuStreamProcessors: 2048, gpuMemoryBandwidthGbps: 288, gpuBoostClockMhz: 2655, gpu3dmarkTimeSpyScore: 10700, gpu3dmarkPortRoyalScore: 5500, lengthMm: 235, thicknessMm: 43, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 1 }]] }
+    specs: { powerW: 160, recommendedPsuW: 550, vramGb: 8, gpuVendor: "amd", gpuArchitectureFamily: "RX 90", gpuStreamProcessors: 2048, gpuMemoryBandwidthGbps: 320, gpuBoostClockMhz: 2740, gpu3dmarkTimeSpyScore: 10700, gpu3dmarkPortRoyalScore: 5500, lengthMm: 235, thicknessMm: 43, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 1 }]] }
   }),
   seed({
     id: "gpu-rtx-4090",
     category: "gpu",
-    name: "NVIDIA GeForce RTX 4090 24GB",
+    name: "NVIDIA GeForce RTX 5090 32GB",
     brand: "NVIDIA",
-    model: "RTX 4090",
+    model: "RTX 5090",
     priceWon: 2490000,
-    specs: { powerW: 450, recommendedPsuW: 850, vramGb: 24, gpuVendor: "nvidia", gpuArchitectureFamily: "Ada Lovelace", gpuStreamProcessors: 16384, gpuMemoryBandwidthGbps: 1008, gpuBoostClockMhz: 2520, gpu3dmarkTimeSpyScore: 36000, gpu3dmarkPortRoyalScore: 25700, lengthMm: 336, thicknessMm: 75, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "12v2x6", count: 1 }], [{ kind: "pcie_8pin_6plus2", count: 3 }]] }
+    specs: { powerW: 575, recommendedPsuW: 1000, vramGb: 32, gpuVendor: "nvidia", gpuArchitectureFamily: "RTX 50", gpuStreamProcessors: 21760, gpuMemoryBandwidthGbps: 1792, gpuBoostClockMhz: 2407, gpu3dmarkTimeSpyScore: 36000, gpu3dmarkPortRoyalScore: 25700, lengthMm: 336, thicknessMm: 75, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "12v2x6", count: 1 }], [{ kind: "pcie_8pin_6plus2", count: 3 }]] }
   }),
   seed({
     id: "ssd-nvme-1tb-gen4-mid",
@@ -635,7 +635,7 @@ export const extendedSeedCatalog: Part[] = [
     brand: "PC Supporter",
     model: "REF-AM5-8C65",
     priceWon: 299000,
-    specs: { socket: "AM5", memoryType: "DDR5", cores: 8, threads: 16, boostClockGhz: 5.3, tdpW: 65, pptW: 88, integratedGraphics: true, coolerIncluded: false, maxMemorySpeedMhz: 5600 }
+    specs: { socket: "AM5", memoryType: "DDR5", cpuSeries: "Ryzen 9000", cores: 8, threads: 16, boostClockGhz: 5.3, tdpW: 65, pptW: 88, integratedGraphics: true, coolerIncluded: false, maxMemorySpeedMhz: 5600 }
   }),
   seed({
     id: "cpu-am4-6c65-ref",
@@ -649,11 +649,11 @@ export const extendedSeedCatalog: Part[] = [
   seed({
     id: "cpu-lga1700-10c-ref",
     category: "cpu",
-    name: "LGA1700 10코어 기준 프로세서",
+    name: "LGA1851 10코어 기준 프로세서",
     brand: "PC Supporter",
-    model: "REF-LGA1700-10C",
+    model: "REF-LGA1851-10C",
     priceWon: 239000,
-    specs: { socket: "LGA1700", memoryType: "DDR5", cores: 10, threads: 16, boostClockGhz: 4.8, tdpW: 65, pptW: 154, integratedGraphics: true, coolerIncluded: false, maxMemorySpeedMhz: 5600 }
+    specs: { socket: "LGA1851", memoryType: "DDR5", cpuSeries: "Core Ultra 200", cores: 10, threads: 10, boostClockGhz: 4.9, tdpW: 65, pptW: 121, integratedGraphics: true, coolerIncluded: false, maxMemorySpeedMhz: 6400 }
   }),
   seed({
     id: "cooler-air-220-multi-ref",
@@ -662,7 +662,7 @@ export const extendedSeedCatalog: Part[] = [
     brand: "PC Supporter",
     model: "REF-AIR-220",
     priceWon: 59000,
-    specs: { supportedSockets: ["AM5", "AM4", "LGA1700", "LGA1200"], maxCoolingW: 220, maxCoolerHeightMm: 158, coolerType: "air" }
+    specs: { supportedSockets: ["AM5", "AM4", "LGA1851", "LGA1700", "LGA1200"], maxCoolingW: 220, maxCoolerHeightMm: 158, coolerType: "air" }
   }),
   seed({
     id: "cooler-liquid-280-multi-ref",
@@ -671,7 +671,7 @@ export const extendedSeedCatalog: Part[] = [
     brand: "PC Supporter",
     model: "REF-AIO-280",
     priceWon: 109000,
-    specs: { supportedSockets: ["AM5", "AM4", "LGA1700", "LGA1200"], maxCoolingW: 280, coolerType: "liquid", radiatorSizeMm: 280, radiatorSizesMm: [280], radiatorPosition: "top" }
+    specs: { supportedSockets: ["AM5", "AM4", "LGA1851", "LGA1700", "LGA1200"], maxCoolingW: 280, coolerType: "liquid", radiatorSizeMm: 280, radiatorSizesMm: [280], radiatorPosition: "top" }
   }),
   seed({
     id: "mb-am5-itx-ref",
@@ -685,11 +685,11 @@ export const extendedSeedCatalog: Part[] = [
   seed({
     id: "mb-lga1700-atx-ddr5-ref",
     category: "motherboard",
-    name: "LGA1700 DDR5 ATX 확장형 기준 메인보드",
+    name: "LGA1851 DDR5 ATX 확장형 기준 메인보드",
     brand: "PC Supporter",
-    model: "REF-LGA1700-ATX-D5",
+    model: "REF-LGA1851-ATX-D5",
     priceWon: 239000,
-    specs: { socket: "LGA1700", memoryType: "DDR5", maxMemoryGb: 192, memorySlots: 4, maxMemorySpeedMhz: 7200, m2Slots: 4, m2Interfaces: ["NVMe"], m2PcieGenerations: [4], sataPorts: 6, vrmCapacityW: 240, formFactor: "ATX", pcieX16Slots: 1, pcieX8Slots: 1, fanPortCount: 5, rgb5vPortCount: 2, rgb12vPortCount: 1, rgbPortCount: 3 }
+    specs: { socket: "LGA1851", memoryType: "DDR5", maxMemoryGb: 192, memorySlots: 4, maxMemorySpeedMhz: 7200, m2Slots: 4, m2Interfaces: ["NVMe"], m2PcieGenerations: [4], sataPorts: 6, vrmCapacityW: 240, formFactor: "ATX", pcieX16Slots: 1, pcieX8Slots: 1, fanPortCount: 5, rgb5vPortCount: 2, rgb12vPortCount: 1, rgbPortCount: 3 }
   }),
   seed({
     id: "mb-am4-matx-ref",
@@ -734,7 +734,7 @@ export const extendedSeedCatalog: Part[] = [
     brand: "PC Supporter",
     model: "REF-GPU-8GB",
     priceWon: 459000,
-    specs: { powerW: 165, recommendedPsuW: 550, vramGb: 8, gpuVendor: "nvidia", gpuMemoryType: "GDDR6", gpuStreamProcessors: 3072, gpuMemoryBandwidthGbps: 288, gpuBoostClockMhz: 2460, lengthMm: 270, thicknessMm: 48, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 1 }]] }
+    specs: { powerW: 165, recommendedPsuW: 550, vramGb: 8, gpuVendor: "nvidia", gpuArchitectureFamily: "RTX 50", gpuMemoryType: "GDDR6", gpuStreamProcessors: 3072, gpuMemoryBandwidthGbps: 288, gpuBoostClockMhz: 2460, lengthMm: 270, thicknessMm: 48, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 1 }]] }
   }),
   seed({
     id: "gpu-performance-12gb-ref",
@@ -743,7 +743,7 @@ export const extendedSeedCatalog: Part[] = [
     brand: "PC Supporter",
     model: "REF-GPU-12GB",
     priceWon: 799000,
-    specs: { powerW: 285, recommendedPsuW: 750, vramGb: 12, gpuVendor: "amd", gpuMemoryType: "GDDR6", gpuStreamProcessors: 5888, gpuMemoryBandwidthGbps: 504, gpuBoostClockMhz: 2475, lengthMm: 330, thicknessMm: 62, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 2 }]] }
+    specs: { powerW: 285, recommendedPsuW: 750, vramGb: 12, gpuVendor: "amd", gpuArchitectureFamily: "RX 90", gpuMemoryType: "GDDR6", gpuStreamProcessors: 5888, gpuMemoryBandwidthGbps: 504, gpuBoostClockMhz: 2475, lengthMm: 330, thicknessMm: 62, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 2 }]] }
   }),
   seed({
     id: "gpu-creator-16gb-ref",
@@ -752,7 +752,7 @@ export const extendedSeedCatalog: Part[] = [
     brand: "PC Supporter",
     model: "REF-GPU-16GB",
     priceWon: 1090000,
-    specs: { powerW: 250, recommendedPsuW: 750, vramGb: 16, gpuVendor: "nvidia", gpuMemoryType: "GDDR6", gpuStreamProcessors: 8448, gpuMemoryBandwidthGbps: 672, gpuBoostClockMhz: 2610, lengthMm: 310, thicknessMm: 55, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 2 }]] }
+    specs: { powerW: 250, recommendedPsuW: 750, vramGb: 16, gpuVendor: "nvidia", gpuArchitectureFamily: "RTX 50", gpuMemoryType: "GDDR6", gpuStreamProcessors: 8448, gpuMemoryBandwidthGbps: 672, gpuBoostClockMhz: 2610, lengthMm: 310, thicknessMm: 55, pcieSlotWidth: 16, pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 2 }]] }
   }),
   seed({
     id: "ssd-nvme-500gb-ref",

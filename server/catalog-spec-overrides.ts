@@ -1,5 +1,5 @@
 import type { CatalogSpecOverride, CatalogSpecOverrideFieldKey, CatalogSpecOverrideOperation, CatalogSpecOverrideValue, CatalogSpecOverrideValueType } from "../shared/catalog-spec-overrides";
-import { catalogSpecOverrideFieldTypeFor } from "../shared/catalog-spec-overrides";
+import { catalogCaseSupportOverrideValueFor, catalogSpecOverrideFieldIsMissing, catalogSpecOverrideFieldTypeFor, isCatalogCaseSupportOverrideField } from "../shared/catalog-spec-overrides";
 import type { Part, PartSpecs } from "../shared/types";
 import { CATEGORY_LABELS, PART_CATEGORIES, isKnownPrice } from "../shared/types";
 import { mutateCatalogSpecOverrideRecords, readCatalogSpecOverrideRecords } from "./repository";
@@ -68,6 +68,7 @@ function scalarValueFor(type: CatalogSpecOverrideValueType, value: unknown, allo
 
 function fieldValueFor(category: Part["category"], field: string, value: unknown) {
   const type = catalogSpecOverrideFieldTypeFor(category, field);
+  if (type && isCatalogCaseSupportOverrideField(field)) return catalogCaseSupportOverrideValueFor(field, value);
   const normalized = type ? scalarValueFor(type, value, field === "hddBays") : undefined;
   if (normalized === undefined) return undefined;
   if (field === "hddBays" && (typeof normalized !== "number" || !Number.isInteger(normalized))) return undefined;
@@ -155,7 +156,7 @@ export function validateCatalogSpecOverrideBatch(input: unknown, catalog: Part[]
     else if (Object.keys(rawFields).length < 1 || Object.keys(rawFields).length > MAX_FIELDS_PER_OVERRIDE) itemErrors.push(`fields는 1개 이상 ${MAX_FIELDS_PER_OVERRIDE}개 이하로 입력해야 합니다.`);
     const fields: Partial<Record<CatalogSpecOverrideFieldKey, CatalogSpecOverrideValue>> = {};
     const existing = part ? existingOverrides[partId] : undefined;
-    const allowedMissingFields = new Set([...(part?.missingFields ?? []), ...Object.keys(existing?.fields ?? {})]);
+    const baseSpecs = part ? stripCatalogSpecOverride(part).specs : undefined;
     if (rawFields && typeof rawFields === "object" && !Array.isArray(rawFields) && part && PART_CATEGORIES.includes(category as Part["category"])) {
       for (const [field, rawValue] of Object.entries(rawFields)) {
         const fieldType = catalogSpecOverrideFieldTypeFor(part.category, field);
@@ -163,7 +164,7 @@ export function validateCatalogSpecOverrideBatch(input: unknown, catalog: Part[]
           itemErrors.push(`${field}은 ${CATEGORY_LABELS[part.category]}에서 지원하지 않는 보강 필드입니다.`);
           continue;
         }
-        if (!allowedMissingFields.has(field)) {
+        if (baseSpecs && !catalogSpecOverrideFieldIsMissing(baseSpecs, field)) {
           itemErrors.push(`${field}은 현재 누락 필드가 아니므로 override로 덮어쓸 수 없습니다.`);
           continue;
         }
@@ -172,9 +173,10 @@ export function validateCatalogSpecOverrideBatch(input: unknown, catalog: Part[]
         else fields[field as CatalogSpecOverrideFieldKey] = value;
       }
     }
+    const nextFields = { ...(existing?.fields ?? {}), ...fields };
+    if (Object.keys(nextFields).length > MAX_FIELDS_PER_OVERRIDE) itemErrors.push(`저장할 fields는 기존 보완값을 합쳐 최대 ${MAX_FIELDS_PER_OVERRIDE}개까지 허용합니다.`);
     const item: CatalogSpecOverrideValidationItem = { partId, ...(part ? { partName: part.name, category: part.category } : {}), valid: itemErrors.length === 0, errors: itemErrors };
     if (itemErrors.length === 0 && part && PART_CATEGORIES.includes(category as Part["category"])) {
-      const nextFields = { ...(existing?.fields ?? {}), ...fields };
       const sourceUnchanged = Boolean(existing && existing.manufacturerModel === manufacturerModel && existing.sourceUrl === sourceUrl);
       const nextOverride: CatalogSpecOverride = { partId, category: part.category, fields: nextFields, manufacturerModel, sourceNote, sourceUrl, ...(sourceUnchanged && existing?.sourceCheck ? { sourceCheck: existing.sourceCheck } : {}), updatedAt: existing && fieldsEqual(existing.fields, nextFields) && existing.manufacturerModel === manufacturerModel && existing.sourceNote === sourceNote && existing.sourceUrl === sourceUrl ? existing.updatedAt : new Date().toISOString() };
       const changedFields = [
@@ -198,21 +200,22 @@ export function applyCatalogSpecOverrides(parts: Part[], overrides: CatalogSpecO
   return parts.map((part) => {
     const override = overrides[part.id];
     if (!override || override.category !== part.category || !isListingAllowed(part, "all")) return part;
-    const specs = { ...part.specs };
+    const base = stripCatalogSpecOverride(part);
+    const specs = { ...base.specs };
     const appliedFields: string[] = [];
     const baseSpecValues: Record<string, unknown> = {};
     for (const [field, rawValue] of Object.entries(override.fields)) {
       const fieldType = catalogSpecOverrideFieldTypeFor(part.category, field);
-      if (!fieldType || !part.missingFields.includes(field)) continue;
+      if (!fieldType || !catalogSpecOverrideFieldIsMissing(base.specs, field)) continue;
       const value = fieldValueFor(part.category, field, rawValue);
       if (value === undefined) continue;
       const specKey = field as keyof typeof specs;
       baseSpecValues[field] = specs[specKey];
-      specs[specKey] = (fieldType === "string_list" ? value : value) as never;
+      specs[specKey] = value as never;
       appliedFields.push(field);
     }
-    if (appliedFields.length === 0) return part;
-    const remainingMissingFields = part.missingFields.filter((field) => !appliedFields.includes(field));
+    if (appliedFields.length === 0) return base;
+    const remainingMissingFields = base.missingFields.filter((field) => !appliedFields.includes(field));
     specs.catalogSpecProvenance = {
       manufacturerModel: override.manufacturerModel,
       sourceNote: override.sourceNote,
@@ -221,19 +224,20 @@ export function applyCatalogSpecOverrides(parts: Part[], overrides: CatalogSpecO
       ...(override.sourceCheck ? { sourceCheck: override.sourceCheck } : {}),
       fields: appliedFields,
       baseSpecValues,
-      baseDataQuality: part.dataQuality,
-      baseMissingFields: [...part.missingFields],
-      baseUpdatedAt: part.updatedAt
+      baseDataQuality: base.dataQuality,
+      baseMissingFields: [...base.missingFields],
+      baseUpdatedAt: base.updatedAt
     };
-    return { ...part, specs, missingFields: remainingMissingFields, dataQuality: (remainingMissingFields.length === 0 ? "manual" : "incomplete") as Part["dataQuality"], updatedAt: override.updatedAt };
+    return { ...base, specs, missingFields: remainingMissingFields, dataQuality: (remainingMissingFields.length === 0 ? "manual" : "incomplete") as Part["dataQuality"], updatedAt: override.updatedAt };
   });
 }
 
-export function stripCatalogSpecOverride(part: Part) {
+export function stripCatalogSpecOverride(part: Part): Part {
   const provenance = part.specs.catalogSpecProvenance;
   if (!provenance) return part;
   const { catalogSpecProvenance: _catalogSpecProvenance, ...specs } = part.specs;
-  for (const [field, value] of Object.entries(provenance.baseSpecValues)) {
+  for (const field of new Set([...provenance.fields, ...Object.keys(provenance.baseSpecValues)])) {
+    const value = provenance.baseSpecValues[field];
     const specKey = field as keyof typeof specs;
     if (value === undefined) delete specs[specKey];
     else specs[specKey] = value as never;

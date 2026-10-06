@@ -49,6 +49,16 @@ vi.mock("pg", () => ({
         const hasOverrides = Object.keys(fakeDatabase.coolingFanOverrides).length > 0;
         return { rows: hasOverrides ? [{ payload: structuredClone(fakeDatabase.coolingFanOverrides), updated_at: fakeDatabase.coolingFanOverrideUpdatedAt }] : [], rowCount: hasOverrides ? 1 : 0 };
       }
+      // readAccessoryVersionStamp — accessories + cooling_fan override 스탬프를
+      // 가짜 상태로 다시 계산해 replica 변경 감지 시나리오가 실제로 캐시를 무효화한다.
+      if (sql.includes("count(*) FROM catalog_accessories") && sql.includes("AS stamp")) {
+        const accessoryMax = fakeDatabase.rows.length > 0
+          ? new Date(Math.max(...fakeDatabase.rows.map((row) => new Date(row.updated_at).getTime()))).toISOString()
+          : "-";
+        const overrideCount = Object.keys(fakeDatabase.coolingFanOverrides).length;
+        const overrideMax = fakeDatabase.coolingFanOverrideUpdatedAt ? new Date(fakeDatabase.coolingFanOverrideUpdatedAt).toISOString() : "-";
+        return { rows: [{ stamp: `${fakeDatabase.rows.length}:${accessoryMax}:${overrideCount}:${overrideMax}` }], rowCount: 1 };
+      }
       throw new Error(`Unexpected synthetic PostgreSQL pool query: ${sql.slice(0, 140)}`);
     }
 
@@ -68,7 +78,7 @@ vi.mock("pg", () => ({
             transactionCoolingFanOverrideUpdatedAt = fakeDatabase.coolingFanOverrideUpdatedAt;
             return { rows: [], rowCount: 0 };
           }
-          if (sql === "ROLLBACK" || sql.includes("pg_advisory_xact_lock") || sql.includes("CREATE TABLE IF NOT EXISTS catalog_parts")) {
+          if (sql === "ROLLBACK" || sql.includes("pg_advisory_xact_lock") || sql.includes("CREATE TABLE IF NOT EXISTS catalog_parts") || sql.startsWith("SELECT pg_notify")) {
             return { rows: [], rowCount: 0 };
           }
           if (sql === "COMMIT") {
@@ -266,6 +276,9 @@ describe("PostgreSQL accessory persistence", () => {
       fakeDatabase.rows.push(databaseRow(writtenByAnotherReplica));
       expect((await accessories.loadAccessories()).some((item) => item.id === writtenByAnotherReplica.id)).toBe(true);
 
+      // 캐시가 따뜻할 때는 버전 스탬프가 같으면 payload 읽기를 시도하지 않는다 —
+      // 읽기 실패 전파를 검증하려면 스탬프를 바꿔 실제 읽기를 강제한다.
+      fakeDatabase.rows.push(databaseRow(accessory({ id: "stamp-buster-fan", sourceProductCode: "stamp-buster-pcode" })));
       fakeDatabase.failAccessoryRead = true;
       await expect(accessories.loadAccessories()).rejects.toThrow("synthetic PostgreSQL accessory read outage");
       await expect(readFile(strayLocalJson, "utf8")).resolves.toBe("{ deliberately invalid local JSON");

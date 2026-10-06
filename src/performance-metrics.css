@@ -1,0 +1,14 @@
+.performance-index-item { position: relative; }
+.performance-metric-help { position: static; display: inline-flex; flex: 0 0 auto; }
+.performance-metric-help-button { display: inline-flex; align-items: center; justify-content: center; width: 21px; height: 21px; min-width: 21px; min-height: 21px; padding: 0; border: 1px solid var(--muted); border-radius: 50%; background: transparent; color: var(--muted); font: inherit; font-size: 11px; font-weight: 700; cursor: help; }
+.performance-metric-help-button:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
+.performance-metric-tooltip { position: absolute; z-index: 30; top: 46px; right: 0; width: min(260px, 72vw); padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); background: var(--surface, #fff); box-shadow: 0 6px 18px rgba(0, 0, 0, .12); font-size: 12px; font-weight: 400; line-height: 1.6; white-space: normal; }
+.performance-index-item:nth-child(odd) .performance-metric-tooltip { left: 0; right: auto; }
+.performance-metric-tooltip[hidden] { display: none; }
+.performance-metric-sources { display: flex; flex-wrap: wrap; gap: 12px; margin: 12px 0 0; font-size: 11px; }
+.performance-metric-sources a { color: var(--teal); }
+@media (max-width: 640px) {
+  .performance-metric-help-button { position: relative; width: 44px; height: 44px; min-width: 44px; min-height: 44px; border: 0; }
+  .performance-metric-help-button::before { position: absolute; content: ""; width: 28px; height: 28px; border: 1px solid var(--muted); border-radius: 50%; pointer-events: none; }
+  .performance-index-item { padding: 12px; }
+}

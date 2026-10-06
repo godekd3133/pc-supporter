@@ -1,3 +1,4 @@
+import { gamingGameOptionFor } from "../gaming-catalog";
 import type { AccessorySelection, BuildGenerationRequest, BuildSelection, PartSelection, RecommendationPreferences } from "../types";
 import { isRecommendationPriority } from "../types";
 import { BUILD_INPUT_MAX_ID_LENGTH, BUILD_INPUT_MAX_M2_SLOTS, BUILD_INPUT_MAX_SELECTIONS_PER_LIST } from "../build-input-limits";
@@ -19,6 +20,8 @@ const RESOLUTIONS = ["1080p", "1440p", "4k"] as const;
 const REFRESH_RATES = [60, 144, 240] as const;
 const GRAPHICS_PRESETS = ["competitive", "balanced", "high"] as const;
 const UPSCALING_MODES = ["native", "quality", "balanced"] as const;
+const GPU_VENDORS = ["nvidia", "amd", "intel"] as const;
+const PINNABLE_CATEGORIES = ["cpu", "cooler", "motherboard", "memory", "gpu", "ssd", "hdd", "case", "psu"] as const;
 
 export function emptyBuild(): BuildSelection {
   return { memory: [], ssd: [], hdd: [], accessories: [], useIntegratedGraphics: true };
@@ -205,9 +208,15 @@ export function parseRecommendationPreferences(value: unknown): RecommendationPr
   const gamingGraphicsPreset = GRAPHICS_PRESETS.includes(value.gamingGraphicsPreset as typeof GRAPHICS_PRESETS[number]) ? value.gamingGraphicsPreset as RecommendationPreferences["gamingGraphicsPreset"] : undefined;
   const gamingRayTracing = typeof value.gamingRayTracing === "boolean" ? value.gamingRayTracing : undefined;
   const gamingUpscaling = UPSCALING_MODES.includes(value.gamingUpscaling as typeof UPSCALING_MODES[number]) ? value.gamingUpscaling as RecommendationPreferences["gamingUpscaling"] : undefined;
+  const gamingMode = value.gamingMode === "budget" || value.gamingMode === "target_fps" ? value.gamingMode : undefined;
+  const gamingTargetFps = typeof value.gamingTargetFps === "number" && Number.isInteger(value.gamingTargetFps) && value.gamingTargetFps >= 30 && value.gamingTargetFps <= 500 ? value.gamingTargetFps : undefined;
+  const gpuVendorPreference = GPU_VENDORS.includes(value.gpuVendorPreference as typeof GPU_VENDORS[number]) ? value.gpuVendorPreference as RecommendationPreferences["gpuVendorPreference"] : undefined;
   return {
     priority,
     profile,
+    ...(profile === "gaming" && gamingMode ? { gamingMode } : {}),
+    ...(profile === "gaming" && gamingTargetFps !== undefined ? { gamingTargetFps } : {}),
+    ...(profile === "gaming" && gpuVendorPreference ? { gpuVendorPreference } : {}),
     ...(budgetWon === undefined ? {} : { budgetWon }),
     listingPolicy,
     ...(performanceTier ? { performanceTier } : {}),
@@ -224,6 +233,12 @@ export function parseBuildGenerationRequest(value: unknown): BuildGenerationRequ
   if (!record(value)) return { errors: ["자동 견적 요청은 객체여야 합니다."] };
   const errors: string[] = [];
   const profile = PROFILES.includes(value.profile as typeof PROFILES[number]) ? value.profile as RecommendationPreferences["profile"] : "general";
+  if (value.gamingMode !== undefined && value.gamingMode !== "budget" && value.gamingMode !== "target_fps") errors.push("gamingMode는 budget 또는 target_fps여야 합니다.");
+  if (value.gamingTargetFps !== undefined && (typeof value.gamingTargetFps !== "number" || !Number.isInteger(value.gamingTargetFps) || value.gamingTargetFps < 30 || value.gamingTargetFps > 500)) errors.push("목표 FPS는 30부터 500 사이의 정수여야 합니다.");
+  if (value.gamingMode === "target_fps" && (profile !== "gaming" || !Array.isArray(value.gamingGameIds) || value.gamingGameIds.length === 0 || value.gamingTargetFps === undefined)) errors.push("게임 목표 견적에는 게임과 목표 FPS가 필요합니다.");
+  if (value.gamingMode === "target_fps" && Array.isArray(value.gamingGameIds) && value.gamingGameIds.some((id) => typeof id !== "string" || !gamingGameOptionFor(id))) errors.push("선택한 게임 ID를 확인해 주세요.");
+  if (value.gamingMode === "target_fps" && value.includeGpu === false) errors.push("목표 FPS 견적에는 외장 그래픽카드가 필요합니다.");
+  if (value.gamingMode !== undefined && profile !== "gaming") errors.push("게임 견적 모드는 게이밍 용도에서만 선택할 수 있습니다.");
   const priority = isRecommendationPriority(value.priority) ? value.priority : "balanced";
   const budgetWon = Number(value.budgetWon);
   if (!Number.isFinite(budgetWon) || !Number.isInteger(budgetWon) || budgetWon <= 0 || budgetWon > 100_000_000) errors.push("budgetWon은 1원부터 100,000,000원 사이의 정수여야 합니다.");
@@ -237,7 +252,8 @@ export function parseBuildGenerationRequest(value: unknown): BuildGenerationRequ
   if (value.gamingGraphicsPreset !== undefined && !GRAPHICS_PRESETS.includes(value.gamingGraphicsPreset as typeof GRAPHICS_PRESETS[number])) errors.push("gamingGraphicsPreset은 competitive, balanced, high 중 하나여야 합니다.");
   if (value.gamingRayTracing !== undefined && typeof value.gamingRayTracing !== "boolean") errors.push("gamingRayTracing은 boolean이어야 합니다.");
   if (value.gamingUpscaling !== undefined && !UPSCALING_MODES.includes(value.gamingUpscaling as typeof UPSCALING_MODES[number])) errors.push("gamingUpscaling은 native, quality, balanced 중 하나여야 합니다.");
-  const memoryCapacityGb = Number(value.memoryCapacityGb ?? 32);
+  if (value.gamingTestbedPhase1 !== undefined && typeof value.gamingTestbedPhase1 !== "boolean") errors.push("gamingTestbedPhase1은 boolean이어야 합니다.");
+  const memoryCapacityGb = Number(value.memoryCapacityGb ?? (value.gamingTestbedPhase1 === true && profile === "gaming" ? 16 : 32));
   if (![16, 32, 64, 128].includes(memoryCapacityGb)) errors.push("memoryCapacityGb는 16, 32, 64, 128 중 하나여야 합니다.");
   const listingPolicyRaw = value.listingPolicy === undefined ? (value.includeNonRetail === true ? "all" : "retail_only") : String(value.listingPolicy);
   if (!LISTING_POLICIES.includes(listingPolicyRaw as typeof LISTING_POLICIES[number])) errors.push("listingPolicy는 retail_only, include_bulk, all 중 하나여야 합니다.");
@@ -247,9 +263,32 @@ export function parseBuildGenerationRequest(value: unknown): BuildGenerationRequ
   if (!Number.isInteger(hddCount) || hddCount < 0 || hddCount > 8) errors.push("hddCount는 0부터 8 사이의 정수여야 합니다.");
   const hddCapacityGb = Number(value.hddCapacityGb ?? 4000);
   if (!Number.isInteger(hddCapacityGb) || hddCapacityGb <= 0 || hddCapacityGb > 100_000) errors.push("hddCapacityGb는 1부터 100,000 사이의 정수여야 합니다.");
+  if (value.gpuVendorPreference !== undefined && !GPU_VENDORS.includes(value.gpuVendorPreference as typeof GPU_VENDORS[number])) errors.push("gpuVendorPreference는 nvidia, amd, intel 중 하나여야 합니다.");
+  let pinnedParts: BuildGenerationRequest["pinnedParts"];
+  if (value.pinnedParts !== undefined) {
+    if (!record(value.pinnedParts)) {
+      errors.push("pinnedParts는 카테고리별 부품 ID 객체여야 합니다.");
+    } else {
+      pinnedParts = {};
+      for (const [category, partId] of Object.entries(value.pinnedParts)) {
+        if (!PINNABLE_CATEGORIES.includes(category as typeof PINNABLE_CATEGORIES[number])) {
+          errors.push(`pinnedParts 카테고리 '${category}'는 지원하지 않습니다.`);
+          continue;
+        }
+        if (typeof partId !== "string" || partId.trim().length === 0 || partId.trim().length > BUILD_INPUT_MAX_ID_LENGTH) {
+          errors.push(`pinnedParts.${category}는 비어 있지 않은 ${BUILD_INPUT_MAX_ID_LENGTH}자 이하 부품 ID여야 합니다.`);
+          continue;
+        }
+        pinnedParts[category as typeof PINNABLE_CATEGORIES[number]] = partId.trim();
+      }
+    }
+  }
   if (errors.length > 0) return { errors };
   return {
     request: {
+      ...(value.gamingMode === "budget" || value.gamingMode === "target_fps" ? { gamingMode: value.gamingMode } : {}),
+      ...(typeof value.gamingTargetFps === "number" ? { gamingTargetFps: value.gamingTargetFps } : {}),
+      ...(typeof value.gamingTestbedPhase1 === "boolean" ? { gamingTestbedPhase1: value.gamingTestbedPhase1 } : {}),
       profile,
       budgetWon,
       includeGpu: typeof value.includeGpu === "boolean" ? value.includeGpu : profile === "gaming",
@@ -266,7 +305,9 @@ export function parseBuildGenerationRequest(value: unknown): BuildGenerationRequ
       hddCapacityGb,
       hddCount,
       includeNonRetail: listingPolicyRaw === "all",
-      listingPolicy: listingPolicyRaw as BuildGenerationRequest["listingPolicy"]
+      listingPolicy: listingPolicyRaw as BuildGenerationRequest["listingPolicy"],
+      ...(pinnedParts !== undefined && Object.keys(pinnedParts).length > 0 ? { pinnedParts } : {}),
+      ...(GPU_VENDORS.includes(value.gpuVendorPreference as typeof GPU_VENDORS[number]) ? { gpuVendorPreference: value.gpuVendorPreference as BuildGenerationRequest["gpuVendorPreference"] } : {})
     },
     errors: []
   };

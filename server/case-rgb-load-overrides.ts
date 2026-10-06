@@ -1,5 +1,7 @@
 import type { CaseRgbLoadOverride, Part, RgbDeviceLoadProvenance } from "../shared/types";
 import { CASE_RGB_LOAD_OVERRIDES_PATH, readJson, writeJson } from "./storage";
+import { publishInstanceEvent } from "./instance-events";
+import { pushRuntimeConfigToDatabase } from "./runtime-config-store";
 
 export type CaseRgbLoadOverrideMap = Record<string, CaseRgbLoadOverride>;
 export type CaseRgbLoadOverrideOperation = "create" | "update" | "unchanged";
@@ -243,6 +245,8 @@ export async function saveCaseRgbLoadOverrides(values: CaseRgbLoadOverride[]) {
   return withOverrideWriteLock(async (overrides) => {
     for (const value of values) overrides[value.partId] = value;
     await writeJson(CASE_RGB_LOAD_OVERRIDES_PATH, overrides);
+    await pushRuntimeConfigToDatabase("case-rgb-load-overrides", overrides);
+    void publishInstanceEvent("config:file", { name: "case-rgb-load-overrides" });
     return values;
   });
 }
@@ -252,6 +256,8 @@ export async function deleteCaseRgbLoadOverride(partId: string) {
     if (!overrides[partId]) return false;
     delete overrides[partId];
     await writeJson(CASE_RGB_LOAD_OVERRIDES_PATH, overrides);
+    await pushRuntimeConfigToDatabase("case-rgb-load-overrides", overrides);
+    void publishInstanceEvent("config:file", { name: "case-rgb-load-overrides" });
     return true;
   });
 }

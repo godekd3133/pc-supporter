@@ -292,3 +292,40 @@ html[data-theme="dark"] .mobile-home-view { --home-action-primary: #1b64da; }
 @media (prefers-reduced-motion: reduce) {
   .mobile-cache-disclosure > summary > svg:last-child { transition: none; }
 }
+
+/* 견적 여정 카드 — 홈 로비의 진행 상황·다음 단계 안내 */
+.home-journey { margin: 0 0 1.25rem; padding: 1.1rem 1.2rem; border: 1px solid var(--line); border-radius: 1rem; background: var(--surface); }
+.home-journey-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin-bottom: .8rem; }
+.home-journey-heading h2 { margin: 0; color: var(--ink); font-size: 1.0625rem; font-weight: 700; }
+.home-journey-heading p { margin: .15rem 0 0; color: var(--muted); font-size: .8125rem; }
+.home-journey-progress { color: var(--muted); font-family: "DM Mono", monospace; font-size: .8125rem; }
+.home-journey-steps { display: flex; flex-wrap: wrap; gap: .4rem; margin: 0 0 .9rem; padding: 0; list-style: none; }
+.home-journey-step { display: inline-flex; align-items: center; gap: .4rem; padding: .35rem .65rem; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: .75rem; font-weight: 600; }
+.home-journey-step.done { border-color: var(--teal); color: var(--ink); background: var(--teal-soft); }
+.home-journey-step.active { border-color: var(--ink); color: var(--ink); }
+.home-journey-step-icon { display: inline-flex; font-size: .75rem; }
+.home-journey-step.done .home-journey-step-icon { color: var(--teal-deep); }
+.home-journey-next { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .75rem .9rem; border-radius: .75rem; background: var(--teal-soft); }
+.home-journey-next-copy { display: flex; flex-direction: column; gap: .15rem; min-width: 0; }
+.home-journey-next-copy strong { color: var(--ink); font-size: .875rem; }
+.home-journey-next-copy small { color: var(--muted); font-size: .75rem; line-height: 1.5; }
+.home-journey-next .button { flex: 0 0 auto; }
+.home-journey-recent { margin-top: .9rem; padding-top: .8rem; border-top: 1px solid var(--line); }
+.home-journey-recent-label { display: inline-flex; align-items: center; gap: .4rem; color: var(--muted); font-size: .75rem; font-weight: 600; }
+.home-journey-recent-list { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .55rem; }
+.home-journey-recent-item { display: inline-flex; flex-direction: column; align-items: flex-start; gap: .1rem; max-width: 16rem; padding: .5rem .75rem; border: 1px solid var(--line); border-radius: .65rem; background: var(--surface); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.home-journey-recent-item:hover { border-color: var(--teal); }
+.home-journey-recent-item strong { max-width: 100%; overflow: hidden; font-size: .8125rem; text-overflow: ellipsis; white-space: nowrap; }
+.home-journey-recent-item small { color: var(--muted); font-size: .7rem; }
+
+/* 모바일 컴팩트 변형 — MobileHomeView 안에 들어간다 */
+.mobile-home-view .home-journey.compact { margin: 0 0 var(--home-section-space); padding: 0; border: 0; background: transparent; }
+.mobile-home-view .home-journey.compact .home-journey-heading h2 { font-size: var(--home-type-section); }
+.mobile-home-view .home-journey.compact .home-journey-steps { gap: .3rem; }
+.mobile-home-view .home-journey.compact .home-journey-step { padding: .3rem .55rem; font-size: var(--home-type-caption); }
+.mobile-home-view .home-journey.compact .home-journey-next { align-items: stretch; flex-direction: column; gap: .6rem; }
+.mobile-home-view .home-journey.compact .home-journey-next .button { justify-content: center; width: 100%; }
+
+@media (max-width: 760px) {
+  .home-page > .home-journey { display: none; }
+}

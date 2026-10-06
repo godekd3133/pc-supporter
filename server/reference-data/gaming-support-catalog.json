@@ -1,0 +1,271 @@
+{
+  "schemaVersion": 1,
+  "refreshedAt": "2026-10-04T22:15:40.190Z",
+  "parts": [
+    {
+      "id": "danawa-psu-98760842",
+      "category": "psu",
+      "name": "마이크로닉스 COOLMAX ELITE II 600W",
+      "brand": "마이크로닉스",
+      "model": "마이크로닉스 COOLMAX ELITE II 600W",
+      "imageUrl": "https://img.danuri.io/catalog-image/842/760/098/61197b2a76764e45872d94ca1a71ede7.jpg?shrink=160:160&_v=20261005045748",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=98760842",
+      "source": "danawa",
+      "sourceProductCode": "98760842",
+      "sourceCategoryId": "112777",
+      "listingType": "retail",
+      "priceWon": 44880,
+      "rawSpecText": "ATX 파워 / 600W / 케이블연결: 케이블일체형 / 전압변동: ±0.4% / +12V 싱글레일 / +12V 가용률: 100% / 120mm 팬 / 깊이: 140mm / 무상 5년 / [커넥터] 메인전원: 24핀(20+4) / 보조전원: (4+4)핀x1 / PCIe 8핀(6+2): 2개 / SATA: 4개 / IDE 4핀: 3개 / [부가기능] 대기전력 1W 미만",
+      "specs": {
+        "pciePowerConnectors": {
+          "pcie_8pin_6plus2": 2
+        },
+        "wattageW": 600,
+        "psuDepthMm": 140,
+        "psuCableType": "fixed",
+        "psuRailType": "single",
+        "psuFormFactor": "ATX"
+      },
+      "dataQuality": "live",
+      "missingFields": [],
+      "updatedAt": "2026-10-04T22:15:30.048Z",
+      "priceCheckedAt": "2026-10-04T22:15:30.048Z"
+    },
+    {
+      "id": "danawa-psu-99732404",
+      "category": "psu",
+      "name": "마이크로닉스 COOLMAX FOCUS II 700W ETA브론즈 ATX3.1",
+      "brand": "마이크로닉스",
+      "model": "마이크로닉스 COOLMAX FOCUS II 700W ETA브론즈 ATX3.1",
+      "imageUrl": "https://img.danuri.io/catalog-image/404/732/099/521bad26561e45d2ba05fad060eeeee7.jpg?shrink=160:160&_v=20261005043344",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=99732404",
+      "source": "danawa",
+      "sourceProductCode": "99732404",
+      "sourceCategoryId": "112777",
+      "listingType": "retail",
+      "priceWon": 70130,
+      "rawSpecText": "ATX 파워 / 700W / ETA인증: BRONZE / LAMBDA인증: STANDARD+ / +12V 싱글레일 / +12V 가용률: 100% / 액티브PFC / PF(역률): 99% / 120mm 팬 / 깊이: 140mm / 무상 5년 / [커넥터] 메인전원: 24핀(20+4) / 보조전원: 8핀x1, 4핀x1 / PCIe 16핀(12+4): 12V2x6 1개 / PCIe 8핀(6+2): 2개 / SATA: 5개 / IDE 4핀: 3개 / [부가기능] 대기전력 1W 미만 / 플랫케이블",
+      "specs": {
+        "pciePowerConnectors": {
+          "pcie_8pin_6plus2": 2,
+          "12v2x6": 1
+        },
+        "wattageW": 700,
+        "psuDepthMm": 140,
+        "psuRailType": "single",
+        "psuFormFactor": "ATX"
+      },
+      "dataQuality": "live",
+      "missingFields": [],
+      "updatedAt": "2026-10-04T22:15:30.721Z",
+      "priceCheckedAt": "2026-10-04T22:15:30.721Z"
+    },
+    {
+      "id": "danawa-psu-74484749",
+      "category": "psu",
+      "name": "마이크로닉스 WIZMAX 750W 80PLUS실버 ATX3.1",
+      "brand": "마이크로닉스",
+      "model": "마이크로닉스 WIZMAX 750W 80PLUS실버 ATX3.1",
+      "imageUrl": "https://img.danuri.io/catalog-image/749/484/074/991d6eccb7144a97ab9bf0f410ba33a1.jpg?shrink=160:160&_v=20261005045814",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=74484749",
+      "source": "danawa",
+      "sourceProductCode": "74484749",
+      "sourceCategoryId": "112777",
+      "listingType": "retail",
+      "priceWon": 87190,
+      "rawSpecText": "ATX 파워 / 750W / 80 PLUS 실버 / 전압변동: ±0.9% / +12V 싱글레일 / +12V 가용률: 100% / 액티브PFC / PF(역률): 99% / 120mm 팬 / 깊이: 140mm / 무상 6년 / [커넥터] 메인전원: 24핀(20+4) / 보조전원: 8핀x1, (4+4)핀x1 / PCIe 16핀(12+4): 12V2x6 1개 / PCIe 8핀(6+2): 2개 / SATA: 6개 / IDE 4핀: 4개 / [부가기능] 플랫케이블 / 대기전력 1W 미만 / 자동 팬 조절 / 프리볼트",
+      "specs": {
+        "pciePowerConnectors": {
+          "12v2x6": 1,
+          "pcie_8pin_6plus2": 2
+        },
+        "wattageW": 750,
+        "psuDepthMm": 140,
+        "psuRailType": "single",
+        "efficiency": "80PLUS Silver",
+        "psuFormFactor": "ATX"
+      },
+      "dataQuality": "live",
+      "missingFields": [],
+      "updatedAt": "2026-10-04T22:15:31.444Z",
+      "priceCheckedAt": "2026-10-04T22:15:31.444Z"
+    },
+    {
+      "id": "danawa-psu-74484791",
+      "category": "psu",
+      "name": "마이크로닉스 WIZMAX 850W 80PLUS실버 ATX3.1",
+      "brand": "마이크로닉스",
+      "model": "마이크로닉스 WIZMAX 850W 80PLUS실버 ATX3.1",
+      "imageUrl": "https://img.danuri.io/catalog-image/791/484/074/63e6c5a4c6904f8c8b6354b109ab4b9b.jpg?shrink=160:160&_v=20261005045928",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=74484791",
+      "source": "danawa",
+      "sourceProductCode": "74484791",
+      "sourceCategoryId": "112777",
+      "listingType": "retail",
+      "priceWon": 106590,
+      "rawSpecText": "ATX 파워 / 850W / 80 PLUS 실버 / 전압변동: ±0.9% / +12V 싱글레일 / +12V 가용률: 100% / 액티브PFC / PF(역률): 99% / 120mm 팬 / 깊이: 140mm / 무상 6년 / [커넥터] 메인전원: 24핀(20+4) / 보조전원: 8핀x1, (4+4)핀x1 / PCIe 16핀(12+4): 12V2x6 1개 / PCIe 8핀(6+2): 2개 / SATA: 8개 / IDE 4핀: 4개 / [부가기능] 자동 팬 조절 / 대기전력 1W 미만 / 프리볼트 / 플랫케이블",
+      "specs": {
+        "pciePowerConnectors": {
+          "12v2x6": 1,
+          "pcie_8pin_6plus2": 2
+        },
+        "wattageW": 850,
+        "psuDepthMm": 140,
+        "psuRailType": "single",
+        "efficiency": "80PLUS Silver",
+        "psuFormFactor": "ATX"
+      },
+      "dataQuality": "live",
+      "missingFields": [],
+      "updatedAt": "2026-10-04T22:15:37.538Z",
+      "priceCheckedAt": "2026-10-04T22:15:37.538Z"
+    },
+    {
+      "id": "danawa-psu-90643607",
+      "category": "psu",
+      "name": "마이크로닉스 WIZMAX G-1000W 80PLUS골드 ATX3.1",
+      "brand": "마이크로닉스",
+      "model": "마이크로닉스 WIZMAX G-1000W 80PLUS골드 ATX3.1",
+      "imageUrl": "https://img.danuri.io/catalog-image/607/643/090/ee27d0648b024abc98fbc4da1a98da8a.jpg?shrink=160:160&_v=20261005045712",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=90643607",
+      "source": "danawa",
+      "sourceProductCode": "90643607",
+      "sourceCategoryId": "112777",
+      "listingType": "retail",
+      "priceWon": 193000,
+      "rawSpecText": "ATX 파워 / 1000W / 80 PLUS 골드 / 케이블연결: 풀모듈러 / ETA인증: GOLD / LAMBDA인증: A+ / 전압변동: ±0.8% / +12V 싱글레일 / +12V 가용률: 100% / 액티브PFC / PF(역률): 99% / 140mm 팬 / 깊이: 150mm / 무상 10년 / [커넥터] 메인전원: 24핀(20+4) / 보조전원: (4+4)핀x2 / PCIe 16핀(12+4): 12V2x6 1개 / PCIe 8핀(6+2): 4개 / SATA: 8개 / IDE 4핀: 4개 / [부가기능] 팬리스모드 / 자동 팬 조절 / 대기전력 1W 미만 / 프리볼트",
+      "specs": {
+        "pciePowerConnectors": {
+          "12v2x6": 1,
+          "pcie_8pin_6plus2": 4
+        },
+        "wattageW": 1000,
+        "psuDepthMm": 150,
+        "psuCableType": "fully_modular",
+        "psuRailType": "single",
+        "efficiency": "80PLUS Gold",
+        "psuFormFactor": "ATX"
+      },
+      "dataQuality": "live",
+      "missingFields": [],
+      "updatedAt": "2026-10-04T22:15:38.357Z",
+      "priceCheckedAt": "2026-10-04T22:15:38.357Z"
+    },
+    {
+      "id": "danawa-case-124217320",
+      "category": "case",
+      "name": "3RSYS L200 (블랙)",
+      "brand": "3RSYS",
+      "model": "3RSYS L200 (블랙)",
+      "imageUrl": "https://img.danuri.io/catalog-image/320/217/124/f85cf5d016fe438093f39f1f4bae57d0.jpeg?shrink=160:160&_v=20261004080457",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=124217320",
+      "source": "danawa",
+      "sourceProductCode": "124217320",
+      "sourceCategoryId": "112775",
+      "listingType": "retail",
+      "priceWon": 32690,
+      "rawSpecText": "ATX 케이스 / 지원보드규격: M-ATX , ITX / VGA 길이: 410mm / CPU쿨러 높이: 167mm / 미니타워 / [패널] 전면 패널 타입: 강화유리 / 측면 패널 타입: 강화유리 / [쿨러/튜닝] 쿨링팬: 총3개 / LED팬: 3개 / 후면: 120mm LED x1 / 내부 측면: 120mm LED x2 / [크기] 너비(W): 210mm / 높이(H): 418mm / 깊이(D): 423mm / [호환성] 지원파워규격: 표준-ATX / 파워 장착 길이: 200mm / 파워 위치: 하단후면 / [부가기능] LED 색상: RGB",
+      "specs": {
+        "maxGpuLengthMm": 410,
+        "maxCoolerHeightMm": 167,
+        "maxPsuLengthMm": 200,
+        "fanCount": 3,
+        "rgbDeviceCount": 3,
+        "rgbDeviceVoltage": "12V",
+        "radiatorSizesMm": [],
+        "radiatorSupports": [],
+        "motherboardFormFactors": [
+          "mATX",
+          "ITX"
+        ],
+        "supportedPsuFormFactors": [
+          "ATX"
+        ]
+      },
+      "dataQuality": "incomplete",
+      "missingFields": [
+        "hddBays"
+      ],
+      "updatedAt": "2026-10-04T22:15:38.954Z",
+      "priceCheckedAt": "2026-10-04T22:15:38.954Z"
+    },
+    {
+      "id": "danawa-case-94088714",
+      "category": "case",
+      "name": "앱코 G26 메가플로우 MESH (블랙)",
+      "brand": "앱코",
+      "model": "앱코 G26 메가플로우 MESH (블랙)",
+      "imageUrl": "https://img.danuri.io/catalog-image/714/088/094/99219179c3764cc793456fb10b76b248.jpg?shrink=160:160&_v=20261004080351",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=94088714",
+      "source": "danawa",
+      "sourceProductCode": "94088714",
+      "sourceCategoryId": "112775",
+      "listingType": "retail",
+      "priceWon": 39900,
+      "rawSpecText": "ATX 케이스 / 지원보드규격: ATX , M-ATX , M-ITX / VGA 길이: 400mm / CPU쿨러 높이: 165mm / 미들타워 / [패널] 전면 패널 타입: 메쉬 / 측면 패널 타입: 강화유리 / [쿨러/튜닝] 쿨링팬: 총3개 / LED팬: 3개 / 후면: 120mm LED x1 / 전면: 140mm LED x2 / [크기] 너비(W): 212mm / 깊이(D): 420mm / 높이(H): 485mm / [호환성] 지원파워규격: 표준-ATX / 파워 장착 길이: 200mm / 파워 위치: 하단후면 / [부가기능] LED 색상: RGB",
+      "specs": {
+        "maxGpuLengthMm": 400,
+        "maxCoolerHeightMm": 165,
+        "maxPsuLengthMm": 200,
+        "fanCount": 3,
+        "rgbDeviceCount": 3,
+        "rgbDeviceVoltage": "12V",
+        "radiatorSizesMm": [],
+        "radiatorSupports": [],
+        "motherboardFormFactors": [
+          "ATX",
+          "mATX",
+          "ITX"
+        ],
+        "supportedPsuFormFactors": [
+          "ATX"
+        ]
+      },
+      "dataQuality": "incomplete",
+      "missingFields": [
+        "hddBays"
+      ],
+      "updatedAt": "2026-10-04T22:15:39.487Z",
+      "priceCheckedAt": "2026-10-04T22:15:39.487Z"
+    },
+    {
+      "id": "danawa-case-32861099",
+      "category": "case",
+      "name": "darkFlash DS900 ARGB 강화유리 (블랙)",
+      "brand": "darkFlash",
+      "model": "darkFlash DS900 ARGB 강화유리 (블랙)",
+      "imageUrl": "https://img.danuri.io/catalog-image/099/861/032/a8c00370c99644488731eb02fddb5328.jpg?shrink=160:160&_v=20261004080444",
+      "danawaUrl": "https://prod.danawa.com/info/?pcode=32861099",
+      "source": "danawa",
+      "sourceProductCode": "32861099",
+      "sourceCategoryId": "112775",
+      "listingType": "retail",
+      "priceWon": 64200,
+      "rawSpecText": "ATX 케이스 / 지원보드규격: ATX , M-ATX , M-ITX / VGA 길이: 425mm / CPU쿨러 높이: 170mm / 미들타워 / [패널] 전면 패널 타입: 강화유리 / 측면 패널 타입: 강화유리 / [쿨러/튜닝] 쿨링팬: 총4개 / LED팬: 4개 / 후면: 120mm LED x1 / 내부 측면: 120mm LED x3 / [크기] 너비(W): 218mm / 깊이(D): 434mm / 높이(H): 454mm / [호환성] 지원파워규격: 표준-ATX / 파워 장착 길이: 260mm / 파워 위치: 하단후면 / [부가기능] LED 색상: ARGB / [변경사항] 24년 4월 장착쿨링팬 C6 ARGB → C7 ARGB으로 변경 / 24년 8월 상단 라디에이터 120, 140, 240, 280, 360 →120, 240, 360으로 변경",
+      "specs": {
+        "maxGpuLengthMm": 425,
+        "maxCoolerHeightMm": 170,
+        "maxPsuLengthMm": 260,
+        "fanCount": 4,
+        "rgbDeviceCount": 4,
+        "rgbDeviceVoltage": "5V",
+        "radiatorSizesMm": [],
+        "radiatorSupports": [],
+        "motherboardFormFactors": [
+          "ATX",
+          "mATX",
+          "ITX"
+        ],
+        "supportedPsuFormFactors": [
+          "ATX"
+        ]
+      },
+      "dataQuality": "incomplete",
+      "missingFields": [
+        "hddBays"
+      ],
+      "updatedAt": "2026-10-04T22:15:40.190Z",
+      "priceCheckedAt": "2026-10-04T22:15:40.190Z"
+    }
+  ]
+}

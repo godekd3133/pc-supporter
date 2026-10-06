@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { generatedDraftSummaryFor, generatedVariantGamingConditionText, generatorVariantsImportPreviewFor, generatorVariantsJsonFor, savedPresetConditionTagsFor } from "./BuildGeneratorView";
+import { generatedDraftSummaryFor, generatedGamingGpuChoiceText, generatedVariantGamingConditionText, generatorMemoryParamFor, generatorVariantsImportPreviewFor, generatorVariantsJsonFor, phase1BriefInterpretationFor, savedPresetConditionTagsFor } from "./BuildGeneratorView";
 import type { BuildGenerationResult } from "../shared/types";
 import type { SavedGeneratorPreset } from "../shared/generator-preset";
 
@@ -61,7 +61,7 @@ function importPayload(draftOverrides: Record<string, unknown> | null = {}, extr
 describe("generatedDraftSummaryFor", () => {
   it("describes the gaming display target as a build goal, not a measured result", () => {
     const draft = importedDraft({ profile: "gaming", priority: "performance", budgetWon: 2_000_000 });
-    expect(generatedDraftSummaryFor(draft)).toBe("QHD 144Hz 게임 목표를 기준으로 부품을 골랐어요. 예산은 200만 원으로 설정했어요.");
+    expect(generatedDraftSummaryFor(draft)).toBe("예산에 맞는 게임용 PC예요. 예산 200만 원 안에서 그래픽카드 성능을 먼저 고려했어요.");
   });
 
   it("keeps an exact budget when it cannot be written in whole ten-thousands", () => {
@@ -70,11 +70,68 @@ describe("generatedDraftSummaryFor", () => {
   });
 });
 
+describe("gaming brief", () => {
+  it("preserves game target settings for the form request", () => {
+    const interpretation = phase1BriefInterpretationFor("QHD 게임용 PC 220만원 144Hz", "gaming");
+    expect(interpretation.config).toMatchObject({ profile: "gaming", budgetWon: 2_200_000 });
+    expect(interpretation.config.gamingResolution).toBe("1440p");
+    expect(interpretation.config.gamingRefreshRate).toBe(144);
+    expect(interpretation.matches.some((match) => match.field === "gamingRefreshRate")).toBe(true);
+    expect(interpretation.warnings.join(" ")).not.toContain("다음 단계");
+    expect(interpretation.coverage.total).toBeGreaterThan(0);
+  });
+
+  it("preserves the fields of a work request", () => {
+    const interpretation = phase1BriefInterpretationFor("개발용 250만원 RAM 64GB SSD 2TB", "gaming");
+    expect(interpretation.config).toMatchObject({ profile: "development", memoryCapacityGb: 64, storageCapacityGb: 2000 });
+  });
+});
+
 describe("generatedVariantGamingConditionText", () => {
   it("labels the requested display refresh rate in hertz without claiming measured FPS", () => {
     const text = generatedVariantGamingConditionText(importedDraft({ profile: "gaming" }));
     expect(text).toContain("144Hz");
     expect(text).not.toContain("FPS");
+  });
+
+  it("shows the selected upscaling setting beside a target FPS", () => {
+    const text = generatedVariantGamingConditionText(importedDraft({ profile: "gaming", gamingMode: "target_fps", gamingTargetFps: 120, gamingGameIds: ["cyberpunk"], gamingGraphicsPreset: "high", gamingUpscaling: "quality" }));
+    expect(text).toContain("목표 120 FPS");
+    expect(text).toContain("업스케일링·품질");
+  });
+
+  it("shows integrated graphics without calling it an NVIDIA graphics card", () => {
+    const draft = importedDraft({ profile: "gaming", gamingMode: "budget", gpuVendorPreference: "nvidia" });
+    expect(generatedVariantGamingConditionText(draft)).toContain("내장 그래픽");
+    expect(generatedVariantGamingConditionText(draft)).not.toContain("NVIDIA");
+    expect(generatedGamingGpuChoiceText(draft)).toBe("CPU 내장 그래픽을 사용해요.");
+  });
+
+  it("does not infer the vendor when older drafts have no manufacturer preference", () => {
+    const draft = importedDraft({ profile: "gaming", gamingMode: "budget", selection: { ...draftSelection, gpu: { partId: "gpu-1", quantity: 1 }, useIntegratedGraphics: false } });
+    expect(generatedVariantGamingConditionText(draft)).toContain("외장 그래픽카드");
+    expect(generatedGamingGpuChoiceText(draft)).not.toContain("NVIDIA");
+  });
+
+  it("does not assume integrated graphics merely because the GPU slot is empty", () => {
+    const draft = importedDraft({ profile: "gaming", gamingMode: "budget", selection: { ...draftSelection, useIntegratedGraphics: false } });
+    expect(generatedGamingGpuChoiceText(draft)).toBe("외장 그래픽카드가 포함되지 않았어요.");
+    expect(generatedVariantGamingConditionText(draft)).not.toContain("내장 그래픽");
+  });
+});
+
+describe("generator RAM URL persistence", () => {
+  it.each(["32", "64", "128"])("includes gaming RAM %sGB instead of restoring it as the 16GB default", (capacityGb) => {
+    const url = new URLSearchParams();
+    const memory = generatorMemoryParamFor("gaming", capacityGb);
+    if (memory !== undefined) url.set("ram", memory);
+    expect(url.get("ram") ?? "16").toBe(capacityGb);
+  });
+
+  it("omits only the matching profile default", () => {
+    expect(generatorMemoryParamFor("gaming", "16")).toBeUndefined();
+    expect(generatorMemoryParamFor("office", "32")).toBeUndefined();
+    expect(generatorMemoryParamFor("office", "16")).toBe("16");
   });
 });
 
@@ -116,7 +173,7 @@ describe("savedPresetConditionTagsFor", () => {
       hddCapacityGb: 4000,
       listingPolicy: "include_bulk"
     }));
-    expect(tags).toEqual(["QHD", "144Hz", "높음", "DLSS·품질 참고", "레이 트레이싱", "게임 2개", "외장 GPU", "RAM 32GB", "SSD 2TB", "HDD 4TB×1", "벌크 포함"]);
+    expect(tags).toEqual(["QHD", "144Hz", "높음", "업스케일링·품질", "레이 트레이싱", "게임 2개", "외장 GPU", "RAM 32GB", "SSD 2TB", "HDD 4TB×1", "벌크 포함"]);
   });
 
   it("keeps a compact summary for non-gaming presets", () => {
@@ -210,5 +267,44 @@ describe("generatorVariantsImportPreviewFor", () => {
     const fourItems = importPayload();
     expect(generatorVariantsImportPreviewFor({ ...fourItems, items: [...fourItems.items, ...fourItems.items, ...fourItems.items, { ...fourItems.items[0], priority: "reliability" }] }).error).toBeTruthy();
     expect(generatorVariantsImportPreviewFor({ ...fourItems, items: [...fourItems.items, { ...fourItems.items[0] }] }).error).toBeTruthy();
+  });
+});
+
+
+describe("phase-two generated conditions", () => {
+  it("does not hide explicit target FPS behind the restricted-catalog flag", () => {
+    const draft = importedDraft({ profile: "gaming", gamingTestbedPhase1: true, gamingMode: "target_fps", gamingTargetFps: 120, gamingRefreshRate: 144, gamingGameIds: ["pubg"], gpuVendorPreference: "amd" });
+    expect(generatedVariantGamingConditionText(draft)).toContain("목표 120 FPS");
+    expect(generatedDraftSummaryFor(draft)).toContain("목표 120 FPS");
+    expect(generatedVariantGamingConditionText(draft)).not.toContain("GPU 성능 우선");
+  });
+
+  it("rejects invalid target or vendor metadata before imported drafts can be applied", () => {
+    expect(generatorVariantsImportPreviewFor(importPayload({ gamingTargetFps: 501 })).variants).toBeUndefined();
+    expect(generatorVariantsImportPreviewFor(importPayload({ gpuVendorPreference: "intel" })).variants).toBeUndefined();
+    expect(generatorVariantsImportPreviewFor(importPayload({ gamingMode: "fiction" })).variants).toBeUndefined();
+    expect(generatorVariantsImportPreviewFor(importPayload({ profile: "gaming", gamingMode: "target_fps", gamingTargetFps: 120, gamingGameIds: ["cyberpunk"], gpuVendorPreference: "amd" })).variants).toHaveLength(1);
+  });
+
+  it("blocks applying FPS drafts whose requested game conditions are incomplete or invalid", () => {
+    const target = { profile: "gaming", gamingMode: "target_fps", gamingTargetFps: 120, gamingGameIds: ["cyberpunk"], gamingGraphicsPreset: "high", gamingRayTracing: false, gamingUpscaling: "native" };
+    for (const patch of [
+      { profile: "office" }, { gamingTargetFps: undefined }, { gamingGameIds: undefined }, { gamingGameIds: [] },
+      { gamingGameIds: ["cyberpunk", "cyberpunk"] }, { gamingGameIds: ["unknown-game"] },
+      { gamingGameIds: Array.from({ length: 6 }, (_, i) => `game-${i}`) }, { gamingGameIds: "cyberpunk" },
+      { gamingGraphicsPreset: "made-up" }, { gamingRayTracing: "yes" }, { gamingUpscaling: "made-up" }
+    ]) {
+      expect(generatorVariantsImportPreviewFor(importPayload({ ...target, ...patch })).variants).toBeUndefined();
+    }
+  });
+});
+
+
+describe("imported FPS evidence", () => {
+  it("discards persisted FPS claims before applying an imported draft", () => {
+    const imported = generatorVariantsImportPreviewFor(importPayload({ gamingTargetAssessment: { status: "verified", targetMet: true, measurements: "broken" }, gamingPerformanceAssessment: { status: "verified" } }));
+    expect(imported.variants).toHaveLength(1);
+    expect(imported.variants?.[0].draft?.gamingTargetAssessment).toBeUndefined();
+    expect(imported.variants?.[0].draft?.gamingPerformanceAssessment).toBeUndefined();
   });
 });

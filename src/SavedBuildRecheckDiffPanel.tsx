@@ -33,17 +33,17 @@ function resourceHeadroomText(value: number | undefined) {
 }
 
 function resourceBudgetText(resource: SavedBuildCheckSnapshot["resourceBudget"]) {
-  if (!resource) return "미적용";
+  if (!resource) return "기록 없음";
   return `전력 ${resourceHeadroomText(resource.powerHeadroomW)} · 냉각 ${resourceHeadroomText(resource.coolerHeadroomW)}`;
 }
 
 function resourceBudgetDeltaText(summary: ReturnType<typeof savedBuildCheckTransitionSummaryFor>, changed: boolean) {
-  if (!changed) return "저장 당시와 현재 예산 상태 동일";
+  if (!changed) return "전력·냉각 여유 변화 없음";
   const values = [
     summary.powerHeadroomDeltaW !== undefined ? `전력 ${summary.powerHeadroomDeltaW > 0 ? "+" : ""}${summary.powerHeadroomDeltaW}W` : undefined,
     summary.coolerHeadroomDeltaW !== undefined ? `냉각 ${summary.coolerHeadroomDeltaW > 0 ? "+" : ""}${summary.coolerHeadroomDeltaW}W` : undefined
   ].filter((value): value is string => Boolean(value));
-  return values.length > 0 ? values.join(" · ") : "예산 상태·정보 수준 변화 확인";
+  return values.length > 0 ? values.join(" · ") : "전력·냉각 정보가 달라졌어요.";
 }
 
 function refreshPriceTransition(item: CatalogRefreshReportItem) {
@@ -111,13 +111,13 @@ function SavedBuildRecheckRefreshImpactPanel({ report, findingChanges, result, o
       const focusableFinding = linkedChanges.map((change) => change.after ? result.findings.find((finding) => finding.ruleId === change.after?.ruleId || finding.id === change.after?.id) : undefined).find((finding): finding is Finding => Boolean(finding));
       const nextActions = refreshNextActionsFor(item);
       return <article className={linkedChanges.length > 0 ? "linked" : "unlinked"} key={`${item.target.kind}-${item.target.id}`}>
-        <div className="saved-build-recheck-refresh-impact-item-heading"><strong>{item.name}</strong><span>{linkedChanges.length > 0 ? `결과 변화 ${linkedChanges.length}개` : "결과 연결 없음"}</span></div>
+        <div className="saved-build-recheck-refresh-impact-item-heading"><strong>{item.name}</strong><span>{linkedChanges.length > 0 ? `결과 변화 ${linkedChanges.length}개` : "관련 호환 결과 변화 없음"}</span></div>
         <small>{item.target.kind === "part" ? "핵심 부품" : "주변 부품"} · 업데이트 {refreshDateText(item.refreshedAt)} · {item.changedFields.length > 0 ? item.changedFields.map((field) => catalogChangeFieldLabelFor(field)).join(" · ") : "가격·사양 변경 없음"}</small>
         <div className="saved-build-recheck-refresh-impact-facts"><span><b>가격</b>{refreshPriceTransition(item)}</span><span><b>사양 정보 없음</b>{item.previousMissingCount}개 → {item.nextMissingCount}개</span></div>
         {item.valueDiffs && item.valueDiffs.length > 0 && <div className="saved-build-recheck-refresh-impact-values"><strong>바뀐 값</strong>{item.valueDiffs.slice(0, 4).map((diff) => <div key={diff.field}><span>{catalogChangeFieldLabelFor(diff.field)}</span><small><em>{catalogRefreshValueText(diff.previous)}</em><b>→</b><em>{catalogRefreshValueText(diff.next)}</em></small></div>)}{item.valueDiffs.length > 4 && <small>그 외 {item.valueDiffs.length - 4}개 항목이 바뀌었어요.</small>}</div>}
         {linkedChanges.length > 0 ? <ul>{linkedChanges.slice(0, 4).map((change) => <li key={`${change.key}-${change.change}`}><b>{findingChangeLabel(change.change)}</b><span>{(change.after ?? change.before)?.title ?? change.key}</span></li>)}</ul> : <p>현재 호환 결과에서 이 부품과 관련된 변화가 없어요.</p>}
         {onFocusSection && nextActions.length > 0 && <div className="saved-build-recheck-refresh-impact-actions">{nextActions.map((action) => <button className="text-button" type="button" data-testid={`saved-build-recheck-refresh-action-${action.id}`} onClick={() => onFocusSection(action.id)} key={action.id}><FiSearch /> {action.label}</button>)}</div>}
-        {focusableFinding && onFocusFinding && <button className="text-button" type="button" onClick={() => onFocusFinding(focusableFinding.ruleId)}><FiSearch /> 연결된 현재 항목 보기</button>}
+        {focusableFinding && onFocusFinding && <button className="text-button" type="button" onClick={() => onFocusFinding(focusableFinding.ruleId)}><FiSearch /> 관련 호환 항목 보기</button>}
       </article>;
     })}</div> : report.failures.length === 0 && <p className="saved-build-recheck-refresh-impact-empty"><FiInfo /> 가격·사양 변경이 없어요.</p>}
     {report.items.length > 6 && <small className="saved-build-recheck-refresh-impact-more">그 외 부품 {report.items.length - 6}개의 변경 내용이 있어요.</small>}
@@ -143,7 +143,7 @@ export function SavedBuildRecheckDiffPanel({ snapshot, result, partMap, onFocusF
       <article className={riskChanged ? "changed" : undefined}><span>호환 항목</span><strong>호환 불가 {snapshot.blockerCount} → {result.blockerCount} · 주의 {snapshot.warningCount} → {result.warningCount} · 정보 부족 {snapshot.unknownCount} → {result.unknownCount}</strong><small>{riskChanged ? `호환 불가 ${deltaText(summary.blockerDelta)} · 주의 ${deltaText(summary.warningDelta)} · 정보 부족 ${deltaText(summary.unknownDelta)}` : "호환 불가·주의·정보 부족 항목 수는 그대로예요."}</small></article>
       <article className={priceChanged ? "changed" : undefined}><span>가격</span><strong>{priceDeltaText(summary.priceDeltaWon, snapshot.priceComplete && result.priceComplete)}</strong><small>{diff.priceCompletenessChanged ? `가격 정보 ${snapshot.priceComplete ? "가격 정보 있음" : "-"} → ${result.priceComplete ? "가격 정보 있음" : "-"}` : "저장 당시와 현재 총액 비교"}</small></article>
 
-      <article className={resourceBudgetChanged ? "changed" : undefined}><span>전력·냉각 예산</span><strong>{resourceBudgetText(snapshot.resourceBudget)} → {resourceBudgetText(currentSnapshot.resourceBudget)}</strong><small>{resourceBudgetDeltaText(summary, resourceBudgetChanged)}</small></article>
+      <article className={resourceBudgetChanged ? "changed" : undefined}><span>전력·냉각 여유</span><strong>{resourceBudgetText(snapshot.resourceBudget)} → {resourceBudgetText(currentSnapshot.resourceBudget)}</strong><small>{resourceBudgetDeltaText(summary, resourceBudgetChanged)}</small></article>
 
     </div>
     <div className="saved-build-recheck-diff-facts"><span>저장 당시 <b>{new Date(snapshot.checkedAt).toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" })}</b></span><span>현재 결과 <b>{new Date(result.checkedAt).toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" })}</b></span><span>{summary.findingDiffAvailable ? `항목 해결 ${summary.resolvedFindingCount}개 · 신규 ${summary.newFindingCount}개` : "이전 기록에 항목별 비교 정보가 없어요."}</span></div>
@@ -152,7 +152,7 @@ export function SavedBuildRecheckDiffPanel({ snapshot, result, partMap, onFocusF
     {snapshot.catalogRefreshReport && <SavedBuildRecheckRefreshImpactPanel report={snapshot.catalogRefreshReport} findingChanges={findingDiff.changes} result={result} onFocusFinding={onFocusFinding} onFocusSection={onFocusSection} />}
     <div className="saved-build-recheck-diff-findings" data-testid="saved-build-recheck-diff-findings">
       <div className="saved-build-recheck-diff-findings-heading"><strong>변경된 항목</strong><span>{findingDiff.available ? `${changedFindings.length}개` : "비교 불가"}</span></div>
-      {!findingDiff.available ? <p className="saved-build-recheck-diff-findings-empty"><FiInfo /> 구버전 저장본에는 항목 상세가 없어 규칙별 비교를 제공하지 않습니다.</p> : changedFindings.length === 0 ? <p className="saved-build-recheck-diff-findings-empty"><FiCheckCircle /> 저장 당시와 현재 결과가 같아요.</p> : <div className="saved-build-recheck-diff-findings-list">{changedFindings.slice(0, 4).map((change) => {
+      {!findingDiff.available ? <p className="saved-build-recheck-diff-findings-empty"><FiInfo /> 이전 저장 기록에는 호환 항목의 상세 내용이 없어 비교할 수 없어요.</p> : changedFindings.length === 0 ? <p className="saved-build-recheck-diff-findings-empty"><FiCheckCircle /> 저장 당시와 현재 결과가 같아요.</p> : <div className="saved-build-recheck-diff-findings-list">{changedFindings.slice(0, 4).map((change) => {
         const beforeFinding = change.before;
         const afterFinding = change.after;
         const currentFinding = afterFinding ? result.findings.find((finding) => finding.ruleId === afterFinding.ruleId || finding.id === afterFinding.id) : undefined;
@@ -170,11 +170,11 @@ export function SavedBuildRecheckDiffPanel({ snapshot, result, partMap, onFocusF
             <div className="saved-build-recheck-recommendation-actions">{onPreviewSuggestion && recommendation.decision.state !== "hold" && <button className="text-button" type="button" onClick={() => onPreviewSuggestion(recommendation.suggestion.part.category, recommendation.suggestion.part, recommendation.suggestion.recommendedQuantity, currentFinding?.affectedPartIds)}><FiRefreshCw /> 미리 적용</button>}{currentFinding && onFocusFinding && <button className="text-button" type="button" onClick={() => onFocusFinding(currentFinding.ruleId)}><FiSearch /> 부품 전체 보기</button>}</div>
           </div>}
           {currentFinding && strategyPlans.length > 0 && <div className="saved-build-recheck-finding-strategies" data-testid={`saved-build-recheck-finding-strategies-${change.key}`}>
-            <div className="saved-build-recheck-finding-strategies-heading"><strong>이 항목 기준 전략</strong><span>관련 항목</span></div>
+            <div className="saved-build-recheck-finding-strategies-heading"><strong>이 항목을 해결할 부품 조합</strong><span>관련 항목</span></div>
             <div className="saved-build-recheck-finding-strategies-list">{strategyPlans.map((plan) => {
               const resolution = findingPlanResolutionFor(plan, currentFinding);
               const changes = planChangesForFinding(plan, currentFinding);
-              return <article className={resolution} key={`${change.key}-${plan.label}`}><div><strong>{plan.label}</strong><span>{findingPlanResolutionLabel(resolution)}</span></div><small>남은 호환 문제 {plan.remainingBlockers}개 · 가격 {priceDeltaText(plan.priceDeltaWon, plan.priceComplete)}</small>{changes.length > 0 ? <p>{changes.slice(0, 2).map((item) => item.kind === "change_quantity" ? `${item.fromQuantity ?? "?"}개 → ${item.toQuantity ?? "?"}개` : `${item.fromPartName ?? "현재 선택"} → ${item.toPart.name}`).join(" · ")}{changes.length > 2 ? ` 외 ${changes.length - 2}개` : ""}</p> : <p>{resolution === "resolved" ? "이 구성으로 해결할 수 있어요." : resolution === "remaining" ? "이 구성을 적용해도 이 항목은 남아요." : "현재 항목과 연결된 변경 내용이 없어요."}</p>}</article>;
+              return <article className={resolution} key={`${change.key}-${plan.label}`}><div><strong>{plan.label}</strong><span>{findingPlanResolutionLabel(resolution)}</span></div><small>남은 호환 문제 {plan.remainingBlockers}개 · 가격 {priceDeltaText(plan.priceDeltaWon, plan.priceComplete)}</small>{changes.length > 0 ? <p>{changes.slice(0, 2).map((item) => item.kind === "change_quantity" ? `${item.fromQuantity ?? "?"}개 → ${item.toQuantity ?? "?"}개` : `${item.fromPartName ?? "현재 선택"} → ${item.toPart.name}`).join(" · ")}{changes.length > 2 ? ` 외 ${changes.length - 2}개` : ""}</p> : <p>{resolution === "resolved" ? "이 구성으로 해결할 수 있어요." : resolution === "remaining" ? "이 구성을 적용해도 이 항목은 남아요." : "이 항목과 관련된 부품 변경이 없어요."}</p>}</article>;
             })}</div>
           </div>}
           {currentFinding && !recommendation && onFocusFinding && <button className="text-button" type="button" onClick={() => onFocusFinding(currentFinding.ruleId)}><FiSearch /> 현재 항목 보기</button>}

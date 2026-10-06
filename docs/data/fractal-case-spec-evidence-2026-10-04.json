@@ -1,0 +1,4412 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-10-04T15:01:52.677Z",
+  "scope": "Deployed case snapshot 2026-10-04; Fractal Design except Pop series; missing fields only",
+  "items": [
+    {
+      "partId": "danawa-case-13489595",
+      "category": "case",
+      "fields": {
+        "ssdBays": 2,
+        "radiatorSupports": [
+          {
+            "position": "front",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280,
+              360
+            ],
+            "requirements": [
+              {
+                "sizesMm": [
+                  140,
+                  280
+                ],
+                "maxRadiatorWidthMm": 145
+              },
+              {
+                "sizesMm": [
+                  280,
+                  360
+                ],
+                "configurationNote": "제품표는 전면 280/360mm 장착 시 GPU 305mm 미만 구성을 명시합니다. 실제 라디에이터와 팬 두께 및 GPU 간섭을 확인해야 합니다."
+              }
+            ]
+          },
+          {
+            "position": "top",
+            "sizesMm": [
+              120,
+              240
+            ],
+            "requirements": [
+              {
+                "sizesMm": [
+                  240
+                ],
+                "maxMemoryHeightMm": 40,
+                "configurationNote": "240mm 상단 장착은 RAM·VRM·I/O 커버 등 메인보드 부품 높이 40mm 이하 조건입니다."
+              }
+            ]
+          },
+          {
+            "position": "rear",
+            "sizesMm": [
+              120
+            ]
+          },
+          {
+            "position": "bottom",
+            "sizesMm": [
+              120
+            ],
+            "requirements": [
+              {
+                "configurationNote": "하단 120mm 라디에이터 장착에는 HDD 케이지 제거가 필요합니다."
+              }
+            ]
+          }
+        ],
+        "radiatorSizesMm": [
+          120,
+          140,
+          240,
+          280,
+          360
+        ]
+      },
+      "manufacturerModel": "FD-C-MES2C-01",
+      "sourceUrl": "https://assets.fractal-design.com/files/uxzbxy2o/production/957ad6ea3e40c76bf4dbae6baf505bad55f3984d.pdf",
+      "sourceNote": "기본 독립 전용 SSD 2개만 반영하며 공용·추가구매·팬 공유 위치는 제외합니다. 전체 라디에이터 목록·조건 추가 근거: https://assets.fractal-design.com/files/uxzbxy2o/production/a401ebedcbd520103b5624df0baae29733f9e5e6.pdf",
+      "updatedAt": "2026-10-04T15:01:52.677Z"
+    },
+    {
+      "partId": "danawa-case-11479695",
+      "category": "case",
+      "fields": {
+        "ssdBays": 2,
+        "radiatorSupports": [
+          {
+            "position": "front",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280,
+              360
+            ],
+            "requirements": [
+              {
+                "sizesMm": [
+                  140,
+                  280
+                ],
+                "maxRadiatorWidthMm": 145
+              },
+              {
+                "configurationNote": "전면 장착 시 GPU 허용 길이는 366mm에서 라디에이터와 팬 두께의 합을 뺀 값입니다. 앞 팬 브래킷 위치도 확인해야 합니다."
+              }
+            ]
+          },
+          {
+            "position": "top",
+            "sizesMm": [
+              120,
+              240
+            ],
+            "requirements": [
+              {
+                "maxMemoryHeightMm": 40,
+                "configurationNote": "상단 장착은 RAM·VRM·I/O 커버 등 메인보드 부품 전체 높이 40mm 이하 조건입니다."
+              }
+            ]
+          },
+          {
+            "position": "rear",
+            "sizesMm": [
+              120
+            ]
+          },
+          {
+            "position": "bottom",
+            "sizesMm": [
+              120
+            ],
+            "requirements": [
+              {
+                "configurationNote": "하단 라디에이터가 들어갈 공간을 확보하도록 HDD 케이지를 제거해야 합니다."
+              }
+            ]
+          }
+        ],
+        "radiatorSizesMm": [
+          120,
+          140,
+          240,
+          280,
+          360
+        ]
+      },
+      "manufacturerModel": "FD-C-DEF7C-01",
+      "sourceUrl": "https://www.fractal-design.com/products/cases/define-series/define-7-compact/define-7-compact-black-solid/",
+      "sourceNote": "기본 독립 전용 SSD 2개만 반영하며 공용·추가구매·팬 공유 위치는 제외합니다. 전체 라디에이터 목록·조건 추가 근거: https://www.fractal-design.com/app/uploads/2023/08/Define-7-Compact-Manual-V.2-2023-08-21.pdf https://support.fractal-design.com/support/solutions/articles/4000174752-define-7-compact",
+      "updatedAt": "2026-10-04T15:01:52.677Z"
+    },
+    {
+      "partId": "danawa-case-91561445",
+      "category": "case",
+      "fields": {
+        "ssdBays": 1
+      },
+      "manufacturerModel": "FD-C-MES3X-01",
+      "sourceUrl": "https://www.fractal-design.com/app/uploads/2025/05/Meshify-3-XL_Product_Sheet_EN.pdf",
+      "sourceNote": "제품표 전용 2.5형 장착부는 1개입니다. 공용 브래킷 2개는 각 SSD 2개 또는 HDD 1개를 받아 별도 전용 수에 더하지 않습니다.",
+      "updatedAt": "2026-10-04T15:01:52.677Z"
+    },
+    {
+      "partId": "danawa-case-91561427",
+      "category": "case",
+      "fields": {
+        "ssdBays": 1
+      },
+      "manufacturerModel": "FD-C-MES3X-02",
+      "sourceUrl": "https://www.fractal-design.com/app/uploads/2025/05/Meshify-3-XL_Product_Sheet_EN.pdf",
+      "sourceNote": "제품표 전용 2.5형 장착부는 1개입니다. 공용 브래킷 2개는 각 SSD 2개 또는 HDD 1개를 받아 별도 전용 수에 더하지 않습니다.",
+      "updatedAt": "2026-10-04T15:01:52.677Z"
+    },
+    {
+      "partId": "danawa-case-91560920",
+      "category": "case",
+      "fields": {
+        "ssdBays": 2,
+        "radiatorSupports": [
+          {
+            "position": "front",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280,
+              360
+            ],
+            "requirements": [
+              {
+                "maxRadiatorWidthMm": 155,
+                "maxRadiatorLengthMm": 445,
+                "configurationNote": "에어 가이드를 유지하면 실제 라디에이터 길이는 420mm 이하, 제거하면 445mm 이하입니다. 280mm는 에어 가이드 제거가 필요하고 케이블 커버를 유지하면 두께 33mm 이하입니다."
+              },
+              {
+                "configurationNote": "전면 라디에이터 설치 시 GPU 허용 길이는 349mm에서 라디에이터 두께만큼 줄어듭니다. 실제 두께와 GPU 길이를 함께 확인해야 합니다."
+              }
+            ]
+          },
+          {
+            "position": "top",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280
+            ],
+            "requirements": [
+              {
+                "maxRadiatorWidthMm": 148
+              }
+            ]
+          },
+          {
+            "position": "rear",
+            "sizesMm": [
+              120
+            ],
+            "requirements": [
+              {
+                "maxRadiatorWidthMm": 128
+              }
+            ]
+          }
+        ],
+        "radiatorSizesMm": [
+          120,
+          140,
+          240,
+          280,
+          360
+        ]
+      },
+      "manufacturerModel": "FD-C-MES3A-02",
+      "sourceUrl": "https://assets.fractal-design.com/files/uxzbxy2o/production/50476fee3b3101e6d05d1bd5c1ff30f1738e378b.pdf",
+      "sourceNote": "기본 독립 전용 SSD 2개만 반영하며 공용·추가구매·팬 공유 위치는 제외합니다. 전체 라디에이터 목록·조건 추가 근거: https://assets.fractal-design.com/files/uxzbxy2o/production/f44d33810a02c53771f131ec4050ce922c536e08.pdf https://support.fractal-design.com/support/solutions/articles/4000217816-meshify-3-radiator-support",
+      "updatedAt": "2026-10-04T15:01:52.677Z"
+    },
+    {
+      "partId": "danawa-case-91560968",
+      "category": "case",
+      "fields": {
+        "ssdBays": 2,
+        "radiatorSupports": [
+          {
+            "position": "front",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280,
+              360
+            ],
+            "requirements": [
+              {
+                "maxRadiatorWidthMm": 155,
+                "maxRadiatorLengthMm": 445,
+                "configurationNote": "에어 가이드를 유지하면 실제 라디에이터 길이는 420mm 이하, 제거하면 445mm 이하입니다. 280mm는 에어 가이드 제거가 필요하고 케이블 커버를 유지하면 두께 33mm 이하입니다."
+              },
+              {
+                "configurationNote": "전면 라디에이터 설치 시 GPU 허용 길이는 349mm에서 라디에이터 두께만큼 줄어듭니다. 실제 두께와 GPU 길이를 함께 확인해야 합니다."
+              }
+            ]
+          },
+          {
+            "position": "top",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280
+            ],
+            "requirements": [
+              {
+                "maxRadiatorWidthMm": 148
+              }
+            ]
+          },
+          {
+            "position": "rear",
+            "sizesMm": [
+              120
+            ],
+            "requirements": [
+              {
+                "maxRadiatorWidthMm": 128
+              }
+            ]
+          }
+        ],
+        "radiatorSizesMm": [
+          120,
+          140,
+          240,
+          280,
+          360
+        ]
+      },
+      "manufacturerModel": "FD-C-MES3A-01",
+      "sourceUrl": "https://assets.fractal-design.com/files/uxzbxy2o/production/50476fee3b3101e6d05d1bd5c1ff30f1738e378b.pdf",
+      "sourceNote": "기본 독립 전용 SSD 2개만 반영하며 공용·추가구매·팬 공유 위치는 제외합니다. 전체 라디에이터 목록·조건 추가 근거: https://assets.fractal-design.com/files/uxzbxy2o/production/f44d33810a02c53771f131ec4050ce922c536e08.pdf https://support.fractal-design.com/support/solutions/articles/4000217816-meshify-3-radiator-support",
+      "updatedAt": "2026-10-04T15:01:52.677Z"
+    },
+    {
+      "partId": "danawa-case-91560869",
+      "category": "case",
+      "fields": {
+        "ssdBays": 2,
+        "radiatorSupports": [
+          {
+            "position": "front",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280,
+              360
+            ],
+            "requirements": [
+              {
+                "maxRadiatorWidthMm": 155,
+                "maxRadiatorLengthMm": 445,
+                "configurationNote": "에어 가이드를 유지하면 실제 라디에이터 길이는 420mm 이하, 제거하면 445mm 이하입니다. 280mm는 에어 가이드 제거가 필요하고 케이블 커버를 유지하면 두께 33mm 이하입니다."
+              },
+              {
+                "configurationNote": "전면 라디에이터 설치 시 GPU 허용 길이는 349mm에서 라디에이터 두께만큼 줄어듭니다. 실제 두께와 GPU 길이를 함께 확인해야 합니다."
+              }
+            ]
+          },
+          {
+            "position": "top",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280
+            ],
+            "requirements": [
+              {
+                "maxRadiatorWidthMm": 148
+              }
+            ]
+          },
+          {
+            "position": "rear",
+            "sizesMm": [
+              120
+            ],
+            "requirements": [
+              {
+                "maxRadiatorWidthMm": 128
+              }
+            ]
+          }
+        ],
+        "radiatorSizesMm": [
+          120,
+          140,
+          240,
+          280,
+          360
+        ]
+      },
+      "manufacturerModel": "FD-C-MES3A-07",
+      "sourceUrl": "https://assets.fractal-design.com/files/uxzbxy2o/production/50476fee3b3101e6d05d1bd5c1ff30f1738e378b.pdf",
+      "sourceNote": "기본 독립 전용 SSD 2개만 반영하며 공용·추가구매·팬 공유 위치는 제외합니다. 전체 라디에이터 목록·조건 추가 근거: https://assets.fractal-design.com/files/uxzbxy2o/production/f44d33810a02c53771f131ec4050ce922c536e08.pdf https://support.fractal-design.com/support/solutions/articles/4000217816-meshify-3-radiator-support",
+      "updatedAt": "2026-10-04T15:01:52.677Z"
+    },
+    {
+      "partId": "danawa-case-102124007",
+      "category": "case",
+      "fields": {
+        "ssdBays": 2,
+        "radiatorSupports": [
+          {
+            "position": "front",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280,
+              360
+            ],
+            "requirements": [
+              {
+                "configurationNote": "전면 라디에이터 설치 시 GPU 허용 길이는 425mm에서 라디에이터 두께만큼 줄어듭니다. 실제 두께와 GPU 길이를 함께 확인해야 합니다."
+              },
+              {
+                "sizesMm": [
+                  360
+                ],
+                "configurationNote": "360mm 전면과 상단을 동시에 쓰면 HDD 트레이를 뒤로 옮겨야 하며, HDD 트레이 둘을 모두 쓰면 PSU 최대 길이는 155mm입니다."
+              }
+            ]
+          },
+          {
+            "position": "top",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280,
+              360
+            ],
+            "requirements": [
+              {
+                "sizesMm": [
+                  360
+                ],
+                "maxRadiatorWidthMm": 138
+              },
+              {
+                "sizesMm": [
+                  280
+                ],
+                "maxRadiatorWidthMm": 157
+              }
+            ]
+          },
+          {
+            "position": "rear",
+            "sizesMm": [
+              120
+            ],
+            "requirements": [
+              {
+                "maxRadiatorWidthMm": 135
+              }
+            ]
+          }
+        ],
+        "radiatorSizesMm": [
+          120,
+          140,
+          240,
+          280,
+          360
+        ]
+      },
+      "manufacturerModel": "FD-C-EPO1X-01",
+      "sourceUrl": "https://www.fractal-design.com/app/uploads/2025/11/Epoch-XL_Product-Sheet_EN.pdf",
+      "sourceNote": "기본 독립 전용 SSD 2개만 반영하며 공용·추가구매·팬 공유 위치는 제외합니다. 전체 라디에이터 목록·조건 추가 근거: https://assets.fractal-design.com/files/uxzbxy2o/production/6c872113c3ffd3b7f17dd4bab6637188b029a151.pdf https://support.fractal-design.com/support/solutions/articles/4000224622-epoch-xl-radiator-compatibility",
+      "updatedAt": "2026-10-04T15:01:52.677Z"
+    },
+    {
+      "partId": "danawa-case-102124055",
+      "category": "case",
+      "fields": {
+        "ssdBays": 2,
+        "radiatorSupports": [
+          {
+            "position": "front",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280,
+              360
+            ],
+            "requirements": [
+              {
+                "configurationNote": "전면 라디에이터 설치 시 GPU 허용 길이는 425mm에서 라디에이터 두께만큼 줄어듭니다. 실제 두께와 GPU 길이를 함께 확인해야 합니다."
+              },
+              {
+                "sizesMm": [
+                  360
+                ],
+                "configurationNote": "360mm 전면과 상단을 동시에 쓰면 HDD 트레이를 뒤로 옮겨야 하며, HDD 트레이 둘을 모두 쓰면 PSU 최대 길이는 155mm입니다."
+              }
+            ]
+          },
+          {
+            "position": "top",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280,
+              360
+            ],
+            "requirements": [
+              {
+                "sizesMm": [
+                  360
+                ],
+                "maxRadiatorWidthMm": 138
+              },
+              {
+                "sizesMm": [
+                  280
+                ],
+                "maxRadiatorWidthMm": 157
+              }
+            ]
+          },
+          {
+            "position": "rear",
+            "sizesMm": [
+              120
+            ],
+            "requirements": [
+              {
+                "maxRadiatorWidthMm": 135
+              }
+            ]
+          }
+        ],
+        "radiatorSizesMm": [
+          120,
+          140,
+          240,
+          280,
+          360
+        ]
+      },
+      "manufacturerModel": "FD-C-EPO1X-02",
+      "sourceUrl": "https://www.fractal-design.com/app/uploads/2025/11/Epoch-XL_Product-Sheet_EN.pdf",
+      "sourceNote": "기본 독립 전용 SSD 2개만 반영하며 공용·추가구매·팬 공유 위치는 제외합니다. 전체 라디에이터 목록·조건 추가 근거: https://assets.fractal-design.com/files/uxzbxy2o/production/6c872113c3ffd3b7f17dd4bab6637188b029a151.pdf https://support.fractal-design.com/support/solutions/articles/4000224622-epoch-xl-radiator-compatibility",
+      "updatedAt": "2026-10-04T15:01:52.677Z"
+    },
+    {
+      "partId": "danawa-case-94087853",
+      "category": "case",
+      "fields": {
+        "ssdBays": 2,
+        "radiatorSupports": [
+          {
+            "position": "front",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280,
+              360
+            ],
+            "requirements": [
+              {
+                "maxRadiatorWidthMm": 151,
+                "maxRadiatorThicknessMm": 72,
+                "configurationNote": "실제 폭 125mm 이하는 두께 72mm까지, 폭 125mm를 넘고 151mm 이하는 두께 52mm까지입니다."
+              },
+              {
+                "configurationNote": "전면 라디에이터 설치 시 GPU 허용 길이는 372mm에서 라디에이터 두께만큼 줄어듭니다. 실제 두께와 GPU 길이를 함께 확인해야 합니다."
+              }
+            ]
+          },
+          {
+            "position": "top",
+            "sizesMm": [
+              120,
+              240
+            ],
+            "requirements": [
+              {
+                "maxMemoryHeightMm": 35,
+                "maxRadiatorWidthMm": 122,
+                "configurationNote": "RAM뿐 아니라 VRM 방열판과 I/O 커버 등 메인보드 부품 전체 높이가 35mm 이하여야 합니다."
+              }
+            ]
+          },
+          {
+            "position": "rear",
+            "sizesMm": [
+              120
+            ]
+          }
+        ],
+        "radiatorSizesMm": [
+          120,
+          140,
+          240,
+          280,
+          360
+        ]
+      },
+      "manufacturerModel": "FD-C-EPO1A-01",
+      "sourceUrl": "https://assets.fractal-design.com/files/uxzbxy2o/production/63689e50c0c316464914235f9bb29525bd6787c3.pdf",
+      "sourceNote": "기본 독립 전용 SSD 2개만 반영하며 공용·추가구매·팬 공유 위치는 제외합니다. 전체 라디에이터 목록·조건 추가 근거: https://assets.fractal-design.com/files/uxzbxy2o/production/68578f9fa95fce8af9edaba6dd98ecb0cdf73046.pdf https://support.fractal-design.com/support/solutions/articles/4000219370-epoch-radiator-compatibility",
+      "updatedAt": "2026-10-04T15:01:52.677Z"
+    },
+    {
+      "partId": "danawa-case-94087928",
+      "category": "case",
+      "fields": {
+        "ssdBays": 2,
+        "radiatorSupports": [
+          {
+            "position": "front",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280,
+              360
+            ],
+            "requirements": [
+              {
+                "maxRadiatorWidthMm": 151,
+                "maxRadiatorThicknessMm": 72,
+                "configurationNote": "실제 폭 125mm 이하는 두께 72mm까지, 폭 125mm를 넘고 151mm 이하는 두께 52mm까지입니다."
+              },
+              {
+                "configurationNote": "전면 라디에이터 설치 시 GPU 허용 길이는 372mm에서 라디에이터 두께만큼 줄어듭니다. 실제 두께와 GPU 길이를 함께 확인해야 합니다."
+              }
+            ]
+          },
+          {
+            "position": "top",
+            "sizesMm": [
+              120,
+              240
+            ],
+            "requirements": [
+              {
+                "maxMemoryHeightMm": 35,
+                "maxRadiatorWidthMm": 122,
+                "configurationNote": "RAM뿐 아니라 VRM 방열판과 I/O 커버 등 메인보드 부품 전체 높이가 35mm 이하여야 합니다."
+              }
+            ]
+          },
+          {
+            "position": "rear",
+            "sizesMm": [
+              120
+            ]
+          }
+        ],
+        "radiatorSizesMm": [
+          120,
+          140,
+          240,
+          280,
+          360
+        ]
+      },
+      "manufacturerModel": "FD-C-EPO1A-03",
+      "sourceUrl": "https://assets.fractal-design.com/files/uxzbxy2o/production/63689e50c0c316464914235f9bb29525bd6787c3.pdf",
+      "sourceNote": "기본 독립 전용 SSD 2개만 반영하며 공용·추가구매·팬 공유 위치는 제외합니다. 전체 라디에이터 목록·조건 추가 근거: https://assets.fractal-design.com/files/uxzbxy2o/production/68578f9fa95fce8af9edaba6dd98ecb0cdf73046.pdf https://support.fractal-design.com/support/solutions/articles/4000219370-epoch-radiator-compatibility",
+      "updatedAt": "2026-10-04T15:01:52.677Z"
+    },
+    {
+      "partId": "danawa-case-94087988",
+      "category": "case",
+      "fields": {
+        "ssdBays": 2,
+        "radiatorSupports": [
+          {
+            "position": "front",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280,
+              360
+            ],
+            "requirements": [
+              {
+                "maxRadiatorWidthMm": 151,
+                "maxRadiatorThicknessMm": 72,
+                "configurationNote": "실제 폭 125mm 이하는 두께 72mm까지, 폭 125mm를 넘고 151mm 이하는 두께 52mm까지입니다."
+              },
+              {
+                "configurationNote": "전면 라디에이터 설치 시 GPU 허용 길이는 372mm에서 라디에이터 두께만큼 줄어듭니다. 실제 두께와 GPU 길이를 함께 확인해야 합니다."
+              }
+            ]
+          },
+          {
+            "position": "top",
+            "sizesMm": [
+              120,
+              240
+            ],
+            "requirements": [
+              {
+                "maxMemoryHeightMm": 35,
+                "maxRadiatorWidthMm": 122,
+                "configurationNote": "RAM뿐 아니라 VRM 방열판과 I/O 커버 등 메인보드 부품 전체 높이가 35mm 이하여야 합니다."
+              }
+            ]
+          },
+          {
+            "position": "rear",
+            "sizesMm": [
+              120
+            ]
+          }
+        ],
+        "radiatorSizesMm": [
+          120,
+          140,
+          240,
+          280,
+          360
+        ]
+      },
+      "manufacturerModel": "FD-C-EPO1A-04",
+      "sourceUrl": "https://assets.fractal-design.com/files/uxzbxy2o/production/63689e50c0c316464914235f9bb29525bd6787c3.pdf",
+      "sourceNote": "기본 독립 전용 SSD 2개만 반영하며 공용·추가구매·팬 공유 위치는 제외합니다. 전체 라디에이터 목록·조건 추가 근거: https://assets.fractal-design.com/files/uxzbxy2o/production/68578f9fa95fce8af9edaba6dd98ecb0cdf73046.pdf https://support.fractal-design.com/support/solutions/articles/4000219370-epoch-radiator-compatibility",
+      "updatedAt": "2026-10-04T15:01:52.677Z"
+    },
+    {
+      "partId": "danawa-case-14840138",
+      "category": "case",
+      "fields": {
+        "ssdBays": 2,
+        "radiatorSupports": [
+          {
+            "position": "front",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280,
+              360
+            ]
+          },
+          {
+            "position": "top",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280,
+              360,
+              420
+            ],
+            "requirements": [
+              {
+                "maxMemoryHeightMm": 35,
+                "configurationNote": "메인보드 부품 전체 높이는 35mm 이하여야 합니다."
+              },
+              {
+                "sizesMm": [
+                  140,
+                  280,
+                  420
+                ],
+                "configurationNote": "140/280/420mm 상단 라디에이터는 Open Layout으로 전환해야 합니다."
+              }
+            ]
+          },
+          {
+            "position": "rear",
+            "sizesMm": [
+              120
+            ]
+          },
+          {
+            "position": "bottom",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280
+            ]
+          }
+        ],
+        "radiatorSizesMm": [
+          120,
+          140,
+          240,
+          280,
+          360,
+          420
+        ]
+      },
+      "manufacturerModel": "FD-CA-DEF-R6-BK-TG",
+      "sourceUrl": "https://www.fractal-design.cn/app/uploads/2019/06/Define-R6_Product-sheet_EN-0.34-MB-1.pdf",
+      "sourceNote": "기본 독립 전용 SSD 2개만 반영하며 공용·추가구매·팬 공유 위치는 제외합니다. 전체 라디에이터 목록·조건 추가 근거: https://www.fractal-design.cn/app/uploads/2019/06/Define-R6_Product-sheet_EN-0.34-MB-1.pdf",
+      "updatedAt": "2026-10-04T15:01:52.677Z"
+    },
+    {
+      "partId": "danawa-case-14839061",
+      "category": "case",
+      "fields": {
+        "ssdBays": 2,
+        "radiatorSupports": [
+          {
+            "position": "front",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280,
+              360
+            ]
+          },
+          {
+            "position": "top",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280,
+              360,
+              420
+            ],
+            "requirements": [
+              {
+                "maxMemoryHeightMm": 35,
+                "configurationNote": "메인보드 부품 전체 높이는 35mm 이하여야 합니다."
+              },
+              {
+                "sizesMm": [
+                  140,
+                  280,
+                  420
+                ],
+                "configurationNote": "140/280/420mm 상단 라디에이터는 Open Layout으로 전환해야 합니다."
+              }
+            ]
+          },
+          {
+            "position": "rear",
+            "sizesMm": [
+              120
+            ]
+          },
+          {
+            "position": "bottom",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280
+            ]
+          }
+        ],
+        "radiatorSizesMm": [
+          120,
+          140,
+          240,
+          280,
+          360,
+          420
+        ]
+      },
+      "manufacturerModel": "FD-CA-DEF-R6-BK",
+      "sourceUrl": "https://www.fractal-design.cn/app/uploads/2019/06/Define-R6_Product-sheet_EN-0.34-MB-1.pdf",
+      "sourceNote": "기본 독립 전용 SSD 2개만 반영하며 공용·추가구매·팬 공유 위치는 제외합니다. 전체 라디에이터 목록·조건 추가 근거: https://www.fractal-design.cn/app/uploads/2019/06/Define-R6_Product-sheet_EN-0.34-MB-1.pdf",
+      "updatedAt": "2026-10-04T15:01:52.677Z"
+    },
+    {
+      "partId": "danawa-case-108416156",
+      "category": "case",
+      "fields": {
+        "ssdBays": 2,
+        "radiatorSupports": [
+          {
+            "position": "front",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280,
+              360,
+              420
+            ],
+            "requirements": [
+              {
+                "configurationNote": "전면 라디에이터 설치 시 GPU 허용 길이는 413mm에서 라디에이터 두께만큼 줄어듭니다. 실제 두께와 GPU 길이를 함께 확인해야 합니다."
+              },
+              {
+                "sizesMm": [
+                  420
+                ],
+                "maxRadiatorLengthMm": 465,
+                "maxRadiatorThicknessMm": 40,
+                "configurationNote": "420mm는 엔드탱크 여유·튜브 방향과 HDD 트레이 위치를 확인해야 합니다. 일부 모델은 튜브를 위로 향하게 장착해야 합니다."
+              }
+            ]
+          },
+          {
+            "position": "top",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280,
+              360
+            ],
+            "requirements": [
+              {
+                "sizesMm": [
+                  360
+                ],
+                "maxRadiatorWidthMm": 138
+              },
+              {
+                "sizesMm": [
+                  280
+                ],
+                "maxRadiatorWidthMm": 157
+              }
+            ]
+          },
+          {
+            "position": "rear",
+            "sizesMm": [
+              120
+            ],
+            "requirements": [
+              {
+                "maxRadiatorWidthMm": 135
+              }
+            ]
+          }
+        ],
+        "radiatorSizesMm": [
+          120,
+          140,
+          240,
+          280,
+          360,
+          420
+        ]
+      },
+      "manufacturerModel": "FD-C-NOR1X-07",
+      "sourceUrl": "https://assets.fractal-design.com/files/uxzbxy2o/production/2bf236b6a310d8abe38ff7d334bb592a0965dcb0.pdf",
+      "sourceNote": "기본 독립 전용 SSD 2개만 반영하며 공용·추가구매·팬 공유 위치는 제외합니다. 전체 라디에이터 목록·조건 추가 근거: https://assets.fractal-design.com/files/uxzbxy2o/production/72710ae076535c2676cc487faddb9517b500c681.pdf https://support.fractal-design.com/support/solutions/articles/4000203863-north-xl-water-cooling-radiator-compatibility",
+      "updatedAt": "2026-10-04T15:01:52.677Z"
+    },
+    {
+      "partId": "danawa-case-108416054",
+      "category": "case",
+      "fields": {
+        "ssdBays": 2,
+        "radiatorSupports": [
+          {
+            "position": "front",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280,
+              360
+            ],
+            "requirements": [
+              {
+                "maxRadiatorWidthMm": 151,
+                "maxRadiatorThicknessMm": 55,
+                "configurationNote": "실제 라디에이터 폭이 125mm를 넘으면 두께는 35mm 이하입니다. 폭 125mm 이하는 두께 55mm까지입니다."
+              },
+              {
+                "configurationNote": "전면 라디에이터 설치 시 GPU 허용 길이는 355mm에서 라디에이터 두께만큼 줄어듭니다. 실제 두께와 GPU 길이를 함께 확인해야 합니다."
+              },
+              {
+                "sizesMm": [
+                  360
+                ],
+                "configurationNote": "360mm 전면 장착은 HDD 트레이 위치·엔드탱크와 튜브 방향의 간섭을 확인해야 합니다."
+              }
+            ]
+          },
+          {
+            "position": "top",
+            "sizesMm": [
+              120,
+              240
+            ],
+            "requirements": [
+              {
+                "maxMemoryHeightMm": 35,
+                "maxRadiatorWidthMm": 122,
+                "configurationNote": "RAM뿐 아니라 VRM 방열판과 I/O 커버 등 메인보드 부품 전체 높이가 35mm 이하여야 합니다."
+              }
+            ]
+          },
+          {
+            "position": "rear",
+            "sizesMm": [
+              120
+            ]
+          }
+        ],
+        "radiatorSizesMm": [
+          120,
+          140,
+          240,
+          280,
+          360
+        ]
+      },
+      "manufacturerModel": "FD-C-NOR1C-05",
+      "sourceUrl": "https://assets.fractal-design.com/files/uxzbxy2o/production/9b2776d0cc8e0249db9357726411061d0d78df1b.pdf",
+      "sourceNote": "기본 독립 전용 SSD 2개만 반영하며 공용·추가구매·팬 공유 위치는 제외합니다. 전체 라디에이터 목록·조건 추가 근거: https://assets.fractal-design.com/files/uxzbxy2o/production/0db9c256528400d4d16ab77d6fd3bee9b77ea90e.pdf https://support.fractal-design.com/support/solutions/articles/4000189454-north-gpu-compatibility",
+      "updatedAt": "2026-10-04T15:01:52.677Z"
+    },
+    {
+      "partId": "danawa-case-40016330",
+      "category": "case",
+      "fields": {
+        "ssdBays": 2,
+        "radiatorSupports": [
+          {
+            "position": "front",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280,
+              360,
+              420
+            ],
+            "requirements": [
+              {
+                "configurationNote": "전면 라디에이터 설치 시 GPU 허용 길이는 413mm에서 라디에이터 두께만큼 줄어듭니다. 실제 두께와 GPU 길이를 함께 확인해야 합니다."
+              },
+              {
+                "sizesMm": [
+                  420
+                ],
+                "maxRadiatorLengthMm": 465,
+                "maxRadiatorThicknessMm": 40,
+                "configurationNote": "420mm는 엔드탱크 여유·튜브 방향과 HDD 트레이 위치를 확인해야 합니다. 일부 모델은 튜브를 위로 향하게 장착해야 합니다."
+              }
+            ]
+          },
+          {
+            "position": "top",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280,
+              360
+            ],
+            "requirements": [
+              {
+                "sizesMm": [
+                  360
+                ],
+                "maxRadiatorWidthMm": 137
+              },
+              {
+                "sizesMm": [
+                  280
+                ],
+                "maxRadiatorWidthMm": 157
+              }
+            ]
+          },
+          {
+            "position": "rear",
+            "sizesMm": [
+              120,
+              140
+            ],
+            "requirements": [
+              {
+                "sizesMm": [
+                  140
+                ],
+                "maxRadiatorWidthMm": 146
+              }
+            ]
+          }
+        ],
+        "radiatorSizesMm": [
+          120,
+          140,
+          240,
+          280,
+          360,
+          420
+        ]
+      },
+      "manufacturerModel": "FD-C-NOR1X-04",
+      "sourceUrl": "https://www.fractal-design.com/app/uploads/2025/03/North-XL_Product-Sheet_EN.pdf",
+      "sourceNote": "기본 독립 전용 SSD 2개만 반영하며 공용·추가구매·팬 공유 위치는 제외합니다. 전체 라디에이터 목록·조건 추가 근거: https://support.fractal-design.com/support/solutions/articles/4000203863-north-xl-water-cooling-radiator-compatibility",
+      "updatedAt": "2026-10-04T15:01:52.677Z"
+    },
+    {
+      "partId": "danawa-case-90158345",
+      "category": "case",
+      "fields": {
+        "ssdBays": 2,
+        "radiatorSupports": [
+          {
+            "position": "front",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280,
+              360,
+              420
+            ],
+            "requirements": [
+              {
+                "configurationNote": "전면 라디에이터 설치 시 GPU 허용 길이는 413mm에서 라디에이터 두께만큼 줄어듭니다. 실제 두께와 GPU 길이를 함께 확인해야 합니다."
+              },
+              {
+                "sizesMm": [
+                  420
+                ],
+                "maxRadiatorLengthMm": 465,
+                "maxRadiatorThicknessMm": 40,
+                "configurationNote": "420mm는 엔드탱크 여유·튜브 방향과 HDD 트레이 위치를 확인해야 합니다. 일부 모델은 튜브를 위로 향하게 장착해야 합니다."
+              }
+            ]
+          },
+          {
+            "position": "top",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280,
+              360
+            ],
+            "requirements": [
+              {
+                "sizesMm": [
+                  360
+                ],
+                "maxRadiatorWidthMm": 137
+              },
+              {
+                "sizesMm": [
+                  280
+                ],
+                "maxRadiatorWidthMm": 157
+              }
+            ]
+          },
+          {
+            "position": "rear",
+            "sizesMm": [
+              120
+            ],
+            "requirements": [
+              {
+                "maxRadiatorWidthMm": 135
+              }
+            ]
+          }
+        ],
+        "radiatorSizesMm": [
+          120,
+          140,
+          240,
+          280,
+          360,
+          420
+        ]
+      },
+      "manufacturerModel": "FD-C-NOR1X-06",
+      "sourceUrl": "https://www.fractal-design.com/app/uploads/2025/03/North-XL_Product-Sheet_EN.pdf",
+      "sourceNote": "기본 독립 전용 SSD 2개만 반영하며 공용·추가구매·팬 공유 위치는 제외합니다. 전체 라디에이터 목록·조건 추가 근거: https://support.fractal-design.com/support/solutions/articles/4000203863-north-xl-water-cooling-radiator-compatibility",
+      "updatedAt": "2026-10-04T15:01:52.677Z"
+    },
+    {
+      "partId": "danawa-case-40016360",
+      "category": "case",
+      "fields": {
+        "ssdBays": 2,
+        "radiatorSupports": [
+          {
+            "position": "front",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280,
+              360,
+              420
+            ],
+            "requirements": [
+              {
+                "configurationNote": "전면 라디에이터 설치 시 GPU 허용 길이는 413mm에서 라디에이터 두께만큼 줄어듭니다. 실제 두께와 GPU 길이를 함께 확인해야 합니다."
+              },
+              {
+                "sizesMm": [
+                  420
+                ],
+                "maxRadiatorLengthMm": 465,
+                "maxRadiatorThicknessMm": 40,
+                "configurationNote": "420mm는 엔드탱크 여유·튜브 방향과 HDD 트레이 위치를 확인해야 합니다. 일부 모델은 튜브를 위로 향하게 장착해야 합니다."
+              }
+            ]
+          },
+          {
+            "position": "top",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280,
+              360
+            ],
+            "requirements": [
+              {
+                "sizesMm": [
+                  360
+                ],
+                "maxRadiatorWidthMm": 137
+              },
+              {
+                "sizesMm": [
+                  280
+                ],
+                "maxRadiatorWidthMm": 157
+              }
+            ]
+          },
+          {
+            "position": "rear",
+            "sizesMm": [
+              120,
+              140
+            ],
+            "requirements": [
+              {
+                "sizesMm": [
+                  140
+                ],
+                "maxRadiatorWidthMm": 146
+              }
+            ]
+          }
+        ],
+        "radiatorSizesMm": [
+          120,
+          140,
+          240,
+          280,
+          360,
+          420
+        ]
+      },
+      "manufacturerModel": "FD-C-NOR1X-02",
+      "sourceUrl": "https://www.fractal-design.com/app/uploads/2025/03/North-XL_Product-Sheet_EN.pdf",
+      "sourceNote": "기본 독립 전용 SSD 2개만 반영하며 공용·추가구매·팬 공유 위치는 제외합니다. 전체 라디에이터 목록·조건 추가 근거: https://support.fractal-design.com/support/solutions/articles/4000203863-north-xl-water-cooling-radiator-compatibility",
+      "updatedAt": "2026-10-04T15:01:52.677Z"
+    },
+    {
+      "partId": "danawa-case-18448790",
+      "category": "case",
+      "fields": {
+        "ssdBays": 2,
+        "radiatorSupports": [
+          {
+            "position": "front",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280,
+              360
+            ],
+            "requirements": [
+              {
+                "maxRadiatorWidthMm": 151,
+                "maxRadiatorThicknessMm": 55,
+                "configurationNote": "실제 라디에이터 폭이 125mm를 넘으면 두께는 35mm 이하입니다. 폭 125mm 이하는 두께 55mm까지입니다."
+              },
+              {
+                "configurationNote": "전면 라디에이터 설치 시 GPU 허용 길이는 355mm에서 라디에이터 두께만큼 줄어듭니다. 실제 두께와 GPU 길이를 함께 확인해야 합니다."
+              },
+              {
+                "sizesMm": [
+                  360
+                ],
+                "configurationNote": "360mm 전면 장착은 HDD 트레이 위치·엔드탱크와 튜브 방향의 간섭을 확인해야 합니다."
+              }
+            ]
+          },
+          {
+            "position": "top",
+            "sizesMm": [
+              120,
+              240
+            ],
+            "requirements": [
+              {
+                "maxMemoryHeightMm": 35,
+                "maxRadiatorWidthMm": 122,
+                "configurationNote": "RAM뿐 아니라 VRM 방열판과 I/O 커버 등 메인보드 부품 전체 높이가 35mm 이하여야 합니다."
+              }
+            ]
+          },
+          {
+            "position": "rear",
+            "sizesMm": [
+              120
+            ]
+          }
+        ],
+        "radiatorSizesMm": [
+          120,
+          140,
+          240,
+          280,
+          360
+        ]
+      },
+      "manufacturerModel": "FD-C-NOR1C-04",
+      "sourceUrl": "https://assets.fractal-design.com/files/uxzbxy2o/production/23a01a08f4b1cecd7b3efda20f85d8dcee09d891.pdf",
+      "sourceNote": "기본 독립 전용 SSD 2개만 반영하며 공용·추가구매·팬 공유 위치는 제외합니다. 전체 라디에이터 목록·조건 추가 근거: https://assets.fractal-design.com/files/uxzbxy2o/production/6f9ccb3a36843c7b3e696a62dfa5e7370db78da7.pdf https://support.fractal-design.com/support/solutions/articles/4000189454-north-gpu-compatibility",
+      "updatedAt": "2026-10-04T15:01:52.677Z"
+    },
+    {
+      "partId": "danawa-case-18448748",
+      "category": "case",
+      "fields": {
+        "ssdBays": 2,
+        "radiatorSupports": [
+          {
+            "position": "front",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280,
+              360
+            ],
+            "requirements": [
+              {
+                "maxRadiatorWidthMm": 151,
+                "maxRadiatorThicknessMm": 55,
+                "configurationNote": "실제 라디에이터 폭이 125mm를 넘으면 두께는 35mm 이하입니다. 폭 125mm 이하는 두께 55mm까지입니다."
+              },
+              {
+                "configurationNote": "전면 라디에이터 설치 시 GPU 허용 길이는 355mm에서 라디에이터 두께만큼 줄어듭니다. 실제 두께와 GPU 길이를 함께 확인해야 합니다."
+              },
+              {
+                "sizesMm": [
+                  360
+                ],
+                "configurationNote": "360mm 전면 장착은 HDD 트레이 위치·엔드탱크와 튜브 방향의 간섭을 확인해야 합니다."
+              }
+            ]
+          },
+          {
+            "position": "top",
+            "sizesMm": [
+              120,
+              240
+            ],
+            "requirements": [
+              {
+                "maxMemoryHeightMm": 35,
+                "maxRadiatorWidthMm": 122,
+                "configurationNote": "RAM뿐 아니라 VRM 방열판과 I/O 커버 등 메인보드 부품 전체 높이가 35mm 이하여야 합니다."
+              }
+            ]
+          },
+          {
+            "position": "rear",
+            "sizesMm": [
+              120
+            ]
+          }
+        ],
+        "radiatorSizesMm": [
+          120,
+          140,
+          240,
+          280,
+          360
+        ]
+      },
+      "manufacturerModel": "FD-C-NOR1C-02",
+      "sourceUrl": "https://assets.fractal-design.com/files/uxzbxy2o/production/23a01a08f4b1cecd7b3efda20f85d8dcee09d891.pdf",
+      "sourceNote": "기본 독립 전용 SSD 2개만 반영하며 공용·추가구매·팬 공유 위치는 제외합니다. 전체 라디에이터 목록·조건 추가 근거: https://assets.fractal-design.com/files/uxzbxy2o/production/6f9ccb3a36843c7b3e696a62dfa5e7370db78da7.pdf https://support.fractal-design.com/support/solutions/articles/4000189454-north-gpu-compatibility",
+      "updatedAt": "2026-10-04T15:01:52.677Z"
+    },
+    {
+      "partId": "danawa-case-18448688",
+      "category": "case",
+      "fields": {
+        "ssdBays": 2
+      },
+      "manufacturerModel": "FD-C-NOR1C-01",
+      "sourceUrl": "https://assets.fractal-design.com/files/uxzbxy2o/production/23a01a08f4b1cecd7b3efda20f85d8dcee09d891.pdf",
+      "sourceNote": "전용 SSD 장착부 2개입니다. 공용 3.5/2.5형 위치 3개(2개 포함)는 전용 수에서 제외합니다. Mesh/TG 표를 각각 대조했습니다.",
+      "updatedAt": "2026-10-04T15:01:52.677Z"
+    },
+    {
+      "partId": "danawa-case-10958544",
+      "category": "case",
+      "fields": {
+        "ssdBays": 2,
+        "radiatorSupports": [
+          {
+            "position": "front",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280,
+              360,
+              420,
+              480
+            ],
+            "requirements": [
+              {
+                "sizesMm": [
+                  420,
+                  480
+                ],
+                "configurationNote": "420/480mm 전면 라디에이터는 5.25형 드라이브를 장착하지 않은 구성에서 지원합니다."
+              }
+            ]
+          },
+          {
+            "position": "top",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280,
+              360,
+              420,
+              480
+            ],
+            "requirements": [
+              {
+                "sizesMm": [
+                  420,
+                  480
+                ],
+                "configurationNote": "420/480mm 상단 라디에이터는 5.25형 드라이브를 장착하지 않은 구성에서 지원합니다."
+              },
+              {
+                "sizesMm": [
+                  420
+                ],
+                "configurationNote": "420mm 상단 라디에이터는 Storage 배치와 함께 사용할 수 없습니다. Open 배치가 필요합니다."
+              }
+            ]
+          },
+          {
+            "position": "rear",
+            "sizesMm": [
+              120
+            ]
+          },
+          {
+            "position": "bottom",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280
+            ]
+          }
+        ],
+        "radiatorSizesMm": [
+          120,
+          140,
+          240,
+          280,
+          360,
+          420,
+          480
+        ]
+      },
+      "manufacturerModel": "Define 7 XL",
+      "sourceUrl": "https://www.fractal-design.com/app/uploads/2020/10/Define-7-XL_Product-Sheet_EN.pdf",
+      "sourceNote": "기본 독립 전용 SSD 2개만 반영하며 공용·추가구매·팬 공유 위치는 제외합니다. 전체 라디에이터 목록·조건 추가 근거: https://www.fractal-design.com/app/uploads/2023/08/Define-7-XL-Manual-V.3-2023-08-21.pdf",
+      "updatedAt": "2026-10-04T15:01:52.677Z"
+    },
+    {
+      "partId": "danawa-case-10958601",
+      "category": "case",
+      "fields": {
+        "ssdBays": 2,
+        "radiatorSupports": [
+          {
+            "position": "front",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280,
+              360,
+              420,
+              480
+            ],
+            "requirements": [
+              {
+                "sizesMm": [
+                  420,
+                  480
+                ],
+                "configurationNote": "420/480mm 전면 라디에이터는 5.25형 드라이브를 장착하지 않은 구성에서 지원합니다."
+              }
+            ]
+          },
+          {
+            "position": "top",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280,
+              360,
+              420,
+              480
+            ],
+            "requirements": [
+              {
+                "sizesMm": [
+                  420,
+                  480
+                ],
+                "configurationNote": "420/480mm 상단 라디에이터는 5.25형 드라이브를 장착하지 않은 구성에서 지원합니다."
+              },
+              {
+                "sizesMm": [
+                  420
+                ],
+                "configurationNote": "420mm 상단 라디에이터는 Storage 배치와 함께 사용할 수 없습니다. Open 배치가 필요합니다."
+              }
+            ]
+          },
+          {
+            "position": "rear",
+            "sizesMm": [
+              120
+            ]
+          },
+          {
+            "position": "bottom",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280
+            ]
+          }
+        ],
+        "radiatorSizesMm": [
+          120,
+          140,
+          240,
+          280,
+          360,
+          420,
+          480
+        ]
+      },
+      "manufacturerModel": "FD-C-DEF7X-03",
+      "sourceUrl": "https://www.fractal-design.com/app/uploads/2020/10/Define-7-XL_Product-Sheet_EN.pdf",
+      "sourceNote": "기본 독립 전용 SSD 2개만 반영하며 공용·추가구매·팬 공유 위치는 제외합니다. 전체 라디에이터 목록·조건 추가 근거: https://www.fractal-design.com/app/uploads/2023/08/Define-7-XL-Manual-V.3-2023-08-21.pdf",
+      "updatedAt": "2026-10-04T15:01:52.677Z"
+    },
+    {
+      "partId": "danawa-case-10909788",
+      "category": "case",
+      "fields": {
+        "ssdBays": 2,
+        "radiatorSupports": [
+          {
+            "position": "front",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280,
+              360
+            ],
+            "requirements": [
+              {
+                "configurationNote": "전체 전면 지원 목록은 Open Layout 및 5.25형 드라이브 미장착 도해 기준입니다. 저장 배치와 드라이브 간섭을 확인해야 합니다."
+              }
+            ]
+          },
+          {
+            "position": "top",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280,
+              360,
+              420
+            ],
+            "requirements": [
+              {
+                "sizesMm": [
+                  140,
+                  280,
+                  420
+                ],
+                "maxMemoryHeightMm": 36,
+                "maxRadiatorWidthMm": 143
+              },
+              {
+                "configurationNote": "전체 상단 지원 목록은 Open Layout 및 5.25형 드라이브 미장착 도해 기준입니다. Storage 배치에서는 전체 목록을 그대로 적용할 수 없습니다."
+              }
+            ]
+          },
+          {
+            "position": "rear",
+            "sizesMm": [
+              120
+            ]
+          },
+          {
+            "position": "bottom",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280
+            ],
+            "requirements": [
+              {
+                "configurationNote": "전체 하단 지원 목록은 매뉴얼의 Open Layout 도해 기준입니다. Storage 배치 적용 여부를 확인해야 합니다."
+              }
+            ]
+          }
+        ],
+        "radiatorSizesMm": [
+          120,
+          140,
+          240,
+          280,
+          360,
+          420
+        ]
+      },
+      "manufacturerModel": "FD-C-DEF7A-01",
+      "sourceUrl": "https://www.fractal-design.com/app/uploads/2020/10/Define-7_Product-Sheet_EN.pdf",
+      "sourceNote": "기본 독립 전용 SSD 2개만 반영하며 공용·추가구매·팬 공유 위치는 제외합니다. 전체 라디에이터 목록·조건 추가 근거: https://www.fractal-design.com/app/uploads/2023/08/Define-7-Manual-V.3-2023-08-21.pdf",
+      "updatedAt": "2026-10-04T15:01:52.677Z"
+    },
+    {
+      "partId": "danawa-case-10910196",
+      "category": "case",
+      "fields": {
+        "ssdBays": 2,
+        "radiatorSupports": [
+          {
+            "position": "front",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280,
+              360
+            ],
+            "requirements": [
+              {
+                "configurationNote": "전체 전면 지원 목록은 Open Layout 및 5.25형 드라이브 미장착 도해 기준입니다. 저장 배치와 드라이브 간섭을 확인해야 합니다."
+              }
+            ]
+          },
+          {
+            "position": "top",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280,
+              360,
+              420
+            ],
+            "requirements": [
+              {
+                "sizesMm": [
+                  140,
+                  280,
+                  420
+                ],
+                "maxMemoryHeightMm": 36,
+                "maxRadiatorWidthMm": 143
+              },
+              {
+                "configurationNote": "전체 상단 지원 목록은 Open Layout 및 5.25형 드라이브 미장착 도해 기준입니다. Storage 배치에서는 전체 목록을 그대로 적용할 수 없습니다."
+              }
+            ]
+          },
+          {
+            "position": "rear",
+            "sizesMm": [
+              120
+            ]
+          },
+          {
+            "position": "bottom",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280
+            ],
+            "requirements": [
+              {
+                "configurationNote": "전체 하단 지원 목록은 매뉴얼의 Open Layout 도해 기준입니다. Storage 배치 적용 여부를 확인해야 합니다."
+              }
+            ]
+          }
+        ],
+        "radiatorSizesMm": [
+          120,
+          140,
+          240,
+          280,
+          360,
+          420
+        ]
+      },
+      "manufacturerModel": "FD-C-DEF7A-03",
+      "sourceUrl": "https://www.fractal-design.com/app/uploads/2020/10/Define-7_Product-Sheet_EN.pdf",
+      "sourceNote": "기본 독립 전용 SSD 2개만 반영하며 공용·추가구매·팬 공유 위치는 제외합니다. 전체 라디에이터 목록·조건 추가 근거: https://www.fractal-design.com/app/uploads/2023/08/Define-7-Manual-V.3-2023-08-21.pdf",
+      "updatedAt": "2026-10-04T15:01:52.677Z"
+    },
+    {
+      "partId": "danawa-case-15025229",
+      "category": "case",
+      "fields": {
+        "ssdBays": 4,
+        "radiatorSupports": [
+          {
+            "position": "front",
+            "sizesMm": [
+              120,
+              140,
+              180,
+              240,
+              280,
+              360,
+              420
+            ],
+            "requirements": [
+              {
+                "sizesMm": [
+                  180,
+                  360
+                ],
+                "maxRadiatorWidthMm": 180
+              },
+              {
+                "sizesMm": [
+                  420
+                ],
+                "configurationNote": "하단 360mm 라디에이터와 동시에 사용하면 전면 420mm는 얇은 모델이 필요합니다. 제조사 Celsius S36 하단 예시는 전면 두께 25mm 이하 및 튜브 상향 조건입니다."
+              }
+            ]
+          },
+          {
+            "position": "bottom",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280,
+              360,
+              420
+            ],
+            "requirements": [
+              {
+                "sizesMm": [
+                  420
+                ],
+                "maxRadiatorLengthMm": 461,
+                "configurationNote": "하단 420mm는 두께에 따라 다른 부품과 간섭할 수 있습니다. 전면 라디에이터를 같이 쓰면 두께와 튜브 방향도 확인해야 합니다."
+              }
+            ]
+          },
+          {
+            "position": "rear",
+            "sizesMm": [
+              120,
+              140
+            ]
+          }
+        ],
+        "radiatorSizesMm": [
+          120,
+          140,
+          180,
+          240,
+          280,
+          360,
+          420
+        ]
+      },
+      "manufacturerModel": "FD-C-TOR1A-05",
+      "sourceUrl": "https://assets.fractal-design.com/files/uxzbxy2o/production/03b86180d162fdc4ef0e881e1c9ea24e1fa6d846.pdf",
+      "sourceNote": "기본 독립 전용 SSD 4개만 반영하며 공용·추가구매·팬 공유 위치는 제외합니다. 전체 라디에이터 목록·조건 추가 근거: https://assets.fractal-design.com/files/uxzbxy2o/production/af5f587352e8fa20cb09151326dae43796eebb44.pdf https://support.fractal-design.com/support/solutions/articles/4000174902-torrent-radiator-support",
+      "updatedAt": "2026-10-04T15:01:52.677Z"
+    },
+    {
+      "partId": "danawa-case-12681041",
+      "category": "case",
+      "fields": {
+        "ssdBays": 2,
+        "radiatorSupports": [
+          {
+            "position": "front",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280,
+              360,
+              420,
+              480
+            ],
+            "requirements": [
+              {
+                "configurationNote": "전체 전면 라디에이터 목록은 Open Layout 도해 기준입니다. Storage 배치의 드라이브 트레이와 간섭을 확인해야 합니다."
+              }
+            ]
+          },
+          {
+            "position": "top",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280,
+              360,
+              420,
+              480
+            ],
+            "requirements": [
+              {
+                "configurationNote": "전체 상단 라디에이터 목록은 Open Layout 도해 기준입니다. Storage 배치와의 조합을 확인해야 합니다."
+              }
+            ]
+          },
+          {
+            "position": "rear",
+            "sizesMm": [
+              120
+            ]
+          },
+          {
+            "position": "bottom",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280
+            ],
+            "requirements": [
+              {
+                "configurationNote": "전체 하단 라디에이터 목록은 매뉴얼의 Open Layout 도해 기준입니다. Storage 배치 적용 여부를 확인해야 합니다."
+              }
+            ]
+          }
+        ],
+        "radiatorSizesMm": [
+          120,
+          140,
+          240,
+          280,
+          360,
+          420,
+          480
+        ]
+      },
+      "manufacturerModel": "FD-C-MES2X-02",
+      "sourceUrl": "https://www.fractal-design.com/app/uploads/2020/10/Meshify-2-XL-_Product-Sheet_EN.pdf",
+      "sourceNote": "기본 독립 전용 SSD 2개만 반영하며 공용·추가구매·팬 공유 위치는 제외합니다. 전체 라디에이터 목록·조건 추가 근거: https://assets.fractal-design.com/files/uxzbxy2o/production/cdf01f190b68cdc6e6f82f47f6b13ebb6a950089.pdf",
+      "updatedAt": "2026-10-04T15:01:52.677Z"
+    },
+    {
+      "partId": "danawa-case-18294494",
+      "category": "case",
+      "fields": {
+        "ssdBays": 4,
+        "radiatorSupports": [
+          {
+            "position": "side",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280
+            ],
+            "requirements": [
+              {
+                "maxRadiatorWidthMm": 144,
+                "maxRadiatorLengthMm": 328
+              },
+              {
+                "sizesMm": [
+                  120
+                ],
+                "maxGpuLengthMm": 175
+              },
+              {
+                "sizesMm": [
+                  140,
+                  240,
+                  280
+                ],
+                "configurationNote": "140/240/280mm는 GPU·PCIe 카드 폭과 함께 확인해야 합니다. 제조사 예시는 라디에이터 30mm와 팬 25mm 사용 시 PCIe 카드 폭 25mm까지입니다."
+              }
+            ]
+          }
+        ],
+        "radiatorSizesMm": [
+          120,
+          140,
+          240,
+          280
+        ]
+      },
+      "manufacturerModel": "FD-C-RID1N-12",
+      "sourceUrl": "https://www.fractal-design.com/app/uploads/2023/01/Ridge_Product-Sheet_EN.pdf",
+      "sourceNote": "기본 독립 전용 SSD 4개만 반영하며 공용·추가구매·팬 공유 위치는 제외합니다. 전체 라디에이터 목록·조건 추가 근거: https://www.fractal-design.com/app/uploads/2022/11/Ridge-manual-V1..pdf https://support.fractal-design.com/support/solutions/articles/4000188958-ridge-radiator-options",
+      "updatedAt": "2026-10-04T15:01:52.677Z"
+    },
+    {
+      "partId": "danawa-case-68242736",
+      "category": "case",
+      "fields": {
+        "ssdBays": 2,
+        "radiatorSupports": [
+          {
+            "position": "top",
+            "sizesMm": [
+              120,
+              140,
+              240,
+              280
+            ],
+            "requirements": [
+              {
+                "maxRadiatorWidthMm": 140,
+                "maxRadiatorLengthMm": 315,
+                "configurationNote": "실제 길이가 300mm를 넘으면 팬 포함 두께 52mm 이하, 300mm 미만이면 58mm 이하입니다. 길이 250mm 미만을 전면으로 치우쳐 놓으면 68mm까지 가능한 별도 배치가 있습니다. 300mm 경계는 제조사 안내 확인이 필요합니다."
+              }
+            ]
+          }
+        ],
+        "radiatorSizesMm": [
+          120,
+          140,
+          240,
+          280
+        ]
+      },
+      "manufacturerModel": "FD-C-ERA2N-03",
+      "sourceUrl": "https://assets.fractal-design.com/files/uxzbxy2o/production/74b237a6f0ad974a72d19a47b972c0c082b38882.pdf",
+      "sourceNote": "기본 독립 전용 SSD 2개만 반영하며 공용·추가구매·팬 공유 위치는 제외합니다. 제조사 최대4 중 spine 조건부2를 제외했습니다. https://support.fractal-design.com/support/solutions/articles/4000210395-era-2-2-5-drive-support 전체 라디에이터 목록·조건 추가 근거: https://www.fractal-design.com/products/cases/era-series/era-2/era-2-midnight-blue/ https://support.fractal-design.com/support/solutions/articles/4000210382-era-2-radiator-support",
+      "updatedAt": "2026-10-04T15:01:52.677Z"
+    },
+    {
+      "partId": "danawa-case-20344595",
+      "category": "case",
+      "fields": {
+        "ssdBays": 1,
+        "radiatorSupports": [
+          {
+            "position": "side",
+            "sizesMm": [
+              120
+            ],
+            "requirements": [
+              {
+                "maxRadiatorWidthMm": 121,
+                "maxGpuLengthMm": 200,
+                "configurationNote": "측면 120mm 수랭은 케이스의 2.5형 SSD 장착부를 비운 구성이 필요합니다. GPU 길이 200mm 이하 조건과 함께 확인해야 합니다."
+              }
+            ]
+          }
+        ],
+        "radiatorSizesMm": [
+          120
+        ]
+      },
+      "manufacturerModel": "FD-C-TER1N-03",
+      "sourceUrl": "https://www.fractal-design.com/app/uploads/2023/05/Terra_Product-sheet_EN.pdf",
+      "sourceNote": "기본 독립 전용 SSD 1개만 반영하며 공용·추가구매·팬 공유 위치는 제외합니다. 제조사 최대2 중 팬 공유 하단1을 제외했습니다. https://support.fractal-design.com/support/solutions/articles/4000194857-terra-ssd-installation 전체 라디에이터 목록·조건 추가 근거: https://www.fractal-design.com/app/uploads/2023/05/Terra_Product-sheet_EN.pdf https://support.fractal-design.com/support/solutions/articles/4000194856-terra-radiator-support",
+      "updatedAt": "2026-10-04T15:01:52.677Z"
+    }
+  ],
+  "unresolved": [
+    {
+      "partId": "danawa-case-91561445",
+      "manufacturerModel": "FD-C-MES3X-01",
+      "fields": [
+        "radiatorSizesMm",
+        "radiatorSupports"
+      ],
+      "reason": "Meshify 3 XL의 측면 지원이 현 매뉴얼 280/360mm와 웹 120/240/360mm로 달라 전체 목록을 제품 리비전에 확정하지 못했습니다. 부분 위치 목록도 입력하지 않습니다.",
+      "sourceUrls": [
+        "https://www.fractal-design.com/app/uploads/2025/05/Meshify-3-XL_Product_Sheet_EN.pdf",
+        "https://assets.fractal-design.com/files/uxzbxy2o/production/b88856692511e5475fea5bf34b53a17db36f4ddd.pdf",
+        "https://www.fractal-design.com/products/cases/meshify-series/meshify-3-xl/meshify-3-xl-black-solid/"
+      ]
+    },
+    {
+      "partId": "danawa-case-91561427",
+      "manufacturerModel": "FD-C-MES3X-02",
+      "fields": [
+        "radiatorSizesMm",
+        "radiatorSupports"
+      ],
+      "reason": "Meshify 3 XL의 측면 지원이 현 매뉴얼 280/360mm와 웹 120/240/360mm로 달라 전체 목록을 제품 리비전에 확정하지 못했습니다. 부분 위치 목록도 입력하지 않습니다.",
+      "sourceUrls": [
+        "https://www.fractal-design.com/app/uploads/2025/05/Meshify-3-XL_Product_Sheet_EN.pdf",
+        "https://assets.fractal-design.com/files/uxzbxy2o/production/b88856692511e5475fea5bf34b53a17db36f4ddd.pdf",
+        "https://www.fractal-design.com/products/cases/meshify-series/meshify-3-xl/meshify-3-xl-black-solid/"
+      ]
+    },
+    {
+      "partId": "danawa-case-18448688",
+      "manufacturerModel": "FD-C-NOR1C-01",
+      "fields": [
+        "radiatorSizesMm",
+        "radiatorSupports"
+      ],
+      "reason": "North Mesh 웹의 측면 라디에이터 항목은 2x120/140mm 팬 형식이고 매뉴얼의 전체 라디에이터 도해는 전면/상단/후면만 표시합니다. 측면 전체 크기를 확정하지 못해 부분 목록도 입력하지 않습니다.",
+      "sourceUrls": [
+        "https://assets.fractal-design.com/files/uxzbxy2o/production/23a01a08f4b1cecd7b3efda20f85d8dcee09d891.pdf",
+        "https://assets.fractal-design.com/files/uxzbxy2o/production/6f9ccb3a36843c7b3e696a62dfa5e7370db78da7.pdf",
+        "https://www.fractal-design.com/products/cases/north-series/north/north-charcoal-black/"
+      ]
+    }
+  ],
+  "existingConflicts": [
+    {
+      "partId": "danawa-case-18294494",
+      "field": "supportedPsuFormFactors",
+      "currentValue": [
+        "SFX-L",
+        "ATX"
+      ],
+      "manufacturerValue": [
+        "SFX",
+        "SFX-L"
+      ],
+      "sourceUrl": "https://www.fractal-design.com/app/uploads/2023/01/Ridge_Product-Sheet_EN.pdf",
+      "reason": "기존 비어 있지 않은 값에 ATX가 들어 있으나 제조사는 SFX/SFX-L만 명시합니다. 누락값 보강 범위 밖이므로 변경하지 않았습니다."
+    },
+    {
+      "partId": "danawa-case-68242736",
+      "field": "supportedPsuFormFactors",
+      "currentValue": [
+        "ATX"
+      ],
+      "manufacturerValue": [
+        "SFX",
+        "SFX-L"
+      ],
+      "sourceUrl": "https://assets.fractal-design.com/files/uxzbxy2o/production/74b237a6f0ad974a72d19a47b972c0c082b38882.pdf",
+      "reason": "기존 비어 있지 않은 값에 ATX가 들어 있으나 제조사는 SFX/SFX-L만 명시합니다. 누락값 보강 범위 밖이므로 변경하지 않았습니다."
+    },
+    {
+      "partId": "danawa-case-20344595",
+      "field": "supportedPsuFormFactors",
+      "currentValue": [
+        "ATX"
+      ],
+      "manufacturerValue": [
+        "SFX",
+        "SFX-L"
+      ],
+      "sourceUrl": "https://www.fractal-design.com/app/uploads/2023/05/Terra_Product-sheet_EN.pdf",
+      "reason": "기존 비어 있지 않은 값에 ATX가 들어 있으나 제조사는 SFX/SFX-L만 명시합니다. 누락값 보강 범위 밖이므로 변경하지 않았습니다."
+    }
+  ],
+  "groups": [
+    {
+      "model": "Meshify 2 Compact",
+      "partIds": [
+        "danawa-case-13489595"
+      ],
+      "ssdBays": 2,
+      "ssdNote": "전용 SSD 위치는 최대 4개이나 기본 브래킷은 2개입니다. 공용 3.5/2.5형 2개와 추가 구매 브래킷은 제외합니다.",
+      "radiatorSourceUrls": [
+        "https://assets.fractal-design.com/files/uxzbxy2o/production/a401ebedcbd520103b5624df0baae29733f9e5e6.pdf"
+      ],
+      "radiatorCompletePartIds": [
+        "danawa-case-13489595"
+      ],
+      "radiatorUnresolvedPartIds": []
+    },
+    {
+      "model": "Define 7 Compact",
+      "partIds": [
+        "danawa-case-11479695"
+      ],
+      "ssdBays": 2,
+      "ssdNote": "전용 SSD 4개 위치 중 기본 브래킷 2개만 셉니다. 공용 3.5/2.5형 2개와 추가 브래킷은 제외합니다.",
+      "radiatorSourceUrls": [
+        "https://www.fractal-design.com/app/uploads/2023/08/Define-7-Compact-Manual-V.2-2023-08-21.pdf",
+        "https://support.fractal-design.com/support/solutions/articles/4000174752-define-7-compact"
+      ],
+      "radiatorCompletePartIds": [
+        "danawa-case-11479695"
+      ],
+      "radiatorUnresolvedPartIds": []
+    },
+    {
+      "model": "Meshify 3 XL",
+      "partIds": [
+        "danawa-case-91561445",
+        "danawa-case-91561427"
+      ],
+      "ssdBays": 1,
+      "ssdNote": "제품표 전용 2.5형 장착부는 1개입니다. 공용 브래킷 2개는 각 SSD 2개 또는 HDD 1개를 받아 별도 전용 수에 더하지 않습니다.",
+      "radiatorSourceUrls": [],
+      "radiatorCompletePartIds": [],
+      "radiatorUnresolvedPartIds": [
+        "danawa-case-91561445",
+        "danawa-case-91561427"
+      ]
+    },
+    {
+      "model": "Meshify 3",
+      "partIds": [
+        "danawa-case-91560920",
+        "danawa-case-91560968",
+        "danawa-case-91560869"
+      ],
+      "ssdBays": 2,
+      "ssdNote": "전용 SSD 2개입니다. 최대 SSD 6개는 공용 브래킷 2개에 각 SSD 2개를 더한 수이므로 전용 수에 넣지 않습니다.",
+      "radiatorSourceUrls": [
+        "https://assets.fractal-design.com/files/uxzbxy2o/production/f44d33810a02c53771f131ec4050ce922c536e08.pdf",
+        "https://support.fractal-design.com/support/solutions/articles/4000217816-meshify-3-radiator-support"
+      ],
+      "radiatorCompletePartIds": [
+        "danawa-case-91560920",
+        "danawa-case-91560968",
+        "danawa-case-91560869"
+      ],
+      "radiatorUnresolvedPartIds": []
+    },
+    {
+      "model": "Epoch XL",
+      "partIds": [
+        "danawa-case-102124007",
+        "danawa-case-102124055"
+      ],
+      "ssdBays": 2,
+      "ssdNote": "전용 SSD 브래킷 2개 포함입니다. 공용 HDD/SSD 트레이 2개는 전용 수에서 제외합니다.",
+      "radiatorSourceUrls": [
+        "https://assets.fractal-design.com/files/uxzbxy2o/production/6c872113c3ffd3b7f17dd4bab6637188b029a151.pdf",
+        "https://support.fractal-design.com/support/solutions/articles/4000224622-epoch-xl-radiator-compatibility"
+      ],
+      "radiatorCompletePartIds": [
+        "danawa-case-102124007",
+        "danawa-case-102124055"
+      ],
+      "radiatorUnresolvedPartIds": []
+    },
+    {
+      "model": "Epoch",
+      "partIds": [
+        "danawa-case-94087853",
+        "danawa-case-94087928",
+        "danawa-case-94087988"
+      ],
+      "ssdBays": 2,
+      "ssdNote": "전용 SSD 장착부 2개입니다. 공용 3.5/2.5형 위치 3개(2개 포함)는 전용 수에서 제외합니다.",
+      "radiatorSourceUrls": [
+        "https://assets.fractal-design.com/files/uxzbxy2o/production/68578f9fa95fce8af9edaba6dd98ecb0cdf73046.pdf",
+        "https://support.fractal-design.com/support/solutions/articles/4000219370-epoch-radiator-compatibility"
+      ],
+      "radiatorCompletePartIds": [
+        "danawa-case-94087853",
+        "danawa-case-94087928",
+        "danawa-case-94087988"
+      ],
+      "radiatorUnresolvedPartIds": []
+    },
+    {
+      "model": "Define R6",
+      "partIds": [
+        "danawa-case-14840138",
+        "danawa-case-14839061"
+      ],
+      "ssdBays": 2,
+      "ssdNote": "전용 SSD 브래킷 2개 포함, 전용 위치 최대 4개입니다. 공용 HDD/SSD 6개와 추가 브래킷은 제외합니다. 제품표는 Solid/TG를 함께 다룹니다.",
+      "radiatorSourceUrls": [
+        "https://www.fractal-design.cn/app/uploads/2019/06/Define-R6_Product-sheet_EN-0.34-MB-1.pdf"
+      ],
+      "radiatorCompletePartIds": [
+        "danawa-case-14840138",
+        "danawa-case-14839061"
+      ],
+      "radiatorUnresolvedPartIds": []
+    },
+    {
+      "model": "North XL Momentum Edition",
+      "partIds": [
+        "danawa-case-108416156"
+      ],
+      "ssdBays": 2,
+      "ssdNote": "전용 SSD 브래킷 2개입니다. 공용 3.5/2.5형 트레이 2개는 전용 수에서 제외합니다.",
+      "radiatorSourceUrls": [
+        "https://assets.fractal-design.com/files/uxzbxy2o/production/72710ae076535c2676cc487faddb9517b500c681.pdf",
+        "https://support.fractal-design.com/support/solutions/articles/4000203863-north-xl-water-cooling-radiator-compatibility"
+      ],
+      "radiatorCompletePartIds": [
+        "danawa-case-108416156"
+      ],
+      "radiatorUnresolvedPartIds": []
+    },
+    {
+      "model": "North Momentum Edition",
+      "partIds": [
+        "danawa-case-108416054"
+      ],
+      "ssdBays": 2,
+      "ssdNote": "전용 SSD 브래킷 2개입니다. 공용 3.5/2.5형 트레이 2개는 전용 수에서 제외합니다.",
+      "radiatorSourceUrls": [
+        "https://assets.fractal-design.com/files/uxzbxy2o/production/0db9c256528400d4d16ab77d6fd3bee9b77ea90e.pdf",
+        "https://support.fractal-design.com/support/solutions/articles/4000189454-north-gpu-compatibility"
+      ],
+      "radiatorCompletePartIds": [
+        "danawa-case-108416054"
+      ],
+      "radiatorUnresolvedPartIds": []
+    },
+    {
+      "model": "North XL",
+      "partIds": [
+        "danawa-case-40016330",
+        "danawa-case-90158345",
+        "danawa-case-40016360"
+      ],
+      "ssdBays": 2,
+      "ssdNote": "전용 SSD 브래킷 2개입니다. 공용 3.5/2.5형 트레이 2개는 전용 수에서 제외합니다. TG/RC 각각 제품표 열을 대조했습니다.",
+      "radiatorSourceUrls": [
+        "https://support.fractal-design.com/support/solutions/articles/4000203863-north-xl-water-cooling-radiator-compatibility"
+      ],
+      "radiatorCompletePartIds": [
+        "danawa-case-40016330",
+        "danawa-case-90158345",
+        "danawa-case-40016360"
+      ],
+      "radiatorUnresolvedPartIds": []
+    },
+    {
+      "model": "North",
+      "partIds": [
+        "danawa-case-18448790",
+        "danawa-case-18448748",
+        "danawa-case-18448688"
+      ],
+      "ssdBays": 2,
+      "ssdNote": "전용 SSD 장착부 2개입니다. 공용 3.5/2.5형 위치 3개(2개 포함)는 전용 수에서 제외합니다. Mesh/TG 표를 각각 대조했습니다.",
+      "radiatorSourceUrls": [
+        "https://assets.fractal-design.com/files/uxzbxy2o/production/6f9ccb3a36843c7b3e696a62dfa5e7370db78da7.pdf",
+        "https://support.fractal-design.com/support/solutions/articles/4000189454-north-gpu-compatibility"
+      ],
+      "radiatorCompletePartIds": [
+        "danawa-case-18448790",
+        "danawa-case-18448748"
+      ],
+      "radiatorUnresolvedPartIds": [
+        "danawa-case-18448688"
+      ]
+    },
+    {
+      "model": "Define 7 XL",
+      "partIds": [
+        "danawa-case-10958544",
+        "danawa-case-10958601"
+      ],
+      "ssdBays": 2,
+      "ssdNote": "전용 SSD 브래킷 2개 포함, 전용 위치 최대 5개입니다. 공용 HDD/SSD 트레이와 추가 브래킷은 제외합니다. Solid/TG 같은 규격입니다.",
+      "radiatorSourceUrls": [
+        "https://www.fractal-design.com/app/uploads/2023/08/Define-7-XL-Manual-V.3-2023-08-21.pdf"
+      ],
+      "radiatorCompletePartIds": [
+        "danawa-case-10958544",
+        "danawa-case-10958601"
+      ],
+      "radiatorUnresolvedPartIds": []
+    },
+    {
+      "model": "Define 7",
+      "partIds": [
+        "danawa-case-10909788",
+        "danawa-case-10910196"
+      ],
+      "ssdBays": 2,
+      "ssdNote": "전용 SSD 브래킷 2개 포함, 전용 위치 최대 4개입니다. 공용 HDD/SSD 트레이와 추가 브래킷은 제외합니다. Solid/TG 같은 규격입니다.",
+      "radiatorSourceUrls": [
+        "https://www.fractal-design.com/app/uploads/2023/08/Define-7-Manual-V.3-2023-08-21.pdf"
+      ],
+      "radiatorCompletePartIds": [
+        "danawa-case-10909788",
+        "danawa-case-10910196"
+      ],
+      "radiatorUnresolvedPartIds": []
+    },
+    {
+      "model": "Torrent",
+      "partIds": [
+        "danawa-case-15025229"
+      ],
+      "ssdBays": 4,
+      "ssdNote": "전용 SSD 브래킷 4개 포함입니다. 별도 HDD 트레이 2개는 더하지 않습니다.",
+      "radiatorSourceUrls": [
+        "https://assets.fractal-design.com/files/uxzbxy2o/production/af5f587352e8fa20cb09151326dae43796eebb44.pdf",
+        "https://support.fractal-design.com/support/solutions/articles/4000174902-torrent-radiator-support"
+      ],
+      "radiatorCompletePartIds": [
+        "danawa-case-15025229"
+      ],
+      "radiatorUnresolvedPartIds": []
+    },
+    {
+      "model": "Meshify 2 XL",
+      "partIds": [
+        "danawa-case-12681041"
+      ],
+      "ssdBays": 2,
+      "ssdNote": "전용 SSD 브래킷 2개 포함, 전용 위치 최대 5개입니다. 공용 HDD/SSD 트레이와 멀티브래킷, 추가 구매 SSD 브래킷은 제외합니다.",
+      "radiatorSourceUrls": [
+        "https://assets.fractal-design.com/files/uxzbxy2o/production/cdf01f190b68cdc6e6f82f47f6b13ebb6a950089.pdf"
+      ],
+      "radiatorCompletePartIds": [
+        "danawa-case-12681041"
+      ],
+      "radiatorUnresolvedPartIds": []
+    },
+    {
+      "model": "Ridge",
+      "partIds": [
+        "danawa-case-18294494"
+      ],
+      "ssdBays": 4,
+      "ssdNote": "전용 SSD 장착부 4개 포함입니다. SSD 사용 시 GPU 최대 길이는 335mm가 아닌 325mm라는 별도 조건을 기록합니다.",
+      "radiatorSourceUrls": [
+        "https://www.fractal-design.com/app/uploads/2022/11/Ridge-manual-V1..pdf",
+        "https://support.fractal-design.com/support/solutions/articles/4000188958-ridge-radiator-options"
+      ],
+      "radiatorCompletePartIds": [
+        "danawa-case-18294494"
+      ],
+      "radiatorUnresolvedPartIds": []
+    },
+    {
+      "model": "Era2",
+      "partIds": [
+        "danawa-case-68242736"
+      ],
+      "ssdBays": 2,
+      "ssdNote": "제조사 최대 SSD 4개 중 전면 전용 브래킷 2개만 셉니다. spine 위 2개는 위치 1/2와 SSD 두께 조건이 있어 제외합니다. 상세 근거: https://support.fractal-design.com/support/solutions/articles/4000210395-era-2-2-5-drive-support",
+      "radiatorSourceUrls": [
+        "https://www.fractal-design.com/products/cases/era-series/era-2/era-2-midnight-blue/",
+        "https://support.fractal-design.com/support/solutions/articles/4000210382-era-2-radiator-support"
+      ],
+      "radiatorCompletePartIds": [
+        "danawa-case-68242736"
+      ],
+      "radiatorUnresolvedPartIds": []
+    },
+    {
+      "model": "Terra",
+      "partIds": [
+        "danawa-case-20344595"
+      ],
+      "ssdBays": 1,
+      "ssdNote": "제조사 최대 SSD 2개 중 전면 고정 위치 1개만 셉니다. 추가 하단 SSD 1개는 팬과 같은 위치를 써 제외합니다. 상세 근거: https://support.fractal-design.com/support/solutions/articles/4000194857-terra-ssd-installation",
+      "radiatorSourceUrls": [
+        "https://www.fractal-design.com/app/uploads/2023/05/Terra_Product-sheet_EN.pdf",
+        "https://support.fractal-design.com/support/solutions/articles/4000194856-terra-radiator-support"
+      ],
+      "radiatorCompletePartIds": [
+        "danawa-case-20344595"
+      ],
+      "radiatorUnresolvedPartIds": []
+    }
+  ],
+  "radiatorEvidence": [
+    {
+      "partId": "danawa-case-13489595",
+      "model": "Meshify 2 Compact",
+      "fullListVerified": true,
+      "sourceUrls": [
+        "https://assets.fractal-design.com/files/uxzbxy2o/production/a401ebedcbd520103b5624df0baae29733f9e5e6.pdf"
+      ],
+      "radiatorSupports": [
+        {
+          "position": "front",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280,
+            360
+          ],
+          "requirements": [
+            {
+              "sizesMm": [
+                140,
+                280
+              ],
+              "maxRadiatorWidthMm": 145
+            },
+            {
+              "sizesMm": [
+                280,
+                360
+              ],
+              "configurationNote": "제품표는 전면 280/360mm 장착 시 GPU 305mm 미만 구성을 명시합니다. 실제 라디에이터와 팬 두께 및 GPU 간섭을 확인해야 합니다."
+            }
+          ]
+        },
+        {
+          "position": "top",
+          "sizesMm": [
+            120,
+            240
+          ],
+          "requirements": [
+            {
+              "sizesMm": [
+                240
+              ],
+              "maxMemoryHeightMm": 40,
+              "configurationNote": "240mm 상단 장착은 RAM·VRM·I/O 커버 등 메인보드 부품 높이 40mm 이하 조건입니다."
+            }
+          ]
+        },
+        {
+          "position": "rear",
+          "sizesMm": [
+            120
+          ]
+        },
+        {
+          "position": "bottom",
+          "sizesMm": [
+            120
+          ],
+          "requirements": [
+            {
+              "configurationNote": "하단 120mm 라디에이터 장착에는 HDD 케이지 제거가 필요합니다."
+            }
+          ]
+        }
+      ],
+      "radiatorSizesMm": [
+        120,
+        140,
+        240,
+        280,
+        360
+      ]
+    },
+    {
+      "partId": "danawa-case-11479695",
+      "model": "Define 7 Compact",
+      "fullListVerified": true,
+      "sourceUrls": [
+        "https://www.fractal-design.com/app/uploads/2023/08/Define-7-Compact-Manual-V.2-2023-08-21.pdf",
+        "https://support.fractal-design.com/support/solutions/articles/4000174752-define-7-compact"
+      ],
+      "radiatorSupports": [
+        {
+          "position": "front",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280,
+            360
+          ],
+          "requirements": [
+            {
+              "sizesMm": [
+                140,
+                280
+              ],
+              "maxRadiatorWidthMm": 145
+            },
+            {
+              "configurationNote": "전면 장착 시 GPU 허용 길이는 366mm에서 라디에이터와 팬 두께의 합을 뺀 값입니다. 앞 팬 브래킷 위치도 확인해야 합니다."
+            }
+          ]
+        },
+        {
+          "position": "top",
+          "sizesMm": [
+            120,
+            240
+          ],
+          "requirements": [
+            {
+              "maxMemoryHeightMm": 40,
+              "configurationNote": "상단 장착은 RAM·VRM·I/O 커버 등 메인보드 부품 전체 높이 40mm 이하 조건입니다."
+            }
+          ]
+        },
+        {
+          "position": "rear",
+          "sizesMm": [
+            120
+          ]
+        },
+        {
+          "position": "bottom",
+          "sizesMm": [
+            120
+          ],
+          "requirements": [
+            {
+              "configurationNote": "하단 라디에이터가 들어갈 공간을 확보하도록 HDD 케이지를 제거해야 합니다."
+            }
+          ]
+        }
+      ],
+      "radiatorSizesMm": [
+        120,
+        140,
+        240,
+        280,
+        360
+      ]
+    },
+    {
+      "partId": "danawa-case-91560920",
+      "model": "Meshify 3",
+      "fullListVerified": true,
+      "sourceUrls": [
+        "https://assets.fractal-design.com/files/uxzbxy2o/production/f44d33810a02c53771f131ec4050ce922c536e08.pdf",
+        "https://support.fractal-design.com/support/solutions/articles/4000217816-meshify-3-radiator-support"
+      ],
+      "radiatorSupports": [
+        {
+          "position": "front",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280,
+            360
+          ],
+          "requirements": [
+            {
+              "maxRadiatorWidthMm": 155,
+              "maxRadiatorLengthMm": 445,
+              "configurationNote": "에어 가이드를 유지하면 실제 라디에이터 길이는 420mm 이하, 제거하면 445mm 이하입니다. 280mm는 에어 가이드 제거가 필요하고 케이블 커버를 유지하면 두께 33mm 이하입니다."
+            },
+            {
+              "configurationNote": "전면 라디에이터 설치 시 GPU 허용 길이는 349mm에서 라디에이터 두께만큼 줄어듭니다. 실제 두께와 GPU 길이를 함께 확인해야 합니다."
+            }
+          ]
+        },
+        {
+          "position": "top",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280
+          ],
+          "requirements": [
+            {
+              "maxRadiatorWidthMm": 148
+            }
+          ]
+        },
+        {
+          "position": "rear",
+          "sizesMm": [
+            120
+          ],
+          "requirements": [
+            {
+              "maxRadiatorWidthMm": 128
+            }
+          ]
+        }
+      ],
+      "radiatorSizesMm": [
+        120,
+        140,
+        240,
+        280,
+        360
+      ]
+    },
+    {
+      "partId": "danawa-case-91560968",
+      "model": "Meshify 3",
+      "fullListVerified": true,
+      "sourceUrls": [
+        "https://assets.fractal-design.com/files/uxzbxy2o/production/f44d33810a02c53771f131ec4050ce922c536e08.pdf",
+        "https://support.fractal-design.com/support/solutions/articles/4000217816-meshify-3-radiator-support"
+      ],
+      "radiatorSupports": [
+        {
+          "position": "front",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280,
+            360
+          ],
+          "requirements": [
+            {
+              "maxRadiatorWidthMm": 155,
+              "maxRadiatorLengthMm": 445,
+              "configurationNote": "에어 가이드를 유지하면 실제 라디에이터 길이는 420mm 이하, 제거하면 445mm 이하입니다. 280mm는 에어 가이드 제거가 필요하고 케이블 커버를 유지하면 두께 33mm 이하입니다."
+            },
+            {
+              "configurationNote": "전면 라디에이터 설치 시 GPU 허용 길이는 349mm에서 라디에이터 두께만큼 줄어듭니다. 실제 두께와 GPU 길이를 함께 확인해야 합니다."
+            }
+          ]
+        },
+        {
+          "position": "top",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280
+          ],
+          "requirements": [
+            {
+              "maxRadiatorWidthMm": 148
+            }
+          ]
+        },
+        {
+          "position": "rear",
+          "sizesMm": [
+            120
+          ],
+          "requirements": [
+            {
+              "maxRadiatorWidthMm": 128
+            }
+          ]
+        }
+      ],
+      "radiatorSizesMm": [
+        120,
+        140,
+        240,
+        280,
+        360
+      ]
+    },
+    {
+      "partId": "danawa-case-91560869",
+      "model": "Meshify 3",
+      "fullListVerified": true,
+      "sourceUrls": [
+        "https://assets.fractal-design.com/files/uxzbxy2o/production/f44d33810a02c53771f131ec4050ce922c536e08.pdf",
+        "https://support.fractal-design.com/support/solutions/articles/4000217816-meshify-3-radiator-support"
+      ],
+      "radiatorSupports": [
+        {
+          "position": "front",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280,
+            360
+          ],
+          "requirements": [
+            {
+              "maxRadiatorWidthMm": 155,
+              "maxRadiatorLengthMm": 445,
+              "configurationNote": "에어 가이드를 유지하면 실제 라디에이터 길이는 420mm 이하, 제거하면 445mm 이하입니다. 280mm는 에어 가이드 제거가 필요하고 케이블 커버를 유지하면 두께 33mm 이하입니다."
+            },
+            {
+              "configurationNote": "전면 라디에이터 설치 시 GPU 허용 길이는 349mm에서 라디에이터 두께만큼 줄어듭니다. 실제 두께와 GPU 길이를 함께 확인해야 합니다."
+            }
+          ]
+        },
+        {
+          "position": "top",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280
+          ],
+          "requirements": [
+            {
+              "maxRadiatorWidthMm": 148
+            }
+          ]
+        },
+        {
+          "position": "rear",
+          "sizesMm": [
+            120
+          ],
+          "requirements": [
+            {
+              "maxRadiatorWidthMm": 128
+            }
+          ]
+        }
+      ],
+      "radiatorSizesMm": [
+        120,
+        140,
+        240,
+        280,
+        360
+      ]
+    },
+    {
+      "partId": "danawa-case-102124007",
+      "model": "Epoch XL",
+      "fullListVerified": true,
+      "sourceUrls": [
+        "https://assets.fractal-design.com/files/uxzbxy2o/production/6c872113c3ffd3b7f17dd4bab6637188b029a151.pdf",
+        "https://support.fractal-design.com/support/solutions/articles/4000224622-epoch-xl-radiator-compatibility"
+      ],
+      "radiatorSupports": [
+        {
+          "position": "front",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280,
+            360
+          ],
+          "requirements": [
+            {
+              "configurationNote": "전면 라디에이터 설치 시 GPU 허용 길이는 425mm에서 라디에이터 두께만큼 줄어듭니다. 실제 두께와 GPU 길이를 함께 확인해야 합니다."
+            },
+            {
+              "sizesMm": [
+                360
+              ],
+              "configurationNote": "360mm 전면과 상단을 동시에 쓰면 HDD 트레이를 뒤로 옮겨야 하며, HDD 트레이 둘을 모두 쓰면 PSU 최대 길이는 155mm입니다."
+            }
+          ]
+        },
+        {
+          "position": "top",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280,
+            360
+          ],
+          "requirements": [
+            {
+              "sizesMm": [
+                360
+              ],
+              "maxRadiatorWidthMm": 138
+            },
+            {
+              "sizesMm": [
+                280
+              ],
+              "maxRadiatorWidthMm": 157
+            }
+          ]
+        },
+        {
+          "position": "rear",
+          "sizesMm": [
+            120
+          ],
+          "requirements": [
+            {
+              "maxRadiatorWidthMm": 135
+            }
+          ]
+        }
+      ],
+      "radiatorSizesMm": [
+        120,
+        140,
+        240,
+        280,
+        360
+      ]
+    },
+    {
+      "partId": "danawa-case-102124055",
+      "model": "Epoch XL",
+      "fullListVerified": true,
+      "sourceUrls": [
+        "https://assets.fractal-design.com/files/uxzbxy2o/production/6c872113c3ffd3b7f17dd4bab6637188b029a151.pdf",
+        "https://support.fractal-design.com/support/solutions/articles/4000224622-epoch-xl-radiator-compatibility"
+      ],
+      "radiatorSupports": [
+        {
+          "position": "front",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280,
+            360
+          ],
+          "requirements": [
+            {
+              "configurationNote": "전면 라디에이터 설치 시 GPU 허용 길이는 425mm에서 라디에이터 두께만큼 줄어듭니다. 실제 두께와 GPU 길이를 함께 확인해야 합니다."
+            },
+            {
+              "sizesMm": [
+                360
+              ],
+              "configurationNote": "360mm 전면과 상단을 동시에 쓰면 HDD 트레이를 뒤로 옮겨야 하며, HDD 트레이 둘을 모두 쓰면 PSU 최대 길이는 155mm입니다."
+            }
+          ]
+        },
+        {
+          "position": "top",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280,
+            360
+          ],
+          "requirements": [
+            {
+              "sizesMm": [
+                360
+              ],
+              "maxRadiatorWidthMm": 138
+            },
+            {
+              "sizesMm": [
+                280
+              ],
+              "maxRadiatorWidthMm": 157
+            }
+          ]
+        },
+        {
+          "position": "rear",
+          "sizesMm": [
+            120
+          ],
+          "requirements": [
+            {
+              "maxRadiatorWidthMm": 135
+            }
+          ]
+        }
+      ],
+      "radiatorSizesMm": [
+        120,
+        140,
+        240,
+        280,
+        360
+      ]
+    },
+    {
+      "partId": "danawa-case-94087853",
+      "model": "Epoch",
+      "fullListVerified": true,
+      "sourceUrls": [
+        "https://assets.fractal-design.com/files/uxzbxy2o/production/68578f9fa95fce8af9edaba6dd98ecb0cdf73046.pdf",
+        "https://support.fractal-design.com/support/solutions/articles/4000219370-epoch-radiator-compatibility"
+      ],
+      "radiatorSupports": [
+        {
+          "position": "front",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280,
+            360
+          ],
+          "requirements": [
+            {
+              "maxRadiatorWidthMm": 151,
+              "maxRadiatorThicknessMm": 72,
+              "configurationNote": "실제 폭 125mm 이하는 두께 72mm까지, 폭 125mm를 넘고 151mm 이하는 두께 52mm까지입니다."
+            },
+            {
+              "configurationNote": "전면 라디에이터 설치 시 GPU 허용 길이는 372mm에서 라디에이터 두께만큼 줄어듭니다. 실제 두께와 GPU 길이를 함께 확인해야 합니다."
+            }
+          ]
+        },
+        {
+          "position": "top",
+          "sizesMm": [
+            120,
+            240
+          ],
+          "requirements": [
+            {
+              "maxMemoryHeightMm": 35,
+              "maxRadiatorWidthMm": 122,
+              "configurationNote": "RAM뿐 아니라 VRM 방열판과 I/O 커버 등 메인보드 부품 전체 높이가 35mm 이하여야 합니다."
+            }
+          ]
+        },
+        {
+          "position": "rear",
+          "sizesMm": [
+            120
+          ]
+        }
+      ],
+      "radiatorSizesMm": [
+        120,
+        140,
+        240,
+        280,
+        360
+      ]
+    },
+    {
+      "partId": "danawa-case-94087928",
+      "model": "Epoch",
+      "fullListVerified": true,
+      "sourceUrls": [
+        "https://assets.fractal-design.com/files/uxzbxy2o/production/68578f9fa95fce8af9edaba6dd98ecb0cdf73046.pdf",
+        "https://support.fractal-design.com/support/solutions/articles/4000219370-epoch-radiator-compatibility"
+      ],
+      "radiatorSupports": [
+        {
+          "position": "front",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280,
+            360
+          ],
+          "requirements": [
+            {
+              "maxRadiatorWidthMm": 151,
+              "maxRadiatorThicknessMm": 72,
+              "configurationNote": "실제 폭 125mm 이하는 두께 72mm까지, 폭 125mm를 넘고 151mm 이하는 두께 52mm까지입니다."
+            },
+            {
+              "configurationNote": "전면 라디에이터 설치 시 GPU 허용 길이는 372mm에서 라디에이터 두께만큼 줄어듭니다. 실제 두께와 GPU 길이를 함께 확인해야 합니다."
+            }
+          ]
+        },
+        {
+          "position": "top",
+          "sizesMm": [
+            120,
+            240
+          ],
+          "requirements": [
+            {
+              "maxMemoryHeightMm": 35,
+              "maxRadiatorWidthMm": 122,
+              "configurationNote": "RAM뿐 아니라 VRM 방열판과 I/O 커버 등 메인보드 부품 전체 높이가 35mm 이하여야 합니다."
+            }
+          ]
+        },
+        {
+          "position": "rear",
+          "sizesMm": [
+            120
+          ]
+        }
+      ],
+      "radiatorSizesMm": [
+        120,
+        140,
+        240,
+        280,
+        360
+      ]
+    },
+    {
+      "partId": "danawa-case-94087988",
+      "model": "Epoch",
+      "fullListVerified": true,
+      "sourceUrls": [
+        "https://assets.fractal-design.com/files/uxzbxy2o/production/68578f9fa95fce8af9edaba6dd98ecb0cdf73046.pdf",
+        "https://support.fractal-design.com/support/solutions/articles/4000219370-epoch-radiator-compatibility"
+      ],
+      "radiatorSupports": [
+        {
+          "position": "front",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280,
+            360
+          ],
+          "requirements": [
+            {
+              "maxRadiatorWidthMm": 151,
+              "maxRadiatorThicknessMm": 72,
+              "configurationNote": "실제 폭 125mm 이하는 두께 72mm까지, 폭 125mm를 넘고 151mm 이하는 두께 52mm까지입니다."
+            },
+            {
+              "configurationNote": "전면 라디에이터 설치 시 GPU 허용 길이는 372mm에서 라디에이터 두께만큼 줄어듭니다. 실제 두께와 GPU 길이를 함께 확인해야 합니다."
+            }
+          ]
+        },
+        {
+          "position": "top",
+          "sizesMm": [
+            120,
+            240
+          ],
+          "requirements": [
+            {
+              "maxMemoryHeightMm": 35,
+              "maxRadiatorWidthMm": 122,
+              "configurationNote": "RAM뿐 아니라 VRM 방열판과 I/O 커버 등 메인보드 부품 전체 높이가 35mm 이하여야 합니다."
+            }
+          ]
+        },
+        {
+          "position": "rear",
+          "sizesMm": [
+            120
+          ]
+        }
+      ],
+      "radiatorSizesMm": [
+        120,
+        140,
+        240,
+        280,
+        360
+      ]
+    },
+    {
+      "partId": "danawa-case-14840138",
+      "model": "Define R6",
+      "fullListVerified": true,
+      "sourceUrls": [
+        "https://www.fractal-design.cn/app/uploads/2019/06/Define-R6_Product-sheet_EN-0.34-MB-1.pdf"
+      ],
+      "radiatorSupports": [
+        {
+          "position": "front",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280,
+            360
+          ]
+        },
+        {
+          "position": "top",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280,
+            360,
+            420
+          ],
+          "requirements": [
+            {
+              "maxMemoryHeightMm": 35,
+              "configurationNote": "메인보드 부품 전체 높이는 35mm 이하여야 합니다."
+            },
+            {
+              "sizesMm": [
+                140,
+                280,
+                420
+              ],
+              "configurationNote": "140/280/420mm 상단 라디에이터는 Open Layout으로 전환해야 합니다."
+            }
+          ]
+        },
+        {
+          "position": "rear",
+          "sizesMm": [
+            120
+          ]
+        },
+        {
+          "position": "bottom",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280
+          ]
+        }
+      ],
+      "radiatorSizesMm": [
+        120,
+        140,
+        240,
+        280,
+        360,
+        420
+      ]
+    },
+    {
+      "partId": "danawa-case-14839061",
+      "model": "Define R6",
+      "fullListVerified": true,
+      "sourceUrls": [
+        "https://www.fractal-design.cn/app/uploads/2019/06/Define-R6_Product-sheet_EN-0.34-MB-1.pdf"
+      ],
+      "radiatorSupports": [
+        {
+          "position": "front",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280,
+            360
+          ]
+        },
+        {
+          "position": "top",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280,
+            360,
+            420
+          ],
+          "requirements": [
+            {
+              "maxMemoryHeightMm": 35,
+              "configurationNote": "메인보드 부품 전체 높이는 35mm 이하여야 합니다."
+            },
+            {
+              "sizesMm": [
+                140,
+                280,
+                420
+              ],
+              "configurationNote": "140/280/420mm 상단 라디에이터는 Open Layout으로 전환해야 합니다."
+            }
+          ]
+        },
+        {
+          "position": "rear",
+          "sizesMm": [
+            120
+          ]
+        },
+        {
+          "position": "bottom",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280
+          ]
+        }
+      ],
+      "radiatorSizesMm": [
+        120,
+        140,
+        240,
+        280,
+        360,
+        420
+      ]
+    },
+    {
+      "partId": "danawa-case-108416156",
+      "model": "North XL Momentum Edition",
+      "fullListVerified": true,
+      "sourceUrls": [
+        "https://assets.fractal-design.com/files/uxzbxy2o/production/72710ae076535c2676cc487faddb9517b500c681.pdf",
+        "https://support.fractal-design.com/support/solutions/articles/4000203863-north-xl-water-cooling-radiator-compatibility"
+      ],
+      "radiatorSupports": [
+        {
+          "position": "front",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280,
+            360,
+            420
+          ],
+          "requirements": [
+            {
+              "configurationNote": "전면 라디에이터 설치 시 GPU 허용 길이는 413mm에서 라디에이터 두께만큼 줄어듭니다. 실제 두께와 GPU 길이를 함께 확인해야 합니다."
+            },
+            {
+              "sizesMm": [
+                420
+              ],
+              "maxRadiatorLengthMm": 465,
+              "maxRadiatorThicknessMm": 40,
+              "configurationNote": "420mm는 엔드탱크 여유·튜브 방향과 HDD 트레이 위치를 확인해야 합니다. 일부 모델은 튜브를 위로 향하게 장착해야 합니다."
+            }
+          ]
+        },
+        {
+          "position": "top",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280,
+            360
+          ],
+          "requirements": [
+            {
+              "sizesMm": [
+                360
+              ],
+              "maxRadiatorWidthMm": 138
+            },
+            {
+              "sizesMm": [
+                280
+              ],
+              "maxRadiatorWidthMm": 157
+            }
+          ]
+        },
+        {
+          "position": "rear",
+          "sizesMm": [
+            120
+          ],
+          "requirements": [
+            {
+              "maxRadiatorWidthMm": 135
+            }
+          ]
+        }
+      ],
+      "radiatorSizesMm": [
+        120,
+        140,
+        240,
+        280,
+        360,
+        420
+      ]
+    },
+    {
+      "partId": "danawa-case-108416054",
+      "model": "North Momentum Edition",
+      "fullListVerified": true,
+      "sourceUrls": [
+        "https://assets.fractal-design.com/files/uxzbxy2o/production/0db9c256528400d4d16ab77d6fd3bee9b77ea90e.pdf",
+        "https://support.fractal-design.com/support/solutions/articles/4000189454-north-gpu-compatibility"
+      ],
+      "radiatorSupports": [
+        {
+          "position": "front",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280,
+            360
+          ],
+          "requirements": [
+            {
+              "maxRadiatorWidthMm": 151,
+              "maxRadiatorThicknessMm": 55,
+              "configurationNote": "실제 라디에이터 폭이 125mm를 넘으면 두께는 35mm 이하입니다. 폭 125mm 이하는 두께 55mm까지입니다."
+            },
+            {
+              "configurationNote": "전면 라디에이터 설치 시 GPU 허용 길이는 355mm에서 라디에이터 두께만큼 줄어듭니다. 실제 두께와 GPU 길이를 함께 확인해야 합니다."
+            },
+            {
+              "sizesMm": [
+                360
+              ],
+              "configurationNote": "360mm 전면 장착은 HDD 트레이 위치·엔드탱크와 튜브 방향의 간섭을 확인해야 합니다."
+            }
+          ]
+        },
+        {
+          "position": "top",
+          "sizesMm": [
+            120,
+            240
+          ],
+          "requirements": [
+            {
+              "maxMemoryHeightMm": 35,
+              "maxRadiatorWidthMm": 122,
+              "configurationNote": "RAM뿐 아니라 VRM 방열판과 I/O 커버 등 메인보드 부품 전체 높이가 35mm 이하여야 합니다."
+            }
+          ]
+        },
+        {
+          "position": "rear",
+          "sizesMm": [
+            120
+          ]
+        }
+      ],
+      "radiatorSizesMm": [
+        120,
+        140,
+        240,
+        280,
+        360
+      ]
+    },
+    {
+      "partId": "danawa-case-40016330",
+      "model": "North XL",
+      "fullListVerified": true,
+      "sourceUrls": [
+        "https://support.fractal-design.com/support/solutions/articles/4000203863-north-xl-water-cooling-radiator-compatibility"
+      ],
+      "radiatorSupports": [
+        {
+          "position": "front",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280,
+            360,
+            420
+          ],
+          "requirements": [
+            {
+              "configurationNote": "전면 라디에이터 설치 시 GPU 허용 길이는 413mm에서 라디에이터 두께만큼 줄어듭니다. 실제 두께와 GPU 길이를 함께 확인해야 합니다."
+            },
+            {
+              "sizesMm": [
+                420
+              ],
+              "maxRadiatorLengthMm": 465,
+              "maxRadiatorThicknessMm": 40,
+              "configurationNote": "420mm는 엔드탱크 여유·튜브 방향과 HDD 트레이 위치를 확인해야 합니다. 일부 모델은 튜브를 위로 향하게 장착해야 합니다."
+            }
+          ]
+        },
+        {
+          "position": "top",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280,
+            360
+          ],
+          "requirements": [
+            {
+              "sizesMm": [
+                360
+              ],
+              "maxRadiatorWidthMm": 137
+            },
+            {
+              "sizesMm": [
+                280
+              ],
+              "maxRadiatorWidthMm": 157
+            }
+          ]
+        },
+        {
+          "position": "rear",
+          "sizesMm": [
+            120,
+            140
+          ],
+          "requirements": [
+            {
+              "sizesMm": [
+                140
+              ],
+              "maxRadiatorWidthMm": 146
+            }
+          ]
+        }
+      ],
+      "radiatorSizesMm": [
+        120,
+        140,
+        240,
+        280,
+        360,
+        420
+      ]
+    },
+    {
+      "partId": "danawa-case-90158345",
+      "model": "North XL",
+      "fullListVerified": true,
+      "sourceUrls": [
+        "https://support.fractal-design.com/support/solutions/articles/4000203863-north-xl-water-cooling-radiator-compatibility"
+      ],
+      "radiatorSupports": [
+        {
+          "position": "front",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280,
+            360,
+            420
+          ],
+          "requirements": [
+            {
+              "configurationNote": "전면 라디에이터 설치 시 GPU 허용 길이는 413mm에서 라디에이터 두께만큼 줄어듭니다. 실제 두께와 GPU 길이를 함께 확인해야 합니다."
+            },
+            {
+              "sizesMm": [
+                420
+              ],
+              "maxRadiatorLengthMm": 465,
+              "maxRadiatorThicknessMm": 40,
+              "configurationNote": "420mm는 엔드탱크 여유·튜브 방향과 HDD 트레이 위치를 확인해야 합니다. 일부 모델은 튜브를 위로 향하게 장착해야 합니다."
+            }
+          ]
+        },
+        {
+          "position": "top",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280,
+            360
+          ],
+          "requirements": [
+            {
+              "sizesMm": [
+                360
+              ],
+              "maxRadiatorWidthMm": 137
+            },
+            {
+              "sizesMm": [
+                280
+              ],
+              "maxRadiatorWidthMm": 157
+            }
+          ]
+        },
+        {
+          "position": "rear",
+          "sizesMm": [
+            120
+          ],
+          "requirements": [
+            {
+              "maxRadiatorWidthMm": 135
+            }
+          ]
+        }
+      ],
+      "radiatorSizesMm": [
+        120,
+        140,
+        240,
+        280,
+        360,
+        420
+      ]
+    },
+    {
+      "partId": "danawa-case-40016360",
+      "model": "North XL",
+      "fullListVerified": true,
+      "sourceUrls": [
+        "https://support.fractal-design.com/support/solutions/articles/4000203863-north-xl-water-cooling-radiator-compatibility"
+      ],
+      "radiatorSupports": [
+        {
+          "position": "front",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280,
+            360,
+            420
+          ],
+          "requirements": [
+            {
+              "configurationNote": "전면 라디에이터 설치 시 GPU 허용 길이는 413mm에서 라디에이터 두께만큼 줄어듭니다. 실제 두께와 GPU 길이를 함께 확인해야 합니다."
+            },
+            {
+              "sizesMm": [
+                420
+              ],
+              "maxRadiatorLengthMm": 465,
+              "maxRadiatorThicknessMm": 40,
+              "configurationNote": "420mm는 엔드탱크 여유·튜브 방향과 HDD 트레이 위치를 확인해야 합니다. 일부 모델은 튜브를 위로 향하게 장착해야 합니다."
+            }
+          ]
+        },
+        {
+          "position": "top",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280,
+            360
+          ],
+          "requirements": [
+            {
+              "sizesMm": [
+                360
+              ],
+              "maxRadiatorWidthMm": 137
+            },
+            {
+              "sizesMm": [
+                280
+              ],
+              "maxRadiatorWidthMm": 157
+            }
+          ]
+        },
+        {
+          "position": "rear",
+          "sizesMm": [
+            120,
+            140
+          ],
+          "requirements": [
+            {
+              "sizesMm": [
+                140
+              ],
+              "maxRadiatorWidthMm": 146
+            }
+          ]
+        }
+      ],
+      "radiatorSizesMm": [
+        120,
+        140,
+        240,
+        280,
+        360,
+        420
+      ]
+    },
+    {
+      "partId": "danawa-case-18448790",
+      "model": "North",
+      "fullListVerified": true,
+      "sourceUrls": [
+        "https://assets.fractal-design.com/files/uxzbxy2o/production/6f9ccb3a36843c7b3e696a62dfa5e7370db78da7.pdf",
+        "https://support.fractal-design.com/support/solutions/articles/4000189454-north-gpu-compatibility"
+      ],
+      "radiatorSupports": [
+        {
+          "position": "front",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280,
+            360
+          ],
+          "requirements": [
+            {
+              "maxRadiatorWidthMm": 151,
+              "maxRadiatorThicknessMm": 55,
+              "configurationNote": "실제 라디에이터 폭이 125mm를 넘으면 두께는 35mm 이하입니다. 폭 125mm 이하는 두께 55mm까지입니다."
+            },
+            {
+              "configurationNote": "전면 라디에이터 설치 시 GPU 허용 길이는 355mm에서 라디에이터 두께만큼 줄어듭니다. 실제 두께와 GPU 길이를 함께 확인해야 합니다."
+            },
+            {
+              "sizesMm": [
+                360
+              ],
+              "configurationNote": "360mm 전면 장착은 HDD 트레이 위치·엔드탱크와 튜브 방향의 간섭을 확인해야 합니다."
+            }
+          ]
+        },
+        {
+          "position": "top",
+          "sizesMm": [
+            120,
+            240
+          ],
+          "requirements": [
+            {
+              "maxMemoryHeightMm": 35,
+              "maxRadiatorWidthMm": 122,
+              "configurationNote": "RAM뿐 아니라 VRM 방열판과 I/O 커버 등 메인보드 부품 전체 높이가 35mm 이하여야 합니다."
+            }
+          ]
+        },
+        {
+          "position": "rear",
+          "sizesMm": [
+            120
+          ]
+        }
+      ],
+      "radiatorSizesMm": [
+        120,
+        140,
+        240,
+        280,
+        360
+      ]
+    },
+    {
+      "partId": "danawa-case-18448748",
+      "model": "North",
+      "fullListVerified": true,
+      "sourceUrls": [
+        "https://assets.fractal-design.com/files/uxzbxy2o/production/6f9ccb3a36843c7b3e696a62dfa5e7370db78da7.pdf",
+        "https://support.fractal-design.com/support/solutions/articles/4000189454-north-gpu-compatibility"
+      ],
+      "radiatorSupports": [
+        {
+          "position": "front",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280,
+            360
+          ],
+          "requirements": [
+            {
+              "maxRadiatorWidthMm": 151,
+              "maxRadiatorThicknessMm": 55,
+              "configurationNote": "실제 라디에이터 폭이 125mm를 넘으면 두께는 35mm 이하입니다. 폭 125mm 이하는 두께 55mm까지입니다."
+            },
+            {
+              "configurationNote": "전면 라디에이터 설치 시 GPU 허용 길이는 355mm에서 라디에이터 두께만큼 줄어듭니다. 실제 두께와 GPU 길이를 함께 확인해야 합니다."
+            },
+            {
+              "sizesMm": [
+                360
+              ],
+              "configurationNote": "360mm 전면 장착은 HDD 트레이 위치·엔드탱크와 튜브 방향의 간섭을 확인해야 합니다."
+            }
+          ]
+        },
+        {
+          "position": "top",
+          "sizesMm": [
+            120,
+            240
+          ],
+          "requirements": [
+            {
+              "maxMemoryHeightMm": 35,
+              "maxRadiatorWidthMm": 122,
+              "configurationNote": "RAM뿐 아니라 VRM 방열판과 I/O 커버 등 메인보드 부품 전체 높이가 35mm 이하여야 합니다."
+            }
+          ]
+        },
+        {
+          "position": "rear",
+          "sizesMm": [
+            120
+          ]
+        }
+      ],
+      "radiatorSizesMm": [
+        120,
+        140,
+        240,
+        280,
+        360
+      ]
+    },
+    {
+      "partId": "danawa-case-10958544",
+      "model": "Define 7 XL",
+      "fullListVerified": true,
+      "sourceUrls": [
+        "https://www.fractal-design.com/app/uploads/2023/08/Define-7-XL-Manual-V.3-2023-08-21.pdf"
+      ],
+      "radiatorSupports": [
+        {
+          "position": "front",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280,
+            360,
+            420,
+            480
+          ],
+          "requirements": [
+            {
+              "sizesMm": [
+                420,
+                480
+              ],
+              "configurationNote": "420/480mm 전면 라디에이터는 5.25형 드라이브를 장착하지 않은 구성에서 지원합니다."
+            }
+          ]
+        },
+        {
+          "position": "top",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280,
+            360,
+            420,
+            480
+          ],
+          "requirements": [
+            {
+              "sizesMm": [
+                420,
+                480
+              ],
+              "configurationNote": "420/480mm 상단 라디에이터는 5.25형 드라이브를 장착하지 않은 구성에서 지원합니다."
+            },
+            {
+              "sizesMm": [
+                420
+              ],
+              "configurationNote": "420mm 상단 라디에이터는 Storage 배치와 함께 사용할 수 없습니다. Open 배치가 필요합니다."
+            }
+          ]
+        },
+        {
+          "position": "rear",
+          "sizesMm": [
+            120
+          ]
+        },
+        {
+          "position": "bottom",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280
+          ]
+        }
+      ],
+      "radiatorSizesMm": [
+        120,
+        140,
+        240,
+        280,
+        360,
+        420,
+        480
+      ]
+    },
+    {
+      "partId": "danawa-case-10958601",
+      "model": "Define 7 XL",
+      "fullListVerified": true,
+      "sourceUrls": [
+        "https://www.fractal-design.com/app/uploads/2023/08/Define-7-XL-Manual-V.3-2023-08-21.pdf"
+      ],
+      "radiatorSupports": [
+        {
+          "position": "front",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280,
+            360,
+            420,
+            480
+          ],
+          "requirements": [
+            {
+              "sizesMm": [
+                420,
+                480
+              ],
+              "configurationNote": "420/480mm 전면 라디에이터는 5.25형 드라이브를 장착하지 않은 구성에서 지원합니다."
+            }
+          ]
+        },
+        {
+          "position": "top",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280,
+            360,
+            420,
+            480
+          ],
+          "requirements": [
+            {
+              "sizesMm": [
+                420,
+                480
+              ],
+              "configurationNote": "420/480mm 상단 라디에이터는 5.25형 드라이브를 장착하지 않은 구성에서 지원합니다."
+            },
+            {
+              "sizesMm": [
+                420
+              ],
+              "configurationNote": "420mm 상단 라디에이터는 Storage 배치와 함께 사용할 수 없습니다. Open 배치가 필요합니다."
+            }
+          ]
+        },
+        {
+          "position": "rear",
+          "sizesMm": [
+            120
+          ]
+        },
+        {
+          "position": "bottom",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280
+          ]
+        }
+      ],
+      "radiatorSizesMm": [
+        120,
+        140,
+        240,
+        280,
+        360,
+        420,
+        480
+      ]
+    },
+    {
+      "partId": "danawa-case-10909788",
+      "model": "Define 7",
+      "fullListVerified": true,
+      "sourceUrls": [
+        "https://www.fractal-design.com/app/uploads/2023/08/Define-7-Manual-V.3-2023-08-21.pdf"
+      ],
+      "radiatorSupports": [
+        {
+          "position": "front",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280,
+            360
+          ],
+          "requirements": [
+            {
+              "configurationNote": "전체 전면 지원 목록은 Open Layout 및 5.25형 드라이브 미장착 도해 기준입니다. 저장 배치와 드라이브 간섭을 확인해야 합니다."
+            }
+          ]
+        },
+        {
+          "position": "top",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280,
+            360,
+            420
+          ],
+          "requirements": [
+            {
+              "sizesMm": [
+                140,
+                280,
+                420
+              ],
+              "maxMemoryHeightMm": 36,
+              "maxRadiatorWidthMm": 143
+            },
+            {
+              "configurationNote": "전체 상단 지원 목록은 Open Layout 및 5.25형 드라이브 미장착 도해 기준입니다. Storage 배치에서는 전체 목록을 그대로 적용할 수 없습니다."
+            }
+          ]
+        },
+        {
+          "position": "rear",
+          "sizesMm": [
+            120
+          ]
+        },
+        {
+          "position": "bottom",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280
+          ],
+          "requirements": [
+            {
+              "configurationNote": "전체 하단 지원 목록은 매뉴얼의 Open Layout 도해 기준입니다. Storage 배치 적용 여부를 확인해야 합니다."
+            }
+          ]
+        }
+      ],
+      "radiatorSizesMm": [
+        120,
+        140,
+        240,
+        280,
+        360,
+        420
+      ]
+    },
+    {
+      "partId": "danawa-case-10910196",
+      "model": "Define 7",
+      "fullListVerified": true,
+      "sourceUrls": [
+        "https://www.fractal-design.com/app/uploads/2023/08/Define-7-Manual-V.3-2023-08-21.pdf"
+      ],
+      "radiatorSupports": [
+        {
+          "position": "front",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280,
+            360
+          ],
+          "requirements": [
+            {
+              "configurationNote": "전체 전면 지원 목록은 Open Layout 및 5.25형 드라이브 미장착 도해 기준입니다. 저장 배치와 드라이브 간섭을 확인해야 합니다."
+            }
+          ]
+        },
+        {
+          "position": "top",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280,
+            360,
+            420
+          ],
+          "requirements": [
+            {
+              "sizesMm": [
+                140,
+                280,
+                420
+              ],
+              "maxMemoryHeightMm": 36,
+              "maxRadiatorWidthMm": 143
+            },
+            {
+              "configurationNote": "전체 상단 지원 목록은 Open Layout 및 5.25형 드라이브 미장착 도해 기준입니다. Storage 배치에서는 전체 목록을 그대로 적용할 수 없습니다."
+            }
+          ]
+        },
+        {
+          "position": "rear",
+          "sizesMm": [
+            120
+          ]
+        },
+        {
+          "position": "bottom",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280
+          ],
+          "requirements": [
+            {
+              "configurationNote": "전체 하단 지원 목록은 매뉴얼의 Open Layout 도해 기준입니다. Storage 배치 적용 여부를 확인해야 합니다."
+            }
+          ]
+        }
+      ],
+      "radiatorSizesMm": [
+        120,
+        140,
+        240,
+        280,
+        360,
+        420
+      ]
+    },
+    {
+      "partId": "danawa-case-15025229",
+      "model": "Torrent",
+      "fullListVerified": true,
+      "sourceUrls": [
+        "https://assets.fractal-design.com/files/uxzbxy2o/production/af5f587352e8fa20cb09151326dae43796eebb44.pdf",
+        "https://support.fractal-design.com/support/solutions/articles/4000174902-torrent-radiator-support"
+      ],
+      "radiatorSupports": [
+        {
+          "position": "front",
+          "sizesMm": [
+            120,
+            140,
+            180,
+            240,
+            280,
+            360,
+            420
+          ],
+          "requirements": [
+            {
+              "sizesMm": [
+                180,
+                360
+              ],
+              "maxRadiatorWidthMm": 180
+            },
+            {
+              "sizesMm": [
+                420
+              ],
+              "configurationNote": "하단 360mm 라디에이터와 동시에 사용하면 전면 420mm는 얇은 모델이 필요합니다. 제조사 Celsius S36 하단 예시는 전면 두께 25mm 이하 및 튜브 상향 조건입니다."
+            }
+          ]
+        },
+        {
+          "position": "bottom",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280,
+            360,
+            420
+          ],
+          "requirements": [
+            {
+              "sizesMm": [
+                420
+              ],
+              "maxRadiatorLengthMm": 461,
+              "configurationNote": "하단 420mm는 두께에 따라 다른 부품과 간섭할 수 있습니다. 전면 라디에이터를 같이 쓰면 두께와 튜브 방향도 확인해야 합니다."
+            }
+          ]
+        },
+        {
+          "position": "rear",
+          "sizesMm": [
+            120,
+            140
+          ]
+        }
+      ],
+      "radiatorSizesMm": [
+        120,
+        140,
+        180,
+        240,
+        280,
+        360,
+        420
+      ]
+    },
+    {
+      "partId": "danawa-case-12681041",
+      "model": "Meshify 2 XL",
+      "fullListVerified": true,
+      "sourceUrls": [
+        "https://assets.fractal-design.com/files/uxzbxy2o/production/cdf01f190b68cdc6e6f82f47f6b13ebb6a950089.pdf"
+      ],
+      "radiatorSupports": [
+        {
+          "position": "front",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280,
+            360,
+            420,
+            480
+          ],
+          "requirements": [
+            {
+              "configurationNote": "전체 전면 라디에이터 목록은 Open Layout 도해 기준입니다. Storage 배치의 드라이브 트레이와 간섭을 확인해야 합니다."
+            }
+          ]
+        },
+        {
+          "position": "top",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280,
+            360,
+            420,
+            480
+          ],
+          "requirements": [
+            {
+              "configurationNote": "전체 상단 라디에이터 목록은 Open Layout 도해 기준입니다. Storage 배치와의 조합을 확인해야 합니다."
+            }
+          ]
+        },
+        {
+          "position": "rear",
+          "sizesMm": [
+            120
+          ]
+        },
+        {
+          "position": "bottom",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280
+          ],
+          "requirements": [
+            {
+              "configurationNote": "전체 하단 라디에이터 목록은 매뉴얼의 Open Layout 도해 기준입니다. Storage 배치 적용 여부를 확인해야 합니다."
+            }
+          ]
+        }
+      ],
+      "radiatorSizesMm": [
+        120,
+        140,
+        240,
+        280,
+        360,
+        420,
+        480
+      ]
+    },
+    {
+      "partId": "danawa-case-18294494",
+      "model": "Ridge",
+      "fullListVerified": true,
+      "sourceUrls": [
+        "https://www.fractal-design.com/app/uploads/2022/11/Ridge-manual-V1..pdf",
+        "https://support.fractal-design.com/support/solutions/articles/4000188958-ridge-radiator-options"
+      ],
+      "radiatorSupports": [
+        {
+          "position": "side",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280
+          ],
+          "requirements": [
+            {
+              "maxRadiatorWidthMm": 144,
+              "maxRadiatorLengthMm": 328
+            },
+            {
+              "sizesMm": [
+                120
+              ],
+              "maxGpuLengthMm": 175
+            },
+            {
+              "sizesMm": [
+                140,
+                240,
+                280
+              ],
+              "configurationNote": "140/240/280mm는 GPU·PCIe 카드 폭과 함께 확인해야 합니다. 제조사 예시는 라디에이터 30mm와 팬 25mm 사용 시 PCIe 카드 폭 25mm까지입니다."
+            }
+          ]
+        }
+      ],
+      "radiatorSizesMm": [
+        120,
+        140,
+        240,
+        280
+      ]
+    },
+    {
+      "partId": "danawa-case-68242736",
+      "model": "Era2",
+      "fullListVerified": true,
+      "sourceUrls": [
+        "https://www.fractal-design.com/products/cases/era-series/era-2/era-2-midnight-blue/",
+        "https://support.fractal-design.com/support/solutions/articles/4000210382-era-2-radiator-support"
+      ],
+      "radiatorSupports": [
+        {
+          "position": "top",
+          "sizesMm": [
+            120,
+            140,
+            240,
+            280
+          ],
+          "requirements": [
+            {
+              "maxRadiatorWidthMm": 140,
+              "maxRadiatorLengthMm": 315,
+              "configurationNote": "실제 길이가 300mm를 넘으면 팬 포함 두께 52mm 이하, 300mm 미만이면 58mm 이하입니다. 길이 250mm 미만을 전면으로 치우쳐 놓으면 68mm까지 가능한 별도 배치가 있습니다. 300mm 경계는 제조사 안내 확인이 필요합니다."
+            }
+          ]
+        }
+      ],
+      "radiatorSizesMm": [
+        120,
+        140,
+        240,
+        280
+      ]
+    },
+    {
+      "partId": "danawa-case-20344595",
+      "model": "Terra",
+      "fullListVerified": true,
+      "sourceUrls": [
+        "https://www.fractal-design.com/app/uploads/2023/05/Terra_Product-sheet_EN.pdf",
+        "https://support.fractal-design.com/support/solutions/articles/4000194856-terra-radiator-support"
+      ],
+      "radiatorSupports": [
+        {
+          "position": "side",
+          "sizesMm": [
+            120
+          ],
+          "requirements": [
+            {
+              "maxRadiatorWidthMm": 121,
+              "maxGpuLengthMm": 200,
+              "configurationNote": "측면 120mm 수랭은 케이스의 2.5형 SSD 장착부를 비운 구성이 필요합니다. GPU 길이 200mm 이하 조건과 함께 확인해야 합니다."
+            }
+          ]
+        }
+      ],
+      "radiatorSizesMm": [
+        120
+      ]
+    }
+  ],
+  "manufacturerSourceConflicts": [
+    {
+      "model": "Define 7 Compact",
+      "detail": "웹 top 140mm와 매뉴얼 p.28 top120/240mm가 다릅니다. 매뉴얼 전체 도해를 기준으로 채택했습니다."
+    },
+    {
+      "model": "Meshify 2 XL",
+      "detail": "웹 top/front에서480mm가 빠졌으나 현 매뉴얼 p.43이 명시합니다. 매뉴얼을 채택했습니다."
+    },
+    {
+      "model": "Meshify 3",
+      "detail": "웹 front140mm가 빠졌으나 현 매뉴얼 p.41이 명시합니다. 매뉴얼을 채택했습니다."
+    },
+    {
+      "model": "Epoch",
+      "detail": "웹 top140mm 및 front240mm 표기가 현 매뉴얼 p.34와 다릅니다. 매뉴얼 top120/240, front120/140/240/280/360을 채택했습니다."
+    },
+    {
+      "model": "Epoch XL",
+      "detail": "FAQ rear up to140mm와 현 매뉴얼 p.35 rear120mm가 다릅니다. 매뉴얼을 채택했습니다."
+    },
+    {
+      "model": "North XL / RC / Momentum",
+      "detail": "웹 front140mm가 빠졌으나 해당 현 매뉴얼의 전체 도해는140mm를 명시합니다. 매뉴얼을 채택했습니다."
+    },
+    {
+      "model": "Torrent",
+      "detail": "웹 front180mm가 빠졌으나 현 매뉴얼 p.41이 명시합니다. 매뉴얼을 채택했습니다."
+    }
+  ],
+  "sourceFileHashes": [
+    {
+      "model": "Meshify 2 Compact",
+      "sourceUrl": "https://assets.fractal-design.com/files/uxzbxy2o/production/a401ebedcbd520103b5624df0baae29733f9e5e6.pdf",
+      "sha256": "c4fc515a6bfb4d35c90c614fdc0340496ce10863798e6a7e430ec12eee15be2a",
+      "radiatorPhysicalPages": [
+        41
+      ],
+      "renderedAndReviewedPhysicalPages": [
+        41
+      ]
+    },
+    {
+      "model": "Meshify 2 XL",
+      "sourceUrl": "https://assets.fractal-design.com/files/uxzbxy2o/production/cdf01f190b68cdc6e6f82f47f6b13ebb6a950089.pdf",
+      "sha256": "b664cbbe1c47747aa836ced611b606dda888d2a859409d1be2206ddd9a094474",
+      "radiatorPhysicalPages": [
+        44
+      ],
+      "renderedAndReviewedPhysicalPages": [
+        44
+      ]
+    },
+    {
+      "model": "Meshify 3 XL",
+      "sourceUrl": "https://assets.fractal-design.com/files/uxzbxy2o/production/b88856692511e5475fea5bf34b53a17db36f4ddd.pdf",
+      "sha256": "c06d49344ca52da6f51d94b92b7bfe46dee96dd6f475d98edf9eac4ee5a22d9e",
+      "radiatorPhysicalPages": [
+        48,
+        50
+      ],
+      "renderedAndReviewedPhysicalPages": [
+        48
+      ]
+    },
+    {
+      "model": "Epoch",
+      "sourceUrl": "https://assets.fractal-design.com/files/uxzbxy2o/production/68578f9fa95fce8af9edaba6dd98ecb0cdf73046.pdf",
+      "sha256": "d3768918075a6251bd02c95e006b5ae40472d94c2d7f861a54bb3279fccbe355",
+      "radiatorPhysicalPages": [
+        34
+      ],
+      "renderedAndReviewedPhysicalPages": [
+        34
+      ]
+    },
+    {
+      "model": "Epoch XL",
+      "sourceUrl": "https://assets.fractal-design.com/files/uxzbxy2o/production/6c872113c3ffd3b7f17dd4bab6637188b029a151.pdf",
+      "sha256": "b9de83199ca15e259f654c34e466c6de9e6f6dbca72c328b889a546948de88d3",
+      "radiatorPhysicalPages": [
+        36,
+        37,
+        38
+      ],
+      "renderedAndReviewedPhysicalPages": [
+        36
+      ]
+    },
+    {
+      "model": "North",
+      "sourceUrl": "https://assets.fractal-design.com/files/uxzbxy2o/production/6f9ccb3a36843c7b3e696a62dfa5e7370db78da7.pdf",
+      "sha256": "6270d8aae6c4884e0184d53ccec6b193919d29cd1f53e2d1d6f5f292dd1ab209",
+      "radiatorPhysicalPages": [
+        34
+      ],
+      "renderedAndReviewedPhysicalPages": [
+        34
+      ]
+    },
+    {
+      "model": "North XL RC",
+      "sourceUrl": "https://assets.fractal-design.com/files/uxzbxy2o/production/b9da6c6ccec21bb0859a91f1f2f5c424048391d1.pdf",
+      "sha256": "fa2599ae02d49c219fb20ad68ef62b959d2e972e40005e2fbad0424c15a048a3",
+      "radiatorPhysicalPages": [
+        40,
+        42
+      ],
+      "renderedAndReviewedPhysicalPages": [
+        40
+      ]
+    },
+    {
+      "model": "North XL Momentum Edition",
+      "sourceUrl": "https://assets.fractal-design.com/files/uxzbxy2o/production/72710ae076535c2676cc487faddb9517b500c681.pdf",
+      "sha256": "db8d84dfb60691246f94503d9b9fe8c9b15eb36f6fd32277c770e0effb74ed69",
+      "radiatorPhysicalPages": [
+        36,
+        38
+      ],
+      "renderedAndReviewedPhysicalPages": [
+        36
+      ]
+    },
+    {
+      "model": "Meshify 3",
+      "sourceUrl": "https://assets.fractal-design.com/files/uxzbxy2o/production/f44d33810a02c53771f131ec4050ce922c536e08.pdf",
+      "sha256": "589f6f9c06c03760320f9f814822a40a25e6bece1f59e9688495a31676545edc",
+      "radiatorPhysicalPages": [
+        42,
+        44
+      ],
+      "renderedAndReviewedPhysicalPages": [
+        42
+      ]
+    },
+    {
+      "model": "North Momentum Edition",
+      "sourceUrl": "https://assets.fractal-design.com/files/uxzbxy2o/production/0db9c256528400d4d16ab77d6fd3bee9b77ea90e.pdf",
+      "sha256": "618c804ecdd59eab79d794e7dce21b7ebeb62157edbf95d6e13e19330bf5ef8f",
+      "radiatorPhysicalPages": [
+        32
+      ],
+      "renderedAndReviewedPhysicalPages": [
+        32
+      ]
+    },
+    {
+      "model": "Torrent",
+      "sourceUrl": "https://assets.fractal-design.com/files/uxzbxy2o/production/af5f587352e8fa20cb09151326dae43796eebb44.pdf",
+      "sha256": "01b513e972d4f2ab0be5c7b016ce7c11c427b01a84e83b7794a7c9be789cc856",
+      "radiatorPhysicalPages": [
+        42
+      ],
+      "renderedAndReviewedPhysicalPages": [
+        42
+      ]
+    }
+  ]
+}

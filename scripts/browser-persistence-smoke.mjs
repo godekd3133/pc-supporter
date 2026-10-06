@@ -337,7 +337,7 @@ async function main() {
     await navigate(client, `${webUrl}/catalog?category=gpu&partId=${encodeURIComponent(provenancePart.id)}`, "수동 provenance 카탈로그 상세");
     await waitForValue(client, "document.querySelector('[data-testid=\"catalog-part-detail\"]') !== null && (document.body?.innerText ?? '').includes('GPU 소비전력') && (document.body?.innerText ?? '').includes('320W')", "수동 스펙 보강 적용");
     assert((await bodyText(client)).includes("GPU 소비전력") && (await bodyText(client)).includes("320W"), "제조사 수동 보강값이 카탈로그 상세 사양에 적용되지 않았습니다.");
-    await navigate(client, `${webUrl}/admin`, "수동 override 관리자 화면");
+    await navigate(client, `${webUrl}/admin/catalog`, "수동 override 관리자 화면");
     await waitForValue(client, "(document.body?.innerText ?? '').includes('부품 데이터 센터')", "수동 override 관리자 화면 확인");
     await waitForValue(client, "document.getElementById('admin-catalog-spec-override') !== null", "제조사 정보 수동 스펙 보강 anchor");
     await client.evaluate("(() => { const node = document.getElementById('admin-catalog-spec-override'); node?.scrollIntoView({ block: 'center', behavior: 'auto' }); node?.focus({ preventScroll: true }); return Boolean(node); })()");
@@ -628,6 +628,10 @@ async function main() {
     })()`);
     await navigate(secondClient, `${webUrl}/share/${encodeURIComponent(candidateSavedId)}`, "두 번째 탭 구매 목록 route");
     await openResultDetails(secondClient);
+    // 공유 데이터 도착 후 재렌더로 details가 닫힐 수 있어 다시 연다 —
+    // 이후 단계의 innerText·actionMessage 검사가 닫힌 패널을 보지 못한다.
+    await waitForValue(secondClient, "document.querySelector('[data-testid=\"purchase-list-panel\"]') !== null", "두 번째 탭 구매 목록 패널");
+    await openResultDetails(secondClient);
     const secondTabProgressProbe = await secondClient.evaluate(`(async () => {
       const startedAt = Date.now();
       let statusText = "";
@@ -682,6 +686,9 @@ async function main() {
     await navigate(client, `${webUrl}/share/${encodeURIComponent(candidateSavedId)}`, "서버 진행률 재조회 route");
     await openResultDetails(client);
     await waitForValue(client, "document.querySelector('[data-testid=\"purchase-list-panel\"]') !== null", "서버 진행률 구매 목록");
+    // 서버 진행률 응답 도착 후 결과 뷰가 다시 렌더되면서 details가 접힐 수 있다 —
+    // innerText 기반 검사 전에 다시 펼친다.
+    await openResultDetails(client);
     const serverProgressSyncProbe = await client.evaluate("(() => { const node = document.querySelector('[data-testid=\"purchase-list-server-sync\"]'); return { syncText: node?.textContent?.trim() ?? null, audit: window.__pcSupporterApiRequestAudit?.filter((entry) => /purchase-progress|builds\\//.test(entry.path))?.slice(-6) ?? [] }; })()");
     if (!(serverProgressSyncProbe.syncText ?? "").includes("서버 저장")) {
       for (let i = 0; i < 240; i += 1) {
@@ -751,6 +758,10 @@ async function main() {
       };
       const key = 'pc-supporter-saved-build-owner-tokens'; const tokens = JSON.parse(localStorage.getItem(key) ?? '{}'); delete tokens[${JSON.stringify(originalSavedId)}]; localStorage.setItem(key, JSON.stringify(tokens)); return true;
     })()`);
+    // 외부 사용자 관점을 만들려면 HttpOnly owner-session 쿠키까지 끊어야 한다 —
+    // localStorage의 legacy 토큰만 지우면 세션 쿠키가 비동기로 소유권을 되살려
+    // "내 견적으로 복제" 버튼이 렌더 도중 사라지는 경합이 생긴다.
+    await client.send("Network.deleteCookies", { name: "pc_supporter_owner_session", url: apiUrl, path: "/api" }).catch(() => undefined);
     await navigate(client, `${webUrl}/share/${encodeURIComponent(originalSavedId)}`, "공유 견적 외부 사용자 복제 route");
     await waitForValue(client, "document.querySelector('[data-testid=\"shared-build-clone\"]') !== null", "공유 견적 내 견적으로 복제 액션");
     assert(await clickSelector(client, '[data-testid="shared-build-clone"]', 1) === 1, "공유 견적 내 견적으로 복제 버튼을 클릭하지 못했습니다.");

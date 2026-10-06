@@ -20,11 +20,18 @@ vi.mock("./repository", () => ({
     fake.catalogReads += 1;
     return fake.databaseCatalog;
   },
+  // loadCatalog의 버전 스탬프 캐시용 — fixture 내용에서 파생해야 스냅샷 사이
+  // 카탈로그가 바뀌었을 때 캐시가 실제로 무효화된다.
+  readCatalogVersionStamp: async () => {
+    const maxUpdated = fake.databaseCatalog.map((part) => (part as { updatedAt?: string }).updatedAt ?? "").sort().at(-1) ?? "-";
+    return `${fake.databaseCatalog.length}:${maxUpdated}`;
+  },
   patchCatalogPriceRecords: async () => undefined,
   writeCatalogRecords: async () => undefined
 }));
 
 vi.mock("./storage", () => ({
+  DATA_DIR: "/fixture",
   CASE_RGB_LOAD_OVERRIDES_PATH: "/fixture/case-rgb-load-overrides.json",
   GPU_PHYSICAL_OVERRIDES_PATH: "/fixture/gpu-physical-overrides.json",
   fileUpdatedAt: async () => fake.fileUpdatedAt,

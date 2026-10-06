@@ -27,7 +27,9 @@ describe("catalog change impact mapping", () => {
     const motherboardRecord = record({ category: "motherboard" });
     const caseRecord = record({ category: "case" });
     expect(catalogChangeImpactsFor(motherboardRecord, { field: "정규화 스펙 · Vcore 출력 합계", previous: "600", next: "720" })[0]?.ruleIds).toEqual(["cpu-motherboard-power"]);
-    expect(catalogChangeImpactsFor(motherboardRecord, { field: "정규화 스펙 · 전원부 페이즈", previous: "10", next: "12" })[0]?.ruleIds).toEqual(["cpu-motherboard-power"]);
+    expect(catalogChangeImpactsFor(motherboardRecord, { field: "정규화 스펙 · Vcore 페이즈", previous: "10", next: "12" })[0]?.ruleIds).toEqual(["cpu-motherboard-power"]);
+    // 전체 페이즈 합계는 전원부 추정에 쓰지 않으므로 호환성 재검사를 만들지 않는다.
+    expect(catalogChangeImpactsFor(motherboardRecord, { field: "정규화 스펙 · 전원부 페이즈", previous: "12", next: "16" }).flatMap((impact) => impact.ruleIds)).not.toContain("cpu-motherboard-power");
     expect(catalogChangeImpactsFor(motherboardRecord, { field: "정규화 스펙 · 메모리 슬롯", previous: "2", next: "4" })[0]?.ruleIds).toEqual(["memory-slots", "memory-module-capacity"]);
     expect(catalogChangeImpactsFor(caseRecord, { field: "정규화 스펙 · SSD 베이", previous: "2", next: "1" })[0]?.ruleIds).toEqual(["case-ssd-bays"]);
   });

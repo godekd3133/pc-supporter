@@ -1,11 +1,13 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
-import { emptyEngineTargetFiltersConfig, engineTargetFilterActiveFacetCount, engineTargetFilterConfigFromUnknown, engineTargetFiltersAllowPart, ENGINE_TARGET_FILTER_FACETS } from "../shared/engine-target-filters";
+import { emptyEngineTargetFiltersConfig, engineTargetFilterActiveFacetCount, engineTargetFilterBypassesBrandPolicy, engineTargetFilterConfigFromUnknown, engineTargetFiltersAllowPart, ENGINE_TARGET_FILTER_FACETS } from "../shared/engine-target-filters";
 import type { EngineTargetFiltersConfig } from "../shared/engine-target-filters";
 import { isKnownPrice, PART_CATEGORIES } from "../shared/types";
 import type { Part, PartCategory } from "../shared/types";
-import { isQuoteBrandAllowed, isQuoteSelectable } from "./listing";
+import { isQuoteBrandAllowed, isQuotePurchasable, isQuoteSelectable } from "./listing";
 import { DATA_DIR, fileUpdatedAt, withSerializedFileMutation, writeJson } from "./storage";
+import { publishInstanceEvent } from "./instance-events";
+import { pushRuntimeConfigToDatabase } from "./runtime-config-store";
 
 export type EngineTargetFilterCategorySummary = {
   totalCount: number;
@@ -21,10 +23,22 @@ export type EngineTargetFilterValueOption = {
   count: number;
 };
 
+// 관리자 패널의 "부품 직접 제외" 선택지 — 제외는 부품 id로 저장되므로
+// 카탈로그 전체 행을 id와 함께 내려보낸다(관리자 전용 단발 조회).
+export type EngineTargetFilterPartOption = {
+  id: string;
+  name: string;
+  brand?: string;
+  priceWon?: number;
+};
+
 export type EngineTargetFilterCategoryFacetOptions = {
   partCount: number;
   brandOptions: EngineTargetFilterValueOption[];
   facetOptions: Partial<Record<string, { options: EngineTargetFilterValueOption[]; missingCount: number }>>;
+  // 부품 선택 목록 — 관리자 견적 필터 편집용. 공개 카탈로그 facet 경로에는
+  // 싣지 않는다(응답 크기·노출 범위를 기존 그대로 유지하기 위해).
+  parts?: EngineTargetFilterPartOption[];
 };
 
 type EngineTargetFiltersCache = { path: string; mtimeMs: number; config: EngineTargetFiltersConfig } | undefined;
@@ -53,29 +67,43 @@ export function invalidateEngineTargetFiltersCache() {
   cache = undefined;
 }
 
-export async function saveEngineTargetFiltersConfig(config: EngineTargetFiltersConfig) {
+async function persistEngineTargetFiltersConfig(config: EngineTargetFiltersConfig) {
   const path = engineTargetFiltersPath();
   await withSerializedFileMutation(path, async () => {
     await writeJson(path, config);
     invalidateEngineTargetFiltersCache();
   });
+}
+
+export async function saveEngineTargetFiltersConfig(config: EngineTargetFiltersConfig) {
+  const path = engineTargetFiltersPath();
+  await persistEngineTargetFiltersConfig(config);
+  // 공유 원본(runtime_configs)에 올리고 다른 인스턴스에 무효화만 알린다.
+  await pushRuntimeConfigToDatabase("engine-target-filters", config);
+  void publishInstanceEvent("config:file", { name: "engine-target-filters" });
   return { config: loadEngineTargetFiltersConfig(), updatedAt: await fileUpdatedAt(path) };
+}
+
+// 다른 인스턴스가 버스로 복제해온 설정 — 로컬 파일에만 기록하고 재발행하지 않는다.
+export async function applyReceivedEngineTargetFiltersConfig(config: EngineTargetFiltersConfig) {
+  await persistEngineTargetFiltersConfig(config);
 }
 
 // 생성기 후보 풀의 기준 게이트(범주·비핵심 상품·견적 브랜드·가격/스펙 완결)와
 // 동일한 선행 조건으로 미리보기 수를 계산해, 저장 전 영향이 실제와 다르지 않게 한다.
-function enginePoolBaseAllowsPart(part: Part, category: PartCategory) {
+function enginePoolBaseAllowsPart(part: Part, category: PartCategory, catalog: Part[], config?: EngineTargetFiltersConfig) {
+  const bypassBrandPolicy = engineTargetFilterBypassesBrandPolicy(config, category);
   return part.category === category
     && part.listingType !== "accessory"
-    && isQuoteBrandAllowed(category, part.brand)
-    && isQuoteSelectable(part);
+    && (bypassBrandPolicy || isQuoteBrandAllowed(category, part.brand))
+    && (bypassBrandPolicy ? isQuotePurchasable(part, catalog) : isQuoteSelectable(part, catalog));
 }
 
 export function engineTargetFilterSummaryFor(catalog: Part[], config: EngineTargetFiltersConfig): EngineTargetFilterSummary {
   const summary: EngineTargetFilterSummary = {};
   for (const category of PART_CATEGORIES) {
     const parts = catalog.filter((part) => part.category === category && part.listingType !== "accessory");
-    const eligible = parts.filter((part) => enginePoolBaseAllowsPart(part, category));
+    const eligible = parts.filter((part) => enginePoolBaseAllowsPart(part, category, catalog, config));
     const rule = config.categories[category];
     const matching = eligible.filter((part) => engineTargetFiltersAllowPart(part, config));
     summary[category] = {
@@ -106,7 +134,7 @@ export function engineTargetFilterFacetOptionsFor(catalog: Part[]): Record<PartC
   const result = {} as Record<PartCategory, EngineTargetFilterCategoryFacetOptions>;
   for (const category of PART_CATEGORIES) {
     const parts = catalog.filter((part) => part.category === category && part.listingType !== "accessory");
-    result[category] = facetOptionsForParts(parts, category);
+    result[category] = facetOptionsForParts(parts, category, true);
   }
   return result;
 }
@@ -127,7 +155,7 @@ export function catalogPartFacetOptionsFor(parts: Part[], category: PartCategory
   };
 }
 
-function facetOptionsForParts(parts: Part[], category: PartCategory): EngineTargetFilterCategoryFacetOptions {
+function facetOptionsForParts(parts: Part[], category: PartCategory, includeParts = false): EngineTargetFilterCategoryFacetOptions {
   const brands = new Map<string, { value: string; count: number }>();
   const facetOptions: EngineTargetFilterCategoryFacetOptions["facetOptions"] = {};
   const facets = ENGINE_TARGET_FILTER_FACETS[category];
@@ -152,10 +180,16 @@ function facetOptionsForParts(parts: Part[], category: PartCategory): EngineTarg
   for (const [facetId, collector] of collectors) {
     facetOptions[facetId] = { options: sortedOptions(collector.options), missingCount: collector.missingCount };
   }
+  const partOptions = includeParts
+    ? [...parts]
+        .sort((left, right) => (left.brand ?? "").localeCompare(right.brand ?? "", "ko-KR") || left.name.localeCompare(right.name, "ko-KR"))
+        .map((part) => ({ id: part.id, name: part.name, ...(part.brand ? { brand: part.brand } : {}), ...(isKnownPrice(part.priceWon) ? { priceWon: part.priceWon } : {}) }))
+    : undefined;
   return {
     partCount: parts.length,
     brandOptions: sortedOptions(brands),
-    facetOptions
+    facetOptions,
+    ...(partOptions ? { parts: partOptions } : {})
   };
 }
 

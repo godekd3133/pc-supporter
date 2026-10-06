@@ -74,9 +74,9 @@
 
 .catalog-detail-facet-label span { display: block; color: #5b7975; font-size: 8px; font-weight: 700; line-height: 1.35; }
 
-.catalog-detail-facet-body { display: grid; gap: 5px; min-width: 0; }
+.catalog-detail-facet-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 5px; min-width: 0; }
 
-.catalog-detail-facet-options { display: flex; flex-wrap: wrap; gap: 4px; }
+.catalog-detail-facet-options { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
 
 .catalog-facet-option { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid #dbeae6; border-radius: 999px; color: #4f6d66; background: #fff; font-size: 8px; line-height: 1.3; cursor: pointer; transition: border-color 120ms ease, background-color 120ms ease, color 120ms ease; }
 
@@ -92,9 +92,9 @@
 
 .catalog-facet-option.flag { border-radius: 7px; }
 
-.catalog-detail-facet-range-inputs { display: flex; align-items: center; gap: 6px; }
+.catalog-detail-facet-range-inputs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
 
-.catalog-detail-facet-range-inputs input { width: 92px; height: 28px; padding: 0 7px; border: 1px solid #dbeae6; border-radius: 5px; outline: 0; color: #607f78; background: #fff; font-size: 8px; }
+.catalog-detail-facet-range-inputs input { width: 92px; min-width: 0; height: 28px; padding: 0 7px; border: 1px solid #dbeae6; border-radius: 5px; outline: 0; color: #607f78; background: #fff; font-size: 8px; }
 
 .catalog-detail-facet-range-inputs input:focus { border-color: #8abeb2; box-shadow: 0 0 0 3px #edf9f6; }
 
@@ -355,7 +355,12 @@ html[data-theme="dark"] .catalog-part-card-copy strong { color: var(--ink); }
 
 .catalog-pagination span { color: #7e9399; font-family: "DM Mono", monospace; font-size: 8px; }
 
-.catalog-state { display: flex; align-items: center; justify-content: center; gap: 7px; min-height: 180px; color: #82969c; font-size: 9px; }
+.catalog-state { display: flex; align-items: center; justify-content: center; gap: 7px; min-height: 180px; color: #82969c; font-size: 9px; text-align: center; }
+
+/* 조건을 좁혀 0건이 된 경우 바로 되돌아갈 동선을 제공한다 */
+.catalog-empty-copy { display: grid; justify-items: center; gap: 9px; max-width: 340px; }
+
+.catalog-empty-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 7px; }
 
 .catalog-state svg { flex: 0 0 auto; color: #78a194; }
 
@@ -845,6 +850,8 @@ html[data-theme="dark"] .catalog-part-card-copy strong { color: var(--ink); }
   .catalog-results-heading > span { max-width: none; text-align: left; }
   .catalog-page .workspace-heading > .button { width: 100%; }
   .catalog-part-card-copy span { white-space: normal; overflow-wrap: anywhere; }
+  /* 부품명은 카드에서 가장 중요한 텍스트 — 한 줄 말줄임 대신 두 줄까지 보여준다 */
+  .catalog-part-card-copy strong { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; white-space: normal; overflow-wrap: anywhere; }
 }
 
 @media (max-width: 500px) {

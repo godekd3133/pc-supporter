@@ -1,12 +1,12 @@
 import { GAMING_GRAPHICS_PRESET_LABELS, GAMING_UPSCALING_LABELS, RECOMMENDATION_PERFORMANCE_TIER_LABELS } from "../shared/types";
-import type { BuildGenerationRequest, GamingGraphicsPreset, GamingRefreshRate, GamingResolution, GamingUpscaling, RecommendationFloorWon, RecommendationPerformanceTier, RecommendationPriority, RecommendationProfile } from "../shared/types";
+import type { BuildGenerationRequest, GamingMode, GpuVendorPreference, GamingGraphicsPreset, GamingRefreshRate, GamingResolution, GamingUpscaling, ListingPolicy, RecommendationFloorWon, RecommendationPerformanceTier, RecommendationPriority, RecommendationProfile } from "../shared/types";
 import { GAMING_GAME_CATEGORY_LABELS, GAMING_GAMES, gamingAdvisoryTuningFor } from "../shared/gaming-catalog";
 import type { GamingGameCategory, GamingGameId, GamingGameOption } from "../shared/gaming-catalog";
 import type { GeneratorPresetConfig } from "../shared/generator-preset";
 
 export type OnboardingStep = "intent" | "mode" | "upgrade" | "usecase" | "games" | "performance" | "graphics" | "works" | "intensity" | "spec" | "budget" | "summary";
 export type OnboardingIntent = "new" | "upgrade" | "later";
-export type OnboardingMode = "budget" | "task" | "spec";
+export type OnboardingMode = "budget" | "target_fps" | "task" | "spec";
 export type OnboardingUsecase = "gaming" | "work";
 export type OnboardingGameCategory = GamingGameCategory;
 export type OnboardingGame = GamingGameId;
@@ -25,23 +25,31 @@ export interface OnboardingState {
   intensity?: OnboardingIntensity;
   resolution: GamingResolution;
   refreshRate: GamingRefreshRate;
+  targetFps?: number;
+  gamingMode?: GamingMode;
+  gpuVendorPreference: GpuVendorPreference;
   graphicsPreset: GamingGraphicsPreset;
   rayTracing: boolean;
   upscaling: GamingUpscaling;
   memoryGb: number;
   storageGb: number;
+  memoryExplicit?: boolean;
+  storageExplicit?: boolean;
   specTier: OnboardingSpecTier;
   specIncludeGpu: boolean;
   budgetWon: number;
+  listingPolicy?: ListingPolicy;
 }
 
 export const ONBOARDING_STORAGE_KEY = "pc-supporter-quote-onboarding";
 
-export const BUDGET_STOPS_WON = [1_500_000, 2_000_000, 3_000_000, 4_000_000, 5_000_000, 6_000_000] as const;
+export const BUDGET_STOPS_WON = [800_000, 1_200_000, 1_600_000, 2_200_000, 4_000_000, 10_000_000] as const;
 export const BUDGET_MIN_WON = 800_000;
-export const BUDGET_MAX_WON = 8_000_000;
+export const BUDGET_MAX_WON = 10_000_000;
 export const BUDGET_STEP_WON = 100_000;
 export const MAX_ONBOARDING_GAMES = 5;
+
+export const CURRENT_FPS_REFERENCE_GUIDANCE = "FPS 테스트가 있는 게임은 사이버펑크 2077·포르자 호라이즌 5·카운터 스트라이크 2·포트나이트·ARK: Survival Ascended·헬다이버즈 2예요. 일부 QHD·4K 옵션에서 레이 트레이싱과 업스케일링을 끈 결과입니다. 같은 게임·그래픽카드·옵션의 테스트가 없으면 FPS를 알 수 없다고 표시해요.";
 
 export const ONBOARDING_GAME_CATEGORY_LABELS = GAMING_GAME_CATEGORY_LABELS;
 
@@ -157,10 +165,11 @@ export function initialOnboardingState(): OnboardingState {
     works: [],
     resolution: "4k",
     refreshRate: 144,
+    gpuVendorPreference: "nvidia",
     graphicsPreset: "high",
     rayTracing: false,
     upscaling: "quality",
-    memoryGb: 32,
+    memoryGb: 16,
     storageGb: 1000,
     specTier: "high",
     specIncludeGpu: true,
@@ -174,7 +183,7 @@ export function onboardingStateToJson(state: OnboardingState): string {
 
 const STEPS: readonly OnboardingStep[] = ["intent", "mode", "upgrade", "usecase", "games", "performance", "graphics", "works", "intensity", "spec", "budget", "summary"];
 const INTENTS: readonly OnboardingIntent[] = ["new", "upgrade", "later"];
-const MODES: readonly OnboardingMode[] = ["budget", "task", "spec"];
+const MODES: readonly OnboardingMode[] = ["budget", "target_fps", "task", "spec"];
 const USECASES: readonly OnboardingUsecase[] = ["gaming", "work"];
 const GAME_IDS: readonly OnboardingGame[] = ONBOARDING_GAMES.map((game) => game.id);
 const WORK_IDS: readonly OnboardingWork[] = ONBOARDING_WORKS.map((work) => work.id);
@@ -205,13 +214,21 @@ export function onboardingStateFromJson(raw: string | null | undefined): Onboard
       intensity: candidate.intensity && INTENSITY_IDS.includes(candidate.intensity) ? candidate.intensity : undefined,
       resolution: candidate.resolution && RESOLUTIONS.includes(candidate.resolution) ? candidate.resolution : base.resolution,
       refreshRate: candidate.refreshRate && REFRESH_RATES.includes(candidate.refreshRate) ? candidate.refreshRate : base.refreshRate,
+      targetFps: validTargetFps(candidate.targetFps) ? candidate.targetFps : undefined,
+      gamingMode: candidate.gamingMode === "budget" || candidate.gamingMode === "target_fps" ? candidate.gamingMode : undefined,
+      gpuVendorPreference: candidate.gpuVendorPreference === "amd" ? "amd" : "nvidia",
       graphicsPreset: candidate.graphicsPreset && GRAPHICS_PRESETS.includes(candidate.graphicsPreset) ? candidate.graphicsPreset : base.graphicsPreset,
       rayTracing: typeof candidate.rayTracing === "boolean" ? candidate.rayTracing : base.rayTracing,
       upscaling: candidate.upscaling && UPSCALING_OPTIONS.includes(candidate.upscaling) ? candidate.upscaling : base.upscaling,
+      memoryExplicit: candidate.memoryExplicit === true ? true : undefined,
+      storageExplicit: candidate.storageExplicit === true ? true : undefined,
       memoryGb: MEMORY_OPTIONS.includes(candidate.memoryGb as (typeof MEMORY_OPTIONS)[number]) ? Number(candidate.memoryGb) : base.memoryGb,
       storageGb: STORAGE_OPTIONS.includes(candidate.storageGb as (typeof STORAGE_OPTIONS)[number]) ? Number(candidate.storageGb) : base.storageGb,
       specTier: candidate.specTier && SPEC_TIERS.includes(candidate.specTier) ? candidate.specTier : base.specTier,
       specIncludeGpu: typeof candidate.specIncludeGpu === "boolean" ? candidate.specIncludeGpu : base.specIncludeGpu,
+      // Saved drafts without a purchase condition used the generator's retail-only
+      // default. Keep that condition when resuming or editing the draft.
+      listingPolicy: candidate.listingPolicy === "include_bulk" || candidate.listingPolicy === "all" ? candidate.listingPolicy : "retail_only",
       budgetWon: Number.isInteger(candidate.budgetWon) && Number(candidate.budgetWon) > 0 ? clampBudget(Number(candidate.budgetWon)) : base.budgetWon
     };
   } catch {
@@ -220,7 +237,7 @@ export function onboardingStateFromJson(raw: string | null | undefined): Onboard
 }
 
 // 자동 구성 프리셋을 온보딩 마법사로 가져올 때의 초기 상태.
-// 마법사가 표현하지 못하는 조건(우선순위·HDD·구매 조건)은 주입하지 않고,
+// 마법사가 표현하지 못하는 조건(우선순위·HDD)은 주입하지 않고,
 // 요약 화면에서 예산·성능 조건을 다시 고를 수 있게 summary 단계로 연다.
 const PRESET_WORK_FALLBACK: Record<"office" | "development" | "creator", OnboardingWork> = {
   office: "office",
@@ -229,7 +246,7 @@ const PRESET_WORK_FALLBACK: Record<"office" | "development" | "creator", Onboard
 };
 
 export function onboardingStateForGeneratorPreset(config: GeneratorPresetConfig): OnboardingState {
-  const base = initialOnboardingState();
+  const base = { ...initialOnboardingState(), listingPolicy: config.listingPolicy };
   const budgetWon = clampBudget(config.budgetWon);
   if (config.profile === "gaming") {
     const games = (config.gamingGameIds ?? [])
@@ -239,7 +256,10 @@ export function onboardingStateForGeneratorPreset(config: GeneratorPresetConfig)
       ...base,
       step: "summary",
       intent: "new",
-      mode: "task",
+      mode: config.gamingMode === "budget" ? "budget" : "target_fps",
+      gamingMode: config.gamingMode ?? "target_fps",
+      targetFps: config.gamingTargetFps,
+      gpuVendorPreference: config.gpuVendorPreference === "amd" ? "amd" : "nvidia",
       usecase: "gaming",
       games,
       resolution: config.gamingResolution,
@@ -249,6 +269,8 @@ export function onboardingStateForGeneratorPreset(config: GeneratorPresetConfig)
       upscaling: config.gamingUpscaling ?? base.upscaling,
       memoryGb: config.memoryCapacityGb,
       storageGb: config.storageCapacityGb,
+      memoryExplicit: true,
+      storageExplicit: true,
       budgetWon
     };
   }
@@ -299,8 +321,8 @@ export function canAdvance(state: OnboardingState): boolean {
     case "games": return state.games.length > 0;
     case "works": return state.works.length > 0;
     case "intensity": return state.intensity !== undefined;
+    case "performance": return validTargetFps(targetFpsFor(state));
     case "upgrade":
-    case "performance":
     case "graphics":
     case "spec":
     case "budget":
@@ -308,18 +330,28 @@ export function canAdvance(state: OnboardingState): boolean {
   }
 }
 
-export function advanceOnboarding(state: OnboardingState): OnboardingState {
+export interface OnboardingFlowOptions { gamingTestbedPhase1?: boolean }
+
+export function advanceOnboarding(state: OnboardingState, options: OnboardingFlowOptions = {}): OnboardingState {
   switch (state.step) {
     case "intent":
       if (state.intent === "new") return { ...state, step: "mode" };
       if (state.intent === "upgrade") return { ...state, step: "upgrade" };
       return state;
     case "mode":
-      if (state.mode === "task") return { ...state, step: "usecase" };
-      if (state.mode === "spec") return { ...state, step: "spec" };
-      return { ...state, step: "budget" };
+      if (state.mode === "target_fps") return { ...state, gamingMode: "target_fps", usecase: "gaming", step: "games" };
+      if (state.mode === "task") return { ...state, usecase: undefined, step: "usecase" };
+      if (state.mode === "spec") return { ...state, usecase: undefined, step: "spec" };
+      return {
+        ...state,
+        ...(options.gamingTestbedPhase1 ? { usecase: "gaming" as const } : {}),
+        // The new budget-game route allows domestic new bulk listings. Explicit
+        // purchase conditions, imported presets and restored drafts stay intact.
+        ...(state.intent === "new" && (state.usecase === "gaming" || options.gamingTestbedPhase1) && state.listingPolicy === undefined ? { listingPolicy: "include_bulk" as const } : {}),
+        step: "budget"
+      };
     case "usecase":
-      return { ...state, step: state.usecase === "work" ? "works" : "games" };
+      return { ...state, step: state.usecase === "work" ? "works" : options.gamingTestbedPhase1 ? "budget" : "games" };
     case "games": return { ...state, step: "performance" };
     case "works": return { ...state, step: "intensity" };
     case "performance": return { ...state, step: "graphics" };
@@ -332,19 +364,20 @@ export function advanceOnboarding(state: OnboardingState): OnboardingState {
   }
 }
 
-export function backOnboarding(state: OnboardingState): OnboardingState {
+export function backOnboarding(state: OnboardingState, options: OnboardingFlowOptions = {}): OnboardingState {
   switch (state.step) {
     case "mode": return { ...state, step: "intent" };
     case "upgrade": return { ...state, step: "intent" };
     case "usecase": return { ...state, step: "mode" };
     case "spec": return { ...state, step: "mode" };
-    case "games": return { ...state, step: "usecase" };
+    case "games": return { ...state, step: state.mode === "target_fps" ? "mode" : "usecase" };
     case "works": return { ...state, step: "usecase" };
     case "performance": return { ...state, step: "games" };
     case "graphics": return { ...state, step: "performance" };
     case "intensity": return { ...state, step: "works" };
     case "budget":
-      if (state.usecase === "gaming") return { ...state, step: "graphics" };
+      if (state.mode === "budget") return { ...state, step: "mode" };
+      if (state.usecase === "gaming") return { ...state, step: options.gamingTestbedPhase1 ? "usecase" : "graphics" };
       if (state.usecase === "work") return { ...state, step: "intensity" };
       if (state.mode === "spec") return { ...state, step: "spec" };
       return { ...state, step: "mode" };
@@ -378,21 +411,25 @@ export function stepLabelFor(step: OnboardingStep): string {
   return STEP_LABELS[step];
 }
 
+const DIRECT_GAMING_FLOW_STEPS: readonly OnboardingStep[] = ["intent", "mode", "games", "performance", "graphics", "budget", "summary"];
 const GAMING_FLOW_STEPS: readonly OnboardingStep[] = ["intent", "mode", "usecase", "games", "performance", "graphics", "budget", "summary"];
+const GAMING_BUDGET_FLOW_STEPS: readonly OnboardingStep[] = ["intent", "mode", "usecase", "budget", "summary"];
 const WORK_FLOW_STEPS: readonly OnboardingStep[] = ["intent", "mode", "usecase", "works", "intensity", "budget", "summary"];
 const SPEC_FLOW_STEPS: readonly OnboardingStep[] = ["intent", "mode", "spec", "budget", "summary"];
 const BUDGET_FLOW_STEPS: readonly OnboardingStep[] = ["intent", "mode", "budget", "summary"];
 const UPGRADE_FLOW_STEPS: readonly OnboardingStep[] = ["intent", "upgrade"];
 
-function flowStepsFor(state: OnboardingState): readonly OnboardingStep[] {
+function flowStepsFor(state: OnboardingState, options: OnboardingFlowOptions = {}): readonly OnboardingStep[] {
   if (state.step === "upgrade" || state.intent === "upgrade") return UPGRADE_FLOW_STEPS;
-  if (state.usecase === "gaming" || ["usecase", "games", "performance", "graphics"].includes(state.step)) return GAMING_FLOW_STEPS;
+  if (state.mode === "budget") return BUDGET_FLOW_STEPS;
+  if (state.mode === "target_fps") return DIRECT_GAMING_FLOW_STEPS;
+  if (state.usecase === "gaming" || ["usecase", "games", "performance", "graphics"].includes(state.step)) return options.gamingTestbedPhase1 ? GAMING_BUDGET_FLOW_STEPS : GAMING_FLOW_STEPS;
   if (state.usecase === "work" || ["works", "intensity"].includes(state.step)) return WORK_FLOW_STEPS;
   if (state.mode === "spec" || state.step === "spec") return SPEC_FLOW_STEPS;
   return BUDGET_FLOW_STEPS;
 }
 
-export function stepIndicatorFor(state: OnboardingState): OnboardingStepIndicator {
+export function stepIndicatorFor(state: OnboardingState, options: OnboardingFlowOptions = {}): OnboardingStepIndicator {
   const eyebrow = state.step === "intent" ? "START HERE"
     : state.step === "mode" ? "NEW QUOTE"
       : state.step === "upgrade" ? "UPGRADE"
@@ -403,9 +440,19 @@ export function stepIndicatorFor(state: OnboardingState): OnboardingStepIndicato
                 : state.step === "spec" ? "PERFORMANCE"
                   : state.step === "budget" ? "BUDGET"
                     : "READY";
-  const steps = flowStepsFor(state);
+  const steps = flowStepsFor(state, options);
   const stepIndex = steps.indexOf(state.step);
   return { eyebrow, index: stepIndex >= 0 ? stepIndex + 1 : 1, total: steps.length };
+}
+
+export function validTargetFps(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 30 && value <= 500;
+}
+
+export function targetFpsFor(state: OnboardingState): number { return state.targetFps ?? state.refreshRate; }
+
+export function gamingModeFor(state: OnboardingState, options: OnboardingFlowOptions = {}): GamingMode {
+  return options.gamingTestbedPhase1 || state.mode === "budget" ? "budget" : state.gamingMode ?? "target_fps";
 }
 
 export interface BudgetEstimate {
@@ -492,7 +539,10 @@ export function budgetEstimateForSelectedTarget(state: OnboardingState): BudgetE
   if (state.usecase !== "gaming") return estimate;
   return {
     ...estimate,
-    performance: `${resolutionLabelFor(state.resolution)} · ${state.refreshRate}Hz 주사율 목표`
+    performance: `${resolutionLabelFor(state.resolution)} · 목표 ${targetFpsFor(state)} FPS`,
+    gpu: "FPS 테스트와 비교해 선택",
+    memory: state.memoryExplicit ? `${state.memoryGb}GB 이상` : "16GB부터 · 구성에 맞춰 조정",
+    storage: state.storageExplicit ? `${state.storageGb >= 1000 ? `${state.storageGb / 1000}TB` : `${state.storageGb}GB`} SSD` : "1TB SSD"
   };
 }
 
@@ -542,15 +592,19 @@ function floorBoundedBudgetRange(range: RequiredBudgetRange, floorWon: number | 
   };
 }
 
-export function requiredGamingBudgetFor(resolution: GamingResolution, refreshRate: GamingRefreshRate, games: readonly OnboardingGame[], options: GamingBudgetOptions = {}, floorWon?: number): RequiredBudgetRange {
+export function requiredGamingBudgetFor(resolution: GamingResolution, refreshRate: number, games: readonly OnboardingGame[], options: GamingBudgetOptions = {}, floorWon?: number): RequiredBudgetRange {
   const tuning = gamingAdvisoryTuningFor(resolution, { gameIds: games, ...options });
-  const required = roundTo100k(BASE_REQUIRED_BUDGET_WON[resolution][refreshRate] * tuning.demandMultiplier);
+  const rates = BASE_REQUIRED_BUDGET_WON[resolution];
+  const base = refreshRate <= 60 ? rates[60] * refreshRate / 60
+    : refreshRate <= 144 ? rates[60] + (rates[144] - rates[60]) * (refreshRate - 60) / 84
+      : rates[144] + (rates[240] - rates[144]) * (refreshRate - 144) / 96;
+  const required = roundTo100k(base * tuning.demandMultiplier);
   return floorBoundedBudgetRange({ minWon: roundTo100k(required * 0.92), maxWon: roundTo100k(required * 1.08) }, floorWon);
 }
 
 export function gamingTargetShortfall(state: OnboardingState, floors?: RecommendationFloorWon, requestFloorWon?: number): RequiredBudgetRange | null {
   if (state.usecase !== "gaming") return null;
-  const required = requiredGamingBudgetFor(state.resolution, state.refreshRate, state.games, {
+  const required = requiredGamingBudgetFor(state.resolution, targetFpsFor(state), state.games, {
     graphicsPreset: state.graphicsPreset,
     rayTracing: state.rayTracing,
     upscaling: state.upscaling
@@ -585,7 +639,8 @@ export function requiredWorkBudgetFor(works: readonly OnboardingWork[], intensit
 
 export function targetBudgetRangeFor(state: OnboardingState, floors?: RecommendationFloorWon, requestFloorWon?: number): RequiredBudgetRange | null {
   if (state.usecase === "gaming") {
-    return requiredGamingBudgetFor(state.resolution, state.refreshRate, state.games, {
+    if (gamingModeFor(state) === "budget") return null;
+    return requiredGamingBudgetFor(state.resolution, targetFpsFor(state), state.games, {
       graphicsPreset: state.graphicsPreset,
       rayTracing: state.rayTracing,
       upscaling: state.upscaling
@@ -619,6 +674,9 @@ export interface RecommendParams {
   workIntensity?: OnboardingIntensity;
   budgetWon: number;
   includeGpu: boolean;
+  gamingMode?: GamingMode;
+  gamingTargetFps?: number;
+  gpuVendorPreference?: GpuVendorPreference;
   gamingResolution?: GamingResolution;
   gamingRefreshRate?: GamingRefreshRate;
   gamingGameIds?: string[];
@@ -629,12 +687,28 @@ export interface RecommendParams {
   storageCapacityGb: number;
 }
 
-export function recommendParamsFor(state: OnboardingState): RecommendParams {
+export function listingPolicyFor(state: OnboardingState): ListingPolicy {
+  return state.listingPolicy ?? "retail_only";
+}
+
+export function purchaseConditionSummaryFor(state: OnboardingState): string {
+  const policy = listingPolicyFor(state);
+  if (policy === "include_bulk") return "국내 신품 · 벌크 포함";
+  if (policy === "all") return "전체 유통 조건";
+  return "신품 · 정식 유통";
+}
+
+export function recommendParamsFor(state: OnboardingState, options: OnboardingFlowOptions = {}): RecommendParams {
   if (state.usecase === "gaming") {
-    // 요약 화면에 표시한 예산 티어 추정(저예산은 16GB·500GB)과 같은 구성을 보낸다.
-    const estimate = budgetEstimateFor(state.budgetWon, "gaming");
+    const mode = gamingModeFor(state, options);
+    if (mode === "budget") return { profile: "gaming", gamingMode: "budget", gpuVendorPreference: state.gpuVendorPreference, priority: "performance", budgetWon: state.budgetWon, includeGpu: true, memoryCapacityGb: state.memoryExplicit ? state.memoryGb : 16, storageCapacityGb: state.storageExplicit ? state.storageGb : 1000 };
+    // Game budgets start with 16GB; CPU/GPU performance and platform compatibility
+    // determine necessary upgrades instead of a budget tier forcing larger memory.
     return {
       profile: "gaming",
+      gamingMode: "target_fps",
+      gamingTargetFps: targetFpsFor(state),
+      gpuVendorPreference: state.gpuVendorPreference,
       priority: "performance",
       budgetWon: state.budgetWon,
       includeGpu: true,
@@ -644,8 +718,8 @@ export function recommendParamsFor(state: OnboardingState): RecommendParams {
       gamingGraphicsPreset: state.graphicsPreset,
       gamingRayTracing: state.rayTracing,
       gamingUpscaling: state.upscaling,
-      memoryCapacityGb: capacityGbFromEstimateLabel(estimate.memory),
-      storageCapacityGb: capacityGbFromEstimateLabel(estimate.storage)
+      memoryCapacityGb: state.memoryExplicit ? state.memoryGb : 16,
+      storageCapacityGb: state.storageExplicit ? state.storageGb : 1000
     };
   }
   if (state.usecase === "work") {
@@ -688,10 +762,14 @@ export function recommendParamsFor(state: OnboardingState): RecommendParams {
 
 // 온보딩이 실제로 보낼 자동 구성 요청 — 최저 구성가 조회가 안내 수치가 아니라
 // 이 요청의 풀·게이트 그대로를 기준으로 해야 한다.
-export function recommendGenerationRequestFor(state: OnboardingState): BuildGenerationRequest {
-  const params = recommendParamsFor(state);
+export function recommendGenerationRequestFor(state: OnboardingState, options: OnboardingFlowOptions = {}): BuildGenerationRequest {
+  const params = recommendParamsFor(state, options);
+  const listingPolicy = listingPolicyFor(state);
   return {
     profile: params.profile,
+    listingPolicy,
+    includeNonRetail: listingPolicy !== "retail_only",
+    ...(params.profile === "gaming" ? { gamingTestbedPhase1: true, gamingMode: params.gamingMode, gamingTargetFps: params.gamingTargetFps, gpuVendorPreference: params.gpuVendorPreference } : {}),
     priority: params.priority,
     performanceTier: params.performanceTier,
     budgetWon: params.budgetWon,
@@ -707,12 +785,16 @@ export function recommendGenerationRequestFor(state: OnboardingState): BuildGene
   };
 }
 
-export function recommendQueryFor(state: OnboardingState): string {
-  const params = recommendParamsFor(state);
+export function recommendQueryFor(state: OnboardingState, options: OnboardingFlowOptions = {}): string {
+  const params = recommendParamsFor(state, options);
   const search = new URLSearchParams();
   search.set("profile", params.profile);
+  search.set("listingPolicy", listingPolicyFor(state));
   if (params.priority !== "balanced") search.set("priority", params.priority);
   if (params.profile === "gaming") {
+    search.set("gamingMode", params.gamingMode ?? "budget");
+    search.set("gpuVendor", params.gpuVendorPreference ?? "nvidia");
+    if (params.gamingTargetFps) search.set("targetFps", String(params.gamingTargetFps));
     // Keep the selected target explicit even when it matches the generator default.
     // The onboarding flow is a requirement handoff, so a shared URL must not rely on
     // a later generator default to reconstruct the selected refresh-rate target or graphics rule.
@@ -728,7 +810,7 @@ export function recommendQueryFor(state: OnboardingState): string {
     search.set("work", params.workType);
     search.set("intensity", params.workIntensity);
   }
-  if (params.memoryCapacityGb !== 32) search.set("ram", String(params.memoryCapacityGb));
+  search.set("ram", String(params.memoryCapacityGb));
   if (params.budgetWon !== 1_500_000) search.set("budget", String(params.budgetWon));
   if (!params.includeGpu) search.set("gpu", "0");
   if (params.storageCapacityGb !== 1000) search.set("ssd", String(params.storageCapacityGb));
@@ -751,7 +833,8 @@ export function gameLabelsFor(ids: readonly string[]): string[] {
 }
 
 export function targetSummaryFor(state: OnboardingState): string {
-  if (state.usecase === "gaming") return `${gamesSummaryFor(state.games)} · ${resolutionLabelFor(state.resolution)} · 목표 주사율 ${state.refreshRate}Hz · ${GAMING_GRAPHICS_PRESET_LABELS[state.graphicsPreset]} · ${GAMING_UPSCALING_LABELS[state.upscaling]}${state.rayTracing ? " · 레이 트레이싱" : ""}`;
+  if (state.usecase === "gaming" && gamingModeFor(state) === "budget") return "예산 안에서 GPU 성능 우선";
+  if (state.usecase === "gaming") return `${gamesSummaryFor(state.games)} · ${resolutionLabelFor(state.resolution)} · 목표 ${targetFpsFor(state)} FPS · ${GAMING_GRAPHICS_PRESET_LABELS[state.graphicsPreset]} · ${GAMING_UPSCALING_LABELS[state.upscaling]}${state.rayTracing ? " · 레이 트레이싱" : ""}`;
   if (state.usecase === "work") {
     const work = primaryWorkFor(state.works);
     const intensity = intensityOptionFor(state.intensity);

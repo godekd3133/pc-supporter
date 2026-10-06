@@ -1,9 +1,14 @@
+import { applyGamingStorageCatalogSnapshot } from "./gaming-storage-catalog";
+import { applyGamingSupportCatalogSnapshot } from "./gaming-support-catalog";
+import { applyGamingTargetCatalogSnapshot } from "./gaming-target-catalog";
+import { applyGamingAmdCatalogSnapshot } from "./gaming-amd-catalog";
 import type { BenchmarkAvailabilityFilter, BenchmarkSourceCoverage, CatalogBenchmarkCoverage, BrandCountOption, DataFreshness, DataQuality, ListingPolicy, Part, PartCategory, PriceAvailabilityFilter, ServiceMeta } from "../shared/types";
 import type { CatalogSnapshot } from "./catalog-snapshot";
 import { catalogCategoryIntegritySummaryFor, catalogCategoryMismatchFor } from "../shared/catalog-category-integrity";
 import { catalogSpecCoverageFor } from "../shared/catalog-spec-coverage";
 import { isKnownPrice, PART_CATEGORIES } from "../shared/types";
 import { starterCatalog } from "./seed-catalog-starter";
+import { applyPhase1CatalogSnapshot } from "./phase1-catalog";
 import {
   CASE_RGB_LOAD_OVERRIDES_PATH,
   GPU_PHYSICAL_OVERRIDES_PATH,
@@ -14,6 +19,7 @@ import { inferListingType, isListingAllowed, isQuoteBrandAllowed, isQuoteSelecta
 import { recommendationFloorWonFor } from "../shared/domain/engine";
 import { accessoryMeta, loadAccessories, readAccessoryCoverage } from "./accessories";
 import { reparseDanawaPart } from "./danawa";
+import { syncSeedPartPricesFromLive } from "../shared/domain/seed-anchor";
 import { applyM2SlotOverrides, readM2SlotOverrides, stripM2SlotOverride } from "./m2-overrides";
 import { applyBenchmarkOverrides, readBenchmarkOverrides } from "./benchmark-overrides";
 import { applyGpuPhysicalOverrides, readGpuPhysicalOverrides, stripGpuPhysicalOverrides } from "./gpu-physical-overrides";
@@ -128,10 +134,10 @@ async function loadCatalogUncoalesced() {
     if (catalogCache && catalogCacheStamp === stampBefore) return catalogCache;
     const persisted = await readCatalogRecords();
     const overrideMaps = await readCatalogOverrideMaps();
-    catalogCache = applyCatalogOverrideMaps(
-      mergeCatalog(seedBaseFor(persisted), persisted.map((part) => reparseDanawaPart(part))),
+    catalogCache = syncSeedPartPricesFromLive(applyCatalogOverrideMaps(
+      applyGamingStorageCatalogSnapshot(applyGamingTargetCatalogSnapshot(applyGamingSupportCatalogSnapshot(applyGamingAmdCatalogSnapshot(applyPhase1CatalogSnapshot(mergeCatalog(seedBaseFor(persisted), persisted.map((part) => reparseDanawaPart(part)))))))),
       overrideMaps
-    );
+    ));
     catalogCacheStamp = stampBefore;
     return catalogCache;
   } catch (error) {
@@ -172,7 +178,7 @@ export async function saveCatalog(parts: Part[]) {
   const baseCatalog = mergeCatalog([], parts.map((part) => stripCatalogSpecOverride(stripCaseRgbLoadOverride(stripGpuPhysicalOverrides(stripM2SlotOverride(part))))));
   await writeCatalogRecords(baseCatalog);
   const overrideMaps = await readCatalogOverrideMaps();
-  catalogCache = applyCatalogOverrideMaps(baseCatalog, overrideMaps);
+  catalogCache = syncSeedPartPricesFromLive(applyCatalogOverrideMaps(baseCatalog, overrideMaps));
   catalogCacheStamp = null;
   catalogRuntimeRevision += 1;
   return catalogCache;
@@ -190,7 +196,7 @@ async function upsertCatalogUnlocked(
     : mergeCatalog(current, incoming);
   await writeCatalogRecords(baseCatalog, { replaceDanawaCategories });
   const overrideMaps = await readCatalogOverrideMaps();
-  catalogCache = applyCatalogOverrideMaps(baseCatalog, overrideMaps);
+  catalogCache = syncSeedPartPricesFromLive(applyCatalogOverrideMaps(baseCatalog, overrideMaps));
   catalogCacheStamp = null;
   catalogRuntimeRevision += 1;
   return catalogCache;
@@ -566,6 +572,7 @@ export type PartSearchOptions = {
 };
 
 function partSearchPredicateFor(
+  catalog: Part[],
   category: PartCategory | undefined,
   query: string | undefined,
   options: PartSearchOptions = {}
@@ -577,7 +584,7 @@ function partSearchPredicateFor(
     if (options.partId && part.id !== options.partId) return false;
     if (category && part.category !== category) return false;
     if (options.quoteBrandRestricted && !isQuoteBrandAllowed(part.category, part.brand)) return false;
-    if (options.quoteSellableOnly && !isQuoteSelectable(part)) return false;
+    if (options.quoteSellableOnly && !isQuoteSelectable(part, catalog)) return false;
     if (normalizedBrand && !(part.brand ?? "").toLocaleLowerCase("ko-KR").includes(normalizedBrand)) return false;
     if (options.quality && options.quality !== "all" && part.dataQuality !== options.quality) return false;
     if (options.freshness && options.freshness !== "all" && classifyDataFreshness(part.updatedAt, options.now) !== options.freshness) return false;
@@ -607,13 +614,43 @@ function partSearchPredicateFor(
   };
 }
 
+// 요청 핫패스용 카탈로그 인덱스 — 배열 참조를 키로 한 WeakMap이라 카탈로그가
+// 재로드돼 새 배열로 교체되면 자동으로 무효화된다. 범주 버킷으로 전수 스캔을
+// 범주 슬라이스 스캔으로 줄인다.
+type CatalogIndex = {
+  byCategory: Map<PartCategory, Part[]>;
+};
+
+const catalogIndexCache = new WeakMap<Part[], CatalogIndex>();
+
+function catalogIndexFor(catalog: Part[]): CatalogIndex {
+  const cached = catalogIndexCache.get(catalog);
+  if (cached) return cached;
+  const byCategory = new Map<PartCategory, Part[]>();
+  for (const part of catalog) {
+    const bucket = byCategory.get(part.category);
+    if (bucket) bucket.push(part);
+    else byCategory.set(part.category, [part]);
+  }
+  const index: CatalogIndex = { byCategory };
+  catalogIndexCache.set(catalog, index);
+  return index;
+}
+
+// 범주가 주어지면 인덱스의 범주 버킷만 평가한다 — 범주 조건은 버킷 구성 시
+// 이미 적용됐으므로 predicate의 범주 검사는 버킷 안에서 항상 참이다.
+export function catalogCandidatesFor(catalog: Part[], category: PartCategory | undefined): Part[] {
+  if (!category) return catalog;
+  return catalogIndexFor(catalog).byCategory.get(category) ?? [];
+}
+
 export function filterParts(
   catalog: Part[],
   category: PartCategory | undefined,
   query: string | undefined,
   options: PartSearchOptions = {}
 ) {
-  return catalog.filter(partSearchPredicateFor(category, query, options));
+  return catalogCandidatesFor(catalog, category).filter(partSearchPredicateFor(catalog, category, query, options));
 }
 
 function sortParts(parts: Part[], category: PartCategory | undefined, sort: PartSearchOptions["sort"]) {
@@ -696,13 +733,13 @@ export function catalogSearchTotalsFor(
   }
 ): CatalogSearchTotals {
   const predicates = {
-    base: partSearchPredicateFor(category, query, optionSets.base),
-    price: partSearchPredicateFor(category, query, optionSets.price),
-    freshness: partSearchPredicateFor(category, query, optionSets.freshness),
-    benchmark: partSearchPredicateFor(category, query, optionSets.benchmark),
-    final: partSearchPredicateFor(category, query, optionSets.final),
-    unfiltered: partSearchPredicateFor(category, query, optionSets.unfiltered),
-    coreCandidate: partSearchPredicateFor(category, query, optionSets.coreCandidate)
+    base: partSearchPredicateFor(catalog, category, query, optionSets.base),
+    price: partSearchPredicateFor(catalog, category, query, optionSets.price),
+    freshness: partSearchPredicateFor(catalog, category, query, optionSets.freshness),
+    benchmark: partSearchPredicateFor(catalog, category, query, optionSets.benchmark),
+    final: partSearchPredicateFor(catalog, category, query, optionSets.final),
+    unfiltered: partSearchPredicateFor(catalog, category, query, optionSets.unfiltered),
+    coreCandidate: partSearchPredicateFor(catalog, category, query, optionSets.coreCandidate)
   };
   const totals: CatalogSearchTotals = {
     baseTotal: 0,
@@ -714,7 +751,7 @@ export function catalogSearchTotalsFor(
     coreCandidateTotal: 0,
     categoryMismatchExcludedCount: 0
   };
-  for (const part of catalog) {
+  for (const part of catalogCandidatesFor(catalog, category)) {
     if (predicates.base(part)) totals.baseTotal += 1;
     if (predicates.price(part)) totals.priceTotal += 1;
     if (predicates.freshness(part)) totals.freshnessTotal += 1;

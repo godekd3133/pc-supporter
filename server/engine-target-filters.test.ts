@@ -106,6 +106,34 @@ describe("engineTargetFilterFacetOptionsFor", () => {
   });
 });
 
+describe("부품 직접 제외", () => {
+  it("excludePartIds는 허용 조건과 무관하게 해당 부품을 후보에서 뺀다", () => {
+    const config = { schemaVersion: 1 as const, enabled: true, categories: { ssd: { excludePartIds: ["ssd-nvme-1tb"] } } };
+    const summary = engineTargetFilterSummaryFor(seedCatalog, config);
+    const ssd = summary.ssd!;
+    expect(ssd.matchingCount).toBe(ssd.eligibleCount - 1);
+    expect(ssd.activeFacets).toBe(1);
+  });
+
+  it("제외만 있는 규칙도 실제 조건으로 인정되고 생성에 적용된다", () => {
+    const targetFilters = { schemaVersion: 1 as const, enabled: true, categories: { ssd: { excludePartIds: ["ssd-nvme-1tb"] } } };
+    const draft = generateBuildDraft(seedCatalog, request, [], { targetFilters });
+    expect(draft.selection.ssd?.[0]?.partId).toBe("ssd-sata-1tb");
+  });
+
+  it("제외 목록의 정규화는 문자열 id만 남기고 잘못된 값은 오류로 기록한다", () => {
+    const parsed = normalizeEngineTargetFiltersInput({ categories: { ssd: { excludePartIds: ["ssd-nvme-1tb", " ssd-nvme-1tb ", 5, "ssd-sata-1tb"] } } });
+    expect(parsed.config.categories.ssd?.excludePartIds).toEqual(["ssd-nvme-1tb", "ssd-sata-1tb"]);
+    expect(parsed.errors.length).toBeGreaterThan(0);
+  });
+
+  it("facets 응답은 관리자 선택용 부품 목록을 범주별로 담는다", () => {
+    const facets = engineTargetFilterFacetOptionsFor(seedCatalog);
+    expect(facets.ssd.parts?.map((part) => part.id)).toEqual(expect.arrayContaining(["ssd-nvme-1tb", "ssd-sata-1tb"]));
+    expect(facets.ssd.parts?.every((part) => part.name.length > 0)).toBe(true);
+  });
+});
+
 describe("generateBuildDraft with target filters", () => {
   it("저장된 타겟 필터가 생성 후보 풀에 적용된다", () => {
     const targetFilters = { schemaVersion: 1 as const, enabled: true, categories: { ssd: { specValues: { interface: ["SATA"] } } } };
@@ -125,6 +153,16 @@ describe("generateBuildDraft with target filters", () => {
       expect(error).toBeInstanceOf(BuildGenerationError);
       if (error instanceof BuildGenerationError) expect(error.message).toContain("SSD");
     }
+  });
+
+  it("테스트 베드 부품은 일반 생성에선 브랜드 정책에 걸리고 namePatterns 지정 시 선택된다", () => {
+    const unfiltered = generateBuildDraft(seedCatalog, request);
+    const memoryIds = (unfiltered.selection.memory ?? []).map((entry) => entry.partId);
+    expect(memoryIds).not.toContain("memory-klevv-fitv-ddr5-6000");
+    expect(memoryIds).not.toContain("memory-patriot-viper-ddr5-5600");
+    const targetFilters = { schemaVersion: 1 as const, enabled: true, categories: { memory: { namePatterns: ["KLEVV|PATRIOT"] } } };
+    const filtered = generateBuildDraft(seedCatalog, request, [], { targetFilters });
+    expect((filtered.selection.memory ?? []).map((entry) => entry.partId)).toContain("memory-klevv-fitv-ddr5-6000");
   });
 
   it("최소 실행 가능 견적가도 같은 필터를 적용한다", () => {

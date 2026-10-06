@@ -52,6 +52,15 @@ const result = {
 } as CompatibilityResult;
 
 describe("compatibility report export", () => {
+  it("prints the checked unit price when the current catalog has changed after the check", () => {
+    const checked = { ...result, partPriceSnapshot: [{ partId: cpu.id, priceWon: 100_000 }] };
+    const refreshed = { ...cpu, priceWon: 219_000 };
+    const report = compatibilityReportTextFor(checked, build, new Map([[cpu.id, refreshed]]), new Map([[accessory.id, accessory]]));
+    expect(report).toContain("CPU: 테스트 CPU · 100,000원");
+    expect(report).not.toContain("219,000원");
+    expect(report).toContain("전체 합계: 110,000원");
+    expect(refreshed.priceWon).toBe(219_000);
+  });
   it("includes status, facts, accessory quantities, suggestions, and price summary", () => {
     const report = compatibilityReportTextFor(result, build, new Map([[cpu.id, cpu]]), new Map([[accessory.id, accessory]]), { path: "/result?finding=blocker#findings", findingFilter: "blocker", section: "findings" });
 
@@ -245,7 +254,7 @@ describe("compatibility report export", () => {
     expect(report).toContain("### [최소 변경] 소켓 해결 플랜");
     expect(report).toContain("대체 부품 적용 후: 호환 불가 0개 · 주의 1개 · 확인 필요 1개");
     expect(report).toContain("적용 후 남는 항목: M.2 슬롯 확인 필요");
-    expect(report).toContain("잔여 규칙 ID: m2-slot-generation");
+    expect(report).not.toContain("잔여 규칙 ID");
     expect(report).toContain("변경 부품:");
     expect(report).toContain("CPU: 테스트 CPU → 플랜 CPU · 가격 -20,000원");
     expect(report).not.toContain("비교 스펙 유지");

@@ -13,7 +13,7 @@ const part = (sourceProductCode: string, overrides: Partial<Part> = {}): Part =>
   danawaUrl: `https://prod.danawa.com/info/?pcode=${sourceProductCode}&cate=112747`,
   priceWon: 100000,
   rawSpecText: "AMD(소켓AM5) / TDP: 65W",
-  specs: { socket: "AM5", tdpW: 65 },
+  specs: { socket: "AM5", tdpW: 65, cpuSeries: "Ryzen 9000" },
   dataQuality: "live",
   missingFields: [],
   updatedAt: "2026-08-28T00:00:00.000Z",

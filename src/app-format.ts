@@ -63,15 +63,32 @@ export function formatM2SlotProfiles(profiles: M2SlotProfile[] | undefined) {
 }
 
 export function formatRadiatorPosition(position: string | undefined) {
-  return position === "front" ? "전면" : position === "top" ? "상단" : position === "bottom" ? "하단" : position === "side" ? "측면" : position === "rear" ? "후면" : undefined;
+  return position === "front" ? "전면" : position === "top" ? "상단" : position === "bottom" ? "하단" : position === "side" ? "측면" : position === "rear" ? "후면" : position === "psu_shroud" ? "파워 커버" : undefined;
 }
 
-export function formatRadiatorSupports(supports: Array<{ position?: unknown; sizesMm?: unknown }> | undefined) {
+function formatRadiatorRequirements(requirements: unknown) {
+  if (!Array.isArray(requirements) || requirements.length === 0) return undefined;
+  const dimensionLabels: Record<string, string> = { maxRadiatorThicknessMm: "라디에이터 두께", maxAssemblyThicknessMm: "팬 포함 두께", maxMemoryHeightMm: "메모리 높이", maxRadiatorWidthMm: "라디에이터 폭", maxRadiatorLengthMm: "라디에이터 길이", maxGpuLengthMm: "GPU 길이" };
+  return requirements.map((rawRequirement) => {
+    if (!rawRequirement || typeof rawRequirement !== "object" || Array.isArray(rawRequirement)) return "장착 조건 확인 필요";
+    const requirement = rawRequirement as Record<string, unknown>;
+    const terms = Object.entries(dimensionLabels).flatMap(([field, label]) => {
+      const limit = requirement[field];
+      return typeof limit === "number" && Number.isFinite(limit) ? [`${label} ${limit}mm ${requirement.exclusiveUpperBound === true ? "미만" : "이하"}`] : [];
+    });
+    if (typeof requirement.configurationNote === "string" && requirement.configurationNote.trim()) terms.push(requirement.configurationNote.trim());
+    const sizes = Array.isArray(requirement.sizesMm) ? requirement.sizesMm.filter((size): size is number => typeof size === "number" && Number.isFinite(size)).map((size) => `${size}mm`).join("·") : undefined;
+    return `${sizes ? `${sizes} 기준: ` : ""}${terms.length > 0 ? terms.join(" · ") : "장착 조건 확인 필요"}`;
+  }).join(" / ");
+}
+
+export function formatRadiatorSupports(supports: Array<{ position?: unknown; sizesMm?: unknown; requirements?: unknown }> | undefined) {
   if (!supports || supports.length === 0) return undefined;
   return supports.map((support) => {
     const position = typeof support.position === "string" ? support.position : "확인 필요";
     const sizes = Array.isArray(support.sizesMm) ? support.sizesMm.filter((size): size is number => typeof size === "number" && Number.isFinite(size)).map((size) => `${size}mm`).join(", ") : "확인 필요";
-    return `${formatRadiatorPosition(position) ?? position} · ${sizes}`;
+    const requirements = formatRadiatorRequirements(support.requirements);
+    return `${formatRadiatorPosition(position) ?? position} · ${sizes}${requirements ? ` (장착 조건: ${requirements})` : ""}`;
   }).join(" / ");
 }
 
@@ -135,9 +152,9 @@ export function suggestionSpecRows(part: Part): Array<[string, unknown]> {
   const specs = part.specs;
   const rowsByCategory: Record<PartCategory, Array<[string, unknown]>> = {
     cpu: [["소켓", specs.socket], ["코어 / 스레드", specs.cores !== undefined && specs.threads !== undefined ? `${specs.cores} / ${specs.threads}` : undefined], ["부스트 클럭", specs.boostClockGhz !== undefined ? `${specs.boostClockGhz}GHz` : undefined], ["기준 전력", (specs.pptW ?? specs.tdpW) !== undefined ? `${specs.pptW ?? specs.tdpW}W` : undefined]],
-    cooler: [["지원 소켓", specs.supportedSockets], ["냉각 지원", specs.maxCoolingW !== undefined ? `${specs.maxCoolingW}W` : undefined], ["최대 높이", specs.maxCoolerHeightMm !== undefined ? `${specs.maxCoolerHeightMm}mm` : undefined], ["라디에이터", specs.radiatorSizeMm !== undefined ? `${specs.radiatorSizeMm}mm` : undefined], ["라디에이터 위치", formatRadiatorPosition(specs.radiatorPosition)]],
+    cooler: [["지원 소켓", specs.supportedSockets], ["냉각 지원", specs.maxCoolingW !== undefined ? `${specs.maxCoolingW}W` : undefined], ["최대 높이", specs.maxCoolerHeightMm !== undefined ? `${specs.maxCoolerHeightMm}mm` : undefined], ["라디에이터", specs.radiatorSizeMm !== undefined ? `${specs.radiatorSizeMm}mm` : undefined], ["라디에이터 위치", formatRadiatorPosition(specs.radiatorPosition)], ["라디에이터 두께", specs.radiatorThicknessMm !== undefined ? `${specs.radiatorThicknessMm}mm` : undefined], ["라디에이터 팬 두께", specs.radiatorFanThicknessMm !== undefined ? `${specs.radiatorFanThicknessMm}mm` : undefined], ["라디에이터 실제 폭", specs.radiatorWidthMm !== undefined ? `${specs.radiatorWidthMm}mm` : undefined], ["라디에이터 실제 길이", specs.radiatorLengthMm !== undefined ? `${specs.radiatorLengthMm}mm` : undefined]],
     motherboard: [["소켓", specs.socket], ["메모리", specs.memoryType], ["메모리 프로파일", specs.memoryProfiles], ["메모리 슬롯 규격", specs.memoryFormFactor], ["최대 메모리", specs.maxMemoryGb !== undefined ? `${specs.maxMemoryGb}GB` : undefined], ["RAM 슬롯", specs.memorySlots], ["M.2 슬롯", specs.m2Slots], ["M.2 연결", specs.m2Interfaces], ["M.2 PCIe 세대", specs.m2PcieGenerations?.map((generation) => `PCIe ${generation.toFixed(1)}`)], ["M.2 슬롯별 연결", formatM2SlotProfiles(specs.m2SlotProfiles)], ["M.2 공유 범위", formatM2SharingScopes(specs.m2LaneSharingScopes)], ["PCIe x16 슬롯", specs.pcieX16Slots], ["PCIe x8 슬롯", specs.pcieX8Slots], ["PCIe x4 슬롯", specs.pcieX4Slots], ["PCIe x1 슬롯", specs.pcieX1Slots], ["5V ARGB 헤더", specs.rgb5vPortCount], ["12V RGB 헤더", specs.rgb12vPortCount], ["폼팩터", specs.formFactor]],
-    memory: [["메모리", specs.memoryType], ["프로파일", specs.memoryProfiles], ["용량", specs.capacityGb !== undefined ? `${specs.capacityGb}GB` : undefined], ["모듈 수/킷", specs.memoryModuleCountPerKit !== undefined ? `${specs.memoryModuleCountPerKit}개` : undefined], ["속도", specs.speedMhz !== undefined ? `${specs.speedMhz}MHz` : undefined], ["메모리 타이밍", specs.memoryTiming], ["CAS 레이턴시", specs.memoryCasLatency !== undefined ? `CL${specs.memoryCasLatency}` : undefined], ["실효 CAS 지연(계산)", memoryEffectiveLatencyForDisplay(part) !== undefined ? `${memoryEffectiveLatencyForDisplay(part)!.toFixed(2)}ns` : undefined], ["전압", specs.memoryVoltageV !== undefined ? `${specs.memoryVoltageV}V` : undefined], ["규격", specs.formFactor]],
+    memory: [["메모리", specs.memoryType], ["프로파일", specs.memoryProfiles], ["용량", specs.capacityGb !== undefined ? `${specs.capacityGb}GB` : undefined], ["모듈 수/킷", specs.memoryModuleCountPerKit !== undefined ? `${specs.memoryModuleCountPerKit}개` : undefined], ["속도", specs.speedMhz !== undefined ? `${specs.speedMhz}MHz` : undefined], ["메모리 타이밍", specs.memoryTiming], ["CAS 레이턴시", specs.memoryCasLatency !== undefined ? `CL${specs.memoryCasLatency}` : undefined], ["실효 CAS 지연(계산)", memoryEffectiveLatencyForDisplay(part) !== undefined ? `${memoryEffectiveLatencyForDisplay(part)!.toFixed(2)}ns` : undefined], ["전압", specs.memoryVoltageV !== undefined ? `${specs.memoryVoltageV}V` : undefined], ["규격", specs.formFactor], ["메모리 높이", specs.memoryHeightMm !== undefined ? `${specs.memoryHeightMm}mm` : undefined]],
     gpu: [["GPU 계열", specs.gpuVendor && specs.gpuArchitectureFamily ? `${specs.gpuVendor.toUpperCase()} · ${specs.gpuArchitectureFamily}` : specs.gpuVendor?.toUpperCase()], ["GPU 메모리", specs.gpuMemoryType], ["VRAM", specs.vramGb !== undefined ? `${specs.vramGb}GB` : undefined], ["부스트 클럭", specs.gpuBoostClockMhz !== undefined ? `${specs.gpuBoostClockMhz.toLocaleString("ko-KR")}MHz` : undefined], ["스트림 프로세서", specs.gpuStreamProcessors !== undefined ? specs.gpuStreamProcessors.toLocaleString("ko-KR") : undefined], ["VRAM 대역폭", specs.gpuMemoryBandwidthGbps !== undefined ? `${specs.gpuMemoryBandwidthGbps.toLocaleString("ko-KR")}GB/s` : undefined], ["PCIe 장착 폭", specs.pcieSlotWidth !== undefined ? `x${specs.pcieSlotWidth}` : undefined], ["보조전원", formatPciePowerOptions(specs.pciePowerOptions)], ["어댑터 경로", formatPciePowerAdapterOptions(specs.pciePowerAdapterOptions)], ["소비전력", specs.powerW !== undefined ? `${specs.powerW}W` : undefined], ["권장 파워", specs.recommendedPsuW !== undefined ? `${specs.recommendedPsuW}W` : undefined], ["길이", specs.lengthMm !== undefined ? `${specs.lengthMm}mm` : undefined], ["두께", specs.thicknessMm !== undefined ? `${specs.thicknessMm}mm` : undefined], ["물리 슬롯 점유", specs.gpuSlotOccupancy !== undefined ? `${specs.gpuSlotOccupancy} 슬롯` : undefined], ["케이블 굽힘 여유", specs.gpuCableBendClearanceMm !== undefined ? `${specs.gpuCableBendClearanceMm}mm` : undefined]],
     ssd: [["인터페이스", specs.interface], ["폼팩터", specs.formFactor], ["PCIe 세대", specs.m2PcieGeneration !== undefined ? `PCIe ${specs.m2PcieGeneration.toFixed(1)}` : undefined], ["용량", specs.capacityGb !== undefined ? `${specs.capacityGb}GB` : undefined], ["순차 읽기", specs.sequentialReadMbps !== undefined ? `${specs.sequentialReadMbps}MB/s` : undefined], ["순차 쓰기", specs.sequentialWriteMbps !== undefined ? `${specs.sequentialWriteMbps}MB/s` : undefined], ["읽기 IOPS", specs.ssdReadIops !== undefined ? `${specs.ssdReadIops.toLocaleString("ko-KR")}` : undefined], ["쓰기 IOPS", specs.ssdWriteIops !== undefined ? `${specs.ssdWriteIops.toLocaleString("ko-KR")}` : undefined], ["컨트롤러", specs.ssdController], ["NAND", specs.ssdNandType], ["TBW", specs.ssdTbwTb !== undefined ? `${specs.ssdTbwTb}TB` : undefined]],
     hdd: [["인터페이스", specs.interface], ["폼팩터", specs.formFactor], ["용량", specs.capacityGb !== undefined ? `${specs.capacityGb}GB` : undefined]],

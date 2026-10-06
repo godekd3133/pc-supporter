@@ -108,6 +108,7 @@ import type {
 import { ACCESSORY_CATEGORIES, ACCESSORY_CATEGORY_LABELS, ACCESSORY_PRICE_FILTER_LABELS, BENCHMARK_SOURCE_KIND_LABELS, CATEGORY_LABELS, DATA_FRESHNESS_LABELS, DATA_QUALITY_LABELS, GAMING_REFRESH_RATE_LABELS, GAMING_RESOLUTION_LABELS, GAMING_RESOLUTION_VRAM_TARGETS, isCatalogDataQualityChangeField, isKnownPrice, LISTING_POLICY_LABELS, LISTING_TYPE_LABELS, PART_CATEGORIES, RECOMMENDATION_PRIORITY_DESCRIPTIONS, RECOMMENDATION_PRIORITY_LABELS, RECOMMENDATION_PROFILE_LABELS, RECOMMENDATION_VARIANT_PRIORITIES } from "../shared/types";
 import { m2ReviewTemplatesToCsv, parseM2ReviewCsv } from "../shared/m2-csv";
 import { trackUsageEvent } from "./usage-events";
+import type { JourneyActionKind } from "./user-journey";
 import { benchmarkOverridesToCsv, benchmarkReviewItemsToCsv, parseBenchmarkOverridesCsv } from "../shared/benchmark-csv";
 import { similarityBasisLabelFor, similarityReferenceUsedCategoryFor } from "../shared/similarity-evidence";
 import { CATALOG_PRICE_EVIDENCE_LABELS, catalogPriceEvidenceDescriptionFor, catalogPriceEvidenceFor, catalogPriceEvidenceLabelFor } from "../shared/catalog-price-evidence";
@@ -126,6 +127,8 @@ import { buildPriceSnapshotFor } from "../shared/build-price-summary";
 import type { BuildPriceSnapshot } from "../shared/build-price-summary";
 import type { CatalogRefreshReport, CatalogRefreshReportFailure, CatalogRefreshReportItem } from "../shared/catalog-refresh-report";
 import { buildCompatibilityInputFingerprint } from "../shared/build-fingerprint";
+import { engineConditionTagsFor } from "../shared/recommendation-preference-tags";
+import { GENERATED_DRAFT_CONTEXT_KEY, generatedDraftContextFromJson, recommendationPreferencesForGeneratedDraft, generatedDraftWithoutPersistedFpsAssessment, generatorPresetConfigForGeneratedDraft } from "./generated-draft-context";
 import { appendBuildHistoryEntry, buildInputChangeLabel } from "../shared/build-history";
 import type { BuildHistoryEntry, BuildInputSnapshot } from "../shared/build-history";
 import { buildPreflightFor } from "../shared/build-preflight";
@@ -218,6 +221,7 @@ import type { SavedWatchlistLink } from "./watchlist-link-storage";
 import type { GeneratorBudgetResult, GeneratorVariantResult } from "./BuildGeneratorView";
 import { ONBOARDING_STORAGE_KEY, onboardingStateForGeneratorPreset, onboardingStateToJson } from "./quote-onboarding";
 import type { SavedGeneratorPreset } from "../shared/generator-preset";
+import { generatorPresetConfigFromUnknown } from "../shared/generator-preset";
 import { GENERATOR_VARIANTS_DRAFT_TRANSFER_KEY, generatorVariantsDraftTransferFromUnknown, type GeneratorVariantsDraftTransferOrigin } from "../shared/generator-variants-share";
 import type { SavedBuildOrigin } from "../shared/saved-build-origin";
 import type { PickerCandidateMode, PickerPart } from "./PartPicker";
@@ -504,6 +508,7 @@ const RULE_GUIDES: Record<string, string> = {
   "gpu-motherboard-pcie": "그래픽카드 장착 폭과 메인보드 슬롯이 맞지 않아요.",
   "gpu-thickness": "그래픽카드 두께가 55mm 이상이라 옆 슬롯에 닿을 수 있어요.",
   "gpu-case-length": "그래픽카드가 케이스에 들어가지 않을 수 있어요.",
+  "gpu-case-low-profile": "슬림 케이스에는 LP 브라켓 그래픽카드만 장착할 수 있어요.",
   "gpu-cable-clearance": "GPU 전원 케이블과 케이스 측면 공간이 맞지 않을 수 있어요.",
   "gpu-psu-power": "그래픽카드와 CPU에 필요한 전력보다 파워 용량이 부족해요.",
   "psu-system-power": "그래픽카드 없이 CPU 전력과 기본 시스템 부하로 추정한 전력보다 파워 여유가 적어요.",
@@ -518,21 +523,8 @@ function readRecommendationPreferences(): RecommendationPreferences {
   try {
     const raw = safeLocalStorage.getItem("pc-supporter-recommendation-preferences");
     if (!raw) return DEFAULT_RECOMMENDATION_PREFERENCES;
-    const value = JSON.parse(raw) as Partial<RecommendationPreferences>;
-    const priority = value.priority === "budget" || value.priority === "performance" || value.priority === "reliability" ? value.priority : "balanced";
-    const profile = value.profile === "gaming" || value.profile === "creator" || value.profile === "development" || value.profile === "office"
-      ? value.profile
-      : "general";
-    const listingPolicy = value.listingPolicy === "include_bulk" || value.listingPolicy === "all"
-      ? value.listingPolicy
-      : "retail_only";
-    const budgetWon = typeof value.budgetWon === "number" && Number.isInteger(value.budgetWon) && value.budgetWon > 0
-      ? value.budgetWon
-      : undefined;
-    const gamingResolution = value.gamingResolution === "1080p" || value.gamingResolution === "4k" ? value.gamingResolution : "1440p";
-    const gamingRefreshRate = value.gamingRefreshRate === 60 || value.gamingRefreshRate === 240 ? value.gamingRefreshRate : 144;
-    const base: RecommendationPreferences = budgetWon === undefined ? { priority, profile, listingPolicy, gamingResolution } : { priority, profile, budgetWon, listingPolicy, gamingResolution };
-    return profile === "gaming" ? { ...base, gamingRefreshRate } : base;
+    const parsed = parseBuildTransfer({ selection: { memory: [], ssd: [], hdd: [], useIntegratedGraphics: true }, recommendationPreferences: JSON.parse(raw) });
+    return parsed.envelope?.recommendationPreferences ?? DEFAULT_RECOMMENDATION_PREFERENCES;
   } catch {
     return DEFAULT_RECOMMENDATION_PREFERENCES;
   }
@@ -841,6 +833,7 @@ function App() {
   const [checking, setChecking] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [generatorDraft, setGeneratorDraft] = useState<BuildGenerationResult | null>(null);
+  const [appliedGeneratorDraft, setAppliedGeneratorDraft] = useState<BuildGenerationResult | null>(() => generatedDraftContextFromJson(safeLocalStorage.getItem(GENERATED_DRAFT_CONTEXT_KEY)));
   const [generatorVariants, setGeneratorVariants] = useState<GeneratorVariantResult[]>([]);
   const [generatorBudgetLadder, setGeneratorBudgetLadder] = useState<GeneratorBudgetResult[]>([]);
   const [generatorError, setGeneratorError] = useState<string | null>(null);
@@ -881,6 +874,7 @@ function App() {
   const [buildChangeDialogComponent, setBuildChangeDialogComponent] = useState<ComponentType<BuildChangeDialogProps> | null>(null);
   const [buildChangeResultComparison, setBuildChangeResultComparison] = useState<BuildChangeResultComparison | null>(null);
   const [scenarioPreview, setScenarioPreview] = useState<BuildScenarioPreviewState | null>(null);
+  const [adjustingPartKey, setAdjustingPartKey] = useState<string | null>(null);
   const [upgradeBundleScenarioPreview, setUpgradeBundleScenarioPreview] = useState<UpgradeBundleScenarioPreviewState | null>(null);
   const [candidateScenarioComparison, setCandidateScenarioComparison] = useState<CandidateScenarioCompareState | null>(null);
   const [saveName, setSaveName] = useState("나의 PC 견적");
@@ -949,6 +943,14 @@ function App() {
     [build, recommendationPreferences]
   );
   const resultIsStale = Boolean(result) && checkedInputFingerprint !== currentInputFingerprint;
+  const currentGeneratedDraft = appliedGeneratorDraft
+    && buildCompatibilityInputFingerprint(appliedGeneratorDraft.selection, recommendationPreferencesForGeneratedDraft(appliedGeneratorDraft)) === currentInputFingerprint
+    ? appliedGeneratorDraft : null;
+
+  useEffect(() => {
+    if (appliedGeneratorDraft?.gamingTestbedPhase1) safeLocalStorage.setItem(GENERATED_DRAFT_CONTEXT_KEY, JSON.stringify(generatedDraftWithoutPersistedFpsAssessment(appliedGeneratorDraft)));
+    else safeLocalStorage.removeItem(GENERATED_DRAFT_CONTEXT_KEY);
+  }, [appliedGeneratorDraft]);
 
   const refreshMeta = useCallback(async () => {
     const requestVersion = ++metaRefreshRequestRef.current;
@@ -984,6 +986,11 @@ function App() {
   useEffect(() => {
     trackUsageEvent("app_open");
   }, []);
+
+  // 퍼널 분석용 화면 전환 추적 — 라우트 뷰가 바뀔 때마다 기록한다.
+  useEffect(() => {
+    trackUsageEvent("view", { view });
+  }, [view]);
 
   useEffect(() => {
     if (view !== "editor" || new URLSearchParams(window.location.search).get("entry") !== "shared-generator") return;
@@ -1735,6 +1742,32 @@ function App() {
     window.scrollTo({ top: 0, behavior: "auto" });
   }
 
+  // 홈 여정 카드·결과 다음 단계의 CTA를 실제 라우트 이동으로 연결한다.
+  function handleJourneyAction(action: JourneyActionKind) {
+    switch (action) {
+      case "start":
+        navigate("/start", "start");
+        break;
+      case "resume":
+      case "save":
+        navigate("/build", "editor");
+        break;
+      case "history":
+        navigate("/history", "history");
+        break;
+      case "watchlist":
+        navigate("/watchlist", "pricewatchlist");
+        break;
+      case "result":
+        navigate("/result", "result");
+        break;
+      case "result-trend":
+        navigate("/result", "result");
+        window.setTimeout(() => document.getElementById("build-price-trend")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+        break;
+    }
+  }
+
   function openGenerator(priority?: RecommendationPriority) {
     generatorRequestRef.current += 1;
     setGenerating(false);
@@ -1750,14 +1783,32 @@ function App() {
 
   // 저장된 자동 구성 프리셋을 온보딩 마법사에 주입한다 — 요약 화면에서
   // 예산·성능 조건을 다시 고른 뒤 /recommend로 넘어가는 편집 경로다.
-  function openGeneratorPresetInOnboarding(preset: SavedGeneratorPreset) {
+  function openGeneratorPresetInOnboarding(preset: SavedGeneratorPreset, step: "summary" | "games" | "performance" = "summary") {
     try {
-      safeSessionStorage.setItem(ONBOARDING_STORAGE_KEY, onboardingStateToJson(onboardingStateForGeneratorPreset(preset)));
+      safeSessionStorage.setItem(ONBOARDING_STORAGE_KEY, onboardingStateToJson({ ...onboardingStateForGeneratorPreset(preset), step }));
     } catch {
       // Session storage may be blocked; the wizard then opens a fresh draft.
     }
     navigate("/start?preset=1", "start");
     setToast(`${preset.name} 프리셋을 견적 설정에 불러왔어요. 예산과 조건을 확인하고 필요하면 수정하세요.`);
+  }
+
+  function editCurrentGamingConditions() {
+    const config = currentGeneratedDraft
+      ? generatorPresetConfigForGeneratedDraft(currentGeneratedDraft)
+      : generatorPresetConfigFromUnknown({
+          ...recommendationPreferences, profile: "gaming", gamingMode: "target_fps",
+          gamingTargetFps: recommendationPreferences.gamingTargetFps ?? 144,
+          gamingResolution: recommendationPreferences.gamingResolution ?? "1440p",
+          gamingRefreshRate: recommendationPreferences.gamingRefreshRate ?? 144,
+          memoryCapacityGb: [16, 32, 64, 128].find((capacity) => capacity >= (result?.metrics?.totalMemoryGb ?? 16)) ?? 128,
+          storageCapacityGb: 1000, budgetWon: recommendationPreferences.budgetWon ?? 2_000_000,
+          includeGpu: Boolean(build.gpu), hddCount: 0, hddCapacityGb: 4000,
+          listingPolicy: recommendationPreferences.listingPolicy ?? "retail_only"
+        });
+    if (!config) { setToast("현재 게임 조건을 불러오지 못했어요. 견적 설정에서 다시 선택해 주세요."); return; }
+    const timestamp = new Date().toISOString();
+    openGeneratorPresetInOnboarding({ ...config, id: "current-gaming-target", name: "현재 게임 조건", createdAt: timestamp, updatedAt: timestamp }, config.gamingGameIds?.length ? "performance" : "games");
   }
 
   function resetRouteTransientState() {
@@ -1887,6 +1938,7 @@ function App() {
     try {
       await rememberBuildSelection(nextBuild, hydrationController.signal);
       if (checkRequestSequenceRef.current !== requestSequence || routeRequestSequenceRef.current !== routeRequestSequence) return;
+      trackUsageEvent("check_request", { source: "editor" });
       const checked = await api<CompatibilityResult>("/api/compatibility/check", {
         method: "POST",
         body: JSON.stringify({ ...nextBuild, recommendationPreferences: nextPreferences }),
@@ -1901,11 +1953,13 @@ function App() {
       setCheckedInputFingerprint(buildCompatibilityInputFingerprint(nextBuild, nextPreferences));
       setCheckError(null);
       setChecking(false);
+      trackUsageEvent("check_success", { source: "editor" });
       const upgradeEntry = new URLSearchParams(window.location.search).get("entry") === "upgrade";
       navigate(upgradeEntry ? "/result?entry=upgrade" : "/result", "result", { preservePendingCheck: true, preserveCatalogRefresh: options.catalogRefreshRequest !== undefined });
       return checked;
     } catch (error: unknown) {
       if (checkRequestSequenceRef.current !== requestSequence || routeRequestSequenceRef.current !== routeRequestSequence) return;
+      trackUsageEvent("check_fail", { source: "editor", status: error instanceof ApiError ? error.status : 0 });
       const message = error instanceof Error ? error.message : "검사에 실패했습니다.";
       setCheckError(message);
       setToast(message);
@@ -2142,6 +2196,7 @@ function App() {
     try {
       await navigator.clipboard.writeText(url);
       if (!isCurrent()) return;
+      trackUsageEvent("share_link", { kind: "result" });
       setToast("현재 결과 링크를 클립보드에 복사했습니다.");
     } catch {
       if (isCurrent()) setToast(`결과 링크를 복사하지 못했습니다. 주소를 직접 복사해 주세요: ${url}`);
@@ -2317,17 +2372,18 @@ function App() {
     }
   }
 
-  async function generateDraft(request: BuildGenerationRequest) {
+  async function generateDraft(request: BuildGenerationRequest, preserveDraft = false) {
     const requestVersion = ++generatorRequestRef.current;
     const isCurrent = () => generatorRequestRef.current === requestVersion;
     setGenerating(true);
-    setGeneratorDraft(null);
+    if (!preserveDraft) setGeneratorDraft(null);
     setGeneratorVariants([]);
     setGeneratorBudgetLadder([]);
     setGeneratorError(null);
     setGeneratorRequestId(null);
     setGeneratorDiagnostics([]);
     setGeneratorRecoveryOptions([]);
+    trackUsageEvent("recommend_request", { source: "recommend", profile: request.profile, ...(request.budgetWon !== undefined ? { budgetWon: request.budgetWon } : {}) });
     try {
       const draft = await api<BuildGenerationResult>("/api/builds/recommend", {
         method: "POST",
@@ -2337,15 +2393,18 @@ function App() {
       });
       await rememberBuildSelection(draft.selection);
       if (!isCurrent()) return;
+      trackUsageEvent("recommend_success", { source: "recommend", profile: draft.profile });
       setGeneratorDraft(draft);
     } catch (error: unknown) {
       if (!isCurrent()) return;
+      trackUsageEvent("recommend_fail", { source: "recommend", status: error instanceof ApiError ? error.status : 0 });
       const message = error instanceof Error ? error.message : "자동 견적을 생성하지 못했습니다.";
       setGeneratorError(message);
       setGeneratorRequestId(requestIdFromError(error));
       setGeneratorDiagnostics(diagnosticsFromError(error));
       setGeneratorRecoveryOptions(recoveryOptionsFromError(error));
       setToast(message);
+      if (preserveDraft) throw error;
     } finally {
       if (isCurrent()) setGenerating(false);
     }
@@ -2362,6 +2421,7 @@ function App() {
     setGeneratorRequestId(null);
     setGeneratorDiagnostics([]);
     setGeneratorRecoveryOptions([]);
+    trackUsageEvent("recommend_request", { source: "variants", profile: request.profile, ...(request.budgetWon !== undefined ? { budgetWon: request.budgetWon } : {}) });
     try {
       const payload = await api<{ variants: GeneratorVariantResult[] }>("/api/builds/recommend/variants", {
         method: "POST",
@@ -2379,10 +2439,12 @@ function App() {
         }
       }));
       if (!isCurrent()) return;
+      trackUsageEvent("recommend_success", { source: "variants" });
       setGeneratorVariants(variants);
       if (isCurrent() && variants.every((variant) => !variant.draft)) setToast("세 가지 기준에서 모두 자동 구성을 만들지 못했습니다.");
     } catch (error: unknown) {
       if (!isCurrent()) return;
+      trackUsageEvent("recommend_fail", { source: "variants", status: error instanceof ApiError ? error.status : 0 });
       const message = error instanceof Error ? error.message : "세 가지 자동 구성 결과를 만들지 못했습니다.";
       setGeneratorError(message);
       setGeneratorRequestId(requestIdFromError(error));
@@ -2405,6 +2467,7 @@ function App() {
     setGeneratorRequestId(null);
     setGeneratorDiagnostics([]);
     setGeneratorRecoveryOptions([]);
+    trackUsageEvent("recommend_request", { source: "budget-ladder", profile: request.profile, ...(request.budgetWon !== undefined ? { budgetWon: request.budgetWon } : {}) });
     try {
       const payload = await api<{ scenarios: GeneratorBudgetResult[] }>("/api/builds/recommend/budget-ladder", {
         method: "POST",
@@ -2417,10 +2480,12 @@ function App() {
         return scenario;
       }));
       if (!isCurrent()) return;
+      trackUsageEvent("recommend_success", { source: "budget-ladder" });
       setGeneratorBudgetLadder(results);
       if (isCurrent() && results.every((scenario) => !scenario.draft)) setToast("세 예산 구간에서 모두 자동 구성을 만들지 못했습니다.");
     } catch (error: unknown) {
       if (!isCurrent()) return;
+      trackUsageEvent("recommend_fail", { source: "budget-ladder", status: error instanceof ApiError ? error.status : 0 });
       const message = error instanceof Error ? error.message : "예산 구간별 자동 구성을 만들지 못했습니다.";
       setGeneratorError(message);
       setGeneratorRequestId(requestIdFromError(error));
@@ -2444,8 +2509,9 @@ function App() {
     setGeneratorRecoveryOptions([]);
     await rememberBuildSelection(draft.selection, hydrationController.signal);
     if (!isCurrent()) return;
-    const nextPreferences = { ...recommendationPreferences, profile: draft.profile, priority: draft.priority, performanceTier: draft.performanceTier, gamingResolution: draft.profile === "gaming" ? draft.gamingResolution : undefined, gamingRefreshRate: draft.profile === "gaming" ? draft.gamingRefreshRate : undefined, gamingGameIds: draft.profile === "gaming" ? draft.gamingGameIds : undefined, gamingGraphicsPreset: draft.profile === "gaming" ? draft.gamingGraphicsPreset : undefined, gamingRayTracing: draft.profile === "gaming" ? draft.gamingRayTracing : undefined, gamingUpscaling: draft.profile === "gaming" ? draft.gamingUpscaling : undefined, budgetWon: draft.budgetWon, listingPolicy: draft.listingPolicy };
+    const nextPreferences = recommendationPreferencesForGeneratedDraft(draft);
     setBuild(draft.selection);
+    setAppliedGeneratorDraft(draft);
     setRecommendationPreferences(nextPreferences);
     setCurrentBuildOrigin(origin ?? null);
     if (checkNow) {
@@ -2458,6 +2524,57 @@ function App() {
     }
   }
 
+  async function adjustGeneratedDraft(request: BuildGenerationRequest) {
+    const requestVersion = ++generatorRequestRef.current;
+    const routeVersion = routeRequestSequenceRef.current;
+    const controller = new AbortController();
+    selectionHydrationAbortControllerRef.current?.abort();
+    selectionHydrationAbortControllerRef.current = controller;
+    const isCurrent = () => generatorRequestRef.current === requestVersion
+      && routeRequestSequenceRef.current === routeVersion && !controller.signal.aborted;
+    setGenerating(true);
+    setCheckError(null);
+    try {
+      const draft = await api<BuildGenerationResult>("/api/builds/recommend", {
+        method: "POST", body: JSON.stringify(request), retry: 1,
+        retryOnRateLimit: true, signal: controller.signal
+      });
+      if (!isCurrent()) return;
+      await rememberBuildSelection(draft.selection, controller.signal);
+      if (!isCurrent()) return;
+      const nextPreferences = recommendationPreferencesForGeneratedDraft(draft);
+      // Validate the whole new platform before replacing the visible result.
+      const checked = await api<CompatibilityResult>("/api/compatibility/check", {
+        method: "POST", body: JSON.stringify({ ...draft.selection, recommendationPreferences: nextPreferences }),
+        retry: 1, retryOnRateLimit: true, signal: controller.signal
+      });
+      if (!isCurrent()) return;
+      if (checked.blockerCount > 0) {
+        setToast("이 조합에는 호환되지 않는 부품이 있어요. 다른 부품이나 예산으로 조정해 주세요.");
+        return;
+      }
+      setAppliedGeneratorDraft(draft);
+      setGeneratorDraft(draft);
+      setBuild(draft.selection);
+      setRecommendationPreferences(nextPreferences);
+      setResult(checked);
+      setCheckedInputFingerprint(buildCompatibilityInputFingerprint(draft.selection, nextPreferences));
+      setSavedCheckHistory(null);
+      setCurrentBuildOrigin(null);
+      setShareId(null);
+      setShareOwnerToken(null);
+      setShareExpiresAt(null);
+      setBuildChangeResultComparison(null);
+      setScenarioPreview(null);
+      setToast(draft.withinBudget ? "부품에 맞춰 견적을 다시 조정했어요." : `조정한 견적이 예산을 ${formatWon(draft.totalPriceWon - draft.budgetWon)} 초과해요.`);
+    } catch (error: unknown) {
+      if (isCurrent()) setToast(error instanceof Error ? error.message : "견적을 조정하지 못했어요.");
+    } finally {
+      if (isCurrent()) setGenerating(false);
+      if (selectionHydrationAbortControllerRef.current === controller) selectionHydrationAbortControllerRef.current = null;
+    }
+  }
+
   function recommendationPreferencesForGenerationRequest(request: BuildGenerationRequest): RecommendationPreferences {
     return {
       ...recommendationPreferences,
@@ -2466,6 +2583,9 @@ function App() {
       budgetWon: request.budgetWon,
       listingPolicy: request.listingPolicy ?? (request.includeNonRetail ? "all" : "retail_only"),
       performanceTier: request.performanceTier,
+      gamingMode: request.profile === "gaming" ? request.gamingMode : undefined,
+      gamingTargetFps: request.profile === "gaming" ? request.gamingTargetFps : undefined,
+      gpuVendorPreference: request.profile === "gaming" ? request.gpuVendorPreference : undefined,
       gamingResolution: request.profile === "gaming" ? request.gamingResolution ?? "1440p" : undefined,
       gamingRefreshRate: request.profile === "gaming" ? request.gamingRefreshRate ?? 144 : undefined,
       gamingGameIds: request.profile === "gaming" ? request.gamingGameIds : undefined,
@@ -2665,6 +2785,7 @@ function App() {
         body: JSON.stringify({ name, selection: targetBuild, recommendationPreferences: targetPreferences, expiresInDays: saveExpiryDays === "never" ? undefined : saveExpiryDays, ...(decisionNote ? { decisionNote } : {}), ...(saveOrigin ? { origin: saveOrigin } : {}), ...(refreshReport ? { catalogRefreshReport: refreshReport } : {}), ...(parentCanManage && target?.parentBuildId ? { parentBuildId: target.parentBuildId } : {}) })
       });
       rememberSavedBuildId(saved.id);
+      trackUsageEvent("build_save", { kind: target?.kind ?? "draft" });
       if (saved.ownerManaged) markOwnerSessionResource("build", saved.id);
       if (saved.ownerToken) rememberSavedBuildOwnerToken(saved.id, saved.ownerToken);
       if (saved.ownerToken && ownerSessionModeSupported()) void retryOwnerSessionMigration().catch(() => undefined);
@@ -2689,7 +2810,7 @@ function App() {
       setSaveBuildTarget(null);
       const url = savedBuildShareUrlFor(window.location.origin, saved.id, compatibilityReportViewStateForLocation());
       if (target) {
-        const opened = await openSavedBuild(publicSaved);
+        const opened = await openSavedBuild(publicSaved, undefined, { track: false });
         if (!opened && !isCurrent()) return;
         const continuationRequestVersion = saveBuildRequestRef.current;
         const continuationRouteRequestSequence = routeRequestSequenceRef.current;
@@ -2849,6 +2970,7 @@ function App() {
     setCheckError(null);
     setBuild((current) => withSelectedPart(current, category, selection));
     setPicker(null);
+    trackUsageEvent("part_select", { category });
     if (view === "result") navigate("/build", "editor");
   }
 
@@ -2860,7 +2982,7 @@ function App() {
   function quoteSelectionMessageFor(category: PartCategory, part: Part) {
     const brandMessage = quoteBrandSelectionMessageFor(category);
     if (brandMessage !== undefined && !isQuoteBrandAllowed(category, part.brand)) return brandMessage;
-    if (!isQuoteSelectable(part)) return "가격 또는 사양 정보가 없는 부품은 견적에 담을 수 없어요.";
+    if (!isQuoteSelectable(part, parts)) return "가격 또는 사양 정보가 없는 부품은 견적에 담을 수 없어요.";
     return undefined;
   }
 
@@ -2930,6 +3052,27 @@ function App() {
     const nextBuild = replaceAffectedPartsInBuild(build, category, part.id, affectedPartIds, quantity);
     const quantityText = quantity !== undefined && category === "memory" ? ` ${quantity}킷` : "";
     openBuildChangePreview("대체 부품 적용", `${part.name}${quantityText}을 적용합니다. 적용 후 전체 견적의 호환 결과를 계산합니다.`, nextBuild, [part], candidateEvidence);
+  }
+
+  async function adjustPart(category: PartCategory, direction: "upgrade" | "downgrade") {
+    setAdjustingPartKey(`${category}:${direction}`);
+    try {
+      const response = await api<{ ok: boolean; suggestion?: { part: Part; selection: BuildSelection }; reason?: string }>("/api/builds/adjust", {
+        method: "POST",
+        body: JSON.stringify({ build, category, direction }),
+        retry: 1,
+        retryOnRateLimit: true
+      });
+      if (!response.ok || !response.suggestion) {
+        setToast(direction === "upgrade" ? "지금보다 강한 호환 부품이 없어요." : "지금보다 저렴한 호환 부품이 없어요.");
+        return;
+      }
+      applySuggestion(category, response.suggestion.part);
+    } catch {
+      setToast("부품 조정을 불러오지 못했어요.");
+    } finally {
+      setAdjustingPartKey(null);
+    }
   }
 
   async function previewSuggestion(category: PartCategory, part: Part, quantity?: number, affectedPartIds: string[] = [], candidateEvidence?: CandidateApplicationEvidence) {
@@ -3150,7 +3293,7 @@ function App() {
     setToast(`${entry.label} 전 구성으로 복원하고 호환 결과를 새로 계산했어요.`);
   }
 
-  async function openSavedBuild(saved: SavedBuild, focus?: SavedBuildOpenFocus) {
+  async function openSavedBuild(saved: SavedBuild, focus?: SavedBuildOpenFocus, options?: { track?: boolean }) {
     if (openingSavedBuildIdRef.current) return false;
     const requestVersion = ++openingSavedBuildRequestRef.current;
     abortSelectionHydration();
@@ -3191,6 +3334,7 @@ function App() {
           ? `/result?findingRule=${encodeURIComponent(resultFindingRuleId)}#findings`
           : "/result";
       navigate(resultRoute, "result", { resultFindingRuleId });
+      if (options?.track !== false) trackUsageEvent("saved_build_open", { from: view });
       setToast(null);
       return true;
     } catch (error: unknown) {
@@ -3274,6 +3418,7 @@ function App() {
         ...(targetPriceWon !== undefined ? { targetPriceWon } : {})
       });
       safeLocalStorage.setItem(CATALOG_WATCHLIST_STORAGE_KEY, catalogWatchlistToJson(next));
+      if (!alreadyWatched) trackUsageEvent("watchlist_add", { kind: target.kind });
       setToast(alreadyWatched
         ? (targetPriceWon !== undefined ? "가격 추적 중인 부품의 목표가를 갱신했습니다." : "이미 가격 추적 중인 부품입니다. 가격 추적 화면에서 목표가를 설정할 수 있습니다.")
         : "가격 추적에 등록했습니다. 가격 추적 화면에서 목표가와 알림 조건을 설정할 수 있습니다.");
@@ -3440,6 +3585,9 @@ function App() {
       alertUnreadCount={homeUnreadAlertCount}
       hasBuildAlerts={homeHasBuildAlerts}
       hasWatchlistAlerts={homeHasWatchlistAlerts}
+      savedBuilds={savedBuilds}
+      onJourneyAction={handleJourneyAction}
+      onOpenSavedBuild={(saved) => void openSavedBuild(saved)}
       onStart={() => navigate("/build", "editor")}
       onGuidedStart={() => navigate("/start", "start")}
       onGenerate={() => openGenerator()}
@@ -3486,6 +3634,7 @@ function App() {
         recoveryOptions={generatorRecoveryOptions}
         loading={generating}
         onGenerate={generateDraft}
+        onAdjustDraft={(request) => generateDraft(request, true)}
         onGenerateVariants={generateDraftVariants}
         onGenerateBudgetLadder={generateDraftBudgetLadder}
         onApply={applyGeneratedDraft}
@@ -3512,7 +3661,7 @@ function App() {
       changeHistory={changeHistory}
       onRecommendationPreferencesChange={setRecommendationPreferences}
       onRestoreChange={(entry) => void restoreBuildHistory(entry)}
-      onOpenPicker={(category) => setPicker({ category })}
+      onOpenPicker={(category) => { trackUsageEvent("part_picker_open", { category, via: "editor" }); setPicker({ category }); }}
       onChangeAccessoryQuantity={(index, quantity) => void changeAccessoryQuantity(index, quantity)}
       onChangeAccessoryTarget={(index, targetPartId) => void changeAccessoryTarget(index, targetPartId)}
       onChangeAccessoryHubTarget={(index, targetAccessoryId) => void changeAccessoryHubTarget(index, targetAccessoryId)}
@@ -3558,6 +3707,7 @@ function App() {
       meta={meta}
       onMetaRefresh={refreshMeta}
       onToast={setToast}
+      onNavigate={(path) => navigate(path, "admin")}
     /></Suspense>
   ) : view === "history" ? (
     <Suspense fallback={<div className="shared-build-state"><FiLoader className="spin" /><span>저장된 견적을 불러오는 중...</span></div>}><LazyHistoryView
@@ -3603,6 +3753,9 @@ function App() {
     <SharedBuildErrorView message={shareLoadError} onRetry={() => setShareLoadRetryNonce((current) => current + 1)} onBack={() => navigate("/", "home")} />
       ) : (
     <LazyResultView
+      generatedDraft={currentGeneratedDraft}
+      onAdjustGenerated={adjustGeneratedDraft}
+      generatedAdjusting={generating}
       dependencies={resultViewDependencies}
       build={build}
       result={result}
@@ -3636,9 +3789,12 @@ function App() {
       onDismissScenarioPreview={() => { scenarioRequestSequenceRef.current += 1; setScenarioPreview(null); }}
       onDismissBuildChangeResultComparison={() => setBuildChangeResultComparison(null)}
       onEdit={() => navigate(routeHasUpgradeEntry ? "/build?entry=upgrade" : "/build", "editor")}
+      onEditGamingConditions={editCurrentGamingConditions}
       upgradeEntry={view === "result" && routeHasUpgradeEntry}
       onCloneSharedBuild={cloneSharedBuildToDraft}
       onStartNew={() => navigate("/start", "start")}
+      savedBuildCount={savedBuilds.length}
+      onOpenWatchlist={() => navigate("/watchlist", "pricewatchlist")}
       onBack={() => navigate("/", "home")}
       onCheck={() => void checkBuild()}
       initialFindingRuleId={pendingResultFindingRuleId}
@@ -3659,8 +3815,10 @@ function App() {
       onRefreshCatalogItem={(target) => void refreshCatalogItem(target)}
       onRefreshAll={(targets) => void refreshAllCatalogItems(targets)}
       refreshingPartId={refreshingPartId}
-      onOpenPicker={(category, findingRuleId, findingTitle, affectedPartIds) => setPicker({ category, findingRuleId: findingRuleId?.replace(/^precision:/, ""), findingTitle, affectedPartIds, ...(findingRuleId?.startsWith("precision:") ? { initialCandidateMode: "precision" as const } : {}) })}
+      onOpenPicker={(category, findingRuleId, findingTitle, affectedPartIds) => { trackUsageEvent("part_picker_open", { category, via: "result" }); setPicker({ category, findingRuleId: findingRuleId?.replace(/^precision:/, ""), findingTitle, affectedPartIds, ...(findingRuleId?.startsWith("precision:") ? { initialCandidateMode: "precision" as const } : {}) }); }}
       onApplySuggestion={(category, part, quantity, affectedPartIds, evidence) => void applySuggestion(category, part, quantity, affectedPartIds, evidence)}
+      onAdjustPart={adjustPart}
+      adjustingPartKey={adjustingPartKey}
       onApplyUpgradeBundle={(bundle) => void applyUpgradeBundle(bundle)}
       onApplyRepairPlan={(plan) => void applyRepairPlan(plan)}
       onSavePlan={(nextBuild, nextPreferences, label, parentBuildId) => requestSaveBuild({ build: nextBuild, preferences: nextPreferences, label, ...(parentBuildId ? { parentBuildId } : {}) })}
@@ -3751,7 +3909,7 @@ function App() {
       {metadataEditTarget && <Suspense fallback={<div className="modal-backdrop" role="presentation"><section className="save-build-dialog" role="status"><FiLoader className="spin" /></section></div>}><LazyEditSavedBuildMetadataDialog name={metadataEditName} decisionNote={metadataEditDecisionNote} saving={metadataSaving} onChange={setMetadataEditName} onDecisionNoteChange={setMetadataEditDecisionNote} onClose={() => { metadataMutationRequestRef.current += 1; setMetadataEditTarget(null); }} onSubmit={() => void updateSavedBuildMetadata()} /></Suspense>}
       {buildImportPreview && <BuildImportPreviewDialog envelope={buildImportPreview} currentBuild={build} currentPreferences={recommendationPreferences} partMap={partMap} accessoryMap={accessoryMap} onClose={() => setBuildImportPreview(null)} onConfirm={applyImportedBuild} />}
       {pendingBuildChange && (BuildChangeDialog ? <BuildChangeDialog change={pendingBuildChange} checking={checking} onClose={() => setPendingBuildChange(null)} onConfirm={() => void confirmBuildChange()} formatPriceDelta={formatPriceDelta} /> : <div className="modal-backdrop" role="presentation"><section className="shared-build-state" role="status" data-testid="build-change-dialog-loading"><FiLoader className="spin" /> 변경 미리보기를 준비하는 중...</section></div>)}
-      {toast && <div className="toast" role="status">{toast}</div>}
+      {toast && <div className="toast" role="status"><span>{toast}</span><button className="toast-dismiss" type="button" aria-label="알림 닫기" onClick={() => setToast(null)}>×</button></div>}
     </div>
   );
 }
@@ -3767,7 +3925,7 @@ function BuildImportPreviewDialog({ envelope, currentBuild, currentPreferences, 
   const statusLabel: Record<BuildPreflight["status"], string> = { ready: "가져올 수 있어요", needs_selection: "필수 부품을 선택해 주세요", needs_data_review: "부품 정보가 부족해요" };
   const selectedCoreCategories = PART_CATEGORIES.filter((category) => selectionList(envelope.selection, category).length > 0).length;
   const m2SlotCount = Object.keys(envelope.selection.m2SlotSelection ?? {}).length;
-  const preferenceText = `${RECOMMENDATION_PROFILE_LABELS[envelope.recommendationPreferences.profile]} · ${RECOMMENDATION_PRIORITY_LABELS[envelope.recommendationPreferences.priority]} · ${LISTING_POLICY_LABELS[envelope.recommendationPreferences.listingPolicy ?? "retail_only"]}${envelope.recommendationPreferences.profile === "gaming" ? ` · ${GAMING_RESOLUTION_LABELS[envelope.recommendationPreferences.gamingResolution ?? "1440p"]} · ${GAMING_REFRESH_RATE_LABELS[envelope.recommendationPreferences.gamingRefreshRate ?? 144]}` : ""}`;
+  const preferenceText = `${RECOMMENDATION_PROFILE_LABELS[envelope.recommendationPreferences.profile]} · ${RECOMMENDATION_PRIORITY_LABELS[envelope.recommendationPreferences.priority]} · ${LISTING_POLICY_LABELS[envelope.recommendationPreferences.listingPolicy ?? "retail_only"]}${envelope.recommendationPreferences.profile === "gaming" ? ` · ${engineConditionTagsFor(envelope.recommendationPreferences).join(" · ")}` : ""}`;
   return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="build-import-dialog" role="dialog" aria-modal="true" aria-labelledby="build-import-preview-title"><div className="modal-header"><div><h2 id="build-import-preview-title">견적 JSON 미리보기</h2><p>가져올 부품과 금액을 확인해 주세요.</p></div><button className="icon-button" type="button" onClick={onClose} aria-label="견적 JSON 미리보기 닫기"><FiXCircle /></button></div><div className={`build-import-status ${preflight.status}`}><strong>{statusLabel[preflight.status]}</strong></div><div className="build-import-stats"><div><span>선택 카테고리</span><strong>{selectedCoreCategories}개</strong></div><div><span>선택 부품</span><strong>{preflight.selectedPartCount}개</strong></div><div><span>주변 부품</span><strong>{preflight.selectedAccessoryCount}개</strong></div><div><span>M.2 수동 배치</span><strong>{m2SlotCount}개</strong></div></div><div className="build-import-preferences"><span>추천 기준</span><strong>{preferenceText}</strong>{envelope.recommendationPreferences.budgetWon !== undefined && <small>목표 예산 {envelope.recommendationPreferences.budgetWon.toLocaleString("ko-KR")}원</small>}</div>{diff.changedCount > 0 ? <div className="build-import-diff"><div className="build-import-diff-heading"><strong>가져오기 변경 예정</strong><span>{diff.changedCount}개 항목</span></div><div className="build-import-diff-list">{diff.rows.map((row) => <div className="build-import-diff-row" key={row.id}><span>{row.label}</span><small>{row.before} → {row.after}</small></div>)}</div></div> : <p className="build-import-diff-clear"><FiCheckCircle /> 현재 견적과 부품 구성·추천 조건이 같아요.</p>}{preflight.issues.length > 0 ? <div className="build-import-issues"><strong>부품 정보와 호환 항목</strong>{preflight.issues.slice(0, 5).map((issue) => <p key={issue.id}><b>{issue.label}</b> · {issue.message}</p>)}{preflight.issues.length > 5 && <small>그 외 {preflight.issues.length - 5}개 항목이 있어요.</small>}</div> : <p className="build-import-clear"><FiCheckCircle /> 선택한 부품 정보를 불러왔어요.</p>}<p className="build-import-note"><FiInfo /> 이 구성을 가져오면 현재 견적이 바뀝니다. 호환 결과는 견적을 불러온 뒤 확인할 수 있어요.</p><div className="build-import-actions"><button className="button button-light" type="button" onClick={onClose}>취소</button><button className="button button-primary" type="button" onClick={() => onConfirm(envelope)}>이 구성으로 가져오기</button></div></section></div>;
 }
 

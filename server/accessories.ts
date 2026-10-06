@@ -109,6 +109,15 @@ export async function loadAccessories() {
   }
 }
 
+// 인스턴스 이벤트 버스가 다른 노드의 주변 부품 쓰기를 알릴 때 로컬 캐시를
+// 비운다 — 다음 loadAccessories()가 스탬프와 함께 최신 상태를 다시 읽는다.
+export function invalidateAccessoryCache() {
+  accessoryLoadInFlight = null;
+  accessoryCache = null;
+  accessoryCacheStamp = null;
+  accessoryStateRevision += 1;
+}
+
 export function findAccessory(items: AccessoryItem[], id: string) {
   return items.find((item) => item.id === id);
 }
@@ -170,8 +179,14 @@ function isPriceInFilter(item: AccessoryItem, priceFilter: AccessoryPriceFilter 
 function filterAccessories(items: AccessoryItem[], query: string | undefined, options: AccessorySearchOptions = {}) {
   const normalizedQuery = query?.trim().toLocaleLowerCase("ko-KR") ?? "";
   const normalizedBrand = options.brand?.trim().toLocaleLowerCase("ko-KR") ?? "";
+  // seed 주변 부품은 실제 판매 상품이 아니라 범주 플레이스홀더다 — 다나와 매물이
+  // 잡히는 범주에서는 카탈로그 표기에서 빼고, live가 전혀 없는 범주에서만
+  // 채워넣기용으로 남긴다. quality=seed를 명시한 관리자 조회는 그대로 본다.
+  const categoriesWithLive = new Set(items.filter((item) => item.source === "danawa").map((item) => item.category));
+  const hidePlaceholderSeed = options.quality !== "seed";
   return items
     .filter((item) => !options.category || options.category === "all" || item.category === options.category)
+    .filter((item) => !hidePlaceholderSeed || item.dataQuality !== "seed" || !categoriesWithLive.has(item.category))
     .filter((item) => !normalizedBrand || (item.brand ?? "").toLocaleLowerCase("ko-KR").includes(normalizedBrand))
     .filter((item) => !options.quality || options.quality === "all" || item.dataQuality === options.quality)
     .filter((item) => !options.freshness || options.freshness === "all" || classifyDataFreshness(item.updatedAt, options.now) === options.freshness)

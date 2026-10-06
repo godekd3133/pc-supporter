@@ -102,6 +102,7 @@ vi.mock("pg", () => ({
             transactionPayload = JSON.parse(String(values?.[0])) as Record<string, CatalogSpecOverride | M2SlotOverride>;
             return { rows: [], rowCount: 1 };
           }
+          if (sql.startsWith("SELECT pg_notify")) return { rows: [], rowCount: 1 };
           throw new Error(`Unexpected synthetic PostgreSQL client query: ${sql.slice(0, 160)}`);
         },
         release: () => undefined

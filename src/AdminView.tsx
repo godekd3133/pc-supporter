@@ -48,6 +48,7 @@ const AdminSeedCatalogPanel = lazy(() => import("./AdminSeedCatalogPanel").then(
 const AdminSeedCatalogMappingPanel = lazy(() => import("./AdminSeedCatalogMappingPanel").then((module) => ({ default: module.AdminSeedCatalogMappingPanel })));
 const AdminEngineFiltersPanel = lazy(() => import("./AdminEngineFiltersPanel").then((module) => ({ default: module.AdminEngineFiltersPanel })));
 const AdminGenerationFailuresPanel = lazy(() => import("./AdminGenerationFailuresPanel").then((module) => ({ default: module.AdminGenerationFailuresPanel })));
+const AdminUsageAnalyticsPanel = lazy(() => import("./AdminUsageAnalyticsPanel").then((module) => ({ default: module.AdminUsageAnalyticsPanel })));
 const AdminCrawlEnginePanel = lazy(() => import("./AdminCrawlEnginePanel").then((module) => ({ default: module.AdminCrawlEnginePanel })));
 const AdminQuotationEnginePanel = lazy(() => import("./AdminQuotationEnginePanel").then((module) => ({ default: module.AdminQuotationEnginePanel })));
 
@@ -557,17 +558,26 @@ function dispatchAdminToast(message: string) {
   window.dispatchEvent(new CustomEvent("pc-supporter:admin-toast", { detail: message }));
 }
 
-const ADMIN_SECTION_GROUPS: { label: string; items: { id: string; label: string }[] }[] = [
+type AdminPageKey = "overview" | "engine" | "catalog" | "compatibility" | "evidence";
+
+const ADMIN_PAGE_GROUPS: { key: AdminPageKey; label: string; path: string; summary: string; items: { id: string; label: string }[] }[] = [
   {
+    key: "overview",
     label: "운영",
+    path: "/admin",
+    summary: "수집 작업과 현황, 사용 통계, 견적 버전",
     items: [
       { id: "admin-overview", label: "현황" },
+      { id: "admin-usage-analytics", label: "사용 통계" },
       { id: "admin-crawl-engine", label: "크롤 엔진" },
       { id: "admin-build-versions", label: "견적 버전" }
     ]
   },
   {
+    key: "engine",
     label: "견적 생성 엔진",
+    path: "/admin/engine",
+    summary: "엔진 옵션·타겟 필터·실패 감시",
     items: [
       { id: "admin-engine-options", label: "엔진 옵션" },
       { id: "admin-engine-filters", label: "타겟 필터" },
@@ -575,7 +585,10 @@ const ADMIN_SECTION_GROUPS: { label: string; items: { id: string; label: string 
     ]
   },
   {
+    key: "catalog",
     label: "카탈로그",
+    path: "/admin/catalog",
+    summary: "스펙 완성도·보강 목록·변경 이력",
     items: [
       { id: "admin-spec-coverage", label: "스펙 완성도" },
       { id: "admin-catalog-spec-review", label: "보강 목록" },
@@ -584,7 +597,10 @@ const ADMIN_SECTION_GROUPS: { label: string; items: { id: string; label: string 
     ]
   },
   {
+    key: "compatibility",
     label: "호환 정보",
+    path: "/admin/compatibility",
+    summary: "M.2·GPU 물리·RGB/쿨링 부하·주변 부품",
     items: [
       { id: "admin-m2-mapping", label: "M.2 매핑" },
       { id: "admin-gpu-physical", label: "GPU 물리" },
@@ -594,7 +610,10 @@ const ADMIN_SECTION_GROUPS: { label: string; items: { id: string; label: string 
     ]
   },
   {
+    key: "evidence",
     label: "근거 데이터",
+    path: "/admin/evidence",
+    summary: "벤치마크·게임 FPS·기준값·코드 매핑",
     items: [
       { id: "admin-benchmark-review", label: "벤치마크" },
       { id: "admin-gaming-performance-evidence", label: "게임 FPS" },
@@ -604,25 +623,46 @@ const ADMIN_SECTION_GROUPS: { label: string; items: { id: string; label: string 
   }
 ];
 
-// 섹션 바로가기 — 스크롤 위치를 따라가는 가로 인덱스. DeferredAdminPanel은
-// hash 변경으로 lazy 패널을 불러오므로 href 앵커만으로 도착·마운트가 된다.
-function AdminSectionNav() {
+function adminPageKeyForPath(pathname: string): AdminPageKey {
+  const segment = pathname.replace(/^\/admin\/?/, "").split("/")[0] ?? "";
+  return ADMIN_PAGE_GROUPS.find((group) => group.path === `/admin/${segment}`)?.key ?? "overview";
+}
+
+function adminPagePathForAnchor(anchorId: string): string {
+  const group = ADMIN_PAGE_GROUPS.find((entry) => entry.items.some((item) => item.id === anchorId));
+  return group ? `${group.path}#${anchorId}` : `/admin#${anchorId}`;
+}
+
+// 페이지 탭 — /admin 아래 그룹별 경로로 이동한다. 클라이언트 라우터가
+// popstate로 화면을 갱신하므로 preventDefault 후 pushState만 하면 된다.
+function AdminPageNav({ activeKey, onNavigate }: { activeKey: AdminPageKey; onNavigate: (path: string) => void }) {
+  return <nav className="admin-page-nav" aria-label="관리자 페이지">
+    {ADMIN_PAGE_GROUPS.map((group) => <a
+      className={`admin-page-nav-link${activeKey === group.key ? " active" : ""}`}
+      href={group.path}
+      key={group.key}
+      onClick={(event) => { event.preventDefault(); onNavigate(group.path); }}
+      title={group.summary}
+    >{group.label}</a>)}
+  </nav>;
+}
+
+// 섹션 바로가기 — 현재 페이지의 섹션만 보여주는 스크롤 인덱스.
+// DeferredAdminPanel은 hash 변경으로 lazy 패널을 불러오므로 href 앵커만으로
+// 도착·마운트가 된다.
+function AdminSectionNav({ items }: { items: { id: string; label: string }[] }) {
   const [activeId, setActiveId] = useState("");
   useEffect(() => {
     let frame = 0;
     const update = () => {
       frame = 0;
-      // nav의 나열 순서와 실제 DOM 순서가 다르므로(예: seed 패널이 견적
-      // 버전 카드 안에 있음) 문서 위치를 기준으로 마지막 통과 앵커를 고른다.
       let current = "";
       let currentTop = Number.NEGATIVE_INFINITY;
-      for (const group of ADMIN_SECTION_GROUPS) {
-        for (const item of group.items) {
-          const el = document.getElementById(item.id);
-          if (!el) continue;
-          const top = el.getBoundingClientRect().top;
-          if (top <= 140 && top > currentTop) { current = item.id; currentTop = top; }
-        }
+      for (const item of items) {
+        const el = document.getElementById(item.id);
+        if (!el) continue;
+        const top = el.getBoundingClientRect().top;
+        if (top <= 140 && top > currentTop) { current = item.id; currentTop = top; }
       }
       setActiveId(current);
     };
@@ -638,20 +678,11 @@ function AdminSectionNav() {
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onScroll);
     };
-  }, []);
-  return <nav className="admin-section-nav" aria-label="관리자 섹션 바로가기">
-    {ADMIN_SECTION_GROUPS.map((group) => <div className="admin-section-nav-group" key={group.label}>
-      <span className="admin-section-nav-group-label">{group.label}</span>
-      {group.items.map((item) => <a className={`admin-section-nav-link${activeId === item.id ? " active" : ""}`} href={`#${item.id}`} key={item.id}>{item.label}</a>)}
-    </div>)}
+  }, [items]);
+  if (items.length <= 1) return null;
+  return <nav className="admin-section-nav" aria-label="섹션 바로가기">
+    {items.map((item) => <a className={`admin-section-nav-link${activeId === item.id ? " active" : ""}`} href={`#${item.id}`} key={item.id}>{item.label}</a>)}
   </nav>;
-}
-
-function focusAdminPanel(anchorId: string) {
-  const target = document.getElementById(anchorId);
-  if (!target) return;
-  target.scrollIntoView({ behavior: "smooth", block: "center" });
-  target.focus({ preventScroll: true });
 }
 
 function catalogSpecCoverageTone(coverage: CatalogSpecCoverage["categories"][number]) {
@@ -685,8 +716,8 @@ function catalogWorkPriorityPath(action: CatalogWorkPriority) {
 }
 
 function catalogWorkPriorityReviewPath(action: CatalogWorkPriority) {
-  if (action.kind === "pcie") return "/admin?reviewEvidence=pcie#admin-catalog-spec-review";
-  return "/admin#admin-catalog-spec-review";
+  if (action.kind === "pcie") return "/admin/catalog?reviewEvidence=pcie#admin-catalog-spec-review";
+  return "/admin/catalog#admin-catalog-spec-review";
 }
 
 function accessoryWorkPriorityPath(action: Pick<AccessoryWorkPriority, "category">) {
@@ -822,7 +853,7 @@ function CatalogPcieSlotCoveragePanel({ coverage }: { coverage: CatalogSpecCover
     <div className="catalog-pcie-slot-coverage-heading"><div><strong>메인보드 PCIe 슬롯 정보</strong><small>확장 슬롯 페이지에서 확인한 폭 정보를 기준으로, 요구 폭별 조건 필터에 사용할 수 있는 범위를 표시합니다.</small></div><span>{pcieCoverage.total.toLocaleString("ko-KR")}개 보드</span></div>
     <div className="catalog-pcie-slot-coverage-summary"><span>x4 이상 조건 사용 가능 <strong>{x4Coverage.complete.toLocaleString("ko-KR")}개</strong></span><span>정보 부족 <strong>{x4Coverage.missing.toLocaleString("ko-KR")}개</strong></span><span>기준 정보 확인률 <strong>{x4Coverage.coveragePercent}%</strong></span></div>
     <div className="catalog-pcie-slot-coverage-list">{PCIE_COVERAGE_WIDTHS.map((requiredWidth) => { const item = pcieCoverage.byRequiredWidth[requiredWidth]; const tone = catalogPcieCoverageTone(item); return <article className={`catalog-pcie-slot-coverage-item ${tone}`} key={requiredWidth}><div className="catalog-pcie-slot-coverage-item-heading"><strong>x{requiredWidth} 이상 조건</strong><span>{item.total === 0 ? "대상 없음" : `${item.coveragePercent}% 확인`}</span></div><div className="catalog-pcie-slot-coverage-track" role="progressbar" aria-label={`PCIe x${requiredWidth} 이상 슬롯 정보 비율`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={item.total === 0 ? 0 : item.coveragePercent}><span style={{ width: `${item.total === 0 ? 0 : Math.min(100, item.coveragePercent)}%` }} /></div><small>정보 확인 {item.complete.toLocaleString("ko-KR")} · 정보 부족 {item.missing.toLocaleString("ko-KR")}</small></article>; })}</div>
-    <div className="catalog-pcie-slot-coverage-actions"><a className="text-button" data-testid="admin-catalog-pcie-open-missing" href="/catalog?category=motherboard&pcieSlotInfo=missing"><FiSearch /> 정보 부족 보드 보기</a><a className="text-button" data-testid="admin-catalog-pcie-open-review" href="/admin?reviewEvidence=pcie#admin-catalog-spec-review"><FiRefreshCw /> PCIe 정보 보강 목록 열기</a><a className="text-button" data-testid="admin-catalog-pcie-open-x4" href="/catalog?category=motherboard&pcieSlotWidth=4&minPcieSlotCount=1"><FiLayers /> x4 이상 슬롯 보드 보기</a></div>
+    <div className="catalog-pcie-slot-coverage-actions"><a className="text-button" data-testid="admin-catalog-pcie-open-missing" href="/catalog?category=motherboard&pcieSlotInfo=missing"><FiSearch /> 정보 부족 보드 보기</a><a className="text-button" data-testid="admin-catalog-pcie-open-review" href="/admin/catalog?reviewEvidence=pcie#admin-catalog-spec-review"><FiRefreshCw /> PCIe 정보 보강 목록 열기</a><a className="text-button" data-testid="admin-catalog-pcie-open-x4" href="/catalog?category=motherboard&pcieSlotWidth=4&minPcieSlotCount=1"><FiLayers /> x4 이상 슬롯 보드 보기</a></div>
     <p className="catalog-pcie-slot-coverage-note"><FiInfo /> 이 PCIe 정보 확인률은 전체 카탈로그의 사양 완성도 수치에는 반영되지 않습니다. PCIe 조건을 적용할 때 페이지 폭 정보가 모두 확인된 보드만 부품으로 사용하며, 정보 부족 보드는 별도 보강 대상으로 확인합니다.</p>
     <CatalogCategoryIntegrityPanel integrity={coverage.categoryIntegrity} />
   </section>;
@@ -876,8 +907,6 @@ type AdminBuildVersionAuditPanelProps = {
   backupDetailId: string | null;
   onOpenBackupDetail: (backupId: string) => void;
   onCloseBackupDetail: () => void;
-  onStartCategoryCrawl: (category: PartCategory) => void;
-  categoryCrawlRunning: boolean;
 };
 
 const SAVED_BUILD_VERSION_METADATA_LABELS: Record<string, string> = { versionGroupId: "버전 그룹", versionNumber: "버전 번호", derivedFromBuildId: "부모 견적" };
@@ -894,22 +923,20 @@ function AdminBuildVersionBackupDetailPanel({ detail, loading, error, onClose }:
   </div>;
 }
 
-function AdminBuildVersionAuditPanel({ audit, loading, error, onRefresh, migrationPreview, migrationPreviewLoading, migrationPreviewError, onMigrationPreview, migrationApplyLoading, migrationApplyError, migrationApplyResult, onApplyMigration, rollbackLoading, rollbackError, rollbackResult, onRollbackMigration, backups, backupDetail, backupDetailLoading, backupDetailError, backupDetailId, onOpenBackupDetail, onCloseBackupDetail, onStartCategoryCrawl, categoryCrawlRunning }: AdminBuildVersionAuditPanelProps) {
+function AdminBuildVersionAuditPanel({ audit, loading, error, onRefresh, migrationPreview, migrationPreviewLoading, migrationPreviewError, onMigrationPreview, migrationApplyLoading, migrationApplyError, migrationApplyResult, onApplyMigration, rollbackLoading, rollbackError, rollbackResult, onRollbackMigration, backups, backupDetail, backupDetailLoading, backupDetailError, backupDetailId, onOpenBackupDetail, onCloseBackupDetail }: AdminBuildVersionAuditPanelProps) {
   const statusLabel = audit?.status === "healthy" ? (audit.versionGapGroups.length > 0 ? "번호 누락 확인" : "무결성 정상") : audit?.status === "needs_migration" ? "이전 형식 정리 필요" : "무결성 확인 필요";
   const statusDescription = audit?.status === "healthy"
     ? audit.versionGapGroups.length > 0 ? "명시적 버전 메타데이터는 유효하지만 일부 그룹에 번호 간격이 있습니다. 초기 버전이 보존 정책으로 제외된 것인지 확인해 주세요." : "모든 저장 견적이 명시적인 버전 그룹과 버전 번호를 가지고 있습니다."
     : audit?.status === "needs_migration"
       ? "이전 형식(v1)으로 저장된 견적이 남아 있습니다. 새 견적은 명시적 버전 정보로 저장됩니다."
       : "중복 버전 번호 또는 부모 견적 연결 오류가 발견되었습니다. 저장 데이터를 자동으로 고치지 않고 원인을 먼저 확인해야 합니다.";
-  const seedCatalogPanel = <DeferredAdminPanel label="기본 정보 기준값 비교" anchorId="admin-seed-catalog-preview-panel"><Suspense fallback={<AdminPanelLoading label="기본 정보 기준값 비교" />}><AdminSeedCatalogPanel /></Suspense></DeferredAdminPanel>;
-  const seedMappingPanel = <DeferredAdminPanel label="starter 상품 코드 매핑 확인" anchorId="admin-seed-catalog-mapping-panel"><Suspense fallback={<AdminPanelLoading label="starter 상품 코드 매핑 확인" />}><AdminSeedCatalogMappingPanel onStartCategory={onStartCategoryCrawl} categoryCrawlRunning={categoryCrawlRunning} /></Suspense></DeferredAdminPanel>;
 
   if (!audit) {
-    return <>{seedCatalogPanel}{seedMappingPanel}<section className="admin-card version-audit-card" data-testid="admin-build-version-audit"><div className="admin-card-heading"><div><h3>저장 견적 버전 상태</h3></div><span className="job-status running">{loading ? "확인 중" : "확인 실패"}</span></div>{loading ? <p className="version-audit-empty"><FiLoader className="spin" /> 저장 견적 버전 메타데이터를 확인하고 있습니다.</p> : <div className="version-audit-error"><FiAlertTriangle /><span>{error ?? "저장 견적 버전 상태를 확인하지 못했습니다."}</span><button className="button button-secondary" onClick={onRefresh}><FiRefreshCw /> 다시 확인</button></div>}</section></>;
+    return <section className="admin-card version-audit-card" data-testid="admin-build-version-audit"><div className="admin-card-heading"><div><h3>저장 견적 버전 상태</h3></div><span className="job-status running">{loading ? "확인 중" : "확인 실패"}</span></div>{loading ? <p className="version-audit-empty"><FiLoader className="spin" /> 저장 견적 버전 메타데이터를 확인하고 있습니다.</p> : <div className="version-audit-error"><FiAlertTriangle /><span>{error ?? "저장 견적 버전 상태를 확인하지 못했습니다."}</span><button className="button button-secondary" onClick={onRefresh}><FiRefreshCw /> 다시 확인</button></div>}</section>;
   }
 
   const issueCount = audit.legacyCount + audit.duplicateVersionKeys.length + audit.orphanParentIds.length + audit.crossGroupParentIds.length + audit.versionGapGroups.reduce((total, gap) => total + gap.missingVersions.length, 0);
-  return <>{seedCatalogPanel}{seedMappingPanel}<section className={`admin-card version-audit-card ${audit.status}`} data-testid="admin-build-version-audit">
+  return <section className={`admin-card version-audit-card ${audit.status}`} data-testid="admin-build-version-audit">
     <div className="admin-card-heading">
       <div><h3>저장 견적 버전 상태</h3><p className="version-audit-description">{statusDescription}</p></div>
       <div className="version-audit-heading-actions"><span className={`version-audit-status ${audit.status}`}><i /> {statusLabel}</span><button className="button button-secondary version-audit-preview-button" onClick={onMigrationPreview} disabled={migrationPreviewLoading}><FiSearch className={migrationPreviewLoading ? "spin" : undefined} /> {migrationPreviewLoading ? "프리뷰 확인 중" : "마이그레이션 프리뷰"}</button><button className="icon-button" aria-label="저장 견적 버전 상태 새로고침" title="다시 확인" onClick={onRefresh} disabled={loading}><FiRefreshCw className={loading ? "spin" : undefined} /></button></div>
@@ -952,10 +979,10 @@ function AdminBuildVersionAuditPanel({ audit, loading, error, onRefresh, migrati
     {migrationApplyResult && <div className="version-migration-operation success" data-testid="admin-build-version-migration-result"><div><FiCheckCircle /><span>{migrationApplyResult.status === "applied" ? <><strong>{migrationApplyResult.changedCount}개</strong> 이전 형식의 버전 정보를 적용했고 백업을 만들었습니다.</> : "이미 모든 저장 견적이 명시적 버전 메타데이터를 사용하고 있습니다."}</span></div>{migrationApplyResult.backupId && <button className="button button-light" onClick={() => onRollbackMigration()} disabled={rollbackLoading}><FiRefreshCw className={rollbackLoading ? "spin" : undefined} /> {rollbackLoading ? "복구 중..." : "마지막 적용 되돌리기"}</button>}</div>}
     {rollbackError && <p className="version-migration-operation-error"><FiAlertTriangle /> {rollbackError}</p>}
     {rollbackResult && <div className="version-migration-operation rollback" data-testid="admin-build-version-rollback-result"><div><FiCheckCircle /><span>마지막 버전 메타데이터 적용을 되돌렸습니다. 이전 형식 상태를 복원했습니다.</span></div></div>}
-  </section></>;
+  </section>;
 }
 
-export function AdminView({ meta, onMetaRefresh, onToast }: { meta: ServiceMeta | null; onMetaRefresh: () => void; onToast: (message: string) => void }) {
+export function AdminView({ meta, onMetaRefresh, onToast, onNavigate }: { meta: ServiceMeta | null; onMetaRefresh: () => void; onToast: (message: string) => void; onNavigate: (path: string) => void }) {
   const [running, setRunning] = useState(false);
   const [status, setStatus] = useState<CrawlStatus | null>(meta?.crawler ?? null);
   const [accessoryRunning, setAccessoryRunning] = useState(false);
@@ -1439,29 +1466,46 @@ export function AdminView({ meta, onMetaRefresh, onToast }: { meta: ServiceMeta 
   if (session?.enabled && !session.authenticated) return <div className="admin-page"><div className="workspace-heading"><div><button className="back-link" onClick={() => window.history.back()}><FiArrowLeft /> 이전으로</button><h1>관리자 인증</h1><p>다나와 수집과 카탈로그 변경은 관리자만 실행할 수 있습니다.</p></div><span className="admin-badge"><FiShield /> 보호됨</span></div>{session.security?.environment === "production" && !session.security.productionReady && <AdminSecurityNotice security={session.security} />}<section className="auth-card"><span className="auth-icon"><FiShield /></span><div><h2>데이터 센터에 로그인</h2><p>관리자 비밀번호는 브라우저에 저장되지 않습니다.</p></div><form onSubmit={login}><label htmlFor="admin-password">관리자 비밀번호</label><input id="admin-password" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="비밀번호 입력" required /><button className="button button-primary full-width" type="submit" disabled={loginLoading}>{loginLoading ? <><FiLoader className="spin" /> 인증 중...</> : <><FiShield /> 로그인</>}</button></form><p className="auth-hint"><FiInfo /> 로컬 프로젝트에서는 `ADMIN_PASSWORD` 환경변수로 설정합니다.</p></section></div>;
   const currentStatus = status ?? { status: "idle" as const, mode: "sample" as const, categoriesCompleted: 0, categoriesTotal: 9, pagesVisited: 0, pagesExpected: 0, listedProducts: 0, productsSeen: 0, productsUpdated: 0, detailFetched: 0, detailFailed: 0, failedProducts: 0, missingProducts: 0, incompleteSpecs: 0, coverage: "partial" as const, specCoverage: "partial" as const };
  const currentAccessoryStatus: AccessoryCrawlStatus = accessoryStatus ?? { status: "idle", mode: "sample", details: true, onlyIncomplete: false, category: undefined, categoriesCompleted: 0, categoriesTotal: 10, pagesVisited: 0, pagesExpected: 0, listedProducts: 0, productsSeen: 0, expectedProducts: 0, productsUpdated: 0, detailFetched: 0, detailFailed: 0, missingProducts: 0, incompleteSpecs: 0, coverage: "partial", specCoverage: "partial" };
+  const activePage = adminPageKeyForPath(window.location.pathname);
+  const activeGroup = ADMIN_PAGE_GROUPS.find((group) => group.key === activePage) ?? ADMIN_PAGE_GROUPS[0];
   return <div className="admin-page">
     <div className="workspace-heading"><div><button className="back-link" onClick={() => window.history.back()}><FiArrowLeft /> 이전으로</button><h1>부품 데이터 센터</h1><p>다나와 부품 수집과 사양 정리, 호환 정보의 확인 범위를 관리합니다.</p></div><div className="admin-heading-actions"><span className="admin-badge"><FiShield /> {meta?.adminAuthEnabled ? "인증 보호됨" : "개발용 관리자"}</span>{session?.enabled && session.authenticated && <button className="text-button admin-logout-button" type="button" onClick={() => void logout()} disabled={loginLoading}><FiLogOut /> {loginLoading ? "종료 중..." : "로그아웃"}</button>}</div></div>
-    <AdminSectionNav />
-    <section className="admin-hero"><div className="admin-hero-icon"><FiDatabase /></div><div><p className="eyebrow">다나와 수집</p><h2>카탈로그 자동 갱신</h2><p>카테고리 목록과 상세 스펙을 수집하고, 누락 필드·출처·확인 범위를 나눠 추적합니다.</p></div><div className="crawl-actions"><button className="button button-secondary" onClick={() => void startCrawl(false)} disabled={running || currentStatus.status === "running"}>{running || currentStatus.status === "running" ? <><FiLoader className="spin" /> 갱신 중...</> : <><FiRefreshCw /> 빠른 갱신</>}</button><button className="button button-primary" onClick={() => void startCrawl(true)} disabled={running || currentStatus.status === "running"}><FiDatabase /> 전체 부품 수집</button></div></section>
+    <AdminPageNav activeKey={activePage} onNavigate={onNavigate} />
+    <AdminSectionNav items={activeGroup.items} />
     <AdminSecurityNotice security={session?.security} />
     {meta?.persistence?.unavailableReason === "database_unavailable" && <div className="persistence-warning" role="alert"><FiAlertTriangle /><div><strong>PostgreSQL 연결 실패</strong><p>서버 저장을 사용할 수 없습니다. PostgreSQL 연결이 복구된 뒤 다시 시도해 주세요.</p></div></div>}
+    {activePage === "overview" && <>
+    <section className="admin-hero"><div className="admin-hero-icon"><FiDatabase /></div><div><p className="eyebrow">다나와 수집</p><h2>카탈로그 자동 갱신</h2><p>카테고리 목록과 상세 스펙을 수집하고, 누락 필드·출처·확인 범위를 나눠 추적합니다.</p></div><div className="crawl-actions"><button className="button button-secondary" onClick={() => void startCrawl(false)} disabled={running || currentStatus.status === "running"}>{running || currentStatus.status === "running" ? <><FiLoader className="spin" /> 갱신 중...</> : <><FiRefreshCw /> 빠른 갱신</>}</button><button className="button button-primary" onClick={() => void startCrawl(true)} disabled={running || currentStatus.status === "running"}><FiDatabase /> 전체 부품 수집</button></div></section>
     <AdminCrawlResumeControl /><AdminCrawlProgressDetail />
     <div id="admin-build-versions">
-    <AdminBuildVersionAuditPanel audit={versionAudit} loading={versionAuditLoading} error={versionAuditError} onRefresh={() => setVersionAuditRefreshKey((current) => current + 1)} migrationPreview={migrationPreview} migrationPreviewLoading={migrationPreviewLoading} migrationPreviewError={migrationPreviewError} onMigrationPreview={() => void loadMigrationPreview()} migrationApplyLoading={migrationApplyLoading} migrationApplyError={migrationApplyError} migrationApplyResult={migrationApplyResult} onApplyMigration={() => void applyMigration()} rollbackLoading={rollbackLoading} rollbackError={rollbackError} rollbackResult={rollbackResult} onRollbackMigration={(backup) => void rollbackMigration(backup)} backups={backups} backupDetail={backupDetail} backupDetailLoading={backupDetailLoading} backupDetailError={backupDetailError} backupDetailId={backupDetailId} onOpenBackupDetail={(backupId) => void loadBackupDetail(backupId)} onCloseBackupDetail={closeBackupDetail} onStartCategoryCrawl={(category) => { void startCrawl(false, category); }} categoryCrawlRunning={running || currentStatus.status === "running"} />
+    <AdminBuildVersionAuditPanel audit={versionAudit} loading={versionAuditLoading} error={versionAuditError} onRefresh={() => setVersionAuditRefreshKey((current) => current + 1)} migrationPreview={migrationPreview} migrationPreviewLoading={migrationPreviewLoading} migrationPreviewError={migrationPreviewError} onMigrationPreview={() => void loadMigrationPreview()} migrationApplyLoading={migrationApplyLoading} migrationApplyError={migrationApplyError} migrationApplyResult={migrationApplyResult} onApplyMigration={() => void applyMigration()} rollbackLoading={rollbackLoading} rollbackError={rollbackError} rollbackResult={rollbackResult} onRollbackMigration={(backup) => void rollbackMigration(backup)} backups={backups} backupDetail={backupDetail} backupDetailLoading={backupDetailLoading} backupDetailError={backupDetailError} backupDetailId={backupDetailId} onOpenBackupDetail={(backupId) => void loadBackupDetail(backupId)} onCloseBackupDetail={closeBackupDetail} />
     </div>
+    </>}
+    {activePage === "catalog" && <>
     <div id="admin-spec-coverage">
-    <CatalogSpecCoveragePanel coverage={meta?.catalogSpecCoverage} benchmarkCoverage={adminMeta?.benchmarkCoverage} accessoryCoverage={meta?.accessoryCoverage} onStartCategoryCrawl={(category) => { void startCrawl(false, category); }} onStartCategoryCrawlAll={(category) => { void startCrawl(true, category); }} categoryCrawlRunning={running || currentStatus.status === "running"} onStartAccessoryCrawl={(category) => { void startAccessoryCrawl({ category, offset: 0, limit: 30 }); }} accessoryCrawlRunning={accessoryRunning || currentAccessoryStatus.status === "running"} onOpenBenchmarkReview={() => focusAdminPanel("admin-benchmark-review")} />
+    <CatalogSpecCoveragePanel coverage={meta?.catalogSpecCoverage} benchmarkCoverage={adminMeta?.benchmarkCoverage} accessoryCoverage={meta?.accessoryCoverage} onStartCategoryCrawl={(category) => { void startCrawl(false, category); }} onStartCategoryCrawlAll={(category) => { void startCrawl(true, category); }} categoryCrawlRunning={running || currentStatus.status === "running"} onStartAccessoryCrawl={(category) => { void startAccessoryCrawl({ category, offset: 0, limit: 30 }); }} accessoryCrawlRunning={accessoryRunning || currentAccessoryStatus.status === "running"} onOpenBenchmarkReview={() => onNavigate(adminPagePathForAnchor("admin-benchmark-review"))} />
     </div>
+    <DeferredAdminPanel label="변경 이력" anchorId="admin-catalog-change-log"><Suspense fallback={<AdminPanelLoading label="변경 이력" />}><CatalogChangeHistoryPanel records={catalogChanges} loading={catalogChangesLoading} error={catalogChangesError} historyLimit={catalogChangesLimit} fromDate={catalogChangesFrom} toDate={catalogChangesTo} categoryFilter={catalogChangesCategory} onHistoryLimitChange={setCatalogChangesLimit} onFromDateChange={setCatalogChangesFrom} onToDateChange={setCatalogChangesTo} onCategoryFilterChange={setCatalogChangesCategory} onRefresh={() => setCatalogChangesRefreshKey((current) => current + 1)} onToast={onToast} /></Suspense></DeferredAdminPanel>
+    </>}
+    {activePage === "overview" && <>
     <div className="admin-grid" id="admin-overview"><section className="admin-card"><div className="admin-card-heading"><div><p className="eyebrow">현재 카탈로그</p><h3>현재 데이터</h3></div><FiActivity /></div><div className="admin-stats"><div><strong>{meta?.catalogCount ?? 0}</strong><span>전체 부품</span></div><div><strong>{meta?.catalogEligibleCount ?? meta?.catalogCount ?? 0}</strong><span>핵심 부품</span></div><div><strong>{meta?.engineVersion ?? "-"}</strong><span>검사 기준</span></div><div><strong>{meta?.catalogCount ? Math.round((meta.priceCoverage.priced / meta.catalogCount) * 100) : 0}%</strong><span>가격 포함률</span></div></div><div className="data-health"><span><i className="health-dot live" /> 수집 상품 {meta?.qualityCounts.live ?? 0}</span><span><i className="health-dot incomplete" /> 확인 필요 {meta?.qualityCounts.incomplete ?? 0}</span><span><i className="health-dot seed" /> 기본 부품 {meta?.qualityCounts.seed ?? 0}</span><span><i className="health-dot accessory" /> 주변 부품 {meta?.accessoryCount ?? 0}</span></div><div className="category-counts">{PART_CATEGORIES.map((category) => <div key={category}><span>{CATEGORY_LABELS[category]}</span><strong>{meta?.categoryCounts[category] ?? 0}</strong></div>)}</div><p className="admin-updated"><FiClock /> 마지막 카탈로그 수정 {meta ? new Date(meta.catalogUpdatedAt).toLocaleString("ko-KR") : "확인 중"}</p></section><section className="admin-card"><div className="admin-card-heading"><div><p className="eyebrow">수집 작업</p><h3>수집 작업 상태</h3></div><span className={`job-status ${currentStatus.status} ${currentStatus.coverage}`}>{currentStatus.status === "running" ? "실행 중" : currentStatus.status === "completed" ? "완료" : currentStatus.status === "failed" ? "실패" : currentStatus.status === "cancelled" ? "중단됨" : "대기"}</span></div><div className="crawl-summary-line"><span>범주 <strong>{currentStatus.category ? CATEGORY_LABELS[currentStatus.category] : "전체 핵심 부품"}</strong></span><span>모드 <strong>{currentStatus.mode === "all" ? "전체" : "샘플"}</strong></span><span>목록 수집 상태 <strong>{currentStatus.coverage === "complete" ? "완전" : "부분"}</strong></span><span>스펙 <strong>{currentStatus.specCoverage === "complete" ? "완전" : "부분"}</strong></span></div><div className="crawl-progress"><div><span>카테고리</span><strong>{currentStatus.categoriesCompleted} / {currentStatus.categoriesTotal}</strong></div><div className="progress-track"><span style={{ width: `${currentStatus.categoriesTotal ? (currentStatus.categoriesCompleted / currentStatus.categoriesTotal) * 100 : 0}%` }} /></div><div className="crawl-counts"><span>페이지 <strong>{currentStatus.pagesVisited} / {currentStatus.pagesExpected || "?"}</strong></span><span>목록 상품 <strong>{currentStatus.listedProducts}</strong></span><span>상세 성공 <strong>{currentStatus.detailFetched}</strong></span><span>상세 실패 <strong>{currentStatus.detailFailed}</strong></span><span>신규 <strong>{currentStatus.newProducts ?? 0}</strong></span><span>판매 중단 <strong>{currentStatus.delistedProducts ?? 0}</strong></span><span>재등록 <strong>{currentStatus.relistedProducts ?? 0}</strong></span></div></div><p className="crawl-message">{currentStatus.message ?? "아직 실행된 수집 작업이 없습니다."}</p>{currentStatus.error && <p className="crawl-error"><FiXCircle /> {currentStatus.error}</p>}</section></div>
+    <DeferredAdminPanel label="사용자 흐름 통계" anchorId="admin-usage-analytics"><Suspense fallback={<AdminPanelLoading label="사용자 흐름 통계" />}><AdminUsageAnalyticsPanel onToast={onToast} /></Suspense></DeferredAdminPanel>
     <DeferredAdminPanel label="크롤링 엔진 상태" anchorId="admin-crawl-engine"><Suspense fallback={<AdminPanelLoading label="크롤링 엔진 상태" />}><AdminCrawlEnginePanel onToast={onToast} /></Suspense></DeferredAdminPanel>
+    </>}
+    {activePage === "engine" && <>
     <div className="admin-module-band"><div className="admin-module-band-copy"><p className="eyebrow"><FiZap /> 견적 생성 엔진</p><h2>자동 견적 구성</h2><p>엔진 옵션·타겟 필터·실패 감시를 견적 생성 엔진 한 단위로 관리합니다.</p></div></div>
     <DeferredAdminPanel label="견적 생성 엔진 옵션" anchorId="admin-engine-options"><Suspense fallback={<AdminPanelLoading label="견적 생성 엔진 옵션" />}><AdminQuotationEnginePanel onToast={onToast} /></Suspense></DeferredAdminPanel>
     <DeferredAdminPanel label="견적 타겟 필터" anchorId="admin-engine-filters"><Suspense fallback={<AdminPanelLoading label="견적 타겟 필터" />}><AdminEngineFiltersPanel onToast={onToast} /></Suspense></DeferredAdminPanel>
     <DeferredAdminPanel label="자동 구성 실패 기록" anchorId="admin-generation-failures"><Suspense fallback={<AdminPanelLoading label="자동 구성 실패 기록" />}><AdminGenerationFailuresPanel onToast={onToast} /></Suspense></DeferredAdminPanel>
-    <DeferredAdminPanel label="변경 이력" anchorId="admin-catalog-change-log"><Suspense fallback={<AdminPanelLoading label="변경 이력" />}><CatalogChangeHistoryPanel records={catalogChanges} loading={catalogChangesLoading} error={catalogChangesError} historyLimit={catalogChangesLimit} fromDate={catalogChangesFrom} toDate={catalogChangesTo} categoryFilter={catalogChangesCategory} onHistoryLimitChange={setCatalogChangesLimit} onFromDateChange={setCatalogChangesFrom} onToDateChange={setCatalogChangesTo} onCategoryFilterChange={setCatalogChangesCategory} onRefresh={() => setCatalogChangesRefreshKey((current) => current + 1)} onToast={onToast} /></Suspense></DeferredAdminPanel>
-    <DeferredAdminPanel label="M.2 매핑" anchorId="admin-m2-mapping"><Suspense fallback={<AdminPanelLoading label="M.2 매핑" />}><M2SlotOverridePanel onToast={onToast} onMetaRefresh={onMetaRefresh} /></Suspense></DeferredAdminPanel>
+    </>}
+    {activePage === "compatibility" && <DeferredAdminPanel label="M.2 매핑" anchorId="admin-m2-mapping"><Suspense fallback={<AdminPanelLoading label="M.2 매핑" />}><M2SlotOverridePanel onToast={onToast} onMetaRefresh={onMetaRefresh} /></Suspense></DeferredAdminPanel>}
+    {activePage === "evidence" && <>
     <DeferredAdminPanel label="벤치마크 확인" anchorId="admin-benchmark-review"><Suspense fallback={<AdminPanelLoading label="벤치마크 확인" />}><BenchmarkOverridePanel onToast={onToast} onMetaRefresh={onMetaRefresh} storageMode={meta?.storageMode} /></Suspense></DeferredAdminPanel>
     <DeferredAdminPanel label="게임별 FPS 자료" anchorId="admin-gaming-performance-evidence"><Suspense fallback={<AdminPanelLoading label="게임별 FPS 자료" />}><AdminGamingPerformancePanel onToast={onToast} /></Suspense></DeferredAdminPanel>
+    <DeferredAdminPanel label="기본 정보 기준값 비교" anchorId="admin-seed-catalog-preview-panel"><Suspense fallback={<AdminPanelLoading label="기본 정보 기준값 비교" />}><AdminSeedCatalogPanel /></Suspense></DeferredAdminPanel>
+    <DeferredAdminPanel label="starter 상품 코드 매핑 확인" anchorId="admin-seed-catalog-mapping-panel"><Suspense fallback={<AdminPanelLoading label="starter 상품 코드 매핑 확인" />}><AdminSeedCatalogMappingPanel onStartCategory={(category) => { void startCrawl(false, category); }} categoryCrawlRunning={running || currentStatus.status === "running"} /></Suspense></DeferredAdminPanel>
+    </>}
+    {activePage === "compatibility" && <>
     <DeferredAdminPanel label="GPU 물리 확인" anchorId="admin-gpu-physical"><Suspense fallback={<AdminPanelLoading label="GPU 물리 확인" />}><GpuPhysicalOverridePanel onToast={onToast} onMetaRefresh={onMetaRefresh} /></Suspense></DeferredAdminPanel>
     <section className="admin-card accessory-admin-card" id="admin-accessory-card">
         <DeferredAdminPanel label="케이스 RGB 부하 확인" anchorId="admin-case-rgb-load"><Suspense fallback={<AdminPanelLoading label="케이스 RGB 부하 확인" />}><CaseRgbLoadOverridePanel onToast={onToast} onMetaRefresh={onMetaRefresh} /></Suspense></DeferredAdminPanel>
@@ -1485,7 +1529,9 @@ export function AdminView({ meta, onMetaRefresh, onToast }: { meta: ServiceMeta 
         <div className="crawl-summary-line"><span>모드 <strong>{currentAccessoryStatus.mode === "all" ? "전체" : currentAccessoryStatus.onlyIncomplete ? "미확인 배치" : "배치"}</strong></span><span>상세 <strong>{currentAccessoryStatus.details ? "보강 실행" : "목록만"}</strong></span><span>목록 수집 <strong className={currentAccessoryStatus.coverage}>{currentAccessoryStatus.coverage === "complete" ? "완전" : "부분"}</strong></span><span>누락 표기 <strong className={currentAccessoryStatus.specCoverage}>{currentAccessoryStatus.specCoverage === "complete" ? "없음" : "있음"}</strong></span></div>
         <div className="crawl-counts"><span>범주 <strong>{currentAccessoryStatus.categoriesCompleted} / {currentAccessoryStatus.categoriesTotal}</strong></span><span>상품 <strong>{currentAccessoryStatus.productsSeen.toLocaleString("ko-KR")} / {currentAccessoryStatus.expectedProducts.toLocaleString("ko-KR") || "?"}</strong></span><span>페이지 <strong>{currentAccessoryStatus.pagesVisited} / {currentAccessoryStatus.pagesExpected || "?"}</strong></span><span>목록 상품 <strong>{currentAccessoryStatus.listedProducts}</strong></span><span>상세 성공 <strong>{currentAccessoryStatus.detailFetched}</strong></span><span>상세 실패 <strong>{currentAccessoryStatus.detailFailed}</strong></span><span>반영 <strong>{currentAccessoryStatus.productsUpdated}</strong></span><span>누락 <strong>{currentAccessoryStatus.missingProducts}</strong></span></div>
         <p className="crawl-message">{currentAccessoryStatus.message ?? "아직 실행된 주변 부품 수집 작업이 없습니다."}</p>{currentAccessoryStatus.error && <p className="crawl-error"><FiXCircle /> {currentAccessoryStatus.error}</p>}
-      </section><section className="pipeline-card" id="admin-pipeline"><div className="section-title-row"><div><p className="eyebrow">데이터 처리 과정</p><h2>수집부터 결과까지</h2></div><span className="muted-count">자동 갱신 주기: 24시간</span></div><div className="pipeline-flow"><PipelineStep Icon={FiSearch} title="다나와 목록" text="카테고리·상품 코드" /><span className="pipeline-arrow">→</span><PipelineStep Icon={FiDatabase} title="상세 스펙" text="메타·상품 정보" /><span className="pipeline-arrow">→</span><PipelineStep Icon={FiTool} title="정리" text="소켓·단위·규격" /><span className="pipeline-arrow">→</span><PipelineStep Icon={FiShield} title="호환 점검" text="결과와 누락 정보" /></div><p className="pipeline-note"><FiInfo /> 요청 지연과 상세 페이지 보강을 적용합니다. 전체 수집에서는 상품 목록과 상세 페이지를 모두 읽어야 목록 수집이 완료로 표시됩니다. 페이지에 없는 사양은 따로 누락 항목으로 집계합니다.</p></section></div>;
+      </section>
+      </>}
+      {activePage === "overview" && <section className="pipeline-card" id="admin-pipeline"><div className="section-title-row"><div><p className="eyebrow">데이터 처리 과정</p><h2>수집부터 결과까지</h2></div><span className="muted-count">자동 갱신 주기: 24시간</span></div><div className="pipeline-flow"><PipelineStep Icon={FiSearch} title="다나와 목록" text="카테고리·상품 코드" /><span className="pipeline-arrow">→</span><PipelineStep Icon={FiDatabase} title="상세 스펙" text="메타·상품 정보" /><span className="pipeline-arrow">→</span><PipelineStep Icon={FiTool} title="정리" text="소켓·단위·규격" /><span className="pipeline-arrow">→</span><PipelineStep Icon={FiShield} title="호환 점검" text="결과와 누락 정보" /></div><p className="pipeline-note"><FiInfo /> 요청 지연과 상세 페이지 보강을 적용합니다. 전체 수집에서는 상품 목록과 상세 페이지를 모두 읽어야 목록 수집이 완료로 표시됩니다. 페이지에 없는 사양은 따로 누락 항목으로 집계합니다.</p></section>}</div>;
 }
 
 function PipelineStep({ Icon, title, text }: { Icon: IconType; title: string; text: string }) {

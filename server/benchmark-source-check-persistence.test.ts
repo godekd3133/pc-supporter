@@ -56,7 +56,7 @@ describe("benchmark source-check persistence API", () => {
       const checkedPayload = await checked.json() as Record<string, any>;
       expect(checked.status).toBe(200);
       expect(checkedPayload).toMatchObject({ persisted: true, historyRecorded: true, sourceCheck: { status: "reachable", identityStatus: "matched" }, override: { sourceCheck: { status: "reachable" } } });
-      expect(checkPhysicalSourceUrlMock).toHaveBeenCalledWith("https://vendor.example/benchmark", "7600");
+      expect(checkPhysicalSourceUrlMock).toHaveBeenCalledWith("https://vendor.example/benchmark", "9600");
 
       const history = await fetch(`${baseUrl}/api/admin/benchmark-overrides/cpu-7600/source-check/history`);
       const historyPayload = await history.json() as Record<string, any>;

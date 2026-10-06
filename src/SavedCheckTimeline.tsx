@@ -64,7 +64,7 @@ export function savedAccessoryLineText(saved: SavedBuild) {
 
 export function savedPreferenceText(saved: SavedBuild) {
   const preferences = saved.recommendationPreferences;
-  if (!preferences) return "기본 기준";
+  if (!preferences) return "기본 설정";
   return `${RECOMMENDATION_PROFILE_LABELS[preferences.profile]} · ${RECOMMENDATION_PRIORITY_LABELS[preferences.priority]} · ${LISTING_POLICY_LABELS[preferences.listingPolicy ?? "retail_only"]}`;
 }
 
@@ -79,8 +79,8 @@ export function savedCheckRiskText(snapshot: NonNullable<SavedBuild["checkSnapsh
     ? base
     : `${base} · 주변 부품 호환 불가 ${accessory.blockerCount}개 · 주의 ${accessory.warningCount}개 · 정보 부족 ${accessory.unknownCount}개`;
   const resourceState = snapshot.resourceBudget?.state;
-  if (resourceState === "danger") return `${withAccessory} · 전력·냉각 기준 미달`;
-  if (resourceState === "warning") return `${withAccessory} · 전력·냉각 여유 좁음`;
+  if (resourceState === "danger") return `${withAccessory} · 전력·냉각 용량 부족`;
+  if (resourceState === "warning") return `${withAccessory} · 전력·냉각 여유 적음`;
   if (resourceState === "unknown") return `${withAccessory} · 전력·냉각 정보 부족`;
   return withAccessory;
 }
@@ -91,7 +91,7 @@ export function savedCheckPriceText(snapshot: NonNullable<SavedBuild["checkSnaps
 
 export function savedCheckResourceText(snapshot: NonNullable<SavedBuild["checkSnapshot"]>) {
   const resource = snapshot.resourceBudget;
-  if (!resource) return "미적용";
+  if (!resource) return "기록 없음";
   const headroomText = (value: number | undefined) => value === undefined ? "정보 없음" : value >= 0 ? `${value}W 여유` : `${Math.abs(value)}W 부족`;
   return `전력 ${headroomText(resource.powerHeadroomW)} · 냉각 ${headroomText(resource.coolerHeadroomW)}`;
 }
@@ -163,6 +163,7 @@ export const CATALOG_SPEC_LABELS: Record<string, string> = {
   memoryTiming: "메모리 타이밍",
   memoryEffectiveLatencyNs: "실효 CAS 지연",
   vrmPhaseCount: "전원부 페이즈",
+  vrmVcorePhaseCount: "Vcore 페이즈",
   vrmVcoreOutputA: "Vcore 출력 합계",
   maxMemoryGb: "최대 메모리",
   memorySlots: "메모리 슬롯",
@@ -313,7 +314,7 @@ export function catalogSpecKeyForLabel(label: string) {
 }
 
 export function catalogCauseDiffLabel(diff: CatalogChangeValueDiff) {
-  return diff.field.startsWith("정규화 스펙 · ") ? diff.field.slice("정규화 스펙 · ".length) : diff.field;
+  return diff.field.startsWith("정규화 스펙 · ") ? diff.field.slice("정규화 스펙 · ".length) : catalogChangeFieldLabelFor(diff.field);
 }
 
 export function catalogCauseDiffPriority(record: CatalogChangeRecord, diff: CatalogChangeValueDiff) {
@@ -369,7 +370,7 @@ export function SavedCatalogCauseValueDiffs({ record, compact = false, relatedRu
   const allImpacts = [...new Map(diffs.flatMap((diff) => catalogChangeImpactsFor(record, diff)).map((impact) => [impact.id, impact])).values()];
   const exactImpacts = relatedRuleIds.length > 0 ? allImpacts.filter((impact) => impact.ruleIds.some((ruleId) => relatedRuleIds.includes(ruleId))) : [];
   const impacts = exactImpacts.length > 0 ? exactImpacts : allImpacts;
-  return <details className={compact ? "history-check-cause-values compact" : "history-check-cause-values"}><summary>{groupLabel} · 변경 값 표 ({diffs.length}개)</summary>{specDiffs.length > 0 && <div className="history-check-cause-group"><strong>핵심 규격 변화</strong><SavedCatalogCauseDiffRows record={record} diffs={specDiffs} /></div>}{priceAndDataDiffs.length > 0 && <div className="history-check-cause-group"><strong>가격·데이터 변화</strong><SavedCatalogCauseDiffRows record={record} diffs={priceAndDataDiffs} /></div>}{impacts.length > 0 && <div className="history-check-cause-impact"><strong>{exactImpacts.length > 0 ? "이 결과에 연결된 영향" : "영향이 있을 수 있는 항목"}</strong>{impacts.map((impact) => <div className="history-check-cause-impact-row" key={impact.id}><span>{savedCatalogCauseImpactKindText(impact.kind)}</span><div><strong>{impact.label}</strong><small>{impact.summary}</small>{impact.ruleIds.length > 0 && <small>규칙 · {impact.ruleIds.join(" · ")}</small>}</div></div>)}<small className="history-check-cause-impact-note"><FiRefreshCw /> 값이 바뀌었으니 현재 기준으로 다시 검사해 주세요.</small></div>}</details>;
+  return <details className={compact ? "history-check-cause-values compact" : "history-check-cause-values"}><summary>{groupLabel} · 바뀐 값 ({diffs.length}개)</summary>{specDiffs.length > 0 && <div className="history-check-cause-group"><strong>부품 사양 변경</strong><SavedCatalogCauseDiffRows record={record} diffs={specDiffs} /></div>}{priceAndDataDiffs.length > 0 && <div className="history-check-cause-group"><strong>가격·상품 정보 변경</strong><SavedCatalogCauseDiffRows record={record} diffs={priceAndDataDiffs} /></div>}{impacts.length > 0 && <div className="history-check-cause-impact"><strong>{exactImpacts.length > 0 ? "바뀐 사양과 관련된 호환 결과" : "바뀐 사양으로 달라질 수 있는 항목"}</strong>{impacts.map((impact) => <div className="history-check-cause-impact-row" key={impact.id}><span>{savedCatalogCauseImpactKindText(impact.kind)}</span><div><strong>{impact.label}</strong><small>{impact.summary}</small></div></div>)}<small className="history-check-cause-impact-note"><FiRefreshCw /> 부품 정보가 바뀌었어요. 호환성을 다시 확인해 주세요.</small></div>}</details>;
 }
 
 export function SavedCatalogCauseSourceLink({ record, partMap, accessoryMap }: { record: CatalogChangeRecord; partMap?: ReadonlyMap<string, Part>; accessoryMap?: ReadonlyMap<string, AccessoryItem> }) {
@@ -380,7 +381,7 @@ export function SavedCatalogCauseSourceLink({ record, partMap, accessoryMap }: {
 export function savedCheckFindingFactText(fact: SavedBuildCheckFindingSummary["facts"][number] | undefined) {
   if (!fact) return "기록 없음";
   const actual = fact.actual ?? "확인 정보 없음";
-  return fact.expected ? `${actual} · 기대값 ${fact.expected}` : actual;
+  return fact.expected ? `${actual} · 필요한 조건 ${fact.expected}` : actual;
 }
 
 export function SavedCheckFindingFactDiff({ before, after }: { before?: SavedBuildCheckFindingSummary; after?: SavedBuildCheckFindingSummary }) {
@@ -515,7 +516,7 @@ export function SavedBuildCheckTimeline({ history, partMap, accessoryMap, showDi
                 const affected = savedCheckFindingAffectedText(finding, partMap);
 
                 return <article className={`history-check-diff-finding ${change.change}`} key={`${change.key}-${change.change}`}><span className="history-check-diff-label">{savedCheckFindingChangeText(change.change)}</span><div className="history-check-diff-finding-content"><div className="history-check-diff-finding-versions"><div className="history-check-diff-finding-version before"><span>변경 전</span>{beforeFinding ? <><strong>{beforeFinding.title}</strong><small>{savedCheckFindingSeverityText(beforeFinding.severity)} · {beforeFinding.message}</small></> : <small>이 시점에는 기록이 없어요.</small>}</div><b aria-hidden="true">→</b><div className="history-check-diff-finding-version after"><span>변경 후</span>{afterFinding ? <><strong>{afterFinding.title}</strong><small>{savedCheckFindingSeverityText(afterFinding.severity)} · {afterFinding.message}</small></> : <small>이 시점에는 기록이 없어요.</small>}</div></div><SavedCheckFindingFactDiff before={beforeFinding} after={afterFinding} />{affected && <small>영향 부품 · {affected}</small>}</div></article>;
-              })}</div> : <p className="history-check-diff-empty"><FiCheckCircle /> 선택한 시점 사이에 규칙별 변화가 없습니다.</p>}
+              })}</div> : <p className="history-check-diff-empty"><FiCheckCircle /> 선택한 두 결과에서 호환 항목은 같아요.</p>}
             </>
           ) : <p className="history-check-diff-unavailable"><FiInfo /> 이 기록은 전체 결과·가격 요약만 저장된 옛 버전이라 항목별 비교를 보여드릴 수 없어요.</p>}
         </div>

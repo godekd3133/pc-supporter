@@ -104,15 +104,12 @@ async function runFlow(client, { prefix, viewport }) {
   await navigateToStart(client);
   await record("02-start-intent", "시작 선택 · 새 견적 / 업그레이드 / 나중에");
   await clickButton(client, "새 PC 견적 보기");
-  await clickButton(client, "새 견적 시작하기");
   await waitForTitle(client, "어떤 기준으로 부품을 고를까요?", "새 견적 방식 화면");
   await record("03-new-quote", "새 견적 방식");
   await clickButton(client, "게임·작업을 기준으로 고르기");
-  await clickButton(client, "이 기준으로 계속");
   await waitForTitle(client, "어떤 용도로 쓸 PC인가요?", "용도 선택 화면");
   await record("04-usecase", "게임 또는 작업 선택");
   await clickButton(client, "게임");
-  await clickButton(client, "다음");
   await waitForTitle(client, "주로 할 게임을 골라주세요", "게임 선택 화면");
   await clickButton(client, "사이버펑크 2077");
   await clickButton(client, "다음");
@@ -175,13 +172,11 @@ async function runRepresentativeBranches(client, { prefix, viewport }) {
   const startNewQuote = async () => {
     await navigateToStart(client);
     await clickButton(client, "새 PC 견적 보기");
-    await clickButton(client, "새 견적 시작하기");
-    await waitForTitle(client, "어떤 기준으로 부품을 고를까요?", "새 견적 방식 화면");
+      await waitForTitle(client, "어떤 기준으로 부품을 고를까요?", "새 견적 방식 화면");
   };
 
   await startNewQuote();
   await clickButton(client, "게임·작업을 기준으로 고르기");
-  await clickButton(client, "이 기준으로 계속");
   await waitForTitle(client, "어떤 용도로 쓸 PC인가요?", "작업 용도 화면");
   await clickButton(client, "작업");
   await clickButton(client, "다음");
@@ -205,7 +200,6 @@ async function runRepresentativeBranches(client, { prefix, viewport }) {
 
   await startNewQuote();
   await clickButton(client, "예산을 기준으로 고르기");
-  await clickButton(client, "이 기준으로 계속");
   await waitForTitle(client, "예산을 정해주세요", "예산-only 화면");
   await clickButton(client, "400만원");
   await record("budget", "01-budget", "예산-only · 상급 일반 구성");
@@ -218,7 +212,6 @@ async function runRepresentativeBranches(client, { prefix, viewport }) {
 
   await startNewQuote();
   await clickButton(client, "원하는 사양 직접 입력하기");
-  await clickButton(client, "이 기준으로 계속");
   await waitForTitle(client, "성능 목표를 정하세요", "직접 성능 화면");
   await record("spec", "01-spec", "직접 성능 · 최상급 · RAM · SSD");
   await clickButton(client, "최상급");

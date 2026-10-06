@@ -69,15 +69,24 @@ VITE_API_BASE_URL=https://api.example.com npm run mobile:android:aab
 
 KBO Fans가 운영 중인 Lightsail static IP `3.39.79.1`과 기존 Caddy를 유지하면서 PC Supporter를 같은 인스턴스에 별도 서비스로 추가할 수 있습니다. PC Supporter는 `/opt/pc-supporter`, `/var/lib/pc-supporter`, `pc-supporter-api` systemd service, `4174` 내부 포트를 사용하고, 기본 HTTPS host는 `pc-supporter.3-39-79-1.sslip.io`입니다. KBO Fans의 `8000` 포트와 `/opt/kbo-fans` 및 기존 Caddy site block은 덮어쓰지 않습니다.
 
-먼저 `aws login`으로 AWS 세션을 복구하고 Lightsail SSH access key/certificate를 준비한 뒤, 배포 consumer가 요구하는 현재 production web build를 `dist/`에 생성합니다. native `build:mobile`의 `dist-mobile/`은 Capacitor용이므로 Lightsail web deployment input으로 사용하지 않습니다.
+인스턴스 접속과 배포의 기본 경로는 **영구 SSH 키**이며 AWS 세션은 필요하지 않습니다. 로컬 `~/.ssh/config`에 `Host pc-supporter`(`3.39.79.1`, user `ubuntu`, `~/.ssh/pc-supporter-deploy`)가 등록돼 있어 운영 확인은 `ssh pc-supporter`로 바로 접속할 수 있습니다. 배포 스크립트도 `~/.ssh/pc-supporter-deploy`가 존재하면 자동으로 그 키를 사용합니다. 배포 consumer가 요구하는 현재 production web build를 `dist/`에 생성합니다. native `build:mobile`의 `dist-mobile/`은 Capacitor용이므로 Lightsail web deployment input으로 사용하지 않습니다.
 
 ```bash
 npm run build
 ./scripts/lightsail-deploy.sh \
   --host ubuntu@3.39.79.1 \
-  --domain pc-supporter.3-39-79-1.sslip.io \
-  --ssh-key /tmp/pc-supporter-lightsail-key \
-  --ssh-certificate /tmp/pc-supporter-lightsail-key-cert.pub
+  --domain pc-supporter.3-39-79-1.sslip.io
+```
+
+영구 키를 사용할 수 없는 **비상용 경로**로만 AWS CLI 임시 SSH access key/certificate를 사용합니다. `default` 프로필은 IAM 사용자 `pc-supporter-lightsail-ops`의 정적 access key를 쓰므로 `aws login` 세션 갱신 없이 동작합니다.
+
+```bash
+aws lightsail get-instance-access-details \
+  --instance-name kbo-fans-api-lightsail \
+  --protocol ssh \
+  --region ap-northeast-2
+# 반환된 privateKey는 /tmp/pc-supporter-lightsail-key,
+# certKey는 /tmp/pc-supporter-lightsail-key-cert.pub로 저장
 ```
 
 첫 배포에서 `--env-file`을 생략하면 원격 `/etc/pc-supporter/backend.env`에 관리자 비밀번호와 세션 secret을 생성하고 값을 출력하지 않습니다. 이후에는 remote env를 보존하는 배포만 사용합니다.
@@ -86,12 +95,10 @@ npm run build
 ./scripts/lightsail-deploy.sh \
   --host ubuntu@3.39.79.1 \
   --domain pc-supporter.3-39-79-1.sslip.io \
-  --ssh-key /tmp/pc-supporter-lightsail-key \
-  --ssh-certificate /tmp/pc-supporter-lightsail-key-cert.pub \
   --preserve-env
 ```
 
-배포 스크립트는 production admin 인증값이 없으면 public deployment를 거부하고, Caddy 설정을 먼저 백업한 뒤 별도 site block만 추가합니다. 첫 기동에서 `tsx`가 저사양 Lightsail 인스턴스의 cold compile에 시간을 사용할 수 있으므로 내부 `/api/health`는 기본 240초 동안 systemd 상태와 함께 반복 확인합니다. `PC_SUPPORTER_INTERNAL_HEALTH_TIMEOUT_SECONDS`로 이 대기 시간을 조정할 수 있습니다. 외부 `/api/health`는 `https://localhost` native origin을 함께 보내 CORS header까지 확인한 뒤 성공으로 종료합니다. AWS session이 만료됐거나 SSH가 `Permission denied (publickey)`이면 bundle dry-run까지만 수행하고 배포 성공으로 기록하지 않습니다.
+배포 스크립트는 production admin 인증값이 없으면 public deployment를 거부하고, Caddy 설정을 먼저 백업한 뒤 별도 site block만 추가합니다. 첫 기동에서 `tsx`가 저사양 Lightsail 인스턴스의 cold compile에 시간을 사용할 수 있으므로 내부 `/api/health`는 기본 240초 동안 systemd 상태와 함께 반복 확인합니다. `PC_SUPPORTER_INTERNAL_HEALTH_TIMEOUT_SECONDS`로 이 대기 시간을 조정할 수 있습니다. 외부 `/api/health`는 `https://localhost` native origin을 함께 보내 CORS header까지 확인한 뒤 성공으로 종료합니다. SSH가 `Permission denied (publickey)`이면 bundle dry-run까지만 수행하고 배포 성공으로 기록하지 않습니다. 영구 키를 못 쓰는 경우에만 `aws lightsail get-instance-access-details` 임시 인증서 경로를 사용하고, 그때의 임시 크레덴셜 유효기간(~13분) 주의점은 `context.md`를 참고합니다.
 
 ### main push 자동 배포
 

@@ -396,7 +396,7 @@ describe("compatibility engine", () => {
 
     expect(result.analysis.profile).toBe("gaming");
     expect(result.analysis.scoreBasis).toContain("고정 기준");
-    expect(result.analysis.scoreModelVersion).toBe("objective-index-v1");
+    expect(result.analysis.scoreModelVersion).toBe("objective-index-v2");
     expect(result.analysis.factors.some((factor) => factor.category === "gpu")).toBe(true);
     expect(["상위권", "균형형", "보완 권장", "계산 불가"]).toContain(result.analysis.scoreLabel);
   });
@@ -691,7 +691,7 @@ describe("compatibility engine", () => {
     expect(bundle).toBeDefined();
     expect(bundle?.changes).toHaveLength(2);
     expect(new Set(bundle?.changes.map((change) => change.category)).size).toBe(2);
-    expect(bundle?.totalPriceDeltaWon).toBe(304000);
+    expect(bundle?.totalPriceDeltaWon).toBe(303000);
     expect(bundle?.expansionEvidence).toMatchObject({
       baselineScore: expect.any(Number),
       candidateScore: expect.any(Number),
@@ -701,7 +701,7 @@ describe("compatibility engine", () => {
     });
     expect(bundle?.compatibilityEvidence).toEqual({ blockerCount: 0, warningCount: 0, unknownCount: 0 });
     expect(bundle?.budgetEvidence).toMatchObject({ budgetWon, priceComplete: true, withinBudget: true });
-    expect(bundle?.budgetEvidence?.afterCoreTotalPriceWon).toBe(baseline.totalPriceWon + 304000);
+    expect(bundle?.budgetEvidence?.afterCoreTotalPriceWon).toBe(baseline.totalPriceWon + 303000);
     expect(result.upgradeBundleSearch).toMatchObject({
       candidateCount: expect.any(Number),
       candidateCategoryCount: expect.any(Number),
@@ -772,6 +772,40 @@ describe("compatibility engine", () => {
     expect(result.gpuFit).toMatchObject({ status: "incompatible", power: { status: "incompatible" } });
     expect(result.analysis.bottlenecks.some((bottleneck) => bottleneck.severity === "critical" && bottleneck.category === "psu")).toBe(true);
     expect(result.analysis.nextActions.some((action) => action.includes("파워"))).toBe(true);
+  });
+
+  it("blocks a 500W PSU below a confirmed 650W GPU recommendation even when GPU consumption is missing", () => {
+    const build = compatibleBuild();
+    build.psu = { partId: "psu-650w", quantity: 1 };
+    const catalog = seedCatalog.map((part): Part => part.id === "gpu-rtx-4060"
+      ? { ...part, specs: { ...part.specs, powerW: undefined, recommendedPsuW: 650 } }
+      : part.id === "psu-650w" ? { ...part, specs: { ...part.specs, wattageW: 500 } } : part);
+    const result = evaluateBuild(build, catalog, { includeSuggestions: false });
+    const finding = result.findings.find((item) => item.ruleId === "gpu-psu-power");
+    expect(finding?.severity).toBe("blocker");
+    expect(finding?.facts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: "권장 파워 용량", expected: "650W" }),
+      expect.objectContaining({ label: "선택한 파워 용량", actual: "500W" })
+    ]));
+    expect(finding?.facts.some((fact) => fact.label === "그래픽카드 소비전력")).toBe(false);
+    expect(result.gpuFit?.power.status).toBe("incompatible");
+    expect(catalog.find((part) => part.id === "gpu-rtx-4060")?.specs.powerW).toBeUndefined();
+  });
+
+  it("reports only missing GPU consumption while preserving a confirmed 650W recommendation and 700W PSU", () => {
+    const build = compatibleBuild();
+    build.psu = { partId: "psu-650w", quantity: 1 };
+    const catalog = seedCatalog.map((part): Part => part.id === "gpu-rtx-4060"
+      ? { ...part, specs: { ...part.specs, powerW: undefined, recommendedPsuW: 650 } }
+      : part.id === "psu-650w" ? { ...part, specs: { ...part.specs, wattageW: 700 } } : part);
+    const finding = evaluateBuild(build, catalog, { includeSuggestions: false }).findings.find((item) => item.ruleId === "gpu-psu-power");
+    expect(finding?.severity).toBe("unknown");
+    expect(finding?.facts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: "권장 파워 용량", expected: "650W" }),
+      expect.objectContaining({ label: "선택한 파워 용량", actual: "700W" })
+    ]));
+    expect(finding?.facts.filter((fact) => fact.label === "누락된 정보")).toHaveLength(1);
+    expect(finding?.facts.filter((fact) => fact.label === "누락된 정보")[0].actual).toBe("GPU 소비전력");
   });
 
   it("keeps multi-target replacement suggestions representative of each replacement category", () => {
@@ -964,6 +998,47 @@ describe("compatibility engine", () => {
 
     expect(finding?.severity).toBe("unknown");
     expect(result.links.find((link) => link.id === "gpu-case")?.status).toBe("unknown");
+  });
+
+  it("blocks a non-LP GPU in an LP-only case and warns when bracket evidence is missing", () => {
+    const baseCase = seedCatalog.find((part) => part.id === "case-full-airflow")!;
+    const slimCase: Part = { ...baseCase, id: "case-lp-only", specs: { ...baseCase.specs, lowProfileOnly: true } };
+    const baseGpu = seedCatalog.find((part) => part.id === "gpu-rtx-4060")!;
+    const noLpGpu: Part = { ...baseGpu, id: "gpu-no-lp", specs: { ...baseGpu.specs, lowProfileBracket: false } };
+    const lpGpu: Part = { ...baseGpu, id: "gpu-with-lp", specs: { ...baseGpu.specs, lowProfileBracket: true } };
+    const catalog = seedCatalog.filter((part) => part.category !== "case" && part.category !== "gpu").concat(slimCase, noLpGpu, lpGpu);
+    const build = compatibleBuild();
+    build.case = { partId: slimCase.id, quantity: 1 };
+
+    build.gpu = { partId: noLpGpu.id, quantity: 1 };
+    const blocked = evaluateBuild(build, catalog, { includeSuggestions: false });
+    const blocker = blocked.findings.find((item) => item.ruleId === "gpu-case-low-profile");
+    expect(blocker?.severity).toBe("blocker");
+
+    build.gpu = { partId: baseGpu.id, quantity: 1 };
+    const unverified = evaluateBuild(build, [...catalog, baseGpu], { includeSuggestions: false });
+    expect(unverified.findings.find((item) => item.ruleId === "gpu-case-low-profile")?.severity).toBe("warning");
+
+    build.gpu = { partId: lpGpu.id, quantity: 1 };
+    const ok = evaluateBuild(build, catalog, { includeSuggestions: false });
+    expect(ok.findings.find((item) => item.ruleId === "gpu-case-low-profile")).toBeUndefined();
+  });
+
+  it("offers LP-bracket GPUs as fixes for an LP-only case finding", () => {
+    const baseCase = seedCatalog.find((part) => part.id === "case-full-airflow")!;
+    const slimCase: Part = { ...baseCase, id: "case-lp-only-fix", specs: { ...baseCase.specs, lowProfileOnly: true } };
+    const baseGpu = seedCatalog.find((part) => part.id === "gpu-rtx-4060")!;
+    const lpGpu: Part = { ...baseGpu, id: "gpu-with-lp-fix", specs: { ...baseGpu.specs, lowProfileBracket: true } };
+    const catalog = seedCatalog.filter((part) => part.category !== "case" && part.category !== "gpu").concat(slimCase, baseGpu, lpGpu);
+    const build = compatibleBuild();
+    build.case = { partId: slimCase.id, quantity: 1 };
+    build.gpu = { partId: baseGpu.id, quantity: 1 };
+    const result = evaluateBuild(build, catalog);
+    const finding = result.findings.find((item) => item.ruleId === "gpu-case-low-profile");
+    const suggestion = finding?.suggestions?.find((item) => item.part.id === lpGpu.id);
+
+    expect(finding?.severity).toBe("warning");
+    expect(suggestion?.fixesCurrentIssue).toBe(true);
   });
 
   it("blocks a manually verified GPU cable bend conflict without deriving it from card thickness", () => {
@@ -2036,7 +2111,10 @@ describe("compatibility engine", () => {
     expect(noProfileResult.findings.some((finding) => finding.ruleId === "memory-speed")).toBe(false);
 
     const unknownCpuResult = evaluateBuild({ ...build, cpu: { partId: unknownCpu.id, quantity: 1 } }, catalog, { includeSuggestions: false });
-    expect(unknownCpuResult.findings.find((finding) => finding.ruleId === "memory-speed")?.severity).toBe("unknown");
+    // CPU·보드 상한 데이터가 없을 때는 unknown이 아니라 warning으로 내린다 —
+    // 크롤링 스펙에 상한이 없는 부품이 대부분이라 unknown으로 두면 모든 견적이
+    // needs_review가 되어 유효 조합이 사라졌다.
+    expect(unknownCpuResult.findings.find((finding) => finding.ruleId === "memory-speed")?.severity).toBe("warning");
 
     const boardLimitedMotherboard = {
       ...motherboard,
@@ -2243,8 +2321,8 @@ describe("compatibility engine", () => {
     const completeSuggestion = finding?.suggestions?.find((suggestion) => suggestion.part.id === completeCpu.id);
     const limitedSuggestion = finding?.suggestions?.find((suggestion) => suggestion.part.id === limitedCpu.id);
 
-    expect(completeSuggestion?.similarityEvidence).toMatchObject({ comparedDimensions: 3, totalDimensions: 3, confidence: "high" });
-    expect(limitedSuggestion?.similarityEvidence).toMatchObject({ comparedDimensions: 1, totalDimensions: 3, confidence: "limited" });
+    expect(completeSuggestion?.similarityEvidence).toMatchObject({ comparedDimensions: 4, totalDimensions: 4, confidence: "high" });
+    expect(limitedSuggestion?.similarityEvidence).toMatchObject({ comparedDimensions: 2, totalDimensions: 4, confidence: "limited" });
     expect(completeSuggestion?.similarityLabel).toBe("동급");
     expect(limitedSuggestion?.similarityLabel).toBe("유사");
 
@@ -2255,7 +2333,7 @@ describe("compatibility engine", () => {
     ]);
     const limitedPlan = limitedOnlyResult.repairPlans?.find((plan) => plan.changes.some((change) => change.toPart.id === limitedCpu.id));
     expect(limitedPlan?.similarityLabel).toBe("유사");
-    expect(limitedPlan?.similarityEvidence).toMatchObject({ comparedDimensions: 1, totalDimensions: 3, confidence: "limited" });
+    expect(limitedPlan?.similarityEvidence).toMatchObject({ comparedDimensions: 2, totalDimensions: 4, confidence: "limited" });
   });
 
   it("does not recommend a candidate that resolves one issue by introducing a new unknown", () => {
@@ -2356,7 +2434,7 @@ describe("compatibility engine", () => {
     const farSuggestion = suggestions.find((suggestion) => suggestion.part.id === farCpu.id);
 
     expect(closeSuggestion?.similarityScore).toBeGreaterThan(farSuggestion?.similarityScore ?? -1);
-    expect(closeSuggestion?.similarityEvidence).toMatchObject({ comparedDimensions: 5, totalDimensions: 5, confidence: "high" });
+    expect(closeSuggestion?.similarityEvidence).toMatchObject({ comparedDimensions: 6, totalDimensions: 6, confidence: "high" });
     expect(closeSuggestion?.performanceSummary).toContain("%");
     expect(closeSuggestion?.similarityEvidence.dimensions).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: "cinebenchR23Multi", label: "R23 멀티", weight: 7 })
@@ -2609,11 +2687,13 @@ describe("compatibility engine", () => {
     const baseCpu = seedCatalog.find((part) => part.id === "cpu-i7-14700k")!;
     const referenceCpu: Part = {
       ...currentCpu,
-      id: "cpu-7500f-performance-reference",
-      name: "확인된 Ryzen 5 7500F 계열 참조 모델",
-      model: "AMD Ryzen 5 7500F Reference",
+      id: "cpu-9500f-performance-reference",
+      // seed cpu-7500f 슬롯은 현재 9500F로 채워져 있으므로 같은 모델 계열이어야
+      // 참조로 잡힌다.
+      name: "확인된 Ryzen 5 9500F 계열 참조 모델",
+      model: "AMD Ryzen 5 9500F Reference",
       source: "danawa",
-      sourceProductCode: "reference-7500f",
+      sourceProductCode: "reference-9500f",
       dataQuality: "live",
       specs: {
         ...currentCpu.specs,
@@ -2664,7 +2744,7 @@ describe("compatibility engine", () => {
     const result = evaluateBuild(build, catalog, { recommendationPreferences: { profile: "general", priority: "performance" } });
     const suggestion = result.findings.find((item) => item.ruleId === "cpu-motherboard-socket")?.suggestions?.find((item) => item.part.id === closeCpu.id);
 
-    expect(closeSimilarity.similarityEvidence).toMatchObject({ comparedDimensions: 4, totalDimensions: 4, confidence: "high", basis: "mixed" });
+    expect(closeSimilarity.similarityEvidence).toMatchObject({ comparedDimensions: 6, totalDimensions: 6, confidence: "high", basis: "mixed" });
     expect(closeSimilarity.similarityEvidence.notes?.[0]).toContain("동일 CPU 모델 계열의 확인된 카탈로그 참조");
     expect(closeSimilarity.performanceSummary).toContain("동일 CPU 모델 계열 참조 기준");
     expect(suggestion).toBeDefined();
@@ -2674,8 +2754,8 @@ describe("compatibility engine", () => {
     const x3dReferenceCpu: Part = {
       ...referenceCpu,
       id: "cpu-7800x3d-performance-reference",
-      name: "확인된 Ryzen 7 7800X3D 계열 참조 모델",
-      model: "AMD Ryzen 7 7800X3D Reference",
+      name: "확인된 Ryzen 7 9800X3D 계열 참조 모델",
+      model: "AMD Ryzen 7 9800X3D Reference",
       sourceProductCode: "reference-7800x3d",
       specs: { ...referenceCpu.specs, cores: 8, threads: 16, boostClockGhz: 5, cinebenchR23Single: 1788, cinebenchR23Multi: 18208 }
     };
@@ -2810,7 +2890,7 @@ describe("compatibility engine", () => {
     build.cpu = { partId: currentCpu.id, quantity: 1 };
     const similarity = candidateSimilarityForBuild(build, [...seedCatalog, currentCpu, referenceCpu, candidateCpu], "cpu", candidateCpu, "general");
 
-    expect(similarity.similarityEvidence).toMatchObject({ comparedDimensions: 5, totalDimensions: 5, confidence: "high" });
+    expect(similarity.similarityEvidence).toMatchObject({ comparedDimensions: 6, totalDimensions: 6, confidence: "high" });
     expect(similarity.similarityEvidence.reference).toMatchObject({ partId: referenceCpu.id, transferredDimensions: expect.arrayContaining(["threads", "cinebenchR23Single", "cinebenchR23Multi"]) });
     expect(similarity.similarityEvidence.dimensions).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: "cores", currentValue: "20코어", source: "selected" }),
@@ -3524,7 +3604,7 @@ describe("compatibility engine", () => {
 
     expect(result.recommendationSearch).toMatchObject({ mode: "bounded", evaluatedCandidateCount: expect.any(Number) });
     expect(cpuSuggestions[0]?.part.id).toBe(completeCandidate.id);
-    expect(cpuSuggestions[0]?.similarityEvidence).toMatchObject({ comparedDimensions: 5, totalDimensions: 5, confidence: "high" });
+    expect(cpuSuggestions[0]?.similarityEvidence).toMatchObject({ comparedDimensions: 6, totalDimensions: 6, confidence: "high" });
   });
 
   it("honors budget and performance priority when generating a draft", () => {
@@ -3758,7 +3838,7 @@ describe("compatibility engine", () => {
     expect(error).toMatchObject({
       diagnostics: [expect.objectContaining({
         id: "gaming-gpu-vram-target",
-        facts: expect.arrayContaining([{ label: "요청 조건 VRAM 참고 기준", value: "22GB" }])
+        facts: expect.arrayContaining([{ label: "권장 VRAM 참고 기준", value: "22GB" }])
       })]
     });
   });
@@ -3871,7 +3951,7 @@ describe("compatibility engine", () => {
       diagnostics: [expect.objectContaining({
         id: "gaming-gpu-vram-target",
         facts: expect.arrayContaining([
-          { label: "요청 조건 VRAM 참고 기준", value: "12GB" },
+          { label: "권장 VRAM 참고 기준", value: "12GB" },
           { label: "기준 충족 GPU", value: "0개" }
         ])
       })]
@@ -3975,7 +4055,7 @@ describe("compatibility engine", () => {
     expect(error).toMatchObject({
       diagnostics: [expect.objectContaining({
         id: "gaming-gpu-vram-target",
-        facts: expect.arrayContaining([{ label: "요청 조건 VRAM 참고 기준", value: "19GB" }])
+        facts: expect.arrayContaining([{ label: "권장 VRAM 참고 기준", value: "19GB" }])
       })]
     });
   });
@@ -4103,9 +4183,12 @@ describe("compatibility engine", () => {
   });
 
   it("does not call a matching GPU measurement verified when average FPS misses the target", () => {
-    const catalog = seedCatalog.map((part) => part.category === "gpu"
-      ? { ...part, specs: { ...part.specs, vramGb: 24 } }
-      : part);
+    const catalog = seedCatalog
+      // 테스트 베드 시드(RX 580)는 미측정 대체 후보로 떠 실측 회피를 유발하므로 이 검증에서는 제외한다.
+      .filter((part) => part.id !== "gpu-afox-rx580-8gb")
+      .map((part) => part.category === "gpu"
+        ? { ...part, specs: { ...part.specs, vramGb: 24 } }
+        : part);
     const request = {
       profile: "gaming" as const,
       budgetWon: 3_000_000,
@@ -4257,7 +4340,7 @@ describe("compatibility engine", () => {
     expect(error).toMatchObject({
       diagnostics: [expect.objectContaining({
         id: "gaming-gpu-vram-target",
-        facts: expect.arrayContaining([{ label: "요청 조건 VRAM 참고 기준", value: "16GB" }])
+        facts: expect.arrayContaining([{ label: "권장 VRAM 참고 기준", value: "16GB" }])
       })]
     });
   });
@@ -4486,8 +4569,10 @@ describe("compatibility engine", () => {
   });
 
   it("does not pass an iGPU-only build when the CPU graphics field is unknown", () => {
+    // 이름으로도 내장 그래픽 유무를 추론할 수 없는 부품이어야 '미확인' 경고가 뜬다
+    // — 알려진 모델명(7800X3D 등)은 이름 기반 추론이 이미 답을 준다.
     const catalog = seedCatalog.map((part) => part.id === "cpu-7800x3d"
-      ? { ...part, specs: { ...part.specs, integratedGraphics: undefined } }
+      ? { ...part, name: "테스트 무표기 프로세서", specs: { ...part.specs, integratedGraphics: undefined } }
       : part);
     const build = compatibleBuild();
     build.gpu = undefined;
@@ -4762,6 +4847,53 @@ describe("generator quote reliability regressions", () => {
     expect(draft.selection.ssd.map((selection) => selection.partId)).not.toContain(foreignSsd.id);
     expect(draft.selection.psu?.partId).not.toBe(foreignPsu.id);
   });
+
+  it("exposes tier adjacency and regenerates with pinned parts for balance adjustments", () => {
+    const cpuMid: Part = withSpecs(baseCpu, { cores: 6, threads: 12, boostClockGhz: 4.4, integratedGraphics: false, cinebenchR23Single: 1500, cinebenchR23Multi: 11000 }, 200_000);
+    cpuMid.id = "cpu-mid";
+    // Both fixtures must be eligible under the current-generation catalog
+    // policy, and have distinct prices for a price-directional ± neighbor.
+    cpuMid.name = "AMD 라이젠5-6세대 9600X (그래니트 릿지)";
+    const cpuHigh: Part = withSpecs(baseCpu, { cores: 8, threads: 16, boostClockGhz: 5.5, integratedGraphics: false, cinebenchR23Single: 2200, cinebenchR23Multi: 21000 }, 390_000);
+    cpuHigh.id = "cpu-high";
+    cpuHigh.name = "AMD 라이젠7-6세대 9700X (그래니트 릿지)";
+    const gpuLow: Part = withSpecs(baseGpu, { gpu3dmarkTimeSpyScore: 9000, vramGb: 8, powerW: 130, recommendedPsuW: 550 }, 280_000);
+    gpuLow.id = "gpu-low";
+    gpuLow.name = "지포스 RTX 5050 저가형";
+    const gpuHigh: Part = withSpecs(baseGpu, { gpu3dmarkTimeSpyScore: 16000, vramGb: 16, powerW: 180, recommendedPsuW: 600 }, 550_000);
+    gpuHigh.id = "gpu-high";
+    gpuHigh.name = "지포스 RTX 5060 Ti 고급형";
+    const catalog = fixtureCatalog({ cpus: [cpuMid, cpuHigh], gpus: [gpuLow, gpuHigh] });
+    const request = { profile: "gaming" as const, budgetWon: 2_500_000, includeGpu: true };
+    const draft = generateBuildDraft(catalog, request);
+
+    expect(draft.performanceMetrics?.gamingIndex).toBeDefined();
+    expect(draft.performanceMetrics?.frameStability).toBeDefined();
+    expect(draft.performanceMetrics?.singleCorePercent).toBeGreaterThan(0);
+    const cpuAdjacency = draft.partTiers?.cpu;
+    expect(cpuAdjacency?.upId ?? cpuAdjacency?.downId).toBeDefined();
+    expect(draft.partTiers?.gpu?.upId ?? draft.partTiers?.gpu?.downId).toBeDefined();
+
+    const neighborId = cpuAdjacency!.upId ?? cpuAdjacency!.downId!;
+    const adjusted = generateBuildDraft(catalog, { ...request, pinnedParts: { cpu: neighborId } });
+    expect(adjusted.selection.cpu?.partId).toBe(neighborId);
+    expect(adjusted.lines.find((line) => line.category === "cpu")?.partId).toBe(neighborId);
+  });
+
+  it("returns pinned over-budget adjustments instead of failing the draft", () => {
+    const premiumGpu: Part = withSpecs(baseGpu, { gpu3dmarkTimeSpyScore: 36000, vramGb: 16, powerW: 350, recommendedPsuW: 1000 });
+    premiumGpu.id = "gpu-premium";
+    premiumGpu.name = "지포스 RTX 5080 프리미엄";
+    premiumGpu.priceWon = 9_000_000;
+    const catalog = fixtureCatalog({ gpus: [baseGpu, premiumGpu] });
+    const draft = generateBuildDraft(catalog, { profile: "gaming", budgetWon: 1_500_000, includeGpu: true, pinnedParts: { gpu: premiumGpu.id } });
+    expect(draft.selection.gpu?.partId).toBe("gpu-premium");
+    expect(draft.withinBudget).toBe(false);
+    expect(draft.totalPriceWon).toBeGreaterThan(1_500_000);
+    // 카탈로그에 없는 핀은 무시하고 정상 생성한다.
+    const ghostPinned = generateBuildDraft(catalog, { profile: "gaming", budgetWon: 1_500_000, includeGpu: true, pinnedParts: { gpu: premiumGpu.id, cpu: "cpu-does-not-exist" } });
+    expect(ghostPinned.selection.gpu?.partId).toBe("gpu-premium");
+  });
 });
 
 describe("estimated power, cooling and storage-bay rules ported from CompatPC", () => {
@@ -4775,9 +4907,9 @@ describe("estimated power, cooling and storage-bay rules ported from CompatPC", 
 
   it("keeps an explicit VRM capacity as the only blocker source and warns on Vcore or phase estimates", () => {
     const explicitBoard = withSpecs("mb-b650-4x3", "mb-explicit-vrm-150", { vrmCapacityW: 150, vrmVcoreOutputA: 2000 });
-    const vcoreBoard = withSpecs("mb-b650-4x3", "mb-vcore-400", { vrmCapacityW: undefined, vrmVcoreOutputA: 400, vrmPhaseCount: 20 });
+    const vcoreBoard = withSpecs("mb-b650-4x3", "mb-vcore-400", { vrmCapacityW: undefined, vrmVcoreOutputA: 400, vrmVcorePhaseCount: 20 });
     const roomyVcoreBoard = withSpecs("mb-b650-4x3", "mb-vcore-720", { vrmCapacityW: undefined, vrmVcoreOutputA: 720 });
-    const phaseBoard = withSpecs("mb-b650-4x3", "mb-phase-8", { vrmCapacityW: undefined, vrmPhaseCount: 8 });
+    const phaseBoard = withSpecs("mb-b650-4x3", "mb-phase-8", { vrmCapacityW: undefined, vrmVcorePhaseCount: 8 });
     const unknownBoard = withSpecs("mb-b650-4x3", "mb-vrm-unlisted", { vrmCapacityW: undefined });
     const parts = [explicitBoard, vcoreBoard, roomyVcoreBoard, phaseBoard, unknownBoard];
     const withBoard = (boardId: string): BuildSelection => ({ ...compatibleBuild(), motherboard: { partId: boardId, quantity: 1 } });
@@ -4796,7 +4928,12 @@ describe("estimated power, cooling and storage-bay rules ported from CompatPC", 
     expect(phase.map((finding) => finding.severity)).toEqual(["warning"]);
     expect(phase[0].facts).toEqual(expect.arrayContaining([{ label: "추정 근거", actual: "전원부 8페이즈 × 50A × 0.35" }]));
     expect(findingsFor(withBoard(roomyVcoreBoard.id), parts, "cpu-motherboard-power")).toEqual([]);
-    expect(findingsFor(withBoard(unknownBoard.id), parts, "cpu-motherboard-power").map((finding) => finding.severity)).toEqual(["unknown"]);
+    // 추정 근거도 없는 보드는 main 정책대로 unknown이 아니라 warning으로만 알린다.
+    expect(findingsFor(withBoard(unknownBoard.id), parts, "cpu-motherboard-power").map((finding) => finding.severity)).toEqual(["warning"]);
+    // 전체 페이즈 합계(vrmPhaseCount)는 Vcore 공급 추정에 쓰지 않는다.
+    const totalPhaseOnlyBoard = withSpecs("mb-b650-4x3", "mb-total-phase-only", { vrmCapacityW: undefined, vrmPhaseCount: 30 });
+    expect(findingsFor(withBoard(totalPhaseOnlyBoard.id), [...parts, totalPhaseOnlyBoard], "cpu-motherboard-power").map((finding) => finding.title))
+      .toEqual(["메인보드 전원부 용량이 확인되지 않았습니다."]);
   });
 
   it("warns when one RAM module exceeds the board's maximum capacity divided by its slots", () => {
@@ -4883,7 +5020,7 @@ describe("estimated power, cooling and storage-bay rules ported from CompatPC", 
   });
 
   it("names the VRM estimate source and leaves an informational overrun out of the build status", () => {
-    const phaseBoard = withSpecs("mb-b650-4x3", "mb-phase-7-source", { vrmCapacityW: undefined, vrmPhaseCount: 7 });
+    const phaseBoard = withSpecs("mb-b650-4x3", "mb-phase-7-source", { vrmCapacityW: undefined, vrmVcorePhaseCount: 7 });
     const cpu125 = withSpecs("cpu-7800x3d", "cpu-ppt-125-source", { pptW: 125 });
     const parts = [phaseBoard, cpu125];
     const result = evaluateBuild({

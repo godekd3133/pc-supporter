@@ -143,6 +143,7 @@ describe("public API evidence projection", () => {
         specs: {
           socket: "AM5",
           memoryType: "DDR5",
+          cpuSeries: "Ryzen 9000",
           cores: 8,
           threads: 16,
           cinebenchR23Single: 98765,
@@ -178,6 +179,7 @@ describe("public API evidence projection", () => {
           recommendedPsuW: 550,
           pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 1 }]],
           gpuVendor: "nvidia",
+          gpuArchitectureFamily: "RTX 50",
           gpuMemoryBandwidthGbps: 320,
           gpu3dmarkTimeSpyScore: 24680,
           gpu3dmarkPortRoyalScore: 13579,

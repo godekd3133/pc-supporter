@@ -476,7 +476,11 @@ const FIELD_DEFINITIONS: Record<PartCategory, FieldDefinition[]> = {
     { field: "supportedSockets", label: "지원 소켓", weight: 40, instruction: "동봉 브래킷 기준의 지원 CPU 소켓을 확인합니다." },
     { field: "maxCoolingW", label: "냉각 지원", weight: 38, instruction: "제조사 표기 냉각 한도를 확인하되 TDP와 동일하다고 추정하지 않습니다." },
     { field: "coolerType", label: "쿨러 유형", weight: 22, instruction: "공랭·일체형 수랭 등 실제 쿨러 유형을 확인합니다." },
-    { field: "radiatorSizeMm", label: "라디에이터 크기", weight: 20, instruction: "수랭 쿨러의 라디에이터 크기와 단위를 확인합니다." }
+    { field: "radiatorSizeMm", label: "라디에이터 크기", weight: 20, instruction: "수랭 쿨러의 라디에이터 크기와 단위를 확인합니다." },
+    { field: "radiatorThicknessMm", label: "라디에이터 두께", weight: 28, instruction: "팬을 제외한 라디에이터 본체 두께를 mm 단위로 확인합니다." },
+    { field: "radiatorFanThicknessMm", label: "라디에이터 팬 두께", weight: 28, instruction: "라디에이터에 장착하는 팬 두께를 mm 단위로 확인합니다." },
+    { field: "radiatorWidthMm", label: "라디에이터 실제 폭", weight: 26, instruction: "명목 크기와 구분해 라디에이터 본체의 실제 폭을 mm 단위로 확인합니다." },
+    { field: "radiatorLengthMm", label: "라디에이터 실제 길이", weight: 26, instruction: "물탱크를 포함한 라디에이터 본체의 실제 길이를 mm 단위로 확인합니다." }
   ],
   motherboard: [
     { field: "socket", label: "소켓", weight: 40, instruction: "메인보드 CPU 소켓을 제조사 페이지에서 확인합니다." },
@@ -486,6 +490,7 @@ const FIELD_DEFINITIONS: Record<PartCategory, FieldDefinition[]> = {
     { field: "memorySlots", label: "메모리 슬롯", weight: 24, instruction: "물리 DIMM 슬롯 수를 확인합니다." },
     { field: "sataPorts", label: "SATA 포트", weight: 22, instruction: "사용 가능한 SATA 포트 수를 확인합니다." },
     { field: "motherboardFormFactors", label: "지원 메인보드 규격", weight: 18, instruction: "메인보드 자체 규격을 실제 페이지에서 확인합니다." },
+    { field: "vrmCapacityW", label: "전원부 용량", weight: 30, instruction: "VCore 페이즈 수×전류 정격과 방열판 유무로 CPU 지속 전력 허용치(W)를 추정합니다. 제조사 페이지의 전원부 구성을 출처 메모에 남깁니다." },
     { field: "pcieX16Slots", label: "PCIe x16 슬롯", weight: 38, instruction: "확장 슬롯 페이지에서 PCIe x16 슬롯 수를 확인합니다. 표기가 없으면 0개로 추정하지 않습니다." },
     { field: "pcieX8Slots", label: "PCIe x8 슬롯", weight: 36, instruction: "확장 슬롯 페이지에서 PCIe x8 슬롯 수를 확인합니다. 표기가 없으면 0개로 추정하지 않습니다." },
     { field: "pcieX4Slots", label: "PCIe x4 슬롯", weight: 34, instruction: "확장 슬롯 페이지에서 PCIe x4 슬롯 수를 확인합니다. 표기가 없으면 0개로 추정하지 않습니다." },
@@ -497,7 +502,8 @@ const FIELD_DEFINITIONS: Record<PartCategory, FieldDefinition[]> = {
     { field: "speedMhz", label: "메모리 속도", weight: 28, instruction: "페이지 표기 속도를 MT/s 기준으로 정규화해 확인합니다." },
     { field: "memoryFormFactor", label: "물리 규격", weight: 26, instruction: "DIMM·SO-DIMM 등 물리 규격을 확인합니다." },
     { field: "memoryModuleCountPerKit", label: "킷 모듈 수", weight: 22, instruction: "킷 구성의 실제 모듈 개수를 확인합니다." },
-    { field: "memoryProfiles", label: "XMP·EXPO 프로파일", weight: 16, instruction: "XMP·EXPO 프로파일이 페이지에 명시된 경우에만 기록합니다." }
+    { field: "memoryProfiles", label: "XMP·EXPO 프로파일", weight: 16, instruction: "XMP·EXPO 프로파일이 페이지에 명시된 경우에만 기록합니다." },
+    { field: "memoryHeightMm", label: "메모리 높이", weight: 28, instruction: "방열판을 포함한 메모리 모듈의 전체 높이를 mm 단위로 확인합니다." }
   ],
   gpu: [
     { field: "powerW", label: "소비전력", weight: 45, instruction: "그래픽카드 보드 전력 또는 제조사 권장 기준을 구분해 확인합니다." },
@@ -525,6 +531,10 @@ const FIELD_DEFINITIONS: Record<PartCategory, FieldDefinition[]> = {
     { field: "maxGpuLengthMm", label: "GPU 허용 길이", weight: 45, instruction: "라디에이터·전면 팬 장착 시 조건을 포함해 제조사 허용 길이를 확인합니다." },
     { field: "maxCoolerHeightMm", label: "쿨러 허용 높이", weight: 40, instruction: "측면 패널 기준 CPU 쿨러 허용 높이를 확인합니다." },
     { field: "maxPsuLengthMm", label: "PSU 허용 길이", weight: 35, instruction: "케이지·브래킷 조건을 포함한 PSU 허용 길이를 확인합니다." },
+    { field: "radiatorSizesMm", label: "지원 라디에이터 크기", weight: 38, instruction: "제조사에 명시된 지원 크기를 mm 단위로 입력합니다. 위치별 제한은 라디에이터 지원 위치에 기록합니다." },
+    { field: "radiatorSupports", label: "라디에이터 지원 위치", weight: 40, instruction: "위치(front·top·bottom·side·rear·psu_shroud)별 지원 크기와 두께·메모리·GPU·구성 조건(requirements)을 JSON으로 입력합니다." },
+    { field: "supportedPsuFormFactors", label: "지원 파워 규격", weight: 36, instruction: "제조사에 명시된 ATX·SFX·SFX-L 규격을 입력합니다. 필요한 브래킷 조건은 확인 정보 메모에 남깁니다." },
+    { field: "ssdBays", label: "2.5인치 SSD 베이", weight: 25, instruction: "실제로 장착 가능한 2.5인치 SSD 베이 수를 확인합니다. 장착할 수 없는 경우에만 0을 입력합니다." },
     { field: "motherboardFormFactors", label: "지원 메인보드 규격", weight: 28, instruction: "지원 메인보드 폼팩터를 확인합니다." },
     { field: "hddBays", label: "HDD 베이", weight: 25, instruction: "실제로 장착 가능한 3.5인치 HDD 베이 수를 확인합니다." },
     { field: "fanCount", label: "기본 팬 수", weight: 15, instruction: "기본 제공 팬 수를 추가 팬 슬롯과 구분해 확인합니다." }

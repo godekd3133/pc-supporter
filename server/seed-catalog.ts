@@ -15,13 +15,18 @@ export const seedCatalog: Part[] = [
   seed({
     id: "cpu-7800x3d",
     category: "cpu",
-    name: "AMD 라이젠7-5세대 7800X3D",
+    name: "AMD 라이젠7-6세대 9800X3D",
     brand: "AMD",
-    model: "7800X3D",
+    model: "9800X3D",
     priceWon: 499000,
     specs: {
       socket: "AM5",
       memoryType: "DDR5",
+      cpuSeries: "Ryzen 9000",
+      cores: 8,
+      threads: 16,
+      boostClockGhz: 5.2,
+      l3CacheMb: 96,
       tdpW: 120,
       pptW: 162,
       integratedGraphics: true,
@@ -32,13 +37,18 @@ export const seedCatalog: Part[] = [
   seed({
     id: "cpu-7500f",
     category: "cpu",
-    name: "AMD 라이젠5-5세대 7500F",
+    name: "AMD 라이젠5-6세대 9500F",
     brand: "AMD",
-    model: "7500F",
+    model: "9500F",
     priceWon: 182000,
     specs: {
       socket: "AM5",
       memoryType: "DDR5",
+      cpuSeries: "Ryzen 9000",
+      cores: 6,
+      threads: 12,
+      boostClockGhz: 5.0,
+      l3CacheMb: 32,
       tdpW: 65,
       pptW: 88,
       integratedGraphics: false,
@@ -49,13 +59,18 @@ export const seedCatalog: Part[] = [
   seed({
     id: "cpu-i7-14700k",
     category: "cpu",
-    name: "인텔 코어 i7-14세대 14700K",
+    name: "인텔 코어 울트라7 시리즈2 265K (애로우레이크)",
     brand: "Intel",
-    model: "i7-14700K",
+    model: "Core Ultra 7 265K",
     priceWon: 541000,
     specs: {
-      socket: "LGA1700",
+      socket: "LGA1851",
       memoryType: "DDR5",
+      cpuSeries: "Core Ultra 200",
+      cores: 20,
+      threads: 20,
+      boostClockGhz: 5.5,
+      l3CacheMb: 30,
       tdpW: 125,
       pptW: 253,
       integratedGraphics: true,
@@ -71,7 +86,7 @@ export const seedCatalog: Part[] = [
     model: "AK620",
     priceWon: 69000,
     specs: {
-      supportedSockets: ["AM5", "AM4", "LGA1700", "LGA1200"],
+      supportedSockets: ["AM5", "AM4", "LGA1851", "LGA1700", "LGA1200"],
       maxCoolingW: 260,
       maxCoolerHeightMm: 160
     }
@@ -136,12 +151,12 @@ export const seedCatalog: Part[] = [
   seed({
     id: "mb-b760-intel",
     category: "motherboard",
-    name: "GIGABYTE B760M AORUS ELITE AX",
+    name: "GIGABYTE B860M AORUS ELITE AX",
     brand: "GIGABYTE",
-    model: "B760M AORUS ELITE AX",
+    model: "B860M AORUS ELITE AX",
     priceWon: 189000,
     specs: {
-      socket: "LGA1700",
+      socket: "LGA1851",
       memoryType: "DDR5",
       maxMemoryGb: 192,
       memorySlots: 4,
@@ -205,6 +220,7 @@ export const seedCatalog: Part[] = [
     model: "RTX 5090 Gaming Trio",
     priceWon: 3490000,
     specs: {
+      gpuArchitectureFamily: "RTX 50",
       powerW: 575,
       recommendedPsuW: 1000,
       lengthMm: 359,
@@ -216,11 +232,12 @@ export const seedCatalog: Part[] = [
   seed({
     id: "gpu-rtx-4060",
     category: "gpu",
-    name: "ZOTAC GeForce RTX 4060 Twin Edge",
+    name: "ZOTAC GeForce RTX 5060 Twin Edge",
     brand: "ZOTAC",
-    model: "RTX 4060 Twin Edge",
+    model: "RTX 5060 Twin Edge",
     priceWon: 439000,
     specs: {
+      gpuArchitectureFamily: "RTX 50",
       powerW: 115,
       recommendedPsuW: 550,
       lengthMm: 221,
@@ -362,5 +379,72 @@ export const seedCatalog: Part[] = [
     }),
     dataQuality: "incomplete",
     missingFields: ["efficiency", "12V output", "connectors"]
-  }
+  },
+  // 관리자 테스트 베드용 큐레이션 부품 — namePatterns 허용목록·세대 우회와 함께
+  // 실제 다나와 판매 상품명에 맞춘 사양으로 둔다.
+  seed({
+    id: "cooler-nautilus-360rs",
+    category: "cooler",
+    name: "CORSAIR NAUTILUS 360 RS ARGB",
+    brand: "CORSAIR",
+    model: "NAUTILUS 360 RS",
+    priceWon: 149000,
+    specs: {
+      coolerType: "liquid",
+      radiatorSizeMm: 360,
+      radiatorPosition: "top",
+      supportedSockets: ["AM5", "AM4", "LGA1851", "LGA1700"],
+      maxCoolingW: 300,
+      maxCoolerHeightMm: 50
+    }
+  }),
+  seed({
+    id: "memory-klevv-fitv-ddr5-6000",
+    category: "memory",
+    name: "ESSENCORE KLEVV FIT V DDR5-6000 CL30 16GB",
+    brand: "KLEVV",
+    model: "FIT V DDR5-6000",
+    priceWon: 59900,
+    specs: {
+      memoryType: "DDR5",
+      capacityGb: 16,
+      speedMhz: 6000,
+      formFactor: "DIMM",
+      memoryCasLatency: 30
+    }
+  }),
+  seed({
+    id: "memory-patriot-viper-ddr5-5600",
+    category: "memory",
+    name: "PATRIOT VIPER VENOM DDR5-5600 CL36 16GB",
+    brand: "PATRIOT",
+    model: "VIPER VENOM DDR5-5600",
+    priceWon: 49900,
+    specs: {
+      memoryType: "DDR5",
+      capacityGb: 16,
+      speedMhz: 5600,
+      formFactor: "DIMM",
+      memoryCasLatency: 36
+    }
+  }),
+  seed({
+    id: "gpu-afox-rx580-8gb",
+    category: "gpu",
+    name: "AFOX 라데온 RX 580 D5 8GB",
+    brand: "AFOX",
+    model: "RX 580",
+    priceWon: 99000,
+    specs: {
+      gpuVendor: "amd",
+      gpuArchitectureFamily: "RX 500",
+      vramGb: 8,
+      powerW: 185,
+      recommendedPsuW: 500,
+      lengthMm: 230,
+      thicknessMm: 40,
+      pcieSlotWidth: 16,
+      pciePowerOptions: [[{ kind: "pcie_8pin_6plus2", count: 1 }]]
+    }
+  })
 ];

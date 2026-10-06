@@ -1,13 +1,18 @@
+import { gamingTierAssessmentFor } from "../shared/gaming-part-tiers";
+import { loadGamingFpsReferences } from "./gaming-fps-reference";
+import { gamingTargetAssessmentForBuild } from "../shared/gaming-target-build";
 import "dotenv/config";
 import express, { type NextFunction, type Request, type RequestHandler, type Response } from "express";
+import compression from "compression";
 import type { Server as HttpServer } from "node:http";
 import { existsSync } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { resolve } from "node:path";
-import type { AccessoryCategory, AccessoryPriceFilter, AccessoryRefreshResponse, AccessorySelection, AlternativeRisk, AlternativeRiskCounts, BuildGenerationRequest, BuildGenerationVariantResult, BuildSelection, CatalogChangeKind, CatalogChangeRecord, CompatibilityResult, CrawlResumePreview, CrawlStatus, DataFreshness, DataQuality, Finding, GpuPhysicalOverride, ListingPolicy, M2CoverageFilter, M2MappingStatus, M2SlotCoverage, M2SlotCoverageBucket, M2SlotCoverageItem, M2SlotOverride, M2SlotReviewTemplate, M2SlotReviewTemplateItem, Part, PartCategory, PartRefreshResponse, PriceAvailabilityFilter, RecommendationPreferences, RecommendationProfile, SavedBuild, SavedBuildCheckSnapshot } from "../shared/types";
+import type { AccessoryCategory, AccessoryItem, AccessoryPriceFilter, AccessoryRefreshResponse, AccessorySelection, AlternativeRisk, AlternativeRiskCounts, BuildGenerationRequest, BuildGenerationVariantResult, BuildSelection, CatalogChangeKind, CatalogChangeRecord, CompatibilityResult, CrawlResumePreview, CrawlStatus, DataFreshness, DataQuality, Finding, GpuPhysicalOverride, ListingPolicy, M2CoverageFilter, M2MappingStatus, M2SlotCoverage, M2SlotCoverageBucket, M2SlotCoverageItem, M2SlotOverride, M2SlotReviewTemplate, M2SlotReviewTemplateItem, Part, PartCategory, PartRefreshResponse, PriceAvailabilityFilter, RecommendationPreferences, RecommendationProfile, SavedBuild, SavedBuildCheckSnapshot } from "../shared/types";
 import { ACCESSORY_CATEGORIES, PART_CATEGORIES } from "../shared/types";
 import { catalogEligibilitySummaryFor, catalogMeta, catalogSearchTotalsFor, catalogUpdatedAtFor, countParts, currentCatalogRuntimeRevision, filterParts, findPart, invalidateCatalogCache, loadCatalog, parseCatalogDetailFilterQuery, parseCatalogMissingField, parsePartSpecFilter, partSpecFilterDiagnosticsFor, partSpecFilterMatcherFor, searchParts, upsertCatalog } from "./catalog";
-import { countAccessories, currentAccessoryUpdatedAt, findAccessory, loadAccessories, readAccessoryCoverage, searchAccessories, upsertAccessories } from "./accessories";
+import { countAccessories, currentAccessoryUpdatedAt, findAccessory, invalidateAccessoryCache, loadAccessories, readAccessoryCoverage, searchAccessories, upsertAccessories } from "./accessories";
+import { noteStaleServedPrices } from "./stale-price-refresh";
 import { loadCatalogSnapshot, loadCatalogSnapshotTimestamp } from "./catalog-snapshot";
 import { validateAccessoryTargetPartIds, validateBuildPartIds, validateBuildSelection } from "./build-validation";
 export { validateAccessoryTargetPartIds, validateBuildPartIds, validateBuildSelection } from "./build-validation";
@@ -18,11 +23,12 @@ export type { BuildParseResult, BuildGenerationRequestParseResult } from "../sha
 import { compatibilityResultForPublicTransport, evaluateBuildWithAccessories as evaluateBuildWithSharedDomain } from "../shared/domain/compatibility-evaluator";
 import { loadSavedBuildPresentationContext, savedBuildPresentationFor, savedBuildPresentationsFor } from "./saved-build-presentation";
 import { savedBuildAlternativeAlertsFor } from "./saved-build-alternatives";
-import { recordUsageEvent, trackUsageEvent, usageEventSummaryFor } from "./usage-events";
+import { clientUsageEventsFromRequest, recordClientUsageEvents, recordUsageEvent, trackUsageEvent, usageAnalyticsFor, usageEventSummaryFor } from "./usage-events";
 import { classifyDataFreshness } from "./data-health";
 import { isAccessoryCrawlRunning, readAccessoryCrawlManifest, readAccessoryCrawlStatus, runAccessoryCrawlJob } from "./engines/crawler-engine";
 import { BuildGenerationError, ENGINE_VERSION, assessAlternativePart, buildGenerationRecoveryOptionsFor, candidateSimilarityForBuild, compareCandidateSimilarity, compareCandidateValue, evaluateBuild, generateBuildDraft } from "./engine";
-import { recordGenerationFailure, recentGenerationFailures } from "./generation-failure-log";
+import { checkedPartPriceSnapshotFor } from "../shared/checked-part-price-snapshot";
+import { appendGenerationFailureRecord, recordGenerationFailure, recentGenerationFailures } from "./generation-failure-log";
 import { cancelCrawlPageRetryBatch, crawlPageRetryBatchPlanFor, crawlPageRetryPlanFor, crawlResumePlanFor, isCrawlPageRetryBatchRunning, isCrawlRunning, readCrawlStatus, runCrawlJob, runCrawlPageRetryBatchJob, runCrawlPageRetryJob } from "./engines/crawler-engine";
 import { CRAWL_MANIFEST_PATH, ensureDataDirectory, fileUpdatedAt, readJson } from "./storage";
 import type { CrawlManifest } from "../shared/types";
@@ -95,8 +101,10 @@ import { gamingPerformanceEvidencePath, loadGamingPerformanceEvidence, saveGamin
 import { clearCompatibilityEngineCaches, compatiblePartAssessmentCache } from "./engines/compatibility-engine";
 import { crawlerEngineSnapshot } from "./engines/crawler-engine";
 import { engineModulesStatus } from "./engines";
-import { ENGINE_GENERATION_OPTION_DEFAULTS, engineGenerationLadderMultipliersFor, engineGenerationOptionsPath, engineGenerationVariantPrioritiesFor, loadEngineGenerationOptions, normalizeEngineGenerationOptions, quotationEngineFloorFor, saveEngineGenerationOptions } from "./engines/quotation-engine";
-import { catalogPartFacetOptionsFor, engineTargetFilterFacetOptionsFor, engineTargetFilterSummaryFor, engineTargetFiltersPath, loadEngineTargetFiltersConfig, normalizeEngineTargetFiltersInput, saveEngineTargetFiltersConfig } from "./engine-target-filters";
+import { applyReceivedEngineGenerationOptions, ENGINE_GENERATION_OPTION_DEFAULTS, engineGenerationLadderMultipliersFor, engineGenerationOptionsPath, engineGenerationVariantPrioritiesFor, invalidateEngineGenerationOptionsCache, loadEngineGenerationOptions, normalizeEngineGenerationOptions, quotationEngineFloorFor, saveEngineGenerationOptions } from "./engines/quotation-engine";
+import { applyReceivedEngineTargetFiltersConfig, engineTargetFilterFacetOptionsFor, engineTargetFilterSummaryFor, engineTargetFiltersPath, invalidateEngineTargetFiltersCache, loadEngineTargetFiltersConfig, normalizeEngineTargetFiltersInput, saveEngineTargetFiltersConfig } from "./engine-target-filters";
+import { engineTargetFilterConfigFromUnknown } from "../shared/engine-target-filters";
+import { catalogFacetOptionsCachedFor } from "./catalog-facet-options";
 import { engineTargetFilterFacetDiagnosticsFor, engineTargetFilterRuleAllowsPart, engineTargetFilterRuleForCategory, engineTargetFilterRuleFromUnknown, ENGINE_TARGET_FILTER_FACETS } from "../shared/engine-target-filters";
 import { gamingPerformanceEvidenceBatchValidationFor } from "../shared/gaming-performance-evidence";
 import { candidateDecisionSummaryFor } from "../shared/candidate-decision";
@@ -108,7 +116,8 @@ import { savedBuildDecisionNoteFromUnknown, savedBuildNameFromUnknown, SAVED_BUI
 import { savedBuildOriginFromUnknown } from "../shared/saved-build-origin";
 import { parseSavedBuildPurchaseProgress, parseSavedBuildPurchaseProgressExpectedRevision, parseSavedBuildPurchaseProgressRevision } from "./purchase-progress";
 import { parseSavedBuildPurchasePriceHistory, parseSavedBuildPurchasePriceHistoryExpectedRevision, parseSavedBuildPurchasePriceHistoryRevision } from "./purchase-price-history";
-import { isListingAllowed, isQuoteSelectable } from "./listing";
+import { isListingAllowed, isQuoteSelectable, quoteGenerationSummaryFor } from "./listing";
+import { ADJUSTABLE_CATEGORIES, suggestPartAdjustment } from "../shared/part-adjustment";
 import { catalogSeedPreviewFor } from "../shared/catalog-seed-preview";
 import { catalogSeedMappingIdentityCompatibleFor, catalogSeedMappingPreviewFor } from "../shared/catalog-seed-mapping";
 import { catalogSeedCollectionQueueFor } from "../shared/catalog-seed-collection-queue";
@@ -124,6 +133,9 @@ import { priceRefreshIntervalMsFromEnv, priceRefreshOptionsFromEnv, startDurable
 import { BackgroundJobActiveConflictError, BackgroundJobIdempotencyConflictError, backgroundJobStore, type BackgroundJob } from "./background-job-store";
 import { startPriceRefreshQueueWorker } from "./price-refresh-worker";
 import { requestTelemetry } from "./request-telemetry";
+import { httpMetricsSnapshot, recordHttpRequestMetric } from "./request-metrics";
+import { INSTANCE_ID, instanceEventBusReady, startInstanceEventBus, stopInstanceEventBus } from "./instance-events";
+import { syncAllRuntimeConfigsFromDatabase, syncRuntimeConfigFromDatabase } from "./runtime-config-sync";
 import { securityHeaders } from "./security-headers";
 
 const app = express();
@@ -205,7 +217,10 @@ function isLoopbackProxyAddress(address: string) {
 app.set("trust proxy", isLoopbackProxyAddress);
 
 app.use(securityHeaders());
-app.use(requestTelemetry());
+app.use(requestTelemetry((record) => {
+  recordHttpRequestMetric(record);
+  console.log(JSON.stringify(record));
+}));
 
 function isApiPath(path: string) {
   return path === "/api" || path.startsWith("/api/");
@@ -257,6 +272,9 @@ app.use((request, response, next) => {
   next();
 });
 
+// JSON 응답을 gzip으로 압축한다 — 카탈로그 목록·견적 검사 결과처럼 큰
+// 본문의 전송량을 줄인다. SSE 스트림은 없으므로 전체 라우트에 적용한다.
+app.use(compression());
 app.use(express.json({ limit: "1mb" }));
 
 app.use((request, response, next) => {
@@ -319,13 +337,17 @@ function evaluateBuildWithAccessories(
   recommendationPreferences: RecommendationPreferences,
   includeSuggestions = true
 ): CompatibilityResult {
-  return evaluateBuildWithSharedDomain(build, catalog, accessories, {
+  const result = evaluateBuildWithSharedDomain(build, catalog, accessories, {
     catalogSnapshotAt,
     recommendationPreferences,
     gamingPerformanceEvidence: loadGamingPerformanceEvidence(),
     includeSuggestions,
     now: new Date().toISOString()
   });
+  const gamingTargetAssessment = gamingTargetAssessmentForBuild(build, catalog, recommendationPreferences, loadGamingFpsReferences());
+  const selected = Object.fromEntries(catalog.filter((part) => Object.values(build).flat().some((item) => item && typeof item === "object" && "partId" in item && item.partId === part.id)).map((part) => [part.category, part]));
+  const tierAssessment = recommendationPreferences.gamingMode ? gamingTierAssessmentFor(selected, { memoryCapacityGb: 16, actualMemoryCapacityGb: build.memory.reduce((sum, item) => sum + (catalog.find((part) => part.id === item.partId)?.specs.capacityGb ?? 0) * item.quantity, 0), actualMemoryModuleCount: build.memory.every((item) => catalog.find((part) => part.id === item.partId)?.specs.memoryModuleCountPerKit !== undefined) ? build.memory.reduce((sum,item) => sum+(catalog.find((part) => part.id === item.partId)!.specs.memoryModuleCountPerKit!) * item.quantity,0) : undefined, memoryQuantity: build.memory.reduce((sum,item) => sum+item.quantity,0), hddCount: build.hdd.reduce((sum,item) => sum+item.quantity,0) }) : undefined;
+  return { ...result, partPriceSnapshot: checkedPartPriceSnapshotFor(build, catalog), ...(gamingTargetAssessment ? { gamingTargetAssessment } : {}), ...(tierAssessment ? { gamingSupportRequirements: tierAssessment.requirements, partTierSuitability: tierAssessment.categories } : {}) };
 }
 
 function catalogRefreshReportForRequest(value: unknown, build: BuildSelection, preferences: RecommendationPreferences): { report?: CatalogRefreshReport; error?: string } {
@@ -886,11 +908,17 @@ async function runDueSavedBuildMonitors(now = new Date().toISOString()) {
   }
 }
 
+// LB 헬스 체크용 가벼운 liveness — DB·보안 진단 없이 프로세스 생존만 답한다.
+// 준비 상태(readiness)는 아래 /api/health가 담당한다.
+app.get("/api/health/live", (_request, response) => {
+  response.json({ ok: true, service: "pc-supporter", instanceId: INSTANCE_ID });
+});
+
 app.get("/api/health", async (_request, response) => {
   const persistence = await persistenceDiagnostics();
   const adminSecurity = adminSecurityStatus();
   const ok = persistence.ready && adminSecurity.productionReady;
-  response.status(ok ? 200 : 503).json({ ok, service: "pc-supporter", engineVersion: ENGINE_VERSION, persistence, adminSecurity });
+  response.status(ok ? 200 : 503).json({ ok, service: "pc-supporter", engineVersion: ENGINE_VERSION, instanceId: INSTANCE_ID, persistence, adminSecurity });
 });
 
 app.get("/api/admin/meta", requireAdmin, async (request, response) => {
@@ -916,24 +944,32 @@ app.get("/api/meta", async (request, response) => {
   }, undefined, !mayReadInternalMeta);
 });
 
-// 클라이언트는 app_open만 전송할 수 있다 — check/save/share/recommend는
-// 서버 route handler에서 직접 계수해 이중 계수를 막는다.
+// 클라이언트는 퍼널 이벤트 화이트리스트만 전송할 수 있다 — check/save/share/
+// recommend는 서버 route handler에서 직접 계수해 이중 계수를 막는다.
+// 단일 {name} 형태와 {visitorId, sessionId, events:[...]} 배치를 모두 받는다.
 app.post("/api/events", usageEventRateLimit, async (request, response) => {
-  const name = typeof request.body?.name === "string" ? request.body.name.trim() : "";
-  if (name !== "app_open") {
+  const batch = clientUsageEventsFromRequest(request.body);
+  if (!batch) {
     response.status(400).json({ error: "지원하지 않는 이벤트입니다.", code: "USAGE_EVENT_INVALID" });
     return;
   }
   try {
-    await recordUsageEvent("app_open");
-  } catch {
-    // 카운터 실패는 비컨 응답을 막지 않는다
+    await recordClientUsageEvents(batch);
+  } catch (eventError) {
+    console.warn(JSON.stringify({ event: "usage-event.persist-failed", error: eventError instanceof Error ? eventError.message : String(eventError) }));
   }
   response.status(204).end();
 });
 
 app.get("/api/admin/usage-events", requireAdmin, async (_request, response) => {
   response.json(await usageEventSummaryFor());
+});
+
+// 퍼널·리텐션·세부 지표 — usage_events 원시 로그를 기간별로 집계한다.
+app.get("/api/admin/usage-analytics", requireAdmin, async (request, response) => {
+  const rawDays = Number(request.query.days);
+  const days = Number.isInteger(rawDays) ? rawDays : 30;
+  response.json(await usageAnalyticsFor(days));
 });
 
 // 자동 구성 실패는 422 응답만으로는 원인을 알기 어렵다 — 최근 실패를 요청
@@ -953,7 +989,14 @@ app.get("/api/admin/monitor/status", requireAdmin, (_request, response) => {
     },
     compatibilityCache: compatibilityResultCache.stats(),
     savedBuildCheckPreviewCache: savedBuildCheckPreviewCache.stats(),
-    compatiblePartAssessmentCache: compatiblePartAssessmentCache.stats()
+    compatiblePartAssessmentCache: compatiblePartAssessmentCache.stats(),
+    httpMetrics: httpMetricsSnapshot(),
+    instance: {
+      instanceId: INSTANCE_ID,
+      eventBusReady: instanceEventBusReady(),
+      memory: process.memoryUsage(),
+      uptimeSeconds: Math.floor(process.uptime())
+    }
   });
 });
 
@@ -1139,8 +1182,10 @@ app.get("/api/parts", publicCatalogReadRateLimit, async (request, response) => {
   // 두 단계로 나눠 센다 — detailExcludedCount는 legacy 조건까지 통과한 풀 기준이다.
   const specInputParts = (specFilterApplied || detailApplied) ? filterParts(catalog, category, query, benchmarkOptions) : [];
   const detailInputParts = detailApplied ? specInputParts.filter(partSpecFilterMatcherFor(parsedSpecFilter.filter)) : [];
+  const servedParts = searchParts(catalog, category, query, limit, options, offset);
+  noteStaleServedPrices(servedParts);
   const payload = {
-    items: searchParts(catalog, category, query, limit, options, offset).map((part) => ({ ...part, dataFreshness: classifyDataFreshness(part.updatedAt) })),
+    items: servedParts.map((part) => ({ ...part, dataFreshness: classifyDataFreshness(part.updatedAt) })),
     total,
     ...(brand ? { brand } : {}),
     ...(partId ? { partId } : {}),
@@ -1166,6 +1211,7 @@ app.get("/api/parts/batch", publicCatalogBatchRateLimit, async (request, respons
   const catalog = await loadCatalog();
   const byId = new Map(catalog.map((part) => [part.id, part]));
   const payload = { items: parsed.ids.map((id) => byId.get(id)).filter((part): part is Part => part !== undefined).map((part) => ({ ...part, dataFreshness: classifyDataFreshness(part.updatedAt) })), missingIds: parsed.ids.filter((id) => !byId.has(id)) };
+  noteStaleServedPrices(payload.items);
   const lastModified = payload.items.reduce<string | undefined>((latest, part) => !latest || part.updatedAt > latest ? part.updatedAt : latest, undefined);
   sendJsonWithEtag(request, response, payload, lastModified);
 });
@@ -1180,11 +1226,10 @@ app.get("/api/parts/facets", publicCatalogReadRateLimit, async (request, respons
     return;
   }
   const catalog = await loadCatalog();
-  const parts = filterParts(catalog, category, undefined, { quoteBrandRestricted: true, quoteSellableOnly: true });
   sendJsonWithEtag(request, response, {
     category,
     facets: ENGINE_TARGET_FILTER_FACETS[category],
-    options: catalogPartFacetOptionsFor(parts, category)
+    options: catalogFacetOptionsCachedFor(catalog, category)
   });
 });
 
@@ -1196,6 +1241,7 @@ app.get("/api/parts/:id", publicCatalogDetailRateLimit, async (request, response
     response.status(404).json({ error: "부품을 찾을 수 없습니다." });
     return;
   }
+  noteStaleServedPrices([part]);
   sendJsonWithEtag(request, response, { ...part, dataFreshness: classifyDataFreshness(part.updatedAt) }, part.updatedAt);
 });
 
@@ -1208,6 +1254,7 @@ app.post("/api/parts/batch", publicCatalogBatchRateLimit, async (request, respon
   const catalog = await loadCatalog();
   const byId = new Map(catalog.map((part) => [part.id, part]));
   const items = parsed.ids.map((id) => byId.get(id)).filter((part): part is Part => part !== undefined).map((part) => ({ ...part, dataFreshness: classifyDataFreshness(part.updatedAt) }));
+  noteStaleServedPrices(items);
   response.json({ items, missingIds: parsed.ids.filter((id) => !byId.has(id)) });
 });
 
@@ -1509,7 +1556,7 @@ app.post("/api/parts/compatible", publicCandidateRateLimit, async (request, resp
     const detailFilteredParts = detailRule ? specFilteredParts.filter((part) => engineTargetFilterRuleAllowsPart(part, detailRule)) : specFilteredParts;
     // 판매 정책으로 빠진 부품(스펙 미등록·가격 미확인)도 안내 문구를 위해 따로 센다.
     const policyExcludedParts = searchParts(catalog, category, query, catalog.length, { ...options, quoteSellableOnly: false }, 0)
-      .filter((part) => !isQuoteSelectable(part));
+      .filter((part) => !isQuoteSelectable(part, catalog));
     const assessedParts = detailFilteredParts
       .map((part) => {
         const assessment = assessAlternativePart(parsed.build, catalog, category, part, intentFinding);
@@ -1680,8 +1727,10 @@ app.get("/api/accessories", publicAccessoryReadRateLimit, async (request, respon
   const baseTotal = countAccessories(accessories, query, baseOptions);
   const freshnessTotal = countAccessories(accessories, query, freshnessOptions);
   const total = freshnessTotal;
+  const servedAccessories = searchAccessories(accessories, query, limit, freshnessOptions, offset);
+  noteStaleServedPrices(servedAccessories);
   const payload = {
-    items: searchAccessories(accessories, query, limit, freshnessOptions, offset).map((item) => ({ ...item, dataFreshness: classifyDataFreshness(item.updatedAt) })),
+    items: servedAccessories.map((item) => ({ ...item, dataFreshness: classifyDataFreshness(item.updatedAt) })),
     total,
     category,
     ...(brand ? { brand } : {}),
@@ -1700,6 +1749,7 @@ app.get("/api/accessories/:id", publicAccessoryDetailRateLimit, async (request, 
     response.status(404).json({ error: "주변 부품을 찾을 수 없습니다." });
     return;
   }
+  noteStaleServedPrices([accessory]);
   response.json({ ...accessory, dataFreshness: classifyDataFreshness(accessory.updatedAt) });
 });
 
@@ -1712,6 +1762,7 @@ app.post("/api/accessories/batch", publicAccessoryBatchRateLimit, async (request
   const accessories = await loadAccessories();
   const byId = new Map(accessories.map((item) => [item.id, item]));
   const items = parsed.ids.map((id) => byId.get(id)).filter((item): item is Awaited<ReturnType<typeof loadAccessories>>[number] => item !== undefined).map((item) => ({ ...item, dataFreshness: classifyDataFreshness(item.updatedAt) }));
+  noteStaleServedPrices(items);
   response.json({ items, missingIds: parsed.ids.filter((id) => !byId.has(id)) });
 });
 
@@ -1879,7 +1930,7 @@ app.post("/api/compatibility/check", publicCompatibilityRateLimit, async (reques
   response.setHeader("Content-Type", "application/json; charset=utf-8");
   const publicBody = JSON.stringify(publicApiPayloadProjection(outcome.value.result));
   response.setHeader("Content-Length", String(Buffer.byteLength(publicBody)));
-  trackUsageEvent("check");
+  trackUsageEvent("check", { path: "/api/compatibility/check" });
   response.end(publicBody);
 });
 
@@ -1892,13 +1943,18 @@ app.post("/api/builds/recommend", publicRecommendationRateLimit, async (request,
   let catalog: Part[] | undefined;
   try {
     catalog = await loadCatalog();
-    trackUsageEvent("recommend");
-    response.json(generateBuildDraft(catalog, parsed.request, loadGamingPerformanceEvidence(), { targetFilters: loadEngineTargetFiltersConfig() }));
+    // 관리자 generationDepth(세대 게이트) 설정은 프로세스 전역에 반영되므로
+    // 요청마다 로드해 재시작 후에도 저장값과 맞춘다.
+    loadEngineGenerationOptions();
+    trackUsageEvent("recommend", { path: "/api/builds/recommend" });
+    const draft = generateBuildDraft(catalog, parsed.request, loadGamingPerformanceEvidence(), { targetFilters: loadEngineTargetFiltersConfig(), gamingTestbedPhase1: parsed.request.gamingTestbedPhase1, gamingFpsReferences: loadGamingFpsReferences() });
+    noteStaleServedPrices(await servedItemsFor(draft.selection, catalog));
+    response.json(draft);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "현재 데이터로 자동 견적을 생성하지 못했습니다.";
-    const recoveryOptions = catalog ? buildGenerationRecoveryOptionsFor(catalog, parsed.request) : [];
+    const recoveryOptions = catalog ? buildGenerationRecoveryOptionsFor(catalog, parsed.request, { targetFilters: loadEngineTargetFiltersConfig(), gamingFpsReferences: loadGamingFpsReferences() }) : [];
     const diagnostics = error instanceof BuildGenerationError ? error.diagnostics : [];
-    trackUsageEvent("recommend_failed");
+    trackUsageEvent("recommend_failed", { path: "/api/builds/recommend" });
     recordGenerationFailure({
       route: "/api/builds/recommend",
       statusCode: 422,
@@ -1912,16 +1968,31 @@ app.post("/api/builds/recommend", publicRecommendationRateLimit, async (request,
   }
 });
 
+async function servedItemsFor(selection: BuildSelection, catalog: Part[]): Promise<(Part | AccessoryItem)[]> {
+  const byId = new Map(catalog.map((part) => [part.id, part]));
+  const parts = PART_CATEGORIES.flatMap((category) => {
+    if (category === "memory" || category === "ssd" || category === "hdd") return selection[category].map((entry) => entry.partId);
+    const entry = selection[category];
+    return entry ? [entry.partId] : [];
+  }).map((id) => byId.get(id)).filter((part): part is Part => part !== undefined);
+  const accessoryIds = (selection.accessories ?? []).map((entry) => entry.accessoryId);
+  if (accessoryIds.length === 0) return parts;
+  const accessoryById = new Map((await loadAccessories()).map((item) => [item.id, item]));
+  return [...parts, ...accessoryIds.map((id) => accessoryById.get(id)).filter((item): item is AccessoryItem => item !== undefined)];
+}
+
 function buildGenerationVariantResultsFor(catalog: Part[], request: BuildGenerationRequest, requestId?: string): BuildGenerationVariantResult[] {
   const gamingPerformanceEvidence = loadGamingPerformanceEvidence();
   const targetFilters = loadEngineTargetFiltersConfig();
   return engineGenerationVariantPrioritiesFor().map((priority) => {
     try {
-      return { priority, draft: generateBuildDraft(catalog, { ...request, priority }, gamingPerformanceEvidence, { targetFilters }) };
+      const draft = generateBuildDraft(catalog, { ...request, priority }, gamingPerformanceEvidence, { targetFilters, gamingTestbedPhase1: request.gamingTestbedPhase1, gamingFpsReferences: loadGamingFpsReferences() });
+      void servedItemsFor(draft.selection, catalog).then(noteStaleServedPrices).catch(() => undefined);
+      return { priority, draft };
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "이 기준의 자동 구성을 만들지 못했습니다.";
       const diagnostics = error instanceof BuildGenerationError ? error.diagnostics : [];
-      trackUsageEvent("recommend_failed");
+      trackUsageEvent("recommend_failed", { path: "/api/builds/recommend/variants" });
       recordGenerationFailure({
         route: "/api/builds/recommend/variants",
         statusCode: 200,
@@ -1937,6 +2008,51 @@ function buildGenerationVariantResultsFor(catalog: Part[], request: BuildGenerat
 }
 
 
+
+// 결과 화면 +/− 버튼: 특정 카테고리 부품을 한 단계 강화/약화한 호환 대안을 제안한다.
+app.post("/api/builds/adjust", publicCompatibilityRateLimit, async (request, response) => {
+  const parsed = parseBuild(request.body?.build ?? request.body?.selection ?? request.body);
+  if (parsed.errors.length > 0) {
+    response.status(400).json({ error: "견적 입력 형식이 올바르지 않습니다.", details: parsed.errors });
+    return;
+  }
+  const category = request.body?.category;
+  const direction = request.body?.direction;
+  if (typeof category !== "string" || !(ADJUSTABLE_CATEGORIES as readonly string[]).includes(category)) {
+    response.status(400).json({ error: "조정할 부품 카테고리가 올바르지 않습니다." });
+    return;
+  }
+  if (direction !== "upgrade" && direction !== "downgrade") {
+    response.status(400).json({ error: "direction은 upgrade 또는 downgrade여야 합니다." });
+    return;
+  }
+  try {
+    const catalog = await loadCatalog();
+    const result = suggestPartAdjustment(catalog, parsed.build, category as PartCategory, direction);
+    trackUsageEvent("adjust", { path: "/api/builds/adjust" });
+    if (!result.suggestion) {
+      response.status(200).json({ ok: false, reason: result.reason });
+      return;
+    }
+    const { suggestion, alternatives } = result;
+    response.json({
+      ok: true,
+      suggestion: {
+        category: suggestion.category,
+        direction: suggestion.direction,
+        part: suggestion.part,
+        selection: suggestion.selection,
+        beforePriceWon: suggestion.beforePriceWon,
+        afterPriceWon: suggestion.afterPriceWon,
+        status: suggestion.status
+      },
+      alternatives: alternatives.map((part) => ({ id: part.id, name: part.name, priceWon: part.priceWon }))
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "부품 조정을 처리하지 못했습니다.";
+    response.status(422).json({ error: message });
+  }
+});
 
 // 온보딩·복구 제안이 "이 요청 그대로 만들 수 있는 최저 견적"을 표시하도록
 // 요청 형태 그대로의 실측 최저가를 반환한다 — 프로필 평균이 아니라 요청과 같은
@@ -1973,13 +2089,13 @@ app.post("/api/builds/recommend/variants", publicRecommendationRateLimit, async 
   try {
     catalog = await loadCatalog();
     const variants = buildGenerationVariantResultsFor(catalog, parsed.request, response.locals.requestId as string | undefined);
-    trackUsageEvent("recommend");
+    trackUsageEvent("recommend", { path: "/api/builds/recommend/variants" });
     response.json({ variants });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "세 가지 자동 구성 결과를 만들지 못했습니다.";
-    const recoveryOptions = catalog ? buildGenerationRecoveryOptionsFor(catalog, parsed.request) : [];
+    const recoveryOptions = catalog ? buildGenerationRecoveryOptionsFor(catalog, parsed.request, { targetFilters: loadEngineTargetFiltersConfig(), gamingFpsReferences: loadGamingFpsReferences() }) : [];
     const diagnostics = error instanceof BuildGenerationError ? error.diagnostics : [];
-    trackUsageEvent("recommend_failed");
+    trackUsageEvent("recommend_failed", { path: "/api/builds/recommend/variants" });
     recordGenerationFailure({
       route: "/api/builds/recommend/variants",
       statusCode: 422,
@@ -2006,7 +2122,7 @@ app.post("/api/builds/recommend/budget-ladder", publicRecommendationRateLimit, a
     const targetFilters = loadEngineTargetFiltersConfig();
     const outcomes = scenarios.map((scenario) => {
       try {
-        return { ...scenario, draft: generateBuildDraft(catalog!, scenario.request, loadGamingPerformanceEvidence(), { targetFilters }) };
+        return { ...scenario, draft: generateBuildDraft(catalog!, scenario.request, loadGamingPerformanceEvidence(), { targetFilters, gamingTestbedPhase1: scenario.request.gamingTestbedPhase1, gamingFpsReferences: loadGamingFpsReferences() }) };
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "이 예산 구간의 자동 구성을 만들지 못했습니다.";
         const diagnostics = error instanceof BuildGenerationError ? error.diagnostics : [];
@@ -2022,13 +2138,13 @@ app.post("/api/builds/recommend/budget-ladder", publicRecommendationRateLimit, a
         return { ...scenario, error: message, ...(diagnostics.length > 0 ? { diagnostics } : {}) };
       }
     });
-    trackUsageEvent("recommend");
+    trackUsageEvent("recommend", { path: "/api/builds/recommend/budget-ladder" });
     response.json({ scenarios: outcomes });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "예산 구간 자동 견적을 생성하지 못했습니다.";
-    const recoveryOptions = catalog ? buildGenerationRecoveryOptionsFor(catalog, parsed.request) : [];
+    const recoveryOptions = catalog ? buildGenerationRecoveryOptionsFor(catalog, parsed.request, { targetFilters: loadEngineTargetFiltersConfig(), gamingFpsReferences: loadGamingFpsReferences() }) : [];
     const diagnostics = error instanceof BuildGenerationError ? error.diagnostics : [];
-    trackUsageEvent("recommend_failed");
+    trackUsageEvent("recommend_failed", { path: "/api/builds/recommend/budget-ladder" });
     recordGenerationFailure({
       route: "/api/builds/recommend/budget-ladder",
       statusCode: 422,
@@ -2144,7 +2260,7 @@ app.post("/api/builds", buildCreateRateLimit, privateNoStore, async (request, re
   };
   const created = await persistOwnerShareResource(request, response, "build", saved, () => appendSavedBuild(saved), () => deleteSavedBuild(id));
   if (!created) return;
-  trackUsageEvent("save");
+  trackUsageEvent("save", { path: "/api/builds" });
   response.status(201).json({
     ...ownerManagedShareResponse(savedBuildPresentationFor(created.persisted, { catalog, accessories }), ownerCredential.token, created.ownerManaged),
     recoveryCode: recoveryCredential.code
@@ -2166,7 +2282,7 @@ app.post("/api/watchlists", watchlistCreateRateLimit, privateNoStore, async (req
     return saved;
   }, () => deleteSavedWatchlist(saved.id));
   if (!created) return;
-  trackUsageEvent("share");
+  trackUsageEvent("share", { path: "/api/watchlists" });
   response.status(201).json(ownerManagedShareResponse(publicSavedCatalogWatchlist(created.persisted), ownerCredential.token, created.ownerManaged));
 });
 
@@ -2199,7 +2315,7 @@ app.post("/api/comparisons", comparisonCreateRateLimit, privateNoStore, async (r
     return saved;
   }, () => deleteSavedComparison(saved.id));
   if (!created) return;
-  trackUsageEvent("share");
+  trackUsageEvent("share", { path: "/api/comparisons" });
   response.status(201).json(ownerManagedShareResponse(publicAlternativeComparison(created.persisted), ownerCredential.token, created.ownerManaged));
 });
 
@@ -2293,7 +2409,7 @@ app.post("/api/version-comparisons", versionComparisonCreateRateLimit, privateNo
     return saved;
   }, () => deleteSavedBuildVersionComparison(saved.id));
   if (!created) return;
-  trackUsageEvent("share");
+  trackUsageEvent("share", { path: "/api/version-comparisons" });
   response.status(201).json(ownerManagedShareResponse(publicSavedBuildVersionComparisonShare(created.persisted), ownerCredential.token, created.ownerManaged));
 });
 
@@ -2370,7 +2486,7 @@ app.post("/api/budget-ladders", budgetLadderCreateRateLimit, privateNoStore, asy
     return saved;
   }, () => deleteSavedBudgetLadder(saved.id));
   if (!created) return;
-  trackUsageEvent("share");
+  trackUsageEvent("share", { path: "/api/budget-ladders" });
   response.status(201).json(ownerManagedShareResponse(publicBudgetLadderShare(created.persisted, catalogSnapshotAt), ownerCredential.token, created.ownerManaged));
 });
 
@@ -2457,7 +2573,7 @@ app.post("/api/generator-variants", generatorVariantsCreateRateLimit, privateNoS
     return saved;
   }, () => deleteSavedGeneratorVariants(saved.id));
   if (!created) return;
-  trackUsageEvent("share");
+  trackUsageEvent("share", { path: "/api/generator-variants" });
   response.status(201).json(ownerManagedShareResponse(publicGeneratorVariantsShare(created.persisted, catalogSnapshotAt), ownerCredential.token, created.ownerManaged));
 });
 
@@ -3655,7 +3771,7 @@ app.get("/api/admin/engines", requireAdmin, async (_request, response) => {
 // 조정한다. 저장은 파일 기반 운영 아티팩트(data/engine-generation-options.json).
 app.get("/api/admin/engine-options", requireAdmin, async (_request, response) => {
   const options = loadEngineGenerationOptions();
-  const updatedAt = await fileUpdatedAt(engineGenerationOptionsPath());
+  const updatedAt = existsSync(engineGenerationOptionsPath()) ? await fileUpdatedAt(engineGenerationOptionsPath()) : null;
   response.json({ options, defaults: ENGINE_GENERATION_OPTION_DEFAULTS, updatedAt });
 });
 
@@ -4358,9 +4474,14 @@ app.get("/api/admin/engine-filters", requireAdmin, async (_request, response) =>
   const config = loadEngineTargetFiltersConfig();
   const catalog = await loadCatalog();
   const path = engineTargetFiltersPath();
+  const generationDepth = loadEngineGenerationOptions().generationDepth;
   response.json({
     config,
     summary: engineTargetFilterSummaryFor(catalog, config),
+    // 크롤러가 수집한 카탈로그에서 계산된 라인별 세대 경계 — 신세대 상품이
+    // 판매 중으로 쌓이면 자동으로 올라간다. generationDepth=0이면 게이트 꺼짐.
+    generations: generationDepth === 0 ? [] : quoteGenerationSummaryFor(catalog, generationDepth),
+    generationGate: { enabled: generationDepth !== 0, depth: generationDepth },
     pathConfigured: Boolean(process.env.ENGINE_TARGET_FILTERS_PATH?.trim()),
     ...(existsSync(path) ? { updatedAt: await fileUpdatedAt(path) } : {})
   });
@@ -4945,6 +5066,9 @@ async function start() {
   await ensureDataDirectory();
   try {
     await initializePersistence();
+    // 공유 설정을 DB에서 내려 로컬 파일 복제본을 맞춘 뒤 카탈로그를 읽는다 —
+    // 오버라이드 복제본이 카탈로드 로드 전에 반영돼야 첫 요청부터 최신 스펙이 나간다.
+    await syncAllRuntimeConfigsFromDatabase();
     await loadCatalog();
   } catch (error: unknown) {
     const persistence = await persistenceDiagnostics();
@@ -4963,6 +5087,11 @@ async function start() {
     apiServer = app.listen(port, serverHost, () => {
       console.log(`PC Supporter API listening on http://127.0.0.1:${port} (${processRole})`);
     });
+    // 소켓 계층 타임아웃 — 프록시/로드밸런서 idle 제한(60s)보다 길게 잡아
+    // 연결이 먼저 끊기지 않게 하고, 붙은 요청이 워커를 무한히 잡지 않게 한다.
+    apiServer.keepAliveTimeout = 65_000;
+    apiServer.headersTimeout = 66_000;
+    apiServer.requestTimeout = Math.max(30_000, Number(process.env.PC_SUPPORTER_REQUEST_TIMEOUT_MS ?? 120_000));
   }
 
   if (processRole !== "api") {
@@ -4978,6 +5107,31 @@ async function start() {
     trackBackgroundTimer(setTimeout(() => void runDueSavedBuildMonitors(), 5_000));
     trackBackgroundTimer(setInterval(() => void runDueSavedBuildMonitors(), 60_000));
   }
+
+  // 인스턴스 이벤트 버스 — 다른 노드의 카탈로그/주변 부품 쓰기가 알려지면
+  // 로컬 인메모리 캐시를 비우고, 견적 실패 기록은 모든 노드의 로그에 합친다.
+  startInstanceEventBus((event) => {
+    if (event.kind === "cache-invalidate:catalog") {
+      invalidateCatalogCache();
+      clearCompatibilityEngineCaches();
+      return;
+    }
+    if (event.kind === "cache-invalidate:accessories") {
+      invalidateAccessoryCache();
+      clearCompatibilityEngineCaches();
+      return;
+    }
+    if (event.kind === "generation-failure" && event.source !== INSTANCE_ID) {
+      appendGenerationFailureRecord(event.data as Parameters<typeof appendGenerationFailureRecord>[0]);
+      return;
+    }
+    // 다른 인스턴스가 저장한 설정 — 공유 원본(runtime_configs)에서 가져와
+    // 로컬 파일 복제본에 기록한다. 자신이 발행한 이벤트의 루프백은 건너뛴다.
+    if (event.kind === "config:file" && event.source !== INSTANCE_ID) {
+      const name = (event.data as { name?: string } | undefined)?.name;
+      if (name) void syncRuntimeConfigFromDatabase(name);
+    }
+  });
 
   const priceRefreshEnabled = priceRefreshSchedulerEnabled();
   const ownsBackgroundWork = processRole !== "api";
@@ -5028,6 +5182,7 @@ async function start() {
           apiServer!.closeIdleConnections?.();
         });
       }
+      await stopInstanceEventBus();
       await priceRefreshScheduler.waitForIdle();
       await durablePriceRefreshScheduler.waitForIdle();
       if (priceRefreshWorker) await priceRefreshWorker.stop();

@@ -16,7 +16,7 @@ describe("engineConditionTagsFor", () => {
       gamingUpscaling: "quality",
       gamingRayTracing: true,
       gamingGameIds: ["cyberpunk", "pubg"]
-    }))).toEqual(["4K", "144Hz", "높음", "DLSS·품질 참고", "레이 트레이싱", "게임 2개"]);
+    }))).toEqual(["4K", "144Hz", "높음", "업스케일링·품질", "레이 트레이싱", "게임 2개"]);
   });
 
   it("lists the performance tier for general profiles and skips unset fields", () => {
@@ -40,5 +40,17 @@ describe("savedBuildPreferenceTagsFor", () => {
   it("omits the budget tag when unset and always carries the priority", () => {
     expect(savedBuildPreferenceTagsFor(preferencesWith({ priority: "budget" }))).toEqual(["가성비 우선"]);
     expect(savedBuildPreferenceTagsFor(preferencesWith({ budgetWon: 0 }))).toEqual(["균형형"]);
+  });
+});
+
+
+describe("game mode condition tags", () => {
+  it("summarizes a target preset with FPS instead of presenting monitor Hz as the FPS goal", () => {
+    const tags = engineConditionTagsFor(preferencesWith({ profile: "gaming", gamingMode: "target_fps", gamingTargetFps: 120, gamingRefreshRate: 144, gamingResolution: "1440p", gamingGameIds: ["pubg"], gpuVendorPreference: "amd", gamingGraphicsPreset: "high", gamingUpscaling: "native" }));
+    expect(tags).toEqual(["QHD", "목표 120 FPS", "높음", "업스케일링 없음", "게임 1개", "AMD"]);
+    expect(tags).not.toContain("144Hz");
+  });
+  it("keeps dormant game settings out of a budget-only preset summary", () => {
+    expect(engineConditionTagsFor(preferencesWith({ profile: "gaming", gamingMode: "budget", gamingTargetFps: 120, gamingResolution: "4k", gpuVendorPreference: "nvidia", gamingGameIds: ["pubg"] }))).toEqual(["GPU 성능 우선", "NVIDIA"]);
   });
 });

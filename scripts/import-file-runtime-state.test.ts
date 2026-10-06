@@ -12,6 +12,7 @@ import {
   readFileRuntimeStateSnapshot,
   usageEventsFromUnknown
 } from "./import-file-runtime-state";
+import { POSTGRES_SCHEMA_SHA256, POSTGRES_SCHEMA_VERSION } from "../server/postgres-schema-contract";
 
 const now = new Date("2026-09-30T12:00:00.000Z");
 const attemptsInput = {
@@ -48,8 +49,8 @@ class FakeRuntimeStateClient {
     this.attempts = structuredClone(options.attempts ?? []);
     this.usage = structuredClone(options.usage ?? []);
     this.databaseName = options.databaseName ?? "pcsupporter";
-    this.schemaVersion = options.schemaVersion ?? 1;
-    this.schemaSha256 = options.schemaSha256 ?? "95e0fc5b0b63ef7d1d308d3b7b4575616c3b1584a5a6d755a32378ef2f48f6f7";
+    this.schemaVersion = options.schemaVersion ?? POSTGRES_SCHEMA_VERSION;
+    this.schemaSha256 = options.schemaSha256 ?? POSTGRES_SCHEMA_SHA256;
   }
 
   asPoolClient() { return this as unknown as PoolClient; }

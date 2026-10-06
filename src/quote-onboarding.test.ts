@@ -1,7 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createElement } from "react";
 import { QuoteOnboardingView } from "./QuoteOnboardingView";
+import { BuildGeneratorView } from "./BuildGeneratorView";
+import { safeSessionStorage } from "./safe-storage";
 import {
   advanceOnboarding,
   backOnboarding,
@@ -15,9 +17,11 @@ import {
   ONBOARDING_GAMES,
   ONBOARDING_INTENSITIES,
   ONBOARDING_WORKS,
+  ONBOARDING_STORAGE_KEY,
   onboardingStateForGeneratorPreset,
   onboardingStateFromJson,
   onboardingStateToJson,
+  purchaseConditionSummaryFor,
   recommendGenerationRequestFor,
   recommendParamsFor,
   recommendQueryFor,
@@ -27,6 +31,8 @@ import {
   stepIndicatorFor,
   targetBudgetRangeFor,
   targetSummaryFor,
+  targetFpsFor,
+  validTargetFps,
   workEstimateFor
 } from "./quote-onboarding";
 import type { OnboardingState } from "./quote-onboarding";
@@ -37,7 +43,7 @@ function stateWith(patch: Partial<OnboardingState>): OnboardingState {
 }
 
 describe("quote-onboarding flow", () => {
-  it("renders a labeled first step, selectable choices, and a disabled next action", () => {
+  it("renders choices that advance directly without a next action", () => {
     const markup = renderToStaticMarkup(createElement(QuoteOnboardingView, { onFinish: () => undefined, onUpgrade: () => undefined, onSkip: () => undefined, onHome: () => undefined }));
 
     expect(markup).toContain('data-testid="onboarding-progress"');
@@ -46,8 +52,7 @@ describe("quote-onboarding flow", () => {
     expect(markup).toContain('role="radiogroup" aria-labelledby="onboarding-title"');
     expect(markup.match(/type="radio" name="onboarding-intent"/g)).toHaveLength(3);
     expect(markup).not.toContain('aria-pressed="false"');
-    expect(markup).toContain('disabled=""');
-    expect(markup).toContain("새 견적 시작하기");
+    expect(markup).not.toContain('class="onboarding-cta"');
   });
 
   it("covers the visual catalog categories with an expandable famous-game list", () => {
@@ -112,6 +117,25 @@ describe("quote-onboarding flow", () => {
 
   it("routes upgrade intent to the upgrade info step", () => {
     expect(advanceOnboarding(stateWith({ intent: "upgrade" })).step).toBe("upgrade");
+  });
+
+  it("uses the phase-one budget gaming route without game or FPS requirements", () => {
+    const options = { gamingTestbedPhase1: true };
+    const budget = advanceOnboarding(stateWith({ step: "mode", mode: "budget", usecase: "work" }), options);
+    expect(budget).toMatchObject({ step: "budget", usecase: "gaming" });
+    expect(backOnboarding(budget, options).step).toBe("mode");
+    const gaming = advanceOnboarding(stateWith({ step: "usecase", mode: "task", usecase: "gaming" }), options);
+    expect(gaming.step).toBe("budget");
+    expect(backOnboarding(gaming, options).step).toBe("usecase");
+    expect(stepIndicatorFor(gaming, options)).toMatchObject({ index: 4, total: 5 });
+    const request = recommendGenerationRequestFor({ ...gaming, games: ["cyberpunk"], budgetWon: 1_200_000 }, options);
+    expect(request).toMatchObject({ profile: "gaming", budgetWon: 1_200_000, memoryCapacityGb: 16 });
+    expect(request.gamingGameIds).toBeUndefined();
+    expect(request.gamingRefreshRate).toBeUndefined();
+    const query = new URLSearchParams(recommendQueryFor(gaming, options));
+    expect(query.has("games")).toBe(false);
+    expect(query.has("refresh")).toBe(false);
+    expect(advanceOnboarding(stateWith({ step: "mode", mode: "spec", usecase: "gaming" }), options).usecase).toBeUndefined();
   });
 
   it("goes back through the gaming branch in reverse", () => {
@@ -182,17 +206,17 @@ describe("quote-onboarding estimates", () => {
   it("keeps the selected gaming target in the budget estimate when the budget reaches a higher tier", () => {
     const state = stateWith({ usecase: "gaming", resolution: "1440p", refreshRate: 144, budgetWon: 3_000_000 });
     expect(budgetEstimateForSelectedTarget(state)).toMatchObject({
-      performance: "QHD · 144Hz 주사율 목표",
-      gpu: "최상급 GPU",
-      memory: "32GB",
-      storage: "2TB SSD"
+      performance: "QHD · 목표 144 FPS",
+      gpu: "FPS 테스트와 비교해 선택",
+      memory: "16GB부터 · 구성에 맞춰 조정",
+      storage: "1TB SSD"
     });
   });
 
-  it("labels the selected refresh rate as a target, not an FPS measurement", () => {
-    const summary = targetSummaryFor(stateWith({ usecase: "gaming", refreshRate: 144 }));
-    expect(summary).toContain("목표 주사율 144Hz");
-    expect(summary).not.toContain("FPS");
+  it("labels the selected FPS as a goal without implying a measured result", () => {
+    const summary = targetSummaryFor(stateWith({ usecase: "gaming", refreshRate: 144, targetFps: 120 }));
+    expect(summary).toContain("목표 120 FPS");
+    expect(summary).not.toContain("실측");
     expect(budgetEstimateFor(2_000_000, "gaming").performance).not.toContain("FPS");
   });
 
@@ -277,7 +301,8 @@ describe("quote-onboarding estimates", () => {
 
   it("clamps the budget control range", () => {
     expect(clampBudget(100_000)).toBe(800_000);
-    expect(clampBudget(9_000_000)).toBe(8_000_000);
+    expect(clampBudget(9_000_000)).toBe(9_000_000);
+    expect(clampBudget(11_000_000)).toBe(10_000_000);
     expect(clampBudget(2_040_000)).toBe(2_000_000);
   });
 });
@@ -296,16 +321,15 @@ describe("quote-onboarding recommend params", () => {
     expect(params.budgetWon).toBe(2_000_000);
   });
 
-  it("carries the low gaming budget tier's displayed memory and storage into the request", () => {
-    // 예산 티어 추정이 16GB·500GB로 안내하는 구간에서 요청도 같은 조건을 보낸다 —
-    // 32GB·1TB 고정 요청은 표시된 추정과 어긋나 최저가를 크게 올린다.
+  it("starts game targets with 16GB instead of spending GPU budget on tier-based memory increases", () => {
+    // Budget alone must not force RAM upgrades ahead of the GPU.
     const low = recommendParamsFor(stateWith({ usecase: "gaming", games: ["league"], resolution: "1080p", refreshRate: 60, budgetWon: 800_000 }));
     expect(low.memoryCapacityGb).toBe(16);
-    expect(low.storageCapacityGb).toBe(500);
+    expect(low.storageCapacityGb).toBe(1000);
     expect(low.includeGpu).toBe(true);
 
     const mid = recommendParamsFor(stateWith({ usecase: "gaming", games: ["league"], budgetWon: 1_200_000 }));
-    expect(mid.memoryCapacityGb).toBe(32);
+    expect(mid.memoryCapacityGb).toBe(16);
     expect(mid.storageCapacityGb).toBe(1000);
   });
 
@@ -321,7 +345,7 @@ describe("quote-onboarding recommend params", () => {
       gamingGraphicsPreset: "high",
       gamingRayTracing: true,
       gamingUpscaling: "native",
-      memoryCapacityGb: 32,
+      memoryCapacityGb: 16,
       storageCapacityGb: 1000
     });
 
@@ -490,7 +514,9 @@ describe("quote-onboarding generator presets", () => {
     expect(state).toMatchObject({
       step: "summary",
       intent: "new",
-      mode: "task",
+      mode: "target_fps",
+      gamingMode: "target_fps",
+      gpuVendorPreference: "nvidia",
       usecase: "gaming",
       games: ["league", "cyberpunk"],
       resolution: "1080p",
@@ -531,12 +557,12 @@ describe("quote-onboarding generator presets", () => {
     const state = onboardingStateForGeneratorPreset(presetConfigWith({ profile: "gaming", gamingGameIds: ["league", "not-a-real-game"], budgetWon: 100 }));
     expect(state.games).toEqual(["league"]);
     expect(state.budgetWon).toBe(800_000);
-    expect(onboardingStateForGeneratorPreset(presetConfigWith({ profile: "gaming", gamingGameIds: ["bogus"], budgetWon: 99_000_000 }))).toMatchObject({ games: [], budgetWon: 8_000_000 });
+    expect(onboardingStateForGeneratorPreset(presetConfigWith({ profile: "gaming", gamingGameIds: ["bogus"], budgetWon: 99_000_000 }))).toMatchObject({ games: [], budgetWon: 10_000_000 });
   });
 
   it("produces a state that survives persistence and can finish the wizard", () => {
     const state = onboardingStateForGeneratorPreset(presetConfigWith({ profile: "gaming", gamingGameIds: ["pubg"] }));
-    expect(onboardingStateFromJson(onboardingStateToJson(state))).toEqual(state);
+    expect(onboardingStateFromJson(onboardingStateToJson(state))).toEqual({ ...state, listingPolicy: "retail_only" });
     expect(canAdvance(state)).toBe(true);
     expect(stepIndicatorFor(state).eyebrow).toBe("READY");
   });
@@ -545,7 +571,7 @@ describe("quote-onboarding generator presets", () => {
 describe("quote-onboarding persistence", () => {
   it("round-trips wizard state", () => {
     const state = stateWith({ step: "budget", intent: "new", mode: "task", usecase: "gaming", games: ["cyberpunk", "pubg"], budgetWon: 3_000_000 });
-    expect(onboardingStateFromJson(onboardingStateToJson(state))).toEqual(state);
+    expect(onboardingStateFromJson(onboardingStateToJson(state))).toEqual({ ...state, listingPolicy: "retail_only" });
   });
 
   it("rejects invalid persisted payloads", () => {
@@ -557,6 +583,135 @@ describe("quote-onboarding persistence", () => {
     expect(dirty?.budgetWon).toBe(2_000_000);
     const oversized = onboardingStateFromJson(JSON.stringify({ step: "games", games: Array(8).fill("cyberpunk"), budgetWon: 99_000_000 }));
     expect(oversized?.games).toHaveLength(5);
-    expect(oversized?.budgetWon).toBe(8_000_000);
+    expect(oversized?.budgetWon).toBe(10_000_000);
+  });
+});
+
+
+describe("phase-two gaming targets", () => {
+  it("offers a direct game-target branch and retains budget-only generation", () => {
+    const target = advanceOnboarding(stateWith({ step: "mode", mode: "target_fps" }));
+    expect(target).toMatchObject({ step: "games", usecase: "gaming", gamingMode: "target_fps" });
+    expect(backOnboarding(target).step).toBe("mode");
+    expect(stepIndicatorFor(target)).toMatchObject({ index: 3, total: 7 });
+    const budget = stateWith({ mode: "budget", usecase: "gaming", gamingMode: "budget", games: ["cyberpunk"], gpuVendorPreference: "amd" });
+    const request = recommendGenerationRequestFor(budget);
+    expect(request).toMatchObject({ gamingMode: "budget", gpuVendorPreference: "amd", memoryCapacityGb: 16 });
+    expect(request.gamingGameIds).toBeUndefined();
+    expect(request.gamingTargetFps).toBeUndefined();
+    expect(targetBudgetRangeFor(budget)).toBeNull();
+  });
+
+  it("keeps custom target FPS distinct from monitor refresh in both payload and URL", () => {
+    const state = stateWith({ mode: "target_fps", usecase: "gaming", games: ["cyberpunk", "pubg"], targetFps: 120, refreshRate: 144, resolution: "1440p", gpuVendorPreference: "amd", graphicsPreset: "high", rayTracing: true, upscaling: "native" });
+    expect(recommendGenerationRequestFor(state)).toMatchObject({ gamingMode: "target_fps", gamingTargetFps: 120, gamingRefreshRate: 144, gpuVendorPreference: "amd", gamingGameIds: ["cyberpunk", "pubg"], gamingRayTracing: true });
+    const query = new URLSearchParams(recommendQueryFor(state));
+    expect(Object.fromEntries(query)).toMatchObject({ gamingMode: "target_fps", targetFps: "120", refresh: "144", gpuVendor: "amd", games: "cyberpunk,pubg", graphics: "high", rt: "1", upscaling: "native" });
+    expect(targetSummaryFor(state)).toContain("목표 120 FPS");
+    expect(targetFpsFor(state)).toBe(120);
+  });
+
+  it("validates custom target FPS and restores new settings without changing old drafts", () => {
+    for (const fps of [30, 60, 120, 500]) expect(validTargetFps(fps)).toBe(true);
+    for (const fps of [0, 29, 501, 60.5, NaN, Infinity]) expect(validTargetFps(fps)).toBe(false);
+    expect(canAdvance(stateWith({ step: "performance", targetFps: 0 }))).toBe(false);
+    const state = stateWith({ step: "graphics", mode: "target_fps", usecase: "gaming", gamingMode: "target_fps", targetFps: 120, gpuVendorPreference: "amd", games: ["pubg"] });
+    expect(onboardingStateFromJson(onboardingStateToJson(state))).toEqual({ ...state, listingPolicy: "retail_only" });
+    expect(onboardingStateFromJson('{"step":"performance","refreshRate":60}')?.gpuVendorPreference).toBe("nvidia");
+    expect(onboardingStateFromJson('{"step":"performance","refreshRate":60}')?.targetFps).toBeUndefined();
+  });
+
+  it("restores a target preset with its vendor and custom FPS", () => {
+    const state = onboardingStateForGeneratorPreset(presetConfigWith({ profile: "gaming", gamingMode: "target_fps", gamingTargetFps: 120, gpuVendorPreference: "amd", gamingGameIds: ["pubg"], gamingRefreshRate: 144 }));
+    expect(state).toMatchObject({ step: "summary", mode: "target_fps", gamingMode: "target_fps", targetFps: 120, refreshRate: 144, gpuVendorPreference: "amd" });
+  });
+});
+
+describe("budget gaming purchase-condition handoff", () => {
+  function freshBudgetState(): OnboardingState {
+    const mode = advanceOnboarding({ ...initialOnboardingState(), intent: "new" });
+    return advanceOnboarding({ ...mode, mode: "budget", usecase: "gaming", gamingMode: "budget", budgetWon: 800_000 });
+  }
+
+  it("allows domestic new bulk listings for a newly selected 80만원 game budget without reducing the SSD target", () => {
+    const state = freshBudgetState();
+    expect(state).toMatchObject({ step: "budget", listingPolicy: "include_bulk" });
+    expect(recommendGenerationRequestFor(state)).toMatchObject({ profile: "gaming", gamingMode: "budget", gamingTestbedPhase1: true, budgetWon: 800_000, memoryCapacityGb: 16, storageCapacityGb: 1000, listingPolicy: "include_bulk", includeNonRetail: true });
+    expect(new URLSearchParams(recommendQueryFor(state)).get("listingPolicy")).toBe("include_bulk");
+    expect(purchaseConditionSummaryFor(state)).toBe("국내 신품 · 벌크 포함");
+    expect(onboardingStateFromJson(onboardingStateToJson(state))).toEqual(state);
+  });
+
+  it.each(["target_fps", "task", "spec"] as const)("keeps the existing retail-only default for a new %s route", (mode) => {
+    const state = advanceOnboarding({ ...initialOnboardingState(), step: "mode", intent: "new", mode });
+    expect(recommendGenerationRequestFor(state)).toMatchObject({ listingPolicy: "retail_only", includeNonRetail: false });
+    expect(new URLSearchParams(recommendQueryFor(state)).get("listingPolicy")).toBe("retail_only");
+  });
+
+  it("preserves the retail-only condition of an older saved budget draft when the user edits its mode", () => {
+    const saved = onboardingStateFromJson(JSON.stringify({ step: "mode", intent: "new", mode: "budget", usecase: "gaming", budgetWon: 800_000 }));
+    expect(saved).not.toBeNull();
+    const state = advanceOnboarding(saved!);
+    expect(recommendGenerationRequestFor(state)).toMatchObject({ listingPolicy: "retail_only", includeNonRetail: false, storageCapacityGb: 1000 });
+  });
+
+  it.each(["retail_only", "include_bulk", "all"] as const)("preserves an explicit %s policy through preset editing, storage and the generator URL", (listingPolicy) => {
+    const preset = onboardingStateForGeneratorPreset(presetConfigWith({ profile: "gaming", gamingMode: "budget", budgetWon: 800_000, listingPolicy }));
+    const state = advanceOnboarding({ ...onboardingStateFromJson(onboardingStateToJson(preset))!, step: "mode" });
+    expect(recommendGenerationRequestFor(state)).toMatchObject({ listingPolicy, includeNonRetail: listingPolicy !== "retail_only" });
+    expect(new URLSearchParams(recommendQueryFor(state)).get("listingPolicy")).toBe(listingPolicy);
+  });
+
+  it.each(["budget", "summary"] as const)("shows the purchase condition on the %s screen", (step) => {
+    const state = { ...freshBudgetState(), step };
+    const storageSpy = vi.spyOn(safeSessionStorage, "getItem").mockImplementation((key) => key === ONBOARDING_STORAGE_KEY ? onboardingStateToJson(state) : null);
+    vi.stubGlobal("window", { location: { search: "?preset" } });
+    try {
+      const markup = renderToStaticMarkup(createElement(QuoteOnboardingView, { onFinish: () => undefined, onUpgrade: () => undefined, onSkip: () => undefined, onHome: () => undefined }));
+      expect(markup).toContain("구매 조건");
+      expect(markup).toContain("국내 신품 · 벌크 포함");
+      if (step === "budget") expect(markup).toContain("1TB");
+    } finally {
+      storageSpy.mockRestore();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it.each(["retail_only", "include_bulk", "all"] as const)("restores %s in the actual generator consumer", (listingPolicy) => {
+    const state = { ...freshBudgetState(), listingPolicy };
+    vi.stubGlobal("window", { location: { search: `?${recommendQueryFor(state)}` } });
+    try {
+      const markup = renderToStaticMarkup(createElement(BuildGeneratorView, {
+        initialProfile: "general", draft: null, variants: [], budgetLadder: [], loading: false,
+        onGenerate: async () => undefined, onGenerateVariants: async () => undefined,
+        onGenerateBudgetLadder: async () => undefined, onApply: async () => undefined,
+        onToast: () => undefined, onBudgetLadderShareSaved: () => undefined,
+        onBudgetLadderShareRevoked: () => undefined, onEditPresetInOnboarding: () => undefined,
+        onBack: () => undefined
+      }));
+      expect(markup).toContain(`<option value="${listingPolicy}" selected="">`);
+      expect(markup).toContain('value="800000"');
+      expect(markup).toContain('<option value="1000" selected="">');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+
+describe("explicit gaming capacities in preset editing", () => {
+  it("preserves intentionally selected RAM and SSD amounts while editing target FPS", () => {
+    const state = onboardingStateForGeneratorPreset(presetConfigWith({ profile: "gaming", gamingMode: "target_fps", gamingTargetFps: 120, gamingGameIds: ["pubg"], memoryCapacityGb: 64, storageCapacityGb: 2000 }));
+    expect(recommendGenerationRequestFor(state)).toMatchObject({ gamingTargetFps: 120, memoryCapacityGb: 64, storageCapacityGb: 2000 });
+    expect(budgetEstimateForSelectedTarget(state)).toMatchObject({ gpu: "FPS 테스트와 비교해 선택", memory: "64GB 이상", storage: "2TB SSD" });
+    expect(onboardingStateFromJson(onboardingStateToJson(state))).toEqual(state);
+  });
+});
+
+describe("explicit RAM requirement URL handoff", () => {
+  it("preserves 32GB when a generated game target is edited instead of relying on a changed generator default", () => {
+    const state = { ...initialOnboardingState(), usecase: "gaming" as const, mode: "target_fps" as const, gamingMode: "target_fps" as const, games: ["cyberpunk" as const], memoryGb: 32 as const, memoryExplicit: true };
+    expect(recommendGenerationRequestFor(state).memoryCapacityGb).toBe(32);
+    expect(new URLSearchParams(recommendQueryFor(state)).get("ram")).toBe("32");
   });
 });
