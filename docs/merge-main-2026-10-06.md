@@ -21,7 +21,7 @@ main의 mkKim 커밋 `8fecd66`과 `5161163`이 이 브랜치와 같은 전원부
 | 근거 | 판정 |
 | --- | --- |
 | 확인된 용량 `vrmCapacityW` 있음 | 초과 시 blocker |
-| `vrmVcoreOutputA` 또는 `vrmVcorePhaseCount`로 추정 가능 | 비율 1.1 미만은 info, 1.1 이상은 warning |
+| `vrmVcoreOutputA` 또는 `vrmVcorePhaseCount`로 추정 가능 | CPU 전력이 추정 공급을 넘으면 비율 1.1 미만은 info, 1.1 이상은 warning. 넘지 않으면 표시 안 함 |
 | 추정 근거 없음, CPU 전력은 있음 | main 정책 그대로 warning("메인보드 전원부 용량이 확인되지 않았습니다.") |
 | CPU 전력 없음 | unknown |
 
@@ -39,6 +39,7 @@ main의 mkKim 커밋 `8fecd66`과 `5161163`이 이 브랜치와 같은 전원부
   - VRM 추정 픽스처를 `vrmVcorePhaseCount`로 바꿨습니다.
   - 전원부 정보가 없는 보드의 기대값을 unknown에서 warning으로 바꿨습니다.
   - 합계 페이즈만 있는 보드는 추정하지 않는다는 테스트를 추가했습니다.
+- **`shared/catalog-change-impact.test.ts`:** 전원부 재검사 기대값을 "Vcore 페이즈" 라벨 기준으로 바꾸고, "전원부 페이즈"(합계) 변경은 전원부 재검사를 만들지 않는다는 기대를 추가했습니다.
 - **`ENGINE_VERSION`:** `2.62.0`으로 올렸습니다. 양쪽 모두 `2.60.0`이었고 운영은 `2.61.0`이므로, 결과 캐시를 무효화하려면 운영보다 높아야 합니다.
 - **`package.json`:** main에서 추가된 `compression` 의존성 때문에 `npm install`이 필요합니다.
 
@@ -49,10 +50,17 @@ main의 mkKim 커밋 `8fecd66`과 `5161163`이 이 브랜치와 같은 전원부
 - 무작위 부품셋 하네스(2026-10-02 스냅샷, `--reparse --targeted`, 엔진 2.62.0):
   - 300건에서 실행 오류, 결과 불변식 위반, 독립 판정 불일치 모두 0건.
   - 지정 조합 58건 모두 일치.
-  - `cpu-motherboard-power`는 warning 53, info 6. 1차의 unknown 30건이 main 정책의 warning으로 바뀌었습니다.
+  - `cpu-motherboard-power`는 warning 53(추정 부족 25 + 근거 없음 28), info 6.
+  - 병합 전(2차 실행) unknown 30건 중 28건은 main 정책의 "전원부 용량이 확인되지 않았습니다" warning으로 바뀌었습니다. 2건은 범위 표기("11~12페이즈") 파싱으로 추정이 가능해져 표시가 사라졌습니다.
 - 로컬 테스트 주의: Windows `core.autocrlf=true`이면 `db/schema.sql`이 CRLF로 체크아웃되어 테스트 전역 설정이 스키마 체크섬 오류로 멈춥니다. 작업 파일만 LF로 바꾸면 됩니다(저장소 내용은 같음).
+
+## 반영
+
+- 병합 커밋 `a3ece1f`로 `origin/main`을 fast-forward했습니다(2026-10-06). main 푸시로 CI와 운영 자동 배포(`deploy` 작업)가 실행됩니다.
 
 ## 남은 일
 
-- 운영 엔진 `2.61.0`이 `origin/main`(`2.60.0`)에 없는 코드에서 배포된 것으로 보입니다. 배포 커밋을 확인해야 합니다.
+- CI와 운영 배포 결과를 확인해야 합니다. 반영되면 `/api/health`의 `engineVersion`이 `2.62.0`으로 나옵니다.
+- 운영 엔진 `2.61.0`이 `origin/main`(`2.60.0`)에 없는 코드에서 배포된 것으로 보입니다. 이번 배포로 그 변경이 빠질 수 있으니 배포 커밋을 확인해야 합니다.
+- `cpu-motherboard-power`는 두 정책이 섞인 상태입니다. 판정 방식 합의가 필요합니다.
 - I-6 케이스 보강값(`docs/data/case-spec-overrides-2026-10-04.json`)은 운영 DB에 아직 반영되지 않았습니다.
