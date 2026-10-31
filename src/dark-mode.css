@@ -1,0 +1,88 @@
+/* Status panels and dark-mode leftovers. Loaded after redesign.css.
+   Tone lives in a 3px left bar or a coloured icon/number, never in the fill. */
+
+/* Status panels: neutral surface, tone in the left bar (both themes). */
+:root .app-shell.app-shell :is(.purchase-decision-gate, .purchase-readiness-panel, .purchase-checklist-panel, .build-resource-summary-panel, .build-connectivity-panel, .gpu-fit-summary-panel, .purchase-list-price-evidence-summary, .upgrade-physical-evidence, .build-action-center, .assembly-verification-panel, .finding-card, .build-price-summary-panel, .result-hero, .saved-build-recheck-diff-panel) {
+  border: 1px solid var(--line) !important;
+  border-left: 3px solid var(--tone) !important;
+  color: var(--ink-2) !important;
+  background: var(--surface) !important;
+}
+/* Each panel and card picks its own tone; it does not inherit the parent's. */
+:root .app-shell.app-shell :where(.purchase-decision-gate, .purchase-readiness-panel, .purchase-checklist-panel, .build-resource-summary-panel, .build-connectivity-panel, .gpu-fit-summary-panel, .purchase-list-price-evidence-summary, .upgrade-physical-evidence, .build-action-center, .assembly-verification-panel, .finding-card, .build-price-summary-panel, .result-hero, .saved-build-recheck-diff-panel, .build-resource-card, .purchase-readiness-grid > article, .purchase-checklist-item, .build-connectivity-item, .purchase-list-action-center-item, .price-watchlist-alert) { --tone: var(--line-strong); }
+:root .app-shell.app-shell :is(.blocked, .danger, .blocker, .incompatible, .error, .critical, .issue, .price-review) { --tone: var(--red); }
+:root .app-shell.app-shell :is(.review, .warning, .pending, .partial, .unknown, .focus, .data-review, .order, .stale) { --tone: var(--yellow); }
+:root .app-shell.app-shell :is(.good, .pass, .passed, .complete, .compatible, .ready, .install, .success) { --tone: var(--ok); }
+
+/* Flat containers stay flat. */
+:root .app-shell.app-shell .assembly-plan-panel,
+:root .app-shell.app-shell :is(.assembly-plan-step, .gpu-fit-metric, .compatibility-link, .health-item, .analysis-insight-group, .analysis-gpu-target, .analysis-bottleneck) {
+  color: var(--ink-2) !important;
+  background: transparent !important;
+}
+:root .app-shell.app-shell .assembly-plan-panel { border-color: var(--line) !important; }
+:root .app-shell.app-shell :is(.assembly-plan-step, .gpu-fit-metric) { border-color: var(--line) !important; }
+
+/* Cards inside status panels. */
+:root .app-shell.app-shell :is(.build-resource-card, .purchase-readiness-grid > article, .purchase-checklist-item, .build-connectivity-item, .purchase-list-action-center-item, .price-watchlist-alert) {
+  border: 1px solid var(--line) !important;
+  border-left: 3px solid var(--tone) !important;
+  padding-left: 12px !important;
+  box-sizing: border-box;
+  min-width: 0;
+  color: var(--ink-2) !important;
+  background: var(--surface) !important;
+}
+:root .app-shell.app-shell .purchase-checklist-item:has(.purchase-checklist-kind.blocker) { --tone: var(--red); }
+:root .app-shell.app-shell .purchase-checklist-item:has(.purchase-checklist-kind:is(.warning, .unknown)) { --tone: var(--yellow); }
+
+/* Undo the dark theme's red/yellow/green body text inside those panels. */
+html[data-theme="dark"] .app-shell.app-shell :is(.build-action-center, .assembly-plan-panel, .purchase-readiness-panel, .purchase-checklist-panel, .finding-card, .analysis-bottleneck, .analysis-insight-group, .analysis-gpu-target, .compatibility-link, .gpu-fit-metric, .build-resource-card, .purchase-checklist-item, .purchase-list-action-center-item, .price-watchlist-alert, .assembly-verification-panel, .health-item) :where(h1, h2, h3, h4, strong, dd, td, th) { color: var(--ink) !important; }
+html[data-theme="dark"] .app-shell.app-shell :is(.build-action-center, .assembly-plan-panel, .purchase-readiness-panel, .purchase-checklist-panel, .finding-card, .analysis-bottleneck, .analysis-insight-group, .analysis-gpu-target, .compatibility-link, .gpu-fit-metric, .build-resource-card, .purchase-checklist-item, .purchase-list-action-center-item, .price-watchlist-alert, .assembly-verification-panel, .health-item) :where(p, span, em, li) { color: inherit !important; }
+html[data-theme="dark"] .app-shell.app-shell :is(.build-action-center, .assembly-plan-panel, .purchase-readiness-panel, .purchase-checklist-panel, .finding-card, .analysis-bottleneck, .analysis-insight-group, .analysis-gpu-target, .compatibility-link, .gpu-fit-metric, .build-resource-card, .purchase-checklist-item, .purchase-list-action-center-item, .price-watchlist-alert, .assembly-verification-panel, .health-item) :where(small) { color: var(--muted) !important; }
+
+/* Icon tiles: neutral tile, coloured glyph. */
+:root .app-shell.app-shell :is(.result-quick-nav-icon, .purchase-list-action-center-icon, .change-history-icon, .peripheral-recommendation-image:not(:has(img))) { background: var(--hover-fill) !important; }
+html[data-theme="dark"] .app-shell .purchase-list-row-check > span { border-color: var(--line-strong); background: var(--surface); }
+html[data-theme="dark"] .app-shell .purchase-list-row-check input:checked + span { border-color: var(--ok); background: var(--ok); }
+:root .app-shell.app-shell .gpu-fit-connector-options span:is(.unknown, .danger) { background: transparent !important; }
+
+/* Rows wrap instead of clipping or spilling past the panel edge. */
+.app-shell :is(.purchase-decision-gate-facts, .health-item, .build-resource-card, .gpu-fit-metric, .purchase-readiness-grid > article, .build-connectivity-item) :is(span, strong, small, p) { overflow: visible !important; white-space: normal !important; text-overflow: clip !important; overflow-wrap: anywhere; }
+.app-shell .assembly-plan-step { grid-template-columns: 24px minmax(0, 1fr) !important; }
+.app-shell .assembly-plan-step > :is(button, a, .assembly-plan-target, .assembly-plan-actions) { grid-column: 2; justify-self: start; max-width: 100%; white-space: normal; text-align: left; }
+.app-shell .assembly-plan-step-top { flex-wrap: wrap; }
+.app-shell .purchase-list-row div:has(> .purchase-list-watch-button) { flex-wrap: wrap; }
+
+/* Upgrade cards: pastel chips and tiles become neutral, tone stays in the text colour. */
+html[data-theme="dark"] .app-shell :is(.upgrade-recommendation-icon, .upgrade-bundle-icon, .upgrade-recommendation-image:not(:has(img)), .upgrade-rank-badge, .upgrade-bundle-rank, .upgrade-bundle-meta > span, .upgrade-bundle-scenario-direction, .upgrade-bundle-scenario-findings li b, .upgrade-bundle-scenario-loading) { color: var(--ink-2); background: var(--hover-fill); }
+html[data-theme="dark"] .app-shell :is(.upgrade-bundle-meta > span:is(.within, .positive), .upgrade-bundle-scenario-direction:not(.worsened, .changed)) { color: var(--ok); }
+html[data-theme="dark"] .app-shell :is(.upgrade-bundle-meta > span:is(.over, .negative), .upgrade-bundle-scenario-direction.worsened, .upgrade-bundle-scenario-findings li b) { color: var(--red); }
+html[data-theme="dark"] .app-shell :is(.upgrade-bundle-meta > span.unknown, .upgrade-bundle-scenario-direction.changed, .upgrade-rank-badge) { color: var(--yellow); }
+html[data-theme="dark"] .app-shell :is(.upgrade-recommendation-icon, .upgrade-bundle-icon, .upgrade-recommendation-image) { color: var(--teal-deep); border-color: var(--line); }
+html[data-theme="dark"] .app-shell :is(.upgrade-bundle-sort, .upgrade-bundle-sort select, .upgrade-bundle-card, .upgrade-bundle-change, .upgrade-bundle-scenario-comparison > div, .upgrade-physical-evidence-overview) { border-color: var(--line); color: var(--ink-2); background: var(--surface); }
+:root .app-shell.app-shell :is(.upgrade-bundle-panel, .upgrade-bundle-scenario-expansion, .upgrade-bundle-scenario-summary) { border-color: var(--line) !important; background: var(--surface) !important; }
+:root .app-shell.app-shell .upgrade-bundle-scenario-expansion { border-left: 3px solid var(--tone, var(--line)) !important; }
+.app-shell .upgrade-bundle-scenario-expansion.positive { --tone: var(--ok); }
+.app-shell .upgrade-bundle-scenario-expansion.negative { --tone: var(--red); }
+.app-shell .upgrade-physical-evidence > div:first-child { flex-wrap: wrap; }
+html[data-theme="dark"] .app-shell .upgrade-physical-evidence :is(div:first-child strong, div:first-child span, p) { color: var(--ink-2); }
+
+/* Dialogs that kept a white body. */
+html[data-theme="dark"] .app-shell :is(.save-build-dialog, .home-budget-ladder-revoke-dialog, .build-import-dialog, .build-change-dialog, .candidate-scenario-dialog) { color: var(--ink); background: var(--surface); box-shadow: 0 0 0 1px var(--line), 0 25px 90px rgba(0, 0, 0, .5); }
+html[data-theme="dark"] .app-shell .save-build-form > :is(input, select, textarea) { border-color: var(--line); color: var(--ink); background: var(--canvas); }
+html[data-theme="dark"] .app-shell .save-build-form > label { color: var(--ink-2); }
+html[data-theme="dark"] .app-shell :is(.save-build-form > label span, .save-build-note-counter, .save-build-form > p) { color: var(--muted); }
+
+/* Price-trend period buttons and the record-count badge. */
+html[data-theme="dark"] .app-shell :is(.catalog-price-history-range, .build-price-trend-range) button:not(.selected) { border-color: var(--line); color: var(--ink-2); background: var(--surface); }
+html[data-theme="dark"] .app-shell :is(.catalog-price-history-range, .build-price-trend-range) button:not(.selected):hover { border-color: var(--line-strong); color: var(--ink); background: var(--hover-fill); }
+html[data-theme="dark"] .app-shell :is(.catalog-price-history-heading, .build-price-trend-heading) > span { border-color: var(--line); color: var(--ink-2); background: var(--hover-fill); }
+html[data-theme="dark"] .app-shell :is(.catalog-price-history-state, .build-price-trend-state, .catalog-price-history-note, .build-price-trend-note) { color: var(--muted); }
+
+/* Price watchlist: alert summary and preference chip lose their green fill. */
+:root .app-shell.app-shell :is(.price-watchlist-alert-summary, .price-watchlist-alert-preferences-heading > span) { border: 1px solid var(--line) !important; color: var(--ink-2) !important; background: var(--surface) !important; }
+:root .app-shell.app-shell .price-watchlist-alert-summary { border-left: 3px solid var(--ok) !important; }
+:root .app-shell.app-shell .price-watchlist-alert-summary svg { color: var(--ok); }
+:root .app-shell.app-shell :is(.purchase-list-price-review, .repair-plan-goal-note) { border: 1px solid var(--line) !important; border-left: 3px solid var(--yellow) !important; background: var(--surface) !important; }
+html[data-theme="dark"] .app-shell.app-shell .assembly-plan-step-progress { padding: 0; color: var(--muted) !important; background: transparent !important; }

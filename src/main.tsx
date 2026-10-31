@@ -5,6 +5,7 @@ import { AppErrorBoundary } from "./AppErrorBoundary";
 import { applyTheme, THEME_STORAGE_KEY, themeModeFromStorage } from "./theme";
 import "./styles.css";
 import "./redesign.css";
+import "./dark-mode.css";
 
 const App = lazy(() => import("./App"));
 
