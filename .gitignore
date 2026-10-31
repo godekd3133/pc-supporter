@@ -35,3 +35,6 @@ output/
 
 # Generated production server bundles.
 server-runtime/
+
+# Copied from node_modules/pretendard at build time (vite.config.ts).
+public/fonts/pretendard/

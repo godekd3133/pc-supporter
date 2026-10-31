@@ -1,4 +1,5 @@
 import { defineConfig } from "vitest/config";
+import { cpSync, existsSync } from "node:fs";
 import { loadEnv, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import { apiBaseUrlCspOrigin, createContentSecurityPolicy } from "./shared/content-security-policy";
@@ -8,8 +9,18 @@ const apiProxy = {
   "/api": apiProxyTarget
 };
 
+// Pretendard is self-hosted from the npm package. Its @font-face sheet loads as its own
+// stylesheet, attached by main.tsx, instead of inflating the first-route CSS bundle.
+const PRETENDARD_SOURCE = "node_modules/pretendard/dist/web/variable";
+const PRETENDARD_PUBLIC = "public/fonts/pretendard";
+
 const fontPreloadPlugin: Plugin = {
   name: "pc-supporter-font-preload",
+  buildStart() {
+    if (existsSync(`${PRETENDARD_PUBLIC}/pretendardvariable-dynamic-subset.css`) || !existsSync(PRETENDARD_SOURCE)) return;
+    cpSync(`${PRETENDARD_SOURCE}/pretendardvariable-dynamic-subset.css`, `${PRETENDARD_PUBLIC}/pretendardvariable-dynamic-subset.css`);
+    cpSync(`${PRETENDARD_SOURCE}/woff2-dynamic-subset`, `${PRETENDARD_PUBLIC}/woff2-dynamic-subset`, { recursive: true });
+  },
   transformIndexHtml() {
     return [
       { tag: "link", attrs: { rel: "preconnect", href: "https://fonts.googleapis.com" }, injectTo: "head" },

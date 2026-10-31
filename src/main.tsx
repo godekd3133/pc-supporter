@@ -3,7 +3,6 @@ import { StrictMode, Suspense, lazy } from "react";
 import { createRoot } from "react-dom/client";
 import { AppErrorBoundary } from "./AppErrorBoundary";
 import { applyTheme, THEME_STORAGE_KEY, themeModeFromStorage } from "./theme";
-import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 import "./styles.css";
 import "./redesign.css";
 
@@ -15,12 +14,10 @@ try {
   applyTheme("light");
 }
 
+// Self-hosted Pretendard (copied by vite.config.ts) loads beside the app CSS, not inside it.
+document.head.appendChild(Object.assign(document.createElement("link"), { rel: "stylesheet", href: `${import.meta.env.BASE_URL}fonts/pretendard/pretendardvariable-dynamic-subset.css` }));
 // Example builds are test fixtures: shown to automation and with ?demo, hidden from users.
-try {
-  if (navigator.webdriver || new URLSearchParams(window.location.search).has("demo")) document.documentElement.dataset.demoTools = "on";
-} catch {
-  // Leave demo tools hidden.
-}
+if (navigator.webdriver || location.search.includes("demo")) document.documentElement.dataset.demoTools = "on";
 
 let printOpenedDetails: HTMLDetailsElement[] = [];
 window.addEventListener("beforeprint", () => {
