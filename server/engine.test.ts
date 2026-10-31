@@ -193,18 +193,18 @@ function m2PcieGenerationFixture(boardGenerations: number[] | undefined, ssdGene
   return { build, catalog: [...seedCatalog, motherboard, ssd] };
 }
 
-function memoryFormFactorFixture(boardFormFactor: "DIMM" | "SO-DIMM" | undefined, memoryFormFactor: "DIMM" | "SO-DIMM") {
+function memoryFormFactorFixture(boardFormFactor: "DIMM" | "SO-DIMM" | undefined, memoryFormFactor: "DIMM" | "SO-DIMM" | undefined, boardSpecs: Part["specs"] = {}) {
   const baseMotherboard = seedCatalog.find((part) => part.id === "mb-b650-4x3")!;
   const baseMemory = seedCatalog.find((part) => part.id === "memory-ddr5-16-5600")!;
   const motherboard = {
     ...baseMotherboard,
     id: `mb-memory-form-${boardFormFactor ?? "unknown"}`,
-    specs: { ...baseMotherboard.specs, memoryFormFactor: boardFormFactor }
+    specs: { ...baseMotherboard.specs, memoryFormFactor: boardFormFactor, ...boardSpecs }
   };
   const memory = {
     ...baseMemory,
-    id: `memory-form-${memoryFormFactor}`,
-    name: `테스트 ${memoryFormFactor} 메모리`,
+    id: `memory-form-${memoryFormFactor ?? "unknown"}`,
+    name: `테스트 ${memoryFormFactor ?? "규격 미기재"} 메모리`,
     specs: { ...baseMemory.specs, formFactor: memoryFormFactor }
   };
   const build = compatibleBuild();
@@ -1825,13 +1825,33 @@ describe("compatibility engine", () => {
     expect(sodimm.findings.some((finding) => finding.ruleId === "memory-form-factor")).toBe(false);
   });
 
-  it("marks memory form factor as unknown when the motherboard slot format is missing", () => {
-    const { build, catalog } = memoryFormFactorFixture(undefined, "SO-DIMM");
+  it("marks memory form factor as unknown when an ITX motherboard slot format is missing", () => {
+    // Thin Mini-ITX 보드는 SO-DIMM을 쓰므로 ITX는 폼팩터로 슬롯 규격을 추론하지 않는다.
+    const { build, catalog } = memoryFormFactorFixture(undefined, "SO-DIMM", { formFactor: "ITX" });
     const result = evaluateBuild(build, catalog, { includeSuggestions: false });
     const finding = result.findings.find((item) => item.ruleId === "memory-form-factor");
 
     expect(finding?.severity).toBe("unknown");
     expect(result.status).toBe("needs_review");
+  });
+
+  it("treats a desktop-socket ATX/mATX board without a slot format as DIMM and blocks SO-DIMM memory", () => {
+    const atx = memoryFormFactorFixture(undefined, "SO-DIMM");
+    const atxFinding = evaluateBuild(atx.build, atx.catalog, { includeSuggestions: false }).findings.find((item) => item.ruleId === "memory-form-factor");
+    const matx = memoryFormFactorFixture(undefined, "SO-DIMM", { formFactor: "mATX", socket: "LGA1700" });
+    const matxFinding = evaluateBuild(matx.build, matx.catalog, { includeSuggestions: false }).findings.find((item) => item.ruleId === "memory-form-factor");
+    const onboardMobile = memoryFormFactorFixture(undefined, "SO-DIMM", { socket: undefined });
+    const onboardFinding = evaluateBuild(onboardMobile.build, onboardMobile.catalog, { includeSuggestions: false }).findings.find((item) => item.ruleId === "memory-form-factor");
+    const unlabeledDimm = memoryFormFactorFixture(undefined, undefined);
+    const unlabeledFinding = evaluateBuild(unlabeledDimm.build, unlabeledDimm.catalog, { includeSuggestions: false }).findings.find((item) => item.ruleId === "memory-form-factor");
+
+    expect(atxFinding?.severity).toBe("blocker");
+    expect(atxFinding?.facts).toEqual(expect.arrayContaining([{ label: "슬롯 규격 판단 근거", actual: "ATX 폼팩터/AM5 데스크톱 소켓으로 DIMM 판단" }]));
+    expect(matxFinding?.severity).toBe("blocker");
+    // 소켓이 확인되지 않는 보드(모바일 CPU 온보드 등)는 추론하지 않는다.
+    expect(onboardFinding?.severity).toBe("unknown");
+    // 추론한 DIMM은 SO-DIMM을 잡는 데만 쓰고, 규격 미기재 RAM에 새 "확인 필요"를 만들지 않는다.
+    expect(unlabeledFinding).toBeUndefined();
   });
 
   it("checks EXPO and XMP profile overlap without treating a mismatch as a physical blocker", () => {
@@ -2635,10 +2655,15 @@ describe("compatibility engine", () => {
         recommendedPsuW: 550
       }
     };
+    // 1000W 파워는 RTX 5090 권장 파워를 막 충족해 CPU 전력 반영 파워 여유 warning이 붙는다.
+    // 이 테스트는 성능 참조 순위만 보므로 파워 여유를 충분히 둔다.
+    const basePsu = seedCatalog.find((part) => part.id === "psu-1000w")!;
+    const roomyPsu: Part = { ...basePsu, id: "psu-1300w-headroom", specs: { ...basePsu.specs, wattageW: 1300 } };
     const build = compatibleBuild();
     build.gpu = { partId: currentGpu.id, quantity: 1 };
     build.case = { partId: "case-compact-matx", quantity: 1 };
-    const catalog = [...seedCatalog, referenceGpu, closeGpu, farGpu];
+    build.psu = { partId: roomyPsu.id, quantity: 1 };
+    const catalog = [...seedCatalog, referenceGpu, closeGpu, farGpu, roomyPsu];
     const closeSimilarity = candidateSimilarityForBuild(build, catalog, "gpu", closeGpu, "gaming", "1440p");
     const farSimilarity = candidateSimilarityForBuild(build, catalog, "gpu", farGpu, "gaming", "1440p");
     const result = evaluateBuild(build, catalog, { recommendationPreferences: { profile: "gaming", priority: "performance" } });
@@ -4868,5 +4893,189 @@ describe("generator quote reliability regressions", () => {
     // 카탈로그에 없는 핀은 무시하고 정상 생성한다.
     const ghostPinned = generateBuildDraft(catalog, { profile: "gaming", budgetWon: 1_500_000, includeGpu: true, pinnedParts: { gpu: premiumGpu.id, cpu: "cpu-does-not-exist" } });
     expect(ghostPinned.selection.gpu?.partId).toBe("gpu-premium");
+  });
+});
+
+describe("estimated power, cooling and storage-bay rules ported from CompatPC", () => {
+  const seedPart = (id: string) => seedCatalog.find((part) => part.id === id)!;
+  const withSpecs = (id: string, nextId: string, specs: Part["specs"]): Part => {
+    const base = seedPart(id);
+    return { ...base, id: nextId, specs: { ...base.specs, ...specs } };
+  };
+  const findingsFor = (build: BuildSelection, extraParts: Part[], ruleId: string) => evaluateBuild(build, [...seedCatalog, ...extraParts], { includeSuggestions: false })
+    .findings.filter((finding) => finding.ruleId === ruleId);
+
+  it("blocks only on a verified VRM capacity and warns on high-power CPUs with entry-tier boards", () => {
+    const board = (id: string, specs: Part["specs"], name?: string): Part => ({ ...withSpecs("mb-b650-4x3", id, { vrmCapacityW: undefined, ...specs }), ...(name ? { name } : {}) });
+    const explicitBoard = withSpecs("mb-b650-4x3", "mb-explicit-vrm-150", { vrmCapacityW: 150, chipset: "A620" });
+    const entryChipsetBoard = board("mb-entry-a620", { chipset: "A620", vrmVcoreOutputA: 720 });
+    const entryOutputBoard = board("mb-entry-vcore-300", { chipset: "B850", vrmVcoreOutputA: 300 });
+    const standardOutputBoard = board("mb-standard-vcore-350", { chipset: "B850", vrmVcoreOutputA: 350 });
+    const standardChipsetBoard = board("mb-standard-b650", {});
+    const unknownBoard = board("mb-vrm-unlisted", {}, "전원부 미표기 보드");
+    const parts = [explicitBoard, entryChipsetBoard, entryOutputBoard, standardOutputBoard, standardChipsetBoard, unknownBoard];
+    const withBoard = (boardId: string): BuildSelection => ({ ...compatibleBuild(), motherboard: { partId: boardId, quantity: 1 } });
+    const severitiesFor = (boardId: string) => findingsFor(withBoard(boardId), parts, "cpu-motherboard-power").map((finding) => finding.severity);
+
+    // 9800X3D PPT 162W: 확인된 용량 150W 초과는 차단, 보급형 칩셋/낮은 Vcore 출력은 경고.
+    expect(severitiesFor(explicitBoard.id)).toEqual(["blocker"]);
+    expect(severitiesFor(entryChipsetBoard.id)).toEqual(["warning"]);
+    expect(findingsFor(withBoard(entryChipsetBoard.id), parts, "cpu-motherboard-power")[0].facts).toEqual(expect.arrayContaining([
+      { label: "CPU 최대 전력", actual: "162W (PPT)" },
+      { label: "메인보드 전원부 등급", actual: "보급형 칩셋 A620" }
+    ]));
+    expect(severitiesFor(entryOutputBoard.id)).toEqual(["warning"]);
+    expect(severitiesFor(standardOutputBoard.id)).toEqual([]);
+    expect(severitiesFor(standardChipsetBoard.id)).toEqual([]);
+    expect(severitiesFor(unknownBoard.id)).toEqual(["info"]);
+    // 추정 W/페이즈 수로는 판정하지 않는다.
+    const phaseOnlyBoard = board("mb-phase-only", { chipset: "B850", vrmVcorePhaseCount: 4, vrmPhaseCount: 6 });
+    expect(findingsFor(withBoard(phaseOnlyBoard.id), [...parts, phaseOnlyBoard], "cpu-motherboard-power")).toEqual([]);
+  });
+
+  it("uses Intel MTP and the AMD TDP × 1.35 PPT definition only for the VRM rule", () => {
+    const entryBoard: Part = { ...withSpecs("mb-b650-4x3", "mb-entry-h810", { vrmCapacityW: undefined, chipset: "H810", socket: "AM5" }) };
+    const cpu = (id: string, specs: Part["specs"]) => withSpecs("cpu-7800x3d", id, { pptW: undefined, ...specs });
+    const intelK = cpu("cpu-intel-mtp-250", { tdpW: 125, cpuMaxTurboPowerW: 250, socket: "LGA1851" });
+    const intelNoMtp = cpu("cpu-intel-tdp-125", { tdpW: 125, socket: "LGA1851" });
+    const amdX3d = cpu("cpu-amd-tdp-120", { tdpW: 120, socket: "AM5" });
+    const amdLow = cpu("cpu-amd-tdp-65", { tdpW: 65, socket: "AM5" });
+    const parts = [entryBoard, intelK, intelNoMtp, amdX3d, amdLow];
+    const factsFor = (cpuId: string) => findingsFor({
+      ...compatibleBuild(),
+      cpu: { partId: cpuId, quantity: 1 },
+      motherboard: { partId: entryBoard.id, quantity: 1 }
+    }, parts, "cpu-motherboard-power").map((finding) => `${finding.severity}:${finding.facts[0]?.actual}`);
+
+    expect(factsFor(intelK.id)).toEqual(["warning:250W (최대 터보 전력(MTP))"]);
+    expect(factsFor(intelNoMtp.id)).toEqual([]);
+    expect(factsFor(amdX3d.id)).toEqual(["warning:162W (TDP 120W × 1.35(AMD PPT 정의))"]);
+    expect(factsFor(amdLow.id)).toEqual([]);
+  });
+
+  it("keeps an unknown VRM tier informational so it does not change the build status", () => {
+    const unknownBoard: Part = { ...withSpecs("mb-b650-4x3", "mb-vrm-tier-unknown", { vrmCapacityW: undefined }), name: "전원부 미표기 보드" };
+    const result = evaluateBuild({ ...compatibleBuild(), motherboard: { partId: unknownBoard.id, quantity: 1 } }, [...seedCatalog, unknownBoard], { includeSuggestions: false });
+    const baseline = evaluateBuild(compatibleBuild(), seedCatalog, { includeSuggestions: false });
+
+    expect(result.findings.find((item) => item.ruleId === "cpu-motherboard-power")?.severity).toBe("info");
+    expect(result.warningCount).toBe(baseline.warningCount);
+    expect(result.status).toBe(baseline.status);
+  });
+
+  it("warns when one RAM module exceeds the board's maximum capacity divided by its slots", () => {
+    const smallBoard = withSpecs("mb-b650-4x3", "mb-64gb-4-slot", { maxMemoryGb: 64, memorySlots: 4 });
+    const largeKit = withSpecs("memory-ddr5-16-5600", "memory-ddr5-64-kit-2x32", { capacityGb: 64, memoryModuleCountPerKit: 2 });
+    const parts = [smallBoard, largeKit];
+    const oversized = findingsFor({
+      ...compatibleBuild(),
+      motherboard: { partId: smallBoard.id, quantity: 1 },
+      memory: [{ partId: largeKit.id, quantity: 1 }]
+    }, parts, "memory-module-capacity");
+
+    expect(oversized.map((finding) => finding.severity)).toEqual(["warning"]);
+    expect(oversized[0].facts).toEqual(expect.arrayContaining([
+      { label: "메인보드 슬롯당 용량(최대 용량 ÷ 슬롯 수)", expected: "16GB" }
+    ]));
+    expect(findingsFor(compatibleBuild(), parts, "memory-module-capacity")).toEqual([]);
+  });
+
+  it("counts spare 3.5-inch bays for 2.5-inch SSDs, warns on overflow and skips cases without an SSD bay count", () => {
+    // compatibleBuild()는 HDD 1개를 쓰므로 hddBays 1이면 남는 3.5인치 베이가 없다.
+    const noSpareCase = withSpecs("case-full-airflow", "case-one-ssd-bay-no-spare", { ssdBays: 1, hddBays: 1 });
+    const spareBayCase = withSpecs("case-full-airflow", "case-one-ssd-bay-one-spare", { ssdBays: 1, hddBays: 2 });
+    const unlistedBayCase = withSpecs("case-full-airflow", "case-ssd-bays-unlisted", { ssdBays: undefined, hddBays: 1 });
+    const parts = [noSpareCase, spareBayCase, unlistedBayCase];
+    const sataBuild = (caseId: string): BuildSelection => ({
+      ...compatibleBuild(),
+      ssd: [{ partId: "ssd-sata-1tb", quantity: 2 }],
+      case: { partId: caseId, quantity: 1 }
+    });
+
+    const overflow = findingsFor(sataBuild(noSpareCase.id), parts, "case-ssd-bays");
+    expect(overflow.map((finding) => finding.severity)).toEqual(["warning"]);
+    expect(overflow[0].facts).toEqual([
+      { label: "선택한 2.5인치 SSD", actual: "2개" },
+      { label: "케이스 SSD 베이", expected: "1개" },
+      { label: "2.5인치 장착 가능(남는 3.5인치 베이 포함)", expected: "1개" }
+    ]);
+    expect(findingsFor(sataBuild(spareBayCase.id), parts, "case-ssd-bays")).toEqual([]);
+    expect(findingsFor(sataBuild(unlistedBayCase.id), parts, "case-ssd-bays")).toEqual([]);
+    expect(findingsFor({ ...compatibleBuild(), case: { partId: noSpareCase.id, quantity: 1 } }, parts, "case-ssd-bays")).toEqual([]);
+  });
+
+  it("estimates PSU headroom for integrated-graphics builds and adds a warning band above the GPU recommendation", () => {
+    const smallPsu = withSpecs("psu-1000w", "psu-350w", { wattageW: 350 });
+    const tinyPsu = withSpecs("psu-1000w", "psu-300w", { wattageW: 300 });
+    const roomyPsu = withSpecs("psu-1000w", "psu-1300w", { wattageW: 1300 });
+    const parts = [smallPsu, tinyPsu, roomyPsu];
+    const integratedBuild = (psuId: string): BuildSelection => ({ ...compatibleBuild(), gpu: undefined, useIntegratedGraphics: true, psu: { partId: psuId, quantity: 1 } });
+    const flagshipBuild = (psuId: string): BuildSelection => ({ ...compatibleBuild(), gpu: { partId: "gpu-rtx-5090", quantity: 1 }, psu: { partId: psuId, quantity: 1 } });
+
+    const tight = findingsFor(integratedBuild(smallPsu.id), parts, "psu-system-power");
+    expect(tight.map((finding) => finding.severity)).toEqual(["warning"]);
+    expect(tight[0].title).toBe("파워 용량 여유가 크지 않습니다.");
+    expect(tight[0].facts).toEqual(expect.arrayContaining([{ label: "예상 시스템 부하(추정)", expected: "314W" }]));
+    expect(findingsFor(integratedBuild(tinyPsu.id), parts, "psu-system-power").map((finding) => finding.title)).toEqual(["파워 용량이 예상 시스템 전력보다 부족할 수 있습니다."]);
+    expect(findingsFor(integratedBuild("psu-1000w"), parts, "psu-system-power")).toEqual([]);
+    expect(findingsFor(compatibleBuild(), parts, "psu-system-power")).toEqual([]);
+
+    const atRecommendation = findingsFor(flagshipBuild("psu-1000w"), parts, "gpu-psu-power");
+    expect(atRecommendation.map((finding) => finding.severity)).toEqual(["warning"]);
+    expect(atRecommendation[0].facts).toEqual(expect.arrayContaining([{ label: "예상 시스템 부하(추정)", expected: "894W" }]));
+    expect(findingsFor(flagshipBuild(roomyPsu.id), parts, "gpu-psu-power")).toEqual([]);
+  });
+
+  it("includes the 1.2x PSU headroom boundary and uses the GPU power fallback without a recommended PSU", () => {
+    const cpu150 = withSpecs("cpu-7800x3d", "cpu-ppt-150-psu", { pptW: 150 });
+    const psuAt = (wattageW: number) => withSpecs("psu-1000w", `psu-${wattageW}w-boundary`, { wattageW });
+    const unratedGpu = withSpecs("gpu-rtx-4060", "gpu-200w-no-recommendation", { powerW: 200, recommendedPsuW: undefined });
+    const parts = [cpu150, unratedGpu, psuAt(360), psuAt(361), psuAt(617), psuAt(618), psuAt(1073), psuAt(1074)];
+    const integrated = (wattageW: number) => findingsFor({
+      ...compatibleBuild(),
+      cpu: { partId: cpu150.id, quantity: 1 },
+      gpu: undefined,
+      useIntegratedGraphics: true,
+      psu: { partId: `psu-${wattageW}w-boundary`, quantity: 1 }
+    }, parts, "psu-system-power");
+    const withGpu = (gpuId: string, wattageW: number) => findingsFor({
+      ...compatibleBuild(),
+      gpu: { partId: gpuId, quantity: 1 },
+      psu: { partId: `psu-${wattageW}w-boundary`, quantity: 1 }
+    }, parts, "gpu-psu-power");
+
+    // (150W + 100W) × 1.2 = 300W, 경고 상한 300W × 1.2 = 360W(포함).
+    expect(integrated(360).map((finding) => finding.severity)).toEqual(["warning"]);
+    expect(integrated(361)).toEqual([]);
+    // 권장 파워가 없으면 200W + 1.2 × (162W + 100W) = 514.4W, 경고 상한 617.28W.
+    expect(withGpu(unratedGpu.id, 617).map((finding) => finding.severity)).toEqual(["warning"]);
+    expect(withGpu(unratedGpu.id, 618)).toEqual([]);
+    // RTX 5090: 1000W − 300W + 162W × 1.2 = 894.4W, 경고 상한 1073.28W.
+    expect(withGpu("gpu-rtx-5090", 1073).map((finding) => finding.severity)).toEqual(["warning"]);
+    expect(withGpu("gpu-rtx-5090", 1074)).toEqual([]);
+  });
+
+  it("passes equal module and bay counts, skips unknown kit module counts and flags SSDs without a form factor", () => {
+    const board = withSpecs("mb-b650-4x3", "mb-128gb-4-slot", { maxMemoryGb: 128, memorySlots: 4 });
+    const exactKit = withSpecs("memory-ddr5-16-5600", "memory-ddr5-64-kit-2x32-exact", { capacityGb: 64, memoryModuleCountPerKit: 2 });
+    const uncountedKit = withSpecs("memory-ddr5-16-5600", "memory-ddr5-96-kit-uncounted", { capacityGb: 96, memoryModuleCountPerKit: undefined });
+    const twoBayCase = withSpecs("case-full-airflow", "case-two-ssd-bays", { ssdBays: 2, hddBays: 1 });
+    const unknownFormSsd = withSpecs("ssd-sata-1tb", "ssd-sata-form-unknown", { formFactor: undefined });
+    const parts = [board, exactKit, uncountedKit, twoBayCase, unknownFormSsd];
+    const moduleFindings = (memoryId: string) => findingsFor({
+      ...compatibleBuild(),
+      motherboard: { partId: board.id, quantity: 1 },
+      memory: [{ partId: memoryId, quantity: 1 }]
+    }, parts, "memory-module-capacity");
+    const bayFindings = (ssdId: string, quantity: number) => findingsFor({
+      ...compatibleBuild(),
+      ssd: [{ partId: ssdId, quantity }],
+      case: { partId: twoBayCase.id, quantity: 1 }
+    }, parts, "case-ssd-bays");
+
+    expect(moduleFindings(exactKit.id)).toEqual([]);
+    expect(moduleFindings(uncountedKit.id)).toEqual([]);
+    expect(bayFindings("ssd-sata-1tb", 2)).toEqual([]);
+    expect(bayFindings(unknownFormSsd.id, 3).map((finding) => finding.severity)).toEqual(["unknown"]);
   });
 });

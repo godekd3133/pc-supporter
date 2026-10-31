@@ -59,14 +59,26 @@ function buildFingerprintFor(build, preferences) {
       rgbControllerAccessoryId: build.rgbControllerAccessoryId ?? null,
       useIntegratedGraphics: build.useIntegratedGraphics
     },
-    recommendationPreferences: {
-      profile: preferences.profile,
-      priority: preferences.priority,
-      listingPolicy: preferences.listingPolicy ?? "retail_only",
-      budgetWon: preferences.budgetWon ?? null,
-      gamingResolution: preferences.gamingResolution ?? null,
-      gamingRefreshRate: preferences.profile === "gaming" ? preferences.gamingRefreshRate ?? 144 : null
-    }
+    // Mirrors recommendationPreferencesFingerprintFieldsFor() in shared/build-fingerprint.ts.
+    recommendationPreferences: (() => {
+      const gaming = preferences.profile === "gaming";
+      return {
+        profile: preferences.profile,
+        priority: preferences.priority,
+        performanceTier: preferences.performanceTier ?? null,
+        listingPolicy: preferences.listingPolicy ?? "retail_only",
+        budgetWon: preferences.budgetWon ?? null,
+        gamingResolution: preferences.gamingResolution ?? null,
+        gamingRefreshRate: gaming ? preferences.gamingRefreshRate ?? 144 : null,
+        gamingMode: gaming ? preferences.gamingMode ?? null : null,
+        gamingTargetFps: gaming ? preferences.gamingTargetFps ?? null : null,
+        gpuVendorPreference: gaming ? preferences.gpuVendorPreference ?? null : null,
+        gamingGameIds: gaming ? [...new Set(preferences.gamingGameIds ?? [])].sort() : [],
+        gamingGraphicsPreset: gaming ? preferences.gamingGraphicsPreset ?? null : null,
+        gamingRayTracing: gaming ? preferences.gamingRayTracing ?? false : null,
+        gamingUpscaling: gaming ? preferences.gamingUpscaling ?? null : null
+      };
+    })()
   });
 }
 
