@@ -67,7 +67,7 @@ describe("CI verification contracts", () => {
     expect(onboardingSmoke).toContain("사이버펑크 2077");
     expect(onboardingSmoke).toContain("4K / 144Hz");
     expect(onboardingSmoke).toContain("generator-gaming-context");
-    expect(onboardingSmoke).toContain("generator-line");
+    expect(onboardingSmoke).toContain("build-workspace-parts");
     expect(onboardingSmoke).toContain("generator-selection-reasons");
     expect(onboardingSmoke).toContain('entry") === "upgrade"');
   });
