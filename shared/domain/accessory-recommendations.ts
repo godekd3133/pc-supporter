@@ -1,6 +1,6 @@
 import type { AccessoryItem, AccessoryRecommendation, BuildSelection, Part } from "../types";
 import { isKnownPrice } from "../types";
-import { buildConnectivitySummaryFor } from "../build-connectivity";
+import { buildConnectivitySummaryFor, buildCoolerTypeFor, caseFanHeaderCapacityFor } from "../build-connectivity";
 import { fanHubPowerInputFor, fanHubPortCountFor, rgbHubPortCountFor, rgbVoltageFor } from "./accessory-connectivity";
 import { m2FormsOverlap, m2FormFactorsFor, normalizedM2FormFactor, storageAdapterConnectionLabel, storageAdapterKindFor, storageAdapterSupportFor } from "./accessory-compatibility";
 
@@ -80,7 +80,8 @@ export function recommendAccessories(build: BuildSelection, catalog: Part[], acc
   const gpuPowerW = gpu?.specs.powerW ?? 0;
   const gpuLengthMm = gpu?.specs.lengthMm;
   const gpuThicknessMm = gpu?.specs.thicknessMm;
-  const connectivitySummary = buildConnectivitySummaryFor(motherboard?.specs, computerCase?.specs);
+  const coolerType = buildCoolerTypeFor(selectedPart(catalog, build.cooler)?.specs, cpu?.specs);
+  const connectivitySummary = buildConnectivitySummaryFor(motherboard?.specs, computerCase?.specs, coolerType);
   const selectedMemoryTypes = [...new Set(memories
     .map(({ part }) => part.specs.memoryType)
     .filter((memoryType): memoryType is string => Boolean(memoryType)))];
@@ -268,8 +269,8 @@ export function recommendAccessories(build: BuildSelection, catalog: Part[], acc
     );
   }
 
-  const fanPortCount = motherboard?.specs.fanPortCount;
-  const fanHeaderDeficit = caseFanCount !== undefined && fanPortCount !== undefined
+  const fanPortCount = caseFanHeaderCapacityFor(motherboard?.specs, coolerType);
+  const fanHeaderDeficit = caseFanCount !== undefined && fanPortCount !== undefined && computerCase?.specs.fanHubIncluded !== true
     ? Math.max(0, caseFanCount - fanPortCount)
     : 0;
   if (fanHeaderDeficit > 0 && caseFanCount !== undefined && fanPortCount !== undefined) {
@@ -285,7 +286,7 @@ export function recommendAccessories(build: BuildSelection, catalog: Part[], acc
       (item) => (fanHubPortCountFor(item) ?? 0) >= requiredFanCount && fanHubPowerInputFor(item) !== undefined,
       (a, b) => (fanHubPortCountFor(a) ?? Number.MAX_SAFE_INTEGER) - (fanHubPortCountFor(b) ?? Number.MAX_SAFE_INTEGER) || priceAscending(a, b)
     );
-  } else if (caseFanCount !== undefined && caseFanCount >= 5) {
+  } else if (caseFanCount !== undefined && caseFanCount >= 5 && computerCase?.specs.fanHubIncluded !== true) {
     const requiredFanCount = caseFanCount;
     addRecommendations(
       recommendations,

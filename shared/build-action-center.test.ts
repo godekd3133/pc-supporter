@@ -81,7 +81,8 @@ describe("build action center", () => {
     const center = buildActionCenterFor(baseResult(), build, partMap);
 
     expect(center.state).toBe("review");
-    expect(center.actions.map((action) => action.id)).toEqual(expect.arrayContaining(["connectivity:fan-headers", "connectivity:rgb-headers", "connectivity:rgb-voltage"]));
+    expect(center.actions.map((action) => action.id)).toEqual(expect.arrayContaining(["connectivity:fan-headers", "connectivity:rgb-voltage"]));
+    expect(center.actions.map((action) => action.id)).not.toContain("connectivity:rgb-headers");
     expect(center.actions.find((action) => action.id === "connectivity:fan-headers")).toMatchObject({ source: "physical", priority: "review", targetId: "build-connectivity-panel" });
     expect(checklistItemIdsForAction("connectivity:fan-headers")).toEqual(["connectivity:fan-headers"]);
     expect(actionChecklistProgressFor([{ id: "connectivity:fan-headers" }], new Set(["connectivity:fan-headers"]), new Set(["connectivity:fan-headers"]))).toEqual({ total: 1, checked: 1, percent: 100 });

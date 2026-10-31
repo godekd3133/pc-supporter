@@ -68,6 +68,7 @@ import { VALUE_SCORE_MAX } from "../value-score";
 import { gpuFitSummaryFor, gpuPurchaseEvidenceFor, pcieCableTopologyStatusFor, pciePowerMatchFor } from "../gpu-fit";
 import { physicalSourceCheckNeedsReview } from "../physical-source-check";
 import { catalogMissingFieldLabelFor } from "../catalog-spec-coverage";
+import { buildCoolerTypeFor, caseFanHeaderCapacityFor } from "../build-connectivity";
 import { gamingAdvisoryTuningFor, gamingGameOptionFor } from "../gaming-catalog";
 import type { GamingAdvisoryTuning } from "../gaming-catalog";
 import { OBJECTIVE_BENCHMARK_DIMENSION_KEYS, OBJECTIVE_SCORE_MODEL_VERSION, objectiveScoreForDimensions } from "../objective-score";
@@ -86,13 +87,15 @@ import { compareRecommendationTrust, recommendationTrustFor } from "./recommenda
 import { phase1CpuGamingClass, phase1GamingFilters, phase1GamingPartAllowed, phase1GpuGamingClass } from "../phase1-gaming-policy";
 import { phase1IntelMotherboardEvidenceFor, phase1IntelMotherboardSupportsCpu, phase1IntelStockCpuPowerFor, phase1CaseSupportsMotherboard, phase1CoolerSupportsCpu, phase1GpuPowerUpperBoundW, phase1MotherboardSupportsCpu } from "../phase1-hardware-evidence";
 
-export const ENGINE_VERSION = "2.63.0";
+export const ENGINE_VERSION = "2.64.0";
 
 function benchmarkFreshnessFor(part: Part) {
   return classifyDataFreshness(part.specs.benchmarkProvenance?.updatedAt ?? part.updatedAt);
 }
 
 const GPU_THICKNESS_WARNING_MM = 55;
+// 확장 슬롯 간격(0.8인치). 2슬롯 카드 ≈ 40mm, 3슬롯 ≈ 61mm.
+const PCIE_SLOT_PITCH_MM = 20.32;
 const MAX_EVALUATION_CACHE_ENTRIES = 4096;
 const REPAIR_PLAN_OPTIONS_PER_CATEGORY = 4;
 const CANDIDATE_EVALUATION_POOL_SIZE = 192;
@@ -455,8 +458,16 @@ function partIds(...parts: Array<Part | undefined>) {
   return parts.filter((part): part is Part => Boolean(part)).map((part) => part.id);
 }
 
+// DDR5/DDR4를 모두 지원하는 CPU(인텔 12~14세대)는 RAM 세대에 맞는 공식 속도를 쓴다.
+function cpuMemorySpeedLimitFor(cpu: Part | undefined, memoryType: string | undefined) {
+  const byType = cpu?.specs.maxMemorySpeedMhzByType;
+  const typed = memoryType === "DDR4" || memoryType === "DDR5" ? byType?.[memoryType] : undefined;
+  return typed ?? cpu?.specs.maxMemorySpeedMhz;
+}
+
 function formatNumber(value: number | undefined, suffix = "") {
-  return value === undefined ? "확인할 수 없음" : `${value.toLocaleString("ko-KR")}${suffix}`;
+  // 예전 수집본 JSON에는 미확인 값이 null로 남아 있을 수 있다.
+  return value === undefined || value === null ? "확인할 수 없음" : `${value.toLocaleString("ko-KR")}${suffix}`;
 }
 
 function radiatorPositionLabel(position: string) {
@@ -3771,9 +3782,10 @@ export function evaluateBuild(
     }
 
     const cpuMemorySpeedRelevant = memory.some(({ part }) => (part.specs.memoryProfiles?.length ?? 0) > 0);
+    const cpuMemorySpeedLimit = cpuMemorySpeedLimitFor(cpu, memory.find(({ part }) => part.specs.memoryType)?.part.specs.memoryType ?? motherboard.specs.memoryType);
     const memorySpeedLimits = [
       { label: "메인보드 지원 속도", value: motherboard.specs.maxMemorySpeedMhz },
-      ...(cpuMemorySpeedRelevant ? [{ label: "CPU 공식 지원 속도", value: cpu.specs.maxMemorySpeedMhz }] : [])
+      ...(cpuMemorySpeedRelevant ? [{ label: "CPU 공식 지원 속도", value: cpuMemorySpeedLimit }] : [])
     ].filter((limit): limit is { label: string; value: number } => limit.value !== undefined && limit.value > 0);
     const effectiveMemorySpeedLimit = memorySpeedLimits.length > 0
       ? Math.min(...memorySpeedLimits.map((limit) => limit.value))
@@ -3783,7 +3795,7 @@ export function evaluateBuild(
     });
     const missingSpeedFields = [
       ...(motherboard.specs.maxMemorySpeedMhz === undefined ? ["motherboard supported memory speed"] : []),
-      ...(cpuMemorySpeedRelevant && cpu.specs.maxMemorySpeedMhz === undefined ? ["CPU supported memory speed"] : []),
+      ...(cpuMemorySpeedRelevant && cpuMemorySpeedLimit === undefined ? ["CPU supported memory speed"] : []),
       ...(memory.some(({ part }) => part.specs.speedMhz === undefined) ? ["memory speed"] : [])
     ];
     const requiredMemorySpeedLimitCount = cpuMemorySpeedRelevant ? 2 : 1;
@@ -4260,8 +4272,9 @@ export function evaluateBuild(
 
   if (motherboard && computerCase) {
     const caseFanCount = computerCase.specs.fanCount;
-    const motherboardFanPorts = motherboard.specs.fanPortCount;
-    if (caseFanCount !== undefined && motherboardFanPorts === undefined) {
+    const motherboardFanPorts = caseFanHeaderCapacityFor(motherboard.specs, buildCoolerTypeFor(cooler?.specs, cpu?.specs));
+    const caseFanHub = computerCase.specs.fanHubIncluded === true;
+    if (caseFanCount !== undefined && caseFanCount > 0 && !caseFanHub && motherboardFanPorts === undefined) {
       addUnknown(
         findings,
         "case-fan-headers",
@@ -4271,7 +4284,7 @@ export function evaluateBuild(
         ["motherboard fan headers"],
         "motherboard"
       );
-    } else if (caseFanCount !== undefined && motherboardFanPorts !== undefined && caseFanCount > motherboardFanPorts) {
+    } else if (caseFanCount !== undefined && !caseFanHub && motherboardFanPorts !== undefined && caseFanCount > motherboardFanPorts) {
       addFinding(
         findings,
         "case-fan-headers",
@@ -4286,9 +4299,14 @@ export function evaluateBuild(
         [action("verify_spec", "팬 허브/컨트롤러 확인", "case")]
       );
     }
+    // ARGB/RGB 헤더 하나에 분배 케이블이나 데이지 체인으로 여러 장치를 묶는 게
+    // 일반적이고, 다나와는 헤더를 종류별로 한 번만 적는다. 장치 수가 헤더 수보다
+    // 많은 것만으로는 경고하지 않고, 확인된 헤더가 하나도 없을 때만 경고한다.
+    // 전압이 맞는지는 아래 case-rgb-voltage가 따로 판정한다.
     const caseRgbDevices = computerCase.specs.rgbDeviceCount;
     const motherboardRgbPorts = motherboard.specs.rgbPortCount;
-    if (caseRgbDevices !== undefined && caseRgbDevices > 0 && motherboardRgbPorts === undefined) {
+    const caseRgbController = computerCase.specs.rgbControllerIncluded === true;
+    if (caseRgbDevices !== undefined && caseRgbDevices > 0 && !caseRgbController && motherboardRgbPorts === undefined) {
       addUnknown(
         findings,
         "case-rgb-headers",
@@ -4298,13 +4316,13 @@ export function evaluateBuild(
         ["motherboard RGB/ARGB headers"],
         "motherboard"
       );
-    } else if (caseRgbDevices !== undefined && caseRgbDevices > 0 && motherboardRgbPorts !== undefined && caseRgbDevices > motherboardRgbPorts) {
+    } else if (caseRgbDevices !== undefined && caseRgbDevices > 0 && !caseRgbController && motherboardRgbPorts === 0) {
       addFinding(
         findings,
         "case-rgb-headers",
         "warning",
-        "케이스 조명을 모두 연결하기 어려울 수 있습니다.",
-        "케이스 조명을 메인보드에 직접 연결하기 어려울 수 있어요. RGB 허브가 있는지와 연결 규격을 확인해 주세요.",
+        "케이스 조명을 메인보드에 연결할 단자가 없습니다.",
+        "메인보드에 RGB/ARGB 헤더가 없어 케이스 조명을 직접 연결할 수 없어요. 별도 RGB 컨트롤러가 필요합니다.",
         partIds(motherboard, computerCase),
         [
           { label: "케이스 RGB 장치", actual: formatNumber(caseRgbDevices, "개") },
@@ -4314,7 +4332,7 @@ export function evaluateBuild(
       );
     }
     const caseRgbVoltage = computerCase.specs.rgbDeviceVoltage;
-    if (caseRgbDevices !== undefined && caseRgbDevices > 0 && caseRgbVoltage) {
+    if (caseRgbDevices !== undefined && caseRgbDevices > 0 && !caseRgbController && caseRgbVoltage) {
       const requiredVoltages = caseRgbVoltage === "mixed" ? ["5V", "12V"] : [caseRgbVoltage];
       const voltageHeaders = new Map<string, number | undefined>([
         ["5V", motherboard.specs.rgb5vPortCount],
@@ -4607,20 +4625,48 @@ export function evaluateBuild(
         ["GPU thickness"],
         "case"
       );
-    } else if (gpuThickness >= GPU_THICKNESS_WARNING_MM) {
-      addFinding(
-        findings,
-        "gpu-thickness",
-        "warning",
-        "그래픽카드가 두꺼워 옆 슬롯을 가릴 수 있습니다.",
-        "그래픽카드가 옆 슬롯을 가리거나 케이스 안쪽 구조물에 닿을 수 있어요. 제품 크기와 케이스 안쪽 공간을 확인해 주세요.",
-        partIds(gpu, computerCase, motherboard),
-        [
-          { label: "그래픽카드 두께", actual: formatNumber(gpuThickness, "mm") },
-          { label: "주의 기준", expected: formatNumber(GPU_THICKNESS_WARNING_MM, "mm 이상") }
-        ],
-        [action("verify_spec", "GPU 두께/슬롯 간격 확인", "case")]
-      );
+    } else {
+      // 두꺼운 카드는 아래 확장 슬롯을 덮지만, 그 슬롯에 다른 카드를 꽂지 않는
+      // 게이밍 구성에서는 문제가 아니다. 케이스 확장 슬롯 공간이 실제로 부족할 수
+      // 있는 경우(ITX 전용 케이스, mATX까지만 받는 케이스)만 경고한다.
+      const caseBoardForms = computerCase.specs.motherboardFormFactors ?? [];
+      const caseSlotLimit = caseBoardForms.includes("ATX") || caseBoardForms.includes("E-ATX")
+        ? undefined
+        : caseBoardForms.includes("mATX")
+          ? { label: "mATX 케이스 확장 슬롯 공간", warningMm: 4 * PCIE_SLOT_PITCH_MM }
+          : caseBoardForms.includes("ITX")
+            ? { label: "ITX 케이스 확장 슬롯 공간", warningMm: GPU_THICKNESS_WARNING_MM }
+            : { label: "케이스 확장 슬롯 공간", warningMm: GPU_THICKNESS_WARNING_MM };
+      const coveredSlots = Math.max(0, Math.ceil(gpuThickness / PCIE_SLOT_PITCH_MM - 0.05) - 1);
+      if (caseSlotLimit && gpuThickness >= caseSlotLimit.warningMm) {
+        addFinding(
+          findings,
+          "gpu-thickness",
+          "warning",
+          "그래픽카드가 두꺼워 케이스에 들어가지 않을 수 있습니다.",
+          "작은 케이스는 확장 슬롯 공간이 좁아 두꺼운 그래픽카드가 들어가지 않을 수 있어요. 케이스가 지원하는 그래픽카드 두께(슬롯 수)를 확인해 주세요.",
+          partIds(gpu, computerCase, motherboard),
+          [
+            { label: "그래픽카드 두께", actual: formatNumber(gpuThickness, "mm") },
+            { label: caseSlotLimit.label, expected: formatNumber(Math.round(caseSlotLimit.warningMm), "mm 미만") }
+          ],
+          [action("verify_spec", "GPU 두께/슬롯 간격 확인", "case")]
+        );
+      } else if (gpuThickness >= GPU_THICKNESS_WARNING_MM) {
+        addFinding(
+          findings,
+          "gpu-thickness",
+          "info",
+          "그래픽카드가 아래 확장 슬롯을 덮습니다.",
+          `그래픽카드 아래 확장 슬롯 ${coveredSlots}개를 쓸 수 없어요. 다른 확장 카드를 꽂을 계획이 없다면 문제없습니다.`,
+          partIds(gpu, computerCase, motherboard),
+          [
+            { label: "그래픽카드 두께", actual: formatNumber(gpuThickness, "mm") },
+            { label: "덮는 확장 슬롯", actual: formatNumber(coveredSlots, "개") }
+          ],
+          []
+        );
+      }
     }
     const gpuCableBendClearance = gpu.specs.gpuCableBendClearanceMm;
     const caseSidePanelClearance = computerCase.specs.caseSidePanelClearanceMm;
@@ -6008,7 +6054,7 @@ function generatorMemoryCanUseMotherboard(memory: Part, motherboard: Part, cpu: 
   const profileKnown = (memory.specs.memoryProfiles?.length ?? 0) > 0;
   const confirmedSpeedLimits = [
     motherboard.specs.maxMemorySpeedMhz,
-    ...(profileKnown ? [cpu?.specs.maxMemorySpeedMhz] : [])
+    ...(profileKnown ? [cpuMemorySpeedLimitFor(cpu, memory.specs.memoryType ?? motherboard.specs.memoryType)] : [])
   ].filter((value): value is number => value !== undefined && value > 0);
   const effectiveSpeedLimit = confirmedSpeedLimits.length > 0 ? Math.min(...confirmedSpeedLimits) : undefined;
   const profileOverlap = !profileKnown
@@ -6257,11 +6303,13 @@ function filterGeneratorGpuPoolByMinVram<T extends { parts: Part[] }>(pool: T, m
 // 컷에서 면제한다 — DDR5-8000급 EXPO 킷처럼 실제로는 플랫폼에서 돌지만 네이티브
 // 상한을 넘는 지명 부품이 조용히 사라지는 것을 막기 위해서다.
 function preferUsableMemorySpeed(parts: Part[], motherboard: Part, cpu?: Part, targetFilters?: EngineTargetFiltersConfig) {
-  const cpuLimit = cpu?.specs.maxMemorySpeedMhz !== undefined ? cpu.specs.maxMemorySpeedMhz * 1.25 : Number.POSITIVE_INFINITY;
   const boardLimit = motherboard.specs.maxMemorySpeedMhz ?? Number.POSITIVE_INFINITY;
-  const platformLimit = Math.min(cpuLimit, boardLimit);
-  if (!Number.isFinite(platformLimit)) return parts;
-  const usable = parts.filter((part) => (part.specs.speedMhz ?? 0) <= platformLimit || engineTargetFilterNamesPart(part, targetFilters));
+  const platformLimitFor = (part: Part) => {
+    const cpuSpeed = cpuMemorySpeedLimitFor(cpu, part.specs.memoryType ?? motherboard.specs.memoryType);
+    return Math.min(cpuSpeed !== undefined ? cpuSpeed * 1.25 : Number.POSITIVE_INFINITY, boardLimit);
+  };
+  if (cpuMemorySpeedLimitFor(cpu, motherboard.specs.memoryType) === undefined && !Number.isFinite(boardLimit)) return parts;
+  const usable = parts.filter((part) => (part.specs.speedMhz ?? 0) <= platformLimitFor(part) || engineTargetFilterNamesPart(part, targetFilters));
   return usable.length > 0 ? usable : parts;
 }
 

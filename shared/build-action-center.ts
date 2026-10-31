@@ -1,5 +1,5 @@
 import { gpuPurchaseEvidenceFor } from "./gpu-fit";
-import { buildConnectivitySummaryFor } from "./build-connectivity";
+import { buildConnectivitySummaryFor, buildCoolerTypeFor } from "./build-connectivity";
 import { buildResourceSummaryFor } from "./build-resource-summary";
 import { catalogMissingFieldLabelFor } from "./catalog-spec-coverage";
 import type { BuildSelection, CompatibilityResult, Finding, FindingSeverity, BuildDataHealthItem, Part } from "./types";
@@ -60,7 +60,8 @@ function connectivityActionsFor(result: BuildActionCenterResult, build: BuildSel
   if (!build || !partMap) return [];
   const summary = buildConnectivitySummaryFor(
     build.motherboard ? partMap.get(build.motherboard.partId)?.specs : undefined,
-    build.case ? partMap.get(build.case.partId)?.specs : undefined
+    build.case ? partMap.get(build.case.partId)?.specs : undefined,
+    buildCoolerTypeFor(build.cooler ? partMap.get(build.cooler.partId)?.specs : undefined, build.cpu ? partMap.get(build.cpu.partId)?.specs : undefined)
   );
   if (summary.status === "not_applicable") return [];
   const existingFindingRuleIds = new Set(result.findings.map((finding) => finding.ruleId));

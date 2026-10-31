@@ -661,6 +661,8 @@ export interface PartSpecs {
   maxMemoryGb?: number;
   memorySlots?: number;
   maxMemorySpeedMhz?: number;
+  /** CPU official memory speed per generation when it supports both (Intel 12-14th gen: DDR5 + DDR4). */
+  maxMemorySpeedMhzByType?: { DDR4?: number; DDR5?: number };
   speedMhz?: number;
   capacityGb?: number;
   /** Maximum number of storage devices a storage adapter can mount at once. */
@@ -770,6 +772,8 @@ export interface PartSpecs {
   fanCurrentA?: number;
   fanLoadProvenance?: FanLoadProvenance;
   fanPortCount?: number;
+  /** Motherboard AIO/pump headers; usable for a case fan when the CPU cooler is air. */
+  pumpFanHeaderCount?: number;
   rgbPortCount?: number;
   rgb5vPortCount?: number;
   rgb12vPortCount?: number;
@@ -780,6 +784,8 @@ export interface PartSpecs {
   rgbDevicePowerW?: number;
   rgbDeviceLoadProvenance?: RgbDeviceLoadProvenance;
   rgbControllerIncluded?: boolean;
+  /** Case ships with a fan hub that powers its fans without motherboard headers. */
+  fanHubIncluded?: boolean;
   outputW?: number;
   capacityVa?: number;
   outletCount?: number;

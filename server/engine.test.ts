@@ -972,7 +972,7 @@ describe("compatibility engine", () => {
     expect(result.links.find((link) => link.id === "motherboard-gpu")?.status).toBe("compatible");
   });
 
-  it("warns about a thick GPU as a physical-clearance review, not a blocker", () => {
+  it("notes a thick GPU in an ATX case without a warning", () => {
     const baseGpu = seedCatalog.find((part) => part.id === "gpu-rtx-4060")!;
     const gpu = { ...baseGpu, id: "gpu-thick-test", specs: { ...baseGpu.specs, thicknessMm: 66 } };
     const build = compatibleBuild();
@@ -980,11 +980,43 @@ describe("compatibility engine", () => {
     const result = evaluateBuild(build, [...seedCatalog, gpu], { includeSuggestions: false });
     const finding = result.findings.find((item) => item.ruleId === "gpu-thickness");
 
-    expect(finding?.severity).toBe("warning");
+    expect(finding?.severity).toBe("info");
     expect(finding?.facts).toEqual(expect.arrayContaining([
-      expect.objectContaining({ label: "그래픽카드 두께", actual: "66mm" })
+      expect.objectContaining({ label: "그래픽카드 두께", actual: "66mm" }),
+      expect.objectContaining({ label: "덮는 확장 슬롯", actual: "3개" })
     ]));
     expect(result.metrics.gpuThicknessMm).toBe(66);
+    expect(result.gpuFit?.thickness.status).toBe("compatible");
+  });
+
+  it("does not flag a normal 2.5-slot GPU in an ATX case", () => {
+    const baseGpu = seedCatalog.find((part) => part.id === "gpu-rtx-4060")!;
+    const gpu = { ...baseGpu, id: "gpu-2-5-slot", specs: { ...baseGpu.specs, thicknessMm: 52 } };
+    const build = compatibleBuild();
+    build.gpu = { partId: gpu.id, quantity: 1 };
+    const result = evaluateBuild(build, [...seedCatalog, gpu], { includeSuggestions: false });
+
+    expect(result.findings.some((item) => item.ruleId === "gpu-thickness")).toBe(false);
+  });
+
+  it("warns about a thick GPU in an ITX-only case as a physical-clearance review, not a blocker", () => {
+    const baseGpu = seedCatalog.find((part) => part.id === "gpu-rtx-4060")!;
+    const baseCase = seedCatalog.find((part) => part.id === "case-full-airflow")!;
+    const baseMotherboard = seedCatalog.find((part) => part.id === "mb-b650-4x3")!;
+    const gpu = { ...baseGpu, id: "gpu-thick-itx-test", specs: { ...baseGpu.specs, thicknessMm: 60 } };
+    const itxCase: Part = { ...baseCase, id: "case-itx-only-test", specs: { ...baseCase.specs, motherboardFormFactors: ["ITX"] } };
+    const itxBoard: Part = { ...baseMotherboard, id: "mb-itx-test", specs: { ...baseMotherboard.specs, formFactor: "ITX" } };
+    const build = compatibleBuild();
+    build.gpu = { partId: gpu.id, quantity: 1 };
+    build.case = { partId: itxCase.id, quantity: 1 };
+    build.motherboard = { partId: itxBoard.id, quantity: 1 };
+    const result = evaluateBuild(build, [...seedCatalog, gpu, itxCase, itxBoard], { includeSuggestions: false });
+    const finding = result.findings.find((item) => item.ruleId === "gpu-thickness");
+
+    expect(finding?.severity).toBe("warning");
+    expect(finding?.facts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: "그래픽카드 두께", actual: "60mm" })
+    ]));
     expect(result.links.find((link) => link.id === "gpu-case")?.status).toBe("issue");
   });
 
@@ -1267,20 +1299,14 @@ describe("compatibility engine", () => {
   it("does not call a replacement fully compatible while a warning remains", () => {
     const { build, catalog } = psuCaseFixture(240, 220, "ATX", ["ATX"]);
     const baseCase = seedCatalog.find((part) => part.id === "case-full-airflow")!;
-    const baseGpu = seedCatalog.find((part) => part.id === "gpu-rtx-4060")!;
     const roomyCase: Part = {
       ...baseCase,
       id: "case-roomy-psu-warning",
       name: "테스트 여유 케이스",
       specs: { ...baseCase.specs, maxPsuLengthMm: 260, supportedPsuFormFactors: ["ATX"] }
     };
-    const thickGpu: Part = {
-      ...baseGpu,
-      id: "gpu-thick-remaining-warning",
-      specs: { ...baseGpu.specs, thicknessMm: 66 }
-    };
-    build.gpu = { partId: thickGpu.id, quantity: 1 };
-    const result = evaluateBuild(build, [...catalog, roomyCase, thickGpu]);
+    build.memory = [{ partId: "memory-ddr5-16-5600", quantity: 1 }];
+    const result = evaluateBuild(build, [...catalog, roomyCase]);
     const finding = result.findings.find((item) => item.ruleId === "psu-case-length");
     const suggestion = finding?.suggestions?.find((item) => item.part.id === roomyCase.id);
 
@@ -1346,6 +1372,62 @@ describe("compatibility engine", () => {
     ]));
     expect(finding?.actions[0].label).toBe("팬 허브/컨트롤러 확인");
     expect(result.links.find((link) => link.id === "motherboard-case")?.status).toBe("issue");
+  });
+
+  it("counts a free pump header for case fans with an air cooler only", () => {
+    const baseMotherboard = seedCatalog.find((part) => part.id === "mb-b650-4x3")!;
+    const baseCase = seedCatalog.find((part) => part.id === "case-full-airflow")!;
+    const baseCooler = seedCatalog.find((part) => part.id === "cooler-tower-am5-1700")!;
+    const motherboard = { ...baseMotherboard, id: "mb-fan-pump", specs: { ...baseMotherboard.specs, fanPortCount: 3, pumpFanHeaderCount: 1 } };
+    const computerCase = { ...baseCase, id: "case-four-fans", specs: { ...baseCase.specs, fanCount: 4 } };
+    const liquidCooler: Part = { ...baseCooler, id: "cooler-liquid-pump-test", specs: { ...baseCooler.specs, coolerType: "liquid", radiatorSizeMm: 240 } };
+    const build = compatibleBuild();
+    build.motherboard = { partId: motherboard.id, quantity: 1 };
+    build.case = { partId: computerCase.id, quantity: 1 };
+    const catalog = [...seedCatalog, motherboard, computerCase, liquidCooler];
+
+    const air = evaluateBuild(build, catalog, { includeSuggestions: false });
+    expect(air.findings.some((item) => item.ruleId === "case-fan-headers")).toBe(false);
+
+    build.cooler = { partId: liquidCooler.id, quantity: 1 };
+    const liquid = evaluateBuild(build, catalog, { includeSuggestions: false });
+    expect(liquid.findings.find((item) => item.ruleId === "case-fan-headers")?.severity).toBe("warning");
+  });
+
+  it("does not warn about fan headers when the case ships with a fan hub", () => {
+    const baseMotherboard = seedCatalog.find((part) => part.id === "mb-b650-4x3")!;
+    const baseCase = seedCatalog.find((part) => part.id === "case-full-airflow")!;
+    const motherboard = { ...baseMotherboard, id: "mb-fan-hub-case", specs: { ...baseMotherboard.specs, fanPortCount: undefined } };
+    const computerCase = { ...baseCase, id: "case-fan-hub", specs: { ...baseCase.specs, fanCount: 7, fanHubIncluded: true } };
+    const build = compatibleBuild();
+    build.motherboard = { partId: motherboard.id, quantity: 1 };
+    build.case = { partId: computerCase.id, quantity: 1 };
+    const result = evaluateBuild(build, [...seedCatalog, motherboard, computerCase], { includeSuggestions: false });
+
+    expect(result.findings.some((item) => item.ruleId === "case-fan-headers")).toBe(false);
+  });
+
+  it("judges an XMP kit against the CPU speed for its own memory generation", () => {
+    const baseCpu = seedCatalog.find((part) => part.id === "cpu-7800x3d")!;
+    const baseMotherboard = seedCatalog.find((part) => part.id === "mb-b650-4x3")!;
+    const baseMemory = seedCatalog.find((part) => part.id === "memory-ddr5-16-5600")!;
+    // 다나와 원문 "DDR5, DDR4 / 5600, 3200MHz"를 예전 파서가 읽은 상태: 단일 값은 DDR4 속도.
+    const cpu: Part = { ...baseCpu, id: "cpu-14700k-test", specs: { ...baseCpu.specs, maxMemorySpeedMhz: 3200, maxMemorySpeedMhzByType: { DDR5: 5600, DDR4: 3200 } } };
+    const motherboard: Part = { ...baseMotherboard, id: "mb-memory-speed-test", specs: { ...baseMotherboard.specs, maxMemorySpeedMhz: 7200 } };
+    const memory: Part = { ...baseMemory, id: "memory-ddr5-5600-xmp-test", specs: { ...baseMemory.specs, memoryType: "DDR5", speedMhz: 5600, memoryProfiles: ["XMP"] } };
+    const fastMemory: Part = { ...memory, id: "memory-ddr5-6400-xmp-test", specs: { ...memory.specs, speedMhz: 6400 } };
+    const build = compatibleBuild();
+    build.cpu = { partId: cpu.id, quantity: 1 };
+    build.motherboard = { partId: motherboard.id, quantity: 1 };
+    build.memory = [{ partId: memory.id, quantity: 2 }];
+    const catalog = [...seedCatalog, cpu, motherboard, memory, fastMemory];
+
+    expect(evaluateBuild(build, catalog, { includeSuggestions: false }).findings.some((item) => item.ruleId === "memory-speed")).toBe(false);
+
+    build.memory = [{ partId: fastMemory.id, quantity: 2 }];
+    const fast = evaluateBuild(build, catalog, { includeSuggestions: false }).findings.find((item) => item.ruleId === "memory-speed");
+    expect(fast?.severity).toBe("warning");
+    expect(fast?.facts).toEqual(expect.arrayContaining([expect.objectContaining({ label: "CPU 공식 지원 속도", expected: "5,600MHz" })]));
   });
 
   it("marks fan connection as unknown when the motherboard header count is missing", () => {
@@ -1702,18 +1784,40 @@ describe("compatibility engine", () => {
     expect(noEvidence.valueScore).toBeUndefined();
   });
 
-  it("warns when known RGB devices exceed the motherboard RGB header count", () => {
+  it("does not warn when RGB devices outnumber headers that can be split or chained", () => {
     const baseMotherboard = seedCatalog.find((part) => part.id === "mb-b650-4x3")!;
     const baseCase = seedCatalog.find((part) => part.id === "case-full-airflow")!;
     const motherboard = {
       ...baseMotherboard,
       id: "mb-rgb-headers-2",
-      specs: { ...baseMotherboard.specs, fanPortCount: 7, rgbPortCount: 2 }
+      specs: { ...baseMotherboard.specs, fanPortCount: 7, rgbPortCount: 2, rgb5vPortCount: 1, rgb12vPortCount: 1 }
     };
     const computerCase = {
       ...baseCase,
       id: "case-rgb-seven",
-      specs: { ...baseCase.specs, fanCount: 7, rgbDeviceCount: 7 }
+      specs: { ...baseCase.specs, fanCount: 7, rgbDeviceCount: 7, rgbDeviceVoltage: "5V" as const }
+    };
+    const build = compatibleBuild();
+    build.motherboard = { partId: motherboard.id, quantity: 1 };
+    build.case = { partId: computerCase.id, quantity: 1 };
+    const result = evaluateBuild(build, [...seedCatalog, motherboard, computerCase], { includeSuggestions: false });
+
+    expect(result.findings.some((item) => item.ruleId === "case-rgb-headers")).toBe(false);
+    expect(result.findings.some((item) => item.ruleId === "case-rgb-voltage")).toBe(false);
+  });
+
+  it("warns when the motherboard has no RGB header for the case lighting", () => {
+    const baseMotherboard = seedCatalog.find((part) => part.id === "mb-b650-4x3")!;
+    const baseCase = seedCatalog.find((part) => part.id === "case-full-airflow")!;
+    const motherboard = {
+      ...baseMotherboard,
+      id: "mb-rgb-headers-0",
+      specs: { ...baseMotherboard.specs, fanPortCount: 7, rgbPortCount: 0 }
+    };
+    const computerCase = {
+      ...baseCase,
+      id: "case-rgb-no-header",
+      specs: { ...baseCase.specs, fanCount: 7, rgbDeviceCount: 3 }
     };
     const build = compatibleBuild();
     build.motherboard = { partId: motherboard.id, quantity: 1 };
@@ -1723,11 +1827,24 @@ describe("compatibility engine", () => {
 
     expect(finding?.severity).toBe("warning");
     expect(finding?.facts).toEqual(expect.arrayContaining([
-      expect.objectContaining({ label: "케이스 RGB 장치", actual: "7개" }),
-      expect.objectContaining({ label: "메인보드 RGB/ARGB 헤더", expected: "2개" })
+      expect.objectContaining({ label: "케이스 RGB 장치", actual: "3개" }),
+      expect.objectContaining({ label: "메인보드 RGB/ARGB 헤더", expected: "0개" })
     ]));
     expect(finding?.actions[0].label).toBe("RGB 허브/전압 확인");
     expect(result.links.find((link) => link.id === "motherboard-case")?.status).toBe("issue");
+  });
+
+  it("skips RGB header and voltage checks when the case ships with its own controller", () => {
+    const baseMotherboard = seedCatalog.find((part) => part.id === "mb-b650-4x3")!;
+    const baseCase = seedCatalog.find((part) => part.id === "case-full-airflow")!;
+    const motherboard = { ...baseMotherboard, id: "mb-rgb-unknown-ctrl", specs: { ...baseMotherboard.specs, fanPortCount: 7, rgbPortCount: undefined } };
+    const computerCase = { ...baseCase, id: "case-rgb-ctrl", specs: { ...baseCase.specs, fanCount: 3, rgbDeviceCount: 3, rgbDeviceVoltage: "12V" as const, rgbControllerIncluded: true } };
+    const build = compatibleBuild();
+    build.motherboard = { partId: motherboard.id, quantity: 1 };
+    build.case = { partId: computerCase.id, quantity: 1 };
+    const result = evaluateBuild(build, [...seedCatalog, motherboard, computerCase], { includeSuggestions: false });
+
+    expect(result.findings.some((item) => item.ruleId === "case-rgb-headers" || item.ruleId === "case-rgb-voltage")).toBe(false);
   });
 
   it("does not guess RGB compatibility when the motherboard header count is missing", () => {
@@ -4755,7 +4872,7 @@ describe("generator quote reliability regressions", () => {
     expect(draft.status).toBe("compatible");
   });
 
-  it("does not let a non-blocking warning veto a much stronger build", () => {
+  it("picks a much stronger thick GPU without a thickness warning in an ATX case", () => {
     const thinGpu: Part = withSpecs(baseGpu, { thicknessMm: 40, gpu3dmarkTimeSpyScore: 8000, vramGb: 8, powerW: 115, recommendedPsuW: 550, lengthMm: 221 }, 300_000);
     const thickGpu: Part = withSpecs(baseGpu, { thicknessMm: 72, gpu3dmarkTimeSpyScore: 36000, vramGb: 24, powerW: 350, recommendedPsuW: 800, lengthMm: 330 }, 1_200_000);
     thinGpu.id = "gpu-thin-weak";
@@ -4768,7 +4885,7 @@ describe("generator quote reliability regressions", () => {
     });
 
     expect(draft.selection.gpu?.partId).toBe("gpu-thick-strong");
-    expect(draft.warnings.some((warning) => warning.includes("두꺼"))).toBe(true);
+    expect(draft.warnings.some((warning) => warning.includes("두꺼"))).toBe(false);
   });
 
   it("never pairs SO-DIMM memory with a desktop motherboard", () => {

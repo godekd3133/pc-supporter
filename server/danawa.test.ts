@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
+import type { Part } from "../shared/types";
 import {
   buildDanawaListAjaxParams,
   parseDanawaListPage,
@@ -15,6 +16,9 @@ import {
   danawaPriceUnavailableFromHtml,
   fetchDanawaHtml,
   reparseDanawaPart,
+  parseMotherboardMemorySpeedMhz,
+  parseCpuMemorySpeedsByType,
+  cpuNativeMemorySpeedMhz,
   crawlDanawaCategory,
   retryDanawaCategoryPage
 } from "./danawa";
@@ -1357,5 +1361,82 @@ describe("confirmed Danawa product without purchase offers", () => {
     expect(danawaPriceUnavailableFromHtml(product('판매점 0개 <strong id="priceCompareTabCount">1</strong>'), "75656861", "MANLI RTX 5090 32GB")).toBe(false);
     expect(danawaPriceUnavailableFromHtml(product().replace("nMinPrice = 0", "nMinPrice = 5000000"), "75656861", "MANLI RTX 5090 32GB")).toBe(false);
     expect(danawaPriceUnavailableFromHtml(product().replace("</head>", '<meta property="og:url" content="https://prod.danawa.com/info/?pcode=wrong"></head>'), "75656861", "MANLI RTX 5090 32GB")).toBe(false);
+  });
+});
+
+// 아래 원문은 다나와 상품 페이지의 스펙 문자열 그대로다(2026-09 수집본).
+const X870E_NOVA_SPEC = "AMD(소켓AM5) / AMD X870E / DDR5 / VGA 연결: PCIe5.0 x16 / ATX (30.5x24.4cm) / 전원부: 20+2+1페이즈 / 페이즈당110A / Vcore출력합계: 2200A / [메모리] 8200MHz (PC5-65600) / 4개 / 메모리 용량: 최대 256GB / XMP / EXPO / [확장슬롯] PCIe버전: PCIe5.0, PCIe3.0 / PCIex16: 1개(동시사용시x8) / PCIex16(at x2): 1개 / PCIex1: 1개 / [저장장치] M.2: 5개 / SATA3: 4개 / [내부I/O] USB/팬 헤더: USB3.0 헤더 , USB2.0 헤더 , USB3.2 Type C 헤더, RGB 12V 4핀 헤더 , ARGB 5V 3핀 헤더 , CPU추가팬(OPT) 헤더, 펌프전용 헤더 / 시스템팬 4핀: 3+1개 / I/O 헤더: 디버그LED, 프론트오디오AAFP 헤더 , 온도 센서";
+const B850M_GAMING_X_SPEC = "AMD(소켓AM5) / AMD B850 / DDR5 / VGA 연결: PCIe5.0 x16 / M-ATX (24.4x24.4cm) / 전원부: 10+2+2페이즈 / 60A / Vcore출력합계: 600 / 메모리 8200MHz (PC5-65600) / 4개 / 메모리 용량: 최대 256GB / XMP / EXPO / [내부I/O] USB/팬 헤더: USB3.0 헤더 , USB2.0 헤더 , USB3.2 Type C 헤더, RGB 12V 4핀 헤더 , ARGB 5V 3핀 헤더 , CPU추가팬(OPT) 헤더, 펌프전용 헤더 / 시스템팬 4핀: 1개";
+const INTEL_14400F_SPEC = "인텔(1700소켓) / 10코어 / 16쓰레드 / 메모리 규격: DDR5, DDR4 / 내장그래픽:미탑재 / 10nm(인텔7) / 기본 클럭: 2.5GHz / 최대 클럭: 4.7GHz / PCIe5.0, 4.0 / 4800, 3200MHz / 쿨러: 쿨러 포함";
+
+function danawaPart(category: Part["category"], name: string, rawSpecText: string, specs: Part["specs"] = {}): Part {
+  return { id: `danawa-${category}-1`, category, name, source: "danawa", rawSpecText, specs, dataQuality: "live", missingFields: [], updatedAt: "2026-09-21T00:00:00.000Z" };
+}
+
+describe("Danawa spec coverage for build warnings", () => {
+  it("reads motherboard memory speed from every Danawa notation", () => {
+    expect(parseMotherboardMemorySpeedMhz(B850M_GAMING_X_SPEC)).toBe(8200);
+    expect(parseMotherboardMemorySpeedMhz(X870E_NOVA_SPEC)).toBe(8200);
+    expect(parseMotherboardMemorySpeedMhz("인텔(소켓1200) / DDR4 / [메모리] PC4-25600 (3,200MHz) / 4개")).toBe(3200);
+    expect(parseMotherboardMemorySpeedMhz("AMD(소켓AM5) / DDR5 / 메모리 속도: 8000MHz / 4개")).toBe(8000);
+    expect(parseMotherboardMemorySpeedMhz("AMD(소켓AM5) / DDR5 / 최대 8000MHz(OC) / 4개")).toBe(8000);
+    expect(parseMotherboardMemorySpeedMhz("AMD(소켓AM5) / DDR5-8000(OC) / 4개")).toBe(8000);
+    expect(parseMotherboardMemorySpeedMhz("AMD(소켓AM5) / 지원 메모리: DDR5 6400/6000/5600 / 4개")).toBe(6400);
+    // PC5-65600은 대역폭 표기라 속도가 아니다.
+    expect(parseMotherboardMemorySpeedMhz("AMD(소켓AM5) / DDR5 / (PC5-65600) / 4개")).toBeUndefined();
+    expect(parseMotherboardMemorySpeedMhz("AMD(소켓AM5) / DDR5 / [메모리] 4개 / 메모리 용량: 최대 256GB")).toBeUndefined();
+  });
+
+  it("fills motherboard memory speed when an existing row is reparsed", () => {
+    const stored = danawaPart("motherboard", "GIGABYTE B850M GAMING X WIFI6E", B850M_GAMING_X_SPEC, { socket: "AM5", memoryType: "DDR5" });
+    expect(stored.specs.maxMemorySpeedMhz).toBeUndefined();
+    expect(reparseDanawaPart(stored).specs.maxMemorySpeedMhz).toBe(8200);
+  });
+
+  it("sums split system fan counts and keeps the pump header separate", () => {
+    const specs = reparseDanawaPart(danawaPart("motherboard", "ASRock X870E Nova WiFi", X870E_NOVA_SPEC)).specs;
+    // 시스템팬 3+1 + CPU추가팬(OPT) 1. 펌프 헤더는 쿨러 종류에 따라 엔진이 더한다.
+    expect(specs.fanPortCount).toBe(5);
+    expect(specs.pumpFanHeaderCount).toBe(1);
+    expect(reparseDanawaPart(danawaPart("motherboard", "보드", "AMD(소켓AM5) / DDR5 / 시스템팬 4핀: 4개")).specs.pumpFanHeaderCount).toBeUndefined();
+  });
+
+  it("detects a fan hub that ships with the case", () => {
+    const withHub = reparseDanawaPart(danawaPart("case", "허브 케이스", "ATX 케이스 / 지원보드규격: ATX , M-ATX / 쿨링팬: 총6개 / LED팬: 6개 / LED 색상: ARGB / [부가기능] 팬허브 기본 제공")).specs;
+    const withController = reparseDanawaPart(danawaPart("case", "컨트롤러 케이스", "ATX 케이스 / 쿨링팬: 총4개 / [부가기능] 허브 컨트롤러 기본 장착")).specs;
+    const plain = reparseDanawaPart(danawaPart("case", "기본 케이스", "ATX 케이스 / 쿨링팬: 총4개 / LED팬: 4개 / LED 색상: ARGB")).specs;
+    expect(withHub.fanHubIncluded).toBe(true);
+    expect(withController.fanHubIncluded).toBe(true);
+    expect(plain.fanHubIncluded).toBeUndefined();
+  });
+
+  it("pairs Intel DDR5/DDR4 memory speeds with their generation", () => {
+    expect(parseCpuMemorySpeedsByType(INTEL_14400F_SPEC)).toEqual({ DDR5: 4800, DDR4: 3200 });
+    const specs = reparseDanawaPart(danawaPart("cpu", "인텔 코어i5-14세대 14400F (랩터레이크 리프레시) (정품)", INTEL_14400F_SPEC)).specs;
+    expect(specs.memoryType).toBe("DDR5");
+    expect(specs.maxMemorySpeedMhz).toBe(4800);
+    expect(specs.maxMemorySpeedMhzByType).toEqual({ DDR5: 4800, DDR4: 3200 });
+    expect(parseCpuMemorySpeedsByType("AMD(소켓AM5) / 메모리 규격: DDR5 / 5600MHz")).toBeUndefined();
+  });
+
+  it("falls back to official native memory speeds by CPU family", () => {
+    expect(cpuNativeMemorySpeedMhz("AMD 라이젠7-6세대 9800X3D (그래니트 릿지)", "AM5", "DDR5")).toBe(5600);
+    expect(cpuNativeMemorySpeedMhz("AMD 라이젠7 9800X3D", "AM5", "DDR5")).toBe(5600);
+    expect(cpuNativeMemorySpeedMhz("AMD 라이젠7-5세대 7800X3D (라파엘)", "AM5", "DDR5")).toBe(5200);
+    expect(cpuNativeMemorySpeedMhz("인텔 코어 울트라7 시리즈2 265K", "LGA1851", "DDR5")).toBe(6400);
+    expect(cpuNativeMemorySpeedMhz("인텔 코어i5-12세대 12400F", "LGA1700", "DDR5")).toBe(4800);
+    expect(cpuNativeMemorySpeedMhz("인텔 코어i5-14세대 14400F", "LGA1700", "DDR5")).toBe(4800);
+    expect(cpuNativeMemorySpeedMhz("인텔 코어i5-14세대 14600K", "LGA1700", "DDR5")).toBe(5600);
+    expect(cpuNativeMemorySpeedMhz("인텔 코어i7-13세대 13700F", "LGA1700", "DDR4")).toBe(3200);
+    expect(cpuNativeMemorySpeedMhz("인텔 코어i5-10세대 10400F", "LGA1200", "DDR4")).toBe(2666);
+    expect(cpuNativeMemorySpeedMhz("인텔 코어i7-10세대 10700K", "LGA1200", "DDR4")).toBe(2933);
+    expect(cpuNativeMemorySpeedMhz("인텔 코어i5-11세대 11400F", "LGA1200", "DDR4")).toBe(3200);
+    const intelWithoutSpeed = reparseDanawaPart(danawaPart("cpu", "인텔 코어i7-14세대 14700K", "인텔(1700소켓) / 메모리 규격: DDR5, DDR4 / 20코어")).specs;
+    expect(intelWithoutSpeed.maxMemorySpeedMhzByType).toEqual({ DDR5: 5600, DDR4: 3200 });
+  });
+
+  it("drops a stored null radiator size instead of carrying it into findings", () => {
+    const stored = danawaPart("cooler", "수랭 쿨러", "수랭 / 일체형", { coolerType: "liquid", radiatorSizeMm: null as unknown as number });
+    expect("radiatorSizeMm" in reparseDanawaPart(stored).specs).toBe(false);
   });
 });
