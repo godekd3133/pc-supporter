@@ -142,7 +142,7 @@ function HomeCatalogCachePanel({ onToast }: { onToast: (message: string) => void
   </section>;
 }
 
-const LazyHomeJourneyPanel = lazy(() => import("./HomeJourneyPanel").then((module) => ({ default: module.HomeJourneyPanel })));
+const LazyHomeSavedBuildPrices = lazy(() => import("./HomeSavedBuildPrices").then((module) => ({ default: module.HomeSavedBuildPrices })));
 const LazyHomeAlertCenter = lazy(() => import("./HomeAlertCenter").then((module) => ({ default: module.HomeAlertCenter })));
 const LazyHomeSpecSheet = lazy(() => import("./HomeSpecSheet").then((module) => ({ default: module.HomeSpecSheet })));
 const LazyHomeBudgetLadderSharePanel = lazy(() => import("./HomeBudgetLadderSharePanel").then((module) => ({ default: module.HomeBudgetLadderSharePanel })));
@@ -300,7 +300,7 @@ function MobileHomeView({ build, result, resultIsStale, partMap, accessoryMap, a
     </div>
     <section className="mobile-next-steps home-entry-card" aria-label="다른 구성 방법"><div className="mobile-section-heading"><div><span className="mobile-kicker">구성 방법</span><h2>{hasBuild ? "다른 방법으로 구성" : "직접 구성"}</h2></div><button type="button" className="mobile-section-link" onClick={onOpenHistory}>저장한 견적<FiArrowRight /></button></div><button className="mobile-recommend-card" data-testid="mobile-home-recommend" type="button" onClick={hasBuild ? onGenerate : onStart}><span className="mobile-recommend-icon">{hasBuild ? <FiZap /> : <FiEdit3 />}</span><span className="mobile-recommend-copy"><strong>{hasBuild ? "용도/예산으로 다시 구성하기" : "부품 선택하기"}</strong>{!hasBuild && <small>원하는 부품을 선택하고 호환성을 확인해요.</small>}</span><FiArrowRight /></button></section>
     </div>
-    <Suspense fallback={null}><LazyHomeJourneyPanel compact hasDraft={hasBuild} hasResult={resultReady} savedBuilds={savedBuilds} onAction={onJourneyAction} onOpenSavedBuild={onOpenSavedBuild} /></Suspense>
+    {savedBuilds.length > 0 && <Suspense fallback={null}><LazyHomeSavedBuildPrices compact savedBuilds={savedBuilds} onOpenSavedBuild={onOpenSavedBuild} onOpenHistory={onOpenHistory} /></Suspense>}
     {alertItems.length > 0 && <section className="mobile-alert-preview" aria-label="모바일 알림 센터" data-testid="mobile-home-alert-center"><div className="mobile-section-heading"><div><h2>알림</h2></div>{alertUnreadCount > 0 && <span className="mobile-alert-badge">읽지 않은 알림 {alertUnreadCount}개</span>}</div><div className="mobile-alert-preview-list">{alertItems.slice(0, 2).map((item) => { const ItemIcon = item.kind === "alternative" ? FiTrendingUp : item.source === "watchlist" ? FiTag : FiBell; return <article className={`mobile-alert-preview-item ${item.kind}`} key={item.id}><span className="mobile-alert-preview-icon"><ItemIcon /></span><div><strong>{savedBuildMonitorTitleForDisplay(item.title)}</strong><p>{savedBuildMonitorSummaryForDisplay(item.message)}</p>{item.alternative && <small>{item.alternative.currentPartName} → {item.alternative.candidatePartName}{item.alternative.priceDeltaWon !== undefined && item.alternative.priceDeltaWon < 0 ? ` / ${Math.abs(item.alternative.priceDeltaWon).toLocaleString("ko-KR")}원 절약` : ""}</small>}</div></article>; })}</div><button className="mobile-alert-preview-action" type="button" onClick={() => alertItems[0].source === "watchlist" ? onOpenWatchlist() : onOpenHistory()}><FiBell /> 알림 자세히 보기 <FiArrowRight /></button></section>}
     <details className="mobile-cache-disclosure" aria-label="이 기기에 저장된 정보">
       <summary><span><FiDatabase aria-hidden="true" /> 이 기기에 저장된 정보</span><small>최근 부품 목록 관리</small><FiChevronDown aria-hidden="true" /></summary>
@@ -333,7 +333,7 @@ export function HomeView({ onOpenCategory, meta, build, result, resultIsStale, p
       <Suspense fallback={<section className="home-spec-sheet" aria-hidden="true" />}><LazyHomeSpecSheet build={build} result={result} resultIsStale={resultIsStale} partMap={partMap} onOpenResult={onOpenResult} /></Suspense>
     </section>
     <HomeCategoryRow onOpenCategory={onOpenCategory} />
-    <Suspense fallback={null}><LazyHomeJourneyPanel hasDraft={hasAnySelection} hasResult={Boolean(result && !resultIsStale)} savedBuilds={savedBuilds} onAction={onJourneyAction} onOpenSavedBuild={onOpenSavedBuild} /></Suspense>
+    {savedBuilds.length > 0 && <Suspense fallback={null}><LazyHomeSavedBuildPrices savedBuilds={savedBuilds} onOpenSavedBuild={onOpenSavedBuild} onOpenHistory={onOpenHistory} /></Suspense>}
     {alertItems.length > 0 && <Suspense fallback={null}><LazyHomeAlertCenter items={alertItems} unreadCount={alertUnreadCount} hasBuildAlerts={hasBuildAlerts} hasWatchlistAlerts={hasWatchlistAlerts} onOpenHistory={onOpenHistory} onOpenWatchlist={onOpenWatchlist} /></Suspense>}
     <details className="home-secondary-details" aria-label="홈 추가 정보">
       <summary><span><FiInfo /> 저장한 견적/비교</span><small>{localShareCount > 0 ? `${localShareCount}개 / 부품 목록 보기` : "견적과 이 기기의 부품 목록"}</small><FiChevronDown /></summary>

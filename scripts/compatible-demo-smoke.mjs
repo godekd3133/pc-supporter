@@ -61,7 +61,7 @@ try {
   await waitForHomeDemoButtons(client, "compatible demo smoke home");
   assert(await clickText(client, "문제 없는 예시 견적"), "문제 없는 예시 견적 버튼을 찾지 못했습니다.");
   await waitForValue(client, "location.pathname === '/build' && document.querySelector('button.button-primary.full-width')?.disabled === false", "문제 없는 예시 견적 편집기");
-  assert(await clickText(client, "호환 확인하기"), "문제 없는 예시 견적의 호환 확인 버튼을 찾지 못했습니다.");
+  assert(await clickText(client, "견적 완성하기"), "문제 없는 예시 견적의 호환 확인 버튼을 찾지 못했습니다.");
   await waitForValue(client, "location.pathname === '/result' && (document.querySelector('[data-testid=\"result-findings\"]') !== null || document.querySelector('#app-error-title') !== null)", "문제 없는 예시 견적 결과 또는 오류 경계");
   await waitForValue(client, "(() => { try { return Array.isArray(JSON.parse(sessionStorage.getItem('pc-supporter-last-compatibility-result') ?? 'null')?.findings); } catch { return false; } })()", "문제 없는 예시 견적 호환 결과 데이터");
   await sleep(100);

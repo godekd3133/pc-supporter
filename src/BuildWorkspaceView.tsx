@@ -164,7 +164,7 @@ export function BuildWorkspaceView({
     </section>
     <div className="build-workspace-mobile-bar">
       <div><span>합계</span><strong>{partsTotal.toLocaleString("ko-KR")}원</strong></div>
-      <button className="button button-primary" type="button" onClick={onCheck} disabled={busy}>{checking ? <><FiLoader className="spin" /> 확인 중</> : <><FiActivity /> 호환 확인하기</>}</button>
+      <button className="button button-primary" type="button" onClick={onCheck} disabled={busy}>{checking ? <><FiLoader className="spin" /> 확인 중</> : <><FiActivity /> 견적 완성하기</>}</button>
     </div>
   </div>;
 
@@ -188,7 +188,7 @@ export function BuildWorkspaceView({
         <BuildPreflightPanel preflight={preflight} onRefresh={canRefreshCatalog ? onRefreshCatalogItem : undefined} onRefreshAll={canRefreshCatalog ? onRefreshAllCatalogItems : undefined} refreshingPartId={refreshingPartId} />
       </div>
     </details>
-    <button className="button button-primary full-width build-workspace-check" type="button" onClick={onCheck} disabled={busy}>{checking ? <><FiLoader className="spin" /> 호환 확인 중...</> : <><FiActivity /> 호환 확인하기</>}</button>
+    <button className="button button-primary full-width build-workspace-check" type="button" onClick={onCheck} disabled={busy}>{checking ? <><FiLoader className="spin" /> 호환 확인 중...</> : <><FiActivity /> 견적 완성하기</>}</button>
     {activeDraft && onSaveDraft && <button className="text-button build-workspace-save" type="button" onClick={() => onSaveDraft(activeDraft)} disabled={busy}><FiSave /> 새 견적으로 저장</button>}
     {checkError && <RequestErrorNotice message={checkError} onRetry={onCheck} retrying={checking} hasLastResult={hasLastResult} />}
   </div>;

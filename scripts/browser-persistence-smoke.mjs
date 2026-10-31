@@ -347,8 +347,8 @@ async function main() {
     await waitForHomeDemoButtons(client, "격리 홈 화면 복귀 확인");
     assert(await clickText(client, "문제 있는 예시 견적"), "문제 있는 예시 견적 버튼을 찾지 못했습니다.");
     await waitForValue(client, "(document.body?.innerText ?? '').includes('나의 PC 견적 구성') || (document.body?.innerText ?? '').includes('견적 구성')", "격리 견적 편집기");
-    await waitForValue(client, "[...document.querySelectorAll('button')].some((button) => !button.disabled && (button.textContent ?? '').includes('호환 확인하기'))", "격리 검사 준비");
-    assert(await clickText(client, "호환 확인하기"), "격리 호환 확인 버튼을 찾지 못했습니다.");
+    await waitForValue(client, "[...document.querySelectorAll('button')].some((button) => !button.disabled && (button.textContent ?? '').includes('견적 완성하기'))", "격리 검사 준비");
+    assert(await clickText(client, "견적 완성하기"), "격리 호환 확인 버튼을 찾지 못했습니다.");
     await waitForValue(client, "(document.body?.innerText ?? '').includes('호환 결과 상세')", "격리 검사 결과");
     assert((await clickSelector(client, '.result-metrics button.metric-card.danger', 1)) === 1, "격리 차단 오류 요약 카드를 클릭하지 못했습니다.");
     await waitForValue(client, "location.search === '?finding=blocker' && location.hash === '#findings' && document.querySelector('.finding-filter-button.selected')?.textContent?.includes('호환 불가') === true", "격리 결과 필터 URL");

@@ -89,9 +89,9 @@ async function runFlow(client, { prefix, viewport }) {
   if (corruptDraftBackupFailure && prefix === "mobile") {
     draftBackupFailureNoticeWasVisible = await client.evaluate("document.querySelector('[data-testid=draft-recovery-notice]') !== null");
     corruptDraftPreservedBeforeExport = await client.evaluate("Boolean(window.__pcSupporterExpectedCorruptDraft) && window.localStorage.getItem('pc-supporter-draft') === window.__pcSupporterExpectedCorruptDraft");
-    const recoveryActionVisible = await client.evaluate("document.querySelector('[data-testid=draft-recovery-notice] button:not(:disabled)')?.textContent?.includes('이전 견적 JSON 저장') === true");
+    const recoveryActionVisible = await client.evaluate("document.querySelector('[data-testid=draft-recovery-notice] button:not(:disabled)')?.textContent?.includes('이전 견적 내보내기') === true");
     if (!draftBackupFailureNoticeWasVisible || !corruptDraftPreservedBeforeExport || !recoveryActionVisible) throw new Error(`The corrupted draft export action is not available. notice=${draftBackupFailureNoticeWasVisible}; preserved=${corruptDraftPreservedBeforeExport}; action=${recoveryActionVisible}`);
-    await clickButton(client, "이전 견적 JSON 저장");
+    await clickButton(client, "이전 견적 내보내기");
     await waitForValueWithTimeout(client, "document.querySelector('[data-testid=draft-recovery-notice] button:last-child')?.disabled === false", "이전 견적 원본 내보내기 확인");
     const download = await waitForCorruptDraftDownload(join(profileDir, "downloads"));
     if (!download.contents.startsWith("synthetic-corrupt-draft:")) throw new Error("Corrupt draft export contents did not match the original source value.");
