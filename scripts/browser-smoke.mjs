@@ -412,7 +412,7 @@ async function main() {
     assert(await client.evaluate("document.querySelector('[data-testid=\"home-data-trust-open-cpu-benchmark\"]') === null && !/추천 점수 분포|벤치마크 점수|신뢰도 점수/.test(document.body?.innerText ?? '')"), "홈 공개 화면에 내부 추천 점수나 벤치마크 근거가 노출됩니다.");
 
     await client.send("Page.navigate", { url: `${baseUrl}/recommend` });
-    await waitForValue(client, "(document.body?.innerText ?? '').includes('PC 견적 만들기')", "자동 구성 화면");
+    await waitForValue(client, "(document.body?.innerText ?? '').includes('견적 만들기') && document.querySelector('.generator-form') !== null", "자동 구성 화면");
     assert(await selectLabel(client, "구성 우선순위", "reliability"), "자동 구성의 안심 우선 기준을 선택하지 못했습니다.");
     await waitForValue(client, "document.querySelector('[data-testid=\"generator-priority\"]')?.value === 'reliability' && new URLSearchParams(location.search).get('priority') === 'reliability'", "자동 구성 안심 우선 기준 적용");
     assert(await setTextValue(client, '[data-testid="generator-brief-input"]', "게이밍 200만원"), "부분 한 줄 요구사항 입력창을 찾지 못했습니다.");
@@ -464,8 +464,8 @@ async function main() {
     await waitForValue(client, "(document.body?.innerText ?? '').includes('견적 내용을 확인하세요')", "온보딩 summary 화면");
     assert(await clickText(client, "견적 만들기"), "온보딩 견적 생성 CTA를 클릭하지 못했습니다.");
     await waitForValue(client, "location.pathname === '/recommend' && new URLSearchParams(location.search).get('autorun') === '1' && new URLSearchParams(location.search).get('profile') === 'gaming' && new URLSearchParams(location.search).get('resolution') === '4k' && (new URLSearchParams(location.search).get('games') ?? '').includes('cyberpunk') && new URLSearchParams(location.search).get('budget') === '2000000'", "온보딩 → 자동 구성 URL 핸드오프");
-    await waitForValue(client, "document.querySelectorAll('.generator-result .generator-line').length >= 6 && [...document.querySelectorAll('.generator-result .generator-line')].every((line) => (line.querySelector('strong')?.textContent ?? '').trim().length > 0)", "자동 구성 견적의 부품/가격 라인");
-    assert(await client.evaluate("document.querySelector('.generator-result .generator-rationale, .generator-result .generator-analysis, .generator-result .generator-selection-reasons, .generator-result .generator-gaming-evidence, .generator-result .generator-gpu-target') === null"), "자동 구성 견적에 판정 근거 패널이 노출되고 있습니다.");
+    await waitForValue(client, "document.querySelectorAll('.build-workspace-parts .component-card.selected').length >= 6 && [...document.querySelectorAll('.build-workspace-parts .component-card.selected')].every((line) => (line.querySelector('strong')?.textContent ?? '').trim().length > 0)", "자동 구성 견적의 부품/가격 라인");
+    assert(await client.evaluate("document.querySelector('.build-workspace .generator-rationale, .build-workspace .generator-analysis, .build-workspace .generator-selection-reasons, .build-workspace .generator-gaming-evidence, .build-workspace .generator-gpu-target') === null"), "자동 구성 견적에 판정 근거 패널이 노출되고 있습니다.");
 
     await client.send("Page.navigate", { url: `${baseUrl}/admin` });
     if (adminPassword) {
@@ -2157,7 +2157,7 @@ async function main() {
     await waitForValue(client, "document.querySelector('[aria-label=\"카탈로그 성능 근거 상태\"]') === null && document.querySelector('[data-testid=\"catalog-benchmark-filter-summary\"]') === null && document.querySelector('.catalog-part-list [data-testid^=\"catalog-part-\"]') !== null", "모바일 카탈로그 내부 성능 필터 비노출");
     mobileOverflowReports.push(await assertNoMobileOverflow(client, "모바일 카탈로그 가로 overflow가 있습니다."));
     await client.send("Page.navigate", { url: `${baseUrl}/recommend?profile=gaming` });
-    await waitForValue(client, "(document.body?.innerText ?? '').includes('PC 견적 만들기')", "모바일 자동 구성 화면");
+    await waitForValue(client, "(document.body?.innerText ?? '').includes('견적 만들기') && document.querySelector('.generator-form') !== null", "모바일 자동 구성 화면");
     mobileOverflowReports.push(await assertNoMobileOverflow(client, "모바일 자동 구성 가로 overflow가 있습니다."));
     assert(await setTextValue(client, '[data-testid="generator-brief-input"]', "게이밍 200만원"), "모바일 보완 안내 입력창을 찾지 못했습니다.");
     assert(await clickText(client, "입력 내용 보기"), "모바일 보완 안내 입력 내용 보기 버튼을 찾지 못했습니다.");

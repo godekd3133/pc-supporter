@@ -131,20 +131,20 @@ async function runFlow(client, { prefix, viewport }) {
   await waitForTitle(client, "견적 내용을 확인하세요", "조건 요약 화면");
   await record("08-summary", "조건 요약 / 항목별 변경");
   await clickButton(client, "견적 만들기");
-  await waitForValueWithTimeout(client, "location.pathname === '/recommend' && document.querySelector('.generator-result') !== null", "자동 구성 결과");
+  await waitForValueWithTimeout(client, "location.pathname === '/recommend' && document.querySelector('.build-workspace-parts .component-card.selected') !== null", "자동 구성 결과");
   await record("09-generator-result", "자동 구성 결과 / 선택한 게임 목표");
   return manifest;
 }
 
 async function captureOfflineCoreFlow(client, prefix) {
   const recommendation = await client.evaluate(`(() => ({
-    lines: document.querySelectorAll('.generator-result .generator-line').length,
-    total: document.querySelector('.generator-result .generator-total strong')?.textContent?.trim() ?? null
+    lines: document.querySelectorAll('.build-workspace-parts .component-card.selected').length,
+    total: document.querySelector('[data-testid=build-editor-total] strong')?.textContent?.trim() ?? null
   }))()`);
   if (!recommendation || recommendation.lines < 1 || !recommendation.total) {
     throw new Error(`로컬 추천 결과가 비어 있습니다: ${JSON.stringify(recommendation)}`);
   }
-  await client.evaluate("(() => { const target = document.querySelector('.generator-result'); if (!target) return; const headerHeight = document.querySelector('.topbar')?.getBoundingClientRect().height ?? 0; window.scrollTo({ top: Math.max(0, window.scrollY + target.getBoundingClientRect().top - headerHeight - 12), behavior: 'instant' }); })()");
+  await client.evaluate("(() => { const target = document.querySelector('.build-workspace-parts'); if (!target) return; const headerHeight = document.querySelector('.topbar')?.getBoundingClientRect().height ?? 0; window.scrollTo({ top: Math.max(0, window.scrollY + target.getBoundingClientRect().top - headerHeight - 12), behavior: 'instant' }); })()");
   const recommendationPath = await capture(client, `${prefix}-offline-generated-result`);
   await clickButton(client, "호환성 확인");
   await waitForValueWithTimeout(client, "location.pathname === '/result' && document.querySelector('.result-page') !== null && document.querySelector('[data-testid=result-findings]') !== null", "로컬 호환 검사 결과");
@@ -195,7 +195,7 @@ async function runRepresentativeBranches(client, { prefix, viewport }) {
   await waitForTitle(client, "견적 내용을 확인하세요", "작업 조건 요약");
   await record("work", "04-summary", "작업 조건 요약");
   await clickButton(client, "견적 만들기");
-  await waitForValueWithTimeout(client, "location.pathname === '/recommend' && document.querySelector('.generator-result') !== null", "작업 자동 구성 결과");
+  await waitForValueWithTimeout(client, "location.pathname === '/recommend' && document.querySelector('.build-workspace-parts .component-card.selected') !== null", "작업 자동 구성 결과");
   await record("work", "05-result", "작업 결과 / WORK TARGET");
 
   await startNewQuote();
@@ -207,7 +207,7 @@ async function runRepresentativeBranches(client, { prefix, viewport }) {
   await waitForTitle(client, "견적 내용을 확인하세요", "예산-only 요약");
   await record("budget", "02-summary", "예산-only 조건 요약");
   await clickButton(client, "견적 만들기");
-  await waitForValueWithTimeout(client, "location.pathname === '/recommend' && document.querySelector('.generator-result') !== null", "예산-only 결과");
+  await waitForValueWithTimeout(client, "location.pathname === '/recommend' && document.querySelector('.build-workspace-parts .component-card.selected') !== null", "예산-only 결과");
   await record("budget", "03-result", "예산-only 결과 / GENERAL TARGET");
 
   await startNewQuote();
@@ -224,7 +224,7 @@ async function runRepresentativeBranches(client, { prefix, viewport }) {
   await waitForTitle(client, "견적 내용을 확인하세요", "직접 성능 요약");
   await record("spec", "02-summary", "직접 성능 조건 요약");
   await clickButton(client, "견적 만들기");
-  await waitForValueWithTimeout(client, "location.pathname === '/recommend' && document.querySelector('.generator-result') !== null", "직접 성능 결과");
+  await waitForValueWithTimeout(client, "location.pathname === '/recommend' && document.querySelector('.build-workspace-parts .component-card.selected') !== null", "직접 성능 결과");
   await record("spec", "03-result", "직접 성능 결과 / GENERAL TARGET");
 
   await navigateToStart(client);

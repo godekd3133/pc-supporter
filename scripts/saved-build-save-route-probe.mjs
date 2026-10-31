@@ -52,8 +52,8 @@ try {
   await waitForValue(client, "location.pathname === '/'", "홈 화면");
   await waitForHomeDemoButtons(client, "홈 컨텐츠");
   if (!(await clickText(client, "문제 있는 예시 견적"))) throw new Error("문제 있는 예시 견적 버튼을 찾지 못했습니다.");
-  await waitForValue(client, "location.pathname === '/build' && document.querySelector('.workspace-page') !== null && document.querySelector('.desktop-editor-surface button.button-primary.full-width')?.disabled === false", "편집기 화면");
-  if (!(await clickText(client, "호환 확인하기", ".desktop-editor-surface button.button-primary.full-width"))) throw new Error("호환 확인 버튼을 찾지 못했습니다.");
+  await waitForValue(client, "location.pathname === '/build' && document.querySelector('.workspace-page') !== null && document.querySelector('.build-workspace-summary button.button-primary.full-width')?.disabled === false", "편집기 화면");
+  if (!(await clickText(client, "호환 확인하기", ".build-workspace-summary button.button-primary.full-width"))) throw new Error("호환 확인 버튼을 찾지 못했습니다.");
   await waitForValue(client, "location.pathname === '/result' && document.querySelector('.result-page') !== null", "결과 화면");
   await openResultDetails(client);
   if (!(await clickText(client, "견적 저장/공유"))) throw new Error("견적 저장/공유 버튼을 찾지 못했습니다.");

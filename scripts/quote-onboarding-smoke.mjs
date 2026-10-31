@@ -91,8 +91,8 @@ const smokeExpression = `(${async function runQuoteOnboardingSmoke() {
     await waitForStep(nextStep, nextLabel);
   };
   const assertHydratedResult = (branch) => {
-    const result = document.querySelector(".generator-result");
-    const lines = [...document.querySelectorAll(".generator-result .generator-line")];
+    const result = document.querySelector(".build-workspace-parts");
+    const lines = [...document.querySelectorAll(".build-workspace-parts .component-card.selected")];
     assert(result && lines.length >= 6, `${branch} 분기에서 추천 결과와 부품 라인이 hydration되지 않았습니다: ${lines.length}개`);
     assert(lines.every((line) => (line.querySelector("strong")?.textContent ?? "").trim().length > 0 && /원|가격 확인 중/.test(line.textContent ?? "")), `${branch} 분기 추천 결과의 부품명·가격 정보가 불완전합니다.`);
     return lines.length;
@@ -218,7 +218,7 @@ const smokeExpression = `(${async function runQuoteOnboardingSmoke() {
   await waitForStep("summary", "예산 변경 후 조건 요약 화면");
   assert(bodyText().includes("사이버펑크 2077") && bodyText().includes("4K / 144Hz") && bodyText().includes("500만원"), "예산 변경 후 기존 게임/화면 목표 조건이 보존되지 않았습니다.");
   clickCta();
-  await waitFor(() => location.pathname === "/recommend" && document.querySelector(".generator-result") !== null, "자동 구성 결과 handoff", 480);
+  await waitFor(() => location.pathname === "/recommend" && document.querySelector(".build-workspace-parts .component-card.selected") !== null, "자동 구성 결과 handoff", 480);
   const resultText = bodyText();
   const gamingQuery = new URLSearchParams(location.search);
   assert(gamingQuery.get("profile") === "gaming" && gamingQuery.get("resolution") === "4k" && gamingQuery.get("refresh") === "144" && gamingQuery.get("games")?.includes("cyberpunk") && gamingQuery.get("graphics") === "high" && gamingQuery.get("upscaling") === "quality" && gamingQuery.get("ram") === "64" && gamingQuery.get("ssd") === "2000" && gamingQuery.get("budget") === "5000000", `게임 모드/게임/화면 목표/RAM/SSD/예산 조건이 자동 구성 URL에 보존되지 않았습니다: ${location.href}`);
@@ -226,7 +226,7 @@ const smokeExpression = `(${async function runQuoteOnboardingSmoke() {
   assert(gamingContextText.includes("사이버펑크 2077") && gamingContextText.includes("4K") && gamingContextText.includes("144Hz") && gamingContextText.includes("실제 게임 FPS"), "게임/해상도/주사율 목표가 생성 결과에 보존되지 않았습니다.");
   const gamingLineCount = assertHydratedResult("게임");
   assert(resultText.includes("4K") && resultText.includes("144Hz") && gamingLineCount >= 6, "자동 구성 결과에 게이밍 목표/부품 라인이 없습니다.");
-  assert(document.querySelector(".generator-result .generator-rationale, .generator-result .generator-analysis, .generator-result .generator-selection-reasons, .generator-result .generator-gaming-evidence, .generator-result .generator-gpu-target") === null, "자동 구성 견적에 판정 근거 패널이 노출되고 있습니다.");
+  assert(document.querySelector(".build-workspace .generator-rationale, .build-workspace .generator-analysis, .build-workspace .generator-selection-reasons, .build-workspace .generator-gaming-evidence, .build-workspace .generator-gpu-target") === null, "자동 구성 견적에 판정 근거 패널이 노출되고 있습니다.");
   const gaming = { path: location.pathname + location.search, budgetRange: gamingBudgetText, lineCount: gamingLineCount };
 
   await navigateStart();
@@ -249,7 +249,7 @@ const smokeExpression = `(${async function runQuoteOnboardingSmoke() {
   await waitFor(() => text(document.querySelector(".onboarding-title")) === "견적 내용을 확인하세요", "낮은 예산 조건 요약");
   assert(bodyText().includes("QHD / 144Hz") && bodyText().includes("200만원"), "낮은 예산 조건 요약에서 QHD/144Hz와 200만원을 보존하지 않았습니다.");
   clickButton("견적 만들기");
-  await waitFor(() => location.pathname === "/recommend" && document.querySelector(".generator-result") !== null, "낮은 예산 자동 구성 결과", 480);
+  await waitFor(() => location.pathname === "/recommend" && document.querySelector(".build-workspace-parts .component-card.selected") !== null, "낮은 예산 자동 구성 결과", 480);
   const lowBudgetQuery = new URLSearchParams(location.search);
   const lowBudgetContext = text(document.querySelector("[data-testid=generator-gaming-context]"));
   assert(lowBudgetQuery.get("profile") === "gaming" && lowBudgetQuery.get("resolution") === "1440p" && lowBudgetQuery.get("refresh") === "144" && lowBudgetQuery.get("budget") === "2000000", `낮은 예산 조건이 자동 구성 URL에 보존되지 않았습니다: ${location.href}`);
@@ -272,7 +272,7 @@ const smokeExpression = `(${async function runQuoteOnboardingSmoke() {
   await waitForStep("summary", "작업 조건 요약 화면");
   assert(bodyText().includes("영상 편집") && bodyText().includes("무겁게") && bodyText().includes("4K/6K 편집/고급 효과"), "작업 조건 요약이 선택값을 보존하지 않았습니다.");
   clickCta();
-  await waitFor(() => location.pathname === "/recommend" && document.querySelector(".generator-result") !== null, "작업 자동 구성 handoff", 480);
+  await waitFor(() => location.pathname === "/recommend" && document.querySelector(".build-workspace-parts .component-card.selected") !== null, "작업 자동 구성 handoff", 480);
   const workQuery = new URLSearchParams(location.search);
   assert(workQuery.get("profile") === "creator" && workQuery.get("work") === "video" && workQuery.get("intensity") === "heavy" && workQuery.get("ram") === "64" && workQuery.get("ssd") === "2000" && workQuery.get("budget") === "3000000", "작업 모드/작업/강도/RAM/SSD/예산 조건이 자동 구성 URL에 보존되지 않았습니다.");
   const workLineCount = assertHydratedResult("작업");
@@ -288,7 +288,7 @@ const smokeExpression = `(${async function runQuoteOnboardingSmoke() {
   await waitForStep("summary", "예산 중심 요약 화면");
   assert(bodyText().includes("400만원") && bodyText().includes("상급 일반 구성"), "예산 중심 요약에 예산/예상 수준이 보이지 않습니다.");
   clickCta();
-  await waitFor(() => location.pathname === "/recommend" && document.querySelector(".generator-result") !== null, "예산 중심 자동 구성 handoff", 480);
+  await waitFor(() => location.pathname === "/recommend" && document.querySelector(".build-workspace-parts .component-card.selected") !== null, "예산 중심 자동 구성 handoff", 480);
   const budgetQuery = new URLSearchParams(location.search);
   assert(budgetQuery.get("profile") === "general" && budgetQuery.get("priority") === null && budgetQuery.get("tier") === "high" && budgetQuery.get("budget") === "4000000" && budgetQuery.get("ram") === "64" && budgetQuery.get("ssd") === "2000", "예산 모드/예산/RAM/SSD 조건이 자동 구성 URL에 보존되지 않았습니다.");
   const budgetLineCount = assertHydratedResult("예산");
@@ -306,7 +306,7 @@ const smokeExpression = `(${async function runQuoteOnboardingSmoke() {
   await waitForStep("summary", "직접 성능 요약 화면");
   assert(bodyText().includes("최상급 성능") && bodyText().includes("외장 GPU 포함") && bodyText().includes("64GB") && bodyText().includes("2TB"), "직접 성능 요약에 선택한 조건이 보이지 않습니다.");
   clickCta();
-  await waitFor(() => location.pathname === "/recommend" && (document.querySelector(".generator-request-error") !== null || document.querySelector(".generator-result") !== null), "직접 성능 예산 판정 handoff", 480);
+  await waitFor(() => location.pathname === "/recommend" && (document.querySelector(".generator-request-error") !== null || document.querySelector(".build-workspace-parts .component-card.selected") !== null), "직접 성능 예산 판정 handoff", 480);
   const specQuery = new URLSearchParams(location.search);
   assert(specQuery.get("profile") === "general" && specQuery.get("priority") === "performance" && specQuery.get("tier") === "top" && specQuery.get("ram") === "64" && specQuery.get("ssd") === "2000" && specQuery.get("budget") === "3000000" && specQuery.get("gpu") === null, "직접 성능 모드/등급/RAM/SSD/예산 조건이 자동 구성 URL에 보존되지 않았습니다.");
   const specFailure = document.querySelector(".generator-request-error");
@@ -314,7 +314,7 @@ const smokeExpression = `(${async function runQuoteOnboardingSmoke() {
   if (specFailure) {
     const specFailureText = text(specFailure);
     assert(specFailureText.includes("요청 예산 3,000,000원 안에 자동 구성을 찾지 못했습니다."), "예산 안에 구성이 없는 경우 초과 견적을 막고 진단을 표시하지 않았습니다.");
-    assert(specFailureText.includes("가능한 조건 완화안") && document.querySelectorAll(".generator-recovery-option").length > 0 && document.querySelector(".generator-result") === null, "직접 성능 예산 실패에서 입력을 유지하고 선택 가능한 조건 완화안을 표시하지 않았습니다.");
+    assert(specFailureText.includes("가능한 조건 완화안") && document.querySelectorAll(".generator-recovery-option").length > 0 && document.querySelector(".build-workspace-parts") === null, "직접 성능 예산 실패에서 입력을 유지하고 선택 가능한 조건 완화안을 표시하지 않았습니다.");
     spec = { path: location.pathname + location.search, budgetInfeasible: true, recoveryOptions: document.querySelectorAll(".generator-recovery-option").length };
   } else {
     const lineCount = assertHydratedResult("직접 성능");

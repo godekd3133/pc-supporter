@@ -1,6 +1,6 @@
 import { safeLocalStorage } from "./safe-storage";
 import { useEffect, useRef, useState } from "react";
-import { FiBookmark, FiCpu, FiDatabase, FiHome, FiLayers, FiMenu, FiMoon, FiMoreHorizontal, FiSearch, FiSun, FiTool, FiTrendingUp, FiX, FiZap } from "react-icons/fi";
+import { FiBookmark, FiCpu, FiDatabase, FiHome, FiLayers, FiMenu, FiMoon, FiMoreHorizontal, FiSearch, FiSun, FiTool, FiTrendingUp, FiX } from "react-icons/fi";
 import type { ApiStatusDetails } from "./api";
 import { applyTheme, THEME_CHANGE_EVENT, THEME_STORAGE_KEY, themeModeFromStorage, type ThemeMode } from "./theme";
 
@@ -24,7 +24,6 @@ type HeaderProps = {
   showAdmin: boolean;
   onHome: () => void;
   onBuild: () => void;
-  onGenerate: () => void;
   onCatalog: () => void;
   onAccessories: () => void;
   onPriceWatchlist: () => void;
@@ -32,7 +31,7 @@ type HeaderProps = {
   onAdmin: () => void;
 };
 
-export function AppHeader({ view, networkOnline, apiStatus, bootstrapLoading, bootstrapErrorCount, savedBuildUnreadAlertCount, watchlistUnreadAlertCount, catalogRefreshProgress, showAdmin, onHome, onBuild, onGenerate, onCatalog, onAccessories, onPriceWatchlist, onHistory, onAdmin }: HeaderProps) {
+export function AppHeader({ view, networkOnline, apiStatus, bootstrapLoading, bootstrapErrorCount, savedBuildUnreadAlertCount, watchlistUnreadAlertCount, catalogRefreshProgress, showAdmin, onHome, onBuild, onCatalog, onAccessories, onPriceWatchlist, onHistory, onAdmin }: HeaderProps) {
   const [moreOpen, setMoreOpen] = useState(false);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     try {
@@ -99,8 +98,7 @@ export function AppHeader({ view, networkOnline, apiStatus, bootstrapLoading, bo
           </span>
         </button>
         <nav className="topnav" aria-label="주 메뉴">
-          <button className={view === "editor" || view === "result" ? "nav-link active" : "nav-link"} onClick={onBuild}>내 견적</button>
-          <button className={view === "generator" ? "nav-link active" : "nav-link"} onClick={onGenerate}>자동 구성</button>
+          <button className={view === "editor" || view === "generator" || view === "result" ? "nav-link active" : "nav-link"} onClick={onBuild}>견적 만들기</button>
           <button className={view === "catalog" ? "nav-link active" : "nav-link"} onClick={onCatalog}>부품 카탈로그</button>
           <button className={view === "accessories" ? "nav-link active" : "nav-link"} onClick={onAccessories}>주변 부품</button>
           <button className={view === "pricewatchlist" ? "nav-link nav-link-with-badge active" : "nav-link nav-link-with-badge"} onClick={onPriceWatchlist} aria-label={watchlistUnreadAlertCount > 0 ? `가격 추적, 미읽음 알림 ${watchlistUnreadAlertCount}건` : "가격 추적"}><span>가격 추적</span>{watchlistUnreadAlertCount > 0 && <span className="nav-alert-badge" aria-hidden="true">{watchlistUnreadAlertCount > 99 ? "99+" : watchlistUnreadAlertCount}</span>}</button>
@@ -144,7 +142,6 @@ export function AppHeader({ view, networkOnline, apiStatus, bootstrapLoading, bo
           <div className="mobile-more-sheet-handle" aria-hidden="true" />
           <div className="mobile-more-sheet-heading"><div><h2 id="mobile-more-title">추가 기능</h2></div><button className="mobile-more-close" type="button" onClick={() => setMoreOpen(false)} aria-label="더보기 메뉴 닫기"><FiX /></button></div>
           <div className="mobile-more-grid">
-            <button type="button" onClick={() => { setMoreOpen(false); onGenerate(); }}><span><FiZap /></span><strong>자동 구성</strong></button>
             <button type="button" onClick={() => { setMoreOpen(false); onAccessories(); }}><span><FiTool /></span><strong>주변 부품</strong></button>
             <button type="button" onClick={() => { setMoreOpen(false); onPriceWatchlist(); }}><span><FiTrendingUp /></span><strong>가격 추적</strong></button>
             {showAdmin && <button type="button" onClick={() => { setMoreOpen(false); onAdmin(); }}><span><FiDatabase /></span><strong>데이터 센터</strong></button>}

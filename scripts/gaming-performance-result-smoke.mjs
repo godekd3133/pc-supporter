@@ -95,8 +95,8 @@ async function main() {
     await client.evaluate(injection);
     if (dark) await client.evaluate("document.documentElement.dataset.theme = 'dark'; document.documentElement.style.colorScheme = 'dark';");
     if (!(await clickText(client, "문제 없는 예시 견적"))) throw new Error("문제 없는 예시 견적 버튼을 찾지 못했습니다.");
-    await waitForValue(client, "location.pathname === '/build' && document.querySelector('.desktop-editor-surface') !== null", "예시 견적 편집기");
-    if (!(await clickText(client, "호환성 검사하기", ".desktop-editor-surface button"))) throw new Error("호환성 검사 버튼을 찾지 못했습니다.");
+    await waitForValue(client, "location.pathname === '/build' && document.querySelector('.build-workspace-summary') !== null", "예시 견적 편집기");
+    if (!(await clickText(client, "호환성 검사하기", ".build-workspace-summary button"))) throw new Error("호환성 검사 버튼을 찾지 못했습니다.");
     await waitForValue(client, "location.pathname === '/result' && document.querySelector('.result-page') !== null", "게임별 성능 데이터가 포함된 결과 화면");
     const probe = await client.evaluate(`(() => {
       const panel = document.querySelector('[data-testid="result-gaming-performance-evidence"]');
