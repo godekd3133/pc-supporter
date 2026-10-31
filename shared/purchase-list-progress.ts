@@ -159,7 +159,8 @@ export function purchaseListBudgetSummaryFor(rows: ReadonlyArray<PurchaseListRow
   const priceComplete = rows.every((row) => row.totalPriceWon !== undefined);
   const totalPriceWon = rows.reduce((total, row) => total + (row.totalPriceWon ?? 0), 0);
   const priceEvidenceReviewCount = rows.filter(purchaseListPriceEvidenceNeedsReviewFor).length;
-  if (!priceComplete || priceEvidenceReviewCount > 0) return { budgetWon, totalPriceWon, priceComplete, ...(priceEvidenceReviewCount > 0 ? { priceEvidenceReviewCount } : {}) };
+  // A price that still needs checking is still a price: the budget difference is shown, flagged by the review count.
+  if (!priceComplete) return { budgetWon, totalPriceWon, priceComplete, ...(priceEvidenceReviewCount > 0 ? { priceEvidenceReviewCount } : {}) };
   const deltaWon = totalPriceWon - budgetWon;
   return { budgetWon, totalPriceWon, priceComplete, ...(priceEvidenceReviewCount > 0 ? { priceEvidenceReviewCount } : {}), deltaWon, withinBudget: deltaWon <= 0 };
 }

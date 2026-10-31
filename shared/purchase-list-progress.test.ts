@@ -43,8 +43,7 @@ describe("purchase list progress", () => {
     expect(purchaseListBudgetSummaryFor(pricedRows.slice(0, 2), 1_500_000)).toMatchObject({ totalPriceWon: 1_000_000, priceComplete: true, deltaWon: -500_000, withinBudget: true });
     const referenceSummary = purchaseListBudgetSummaryFor(pricedRows.slice(0, 2).map((row, index) => ({ ...row, priceEvidence: index === 0 ? "reference" as const : "live" as const })), 1_500_000);
     expect(referenceSummary).toMatchObject({ totalPriceWon: 1_000_000, priceComplete: true, priceEvidenceReviewCount: 1 });
-    expect(referenceSummary?.deltaWon).toBeUndefined();
-    expect(referenceSummary?.withinBudget).toBeUndefined();
+    expect(referenceSummary).toMatchObject({ deltaWon: -500_000, withinBudget: true });
     expect(purchaseListBudgetSummaryFor(pricedRows, undefined)).toBeUndefined();
   });
 

@@ -852,7 +852,7 @@ export function PurchaseListPanel({ rows, storageKey, inputFingerprint, budgetWo
   const localOnlyNames = serverProgressComparison && serverProgressComparison.localOnlyIds.length > 0 ? rowNamesForIds(serverProgressComparison.localOnlyIds, rows, rowKeys) : "";
   const serverOnlyNames = serverProgressComparison && serverProgressComparison.serverOnlyIds.length > 0 ? rowNamesForIds(serverProgressComparison.serverOnlyIds, rows, rowKeys) : "";
   const budgetTone = budgetSummary?.priceComplete ? budgetSummary.withinBudget ? "within" : "over" : "unknown";
-  const budgetStatusText = !budgetSummary ? "" : !budgetSummary.priceComplete ? "-" : budgetSummary.deltaWon === 0 ? "예산에 맞음" : budgetSummary.withinBudget ? `${Math.abs(budgetSummary.deltaWon ?? 0).toLocaleString("ko-KR")}원 여유` : `${Math.abs(budgetSummary.deltaWon ?? 0).toLocaleString("ko-KR")}원 초과`;
+  const budgetStatusText = !budgetSummary ? "" : !budgetSummary.priceComplete ? "-" : budgetSummary.deltaWon === 0 ? "예산에 맞음" : `${budgetSummary.priceEvidenceReviewCount ? "약 " : ""}${Math.abs(budgetSummary.deltaWon ?? 0).toLocaleString("ko-KR")}원 ${budgetSummary.withinBudget ? "여유" : "초과"}`;
   const priceHistoryRowCount = Object.keys(priceHistory).length;
   const serverPriceHistoryRowsMatch = Boolean(serverPriceHistory && purchaseListPriceHistoryTransferMatchesCurrentFor(rowKeys, serverPriceHistory.rowKeys));
   const serverPriceHistoryMatches = Boolean(serverPriceHistory && serverPriceHistory.inputFingerprint === inputFingerprint && serverPriceHistoryRowsMatch);
