@@ -149,7 +149,7 @@ async function main() {
       const serviceFailureMessage = "저장소에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.";
       let observedServiceErrorCode = "";
       let phase = "api-failure";
-      const budgetInput = document.querySelector(".generator-input-with-unit input[type=number]");
+      const budgetInput = document.querySelector(".generator-input-with-unit input");
       const button = document.querySelector(".generator-budget-submit");
       if (!(budgetInput instanceof HTMLInputElement) || !(button instanceof HTMLButtonElement)) return { stage: "missing-controls" };
       const initialBudget = budgetInput.value;

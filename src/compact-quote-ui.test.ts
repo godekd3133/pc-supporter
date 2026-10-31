@@ -39,7 +39,7 @@ describe("compact quote result", () => {
       onEditPresetInOnboarding: () => undefined, onBack: () => undefined
     }));
     expect(markup).toContain("목표 예산");
-    expect(markup).toContain('type="number"');
+    expect(markup).toContain('inputMode="numeric"');
     expect(markup).toContain('aria-label="CPU 종류"');
     expect(markup).toContain('aria-label="RAM 종류"');
     for (const removed of ["generator-work-context", "필요 사양", "권장 사양", "performance-index-heading", "CPU 테스트 영상"]) expect(markup).not.toContain(removed);
