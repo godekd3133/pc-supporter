@@ -178,9 +178,9 @@ describe("quote-onboarding flow", () => {
 });
 
 describe("quote-onboarding estimates", () => {
-  it("maps 200만원 to the mockup's QHD·144 tier", () => {
+  it("maps 200만원 to the mockup's QHD/144 tier", () => {
     const estimate = budgetEstimateFor(2_000_000, "gaming");
-    expect(estimate.performance).toBe("QHD · 144Hz 주사율 목표");
+    expect(estimate.performance).toBe("QHD / 144Hz 주사율 목표");
     expect(estimate.gpu).toBe("상급 GPU");
     expect(estimate.memory).toBe("32GB");
     expect(estimate.storage).toBe("1TB SSD");
@@ -193,22 +193,22 @@ describe("quote-onboarding estimates", () => {
   });
 
   it("turns the selected work and intensity into a concrete reference spec", () => {
-    expect(workEstimateFor(["video"], "heavy")).toEqual({ performance: "4K·6K 편집·고급 효과", gpu: "상급 GPU", memory: "64GB", storage: "2TB SSD" });
-    expect(workEstimateFor(["audio"], "balanced")).toMatchObject({ performance: "중형 프로젝트·가상악기", gpu: "내장 그래픽", memory: "32GB", storage: "1TB SSD" });
-    expect(workEstimateFor(["office", "threed"], "heavy").performance).toBe("대형 씬·반복 렌더링");
+    expect(workEstimateFor(["video"], "heavy")).toEqual({ performance: "4K/6K 편집/고급 효과", gpu: "상급 GPU", memory: "64GB", storage: "2TB SSD" });
+    expect(workEstimateFor(["audio"], "balanced")).toMatchObject({ performance: "중형 프로젝트/가상악기", gpu: "내장 그래픽", memory: "32GB", storage: "1TB SSD" });
+    expect(workEstimateFor(["office", "threed"], "heavy").performance).toBe("대형 씬/반복 렌더링");
   });
 
   it("raises the gaming tier as budget grows", () => {
-    expect(budgetEstimateFor(4_000_000, "gaming").performance).toBe("4K · 144Hz 주사율 목표");
-    expect(budgetEstimateFor(900_000, "gaming").performance).toBe("FHD · 60Hz 주사율 목표");
+    expect(budgetEstimateFor(4_000_000, "gaming").performance).toBe("4K / 144Hz 주사율 목표");
+    expect(budgetEstimateFor(900_000, "gaming").performance).toBe("FHD / 60Hz 주사율 목표");
   });
 
   it("keeps the selected gaming target in the budget estimate when the budget reaches a higher tier", () => {
     const state = stateWith({ usecase: "gaming", resolution: "1440p", refreshRate: 144, budgetWon: 3_000_000 });
     expect(budgetEstimateForSelectedTarget(state)).toMatchObject({
-      performance: "QHD · 목표 144 FPS",
+      performance: "QHD / 목표 144 FPS",
       gpu: "FPS 테스트와 비교해 선택",
-      memory: "16GB부터 · 구성에 맞춰 조정",
+      memory: "16GB부터 / 구성에 맞춰 조정",
       storage: "1TB SSD"
     });
   });
@@ -220,7 +220,7 @@ describe("quote-onboarding estimates", () => {
     expect(budgetEstimateFor(2_000_000, "gaming").performance).not.toContain("FPS");
   });
 
-  it("requires roughly 320~380만원 for 4K·144 like the mockup warning", () => {
+  it("requires roughly 320~380만원 for 4K/144 like the mockup warning", () => {
     const required = requiredGamingBudgetFor("4k", 144, []);
     expect(required.minWon).toBe(3_200_000);
     expect(required.maxWon).toBe(3_800_000);
@@ -263,7 +263,7 @@ describe("quote-onboarding estimates", () => {
   });
 
   it("raises the displayed floor to the catalog minimum instead of promising headroom", () => {
-    // 가벼운 게임 FHD·60Hz 참고 범위(50~60만원대)가 카탈로그 실측 최저가보다
+    // 가벼운 게임 FHD/60Hz 참고 범위(50~60만원대)가 카탈로그 실측 최저가보다
     // 낮으면 "예산 여유" 안내는 거짓이 된다 — 하한을 실측 최저가로 올려 잡는다.
     const floors = { gaming: { "1080p": 936_330 } };
     const range = requiredGamingBudgetFor("1080p", 60, ["league"], {}, 936_330);
@@ -638,7 +638,7 @@ describe("budget gaming purchase-condition handoff", () => {
     expect(state).toMatchObject({ step: "budget", listingPolicy: "include_bulk" });
     expect(recommendGenerationRequestFor(state)).toMatchObject({ profile: "gaming", gamingMode: "budget", gamingTestbedPhase1: true, budgetWon: 800_000, memoryCapacityGb: 16, storageCapacityGb: 1000, listingPolicy: "include_bulk", includeNonRetail: true });
     expect(new URLSearchParams(recommendQueryFor(state)).get("listingPolicy")).toBe("include_bulk");
-    expect(purchaseConditionSummaryFor(state)).toBe("국내 신품 · 벌크 포함");
+    expect(purchaseConditionSummaryFor(state)).toBe("국내 신품 / 벌크 포함");
     expect(onboardingStateFromJson(onboardingStateToJson(state))).toEqual(state);
   });
 
@@ -669,7 +669,7 @@ describe("budget gaming purchase-condition handoff", () => {
     try {
       const markup = renderToStaticMarkup(createElement(QuoteOnboardingView, { onFinish: () => undefined, onUpgrade: () => undefined, onSkip: () => undefined, onHome: () => undefined }));
       expect(markup).toContain("구매 조건");
-      expect(markup).toContain("국내 신품 · 벌크 포함");
+      expect(markup).toContain("국내 신품 / 벌크 포함");
       if (step === "budget") expect(markup).toContain("1TB");
     } finally {
       storageSpy.mockRestore();
@@ -714,4 +714,20 @@ describe("explicit RAM requirement URL handoff", () => {
     expect(recommendGenerationRequestFor(state).memoryCapacityGb).toBe(32);
     expect(new URLSearchParams(recommendQueryFor(state)).get("ram")).toBe("32");
   });
+});
+
+
+it("preserves explicit CPU/DDR preferences through onboarding draft, request and URL without constraining defaults", () => {
+  const automatic = { ...initialOnboardingState(), intent: "new" as const, mode: "budget" as const, usecase: "gaming" as const };
+  expect(recommendGenerationRequestFor(automatic).cpuVendorPreference).toBeUndefined();
+  expect(new URLSearchParams(recommendQueryFor(automatic)).has("memoryType")).toBe(false);
+  const explicit = { ...automatic, cpuVendorPreference: "intel" as const, memoryTypePreference: "DDR4" as const };
+  expect(recommendParamsFor(explicit)).toMatchObject({ cpuVendorPreference: "intel", memoryTypePreference: "DDR4" });
+  const restored = onboardingStateFromJson(onboardingStateToJson(explicit));
+  expect(restored).toMatchObject({ cpuVendorPreference: "intel", memoryTypePreference: "DDR4" });
+  if (!restored) throw new Error("Expected the explicit CPU/DDR draft to restore.");
+  expect(recommendGenerationRequestFor(restored)).toMatchObject({ cpuVendorPreference: "intel", memoryTypePreference: "DDR4" });
+  const query = new URLSearchParams(recommendQueryFor(restored));
+  expect(query.get("cpuVendor")).toBe("intel");
+  expect(query.get("memoryType")).toBe("DDR4");
 });

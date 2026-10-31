@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Part } from "../shared/types";
-import { configureQuoteGenerationGate, inferListingType, isCurrentGenerationPart, isListingAllowed, isQuoteBrandAllowed, isQuoteSelectable, partQuoteGenerationFor, quoteBrandOptionsFor, quoteGenerationBoundaryFor } from "./listing";
+import { configureQuoteGenerationGate, inferListingType, isExternalGpuEnclosure, isCurrentGenerationPart, isListingAllowed, isQuoteBrandAllowed, isQuoteSelectable, partQuoteGenerationFor, quoteBrandOptionsFor, quoteGenerationBoundaryFor } from "./listing";
 
 function part(overrides: Partial<Part>): Part {
   return {
@@ -107,7 +107,7 @@ describe("current generation policy", () => {
       expect(isCurrentGenerationPart(cpuPart(name)), name).toBe(true);
     }
     for (const name of [
-      // 직전 세대도 제외 — Ryzen 7000/8000G·Core i 12~14세대는 구세대 취급
+      // 직전 세대도 제외 — Ryzen 7000/8000G/Core i 12~14세대는 구세대 취급
       "AMD 라이젠7-5세대 7800X3D",
       "AMD 라이젠5-5세대 7500F",
       "AMD 라이젠7-5세대 8700G (피닉스) (멀티팩 정품)",
@@ -219,7 +219,7 @@ describe("dynamic generation boundary", () => {
       gpuPart("NVIDIA RTX 6000 Ada Generation D6 48GB"),
       gpuPart("NVIDIA RTX 5000 Ada Generation D6 32GB")
     ];
-    // RTX PRO·Ada 제품이 있어도 소비형 경계는 RTX 50이다.
+    // RTX PRO/Ada 제품이 있어도 소비형 경계는 RTX 50이다.
     expect(quoteGenerationBoundaryFor(catalog).get("nvidia-geforce")?.topRank).toBe(50);
     expect(isCurrentGenerationPart(rtx50("a"), catalog)).toBe(true);
     expect(isCurrentGenerationPart(gpuPart("ZOTAC 지포스 RTX 4060"), catalog)).toBe(false);
@@ -255,7 +255,7 @@ describe("dynamic generation boundary", () => {
       { ...rtx60("c"), delistedAt: "2026-10-01T00:00:00.000Z" },
       { ...rtx60("d"), priceWon: undefined }
     ];
-    // 신세대가 단종·미가격 상태면 경계가 올라가지 않는다 — 세대가 실제로
+    // 신세대가 단종/미가격 상태면 경계가 올라가지 않는다 — 세대가 실제로
     // 사라지면 이전 세대가 다시 견적에 돌아온다.
     expect(quoteGenerationBoundaryFor(catalog).get("nvidia-geforce")?.topRank).toBe(50);
     expect(isCurrentGenerationPart(rtx50("a"), catalog)).toBe(true);
@@ -280,4 +280,19 @@ describe("dynamic generation boundary", () => {
     expect(isCurrentGenerationPart(gpuPart("이엠텍 지포스 이상한모델"), catalog)).toBe(false);
     expect(isCurrentGenerationPart(cpuPart("AMD EPYC 4585PX"), [])).toBe(false);
   });
+});
+
+it("excludes confirmed external GPU boxes without rejecting ordinary discrete cards", () => {
+  for (const name of ["GIGABYTE AORUS 지포스 RTX 5060 Ti AI BOX D7 16GB 피씨디렉트", "AORUS RTX 5090 AI BOX", "AORUS RTX 3080 GAMING BOX", "RTX 5060 Ti eGPU 독", "RTX 5060 Ti 외장 그래픽 도크"]) {
+    const enclosure = part({ category: "gpu", name, priceWon: 1424800, dataQuality: "live" });
+    expect(isExternalGpuEnclosure(enclosure)).toBe(true);
+    expect(inferListingType(enclosure)).toBe("accessory");
+    expect(isListingAllowed(enclosure, "all")).toBe(false);
+    expect(isQuoteSelectable(enclosure)).toBe(false);
+  }
+  for (const name of ["GIGABYTE AORUS RTX 5060 Ti GAMING OC 16GB", "MSI RTX 5060 Ti 외장 그래픽 카드", "ASUS RTX 5060 Ti BOX 정품"]) {
+    const desktop = part({ category: "gpu", name });
+    expect(isExternalGpuEnclosure(desktop)).toBe(false);
+    expect(inferListingType(desktop)).toBe("retail");
+  }
 });

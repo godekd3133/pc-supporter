@@ -45,7 +45,7 @@ function operationLabel(operation: CrawlStatus["operation"]) {
 
 function modeLabel(mode: "sample" | "all" | undefined, category?: string) {
   const base = mode === "all" ? "전체 수집" : "샘플 수집";
-  return category ? `${base} · ${category}` : base;
+  return category ? `${base} / ${category}` : base;
 }
 
 function coverageBadge(kind: "partial" | "complete" | undefined) {
@@ -58,8 +58,8 @@ function dateTimeLabel(value: string | undefined) {
 
 function changeSummaryLine(summary: CatalogChangeSummary | undefined) {
   if (!summary) return null;
-  const presence = `신규 ${(summary.addedProducts ?? 0).toLocaleString("ko-KR")} · 중단 ${(summary.delistedProducts ?? 0).toLocaleString("ko-KR")} · 재등록 ${(summary.relistedProducts ?? 0).toLocaleString("ko-KR")}`;
-  return `검사 ${summary.inspectedProducts.toLocaleString("ko-KR")}개 중 ${summary.changedProducts.toLocaleString("ko-KR")}개 변경 · 가격 ${summary.priceChangedProducts.toLocaleString("ko-KR")} · 스펙 ${summary.specChangedProducts.toLocaleString("ko-KR")} · 누락 필드 ${summary.missingFieldChangedProducts.toLocaleString("ko-KR")} · 품질 ${summary.qualityChangedProducts.toLocaleString("ko-KR")} · ${presence}`;
+  const presence = `신규 ${(summary.addedProducts ?? 0).toLocaleString("ko-KR")} / 중단 ${(summary.delistedProducts ?? 0).toLocaleString("ko-KR")} / 재등록 ${(summary.relistedProducts ?? 0).toLocaleString("ko-KR")}`;
+  return `검사 ${summary.inspectedProducts.toLocaleString("ko-KR")}개 중 ${summary.changedProducts.toLocaleString("ko-KR")}개 변경 / 가격 ${summary.priceChangedProducts.toLocaleString("ko-KR")} / 스펙 ${summary.specChangedProducts.toLocaleString("ko-KR")} / 누락 필드 ${summary.missingFieldChangedProducts.toLocaleString("ko-KR")} / 품질 ${summary.qualityChangedProducts.toLocaleString("ko-KR")} / ${presence}`;
 }
 
 function failedPageCount(report: Pick<CrawlCategoryReport, "failedPages">) {
@@ -116,9 +116,9 @@ function FailedPagesList({ failures }: { failures: CrawlPageFailure[] }) {
     <summary><span><FiXCircle /> 실패 페이지 전체 {failures.length}개</span><FiChevronDown /></summary>
     <ul className="crawl-engine-failure-list">
       {failures.map((failure, index) => <li key={`${failure.category}-${failure.page}-${index}`}>
-        <strong>{CATEGORY_LABELS[failure.category]} · {failure.page}페이지</strong>
+        <strong>{CATEGORY_LABELS[failure.category]} / {failure.page}페이지</strong>
         <span className={`crawl-engine-badge ${failure.stage === "list" ? "partial" : "warn"}`}>{failure.stage === "list" ? "목록" : "상세"}</span>
-        <small>{failure.attempts}회 시도 · {failure.message} · {dateTimeLabel(failure.occurredAt)}</small>
+        <small>{failure.attempts}회 시도 / {failure.message} / {dateTimeLabel(failure.occurredAt)}</small>
       </li>)}
     </ul>
   </details>;
@@ -131,9 +131,9 @@ function RetryHistoryList({ records }: { records: CrawlPageRetryRecord[] }) {
     <summary><span><FiRefreshCw /> 페이지 재시도 이력 {records.length}건</span><FiChevronDown /></summary>
     <ul className="crawl-engine-failure-list">
       {visible.map((record) => <li key={`${record.category}-${record.page}-${record.finishedAt}`}>
-        <strong>{CATEGORY_LABELS[record.category]} · {record.page}페이지</strong>
+        <strong>{CATEGORY_LABELS[record.category]} / {record.page}페이지</strong>
         <span className={`crawl-engine-badge ${record.succeeded ? "complete" : "warn"}`}>{record.succeeded ? "성공" : "실패"}</span>
-        <small>{record.attempts}회 시도 · {record.error ? `${record.error} · ` : ""}{dateTimeLabel(record.finishedAt)}</small>
+        <small>{record.attempts}회 시도 / {record.error ? `${record.error} / ` : ""}{dateTimeLabel(record.finishedAt)}</small>
       </li>)}
       {records.length > 20 && <li className="crawl-engine-list-omitted">이전 이력 {records.length - 20}건 생략</li>}
     </ul>
@@ -205,7 +205,7 @@ export function AdminCrawlEnginePanel({ onToast }: { onToast: (message: string) 
           <div className="crawl-engine-status-strip" data-testid="crawl-engine-status-strip">
             <span className={`crawl-engine-run-state ${statusTone(catalog!.status.status)}`}>
               {catalog!.status.status === "running" ? <FiLoader className="spin" /> : <FiActivity />}
-              핵심 부품 {statusLabel(catalog!.status.status)}{catalog!.status.status === "running" && catalog!.status.operation ? ` · ${operationLabel(catalog!.status.operation)}` : ""}
+              핵심 부품 {statusLabel(catalog!.status.status)}{catalog!.status.status === "running" && catalog!.status.operation ? ` / ${operationLabel(catalog!.status.operation)}` : ""}
             </span>
             <span className={`crawl-engine-run-state ${statusTone(accessories!.status.status)}`}>
               {accessories!.status.status === "running" ? <FiLoader className="spin" /> : <FiDatabase />}
@@ -226,7 +226,7 @@ export function AdminCrawlEnginePanel({ onToast }: { onToast: (message: string) 
           {!manifest && <p className="crawl-engine-state"><FiAlertTriangle /> 아직 생성된 핵심 부품 수집 manifest가 없습니다.</p>}
           {manifest && <div className="crawl-engine-manifest" data-testid="crawl-engine-manifest">
             <div className="crawl-engine-manifest-heading">
-              <div><strong>핵심 부품 마지막 수집</strong><small>{modeLabel(manifest.mode, manifest.category ? CATEGORY_LABELS[manifest.category] : undefined)} · 시작 {dateTimeLabel(manifest.startedAt)}{manifest.finishedAt ? ` · 종료 ${dateTimeLabel(manifest.finishedAt)}` : ""}{manifest.resumedFromStartedAt ? " · 이어서 실행" : ""}</small></div>
+              <div><strong>핵심 부품 마지막 수집</strong><small>{modeLabel(manifest.mode, manifest.category ? CATEGORY_LABELS[manifest.category] : undefined)} / 시작 {dateTimeLabel(manifest.startedAt)}{manifest.finishedAt ? ` / 종료 ${dateTimeLabel(manifest.finishedAt)}` : ""}{manifest.resumedFromStartedAt ? " / 이어서 실행" : ""}</small></div>
               <div className="crawl-engine-manifest-badges">목록 {coverageBadge(manifest.coverage)} 스펙 {coverageBadge(manifest.specCoverage)}</div>
             </div>
             <div className="crawl-engine-totals">
@@ -247,7 +247,7 @@ export function AdminCrawlEnginePanel({ onToast }: { onToast: (message: string) 
 
           {accessoryManifest && <div className="crawl-engine-manifest accessory" data-testid="crawl-engine-accessory-manifest">
             <div className="crawl-engine-manifest-heading">
-              <div><strong>주변 부품 마지막 수집</strong><small>{modeLabel(accessoryManifest.mode, accessoryManifest.category ? ACCESSORY_CATEGORY_LABELS[accessoryManifest.category] : undefined)}{accessoryManifest.details ? " · 상세 포함" : " · 목록만"}{accessoryManifest.onlyIncomplete ? " · 미확인만" : ""} · 시작 {dateTimeLabel(accessoryManifest.startedAt)}{accessoryManifest.finishedAt ? ` · 종료 ${dateTimeLabel(accessoryManifest.finishedAt)}` : ""}</small></div>
+              <div><strong>주변 부품 마지막 수집</strong><small>{modeLabel(accessoryManifest.mode, accessoryManifest.category ? ACCESSORY_CATEGORY_LABELS[accessoryManifest.category] : undefined)}{accessoryManifest.details ? " / 상세 포함" : " / 목록만"}{accessoryManifest.onlyIncomplete ? " / 미확인만" : ""} / 시작 {dateTimeLabel(accessoryManifest.startedAt)}{accessoryManifest.finishedAt ? ` / 종료 ${dateTimeLabel(accessoryManifest.finishedAt)}` : ""}</small></div>
               <div className="crawl-engine-manifest-badges">목록 {coverageBadge(accessoryManifest.coverage)} 스펙 {coverageBadge(accessoryManifest.specCoverage)}</div>
             </div>
             <div className="crawl-engine-totals">

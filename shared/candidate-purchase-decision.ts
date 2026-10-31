@@ -88,7 +88,7 @@ export function candidatePurchaseDecisionFor(input: CandidatePurchaseDecisionInp
   if (input.analysisScoreDelta !== undefined && Number.isFinite(input.analysisScoreDelta) && input.analysisConfidence === "unknown") reviewReasons.push("바꾼 뒤 성능 점수를 계산할 정보가 부족합니다.");
   if (input.analysisScoreDelta !== undefined && Number.isFinite(input.analysisScoreDelta) && input.analysisScoreDelta < 0) reviewReasons.push(`${input.analysisConfidence === "limited" ? "일부 정보만 반영해 " : ""}바꾼 뒤 성능이 낮아질 수 있어요.`);
   if (reviewReasons.length > 0) {
-    return { state: "review", label: "확인 후 구매", summary: "아래 가격·호환·장착 정보를 확인한 뒤 구매하세요.", reasons: reviewReasons };
+    return { state: "review", label: "확인 후 구매", summary: "아래 가격/호환/장착 정보를 확인한 뒤 구매하세요.", reasons: reviewReasons };
   }
 
   if (input.similarityScore !== undefined && input.similarityScore >= 95 && (input.similarityConfidence === undefined || input.similarityConfidence === "high") && input.priceDeltaWon !== undefined && input.priceDeltaWon > 0 && (input.analysisScoreDelta === undefined || input.analysisScoreDelta >= 0)) {
@@ -121,7 +121,7 @@ export function candidatePurchaseDecisionFor(input: CandidatePurchaseDecisionInp
     };
   }
 
-  const reasons = ["바꾼 뒤 호환 불가·주의·확인 필요 항목이 없어요."];
+  const reasons = ["바꾼 뒤 호환 불가/주의/확인 필요 항목이 없어요."];
   if (input.similarityScore !== undefined) reasons.push("성능 비교 자료에서 비슷한 부품이에요.");
   if (input.analysisScoreDelta !== undefined && Number.isFinite(input.analysisScoreDelta) && input.analysisScoreDelta < 0) reasons.push("예상 성능이 낮아질 수 있어요.");
   if (input.priceDeltaWon !== undefined) reasons.push(`전체 견적 ${signedWon(input.priceDeltaWon)}`);

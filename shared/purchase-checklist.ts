@@ -126,7 +126,7 @@ export function purchaseChecklistItemsFor(build: BuildSelection, result: Compati
     kind: "manual",
     severity: result.blockerCount > 0 ? "blocker" : "manual",
     title: "적은 변경으로 호환 문제 줄이기",
-    detail: `${result.repairPlans[0].label} 구성에서 바뀌는 부품·가격과 남는 문제를 살펴본 뒤 적용해 주세요.`,
+    detail: `${result.repairPlans[0].label} 구성에서 바뀌는 부품/가격과 남는 문제를 살펴본 뒤 적용해 주세요.`,
     targetId: "repair-plan-panel",
     actionLabel: "호환 개선안 보기"
   }] : [];
@@ -153,7 +153,7 @@ export function purchaseChecklistItemsFor(build: BuildSelection, result: Compati
       kind: "manual",
       severity: item.status === "review" ? "warning" : "unknown",
       title: `${item.label} ${item.status === "review" ? "여유 확인" : "연결 정보 확인"}`,
-      detail: `${item.detail} 케이스 기본 팬·RGB 장치가 메인보드에 연결되는지 확인해 주세요.`,
+      detail: `${item.detail} 케이스 기본 팬/RGB 장치가 메인보드에 연결되는지 확인해 주세요.`,
       targetId: "build-connectivity-panel",
       actionLabel: "연결 확인 보기"
     }));
@@ -175,7 +175,7 @@ export function purchaseChecklistItemsFor(build: BuildSelection, result: Compati
       id: "manual:manufacturer-support",
       kind: "manual",
       severity: "manual",
-      title: "CPU·메인보드·메모리 지원 확인",
+      title: "CPU/메인보드/메모리 지원 확인",
       detail: "이 CPU와 메모리를 메인보드에서 쓸 수 있는지, 필요한 BIOS 버전은 무엇인지 제조사 안내에서 확인해 주세요."
     },
     ...(hasPhysicalParts ? [{
@@ -183,7 +183,7 @@ export function purchaseChecklistItemsFor(build: BuildSelection, result: Compati
       kind: "manual" as const,
       severity: "manual" as const,
       title: missingGpuPhysicalEvidence ? "그래픽카드와 케이스 크기 확인" : "케이스 안쪽 공간 확인",
-      detail: missingGpuPhysicalEvidence ? "그래픽카드가 차지하는 슬롯 수와 전원 케이블 공간, 케이스 안쪽 폭을 제조사 안내에서 확인해 주세요." : "그래픽카드·쿨러·파워와 라디에이터가 케이스 안에 함께 들어가는지, 케이블 공간은 충분한지 확인해 주세요.",
+      detail: missingGpuPhysicalEvidence ? "그래픽카드가 차지하는 슬롯 수와 전원 케이블 공간, 케이스 안쪽 폭을 제조사 안내에서 확인해 주세요." : "그래픽카드/쿨러/파워와 라디에이터가 케이스 안에 함께 들어가는지, 케이블 공간은 충분한지 확인해 주세요.",
       ...(gpuPurchaseEvidence ? { targetId: "gpu-fit-summary-panel" as const, actionLabel: "장착 정보 확인" } : {})
     }] : []),
     ...(hasPowerPath ? [{
@@ -198,31 +198,31 @@ export function purchaseChecklistItemsFor(build: BuildSelection, result: Compati
       id: "manual:power-thermal-budget",
       kind: "manual" as const,
       severity: resourceSummary.state === "danger" ? "blocker" as const : resourceSummary.state === "warning" ? "warning" as const : "unknown" as const,
-      title: resourceSummary.state === "danger" ? "전력·냉각 여유 부족" : resourceSummary.state === "unknown" ? "전력·냉각 정보 확인" : "전력·냉각 여유 확인",
-      detail: `${resourceSummary.summary} 조립 후 전력 사용량·온도·소음도 기록해 확인하세요.`,
+      title: resourceSummary.state === "danger" ? "전력/냉각 여유 부족" : resourceSummary.state === "unknown" ? "전력/냉각 정보 확인" : "전력/냉각 여유 확인",
+      detail: `${resourceSummary.summary} 조립 후 전력 사용량/온도/소음도 기록해 확인하세요.`,
       targetId: "build-resource-summary" as const,
-      actionLabel: "전력·냉각 보기"
+      actionLabel: "전력/냉각 보기"
     }] : []),
     ...(hasM2Storage ? [{
       id: "manual:m2-placement",
       kind: "manual" as const,
       severity: "manual" as const,
-      title: "M.2 슬롯 위치·방열판 장착 순서 확인",
-      detail: "메인보드 안내에서 M.2 슬롯 위치와 방열판·나사 규격을 확인한 뒤 조립 순서를 정해 주세요."
+      title: "M.2 슬롯 위치/방열판 장착 순서 확인",
+      detail: "메인보드 안내에서 M.2 슬롯 위치와 방열판/나사 규격을 확인한 뒤 조립 순서를 정해 주세요."
     }] : []),
     {
       id: "manual:post-build-test",
       kind: "manual",
       severity: "manual",
       title: "조립 후 첫 부팅 확인",
-      detail: "첫 부팅 때 메모리·저장장치·팬이 제대로 작동하는지 확인하고, 온도와 소음도 살펴봐 주세요."
+      detail: "첫 부팅 때 메모리/저장장치/팬이 제대로 작동하는지 확인하고, 온도와 소음도 살펴봐 주세요."
     },
     {
       id: "manual:seller-warranty",
       kind: "manual",
       severity: "manual",
-      title: "판매자·배송·AS 조건 확인",
-      detail: "판매 가격과 재고, 배송일, 초기 불량 교환·보증 조건은 판매 페이지에서 확인해 주세요."
+      title: "판매자/배송/AS 조건 확인",
+      detail: "판매 가격과 재고, 배송일, 초기 불량 교환/보증 조건은 판매 페이지에서 확인해 주세요."
     }
   ];
 
@@ -243,7 +243,7 @@ export function purchaseChecklistTextFor(items: PurchaseChecklistItem[], checked
   items.forEach((item) => {
     const marker = checkedIds.has(item.id) ? "[x]" : "[ ]";
     const kind = item.kind === "finding" ? "검사 항목" : "직접 확인";
-    lines.push(`${marker} ${kind} · ${item.title}`, `    ${item.detail}`);
+    lines.push(`${marker} ${kind} / ${item.title}`, `    ${item.detail}`);
   });
   return lines.join("\n");
 }

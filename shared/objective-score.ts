@@ -27,8 +27,8 @@ export interface ObjectiveScoreAnchor {
   higherIsBetter: boolean;
   /**
    * "linear": index = value/reference (기본). "log": index = log(value)/log(reference).
-   * 순차 처리량·IOPS처럼 체감이 포화되는 차원은 log로 눌러야 프리미엄 부품이
-   * 실익 없이 예산을 흡수하지 않는다. 용량·점수 차원은 선형을 유지한다.
+   * 순차 처리량/IOPS처럼 체감이 포화되는 차원은 log로 눌러야 프리미엄 부품이
+   * 실익 없이 예산을 흡수하지 않는다. 용량/점수 차원은 선형을 유지한다.
    */
   scale?: "linear" | "log";
 }
@@ -95,13 +95,13 @@ export const OBJECTIVE_SCORE_ANCHORS: Record<PartCategory, Record<string, Object
   },
   case: {
     // 케이스 크기 계열은 필요치를 넘는 여유가 거의 무의미하다 — 대형 케이스가
-    // 길이·베이 수만으로 예산을 크게 쓰는 것을 막는다.
+    // 길이/베이 수만으로 예산을 크게 쓰는 것을 막는다.
     maxGpuLengthMm: { reference: 460, higherIsBetter: true, scale: "log" },
     maxCoolerHeightMm: { reference: 200, higherIsBetter: true, scale: "log" },
     hddBays: { reference: 8, higherIsBetter: true, scale: "log" }
   },
   psu: {
-    // 와트수는 적정 구간 안에서 효율·가격이 결정해야 한다 — 선형이면
+    // 와트수는 적정 구간 안에서 효율/가격이 결정해야 한다 — 선형이면
     // 400W급 구성에서도 800W+ 파워가 점수 우위를 가져간다.
     wattageW: { reference: 1_600, higherIsBetter: true, scale: "log" },
     efficiency: { reference: 6, higherIsBetter: true }

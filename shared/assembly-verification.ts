@@ -249,12 +249,12 @@ export type AssemblyVerificationParseResult = {
 };
 
 export const ASSEMBLY_VERIFICATION_CHECKS: readonly AssemblyVerificationCheckDefinition[] = [
-  { id: "post", label: "POST·첫 부팅", detail: "전원 버튼 후 POST 화면과 경고음 없이 BIOS 진입이 되는지 확인합니다." },
-  { id: "bios", label: "BIOS 기본 인식", detail: "CPU·메모리·저장장치·팬이 BIOS에서 정상 인식되는지 확인합니다." },
-  { id: "memory-profile", label: "메모리 프로파일", detail: "XMP·EXPO 적용 상태와 부팅 안정성을 확인합니다." },
-  { id: "storage-detection", label: "저장장치 인식", detail: "M.2·SATA 저장장치가 모두 인식되고 부팅 순서가 올바른지 확인합니다." },
+  { id: "post", label: "POST/첫 부팅", detail: "전원 버튼 후 POST 화면과 경고음 없이 BIOS 진입이 되는지 확인합니다." },
+  { id: "bios", label: "BIOS 기본 인식", detail: "CPU/메모리/저장장치/팬이 BIOS에서 정상 인식되는지 확인합니다." },
+  { id: "memory-profile", label: "메모리 프로파일", detail: "XMP/EXPO 적용 상태와 부팅 안정성을 확인합니다." },
+  { id: "storage-detection", label: "저장장치 인식", detail: "M.2/SATA 저장장치가 모두 인식되고 부팅 순서가 올바른지 확인합니다." },
   { id: "gpu-output", label: "GPU 화면 출력", detail: "모니터 출력, GPU 드라이버, 보조전원 연결 상태를 확인합니다." },
-  { id: "fan-rgb", label: "팬·RGB 동작", detail: "모든 팬 회전과 RGB 전압·효과·제어가 의도대로 동작하는지 확인합니다." }
+  { id: "fan-rgb", label: "팬/RGB 동작", detail: "모든 팬 회전과 RGB 전압/효과/제어가 의도대로 동작하는지 확인합니다." }
 ] as const;
 
 const CHECK_IDS = new Set<AssemblyVerificationCheckId>(ASSEMBLY_VERIFICATION_CHECKS.map((check) => check.id));
@@ -443,7 +443,7 @@ function measurementContinuityFromUnknown(value: unknown, errors: string[]) {
   const gapToleranceSeconds = optionalRange(value.gapToleranceSeconds, "공백 결과 기준", 0, 172_800, errors);
   if (timestampCount === undefined || unparsedTimestampCount === undefined || gapCount === undefined || nonMonotonicCount === undefined || estimatedMissingSamples === undefined) return undefined;
   if (gapCount > Math.max(0, timestampCount - 1) || nonMonotonicCount > Math.max(0, timestampCount - 1) || largestGapSeconds !== undefined && largestGapSeconds > 0 && gapCount === 0) {
-    errors.push("측정 시간축 연속성의 간격·공백 수가 서로 일치하지 않습니다.");
+    errors.push("측정 시간축 연속성의 간격/공백 수가 서로 일치하지 않습니다.");
     return undefined;
   }
   return { status: value.status as AssemblyVerificationMeasurementContinuityStatus, timestampCount, unparsedTimestampCount, ...(sampleIntervalSeconds !== undefined ? { sampleIntervalSeconds } : {}), ...(observedDurationSeconds !== undefined ? { observedDurationSeconds } : {}), gapCount, ...(largestGapSeconds !== undefined ? { largestGapSeconds } : {}), nonMonotonicCount, estimatedMissingSamples, ...(gapToleranceSeconds !== undefined ? { gapToleranceSeconds } : {}) };
@@ -476,7 +476,7 @@ function measurementQualityFromUnknown(value: unknown, errors: string[]) {
   if (rowCount === undefined || validSampleCount === undefined || skippedRowCount === undefined || invalidValueCount === undefined || recognizedCoreColumnCount === undefined || coreColumnCount === undefined || telemetryColumnCount === undefined || seriesPointCount === undefined) return undefined;
   if (typeof hasTimeAxis !== "boolean") return undefined;
   if (validSampleCount + skippedRowCount !== rowCount || recognizedCoreColumnCount > coreColumnCount || seriesPointCount > validSampleCount) {
-    errors.push("측정 입력 품질의 행·열·시계열 수가 서로 일치하지 않습니다.");
+    errors.push("측정 입력 품질의 행/열/시계열 수가 서로 일치하지 않습니다.");
     return undefined;
   }
   return { status: value.status as AssemblyVerificationMeasurementQualityStatus, rowCount, validSampleCount, skippedRowCount, invalidValueCount, recognizedCoreColumnCount, coreColumnCount, telemetryColumnCount, hasTimeAxis, seriesPointCount, ...(continuity ? { continuity } : {}) };
@@ -750,7 +750,7 @@ export function assemblyVerificationRecheckSignalsFor(comparison: AssemblyVerifi
   if (gpuTemperatureRunIds) signals.push({ id: "gpu-temperature-rise", level: "notice", title: "GPU 온도 상승 추세", summary: "동일 조건에서 GPU 온도가 2회 연속 상승했습니다.", evidence: "주변 온도 보정값을 우선 사용하고, 보정값이 없으면 원시 최고 온도를 비교했습니다.", runIds: gpuTemperatureRunIds });
   const cpuFanRunIds = consecutiveRiseSignal(points, (point) => point.cpuFanRpmDelta);
   const gpuFanRunIds = consecutiveRiseSignal(points, (point) => point.gpuFanRpmDelta);
-  if (cpuFanRunIds || gpuFanRunIds) signals.push({ id: "fan-rpm-rise", level: "notice", title: "팬 RPM 상승 추세", summary: "동일 조건에서 CPU 또는 GPU 팬 RPM이 2회 연속 상승했습니다.", evidence: [cpuFanRunIds ? "CPU RPM" : undefined, gpuFanRunIds ? "GPU RPM" : undefined].filter(Boolean).join(" · "), runIds: [...new Set([...(cpuFanRunIds ?? []), ...(gpuFanRunIds ?? [])])] });
+  if (cpuFanRunIds || gpuFanRunIds) signals.push({ id: "fan-rpm-rise", level: "notice", title: "팬 RPM 상승 추세", summary: "동일 조건에서 CPU 또는 GPU 팬 RPM이 2회 연속 상승했습니다.", evidence: [cpuFanRunIds ? "CPU RPM" : undefined, gpuFanRunIds ? "GPU RPM" : undefined].filter(Boolean).join(" / "), runIds: [...new Set([...(cpuFanRunIds ?? []), ...(gpuFanRunIds ?? [])])] });
   let noiseStreak = 0;
   const noiseRunIds: string[] = [];
   points.forEach((point, index) => {
@@ -764,9 +764,9 @@ export function assemblyVerificationRecheckSignalsFor(comparison: AssemblyVerifi
     }
   });
   if (noiseStreak >= 2) signals.push({ id: "noise-rise", level: "notice", title: "소음 상승 추세", summary: "동일 조건에서 기록된 체감 소음이 2회 연속 커졌습니다.", evidence: "정량 소음계가 아닌 사용자가 기록한 소음 단계의 순서를 비교했습니다.", runIds: noiseRunIds.slice(-2) });
-  if (comparison.filter === "all" && points.length > 1 && points.some((point) => assemblyVerificationConditionKeyFor(point) === undefined)) signals.push({ id: "condition-incomplete", level: "notice", title: "비교 조건 미완성", summary: "일부 회차에 도구·시나리오·테스트 시간이 없어 변화량 비교에서 제외될 수 있습니다.", evidence: "조건이 기록된 동일 회차만 변화량을 계산합니다.", runIds: points.filter((point) => assemblyVerificationConditionKeyFor(point) === undefined).map((point) => point.runId).slice(-3) });
+  if (comparison.filter === "all" && points.length > 1 && points.some((point) => assemblyVerificationConditionKeyFor(point) === undefined)) signals.push({ id: "condition-incomplete", level: "notice", title: "비교 조건 미완성", summary: "일부 회차에 도구/시나리오/테스트 시간이 없어 변화량 비교에서 제외될 수 있습니다.", evidence: "조건이 기록된 동일 회차만 변화량을 계산합니다.", runIds: points.filter((point) => assemblyVerificationConditionKeyFor(point) === undefined).map((point) => point.runId).slice(-3) });
   const qualityRunIds = points.filter((point) => point.comparisonBlockReason === "measurement-quality-review" || point.comparisonBlockReason === "measurement-continuity-gapped").map((point) => point.runId);
-  if (qualityRunIds.length > 0) signals.push({ id: "measurement-quality-review", level: "notice", title: "측정 품질 재확인", summary: "측정 품질 또는 시간축 공백 때문에 일부 회차의 델타·신호 비교를 제외했습니다.", evidence: "공백·역순 timestamp나 오류 셀이 있는 회차는 정상 연속 측정으로 간주하지 않습니다.", runIds: qualityRunIds.slice(-3) });
+  if (qualityRunIds.length > 0) signals.push({ id: "measurement-quality-review", level: "notice", title: "측정 품질 재확인", summary: "측정 품질 또는 시간축 공백 때문에 일부 회차의 델타/신호 비교를 제외했습니다.", evidence: "공백/역순 timestamp나 오류 셀이 있는 회차는 정상 연속 측정으로 간주하지 않습니다.", runIds: qualityRunIds.slice(-3) });
   return signals;
 }
 

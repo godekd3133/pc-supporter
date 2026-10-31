@@ -31,7 +31,7 @@ export function PriceTrendChart({ points, ariaLabel, testId }: { points: PriceTr
   const labelIndexes = [...new Set([0, Math.floor((points.length - 1) / 2), points.length - 1])];
 
   // 점이 3px라 직접 겨냥하기 어려우니 차트 위 아무 곳이나 호버하면
-  // 가장 가까운 점의 날짜·금액을 띄운다.
+  // 가장 가까운 점의 날짜/금액을 띄운다.
   const onPointerMove = (event: PointerEvent<SVGSVGElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
     if (rect.width <= 0) return;
@@ -56,7 +56,7 @@ export function PriceTrendChart({ points, ariaLabel, testId }: { points: PriceTr
         className="price-trend-chart-svg"
         viewBox={`0 0 ${width} ${height}`}
         role="img"
-        aria-label={`${ariaLabel} · 현재 ${formatWon(points.at(-1)!.priceWon)}`}
+        aria-label={`${ariaLabel} / 현재 ${formatWon(points.at(-1)!.priceWon)}`}
         onPointerMove={onPointerMove}
         onPointerLeave={() => setHoverIndex(null)}
       >
@@ -70,7 +70,7 @@ export function PriceTrendChart({ points, ariaLabel, testId }: { points: PriceTr
           cy={yFor(point.priceWon)}
           r={index === hoverIndex ? 4.6 : index === points.length - 1 ? 4.5 : 3.2}
           key={`${point.at}-${index}`}
-        ><title>{`${shortDate(point.at)} · ${formatWon(point.priceWon)}`}</title></circle>)}
+        ><title>{`${shortDate(point.at)} / ${formatWon(point.priceWon)}`}</title></circle>)}
       </svg>
       {hoverPoint && <div
         className="price-trend-chart-tooltip"

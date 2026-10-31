@@ -18,8 +18,8 @@ function summaryFor(status: "improved" | "unchanged" | "recheck" | "inconclusive
     gpuPeakRows: [baseline, latest],
     cpuStabilityRows: status === "inconclusive" ? [row("r1", "기준 회차", undefined, undefined, "안정화 미확인"), row("r2", "최신 회차", undefined, undefined, "안정화 미확인")] : [baseline, latest],
     gpuStabilityRows: status === "inconclusive" ? [row("r1", "기준 회차", undefined, undefined, "안정화 미확인"), row("r2", "최신 회차", undefined, undefined, "안정화 미확인")] : [baseline, latest],
-    cpuPowerRows: [row("r1", "기준 회차", 100, 0, "CPU 평균 100W · 관찰 순"), row("r2", "최신 회차", 120, 20, "CPU 평균 120W · 관찰 순")],
-    gpuPowerRows: [row("r1", "기준 회차", 200, 0, "GPU 평균 200W · 관찰 순"), row("r2", "최신 회차", 180, -20, "GPU 평균 180W · 관찰 순")]
+    cpuPowerRows: [row("r1", "기준 회차", 100, 0, "CPU 평균 100W / 관찰 순"), row("r2", "최신 회차", 120, 20, "CPU 평균 120W / 관찰 순")],
+    gpuPowerRows: [row("r1", "기준 회차", 200, 0, "GPU 평균 200W / 관찰 순"), row("r2", "최신 회차", 180, -20, "GPU 평균 180W / 관찰 순")]
   };
 }
 
@@ -27,8 +27,8 @@ describe("assembly verification decision summary", () => {
   it("requests recheck when the latest thermal observation worsens", () => {
     const decision = assemblyVerificationDecisionSummaryFor(summaryFor("recheck"));
 
-    expect(decision).toMatchObject({ status: "recheck", nextAction: "같은 조건에서 온도와 소음을 다시 측정하세요. 케이스 통풍과 팬·전원 연결도 확인하세요." });
-    expect(decision.dimensions.find((dimension) => dimension.id === "cpu-temperature")).toMatchObject({ status: "recheck", summary: "최신 75°C · 기준 대비 +5°C" });
+    expect(decision).toMatchObject({ status: "recheck", nextAction: "같은 조건에서 온도와 소음을 다시 측정하세요. 케이스 통풍과 팬/전원 연결도 확인하세요." });
+    expect(decision.dimensions.find((dimension) => dimension.id === "cpu-temperature")).toMatchObject({ status: "recheck", summary: "최신 75°C / 기준 대비 +5°C" });
     expect(decision.dimensions.find((dimension) => dimension.id === "cpu-power")).toMatchObject({ status: "observational-higher" });
   });
 
@@ -36,7 +36,7 @@ describe("assembly verification decision summary", () => {
     const decision = assemblyVerificationDecisionSummaryFor(summaryFor("improved"));
 
     expect(decision.status).toBe("improved");
-    expect(decision.dimensions.find((dimension) => dimension.id === "cpu-temperature")).toMatchObject({ status: "improved", summary: "최신 65°C · 기준 대비 -5°C" });
+    expect(decision.dimensions.find((dimension) => dimension.id === "cpu-temperature")).toMatchObject({ status: "improved", summary: "최신 65°C / 기준 대비 -5°C" });
   });
 
   it("reports unchanged when thermal observations do not move", () => {

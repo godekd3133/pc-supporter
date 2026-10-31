@@ -75,7 +75,7 @@ try {
   })`);
   const probe = JSON.parse(result);
   assert(probe.appError === null && probe.findingsMounted, "문제 없는 예시 견적의 호환 확인이 결과 화면을 렌더링하지 못했습니다. probe=" + JSON.stringify(probe));
-  assert(probe.compatibility?.status === "compatible" && probe.compatibility.blockerCount === 0 && probe.compatibility.warningCount === 0 && probe.compatibility.unknownCount === 0 && probe.compatibility.findings === 0 && (!probe.compatibility.accessoryStatus || probe.compatibility.accessoryStatus === "compatible"), "문제 없는 예시 견적에서 호환·주의·정보 부족 상태가 남았습니다. probe=" + JSON.stringify(probe.compatibility));
+  assert(probe.compatibility?.status === "compatible" && probe.compatibility.blockerCount === 0 && probe.compatibility.warningCount === 0 && probe.compatibility.unknownCount === 0 && probe.compatibility.findings === 0 && (!probe.compatibility.accessoryStatus || probe.compatibility.accessoryStatus === "compatible"), "문제 없는 예시 견적에서 호환/주의/정보 부족 상태가 남았습니다. probe=" + JSON.stringify(probe.compatibility));
   await waitForValue(client, "document.querySelector('[data-testid=\"upgrade-bundle-panel\"]') !== null || document.querySelector('#app-error-title') !== null", "문제 없는 예시 견적 업그레이드 조합 패널");
   const bundlePreviewStarted = await client.evaluate(`(() => {
     const button = document.querySelector('.upgrade-bundle-card .upgrade-bundle-actions button.button-light');

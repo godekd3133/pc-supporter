@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { httpMetricsSnapshot, recordHttpRequestMetric, resetHttpMetricsForTest } from "./request-metrics";
 
 describe("http request metrics", () => {
-  it("라우트별 요청 수·오류·지연 분포를 집계한다", () => {
+  it("라우트별 요청 수/오류/지연 분포를 집계한다", () => {
     resetHttpMetricsForTest();
     recordHttpRequestMetric({ event: "http.request", requestId: "a", method: "GET", route: "/api/parts", outcome: "completed", statusCode: 200, durationMs: 10 });
     recordHttpRequestMetric({ event: "http.request", requestId: "b", method: "GET", route: "/api/parts", outcome: "completed", statusCode: 200, durationMs: 30 });

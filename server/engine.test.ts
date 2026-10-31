@@ -588,11 +588,11 @@ describe("compatibility engine", () => {
     expect(recommendation?.compatibilityEvidence.powerHeadroomW).toBeGreaterThan(0);
     expect(recommendation?.compatibilityEvidence.gpuClearanceMm).toBeGreaterThan(0);
     expect(recommendation?.reason).toContain("QHD");
-    expect(recommendation?.reason).not.toContain("QHD · 1440p");
+    expect(recommendation?.reason).not.toContain("QHD / 1440p");
     expect(recommendation?.similarityEvidence).toMatchObject({ basis: "mixed" });
     expect(recommendation?.performanceSummary).toContain("Time Spy");
     expect(recommendation?.physicalEvidence).toMatchObject({ status: "review" });
-    expect(recommendation?.physicalEvidence?.summary).toContain("GPU·케이스 장착 정보");
+    expect(recommendation?.physicalEvidence?.summary).toContain("GPU/케이스 장착 정보");
   });
 
   it("applies the selected gaming refresh rate to target evidence and CPU-GPU comparison weights", () => {
@@ -1084,7 +1084,7 @@ describe("compatibility engine", () => {
 
     expect(suggestion?.fixesCurrentIssue).toBe(true);
     expect(suggestion?.physicalEvidence).toMatchObject({ status: "review" });
-    expect(suggestion?.physicalEvidence?.summary).toContain("GPU·케이스 장착 정보");
+    expect(suggestion?.physicalEvidence?.summary).toContain("GPU/케이스 장착 정보");
 
     const gamingResult = evaluateBuild(build, catalog, {
       recommendationPreferences: { priority: "balanced", profile: "gaming", gamingResolution: "1440p", gamingRefreshRate: 144 }
@@ -1099,7 +1099,7 @@ describe("compatibility engine", () => {
       candidateVramGb: candidateGpu.specs.vramGb,
       currentFit: "partial",
       candidateFit: "partial",
-      summary: expect.stringContaining("QHD · 144Hz")
+      summary: expect.stringContaining("QHD / 144Hz")
     });
   });
 
@@ -1344,7 +1344,7 @@ describe("compatibility engine", () => {
       expect.objectContaining({ label: "케이스 기본 팬", actual: "7개" }),
       expect.objectContaining({ label: "메인보드 팬 헤더", expected: "2개" })
     ]));
-    expect(finding?.actions[0].label).toBe("팬 허브·컨트롤러 확인");
+    expect(finding?.actions[0].label).toBe("팬 허브/컨트롤러 확인");
     expect(result.links.find((link) => link.id === "motherboard-case")?.status).toBe("issue");
   });
 
@@ -1496,7 +1496,7 @@ describe("compatibility engine", () => {
     expect(topologyFinding?.severity).toBe("unknown");
     expect(topologyFinding?.facts).toEqual(expect.arrayContaining([
       expect.objectContaining({ label: "선택한 M.2 SSD", actual: "2개" }),
-      expect.objectContaining({ label: "확인 필요", actual: "M2_1·M2_2·M2_3별 PCIe 세대·CPU 직결·레인 공유" })
+      expect.objectContaining({ label: "확인 필요", actual: "M2_1/M2_2/M2_3별 PCIe 세대/CPU 직결/레인 공유" })
     ]));
     expect(mixedResult.links.find((link) => link.id === "motherboard-ssd")?.status).toBe("unknown");
     expect(mixedResult.status).toBe("needs_review");
@@ -1726,7 +1726,7 @@ describe("compatibility engine", () => {
       expect.objectContaining({ label: "케이스 RGB 장치", actual: "7개" }),
       expect.objectContaining({ label: "메인보드 RGB/ARGB 헤더", expected: "2개" })
     ]));
-    expect(finding?.actions[0].label).toBe("RGB 허브·전압 확인");
+    expect(finding?.actions[0].label).toBe("RGB 허브/전압 확인");
     expect(result.links.find((link) => link.id === "motherboard-case")?.status).toBe("issue");
   });
 
@@ -2080,7 +2080,7 @@ describe("compatibility engine", () => {
     const profileResult = evaluateBuild(build, catalog, { includeSuggestions: false });
     const profileFinding = profileResult.findings.find((finding) => finding.ruleId === "memory-speed");
 
-    expect(profileFinding).toMatchObject({ severity: "warning", title: "RAM 속도가 CPU·메인보드의 확인된 지원 상한을 초과합니다." });
+    expect(profileFinding).toMatchObject({ severity: "warning", title: "RAM 속도가 CPU/메인보드의 확인된 지원 상한을 초과합니다." });
     expect(profileFinding?.facts).toEqual(expect.arrayContaining([
       { label: "유효 확인 상한", expected: "5,200MHz" },
       { label: "메인보드 지원 속도", expected: "7,600MHz" },
@@ -2091,7 +2091,7 @@ describe("compatibility engine", () => {
     expect(noProfileResult.findings.some((finding) => finding.ruleId === "memory-speed")).toBe(false);
 
     const unknownCpuResult = evaluateBuild({ ...build, cpu: { partId: unknownCpu.id, quantity: 1 } }, catalog, { includeSuggestions: false });
-    // CPU·보드 상한 데이터가 없을 때는 unknown이 아니라 warning으로 내린다 —
+    // CPU/보드 상한 데이터가 없을 때는 unknown이 아니라 warning으로 내린다 —
     // 크롤링 스펙에 상한이 없는 부품이 대부분이라 unknown으로 두면 모든 견적이
     // needs_review가 되어 유효 조합이 사라졌다.
     expect(unknownCpuResult.findings.find((finding) => finding.ruleId === "memory-speed")?.severity).toBe("warning");
@@ -3009,7 +3009,7 @@ describe("compatibility engine", () => {
 
     expect(suggestion?.similarityEvidence).toMatchObject({ comparedDimensions: 3, totalDimensions: 3, confidence: "high" });
     expect(suggestion?.similarityEvidence.dimensions?.some((dimension) => dimension.key === "gpuStreamProcessors")).toBe(false);
-    expect(suggestion?.similarityEvidence.notes).toContain("GPU 세대 계열(RTX 50 · RTX 40)이 달라 스트림 프로세서는 유사도에서 제외했습니다.");
+    expect(suggestion?.similarityEvidence.notes).toContain("GPU 세대 계열(RTX 50 / RTX 40)이 달라 스트림 프로세서는 유사도에서 제외했습니다.");
   });
 
   it("keeps similarity distance symmetric for higher and lower performance candidates", () => {
@@ -4094,7 +4094,7 @@ describe("compatibility engine", () => {
     const baselineGpu = catalog.find((part) => part.id === baseline.selection.gpu?.partId);
     if (!baselineGpu) throw new Error("기준 자동 구성에서 GPU 부품을 찾지 못했습니다.");
     const evidenceGpuId = "gpu-exact-evidence-priority";
-    const evidenceGpu: Part = { ...baselineGpu, id: evidenceGpuId, name: `${baselineGpu.name} · exact evidence candidate` };
+    const evidenceGpu: Part = { ...baselineGpu, id: evidenceGpuId, name: `${baselineGpu.name} / exact evidence candidate` };
     const evidence: GamingPerformanceEvidenceRecord[] = [{
       id: "evidence-exact-priority",
       gameId: "cyberpunk",
@@ -4135,7 +4135,7 @@ describe("compatibility engine", () => {
     const baselineGpu = catalog.find((part) => part.id === baseline.selection.gpu?.partId);
     if (!baselineGpu) throw new Error("기준 자동 구성에서 GPU 부품을 찾지 못했습니다.");
     const staleGpuId = "gpu-stale-evidence-priority";
-    const staleGpu: Part = { ...baselineGpu, id: staleGpuId, name: `${baselineGpu.name} · stale evidence candidate` };
+    const staleGpu: Part = { ...baselineGpu, id: staleGpuId, name: `${baselineGpu.name} / stale evidence candidate` };
     const evidence: GamingPerformanceEvidenceRecord[] = [{
       id: "evidence-stale-priority",
       gameId: "cyberpunk",
@@ -4217,7 +4217,7 @@ describe("compatibility engine", () => {
     const measuredGpu = catalog.find((part) => part.id === baseline.selection.gpu?.partId);
     if (!measuredGpu) throw new Error("기준 자동 구성에서 GPU 부품을 찾지 못했습니다.");
     const alternativeGpuId = "gpu-unmeasured-target-fallback";
-    const alternativeGpu: Part = { ...measuredGpu, id: alternativeGpuId, name: `${measuredGpu.name} · unmeasured alternative` };
+    const alternativeGpu: Part = { ...measuredGpu, id: alternativeGpuId, name: `${measuredGpu.name} / unmeasured alternative` };
     const evidence: GamingPerformanceEvidenceRecord[] = [{
       id: "evidence-target-miss-ranking",
       gameId: "cyberpunk",
@@ -4604,7 +4604,7 @@ describe("compatibility engine", () => {
 
     expect(finding?.severity).toBe("blocker");
     expect(finding?.facts).toEqual(expect.arrayContaining([
-      expect.objectContaining({ label: "쿨러 라디에이터", actual: "전면 · 240mm" }),
+      expect.objectContaining({ label: "쿨러 라디에이터", actual: "전면 / 240mm" }),
       expect.objectContaining({ label: "케이스 해당 위치 지원", expected: "해당 위치 지원 정보 없음" })
     ]));
   });

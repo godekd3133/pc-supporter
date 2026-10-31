@@ -293,7 +293,7 @@ html[data-theme="dark"] .mobile-home-view { --home-action-primary: #1b64da; }
   .mobile-cache-disclosure > summary > svg:last-child { transition: none; }
 }
 
-/* 견적 여정 카드 — 홈 로비의 진행 상황·다음 단계 안내 */
+/* 견적 여정 카드 — 홈 로비의 진행 상황/다음 단계 안내 */
 .home-journey { margin: 0 0 1.25rem; padding: 1.1rem 1.2rem; border: 1px solid var(--line); border-radius: 1rem; background: var(--surface); }
 .home-journey-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin-bottom: .8rem; }
 .home-journey-heading h2 { margin: 0; color: var(--ink); font-size: 1.0625rem; font-weight: 700; }

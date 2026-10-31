@@ -71,9 +71,9 @@ function comparisonReason(evidence: SimilarityEvidence) {
   const basis = evidence.basis === "benchmark"
     ? "성능 측정 자료 포함"
     : evidence.basis === "mixed"
-      ? "성능 측정·부품 정보"
+      ? "성능 측정/부품 정보"
       : "부품 정보";
-  return `비교 정보 ${evidence.comparedDimensions}/${evidence.totalDimensions}개 · ${basis}`;
+  return `비교 정보 ${evidence.comparedDimensions}/${evidence.totalDimensions}개 / ${basis}`;
 }
 
 function catalogSpecSourceCheckNeedsReviewFor(provenance: Part["specs"]["catalogSpecProvenance"], now: string | number | undefined) {
@@ -120,7 +120,7 @@ export function recommendationTrustFor(input: RecommendationTrustInput): Recomme
   else reasons.push(`부품 자체의 주의 ${input.candidateWarnings}개가 남아 구매 전 확인이 필요합니다.`);
 
   if (fullBuildStatus === "remaining_issues") {
-    reasons.push(`전체 견적에는 호환 불가 ${input.remainingBlockers}개·주의 ${input.remainingWarnings}개·확인 필요 ${input.remainingUnknown}개가 남아 있어요.`);
+    reasons.push(`전체 견적에는 호환 불가 ${input.remainingBlockers}개/주의 ${input.remainingWarnings}개/확인 필요 ${input.remainingUnknown}개가 남아 있어요.`);
   }
 
   if (similarityEvidence.confidence === "high" && similarityEvidence.comparedDimensions >= 2) {

@@ -26,7 +26,7 @@ function hasSelection(build: BuildSelection, category: PartCategory) {
 }
 
 function labelsFor(categories: PerformanceCategory[]) {
-  return categories.map((category) => PERFORMANCE_CATEGORY_LABELS[category]).join(" · ");
+  return categories.map((category) => PERFORMANCE_CATEGORY_LABELS[category]).join(" / ");
 }
 
 export function repairPlanPerformanceRetentionFor(build: BuildSelection, plan: RecommendationPlan): RepairPlanPerformanceRetention {
@@ -39,15 +39,15 @@ export function repairPlanPerformanceRetentionFor(build: BuildSelection, plan: R
     return { status: "unknown", retainedCategories, changedCategories, summary: "비교할 성능 관련 부품이 없어요." };
   }
   if (changedCategories.length === 0) {
-    return { status: "preserved", retainedCategories, changedCategories, summary: `성능 비교 부품 유지 · ${labelsFor(retainedCategories)}` };
+    return { status: "preserved", retainedCategories, changedCategories, summary: `성능 비교 부품 유지 / ${labelsFor(retainedCategories)}` };
   }
   if (retainedCategories.length === 0) {
-    return { status: "changed", retainedCategories, changedCategories, summary: `성능 비교 부품 변경 · ${labelsFor(changedCategories)}` };
+    return { status: "changed", retainedCategories, changedCategories, summary: `성능 비교 부품 변경 / ${labelsFor(changedCategories)}` };
   }
   return {
     status: "mixed",
     retainedCategories,
     changedCategories,
-    summary: `성능 비교 부품 유지 · ${labelsFor(retainedCategories)} · 변경 · ${labelsFor(changedCategories)}`
+    summary: `성능 비교 부품 유지 / ${labelsFor(retainedCategories)} / 변경 / ${labelsFor(changedCategories)}`
   };
 }

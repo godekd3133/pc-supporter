@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { generatedDraftContextFromJson, recommendationPreferencesForGeneratedDraft, generatedDraftWithoutPersistedFpsAssessment, generatorPresetConfigForGeneratedDraft } from './generated-draft-context';
 import type { BuildGenerationResult } from '../shared/types';
+import { generatorPartAdjustmentRequestFor } from './generator-balance';
 const selection = { memory: [{partId:'memory',quantity:1}], ssd:[{partId:'ssd',quantity:1}], hdd:[],cpu:{partId:'cpu',quantity:1},motherboard:{partId:'motherboard',quantity:1},case:{partId:'case',quantity:1},psu:{partId:'psu',quantity:1},useIntegratedGraphics:true };
 const draft: BuildGenerationResult = { gamingTestbedPhase1:true,profile:'gaming',priority:'performance',status:'compatible',selection,budgetWon:800000,totalPriceWon:750000,memoryCapacityGb:16,storageCapacityGb:1000,hddCount:0,rationale:[],warnings:[],gamingResolution:'1440p',gamingRefreshRate:144,includeNonRetail:false,listingPolicy:'retail_only',budgetDeltaWon:-50000,withinBudget:true,priceComplete:true,blockerCount:0,warningCount:0,unknownCount:0,lines:(['cpu','memory','motherboard','ssd','case','psu'] as const).map(category=>({category,partId:category,name:category,quantity:1,priceWon:100000})) };
 describe('generated draft context',()=>{
@@ -69,5 +70,49 @@ describe('editing generated game conditions',()=>{
  it('carries the exact game-target metadata into the onboarding preset seam',()=>{
   const config=generatorPresetConfigForGeneratedDraft({...draft,gamingMode:'target_fps',gamingTargetFps:120,gpuVendorPreference:'amd',gamingGameIds:['pubg'],gamingGraphicsPreset:'high',gamingRayTracing:true,gamingUpscaling:'native'});
   expect(config).toMatchObject({profile:'gaming',gamingMode:'target_fps',gamingTargetFps:120,gamingRefreshRate:144,gpuVendorPreference:'amd',gamingGameIds:['pubg'],gamingRayTracing:true,gamingUpscaling:'native',budgetWon:800000});
+ });
+});
+
+
+it('restores explicit platform choices but removes persisted balance claims', () => {
+ const cpuGpuBalance={cpu:{level:'good' as const},gpu:{level:'good' as const},recommendedCpuModels:['5600'],evidence:'derived_policy' as const};
+ const explicit={...draft,cpuVendorPreference:'intel' as const,memoryTypePreference:'DDR4' as const,cpuGpuBalance};
+ const restored=generatedDraftContextFromJson(JSON.stringify(explicit));
+ expect(restored).toMatchObject({cpuVendorPreference:'intel',memoryTypePreference:'DDR4'});
+ expect(restored?.cpuGpuBalance).toBeUndefined();
+ expect(generatorPresetConfigForGeneratedDraft(restored!)).toMatchObject({cpuVendorPreference:'intel',memoryTypePreference:'DDR4'});
+ expect(generatedDraftContextFromJson(JSON.stringify({...draft,cpuVendorPreference:'nvidia'}))).toBeNull();
+ expect(generatedDraftContextFromJson(JSON.stringify({...draft,memoryTypePreference:'DDR3'}))).toBeNull();
+});
+
+
+describe("restored strict step capacity facts", () => {
+ it("keeps known actual capacities while discarding derived suitability claims", () => {
+  const original={...draft,partTiers:{memory:{currentCapacityGb:64,downId:"memory32",downMemoryCapacityGb:32},ssd:{currentCapacityGb:4000,downId:"ssd2tb",downStorageCapacityGb:2000}}};
+  const stripped=generatedDraftWithoutPersistedFpsAssessment(original);
+  const restored=generatedDraftContextFromJson(JSON.stringify(stripped));
+  expect(restored?.partTierSuitability).toBeUndefined();
+  expect(restored?.partTiers?.memory?.currentCapacityGb).toBe(64);
+  expect(generatorPartAdjustmentRequestFor(restored!,"memory","down")?.memoryCapacityGb).toBe(32);
+  expect(generatorPartAdjustmentRequestFor(restored!,"ssd","down")?.storageCapacityGb).toBe(2000);
+  const skipped={...restored!,partTiers:{memory:{currentCapacityGb:64,downId:"memory16",downMemoryCapacityGb:16}}};
+  expect(generatorPartAdjustmentRequestFor(skipped,"memory","down")).toBeUndefined();
+ });
+ it("extracts only a bounded capacity number from previous derived tier metadata", () => {
+  const old=JSON.parse(JSON.stringify({...draft,partTierSuitability:{memory:{tier:{order:64},minimum:"met",appropriate:"met"}}}));
+  const stripped=generatedDraftWithoutPersistedFpsAssessment(old);
+  expect(stripped.partTierSuitability).toBeUndefined();
+  expect(stripped.partTiers?.memory).toEqual({currentCapacityGb:64});
+  expect(generatedDraftContextFromJson(JSON.stringify(stripped))?.partTiers?.memory?.currentCapacityGb).toBe(64);
+ });
+ it("restores a missing-step reason without inventing an adjacent part ID", () => {
+  const reason="RTX5060TI 단계의 판매 가능한 부품이 없습니다.";
+  const restored=generatedDraftContextFromJson(JSON.stringify({...draft,partTiers:{gpu:{upUnavailableReason:reason}}}));
+  expect(restored?.partTiers?.gpu).toEqual({upUnavailableReason:reason});
+  expect(generatorPartAdjustmentRequestFor(restored!,"gpu","up")).toBeUndefined();
+ });
+ it("rejects misplaced or unbounded actual capacities and invalid reason text", () => {
+  for(const partTiers of [{cpu:{currentCapacityGb:64}},{memory:{currentCapacityGb:0}},{memory:{currentCapacityGb:1.5}},{memory:{currentCapacityGb:2048}},{ssd:{currentCapacityGb:Infinity}},{gpu:{upUnavailableReason:1}},{gpu:{downUnavailableReason:"x".repeat(501)}}])
+   expect(generatedDraftContextFromJson(JSON.stringify({...draft,partTiers}))).toBeNull();
  });
 });

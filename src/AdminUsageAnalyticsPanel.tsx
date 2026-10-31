@@ -118,7 +118,7 @@ export function AdminUsageAnalyticsPanel({ onToast }: { onToast: (message: strin
       </div>
     </div>
     <p className="admin-card-description">
-      익명 방문자 키 기준으로 유저 여정을 집계합니다. 앱 방문 → 온보딩 → 견적 생성·검사 → 결과 → 저장·공유 단계의 전환율과 이탈, 코호트 리텐션을 확인할 수 있습니다. 이벤트는 최대 95일 보존됩니다.
+      익명 방문자 키 기준으로 유저 여정을 집계합니다. 앱 방문 → 온보딩 → 견적 생성/검사 → 결과 → 저장/공유 단계의 전환율과 이탈, 코호트 리텐션을 확인할 수 있습니다. 이벤트는 최대 95일 보존됩니다.
     </p>
     {loading && !data
       ? <p className="generation-failure-state"><FiLoader className="spin" /> 사용 통계를 집계하는 중...</p>
@@ -133,11 +133,11 @@ export function AdminUsageAnalyticsPanel({ onToast }: { onToast: (message: strin
               <div className="usage-analytics-stat"><span><FiActivity /> 이벤트</span><strong>{data.totals.events.toLocaleString("ko-KR")}</strong></div>
               <div className="usage-analytics-stat"><span>견적 생성 성공률</span><strong>{percentText(data.totals.recommendSuccessRate)}</strong><small>{data.totals.recommendSuccesses.toLocaleString("ko-KR")}/{data.totals.recommendRequests.toLocaleString("ko-KR")}건</small></div>
               <div className="usage-analytics-stat"><span>견적 저장</span><strong>{data.totals.saves.toLocaleString("ko-KR")}</strong><small>공유 {data.totals.shares.toLocaleString("ko-KR")}건</small></div>
-              <div className="usage-analytics-stat"><span>세션 평균</span><strong>{data.sessions.avgEventsPerSession.toFixed(1)}건</strong><small>체류 {data.sessions.avgSessionMinutes.toFixed(1)}분 · 바운스 {percentText(data.sessions.bounceRate)}</small></div>
+              <div className="usage-analytics-stat"><span>세션 평균</span><strong>{data.sessions.avgEventsPerSession.toFixed(1)}건</strong><small>체류 {data.sessions.avgSessionMinutes.toFixed(1)}분 / 바운스 {percentText(data.sessions.bounceRate)}</small></div>
             </div>
 
             <div className="usage-analytics-block">
-              <h4><FiBarChart2 /> 핵심 퍼널 <small>방문자 기준 · 이전 단계 이후 도달만 계산</small></h4>
+              <h4><FiBarChart2 /> 핵심 퍼널 <small>방문자 기준 / 이전 단계 이후 도달만 계산</small></h4>
               <div className="usage-analytics-funnel" role="table" aria-label="사용자 퍼널">
                 {data.funnel.map((stage) => <div className="usage-analytics-funnel-row" key={stage.key}>
                   <span className="usage-analytics-funnel-label">{stage.label}</span>
@@ -151,7 +151,7 @@ export function AdminUsageAnalyticsPanel({ onToast }: { onToast: (message: strin
 
             <div className="usage-analytics-grid">
               <div className="usage-analytics-block">
-                <h4>온보딩 단계별 도달 <small>각 단계를 본 고유 방문자 · 첫 단계 대비</small></h4>
+                <h4>온보딩 단계별 도달 <small>각 단계를 본 고유 방문자 / 첫 단계 대비</small></h4>
                 <div className="usage-analytics-steps">
                   {data.onboarding.map((step) => <div className="usage-analytics-step" key={step.step}>
                     <span className="usage-analytics-step-label">{step.label}</span>
@@ -174,7 +174,7 @@ export function AdminUsageAnalyticsPanel({ onToast }: { onToast: (message: strin
             </div>
 
             {data.loop && <div className="usage-analytics-block" data-testid="usage-analytics-loop">
-              <h4><FiRepeat /> 재참여 루프 <small>저장 이후 활동 · 방문자 기준 · 저장자 {data.loop.saversTotal.toLocaleString("ko-KR")}명 대비</small></h4>
+              <h4><FiRepeat /> 재참여 루프 <small>저장 이후 활동 / 방문자 기준 / 저장자 {data.loop.saversTotal.toLocaleString("ko-KR")}명 대비</small></h4>
               <div className="usage-analytics-loop-grid">
                 {([
                   { key: "returning", label: "재방문 (활동일 2일+)", visitors: data.loop.returningVisitors, shareOf: data.totals.visitors },
@@ -187,10 +187,10 @@ export function AdminUsageAnalyticsPanel({ onToast }: { onToast: (message: strin
                   <span className="usage-analytics-loop-label">{row.label}</span>
                   <span className="usage-analytics-loop-bar"><i style={{ width: `${Math.max(0, Math.min(100, (row.shareOf > 0 ? row.visitors / row.shareOf : 0) * 100))}%` }} /></span>
                   <span className="usage-analytics-loop-count">{row.visitors.toLocaleString("ko-KR")}명</span>
-                  <span className="usage-analytics-loop-share">{percentText(row.shareOf > 0 ? row.visitors / row.shareOf : 0)}{row.events !== undefined ? ` · ${row.events.toLocaleString("ko-KR")}건` : ""}</span>
+                  <span className="usage-analytics-loop-share">{percentText(row.shareOf > 0 ? row.visitors / row.shareOf : 0)}{row.events !== undefined ? ` / ${row.events.toLocaleString("ko-KR")}건` : ""}</span>
                 </div>)}
               </div>
-              <p className="usage-analytics-empty">저장자 재참여율 {percentText(data.loop.saverReactivation)} · 재방문율 {percentText(data.loop.returningRate)}</p>
+              <p className="usage-analytics-empty">저장자 재참여율 {percentText(data.loop.saverReactivation)} / 재방문율 {percentText(data.loop.returningRate)}</p>
               {data.loop.nextStepClicks.length > 0 && <table className="usage-analytics-table">
                 <thead><tr><th>다음 단계 CTA</th><th>클릭</th></tr></thead>
                 <tbody>{data.loop.nextStepClicks.map((item) => <tr key={item.step}><td>{item.label}</td><td>{item.count.toLocaleString("ko-KR")}</td></tr>)}</tbody>
@@ -198,9 +198,9 @@ export function AdminUsageAnalyticsPanel({ onToast }: { onToast: (message: strin
             </div>}
 
             <div className="usage-analytics-block">
-              <h4>일별 방문 추이 <small>고유 방문자 · 앱 열기 이벤트</small></h4>
+              <h4>일별 방문 추이 <small>고유 방문자 / 앱 열기 이벤트</small></h4>
               <div className="usage-analytics-daily" role="img" aria-label="일별 고유 방문자 추이">
-                {data.daily.map((row) => <div className="usage-analytics-daily-col" key={row.day} title={`${row.day} · 방문자 ${row.visitors}명 · 앱 열기 ${row.appOpens}건 · 세션 ${row.sessions}`}>
+                {data.daily.map((row) => <div className="usage-analytics-daily-col" key={row.day} title={`${row.day} / 방문자 ${row.visitors}명 / 앱 열기 ${row.appOpens}건 / 세션 ${row.sessions}`}>
                   <i style={{ height: `${Math.max(2, (row.visitors / maxDailyVisitors) * 100)}%` }} />
                   <span>{shortDay(row.day)}</span>
                 </div>)}
@@ -209,7 +209,7 @@ export function AdminUsageAnalyticsPanel({ onToast }: { onToast: (message: strin
 
             <div className="usage-analytics-grid">
               <div className="usage-analytics-block">
-                <h4>리텐션 코호트 <small>첫 방문일 기준 재방문율{avgRetention ? ` · 평균 D+1 ${percentText(avgRetention.day1)} / D+7 ${percentText(avgRetention.day7)} / D+30 ${percentText(avgRetention.day30)}` : ""}</small></h4>
+                <h4>리텐션 코호트 <small>첫 방문일 기준 재방문율{avgRetention ? ` / 평균 D+1 ${percentText(avgRetention.day1)} / D+7 ${percentText(avgRetention.day7)} / D+30 ${percentText(avgRetention.day30)}` : ""}</small></h4>
                 {data.retention.cohorts.length === 0
                   ? <p className="usage-analytics-empty">코호트 데이터가 없습니다.</p>
                   : <table className="usage-analytics-table">
@@ -227,7 +227,7 @@ export function AdminUsageAnalyticsPanel({ onToast }: { onToast: (message: strin
               </div>
 
               <div className="usage-analytics-block">
-                <h4>이벤트 분포 <small>발생 횟수 · 고유 방문자</small></h4>
+                <h4>이벤트 분포 <small>발생 횟수 / 고유 방문자</small></h4>
                 <table className="usage-analytics-table">
                   <thead><tr><th>이벤트</th><th>횟수</th><th>방문자</th></tr></thead>
                   <tbody>
@@ -236,7 +236,7 @@ export function AdminUsageAnalyticsPanel({ onToast }: { onToast: (message: strin
                 </table>
               </div>
             </div>
-            <p className="usage-analytics-footnote">집계 시각 {new Date(data.generatedAt).toLocaleString("ko-KR")} · 분석 기간 최근 {data.rangeDays}일</p>
+            <p className="usage-analytics-footnote">집계 시각 {new Date(data.generatedAt).toLocaleString("ko-KR")} / 분석 기간 최근 {data.rangeDays}일</p>
           </>}
   </section>;
 }

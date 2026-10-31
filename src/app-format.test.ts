@@ -25,12 +25,22 @@ describe("partSummary", () => {
     expect(specRows.map(([label]) => label)).toContain("코어 / 스레드");
     expect(specRows.some(([label]) => label.includes("Cinebench"))).toBe(false);
   });
+  it("hides cooler sockets and displays SSD terabytes without changing stored capacity", () => {
+    const base: Part = { id: "format-part", category: "cooler", name: "Test cooler", source: "seed", dataQuality: "seed", specs: { socket: "AM5", lengthMm: 155 }, missingFields: [], updatedAt: "2026-10-06T00:00:00.000Z" };
+    expect(partSummary(base)).toBe("155mm");
+    const drive = { ...base, category: "ssd" as const, specs: { capacityGb: 1000, interface: "M.2 NVMe" } };
+    expect(partSummary(drive)).toBe("M.2 NVMe / 1TB");
+    expect(drive.specs.capacityGb).toBe(1000);
+    expect(partSummary({ ...drive, specs: { capacityGb: 2000 } })).toBe("2TB");
+    expect(partSummary({ ...drive, specs: { capacityGb: 500 } })).toBe("500GB");
+  });
+
 });
 
 describe("radiator support formatting", () => {
   it("shows size-specific physical limits and configuration conditions", () => {
     const result = formatRadiatorSupports([{ position: "top", sizesMm: [240, 280], requirements: [{ sizesMm: [240], maxRadiatorThicknessMm: 27.5, maxAssemblyThicknessMm: 55.5, maxMemoryHeightMm: 35, maxRadiatorWidthMm: 125, maxRadiatorLengthMm: 300, maxGpuLengthMm: 320, exclusiveUpperBound: true }, { sizesMm: [280], configurationNote: "HDD 케이지 분리 후 장착" }] }]);
-    expect(result).toContain("상단 · 240mm, 280mm");
+    expect(result).toContain("상단 / 240mm, 280mm");
     expect(result).toContain("240mm 기준: 라디에이터 두께 27.5mm 미만");
     expect(result).toContain("팬 포함 두께 55.5mm 미만");
     expect(result).toContain("메모리 높이 35mm 미만");
@@ -41,7 +51,7 @@ describe("radiator support formatting", () => {
   });
 
   it("labels the PSU shroud and includes inclusive limits without changing unconditional supports", () => {
-    expect(formatRadiatorSupports([{ position: "psu_shroud", sizesMm: [240], requirements: [{ maxAssemblyThicknessMm: 55 }] }])).toContain("파워 커버 · 240mm (장착 조건: 팬 포함 두께 55mm 이하)");
-    expect(formatRadiatorSupports([{ position: "top", sizesMm: [240] }])).toBe("상단 · 240mm");
+    expect(formatRadiatorSupports([{ position: "psu_shroud", sizesMm: [240], requirements: [{ maxAssemblyThicknessMm: 55 }] }])).toContain("파워 커버 / 240mm (장착 조건: 팬 포함 두께 55mm 이하)");
+    expect(formatRadiatorSupports([{ position: "top", sizesMm: [240] }])).toBe("상단 / 240mm");
   });
 });

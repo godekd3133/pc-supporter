@@ -93,7 +93,7 @@ export function purchaseListTextFor(rows: PurchaseListRow[], checkedIds?: Readon
       const price = row.totalPriceWon === undefined ? "-" : `${row.totalPriceWon.toLocaleString("ko-KR")}원`;
       const rowKey = purchaseListRowKey(row, rowIndex);
       const status = checkedIds ? `[${itemStates.length > 0 ? PURCHASE_ITEM_STATUS_LABELS[purchaseListItemStatusFor(itemStates, rowKey, checkedIds)] : checkedIds.has(rowKey) ? "구매 완료" : "구매 예정"}] ` : "";
-      lines.push(`- ${status}${row.categoryLabel}: ${row.name} ×${row.quantity} · ${price}${row.totalPriceWon === undefined ? "" : ` · 가격 확인: ${purchaseListPriceEvidenceCheckLabelFor(row)}`}${row.listingType ? ` · ${row.listingType}` : ""}${row.dataFreshness ? ` · ${DATA_FRESHNESS_LABELS[row.dataFreshness]}` : ""}${row.connectionTarget ? ` · 연결 대상 ${row.connectionTarget}` : ""}${row.sourceUrl ? ` · ${row.sourceUrl}` : ""}`);
+      lines.push(`- ${status}${row.categoryLabel}: ${row.name} ×${row.quantity} / ${price}${row.totalPriceWon === undefined ? "" : ` / 가격 확인: ${purchaseListPriceEvidenceCheckLabelFor(row)}`}${row.listingType ? ` / ${row.listingType}` : ""}${row.dataFreshness ? ` / ${DATA_FRESHNESS_LABELS[row.dataFreshness]}` : ""}${row.connectionTarget ? ` / 연결 대상 ${row.connectionTarget}` : ""}${row.sourceUrl ? ` / ${row.sourceUrl}` : ""}`);
     }
     lines.push("");
   }

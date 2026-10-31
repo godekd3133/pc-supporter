@@ -30,7 +30,7 @@ describe("build history labels", () => {
   it("includes changed recommendation settings in the human-readable label", () => {
     const afterPreferences = { ...preferences, profile: "gaming" as const, budgetWon: 1_500_000 };
 
-    expect(buildInputChangeLabel(snapshot(), snapshot(build, afterPreferences))).toBe("사용 목적 · 목표 예산 변경");
+    expect(buildInputChangeLabel(snapshot(), snapshot(build, afterPreferences))).toBe("사용 목적 / 목표 예산 변경");
     const gamingBefore = { ...preferences, profile: "gaming" as const, gamingRefreshRate: 60 as const };
     const gamingAfter = { ...gamingBefore, gamingRefreshRate: 240 as const };
     expect(buildInputChangeLabel(snapshot(build, gamingBefore), snapshot(build, gamingAfter))).toBe("게임 주사율 변경");
@@ -48,7 +48,7 @@ describe("build history labels", () => {
     const coalesced = appendBuildHistoryEntry([first], second, snapshot(secondAfter));
 
     expect(coalesced).toHaveLength(1);
-    expect(coalesced[0]).toMatchObject({ id: "first", snapshot: snapshot(), label: "RAM · 그래픽카드 변경", changedAt: second.changedAt });
+    expect(coalesced[0]).toMatchObject({ id: "first", snapshot: snapshot(), label: "RAM / 그래픽카드 변경", changedAt: second.changedAt });
   });
 
   it("starts a new history entry after the coalescing window", () => {

@@ -87,7 +87,7 @@ describe("assembly plan", () => {
     });
     expect(plan.state).toBe("review");
     expect(plan.steps.find((step) => step.id === "confirm-evidence")).toMatchObject({ status: "review", progress: { label: "확인 완료 1/4개", percent: 25 } });
-    expect(plan.steps.find((step) => step.id === "confirm-purchase")).toMatchObject({ status: "review", progress: { label: "수령·조립 0/3개", percent: 0 } });
+    expect(plan.steps.find((step) => step.id === "confirm-purchase")).toMatchObject({ status: "review", progress: { label: "수령/조립 0/3개", percent: 0 } });
     expect(plan.steps.find((step) => step.id === "bench-assemble")?.status).toBe("pending");
     expect(plan.summary).toContain("구매 항목 3개");
   });

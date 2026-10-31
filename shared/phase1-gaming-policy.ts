@@ -1,6 +1,8 @@
+import { phase1IntelMotherboardEvidenceFor, phase1IntelStockCpuPowerFor } from "./phase1-hardware-evidence";
 import type { EngineTargetFiltersConfig } from "./engine-target-filters";
 import { inferListingType } from "./domain/listing";
 import { gpuGamingIndexFor } from "./relative-performance-index";
+import { cpuGamingScoreFor, cpuGamingEvidenceFor, gamingSsdFamilyAllowed, gamingFallbackSsdAllowed } from "./cpu-gaming-policy";
 import type { GpuVendor, Part } from "./types";
 
 /** The first test bed is a product allowlist, independent of the general catalog. */
@@ -8,15 +10,19 @@ export const PHASE1_GAMING_NAME_PATTERNS = {
   cpu: ["(?:AMD|라이젠|Ryzen).*\\b[579]\\d{3}(?:[A-Z0-9]+)?\\b"],
   cooler: ["^DEEPCOOL\\s+AG400\\s+G2(?:\\s|$)", "^Thermalright\\s+Peerless\\s+Assassin\\s+120\\s+SE\\s+서린(?:\\s|$)", "^CORSAIR\\s+NAUTILUS\\s+360\\s+RS(?:\\s|$)"],
   motherboard: ["^GIGABYTE\\s+B850M\\s+GAMING\\s+X\\s+WIFI6E\\s+제이씨현(?:\\s|$)", "^MSI\\s+MAG\\s+X870E\\s+토마호크\\s+WIFI(?:\\s|$)", "^ASRock\\s+A520M-HVS\\s+대원씨티에스(?:\\s|$)", "^ASUS\\s+TUF\\s+Gaming\\s+B550M-PLUS\\s+STCOM(?:\\s|$)"],
+  ssd: ["(?:ESSENCORE\\s+)?KLEVV\\s+CRAS\\s+C910G\\s+M\\.2\\s+NVMe", "(?:Samsung|삼성전자|SK\\s*하이닉스|SK\\s*hynix)"],
   memory: ["^PATRIOT\\s+DDR5-8000\\s+CL38\\s+VIPER\\s+Xtreme5\\s+RGB\\s+패키지(?:\\s|$)", "^ESSENCORE\\s+KLEVV\\s+DDR5-5600\\s+CL46\\s+파인인포(?:\\s|$)", "^ESSENCORE\\s+KLEVV\\s+DDR4-3200\\s+CL22\\s+파인인포(?:\\s|$)"],
   gpu: ["\\bRTX\\s+50\\d{2}\\b", "^MSI\\s+지포스\\s+RTX\\s+3050\\s+벤투스\\s+2X\\s+E\\s+OC\\s+D6\\s+6GB(?:\\s|$)", "^AFOX\\s+라데온\\s+RX\\s+580\\s+2048SP\\s+D5\\s+8GB\\s+디앤디컴(?:\\s|$)"]
 } as const;
 
-export function phase1GamingPartAllowed(part: Part, vendor?: GpuVendor): boolean {
+export function phase1GamingPartAllowed(part: Part, vendor?: GpuVendor, cpuVendor?: "amd" | "intel"): boolean {
   // Packaging cannot make an overseas or used listing a domestic new product.
   if (part.dataQuality === "seed") return false;
   const listingType = inferListingType(part);
   if (listingType === "overseas" || listingType === "used" || listingType === "accessory") return false;
+  if (part.category === "ssd") return gamingSsdFamilyAllowed(part) || gamingFallbackSsdAllowed(part);
+  if (cpuVendor === "intel" && part.category === "cpu") return cpuGamingEvidenceFor(part)?.vendor === "intel" && phase1IntelStockCpuPowerFor(part) !== undefined;
+  if (cpuVendor === "intel" && part.category === "motherboard") return (part.specs.socket === "LGA1700" || part.specs.socket === "LGA1851") && ((part.specs.vrmCapacityW ?? 0) > 0 || phase1IntelMotherboardEvidenceFor(part) !== undefined);
   const patterns = part.category === "gpu" ? gamingGpuNamePatterns(vendor) : PHASE1_GAMING_NAME_PATTERNS[part.category as keyof typeof PHASE1_GAMING_NAME_PATTERNS];
   if (!patterns) return true;
   return patterns.some((pattern) => new RegExp(pattern, "i").test(part.name));
@@ -29,11 +35,22 @@ function gamingGpuNamePatterns(vendor?: GpuVendor): readonly string[] {
   return PHASE1_GAMING_NAME_PATTERNS.gpu;
 }
 
-export function phase1GamingFilters(adminFilters?: EngineTargetFiltersConfig, vendor?: GpuVendor): EngineTargetFiltersConfig {
+export function phase1GamingFilters(adminFilters?: EngineTargetFiltersConfig, vendor?: GpuVendor, cpuVendor?: "amd" | "intel"): EngineTargetFiltersConfig {
   const categories = adminFilters?.enabled ? { ...adminFilters.categories } : {};
   for (const [category, namePatterns] of Object.entries(PHASE1_GAMING_NAME_PATTERNS)) {
     const key = category as keyof typeof PHASE1_GAMING_NAME_PATTERNS;
     const adminRule = categories[key];
+    if (key === "ssd") { categories[key] = { ...adminRule, namePatterns: [...namePatterns], brands: undefined }; continue; }
+    if (cpuVendor === "intel" && (key === "cpu" || key === "motherboard")) {
+      const specValues = adminRule?.specValues ? { ...adminRule.specValues } : undefined;
+      // A live AMD-only series filter describes the default vendor allowlist.
+      // Release that one facet for an explicit Intel request, retaining every
+      // unrelated admin facet, price range, flag and excluded product ID.
+      const series = specValues?.cpuSeries;
+      if (key === "cpu" && series?.length && series.every((value) => /^Ryzen\s+\d+$/i.test(value))) delete specValues!.cpuSeries;
+      categories[key] = { ...adminRule, ...(specValues ? { specValues } : {}), namePatterns: key === "cpu" ? ["(?:Intel|인텔|코어)"] : [".*"], brands: undefined };
+      continue;
+    }
     // The catalog has already been intersected with the test-bed allowlist.
     // Keep any admin restrictions and expose explicit names so KLEVV and older
     // Ryzen models bypass the unrelated general-generation/brand policy.
@@ -49,6 +66,10 @@ function cpuModelNumber(part: Part): string | undefined {
 /** Internal gaming classes: extra cores alone are not a gaming upgrade. */
 export function phase1CpuGamingClass(part: Part | undefined): number {
   if (!part) return 0;
+  // The director treats the 9800–9950 X3D family as one gaming balance class.
+  if (/\b(?:9800|9850|9900|9950)X3D\b/i.test(`${part.name} ${part.model ?? ""}`)) return 6.5;
+  const learned = cpuGamingScoreFor(part);
+  if (learned !== undefined) return learned / 20;
   const model = cpuModelNumber(part);
   if (!model) return 0;
   const series = Number(model[0]);

@@ -7,11 +7,11 @@ import { PURCHASE_CHECKLIST_ACTION_EVENT, PURCHASE_CHECKLIST_CHANGE_EVENT, PURCH
 import type { BuildSelection, CompatibilityResult, Part } from "../shared/types";
 
 const priorityLabels: Record<BuildActionPriority, string> = { blocker: "먼저 해결", review: "구매 전 확인", manual: "조립 전 확인" };
-const sourceLabels: Record<BuildActionSource, string> = { compatibility: "호환성", accessory: "주변 부품", data: "데이터", physical: "장착·전력", price: "가격", assembly: "조립" };
+const sourceLabels: Record<BuildActionSource, string> = { compatibility: "호환성", accessory: "주변 부품", data: "데이터", physical: "장착/전력", price: "가격", assembly: "조립" };
 const sourceIcons: Record<BuildActionSource, typeof FiInfo> = { compatibility: FiZap, accessory: FiTool, data: FiDatabase, physical: FiMonitor, price: FiShoppingCart, assembly: FiCheckCircle };
 
 function actionButtonText(action: BuildAction) {
-  return action.ruleId ? "항목 보기" : action.targetId === "gpu-fit-summary-panel" ? "GPU 장착 보기" : action.targetId === "build-resource-summary" ? "전력·냉각 보기" : action.targetId === "data-health-panel" ? "데이터 보기" : action.targetId === "purchase-list-panel" ? "구매 목록 보기" : action.targetId === "repair-plan-panel" ? "호환 개선안 보기" : action.targetId === "build-connectivity-panel" ? "연결 자원 보기" : "체크리스트 보기";
+  return action.ruleId ? "항목 보기" : action.targetId === "gpu-fit-summary-panel" ? "GPU 장착 보기" : action.targetId === "build-resource-summary" ? "전력/냉각 보기" : action.targetId === "data-health-panel" ? "데이터 보기" : action.targetId === "purchase-list-panel" ? "구매 목록 보기" : action.targetId === "repair-plan-panel" ? "호환 개선안 보기" : action.targetId === "build-connectivity-panel" ? "연결 자원 보기" : "체크리스트 보기";
 }
 
 function checkedIdsFromStorage(storageKey: string) {

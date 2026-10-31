@@ -8,7 +8,7 @@ describe("saved comparison database mapping", () => {
       name: "GPU 부품 비교",
       category: "gpu",
       current_part_name: "기존 GPU",
-      current_part_summary: "PCIe 4.0 · VRAM 8GB",
+      current_part_summary: "PCIe 4.0 / VRAM 8GB",
       current_part_price: "450,000원",
       catalog_snapshot_at: new Date("2026-09-02T01:02:03.000Z"),
       engine_version: "2.57.0",
@@ -23,7 +23,7 @@ describe("saved comparison database mapping", () => {
       id: "comparison-db-1",
       catalogSnapshotAt: "2026-09-02T01:02:03.000Z",
       engineVersion: "2.57.0",
-      currentPartSummary: "PCIe 4.0 · VRAM 8GB",
+      currentPartSummary: "PCIe 4.0 / VRAM 8GB",
       currentPartPrice: "450,000원",
       ownerTokenHash: "a".repeat(64)
     });

@@ -39,7 +39,7 @@ export function validateCatalogSeedMappingManualInput(input: unknown, category?:
   const body = input && typeof input === "object" && !Array.isArray(input) ? input as Record<string, unknown> : {};
   const sourceProductCode = nonEmptyString(body.sourceProductCode, MAX_SOURCE_PRODUCT_CODE_LENGTH);
   const sourceUrl = nonEmptyString(body.sourceUrl, MAX_SOURCE_URL_LENGTH);
-  if (!sourceProductCode || !/^[0-9A-Za-z_-]{3,64}$/.test(sourceProductCode)) errors.push("다나와 상품 코드는 영문·숫자·하이픈·밑줄 3~64자로 입력해 주세요.");
+  if (!sourceProductCode || !/^[0-9A-Za-z_-]{3,64}$/.test(sourceProductCode)) errors.push("다나와 상품 코드는 영문, 숫자, 하이픈, 밑줄 3~64자로 입력해 주세요.");
   if (!sourceUrl) errors.push("다나와 상품 페이지 URL이 필요합니다.");
   if (!sourceProductCode || !sourceUrl || errors.length > 0) return { valid: false, errors };
 
@@ -123,7 +123,7 @@ export function validateCatalogSeedMappingReview(
   if (active && !active.sourceProductCode) errors.push("현재 부품에 source product code가 없습니다.");
   if (starter && active && active.source === "danawa" && active.sourceProductCode) {
     const candidate = catalogSeedMappingCandidatesFor(starter, activeCatalog, { limit: 5 }).find((item) => item.activePartId === active.id && item.activeSourceProductCode === active.sourceProductCode);
-    if (!candidate) errors.push("현재 부품이 자동 매핑 부품에 없습니다. 이름·모델을 다시 확인해 주세요.");
+    if (!candidate) errors.push("현재 부품이 자동 매핑 부품에 없습니다. 이름/모델을 다시 확인해 주세요.");
   }
   if (errors.length > 0 || !starter || !active || !active.sourceProductCode || active.source !== "danawa") return { valid: false, errors };
   return {

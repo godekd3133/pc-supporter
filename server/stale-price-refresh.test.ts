@@ -8,7 +8,8 @@ const mocks = vi.hoisted(() => ({
   refreshAccessory: vi.fn(),
   upsertCatalog: vi.fn(),
   upsertAccessories: vi.fn(),
-  appendChange: vi.fn()
+  appendChange: vi.fn(),
+  lease: vi.fn()
 }));
 
 vi.mock("./catalog", () => ({
@@ -30,14 +31,14 @@ vi.mock("./part-refresh", () => ({
   accessoryRefreshResponse: () => ({ changedFields: ["priceWon"], refreshedAt: "2026-10-02T00:00:00.000Z" })
 }));
 vi.mock("./catalog-ingestion-coordinator", () => ({
-  withCatalogIngestionLease: async (fn: () => Promise<unknown>) => fn()
+  withCatalogIngestionLease: (fn: () => Promise<unknown>) => mocks.lease(fn)
 }));
 vi.mock("./catalog-change-log", () => ({
   appendCatalogChangeRecord: mocks.appendChange,
   catalogChangeRecord: () => ({ id: "change-record" })
 }));
 
-import { noteStaleServedPrices, resetStalePriceRefreshState, stalePriceRefreshQueueSize, whenStalePriceRefreshIdle } from "./stale-price-refresh";
+import { noteStaleServedPrices, resetStalePriceRefreshState, stalePriceRefreshQueueSize, stalePriceRefreshStatus, whenStalePriceRefreshIdle } from "./stale-price-refresh";
 
 const staleCheckedAt = new Date(Date.now() - 13 * 60 * 60 * 1000).toISOString();
 const freshCheckedAt = new Date().toISOString();
@@ -81,7 +82,8 @@ describe("stale served price refresh", () => {
     mocks.refreshAccessory.mockReset();
     mocks.upsertCatalog.mockReset().mockImplementation(async (items: Part[]) => items);
     mocks.upsertAccessories.mockReset().mockImplementation(async (items: AccessoryItem[]) => items);
-    mocks.appendChange.mockReset();
+    mocks.appendChange.mockReset().mockResolvedValue(undefined);
+    mocks.lease.mockReset().mockImplementation(async (fn: () => Promise<unknown>) => fn());
     resetStalePriceRefreshState();
   });
 
@@ -91,7 +93,7 @@ describe("stale served price refresh", () => {
     const seedPart = part({ id: "seed-part", source: "seed", dataQuality: "seed", priceCheckedAt: staleCheckedAt });
     const noCode = part({ id: "no-code", priceCheckedAt: staleCheckedAt, sourceProductCode: undefined, danawaUrl: undefined });
     mocks.catalog = [stalePart, freshPart, seedPart, noCode];
-    mocks.refreshPart.mockImplementation(async (before: Part) => ({ ...before, priceWon: 120000 }));
+    mocks.refreshPart.mockImplementation(async (before: Part) => ({ ...before, priceWon: 120000, priceCheckedAt: freshCheckedAt }));
 
     noteStaleServedPrices([stalePart, freshPart, seedPart, noCode]);
     await whenStalePriceRefreshIdle();
@@ -105,7 +107,7 @@ describe("stale served price refresh", () => {
   it("refreshes stale accessories through the accessory path", async () => {
     const staleAcc = accessory({ id: "stale-acc", priceCheckedAt: staleCheckedAt });
     mocks.accessories = [staleAcc];
-    mocks.refreshAccessory.mockImplementation(async (before: AccessoryItem) => ({ ...before, priceWon: 12000 }));
+    mocks.refreshAccessory.mockImplementation(async (before: AccessoryItem) => ({ ...before, priceWon: 12000, priceCheckedAt: freshCheckedAt }));
 
     noteStaleServedPrices([staleAcc]);
     await whenStalePriceRefreshIdle();
@@ -128,7 +130,7 @@ describe("stale served price refresh", () => {
   it("dedupes repeat views of the same item into a single refresh", async () => {
     const stalePart = part({ id: "dup", priceCheckedAt: staleCheckedAt });
     mocks.catalog = [stalePart];
-    mocks.refreshPart.mockImplementation(async (before: Part) => ({ ...before }));
+    mocks.refreshPart.mockImplementation(async (before: Part) => ({ ...before, priceCheckedAt: freshCheckedAt }));
 
     noteStaleServedPrices([stalePart]);
     noteStaleServedPrices([stalePart]);
@@ -136,5 +138,53 @@ describe("stale served price refresh", () => {
 
     expect(mocks.refreshPart).toHaveBeenCalledTimes(1);
     expect(stalePriceRefreshQueueSize()).toBe(0);
+  });
+
+  it("does not immediately retry a recently confirmed no-offer price", async () => {
+    const unavailable = part({ priceCheckedAt: staleCheckedAt, priceUnavailableAt: freshCheckedAt, priceWon: undefined });
+    noteStaleServedPrices([unavailable]);
+    await whenStalePriceRefreshIdle();
+    expect(mocks.refreshPart).not.toHaveBeenCalled();
+  });
+
+  it("retains busy work and retries it on a subsequent view after the cooldown", async () => {
+    const stale = part({ id: "busy-part", priceCheckedAt: staleCheckedAt });
+    mocks.catalog = [stale];
+    mocks.lease.mockRejectedValueOnce(Object.assign(new Error("busy"), { name: "CatalogIngestionBusyError" }));
+    const initialNow = Date.now();
+    const now = vi.spyOn(Date, "now").mockReturnValue(initialNow);
+    try {
+      noteStaleServedPrices([stale]);
+      await whenStalePriceRefreshIdle();
+      expect(stalePriceRefreshStatus()).toMatchObject({ pending: 1, deferred: 1, failed: 0 });
+      expect(mocks.refreshPart).not.toHaveBeenCalled();
+      now.mockReturnValue(initialNow + 60_001);
+      mocks.refreshPart.mockResolvedValue({ ...stale, priceCheckedAt: new Date(initialNow + 60_001).toISOString() });
+      noteStaleServedPrices([stale]);
+      await whenStalePriceRefreshIdle();
+      expect(mocks.refreshPart).toHaveBeenCalledTimes(1);
+      expect(stalePriceRefreshStatus()).toMatchObject({ pending: 0, succeeded: 1, deferred: 1 });
+    } finally { now.mockRestore(); }
+  });
+
+  it("does not use a recent specs update as evidence of a fresh price", async () => {
+    const stale = part({ id: "recent-specs", updatedAt: freshCheckedAt, priceCheckedAt: undefined });
+    mocks.catalog = [stale];
+    mocks.refreshPart.mockResolvedValue({ ...stale, priceCheckedAt: freshCheckedAt });
+    noteStaleServedPrices([stale]);
+    await whenStalePriceRefreshIdle();
+    expect(mocks.refreshPart).toHaveBeenCalledTimes(1);
+    expect(stalePriceRefreshStatus()).toMatchObject({ pending: 0, succeeded: 1 });
+  });
+
+  it("records a failed observation while leaving the stale price timestamp unchanged", async () => {
+    const stale = part({ id: "failed-part", priceCheckedAt: staleCheckedAt });
+    mocks.catalog = [stale];
+    mocks.refreshPart.mockRejectedValue(new Error("network failed"));
+    noteStaleServedPrices([stale]);
+    await whenStalePriceRefreshIdle();
+    expect(stalePriceRefreshStatus()).toMatchObject({ pending: 1, failed: 1, lastFailure: { itemId: stale.id, message: "network failed" } });
+    expect(mocks.upsertCatalog).not.toHaveBeenCalled();
+    expect(stale.priceCheckedAt).toBe(staleCheckedAt);
   });
 });

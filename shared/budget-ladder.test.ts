@@ -121,8 +121,8 @@ describe("budget ladder scenarios", () => {
     const text = budgetLadderTextFor(outcomes);
     expect(text).toContain("[목표 예산] 입력한 목표 예산 그대로");
     expect(text).toContain("합계: 980,000원");
-    expect(text).toContain("변경: CPU · 이전 CPU → 새 CPU");
-    expect(text).toContain("실패 정보: GPU 부품 부족: 조건을 만족하는 부품이 없습니다. · 부품 수 0개 · 권장 예산을 상향해 주세요.");
+    expect(text).toContain("변경: CPU / 이전 CPU → 새 CPU");
+    expect(text).toContain("실패 정보: GPU 부품 부족: 조건을 만족하는 부품이 없습니다. / 부품 수 0개 / 권장 예산을 상향해 주세요.");
     expect(text).not.toContain("카탈로그 분석");
 
     const csv = budgetLadderCsvFor(outcomes);
@@ -158,7 +158,7 @@ describe("budget ladder scenarios", () => {
     const sensitiveDiagnostic: BuildGenerationDiagnostic = {
       id: "internal-performance",
       title: "내부 성능 비교",
-      summary: "3DMark Time Spy 21000 · 평균 144 FPS 측정",
+      summary: "3DMark Time Spy 21000 / 평균 144 FPS 측정",
       facts: [{ label: "Recommendation Trust score", value: "92점" }],
       recommendation: "Cinebench R23 18000점과 FPS 자료를 내부 신뢰도 근거로 사용"
     };

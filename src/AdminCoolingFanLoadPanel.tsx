@@ -46,11 +46,11 @@ function fanSummary(item: AccessoryItem) {
     item.specs.fanCount !== undefined ? `상품 팬 ${item.specs.fanCount}개` : undefined,
     item.specs.lengthMm !== undefined ? `${item.specs.lengthMm}mm` : undefined,
     item.specs.fanCurrentA !== undefined ? `${item.specs.fanCurrentA}A/팬` : undefined
-  ].filter(Boolean).join(" · ") || "상세 스펙을 확인할 수 있습니다.";
+  ].filter(Boolean).join(" / ") || "상세 스펙을 확인할 수 있습니다.";
 }
 
 function loadText(item: CoolingFanLoadOverrideListItem) {
-  return [`${item.fanCurrentA}A/팬`, `제조사 ${item.manufacturerModel}`, item.sourceNote].filter(Boolean).join(" · ");
+  return [`${item.fanCurrentA}A/팬`, `제조사 ${item.manufacturerModel}`, item.sourceNote].filter(Boolean).join(" / ");
 }
 
 function downloadJson(filename: string, value: unknown) {
@@ -275,14 +275,14 @@ export function CoolingFanLoadOverridePanel({ onToast, onMetaRefresh }: { onToas
   }, [listQuery, overrides]);
 
   return <section className="admin-card cooling-fan-load-card" data-testid="admin-cooling-fan-load">
-    <div className="admin-card-heading"><div><h3>쿨링팬 소비전류 확인</h3><p className="admin-card-description">상품 페이지나 제조사 자료에서 팬 모터 1개의 소비전류를 확인해 기록합니다. RGB LED 전류와는 따로 저장합니다. 허브 포트·커넥터·전류가 모두 확인된 팬 허브만 추천합니다.</p></div><FiShield /></div>
+    <div className="admin-card-heading"><div><h3>쿨링팬 소비전류 확인</h3><p className="admin-card-description">상품 페이지나 제조사 자료에서 팬 모터 1개의 소비전류를 확인해 기록합니다. RGB LED 전류와는 따로 저장합니다. 허브 포트/커넥터/전류가 모두 확인된 팬 허브만 추천합니다.</p></div><FiShield /></div>
     {error && <div className="cooling-fan-load-error" role="alert"><FiXCircle /> {error}</div>}
     <div className="cooling-fan-load-coverage"><div><strong>{coverage?.totalCoolingFans.toLocaleString("ko-KR") ?? "-"}</strong><span>쿨링팬</span></div><div><strong>{coverage?.knownCount.toLocaleString("ko-KR") ?? "-"}</strong><span>전류 확인</span></div><div><strong>{coverage?.registeredCount.toLocaleString("ko-KR") ?? "-"}</strong><span>제조사 보강</span></div><div><strong>{coverage ? `${coverage.coveragePercent}%` : "-"}</strong><span>정보 확인률</span></div></div>
     <div className="cooling-fan-load-grid">
       <div className="cooling-fan-load-editor">
-        <div className="cooling-fan-load-subheading"><strong>팬 검색·단건 보강</strong><span>제조사 정보 필수</span></div>
-        <label className="cooling-fan-load-search"><span>쿨링팬 검색</span><div><FiSearch /><input aria-label="팬 소비전류 팬 검색" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="팬명·브랜드·모델" disabled={busy} /></div></label>
-        {fansLoading ? <p className="cooling-fan-load-state"><FiLoader className="spin" /> 쿨링팬 검색 중...</p> : fans.length > 0 ? <div className="cooling-fan-load-fans">{fans.map((fan) => <button type="button" className={fan.id === selectedFan?.id ? "selected" : ""} onClick={() => selectFan(fan)} key={fan.id} disabled={busy}><strong>{fan.name}</strong><small>{fan.id} · {fanSummary(fan)}</small></button>)}</div> : <p className="cooling-fan-load-state">검색 결과가 없습니다.</p>}
+        <div className="cooling-fan-load-subheading"><strong>팬 검색/단건 보강</strong><span>제조사 정보 필수</span></div>
+        <label className="cooling-fan-load-search"><span>쿨링팬 검색</span><div><FiSearch /><input aria-label="팬 소비전류 팬 검색" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="팬명/브랜드/모델" disabled={busy} /></div></label>
+        {fansLoading ? <p className="cooling-fan-load-state"><FiLoader className="spin" /> 쿨링팬 검색 중...</p> : fans.length > 0 ? <div className="cooling-fan-load-fans">{fans.map((fan) => <button type="button" className={fan.id === selectedFan?.id ? "selected" : ""} onClick={() => selectFan(fan)} key={fan.id} disabled={busy}><strong>{fan.name}</strong><small>{fan.id} / {fanSummary(fan)}</small></button>)}</div> : <p className="cooling-fan-load-state">검색 결과가 없습니다.</p>}
         {selectedFan && <form className="cooling-fan-load-form" onSubmit={(event) => void saveSelected(event)}>
           <div className="cooling-fan-load-selected"><span>선택한 쿨링팬</span><strong>{selectedFan.name}</strong><small>{selectedFan.id}</small></div>
           <div className="cooling-fan-load-fields"><label><span>팬 모터 소비전류 (A/팬)</span><input aria-label="팬 모터 소비전류" type="number" min="0.001" max="20" step="0.001" value={currentA} onChange={(event) => setCurrentA(event.target.value)} placeholder="예: 0.2" disabled={busy} required /></label><label><span>제조사 모델/SKU</span><input aria-label="팬 소비전류 제조사 모델" value={manufacturerModel} onChange={(event) => setManufacturerModel(event.target.value)} maxLength={160} placeholder="예: FAN-MODEL-REV-A" disabled={busy} required /></label></div>
@@ -292,15 +292,15 @@ export function CoolingFanLoadOverridePanel({ onToast, onMetaRefresh }: { onToas
         </form>}
       </div>
       <div className="cooling-fan-load-batch">
-        <div className="cooling-fan-load-subheading"><strong>JSON 일괄 보강</strong><span>최대 500개 · 오류 발생 시 전체 저장 중단</span></div>
+        <div className="cooling-fan-load-subheading"><strong>JSON 일괄 보강</strong><span>최대 500개 / 오류 발생 시 전체 저장 중단</span></div>
         <textarea aria-label="쿨링팬 소비전류 보강 JSON" value={json} onChange={(event) => { setJson(event.target.value); setValidation(null); setValidatedInput(""); }} placeholder={COOLING_FAN_LOAD_PLACEHOLDER} disabled={busy} />
         <div className="cooling-fan-load-batch-actions"><button className="button button-secondary" type="button" onClick={() => void validateBatch()} disabled={busy || !json.trim()}><FiCheckCircle /> JSON 확인</button><button className="button button-primary" type="button" onClick={() => void saveBatch()} disabled={busy || !validation || validation.invalidCount > 0 || validatedInput !== json}><FiSave /> 확인 결과 저장</button><button className="button button-light" type="button" onClick={() => void exportOverrides()} disabled={busy}><FiDownload /> JSON 내보내기</button></div>
-        {validation && <div className={`cooling-fan-load-validation ${validation.invalidCount === 0 ? "valid" : "invalid"}`} role="status"><strong>{validation.invalidCount === 0 ? <><FiCheckCircle /> 저장 가능</> : <><FiAlertTriangle /> 저장 중단</>} · {validation.validCount}개 유효 · {validation.invalidCount}개 수정 필요</strong>{validation.items.filter((item) => !item.valid).slice(0, 5).map((item) => <p key={item.accessoryId}><b>{item.accessoryName ?? item.accessoryId}</b> · {item.errors.join(" · ")}</p>)}</div>}
+        {validation && <div className={`cooling-fan-load-validation ${validation.invalidCount === 0 ? "valid" : "invalid"}`} role="status"><strong>{validation.invalidCount === 0 ? <><FiCheckCircle /> 저장 가능</> : <><FiAlertTriangle /> 저장 중단</>} / {validation.validCount}개 유효 / {validation.invalidCount}개 수정 필요</strong>{validation.items.filter((item) => !item.valid).slice(0, 5).map((item) => <p key={item.accessoryId}><b>{item.accessoryName ?? item.accessoryId}</b> / {item.errors.join(" / ")}</p>)}</div>}
         <p className="cooling-fan-load-help"><FiInfo /> 등록값에는 제조사 모델/SKU와 출처 메모를 남겨야 합니다. URL은 HTTPS만 허용합니다.</p>
       </div>
     </div>
     <div className="cooling-fan-load-list-heading"><strong>저장된 팬 소비전류 정보</strong><span>{visibleOverrides.length} / {overrides.length}개</span><input aria-label="저장된 팬 소비전류 정보 검색" value={listQuery} onChange={(event) => setListQuery(event.target.value)} placeholder="등록 목록 검색" disabled={busy} /></div>
-    {loading ? <p className="cooling-fan-load-state"><FiLoader className="spin" /> 저장 목록을 불러오는 중...</p> : visibleOverrides.length === 0 ? <p className="cooling-fan-load-state"><FiDatabase /> 저장된 팬 소비전류 정보가 없습니다.</p> : <div className="cooling-fan-load-list">{visibleOverrides.map((item) => <article key={item.accessoryId}><div><strong>{item.accessoryName ?? item.accessoryId}</strong><small>{loadText(item)} · {new Date(item.updatedAt).toLocaleDateString("ko-KR")}</small></div><div>{item.sourceUrl && <a href={item.sourceUrl} target="_blank" rel="noreferrer" aria-label={`${item.accessoryName ?? item.accessoryId} 팬 소비전류 정보 페이지`}><FiExternalLink /></a>}<button className="text-button danger-text-button" type="button" onClick={() => void removeOverride(item.accessoryId)} disabled={busy}><FiTrash2 /> 삭제</button></div></article>)}</div>}
+    {loading ? <p className="cooling-fan-load-state"><FiLoader className="spin" /> 저장 목록을 불러오는 중...</p> : visibleOverrides.length === 0 ? <p className="cooling-fan-load-state"><FiDatabase /> 저장된 팬 소비전류 정보가 없습니다.</p> : <div className="cooling-fan-load-list">{visibleOverrides.map((item) => <article key={item.accessoryId}><div><strong>{item.accessoryName ?? item.accessoryId}</strong><small>{loadText(item)} / {new Date(item.updatedAt).toLocaleDateString("ko-KR")}</small></div><div>{item.sourceUrl && <a href={item.sourceUrl} target="_blank" rel="noreferrer" aria-label={`${item.accessoryName ?? item.accessoryId} 팬 소비전류 정보 페이지`}><FiExternalLink /></a>}<button className="text-button danger-text-button" type="button" onClick={() => void removeOverride(item.accessoryId)} disabled={busy}><FiTrash2 /> 삭제</button></div></article>)}</div>}
     <p className="cooling-fan-load-note"><FiInfo /> 저장값은 기본 주변 부품 정보와 따로 관리합니다. 삭제하면 상품 페이지에서 읽은 값으로 돌아갑니다. 페이지에도 소비전류가 없으면 허브 전류 여유를 ‘확인 필요’로 표시합니다.</p>
   </section>;
 }

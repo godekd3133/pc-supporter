@@ -123,3 +123,42 @@ describe("independent price and listing observations", () => {
     expect(mergeReferenceCatalogPart(stoppedReference, source).delistedAt).toBe(source.updatedAt);
   });
 });
+
+
+describe("price unavailability precedence", () => {
+  const source = loaders[2]!.product;
+  it("cannot revive the old reference price after a newer confirmed no-offer observation", () => {
+    const unavailableAt = new Date(Date.parse(source.priceCheckedAt ?? source.updatedAt) + DAY_MS).toISOString();
+    const current = { ...source, priceWon: undefined, priceUnavailableAt: unavailableAt };
+    delete current.priceWon;
+    const result = mergeReferenceCatalogPart(current, source);
+    expect(result.priceWon).toBeUndefined();
+    expect(result.priceUnavailableAt).toBe(unavailableAt);
+    expect(result.priceCheckedAt).toBe(source.priceCheckedAt);
+  });
+  it("does not treat a newer specs-only timestamp as a new positive price observation", () => {
+    const t = Date.parse(source.priceCheckedAt ?? source.updatedAt);
+    const current = { ...source, priceWon: undefined, priceUnavailableAt: new Date(t + DAY_MS).toISOString() };
+    const specsOnlyReference = { ...source, updatedAt: new Date(t + 2 * DAY_MS).toISOString() };
+    delete specsOnlyReference.priceCheckedAt;
+    const result = mergeReferenceCatalogPart(current, specsOnlyReference);
+    expect(result.priceWon).toBeUndefined();
+    expect(result.priceUnavailableAt).toBe(current.priceUnavailableAt);
+  });
+  it("removes an old positive price when a newer no-offer reference is merged", () => {
+    const unavailableAt = new Date(Date.parse(source.priceCheckedAt ?? source.updatedAt) + DAY_MS).toISOString();
+    const reference = { ...source, priceUnavailableAt: unavailableAt };
+    delete reference.priceWon;
+    const result = mergeReferenceCatalogPart(source, reference);
+    expect(result).not.toHaveProperty("priceWon");
+    expect(result.priceUnavailableAt).toBe(unavailableAt);
+  });
+  it("clears a previous no-offer marker after a later positive observation", () => {
+    const t = Date.parse(source.priceCheckedAt ?? source.updatedAt);
+    const current = { ...source, priceWon: undefined, priceUnavailableAt: new Date(t + DAY_MS).toISOString() };
+    const positive = { ...source, priceWon: 9876543, priceCheckedAt: new Date(t + 2 * DAY_MS).toISOString() };
+    const result = mergeReferenceCatalogPart(current, positive);
+    expect(result.priceWon).toBe(9876543);
+    expect(result).not.toHaveProperty("priceUnavailableAt");
+  });
+});

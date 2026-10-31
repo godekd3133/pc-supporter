@@ -75,7 +75,7 @@ export function recommendAccessories(build: BuildSelection, catalog: Part[], acc
   const selectedM2FormFactors = [...new Set(ssds
     .map(({ part }) => part.specs.formFactor)
     .filter((formFactor): formFactor is string => Boolean(formFactor && formFactor.toLowerCase().includes("m.2") && formFactor.toLowerCase() !== "m.2")))];
-  const m2FitLabel = selectedM2FormFactors.length > 0 ? selectedM2FormFactors.join(" · ") : "M.2";
+  const m2FitLabel = selectedM2FormFactors.length > 0 ? selectedM2FormFactors.join(" / ") : "M.2";
   const cpuPowerW = cpu?.specs.pptW ?? cpu?.specs.tdpW ?? 0;
   const gpuPowerW = gpu?.specs.powerW ?? 0;
   const gpuLengthMm = gpu?.specs.lengthMm;
@@ -164,7 +164,7 @@ export function recommendAccessories(build: BuildSelection, catalog: Part[], acc
       recommendations,
       accessories,
       "memory_cooler",
-      `RAM 속도 ${memorySpeedLabel}${selectedMemoryModuleCount >= 4 ? ` · 메모리 ${selectedMemoryModuleCount}개` : ""} 구성에서는 메모리 쿨링팬이 도움이 될 수 있습니다.`,
+      `RAM 속도 ${memorySpeedLabel}${selectedMemoryModuleCount >= 4 ? ` / 메모리 ${selectedMemoryModuleCount}개` : ""} 구성에서는 메모리 쿨링팬이 도움이 될 수 있습니다.`,
       "RAM 높이와 CPU 쿨러에 걸리지 않는지 확인하세요. 메모리 종류가 맞는지도 살펴보세요.",
       "optional",
       "medium",
@@ -219,7 +219,7 @@ export function recommendAccessories(build: BuildSelection, catalog: Part[], acc
   const fanSizes = parseFanSizes(computerCase);
   const caseFanCount = parseCaseFanCount(computerCase);
   if (fanSizes.length > 0) {
-    const sizeLabel = fanSizes.map((size) => `${size}mm`).join("·");
+    const sizeLabel = fanSizes.map((size) => `${size}mm`).join("/");
     const fanPriority: AccessoryRecommendation["priority"] = caseFanCount === undefined || caseFanCount < 4 ? "recommended" : "optional";
     addRecommendations(
       recommendations,
@@ -244,7 +244,7 @@ export function recommendAccessories(build: BuildSelection, catalog: Part[], acc
       accessories,
       "thermal_grease",
       "CPU 쿨러를 처음 달거나 다시 달 때 써멀그리스를 사용할 수 있습니다.",
-      "부품 교체용이 아니라 조립·정비에 쓰는 제품입니다.",
+      "부품 교체용이 아니라 조립/정비에 쓰는 제품입니다.",
       "optional",
       "low",
       (item) => !/(conductonaut|liquid\s*metal|액체\s*금속|리퀴드\s*메탈|전도성)/i.test(`${item.name} ${item.rawSpecText ?? ""}`),
@@ -259,7 +259,7 @@ export function recommendAccessories(build: BuildSelection, catalog: Part[], acc
       recommendations,
       accessories,
       "ups",
-      `확인된 CPU·그래픽카드 전력 합계는 ${expectedLoadW}W입니다. 정전이나 순간 전압 변화에 대비할 UPS를 살펴보세요.`,
+      `확인된 CPU/그래픽카드 전력 합계는 ${expectedLoadW}W입니다. 정전이나 순간 전압 변화에 대비할 UPS를 살펴보세요.`,
       `출력 ${targetOutputW}W 이상인 제품을 골라보세요. 모니터와 주변기기 전력도 따로 더해야 합니다.`,
       "optional",
       "medium",
@@ -279,7 +279,7 @@ export function recommendAccessories(build: BuildSelection, catalog: Part[], acc
       accessories,
       "fan_hub",
       `케이스 기본 팬 ${caseFanCount}개 중 ${fanHeaderDeficit}개는 메인보드에 바로 연결하기 어렵습니다. 팬 허브를 살펴보세요.`,
-      `팬 ${requiredFanCount}개를 연결할 수 있고 SATA·IDE·Molex 전원을 쓰는 제품만 표시합니다.`,
+      `팬 ${requiredFanCount}개를 연결할 수 있고 SATA/IDE/Molex 전원을 쓰는 제품만 표시합니다.`,
       "recommended",
       "high",
       (item) => (fanHubPortCountFor(item) ?? 0) >= requiredFanCount && fanHubPowerInputFor(item) !== undefined,
@@ -292,7 +292,7 @@ export function recommendAccessories(build: BuildSelection, catalog: Part[], acc
       accessories,
       "fan_hub",
       `케이스 기본 팬이 ${caseFanCount}개입니다. 한꺼번에 연결하려면 팬 허브가 필요할 수 있습니다.`,
-      `팬 ${caseFanCount}개를 연결할 수 있고 SATA·IDE·Molex 전원을 쓰는 제품을 골라보세요.`,
+      `팬 ${caseFanCount}개를 연결할 수 있고 SATA/IDE/Molex 전원을 쓰는 제품을 골라보세요.`,
       "optional",
       "medium",
       (item) => (fanHubPortCountFor(item) ?? 0) >= requiredFanCount && fanHubPowerInputFor(item) !== undefined,

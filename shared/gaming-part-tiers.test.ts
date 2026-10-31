@@ -17,7 +17,7 @@ const water = () => part("cooler", "CORSAIR NAUTILUS 360 RS", { coolerType: "liq
 const ram = (capacityGb: number, memoryType = "DDR4", specs: Part["specs"] = {}) => part("memory", `KLEVV ${memoryType} ${capacityGb}GB`, { capacityGb, memoryType, memoryModuleCountPerKit: 1, speedMhz: memoryType === "DDR4" ? 3200 : 5600, ...specs }, capacityGb * 1000);
 const psu = (wattageW: number, specs: Part["specs"] = {}) => part("psu", `${wattageW}W`, { wattageW, pciePowerConnectors: { pcie_8pin_6plus2: 2 }, psuDepthMm: 140, psuFormFactor: "ATX", ...specs });
 const computerCase = (specs: Part["specs"] = {}) => part("case", "메쉬 케이스", { motherboardFormFactors: ["mATX", "ATX"], maxGpuLengthMm: 330, maxCoolerHeightMm: 160, maxPsuLengthMm: 180, supportedPsuFormFactors: ["ATX"], ...specs });
-const storage = (category: "ssd" | "hdd", capacityGb: number, specs: Part["specs"] = {}, priceWon = capacityGb * 100) => part(category, `${category.toUpperCase()} ${capacityGb}GB`, { capacityGb, interface: category === "ssd" ? "NVMe" : "SATA", ...specs }, priceWon);
+const storage = (category: "ssd" | "hdd", capacityGb: number, specs: Part["specs"] = {}, priceWon = capacityGb * 100) => part(category, `${category === "ssd" ? "ESSENCORE KLEVV CRAS C910G M.2 NVMe" : "HDD"} ${capacityGb}GB`, { capacityGb, interface: category === "ssd" ? "NVMe" : "SATA", ...specs }, priceWon);
 
 describe("gaming component role and capacity tiers", () => {
   it("keeps a Ryzen 7800X3D gaming role above a 9700X without treating R23 multi-core score as game FPS", () => {
@@ -25,7 +25,7 @@ describe("gaming component role and capacity tiers", () => {
     const ordinary = gamingPartTierFor(cpu("9700X", { l3CacheMb: 32 }));
     expect(cached.order).toBeGreaterThan(ordinary.order!);
     expect(cached.evidence).toBe("project_policy");
-    expect(cached.notes.join(" ")).toContain("FPS 실측값은 아닙니다");
+    expect(cached.notes.join(" ")).toContain("게임 상대 성능");
   });
 
   it("does not make core count itself a gaming upgrade", () => {
@@ -80,10 +80,10 @@ describe("gaming component role and capacity tiers", () => {
   });
 
   it("labels parts by their CPU generation, GPU chip and actual capacity", () => {
-    expect(gamingPartTierFor(cpu("9800X3D")).label).toBe("Ryzen 9000 · 3D V-Cache");
+    expect(gamingPartTierFor(cpu("9800X3D")).label).toBe("Ryzen 9000 / 3D V-Cache");
     expect(gamingPartTierFor(cpu("5600")).label).toBe("Ryzen 5000");
     expect(gamingPartTierFor(cpu("5500")).label).toBe("Ryzen 5000");
-    expect(gamingPartTierFor(gpu("RTX 5060 Ti", 16)).label).toBe("RTX 5060 Ti · 16GB");
+    expect(gamingPartTierFor(gpu("RTX 5060 Ti", 16)).label).toBe("RTX 5060 Ti / 16GB");
     expect(gamingPartTierFor(storage("ssd", 2000))).toMatchObject({ label: "2TB SSD", order: 2000, evidence: "catalog_spec" });
     expect(gamingPartTierFor(storage("hdd", 8000))).toMatchObject({ label: "8TB HDD", order: 8000, evidence: "catalog_spec" });
   });
@@ -219,26 +219,26 @@ describe("manual tier adjacency and dependency rebuilding", () => {
     const larger = storage("ssd", 2000);
     const cheaperLarger = { ...larger, id: "ssd-cheaper-2tb", priceWon: 120_000 };
     const smaller = storage("ssd", 500);
-    expect(gamingPartTierAdjacencyFor([current, sameCapacity, larger, cheaperLarger, smaller], current.id)).toEqual({ upId: cheaperLarger.id, upStorageCapacityGb: 2000, downId: smaller.id, downStorageCapacityGb: 500 });
-    expect(gamingPartTierAdjacencyFor([current, sameCapacity], current.id)).toEqual({});
+    expect(gamingPartTierAdjacencyFor([current, sameCapacity, larger, cheaperLarger, smaller], current.id)).toMatchObject({ upId: cheaperLarger.id, upStorageCapacityGb: 2000, downId: smaller.id, downStorageCapacityGb: 500 });
+    expect(gamingPartTierAdjacencyFor([current, sameCapacity], current.id)).toMatchObject({ upUnavailableReason: expect.any(String), downUnavailableReason: expect.any(String) });
   });
 
   it("keeps 500GB as the SSD floor and groups 512GB and 1024GB variants into selectable steps", () => {
     const capacities = [250, 500, 512, 1000, 1024, 2000, 4000].map((capacity) => storage("ssd", capacity));
-    expect(gamingPartTierAdjacencyFor(capacities, storage("ssd", 500).id)).toEqual({ upId: storage("ssd", 1000).id, upStorageCapacityGb: 1000 });
+    expect(gamingPartTierAdjacencyFor(capacities, storage("ssd", 500).id)).toMatchObject({ upId: storage("ssd", 1000).id, upStorageCapacityGb: 1000 });
     expect(gamingPartTierAdjacencyFor(capacities, storage("ssd", 512).id).downId).toBeUndefined();
-    expect(gamingPartTierAdjacencyFor(capacities, storage("ssd", 1024).id)).toEqual({ upId: storage("ssd", 2000).id, upStorageCapacityGb: 2000, downId: storage("ssd", 500).id, downStorageCapacityGb: 500 });
+    expect(gamingPartTierAdjacencyFor(capacities, storage("ssd", 1024).id)).toMatchObject({ upId: storage("ssd", 2000).id, upStorageCapacityGb: 2000, downId: storage("ssd", 500).id, downStorageCapacityGb: 500 });
     expect(gamingPartTierAdjacencyFor(capacities, storage("ssd", 4000).id).upId).toBeUndefined();
-    expect(gamingPartTierAdjacencyFor([...capacities, storage("ssd", 8000)], storage("ssd", 8000).id)).toEqual({ downId: storage("ssd", 4000).id, downStorageCapacityGb: 4000 });
+    expect(gamingPartTierAdjacencyFor([...capacities, storage("ssd", 8000)], storage("ssd", 8000).id)).toMatchObject({ downId: storage("ssd", 4000).id, downStorageCapacityGb: 4000 });
     expect(gamingPartTierAdjacencyFor([part("ssd", "capacity unknown")], "ssd-capacity unknown")).toEqual({});
   });
 
   it("uses per-drive HDD capacity steps independently of the number of HDDs", () => {
     const capacities = [1000, 2000, 4000, 8000, 16000].map((capacity) => storage("hdd", capacity));
-    expect(gamingPartTierAdjacencyFor(capacities, storage("hdd", 4000).id, { hddCount: 2 })).toEqual({ upId: storage("hdd", 8000).id, upHddCapacityGb: 8000, downId: storage("hdd", 2000).id, downHddCapacityGb: 2000 });
+    expect(gamingPartTierAdjacencyFor(capacities, storage("hdd", 4000).id, { hddCount: 2 })).toMatchObject({ upId: storage("hdd", 8000).id, upHddCapacityGb: 8000, downId: storage("hdd", 2000).id, downHddCapacityGb: 2000 });
     expect(gamingPartTierAdjacencyFor(capacities, storage("hdd", 2000).id).downId).toBeUndefined();
     expect(gamingPartTierAdjacencyFor(capacities, storage("hdd", 16000).id).upId).toBeUndefined();
-    expect(gamingPartTierAdjacencyFor([...capacities, storage("hdd", 6000)], storage("hdd", 6000).id)).toEqual({ upId: storage("hdd", 8000).id, upHddCapacityGb: 8000, downId: storage("hdd", 4000).id, downHddCapacityGb: 4000 });
+    expect(gamingPartTierAdjacencyFor([...capacities, storage("hdd", 6000)], storage("hdd", 6000).id)).toMatchObject({ upId: storage("hdd", 8000).id, upHddCapacityGb: 8000, downId: storage("hdd", 4000).id, downHddCapacityGb: 4000 });
     const result = gamingTierAssessmentFor({ ssd: storage("ssd", 2000), hdd: storage("hdd", 4000) }, { hddCount: 2 });
     expect(result.categories.ssd?.tier.label).toBe("2TB SSD");
     expect(result.categories.hdd?.tier.label).toBe("4TB HDD");
@@ -265,7 +265,7 @@ describe("manual tier adjacency and dependency rebuilding", () => {
     const result = gamingTierAssessmentFor({ cpu: cpu("7500F"), gpu: gpu("RTX 5090", 32), motherboard: b850(), memory: ram(16, "DDR5"), psu: psu(650), case: computerCase() });
     expect(result.requirements.memory.appropriateCapacityGb).toBe(32);
     expect(result.categories.memory?.appropriate).toBe("below");
-    expect(JSON.parse(JSON.stringify(result)).policyVersion).toBe("gaming-part-tiers-2026-10-05");
+    expect(JSON.parse(JSON.stringify(result)).policyVersion).toBe("gaming-part-tiers-2026-10-12");
     expect(result).not.toHaveProperty("compatibility");
   });
 });
@@ -291,5 +291,75 @@ describe("adjacent support parts respect known minimums", () => {
     const heatContext = { cpu: cpu("9950X", { tdpW: 170, pptW: 230 }), motherboard: x870() };
     expect(gamingPartTierAdjacencyFor([ag400(), pa120(), water()], pa120().id, heatContext).downId).toBeUndefined();
     expect(gamingPartTierAdjacencyFor([b850(), x870()], x870().id, heatContext).downId).toBeUndefined();
+  });
+});
+
+ describe("explicit top CPU manual chain", () => {
+  it("moves 9800 → 9850 → 9900 → 9950 in both directions independently of game rank", () => {
+    const models = ["9800X3D", "9850X3D", "9900X3D", "9950X3D"];
+    const parts = models.map((model) => cpu(model));
+    for (let index = 0; index < parts.length; index++) {
+      const adjacency = gamingPartTierAdjacencyFor(parts, parts[index].id);
+      expect(adjacency.upId).toBe(parts[index + 1]?.id);
+      expect(adjacency.downId).toBe(parts[index - 1]?.id);
+    }
+  });
+  it("does not substitute a different SSD family for an unavailable capacity", () => {
+    const current = storage("ssd", 1000);
+    const other = { ...storage("ssd", 2000), name: "Kingston NVMe 2TB" };
+    expect(gamingPartTierAdjacencyFor([current, other], current.id).upId).toBeUndefined();
+  });
+});
+
+describe("SSD family preference with approved same-capacity fallback", () => {
+  it("prioritizes the fixed family again when that requested capacity is available", () => {
+    const current = {...storage("ssd",1000),name:"Samsung 990 PRO M.2 NVMe 1TB",brand:"Samsung",specs:{capacityGb:1000,formFactor:"M.2",interface:"NVMe"}};
+    const next = {...current,id:"samsung2tb",name:"Samsung 990 PRO M.2 NVMe 2TB",specs:{...current.specs,capacityGb:2000}};
+    const fixed = storage("ssd",2000);
+    expect(gamingPartTierAdjacencyFor([current,next,fixed],current.id).upId).toBe(fixed.id);
+    const fixedOne = storage("ssd",1000);
+    const twoTb = {...next,specs:{...next.specs,capacityGb:2000}};
+    expect(gamingPartTierAdjacencyFor([current,fixedOne,twoTb],twoTb.id).downId).toBe(fixedOne.id);
+  });
+});
+
+
+describe("strict manual step boundaries", () => {
+  it("does not skip a missing CPU model or reorder a manual ladder when prices change", () => {
+    const parts = [cpu("7500F"), cpu("7600"), cpu("9600"), cpu("9600X")];
+    expect(gamingPartTierAdjacencyFor(parts, parts[0].id).upId).toBe(parts[1].id);
+    expect(gamingPartTierAdjacencyFor(parts.map((part,index) => ({...part,priceWon: 1000000-index*200000})), parts[0].id).upId).toBe(parts[1].id);
+    expect(gamingPartTierAdjacencyFor([parts[0], parts[2]], parts[0].id)).toMatchObject({upUnavailableReason: expect.stringContaining("7600")});
+    expect(gamingPartTierAdjacencyFor([parts[0], parts[2]], parts[0].id).upId).toBeUndefined();
+  });
+  it("treats GPU VRAM variants as one model step and never jumps a missing model", () => {
+    const base = gpu("RTX 5060",8);
+    const eight = gpu("RTX 5060 Ti",8);
+    const sixteen = {...gpu("RTX 5060 Ti",16),priceWon: 1};
+    const next = gpu("RTX 5070",12);
+    expect(gamingPartTierAdjacencyFor([base,eight,sixteen,next],base.id).upId).toBe(eight.id);
+    expect(gamingPartTierAdjacencyFor([base,eight,sixteen,next],eight.id).upId).toBe(next.id);
+    expect(gamingPartTierAdjacencyFor([base,eight,sixteen,next],sixteen.id).downId).toBe(base.id);
+    expect(gamingPartTierAdjacencyFor([base,next],base.id)).toMatchObject({upUnavailableReason: expect.stringContaining("RTX5060TI")});
+  });
+  it("does not use an unavailable-price SKU as the intermediate step", () => {
+    const base = gpu("RTX 5060",8), missing = {...gpu("RTX 5060 Ti",8),priceWon: undefined,priceUnavailableAt:"2026-10-12T00:00:00Z"};
+    expect(gamingPartTierAdjacencyFor([base,missing,gpu("RTX 5070",12)],base.id).upId).toBeUndefined();
+  });
+  it("does not skip unavailable storage capacity or round a RAM kit up past the target", () => {
+    const one = storage("ssd",1000), four=storage("ssd",4000);
+    expect(gamingPartTierAdjacencyFor([one,four],one.id).upId).toBeUndefined();
+    expect(gamingPartTierAdjacencyFor([one,four],four.id).downId).toBeUndefined();
+    expect(gamingPartTierAdjacencyFor([ram(16),ram(48)],ram(16).id,{motherboard:a520()}).upMemoryCapacityGb).toBe(32);
+    expect(gamingPartTierAdjacencyFor([ram(32),ram(16)],ram(32).id,{motherboard:a520(),memoryQuantity:2}).downMemoryCapacityGb).toBe(32);
+  });
+  it("does not skip a missing or insufficient support step", () => {
+    const single=ag400(), waterCooler=water();
+    expect(gamingPartTierAdjacencyFor([single,waterCooler],single.id).upId).toBeUndefined();
+    expect(gamingPartTierAdjacencyFor([psu(600),psu(700)],psu(600).id).upId).toBeUndefined();
+    const current={...computerCase({maxGpuLengthMm:300}),id:"small"};
+    const middle={...computerCase({maxGpuLengthMm:330}),id:"middle",specs:{maxGpuLengthMm:330,motherboardFormFactors:["mATX"],maxCoolerHeightMm:160}};
+    const large={...computerCase({maxGpuLengthMm:400}),id:"large"};
+    expect(gamingPartTierAdjacencyFor([current,middle,large],current.id,{motherboard:x870()}).upId).toBeUndefined();
   });
 });

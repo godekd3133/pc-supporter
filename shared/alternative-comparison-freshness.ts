@@ -22,7 +22,7 @@ export function alternativeComparisonFreshnessFor(snapshot: AlternativeCompariso
       catalogChanged ? `부품 정보 ${new Date(snapshotDate).toLocaleDateString("ko-KR")} → ${new Date(currentDate).toLocaleDateString("ko-KR")}` : undefined,
       engineChanged ? `검사 버전 ${snapshot.engineVersion} → ${currentMeta.engineVersion}` : undefined
     ].filter((value): value is string => Boolean(value));
-    return { tone: "stale", label: "최신 정보 확인 권장", detail: `${reasons.join(" · ")} · 비교표에는 공유 당시 정보가 표시됩니다.` };
+    return { tone: "stale", label: "최신 정보 확인 권장", detail: `${reasons.join(" / ")} / 비교표에는 공유 당시 정보가 표시됩니다.` };
   }
-  return { tone: "current", label: "공유 당시와 같은 정보", detail: `검사 버전 ${snapshot.engineVersion ?? "기록 없음"} · 부품 정보 확인일 ${snapshot.catalogSnapshotAt ? new Date(snapshotDate).toLocaleDateString("ko-KR") : "기록 없음"}` };
+  return { tone: "current", label: "공유 당시와 같은 정보", detail: `검사 버전 ${snapshot.engineVersion ?? "기록 없음"} / 부품 정보 확인일 ${snapshot.catalogSnapshotAt ? new Date(snapshotDate).toLocaleDateString("ko-KR") : "기록 없음"}` };
 }

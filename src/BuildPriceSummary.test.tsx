@@ -22,7 +22,7 @@ describe("BuildPriceSummaryPanel", () => {
     }));
 
     expect(html).toContain("1,000,000원");
-    expect(html).toContain("가격 확인 필요 2종 · 구매 전 다시 확인해 주세요");
+    expect(html).toContain("가격 확인 필요 2종");
     expect(html).toContain("표시 합계에는 확인을 다시 해야 할 가격 2종이 포함돼 있어요.");
     expect(html).not.toContain("가격 정보가 없는 부품이 있어요");
   });

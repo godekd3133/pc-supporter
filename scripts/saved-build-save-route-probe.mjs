@@ -56,7 +56,7 @@ try {
   if (!(await clickText(client, "호환 확인하기", ".desktop-editor-surface button.button-primary.full-width"))) throw new Error("호환 확인 버튼을 찾지 못했습니다.");
   await waitForValue(client, "location.pathname === '/result' && document.querySelector('.result-page') !== null", "결과 화면");
   await openResultDetails(client);
-  if (!(await clickText(client, "견적 저장·공유"))) throw new Error("견적 저장·공유 버튼을 찾지 못했습니다.");
+  if (!(await clickText(client, "견적 저장/공유"))) throw new Error("견적 저장/공유 버튼을 찾지 못했습니다.");
   await waitForValue(client, "document.querySelector('#save-build-dialog-title') !== null", "견적 저장 창");
   if (screenshotPath) await client.evaluate("window.__enableSavedBuildRouteCapture = true");
   const resultPromise = client.evaluate(`(async () => {

@@ -1,5 +1,5 @@
 // 마지막 글자의 받침 유무로 자연스러운 조사를 붙인다.
-// 영어·숫자로 끝나는 부품명도 한국어 발음 기준으로 판별한다.
+// 영어/숫자로 끝나는 부품명도 한국어 발음 기준으로 판별한다.
 
 const VOWEL_END_LETTERS = new Set("ABCDEGHIJKOPQTUVWY".split(""));
 const BATCHIM_DIGITS = new Set(["0", "1", "3", "6", "7", "8"]);

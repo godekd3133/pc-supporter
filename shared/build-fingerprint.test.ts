@@ -85,3 +85,11 @@ describe("gaming target freshness", () => {
     expect(buildCompatibilityInputFingerprint(build, left)).toBe(buildCompatibilityInputFingerprint(build, right));
   });
 });
+
+
+it("invalidates compatibility cache when explicit CPU or memory constraints change", () => {
+  const automatic = buildCompatibilityInputFingerprint(build, preferences);
+  expect(buildCompatibilityInputFingerprint(build, { ...preferences, cpuVendorPreference: "amd" })).not.toBe(automatic);
+  expect(buildCompatibilityInputFingerprint(build, { ...preferences, memoryTypePreference: "DDR5" })).not.toBe(automatic);
+  expect(buildCompatibilityInputFingerprint(build, { ...preferences, cpuVendorPreference: undefined, memoryTypePreference: undefined })).toBe(automatic);
+});

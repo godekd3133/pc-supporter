@@ -36,7 +36,7 @@ describe("saved build version comparison share API", () => {
 
       const unauthorizedCreate = await fetch(`${baseUrl}/api/version-comparisons`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ beforeBuildId: first.id, afterBuildId: second.id }) });
       expect(unauthorizedCreate.status).toBe(401);
-      const createShare = await fetch(`${baseUrl}/api/version-comparisons`, { method: "POST", headers: { "Content-Type": "application/json", "X-Share-Owner-Token": second.ownerToken }, body: JSON.stringify({ name: "원본·수정 버전 공유", beforeBuildId: first.id, afterBuildId: second.id, expiresInDays: 30 }) });
+      const createShare = await fetch(`${baseUrl}/api/version-comparisons`, { method: "POST", headers: { "Content-Type": "application/json", "X-Share-Owner-Token": second.ownerToken }, body: JSON.stringify({ name: "원본/수정 버전 공유", beforeBuildId: first.id, afterBuildId: second.id, expiresInDays: 30 }) });
       const shared = await createShare.json() as Record<string, any>;
       expect(createShare.status).toBe(201);
       expect(createShare.headers.get("cache-control")).toBe("private, no-store");

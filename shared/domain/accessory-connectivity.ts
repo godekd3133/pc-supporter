@@ -253,14 +253,14 @@ export function fanHubConnectionPlanFor(hub: AccessoryItem, selectedFans: Array<
   const fanInputTypes = [...new Set(fanPlans.flatMap((fan) => fan.connectorTypes))];
   const currentSummary = totalCurrentA === undefined || maxFanCurrentA === undefined
     ? "전류 정보 확인 필요"
-    : `${totalCurrentA.toFixed(2)}A / ${maxFanCurrentA.toFixed(2)}A · ${Math.max(0, maxFanCurrentA - totalCurrentA).toFixed(2)}A 여유`;
+    : `${totalCurrentA.toFixed(2)}A / ${maxFanCurrentA.toFixed(2)}A / ${Math.max(0, maxFanCurrentA - totalCurrentA).toFixed(2)}A 여유`;
   const portSummary = hubFanPortCount === undefined
     ? "허브 포트 수 확인 필요"
-    : `${assignedFanCount ?? 0}/${hubFanPortCount}포트 배치${unassignedFanCount ? ` · ${unassignedFanCount}개 미배치` : ""}`;
+    : `${assignedFanCount ?? 0}/${hubFanPortCount}포트 배치${unassignedFanCount ? ` / ${unassignedFanCount}개 미배치` : ""}`;
   const summary = status === "blocked"
-    ? "허브 포트·연결 타입 또는 전류 한도를 초과해 현재 연결 계획을 사용할 수 없습니다."
+    ? "허브 포트/연결 타입 또는 전류 한도를 초과해 현재 연결 계획을 사용할 수 없습니다."
     : status === "review"
-      ? "연결 경로는 구성됐지만 커넥터·제어 방식·전류 정보를 추가로 확인해야 합니다."
+      ? "연결 경로는 구성됐지만 커넥터/제어 방식/전류 정보를 추가로 확인해야 합니다."
       : "선택한 팬을 허브 출력에 연결할 수 있으며 확인된 전류 범위 안입니다.";
   return {
     id: `fan-hub-plan:${hub.id}`,
@@ -286,7 +286,7 @@ export function fanHubConnectionPlanFor(hub: AccessoryItem, selectedFans: Array<
     connectorIssue,
     currentIssue,
     fans: fanPlans,
-    summary: `${summary} ${totalFanCount}개 팬 · 허브 출력 ${hubFanOutputs.length > 0 ? hubFanOutputs.join(" · ") : "확인 필요"} · ${portSummary} · 팬 입력 ${fanInputTypes.join(" · ")} · ${currentSummary}`
+    summary: `${summary} ${totalFanCount}개 팬 / 허브 출력 ${hubFanOutputs.length > 0 ? hubFanOutputs.join(" / ") : "확인 필요"} / ${portSummary} / 팬 입력 ${fanInputTypes.join(" / ")} / ${currentSummary}`
   };
 }
 
@@ -365,7 +365,7 @@ export function rgbControllerConnectionPlanFor(
     ? ["확인 필요"]
     : [controllerVoltage === "mixed" ? "5V + 12V RGB" : `${controllerVoltage} RGB`];
   const deviceSummary = deviceLoad.additionalFanDeviceCount
-    ? `RGB 연결 장치 ${deviceCount}개 · 케이스 ${deviceLoad.caseDeviceCount ?? 0}개 + 추가 팬 RGB ${deviceLoad.additionalFanDeviceCount}개`
+    ? `RGB 연결 장치 ${deviceCount}개 / 케이스 ${deviceLoad.caseDeviceCount ?? 0}개 + 추가 팬 RGB ${deviceLoad.additionalFanDeviceCount}개`
     : `케이스 RGB ${deviceCount}개`;
   const summary = issue === "voltage_mismatch"
     ? "컨트롤러 전압이 케이스 RGB 장치와 달라 직접 연결할 수 없습니다."
@@ -374,9 +374,9 @@ export function rgbControllerConnectionPlanFor(
       : issue === "power_unknown"
         ? "RGB 출력과 전압은 맞지만 컨트롤러 외부 전원 입력을 확인해야 합니다."
         : issue === "rgb_load_unknown"
-          ? "RGB 장치별 소비전류·전력 정보가 없어 컨트롤러가 감당할 수 있는지 계산하지 못했어요."
+          ? "RGB 장치별 소비전류/전력 정보가 없어 컨트롤러가 감당할 수 있는지 계산하지 못했어요."
           : issue === "rgb_capacity_unknown"
-            ? "RGB 장치 부하는 계산했지만 필요한 전압에서 컨트롤러가 낼 수 있는 최대 전류·전력 정보가 없어 여유를 계산하지 못했어요."
+            ? "RGB 장치 부하는 계산했지만 필요한 전압에서 컨트롤러가 낼 수 있는 최대 전류/전력 정보가 없어 여유를 계산하지 못했어요."
             : issue === "rgb_power_over_limit"
               ? "RGB 장치 부하가 컨트롤러의 해당 전원 레일 허용치를 초과해 이 연결을 사용할 수 없습니다."
         : issue === "unknown"
@@ -406,6 +406,6 @@ export function rgbControllerConnectionPlanFor(
     ...(deviceLoad.provenance ? { rgbLoadProvenance: deviceLoad.provenance } : {}),
     status,
     issue,
-    summary: `${summary} ${deviceSummary} · 컨트롤러 출력 ${controllerOutputs.join(" · ")}${outputCount !== undefined ? ` · ${outputCount}포트` : ""}`
+    summary: `${summary} ${deviceSummary} / 컨트롤러 출력 ${controllerOutputs.join(" / ")}${outputCount !== undefined ? ` / ${outputCount}포트` : ""}`
   };
 }

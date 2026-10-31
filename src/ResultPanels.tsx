@@ -11,8 +11,8 @@ import { repairPlanBuildFor } from "../shared/repair-plan-build";
 import { type AccessoryCategory, type AccessoryItem, type AccessoryRecommendation, type AccessorySelection, type BuildSelection, type BuildMetrics, type CompatibilityLink, type CompatibilityResult, type Finding, type M2SlotAssignment, type Part, type PartCategory, type RecommendationPlan, type RecommendationPreferences, type UpgradeCompatibilityEvidence, type UpgradeBudgetEvidence, type UpgradeRecommendation, ACCESSORY_CATEGORIES, ACCESSORY_CATEGORY_LABELS, CATEGORY_LABELS, DATA_FRESHNESS_LABELS, DATA_QUALITY_LABELS, GAMING_REFRESH_RATE_LABELS, GAMING_RESOLUTION_LABELS, GAMING_RESOLUTION_VRAM_TARGETS, isKnownPrice, LISTING_TYPE_LABELS, PART_CATEGORIES } from "../shared/types";
 import type { RepairPlanComparisonViewState } from "./RepairPlanComparison";
 import { api } from "./api";
-import { safeExternalUrl, safeHttpsUrl } from "./safe-source-url";
-import { Suspense, lazy, useEffect, useId, useMemo, useRef, useState } from "react";
+import { safeExternalUrl } from "./safe-source-url";
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import "./performance-metrics.css";
 import type { IconType } from "react-icons";
 import { FiActivity, FiArrowLeft, FiBox, FiCheck, FiCheckCircle, FiChevronDown, FiClock, FiCpu, FiDatabase, FiEdit3, FiExternalLink, FiHardDrive, FiInfo, FiLayers, FiLoader, FiMonitor, FiPlus, FiRefreshCw, FiSearch, FiShare2, FiTool, FiXCircle, FiZap } from "react-icons/fi";
@@ -41,7 +41,7 @@ export function StaleResultView({ build, partMap, lastCheckedAt, entries, onRest
         <p className="eyebrow">새 구성</p>
         <h1>견적이 바뀌었어요.</h1>
         <p>새 구성의 호환 결과를 확인해 주세요. 이전 추천은 현재 견적에 적용되지 않아요.</p>
-        <small>이전 결과 · {new Date(lastCheckedAt).toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" })}</small>
+        <small>이전 결과 / {new Date(lastCheckedAt).toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" })}</small>
 
       </div>
       <button className="button button-primary" onClick={onCheck} disabled={checking}>{checking ? <><FiLoader className="spin" /> 호환 결과 계산 중...</> : <><FiActivity /> 호환 결과 보기</>}</button>
@@ -51,7 +51,7 @@ export function StaleResultView({ build, partMap, lastCheckedAt, entries, onRest
       <div className="stale-build-grid">{PART_CATEGORIES.map((category) => {
         const selections = selectionList(build, category);
         return <div className="stale-build-item" key={category}><span>{CATEGORY_LABELS[category]}</span><strong>{selections.length === 0 ? "미선택" : selections.map((selection) => `${partMap.get(selection.partId)?.name ?? selection.partId}${selection.quantity > 1 ? ` ×${selection.quantity}` : ""}`).join(", ")}</strong></div>;
-      })}{accessorySelections(build).length > 0 && <div className="stale-build-item"><span>주변 부품</span><strong>{accessorySelections(build).length}종 · {accessorySelections(build).reduce((total, selection) => total + selection.quantity, 0)}개</strong></div>}</div>
+      })}{accessorySelections(build).length > 0 && <div className="stale-build-item"><span>주변 부품</span><strong>{accessorySelections(build).length}종 / {accessorySelections(build).reduce((total, selection) => total + selection.quantity, 0)}개</strong></div>}</div>
 
     </section>
     <ChangeHistoryPanel entries={entries} onRestore={onRestore} restoring={checking} />
@@ -79,7 +79,7 @@ export function BuildScenarioPreviewPanel({ preview, currentResult, onApply, onR
       ? "부품을 바꾸면 호환 문제가 늘어날 수 있어요."
       : comparison.direction === "changed"
         ? "가격이나 호환 항목이 달라졌어요."
-        : "현재 구성의 가격·호환 상태가 같아요.";
+        : "현재 구성의 가격/호환 상태가 같아요.";
   return <section className={`build-scenario-preview ${comparison.direction}`} aria-label="구성 미리 보기" data-testid="build-scenario-preview">
     <div className="build-scenario-preview-heading"><div><p className="eyebrow">구성 비교</p><h2>구성 미리 보기</h2><p>{preview.summary}</p></div><div className="build-scenario-preview-heading-actions"><span className={`build-scenario-direction ${comparison.direction}`}>{directionLabel}</span><button className="icon-button" type="button" onClick={onClose} aria-label="구성 미리 보기 닫기"><FiXCircle /></button></div></div>
     <div className="build-scenario-candidate"><span>{CATEGORY_LABELS[preview.category]}</span><strong>{preview.part.name}</strong><small>현재 견적에 적용했을 때의 금액과 호환 정보예요.</small></div>
@@ -87,7 +87,7 @@ export function BuildScenarioPreviewPanel({ preview, currentResult, onApply, onR
     <div className="build-scenario-summary"><strong>{comparison.summary}</strong><span>{scenarioOutcomeNote}</span></div>
     <div className="build-scenario-findings"><div><strong>남은 호환 항목</strong><span>{nextFindings.length > 0 ? `${nextResult.findings.filter((finding) => finding.severity !== "info").length}개 중 최대 3개 표시` : "추가 항목 없음"}</span></div>{nextFindings.length > 0 && <ul>{nextFindings.map((finding) => <li key={finding.id}><b>{finding.severity === "blocker" ? "호환 불가" : finding.severity === "warning" ? "주의" : "확인"}</b>{finding.title}</li>)}</ul>}</div>
     <div className="build-scenario-preview-actions"><button className="button button-light" type="button" onClick={onClose}>계속 비교</button><button className="button button-primary" type="button" onClick={onApply}><FiActivity /> 이 구성으로 바꾸기</button></div>
-    <p className="build-scenario-preview-note"><FiInfo /> 미리보기는 현재 견적을 바꾸지 않아요. 이 구성을 선택하면 견적과 호환 결과가 함께 바뀝니다.</p>
+    
 
   </section>;
 }
@@ -97,7 +97,7 @@ export function BuildHealthPanel({ metrics, gpuSelected, psuSelected, caseSelect
     {
       label: "전력 여유",
       value: metrics.powerHeadroomW === undefined ? "정보 부족" : `${metrics.powerHeadroomW.toLocaleString("ko-KR")}W`,
-      detail: metrics.psuWattageW !== undefined && metrics.recommendedPsuW !== undefined ? `${metrics.psuWattageW}W 파워 · 권장 ${metrics.recommendedPsuW}W` : "파워 용량 정보 부족",
+      detail: metrics.psuWattageW !== undefined && metrics.recommendedPsuW !== undefined ? `${metrics.psuWattageW}W 파워 / 권장 ${metrics.recommendedPsuW}W` : "파워 용량 정보 부족",
       Icon: FiZap,
       tone: metrics.powerHeadroomW !== undefined && metrics.powerHeadroomW < 0 ? "danger" : metrics.powerHeadroomW !== undefined && metrics.powerHeadroomW < 120 ? "warning" : "good"
     },
@@ -118,7 +118,7 @@ export function BuildHealthPanel({ metrics, gpuSelected, psuSelected, caseSelect
     {
       label: "GPU 장착 길이",
       value: metrics.gpuLengthMm === undefined ? gpuSelected ? "길이 정보 없음" : "외장 GPU 없음" : `${metrics.gpuLengthMm}mm`,
-      detail: metrics.gpuLengthMm !== undefined && metrics.maxGpuLengthMm !== undefined ? `케이스 허용 ${metrics.maxGpuLengthMm}mm` : "그래픽카드·케이스 길이 정보 부족",
+      detail: metrics.gpuLengthMm !== undefined && metrics.maxGpuLengthMm !== undefined ? `케이스 허용 ${metrics.maxGpuLengthMm}mm` : "그래픽카드/케이스 길이 정보 부족",
       Icon: FiMonitor,
       tone: metrics.gpuLengthMm !== undefined && metrics.maxGpuLengthMm !== undefined && metrics.gpuLengthMm > metrics.maxGpuLengthMm ? "danger" : gpuSelected && (metrics.gpuLengthMm === undefined || metrics.maxGpuLengthMm === undefined) ? "warning" : "good"
     },
@@ -132,28 +132,12 @@ export function BuildHealthPanel({ metrics, gpuSelected, psuSelected, caseSelect
     {
       label: "PSU 장착 여유",
       value: metrics.psuClearanceMm === undefined ? psuSelected && caseSelected ? "정보 부족" : "미선택" : `${metrics.psuClearanceMm}mm`,
-      detail: metrics.psuClearanceMm !== undefined && metrics.psuDepthMm !== undefined && metrics.maxPsuLengthMm !== undefined ? `${metrics.psuDepthMm}mm PSU · 케이스 ${metrics.maxPsuLengthMm}mm` : "PSU·케이스 장착 치수를 확인해야 합니다",
+      detail: metrics.psuClearanceMm !== undefined && metrics.psuDepthMm !== undefined && metrics.maxPsuLengthMm !== undefined ? `${metrics.psuDepthMm}mm PSU / 케이스 ${metrics.maxPsuLengthMm}mm` : "PSU/케이스 장착 치수를 확인해야 합니다",
       Icon: FiBox,
       tone: metrics.psuClearanceMm !== undefined && metrics.psuClearanceMm < 0 ? "danger" : psuSelected && caseSelected && metrics.psuClearanceMm === undefined ? "warning" : "good"
     }
   ];
-  return <section className="health-panel" data-testid="data-health-panel"><div className="health-heading"><div><h2>전력·용량·장착 공간</h2></div><span><FiActivity /> 부품 사양 비교</span></div><div className="health-grid">{healthItems.map(({ label, value, detail, Icon, tone }) => <div className={`health-item ${tone}`} key={label}><span className="health-icon"><Icon /></span><div><span>{label}</span><strong>{value}</strong><small>{detail}</small></div></div>)}</div></section>;
-}
-
-const PERFORMANCE_INDEX_TOOLTIPS = {
-  gaming: "참고 영상의 QHD 게임 테스트에서 RTX 5060 Ti 16GB를 100%로 두고 비교한 값입니다. 실제 FPS는 게임·옵션·CPU에 따라 달라져요.",
-  frameStability: "CPU 싱글코어 성능과 캐시 용량으로 비교한 예상 등급입니다. 게임별 1% low를 직접 측정한 결과는 아니에요.",
-  singleCore: "한 코어를 사용하는 작업의 상대 성능입니다. Core i5-13600K를 100%로 비교해요. 이 모델은 참고 영상에 없어 추정값을 표시합니다.",
-  multiCore: "여러 코어를 함께 사용하는 작업의 상대 성능입니다. Core i5-14600K를 100%로 비교해요. 이 모델은 참고 영상에 없어 추정값을 표시합니다."
-} as const;
-
-function PerformanceMetricHelp({ text, label }: { text: string; label: string }) {
-  const tooltipId = useId();
-  const [open, setOpen] = useState(false);
-  return <span className="performance-metric-help" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
-    <button type="button" className="performance-metric-help-button" aria-label={`${label} 설명`} aria-describedby={open ? tooltipId : undefined} aria-expanded={open} onFocus={(event) => { if (event.currentTarget.matches(":focus-visible")) setOpen(true); }} onBlur={() => setOpen(false)} onClick={() => setOpen(true)} onKeyDown={(event) => { if (event.key === "Escape") { setOpen(false); event.stopPropagation(); } }}>?</button>
-    <span id={tooltipId} className="performance-metric-tooltip" role="tooltip" hidden={!open}>{text}</span>
-  </span>;
+  return <section className="health-panel" data-testid="data-health-panel"><div className="health-heading"><div><h2>전력/용량/장착 공간</h2></div><span><FiActivity /> 부품 사양 비교</span></div><div className="health-grid">{healthItems.map(({ label, value, detail, Icon, tone }) => <div className={`health-item ${tone}`} key={label}><span className="health-icon"><Icon /></span><div><span>{label}</span><strong>{value}</strong><small>{detail}</small></div></div>)}</div></section>;
 }
 
 type DisplayPerformanceMetrics = Pick<BuildPerformanceReport, "gamingIndex" | "frameStability" | "singleCorePercent" | "multiCorePercent"> & {
@@ -163,48 +147,14 @@ type DisplayPerformanceMetrics = Pick<BuildPerformanceReport, "gamingIndex" | "f
   cpuSource?: string | { url: string };
 };
 
-export function PerformanceIndexMetricsPanel({ report, hasGpu }: { report: DisplayPerformanceMetrics; hasGpu: boolean }) {
-  const gamingVideoVerified = report.gamingEvidenceKind === "verified_video" || report.gamingEvidenceKind === "video_table";
-  const cpuVideoVerified = report.cpuEvidenceKind === "verified_video" || report.cpuEvidenceKind === "video_table";
-  const videoUrlFor = (source: string | { url: string } | undefined) => {
-    const url = safeHttpsUrl(typeof source === "string" ? source : source?.url);
-    if (!url) return undefined;
-    const parsed = new URL(url);
-    return !parsed.username && !parsed.password && !parsed.port && ["youtu.be", "youtube.com", "www.youtube.com"].includes(parsed.hostname) ? url : undefined;
-  };
-  const gamingSourceUrl = videoUrlFor(report.gamingSource);
-  const cpuSourceUrl = videoUrlFor(report.cpuSource);
+export function PerformanceIndexMetricsPanel({ report }: { report: DisplayPerformanceMetrics; hasGpu: boolean }) {
   const metrics = [
-    {
-      key: "gaming",
-      label: "게임 성능",
-      value: report.gamingIndex === undefined ? "자료 없음" : `${report.gamingIndex}%`,
-      detail: report.gamingIndex === undefined ? "비교할 성능 자료가 없어요" : gamingVideoVerified ? "QHD · RTX 5060 Ti 16GB = 100%" : hasGpu ? "모델별 추정값" : "내장 그래픽 추정값",
-      tooltip: report.gamingIndex === undefined ? "이 부품의 게임 성능을 비교할 자료가 없어요." : gamingVideoVerified ? PERFORMANCE_INDEX_TOOLTIPS.gaming : "이 모델은 참고 영상에 없어 추정값을 표시합니다. RTX 5060 Ti 16GB를 100%로 비교하며, 실제 FPS는 게임·옵션·CPU에 따라 달라져요."
-    },
-    {
-      key: "frame-stability",
-      label: "프레임 안정성",
-      value: report.frameStability === undefined ? "자료 없음" : FRAME_STABILITY_LABELS[report.frameStability],
-      detail: report.frameStability === undefined ? "비교할 CPU 자료가 없어요" : "CPU 성능·캐시로 추정",
-      tooltip: report.frameStability === undefined ? "프레임 안정성을 비교할 CPU 성능 자료가 없어요." : PERFORMANCE_INDEX_TOOLTIPS.frameStability
-    },
-    {
-      key: "single-core",
-      label: "싱글코어 성능",
-      value: report.singleCorePercent === undefined ? "자료 없음" : `${report.singleCorePercent}%`,
-      detail: report.singleCorePercent === undefined ? "비교할 CPU 자료가 없어요" : cpuVideoVerified ? "Core i5-13600K = 100%" : "Core i5-13600K = 100% · 추정",
-      tooltip: report.singleCorePercent === undefined ? "이 CPU의 싱글코어 성능을 비교할 자료가 없어요." : cpuVideoVerified ? "참고 영상의 Cinebench R23 싱글코어 결과입니다. Core i5-13600K를 100%로 두며, 한 코어를 사용하는 작업의 처리 속도를 비교할 수 있어요." : PERFORMANCE_INDEX_TOOLTIPS.singleCore
-    },
-    {
-      key: "multi-core",
-      label: "멀티코어 성능",
-      value: report.multiCorePercent === undefined ? "자료 없음" : `${report.multiCorePercent}%`,
-      detail: report.multiCorePercent === undefined ? "비교할 CPU 자료가 없어요" : cpuVideoVerified ? "Core i5-14600K = 100%" : "Core i5-14600K = 100% · 추정",
-      tooltip: report.multiCorePercent === undefined ? "이 CPU의 멀티코어 성능을 비교할 자료가 없어요." : cpuVideoVerified ? "참고 영상의 Cinebench R23 멀티코어 결과입니다. Core i5-14600K를 100%로 두며, 여러 코어를 함께 쓰는 렌더링·인코딩 속도를 비교할 수 있어요." : PERFORMANCE_INDEX_TOOLTIPS.multiCore
-    }
+    { key: "gaming", label: "게임 성능", value: report.gamingIndex === undefined ? "자료 없음" : `${report.gamingIndex}%` },
+    { key: "frame-stability", label: "프레임 안정성", value: report.frameStability === undefined ? "자료 없음" : FRAME_STABILITY_LABELS[report.frameStability] },
+    { key: "single-core", label: "싱글코어 성능", value: report.singleCorePercent === undefined ? "자료 없음" : `${report.singleCorePercent}%` },
+    { key: "multi-core", label: "멀티코어 성능", value: report.multiCorePercent === undefined ? "자료 없음" : `${report.multiCorePercent}%` }
   ];
-  return <section className="performance-index-panel" data-testid="performance-index-panel" aria-label="게임·CPU 성능 비교"><div className="performance-index-heading"><div><h2>성능 비교</h2><p>게임·CPU 성능은 기준 모델을 100%로 비교합니다. ?에서 계산 기준을 확인할 수 있어요.</p></div><FiCpu /></div><div className="performance-index-grid">{metrics.map((metric) => <div className="performance-index-item" key={metric.key}><div className="performance-index-item-label"><span>{metric.label}</span><PerformanceMetricHelp label={metric.label} text={metric.tooltip} /></div><strong>{metric.value}</strong><small>{metric.detail}</small></div>)}</div>{(gamingSourceUrl || cpuSourceUrl) && <p className="performance-metric-sources">{gamingVideoVerified && gamingSourceUrl && <a href={gamingSourceUrl} target="_blank" rel="noreferrer">GPU 테스트 영상</a>}{cpuVideoVerified && cpuSourceUrl && <a href={cpuSourceUrl} target="_blank" rel="noreferrer">CPU 테스트 영상</a>}</p>}</section>;
+  return <section className="performance-index-panel" data-testid="performance-index-panel" aria-label="게임/CPU 성능 비교"><div className="performance-index-grid">{metrics.map((metric) => <div className="performance-index-item" key={metric.key}><span className="performance-index-item-label">{metric.label}</span><strong>{metric.value}</strong></div>)}</div></section>;
 }
 
 export function PerformanceIndexPanel({ build, partMap }: { build: BuildSelection; partMap: ReadonlyMap<string, Part> }) {
@@ -215,9 +165,9 @@ export function PerformanceIndexPanel({ build, partMap }: { build: BuildSelectio
 }
 
 export function M2SlotAssignmentPanel({ assignments, mode }: { assignments: M2SlotAssignment[]; mode?: BuildMetrics["m2SlotAssignmentMode"] }) {
-  const connectionLabels: Record<string, string> = { cpu: "CPU 직결", chipset: "칩셋", unknown: "CPU·칩셋 연결 정보 없음" };
+  const connectionLabels: Record<string, string> = { cpu: "CPU 직결", chipset: "칩셋", unknown: "CPU/칩셋 연결 정보 없음" };
   const isManual = mode === "manual";
-  return <section className="m2-assignment-panel"><div className="m2-assignment-heading"><div><p className="eyebrow">M.2 슬롯</p><h2>{isManual ? "수동 지정 슬롯 배치" : "자동 계산 슬롯 배치"}</h2><p>{isManual ? "선택한 SSD를 지정한 M.2 슬롯에 배치했어요." : "메인보드의 M.2 슬롯 규격에 맞는 SSD 연결 위치예요."}</p></div><FiHardDrive /></div><div className="m2-assignment-list">{assignments.map((assignment) => <div className="m2-assignment-row" key={`${assignment.slotId}-${assignment.partId}`}><span className="m2-assignment-slot">{assignment.slotId}</span><div><strong>{assignment.partName}</strong><small>{assignment.interface ?? "인터페이스 확인"} · 슬롯 PCIe {assignment.slotPcieGeneration?.toFixed(1) ?? "정보 부족"} · 실제 링크 PCIe {assignment.linkGeneration?.toFixed(1) ?? "정보 부족"} · {assignment.connection ? connectionLabels[assignment.connection] ?? assignment.connection : "CPU·칩셋 연결 정보 없음"}</small><small>{assignment.sharedWith && assignment.sharedWith.length > 0 ? `대역폭 공유: ${assignment.sharedWith.join(", ")}` : assignment.sharedWith ? "다른 슬롯과 대역폭 공유 없음" : "대역폭 공유 정보 없음"}</small></div></div>)}</div><p className="m2-assignment-note"><FiInfo /> 슬롯 위치는 메인보드와 SSD 사양에 따라 달라질 수 있어요.</p></section>;
+  return <section className="m2-assignment-panel"><div className="m2-assignment-heading"><div><p className="eyebrow">M.2 슬롯</p><h2>{isManual ? "수동 지정 슬롯 배치" : "자동 계산 슬롯 배치"}</h2><p>{isManual ? "선택한 SSD를 지정한 M.2 슬롯에 배치했어요." : "메인보드의 M.2 슬롯 규격에 맞는 SSD 연결 위치예요."}</p></div><FiHardDrive /></div><div className="m2-assignment-list">{assignments.map((assignment) => <div className="m2-assignment-row" key={`${assignment.slotId}-${assignment.partId}`}><span className="m2-assignment-slot">{assignment.slotId}</span><div><strong>{assignment.partName}</strong><small>{assignment.interface ?? "인터페이스 확인"} / 슬롯 PCIe {assignment.slotPcieGeneration?.toFixed(1) ?? "정보 부족"} / 실제 링크 PCIe {assignment.linkGeneration?.toFixed(1) ?? "정보 부족"} / {assignment.connection ? connectionLabels[assignment.connection] ?? assignment.connection : "CPU/칩셋 연결 정보 없음"}</small><small>{assignment.sharedWith && assignment.sharedWith.length > 0 ? `대역폭 공유: ${assignment.sharedWith.join(", ")}` : assignment.sharedWith ? "다른 슬롯과 대역폭 공유 없음" : "대역폭 공유 정보 없음"}</small></div></div>)}</div><p className="m2-assignment-note"><FiInfo /> 슬롯 위치는 메인보드와 SSD 사양에 따라 달라질 수 있어요.</p></section>;
 }
 
 export function BuildWatchlistPanel({ build, partMap, accessoryMap, onToast }: { build: BuildSelection; partMap: ReadonlyMap<string, Part>; accessoryMap: ReadonlyMap<string, AccessoryItem>; onToast: (message: string) => void }) {
@@ -263,13 +213,13 @@ export function BuildWatchlistPanel({ build, partMap, accessoryMap, onToast }: {
       if (omittedCount > 0) parts.push(`목록 한도로 제외 ${omittedCount}개`);
       if (unpricedCount > 0) parts.push(`가격 없는 부품 ${unpricedCount}개`);
       if (unknownCatalogCount > 0) parts.push(`정보가 없는 부품 ${unknownCatalogCount}개`);
-      onToast(`${parts.join(" · ")} · 가격 추적 화면에서 목표가와 알림 조건을 설정해 주세요.`);
+      onToast(`${parts.join(" / ")} / 가격 추적 화면에서 목표가와 알림 조건을 설정해 주세요.`);
     } catch {
       onToast("견적 전체를 가격 추적에 등록하지 못했습니다.");
     }
   }
 
-  return <section className="build-watchlist-panel" aria-label="견적 전체 가격 추적"><div><h2>견적 전체 가격 추적</h2><p>선택한 부품을 한 번에 관심 목록에 담고 가격 변화를 지켜볼 수 있어요.</p><small>{coreCount}개 핵심 부품{accessoryCount > 0 ? ` · ${accessoryCount}개 주변 부품` : ""}{unpricedCount > 0 ? ` · 가격 없는 부품 ${unpricedCount}개 포함` : ""}</small></div><button className="button button-secondary" type="button" onClick={watchAll}><FiClock /> 전체 추적 등록</button></section>;
+  return <section className="build-watchlist-panel" aria-label="견적 전체 가격 추적"><div><h2>견적 전체 가격 추적</h2><small>{coreCount}개 핵심 부품{accessoryCount > 0 ? ` / ${accessoryCount}개 주변 부품` : ""}{unpricedCount > 0 ? ` / 가격 없는 부품 ${unpricedCount}개 포함` : ""}</small></div><button className="button button-secondary" type="button" onClick={watchAll}><FiClock /> 전체 추적 등록</button></section>;
 }
 
 export function upgradeCompatibilityText(evidence: UpgradeCompatibilityEvidence) {
@@ -284,7 +234,7 @@ export function upgradeCompatibilityText(evidence: UpgradeCompatibilityEvidence)
   if (evidence.m2Headroom !== undefined) details.push(`M.2 ${evidence.m2Headroom}슬롯 여유`);
   if (evidence.sataHeadroom !== undefined) details.push(`SATA ${evidence.sataHeadroom}포트 여유`);
   if (evidence.hddBayHeadroom !== undefined) details.push(`HDD 베이 ${evidence.hddBayHeadroom}개 여유`);
-  return details.length > 0 ? details.join(" · ") : "확장 여유 정보 부족";
+  return details.length > 0 ? details.join(" / ") : "확장 여유 정보 부족";
 }
 
 export function upgradeCompatibilityStatus(evidence: UpgradeCompatibilityEvidence) {
@@ -297,12 +247,12 @@ export function upgradeCompatibilityStatus(evidence: UpgradeCompatibilityEvidenc
 export function upgradeBudgetText(evidence: UpgradeBudgetEvidence | undefined) {
   if (!evidence) return undefined;
   if (!evidence.priceComplete || evidence.afterCoreTotalPriceWon === undefined) {
-    return `목표 ${formatWon(evidence.budgetWon)} · 핵심 금액 정보 부족`;
+    return `목표 ${formatWon(evidence.budgetWon)} / 핵심 금액 정보 부족`;
   }
   const difference = evidence.withinBudget
     ? evidence.budgetWon - evidence.afterCoreTotalPriceWon
     : evidence.afterCoreTotalPriceWon - evidence.budgetWon;
-  return `적용 후 핵심 ${formatWon(evidence.afterCoreTotalPriceWon)} · 목표 ${formatWon(evidence.budgetWon)} · ${formatWon(difference)} ${evidence.withinBudget ? "여유" : "초과"}`;
+  return `적용 후 핵심 ${formatWon(evidence.afterCoreTotalPriceWon)} / 목표 ${formatWon(evidence.budgetWon)} / ${formatWon(difference)} ${evidence.withinBudget ? "여유" : "초과"}`;
 }
 
 const BENCHMARK_SIMILARITY_KEYS = new Set(["cinebenchR23Single", "cinebenchR23Multi", "gpu3dmarkTimeSpyScore", "gpu3dmarkPortRoyalScore"]);
@@ -311,7 +261,7 @@ const BENCHMARK_SPEC_LABELS = new Set(["Cinebench R23 싱글", "Cinebench R23 �
 export function upgradeSpecComparisonTextFor(recommendation: { similarityEvidence?: UpgradeRecommendation["similarityEvidence"] }) {
   const dimensions = (recommendation.similarityEvidence?.dimensions ?? []).filter((dimension) => !BENCHMARK_SIMILARITY_KEYS.has(dimension.key));
   if (dimensions.length === 0) return undefined;
-  return dimensions.slice(0, 4).map((dimension) => `${dimension.label} ${dimension.currentValue} → ${dimension.candidateValue}`).join(" · ");
+  return dimensions.slice(0, 4).map((dimension) => `${dimension.label} ${dimension.currentValue} → ${dimension.candidateValue}`).join(" / ");
 }
 
 function upgradeSpecRowsFor(part: Part) {
@@ -353,9 +303,9 @@ export function UpgradeRecommendationPanel({ recommendations, onApply, onPreview
 
   return <section className="upgrade-recommendation-panel" data-testid="upgrade-recommendation-panel" tabIndex={-1}>
 
-    <div className="upgrade-recommendation-heading"><div><h2>업그레이드 추천</h2><p>현재 구성과 바꿔볼 부품의 사양·가격·호환 정보를 비교해요.</p><small className="upgrade-recommendation-sort-note">최대 3개까지 비교할 수 있어요.</small></div><span className="upgrade-recommendation-icon"><FiZap /></span></div>
+    <div className="upgrade-recommendation-heading"><div><h2>업그레이드 추천</h2><p>현재 구성과 바꿔볼 부품의 사양/가격/호환 정보를 비교해요.</p><small className="upgrade-recommendation-sort-note">최대 3개까지 비교할 수 있어요.</small></div><span className="upgrade-recommendation-icon"><FiZap /></span></div>
     <div className="upgrade-category-filters" role="group" aria-label="업그레이드 부품 분류"><button className={categoryFilter === "all" ? "selected" : ""} type="button" aria-pressed={categoryFilter === "all"} onClick={() => setCategoryFilter("all")}>전체 {recommendations.length}</button>{availableCategories.map((category) => { const count = recommendations.filter((recommendation) => recommendation.category === category).length; return <button className={categoryFilter === category ? "selected" : ""} type="button" aria-pressed={categoryFilter === category} onClick={() => setCategoryFilter(category)} key={category}>{CATEGORY_LABELS[category]} {count}</button>; })}</div>
-    <div className="upgrade-recommendation-list">{visibleRecommendations.map((recommendation, index) => { const id = `${recommendation.category}-${recommendation.part.id}`; const compared = compareIds.includes(id); const budgetClass = recommendation.budgetEvidence?.priceComplete ? recommendation.budgetEvidence.withinBudget ? "within" : "over" : "unknown"; const expanded = expandedId === id; const sourceUrl = safeExternalUrl(recommendation.part.danawaUrl); const specSummary = upgradeSpecComparisonTextFor(recommendation); return <article className={compared ? "upgrade-recommendation-card compared" : "upgrade-recommendation-card"} key={id}><div className="upgrade-recommendation-top"><div className="upgrade-recommendation-badges"><span className="category-badge">{CATEGORY_LABELS[recommendation.category]}</span>{index === 0 && categoryFilter === "all" && <span className="upgrade-rank-badge">우선 추천</span>}</div></div><div className="upgrade-recommendation-body"><span className="upgrade-recommendation-image"><PartVisual part={recommendation.part} /></span><div className="upgrade-recommendation-copy"><strong>{recommendation.part.name}</strong><small>현재: {recommendation.currentPartName}</small><button className="upgrade-detail-toggle" type="button" aria-expanded={expanded} onClick={() => setExpandedId(expanded ? null : id)}>{expanded ? "상세 스펙 닫기" : "상세 스펙 보기"} <FiChevronDown /></button>{specSummary && <em className="upgrade-spec-comparison">주요 사양 · {specSummary}</em>}<em className="upgrade-compatibility">{upgradeCompatibilityStatus(recommendation.compatibilityEvidence)} · {upgradeCompatibilityText(recommendation.compatibilityEvidence)}</em>{recommendation.budgetEvidence && <em className={`upgrade-budget ${budgetClass}`}>{upgradeBudgetText(recommendation.budgetEvidence)}</em>}</div><div className="upgrade-recommendation-side"><strong>{formatWon(recommendation.part.priceWon)}</strong><small>{recommendation.quantity > 1 ? `수량 ${recommendation.quantity}개 · ` : ""}{formatPriceDelta(recommendation.priceDeltaWon)}</small>{sourceUrl && <a className="upgrade-source-link" href={sourceUrl} target="_blank" rel="noreferrer">상품 페이지 <FiExternalLink /></a>}<PartWatchButton part={recommendation.part} onWatch={onWatchPart} /><button className={compared ? "button button-small upgrade-compare-button selected" : "button button-small upgrade-compare-button"} type="button" onClick={() => toggleCompare(recommendation)} disabled={!compared && compareIds.length >= 3} aria-pressed={compared}><FiLayers /> {compared ? "비교 중" : "비교"}</button><button className="button button-small upgrade-preview-button" type="button" onClick={() => onPreview(recommendation)}><FiActivity /> 미리 적용</button><button className="button button-small button-fix" type="button" onClick={() => onApply(recommendation)}><FiZap /> 적용 후 호환 결과 확인</button></div></div>{expanded && <UpgradeRecommendationDetail recommendation={recommendation} />}</article>; })}</div>
+    <div className="upgrade-recommendation-list">{visibleRecommendations.map((recommendation, index) => { const id = `${recommendation.category}-${recommendation.part.id}`; const compared = compareIds.includes(id); const budgetClass = recommendation.budgetEvidence?.priceComplete ? recommendation.budgetEvidence.withinBudget ? "within" : "over" : "unknown"; const expanded = expandedId === id; const sourceUrl = safeExternalUrl(recommendation.part.danawaUrl); const specSummary = upgradeSpecComparisonTextFor(recommendation); return <article className={compared ? "upgrade-recommendation-card compared" : "upgrade-recommendation-card"} key={id}><div className="upgrade-recommendation-top"><div className="upgrade-recommendation-badges"><span className="category-badge">{CATEGORY_LABELS[recommendation.category]}</span>{index === 0 && categoryFilter === "all" && <span className="upgrade-rank-badge">우선 추천</span>}</div></div><div className="upgrade-recommendation-body"><span className="upgrade-recommendation-image"><PartVisual part={recommendation.part} /></span><div className="upgrade-recommendation-copy"><strong>{recommendation.part.name}</strong><small>현재: {recommendation.currentPartName}</small><button className="upgrade-detail-toggle" type="button" aria-expanded={expanded} onClick={() => setExpandedId(expanded ? null : id)}>{expanded ? "상세 스펙 닫기" : "상세 스펙 보기"} <FiChevronDown /></button>{specSummary && <em className="upgrade-spec-comparison">주요 사양 / {specSummary}</em>}<em className="upgrade-compatibility">{upgradeCompatibilityStatus(recommendation.compatibilityEvidence)} / {upgradeCompatibilityText(recommendation.compatibilityEvidence)}</em>{recommendation.budgetEvidence && <em className={`upgrade-budget ${budgetClass}`}>{upgradeBudgetText(recommendation.budgetEvidence)}</em>}</div><div className="upgrade-recommendation-side"><strong>{formatWon(recommendation.part.priceWon)}</strong><small>{recommendation.quantity > 1 ? `수량 ${recommendation.quantity}개 / ` : ""}{formatPriceDelta(recommendation.priceDeltaWon)}</small>{sourceUrl && <a className="upgrade-source-link" href={sourceUrl} target="_blank" rel="noreferrer">상품 페이지 <FiExternalLink /></a>}<PartWatchButton part={recommendation.part} onWatch={onWatchPart} /><button className={compared ? "button button-small upgrade-compare-button selected" : "button button-small upgrade-compare-button"} type="button" onClick={() => toggleCompare(recommendation)} disabled={!compared && compareIds.length >= 3} aria-pressed={compared}><FiLayers /> {compared ? "비교 중" : "비교"}</button><button className="button button-small upgrade-preview-button" type="button" onClick={() => onPreview(recommendation)}><FiActivity /> 미리 적용</button><button className="button button-small button-fix" type="button" onClick={() => onApply(recommendation)}><FiZap /> 적용 후 호환 결과 확인</button></div></div>{expanded && <UpgradeRecommendationDetail recommendation={recommendation} />}</article>; })}</div>
     {visibleRecommendations.some((recommendation) => recommendation.physicalEvidence && recommendation.physicalEvidence.status !== "not_applicable") && <section className="upgrade-physical-evidence-overview" aria-label="업그레이드 부품 장착 정보"><div><strong>업그레이드 부품 장착 규격</strong></div><div className="upgrade-physical-evidence-overview-list">{visibleRecommendations.filter((recommendation) => recommendation.physicalEvidence && recommendation.physicalEvidence.status !== "not_applicable").map((recommendation) => <article key={`${recommendation.category}-${recommendation.part.id}`}><strong>{recommendation.part.name}</strong><UpgradePhysicalEvidence evidence={recommendation.physicalEvidence} /></article>)}</div></section>}
     {comparedRecommendations.length >= 2 && <UpgradeRecommendationComparison recommendations={comparedRecommendations} />}
   </section>;
@@ -409,7 +359,7 @@ export function accessoryRecommendationSpecRows(category: AccessoryCategory) {
       );
     }
     rows.push(
-      { label: "지원 규격", value: (item) => item.specs.supportedFormFactors?.join(" · ") || item.specs.formFactor || "정보 부족" },
+      { label: "지원 규격", value: (item) => item.specs.supportedFormFactors?.join(" / ") || item.specs.formFactor || "정보 부족" },
       { label: "폼팩터", value: (item) => item.specs.formFactor ?? "정보 부족" }
     );
   } else if (category === "thermal_grease") {
@@ -488,13 +438,13 @@ export function AccessoryRecommendationPanel({ recommendations, selectedAccessor
     });
   }
   return <section className="peripheral-recommendation-panel" data-testid="peripheral-recommendation-panel">
-    <div className="peripheral-recommendation-heading"><div><h2>현재 구성에 맞는 주변 부품</h2><p>현재 견적에 더할 수 있는 주변 부품을 추천해요.</p></div><span className="peripheral-recommendation-icon"><FiTool /></span></div>
+    <div className="peripheral-recommendation-heading"><div><h2>현재 구성에 맞는 주변 부품</h2></div><span className="peripheral-recommendation-icon"><FiTool /></span></div>
     <div className="peripheral-recommendation-controls"><div className="peripheral-recommendation-filters" role="group" aria-label="주변 부품 추천 범주"><button className={categoryFilter === "all" ? "selected" : ""} type="button" data-testid="accessory-recommendation-filter-all" aria-pressed={categoryFilter === "all"} onClick={() => setCategoryFilter("all")}>전체 {recommendations.length}</button>{availableCategories.map((category) => { const count = recommendations.filter((recommendation) => recommendation.category === category).length; return <button className={categoryFilter === category ? "selected" : ""} type="button" data-testid={`accessory-recommendation-filter-${category}`} aria-pressed={categoryFilter === category} onClick={() => setCategoryFilter(category)} key={category}>{ACCESSORY_CATEGORY_LABELS[category]} {count}</button>; })}</div><label className="peripheral-recommendation-sort"><span>추천 정렬</span><select aria-label="주변 부품 추천 정렬" data-testid="accessory-recommendation-sort" value={sortMode} onChange={(event) => setSortMode(event.target.value as AccessoryRecommendationSort)}><option value="recommended">추천 순</option><option value="price_asc">가격 낮은 순</option></select></label><a className="peripheral-recommendation-catalog-link" href="/accessories"><FiSearch /> 전체 카탈로그</a></div>
-    <div className="peripheral-recommendation-compare-status">{compareIds.length > 0 ? <><FiLayers /> 같은 범주 부품 비교 {compareIds.length} / 3{compareCategory ? ` · ${ACCESSORY_CATEGORY_LABELS[compareCategory]}` : ""}</> : <><FiLayers /> 부품을 고르면 같은 범주끼리 최대 3개를 비교할 수 있어요.</>}</div>
+    <div className="peripheral-recommendation-compare-status">{compareIds.length > 0 ? <><FiLayers /> 같은 범주 부품 비교 {compareIds.length} / 3{compareCategory ? ` / ${ACCESSORY_CATEGORY_LABELS[compareCategory]}` : ""}</> : <><FiLayers /> 부품을 고르면 같은 범주끼리 최대 3개를 비교할 수 있어요.</>}</div>
     <div className="peripheral-recommendation-list">{visibleRecommendations.map((recommendation) => <AccessoryRecommendationCard key={recommendation.id} recommendation={recommendation} selected={selectedAccessories.some((selection) => selection.accessoryId === recommendation.item.id)} compared={compareIds.includes(recommendation.id)} compareDisabled={!compareIds.includes(recommendation.id) && (compareIds.length >= 3 || Boolean(compareCategory && compareCategory !== recommendation.category))} onToggleCompare={() => toggleCompare(recommendation)} onAddAccessory={onAddAccessory} onWatchAccessory={onWatchAccessory} isAccessoryWatched={isAccessoryWatched} />)}</div>
     {visibleRecommendations.length === 0 && <div className="peripheral-recommendation-empty"><FiSearch /> 선택한 범주에 맞는 추천 부품이 없어요. 전체 추천으로 돌아가 보세요.</div>}
     {comparedRecommendations.length >= 2 && <AccessoryRecommendationComparison recommendations={comparedRecommendations} />}
-    <p className="peripheral-recommendation-note">주변 부품은 필요에 따라 견적에 추가할 수 있어요.</p>
+    
   </section>;
 }
 
@@ -507,11 +457,11 @@ export type AccessoryRecommendationPriceHistory = {
 
 export function accessoryRecommendationPriceHistoryText(history: AccessoryRecommendationPriceHistory | undefined, currentPriceWon: number | undefined) {
   if (!history) return "가격 이력 확인 중";
-  if (history.summary.sampleCount === 0) return `최근 ${history.windowDays}일 기록 없음 · 현재가만 확인`;
+  if (history.summary.sampleCount === 0) return `최근 ${history.windowDays}일 기록 없음 / 현재가만 확인`;
   const facts = [`최근 ${history.windowDays}일 ${history.summary.sampleCount}회`];
   if (history.summary.minPriceWon !== undefined) facts.push(`최저 ${formatWon(history.summary.minPriceWon)}`);
   if (currentPriceWon !== undefined && history.summary.currentPositionPercent !== undefined) facts.push(`현재 위치 ${history.summary.currentPositionPercent.toFixed(1)}%`);
-  return facts.join(" · ");
+  return facts.join(" / ");
 }
 
 export function AccessoryRecommendationComparison({ recommendations }: { recommendations: AccessoryRecommendation[] }) {
@@ -554,7 +504,7 @@ export function AccessoryRecommendationComparison({ recommendations }: { recomme
     { label: "추천 이유", value: (recommendation: AccessoryRecommendation) => recommendation.reason },
     { label: "맞는 이유", value: (recommendation: AccessoryRecommendation) => recommendation.fitBasis }
   ];
-  return <section className="peripheral-recommendation-comparison" data-testid="accessory-recommendation-comparison" aria-label="주변 부품 추천 비교"><div className="peripheral-recommendation-comparison-heading"><div><strong>{ACCESSORY_CATEGORY_LABELS[category]} 부품 비교</strong><small>선택한 부품의 저장된 데이터만 나란히 비교해요. 이 표는 견적을 변경하거나 호환성을 새로 정하지 않아요.</small></div><div className="peripheral-recommendation-comparison-heading-actions"><label><span>가격 이력</span><select aria-label="주변 부품 추천 가격 이력 기간" data-testid="accessory-recommendation-history-days" value={historyDays} onChange={(event) => setHistoryDays(Number(event.target.value) as 7 | 30 | 90)}><option value={7}>7일</option><option value={30}>30일</option><option value={90}>90일</option></select></label><span>{recommendations.length}개 선택</span></div></div>{historyError && <p className="peripheral-recommendation-comparison-history-error" role="status"><FiInfo /> 가격 이력을 불러오지 못해 현재 가격과 저장된 추천 이유만 표시해요. {historyError}</p>}{historyLoading && <p className="peripheral-recommendation-comparison-history-loading" role="status"><FiLoader className="spin" /> 최근 가격 이력을 확인하는 중...</p>}<div className="peripheral-recommendation-comparison-table-wrap"><table><caption>주변 부품 추천 비교</caption><thead><tr><th scope="col">비교 항목</th>{recommendations.map((recommendation) => <th scope="col" key={recommendation.id}>{recommendation.item.name}</th>)}</tr></thead><tbody>{rows.map((row) => <tr key={row.label}><th scope="row">{row.label}</th>{recommendations.map((recommendation) => <td key={`${recommendation.id}-${row.label}`}>{row.value(recommendation)}</td>)}</tr>)}</tbody></table></div></section>;
+  return <section className="peripheral-recommendation-comparison" data-testid="accessory-recommendation-comparison" aria-label="주변 부품 추천 비교"><div className="peripheral-recommendation-comparison-heading"><div><strong>{ACCESSORY_CATEGORY_LABELS[category]} 부품 비교</strong></div><div className="peripheral-recommendation-comparison-heading-actions"><label><span>가격 이력</span><select aria-label="주변 부품 추천 가격 이력 기간" data-testid="accessory-recommendation-history-days" value={historyDays} onChange={(event) => setHistoryDays(Number(event.target.value) as 7 | 30 | 90)}><option value={7}>7일</option><option value={30}>30일</option><option value={90}>90일</option></select></label><span>{recommendations.length}개 선택</span></div></div>{historyError && <p className="peripheral-recommendation-comparison-history-error" role="status"><FiInfo /> 가격 이력을 불러오지 못해 현재 가격과 저장된 추천 이유만 표시해요. {historyError}</p>}{historyLoading && <p className="peripheral-recommendation-comparison-history-loading" role="status"><FiLoader className="spin" /> 최근 가격 이력을 확인하는 중...</p>}<div className="peripheral-recommendation-comparison-table-wrap"><table><caption>주변 부품 추천 비교</caption><thead><tr><th scope="col">비교 항목</th>{recommendations.map((recommendation) => <th scope="col" key={recommendation.id}>{recommendation.item.name}</th>)}</tr></thead><tbody>{rows.map((row) => <tr key={row.label}><th scope="row">{row.label}</th>{recommendations.map((recommendation) => <td key={`${recommendation.id}-${row.label}`}>{row.value(recommendation)}</td>)}</tr>)}</tbody></table></div></section>;
 }
 
 export function AccessoryRecommendationCard({ recommendation, selected, compared, compareDisabled, onToggleCompare, onAddAccessory, onWatchAccessory, isAccessoryWatched }: { recommendation: AccessoryRecommendation; selected: boolean; compared: boolean; compareDisabled: boolean; onToggleCompare: () => void; onAddAccessory: (item: AccessoryItem) => void; onWatchAccessory?: (item: AccessoryItem, targetPriceWon?: number) => boolean; isAccessoryWatched?: (item: AccessoryItem) => boolean }) {
@@ -602,7 +552,7 @@ export function CompatibilityMap({ links, findings = [], onFocusFinding }: { lin
 
   return <section className="compatibility-map" data-testid="compatibility-map" tabIndex={-1}>
     <div className="compatibility-map-heading">
-      <div><h2>부품 연결 상태</h2><p>부품끼리 소켓·규격·전원이 맞는지 확인할 수 있어요.</p></div>
+      <div><h2>부품 연결 상태</h2></div>
       <span className="compatibility-map-icon"><FiShare2 /></span>
     </div>
     <div className="compatibility-link-grid">
@@ -622,7 +572,7 @@ export function CompatibilityMap({ links, findings = [], onFocusFinding }: { lin
         </article>;
       })}
     </div>
-    <p className="compatibility-map-note"><FiInfo /> “문제 있음”은 호환 불가 또는 주의 항목이 연결된 상태이며, “정보 부족”는 현재 카탈로그 정보만으로는 알 수 없는 상태예요.</p>
+    <p className="compatibility-map-note"><FiInfo /> ‘정보 부족’은 사양이 없어 판단하지 못한 항목이에요.</p>
   </section>;
 }
 
@@ -678,8 +628,8 @@ export function RepairPlanPanel({ plans, build, currentResult, partMap, onApply,
   const hasFullyCompatiblePlan = plans.some((plan) => plan.remainingBlockers === 0 && plan.remainingWarnings === 0 && plan.remainingUnknown === 0);
   const unresolvedUnknownTitles = currentResult.findings.filter((finding) => finding.severity === "unknown").map((finding) => finding.title).slice(0, 2);
   const fullPlanNote = unresolvedUnknownTitles.length > 0
-    ? `부품 사양 정보가 부족해 전체 호환 여부를 판단할 수 없어요. ${unresolvedUnknownTitles.join(" · ")} 사양을 보완한 뒤 다시 확인해 주세요.`
+    ? `일부 부품 사양이 없어 호환 여부를 판단하지 못했어요: ${unresolvedUnknownTitles.join(", ")}`
     : "현재 부품 목록에서 호환 문제를 모두 해결하는 조합을 찾지 못했어요. 각 조합에서 남는 항목을 확인해 주세요.";
   const comparisonReady = comparisonPlan && comparisonState;
-  return <section className="repair-plan-panel" data-testid="repair-plan-panel" tabIndex={-1}><div className="repair-plan-heading"><div><p className="eyebrow">호환 문제 해결안</p><h2>호환 문제를 줄이는 부품 조합</h2><p>각 조합에서 해결되는 항목과 남는 문제, 가격 변화를 비교합니다.</p></div><span className="repair-plan-heading-icon"><FiZap /></span></div>{!hasFullyCompatiblePlan && <div className="repair-plan-goal-note" role="status"><FiInfo /><div><strong>호환 문제를 모두 해결하는 조합은 찾지 못했어요.</strong><p>{fullPlanNote}</p></div></div>}<Suspense fallback={<div className="repair-plan-summary loading" data-testid="repair-plan-summary-loading">추천 조합을 불러오는 중...</div>}><LazyRepairPlanSummaryTable plans={plans} onFocusPlan={focusPlan} /></Suspense><div className="repair-plan-grid">{plans.map((plan, index) => { return <article id={"repair-plan-card-" + index} className={index === 0 ? "repair-plan-card featured" : "repair-plan-card"} key={`${plan.label}-${plan.changes.map((change) => change.toPart.id).join("-")}`}><div className="repair-plan-top"><span className="repair-plan-label">{index === 0 ? `추천 1순위 · ${plan.label}` : plan.label}</span></div><h3>{plan.title}</h3><p className="repair-plan-reason">{plan.reason}</p><p className="repair-plan-profile"><FiActivity /> {plan.profileSummary}</p><div className="repair-plan-resolved"><span>해결한 항목</span><div>{plan.resolvedFindingTitles.slice(0, 4).map((title) => <em key={title}>{title}</em>)}{plan.resolvedFindingTitles.length > 4 && <em>외 {plan.resolvedFindingTitles.length - 4}개</em>}</div></div>{plan.remainingFindingTitles && plan.remainingFindingTitles.length > 0 && <div className="repair-plan-remaining"><span>적용 후 남는 문제</span><div>{plan.remainingFindingTitles.slice(0, 3).map((title, index) => remainingFindingChip(plan, title, index))}{plan.remainingFindingTitles.length > 3 && <em>{"외 " + (plan.remainingFindingTitles.length - 3) + "개"}</em>}</div></div>}<div className="repair-plan-stats"><span><strong>{plan.resolvedBlockers}</strong> 호환 문제 해결</span><span><strong>{plan.remainingBlockers}</strong>개 남음</span><span><strong>{plan.remainingWarnings}</strong>개 주의 남음</span><span><strong>{plan.remainingUnknown}</strong>개 정보 부족</span><span><strong>{formatPriceDelta(plan.priceDeltaWon)}</strong> 가격 변화</span>{plan.budgetWon !== undefined && <span><strong>{!plan.priceComplete ? "정보 부족" : plan.withinBudget ? "예산 내" : `${formatPriceDelta(plan.budgetDeltaWon)} 초과`}</strong> 목표 예산</span>}</div><div className="repair-plan-changes">{plan.changes.map((change) => <div className="repair-plan-change" key={`${change.category}-${change.kind}-${change.toPart.id}-${change.toQuantity ?? ""}`}><span className="repair-plan-change-icon"><CategoryIcon category={change.category} /></span><div><small>{change.fromPartName ?? `${CATEGORY_LABELS[change.category]} 미선택`}</small><strong>{change.kind === "change_quantity" ? `수량 ${change.fromQuantity ?? "?"}개 → ${change.toQuantity ?? "?"}개` : `→ ${change.toPart.name}`}</strong>{change.toPart.listingType && change.toPart.listingType !== "retail" && <small>{LISTING_TYPE_LABELS[change.toPart.listingType]}</small>}{upgradeSpecComparisonTextFor({ similarityEvidence: change.similarityEvidence }) && <small>{upgradeSpecComparisonTextFor({ similarityEvidence: change.similarityEvidence })}</small>}</div><em>{formatPriceDelta(change.priceDeltaWon)}</em></div>)}</div><div className="repair-plan-footer"><span>적용 후 {plan.priceComplete ? formatWon(plan.afterTotalPriceWon) : "가격 일부 정보 부족"}</span><div className="repair-plan-footer-actions"><button className="button button-small button-light" type="button" onClick={() => void comparePlan(plan)} disabled={comparisonState?.status === "loading"}><FiActivity /> {comparisonPlan === plan ? "비교 중" : "현재와 비교"}</button><button className="button button-small button-fix" type="button" onClick={() => onApply(plan)}>이 구성 적용 <FiExternalLink /></button></div></div></article>; })}</div>{comparisonReady && <Suspense fallback={<div className="repair-plan-comparison loading" aria-label="호환 개선안 비교" data-testid="repair-plan-comparison" role="status"><div className="repair-plan-comparison-heading"><div><p className="eyebrow">구성 비교</p><h2>비교 화면을 불러오는 중...</h2><p>구성 적용 후 전체 견적을 준비합니다.</p></div><FiLoader className="spin" /></div></div>}><LazyRepairPlanComparisonPanel plan={comparisonPlan} state={comparisonState} currentBuild={build} currentResult={comparisonState.status === "ready" ? comparisonState.currentResult : currentResult} partMap={partMap} onApply={() => onApply(comparisonPlan)} onSavePlan={onSavePlan} onRetry={() => void comparePlan(comparisonPlan)} onClose={() => { requestSequenceRef.current += 1; setComparisonPlan(null); setComparisonState(null); }} /></Suspense>}</section>;
+  return <section className="repair-plan-panel" data-testid="repair-plan-panel" tabIndex={-1}><div className="repair-plan-heading"><div><p className="eyebrow">호환 문제 해결안</p><h2>호환 문제를 줄이는 부품 조합</h2><p>각 조합에서 해결되는 항목과 남는 문제, 가격 변화를 비교합니다.</p></div><span className="repair-plan-heading-icon"><FiZap /></span></div>{!hasFullyCompatiblePlan && <div className="repair-plan-goal-note" role="status"><FiInfo /><div><strong>호환 문제를 모두 해결하는 조합은 찾지 못했어요.</strong><p>{fullPlanNote}</p></div></div>}<Suspense fallback={<div className="repair-plan-summary loading" data-testid="repair-plan-summary-loading">추천 조합을 불러오는 중...</div>}><LazyRepairPlanSummaryTable plans={plans} onFocusPlan={focusPlan} /></Suspense><div className="repair-plan-grid">{plans.map((plan, index) => { return <article id={"repair-plan-card-" + index} className={index === 0 ? "repair-plan-card featured" : "repair-plan-card"} key={`${plan.label}-${plan.changes.map((change) => change.toPart.id).join("-")}`}><div className="repair-plan-top"><span className="repair-plan-label">{index === 0 ? `추천 1순위 / ${plan.label}` : plan.label}</span></div><h3>{plan.title}</h3><p className="repair-plan-reason">{plan.reason}</p><p className="repair-plan-profile"><FiActivity /> {plan.profileSummary}</p><div className="repair-plan-resolved"><span>해결한 항목</span><div>{plan.resolvedFindingTitles.slice(0, 4).map((title) => <em key={title}>{title}</em>)}{plan.resolvedFindingTitles.length > 4 && <em>외 {plan.resolvedFindingTitles.length - 4}개</em>}</div></div>{plan.remainingFindingTitles && plan.remainingFindingTitles.length > 0 && <div className="repair-plan-remaining"><span>적용 후 남는 문제</span><div>{plan.remainingFindingTitles.slice(0, 3).map((title, index) => remainingFindingChip(plan, title, index))}{plan.remainingFindingTitles.length > 3 && <em>{"외 " + (plan.remainingFindingTitles.length - 3) + "개"}</em>}</div></div>}<div className="repair-plan-stats"><span><strong>{plan.resolvedBlockers}</strong> 호환 문제 해결</span><span><strong>{plan.remainingBlockers}</strong>개 남음</span><span><strong>{plan.remainingWarnings}</strong>개 주의 남음</span><span><strong>{plan.remainingUnknown}</strong>개 정보 부족</span><span><strong>{formatPriceDelta(plan.priceDeltaWon)}</strong> 가격 변화</span>{plan.budgetWon !== undefined && <span><strong>{!plan.priceComplete ? "정보 부족" : plan.withinBudget ? "예산 내" : `${formatPriceDelta(plan.budgetDeltaWon)} 초과`}</strong> 목표 예산</span>}</div><div className="repair-plan-changes">{plan.changes.map((change) => <div className="repair-plan-change" key={`${change.category}-${change.kind}-${change.toPart.id}-${change.toQuantity ?? ""}`}><span className="repair-plan-change-icon"><CategoryIcon category={change.category} /></span><div><small>{change.fromPartName ?? `${CATEGORY_LABELS[change.category]} 미선택`}</small><strong>{change.kind === "change_quantity" ? `수량 ${change.fromQuantity ?? "?"}개 → ${change.toQuantity ?? "?"}개` : `→ ${change.toPart.name}`}</strong>{change.toPart.listingType && change.toPart.listingType !== "retail" && <small>{LISTING_TYPE_LABELS[change.toPart.listingType]}</small>}{upgradeSpecComparisonTextFor({ similarityEvidence: change.similarityEvidence }) && <small>{upgradeSpecComparisonTextFor({ similarityEvidence: change.similarityEvidence })}</small>}</div><em>{formatPriceDelta(change.priceDeltaWon)}</em></div>)}</div><div className="repair-plan-footer"><span>적용 후 {plan.priceComplete ? formatWon(plan.afterTotalPriceWon) : "가격 일부 정보 부족"}</span><div className="repair-plan-footer-actions"><button className="button button-small button-light" type="button" onClick={() => void comparePlan(plan)} disabled={comparisonState?.status === "loading"}><FiActivity /> {comparisonPlan === plan ? "비교 중" : "현재와 비교"}</button><button className="button button-small button-fix" type="button" onClick={() => onApply(plan)}>이 구성 적용 <FiExternalLink /></button></div></div></article>; })}</div>{comparisonReady && <Suspense fallback={<div className="repair-plan-comparison loading" aria-label="호환 개선안 비교" data-testid="repair-plan-comparison" role="status"><div className="repair-plan-comparison-heading"><div><p className="eyebrow">구성 비교</p><h2>비교 화면을 불러오는 중...</h2><p>구성 적용 후 전체 견적을 준비합니다.</p></div><FiLoader className="spin" /></div></div>}><LazyRepairPlanComparisonPanel plan={comparisonPlan} state={comparisonState} currentBuild={build} currentResult={comparisonState.status === "ready" ? comparisonState.currentResult : currentResult} partMap={partMap} onApply={() => onApply(comparisonPlan)} onSavePlan={onSavePlan} onRetry={() => void comparePlan(comparisonPlan)} onClose={() => { requestSequenceRef.current += 1; setComparisonPlan(null); setComparisonState(null); }} /></Suspense>}</section>;
 }

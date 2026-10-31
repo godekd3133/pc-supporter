@@ -1,5 +1,5 @@
 // HTTP 요청 지표 레지스트리 — requestTelemetry가 내보내는 완료 기록을
-// 라우트별로 묶어 최근 구간의 처리량·오류율·지연 분포를 유지한다.
+// 라우트별로 묶어 최근 구간의 처리량/오류율/지연 분포를 유지한다.
 // 로그 스트림은 그대로 두고 여기서 집계만 담당한다.
 import type { HttpRequestLog } from "./request-telemetry";
 

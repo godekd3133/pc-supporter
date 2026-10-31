@@ -252,7 +252,7 @@ export function gamingPerformanceEvidenceBatchValidationFor(value: unknown): Gam
       ? ((item as Record<string, unknown>).id as string).trim()
       : undefined;
     if (!record) {
-      errors.push({ index, ...(candidateId ? { id: candidateId } : {}), message: "필수 조건·GPU ID·출처 URL·측정값을 확인해 주세요." });
+      errors.push({ index, ...(candidateId ? { id: candidateId } : {}), message: "필수 조건/GPU ID/출처 URL/측정값을 확인해 주세요." });
       return;
     }
     if (seen.has(record.id)) {
@@ -358,7 +358,7 @@ export function gamingPerformanceEvidenceSummaryFor(records: readonly GamingPerf
           ? "partial"
           : "verified";
   const note = status === "verified"
-    ? "선택한 모든 게임·GPU 조건에 출처·측정일이 있는 자료가 연결되었고, 평균 FPS가 목표 프레임 이상입니다. 측정 환경까지 동일하다는 뜻은 아닙니다."
+    ? "선택한 모든 게임/GPU 조건에 출처/측정일이 있는 자료가 연결되었고, 평균 FPS가 목표 프레임 이상입니다. 측정 환경까지 동일하다는 뜻은 아닙니다."
     : status === "target_not_met"
       ? `연결된 실측 자료 중 ${belowTargetGameIds.length}개 게임의 평균 FPS가 목표 프레임보다 낮습니다.`
     : status === "partial"

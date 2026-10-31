@@ -30,7 +30,7 @@ function statusLabel(status: CompatibilityResult["status"]) {
 }
 
 function riskSummary(current: CompatibilityResult, next: CompatibilityResult) {
-  return `호환 불가 ${current.blockerCount} → ${next.blockerCount} · 주의 ${current.warningCount} → ${next.warningCount} · 확인 필요 ${current.unknownCount} → ${next.unknownCount}`;
+  return `호환 불가 ${current.blockerCount} → ${next.blockerCount} / 주의 ${current.warningCount} → ${next.warningCount} / 확인 필요 ${current.unknownCount} → ${next.unknownCount}`;
 }
 
 export function buildScenarioComparisonFor(current: CompatibilityResult, next: CompatibilityResult): BuildScenarioComparison {
@@ -70,6 +70,6 @@ export function buildScenarioComparisonFor(current: CompatibilityResult, next: C
     unknownDelta,
     ...(priceDeltaWon !== undefined ? { priceDeltaWon } : {}),
     priceChanged,
-    summary: changes.length > 0 ? changes.join(" · ") : riskSummary(current, next)
+    summary: changes.length > 0 ? changes.join(" / ") : riskSummary(current, next)
   };
 }

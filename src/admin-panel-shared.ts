@@ -38,7 +38,7 @@ export function partSummary(part: Part | undefined) {
     part.specs.lengthMm ? `${part.specs.lengthMm}mm` : undefined,
     part.specs.formFactor
   ].filter(Boolean);
-  return values.join(" · ") || "상세 스펙을 확인할 수 있습니다.";
+  return values.join(" / ") || "상세 스펙을 확인할 수 있습니다.";
 }
 
 

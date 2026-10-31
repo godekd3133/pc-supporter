@@ -4,8 +4,8 @@ import { isKnownPrice } from "../types";
 // seed(기준) 부품은 sourceProductCode가 없어 가격 갱신 경로를 타지 않고 정적
 // 기준가가 그대로 남는다 — 같은 제품의 live/수동 매물을 "트윈"으로 연결해 seed
 // 표시가격을 시장 최저가로 맞춘다(syncSeedPartPricesFromLive). 트윈은 벤더
-// (한·영 별칭 정규화)와 제품 식별자가 모두 같은 부품뿐이다 — 정규화된 이름이
-// 완전히 같거나, CPU는 모델 번호·GPU는 칩 모델·메모리는 용량/속도/타입
+// (한/영 별칭 정규화)와 제품 식별자가 모두 같은 부품뿐이다 — 정규화된 이름이
+// 완전히 같거나, CPU는 모델 번호/GPU는 칩 모델/메모리는 용량/속도/타입
 // 시그니처가 같은 경우. 어느 쪽도 맞지 않으면 건드리지 않는다 — 잘못 묶인
 // 가격은 stale 가격보다 해롭다. 견적 후보에서 트윈이 있는 seed는 억제돼
 // (isQuotePurchasable/isQuoteSelectable) 실구매 링크가 있는 live 매물이 대신한다.
@@ -53,7 +53,7 @@ function foldVendors(text: string, out: Set<string>) {
   for (const [pattern, canonical] of VENDOR_FOLDS) if (pattern.test(text)) out.add(canonical);
 }
 
-// 벤더를 정규화한 뒤 이름 전체를 영숫자·한글만 남기고 접는다 — "(16GB)"와
+// 벤더를 정규화한 뒤 이름 전체를 영숫자/한글만 남기고 접는다 — "(16GB)"와
 // "16GB"처럼 괄호 유무 차이는 소거되지만 괄호 안 용량 등 내용은 보존된다.
 function normalizedProductName(name: string) {
   const folded = VENDOR_FOLDS.reduce((text, [pattern, canonical]) => text.replace(pattern, canonical), name);
@@ -91,10 +91,10 @@ function gpuChipTokenFor(part: Part) {
   return undefined;
 }
 
-// 제품 식별을 위한 그룹 키 — 시그니처 경로(cpu·gpu·memory)는 모델/스펙으로
-// 묶고, ssd·hdd는 용량 버킷으로 먼저 나눠 스캔 폭을 줄인다. 그 외 범주는 범주
+// 제품 식별을 위한 그룹 키 — 시그니처 경로(cpu/gpu/memory)는 모델/스펙으로
+// 묶고, ssd/hdd는 용량 버킷으로 먼저 나눠 스캔 폭을 줄인다. 그 외 범주는 범주
 // 단위 버킷으로 묶은 뒤 nameIdentityCompatibleFor가 이름 토큰으로 판정한다
-// — 정규 이름 완전 일치는 "SATA", 괄호 용량, 유통사 접미(STCOM·서린씨앤아이)
+// — 정규 이름 완전 일치는 "SATA", 괄호 용량, 유통사 접미(STCOM/서린씨앤아이)
 // 같은 표기 차이로 같은 제품을 놓친다.
 function capacityBucketFor(capacityGb: number | undefined) {
   if (capacityGb === undefined || !Number.isFinite(capacityGb) || capacityGb <= 0) return "na";
@@ -160,16 +160,16 @@ function specCompatible(seed: Part, live: Part) {
   });
 }
 
-// 이름에서 벤더(별칭 fold)와 무의미 토큰(용량·인터페이스·폼팩터·유통/포장
+// 이름에서 벤더(별칭 fold)와 무의미 토큰(용량/인터페이스/폼팩터/유통/포장
 // 수식어)을 떼고 남는 모델 토큰 — "삼성전자 870 EVO (1TB)"와 "Samsung 870 EVO
 // SATA 1TB"는 둘 다 {870, evo}가 남아 같은 제품으로 묶인다.
 const NAME_NOISE_TOKENS = new Set([
-  // 유통사·포장 접미
+  // 유통사/포장 접미
   "서린씨앤아이", "씨앤아이", "국민전자", "대원씨티에스", "stcom", "코잇", "피씨디렉트", "인텍앤컴퍼니", "웨이코스", "오름정보", "아이티엘", "디지탈그린텍", "제이웍스",
   "new", "정품", "병행수입", "멀티팩", "패키지", "국내", "유통", "정발", "정식", "벌크", "oem", "무상보증", "무상", "보증",
-  // 인터페이스·폼팩터·타입 수식어
+  // 인터페이스/폼팩터/타입 수식어
   "sata", "nvme", "pcie", "gen3", "gen4", "gen5", "m2", "2280", "22110", "atx", "matx", "e-atx", "eatx", "itx", "sfx", "sfxl", "dimm", "udimm", "so-dimm", "sodimm", "ddr3", "ddr4", "ddr5",
-  // 외형·색상·쿨링 수식어
+  // 외형/색상/쿨링 수식어
   "풀모듈러", "세미모듈러", "모듈러", "리버스", "듀얼타워", "타워형", "타워", "화이트", "블랙", "white", "black", "argb", "rgb", "gold", "platinum", "bronze", "윈도우", "강화유리", "메쉬", "mesh", "시스템", "쿨링", "팬",
 ]);
 
@@ -192,13 +192,13 @@ function nameIdentityTokensFor(part: Part) {
   return new Set(tokens);
 }
 
-// 모델 식별에 도움이 되는 토큰 — 숫자를 포함하거나 4자 이상의 토큰. "870"·"evo"
+// 모델 식별에 도움이 되는 토큰 — 숫자를 포함하거나 4자 이상의 토큰. "870"/"evo"
 // 같은 식별 토큰이 없는 지나치게 일반적인 이름의 비교를 막는다.
 function isModelLikeToken(token: string) {
   return /\d/.test(token) || token.length >= 4;
 }
 
-// 토큰 범주(ssd·hdd·mb·psu·cooler·case)의 정체성 판정 — 한쪽이 다른 쪽의
+// 토큰 범주(ssd/hdd/mb/psu/cooler/case)의 정체성 판정 — 한쪽이 다른 쪽의
 // 부분집합이어도 같은 제품으로 본다("AK620" ⊂ "AK620 듀얼타워"). 단, 큰 쪽에만
 // 있는 추가 토큰은 모두 무의미 토큰에서 이미 걸러져 있으므로 남은 토큰은 전부
 // 식별 토큰이다 — "870 EVO" ⊂ "870 EVO PLUS"처럼 판별 토큰(plus)이 남으면
@@ -234,7 +234,7 @@ function intersects(left: Set<string>, right: Set<string>) {
   return false;
 }
 
-// 칩 벤더 키(nvidia·amd·intel)는 보드 파트너가 다른 제품을 연결해 주지만,
+// 칩 벤더 키(nvidia/amd/intel)는 보드 파트너가 다른 제품을 연결해 주지만,
 // seed가 파트너 벤더를 들고 있으면 파트너끼리만 묶어야 가격이 안 섞인다 —
 // ZOTAC 5060 seed에 MSI 5060의 더 싼 가격이 붙는 사고 방지.
 const CHIP_VENDOR_KEYS = new Set(["nvidia", "amd", "intel"]);
@@ -249,8 +249,8 @@ export type SeedLiveTwinIndex = Map<string, Part[]>;
 
 const twinIndexCache = new WeakMap<readonly Part[], SeedLiveTwinIndex>();
 
-// live·manual 매물을 제품 그룹 키로 인덱싱한다 — 트윈 후보는 판매 중(가격
-// 확인·미단종)이고 액세서리가 아닌 부품뿐이다. seed 자신은 인덱스에 들어가지
+// live/manual 매물을 제품 그룹 키로 인덱싱한다 — 트윈 후보는 판매 중(가격
+// 확인/미단종)이고 액세서리가 아닌 부품뿐이다. seed 자신은 인덱스에 들어가지
 // 않는다. 카탈로그 배열 참조를 키로 캐시해 로드마다 한 번만 만든다.
 export function seedLiveTwinIndexFor(catalog: readonly Part[]): SeedLiveTwinIndex {
   const cached = twinIndexCache.get(catalog);
@@ -275,7 +275,7 @@ export function seedLiveTwinsFor(seed: Part, catalogOrIndex: readonly Part[] | S
   const index = catalogOrIndex instanceof Map ? catalogOrIndex : seedLiveTwinIndexFor(catalogOrIndex);
   const seedVendors = vendorKeysFor(seed);
   const needsNameTokens = TOKEN_MATCH_CATEGORIES.has(seed.category);
-  // 메모리는 타입·용량·속도 시그니처로 먼저 묶지만, 양쪽에 시리즈 토큰이 있으면
+  // 메모리는 타입/용량/속도 시그니처로 먼저 묶지만, 양쪽에 시리즈 토큰이 있으면
   // 한 번 더 비교한다 — 같은 벤더의 다른 라인(VIPER VENOM vs SIGNATURE)이
   // 스펙만 같다고 서로의 가격을 물려받으면 안 된다. 시리즈 없는 제네릭 이름
   // ("삼성전자 DDR5-5600 (16GB)")은 토큰이 비어 시그니처로만 판정한다.

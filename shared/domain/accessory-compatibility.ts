@@ -138,7 +138,7 @@ function fanHubTargetRecommendationFor(fan: { selection: AccessorySelection; ite
       plan.connectorIssue === "none" ? "커넥터 일치" : plan.connectorIssue === "control_mode" ? "제어 방식 확인 필요" : plan.connectorIssue === "molex_mismatch" ? "커넥터 불일치" : "커넥터 확인 필요",
       plan.currentIssue === "none" ? "전류 범위 확인" : plan.currentIssue === "over_limit" ? "전류 초과" : "전류 확인 필요",
       plan.externalPower ? `외부 전원 ${plan.externalPower}` : "외부 전원 확인 필요"
-    ].join(" · ");
+    ].join(" / ");
     return {
       hubId: hub.id,
       hubName: hub.name,
@@ -165,11 +165,11 @@ function fanHubTargetRecommendationFor(fan: { selection: AccessorySelection; ite
     ...(suggestedHubId ? { suggestedHubId } : {}),
     candidates,
     summary: recommendedHubId
-      ? `포트·커넥터·전류 정보가 모두 확인된 ${candidates.find((candidate) => candidate.hubId === recommendedHubId)?.hubName ?? "허브"}를 우선 연결 부품으로 제안합니다.`
+      ? `포트/커넥터/전류 정보가 모두 확인된 ${candidates.find((candidate) => candidate.hubId === recommendedHubId)?.hubName ?? "허브"}를 우선 연결 부품으로 제안합니다.`
       : suggestedHubId
         ? `${candidates.find((candidate) => candidate.hubId === suggestedHubId)?.hubName ?? "허브"}가 현재 배치에서 우선 확인할 부품입니다. 전류 정보가 없으면 최종 안전성을 정하지 않아요.`
       : candidates.some((candidate) => candidate.status !== "blocked")
-        ? "호환 불가 문제는 없지만 전류·포트·커넥터 정보는 더 확인해 주세요."
+        ? "호환 불가 문제는 없지만 전류/포트/커넥터 정보는 더 확인해 주세요."
         : "현재 선택한 허브 중 추가 팬을 안전하게 배치할 부품을 확인하지 못했습니다."
   };
 }
@@ -301,7 +301,7 @@ export function accessoryCompatibilityFor(build: BuildSelection, catalog: Part[]
             ruleId: "accessory-storage-adapter",
             severity: "unknown",
             title: "M.2 변환 어댑터를 확인할 대상 SSD가 없습니다.",
-            message: "현재 견적에 M.2 SSD가 없어 변환 어댑터의 연결 타입·길이 규격을 비교할 수 없습니다.",
+            message: "현재 견적에 M.2 SSD가 없어 변환 어댑터의 연결 타입/길이 규격을 비교할 수 없습니다.",
             facts: [
               { label: "어댑터 연결 방식", actual: storageAdapterConnectionLabel(adapterKind) },
               { label: "선택한 M.2 SSD", expected: "확인 필요" }
@@ -313,14 +313,14 @@ export function accessoryCompatibilityFor(build: BuildSelection, catalog: Part[]
             ruleId: "accessory-storage-adapter",
             severity: "unknown",
             title: "어댑터와 SSD 규격을 확인해 주세요.",
-            message: "어댑터나 SSD의 크기·연결 방식 정보가 없어 서로 연결할 수 있는지 확인하지 못했어요.",
+            message: "어댑터나 SSD의 크기/연결 방식 정보가 없어 서로 연결할 수 있는지 확인하지 못했어요.",
             facts: [
               { label: "어댑터 연결 방식", actual: storageAdapterConnectionLabel(adapterKind) },
-              { label: "어댑터 지원 규격", expected: m2FormFactorLabelsFor(item).join(" · ") || "확인 필요" },
-              { label: "선택한 SSD 규격", actual: selectedM2.map(({ part }) => part.specs.formFactor ?? part.name).join(" · ") },
-              { label: "지원 인터페이스", expected: supportedInterfaceLabels.join(" · ") || "확인 필요" }
+              { label: "어댑터 지원 규격", expected: m2FormFactorLabelsFor(item).join(" / ") || "확인 필요" },
+              { label: "선택한 SSD 규격", actual: selectedM2.map(({ part }) => part.specs.formFactor ?? part.name).join(" / ") },
+              { label: "지원 인터페이스", expected: supportedInterfaceLabels.join(" / ") || "확인 필요" }
             ],
-            action: "어댑터 제품 페이지에서 M.2 Key·길이·NVMe/SATA 지원 여부를 확인해 주세요."
+            action: "어댑터 제품 페이지에서 M.2 Key/길이/NVMe/SATA 지원 여부를 확인해 주세요."
           });
         } else if (!m2FormsOverlap(adapterForms, selectedM2Forms)) {
           addFinding(findings, selection, item, selectedM2.map(({ part }) => part.id), {
@@ -329,8 +329,8 @@ export function accessoryCompatibilityFor(build: BuildSelection, catalog: Part[]
             title: "M.2 변환 어댑터 길이 규격이 선택한 SSD와 다릅니다.",
             message: `현재 선택한 M.2 SSD와 함께 사용할 경우 ${storageAdapterConnectionLabel(adapterKind)} 어댑터의 지원 길이가 맞지 않습니다.`,
             facts: [
-              { label: "선택한 SSD 규격", actual: selectedM2.map(({ part }) => part.specs.formFactor ?? part.name).join(" · ") },
-              { label: "어댑터 지원 규격", expected: m2FormFactorLabelsFor(item).join(" · ") || "확인 필요" }
+              { label: "선택한 SSD 규격", actual: selectedM2.map(({ part }) => part.specs.formFactor ?? part.name).join(" / ") },
+              { label: "어댑터 지원 규격", expected: m2FormFactorLabelsFor(item).join(" / ") || "확인 필요" }
             ],
             action: "대상 SSD 길이를 지원하는 어댑터인지 확인하거나 다른 어댑터를 선택하세요."
           });
@@ -338,10 +338,10 @@ export function accessoryCompatibilityFor(build: BuildSelection, catalog: Part[]
           addFinding(findings, selection, item, selectedM2.map(({ part }) => part.id), {
             ruleId: "accessory-storage-adapter",
             severity: "unknown",
-            title: "어댑터가 NVMe·SATA SSD를 지원하는지 확인해 주세요.",
+            title: "어댑터가 NVMe/SATA SSD를 지원하는지 확인해 주세요.",
             message: "어댑터의 연결 방식은 확인했지만 NVMe/SATA 지원 정보가 없어 선택한 SSD와 맞는지 판단하지 못했어요.",
             facts: [
-              { label: "선택한 SSD 인터페이스", actual: selectedInterfaceLabels.join(" · ") },
+              { label: "선택한 SSD 인터페이스", actual: selectedInterfaceLabels.join(" / ") },
               { label: "어댑터 지원 인터페이스", expected: "확인 필요" }
             ],
             action: "어댑터 제품 페이지에서 NVMe/SATA 지원 여부를 확인해 주세요."
@@ -353,8 +353,8 @@ export function accessoryCompatibilityFor(build: BuildSelection, catalog: Part[]
             title: "M.2 변환 어댑터의 인터페이스가 선택한 SSD와 다릅니다.",
             message: `현재 선택한 SSD와 함께 사용할 경우 ${storageAdapterConnectionLabel(adapterKind)} 어댑터가 해당 NVMe/SATA 신호를 지원하지 않을 수 있습니다.`,
             facts: [
-              { label: "선택한 SSD 인터페이스", actual: selectedInterfaceLabels.join(" · ") },
-              { label: "어댑터 지원 인터페이스", expected: supportedInterfaceLabels.join(" · ") || "확인 필요" }
+              { label: "선택한 SSD 인터페이스", actual: selectedInterfaceLabels.join(" / ") },
+              { label: "어댑터 지원 인터페이스", expected: supportedInterfaceLabels.join(" / ") || "확인 필요" }
             ],
             action: "M.2 Key와 NVMe/SATA 지원 여부를 제조사 페이지에서 확인해 주세요."
           });
@@ -380,7 +380,7 @@ export function accessoryCompatibilityFor(build: BuildSelection, catalog: Part[]
               { label: "연결 대상 M.2 SSD", actual: `${selectedM2Count}개` },
               { label: "어댑터 장착 한도", expected: "페이지 확인 필요" }
             ],
-            action: "어댑터 제품 페이지에서 보관·장착 개수를 확인하거나 대상 SSD를 나누어 지정하세요."
+            action: "어댑터 제품 페이지에서 보관/장착 개수를 확인하거나 대상 SSD를 나누어 지정하세요."
           });
         }
 
@@ -392,7 +392,7 @@ export function accessoryCompatibilityFor(build: BuildSelection, catalog: Part[]
               ruleId: "accessory-pcie-slot-width",
               severity: "unknown",
               title: "어댑터가 필요한 PCIe 슬롯 크기를 확인해 주세요.",
-              message: "어댑터가 필요한 PCIe x1·x4·x8·x16 크기 정보가 없어 메인보드 슬롯과 맞는지 확인하지 못했어요.",
+              message: "어댑터가 필요한 PCIe x1/x4/x8/x16 크기 정보가 없어 메인보드 슬롯과 맞는지 확인하지 못했어요.",
               facts: [
                 { label: "어댑터 연결 방식", actual: storageAdapterConnectionLabel(adapterKind) },
                 { label: "어댑터 PCIe 요구 폭", expected: "PCIe 슬롯 폭 정보 확인 필요" }
@@ -428,10 +428,10 @@ export function accessoryCompatibilityFor(build: BuildSelection, catalog: Part[]
                   { label: "어댑터 PCIe 요구 폭", actual: `x${adapterPcieSlotWidth}` },
                   { label: "메인보드 호환 슬롯", actual: pcieSlotInventoryText(motherboard.specs) },
                   { label: "확인된 여유 슬롯", actual: `${knownAvailableSlots}개 / 필요 ${requiredAdapterSlots}개` },
-                  ...(inventory.unknownWidths.length > 0 ? [{ label: "누락된 호스트 폭", expected: inventory.unknownWidths.map((width) => `x${width}`).join(" · ") }] : []),
+                  ...(inventory.unknownWidths.length > 0 ? [{ label: "누락된 호스트 폭", expected: inventory.unknownWidths.map((width) => `x${width}`).join(" / ") }] : []),
                   ...(gpu ? [{ label: "GPU PCIe 폭", actual: gpuWidth === undefined ? "확인 필요" : `x${gpuWidth}` }] : [])
                 ],
-                action: "메인보드 매뉴얼에서 빈 PCIe 슬롯의 폭·위치를 확인하고 GPU와 물리적으로 겹치지 않는지 확인하세요."
+                action: "메인보드 매뉴얼에서 빈 PCIe 슬롯의 폭/위치를 확인하고 GPU와 물리적으로 겹치지 않는지 확인하세요."
               });
             } else if (knownAvailableSlots < requiredAdapterSlots) {
               addFinding(findings, selection, item, relatedPartIds, {
@@ -474,11 +474,11 @@ export function accessoryCompatibilityFor(build: BuildSelection, catalog: Part[]
               title: "M.2 어댑터 사용이 그래픽카드 슬롯에 영향을 주는지 확인해 주세요.",
               message: "M.2와 PCIe 슬롯이 연결 자원을 공유할 수 있어요. 메인보드 설명서에서 그래픽카드 슬롯 속도와 사용 불가 조건을 확인해 주세요.",
               facts: [
-                { label: "M.2 공유 범위", actual: m2LaneSharingScopes?.join(" · ") ?? "PCIe" },
+                { label: "M.2 공유 범위", actual: m2LaneSharingScopes?.join(" / ") ?? "PCIe" },
                 { label: "메인보드 페이지 표기", actual: motherboard.specs.m2LaneSharingNote ?? "레인 공유" },
                 { label: "어댑터 PCIe 요구 폭", actual: adapterPcieSlotWidth === undefined ? "확인 필요" : `x${adapterPcieSlotWidth}` }
               ],
-              action: "메인보드 매뉴얼에서 PCIe bifurcation·레인 배분·M.2 사용 시 비활성화 조건과 부팅 지원을 확인하세요."
+              action: "메인보드 매뉴얼에서 PCIe bifurcation/레인 배분/M.2 사용 시 비활성화 조건과 부팅 지원을 확인하세요."
             });
           }
         }
@@ -494,7 +494,7 @@ export function accessoryCompatibilityFor(build: BuildSelection, catalog: Part[]
           message: "현재 견적에서 M.2 SSD를 찾지 못했거나 SSD 규격 정보가 없어 방열판이 맞는지 확인하지 못했어요.",
           facts: [
             { label: "선택한 M.2 SSD", expected: "확인 필요" },
-            { label: "방열판 지원 규격", expected: m2FormFactorLabelsFor(item).join(" · ") || "확인 필요" }
+            { label: "방열판 지원 규격", expected: m2FormFactorLabelsFor(item).join(" / ") || "확인 필요" }
           ],
           action: "M.2 SSD를 선택한 뒤 방열판 규격을 다시 확인하세요."
         });
@@ -504,13 +504,13 @@ export function accessoryCompatibilityFor(build: BuildSelection, catalog: Part[]
         addFinding(findings, selection, item, selectedM2.map(({ part }) => part.id), {
           ruleId: "accessory-m2-heatsink-form-factor",
           severity: "unknown",
-          title: "SSD와 방열판의 길이·두께를 확인해 주세요.",
+          title: "SSD와 방열판의 길이/두께를 확인해 주세요.",
           message: "SSD나 방열판의 크기 정보가 없어 장착할 수 있는지 확인하지 못했어요.",
           facts: [
-            { label: "선택한 M.2 SSD", actual: selectedM2.map(({ part }) => part.specs.formFactor ?? part.name).join(" · ") },
-            { label: "방열판 지원 규격", expected: m2FormFactorLabelsFor(item).join(" · ") || "확인 필요" }
+            { label: "선택한 M.2 SSD", actual: selectedM2.map(({ part }) => part.specs.formFactor ?? part.name).join(" / ") },
+            { label: "방열판 지원 규격", expected: m2FormFactorLabelsFor(item).join(" / ") || "확인 필요" }
           ],
-          action: "M.2 SSD와 방열판의 길이·두께를 제조사 페이지에서 확인해 주세요."
+          action: "M.2 SSD와 방열판의 길이/두께를 제조사 페이지에서 확인해 주세요."
         });
         } else if (!m2FormsOverlap(candidateForms, selectedM2Forms)) {
         addFinding(findings, selection, item, selectedM2.map(({ part }) => part.id), {
@@ -519,8 +519,8 @@ export function accessoryCompatibilityFor(build: BuildSelection, catalog: Part[]
           title: "M.2 방열판 규격이 선택한 SSD와 맞지 않습니다.",
           message: "선택한 방열판이 현재 M.2 SSD의 길이 규격을 지원하지 않아 그대로 장착할 수 없습니다.",
           facts: [
-            { label: "선택한 SSD 규격", actual: selectedM2.map(({ part }) => part.specs.formFactor ?? part.name).join(" · ") },
-            { label: "방열판 지원 규격", expected: m2FormFactorLabelsFor(item).join(" · ") || "확인 필요" }
+            { label: "선택한 SSD 규격", actual: selectedM2.map(({ part }) => part.specs.formFactor ?? part.name).join(" / ") },
+            { label: "방열판 지원 규격", expected: m2FormFactorLabelsFor(item).join(" / ") || "확인 필요" }
           ],
           action: "M.2 SSD 규격에 맞는 방열판으로 바꾸세요."
         });
@@ -561,7 +561,7 @@ export function accessoryCompatibilityFor(build: BuildSelection, catalog: Part[]
           title: "팬과 케이스의 장착 크기를 확인해 주세요.",
           message: "케이스나 쿨링팬의 크기 정보가 없어 서로 맞는지 확인하지 못했어요.",
           facts: [
-            { label: "케이스 지원 팬 크기", expected: caseFanSizes.length > 0 ? caseFanSizes.map((size) => `${size}mm`).join(" · ") : "확인 필요" },
+            { label: "케이스 지원 팬 크기", expected: caseFanSizes.length > 0 ? caseFanSizes.map((size) => `${size}mm`).join(" / ") : "확인 필요" },
             { label: "선택한 팬 크기", actual: fanSize === undefined ? "확인 필요" : `${fanSize}mm` }
           ],
           action: "케이스 도면에서 팬 장착 위치와 나사 간격을 확인하세요."
@@ -573,7 +573,7 @@ export function accessoryCompatibilityFor(build: BuildSelection, catalog: Part[]
           title: "쿨링팬 크기가 케이스 장착 규격과 맞지 않습니다.",
           message: "선택한 쿨링팬 크기가 케이스 정보에서 확인된 장착 규격과 맞지 않습니다.",
           facts: [
-            { label: "케이스 지원 팬 크기", expected: caseFanSizes.map((size) => `${size}mm`).join(" · ") },
+            { label: "케이스 지원 팬 크기", expected: caseFanSizes.map((size) => `${size}mm`).join(" / ") },
             { label: "선택한 팬 크기", actual: `${fanSize}mm` }
           ],
           action: "케이스 지원 크기의 쿨링팬으로 바꾸세요."
@@ -593,13 +593,13 @@ export function accessoryCompatibilityFor(build: BuildSelection, catalog: Part[]
           ruleId: "accessory-fan-hub-ports",
           severity: "unknown",
           title: "팬 허브의 분배 포트 수를 확인해 주세요.",
-          message: "케이스와 팬 허브의 팬·RGB 포트 정보가 없어 필요한 연결 수를 확인하지 못했어요.",
+          message: "케이스와 팬 허브의 팬/RGB 포트 정보가 없어 필요한 연결 수를 확인하지 못했어요.",
           facts: [
             { label: "케이스 기본 팬", actual: caseFanCount === undefined ? "확인 필요" : `${caseFanCount}개` },
             { label: "팬 허브 분배 포트", expected: "확인 필요" },
             { label: "RGB 분배 포트", expected: "확인 필요" }
           ],
-          action: "팬 허브 제품 페이지에서 팬·RGB 분배 포트와 전원 방식을 확인해 주세요."
+          action: "팬 허브 제품 페이지에서 팬/RGB 분배 포트와 전원 방식을 확인해 주세요."
         });
       } else if (hasFanEvidence && (!computerCase || caseFanCount === undefined)) {
         addFinding(findings, selection, item, relatedPartIds, {
@@ -611,7 +611,7 @@ export function accessoryCompatibilityFor(build: BuildSelection, catalog: Part[]
             { label: "케이스 기본 팬", expected: "확인 필요" },
             { label: "팬 허브 분배 포트", actual: `${fanPortCount}개` }
           ],
-          action: "케이스 기본 팬 수와 팬 허브 전원·분배 포트를 제품 페이지에서 확인해 주세요."
+          action: "케이스 기본 팬 수와 팬 허브 전원/분배 포트를 제품 페이지에서 확인해 주세요."
         });
       } else if (hasFanEvidence && caseFanCount !== undefined && fanPortCount < caseFanCount) {
         addFinding(findings, selection, item, relatedPartIds, {
@@ -642,7 +642,7 @@ export function accessoryCompatibilityFor(build: BuildSelection, catalog: Part[]
               { label: "컨트롤러 RGB 분배 포트", actual: rgbPortCount === undefined ? "확인 필요" : `${rgbPortCount}개` },
               { label: "컨트롤러 RGB 전압", actual: rgbVoltage ?? "확인 필요" }
             ],
-            action: "RGB 컨트롤러 제품 페이지에서 출력 포트·5V/12V 전압·전원 입력을 확인해 주세요."
+            action: "RGB 컨트롤러 제품 페이지에서 출력 포트/5V/12V 전압/전원 입력을 확인해 주세요."
           });
         } else if (rgbPlan.issue === "voltage_mismatch") {
           addFinding(findings, selection, item, relatedPartIds, {
@@ -678,9 +678,9 @@ export function accessoryCompatibilityFor(build: BuildSelection, catalog: Part[]
               { label: "케이스 RGB 장치", actual: `${rgbPlan.deviceCount}개` },
               { label: "필요 전압", actual: rgbPlan.requiredVoltages.join(" + ") || "확인 필요" },
               { label: "장치당 RGB 부하", expected: "제조사 페이지 확인 필요" },
-              { label: "컨트롤러 전원 레일", actual: rgbPlan.powerRails?.map((rail) => `${rail.voltage} ${rail.maxPowerW === undefined ? "용량 확인 필요" : `${rail.maxPowerW.toFixed(2)}W`}`).join(" · ") ?? "확인 필요" }
+              { label: "컨트롤러 전원 레일", actual: rgbPlan.powerRails?.map((rail) => `${rail.voltage} ${rail.maxPowerW === undefined ? "용량 확인 필요" : `${rail.maxPowerW.toFixed(2)}W`}`).join(" / ") ?? "확인 필요" }
             ],
-            action: "케이스 RGB 장치의 개당 소비전류·소비전력과 컨트롤러 해당 레일 한도를 제조사 페이지에서 확인해 주세요."
+            action: "케이스 RGB 장치의 개당 소비전류/소비전력과 컨트롤러 해당 레일 한도를 제조사 페이지에서 확인해 주세요."
           });
         } else if (rgbPlan.issue === "rgb_capacity_unknown") {
           addFinding(findings, selection, item, relatedPartIds, {
@@ -714,9 +714,9 @@ export function accessoryCompatibilityFor(build: BuildSelection, catalog: Part[]
         addFinding(findings, selection, item, relatedPartIds, {
           ruleId: "accessory-fan-hub-power",
           severity: "unknown",
-          title: "팬 허브·RGB 컨트롤러의 외부 전원을 확인해 주세요.",
+          title: "팬 허브/RGB 컨트롤러의 외부 전원을 확인해 주세요.",
           message: "포트와 RGB 전압 외에 허브의 전원 연결 방식(SATA 또는 IDE/Molex)을 확인해 주세요.",
-          facts: [{ label: "외부 전원 입력", expected: "SATA·IDE/Molex 확인 필요" }],
+          facts: [{ label: "외부 전원 입력", expected: "SATA/IDE/Molex 확인 필요" }],
           action: "제품 페이지에서 외부 전원 입력과 연결할 케이블을 확인해 주세요."
         });
       }
@@ -729,26 +729,26 @@ export function accessoryCompatibilityFor(build: BuildSelection, catalog: Part[]
         addFinding(findings, selection, item, relatedPartIds, {
           ruleId: "accessory-ups-capacity",
           severity: "unknown",
-          title: "CPU·GPU 전력 정보가 없어 UPS 용량을 비교하지 못했어요.",
-          message: "CPU·GPU 소비전력 정보가 없어 UPS 출력이 충분한지 계산하지 못했어요.",
+          title: "CPU/GPU 전력 정보가 없어 UPS 용량을 비교하지 못했어요.",
+          message: "CPU/GPU 소비전력 정보가 없어 UPS 출력이 충분한지 계산하지 못했어요.",
           facts: [
-            { label: "확인된 CPU·GPU 전력", expected: "확인 필요" },
+            { label: "확인된 CPU/GPU 전력", expected: "확인 필요" },
             { label: "UPS 출력", actual: outputW === undefined ? "확인 필요" : `${outputW}W` }
           ],
-          action: "CPU·GPU 전력과 UPS 출력(W)을 제품 페이지에서 확인해 주세요. VA는 역률 정보 없이 W로 환산하지 않습니다."
+          action: "CPU/GPU 전력과 UPS 출력(W)을 제품 페이지에서 확인해 주세요. VA는 역률 정보 없이 W로 환산하지 않습니다."
         });
       } else if (outputW === undefined) {
         addFinding(findings, selection, item, relatedPartIds, {
           ruleId: "accessory-ups-capacity",
           severity: "unknown",
           title: "UPS 출력(W)을 확인해 주세요.",
-          message: "UPS의 출력 정보가 없어 CPU·GPU 전력과 비교하지 못했어요.",
+          message: "UPS의 출력 정보가 없어 CPU/GPU 전력과 비교하지 못했어요.",
           facts: [
-            { label: "확인된 CPU·GPU 전력", actual: `${knownSystemPowerW}W` },
+            { label: "확인된 CPU/GPU 전력", actual: `${knownSystemPowerW}W` },
             { label: "UPS 출력", expected: "W 단위 출력 확인 필요" },
             ...(item.specs.capacityVa !== undefined ? [{ label: "UPS 용량", actual: `${item.specs.capacityVa}VA` }] : [])
           ],
-          action: "UPS 출력(W)과 역률·실제 소비전력을 제조사 페이지에서 확인해 주세요."
+          action: "UPS 출력(W)과 역률/실제 소비전력을 제조사 페이지에서 확인해 주세요."
         });
       } else {
         const recommendedOutputW = Math.ceil(knownSystemPowerW * 1.25);
@@ -756,27 +756,27 @@ export function accessoryCompatibilityFor(build: BuildSelection, catalog: Part[]
           addFinding(findings, selection, item, relatedPartIds, {
             ruleId: "accessory-ups-capacity",
             severity: "warning",
-            title: "UPS 출력이 확인된 CPU·GPU 전력보다 낮습니다.",
-            message: "현재 확인된 CPU·GPU 전력만으로도 UPS 출력에 가까워 실제 모니터·주변기기를 포함하면 과부하가 발생할 수 있습니다.",
+            title: "UPS 출력이 확인된 CPU/GPU 전력보다 낮습니다.",
+            message: "현재 확인된 CPU/GPU 전력만으로도 UPS 출력에 가까워 실제 모니터/주변기기를 포함하면 과부하가 발생할 수 있습니다.",
             facts: [
-              { label: "확인된 CPU·GPU 전력", actual: `${knownSystemPowerW}W` },
+              { label: "확인된 CPU/GPU 전력", actual: `${knownSystemPowerW}W` },
               { label: "UPS 출력", actual: `${outputW}W` },
               { label: "권장 최소 여유 출력", expected: `${recommendedOutputW}W 이상` }
             ],
-            action: "더 높은 출력의 UPS를 선택하고 모니터·주변기기 소비전력도 더해 확인하세요."
+            action: "더 높은 출력의 UPS를 선택하고 모니터/주변기기 소비전력도 더해 확인하세요."
           });
         } else if (outputW < recommendedOutputW) {
           addFinding(findings, selection, item, relatedPartIds, {
             ruleId: "accessory-ups-capacity",
             severity: "warning",
             title: "UPS 출력 여유가 권장 기준보다 작습니다.",
-            message: "CPU·GPU의 확인된 전력은 감당하지만 모니터·주변기기까지 포함한 여유가 충분하지 않을 수 있습니다.",
+            message: "CPU/GPU의 확인된 전력은 감당하지만 모니터/주변기기까지 포함한 여유가 충분하지 않을 수 있습니다.",
             facts: [
-              { label: "확인된 CPU·GPU 전력", actual: `${knownSystemPowerW}W` },
+              { label: "확인된 CPU/GPU 전력", actual: `${knownSystemPowerW}W` },
               { label: "UPS 출력", actual: `${outputW}W` },
               { label: "권장 최소 여유 출력", expected: `${recommendedOutputW}W 이상` }
             ],
-            action: "모니터·주변기기 소비전력을 더한 뒤 UPS 여유를 확인하세요."
+            action: "모니터/주변기기 소비전력을 더한 뒤 UPS 여유를 확인하세요."
           });
         }
       }
@@ -786,7 +786,7 @@ export function accessoryCompatibilityFor(build: BuildSelection, catalog: Part[]
   if (rgbTargetNeedsSelection) {
     const targetId = build.rgbControllerAccessoryId;
     const targetEntry = targetId ? selectedFanHubs.find(({ selection }) => selection.accessoryId === targetId) : undefined;
-    const availableControllers = rgbCapableFanHubs.map(({ item }) => item.name).join(" · ") || "없음";
+    const availableControllers = rgbCapableFanHubs.map(({ item }) => item.name).join(" / ") || "없음";
     findings.push({
       id: `accessory-rgb-controller-target-${targetId ?? "missing"}`,
       ruleId: "accessory-rgb-controller-target",
@@ -795,7 +795,7 @@ export function accessoryCompatibilityFor(build: BuildSelection, catalog: Part[]
       accessoryName: targetEntry?.item.name ?? "RGB 연결 컨트롤러",
       relatedPartIds: [computerCase?.id, ...(motherboard ? [motherboard.id] : [])].filter((partId): partId is string => Boolean(partId)),
       title: "케이스 RGB 장치의 연결 컨트롤러를 지정해야 합니다.",
-      message: targetId ? "지정한 RGB 컨트롤러가 선택되지 않았거나 출력·전압 정보가 빠져 연결을 확인하지 못했어요." : "RGB 컨트롤러가 여러 개라 케이스 조명을 연결할 대상을 지정해 주세요.",
+      message: targetId ? "지정한 RGB 컨트롤러가 선택되지 않았거나 출력/전압 정보가 빠져 연결을 확인하지 못했어요." : "RGB 컨트롤러가 여러 개라 케이스 조명을 연결할 대상을 지정해 주세요.",
       facts: [
         { label: "케이스 RGB 장치", actual: `${rgbDeviceCount}개` },
         { label: "지정한 RGB 컨트롤러", actual: targetEntry?.item.name ?? targetId ?? "미지정" },
@@ -828,7 +828,7 @@ export function accessoryCompatibilityFor(build: BuildSelection, catalog: Part[]
   }
   for (const { selection: fanSelection, item: fan } of unassignedFans) {
     const relatedPartIds = [computerCase?.id, ...(motherboard ? [motherboard.id] : [])].filter((partId): partId is string => Boolean(partId));
-    const availableHubs = selectedFanHubs.map(({ item }) => item.name).join(" · ") || "없음";
+    const availableHubs = selectedFanHubs.map(({ item }) => item.name).join(" / ") || "없음";
     addFinding(findings, fanSelection, fan, relatedPartIds, {
       ruleId: "accessory-fan-hub-target",
       severity: "unknown",
@@ -838,7 +838,7 @@ export function accessoryCompatibilityFor(build: BuildSelection, catalog: Part[]
         { label: "추가 팬", actual: fan.name },
         { label: "지정한 대상 허브", actual: fanSelection.targetAccessoryId ?? "미지정" },
         { label: "현재 선택한 팬 허브", actual: availableHubs },
-        ...(fanHubTargetRecommendations.find((recommendation) => recommendation.fanId === fan.id)?.candidates.length ? [{ label: "허브 부품", actual: fanHubTargetRecommendations.find((recommendation) => recommendation.fanId === fan.id)!.candidates.slice(0, 3).map((candidate) => `${candidate.hubName} · ${candidate.status === "pass" ? "추천" : candidate.status === "blocked" ? "호환 불가" : "확인 필요"}`).join(" · ") }] : [])
+        ...(fanHubTargetRecommendations.find((recommendation) => recommendation.fanId === fan.id)?.candidates.length ? [{ label: "허브 부품", actual: fanHubTargetRecommendations.find((recommendation) => recommendation.fanId === fan.id)!.candidates.slice(0, 3).map((candidate) => `${candidate.hubName} / ${candidate.status === "pass" ? "추천" : candidate.status === "blocked" ? "호환 불가" : "확인 필요"}`).join(" / ") }] : [])
       ],
       action: "추가한 주변 부품에서 이 팬의 연결 대상 팬 허브를 지정한 뒤 다시 검사하세요."
     });
@@ -850,31 +850,31 @@ export function accessoryCompatibilityFor(build: BuildSelection, catalog: Part[]
     const plan = fanHubConnectionPlanFor(hub, fansForHub);
     connectionPlans.push(plan);
     const relatedPartIds = [computerCase?.id, ...(motherboard ? [motherboard.id] : [])].filter((partId): partId is string => Boolean(partId));
-    const hubConnectorLabels = plan.hubFanOutputs.length > 0 ? plan.hubFanOutputs.join(" · ") : "확인 필요";
-    const fanConnectorLabels = [...new Set(plan.fans.flatMap((fan) => fan.connectorTypes))].join(" · ");
+    const hubConnectorLabels = plan.hubFanOutputs.length > 0 ? plan.hubFanOutputs.join(" / ") : "확인 필요";
+    const fanConnectorLabels = [...new Set(plan.fans.flatMap((fan) => fan.connectorTypes))].join(" / ");
     if (plan.connectorIssue === "unknown") {
       addFinding(findings, hubSelection, hub, relatedPartIds, {
         ruleId: "accessory-fan-hub-topology",
         severity: "unknown",
         title: "팬과 허브의 커넥터 규격을 확인해 주세요.",
-        message: "허브 출력이나 팬 입력의 3핀·4핀 정보가 빠져 연결과 팬 속도 조절 가능 여부를 확인하지 못했어요.",
+        message: "허브 출력이나 팬 입력의 3핀/4핀 정보가 빠져 연결과 팬 속도 조절 가능 여부를 확인하지 못했어요.",
         facts: [
           { label: "허브 팬 출력", actual: hubConnectorLabels },
           { label: "추가 팬 입력", actual: fanConnectorLabels }
         ],
-        action: "허브 분배단자와 팬 입력 커넥터가 3핀 DC·4핀 PWM·IDE/Molex 중 무엇인지 제품 페이지에서 확인해 주세요."
+        action: "허브 분배단자와 팬 입력 커넥터가 3핀 DC/4핀 PWM/IDE/Molex 중 무엇인지 제품 페이지에서 확인해 주세요."
       });
     } else if (plan.connectorIssue === "molex_mismatch") {
       addFinding(findings, hubSelection, hub, relatedPartIds, {
         ruleId: "accessory-fan-hub-connector",
         severity: "blocker",
         title: "팬 허브 출력 커넥터가 추가 팬과 맞지 않습니다.",
-        message: "IDE/Molex 전원 팬과 메인보드용 3핀·4핀 PWM 출력은 같은 연결 타입으로 직접 사용할 수 없습니다.",
+        message: "IDE/Molex 전원 팬과 메인보드용 3핀/4핀 PWM 출력은 같은 연결 타입으로 직접 사용할 수 없습니다.",
         facts: [
           { label: "허브 팬 출력", actual: hubConnectorLabels },
           { label: "추가 팬 입력", actual: fanConnectorLabels }
         ],
-        action: "같은 커넥터 타입을 지원하는 허브·팬 조합으로 바꾸거나 제조사 변환 경로를 확인하세요."
+        action: "같은 커넥터 타입을 지원하는 허브/팬 조합으로 바꾸거나 제조사 변환 경로를 확인하세요."
       });
     } else if (plan.connectorIssue === "control_mode") {
       addFinding(findings, hubSelection, hub, relatedPartIds, {
@@ -886,7 +886,7 @@ export function accessoryCompatibilityFor(build: BuildSelection, catalog: Part[]
           { label: "허브 팬 출력", actual: hubConnectorLabels },
           { label: "추가 팬 입력", actual: fanConnectorLabels }
         ],
-        action: "팬과 허브의 3핀 DC·4핀 PWM 방식을 맞추고, 팬 속도 조절도 확인해 주세요."
+        action: "팬과 허브의 3핀 DC/4핀 PWM 방식을 맞추고, 팬 속도 조절도 확인해 주세요."
       });
     }
 
@@ -927,7 +927,7 @@ export function accessoryCompatibilityFor(build: BuildSelection, catalog: Part[]
           { label: "허브 최대 허용전류", actual: plan.maxFanCurrentA === undefined ? "확인 필요" : `${plan.maxFanCurrentA.toFixed(2)}A` },
           { label: "추가 팬 소비전류", actual: plan.totalCurrentA === undefined ? "개별 팬 정보 확인 필요" : `${plan.totalCurrentA.toFixed(2)}A` }
         ],
-        action: "허브의 채널·전체 최대 허용전류와 팬별 소비전류를 제조사 페이지에서 확인해 주세요."
+        action: "허브의 채널/전체 최대 허용전류와 팬별 소비전류를 제조사 페이지에서 확인해 주세요."
       });
     } else if (plan.currentIssue === "over_limit" && plan.totalCurrentA !== undefined && plan.maxFanCurrentA !== undefined) {
       addFinding(findings, hubSelection, hub, relatedPartIds, {

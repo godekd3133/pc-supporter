@@ -1,5 +1,5 @@
 // 호환성 검사 엔진 모듈 — evaluateBuild 결과를 둘러싼 인메모리 캐시 계층을
-// 소유한다. index.ts의 라우트는 이 모듈을 통해 캐시를 조회·무효화하고,
+// 소유한다. index.ts의 라우트는 이 모듈을 통해 캐시를 조회/무효화하고,
 // 운영 상태 API는 여기의 지표를 읽는다.
 import { TtlLruInFlightCache, compatibilityResultCache } from "../compatibility-cache";
 import { savedBuildCheckPreviewCache } from "../saved-build-check-cache";

@@ -49,7 +49,7 @@ export interface BudgetLadderShareCreateInput {
 }
 
 export function budgetLadderDerivedSnapshotNameFor(name: string) {
-  const prefix = "현재 기준 · ";
+  const prefix = "현재 기준 / ";
   let trimmed = name.trim();
   while (trimmed.startsWith(prefix)) trimmed = trimmed.slice(prefix.length).trim();
   return `${prefix}${trimmed}`;

@@ -12,7 +12,7 @@ function item(overrides: Partial<AccessoryItem> = {}): AccessoryItem {
     source: "manual",
     listingType: "accessory",
     priceWon: 7900,
-    rawSpecText: "120mm · 4핀 PWM",
+    rawSpecText: "120mm / 4핀 PWM",
     specs: { fanCount: 1, fanCurrentA: 0.2 },
     dataQuality: "seed",
     missingFields: [],

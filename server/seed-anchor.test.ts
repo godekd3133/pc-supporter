@@ -167,7 +167,7 @@ describe("seed live twin anchoring", () => {
   });
 
   it("keeps a seed purchasable when only non-retail twins exist", () => {
-    // 병행수입·벌크 매물만 남은 실제품은 시장에 존재하므로 seed가
+    // 병행수입/벌크 매물만 남은 실제품은 시장에 존재하므로 seed가
     // sync된 최저가로 계속 견적에 선다(구매 링크는 트윈이 제공).
     const catalog = [samsungRamSeed(), samsungRamLive(349910, { listingType: "parallel_import" })];
     expect(isQuotePurchasable(catalog[0], catalog)).toBe(true);

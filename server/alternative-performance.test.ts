@@ -15,7 +15,7 @@ describe("alternative performance filters", () => {
     expect(alternativePerformanceFilterFromUnknown("unknown")).toBe("all");
   });
 
-  it("keeps only 동급·유사 candidates with at least two compared dimensions", () => {
+  it("keeps only 동급/유사 candidates with at least two compared dimensions", () => {
     expect(alternativePerformanceMatches("similar", similarity("동급", 4, 4, "high"))).toBe(true);
     expect(alternativePerformanceMatches("similar", similarity("유사", 2, 4, "limited"))).toBe(true);
     expect(alternativePerformanceMatches("similar", similarity("유사", 1, 4, "limited"))).toBe(false);

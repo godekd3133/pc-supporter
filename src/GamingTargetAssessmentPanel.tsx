@@ -37,9 +37,9 @@ export function GamingTargetAssessmentPanel({ assessment, targetFps, gameIds, on
         {measurement.sourceOnePercentLowFps !== undefined && <p>1% low는 프레임이 낮았던 하위 1% 구간의 평균입니다.</p>}
         <dl>
           <div><dt>CPU</dt><dd>{source.cpuModel}</dd></div>
-          <div><dt>GPU</dt><dd>{source.gpuName ?? source.gpuModel} · {source.gpuVramGb}GB</dd></div>
-          <div><dt>RAM</dt><dd>{source.memoryType} · {source.memorySpeedMhz}MHz{source.memoryCapacityGb !== undefined ? ` · ${source.memoryCapacityGb}GB` : ""}{source.memoryModuleCount !== undefined ? ` · ${source.memoryModuleCount}개` : ""}{source.memoryTiming ? ` · ${source.memoryTiming}` : ""}</dd></div>
-          <div><dt>게임 설정</dt><dd>{GAMING_RESOLUTION_LABELS[source.resolution]} · {source.sourcePreset || GAMING_GRAPHICS_PRESET_LABELS[source.graphicsPreset]} · RT {source.rayTracing ? "켜짐" : "꺼짐"} · {source.upscaler !== "none" ? `${source.upscaler.toUpperCase()} · ` : ""}{GAMING_UPSCALING_LABELS[source.upscaling]} · 프레임 생성 {source.frameGeneration ? "켜짐" : "꺼짐"}</dd></div>
+          <div><dt>GPU</dt><dd>{source.gpuName ?? source.gpuModel} / {source.gpuVramGb}GB</dd></div>
+          <div><dt>RAM</dt><dd>{source.memoryType} / {source.memorySpeedMhz}MHz{source.memoryCapacityGb !== undefined ? ` / ${source.memoryCapacityGb}GB` : ""}{source.memoryModuleCount !== undefined ? ` / ${source.memoryModuleCount}개` : ""}{source.memoryTiming ? ` / ${source.memoryTiming}` : ""}</dd></div>
+          <div><dt>게임 설정</dt><dd>{GAMING_RESOLUTION_LABELS[source.resolution]} / {source.sourcePreset || GAMING_GRAPHICS_PRESET_LABELS[source.graphicsPreset]} / RT {source.rayTracing ? "켜짐" : "꺼짐"} / {source.upscaler !== "none" ? `${source.upscaler.toUpperCase()} / ` : ""}{GAMING_UPSCALING_LABELS[source.upscaling]} / 프레임 생성 {source.frameGeneration ? "켜짐" : "꺼짐"}</dd></div>
           {source.driverVersion && <div><dt>드라이버</dt><dd>{source.driverVersion}</dd></div>}
           {source.operatingSystem && <div><dt>운영체제</dt><dd>{source.operatingSystem}</dd></div>}
           {source.gameVersion && <div><dt>게임 버전</dt><dd>{source.gameVersion}</dd></div>}

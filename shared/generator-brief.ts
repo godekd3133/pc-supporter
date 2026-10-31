@@ -1,9 +1,11 @@
+import { GAMING_GAMES } from "./gaming-catalog";
 import { RECOMMENDATION_PRIORITY_LABELS } from "./types";
 import type { GamingRefreshRate, GamingResolution, ListingPolicy, RecommendationPriority, RecommendationProfile } from "./types";
 
 export type GeneratorBriefField =
   | "profile"
   | "priority"
+  | "gamingGameIds"
   | "gamingResolution"
   | "gamingRefreshRate"
   | "memoryCapacityGb"
@@ -17,6 +19,7 @@ export type GeneratorBriefField =
 export type GeneratorBriefConfig = Partial<{
   profile: RecommendationProfile;
   priority: RecommendationPriority;
+  gamingGameIds: string[];
   gamingResolution: GamingResolution;
   gamingRefreshRate: GamingRefreshRate;
   memoryCapacityGb: 16 | 32 | 64 | 128;
@@ -71,10 +74,10 @@ const BUDGET_PATTERNS: BudgetPattern[] = [
 ];
 
 const PROFILE_MATCHERS: Array<{ profile: RecommendationProfile; pattern: RegExp; label: string }> = [
-  { profile: "development", pattern: /개발|코딩|ai|머신러닝|딥러닝/i, label: "개발·AI" },
-  { profile: "creator", pattern: /크리에이터|영상\s*편집|영상\s*작업|렌더링|3d\s*작업/i, label: "작업·크리에이터" },
+  { profile: "development", pattern: /개발|코딩|ai|머신러닝|딥러닝/i, label: "개발/AI" },
+  { profile: "creator", pattern: /크리에이터|영상\s*편집|영상\s*작업|렌더링|3d\s*작업/i, label: "작업/크리에이터" },
   { profile: "gaming", pattern: /게이밍|게임용|게임\s*PC|fps|롤|배그|스팀/i, label: "게이밍" },
-  { profile: "office", pattern: /사무용|문서|웹\s*서핑|인터넷\s*용|업무용/i, label: "사무·일반" },
+  { profile: "office", pattern: /사무용|문서|웹\s*서핑|인터넷\s*용|업무용/i, label: "사무/일반" },
   { profile: "general", pattern: /일반용|범용/i, label: "일반형" }
 ];
 
@@ -195,29 +198,45 @@ function briefGuidanceFor(config: GeneratorBriefConfig): GeneratorBriefGuidance[
   const add = (item: GeneratorBriefGuidance) => guidance.push(item);
 
   if (config.profile === undefined) {
-    add({ id: "profile", label: "사용 목적", detail: "게임·영상 작업·개발·사무 중 주로 할 일을 적어 주세요." });
+    add({ id: "profile", label: "사용 목적", detail: "게임/영상 작업/개발/사무 중 주로 할 일을 적어 주세요." });
   }
   if (config.budgetWon === undefined) {
     add({ id: "budget", label: "예산", detail: "예: 200만 원" });
   }
   if (config.profile === "gaming") {
     if (config.gamingResolution === undefined) {
-      add({ id: "gaming-resolution", label: "게임 해상도", phrase: "QHD", detail: "FHD·QHD·4K 중 골라 주세요." });
+      add({ id: "gaming-resolution", label: "게임 해상도", phrase: "QHD", detail: "FHD/QHD/4K 중 골라 주세요." });
     }
     if (config.gamingRefreshRate === undefined) {
-      add({ id: "gaming-refresh", label: "목표 주사율", phrase: "144Hz", detail: "60·144·240Hz 중 골라 주세요." });
+      add({ id: "gaming-refresh", label: "목표 주사율", phrase: "144Hz", detail: "60/144/240Hz 중 골라 주세요." });
     }
   }
   if (config.memoryCapacityGb === undefined) {
-    add({ id: "memory", label: "RAM", phrase: "RAM 32GB", detail: "16·32·64·128GB 중 골라 주세요." });
+    add({ id: "memory", label: "RAM", phrase: "RAM 32GB", detail: "16/32/64/128GB 중 골라 주세요." });
   }
   if (config.storageCapacityGb === undefined) {
-    add({ id: "storage", label: "SSD", phrase: "SSD 1TB", detail: "500GB·1TB·2TB·4TB 중 골라 주세요." });
+    add({ id: "storage", label: "SSD", phrase: "SSD 1TB", detail: "500GB/1TB/2TB/4TB 중 골라 주세요." });
   }
   if (config.includeGpu === undefined) {
     add({ id: "gpu", label: "그래픽카드", detail: "외장 그래픽 포함 또는 내장 그래픽만이라고 적어 주세요." });
   }
   return guidance.slice(0, 6);
+}
+
+/** Recognized catalog titles and common Korean game aliases. */
+export function gamingGameIdsFromBrief(text: string): string[] {
+  const aliases: Record<string, RegExp> = {
+    pubg: /배틀\s*그라운드|배그|\bpubg\b/i,
+    league: /리그\s*오브\s*레전드|롤|\blol\b/i,
+    valorant: /발로란트|\bvalorant\b/i,
+    overwatch2: /오버워치|\boverwatch(?:\s*2)?\b/i,
+    lostark: /로스트\s*아크|로아/i
+  };
+  return GAMING_GAMES.filter(game => {
+    const pattern = aliases[game.id] ?? new RegExp(game.label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+    const match = pattern.exec(text);
+    return match && !/^\s*(?:는|은|을|를)?\s*(?:안\s*(?:함|해|할|함)|하지\s*않|제외|빼)/.test(text.slice(match.index + match[0].length));
+  }).slice(0, 5).map(game => game.id);
 }
 
 export function generatorBriefInterpretationFor(input: string): GeneratorBriefInterpretation {
@@ -229,6 +248,11 @@ export function generatorBriefInterpretationFor(input: string): GeneratorBriefIn
     return { config, matches, warnings: ["원하는 조건을 한 줄로 입력해 주세요. 예: QHD 게이밍 220만원, RAM 32GB, SSD 2TB"], confidence: "low", coverage: { matched: 0, total: 5, missing: ["사용 목적", "목표 예산", "RAM 목표", "SSD 목표", "그래픽카드"] }, guidance: [] };
   }
 
+  const gameIds = gamingGameIdsFromBrief(text);
+  if (gameIds.length) {
+    addMatch(config, matches, "gamingGameIds", gameIds, "주로 할 게임", text, GAMING_GAMES.filter(game => gameIds.includes(game.id)).map(game => game.label).join(" / "));
+    if (!allMatchers(text, PROFILE_MATCHERS).length) addMatch(config, matches, "profile", "gaming", "사용 목적", "게임 입력", "게이밍");
+  }
   const profiles = allMatchers(text, PROFILE_MATCHERS);
   const profile = firstMatcher(text, PROFILE_MATCHERS);
   if (profiles.length > 1) warnings.push(`주로 할 일이 여러 개 적혀 있어 ${profile?.label ?? "첫 번째 항목"}만 반영했어요.`);
@@ -260,25 +284,25 @@ export function generatorBriefInterpretationFor(input: string): GeneratorBriefIn
   const memory = memoryFromBrief(text);
   if (memory) {
     if (supportedCapacity(memory.value, [16, 32, 64, 128])) addMatch(config, matches, "memoryCapacityGb", memory.value as 16 | 32 | 64 | 128, "RAM 목표", `${memory.value}GB 이상`, memory.source);
-    else warnings.push(`자동 견적에서는 RAM ${memory.value}GB를 고를 수 없어요. 16·32·64·128GB 중 하나를 적어 주세요.`);
+    else warnings.push(`자동 견적에서는 RAM ${memory.value}GB를 고를 수 없어요. 16/32/64/128GB 중 하나를 적어 주세요.`);
   }
 
   const storage = capacityFromBrief(text, "ssd|nvme|스토리지|저장장치|저장공간");
   if (storage) {
     if (supportedCapacity(storage.value, [500, 1000, 2000, 4000])) addMatch(config, matches, "storageCapacityGb", storage.value as 500 | 1000 | 2000 | 4000, "SSD 목표", `${storage.value >= 1000 ? `${storage.value / 1000}TB` : `${storage.value}GB`} 이상`, storage.source);
-    else warnings.push(`자동 견적에서는 SSD ${storage.value >= 1000 ? `${storage.value / 1000}TB` : `${storage.value}GB`}를 고를 수 없어요. 500GB·1TB·2TB·4TB 중 하나를 적어 주세요.`);
+    else warnings.push(`자동 견적에서는 SSD ${storage.value >= 1000 ? `${storage.value / 1000}TB` : `${storage.value}GB`}를 고를 수 없어요. 500GB/1TB/2TB/4TB 중 하나를 적어 주세요.`);
   }
 
   const hddCount = hddCountFromBrief(text);
   if (hddCount) {
     if (supportedCapacity(hddCount.value, [0, 1, 2, 4])) addMatch(config, matches, "hddCount", hddCount.value as 0 | 1 | 2 | 4, "HDD 개수", `HDD ${hddCount.value}개`, hddCount.source);
-    else warnings.push(`자동 견적에서는 HDD ${hddCount.value}개를 고를 수 없어요. 0·1·2·4개 중 하나를 적어 주세요.`);
+    else warnings.push(`자동 견적에서는 HDD ${hddCount.value}개를 고를 수 없어요. 0/1/2/4개 중 하나를 적어 주세요.`);
   }
 
   const hddCapacity = hddCapacityFromBrief(text);
   if (hddCapacity) {
     if (supportedCapacity(hddCapacity.value, [2000, 4000, 8000, 16000])) addMatch(config, matches, "hddCapacityGb", hddCapacity.value as 2000 | 4000 | 8000 | 16000, "HDD 용량", `HDD ${hddCapacity.value >= 1000 ? `${hddCapacity.value / 1000}TB` : `${hddCapacity.value}GB`} 이상`, hddCapacity.source);
-    else warnings.push(`자동 견적에서는 HDD ${hddCapacity.value >= 1000 ? `${hddCapacity.value / 1000}TB` : `${hddCapacity.value}GB`}를 고를 수 없어요. 2·4·8·16TB 중 하나를 적어 주세요.`);
+    else warnings.push(`자동 견적에서는 HDD ${hddCapacity.value >= 1000 ? `${hddCapacity.value / 1000}TB` : `${hddCapacity.value}GB`}를 고를 수 없어요. 2/4/8/16TB 중 하나를 적어 주세요.`);
   }
 
   const noGpu = /내장\s*그래픽|내장만|외장\s*그래픽\s*(?:없|미포함)|그래픽카드\s*(?:없이|미포함)|gpu\s*없/i.test(text);
@@ -289,7 +313,7 @@ export function generatorBriefInterpretationFor(input: string): GeneratorBriefIn
 
   if (/병행수입|해외구매|해외|중고|리퍼|모든\s*유통|전체\s*조건/i.test(text)) addMatch(config, matches, "listingPolicy", "all", "구매 조건", "전체 유통 조건", "전체 조건");
   else if (/벌크/i.test(text)) addMatch(config, matches, "listingPolicy", "include_bulk", "구매 조건", "벌크 포함", "벌크 포함");
-  else if (/신품|정식\s*유통|정품/i.test(text)) addMatch(config, matches, "listingPolicy", "retail_only", "구매 조건", "신품·정식 유통", "신품·정식 유통");
+  else if (/신품|정식\s*유통|정품/i.test(text)) addMatch(config, matches, "listingPolicy", "retail_only", "구매 조건", "신품/정식 유통", "신품/정식 유통");
 
   if (matches.length === 0) warnings.push("입력한 내용에서 견적 조건을 찾지 못했어요. 예: QHD 게임용 220만원, RAM 32GB, SSD 2TB");
   const hasHardConflict = warnings.some((warning) => warning.includes("조건이 함께 감지"));

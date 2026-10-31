@@ -45,7 +45,7 @@ function dimensionReason(left: BudgetLadderTradeoffMetric, right: BudgetLadderTr
   if (left.riskScore !== undefined && right.riskScore !== undefined && left.riskScore < right.riskScore) dimensions.push("남은 위험");
   if (left.totalPriceWon !== undefined && right.totalPriceWon !== undefined && left.totalPriceWon < right.totalPriceWon) dimensions.push("실제 합계");
   if (left.analysisScore !== undefined && right.analysisScore !== undefined && left.analysisScore > right.analysisScore) dimensions.push("분석 점수");
-  return dimensions.length > 0 ? dimensions.join("·") : "비교 기준";
+  return dimensions.length > 0 ? dimensions.join("/") : "비교 기준";
 }
 
 export function budgetLadderTradeoffFor(outcomes: ReadonlyArray<BudgetLadderOutcome>): BudgetLadderTradeoffSummary[] {
@@ -69,8 +69,8 @@ export function budgetLadderTradeoffFor(outcomes: ReadonlyArray<BudgetLadderOutc
         ...metric,
         frontier: true,
         reason: metric.totalPriceWon === undefined || metric.analysisScore === undefined
-          ? "확인된 비용·분석 점수 범위 안에서 비교 대상으로 남겼습니다."
-          : "위험·실제 합계·분석 점수에서 다른 구간에 밀리지 않았습니다."
+          ? "확인된 비용/분석 점수 범위 안에서 비교 대상으로 남겼습니다."
+          : "위험/실제 합계/분석 점수에서 다른 구간에 밀리지 않았습니다."
       };
     }
     return {

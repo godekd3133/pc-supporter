@@ -6,7 +6,7 @@
 // --part는 <category>:<pcode> 또는 <category>:<categoryId>:<pcode> 형식 — 범주 기본
 // 다나와 categoryId는 CATEGORY_IDS에 있다.
 // --spec 'maxCoolingW=300' 처럼 스펙 필드를 파싱 결과에 덮어쓸 수 있다(다나와 상세
-// 스펙이 없는 항목 — 수랭 쿨러의 냉각 용량·펌프 높이 등 — 수동 보강용).
+// 스펙이 없는 항목 — 수랭 쿨러의 냉각 용량/펌프 높이 등 — 수동 보강용).
 import { setTimeout as sleep } from "node:timers/promises";
 import { PART_CATEGORIES, type Part, type PartCategory, type PartSpecs } from "../shared/types";
 import { fetchDanawaHtml, parseDanawaProductPage, type DanawaListItem } from "../server/danawa";

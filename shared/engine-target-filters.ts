@@ -1,8 +1,8 @@
 import type { Part, PartCategory, PartSpecs } from "./types";
 import { isKnownPrice, PART_CATEGORIES } from "./types";
 
-// 자동 견적 생성기의 카탈로그 타겟 필터 — 관리자가 범주별로 허용 브랜드·스펙 값·
-// 수치 범위·플래그·가격대를 지정하면, 생성기 후보 풀에 들어가기 전에 부품을 걸러낸다.
+// 자동 견적 생성기의 카탈로그 타겟 필터 — 관리자가 범주별로 허용 브랜드/스펙 값/
+// 수치 범위/플래그/가격대를 지정하면, 생성기 후보 풀에 들어가기 전에 부품을 걸러낸다.
 // 같은 facet 안의 선택값은 OR, 서로 다른 facet은 AND로 결합한다.
 // 설정하지 않은 facet은 제한하지 않는다.
 
@@ -122,7 +122,7 @@ export interface EngineCategoryTargetFilter {
   /**
    * 부품 이름과 매칭되는 정규식 목록(OR) — "이 4개 보드만", "RTX 50 시리즈만"
    * 같은 테스트 베드/명시 허용목록 표현용. 이 목록이 있으면 내장 견적 브랜드
-   * 정책(SSD/RAM 삼성·하이닉스, PSU 시소닉·마이크로닉스)은 관리자의 명시
+   * 정책(SSD/RAM 삼성/하이닉스, PSU 시소닉/마이크로닉스)은 관리자의 명시
    * 선택이 우선한다는 의미로 우회한다.
    */
   namePatterns?: string[];
@@ -299,8 +299,8 @@ export function engineTargetFiltersAllowPart(part: Part, config: EngineTargetFil
 
 /**
  * 관리자가 namePatterns로 부품을 직접 지명한 범주는 내장 견적 브랜드 정책
- * (SSD/RAM 삼성·하이닉스, PSU 시소닉·마이크로닉스)을 우회한다 — 명시
- * 허용목록이 기본 정책보다 우선한다. 브랜드·수치 facet만 있는 규칙은
+ * (SSD/RAM 삼성/하이닉스, PSU 시소닉/마이크로닉스)을 우회한다 — 명시
+ * 허용목록이 기본 정책보다 우선한다. 브랜드/수치 facet만 있는 규칙은
  * 우회하지 않는다(의도하지 않은 개방을 막기 위해).
  */
 export function engineTargetFilterBypassesBrandPolicy(config: EngineTargetFiltersConfig | undefined, category: PartCategory) {
@@ -311,7 +311,7 @@ export function engineTargetFilterBypassesBrandPolicy(config: EngineTargetFilter
 
 /**
  * 부품이 이 범주의 namePatterns에 명시적으로 지명됐는가 — seed 참고 부품의
- * 생성기 진입·선택 우회처럼 "관리자가 이름으로 직접 지명했다" 의미를 필요로
+ * 생성기 진입/선택 우회처럼 "관리자가 이름으로 직접 지명했다" 의미를 필요로
  * 하는 곳에서 쓴다. 규칙 전체 통과(engineTargetFilterRuleAllowsPart)와 달리
  * 다른 facet 조건은 보지 않는다.
  */
@@ -323,9 +323,8 @@ export function engineTargetFilterNamesPart(part: Part, config: EngineTargetFilt
 
 // 범주 facet에 선언된 필드만 남긴다 — 다른 범주 링크를 재사용해도 선언되지
 // 않은 조건이 결과를 좁히지 않는다.
-export function engineTargetFilterRuleForCategory(rule: EngineCategoryTargetFilter | undefined, category: PartCategory): EngineCategoryTargetFilter | undefined {
+export function engineTargetFilterRuleForCategory(rule: EngineCategoryTargetFilter | undefined, category: PartCategory, facets: EngineTargetFilterFacet[] = ENGINE_TARGET_FILTER_FACETS[category]): EngineCategoryTargetFilter | undefined {
   if (!rule) return undefined;
-  const facets = ENGINE_TARGET_FILTER_FACETS[category];
   const valueIds = new Set<string>(facets.filter((facet) => facet.kind === "values").map((facet) => facet.id));
   const rangeIds = new Set<string>(facets.filter((facet) => facet.kind === "range").map((facet) => facet.id));
   const flagIds = new Set<string>(facets.filter((facet) => facet.kind === "flag").map((facet) => facet.id));
@@ -701,7 +700,7 @@ export type EngineFilterBucket = { label: string; min?: number; max?: number };
 export type EngineTargetFilterFacet =
   | { id: "brands"; kind: "brands"; label: string }
   | { id: EngineFilterSpecValueField; kind: "values"; label: string }
-  | { id: EngineFilterNumericField; kind: "range"; label: string; unit?: string; buckets?: EngineFilterBucket[] }
+  | { id: EngineFilterNumericField; kind: "range"; label: string; unit?: string; buckets?: EngineFilterBucket[]; checkboxOnly?: boolean }
   | { id: EngineFilterFlagField; kind: "flag"; label: string; optionLabel: string }
   | { id: "price"; kind: "price"; label: string };
 
@@ -756,6 +755,7 @@ export const ENGINE_TARGET_FILTER_FACETS: Record<PartCategory, EngineTargetFilte
     { id: "gpuMemoryType", kind: "values", label: "메모리 타입" },
     { id: "gpuBoostClockMhz", kind: "range", label: "부스트 클럭", unit: "MHz" },
     { id: "lengthMm", kind: "range", label: "카드 길이", unit: "mm" },
+    { id: "thicknessMm", kind: "range", label: "그래픽카드 두께", unit: "mm" },
     { id: "lowProfileBracket", kind: "flag", label: "로우프로파일", optionLabel: "LP 브라켓 포함만" },
     { id: "powerW", kind: "range", label: "소비 전력", unit: "W" },
     { id: "recommendedPsuW", kind: "range", label: "권장 파워", unit: "W" },

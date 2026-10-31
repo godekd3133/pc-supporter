@@ -111,8 +111,8 @@ describe("GPU physical review queue", () => {
     const queue = physicalReviewQueueFor([gpu], overrides, { now: "2026-09-01T00:00:00.000Z" });
 
     expect(queue).toMatchObject({ total: 1, queueTotal: 1, reviewedCount: 0, staleCount: 1, coveragePercent: 0 });
-    expect(queue.items[0]).toMatchObject({ reviewStatus: "stale", focusFields: ["정보 URL 접근·모델 식별 재확인"] });
-    expect(queue.items[0].reviewReason).toContain("정보 URL 접근·모델 식별 재확인 필요");
+    expect(queue.items[0]).toMatchObject({ reviewStatus: "stale", focusFields: ["정보 URL 접근/모델 식별 재확인"] });
+    expect(queue.items[0].reviewReason).toContain("정보 URL 접근/모델 식별 재확인 필요");
   });
 
   it("aggregates cross-category review coverage and evidence freshness", () => {

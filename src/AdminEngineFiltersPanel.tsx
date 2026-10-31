@@ -54,7 +54,7 @@ function cloneConfig(config: EngineTargetFiltersConfig): EngineTargetFiltersConf
   return JSON.parse(JSON.stringify(config)) as EngineTargetFiltersConfig;
 }
 
-// 저장값과 비교할 수 있도록 빈 규칙·빈 배열을 걷어낸 정규화된 사본.
+// 저장값과 비교할 수 있도록 빈 규칙/빈 배열을 걷어낸 정규화된 사본.
 function compactRule(rule: EngineCategoryTargetFilter | undefined): EngineCategoryTargetFilter | undefined {
   if (!rule) return undefined;
   const next: EngineCategoryTargetFilter = {};
@@ -356,7 +356,7 @@ export function AdminEngineFiltersPanel({ onToast }: { onToast: (message: string
   // 부품 단위 제외 — 허용 조건과 무관하게 체크된 부품 id는 항상 후보에서 빠진다.
   // 위에는 "제외된 부품" 요약 블록을 항상 열어 두고, 아래에는 검색+스크롤 목록을 둬
   // 수백 개 부품 중에서도 찾아 넣고/빼기 쉽게 한다. 카탈로그에서 사라진 id
-  // (단종·수집 중단)도 요약 블록에 남겨 해제할 수 있게 한다.
+  // (단종/수집 중단)도 요약 블록에 남겨 해제할 수 있게 한다.
   const renderExcludedPartsRow = () => {
     const rule = selectedRule ?? {};
     const partOptions = selectedFacetOptions?.parts ?? [];
@@ -397,20 +397,20 @@ export function AdminEngineFiltersPanel({ onToast }: { onToast: (message: string
               {missingExcluded.map((id) => (
                 <label key={id} className="engine-filter-option excluded checked">
                   <input type="checkbox" checked onChange={() => toggleExcluded(id)} />
-                  <span>{id} · 카탈로그에 없음</span>
+                  <span>{id} / 카탈로그에 없음</span>
                 </label>
               ))}
             </div>
           </div>
         )}
         <div className="engine-filter-part-toolbar">
-          <input type="search" className="engine-filter-part-search" placeholder="부품 이름·제조사·id 검색" value={partSearch} onChange={(event) => setPartSearch(event.target.value)} />
+          <input type="search" className="engine-filter-part-search" placeholder="부품 이름/제조사/id 검색" value={partSearch} onChange={(event) => setPartSearch(event.target.value)} />
           <label className="engine-filter-part-only">
             <input type="checkbox" checked={excludedOnly} onChange={(event) => setExcludedOnly(event.target.checked)} />
             <span>제외만</span>
           </label>
           <button type="button" className="text-button" disabled={unaddedCount === 0} onClick={excludeAllMatched}>결과 전체 제외</button>
-          <span className="engine-filter-part-count">전체 {partOptions.length.toLocaleString("ko-KR")}개 · 표시 {listed.length.toLocaleString("ko-KR")}개</span>
+          <span className="engine-filter-part-count">전체 {partOptions.length.toLocaleString("ko-KR")}개 / 표시 {listed.length.toLocaleString("ko-KR")}개</span>
         </div>
         <div className="engine-filter-part-list">
           <div className="engine-filter-options">
@@ -436,7 +436,7 @@ export function AdminEngineFiltersPanel({ onToast }: { onToast: (message: string
       <span className={`job-status ${config?.enabled ? "completed" : "idle"}`}>{config?.enabled ? "필터 사용 중" : "필터 해제됨"}</span>
     </div>
     <p className="admin-card-description">자동 견적 생성에 쓸 부품 후보를 범주별로 제한합니다. 같은 조건 안의 선택값은 OR, 서로 다른 조건은 AND로 적용되고, 선택하지 않은 조건은 제한하지 않습니다.</p>
-    {generationGate && !generationGate.enabled && <p className="engine-filter-preview-note"><FiAlertTriangle /> 세대 게이트가 해제되어 있어 CPU·GPU의 구세대 부품도 견적 후보에 포함됩니다.</p>}
+    {generationGate && !generationGate.enabled && <p className="engine-filter-preview-note"><FiAlertTriangle /> 세대 게이트가 해제되어 있어 CPU/GPU의 구세대 부품도 견적 후보에 포함됩니다.</p>}
     {generations.length > 0 && (
       <p className="engine-filter-generation-note" title="카탈로그에 판매 중인 상품으로 자동 계산된 견적 허용 세대입니다. 신세대가 수집되면 자동으로 올라갑니다.">
         세대 경계(자동): {generations.map((entry) => (

@@ -19,7 +19,7 @@ export const DANAWA_CATEGORIES: Array<{
   { category: "psu", categoryId: "112777" }
 ];
 
-// 다나와는 비브라우저 UA에 JSON-LD만 담긴 간소화 리스트(가격·목록 마크업 없음)를
+// 다나와는 비브라우저 UA에 JSON-LD만 담긴 간소화 리스트(가격/목록 마크업 없음)를
 // 돌려준다. 실제 상품 목록(li.prod_item)과 페이지네이션 컨텍스트를 받으려면
 // 일반 데스크톱 브라우저 UA가 필요하다.
 const DEFAULT_USER_AGENT =
@@ -470,25 +470,86 @@ function parseLowestPrice(text: string | undefined) {
   if (cardLowest !== undefined && cardLowest > 0) return cardLowest;
   // 카드가 기준 최저가가 없는 상품은 "최저가 0원, 현금최저가: N원" 형태다 —
   // 0원은 가격이 없다는 뜻이 아니라 현금가만 있다는 뜻이므로 그 값을 쓴다.
-  return parseNumber(text, /현금최저가\s*[:：]?\s*([\d,]+)\s*원/i);
+  const cashLowest = parseNumber(text, /현금최저가\s*[:：]?\s*([\d,]+)\s*원/i);
+  return cashLowest !== undefined && cashLowest > 0 ? cashLowest : undefined;
 }
 
-/** Returns only a price explicitly present in the product page's Open Graph description. */
-export function parseDanawaPriceFromHtml(html: string, expectedProductCode: string) {
-  const $ = cheerio.load(html);
+function danawaPageIdentityMatches($: cheerio.CheerioAPI, expectedProductCode: string) {
   const canonical = $("link[rel='canonical']").attr("href");
   const openGraphUrl = $("meta[property='og:url']").attr("content");
-  const identityUrl = canonical || openGraphUrl;
-  if (!identityUrl) return undefined;
-  try {
-    const parsedUrl = new URL(identityUrl, "https://prod.danawa.com");
-    if (parsedUrl.protocol !== "https:" || !["prod.danawa.com", "www.danawa.com"].includes(parsedUrl.hostname.toLowerCase())) return undefined;
-    const actualProductCode = parsedUrl.searchParams.get("pcode");
-    if (!actualProductCode || actualProductCode !== expectedProductCode) return undefined;
-  } catch {
-    return undefined;
+  const urls = [canonical, openGraphUrl].filter((url): url is string => Boolean(url));
+  if (urls.length === 0) return false;
+  return urls.every((url) => {
+    try {
+      const parsedUrl = new URL(url, "https://prod.danawa.com");
+      return parsedUrl.protocol === "https:"
+        && ["prod.danawa.com", "www.danawa.com"].includes(parsedUrl.hostname.toLowerCase())
+        && parsedUrl.searchParams.get("pcode") === expectedProductCode;
+    } catch { return false; }
+  });
+}
+
+/** Returns only a price explicitly present in the identified product page. */
+export function parseDanawaPriceFromHtml(html: string, expectedProductCode: string) {
+  const $ = cheerio.load(html);
+  if (!danawaPageIdentityMatches($, expectedProductCode)) return undefined;
+  return parseLowestPrice(normalizeSpace($("meta[property='og:description']").attr("content")))
+    ?? productGlobalMinimumPrice($, expectedProductCode);
+}
+
+function productGlobalMinimumPrice($: cheerio.CheerioAPI, expectedProductCode: string) {
+  // Read only the page's own flat, literal product settings. Never evaluate JS or
+  // take a price from recommendation cards, arbitrary scripts or another SKU.
+  const objects = $("script").toArray().flatMap((element) =>
+    [...$(element).text().matchAll(/\b(?:var|let|const)\s+oGlobalSetting\s*=\s*\{([\s\S]*?)\}\s*;/g)].map((match) => match[1]));
+  if (objects.length !== 1) return undefined;
+  const values = new Map<string, unknown>();
+  const body = objects[0];
+  const field = /\s*([A-Za-z_$][\w$]*)\s*:\s*("(?:\\.|[^"\\])*"|\d+(?:\.\d+)?|true|false|null)\s*(,|$)/y;
+  let offset = 0;
+  while (offset < body.length && body.slice(offset).trim()) {
+    field.lastIndex = offset;
+    const match = field.exec(body);
+    if (!match || values.has(match[1])) return undefined;
+    try { values.set(match[1], JSON.parse(match[2])); } catch { return undefined; }
+    offset = field.lastIndex;
   }
-  return parseLowestPrice(normalizeSpace($("meta[property='og:description']").attr("content")));
+  if (String(values.get("nProductCode")) !== expectedProductCode) return undefined;
+  const name = values.get("sProductName");
+  if (typeof name !== "string" || !name.trim()) return undefined;
+  const fold = (value: string) => value.toLocaleLowerCase("ko-KR").replace(/[^\p{L}\p{N}]/gu, "");
+  const titles = [$("meta[property='og:title']").attr("content"), $("title").text()];
+  if (!titles.some((title) => title && fold(title).includes(fold(name)))) return undefined;
+  const raw = values.get("nMinPrice");
+  if (typeof raw === "number") return Number.isFinite(raw) && raw > 0 ? raw : undefined;
+  if (typeof raw !== "string" || !/^\d[\d,]*(?:\.\d+)?$/.test(raw)) return undefined;
+  const price = Number(raw.replace(/,/g, ""));
+  return Number.isFinite(price) && price > 0 ? price : undefined;
+}
+
+/** A zero price alone is inconclusive: require a normal, matching product and an explicit zero-seller count. */
+export function danawaPriceUnavailableFromHtml(html: string, expectedProductCode: string, expectedName: string) {
+  const $ = cheerio.load(html);
+  if (!danawaPageIdentityMatches($, expectedProductCode)) return false;
+  const foldName = (value: string) => value.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+  const expected = foldName(expectedName);
+  const names = [$("meta[property='og:title']").attr("content"), $("title").text(), $(".prod_tit, .prod_title").text()];
+  if (!expected || !names.some((name) => name && foldName(name).includes(expected))) return false;
+  // Do not read a recommendation card's seller count or price as this product's status.
+  const pageText = normalizeSpace($("body").text());
+  const sellerCounts = [...pageText.matchAll(/판매점\s*(?:[:：]\s*)?(\d+)\s*(?:개)?/g)];
+  if (sellerCounts.length === 0 || sellerCounts.some((match) => Number(match[1]) !== 0)) return false;
+  const description = normalizeSpace($("meta[property='og:description']").attr("content"));
+  if (parseDanawaPriceFromHtml(html, expectedProductCode) !== undefined) return false;
+  const prices = [...(description + " " + pageText).matchAll(/(?:현금\s*)?최저가\s*[:：]?\s*([\d,]+)\s*원/g)];
+  if (prices.some((match) => Number(match[1].replace(/,/g, "")) > 0)) return false;
+  if ($(".price_num, .price_sect").toArray().some((element) => parseWon($(element).text()) !== undefined)) return false;
+  const offerCount = $("#priceCompareTabCount").text().trim();
+  if (/^\d+$/.test(offerCount) && Number(offerCount) > 0) return false;
+  // Product-page scripts publish the current minimum, including the cash-only case.
+  const minimumPrices = [...html.matchAll(/\bnMinPrice\s*(?:=|:)\s*["']?([\d,]+)/g)];
+  if (minimumPrices.length === 0 || minimumPrices.some((match) => Number(match[1].replace(/,/g, "")) > 0)) return false;
+  return true;
 }
 
 function capacityMatches(text: string) {
@@ -772,13 +833,13 @@ function parseCpuMemorySpeed(text: string) {
   return parseNumber(text.slice(memoryStart, memoryStart + 240), /\b([\d,]{4,6})\s*MHz\b/i);
 }
 
-// 다나와 CPU 스펙에는 메모리 지원 속도가 없는 경우가 많다. 소켓·세대별로
+// 다나와 CPU 스펙에는 메모리 지원 속도가 없는 경우가 많다. 소켓/세대별로
 // 공식 네이티브(JEDEC) 지원 속도를 채운다 — OC 상한이 아니라 모든 보드가
 // 보장하는 공식 스펙이라 안전한 하한값이다.
 export function cpuNativeMemorySpeedMhz(name: string, socket: string | undefined, memoryType: string | undefined): number | undefined {
   const type = memoryType?.toUpperCase();
   if (socket === "AM5") {
-    // 그래니트 릿지(라이젠 9000)는 DDR5-5600, 라파엘(7000)·피닉스(8000G)는 5200.
+    // 그래니트 릿지(라이젠 9000)는 DDR5-5600, 라파엘(7000)/피닉스(8000G)는 5200.
     return /6세대|그래니트|\b9[0-9]{3}[XF]?\b/i.test(name) ? 5600 : 5200;
   }
   if (socket === "AM4") return type === "DDR4" ? 3200 : undefined;
@@ -839,11 +900,11 @@ function parseSpecs(category: PartCategory, name: string, description: string, r
         : undefined;
     if (specs.integratedGraphics === undefined) {
       // 스펙 텍스트가 비어 있으면 모델 번호로 추론한다 — 라이젠 G/GT는 APU,
-      // Zen4+(5/6세대)·인텔 비-F 모델은 iGPU 탑재가 기본이다.
+      // Zen4+(5/6세대)/인텔 비-F 모델은 iGPU 탑재가 기본이다.
       specs.integratedGraphics = cpuHasIntegratedGraphics({ name, specs, category });
     }
     specs.coolerIncluded = /쿨러\s*:\s*(?!미포함|없음)[^/]*(?:포함|기본)/i.test(text);
-    // 정규 세대 라벨(Ryzen 9000·Core Ultra 200 등) — 견적의 최신 세대
+    // 정규 세대 라벨(Ryzen 9000/Core Ultra 200 등) — 견적의 최신 세대
     // 판정과 관리자 세대 필터가 이 값을 신뢰한다.
     specs.cpuSeries = cpuSeriesLabelFor(name);
   }
@@ -956,7 +1017,7 @@ function parseSpecs(category: PartCategory, name: string, description: string, r
     const gpuFamilyMatch = text.match(/\b(RTX|GTX|RX)\s*([0-9]{2})[0-9]{2}\b/i);
     const arcFamilyMatch = text.match(/\bARC\s*(?:PRO\s*)?([AB])\d+/i);
     const radeonProMatch = text.match(/\bR9\d{3}\b/i);
-    // 워크스테이션·쿼드로 명칭의 숫자는 GeForce 세대 번호가 아니다 — "RTX 6000
+    // 워크스테이션/쿼드로 명칭의 숫자는 GeForce 세대 번호가 아니다 — "RTX 6000
     // Ada"가 RTX 60 시리즈로, "RTX 5000 Ada"가 RTX 50으로 오인되지 않게 이름에
     // 있는 아키텍처 코드네임을 우선 기록한다.
     const workstationLike = /쿼드로|Quadro|RTX\s*PRO|RTX\s*A\d|Ada\s*Generation|NV\s*링크|NVLink|PRO\s*Sync|Radeon\s*PRO|AI\s*PRO|워크스테이션/i.test(text);
@@ -1170,7 +1231,7 @@ export function parseDanawaProductPage(
     sourceProductCode: item.sourceProductCode,
     sourceCategoryId: categoryId,
     listingType,
-    priceWon: item.priceWon ?? parseLowestPrice(priceDescription),
+    priceWon: item.priceWon ?? parseLowestPrice(priceDescription) ?? parseDanawaPriceFromHtml(html, item.sourceProductCode),
     rawSpecText: normalizeSpace(`${description} ${rawSpecText}`),
     specs,
     dataQuality: missing.length === 0 ? "live" : "incomplete",

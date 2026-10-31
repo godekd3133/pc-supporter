@@ -73,9 +73,9 @@ async function main() {
           return originalFetch(input, init);
         };
       })()`);
-      const clicked = await client.evaluate("(() => { const node = [...document.querySelectorAll('.generator-form button')].find((candidate) => !candidate.disabled && (candidate.textContent ?? '').includes('균형형·가성비·성능 3안 비교')); if (!node) return false; node.click(); return true; })()");
+      const clicked = await client.evaluate("(() => { const node = [...document.querySelectorAll('.generator-form button')].find((candidate) => !candidate.disabled && (candidate.textContent ?? '').includes('균형형/가성비/성능 3안 비교')); if (!node) return false; node.click(); return true; })()");
       if (!clicked) throw new Error("3안 비교 버튼을 찾지 못했습니다.");
-      await waitForValue(client, "document.querySelector('.generator-variants') !== null && document.querySelectorAll('[data-testid^=\"generator-variant-reasons-\"]').length === 3", "자동 구성 3안·선택 이유");
+      await waitForValue(client, "document.querySelector('.generator-variants') !== null && document.querySelectorAll('[data-testid^=\"generator-variant-reasons-\"]').length === 3", "자동 구성 3안/선택 이유");
       await openDetails(client, "details.generator-variant-reasons", "3안 선택 이유 상세");
       await client.evaluate("document.querySelector('.generator-variant-reasons')?.scrollIntoView({ block: 'center', behavior: 'instant' });");
       if (dark) await client.evaluate("document.documentElement.dataset.theme = 'dark'; document.documentElement.style.colorScheme = 'dark';");
@@ -259,7 +259,7 @@ async function main() {
             importedScreenshotCaptured = true;
           }
           if (!await setInputValue(client, '.generator-form input[type="number"]', budget)) throw new Error("자동 구성 재생성용 예산 입력을 설정하지 못했습니다.");
-          const compareAgain = await client.evaluate("(() => { const node = [...document.querySelectorAll('.generator-form button')].find((candidate) => !candidate.disabled && (candidate.textContent ?? '').includes('균형형·가성비·성능 3안 비교')); if (!node) return false; node.click(); return true; })()");
+          const compareAgain = await client.evaluate("(() => { const node = [...document.querySelectorAll('.generator-form button')].find((candidate) => !candidate.disabled && (candidate.textContent ?? '').includes('균형형/가성비/성능 3안 비교')); if (!node) return false; node.click(); return true; })()");
           if (!compareAgain) throw new Error("가져온 상태에서 새 자동 구성 비교 버튼을 찾지 못했습니다.");
           await waitForValue(client, "Array.isArray(window.__generatorRecommendationRequests) && window.__generatorRecommendationRequests.length === 2 && document.querySelector('[data-testid=\"generator-variants-imported-state\"]') === null && document.querySelector('.generator-variants') !== null", "새 자동 구성 결과로 복귀");
           importedStateClearedOnRegenerateProbe = await client.evaluate("(() => !document.querySelector('[data-testid=\"generator-variants-imported-state\"]'))()");
@@ -359,7 +359,7 @@ async function main() {
         await client.evaluate("document.querySelector('[data-testid=\"shared-generator-variants-current-check-balanced\"]')?.click()");
         await waitForValue(client, "location.pathname === '/result' && document.querySelector('.result-page') !== null", "현재 draft 호환성 검사 전달");
         probe.draftCheckTransferProbe = true;
-        const resultSaveButton = await client.evaluate("(() => { const node = [...document.querySelectorAll('button')].find((candidate) => candidate instanceof HTMLButtonElement && !candidate.disabled && (candidate.textContent ?? '').includes('견적 저장·공유')); if (!(node instanceof HTMLButtonElement)) return false; node.click(); return true; })()");
+        const resultSaveButton = await client.evaluate("(() => { const node = [...document.querySelectorAll('button')].find((candidate) => candidate instanceof HTMLButtonElement && !candidate.disabled && (candidate.textContent ?? '').includes('견적 저장/공유')); if (!(node instanceof HTMLButtonElement)) return false; node.click(); return true; })()");
         if (!resultSaveButton) throw new Error("검사 전달 결과의 저장 버튼을 찾지 못했습니다.");
         await waitForValue(client, "document.querySelector('#save-build-name') !== null", "검사 전달 결과 저장 다이얼로그");
         const checkSavedDraftName = "smoke 검사 전달 origin 저장 확인";
@@ -380,10 +380,10 @@ async function main() {
         if (deletedTransferShare !== 200) throw new Error(`현재 draft 전달용 공유 snapshot 취소 실패: ${deletedTransferShare}`);
         probe.draftTransferProbe = true;
       }
-      if (executeExportActions && !screenshotPath && (!probe.draftSaveDialogProbe || !probe.draftSaveConfirmedProbe || !probe.draftSaveOriginProbe || !probe.draftTransferProbe || !probe.draftCheckTransferProbe || !probe.draftCheckSaveOriginProbe || !probe.draftResultOriginProbe)) throw new Error("현재 draft 저장·출처·결과 화면·편집기·검사 전달 검증에 실패했습니다.");
+      if (executeExportActions && !screenshotPath && (!probe.draftSaveDialogProbe || !probe.draftSaveConfirmedProbe || !probe.draftSaveOriginProbe || !probe.draftTransferProbe || !probe.draftCheckTransferProbe || !probe.draftCheckSaveOriginProbe || !probe.draftResultOriginProbe)) throw new Error("현재 draft 저장/출처/결과 화면/편집기/검사 전달 검증에 실패했습니다.");
       console.log(JSON.stringify({ ok: true, viewport: mobile ? "mobile" : "desktop", theme: dark ? "dark" : "light", mode: "variants", ...probe, ...(screenshotPath ? { screenshotPath } : {}) }, null, 2));
     } else {
-      await waitForValue(client, "document.querySelector('.generator-result') !== null && document.querySelectorAll('.generator-result .generator-line').length >= 6", "자동 견적 생성·부품 라인");
+      await waitForValue(client, "document.querySelector('.generator-result') !== null && document.querySelectorAll('.generator-result .generator-line').length >= 6", "자동 견적 생성/부품 라인");
       await client.evaluate("document.querySelector('.generator-result')?.scrollIntoView({ block: 'center', behavior: 'instant' });");
       if (dark) await client.evaluate("document.documentElement.dataset.theme = 'dark'; document.documentElement.style.colorScheme = 'dark';");
       await sleep(350);

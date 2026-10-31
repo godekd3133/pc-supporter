@@ -30,3 +30,18 @@ describe("shared request parsers", () => {
     expect(parseBuildGenerationRequest({ profile: "gaming", budgetWon: 1_000_000, includeGpu: true, gamingGameIds: ["a", "b", "c", "d", "e", "f"] }).errors).toContain("gamingGameIds는 최대 5개의 비어 있지 않은 160자 이하 게임 ID 배열이어야 합니다.");
   });
 });
+
+
+describe("explicit CPU and DDR preferences", () => {
+  const request = { profile: "gaming", budgetWon: 1_600_000, includeGpu: true };
+  it("keeps automatic selection unconstrained and preserves explicit choices", () => {
+    expect(parseBuildGenerationRequest(request).request).not.toHaveProperty("cpuVendorPreference");
+    expect(parseBuildGenerationRequest(request).request).not.toHaveProperty("memoryTypePreference");
+    expect(parseBuildGenerationRequest({ ...request, cpuVendorPreference: "intel", memoryTypePreference: "DDR4" }).request).toMatchObject({ cpuVendorPreference: "intel", memoryTypePreference: "DDR4" });
+    expect(parseRecommendationPreferences({ profile: "gaming", cpuVendorPreference: "amd", memoryTypePreference: "DDR5" })).toMatchObject({ cpuVendorPreference: "amd", memoryTypePreference: "DDR5" });
+  });
+  it("rejects unsupported explicit constraints at the generation boundary", () => {
+    expect(parseBuildGenerationRequest({ ...request, cpuVendorPreference: "nvidia" }).errors).toContain("cpuVendorPreference는 amd 또는 intel이어야 합니다.");
+    expect(parseBuildGenerationRequest({ ...request, memoryTypePreference: "DDR3" }).errors).toContain("memoryTypePreference는 DDR4 또는 DDR5여야 합니다.");
+  });
+});

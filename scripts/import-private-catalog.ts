@@ -21,9 +21,9 @@ function usage() {
     "--dry-run          JSON 형식과 중복 ID만 검증하고 저장하지 않습니다.",
     "--apply            현재 PC_SUPPORTER_DATA_DIR 또는 DATABASE_URL 대상에 반영합니다.",
     "--replace-danawa   수집 snapshot의 9개 핵심 범주에서 기존 Danawa 행을 교체합니다.",
-    "--include-accessories  같은 source 디렉터리의 accessories.json도 함께 검증·반영합니다.",
+    "--include-accessories  같은 source 디렉터리의 accessories.json도 함께 검증/반영합니다.",
     "--replace-accessories  10개 주변 부품 범주의 기존 Danawa 행을 교체합니다.",
-    "--include-cooling-fan-overrides  같은 source 디렉터리의 cooling-fan-load-overrides.json을 검증·반영합니다."
+    "--include-cooling-fan-overrides  같은 source 디렉터리의 cooling-fan-load-overrides.json을 검증/반영합니다."
   ].join("\n");
 }
 
@@ -246,5 +246,5 @@ console.log(JSON.stringify({
   mergedRecords: merged.length,
   ...(mergedAccessories ? { mergedAccessoryRecords: mergedAccessories.length } : {}),
   ...(mergedCoolingFanOverrides ? { mergedCoolingFanOverrideRecords: mergedCoolingFanOverrides.length } : {}),
-  message: "private catalog snapshot을 대상 저장소에 반영했습니다. 실제 가격·재고 최신성은 manifest와 원문 검수로 별도 확인해야 합니다."
+  message: "private catalog snapshot을 대상 저장소에 반영했습니다. 실제 가격/재고 최신성은 manifest와 원문 검수로 별도 확인해야 합니다."
 }, null, 2));

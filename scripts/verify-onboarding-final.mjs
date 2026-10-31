@@ -125,11 +125,11 @@ try {
   // ── 3. 작업 분기 요약 (7/7) ─────────────────────────────────────
   await reset();
   await clickBtn("새 PC 견적 보기");
-  await clickBtn("게임·작업을 기준으로 고르기");
+  await clickBtn("게임/작업을 기준으로 고르기");
   await waitFor("(document.querySelector('.onboarding-title')?.textContent ?? '').includes('용도')", "usecase");
   await clickBtn("작업");
   await waitFor("(document.querySelector('.onboarding-title')?.textContent ?? '').includes('작업을')", "work");
-  await clickBtn("개발·빌드");
+  await clickBtn("개발/빌드");
   await clickBtn("다음");
   await waitFor("(document.querySelector('.onboarding-title')?.textContent ?? '').includes('강도') || (document.body?.innerText ?? '').includes('가볍게')", "intensity");
   await clickBtn("균형");
@@ -169,7 +169,7 @@ try {
   // ── 5. 게임 목표 조건의 결과 보존 ───────────────────────────────
   await reset();
   await clickBtn("새 PC 견적 보기");
-  await clickBtn("게임·작업을 기준으로 고르기");
+  await clickBtn("게임/작업을 기준으로 고르기");
   await clickBtn("게임");
   await waitFor("(document.querySelector('.onboarding-title')?.textContent ?? '').includes('게임')", "games");
   // 검색으로 사이버펑크 선택
@@ -182,13 +182,13 @@ try {
   await clickBtn("60");
   await sleep(120);
   const perfPill = await ev("document.querySelector('.onboarding-pill')?.textContent ?? ''");
-  check("목표 4K·60 반영", perfPill.includes("4K") && perfPill.includes("60"), perfPill);
+  check("목표 4K/60 반영", perfPill.includes("4K") && perfPill.includes("60"), perfPill);
   await clickBtn("다음");
   await waitFor("(document.body?.innerText ?? '').includes('그래픽') || (document.body?.innerText ?? '').includes('레이트레이싱')", "graphics");
   // RT 기본값 off 유지 + 업스케일링 없음(native) 선택 — 근거 레코드 조건과 일치
   await clickBtn("업스케일링 없음");
   await sleep(80);
-  await clickBtn("다음 · 예산 정하기");
+  await clickBtn("다음 / 예산 정하기");
   await waitFor("(document.querySelector('.onboarding-title')?.textContent ?? '').includes('예산')", "gaming budget");
   // 예산 600만원 (aria-label 아이콘 버튼)
   for (let i = 0; i < 40; i++) {

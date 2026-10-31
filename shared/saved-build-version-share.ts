@@ -176,7 +176,7 @@ function resourceBudgetFromUnknown(value: unknown): SavedBuildVersionShareCheck[
 }
 
 const PRIVATE_SHARE_TEXT_LINE = /analysisScore|analysisConfidence|analysisScoreLabel|analysisScoreDelta|benchmark|cinebench|3dmark|time\s*spy|port\s*royal|recommendation.?trust|trust\s*score|추천\s*신뢰|신뢰도|(?:성능|카탈로그)\s*분석|성능\s*자료|벤치마크|\bfps\b|초당\s*프레임/i;
-const SAFE_DATA_BOUNDARY = "저장된 두 버전의 선택·호환 결과 비교입니다. 실제 판매가·재고·제조사 QVL·물리 장착·케이블 배선은 구매 전에 확인해야 합니다. 게임 성능은 게임과 설정에 따라 달라집니다.";
+const SAFE_DATA_BOUNDARY = "저장된 두 버전의 선택/호환 결과 비교입니다. 실제 판매가/재고/제조사 QVL/물리 장착/케이블 배선은 구매 전에 확인해야 합니다. 게임 성능은 게임과 설정에 따라 달라집니다.";
 
 function publicShareTextFromUnknown(value: unknown) {
   const text = textValue(value, 12_000);

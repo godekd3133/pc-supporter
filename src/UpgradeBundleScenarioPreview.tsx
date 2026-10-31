@@ -16,7 +16,7 @@ function statusLabel(status: CompatibilityResult["status"]) {
 }
 
 function riskText(result: CompatibilityResult) {
-  return `호환 불가 ${result.blockerCount}개 · 주의 ${result.warningCount}개 · 정보 부족 ${result.unknownCount}개`;
+  return `호환 불가 ${result.blockerCount}개 / 주의 ${result.warningCount}개 / 정보 부족 ${result.unknownCount}개`;
 }
 
 function directionLabel(direction: ReturnType<typeof buildScenarioComparisonFor>["direction"]) {
@@ -45,11 +45,11 @@ export function UpgradeBundleScenarioPreviewPanel({ state, currentResult, onAppl
       ? "부품을 바꾸면 호환 문제가 늘어날 수 있어요."
       : comparison.direction === "changed"
         ? "가격이나 호환 항목이 달라졌어요."
-        : "현재 구성의 가격·호환 상태가 같아요.";
+        : "현재 구성의 가격/호환 상태가 같아요.";
 
   return <section className={`upgrade-bundle-scenario-preview ${comparison.direction}`} aria-label="업그레이드 조합 미리 확인" data-testid="upgrade-bundle-scenario-preview">
     <div className="upgrade-bundle-scenario-heading"><div><p className="eyebrow">업그레이드 조합</p><h2>업그레이드 조합 미리 확인</h2><p>현재 견적에 적용했을 때의 금액과 호환 정보예요.</p></div><div className="upgrade-bundle-scenario-heading-actions"><span className={`upgrade-bundle-scenario-direction ${comparison.direction}`}>{directionLabel(comparison.direction)}</span><button className="icon-button" type="button" onClick={onClose} aria-label="업그레이드 조합 미리 확인 닫기"><FiXCircle /></button></div></div>
-    <div className="upgrade-bundle-scenario-changes">{state.bundle.changes.map((change) => <div className="upgrade-bundle-scenario-change" key={`${change.category}-${change.part.id}`}><span className="category-badge">{CATEGORY_LABELS[change.category]}</span><div><small>{change.currentPartName}</small><strong>→ {change.part.name}</strong><em>{change.improvedDimensions?.filter(Boolean).join(" · ") || "부품 구성 변경"} · {change.quantity > 1 ? `수량 ${change.quantity}개 · ` : ""}{change.priceDeltaWon !== undefined ? `${change.priceDeltaWon > 0 ? "+" : ""}${change.priceDeltaWon.toLocaleString("ko-KR")}원` : "-"}</em></div></div>)}</div>
+    <div className="upgrade-bundle-scenario-changes">{state.bundle.changes.map((change) => <div className="upgrade-bundle-scenario-change" key={`${change.category}-${change.part.id}`}><span className="category-badge">{CATEGORY_LABELS[change.category]}</span><div><small>{change.currentPartName}</small><strong>→ {change.part.name}</strong><em>{change.improvedDimensions?.filter(Boolean).join(" / ") || "부품 구성 변경"} / {change.quantity > 1 ? `수량 ${change.quantity}개 / ` : ""}{change.priceDeltaWon !== undefined ? `${change.priceDeltaWon > 0 ? "+" : ""}${change.priceDeltaWon.toLocaleString("ko-KR")}원` : "-"}</em></div></div>)}</div>
     <div className="upgrade-bundle-scenario-comparison"><div><span>현재 구성</span><strong>{statusLabel(comparison.currentStatus)}</strong><small>{riskText(currentResult)}</small>{currentResult.priceComplete ? <small>총액 {formatWon(currentResult.totalPriceWon)}</small> : <small>총액 -</small>}</div><b>→</b><div className="next"><span>조합 적용 후</span><strong>{statusLabel(comparison.nextStatus)}</strong><small>{riskText(nextResult)}</small>{nextResult.priceComplete ? <small>총액 {formatWon(nextResult.totalPriceWon)}</small> : <small>총액 -</small>}</div></div>
     <div className="upgrade-bundle-scenario-summary"><strong>{comparison.summary}</strong><span>{outcomeNote}</span></div>
     <div className="upgrade-bundle-scenario-findings"><div><strong>남은 호환 항목</strong><span>{nextFindings.length > 0 ? `${nextResult.findings.filter((finding) => finding.severity !== "info").length}개 중 최대 5개 표시` : "추가 항목 없음"}</span></div>{nextFindings.length > 0 && <ul>{nextFindings.map((finding) => <li key={finding.id}><b>{finding.severity === "blocker" ? "호환 불가" : finding.severity === "warning" ? "주의" : "확인"}</b>{finding.title}</li>)}</ul>}</div>

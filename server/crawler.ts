@@ -175,17 +175,17 @@ export function crawlPartChangeRecords(beforeCatalog: Part[], afterCatalog: Part
 // 이전 세대 신규 상품이 "구세대"로 표시된다. 신세대 여부는 수집 전 카탈로그의
 // 최신 세대와 비교한다.
 function quoteInclusionNoteFor(part: Part, catalog: readonly Part[], beforeCatalog: readonly Part[]) {
-  if ((part.category === "cpu" || part.category === "gpu") && !isCurrentGenerationPart(part, catalog)) return "견적 제외 · 구세대";
-  if (!isQuoteSelectable(part, catalog)) return isKnownPrice(part.priceWon) ? "견적 제외 · 스펙 미확인" : "견적 제외 · 가격 미확인";
+  if ((part.category === "cpu" || part.category === "gpu") && !isCurrentGenerationPart(part, catalog)) return "견적 제외 / 구세대";
+  if (!isQuoteSelectable(part, catalog)) return isKnownPrice(part.priceWon) ? "견적 제외 / 스펙 미확인" : "견적 제외 / 가격 미확인";
   const listingType = inferListingType(part);
   if (!isListingAllowed(part, "retail_only")) {
-    return listingType === "retail" ? "견적 제외 · 카탈로그 분류 불일치" : `견적 제외 · ${LISTING_TYPE_LABELS[listingType]}`;
+    return listingType === "retail" ? "견적 제외 / 카탈로그 분류 불일치" : `견적 제외 / ${LISTING_TYPE_LABELS[listingType]}`;
   }
-  if (!isQuoteBrandAllowed(part.category, part.brand ?? part.name.split(" ")[0])) return "견적 제외 · 견적 브랜드 제한";
+  if (!isQuoteBrandAllowed(part.category, part.brand ?? part.name.split(" ")[0], part.name)) return "견적 제외 / 견적 브랜드 제한";
   const generation = partQuoteGenerationFor(part);
   if (generation && generation.line !== "workstation") {
     const previousTop = quoteGenerationBoundaryFor(beforeCatalog).get(generation.line)?.topRank;
-    if (previousTop === undefined || generation.rank > previousTop) return `견적 포함 · 신세대(${generation.label})`;
+    if (previousTop === undefined || generation.rank > previousTop) return `견적 포함 / 신세대(${generation.label})`;
   }
   return "견적 포함";
 }

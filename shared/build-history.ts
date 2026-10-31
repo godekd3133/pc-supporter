@@ -66,7 +66,7 @@ export function buildInputChangeLabel(before: BuildInputSnapshot, after: BuildIn
   const categories = changedBuildCategories(before.build, after.build).map((category) => BUILD_CATEGORY_LABELS[category]);
   const preferences = changedPreferenceLabels(before.recommendationPreferences, after.recommendationPreferences);
   const labels = [...categories, ...preferences];
-  return labels.length > 0 ? labels.join(" · ") + " 변경" : "구성 변경";
+  return labels.length > 0 ? labels.join(" / ") + " 변경" : "구성 변경";
 }
 
 /**

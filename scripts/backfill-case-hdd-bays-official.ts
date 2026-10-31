@@ -208,7 +208,7 @@ const OFFICIAL_CASE_SPECS: OfficialCaseSpec[] = [
     hddBays: 18,
     manufacturerModel: "FD-C-MES2X-02",
     sourceUrl: "https://www.fractal-design.com/app/uploads/2020/10/Meshify-2-XL-_Product-Sheet_EN.pdf",
-    sourceNote: "Fractal Design Meshify 2 XL Black TG Light Tint 공식 시트의 SKU FD-C-MES2X-02와 최대 18개의 3.5/2.5형 저장 위치를 확인했습니다. 기본 포함 트레이는 6개이며 추가 위치는 확장 트레이·브라켓 조건 확인이 필요합니다."
+    sourceNote: "Fractal Design Meshify 2 XL Black TG Light Tint 공식 시트의 SKU FD-C-MES2X-02와 최대 18개의 3.5/2.5형 저장 위치를 확인했습니다. 기본 포함 트레이는 6개이며 추가 위치는 확장 트레이/브라켓 조건 확인이 필요합니다."
   },
   {
     productCode: "17359076",
@@ -383,7 +383,7 @@ const OFFICIAL_CASE_SPECS: OfficialCaseSpec[] = [
     hddBays: 2,
     manufacturerModel: "FD-C-MES3A-01",
     sourceUrl: "https://assets.fractal-design.com/files/uxzbxy2o/production/50476fee3b3101e6d05d1bd5c1ff30f1738e378b.pdf",
-    sourceNote: "Fractal Design Meshify 3 Black Solid 공식 시트의 SKU FD-C-MES3A-01과 3.5/2.5인치 장착 수 2/4를 확인해 3.5인치 HDD는 2개로 기록했습니다. 현재 제품 페이지는 결합 장착 위치 4개라고 표기해 자료 간 차이가 있으므로, 시트의 명시적 3.5인치 수를 따르고 분류 차이를 남깁니다. PDF가 source-check 자동 판독 한도보다 커 SKU·수량은 원문을 직접 열어 확인했습니다.",
+    sourceNote: "Fractal Design Meshify 3 Black Solid 공식 시트의 SKU FD-C-MES3A-01과 3.5/2.5인치 장착 수 2/4를 확인해 3.5인치 HDD는 2개로 기록했습니다. 현재 제품 페이지는 결합 장착 위치 4개라고 표기해 자료 간 차이가 있으므로, 시트의 명시적 3.5인치 수를 따르고 분류 차이를 남깁니다. PDF가 source-check 자동 판독 한도보다 커 SKU/수량은 원문을 직접 열어 확인했습니다.",
     manualSourceReviewed: true
   },
   {
@@ -391,7 +391,7 @@ const OFFICIAL_CASE_SPECS: OfficialCaseSpec[] = [
     hddBays: 2,
     manufacturerModel: "FD-C-MES3A-02",
     sourceUrl: "https://assets.fractal-design.com/files/uxzbxy2o/production/50476fee3b3101e6d05d1bd5c1ff30f1738e378b.pdf",
-    sourceNote: "Fractal Design Meshify 3 Black TG Light Tint 공식 시트의 SKU FD-C-MES3A-02와 3.5/2.5인치 장착 수 2/4를 확인해 3.5인치 HDD는 2개로 기록했습니다. 현재 제품 페이지는 결합 장착 위치 4개라고 표기해 자료 간 차이가 있으므로, 시트의 명시적 3.5인치 수를 따르고 분류 차이를 남깁니다. PDF가 source-check 자동 판독 한도보다 커 SKU·수량은 원문을 직접 열어 확인했습니다.",
+    sourceNote: "Fractal Design Meshify 3 Black TG Light Tint 공식 시트의 SKU FD-C-MES3A-02와 3.5/2.5인치 장착 수 2/4를 확인해 3.5인치 HDD는 2개로 기록했습니다. 현재 제품 페이지는 결합 장착 위치 4개라고 표기해 자료 간 차이가 있으므로, 시트의 명시적 3.5인치 수를 따르고 분류 차이를 남깁니다. PDF가 source-check 자동 판독 한도보다 커 SKU/수량은 원문을 직접 열어 확인했습니다.",
     manualSourceReviewed: true
   },
   {
@@ -399,7 +399,7 @@ const OFFICIAL_CASE_SPECS: OfficialCaseSpec[] = [
     hddBays: 2,
     manufacturerModel: "FD-C-MES3A-03",
     sourceUrl: "https://assets.fractal-design.com/files/uxzbxy2o/production/50476fee3b3101e6d05d1bd5c1ff30f1738e378b.pdf",
-    sourceNote: "Fractal Design Meshify 3 Ambience Pro RGB Black TG Light Tint 공식 시트의 SKU FD-C-MES3A-03과 3.5/2.5인치 장착 수 2/4를 확인해 3.5인치 HDD는 2개로 기록했습니다. 현재 제품 페이지는 결합 장착 위치 4개라고 표기해 자료 간 차이가 있으므로, 시트의 명시적 3.5인치 수를 따르고 분류 차이를 남깁니다. PDF가 source-check 자동 판독 한도보다 커 SKU·수량은 원문을 직접 열어 확인했습니다.",
+    sourceNote: "Fractal Design Meshify 3 Ambience Pro RGB Black TG Light Tint 공식 시트의 SKU FD-C-MES3A-03과 3.5/2.5인치 장착 수 2/4를 확인해 3.5인치 HDD는 2개로 기록했습니다. 현재 제품 페이지는 결합 장착 위치 4개라고 표기해 자료 간 차이가 있으므로, 시트의 명시적 3.5인치 수를 따르고 분류 차이를 남깁니다. PDF가 source-check 자동 판독 한도보다 커 SKU/수량은 원문을 직접 열어 확인했습니다.",
     manualSourceReviewed: true
   },
   {
@@ -407,7 +407,7 @@ const OFFICIAL_CASE_SPECS: OfficialCaseSpec[] = [
     hddBays: 2,
     manufacturerModel: "FD-C-MES3A-07",
     sourceUrl: "https://assets.fractal-design.com/files/uxzbxy2o/production/50476fee3b3101e6d05d1bd5c1ff30f1738e378b.pdf",
-    sourceNote: "Fractal Design Meshify 3 White RGB TG Clear Tint 공식 시트의 SKU FD-C-MES3A-07과 3.5/2.5인치 장착 수 2/4를 확인해 3.5인치 HDD는 2개로 기록했습니다. 현재 제품 페이지는 결합 장착 위치 4개라고 표기해 자료 간 차이가 있으므로, 시트의 명시적 3.5인치 수를 따르고 분류 차이를 남깁니다. PDF가 source-check 자동 판독 한도보다 커 SKU·수량은 원문을 직접 열어 확인했습니다.",
+    sourceNote: "Fractal Design Meshify 3 White RGB TG Clear Tint 공식 시트의 SKU FD-C-MES3A-07과 3.5/2.5인치 장착 수 2/4를 확인해 3.5인치 HDD는 2개로 기록했습니다. 현재 제품 페이지는 결합 장착 위치 4개라고 표기해 자료 간 차이가 있으므로, 시트의 명시적 3.5인치 수를 따르고 분류 차이를 남깁니다. PDF가 source-check 자동 판독 한도보다 커 SKU/수량은 원문을 직접 열어 확인했습니다.",
     manualSourceReviewed: true
   },
   {

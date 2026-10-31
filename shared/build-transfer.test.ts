@@ -147,3 +147,13 @@ describe("game-target JSON transfer", () => {
     expect(parsed.envelope?.recommendationPreferences).toMatchObject({ gpuVendorPreference: "intel", gamingGameIds: ["pubg"] });
   });
 });
+
+
+it("preserves explicit CPU and memory preferences across export and import", () => {
+  const selection = { memory: [], ssd: [], hdd: [], useIntegratedGraphics: true };
+  const preferences = { profile: "gaming" as const, priority: "performance" as const, cpuVendorPreference: "intel" as const, memoryTypePreference: "DDR4" as const };
+  expect(parseBuildTransfer(buildTransferJsonFor(selection, preferences)).envelope?.recommendationPreferences).toMatchObject(preferences);
+  expect(parseBuildTransfer({ selection }).envelope?.recommendationPreferences).not.toHaveProperty("cpuVendorPreference");
+  expect(parseBuildTransfer({ selection, recommendationPreferences: { ...preferences, cpuVendorPreference: "nvidia" } }).envelope).toBeUndefined();
+  expect(parseBuildTransfer({ selection, recommendationPreferences: { ...preferences, memoryTypePreference: "DDR3" } }).envelope).toBeUndefined();
+});

@@ -24,7 +24,7 @@ describe("similarity evidence presentation helpers", () => {
     expect(similarityReferenceCategoryFor(evidence)).toBe("gpu");
     expect(similarityReferenceUsedCategoryFor(evidence)).toBe("gpu");
     expect(similarityBasisLabelFor(evidence)).toBe("3DMark 기반");
-    expect(similarityReferenceTextFor(evidence)).toBe("동일 GPU 모델 계열 참조 · RTX 5070 확인 참조 · 보완 지표 3DMark Time Spy · VRAM");
+    expect(similarityReferenceTextFor(evidence)).toBe("동일 GPU 모델 계열 참조 / RTX 5070 확인 참조 / 보완 지표 3DMark Time Spy / VRAM");
   });
 
   it("identifies CPU and GPU benchmark labels without inventing a score", () => {

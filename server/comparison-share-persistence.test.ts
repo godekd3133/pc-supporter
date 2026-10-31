@@ -13,7 +13,7 @@ function candidate(id: string, priceWon: number) {
     name: `공유 GPU ${id}`,
     category: "gpu",
     partId: `gpu-${id}`,
-    summary: "12GB · 220W · 244mm",
+    summary: "12GB / 220W / 244mm",
     price: `${priceWon.toLocaleString("ko-KR")}원`,
     priceWon,
     similarity: "동급 88점",
@@ -45,7 +45,7 @@ describe("alternative comparison persistence API", () => {
           name: "GPU 부품 전체 미리 비교",
           category: "그래픽카드",
           currentPartName: "기존 GPU",
-          currentPartSummary: "PCIe 4.0 · VRAM 8GB",
+          currentPartSummary: "PCIe 4.0 / VRAM 8GB",
           currentPartPrice: "450,000원",
           catalogSnapshotAt: "2026-09-02T01:02:03.000Z",
           engineVersion: "2.57.0",
@@ -67,7 +67,7 @@ describe("alternative comparison persistence API", () => {
       const publicPayload = await first.json() as Record<string, any>;
       expect(first.status).toBe(200);
       expect(etag).toMatch(/^"[0-9a-f]{32}"$/);
-      expect(publicPayload).toMatchObject({ currentPartName: "기존 GPU", currentPartSummary: "PCIe 4.0 · VRAM 8GB", currentPartPrice: "450,000원", catalogSnapshotAt: "2026-09-02T01:02:03.000Z", engineVersion: "2.57.0" });
+      expect(publicPayload).toMatchObject({ currentPartName: "기존 GPU", currentPartSummary: "PCIe 4.0 / VRAM 8GB", currentPartPrice: "450,000원", catalogSnapshotAt: "2026-09-02T01:02:03.000Z", engineVersion: "2.57.0" });
       expect(publicPayload.ownerToken).toBeUndefined();
       expect(publicPayload.ownerTokenHash).toBeUndefined();
 

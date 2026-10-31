@@ -359,7 +359,7 @@ async function main() {
     assert.equal(afterRerenders.accessoryLines.filter((line) => line.startsWith(`${marker}_accessory_`)).length, limits.maxSelections);
 
     const persistedDraft = JSON.parse(afterRerenders.persistedRaw);
-    assert.deepEqual(canonicalJson(persistedDraft), canonicalJson(selection), "mount·rerender 후 localStorage draft 내용이 원래 합성 draft와 달라졌습니다.");
+    assert.deepEqual(canonicalJson(persistedDraft), canonicalJson(selection), "mount/rerender 후 localStorage draft 내용이 원래 합성 draft와 달라졌습니다.");
     const report = JSON.stringify({
       ok: true,
       mode: "production-preview / isolated-seed-api",

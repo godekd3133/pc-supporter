@@ -95,27 +95,27 @@ function expansionDimensionScoreFor(dimension: ExpansionDimension) {
 }
 
 function expansionDimensionDetailFor(dimension: ExpansionDimension, score: number) {
-  return `${dimension.label} ${Math.round(score)}점 · ${dimension.detail ?? "여유 수치 확인"}`;
+  return `${dimension.label} ${Math.round(score)}점 / ${dimension.detail ?? "여유 수치 확인"}`;
 }
 
 export function savedBuildComparisonExpansionFor(metrics: CompatibilityResult["metrics"] | undefined): SavedBuildComparisonExpansionResult {
-  if (!metrics) return { knownDimensionCount: 0, totalDimensionCount: 0, level: "unavailable", summary: "확장성 데이터 부족 · 확인된 지표 없음", details: [] };
+  if (!metrics) return { knownDimensionCount: 0, totalDimensionCount: 0, level: "unavailable", summary: "확장성 데이터 부족 / 확인된 지표 없음", details: [] };
 
   const memoryCapacity = metrics.totalMemoryGb !== undefined && metrics.memoryHeadroomGb !== undefined
     ? Math.max(metrics.totalMemoryGb + metrics.memoryHeadroomGb, metrics.totalMemoryGb, 1)
     : undefined;
   const hddHeadroom = metrics.hddBayHeadroom ?? (metrics.hddBaysTotal !== undefined ? metrics.hddBaysTotal - (metrics.hddUsed ?? 0) : undefined);
   const dimensions: ExpansionDimension[] = [
-    { label: "메모리 용량", weight: 18, applicable: metrics.totalMemoryGb !== undefined || metrics.memoryHeadroomGb !== undefined, headroom: metrics.memoryHeadroomGb, capacity: memoryCapacity, detail: metrics.totalMemoryGb !== undefined && metrics.memoryHeadroomGb !== undefined ? `현재 ${metrics.totalMemoryGb}GB 사용 · ${metrics.memoryHeadroomGb}GB 여유` : undefined },
-    { label: "RAM 슬롯", weight: 12, applicable: metrics.memorySlotsUsed !== undefined || metrics.memorySlotsTotal !== undefined || metrics.memorySlotHeadroom !== undefined, headroom: metrics.memorySlotHeadroom, capacity: metrics.memorySlotsTotal, detail: metrics.memorySlotsUsed !== undefined && metrics.memorySlotsTotal !== undefined ? `${metrics.memorySlotsUsed}/${metrics.memorySlotsTotal}개 사용 · ${metrics.memorySlotHeadroom ?? "?"}개 여유` : undefined },
-    { label: "M.2 슬롯", weight: 14, applicable: metrics.m2Used !== undefined || metrics.m2SlotsTotal !== undefined || metrics.m2Headroom !== undefined, headroom: metrics.m2Headroom, capacity: metrics.m2SlotsTotal, detail: metrics.m2Used !== undefined && metrics.m2SlotsTotal !== undefined ? `${metrics.m2Used}/${metrics.m2SlotsTotal}개 사용 · ${metrics.m2Headroom ?? "?"}개 여유` : undefined },
-    { label: "SATA 포트", weight: 10, applicable: metrics.sataUsed !== undefined || metrics.sataPortsTotal !== undefined || metrics.sataHeadroom !== undefined, headroom: metrics.sataHeadroom, capacity: metrics.sataPortsTotal, detail: metrics.sataUsed !== undefined && metrics.sataPortsTotal !== undefined ? `${metrics.sataUsed}/${metrics.sataPortsTotal}개 사용 · ${metrics.sataHeadroom ?? "?"}개 여유` : undefined },
-    { label: "HDD 베이", weight: 8, applicable: metrics.hddUsed !== undefined || metrics.hddBaysTotal !== undefined || metrics.hddBayHeadroom !== undefined, headroom: hddHeadroom, capacity: metrics.hddBaysTotal, detail: metrics.hddBaysTotal !== undefined ? `${metrics.hddUsed ?? 0}/${metrics.hddBaysTotal}개 사용 · ${hddHeadroom ?? "?"}개 여유` : undefined },
-    { label: "전력 여유", weight: 16, applicable: metrics.powerHeadroomW !== undefined || metrics.psuWattageW !== undefined || metrics.recommendedPsuW !== undefined || metrics.gpuPowerW !== undefined, headroom: metrics.powerHeadroomW, capacity: metrics.psuWattageW ?? metrics.recommendedPsuW, detail: metrics.powerHeadroomW !== undefined ? `${metrics.psuWattageW ?? "?"}W 파워 · ${metrics.powerHeadroomW}W 여유` : undefined },
-    { label: "냉각 여유", weight: 10, applicable: metrics.coolerHeadroomW !== undefined || metrics.coolerCapacityW !== undefined || metrics.cpuPowerW !== undefined, headroom: metrics.coolerHeadroomW, capacity: metrics.coolerCapacityW, detail: metrics.coolerHeadroomW !== undefined ? `${metrics.coolerCapacityW ?? "?"}W 냉각 · ${metrics.coolerHeadroomW}W 여유` : undefined },
-    { label: "GPU 장착 여유", weight: 7, applicable: metrics.gpuClearanceMm !== undefined || metrics.gpuLengthMm !== undefined || metrics.maxGpuLengthMm !== undefined, headroom: metrics.gpuClearanceMm, capacity: metrics.maxGpuLengthMm, detail: metrics.gpuClearanceMm !== undefined ? `${metrics.gpuLengthMm ?? "?"}mm GPU · ${metrics.gpuClearanceMm}mm 여유` : undefined },
-    { label: "PSU 장착 여유", weight: 3, applicable: metrics.psuClearanceMm !== undefined || metrics.psuDepthMm !== undefined || metrics.maxPsuLengthMm !== undefined, headroom: metrics.psuClearanceMm, capacity: metrics.maxPsuLengthMm, detail: metrics.psuClearanceMm !== undefined ? `${metrics.psuDepthMm ?? "?"}mm PSU · ${metrics.psuClearanceMm}mm 여유` : undefined },
-    { label: "쿨러 장착 여유", weight: 2, applicable: metrics.coolerClearanceMm !== undefined || metrics.coolerHeightMm !== undefined || metrics.maxCoolerHeightMm !== undefined, headroom: metrics.coolerClearanceMm, capacity: metrics.maxCoolerHeightMm, detail: metrics.coolerClearanceMm !== undefined ? `${metrics.coolerHeightMm ?? "?"}mm 쿨러 · ${metrics.coolerClearanceMm}mm 여유` : undefined }
+    { label: "메모리 용량", weight: 18, applicable: metrics.totalMemoryGb !== undefined || metrics.memoryHeadroomGb !== undefined, headroom: metrics.memoryHeadroomGb, capacity: memoryCapacity, detail: metrics.totalMemoryGb !== undefined && metrics.memoryHeadroomGb !== undefined ? `현재 ${metrics.totalMemoryGb}GB 사용 / ${metrics.memoryHeadroomGb}GB 여유` : undefined },
+    { label: "RAM 슬롯", weight: 12, applicable: metrics.memorySlotsUsed !== undefined || metrics.memorySlotsTotal !== undefined || metrics.memorySlotHeadroom !== undefined, headroom: metrics.memorySlotHeadroom, capacity: metrics.memorySlotsTotal, detail: metrics.memorySlotsUsed !== undefined && metrics.memorySlotsTotal !== undefined ? `${metrics.memorySlotsUsed}/${metrics.memorySlotsTotal}개 사용 / ${metrics.memorySlotHeadroom ?? "?"}개 여유` : undefined },
+    { label: "M.2 슬롯", weight: 14, applicable: metrics.m2Used !== undefined || metrics.m2SlotsTotal !== undefined || metrics.m2Headroom !== undefined, headroom: metrics.m2Headroom, capacity: metrics.m2SlotsTotal, detail: metrics.m2Used !== undefined && metrics.m2SlotsTotal !== undefined ? `${metrics.m2Used}/${metrics.m2SlotsTotal}개 사용 / ${metrics.m2Headroom ?? "?"}개 여유` : undefined },
+    { label: "SATA 포트", weight: 10, applicable: metrics.sataUsed !== undefined || metrics.sataPortsTotal !== undefined || metrics.sataHeadroom !== undefined, headroom: metrics.sataHeadroom, capacity: metrics.sataPortsTotal, detail: metrics.sataUsed !== undefined && metrics.sataPortsTotal !== undefined ? `${metrics.sataUsed}/${metrics.sataPortsTotal}개 사용 / ${metrics.sataHeadroom ?? "?"}개 여유` : undefined },
+    { label: "HDD 베이", weight: 8, applicable: metrics.hddUsed !== undefined || metrics.hddBaysTotal !== undefined || metrics.hddBayHeadroom !== undefined, headroom: hddHeadroom, capacity: metrics.hddBaysTotal, detail: metrics.hddBaysTotal !== undefined ? `${metrics.hddUsed ?? 0}/${metrics.hddBaysTotal}개 사용 / ${hddHeadroom ?? "?"}개 여유` : undefined },
+    { label: "전력 여유", weight: 16, applicable: metrics.powerHeadroomW !== undefined || metrics.psuWattageW !== undefined || metrics.recommendedPsuW !== undefined || metrics.gpuPowerW !== undefined, headroom: metrics.powerHeadroomW, capacity: metrics.psuWattageW ?? metrics.recommendedPsuW, detail: metrics.powerHeadroomW !== undefined ? `${metrics.psuWattageW ?? "?"}W 파워 / ${metrics.powerHeadroomW}W 여유` : undefined },
+    { label: "냉각 여유", weight: 10, applicable: metrics.coolerHeadroomW !== undefined || metrics.coolerCapacityW !== undefined || metrics.cpuPowerW !== undefined, headroom: metrics.coolerHeadroomW, capacity: metrics.coolerCapacityW, detail: metrics.coolerHeadroomW !== undefined ? `${metrics.coolerCapacityW ?? "?"}W 냉각 / ${metrics.coolerHeadroomW}W 여유` : undefined },
+    { label: "GPU 장착 여유", weight: 7, applicable: metrics.gpuClearanceMm !== undefined || metrics.gpuLengthMm !== undefined || metrics.maxGpuLengthMm !== undefined, headroom: metrics.gpuClearanceMm, capacity: metrics.maxGpuLengthMm, detail: metrics.gpuClearanceMm !== undefined ? `${metrics.gpuLengthMm ?? "?"}mm GPU / ${metrics.gpuClearanceMm}mm 여유` : undefined },
+    { label: "PSU 장착 여유", weight: 3, applicable: metrics.psuClearanceMm !== undefined || metrics.psuDepthMm !== undefined || metrics.maxPsuLengthMm !== undefined, headroom: metrics.psuClearanceMm, capacity: metrics.maxPsuLengthMm, detail: metrics.psuClearanceMm !== undefined ? `${metrics.psuDepthMm ?? "?"}mm PSU / ${metrics.psuClearanceMm}mm 여유` : undefined },
+    { label: "쿨러 장착 여유", weight: 2, applicable: metrics.coolerClearanceMm !== undefined || metrics.coolerHeightMm !== undefined || metrics.maxCoolerHeightMm !== undefined, headroom: metrics.coolerClearanceMm, capacity: metrics.maxCoolerHeightMm, detail: metrics.coolerClearanceMm !== undefined ? `${metrics.coolerHeightMm ?? "?"}mm 쿨러 / ${metrics.coolerClearanceMm}mm 여유` : undefined }
   ];
   const applicableDimensions = dimensions.filter((dimension) => dimension.applicable);
   const scoredDimensions = applicableDimensions.flatMap((dimension) => {
@@ -125,13 +125,13 @@ export function savedBuildComparisonExpansionFor(metrics: CompatibilityResult["m
   const knownDimensionCount = scoredDimensions.length;
   const totalDimensionCount = applicableDimensions.length;
   const details = scoredDimensions.map(({ dimension, score }) => expansionDimensionDetailFor(dimension, score));
-  if (knownDimensionCount < 3) return { knownDimensionCount, totalDimensionCount, level: "unavailable", summary: `확장성 데이터 부족 · ${knownDimensionCount}/${totalDimensionCount}개 지표 확인`, details };
+  if (knownDimensionCount < 3) return { knownDimensionCount, totalDimensionCount, level: "unavailable", summary: `확장성 데이터 부족 / ${knownDimensionCount}/${totalDimensionCount}개 지표 확인`, details };
   const weightTotal = scoredDimensions.reduce((total, { dimension }) => total + dimension.weight, 0);
   const score = weightTotal > 0
     ? Math.round(scoredDimensions.reduce((total, { dimension, score: dimensionScore }) => total + dimensionScore * dimension.weight, 0) / weightTotal)
     : undefined;
   const level = knownDimensionCount === totalDimensionCount ? "complete" : "limited";
-  return { score, knownDimensionCount, totalDimensionCount, level, summary: `확장성 ${score ?? "-"}점 · ${knownDimensionCount}/${totalDimensionCount}개 여유 지표 확인`, details };
+  return { score, knownDimensionCount, totalDimensionCount, level, summary: `확장성 ${score ?? "-"}점 / ${knownDimensionCount}/${totalDimensionCount}개 여유 지표 확인`, details };
 }
 
 type SavedBuildTradeoffMetric = Pick<SavedBuildComparisonTradeoff, "id" | "name" | "riskScore" | "totalPriceWon" | "analysisScore" | "expansionScore">;
@@ -157,7 +157,7 @@ function savedBuildTradeoffDimensionReason(left: SavedBuildTradeoffMetric, right
   if (left.totalPriceWon !== undefined && right.totalPriceWon !== undefined && left.totalPriceWon < right.totalPriceWon) dimensions.push("총액");
   if (left.analysisScore !== undefined && right.analysisScore !== undefined && left.analysisScore > right.analysisScore) dimensions.push("분석 점수");
   if (left.expansionScore !== undefined && right.expansionScore !== undefined && left.expansionScore > right.expansionScore) dimensions.push("확장성");
-  return dimensions.length > 0 ? dimensions.join("·") : "비교 기준";
+  return dimensions.length > 0 ? dimensions.join("/") : "비교 기준";
 }
 
 export function savedBuildComparisonTradeoffsFor(entries: SavedBuildComparisonEntry[]): SavedBuildComparisonTradeoff[] {
@@ -183,8 +183,8 @@ export function savedBuildComparisonTradeoffsFor(entries: SavedBuildComparisonEn
         ...metric,
         frontier: true,
         reason: metric.totalPriceWon === undefined || metric.analysisScore === undefined || metric.expansionScore === undefined
-          ? "가격·분석·확장성 정보가 일부 없어 우위를 정하지 않고 비교 우위에 남겼습니다."
-          : "호환 위험·총액·분석 점수·확장성에서 다른 버전에 일방적으로 대체되지 않는 선택지입니다."
+          ? "가격/분석/확장성 정보가 일부 없어 우위를 정하지 않고 비교 우위에 남겼습니다."
+          : "호환 위험/총액/분석 점수/확장성에서 다른 버전에 일방적으로 대체되지 않는 선택지입니다."
       };
     }
     return {
@@ -273,5 +273,5 @@ export function savedBuildComparisonConsensusFor(entries: SavedBuildComparisonEn
     const winner = decisions[0].entry;
     return { ...base, status: "converged", winnerId: winner.id, winnerName: winner.name, summary: `${iGa(winner.name)} 확인할 수 있는 ${decisions.length}개 기준에서 모두 1위입니다.` };
   }
-  return { ...base, status: "split", summary: `기준에 따라 1위 견적이 ${winnerNames.join(" · ")}로 나뉩니다.` };
+  return { ...base, status: "split", summary: `기준에 따라 1위 견적이 ${winnerNames.join(" / ")}로 나뉩니다.` };
 }

@@ -5,7 +5,7 @@ import type { Part } from "./types";
  * A power-stage rating in amperes cannot be compared directly with CPU PPT in
  * watts. No synthetic vrmCapacityW is written into catalog specifications.
  */
-export const PHASE1_HARDWARE_EVIDENCE_VERSION = "phase1-hardware-2026-10-04";
+export const PHASE1_HARDWARE_EVIDENCE_VERSION = "phase1-hardware-2026-10-06";
 
 export const PHASE1_MOTHERBOARD_EVIDENCE = [
   {
@@ -136,4 +136,55 @@ export function phase1GpuPowerUpperBoundW(gpu: Part): number | undefined {
   const options = gpu.specs.pciePowerOptions;
   if (!options?.some((option) => option.length === 1 && option[0].kind === "pcie_8pin_6plus2" && option[0].count === 1)) return undefined;
   return 225;
+}
+
+/** Official board capability facts, not an invented wattage for the VRM. */
+export const PHASE1_INTEL_MOTHERBOARD_EVIDENCE = [
+  {
+    model: "GIGABYTE B760M AORUS ELITE DDR4 (rev. 1.x)", memoryType: "DDR4",
+    productIds: ["danawa-motherboard-18651545"],
+    sourceUrl: "https://www.gigabyte.com/Motherboard/B760M-AORUS-ELITE-DDR4-rev-1x",
+    cpuSupportUrl: "https://www.gigabyte.com/Motherboard/B760M-AORUS-ELITE-DDR4-rev-1x/support",
+    sourceFacts: "LGA1700, 12th/13th/14th Core support, twin 12+1+1 digital power stages with 60A DrMOS and covered MOSFET heatsinks.",
+    capabilityPolicy: "Only the listed Core i3/i5 models at Intel Default Settings, PBP up to 125W and MTP up to 181W. This limit is project policy, not measured VRM wattage. Latest compatible BIOS and mitigation microcode must be checked before purchase.",
+    reviewedAt: "2026-10-06"
+  },
+  {
+    model: "GIGABYTE B760M AORUS ELITE (rev. 1.x)", memoryType: "DDR5",
+    productIds: ["danawa-motherboard-18649997", "danawa-motherboard-18651431"],
+    sourceUrl: "https://www.gigabyte.com/uk/Motherboard/B760M-AORUS-ELITE-rev-1x",
+    cpuSupportUrl: "https://www.gigabyte.com/us/Motherboard/B760M-AORUS-ELITE-rev-1x/sp",
+    sourceFacts: "LGA1700, DDR5, 12th/13th/14th Core support, twin 12+1+1 digital power stages with 60A DrMOS and covered MOSFET heatsinks.",
+    capabilityPolicy: "Only the listed Core i3/i5 models at Intel Default Settings, PBP up to 125W and MTP up to 181W. This limit is project policy, not measured VRM wattage. Latest compatible BIOS and mitigation microcode must be checked before purchase.",
+    reviewedAt: "2026-10-06"
+  }
+] as const;
+
+export const PHASE1_INTEL_STOCK_CPU_POWER = {
+  "12100F": { baseW: 58, turboW: 89, sourceUrl: "https://www.intel.com/content/www/us/en/products/compare.html?productIds=132223%2C96144" },
+  "14100F": { baseW: 58, turboW: 110, sourceUrl: "https://www.intel.com/content/www/us/en/products/compare.html?productIds=236853%2C236777%2C236786%2C236854" },
+  "13400F": { baseW: 65, turboW: 148, sourceUrl: "https://www.intel.com/content/www/us/en/products/compare.html?productIds=134590%2C230501" },
+  "14400F": { baseW: 65, turboW: 148, sourceUrl: "https://www.intel.com/content/www/us/en/products/sku/236777/intel-core-i5-processor-14400f-20m-cache-up-to-4-70-ghz/specifications.html" },
+  "14600KF": { baseW: 125, turboW: 181, sourceUrl: "https://www.intel.com/content/www/us/en/support/articles/000006047/processors.html" }
+} as const;
+
+export function phase1IntelStockCpuPowerFor(cpu: Part | undefined): { baseW: number; turboW: number; sourceUrl: string } | undefined {
+  if (!cpu || cpu.specs.socket !== "LGA1700" || !/Intel|인텔|코어/i.test(cpu.name)) return undefined;
+  const model = cpu.name.match(/\b(12100F|14100F|13400F|14400F|14600KF)\b/i)?.[1].toUpperCase() as keyof typeof PHASE1_INTEL_STOCK_CPU_POWER | undefined;
+  return model ? PHASE1_INTEL_STOCK_CPU_POWER[model] : undefined;
+}
+
+export function phase1IntelMotherboardEvidenceFor(motherboard: Part) {
+  const evidence = PHASE1_INTEL_MOTHERBOARD_EVIDENCE.find((row) => (row.productIds as readonly string[]).includes(motherboard.id));
+  if (!evidence || motherboard.specs.socket !== "LGA1700" || motherboard.specs.memoryType !== evidence.memoryType) return undefined;
+  const expectedName = evidence.memoryType === "DDR4" ? /^GIGABYTE\s+B760M\s+AORUS\s+ELITE\s+D4\s+피씨디렉트$/i : /^GIGABYTE\s+B760M\s+AORUS\s+ELITE\s+(?:제이씨현|피씨디렉트)$/i;
+  return expectedName.test(motherboard.name) ? evidence : undefined;
+}
+
+/** Exact reviewed products only; phase count alone never proves another board safe. */
+export function phase1IntelMotherboardSupportsCpu(cpu: Part, motherboard: Part): boolean {
+  const power = phase1IntelStockCpuPowerFor(cpu);
+  const evidence = phase1IntelMotherboardEvidenceFor(motherboard);
+  if (!power || !evidence) return false;
+  return cpu.specs.tdpW !== undefined && cpu.specs.tdpW > 0 && cpu.specs.tdpW <= 125 && (cpu.specs.pptW === undefined || cpu.specs.pptW <= power.turboW);
 }

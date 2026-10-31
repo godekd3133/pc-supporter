@@ -5,8 +5,8 @@ export function BuildConnectivityPanel({ motherboard, computerCase, findings, on
   const summary = buildConnectivitySummaryFor(motherboard, computerCase);
   if (summary.status === "not_applicable") return null;
   const statusLabel = summary.status === "pass" ? "연결 가능" : summary.status === "review" ? "연결 주의" : "정보 부족";
-  return <section className={`build-connectivity-panel ${summary.status}`} aria-label="팬·RGB 연결 상태" data-testid="build-connectivity-panel" tabIndex={-1}>
-    <div className="build-connectivity-heading"><div><p className="eyebrow">팬·RGB 연결</p><h2>팬·RGB 연결 상태</h2><p>케이스에 기본으로 달린 팬과 RGB 장치를 메인보드에 연결할 수 있는지 살펴봅니다.</p></div><strong>{statusLabel}</strong></div>
+  return <section className={`build-connectivity-panel ${summary.status}`} aria-label="팬/RGB 연결 상태" data-testid="build-connectivity-panel" tabIndex={-1}>
+    <div className="build-connectivity-heading"><div><p className="eyebrow">팬/RGB 연결</p><h2>팬/RGB 연결 상태</h2><p>케이스에 기본으로 달린 팬과 RGB 장치를 메인보드에 연결할 수 있는지 살펴봅니다.</p></div><strong>{statusLabel}</strong></div>
     <div className="build-connectivity-grid">{summary.items.map((item) => { const hasFinding = findings.some((finding) => finding.ruleId === item.ruleId); return <article className={`build-connectivity-item ${item.status}`} key={item.id}><div className="build-connectivity-item-heading"><span>{item.label}</span><strong>{item.status === "pass" ? "연결 가능" : item.status === "review" ? "주의" : "정보 부족"}</strong></div>{item.used !== undefined && item.capacity !== undefined && <div className="build-connectivity-meter"><span>{item.used} / {item.capacity}개</span><i><em style={{ width: `${Math.min(100, Math.max(0, item.capacity > 0 ? (item.used / item.capacity) * 100 : item.used > 0 ? 100 : 0))}%` }} /></i></div>}<p>{item.detail}</p>{hasFinding && onFocusFinding && <button className="text-button" type="button" onClick={() => onFocusFinding(item.ruleId)}>관련 결과 보기</button>}</article>; })}</div>
   </section>;
 }

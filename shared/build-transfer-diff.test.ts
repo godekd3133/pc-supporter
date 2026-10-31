@@ -52,7 +52,7 @@ describe("build transfer diff", () => {
       accessoryName: () => "M.2 어댑터"
     });
 
-    expect(result.rows).toContainEqual(expect.objectContaining({ label: "주변 부품", before: "M.2 어댑터 · 대상 SSD A", after: "M.2 어댑터 · 대상 SSD B" }));
+    expect(result.rows).toContainEqual(expect.objectContaining({ label: "주변 부품", before: "M.2 어댑터 / 대상 SSD A", after: "M.2 어댑터 / 대상 SSD B" }));
 
     const fanBefore = build({ accessories: [{ accessoryId: "fan", quantity: 1, targetAccessoryId: "hub-a" }] });
     const fanAfter = { ...fanBefore, accessories: [{ accessoryId: "fan", quantity: 1, targetAccessoryId: "hub-b" }] };

@@ -44,6 +44,6 @@ describe("purchase list live prices", () => {
     const sourceRow = { ...rows[0]!, refreshable: true };
     const live: PurchaseListLivePrice = { status: "unavailable", source: "source-refresh", reason: "source-refresh-blocked", retryAfterSeconds: 7 };
     expect(purchaseListRowsWithLivePricesFor([sourceRow], { [sourceRow.id!]: live })[0]).toEqual(sourceRow);
-    expect(purchaseListLivePriceDisplayFor(sourceRow, live)).toMatchObject({ tone: "unavailable", label: "정보 재확인 대기 중 · 7초 후 다시 시도 · 기존 가격 유지" });
+    expect(purchaseListLivePriceDisplayFor(sourceRow, live)).toMatchObject({ tone: "unavailable", label: "정보 재확인 대기 중 / 7초 후 다시 시도 / 기존 가격 유지" });
   });
 });

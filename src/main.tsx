@@ -3,7 +3,9 @@ import { StrictMode, Suspense, lazy } from "react";
 import { createRoot } from "react-dom/client";
 import { AppErrorBoundary } from "./AppErrorBoundary";
 import { applyTheme, THEME_STORAGE_KEY, themeModeFromStorage } from "./theme";
+import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 import "./styles.css";
+import "./redesign.css";
 
 const App = lazy(() => import("./App"));
 
@@ -11,6 +13,13 @@ try {
   applyTheme(themeModeFromStorage(safeLocalStorage.getItem(THEME_STORAGE_KEY)));
 } catch {
   applyTheme("light");
+}
+
+// Example builds are test fixtures: shown to automation and with ?demo, hidden from users.
+try {
+  if (navigator.webdriver || new URLSearchParams(window.location.search).has("demo")) document.documentElement.dataset.demoTools = "on";
+} catch {
+  // Leave demo tools hidden.
 }
 
 let printOpenedDetails: HTMLDetailsElement[] = [];

@@ -56,7 +56,7 @@ export function purchaseListItemStatusesFromUnknown(value: unknown, validRowKeys
     const rowKey = typeof candidate.rowKey === "string" ? candidate.rowKey.trim() : "";
     const status = parsedStatus(candidate.status);
     if (!rowKey || rowKey.length > MAX_KEY_LENGTH || !status || !validTimestamp(candidate.updatedAt) || (validKeys && !validKeys.has(rowKey)) || seen.has(rowKey)) {
-      errors.push("구매 단계 상태의 행 key·상태·시각이 올바르지 않거나 현재 목록과 다릅니다.");
+      errors.push("구매 단계 상태의 행 key/상태/시각이 올바르지 않거나 현재 목록과 다릅니다.");
       continue;
     }
     seen.add(rowKey);

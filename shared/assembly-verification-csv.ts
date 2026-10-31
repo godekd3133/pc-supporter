@@ -372,7 +372,7 @@ export function parseAssemblyVerificationCsv(input: string): AssemblyVerificatio
     detectedTelemetryHeaders[definition.key] = match.header;
     telemetryColumnIndexes[definition.key] = match.index;
   }
-  if (Object.keys(columnIndexes).length === 0 && Object.keys(telemetryColumnIndexes).length === 0) return { errors: ["CPU/GPU 온도·주변 온도·팬 RPM·사용률·클럭·소비전력 열을 찾지 못했습니다. 제공된 CSV 양식이나 HWiNFO·OCCT 센서 열 이름을 확인해 주세요."] };
+  if (Object.keys(columnIndexes).length === 0 && Object.keys(telemetryColumnIndexes).length === 0) return { errors: ["CPU/GPU 온도/주변 온도/팬 RPM/사용률/클럭/소비전력 열을 찾지 못했습니다. 제공된 CSV 양식이나 HWiNFO/OCCT 센서 열 이름을 확인해 주세요."] };
 
   const valuesByMetric = new Map<AssemblyVerificationCsvMetric, number[]>();
   const seriesPoints: AssemblyVerificationTelemetryPoint[] = [];
@@ -428,7 +428,7 @@ export function parseAssemblyVerificationCsv(input: string): AssemblyVerificatio
     }
   }
 
-  if (sampleCount === 0) return { errors: ["유효한 온도·주변 온도·팬 RPM·사용률·클럭·소비전력 측정값이 있는 행을 찾지 못했습니다."] };
+  if (sampleCount === 0) return { errors: ["유효한 온도/주변 온도/팬 RPM/사용률/클럭/소비전력 측정값이 있는 행을 찾지 못했습니다."] };
   const values: AssemblyVerificationCsvValues = {};
   for (const definition of METRIC_DEFINITIONS) {
     const measurements = valuesByMetric.get(definition.key) ?? [];
@@ -457,11 +457,11 @@ export function parseAssemblyVerificationCsv(input: string): AssemblyVerificatio
     continuity
   };
   const warnings: string[] = [];
-  if (missingMetrics.length > 0) warnings.push(`CSV에서 찾지 못한 측정 열: ${missingMetrics.map((metric) => ASSEMBLY_VERIFICATION_CSV_METRIC_LABELS[metric]).join(" · ")}`);
+  if (missingMetrics.length > 0) warnings.push(`CSV에서 찾지 못한 측정 열: ${missingMetrics.map((metric) => ASSEMBLY_VERIFICATION_CSV_METRIC_LABELS[metric]).join(" / ")}`);
   if (skippedRowCount > 0) warnings.push(`유효한 측정값이 없어 제외한 행 ${skippedRowCount.toLocaleString("ko-KR")}개`);
   if (invalidValueCount > 0) warnings.push(`범위를 벗어나거나 숫자로 읽지 못한 셀 ${invalidValueCount.toLocaleString("ko-KR")}개`);
   if (!timeMatch) warnings.push("시간 열을 찾지 못해 시계열을 샘플 순서로 표시합니다.");
-  if (continuity.status === "gapped") warnings.push(`시간축 공백 ${continuity.gapCount}개 · 최대 공백 ${continuity.largestGapSeconds ?? "-"}초 · 예상 누락 샘플 ${continuity.estimatedMissingSamples}개`);
+  if (continuity.status === "gapped") warnings.push(`시간축 공백 ${continuity.gapCount}개 / 최대 공백 ${continuity.largestGapSeconds ?? "-"}초 / 예상 누락 샘플 ${continuity.estimatedMissingSamples}개`);
   if (continuity.unparsedTimestampCount > 0) warnings.push(`해석하지 못한 timestamp ${continuity.unparsedTimestampCount}개`);
   else if (continuity.status === "unknown" && timeMatch) warnings.push("유효 timestamp가 2개 미만이어서 시간축 연속성을 확인하지 못했습니다.");
   return {

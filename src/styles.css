@@ -18997,3 +18997,19 @@ html[data-theme="dark"] .catalog-part-skeleton-image::after, html[data-theme="da
 .build-mini-adjust-btn { display: inline-flex; align-items: center; justify-content: center; width: 1.5rem; height: 1.5rem; border-radius: 0.375rem; border: 1px solid var(--border-color, rgba(0,0,0,0.12)); background: transparent; color: inherit; cursor: pointer; font-size: 0.8rem; }
 .build-mini-adjust-btn:hover:not(:disabled) { background: var(--accent-soft, rgba(37,99,235,0.08)); color: var(--accent, #2563eb); }
 .build-mini-adjust-btn:disabled { opacity: 0.4; cursor: default; }
+
+/* Compact global navigation, including the lazy header loading state. */
+.topbar { min-height: 52px; }
+.topbar-inner { min-height: 52px; gap: 24px; }
+.brand { min-height: 44px; gap: 8px; }
+.brand-mark { width: 30px; height: 30px; border-radius: 9px; font-size: 17px; }
+.brand strong { font-size: 16px; }
+.brand small { font-size: 9px; margin-top: 0; }
+.nav-link { min-height: 44px; padding: 0 12px; font-size: 13px; }
+.nav-link.active::after { right: 12px; left: 12px; height: 3px; }
+@media (max-width: 760px) {
+  .topbar-inner { min-height: 52px; padding: 4px 16px; gap: 8px; }
+  .brand strong { font-size: 14px; }
+  .mobile-header-menu { width: 44px; height: 44px; min-height: 44px; }
+  .mobile-header-menu svg { width: 17px; height: 17px; }
+}

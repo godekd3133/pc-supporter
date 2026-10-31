@@ -57,7 +57,7 @@ describe("catalog detail filter API", () => {
     expect(nvme.items.every((item) => item.specs.interface === "NVMe")).toBe(true);
     expect(nvme.detailExcludedCount).toBe(all.total - nvme.total);
 
-    // 같은 필드의 복수 선택은 OR로 동작한다 — NVMe·SATA 합집합이 단일 선택보다 크거나 같다.
+    // 같은 필드의 복수 선택은 OR로 동작한다 — NVMe/SATA 합집합이 단일 선택보다 크거나 같다.
     const either = await fetch(`${baseUrl}/api/parts?category=ssd&dv.interface=NVMe,SATA&limit=100`).then((response) => response.json()) as { total: number };
     expect(either.total).toBeGreaterThanOrEqual(nvme.total);
 

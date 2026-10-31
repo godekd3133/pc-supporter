@@ -16,7 +16,7 @@ describe("engineConditionTagsFor", () => {
       gamingUpscaling: "quality",
       gamingRayTracing: true,
       gamingGameIds: ["cyberpunk", "pubg"]
-    }))).toEqual(["4K", "144Hz", "높음", "업스케일링·품질", "레이 트레이싱", "게임 2개"]);
+    }))).toEqual(["4K", "144Hz", "높음", "업스케일링/품질", "레이 트레이싱", "게임 2개"]);
   });
 
   it("lists the performance tier for general profiles and skips unset fields", () => {
@@ -53,4 +53,12 @@ describe("game mode condition tags", () => {
   it("keeps dormant game settings out of a budget-only preset summary", () => {
     expect(engineConditionTagsFor(preferencesWith({ profile: "gaming", gamingMode: "budget", gamingTargetFps: 120, gamingResolution: "4k", gpuVendorPreference: "nvidia", gamingGameIds: ["pubg"] }))).toEqual(["GPU 성능 우선", "NVIDIA"]);
   });
+});
+
+
+it("shows only explicitly requested CPU and DDR choices on saved and preset cards", () => {
+ const explicit=preferencesWith({profile:"gaming",gamingMode:"budget",cpuVendorPreference:"intel",memoryTypePreference:"DDR4"});
+ expect(engineConditionTagsFor(explicit)).toEqual(["CPU Intel", "DDR4", "GPU 성능 우선"]);
+ expect(savedBuildPreferenceTagsFor(explicit)).toEqual(["균형형", "CPU Intel", "DDR4", "GPU 성능 우선"]);
+ expect(engineConditionTagsFor(preferencesWith({profile:"gaming",gamingMode:"budget"}))).toEqual(["GPU 성능 우선"]);
 });

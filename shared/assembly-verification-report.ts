@@ -56,7 +56,7 @@ function signedMetricText(value: number | undefined, suffix = "") {
 }
 
 function sourceText(run: AssemblyVerificationReportRun) {
-  if (run.measurementSource === "csv") return `CSV${run.measurementSourceLabel ? ` · ${run.measurementSourceLabel}` : ""}${run.measurementSampleCount !== undefined ? ` · 원본 기록 ${run.measurementSampleCount}개` : ""}${run.measurementSeriesPointCount !== undefined ? ` · 온도 기록 ${run.measurementSeriesPointCount}개` : ""}`;
+  if (run.measurementSource === "csv") return `CSV${run.measurementSourceLabel ? ` / ${run.measurementSourceLabel}` : ""}${run.measurementSampleCount !== undefined ? ` / 원본 기록 ${run.measurementSampleCount}개` : ""}${run.measurementSeriesPointCount !== undefined ? ` / 온도 기록 ${run.measurementSeriesPointCount}개` : ""}`;
   if (run.measurementSource === "manual") return "직접 입력";
   return "출처 기록 없음";
 }
@@ -65,12 +65,12 @@ function continuityText(run: AssemblyVerificationReportRun) {
   const continuity = run.measurementQuality?.continuity;
   if (!continuity) return "연속성 기록 없음";
   const status = continuity.status === "continuous" ? "연속" : continuity.status === "gapped" ? "중간 누락" : "확인 불가";
-  return `시간 기록 ${status} · 기록 시각 ${continuity.timestampCount}개 · 읽지 못한 시각 ${continuity.unparsedTimestampCount}개 · 누락 구간 ${continuity.gapCount}곳 · 빠진 것으로 보이는 기록 ${continuity.estimatedMissingSamples}개`;
+  return `시간 기록 ${status} / 기록 시각 ${continuity.timestampCount}개 / 읽지 못한 시각 ${continuity.unparsedTimestampCount}개 / 누락 구간 ${continuity.gapCount}곳 / 빠진 것으로 보이는 기록 ${continuity.estimatedMissingSamples}개`;
 }
 
 function reportLabelText(value: string) {
   return value
-    .replace(/^(.*?)(\d+)회차$/, (_, label: string, index: string) => `${label.trim()} · 측정 기록 ${index}`)
+    .replace(/^(.*?)(\d+)회차$/, (_, label: string, index: string) => `${label.trim()} / 측정 기록 ${index}`)
     .replaceAll("회차", "측정 기록")
     .replaceAll("runId", "기록 ID")
     .replaceAll("timestamp", "시간 기록")
@@ -96,7 +96,7 @@ function decisionDimensionStatusLabel(status: NonNullable<AssemblyVerificationRe
 }
 
 function comparisonBlockReasonText(reason: AssemblyVerificationReportRun["comparisonBlockReason"]) {
-  return reason === "condition-changed" ? "조건 변경" : reason === "condition-missing" ? "조건 기록 없음" : reason === "measurement-quality-review" ? "측정 자료 확인 필요" : reason === "measurement-continuity-gapped" ? "시간 기록 누락·역순" : undefined;
+  return reason === "condition-changed" ? "조건 변경" : reason === "condition-missing" ? "조건 기록 없음" : reason === "measurement-quality-review" ? "측정 자료 확인 필요" : reason === "measurement-continuity-gapped" ? "시간 기록 누락/역순" : undefined;
 }
 
 function telemetryTrendLabel(trend: AssemblyVerificationTelemetryMetricAnalysis["trend"]) {
@@ -110,25 +110,25 @@ function telemetrySuffix(metric: AssemblyVerificationTelemetryMetricAnalysis["me
 function telemetryAnalysisTextForMetric(analysis: AssemblyVerificationTelemetryMetricAnalysis) {
   const suffix = telemetrySuffix(analysis.metric);
   const delta = `${analysis.delta > 0 ? "+" : ""}${analysis.delta}${suffix}`;
-  const rate = analysis.ratePerMinute !== undefined ? ` · 변화율 ${analysis.ratePerMinute > 0 ? "+" : ""}${analysis.ratePerMinute}${suffix}/분` : "";
-  const peakAt = analysis.peakAtSeconds !== undefined ? ` · 최고점 ${analysis.peakAtSeconds}초` : "";
-  const window = analysis.finalWindowSpread !== undefined ? ` · 마지막 3점 범위 ${analysis.finalWindowSpread}${suffix}` : "";
-  return `${telemetryTrendLabel(analysis.trend)} · 시작 ${analysis.first}${suffix} → 종료 ${analysis.last}${suffix} · 변화 ${delta}${rate}${peakAt}${window}`;
+  const rate = analysis.ratePerMinute !== undefined ? ` / 변화율 ${analysis.ratePerMinute > 0 ? "+" : ""}${analysis.ratePerMinute}${suffix}/분` : "";
+  const peakAt = analysis.peakAtSeconds !== undefined ? ` / 최고점 ${analysis.peakAtSeconds}초` : "";
+  const window = analysis.finalWindowSpread !== undefined ? ` / 마지막 3점 범위 ${analysis.finalWindowSpread}${suffix}` : "";
+  return `${telemetryTrendLabel(analysis.trend)} / 시작 ${analysis.first}${suffix} → 종료 ${analysis.last}${suffix} / 변화 ${delta}${rate}${peakAt}${window}`;
 }
 
 function telemetryAnalysisText(analysis: AssemblyVerificationTelemetryAnalysis) {
   const metrics = [analysis.metrics.cpuTempC, analysis.metrics.gpuTempC].filter((metric): metric is AssemblyVerificationTelemetryMetricAnalysis => Boolean(metric));
-  const observed = metrics.length > 0 ? metrics.map((metric) => `${metric.metric === "cpuTempC" ? "CPU" : "GPU"} ${telemetryAnalysisTextForMetric(metric)}`).join(" · ") : "비교할 온도 기록 부족";
-  return `${observed}${analysis.elapsedSeconds !== undefined ? ` · 관찰 ${analysis.elapsedSeconds}초` : " · 시간축 기록 없음"}`;
+  const observed = metrics.length > 0 ? metrics.map((metric) => `${metric.metric === "cpuTempC" ? "CPU" : "GPU"} ${telemetryAnalysisTextForMetric(metric)}`).join(" / ") : "비교할 온도 기록 부족";
+  return `${observed}${analysis.elapsedSeconds !== undefined ? ` / 관찰 ${analysis.elapsedSeconds}초` : " / 시간축 기록 없음"}`;
 }
 
 function telemetryContextText(analysis: AssemblyVerificationTelemetryAnalysis) {
   const entries: Array<[keyof AssemblyVerificationTelemetryAnalysis["metrics"], string]> = [["cpuUsagePercent", "CPU 사용률"], ["gpuUsagePercent", "GPU 사용률"], ["cpuClockMHz", "CPU 클럭"], ["gpuClockMHz", "GPU 클럭"], ["cpuPowerW", "CPU 전력"], ["gpuPowerW", "GPU 전력"]];
   const values = entries.map(([metric, label]) => {
     const value = analysis.metrics[metric];
-    return value ? `${label} 평균 ${value.mean}${telemetrySuffix(value.metric)} · 최고 ${value.max}${telemetrySuffix(value.metric)}` : undefined;
+    return value ? `${label} 평균 ${value.mean}${telemetrySuffix(value.metric)} / 최고 ${value.max}${telemetrySuffix(value.metric)}` : undefined;
   }).filter((value): value is string => Boolean(value));
-  return values.length > 0 ? values.join(" · ") : "추가 센서 기록 없음";
+  return values.length > 0 ? values.join(" / ") : "추가 센서 기록 없음";
 }
 
 function telemetryAnalysisTextForCsv(analysis: AssemblyVerificationTelemetryMetricAnalysis) {
@@ -139,7 +139,7 @@ function loadProfileText(profile: AssemblyVerificationLoadProfile) {
   if (profile.reason === "usage-not-recorded") return "사용률 센서 기록 없음";
   const segments = profile.segments.map((segment) => `${segment.breakBefore === "gap" ? `공백 ${segment.gapBeforeSeconds ?? "-"}초 후 ` : segment.breakBefore === "non-monotonic" ? "시간 역순 후 " : ""}${segment.label} ${segment.pointCount}점`).join(" → ");
   const stability = profile.segments.flatMap((segment) => [segment.cpuTempStability ? `CPU 안정화 ${segment.cpuTempStability.stabilized ? "확인" : "미확인"}` : undefined, segment.gpuTempStability ? `GPU 안정화 ${segment.gpuTempStability.stabilized ? "확인" : "미확인"}` : undefined]).filter((value): value is string => Boolean(value));
-  return `${segments || "구간 없음"} · 사용률 기록 ${profile.usageCoveragePercent}% · 분류되지 않은 기록 ${profile.unclassifiedPointCount}개${stability.length > 0 ? ` · ${stability.join(" · ")}` : ""}`;
+  return `${segments || "구간 없음"} / 사용률 기록 ${profile.usageCoveragePercent}% / 분류되지 않은 기록 ${profile.unclassifiedPointCount}개${stability.length > 0 ? ` / ${stability.join(" / ")}` : ""}`;
 }
 
 function loadProfileComparisonText(comparison: AssemblyVerificationLoadProfileComparison) {
@@ -149,15 +149,15 @@ function loadProfileComparisonText(comparison: AssemblyVerificationLoadProfileCo
   if (comparison.reason === "measurement-quality-review") return "측정 자료를 더 확인해야 해 비교하지 않음";
   if (comparison.reason === "no-previous-run") return "같은 조건의 이전 측정 기록 없음";
   if (comparison.reason === "profile-missing") return "사용률 기록 없음";
-  const segments = comparison.segments.map((segment) => `${segment.label}${segment.occurrenceIndex > 0 ? ` ${segment.occurrenceIndex + 1}` : ""}: ${[segment.cpuTempLastDelta === undefined ? undefined : `CPU 종료 ${segment.cpuTempLastDelta > 0 ? "+" : ""}${segment.cpuTempLastDelta}°C`, segment.gpuTempLastDelta === undefined ? undefined : `GPU 종료 ${segment.gpuTempLastDelta > 0 ? "+" : ""}${segment.gpuTempLastDelta}°C`, segment.cpuPowerMeanDelta === undefined ? undefined : `CPU 전력 ${segment.cpuPowerMeanDelta > 0 ? "+" : ""}${segment.cpuPowerMeanDelta}W`, segment.gpuPowerMeanDelta === undefined ? undefined : `GPU 전력 ${segment.gpuPowerMeanDelta > 0 ? "+" : ""}${segment.gpuPowerMeanDelta}W`].filter((value): value is string => Boolean(value)).join(" · ") || "공통 측정값 없음"}`).join(" | ");
-  return `${comparison.previousRunLabel ? reportLabelText(comparison.previousRunLabel) : "이전 측정 기록"} · ${segments || "비교 구간 없음"}`;
+  const segments = comparison.segments.map((segment) => `${segment.label}${segment.occurrenceIndex > 0 ? ` ${segment.occurrenceIndex + 1}` : ""}: ${[segment.cpuTempLastDelta === undefined ? undefined : `CPU 종료 ${segment.cpuTempLastDelta > 0 ? "+" : ""}${segment.cpuTempLastDelta}°C`, segment.gpuTempLastDelta === undefined ? undefined : `GPU 종료 ${segment.gpuTempLastDelta > 0 ? "+" : ""}${segment.gpuTempLastDelta}°C`, segment.cpuPowerMeanDelta === undefined ? undefined : `CPU 전력 ${segment.cpuPowerMeanDelta > 0 ? "+" : ""}${segment.cpuPowerMeanDelta}W`, segment.gpuPowerMeanDelta === undefined ? undefined : `GPU 전력 ${segment.gpuPowerMeanDelta > 0 ? "+" : ""}${segment.gpuPowerMeanDelta}W`].filter((value): value is string => Boolean(value)).join(" / ") || "공통 측정값 없음"}`).join(" | ");
+  return `${comparison.previousRunLabel ? reportLabelText(comparison.previousRunLabel) : "이전 측정 기록"} / ${segments || "비교 구간 없음"}`;
 }
 
 function telemetryOverlayText(overlay: AssemblyVerificationTelemetryOverlay) {
   if (overlay.reason === "reference-condition-missing") return "기준이 되는 부하 조건을 기록하지 않아 비교할 수 없습니다.";
   if (overlay.reason === "no-matching-run-series") return "같은 조건의 온도 기록이 없어 비교할 수 없습니다.";
-  const runs = overlay.runs.map((run) => `${reportLabelText(run.runLabel)}: CPU 최고 ${run.cpuTempPeak === undefined ? "-" : `${run.cpuTempPeak}°C`} · GPU 최고 ${run.gpuTempPeak === undefined ? "-" : `${run.gpuTempPeak}°C`}`).join(" | ");
-  return `${overlay.runCount}개 측정 기록 · ${runs || "기록 없음"}`;
+  const runs = overlay.runs.map((run) => `${reportLabelText(run.runLabel)}: CPU 최고 ${run.cpuTempPeak === undefined ? "-" : `${run.cpuTempPeak}°C`} / GPU 최고 ${run.gpuTempPeak === undefined ? "-" : `${run.gpuTempPeak}°C`}`).join(" | ");
+  return `${overlay.runCount}개 측정 기록 / ${runs || "기록 없음"}`;
 }
 
 function reportOverlayCountText(overlay: AssemblyVerificationTelemetryOverlay | undefined) {
@@ -221,21 +221,21 @@ export function assemblyVerificationReportTextFor(report: AssemblyVerificationRe
   }
   lines.push("## 측정 기록", "");
   for (const run of report.runs) {
-    const condition = [toolLabel(run.loadTool), scenarioLabel(run.loadScenario), run.testDurationMinutes !== undefined ? `${run.testDurationMinutes}분` : "시간 기록 없음"].join(" · ");
+    const condition = [toolLabel(run.loadTool), scenarioLabel(run.loadScenario), run.testDurationMinutes !== undefined ? `${run.testDurationMinutes}분` : "시간 기록 없음"].join(" / ");
     lines.push(
       `### ${reportRunHeading(run)}`,
       `- 상태: ${assemblyVerificationStateLabel(run.state)}`,
       `- 조건: ${condition}`,
-      `- CPU: ${metricText(run.cpuMaxTempC, "°C")} · 주변 ${metricText(run.ambientTempC, "°C")} · 보정 ${metricText(run.cpuAmbientAdjustedC, "°C")} · 직전 대비 ${signedMetricText(run.cpuDeltaC, "°C")} · 보정 대비 ${signedMetricText(run.cpuAmbientAdjustedDeltaC, "°C")}`,
-      `- GPU: ${metricText(run.gpuMaxTempC, "°C")} · 보정 ${metricText(run.gpuAmbientAdjustedC, "°C")} · 직전 대비 ${signedMetricText(run.gpuDeltaC, "°C")} · 보정 대비 ${signedMetricText(run.gpuAmbientAdjustedDeltaC, "°C")}`,
-      `- 팬: CPU ${metricText(run.cpuFanRpm, "RPM")} · GPU ${metricText(run.gpuFanRpm, "RPM")} · 소음 ${noiseLabel(run.noiseLevel)}`,
+      `- CPU: ${metricText(run.cpuMaxTempC, "°C")} / 주변 ${metricText(run.ambientTempC, "°C")} / 보정 ${metricText(run.cpuAmbientAdjustedC, "°C")} / 직전 대비 ${signedMetricText(run.cpuDeltaC, "°C")} / 보정 대비 ${signedMetricText(run.cpuAmbientAdjustedDeltaC, "°C")}`,
+      `- GPU: ${metricText(run.gpuMaxTempC, "°C")} / 보정 ${metricText(run.gpuAmbientAdjustedC, "°C")} / 직전 대비 ${signedMetricText(run.gpuDeltaC, "°C")} / 보정 대비 ${signedMetricText(run.gpuAmbientAdjustedDeltaC, "°C")}`,
+      `- 팬: CPU ${metricText(run.cpuFanRpm, "RPM")} / GPU ${metricText(run.gpuFanRpm, "RPM")} / 소음 ${noiseLabel(run.noiseLevel)}`,
       `- 측정 출처: ${sourceText(run)}`,
-      ...(run.measurementQuality ? [`- 측정 자료: ${measurementQualityLabel(run.measurementQuality.status)} · 읽은 행 ${run.measurementQuality.validSampleCount}/${run.measurementQuality.rowCount} · 기본 센서 ${run.measurementQuality.recognizedCoreColumnCount}/${run.measurementQuality.coreColumnCount} · 추가 센서 ${run.measurementQuality.telemetryColumnCount}개 · 시간 기록 ${run.measurementQuality.hasTimeAxis ? "있음" : "없음"} · ${continuityText(run)}`] : []),
+      ...(run.measurementQuality ? [`- 측정 자료: ${measurementQualityLabel(run.measurementQuality.status)} / 읽은 행 ${run.measurementQuality.validSampleCount}/${run.measurementQuality.rowCount} / 기본 센서 ${run.measurementQuality.recognizedCoreColumnCount}/${run.measurementQuality.coreColumnCount} / 추가 센서 ${run.measurementQuality.telemetryColumnCount}개 / 시간 기록 ${run.measurementQuality.hasTimeAxis ? "있음" : "없음"} / ${continuityText(run)}`] : []),
       ...(run.telemetryAnalysis ? [`- 온도 변화: ${telemetryAnalysisText(run.telemetryAnalysis)}`] : []),
       ...(run.telemetryAnalysis ? [`- 부하 맥락: ${telemetryContextText(run.telemetryAnalysis)}`] : []),
       ...(run.loadProfile ? [`- 부하 구간: ${loadProfileText(run.loadProfile)}`] : []),
       ...(run.loadProfileComparison ? [`- 이전 동일 조건 비교: ${loadProfileComparisonText(run.loadProfileComparison)}`] : []),
-      `- 비교 가능: ${run.comparableToPrevious === false ? `아니오 · ${comparisonBlockReasonText(run.comparisonBlockReason) ?? "비교 제외"}` : run.comparableToPrevious ? "예" : "기준 기록"}`,
+      `- 비교 가능: ${run.comparableToPrevious === false ? `아니오 / ${comparisonBlockReasonText(run.comparisonBlockReason) ?? "비교 제외"}` : run.comparableToPrevious ? "예" : "기준 기록"}`,
       ""
     );
   }
@@ -244,12 +244,12 @@ export function assemblyVerificationReportTextFor(report: AssemblyVerificationRe
     lines.push("## 같은 조건 측정값 비교", "", `- ${telemetryOverlayText(report.telemetryOverlay)}`, "- 측정 시간의 길이가 달라도 진행률을 맞춰 기록별 온도 변화를 비교합니다.", "");
   }
   if (report.qualityOverlay) {
-    const runs = report.qualityOverlay.runs.map((run) => `${reportLabelText(run.runLabel)}: ${run.measurementContinuityStatus === "gapped" ? "시간 기록 누락·역순" : "측정 자료 확인 필요"}`).join(" | ");
-    lines.push("## 측정 자료를 더 확인할 기록", "", `- ${report.qualityOverlay.runCount}개 · ${runs || "기록 없음"}`, "- 누락된 시간 기록은 선을 이어 표시하지 않습니다. 해당 기록은 온도 차이 계산과 종합 요약에서 제외했습니다.", "");
+    const runs = report.qualityOverlay.runs.map((run) => `${reportLabelText(run.runLabel)}: ${run.measurementContinuityStatus === "gapped" ? "시간 기록 누락/역순" : "측정 자료 확인 필요"}`).join(" | ");
+    lines.push("## 측정 자료를 더 확인할 기록", "", `- ${report.qualityOverlay.runCount}개 / ${runs || "기록 없음"}`, "- 누락된 시간 기록은 선을 이어 표시하지 않습니다. 해당 기록은 온도 차이 계산과 종합 요약에서 제외했습니다.", "");
   }
   if (report.decisionSummary) {
     lines.push("## 측정 결과 요약", "", `- 결과: ${decisionStatusLabel(report.decisionSummary.status)}`, `- 권장 안내: ${report.decisionSummary.nextAction}`);
-    for (const dimension of report.decisionSummary.dimensions) lines.push(`- ${dimension.title}: ${dimension.summary} · ${decisionDimensionStatusLabel(dimension.status)}`);
+    for (const dimension of report.decisionSummary.dimensions) lines.push(`- ${dimension.title}: ${dimension.summary} / ${decisionDimensionStatusLabel(dimension.status)}`);
     lines.push("");
   }
   lines.push("참고: 실제 측정값과 알림은 입력하거나 가져온 자료를 바탕으로 한 관찰 결과입니다. 제조사 보증이나 안전 인증, 고장 판정은 아닙니다.");
@@ -309,7 +309,7 @@ export function assemblyVerificationReportCsvFor(report: AssemblyVerificationRep
     run.loadProfile ? loadProfileText(run.loadProfile) : undefined,
     run.loadProfile?.usageCoveragePercent,
     run.loadProfile?.unclassifiedPointCount,
-    run.loadProfile ? run.loadProfile.segments.flatMap((segment) => [segment.cpuTempStability ? `CPU ${segment.cpuTempStability.stabilized ? "안정화 확인" : "안정화 미확인"}` : undefined, segment.gpuTempStability ? `GPU ${segment.gpuTempStability.stabilized ? "안정화 확인" : "안정화 미확인"}` : undefined]).filter((value): value is string => Boolean(value)).join(" · ") : undefined,
+    run.loadProfile ? run.loadProfile.segments.flatMap((segment) => [segment.cpuTempStability ? `CPU ${segment.cpuTempStability.stabilized ? "안정화 확인" : "안정화 미확인"}` : undefined, segment.gpuTempStability ? `GPU ${segment.gpuTempStability.stabilized ? "안정화 확인" : "안정화 미확인"}` : undefined]).filter((value): value is string => Boolean(value)).join(" / ") : undefined,
     run.loadProfileComparison ? loadProfileComparisonText(run.loadProfileComparison) : undefined,
     run.telemetryAnalysis ? reportOverlayCountText(report.telemetryOverlay) : undefined,
     run.telemetryAnalysis ? reportOverlayCountText(report.qualityOverlay) : undefined,

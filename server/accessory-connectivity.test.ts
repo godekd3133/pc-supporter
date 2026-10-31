@@ -7,7 +7,7 @@ function accessory(rawSpecText: string): AccessoryItem {
   return {
     id: "hub",
     category: "fan_hub",
-    name: "테스트 팬·RGB 허브",
+    name: "테스트 팬/RGB 허브",
     source: "manual",
     listingType: "accessory",
     rawSpecText,
@@ -100,7 +100,7 @@ describe("RGB controller connection summaries", () => {
     };
     const missingLoad = rgbControllerConnectionPlanFor(controllerWithoutLoad, 2, "5V");
     expect(missingLoad).toMatchObject({ status: "review", issue: "rgb_load_unknown" });
-    expect(missingLoad.summary).toContain("RGB 장치별 소비전류·전력 정보가 없어 컨트롤러가 감당할 수 있는지 계산하지 못했어요.");
+    expect(missingLoad.summary).toContain("RGB 장치별 소비전류/전력 정보가 없어 컨트롤러가 감당할 수 있는지 계산하지 못했어요.");
 
     const controllerWithoutRailLimit = {
       ...accessory("RGB분배: 4개 / ARGB 3핀 / SATA전원"),
@@ -108,6 +108,6 @@ describe("RGB controller connection summaries", () => {
     };
     const missingLimit = rgbControllerConnectionPlanFor(controllerWithoutRailLimit, 2, "5V", { perDeviceCurrentA: 0.25, perDevicePowerW: 1 });
     expect(missingLimit).toMatchObject({ status: "review", issue: "rgb_capacity_unknown", rgbTotalCurrentA: 0.5, rgbTotalPowerW: 2 });
-    expect(missingLimit.summary).toContain("RGB 장치 부하는 계산했지만 필요한 전압에서 컨트롤러가 낼 수 있는 최대 전류·전력 정보가 없어 여유를 계산하지 못했어요.");
+    expect(missingLimit.summary).toContain("RGB 장치 부하는 계산했지만 필요한 전압에서 컨트롤러가 낼 수 있는 최대 전류/전력 정보가 없어 여유를 계산하지 못했어요.");
   });
 });

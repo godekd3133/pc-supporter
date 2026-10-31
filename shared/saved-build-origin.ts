@@ -53,7 +53,7 @@ export function savedBuildOriginFromUnknown(value: unknown): SavedBuildOrigin | 
 }
 
 export function savedBuildOriginLabelFor(origin: SavedBuildOrigin) {
-  if (origin.kind === "shared_generator_variants") return origin.sourceShareName ? `공유 비교 · ${origin.sourceShareName}` : "공유 자동 구성 비교";
+  if (origin.kind === "shared_generator_variants") return origin.sourceShareName ? `공유 비교 / ${origin.sourceShareName}` : "공유 자동 구성 비교";
   if (origin.kind === "generated") return "자동 구성 결과";
   if (origin.kind === "repair_plan") return "호환 개선안 결과";
   return "비교 구성 결과";
@@ -62,7 +62,7 @@ export function savedBuildOriginLabelFor(origin: SavedBuildOrigin) {
 export function savedBuildOriginDetailFor(origin: SavedBuildOrigin) {
   const priority = origin.sourcePriority === "budget" ? "가성비 우선" : origin.sourcePriority === "performance" ? "성능 우선" : origin.sourcePriority === "balanced" ? "균형형" : undefined;
   const details = [priority, origin.sourceCatalogSnapshotAt ? `공유 catalog ${new Date(origin.sourceCatalogSnapshotAt).toLocaleString("ko-KR", { dateStyle: "short", timeStyle: "short" })}` : undefined, origin.currentRecheckedAt ? `현재 catalog 재생성 ${new Date(origin.currentRecheckedAt).toLocaleString("ko-KR", { dateStyle: "short", timeStyle: "short" })}` : undefined, origin.sourceShareId ? `공유 ID ${origin.sourceShareId.slice(0, 8)}` : undefined].filter(Boolean);
-  return details.length > 0 ? details.join(" · ") : undefined;
+  return details.length > 0 ? details.join(" / ") : undefined;
 }
 
 export function savedBuildOriginComparisonTextFor(before?: SavedBuildOrigin, after?: SavedBuildOrigin) {
@@ -70,9 +70,9 @@ export function savedBuildOriginComparisonTextFor(before?: SavedBuildOrigin, aft
   if (!before || !after) return "한 버전에만 생성 출처 기록";
   const sameShare = Boolean(before.sourceShareId && after.sourceShareId && before.sourceShareId === after.sourceShareId);
   const samePriority = before.sourcePriority === after.sourcePriority;
-  if (sameShare && samePriority) return "같은 공유 비교·priority에서 파생";
+  if (sameShare && samePriority) return "같은 공유 비교/priority에서 파생";
   const details = [sameShare ? "같은 공유 비교" : "공유 비교가 다름", samePriority ? undefined : "priority가 다름"].filter(Boolean);
-  return details.join(" · ");
+  return details.join(" / ");
 }
 
 export function savedBuildOriginAvailabilityLabelFor(status: SavedBuildOriginAvailability | undefined) {

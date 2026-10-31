@@ -133,7 +133,7 @@ export function AdminQuotationEnginePanel({ onToast }: { onToast: (message: stri
       <div><p className="eyebrow">견적 생성 엔진</p><h3>생성 옵션과 엔진 운영 상태</h3></div>
       <button className="button button-light button-small" type="button" onClick={refreshManually} disabled={loading}>{loading ? <FiLoader className="spin" /> : <FiRefreshCw />} 새로고침</button>
     </div>
-    <p className="admin-card-description">서버의 세 엔진(크롤링·견적 생성·호환성 검사) 상태와 견적 생성 엔진의 운영 옵션을 관리합니다.</p>
+    <p className="admin-card-description">서버의 세 엔진(크롤링/견적 생성/호환성 검사) 상태와 견적 생성 엔진의 운영 옵션을 관리합니다.</p>
 
     {loading && !engines
       ? <p className="quotation-engine-state"><FiLoader className="spin" /> 엔진 상태를 불러오는 중...</p>
@@ -143,17 +143,17 @@ export function AdminQuotationEnginePanel({ onToast }: { onToast: (message: stri
           <div className="quotation-engine-registry" aria-label="엔진 레지스트리">
             <div className="quotation-engine-module" data-testid="engine-module-crawler">
               <i className={`engine-state-dot ${engineStateDot(crawler!.catalog.status)}`} />
-              <div><strong>{crawler!.label}</strong><small>{crawler!.catalog.status === "running" ? "실행 중" : crawler!.catalog.status === "failed" ? "실패" : "대기"} · 주변 {crawler!.accessories.status === "running" ? "실행 중" : "대기"}{crawler!.catalog.failedPages > 0 ? ` · 실패 페이지 ${crawler!.catalog.failedPages}개` : ""}</small></div>
+              <div><strong>{crawler!.label}</strong><small>{crawler!.catalog.status === "running" ? "실행 중" : crawler!.catalog.status === "failed" ? "실패" : "대기"} / 주변 {crawler!.accessories.status === "running" ? "실행 중" : "대기"}{crawler!.catalog.failedPages > 0 ? ` / 실패 페이지 ${crawler!.catalog.failedPages}개` : ""}</small></div>
               <FiDatabase />
             </div>
             <div className="quotation-engine-module" data-testid="engine-module-quotation">
               <i className={`engine-state-dot ${quotation!.targetFilters.enabled && quotation!.targetFilters.activeFacets > 0 ? "filtered" : "idle"}`} />
-              <div><strong>{quotation!.label}</strong><small>v{quotation!.engineVersion} · 필터 {quotation!.targetFilters.enabled && quotation!.targetFilters.activeFacets > 0 ? `${quotation!.targetFilters.activeFacets}개 조건` : "해제"}{quotation!.recentFailures > 0 ? ` · 실패 ${quotation!.recentFailures}건` : ""}</small></div>
+              <div><strong>{quotation!.label}</strong><small>v{quotation!.engineVersion} / 필터 {quotation!.targetFilters.enabled && quotation!.targetFilters.activeFacets > 0 ? `${quotation!.targetFilters.activeFacets}개 조건` : "해제"}{quotation!.recentFailures > 0 ? ` / 실패 ${quotation!.recentFailures}건` : ""}</small></div>
               <FiZap />
             </div>
             <div className="quotation-engine-module" data-testid="engine-module-compatibility">
               <i className="engine-state-dot idle" />
-              <div><strong>{compatibility!.label}</strong><small>v{compatibility!.engineVersion} · 평가 캐시 {compatibility!.caches.compatiblePartAssessment.size}개 · 적중률 {cacheHitRate(compatibility!.caches.compatiblePartAssessment)}</small></div>
+              <div><strong>{compatibility!.label}</strong><small>v{compatibility!.engineVersion} / 평가 캐시 {compatibility!.caches.compatiblePartAssessment.size}개 / 적중률 {cacheHitRate(compatibility!.caches.compatiblePartAssessment)}</small></div>
               <FiCpu />
             </div>
           </div>
@@ -172,7 +172,7 @@ export function AdminQuotationEnginePanel({ onToast }: { onToast: (message: stri
               </div>
             </div>
             <div className="quotation-engine-option-group">
-              <div className="quotation-engine-option-label"><FiClock /> 예산 사다리 배율<small>목표 예산 대비 절약형·여유형 견적의 예산 비율입니다.</small></div>
+              <div className="quotation-engine-option-label"><FiClock /> 예산 사다리 배율<small>목표 예산 대비 절약형/여유형 견적의 예산 비율입니다.</small></div>
               <div className="quotation-engine-ladder">
                 <label>절약형<div className="quotation-engine-input-with-unit"><input type="number" min={50} max={99} step={1} value={multiplierToPercent(draft.budgetLadderDownMultiplier)} onChange={(event) => setDraft({ ...draft, budgetLadderDownMultiplier: Number(event.target.value) / 100 })} /><em>%</em></div></label>
                 <label>목표 예산<div className="quotation-engine-input-with-unit fixed"><input type="number" value={100} disabled /><em>%</em></div></label>

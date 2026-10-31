@@ -14,7 +14,7 @@ export function savedBuildMonitorSummaryForDisplay(summary: string) {
     .replace(/차단\s*-\s*(\d+)/g, "호환 불가 -$1")
     .replace(/(\d+)개 차단/g, "호환 불가 $1개")
     .replace(/(\d+) 차단/g, "호환 불가 $1개")
-    .replace("전력·냉각 예산 기준 미달", "전력·냉각 여유 부족")
-    .replace("전력·냉각 수치 확인 필요", "전력·냉각 정보를 더 확인해야 해요.")
-    .replace("전력·냉각 여유 좁음", "전력·냉각 여유가 좁아요.");
+    .replace("전력/냉각 예산 기준 미달", "전력/냉각 여유 부족")
+    .replace("전력/냉각 수치 확인 필요", "전력/냉각 정보를 더 확인해야 해요.")
+    .replace("전력/냉각 여유 좁음", "전력/냉각 여유가 좁아요.");
 }

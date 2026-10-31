@@ -56,9 +56,19 @@ describe("price refresh service", () => {
     mocks.refreshAccessory.mockReset();
     mocks.upsertCatalog.mockReset().mockResolvedValue([]);
     mocks.upsertAccessories.mockReset().mockResolvedValue([]);
-    mocks.patchCatalogPrices.mockReset().mockImplementation(async (patches: Array<{ id: string; priceWon: number; priceCheckedAt: string }>) => patches.flatMap((patch) => {
+    mocks.patchCatalogPrices.mockReset().mockImplementation(async (patches: import("./catalog").CatalogPricePatch[]) => patches.flatMap((patch) => {
       const before = mocks.parts.find((item) => item.id === patch.id);
-      return before ? [{ before, after: { ...before, priceWon: patch.priceWon, priceCheckedAt: patch.priceCheckedAt } }] : [];
+      if (!before) return [];
+      const after = { ...before };
+      if (patch.priceUnavailableAt) {
+        delete after.priceWon;
+        after.priceUnavailableAt = patch.priceUnavailableAt;
+      } else {
+        after.priceWon = patch.priceWon;
+        after.priceCheckedAt = patch.priceCheckedAt;
+        delete after.priceUnavailableAt;
+      }
+      return [{ before, after }];
     }));
     mocks.patchAccessoryPrices.mockReset().mockImplementation(async (patches: Array<{ id: string; priceWon: number; priceCheckedAt: string }>) => patches.flatMap((patch) => {
       const before = mocks.accessories.find((item) => item.id === patch.id);
@@ -148,6 +158,61 @@ describe("price refresh service", () => {
     expect(status.failures).toHaveLength(3);
   });
 
+  it("records a confirmed no-offer observation without rewriting specs or the last positive price time", async () => {
+    const before = part("75656861", { category: "gpu", name: "MANLI RTX 5090 32GB", priceWon: 6344790, priceCheckedAt: "2026-10-04T00:00:00.000Z", specs: { lengthMm: 355, vramGb: 32 } });
+    mocks.parts = [before];
+    mocks.refreshPart.mockImplementation(async (item: Part, options: { onPriceObserved?: (price: number | undefined) => void; onPriceUnavailable?: () => void }) => {
+      options.onPriceObserved?.(undefined);
+      options.onPriceUnavailable?.();
+      return { ...item, priceWon: undefined };
+    });
+    const status = await service.runPriceRefreshJob({ coreLimit: 1, accessoryLimit: 0, delayMs: 0 });
+    expect(status).toMatchObject({ attempted: 1, succeeded: 1, changed: 1, failed: 0 });
+    expect(mocks.patchCatalogPrices).toHaveBeenCalledWith([expect.objectContaining({ id: before.id, priceUnavailableAt: expect.any(String) })]);
+    expect(mocks.patchCatalogPrices.mock.calls[0][0][0]).not.toHaveProperty("priceWon");
+    const saved = mocks.appendChanges.mock.calls[0][0][0].after;
+    expect(saved).not.toHaveProperty("priceWon");
+    expect(saved.priceCheckedAt).toBe(before.priceCheckedAt);
+    expect(saved.specs).toEqual(before.specs);
+    expect(saved.updatedAt).toBe(before.updatedAt);
+  });
+
+  it("clears the no-offer marker when the price worker observes a positive price", async () => {
+    mocks.parts = [part("returned", { priceWon: undefined, priceUnavailableAt: "2026-10-01T00:00:00.000Z" })];
+    mocks.refreshPart.mockImplementation(async (item: Part, options: { onPriceObserved?: (price: number | undefined) => void }) => {
+      options.onPriceObserved?.(120000);
+      return item;
+    });
+    const status = await service.runPriceRefreshJob({ coreLimit: 1, accessoryLimit: 0, delayMs: 0 });
+    expect(status.succeeded).toBe(1);
+    expect(mocks.patchCatalogPrices.mock.calls[0][0][0]).not.toHaveProperty("priceUnavailableAt");
+    expect(mocks.appendChanges.mock.calls[0][0][0].after.priceUnavailableAt).toBeUndefined();
+  });
+
+  it("rotates all active gaming GPU SKUs including higher priced variants without starving the general lane", () => {
+    const now = Date.parse("2026-10-06T00:00:00.000Z");
+    const parts = [
+      ...Array.from({ length: 100 }, (_, i) => part(`general-${String(i).padStart(3, "0")}`)),
+      part("hot-5090", { category: "gpu", name: "MANLI RTX 5090 32GB", priceWon: 6000000, specs: { vramGb: 32 }, priceCheckedAt: "2026-10-04T00:00:00.000Z" }),
+      part("costly-5090", { category: "gpu", name: "MSI RTX 5090 32GB", priceWon: 7000000, specs: { vramGb: 32 }, priceCheckedAt: "2026-10-04T00:00:00.000Z" }),
+      part("overseas-5090", { category: "gpu", name: "RTX 5090 32GB 해외직구", priceWon: 4000000, specs: { vramGb: 32 }, priceCheckedAt: "2026-10-04T00:00:00.000Z" }),
+      part("hot-9070", { category: "gpu", name: "XFX RX 9070 XT 16GB", priceCheckedAt: "2026-10-04T00:00:00.000Z" }),
+      part("unavailable-5080", { category: "gpu", name: "PNY RTX 5080 16GB", priceWon: undefined, priceUnavailableAt: "2026-10-04T00:00:00.000Z", priceCheckedAt: "2026-10-03T00:00:00.000Z" })
+    ];
+    const selected = service.selectCorePriceRefreshCandidates(parts, 10, {}, now);
+    expect(selected).toHaveLength(10);
+    expect(selected.map(({ id }) => id)).toEqual(expect.arrayContaining(["hot-5090", "hot-9070", "unavailable-5080", "general-000"]));
+    expect(selected.map(({ id }) => id)).toContain("costly-5090");
+    expect(selected.map(({ id }) => id)).not.toContain("overseas-5090");
+    expect(selected.filter(({ id }) => id.startsWith("general-"))).toHaveLength(6);
+    const attempted = Object.fromEntries(selected.map(({ id }) => [`part:${id}`, new Date(now).toISOString()]));
+    const next = service.selectCorePriceRefreshCandidates(parts, 10, attempted, now + 60000);
+    expect(next.map(({ id }) => id)).toContain("general-006");
+    expect(next.map(({ id }) => id)).not.toContain("hot-5090");
+    const justUnavailable = { ...parts.find(({ id }) => id === "unavailable-5080")!, priceUnavailableAt: new Date(now).toISOString() };
+    expect(service.selectCorePriceRefreshCandidates([justUnavailable, ...parts.filter(({ category }) => category !== "gpu")], 10, {}, now).map(({ id }) => id)).not.toContain(justUnavailable.id);
+  });
+
   it("does not persist catalog data in dry-run and rejects an existing lock", async () => {
     mocks.parts = [part("dry")];
     mocks.refreshPart.mockImplementation(async (item: Part, options: { onPriceObserved?: (price: number | undefined) => void }) => {
@@ -217,5 +282,25 @@ describe("price refresh service", () => {
     expect(queries.some(({ sql }) => sql.includes("INSERT INTO price_refresh_attempts"))).toBe(true);
     expect(queries.find(({ sql }) => sql.includes("UNNEST"))?.values).toEqual([["part"], ["new-candidate"], [expect.any(String)]]);
     await expect(import("node:fs/promises").then(({ readFile }) => readFile(join(directory, "price-refresh-attempts.json"), "utf8"))).rejects.toThrow();
+  });
+});
+
+describe("all-SKU priority and observation freshness", () => {
+  it("rotates all product variants before revisiting a failed observation", async () => {
+    const { selectCorePriceRefreshCandidates } = await import("./price-refresh");
+    const now = Date.parse("2026-10-12T00:00:00Z");
+    const gpus = Array.from({ length: 20 }, (_, i) => part(`gpu-${String(i).padStart(2, "0")}`, { category: "gpu", name: "MSI RTX 5060 Ti 16GB", priceWon: 500000 + i * 10000 }));
+    const first = selectCorePriceRefreshCandidates(gpus, 10, {}, now);
+    const attempts = Object.fromEntries(first.map(({ id }) => [`part:${id}`, new Date(now).toISOString()]));
+    const second = selectCorePriceRefreshCandidates(gpus, 10, attempts, now + 60_001);
+    expect(new Set([...first, ...second].map(({ id }) => id)).size).toBe(20);
+    const mixed = selectCorePriceRefreshCandidates([...gpus, ...Array.from({ length: 10 }, (_, i) => part(`cpu-${i}`, { updatedAt: "2026-09-01T00:00:00Z" }))], 10, {}, now);
+    expect(mixed.filter(({ category }) => category !== "gpu")).toHaveLength(2);
+    const failed = gpus[0];
+    expect(selectCorePriceRefreshCandidates([failed], 10, attempts, now + 60_001)).toEqual([]);
+    expect(selectCorePriceRefreshCandidates([failed], 10, attempts, now + 3_600_001)).toEqual([failed]);
+    expect(failed.priceCheckedAt).toBeUndefined();
+    const onlySpecsUpdated = { ...failed, updatedAt: new Date(now).toISOString() };
+    expect(selectCorePriceRefreshCandidates([onlySpecsUpdated], 10, {}, now)).toEqual([onlySpecsUpdated]);
   });
 });

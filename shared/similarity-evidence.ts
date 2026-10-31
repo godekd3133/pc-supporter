@@ -42,7 +42,7 @@ export function similarityBasisLabelFor(evidence: SimilarityEvidence | undefined
     const category = similarityReferenceCategoryFor(evidence);
     return category === "cpu" ? "Cinebench R23 기반" : category === "gpu" ? "3DMark 기반" : "벤치마크 기반";
   }
-  if (basis === "mixed") return "벤치마크·확인 스펙 기반";
+  if (basis === "mixed") return "벤치마크/확인 스펙 기반";
   if (basis === "spec") return "확인 스펙 기반";
   return "비교 정보 확인 필요";
 }
@@ -80,5 +80,5 @@ export function similarityReferenceTextFor(evidence: SimilarityEvidence | undefi
   if (!reference) return undefined;
   const categoryLabel = reference.category === "gpu" ? "GPU" : "CPU";
   const dimensions = reference.transferredDimensions.map(similarityDimensionLabelFor);
-  return `동일 ${categoryLabel} 모델 계열 참조 · ${reference.partName}${dimensions.length > 0 ? ` · 보완 지표 ${dimensions.join(" · ")}` : ""}`;
+  return `동일 ${categoryLabel} 모델 계열 참조 / ${reference.partName}${dimensions.length > 0 ? ` / 보완 지표 ${dimensions.join(" / ")}` : ""}`;
 }

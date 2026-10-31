@@ -188,8 +188,8 @@ function stale(record: GamingFpsReference, nowMs: number, maxAgeDays: number): b
 
 function environmentDifferences(reference: GamingFpsReference, options: GamingTargetAssessmentOptions): string[] {
   const differences: string[] = [];
-  if (gamingCpuModelFor(options.cpuName) !== gamingCpuModelFor(reference.cpuModel)) differences.push(`CPU: 테스트 PC ${reference.cpuModel} · 견적 ${options.cpuName ?? "정보 없음"}`);
-  if (!reference.gpuName || options.gpuName !== reference.gpuName) differences.push(`그래픽카드: 테스트 PC ${reference.gpuName ?? reference.gpuModel} · 견적 ${options.gpuName ?? "정보 없음"}`);
+  if (gamingCpuModelFor(options.cpuName) !== gamingCpuModelFor(reference.cpuModel)) differences.push(`CPU: 테스트 PC ${reference.cpuModel} / 견적 ${options.cpuName ?? "정보 없음"}`);
+  if (!reference.gpuName || options.gpuName !== reference.gpuName) differences.push(`그래픽카드: 테스트 PC ${reference.gpuName ?? reference.gpuModel} / 견적 ${options.gpuName ?? "정보 없음"}`);
   const fields: Array<[keyof GamingTargetAssessmentOptions & keyof GamingFpsReference, string]> = [
     ["memoryType", "RAM 규격"], ["memorySpeedMhz", "RAM 속도"], ["memoryCapacityGb", "RAM 용량"],
     ["memoryModuleCount", "RAM 모듈 수"], ["memoryTiming", "RAM 타이밍"], ["sourcePreset", "게임 상세 옵션"],
@@ -197,7 +197,7 @@ function environmentDifferences(reference: GamingFpsReference, options: GamingTa
   ];
   for (const [field, label] of fields) {
     if (reference[field] === undefined || options[field] === undefined || reference[field] !== options[field]) {
-      differences.push(`${label}: 테스트 PC ${reference[field] ?? "기사에 표시 없음"} · 견적 ${options[field] ?? "정보 없음"}`);
+      differences.push(`${label}: 테스트 PC ${reference[field] ?? "기사에 표시 없음"} / 견적 ${options[field] ?? "정보 없음"}`);
     }
   }
   return differences;

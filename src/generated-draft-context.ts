@@ -9,6 +9,8 @@ export const GENERATED_DRAFT_CONTEXT_KEY = 'pc-supporter-generated-draft-context
 const MAX_CONTEXT_BYTES = 64_000;
 const idValid = (value: unknown): value is string => typeof value === 'string' && value.length > 0 && value.length <= 160;
 const finite = (value: unknown, min: number, max: number): value is number => typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
+const capacityValid = (category: string, value: unknown): value is number => ["memory", "ssd", "hdd"].includes(category) && finite(value, 1, category === "memory" ? 1024 : 100_000) && Number.isInteger(value);
+const reasonValid = (value: unknown): value is string => typeof value === "string" && value.trim().length > 0 && value.length <= 500;
 
 /** The request metadata for a generated draft, independent of current editor state. */
 export function recommendationPreferencesForGeneratedDraft(draft: BuildGenerationResult): RecommendationPreferences {
@@ -16,6 +18,7 @@ export function recommendationPreferencesForGeneratedDraft(draft: BuildGeneratio
   return {
     profile: draft.profile, priority: draft.priority, performanceTier: draft.performanceTier,
     budgetWon: draft.budgetWon, listingPolicy: draft.listingPolicy,
+    cpuVendorPreference: draft.cpuVendorPreference, memoryTypePreference: draft.memoryTypePreference,
     gamingMode: gaming ? draft.gamingMode : undefined,
     gamingTargetFps: gaming ? draft.gamingTargetFps : undefined,
     gpuVendorPreference: gaming ? draft.gpuVendorPreference : undefined,
@@ -41,8 +44,19 @@ export function generatorPresetConfigForGeneratedDraft(draft: BuildGenerationRes
 
 /** FPS assessments must be refreshed by the server, never trusted from a local JSON object. */
 export function generatedDraftWithoutPersistedFpsAssessment(draft: BuildGenerationResult): BuildGenerationResult {
-  const { gamingTargetAssessment: _targetAssessment, gamingPerformanceAssessment: _legacyAssessment, gamingSupportRequirements: _supportRequirements, partTierSuitability: _tierSuitability, ...rest } = draft;
-  return rest;
+  const { gamingTargetAssessment: _targetAssessment, gamingPerformanceAssessment: _legacyAssessment, gamingSupportRequirements: _supportRequirements, partTierSuitability: _tierSuitability, cpuGpuBalance: _cpuGpuBalance, ...rest } = draft;
+  // Keep only actual capacity facts for step controls. Suitability, balance and
+  // FPS claims still require server recomputation after reload.
+  const partTiers = rest.partTiers ? { ...rest.partTiers } : {};
+  for (const category of ["memory", "ssd", "hdd"] as const) {
+    if (!draft.lines.some((line) => line.category === category)) continue;
+    const capacity = draft.partTiers?.[category]?.currentCapacityGb ?? _tierSuitability?.[category]?.tier?.order;
+    if (capacityValid(category, capacity)) partTiers[category] = { ...partTiers[category], currentCapacityGb: capacity };
+  }
+  const withCapacities = Object.keys(partTiers).length ? { ...rest, partTiers } : rest;
+  if (!withCapacities.analysis?.cpuGpuBalance) return withCapacities;
+  const { cpuGpuBalance: _analysisBalance, ...analysis } = withCapacities.analysis;
+  return { ...withCapacities, analysis };
 }
 
 /** Restore controls only for a bounded, valid generated build; App checks the exact current selection separately. */
@@ -76,7 +90,11 @@ export function generatedDraftContextFromJson(raw: string | null): BuildGenerati
       if (!entries.some((entry) => entry.partId === line.partId && entry.quantity === line.quantity)) return null;
     }
     if (draft.partTiers && Object.entries(draft.partTiers).some(([key, tier]) => !PART_CATEGORIES.includes(key as PartCategory)
-      || !tier || typeof tier !== "object" || Array.isArray(tier) || (tier.downUseIncludedCooler !== undefined && (key !== "cooler" || typeof tier.downUseIncludedCooler !== "boolean")) || (tier.upId !== undefined && !idValid(tier.upId)) || (tier.downId !== undefined && !idValid(tier.downId))
+      || !tier || typeof tier !== "object" || Array.isArray(tier)
+      || (tier.currentCapacityGb !== undefined && !capacityValid(key, tier.currentCapacityGb))
+      || (tier.upUnavailableReason !== undefined && !reasonValid(tier.upUnavailableReason))
+      || (tier.downUnavailableReason !== undefined && !reasonValid(tier.downUnavailableReason))
+      || (tier.downUseIncludedCooler !== undefined && (key !== "cooler" || typeof tier.downUseIncludedCooler !== "boolean")) || (tier.upId !== undefined && !idValid(tier.upId)) || (tier.downId !== undefined && !idValid(tier.downId))
       || (tier.upMemoryCapacityGb !== undefined && (key !== "memory" || !tier.upId || ![16, 32, 64, 128].includes(tier.upMemoryCapacityGb)))
       || (tier.downMemoryCapacityGb !== undefined && (key !== "memory" || !tier.downId || ![16, 32, 64, 128].includes(tier.downMemoryCapacityGb)))
       || (tier.upStorageCapacityGb !== undefined && (key !== "ssd" || !tier.upId || ![500, 1000, 2000, 4000].includes(tier.upStorageCapacityGb)))

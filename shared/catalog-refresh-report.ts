@@ -34,7 +34,7 @@ export interface CatalogRefreshReport {
 function compactRefreshValue(value: unknown): string {
   if (value === null || value === undefined || value === "") return "확인 정보 없음";
   if (Array.isArray(value)) return value.map((item) => compactRefreshValue(item)).join(", ");
-  if (typeof value === "object") return Object.entries(value as Record<string, unknown>).map(([key, nested]) => `${key}: ${compactRefreshValue(nested)}`).join(" · ");
+  if (typeof value === "object") return Object.entries(value as Record<string, unknown>).map(([key, nested]) => `${key}: ${compactRefreshValue(nested)}`).join(" / ");
   return String(value);
 }
 

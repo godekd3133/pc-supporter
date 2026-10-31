@@ -94,7 +94,7 @@ const INTERNAL_SIGNAL_TEXT_KEYS = new Set([
   "note",
   "detail"
 ]);
-const INTERNAL_SIGNAL_TEXT = /\b(?:cinebench|r23|3dmark|time\s*spy|port\s*royal)\b|\bfps\b|목표\s*프레임|실측\s*프레임|(?:FHD|QHD|4K)\s*[·•]\s*\d{2,3}\s*Hz\s*[·•]\s*권장\s*VRAM|부품별\s*비교\s*변화가\s*합산\s*\d+(?:\.\d+)?%|\d+(?:\.\d+)?\s*%/i;
+const INTERNAL_SIGNAL_TEXT = /\b(?:cinebench|r23|3dmark|time\s*spy|port\s*royal)\b|\bfps\b|목표\s*프레임|실측\s*프레임|(?:FHD|QHD|4K)\s*[·•/]\s*\d{2,3}\s*Hz\s*[·•/]\s*권장\s*VRAM|부품별\s*비교\s*변화가\s*합산\s*\d+(?:\.\d+)?%|\d+(?:\.\d+)?\s*%/i;
 
 function isRestrictedPublicApiKey(key: string) {
   return RESTRICTED_PUBLIC_API_KEYS.has(key)

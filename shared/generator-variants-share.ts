@@ -76,6 +76,8 @@ function finiteNumber(value: unknown, minimum: number, maximum: number) {
 
 function draftFromUnknown(value: unknown, priority: RecommendationPriority): BuildGenerationResult | undefined {
   if (!isRecord(value) || value.priority !== priority || typeof value.profile !== "string" || typeof value.status !== "string" || !isRecord(value.selection) || !Array.isArray(value.lines) || value.lines.length === 0 || value.lines.length > 10) return undefined;
+  if (value.cpuVendorPreference !== undefined && value.cpuVendorPreference !== "amd" && value.cpuVendorPreference !== "intel"
+    || value.memoryTypePreference !== undefined && value.memoryTypePreference !== "DDR4" && value.memoryTypePreference !== "DDR5") return undefined;
   const lines = value.lines.map((line) => {
     if (!isRecord(line)) return undefined;
     const category = textValue(line.category, 80);
@@ -175,7 +177,7 @@ function generatorVariantsDraftTransferOriginFromUnknown(value: unknown): Genera
 
 /**
  * 공유 화면의 "현재 결과 이어가기"가 sessionStorage에 남긴 draft 전달 봉투를 검증한다.
- * draft.selection은 편집기가 그대로 setBuild·호환 검사·저장에 쓰는 값이므로 견적 JSON
+ * draft.selection은 편집기가 그대로 setBuild/호환 검사/저장에 쓰는 값이므로 견적 JSON
  * 가져오기와 같은 shared/build-transfer.ts 파서로 정규화해 넘긴다.
  */
 export function generatorVariantsDraftTransferFromUnknown(value: unknown): { draft: BuildGenerationResult; mode: GeneratorVariantsDraftTransferMode; origin?: GeneratorVariantsDraftTransferOrigin } | undefined {
@@ -206,6 +208,8 @@ export function generatorVariantsShareExpired(snapshot: Pick<GeneratorVariantsSh
  */
 export function generatorVariantsConditionsSearchFor(request: BuildGenerationRequest): string {
   const params = new URLSearchParams();
+  if (request.cpuVendorPreference) params.set("cpuVendor", request.cpuVendorPreference);
+  if (request.memoryTypePreference) params.set("memoryType", request.memoryTypePreference);
   params.set("profile", request.profile);
   if (request.priority === "budget" || request.priority === "performance") params.set("priority", request.priority);
   if (request.performanceTier) params.set("tier", request.performanceTier);

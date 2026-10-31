@@ -70,7 +70,7 @@ describe("engine target filters persistence", () => {
 });
 
 describe("engineTargetFilterSummaryFor", () => {
-  it("범주별 전체·후보·통과 수를 계산한다", () => {
+  it("범주별 전체/후보/통과 수를 계산한다", () => {
     const config = { schemaVersion: 1 as const, enabled: true, categories: { ssd: { specValues: { interface: ["SATA"] } } } };
     const summary = engineTargetFilterSummaryFor(seedCatalog, config);
     const ssd = summary.ssd!;

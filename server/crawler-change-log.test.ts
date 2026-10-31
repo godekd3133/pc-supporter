@@ -100,10 +100,10 @@ describe("crawler change log selection", () => {
     const records = crawlPresenceChangeRecords([], [unpriced, bulk, accessoryType, foreign], [], "2026-10-01T01:00:00.000Z");
 
     const note = (id: string) => records.find((record) => record.itemId === `danawa-cpu-${id}`)?.valueDiffs?.find((diff) => diff.field === "견적 후보")?.next;
-    expect(note("no-price")).toBe("견적 제외 · 가격 미확인");
-    expect(note("bulk-1")).toBe("견적 제외 · 벌크");
-    expect(note("bracket-1")).toBe("견적 제외 · 액세서리");
-    expect(note("import-1")).toBe("견적 제외 · 해외구매");
+    expect(note("no-price")).toBe("견적 제외 / 가격 미확인");
+    expect(note("bulk-1")).toBe("견적 제외 / 벌크");
+    expect(note("bracket-1")).toBe("견적 제외 / 액세서리");
+    expect(note("import-1")).toBe("견적 제외 / 해외구매");
   });
 
   it("excludes delisted parts from the quote candidate pool", () => {

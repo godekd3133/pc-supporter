@@ -1,6 +1,7 @@
+import { PUBLIC_CATALOG_FILTER_FACETS, publicCatalogDetailFilterForCategory } from "../shared/public-catalog-filters";
 import { FiInfo, FiLoader, FiTrash2 } from "react-icons/fi";
 import type { PartCategory } from "../shared/types";
-import { engineFilterOptionLabelFor, engineFilterRangeEqual, engineTargetFilterRuleForCategory, ENGINE_TARGET_FILTER_FACETS } from "../shared/engine-target-filters";
+import { engineFilterOptionLabelFor, engineFilterRangeEqual } from "../shared/engine-target-filters";
 import type { EngineCategoryTargetFilter, EngineFilterRange, EngineTargetFilterFacet } from "../shared/engine-target-filters";
 
 // 다나와식 세부 사양 조건 — 범주 facet 레지스트리(ENGINE_TARGET_FILTER_FACETS)를
@@ -87,7 +88,7 @@ export function initialCatalogDetailFilter(): EngineCategoryTargetFilter {
 // 현재 범주 facet에 선언된 필드만 남긴다 — 다른 범주의 공유 링크가 열려도
 // 선언되지 않은 조건은 보내지 않는다(서버도 같은 규칙으로 걸러낸다).
 export function catalogDetailFilterScopedFor(category: PartCategory, filter: EngineCategoryTargetFilter): EngineCategoryTargetFilter | undefined {
-  return engineTargetFilterRuleForCategory(filter, category);
+  return publicCatalogDetailFilterForCategory(filter, category);
 }
 
 export function catalogDetailFilterParamsFor(category: PartCategory, filter: EngineCategoryTargetFilter): Record<string, string> {
@@ -125,13 +126,13 @@ function toggleDetailRange(list: EngineFilterRange[] | undefined, range: EngineF
 function catalogDetailFilterChipsFor(category: PartCategory, filter: EngineCategoryTargetFilter): CatalogDetailFilterChip[] {
   const scoped = catalogDetailFilterScopedFor(category, filter) ?? {};
   const chips: CatalogDetailFilterChip[] = [];
-  const facetById = new Map<string, EngineTargetFilterFacet>(ENGINE_TARGET_FILTER_FACETS[category].map((facet) => [facet.id, facet]));
+  const facetById = new Map<string, EngineTargetFilterFacet>(PUBLIC_CATALOG_FILTER_FACETS[category].map((facet) => [facet.id, facet]));
   for (const brand of scoped.brands ?? []) {
     chips.push({ key: `brand:${brand}`, label: brand, remove: (rule) => ({ ...rule, brands: (rule.brands ?? []).filter((value) => value !== brand) }) });
   }
   for (const [field, values] of Object.entries(scoped.specValues ?? {})) {
     for (const value of values ?? []) {
-      chips.push({ key: `value:${field}:${value}`, label: `${facetById.get(field as EngineTargetFilterFacet["id"])?.label ?? field} · ${engineFilterOptionLabelFor(field, value)}`, remove: (rule) => ({ ...rule, specValues: { ...rule.specValues, [field]: ((rule.specValues?.[field as keyof NonNullable<typeof rule.specValues>] ?? []) as string[]).filter((item) => item !== value) } }) });
+      chips.push({ key: `value:${field}:${value}`, label: `${facetById.get(field as EngineTargetFilterFacet["id"])?.label ?? field} / ${engineFilterOptionLabelFor(field, value)}`, remove: (rule) => ({ ...rule, specValues: { ...rule.specValues, [field]: ((rule.specValues?.[field as keyof NonNullable<typeof rule.specValues>] ?? []) as string[]).filter((item) => item !== value) } }) });
     }
   }
   for (const [field, ranges] of Object.entries(scoped.numericRanges ?? {})) {
@@ -168,7 +169,7 @@ export function CatalogDetailFilterPanel({ category, filter, facetOptions, loadi
   onReset: () => void;
   onRetry: () => void;
 }) {
-  const facets = ENGINE_TARGET_FILTER_FACETS[category];
+  const facets = PUBLIC_CATALOG_FILTER_FACETS[category];
   const rule = catalogDetailFilterScopedFor(category, filter) ?? {};
   const chips = catalogDetailFilterChipsFor(category, filter);
   const apply = (next: EngineCategoryTargetFilter) => onChange(catalogDetailFilterScopedFor(category, next) ?? {});
@@ -229,12 +230,12 @@ export function CatalogDetailFilterPanel({ category, filter, facetOptions, loadi
           })}
         </div>
       )}
-      <div className="catalog-detail-facet-range-inputs">
+      {!facet.checkboxOnly && <div className="catalog-detail-facet-range-inputs">
         <input type="number" min="0" inputMode="numeric" aria-label={`${facet.label} 최소`} placeholder="최소" value={first.min ?? ""} onChange={(event) => setBound("min", event.target.value)} />
         <span>~</span>
         <input type="number" min="0" inputMode="numeric" aria-label={`${facet.label} 최대`} placeholder="최대" value={first.max ?? ""} onChange={(event) => setBound("max", event.target.value)} />
         {facet.unit && <em>{facet.unit}</em>}
-      </div>
+      </div>}
     </>;
   };
 
@@ -295,7 +296,7 @@ export function CatalogDetailFilterPanel({ category, filter, facetOptions, loadi
 
   return <section className="catalog-detail-filter-panel" aria-label="카탈로그 세부 사양 필터" data-testid="catalog-detail-filters">
     <div className="catalog-spec-filter-heading">
-      <div><strong>세부 사양 조건</strong><small>다나와처럼 범주별 세부 스펙을 골라요. 같은 조건 안의 선택지는 OR, 다른 조건끼리는 AND로 적용돼요.</small></div>
+      <div><strong>세부 사양 조건</strong></div>
       <button className="text-button" type="button" data-testid="catalog-clear-detail-filters" onClick={onReset} disabled={chips.length === 0}>조건 초기화</button>
     </div>
     {loading && !facetOptions
@@ -309,9 +310,9 @@ export function CatalogDetailFilterPanel({ category, filter, facetOptions, loadi
             </div>)}
           </div>}
     {chips.length > 0 && <div className="catalog-detail-filter-chips" data-testid="catalog-detail-filter-chips">
-      <span className="catalog-detail-filter-chips-label">선택 조건 {chips.length}개{detailExcludedCount > 0 ? ` · ${detailExcludedCount.toLocaleString("ko-KR")}개 제외` : ""}</span>
+      <span className="catalog-detail-filter-chips-label">선택 조건 {chips.length}개{detailExcludedCount > 0 ? ` / ${detailExcludedCount.toLocaleString("ko-KR")}개 제외` : ""}</span>
       {chips.map((chip) => <button key={chip.key} type="button" className="catalog-detail-filter-chip" data-testid={`catalog-detail-chip-${chip.key}`} onClick={() => apply(chip.remove(rule))} aria-label={`${chip.label} 조건 해제`}>{chip.label}<FiTrash2 aria-hidden="true" /></button>)}
     </div>}
-    {missingNotes.length > 0 && <p className="catalog-spec-filter-missing" role="status"><FiInfo /> 비교 값이 없어 제외된 부품 {missingNotes.map((item) => `${item.label} ${item.missingCount.toLocaleString("ko-KR")}개`).join(" · ")}</p>}
+    {missingNotes.length > 0 && <p className="catalog-spec-filter-missing" role="status"><FiInfo /> 비교 값이 없어 제외된 부품 {missingNotes.map((item) => `${item.label} ${item.missingCount.toLocaleString("ko-KR")}개`).join(" / ")}</p>}
   </section>;
 }

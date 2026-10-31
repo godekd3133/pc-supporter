@@ -66,10 +66,10 @@ describe("catalog seed mapping API persistence", () => {
       const item = preview.items.find((entry: any) => entry.starter.id === "cpu-9600x");
       expect(item).toMatchObject({ status: "pending", candidates: [expect.objectContaining({ activePartId: candidate.id, activeSourceProductCode: candidate.sourceProductCode })] });
 
-      const approvedResponse = await fetch(`${baseUrl}/api/admin/catalog/seed-mapping-reviews/cpu-9600x`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activePartId: candidate.id, status: "approved", note: "모델·다나와 상품 코드 확인" }) });
+      const approvedResponse = await fetch(`${baseUrl}/api/admin/catalog/seed-mapping-reviews/cpu-9600x`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activePartId: candidate.id, status: "approved", note: "모델/다나와 상품 코드 확인" }) });
       const approved = await approvedResponse.json() as Record<string, any>;
       expect(approvedResponse.status).toBe(200);
-      expect(approved).toMatchObject({ saved: true, review: { starterPartId: "cpu-9600x", category: "cpu", activePartId: candidate.id, activeSourceProductCode: candidate.sourceProductCode, status: "approved", note: "모델·다나와 상품 코드 확인" } });
+      expect(approved).toMatchObject({ saved: true, review: { starterPartId: "cpu-9600x", category: "cpu", activePartId: candidate.id, activeSourceProductCode: candidate.sourceProductCode, status: "approved", note: "모델/다나와 상품 코드 확인" } });
 
       const reloadedResponse = await fetch(`${baseUrl}/api/admin/catalog/seed-mapping-preview`);
       const reloaded = await reloadedResponse.json() as Record<string, any>;

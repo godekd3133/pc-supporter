@@ -25,7 +25,7 @@ function valueText(value: unknown, suffix = ""): string | undefined {
   if (value === undefined || value === null || value === "") return undefined;
   if (Array.isArray(value)) {
     const values = value.map((item) => valueText(item)).filter((item): item is string => Boolean(item));
-    return values.length > 0 ? `${values.join(" · ")}${suffix}` : undefined;
+    return values.length > 0 ? `${values.join(" / ")}${suffix}` : undefined;
   }
   if (typeof value === "boolean") return value ? "있음" : "없음";
   if (typeof value === "number" && !Number.isFinite(value)) return undefined;

@@ -4,7 +4,7 @@ import { savedBuildComparisonCsvFor, savedBuildComparisonJsonFor, savedBuildComp
 const input: SavedBuildComparisonExportInput = {
   buildNames: ["현재 견적", "저장 견적"],
   snapshotRows: [{ label: "저장 당시 상태", values: ["호환 가능", "확인 필요"] }],
-  currentRows: [{ label: "현재 위험", values: ["차단 0개, 주의 1개", "차단 2개 · 주의 0개"] }]
+  currentRows: [{ label: "현재 위험", values: ["차단 0개, 주의 1개", "차단 2개 / 주의 0개"] }]
 };
 
 describe("saved build comparison export", () => {

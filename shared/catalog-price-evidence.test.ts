@@ -19,7 +19,7 @@ describe("catalogPriceEvidenceFor", () => {
     const item = { dataQuality: "live" as const, source: "danawa" as const, priceWon: 129000 };
     expect(catalogPriceEvidenceFor(item)).toBe("recorded");
     expect(catalogPriceEvidenceLabelFor(item)).toBe("다시 확인");
-    expect(catalogPriceEvidenceDescriptionFor(item)).toContain("확인 시각이 없거나 오래된 금액");
+    expect(catalogPriceEvidenceDescriptionFor(item)).toContain("구매 전 상품 페이지에서 가격을 확인");
   });
 
   it("requires a purchase recheck when the confirmed price is older than the freshness window", () => {
@@ -38,8 +38,8 @@ describe("catalogPriceEvidenceFor", () => {
     expect(catalogPriceEvidenceFor(item)).toBe("manual");
     expect(catalogPriceEvidenceLabelFor(item)).toBe("직접 입력");
     expect(CATALOG_PRICE_EVIDENCE_CHECK_LABELS.manual).toBe("직접 입력");
-    expect(catalogPriceEvidenceDescriptionFor(item)).toContain("직접 입력한 금액");
-    expect(catalogPriceEvidenceDescriptionFor(item)).toContain("구매 전에 다시 확인");
+    expect(catalogPriceEvidenceDescriptionFor(item)).toContain("구매 전 상품 페이지에서 가격을 확인");
+    expect(catalogPriceEvidenceDescriptionFor(item)).toContain("구매 전 상품 페이지에서 가격을 확인");
   });
 
   it("treats starter prices as project reference values", () => {
@@ -50,8 +50,8 @@ describe("catalogPriceEvidenceFor", () => {
   it("keeps incomplete non-seed numeric prices in a recheck state", () => {
     const item = { dataQuality: "incomplete" as const, source: "danawa" as const, priceWon: 9900 };
     expect(catalogPriceEvidenceFor(item)).toBe("recorded");
-    expect(catalogPriceEvidenceDescriptionFor(item)).toContain("확인 시각이 없거나 오래된 금액");
-    expect(catalogPriceEvidenceDescriptionFor(item)).toContain("상품 페이지의 금액과 사양을 다시 확인");
+    expect(catalogPriceEvidenceDescriptionFor(item)).toContain("구매 전 상품 페이지에서 가격을 확인");
+    expect(catalogPriceEvidenceDescriptionFor(item)).toContain("구매 전 상품 페이지에서 가격을 확인");
   });
 
   it("does not treat missing, zero, or non-finite prices as known", () => {

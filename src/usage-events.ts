@@ -1,7 +1,7 @@
 import { apiRequestUrl } from "./api";
 import { safeLocalStorage, safeSessionStorage } from "./safe-storage";
 
-// 익명·집계 전용 퍼널 이벤트 (개인 식별자/민감 페이로드 없음).
+// 익명/집계 전용 퍼널 이벤트 (개인 식별자/민감 페이로드 없음).
 // visitor/session 키는 랜덤 UUID이며 서버에서 HMAC 해시 후 저장된다 — 원문은 남지 않는다.
 export const CLIENT_USAGE_EVENT_NAMES = [
   "app_open",

@@ -146,7 +146,7 @@ const GPU_GAMING_RULES: readonly { pattern: RegExp; index: number }[] = [
   { pattern: /RTX\s*3060\s*Ti\b/i, index: 85 },
   { pattern: /RTX\s*3060\b/i, index: 68 },
   { pattern: /RTX\s*3050\b/i, index: 42 },
-  // RTX 20 / GTX 16·10
+  // RTX 20 / GTX 16/10
   { pattern: /RTX\s*2080\s*Ti\b/i, index: 100 },
   { pattern: /RTX\s*2080\s*(?:S|SUPER|슈퍼)\b/i, index: 88 },
   { pattern: /RTX\s*2080\b/i, index: 82 },
@@ -220,7 +220,7 @@ export function gpuGamingIndexFor(part: GpuPerformancePart): number | undefined 
   return undefined;
 }
 
-/** 내장 그래픽(Vega/RDNA iGPU) 견적용 고정 지수 — 사무·케주얼 게임 수준. */
+/** 내장 그래픽(Vega/RDNA iGPU) 견적용 고정 지수 — 사무/케주얼 게임 수준. */
 export const INTEGRATED_GPU_GAMING_INDEX = 12;
 
 // CPU 지수는 Cinebench R23급 공개 값. {single, multi}.
@@ -304,7 +304,7 @@ const CPU_INDEX_RULES: readonly { pattern: RegExp; single: number; multi: number
 /**
  * CPU의 싱글/멀티 코어 상대 지수(R23급 기준값).
  * 실측 specs.cinebenchR23*가 있으면 우선, 없으면 모델 표를 찾고, 둘 다 없으면
- * 클럭·코어 스펙으로 추정한다.
+ * 클럭/코어 스펙으로 추정한다.
  */
 export function cpuRelativeIndexFor(part: Pick<Part, "name" | "model" | "category" | "specs">): { single: number; multi: number } | undefined {
   if (part.category !== "cpu") return undefined;

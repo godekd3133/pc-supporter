@@ -4,14 +4,14 @@ import type { GamingGraphicsPreset, GamingResolution, GamingUpscaling } from "./
 export type GamingGameCategory = "competitive" | "rpg" | "aaa" | "sandbox" | "sports" | "strategy" | "domestic" | "survival";
 
 export const GAMING_GAME_CATEGORY_LABELS: Record<GamingGameCategory, string> = {
-  competitive: "경쟁·FPS",
-  rpg: "RPG·MMORPG",
-  aaa: "AAA·오픈월드",
-  sandbox: "샌드박스·생존",
-  sports: "레이싱·격투·스포츠",
-  strategy: "전략·시뮬레이션",
+  competitive: "경쟁/FPS",
+  rpg: "RPG/MMORPG",
+  aaa: "AAA/오픈월드",
+  sandbox: "샌드박스/생존",
+  sports: "레이싱/격투/스포츠",
+  strategy: "전략/시뮬레이션",
   domestic: "국내 인기",
-  survival: "생존·코옵"
+  survival: "생존/코옵"
 };
 
 export const GAMING_GAMES = [

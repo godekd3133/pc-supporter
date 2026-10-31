@@ -51,14 +51,14 @@ try {
   });
   await client.send("Page.navigate", { url: `${baseUrl}/watchlist` });
   await waitForValue(client, "location.pathname === '/watchlist'", "가격 추적 화면");
-  await waitForValue(client, "[...document.querySelectorAll('button')].some((button) => !button.disabled && (button.textContent ?? '').includes('서버 저장·공유'))", "가격 추적 서버 저장 버튼");
+  await waitForValue(client, "[...document.querySelectorAll('button')].some((button) => !button.disabled && (button.textContent ?? '').includes('서버 저장/공유'))", "가격 추적 서버 저장 버튼");
   const result = await client.evaluate(`(async () => {
     const originalClipboard = navigator.clipboard;
     const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
     let copyCalls = 0;
     try {
       Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async () => { copyCalls += 1; await wait(700); } } });
-      const save = [...document.querySelectorAll("button")].find((button) => button instanceof HTMLButtonElement && !button.disabled && (button.textContent ?? "").includes("서버 저장·공유"));
+      const save = [...document.querySelectorAll("button")].find((button) => button instanceof HTMLButtonElement && !button.disabled && (button.textContent ?? "").includes("서버 저장/공유"));
       if (!(save instanceof HTMLButtonElement)) return { stage: "missing-save" };
       save.click();
       for (let index = 0; index < 160 && copyCalls < 1; index += 1) await wait(25);

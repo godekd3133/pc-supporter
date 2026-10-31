@@ -95,3 +95,14 @@ describe("generatorVariantsDraftTransferFromUnknown", () => {
     expect(generatorVariantsDraftTransferFromUnknown({ payload: badPayload, priority: "balanced", mode: "edit" })).toBeUndefined();
   });
 });
+
+
+it("serializes explicit platforms while leaving automatic choices absent", () => {
+  const request = { profile: "gaming" as const, budgetWon: 1_600_000, includeGpu: true };
+  const automatic = new URLSearchParams(generatorVariantsConditionsSearchFor(request));
+  expect(automatic.has("cpuVendor")).toBe(false);
+  expect(automatic.has("memoryType")).toBe(false);
+  const explicit = new URLSearchParams(generatorVariantsConditionsSearchFor({ ...request, cpuVendorPreference: "intel", memoryTypePreference: "DDR4" }));
+  expect(explicit.get("cpuVendor")).toBe("intel");
+  expect(explicit.get("memoryType")).toBe("DDR4");
+});

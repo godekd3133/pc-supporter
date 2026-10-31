@@ -55,6 +55,15 @@ export function replacePartInBuild(build: BuildSelection, category: PartCategory
   } as BuildSelection;
 }
 
+/** Swaps one selected line for another part while keeping its quantity and position. */
+export function replaceSelectionAt(build: BuildSelection, category: PartCategory, index: number, partId: string): BuildSelection {
+  if (category === "memory" || category === "ssd" || category === "hdd") {
+    const list = selectionList(build, category).map((selection, current) => current === index ? { ...selection, partId } : selection);
+    return { ...build, [category]: list, ...(category === "ssd" ? { m2SlotSelection: undefined } : {}) } as BuildSelection;
+  }
+  return replacePartInBuild(build, category, partId);
+}
+
 export function upgradeBundleBuildFor(build: BuildSelection, bundle: UpgradeBundleRecommendation) {
   return bundle.changes.reduce(
     (current, change) => replacePartInBuild(current, change.category, change.part.id, change.quantity),
@@ -186,11 +195,11 @@ export function defaultAccessoryTargetAccessoryId(build: BuildSelection, item: A
 
 export function accessoryConnectionTargetFor(build: BuildSelection, selection: AccessorySelection, item: AccessoryItem | undefined, partMap: ReadonlyMap<string, Part>, accessoryMap: ReadonlyMap<string, AccessoryItem>) {
   if (isM2TargetableAccessory(item)) {
-    if (selection.targetPartId) return `SSD ${partMap.get(selection.targetPartId)?.name ?? `대상 확인 필요 · ${selection.targetPartId}`}`;
+    if (selection.targetPartId) return `SSD ${partMap.get(selection.targetPartId)?.name ?? `대상 확인 필요 / ${selection.targetPartId}`}`;
     return selectedM2TargetOptions(build, partMap).length > 0 ? "선택한 M.2 SSD 전체" : "M.2 SSD 미지정";
   }
   if (isFanTargetableAccessory(item)) {
-    if (selection.targetAccessoryId) return `팬 허브 ${accessoryMap.get(selection.targetAccessoryId)?.name ?? `대상 확인 필요 · ${selection.targetAccessoryId}`}`;
+    if (selection.targetAccessoryId) return `팬 허브 ${accessoryMap.get(selection.targetAccessoryId)?.name ?? `대상 확인 필요 / ${selection.targetAccessoryId}`}`;
     const hubs = accessorySelections(build)
       .map((hubSelection) => ({ selection: hubSelection, item: accessoryMap.get(hubSelection.accessoryId) }))
       .filter((entry): entry is { selection: AccessorySelection; item: AccessoryItem } => entry.item?.category === "fan_hub");

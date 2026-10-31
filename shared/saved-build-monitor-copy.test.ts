@@ -8,12 +8,12 @@ describe("saved build monitor display copy", () => {
   });
 
   it("normalizes legacy blocker counts and preserves detail", () => {
-    expect(savedBuildMonitorSummaryForDisplay("차단 +1 · 2개 차단 · 전력·냉각 예산 기준 미달"))
-      .toBe("호환 불가 +1 · 호환 불가 2개 · 전력·냉각 여유 부족");
+    expect(savedBuildMonitorSummaryForDisplay("차단 +1 / 2개 차단 / 전력/냉각 예산 기준 미달"))
+      .toBe("호환 불가 +1 / 호환 불가 2개 / 전력/냉각 여유 부족");
   });
 
   it("does not rewrite the current blocker and resource wording twice", () => {
-    const message = "호환 불가 +1 · 전력·냉각 여유 부족";
+    const message = "호환 불가 +1 / 전력/냉각 여유 부족";
     expect(savedBuildMonitorSummaryForDisplay(message)).toBe(message);
   });
 });

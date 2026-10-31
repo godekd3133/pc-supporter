@@ -21,6 +21,7 @@ type HeaderProps = {
   savedBuildUnreadAlertCount: number;
   watchlistUnreadAlertCount: number;
   catalogRefreshProgress: CatalogRefreshProgress | null;
+  showAdmin: boolean;
   onHome: () => void;
   onBuild: () => void;
   onGenerate: () => void;
@@ -31,7 +32,7 @@ type HeaderProps = {
   onAdmin: () => void;
 };
 
-export function AppHeader({ view, networkOnline, apiStatus, bootstrapLoading, bootstrapErrorCount, savedBuildUnreadAlertCount, watchlistUnreadAlertCount, catalogRefreshProgress, onHome, onBuild, onGenerate, onCatalog, onAccessories, onPriceWatchlist, onHistory, onAdmin }: HeaderProps) {
+export function AppHeader({ view, networkOnline, apiStatus, bootstrapLoading, bootstrapErrorCount, savedBuildUnreadAlertCount, watchlistUnreadAlertCount, catalogRefreshProgress, showAdmin, onHome, onBuild, onGenerate, onCatalog, onAccessories, onPriceWatchlist, onHistory, onAdmin }: HeaderProps) {
   const [moreOpen, setMoreOpen] = useState(false);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     try {
@@ -77,7 +78,7 @@ export function AppHeader({ view, networkOnline, apiStatus, bootstrapLoading, bo
   const fallbackCachedAtLabel = apiStatus.fallbackCachedAt && Number.isFinite(Date.parse(apiStatus.fallbackCachedAt))
     ? new Date(apiStatus.fallbackCachedAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })
     : undefined;
-  const statusLabel = apiStatus.status === "offline" && fallbackCachedAtLabel ? `저장된 정보 · ${fallbackCachedAtLabel}` : !networkOnline ? "오프라인" : apiStatus.status === "offline" ? "서버 연결이 끊겼어요" : apiStatus.status === "degraded" ? "연결 오류" : bootstrapErrorCount > 0 ? "일부 정보 없음" : bootstrapLoading ? "불러오는 중" : "연결됨";
+  const statusLabel = apiStatus.status === "offline" && fallbackCachedAtLabel ? `오프라인 / ${fallbackCachedAtLabel} 기준` : !networkOnline ? "오프라인" : apiStatus.status === "offline" ? "서버 연결이 끊겼어요" : apiStatus.status === "degraded" ? "연결 오류" : bootstrapErrorCount > 0 ? "일부 정보 없음" : bootstrapLoading ? "불러오는 중" : "연결됨";
   const statusClass = !networkOnline || apiStatus.status === "offline" || apiStatus.status === "degraded" || bootstrapErrorCount > 0 ? "degraded" : bootstrapLoading ? "loading" : "";
   const showStatus = Boolean(statusClass || bootstrapLoading);
   const refreshTotal = Math.max(1, catalogRefreshProgress?.requestedCount ?? 1);
@@ -104,7 +105,7 @@ export function AppHeader({ view, networkOnline, apiStatus, bootstrapLoading, bo
           <button className={view === "accessories" ? "nav-link active" : "nav-link"} onClick={onAccessories}>주변 부품</button>
           <button className={view === "pricewatchlist" ? "nav-link nav-link-with-badge active" : "nav-link nav-link-with-badge"} onClick={onPriceWatchlist} aria-label={watchlistUnreadAlertCount > 0 ? `가격 추적, 미읽음 알림 ${watchlistUnreadAlertCount}건` : "가격 추적"}><span>가격 추적</span>{watchlistUnreadAlertCount > 0 && <span className="nav-alert-badge" aria-hidden="true">{watchlistUnreadAlertCount > 99 ? "99+" : watchlistUnreadAlertCount}</span>}</button>
           <button className={view === "history" ? "nav-link nav-link-with-badge active" : "nav-link nav-link-with-badge"} onClick={onHistory} aria-label={savedBuildUnreadAlertCount > 0 ? `저장 견적, 미읽음 알림 ${savedBuildUnreadAlertCount}건` : "저장 견적"}><span>저장 견적</span>{savedBuildUnreadAlertCount > 0 && <span className="nav-alert-badge" aria-hidden="true">{savedBuildUnreadAlertCount > 99 ? "99+" : savedBuildUnreadAlertCount}</span>}</button>
-          <button className={view === "admin" ? "nav-link active" : "nav-link"} onClick={onAdmin}>데이터 센터</button>
+          {showAdmin && <button className={view === "admin" ? "nav-link active" : "nav-link"} onClick={onAdmin}>데이터 센터</button>}
         </nav>
         <button className="theme-toggle" type="button" onClick={toggleTheme} aria-pressed={themeMode === "dark"} aria-label={`${nextThemeModeLabel}로 전환`} title={`${nextThemeModeLabel}로 전환`}><ThemeIcon aria-hidden="true" /><span>{nextThemeModeLabel}</span></button>
         {showStatus && <div className={`topbar-status ${statusClass}`} role="status"><span className={`status-dot ${statusClass}`} /> {statusLabel}</div>}
@@ -118,7 +119,7 @@ export function AppHeader({ view, networkOnline, apiStatus, bootstrapLoading, bo
           <span className="topbar-refresh-progress-count">{refreshCompleted} / {refreshTotal}</span>
         </div>
         <div className="topbar-refresh-progress-track" role="progressbar" aria-label="부품 정보 업데이트 진행률" aria-valuemin={0} aria-valuemax={100} aria-valuenow={refreshPercent}><span style={{ width: `${refreshPercent}%` }} /></div>
-        <small>{catalogRefreshProgress.currentName ? `${catalogRefreshProgress.currentName} 업데이트 중` : "업데이트 준비 중"} · {refreshCompleted} / {refreshTotal}개</small>
+        <small>{catalogRefreshProgress.currentName ? `${catalogRefreshProgress.currentName} 업데이트 중` : "업데이트 준비 중"} / {refreshCompleted} / {refreshTotal}개</small>
       </div>}
       <nav className="mobile-bottom-nav" aria-label="모바일 주 메뉴">
         <button className={`mobile-bottom-nav-item ${view === "home" ? "active" : ""}`} type="button" aria-current={view === "home" ? "page" : undefined} onClick={onHome}>
@@ -146,7 +147,7 @@ export function AppHeader({ view, networkOnline, apiStatus, bootstrapLoading, bo
             <button type="button" onClick={() => { setMoreOpen(false); onGenerate(); }}><span><FiZap /></span><strong>자동 구성</strong></button>
             <button type="button" onClick={() => { setMoreOpen(false); onAccessories(); }}><span><FiTool /></span><strong>주변 부품</strong></button>
             <button type="button" onClick={() => { setMoreOpen(false); onPriceWatchlist(); }}><span><FiTrendingUp /></span><strong>가격 추적</strong></button>
-            <button type="button" onClick={() => { setMoreOpen(false); onAdmin(); }}><span><FiDatabase /></span><strong>데이터 센터</strong></button>
+            {showAdmin && <button type="button" onClick={() => { setMoreOpen(false); onAdmin(); }}><span><FiDatabase /></span><strong>데이터 센터</strong></button>}
           </div>
         </section>
       </div>}

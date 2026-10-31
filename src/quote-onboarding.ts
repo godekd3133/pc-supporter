@@ -1,5 +1,5 @@
 import { GAMING_GRAPHICS_PRESET_LABELS, GAMING_UPSCALING_LABELS, RECOMMENDATION_PERFORMANCE_TIER_LABELS } from "../shared/types";
-import type { BuildGenerationRequest, GamingMode, GpuVendorPreference, GamingGraphicsPreset, GamingRefreshRate, GamingResolution, GamingUpscaling, ListingPolicy, RecommendationFloorWon, RecommendationPerformanceTier, RecommendationPriority, RecommendationProfile } from "../shared/types";
+import type { BuildGenerationRequest, CpuVendor, GamingMode, GpuVendorPreference, GamingGraphicsPreset, GamingRefreshRate, GamingResolution, GamingUpscaling, ListingPolicy, RecommendationFloorWon, RecommendationPerformanceTier, RecommendationPriority, RecommendationProfile } from "../shared/types";
 import { GAMING_GAME_CATEGORY_LABELS, GAMING_GAMES, gamingAdvisoryTuningFor } from "../shared/gaming-catalog";
 import type { GamingGameCategory, GamingGameId, GamingGameOption } from "../shared/gaming-catalog";
 import type { GeneratorPresetConfig } from "../shared/generator-preset";
@@ -28,6 +28,8 @@ export interface OnboardingState {
   targetFps?: number;
   gamingMode?: GamingMode;
   gpuVendorPreference: GpuVendorPreference;
+  cpuVendorPreference?: CpuVendor;
+  memoryTypePreference?: "DDR4" | "DDR5";
   graphicsPreset: GamingGraphicsPreset;
   rayTracing: boolean;
   upscaling: GamingUpscaling;
@@ -49,7 +51,7 @@ export const BUDGET_MAX_WON = 10_000_000;
 export const BUDGET_STEP_WON = 100_000;
 export const MAX_ONBOARDING_GAMES = 5;
 
-export const CURRENT_FPS_REFERENCE_GUIDANCE = "FPS 테스트가 있는 게임은 사이버펑크 2077·포르자 호라이즌 5·카운터 스트라이크 2·포트나이트·ARK: Survival Ascended·헬다이버즈 2예요. 일부 QHD·4K 옵션에서 레이 트레이싱과 업스케일링을 끈 결과입니다. 같은 게임·그래픽카드·옵션의 테스트가 없으면 FPS를 알 수 없다고 표시해요.";
+export const CURRENT_FPS_REFERENCE_GUIDANCE = "FPS 정보가 있는 게임: 사이버펑크 2077, 포르자 호라이즌 5, 카운터 스트라이크 2, 포트나이트, ARK: Survival Ascended, 헬다이버즈 2";
 
 export const ONBOARDING_GAME_CATEGORY_LABELS = GAMING_GAME_CATEGORY_LABELS;
 
@@ -73,7 +75,7 @@ export const ONBOARDING_WORKS: readonly OnboardingWorkOption[] = [
   {
     id: "video",
     label: "영상 편집",
-    description: "FHD·4K 컷 편집과 효과 작업",
+    description: "FHD/4K 컷 편집과 효과 작업",
     eyebrow: "VIDEO EDITING",
     intensityQuestion: "영상 편집은 어느 정도 규모인가요?",
     intensitySummary: "영상 해상도와 편집 효과에 따라 필요한 사양이 달라져요.",
@@ -82,8 +84,8 @@ export const ONBOARDING_WORKS: readonly OnboardingWorkOption[] = [
   },
   {
     id: "threed",
-    label: "3D 모델링·렌더링",
-    description: "모델링·씬 구성·반복 렌더링",
+    label: "3D 모델링/렌더링",
+    description: "모델링/씬 구성/반복 렌더링",
     eyebrow: "3D WORK",
     intensityQuestion: "3D 작업은 어느 정도 규모인가요?",
     intensitySummary: "모델링 규모와 렌더링 빈도에 따라 필요한 사양이 달라져요.",
@@ -92,8 +94,8 @@ export const ONBOARDING_WORKS: readonly OnboardingWorkOption[] = [
   },
   {
     id: "dev",
-    label: "개발·빌드",
-    description: "IDE·빌드·컨테이너·가상 머신",
+    label: "개발/빌드",
+    description: "IDE/빌드/컨테이너/가상 머신",
     eyebrow: "DEVELOPMENT",
     intensityQuestion: "개발 프로젝트 규모는 어느 정도인가요?",
     intensitySummary: "프로젝트 규모와 동시에 진행하는 작업에 따라 필요한 사양이 달라져요.",
@@ -102,40 +104,40 @@ export const ONBOARDING_WORKS: readonly OnboardingWorkOption[] = [
   },
   {
     id: "streaming",
-    label: "방송·스트리밍",
-    description: "송출·녹화와 게임 동시 실행",
+    label: "방송/스트리밍",
+    description: "송출/녹화와 게임 동시 실행",
     eyebrow: "STREAMING",
-    intensityQuestion: "방송·스트리밍은 어느 정도 규모인가요?",
+    intensityQuestion: "방송/스트리밍은 어느 정도 규모인가요?",
     intensitySummary: "송출 해상도와 게임 동시 실행 여부에 따라 필요한 사양이 달라져요.",
     profile: "creator",
     rank: 2
   },
   {
     id: "ai",
-    label: "AI·머신러닝",
-    description: "로컬 추론·모델 개발·학습",
+    label: "AI/머신러닝",
+    description: "로컬 추론/모델 개발/학습",
     eyebrow: "AI / MACHINE LEARNING",
-    intensityQuestion: "AI·머신러닝 작업은 어느 정도 규모인가요?",
-    intensitySummary: "모델 크기와 추론·학습 여부에 따라 필요한 메모리와 그래픽 성능이 달라져요.",
+    intensityQuestion: "AI/머신러닝 작업은 어느 정도 규모인가요?",
+    intensitySummary: "모델 크기와 추론/학습 여부에 따라 필요한 메모리와 그래픽 성능이 달라져요.",
     profile: "development",
     rank: 4
   },
   {
     id: "audio",
-    label: "음악·오디오",
-    description: "트랙·플러그인·가상악기 작업",
+    label: "음악/오디오",
+    description: "트랙/플러그인/가상악기 작업",
     eyebrow: "AUDIO WORK",
-    intensityQuestion: "음악·오디오 작업은 어느 정도 규모인가요?",
-    intensitySummary: "트랙 수와 플러그인·가상악기 사용량에 따라 필요한 사양이 달라져요.",
+    intensityQuestion: "음악/오디오 작업은 어느 정도 규모인가요?",
+    intensitySummary: "트랙 수와 플러그인/가상악기 사용량에 따라 필요한 사양이 달라져요.",
     profile: "creator",
     rank: 1
   },
   {
     id: "office",
-    label: "사무·문서",
-    description: "문서·웹·화상회의·멀티태스킹",
+    label: "사무/문서",
+    description: "문서/웹/화상회의/멀티태스킹",
     eyebrow: "OFFICE",
-    intensityQuestion: "사무·문서 작업은 어느 정도인가요?",
+    intensityQuestion: "사무/문서 작업은 어느 정도인가요?",
     intensitySummary: "함께 사용하는 프로그램 수와 문서 규모에 따라 필요한 사양이 달라져요.",
     profile: "office",
     rank: 0
@@ -153,9 +155,9 @@ export interface OnboardingIntensityOption {
 }
 
 export const ONBOARDING_INTENSITIES: readonly OnboardingIntensityOption[] = [
-  { id: "light", label: "가볍게", description: "간단한 작업 · 짧은 사용", priority: "budget", memoryGb: 16, storageGb: 500 },
+  { id: "light", label: "가볍게", description: "간단한 작업 / 짧은 사용", priority: "budget", memoryGb: 16, storageGb: 500 },
   { id: "balanced", label: "균형 있게", description: "대부분의 일반 작업", recommended: true, priority: "balanced", memoryGb: 32, storageGb: 1000 },
-  { id: "heavy", label: "무겁게", description: "큰 규모 · 장시간 작업", priority: "performance", memoryGb: 64, storageGb: 2000 }
+  { id: "heavy", label: "무겁게", description: "큰 규모 / 장시간 작업", priority: "performance", memoryGb: 64, storageGb: 2000 }
 ];
 
 export function initialOnboardingState(): OnboardingState {
@@ -217,6 +219,8 @@ export function onboardingStateFromJson(raw: string | null | undefined): Onboard
       targetFps: validTargetFps(candidate.targetFps) ? candidate.targetFps : undefined,
       gamingMode: candidate.gamingMode === "budget" || candidate.gamingMode === "target_fps" ? candidate.gamingMode : undefined,
       gpuVendorPreference: candidate.gpuVendorPreference === "amd" ? "amd" : "nvidia",
+      cpuVendorPreference: candidate.cpuVendorPreference === "amd" || candidate.cpuVendorPreference === "intel" ? candidate.cpuVendorPreference : undefined,
+      memoryTypePreference: candidate.memoryTypePreference === "DDR4" || candidate.memoryTypePreference === "DDR5" ? candidate.memoryTypePreference : undefined,
       graphicsPreset: candidate.graphicsPreset && GRAPHICS_PRESETS.includes(candidate.graphicsPreset) ? candidate.graphicsPreset : base.graphicsPreset,
       rayTracing: typeof candidate.rayTracing === "boolean" ? candidate.rayTracing : base.rayTracing,
       upscaling: candidate.upscaling && UPSCALING_OPTIONS.includes(candidate.upscaling) ? candidate.upscaling : base.upscaling,
@@ -237,8 +241,8 @@ export function onboardingStateFromJson(raw: string | null | undefined): Onboard
 }
 
 // 자동 구성 프리셋을 온보딩 마법사로 가져올 때의 초기 상태.
-// 마법사가 표현하지 못하는 조건(우선순위·HDD)은 주입하지 않고,
-// 요약 화면에서 예산·성능 조건을 다시 고를 수 있게 summary 단계로 연다.
+// 마법사가 표현하지 못하는 조건(우선순위/HDD)은 주입하지 않고,
+// 요약 화면에서 예산/성능 조건을 다시 고를 수 있게 summary 단계로 연다.
 const PRESET_WORK_FALLBACK: Record<"office" | "development" | "creator", OnboardingWork> = {
   office: "office",
   development: "dev",
@@ -246,7 +250,7 @@ const PRESET_WORK_FALLBACK: Record<"office" | "development" | "creator", Onboard
 };
 
 export function onboardingStateForGeneratorPreset(config: GeneratorPresetConfig): OnboardingState {
-  const base = { ...initialOnboardingState(), listingPolicy: config.listingPolicy };
+  const base = { ...initialOnboardingState(), listingPolicy: config.listingPolicy, cpuVendorPreference: config.cpuVendorPreference, memoryTypePreference: config.memoryTypePreference };
   const budgetWon = clampBudget(config.budgetWon);
   if (config.profile === "gaming") {
     const games = (config.gamingGameIds ?? [])
@@ -463,11 +467,11 @@ export interface BudgetEstimate {
 }
 
 const GAMING_BUDGET_TIERS: readonly { minWon: number; estimate: BudgetEstimate }[] = [
-  { minWon: 3_800_000, estimate: { performance: "4K · 144Hz 주사율 목표", gpu: "최상급 GPU", memory: "64GB", storage: "2TB SSD" } },
-  { minWon: 3_000_000, estimate: { performance: "QHD · 240Hz 주사율 목표", gpu: "최상급 GPU", memory: "32GB", storage: "2TB SSD" } },
-  { minWon: 2_000_000, estimate: { performance: "QHD · 144Hz 주사율 목표", gpu: "상급 GPU", memory: "32GB", storage: "1TB SSD" } },
-  { minWon: 1_100_000, estimate: { performance: "FHD · 144Hz 주사율 목표", gpu: "표준 GPU", memory: "32GB", storage: "1TB SSD" } },
-  { minWon: 0, estimate: { performance: "FHD · 60Hz 주사율 목표", gpu: "입문 GPU", memory: "16GB", storage: "500GB SSD" } }
+  { minWon: 3_800_000, estimate: { performance: "4K / 144Hz 주사율 목표", gpu: "최상급 GPU", memory: "64GB", storage: "2TB SSD" } },
+  { minWon: 3_000_000, estimate: { performance: "QHD / 240Hz 주사율 목표", gpu: "최상급 GPU", memory: "32GB", storage: "2TB SSD" } },
+  { minWon: 2_000_000, estimate: { performance: "QHD / 144Hz 주사율 목표", gpu: "상급 GPU", memory: "32GB", storage: "1TB SSD" } },
+  { minWon: 1_100_000, estimate: { performance: "FHD / 144Hz 주사율 목표", gpu: "표준 GPU", memory: "32GB", storage: "1TB SSD" } },
+  { minWon: 0, estimate: { performance: "FHD / 60Hz 주사율 목표", gpu: "입문 GPU", memory: "16GB", storage: "500GB SSD" } }
 ];
 
 const WORK_BUDGET_TIERS: readonly { minWon: number; estimate: BudgetEstimate }[] = [
@@ -486,39 +490,39 @@ const GENERAL_BUDGET_TIERS: readonly { minWon: number; estimate: BudgetEstimate 
 
 const WORK_ESTIMATES: Record<OnboardingWork, Record<OnboardingIntensity, BudgetEstimate>> = {
   video: {
-    light: { performance: "FHD·가벼운 컷 편집", gpu: "입문 GPU", memory: "16GB", storage: "500GB SSD" },
-    balanced: { performance: "4K 편집·일반 효과", gpu: "중급 GPU", memory: "32GB", storage: "1TB SSD" },
-    heavy: { performance: "4K·6K 편집·고급 효과", gpu: "상급 GPU", memory: "64GB", storage: "2TB SSD" }
+    light: { performance: "FHD/가벼운 컷 편집", gpu: "입문 GPU", memory: "16GB", storage: "500GB SSD" },
+    balanced: { performance: "4K 편집/일반 효과", gpu: "중급 GPU", memory: "32GB", storage: "1TB SSD" },
+    heavy: { performance: "4K/6K 편집/고급 효과", gpu: "상급 GPU", memory: "64GB", storage: "2TB SSD" }
   },
   threed: {
-    light: { performance: "기본 모델링·소형 씬", gpu: "입문 GPU", memory: "32GB", storage: "1TB SSD" },
-    balanced: { performance: "중형 씬·일반 렌더링", gpu: "상급 GPU", memory: "64GB", storage: "2TB SSD" },
-    heavy: { performance: "대형 씬·반복 렌더링", gpu: "최상급 GPU", memory: "128GB", storage: "4TB SSD" }
+    light: { performance: "기본 모델링/소형 씬", gpu: "입문 GPU", memory: "32GB", storage: "1TB SSD" },
+    balanced: { performance: "중형 씬/일반 렌더링", gpu: "상급 GPU", memory: "64GB", storage: "2TB SSD" },
+    heavy: { performance: "대형 씬/반복 렌더링", gpu: "최상급 GPU", memory: "128GB", storage: "4TB SSD" }
   },
   dev: {
-    light: { performance: "일반 프로젝트·단일 빌드", gpu: "내장 그래픽", memory: "16GB", storage: "500GB SSD" },
-    balanced: { performance: "중형 프로젝트·병렬 빌드", gpu: "내장 그래픽", memory: "32GB", storage: "1TB SSD" },
-    heavy: { performance: "대형 프로젝트·VM·병렬 빌드", gpu: "상급 GPU", memory: "64GB", storage: "2TB SSD" }
+    light: { performance: "일반 프로젝트/단일 빌드", gpu: "내장 그래픽", memory: "16GB", storage: "500GB SSD" },
+    balanced: { performance: "중형 프로젝트/병렬 빌드", gpu: "내장 그래픽", memory: "32GB", storage: "1TB SSD" },
+    heavy: { performance: "대형 프로젝트/VM/병렬 빌드", gpu: "상급 GPU", memory: "64GB", storage: "2TB SSD" }
   },
   streaming: {
     light: { performance: "1080p 단일 송출", gpu: "표준 GPU", memory: "32GB", storage: "1TB SSD" },
-    balanced: { performance: "1440p 송출·게임 동시 실행", gpu: "상급 GPU", memory: "32GB", storage: "2TB SSD" },
-    heavy: { performance: "4K·다중 송출·녹화", gpu: "최상급 GPU", memory: "64GB", storage: "2TB SSD" }
+    balanced: { performance: "1440p 송출/게임 동시 실행", gpu: "상급 GPU", memory: "32GB", storage: "2TB SSD" },
+    heavy: { performance: "4K/다중 송출/녹화", gpu: "최상급 GPU", memory: "64GB", storage: "2TB SSD" }
   },
   ai: {
     light: { performance: "소형 모델 로컬 추론", gpu: "입문 GPU", memory: "32GB", storage: "1TB SSD" },
-    balanced: { performance: "중형 모델 추론·개발", gpu: "상급 GPU", memory: "64GB", storage: "2TB SSD" },
-    heavy: { performance: "로컬 학습·대형 모델", gpu: "최상급 GPU", memory: "128GB", storage: "4TB SSD" }
+    balanced: { performance: "중형 모델 추론/개발", gpu: "상급 GPU", memory: "64GB", storage: "2TB SSD" },
+    heavy: { performance: "로컬 학습/대형 모델", gpu: "최상급 GPU", memory: "128GB", storage: "4TB SSD" }
   },
   audio: {
-    light: { performance: "소규모 트랙·기본 플러그인", gpu: "내장 그래픽", memory: "16GB", storage: "500GB SSD" },
-    balanced: { performance: "중형 프로젝트·가상악기", gpu: "내장 그래픽", memory: "32GB", storage: "1TB SSD" },
-    heavy: { performance: "대형 세션·다중 가상악기", gpu: "내장 그래픽", memory: "64GB", storage: "2TB SSD" }
+    light: { performance: "소규모 트랙/기본 플러그인", gpu: "내장 그래픽", memory: "16GB", storage: "500GB SSD" },
+    balanced: { performance: "중형 프로젝트/가상악기", gpu: "내장 그래픽", memory: "32GB", storage: "1TB SSD" },
+    heavy: { performance: "대형 세션/다중 가상악기", gpu: "내장 그래픽", memory: "64GB", storage: "2TB SSD" }
   },
   office: {
-    light: { performance: "문서·웹·화상회의", gpu: "내장 그래픽", memory: "16GB", storage: "500GB SSD" },
-    balanced: { performance: "대용량 문서·멀티태스킹", gpu: "내장 그래픽", memory: "32GB", storage: "1TB SSD" },
-    heavy: { performance: "다중 모니터·대용량 업무", gpu: "입문 GPU", memory: "64GB", storage: "2TB SSD" }
+    light: { performance: "문서/웹/화상회의", gpu: "내장 그래픽", memory: "16GB", storage: "500GB SSD" },
+    balanced: { performance: "대용량 문서/멀티태스킹", gpu: "내장 그래픽", memory: "32GB", storage: "1TB SSD" },
+    heavy: { performance: "다중 모니터/대용량 업무", gpu: "입문 GPU", memory: "64GB", storage: "2TB SSD" }
   }
 };
 
@@ -539,9 +543,9 @@ export function budgetEstimateForSelectedTarget(state: OnboardingState): BudgetE
   if (state.usecase !== "gaming") return estimate;
   return {
     ...estimate,
-    performance: `${resolutionLabelFor(state.resolution)} · 목표 ${targetFpsFor(state)} FPS`,
+    performance: `${resolutionLabelFor(state.resolution)} / 목표 ${targetFpsFor(state)} FPS`,
     gpu: "FPS 테스트와 비교해 선택",
-    memory: state.memoryExplicit ? `${state.memoryGb}GB 이상` : "16GB부터 · 구성에 맞춰 조정",
+    memory: state.memoryExplicit ? `${state.memoryGb}GB 이상` : "16GB부터 / 구성에 맞춰 조정",
     storage: state.storageExplicit ? `${state.storageGb >= 1000 ? `${state.storageGb / 1000}TB` : `${state.storageGb}GB`} SSD` : "1TB SSD"
   };
 }
@@ -677,6 +681,8 @@ export interface RecommendParams {
   gamingMode?: GamingMode;
   gamingTargetFps?: number;
   gpuVendorPreference?: GpuVendorPreference;
+  cpuVendorPreference?: CpuVendor;
+  memoryTypePreference?: "DDR4" | "DDR5";
   gamingResolution?: GamingResolution;
   gamingRefreshRate?: GamingRefreshRate;
   gamingGameIds?: string[];
@@ -693,12 +699,20 @@ export function listingPolicyFor(state: OnboardingState): ListingPolicy {
 
 export function purchaseConditionSummaryFor(state: OnboardingState): string {
   const policy = listingPolicyFor(state);
-  if (policy === "include_bulk") return "국내 신품 · 벌크 포함";
+  if (policy === "include_bulk") return "국내 신품 / 벌크 포함";
   if (policy === "all") return "전체 유통 조건";
-  return "신품 · 정식 유통";
+  return "신품 / 정식 유통";
 }
 
 export function recommendParamsFor(state: OnboardingState, options: OnboardingFlowOptions = {}): RecommendParams {
+  return {
+    ...recommendParamsWithoutPlatformFor(state, options),
+    ...(state.cpuVendorPreference ? { cpuVendorPreference: state.cpuVendorPreference } : {}),
+    ...(state.memoryTypePreference ? { memoryTypePreference: state.memoryTypePreference } : {})
+  };
+}
+
+function recommendParamsWithoutPlatformFor(state: OnboardingState, options: OnboardingFlowOptions): RecommendParams {
   if (state.usecase === "gaming") {
     const mode = gamingModeFor(state, options);
     if (mode === "budget") return { profile: "gaming", gamingMode: "budget", gpuVendorPreference: state.gpuVendorPreference, priority: "performance", budgetWon: state.budgetWon, includeGpu: true, memoryCapacityGb: state.memoryExplicit ? state.memoryGb : 16, storageCapacityGb: state.storageExplicit ? state.storageGb : 1000 };
@@ -761,13 +775,15 @@ export function recommendParamsFor(state: OnboardingState, options: OnboardingFl
 }
 
 // 온보딩이 실제로 보낼 자동 구성 요청 — 최저 구성가 조회가 안내 수치가 아니라
-// 이 요청의 풀·게이트 그대로를 기준으로 해야 한다.
+// 이 요청의 풀/게이트 그대로를 기준으로 해야 한다.
 export function recommendGenerationRequestFor(state: OnboardingState, options: OnboardingFlowOptions = {}): BuildGenerationRequest {
   const params = recommendParamsFor(state, options);
   const listingPolicy = listingPolicyFor(state);
   return {
     profile: params.profile,
     listingPolicy,
+    cpuVendorPreference: state.cpuVendorPreference,
+    memoryTypePreference: state.memoryTypePreference,
     includeNonRetail: listingPolicy !== "retail_only",
     ...(params.profile === "gaming" ? { gamingTestbedPhase1: true, gamingMode: params.gamingMode, gamingTargetFps: params.gamingTargetFps, gpuVendorPreference: params.gpuVendorPreference } : {}),
     priority: params.priority,
@@ -789,6 +805,8 @@ export function recommendQueryFor(state: OnboardingState, options: OnboardingFlo
   const params = recommendParamsFor(state, options);
   const search = new URLSearchParams();
   search.set("profile", params.profile);
+  if (state.cpuVendorPreference) search.set("cpuVendor", state.cpuVendorPreference);
+  if (state.memoryTypePreference) search.set("memoryType", state.memoryTypePreference);
   search.set("listingPolicy", listingPolicyFor(state));
   if (params.priority !== "balanced") search.set("priority", params.priority);
   if (params.profile === "gaming") {
@@ -834,12 +852,12 @@ export function gameLabelsFor(ids: readonly string[]): string[] {
 
 export function targetSummaryFor(state: OnboardingState): string {
   if (state.usecase === "gaming" && gamingModeFor(state) === "budget") return "예산 안에서 GPU 성능 우선";
-  if (state.usecase === "gaming") return `${gamesSummaryFor(state.games)} · ${resolutionLabelFor(state.resolution)} · 목표 ${targetFpsFor(state)} FPS · ${GAMING_GRAPHICS_PRESET_LABELS[state.graphicsPreset]} · ${GAMING_UPSCALING_LABELS[state.upscaling]}${state.rayTracing ? " · 레이 트레이싱" : ""}`;
+  if (state.usecase === "gaming") return `${gamesSummaryFor(state.games)} / ${resolutionLabelFor(state.resolution)} / 목표 ${targetFpsFor(state)} FPS / ${GAMING_GRAPHICS_PRESET_LABELS[state.graphicsPreset]} / ${GAMING_UPSCALING_LABELS[state.upscaling]}${state.rayTracing ? " / 레이 트레이싱" : ""}`;
   if (state.usecase === "work") {
     const work = primaryWorkFor(state.works);
     const intensity = intensityOptionFor(state.intensity);
-    return `${work?.label ?? "작업"} · ${intensity.label}`;
+    return `${work?.label ?? "작업"} / ${intensity.label}`;
   }
-  if (state.mode === "spec") return `${SPEC_TIER_LABELS[state.specTier]} · ${state.memoryGb}GB · ${state.storageGb >= 1000 ? `${state.storageGb / 1000}TB` : `${state.storageGb}GB`} · ${state.specIncludeGpu ? "외장 GPU 포함" : "내장 그래픽"}`;
+  if (state.mode === "spec") return `${SPEC_TIER_LABELS[state.specTier]} / ${state.memoryGb}GB / ${state.storageGb >= 1000 ? `${state.storageGb / 1000}TB` : `${state.storageGb}GB`} / ${state.specIncludeGpu ? "외장 GPU 포함" : "내장 그래픽"}`;
   return "예산 기준";
 }

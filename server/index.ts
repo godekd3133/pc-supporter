@@ -1,3 +1,4 @@
+import { PUBLIC_CATALOG_FILTER_FACETS, publicCatalogDetailFilterForCategory } from "../shared/public-catalog-filters";
 import { gamingTierAssessmentFor } from "../shared/gaming-part-tiers";
 import { loadGamingFpsReferences } from "./gaming-fps-reference";
 import { gamingTargetAssessmentForBuild } from "../shared/gaming-target-build";
@@ -12,7 +13,7 @@ import type { AccessoryCategory, AccessoryItem, AccessoryPriceFilter, AccessoryR
 import { ACCESSORY_CATEGORIES, PART_CATEGORIES } from "../shared/types";
 import { catalogEligibilitySummaryFor, catalogMeta, catalogSearchTotalsFor, catalogUpdatedAtFor, countParts, currentCatalogRuntimeRevision, filterParts, findPart, invalidateCatalogCache, loadCatalog, parseCatalogDetailFilterQuery, parseCatalogMissingField, parsePartSpecFilter, partSpecFilterDiagnosticsFor, partSpecFilterMatcherFor, searchParts, upsertCatalog } from "./catalog";
 import { countAccessories, currentAccessoryUpdatedAt, findAccessory, invalidateAccessoryCache, loadAccessories, readAccessoryCoverage, searchAccessories, upsertAccessories } from "./accessories";
-import { noteStaleServedPrices } from "./stale-price-refresh";
+import { noteStaleServedPrices, stalePriceRefreshStatus } from "./stale-price-refresh";
 import { loadCatalogSnapshot, loadCatalogSnapshotTimestamp } from "./catalog-snapshot";
 import { validateAccessoryTargetPartIds, validateBuildPartIds, validateBuildSelection } from "./build-validation";
 export { validateAccessoryTargetPartIds, validateBuildPartIds, validateBuildSelection } from "./build-validation";
@@ -272,7 +273,7 @@ app.use((request, response, next) => {
   next();
 });
 
-// JSON 응답을 gzip으로 압축한다 — 카탈로그 목록·견적 검사 결과처럼 큰
+// JSON 응답을 gzip으로 압축한다 — 카탈로그 목록/견적 검사 결과처럼 큰
 // 본문의 전송량을 줄인다. SSE 스트림은 없으므로 전체 라우트에 적용한다.
 app.use(compression());
 app.use(express.json({ limit: "1mb" }));
@@ -355,7 +356,7 @@ function catalogRefreshReportForRequest(value: unknown, build: BuildSelection, p
   const report = catalogRefreshReportFromUnknown(value);
   if (!report) return { error: "정보 다시 확인 보고서 형식이 올바르지 않습니다." };
   const expectedFingerprint = buildCompatibilityInputFingerprint(build, preferences);
-  if (report.inputFingerprint !== expectedFingerprint) return { error: "정보 다시 확인 보고서가 현재 견적·추천 기준과 일치하지 않습니다." };
+  if (report.inputFingerprint !== expectedFingerprint) return { error: "정보 다시 확인 보고서가 현재 견적/추천 기준과 일치하지 않습니다." };
   const selectedPartIds = PART_CATEGORIES.flatMap((category) => {
     if (category === "memory") return build.memory.map((selection) => selection.partId);
     if (category === "ssd") return build.ssd.map((selection) => selection.partId);
@@ -615,7 +616,7 @@ function m2CoveragePriority(part: Awaited<ReturnType<typeof loadCatalog>>[number
   }
   const reasons: string[] = [];
   let score = status === "stale" ? 65 : status === "incomplete" ? 35 : 25;
-  if (status === "stale") reasons.push("카탈로그 정보가 매핑 이후 갱신됨 · 재확인 필요");
+  if (status === "stale") reasons.push("카탈로그 정보가 매핑 이후 갱신됨 / 재확인 필요");
   else if (status === "incomplete") reasons.push("기존 매핑의 필수 정보 보완");
   else reasons.push("슬롯별 매핑 미등록");
   if (slotCount >= 2) {
@@ -639,7 +640,7 @@ function m2CoveragePriority(part: Awaited<ReturnType<typeof loadCatalog>>[number
   return {
     reviewPriority: normalizedScore >= 80 ? "high" as const : normalizedScore >= 55 ? "medium" as const : "low" as const,
     reviewPriorityScore: normalizedScore,
-    reviewReason: reasons.join(" · ")
+    reviewReason: reasons.join(" / ")
   };
 }
 
@@ -908,7 +909,7 @@ async function runDueSavedBuildMonitors(now = new Date().toISOString()) {
   }
 }
 
-// LB 헬스 체크용 가벼운 liveness — DB·보안 진단 없이 프로세스 생존만 답한다.
+// LB 헬스 체크용 가벼운 liveness — DB/보안 진단 없이 프로세스 생존만 답한다.
 // 준비 상태(readiness)는 아래 /api/health가 담당한다.
 app.get("/api/health/live", (_request, response) => {
   response.json({ ok: true, service: "pc-supporter", instanceId: INSTANCE_ID });
@@ -965,7 +966,7 @@ app.get("/api/admin/usage-events", requireAdmin, async (_request, response) => {
   response.json(await usageEventSummaryFor());
 });
 
-// 퍼널·리텐션·세부 지표 — usage_events 원시 로그를 기간별로 집계한다.
+// 퍼널/리텐션/세부 지표 — usage_events 원시 로그를 기간별로 집계한다.
 app.get("/api/admin/usage-analytics", requireAdmin, async (request, response) => {
   const rawDays = Number(request.query.days);
   const days = Number.isInteger(rawDays) ? rawDays : 30;
@@ -973,7 +974,7 @@ app.get("/api/admin/usage-analytics", requireAdmin, async (request, response) =>
 });
 
 // 자동 구성 실패는 422 응답만으로는 원인을 알기 어렵다 — 최근 실패를 요청
-// 조건·진단과 함께 관리자가 바로 조회할 수 있게 한다.
+// 조건/진단과 함께 관리자가 바로 조회할 수 있게 한다.
 app.get("/api/admin/generation-failures", requireAdmin, (request, response) => {
   const rawLimit = Number(request.query.limit);
   const limit = Number.isInteger(rawLimit) && rawLimit > 0 ? rawLimit : 50;
@@ -1090,6 +1091,12 @@ app.get("/api/categories", (_request, response) => {
 
 app.get("/api/parts", publicCatalogReadRateLimit, async (request, response) => {
   const category = isCategory(request.query.category) ? request.query.category : undefined;
+  const rawQuoteContext = request.query.quoteContext;
+  if (rawQuoteContext !== undefined && rawQuoteContext !== "gaming_testbed") {
+    response.status(400).json({ error: "견적 부품 목록 조건이 올바르지 않습니다.", code: "INVALID_QUOTE_CONTEXT" });
+    return;
+  }
+  const quoteContext = rawQuoteContext === "gaming_testbed" ? "gaming_testbed" as const : undefined;
   const query = typeof request.query.q === "string" ? request.query.q : undefined;
   const rawBrand = typeof request.query.brand === "string" ? request.query.brand.trim().slice(0, 80) : "";
   const brand = rawBrand || undefined;
@@ -1154,13 +1161,13 @@ app.get("/api/parts", publicCatalogReadRateLimit, async (request, response) => {
     response.status(400).json({ error: "세부 조건 형식이 올바르지 않습니다.", details: parsedDetailFilter.errors });
     return;
   }
-  const detailRule = parsedDetailFilter.filter;
+  const detailRule = category ? publicCatalogDetailFilterForCategory(parsedDetailFilter.filter, category) : parsedDetailFilter.filter;
   const catalog = await loadCatalog();
   // partId 조회는 목록 탐색이 아니라 부품 상세 확인용이라 브랜드 제한을 걸지 않는다.
-  // 견적 후보 목록에서는 가격·사양 정보가 없는 부품을 뺀다 — 스펙 미등록 부품을
-  // 일부러 찾는 관리용 질의(quality=incomplete·missingField·가격 미확인 모두 보기)는 예외다.
+  // 견적 후보 목록에서는 가격/사양 정보가 없는 부품을 뺀다 — 스펙 미등록 부품을
+  // 일부러 찾는 관리용 질의(quality=incomplete/missingField/가격 미확인 모두 보기)는 예외다.
   const quoteSellableOnly = partId === undefined && quality !== "incomplete" && missingField === undefined && priceAvailability === "known";
-  const baseOptions = { ...(partId ? { partId } : {}), ...(brand ? { brand } : {}), ...(missingField ? { missingField } : {}), quality, sort, listingPolicy, quoteBrandRestricted: partId === undefined, quoteSellableOnly };
+  const baseOptions = { ...(quoteContext ? { quoteContext } : {}), ...(partId ? { partId } : {}), ...(brand ? { brand } : {}), ...(missingField ? { missingField } : {}), quality, sort, listingPolicy, quoteBrandRestricted: partId === undefined, quoteSellableOnly };
   const priceOptions = { ...baseOptions, priceAvailability };
   const freshnessOptions = { ...priceOptions, freshness };
   const benchmarkOptions = { ...freshnessOptions, benchmarkAvailability };
@@ -1217,7 +1224,7 @@ app.get("/api/parts/batch", publicCatalogBatchRateLimit, async (request, respons
 });
 
 // 부품 찾기 세부 조건 패널용 facet 정의 + 실제 선택지 — 탐색 목록과 동일한
-// 풀(브랜드 허용·견적 선택 가능 부품) 위에서 개수를 집계해 다나와처럼
+// 풀(브랜드 허용/견적 선택 가능 부품) 위에서 개수를 집계해 다나와처럼
 // "선택지(N개)"를 보여준다.
 app.get("/api/parts/facets", publicCatalogReadRateLimit, async (request, response) => {
   const category = isCategory(request.query.category) ? request.query.category : undefined;
@@ -1225,11 +1232,17 @@ app.get("/api/parts/facets", publicCatalogReadRateLimit, async (request, respons
     response.status(400).json({ error: "세부 조건을 찾으려면 부품 카테고리가 필요합니다." });
     return;
   }
+  const rawQuoteContext = request.query.quoteContext;
+  if (rawQuoteContext !== undefined && rawQuoteContext !== "gaming_testbed") {
+    response.status(400).json({ error: "견적 부품 목록 조건이 올바르지 않습니다.", code: "INVALID_QUOTE_CONTEXT" });
+    return;
+  }
+  const quoteContext = rawQuoteContext === "gaming_testbed" ? "gaming_testbed" as const : undefined;
   const catalog = await loadCatalog();
   sendJsonWithEtag(request, response, {
     category,
-    facets: ENGINE_TARGET_FILTER_FACETS[category],
-    options: catalogFacetOptionsCachedFor(catalog, category)
+    facets: PUBLIC_CATALOG_FILTER_FACETS[category],
+    options: catalogFacetOptionsCachedFor(catalog, category, quoteContext)
   });
 });
 
@@ -1339,7 +1352,7 @@ function parseCatalogSpecRefreshBatchFilters(value: unknown): { filters?: Catalo
   const offsetInvalid = offset !== undefined && (!Number.isInteger(offset) || offset < 0 || offset > 100_000);
   const limitInvalid = limit !== undefined && (!Number.isInteger(limit) || limit < 1 || limit > 100);
   if (candidate.category !== undefined && !category || candidate.priority !== undefined && !priority || candidate.action !== undefined && !action || candidate.evidence !== undefined && !evidence || candidate.query !== undefined && query === undefined || candidate.missingField !== undefined && missingField === undefined || offsetInvalid || limitInvalid) {
-    return { error: "filters의 카테고리·우선순위·작업 유형·정보 범위·검색어·offset·limit을 확인해 주세요." };
+    return { error: "filters의 카테고리/우선순위/작업 유형/정보 범위/검색어/offset/limit을 확인해 주세요." };
   }
   return { filters: { ...(category ? { category } : {}), ...(priority ? { priority } : {}), ...(action ? { action } : {}), ...(evidence ? { evidence } : {}), ...(query ? { query } : {}), ...(missingField ? { missingField } : {}), ...(offset !== undefined ? { offset } : {}), ...(limit !== undefined ? { limit } : {}) } };
 }
@@ -1486,7 +1499,7 @@ app.post("/api/parts/compatible", publicCandidateRateLimit, async (request, resp
   }
   // 다나와식 세부 조건(detailFilter)은 공개 /api/parts와 같은 규칙 형식을 JSON 본문으로 받는다.
   const detailFilterErrors: string[] = [];
-  const detailRule = engineTargetFilterRuleForCategory(engineTargetFilterRuleFromUnknown(body.detailFilter, category, detailFilterErrors), category);
+  const detailRule = publicCatalogDetailFilterForCategory(engineTargetFilterRuleFromUnknown(body.detailFilter, category, detailFilterErrors), category);
   if (detailFilterErrors.length > 0) {
     response.status(400).json({ error: "세부 조건 형식이 올바르지 않습니다.", details: detailFilterErrors });
     return;
@@ -1554,7 +1567,7 @@ app.post("/api/parts/compatible", publicCandidateRateLimit, async (request, resp
     const specFilteredParts = searchedParts.filter(partSpecFilterMatcherFor(parsedSpecFilter.filter));
     const specFilterDiagnostics = partSpecFilterDiagnosticsFor(searchedParts, parsedSpecFilter.filter);
     const detailFilteredParts = detailRule ? specFilteredParts.filter((part) => engineTargetFilterRuleAllowsPart(part, detailRule)) : specFilteredParts;
-    // 판매 정책으로 빠진 부품(스펙 미등록·가격 미확인)도 안내 문구를 위해 따로 센다.
+    // 판매 정책으로 빠진 부품(스펙 미등록/가격 미확인)도 안내 문구를 위해 따로 센다.
     const policyExcludedParts = searchParts(catalog, category, query, catalog.length, { ...options, quoteSellableOnly: false }, 0)
       .filter((part) => !isQuoteSelectable(part, catalog));
     const assessedParts = detailFilteredParts
@@ -2054,9 +2067,9 @@ app.post("/api/builds/adjust", publicCompatibilityRateLimit, async (request, res
   }
 });
 
-// 온보딩·복구 제안이 "이 요청 그대로 만들 수 있는 최저 견적"을 표시하도록
+// 온보딩/복구 제안이 "이 요청 그대로 만들 수 있는 최저 견적"을 표시하도록
 // 요청 형태 그대로의 실측 최저가를 반환한다 — 프로필 평균이 아니라 요청과 같은
-// 풀·게이트를 적용한 값이어야 다음 예산 제안이 다시 실패하지 않는다.
+// 풀/게이트를 적용한 값이어야 다음 예산 제안이 다시 실패하지 않는다.
 app.post("/api/builds/recommend/floor", publicRecommendationRateLimit, async (request, response) => {
   const parsed = parseBuildGenerationRequest(request.body);
   if (parsed.errors.length > 0 || !parsed.request) {
@@ -2909,7 +2922,7 @@ app.put("/api/builds/:id/my-pc", buildShareRateLimit, async (request, response) 
   // 승격 시 서버 점검 구독도 함께 켠다 — 대안 알림은 due인 모니터 실행에서만 생성되므로
   // enabled 없이 승격하면 약속한 알림이 영구히 오지 않는다. 정책은 risk로 맞춰
   // all의 구매 단계 잡음을 줄이고 critical에서는 빠져 있던 대안 알림이 오게 한다.
-  // 강제하기 전의 enabled·정책은 preMyPc*에 보관해 해제 시 복원한다.
+  // 강제하기 전의 enabled/정책은 preMyPc*에 보관해 해제 시 복원한다.
   const current = build.monitorState ?? defaultSavedBuildMonitorSubscription(build.createdAt);
   const monitorState = owned
     ? { ...configureSavedBuildMonitorSubscription(current, { enabled: true, intervalMinutes: current.intervalMinutes, alertPolicy: "risk" }, now), preMyPcEnabled: current.enabled, preMyPcAlertPolicy: current.alertPolicy }
@@ -3652,7 +3665,7 @@ app.get("/api/admin/prices/refresh/status", requireAdmin, async (request, respon
     response.status(404).json({ error: "가격 갱신 작업을 찾을 수 없습니다.", code: "PRICE_REFRESH_JOB_NOT_FOUND" });
     return;
   }
-  response.json({ enabled: priceRefreshSchedulerEnabled(), job: projected });
+  response.json({ enabled: priceRefreshSchedulerEnabled(), job: projected, servedPriceRefresh: stalePriceRefreshStatus() });
 });
 
 app.post("/api/admin/prices/refresh", requireAdmin, async (request, response) => {
@@ -3756,13 +3769,13 @@ app.get("/api/admin/crawl/manifest", requireAdmin, async (_request, response) =>
   response.json(manifest);
 });
 
-// 크롤링 엔진 화면용 집계 응답 — 실행 중 상태·적용 엔진 파라미터·핵심/주변
+// 크롤링 엔진 화면용 집계 응답 — 실행 중 상태/적용 엔진 파라미터/핵심/주변
 // 부품 manifest를 한 번에 묶는다. 집계 자체는 crawler-engine 모듈이 담당한다.
 app.get("/api/admin/crawl/engine", requireAdmin, async (_request, response) => {
   response.json(await crawlerEngineSnapshot());
 });
 
-// 세 엔진(크롤링·견적 생성·호환성 검사)의 운영 상태를 한 번에 묶는다.
+// 세 엔진(크롤링/견적 생성/호환성 검사)의 운영 상태를 한 번에 묶는다.
 app.get("/api/admin/engines", requireAdmin, async (_request, response) => {
   response.json(await engineModulesStatus());
 });
@@ -4313,7 +4326,7 @@ app.post("/api/admin/gpu-physical-overrides/batch/validate", requireAdmin, async
   const validation = validateGpuPhysicalOverrideBatch(request.body, catalog, await readGpuPhysicalOverrides());
   const counts = gpuPhysicalBatchValidationCounts(validation);
   if (validation.errors.length > 0 && validation.items.length === 0) {
-    response.status(400).json({ error: "GPU·케이스·PSU 물리 호환 override 일괄 입력 형식이 올바르지 않습니다.", details: validation.errors, ...counts, items: validation.items });
+    response.status(400).json({ error: "GPU/케이스/PSU 물리 호환 override 일괄 입력 형식이 올바르지 않습니다.", details: validation.errors, ...counts, items: validation.items });
     return;
   }
   response.json({ ...counts, items: validation.items });
@@ -4324,7 +4337,7 @@ app.put("/api/admin/gpu-physical-overrides/batch", requireAdmin, async (request,
   const validation = validateGpuPhysicalOverrideBatch(request.body, catalog, await readGpuPhysicalOverrides());
   const counts = gpuPhysicalBatchValidationCounts(validation);
   if (validation.errors.length > 0) {
-    response.status(400).json({ saved: false, error: "GPU·케이스·PSU 물리 호환 override 일괄 저장을 중단했습니다. 오류가 있는 항목은 하나라도 저장하지 않습니다.", details: validation.errors, ...counts, items: validation.items });
+    response.status(400).json({ saved: false, error: "GPU/케이스/PSU 물리 호환 override 일괄 저장을 중단했습니다. 오류가 있는 항목은 하나라도 저장하지 않습니다.", details: validation.errors, ...counts, items: validation.items });
     return;
   }
   await saveGpuPhysicalOverrides(validation.validOverrides);
@@ -4337,17 +4350,17 @@ app.put("/api/admin/gpu-physical-overrides/:partId", requireAdmin, async (reques
   const catalog = await loadCatalog();
   const partId = routeParam(request.params.partId);
   if (!partId) {
-    response.status(400).json({ error: "GPU·케이스·PSU 식별자가 필요합니다." });
+    response.status(400).json({ error: "GPU/케이스/PSU 식별자가 필요합니다." });
     return;
   }
   const part = findPart(catalog, partId);
   if (!part || (part.category !== "gpu" && part.category !== "case" && part.category !== "psu")) {
-    response.status(404).json({ error: "물리 호환 override를 등록할 GPU·케이스·PSU를 찾을 수 없습니다." });
+    response.status(404).json({ error: "물리 호환 override를 등록할 GPU/케이스/PSU를 찾을 수 없습니다." });
     return;
   }
   const validation = validateGpuPhysicalOverride(part, request.body);
   if (validation.errors.length > 0 || !validation.value) {
-    response.status(400).json({ error: "GPU·케이스·PSU 물리 호환 override 형식이 올바르지 않습니다.", details: validation.errors });
+    response.status(400).json({ error: "GPU/케이스/PSU 물리 호환 override 형식이 올바르지 않습니다.", details: validation.errors });
     return;
   }
   const override = await saveGpuPhysicalOverride(validation.value);
@@ -4365,7 +4378,7 @@ app.post("/api/admin/gpu-physical-overrides/:partId/source-check", gpuPhysicalSo
   }
   const part = findPart(catalog, partId);
   if (!part || (part.category !== "gpu" && part.category !== "case" && part.category !== "psu")) {
-    response.status(404).json({ error: "장착 정보를 점검할 GPU·케이스·PSU를 찾을 수 없습니다." });
+    response.status(404).json({ error: "장착 정보를 점검할 GPU/케이스/PSU를 찾을 수 없습니다." });
     return;
   }
   const overrides = await readGpuPhysicalOverrides();
@@ -4418,7 +4431,7 @@ app.get("/api/admin/gpu-physical-overrides/:partId/source-check/history", requir
   const partId = routeParam(request.params.partId);
   const part = partId ? findPart(catalog, partId) : undefined;
   if (!part || (part.category !== "gpu" && part.category !== "case" && part.category !== "psu")) {
-    response.status(404).json({ error: "정보 점검 이력을 조회할 GPU·케이스·PSU를 찾을 수 없습니다." });
+    response.status(404).json({ error: "정보 점검 이력을 조회할 GPU/케이스/PSU를 찾을 수 없습니다." });
     return;
   }
   const requestedLimit = Number(request.query.limit ?? 20);
@@ -4429,7 +4442,7 @@ app.get("/api/admin/gpu-physical-overrides/:partId/source-check/history", requir
 app.delete("/api/admin/gpu-physical-overrides/:partId", requireAdmin, async (request, response) => {
   const partId = routeParam(request.params.partId);
   if (!partId) {
-    response.status(400).json({ error: "GPU·케이스·PSU 식별자가 필요합니다." });
+    response.status(400).json({ error: "GPU/케이스/PSU 식별자가 필요합니다." });
     return;
   }
   const deleted = await deleteGpuPhysicalOverride(partId);
@@ -4467,8 +4480,8 @@ app.put("/api/admin/gaming-performance-evidence", adminGamingPerformanceEvidence
   response.json({ saved: true, count: items.length, items, updatedAt: await fileUpdatedAt(gamingPerformanceEvidencePath()) });
 });
 
-// 자동 견적 생성기의 카탈로그 타겟 필터 — 범주별로 허용 브랜드·스펙 값·수치
-// 범위·가격대를 관리자가 지정하면 추천 후보 풀에 들어가기 전에 부품을 걸러낸다.
+// 자동 견적 생성기의 카탈로그 타겟 필터 — 범주별로 허용 브랜드/스펙 값/수치
+// 범위/가격대를 관리자가 지정하면 추천 후보 풀에 들어가기 전에 부품을 걸러낸다.
 // 설정 파일을 저장하면 다음 추천 요청부터 같은 기준이 적용된다.
 app.get("/api/admin/engine-filters", requireAdmin, async (_request, response) => {
   const config = loadEngineTargetFiltersConfig();
@@ -4662,7 +4675,7 @@ app.post("/api/admin/benchmark-overrides/source-check/batch", benchmarkSourceChe
   const candidateIds = new Set(candidates.map(({ part }) => part.id));
   const skipped = (requestedPartIds ?? [])
     .filter((partId) => !candidateIds.has(partId))
-    .map((partId) => ({ partId, reason: "저장된 HTTPS 벤치마크 정보 URL이 없거나 현재 CPU·GPU 카탈로그와 일치하지 않습니다." }));
+    .map((partId) => ({ partId, reason: "저장된 HTTPS 벤치마크 정보 URL이 없거나 현재 CPU/GPU 카탈로그와 일치하지 않습니다." }));
   response.json(await benchmarkSourceCheckBatchFor(candidates.map(({ part, override }) => ({ partId: part.id, partName: part.name, category: part.category, sourceUrl: override.sourceUrl, manufacturerModel: part.model?.trim() || part.name })), {
     limit,
     concurrency: 2,
@@ -4685,7 +4698,7 @@ app.post("/api/admin/benchmark-overrides/:partId/source-check", benchmarkSourceC
   }
   const part = findPart(catalog, partId);
   if (!part || (part.category !== "cpu" && part.category !== "gpu")) {
-    response.status(404).json({ error: "벤치마크 출처를 확인할 CPU·GPU를 찾을 수 없습니다." });
+    response.status(404).json({ error: "벤치마크 출처를 확인할 CPU/GPU를 찾을 수 없습니다." });
     return;
   }
   const override = (await readBenchmarkOverrides())[partId];
@@ -4737,7 +4750,7 @@ app.get("/api/admin/benchmark-overrides/:partId/source-check/history", requireAd
   const partId = routeParam(request.params.partId);
   const part = partId ? findPart(catalog, partId) : undefined;
   if (!part || (part.category !== "cpu" && part.category !== "gpu")) {
-    response.status(404).json({ error: "벤치마크 출처 확인 이력을 조회할 CPU·GPU를 찾을 수 없습니다." });
+    response.status(404).json({ error: "벤치마크 출처 확인 이력을 조회할 CPU/GPU를 찾을 수 없습니다." });
     return;
   }
   const requestedLimit = Number(request.query.limit ?? 20);
@@ -4863,7 +4876,7 @@ app.post("/api/admin/catalog/seed-mapping-reviews/:starterPartId/manual-verify",
       response.status(422).json({ error: "입력한 상품 코드가 starter와 다른 다나와 범주에 있습니다.", code: "CATALOG_SEED_MAPPING_CATEGORY_MISMATCH", categories: codeMatches.map((part) => part.category) });
       return;
     }
-    response.status(404).json({ error: "현재 catalog에서 해당 다나와 상품 코드를 찾지 못했습니다. 먼저 해당 상품의 목록·상세 수집을 실행해 주세요.", code: "CATALOG_SEED_MAPPING_SOURCE_NOT_COLLECTED" });
+    response.status(404).json({ error: "현재 catalog에서 해당 다나와 상품 코드를 찾지 못했습니다. 먼저 해당 상품의 목록/상세 수집을 실행해 주세요.", code: "CATALOG_SEED_MAPPING_SOURCE_NOT_COLLECTED" });
     return;
   }
   if (!catalogSeedMappingIdentityCompatibleFor(starter, active)) {

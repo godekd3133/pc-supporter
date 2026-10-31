@@ -1,11 +1,25 @@
 .generator-balance { margin: 18px 0; }
-.generator-balance-budget { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 0 18px; border-bottom: 1px solid var(--line); }
-.generator-balance-budget > div { display: grid; gap: 4px; text-align: center; }
-.generator-balance-budget span { color: var(--muted); font-size: 12px; }
-.generator-balance-budget strong { color: var(--ink); font-size: 22px; font-weight: 700; }
+.generator-balance-total { position: sticky; top: calc(52px + env(safe-area-inset-top)); z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--line); background: var(--surface, #fff); }
+.generator-balance-total > div { display: grid; gap: 4px; }
+.generator-balance-total span { color: var(--muted); font-size: 12px; }
+.generator-balance-total strong { color: var(--ink); font-size: 22px; font-weight: 700; }
+.generator-balance-total small { color: var(--muted); font-size: 12px; }
+.generator-cpu-gpu-balance { display: flex; align-items: center; gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.generator-cpu-gpu-balance > strong { color: var(--ink); }
+.generator-cpu-gpu-balance > div { display: flex; flex-wrap: wrap; gap: 18px; }
+.generator-cpu-gpu-balance span { display: inline-flex; align-items: center; gap: 7px; }
+.generator-cpu-gpu-balance b { color: var(--muted); font-size: 12px; font-weight: 500; }
+.balance-grade { font-style: normal; font-weight: 700; }
+.balance-good { color: #188447; }
+.balance-slightly_weak, .balance-slightly_strong { color: #b86408; }
+.balance-too_weak, .balance-too_strong { color: #c53939; }
+.balance-unknown { color: var(--muted); }
+[data-theme="dark"] .balance-good { color: #6bdd96; }
+[data-theme="dark"] .balance-slightly_weak, [data-theme="dark"] .balance-slightly_strong { color: #ffb963; }
+[data-theme="dark"] .balance-too_weak, [data-theme="dark"] .balance-too_strong { color: #ff8d8d; }
 .generator-balance-lines { display: grid; }
 .generator-balance-line { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
-.generator-balance-line > div { display: grid; flex: 1; gap: 3px; min-width: 0; }
+.generator-balance-part { text-align: left; padding: 0; border: 0; border-radius: 4px; background: transparent; cursor: pointer; font: inherit; display: grid; flex: 1; gap: 3px; min-width: 0; }
 .generator-balance-line span { color: var(--muted); font-size: 11px; }
 .generator-balance-line strong { color: var(--ink); font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
 .generator-balance-line small { color: var(--muted); font-size: 11px; line-height: 1.5; }
@@ -18,3 +32,17 @@
 .generator-balance-status:empty { display: none; }
 .generator-balance-error { color: var(--danger, #ae4545); font-size: 12px; line-height: 1.5; }
 @media (max-width: 640px) { .generator-balance-button { flex-basis: 44px; width: 44px; height: 44px; } .generator-balance-line { gap: 9px; } }
+
+.generator-balance-part:disabled { cursor: default; }
+.generator-balance-part:not(:disabled):hover strong { color: var(--teal); text-decoration: underline; }
+.generator-balance-part:focus-visible { outline: 2px solid var(--teal); outline-offset: 5px; }
+.generator-platform-toggles { display: grid; gap: 12px; }
+.generator-platform-choice { display: grid; gap: 7px; }
+.generator-platform-heading { display: flex; justify-content: space-between; gap: 8px; }
+.generator-platform-heading strong { font-size: 12px; color: var(--ink); }
+.generator-platform-heading small { color: var(--muted); font-size: 10px; }
+.generator-platform-toggle { display: grid; grid-template-columns: 1fr 1fr; padding: 3px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-soft, #f7f9fb); }
+.generator-platform-toggle button { min-height: 36px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; }
+.generator-platform-toggle button.selected { color: var(--teal); background: var(--surface, #fff); font-weight: 700; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+.generator-platform-toggle button:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+@media (max-width: 640px) { .generator-platform-toggle button { min-height: 44px; } }

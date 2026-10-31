@@ -1,6 +1,6 @@
 import type { AccessoryItem, AccessoryRefreshResponse, Part, PartRefreshResponse } from "../shared/types";
 import { CATALOG_DATA_QUALITY_CHANGE_FIELD_LABEL, isKnownPrice } from "../shared/types";
-import { DANAWA_CATEGORIES, fetchDanawaHtml, isAllowedSourceUrl, parseDanawaPriceFromHtml, parseDanawaProductPage, type DanawaCrawlerOptions, type DanawaListItem } from "./danawa";
+import { DANAWA_CATEGORIES, danawaPriceUnavailableFromHtml, fetchDanawaHtml, isAllowedSourceUrl, parseDanawaPriceFromHtml, parseDanawaProductPage, type DanawaCrawlerOptions, type DanawaListItem } from "./danawa";
 import { DANAWA_ACCESSORY_CATEGORIES, parseDanawaAccessoryPage } from "./accessory-crawler";
 import { catalogChangeValueDiffsFor } from "./catalog-change-log";
 
@@ -9,7 +9,7 @@ function categoryConfig(part: Part) {
 }
 
 export function partRefreshBlockReason(part: Part) {
-  if (part.source !== "danawa") return "기본·직접 확인 부품은 다나와 상품 페이지 재확인 대상이 아닙니다.";
+  if (part.source !== "danawa") return "기본/직접 확인 부품은 다나와 상품 페이지 재확인 대상이 아닙니다.";
   if (!categoryConfig(part)) return "지원하지 않는 부품 카테고리입니다.";
   if (!part.sourceProductCode) return "다나와 상품 코드가 없어 상품 페이지를 다시 찾을 수 없습니다.";
   if (!part.danawaUrl || !isAllowedSourceUrl(part.danawaUrl)) return "허용된 다나와 상품 페이지 링크가 없어 다시 확인할 수 없습니다.";
@@ -50,6 +50,7 @@ export function reconcileRefreshedPart(before: Part, parsed: Part) {
     ...parsed,
     priceWon: isKnownPrice(parsed.priceWon) ? parsed.priceWon : before.priceWon,
     priceCheckedAt: isKnownPrice(parsed.priceWon) ? refreshedAt : before.priceCheckedAt,
+    priceUnavailableAt: isKnownPrice(parsed.priceWon) ? undefined : before.priceUnavailableAt,
     imageUrl: parsed.imageUrl ?? before.imageUrl,
     rawSpecText: parsed.rawSpecText || before.rawSpecText,
     // 목록 기반 중단 표시는 상세 페이지 재확인으로 지우지 않는다 — 단종 상품도
@@ -64,6 +65,7 @@ export type PartRefreshOptions = {
   retries?: number;
   fetchHtml?: (url: string, options: DanawaCrawlerOptions) => Promise<string>;
   onPriceObserved?: (priceWon: number | undefined) => void;
+  onPriceUnavailable?: () => void;
 };
 
 export async function refreshDanawaPart(part: Part, options: PartRefreshOptions = {}) {
@@ -83,8 +85,16 @@ export async function refreshDanawaPart(part: Part, options: PartRefreshOptions 
     rawSpecText: part.rawSpecText,
     sourceProductCode: part.sourceProductCode!
   };
+  const observedPrice = parseDanawaPriceFromHtml(html, part.sourceProductCode!);
+  options.onPriceObserved?.(observedPrice);
+  if (danawaPriceUnavailableFromHtml(html, part.sourceProductCode!, part.name)) {
+    options.onPriceUnavailable?.();
+    // An unavailable offer is a price observation, not a new physical specification.
+    const refreshed: Part = { ...part, priceUnavailableAt: new Date().toISOString() };
+    delete refreshed.priceWon;
+    return refreshed;
+  }
   const parsed = parseDanawaProductPage(part.category, item, html, config.categoryId);
-  options.onPriceObserved?.(parseDanawaPriceFromHtml(html, part.sourceProductCode!));
   return reconcileRefreshedPart(part, parsed);
 }
 

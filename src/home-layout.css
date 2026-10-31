@@ -1,0 +1,81 @@
+/* Home layout uses the existing Toss-style theme and shared native/web UI. */
+.home-page .home-intro { display: block; min-height: 0; margin: 0 0 28px; padding: 32px 0 8px; text-align: center; }
+.home-page .home-intro .hero-copy { padding: 0; }
+.home-page .home-intro .hero-eyebrow { justify-content: center; }
+.home-page .home-intro h1 { margin: 12px 0; font-size: clamp(32px, 3.8vw, 46px); line-height: 1.25; }
+.home-page .home-intro .hero-description { max-width: 48ch; margin-inline: auto; font-size: 16px; line-height: 1.65; }
+.home-page .home-intro.has-build { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; text-align: left; }
+.home-page .home-intro.has-build .hero-eyebrow { justify-content: flex-start; }
+.home-page .home-intro.has-build .hero-description { margin-left: 0; }
+.home-page .home-entry-grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 20px; }
+.home-page .home-entry-card { min-width: 0; padding: 28px; border: 1px solid var(--line); border-radius: 24px; background: var(--surface); color: var(--ink); box-shadow: none; }
+.home-page .home-entry-title { display: flex; align-items: flex-start; gap: 14px; }
+.home-page .home-entry-title h2 { margin: 0 0 8px; color: var(--ink); font-size: 22px !important; line-height: 1.4; letter-spacing: -.035em; }
+.home-page .home-entry-title p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.6; }
+.home-page .home-entry-icon { display: grid; flex: 0 0 auto; place-items: center; width: 44px; height: 44px; border-radius: 14px; color: var(--teal-deep); background: var(--teal-soft); }
+.home-page .home-entry-icon svg { width: 22px; height: 22px; }
+.home-page .home-entry-cta { display: flex; justify-content: space-between; width: 100%; min-height: 54px; margin-top: 24px; border-radius: 14px; padding-inline: 20px; font-size: 15px; }
+.home-page .home-entry-result { display: flex; justify-content: space-between; gap: 8px; min-height: 44px; margin-top: 12px; padding: 0; font-size: 13px; }
+.home-page .home-entry-card .guided-home-preview { width: auto; margin-top: 20px; padding: 16px 0 0; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; box-shadow: none; }
+.home-page .home-entry-card .guided-home-preview .panel-kicker,
+.home-page .home-entry-card .guided-home-preview-heading { display: none; }
+.home-page .home-entry-card .guided-home-preview-choices { margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.home-page .home-entry-card .guided-home-preview-choices > div { display: block; padding: 0; border: 0; background: transparent; }
+.home-page .home-entry-card .guided-home-preview-choices dt { color: var(--muted); font-size: 12px; }
+.home-page .home-entry-card .guided-home-preview-choices dd { margin: 6px 0 0; color: var(--ink); font-size: 13px; text-align: left; }
+.home-page .home-journey { margin-top: 28px; }
+.home-page .home-entry-card .hero-demo-tools { margin-top: 12px; }
+
+@keyframes home-section-enter { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: no-preference) {
+  .home-page .home-intro, .home-page .mobile-home-heading { animation: home-section-enter 360ms ease-out both; }
+  .home-page .home-entry-card { animation: home-section-enter 420ms cubic-bezier(.2,.7,.2,1) both; }
+  .home-page .home-entry-card:nth-child(2) { animation-delay: 60ms; }
+  .home-page .home-journey { animation: home-section-enter 440ms ease-out 100ms both; }
+  .home-page button { transition: transform 180ms ease, background-color 180ms ease, border-color 180ms ease; }
+  .home-page button:active { transform: scale(.985); }
+  .home-page button > svg:last-child { transition: transform 180ms ease; }
+  @media (hover: hover) and (pointer: fine) {
+    .home-page .home-entry-cta:hover > svg:last-child,
+    .home-page .mobile-primary-action:hover > svg:last-child,
+    .home-page .mobile-recommend-card:hover > svg:last-child { transform: translateX(4px); }
+  }
+}
+@media (max-width: 760px) {
+  .home-page .mobile-home-view { animation: none; }
+  .home-page .mobile-home-heading { margin: 4px 0 24px; padding: 8px 4px 0; }
+  .home-page .mobile-home-heading h1 { font-size: clamp(28px, 7.5vw, 34px); }
+  .home-page .mobile-home-heading p { font-size: 14px; }
+  .home-page .home-entry-grid { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .home-page .home-entry-card { margin: 0; padding: 22px 20px; border: 1px solid var(--line); border-radius: 22px; background: var(--surface); }
+  .home-page .home-entry-title { gap: 12px; }
+  .home-page .home-entry-title h2 { font-size: 19px !important; margin-bottom: 5px; }
+  .home-page .home-entry-title p { font-size: 13px; }
+  .home-page .home-entry-icon { width: 38px; height: 38px; border-radius: 12px; }
+  .home-page .mobile-primary-actions { margin-top: 20px; }
+  .home-page .mobile-home-view .mobile-primary-action { border-radius: 14px; min-height: 54px; font-size: 15px; }
+  .home-page .mobile-home-view .mobile-guided-entry { margin-top: 18px; padding: 16px 0 0; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; }
+  .home-page .mobile-guided-entry > .mobile-kicker,
+  .home-page .mobile-guided-entry > h2,
+  .home-page .mobile-guided-entry > p:not(.mobile-guided-outcome) { display: none; }
+  .home-page .mobile-home-view .mobile-guided-steps { margin: 0; padding: 0; border: 0; }
+  .home-page .mobile-home-view .mobile-guided-steps li { gap: 5px; font-size: 12px; white-space: nowrap; }
+  .home-page .mobile-home-view .mobile-guided-steps li > span { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--teal-soft); color: var(--teal-deep); }
+  .home-page .mobile-current-build { margin-top: 18px; padding: 16px 0 0; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; }
+  .home-page .mobile-next-steps .mobile-section-heading { gap: 8px; margin: 0 0 8px; flex-wrap: wrap; }
+  .home-page .mobile-next-steps .mobile-section-heading h2 { font-size: 19px; }
+  .home-page .mobile-next-steps .mobile-kicker { display: none; }
+  .home-page .mobile-next-steps .mobile-section-link { min-height: 44px; font-size: 12px; }
+  .home-page .mobile-home-view .mobile-recommend-card { margin: 0; padding: 12px 0 0; border: 0; background: transparent; }
+  .home-page .mobile-home-view .mobile-recommend-copy strong { font-size: 14px; }
+  html[data-theme="dark"] .app-shell .home-page .mobile-next-steps { border: 1px solid var(--line) !important; background: var(--surface) !important; }
+  html[data-theme="dark"] .app-shell .home-page .mobile-recommend-card { border: 0 !important; }
+}
+@media (max-width: 360px) {
+  .home-page .mobile-home-view .mobile-guided-steps li { flex-direction: column; align-items: flex-start; gap: 7px; }
+  .home-page .mobile-cache-disclosure > summary { flex-wrap: wrap; gap: 6px; padding-block: 10px; }
+  .home-page .mobile-cache-disclosure > summary > small { margin-left: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-page, .home-page * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}

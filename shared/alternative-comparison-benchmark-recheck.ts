@@ -103,5 +103,5 @@ export function alternativeComparisonBenchmarkRecheckRowText(row: AlternativeCom
   const shared = row.sharedValue === undefined ? "없음" : `${row.sharedValue.toLocaleString("ko-KR")}점`;
   const current = row.currentValue === undefined ? "확인 필요" : `${row.currentValue.toLocaleString("ko-KR")}점`;
   const delta = row.delta === undefined ? "" : ` (${row.delta > 0 ? "+" : ""}${row.delta.toLocaleString("ko-KR")}점)`;
-  return `${row.label} · 공유 ${shared} → 현재 ${current}${delta}`;
+  return `${row.label} / 공유 ${shared} → 현재 ${current}${delta}`;
 }

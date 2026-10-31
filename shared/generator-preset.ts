@@ -1,5 +1,5 @@
 import { RECOMMENDATION_PRIORITY_VALUES } from "./types";
-import type { GamingGraphicsPreset, GamingMode, GamingRefreshRate, GamingResolution, GamingUpscaling, GpuVendor, ListingPolicy, RecommendationPerformanceTier, RecommendationPriority, RecommendationProfile } from "./types";
+import type { CpuVendor, GamingGraphicsPreset, GamingMode, GamingRefreshRate, GamingResolution, GamingUpscaling, GpuVendor, ListingPolicy, RecommendationPerformanceTier, RecommendationPriority, RecommendationProfile } from "./types";
 
 export const GENERATOR_PRESET_STORAGE_KEY = "pc-supporter-generator-presets";
 export const GENERATOR_PRESET_SCHEMA_VERSION = 1;
@@ -9,6 +9,8 @@ export type GeneratorPresetConfig = {
   gamingMode?: GamingMode;
   gamingTargetFps?: number;
   gpuVendorPreference?: GpuVendor;
+  cpuVendorPreference?: CpuVendor;
+  memoryTypePreference?: "DDR4" | "DDR5";
   profile: RecommendationProfile;
   priority: RecommendationPriority;
   performanceTier?: RecommendationPerformanceTier;
@@ -45,6 +47,8 @@ export function generatorPresetConfigFromUnknown(value: unknown): GeneratorPrese
   if (candidate.gamingMode !== undefined && !oneOf(candidate.gamingMode, ["budget", "target_fps"] as const)
     || candidate.gamingTargetFps !== undefined && (typeof candidate.gamingTargetFps !== "number" || !Number.isInteger(candidate.gamingTargetFps) || candidate.gamingTargetFps < 30 || candidate.gamingTargetFps > 500)
     || candidate.gpuVendorPreference !== undefined && !oneOf(candidate.gpuVendorPreference, ["nvidia", "amd", "intel"] as const)) return null;
+  if (candidate.cpuVendorPreference !== undefined && !oneOf(candidate.cpuVendorPreference, ["amd", "intel"] as const)
+    || candidate.memoryTypePreference !== undefined && !oneOf(candidate.memoryTypePreference, ["DDR4", "DDR5"] as const)) return null;
   const gamingGameIds = candidate.gamingGameIds === undefined
     ? undefined
     : Array.isArray(candidate.gamingGameIds) && candidate.gamingGameIds.length <= 5 && candidate.gamingGameIds.every((item) => typeof item === "string" && item.trim().length > 0 && item.trim().length <= 160)
@@ -77,6 +81,8 @@ export function generatorPresetConfigFromUnknown(value: unknown): GeneratorPrese
     || gamingUpscaling === null) return null;
   return {
     profile: candidate.profile,
+    ...(candidate.cpuVendorPreference !== undefined ? { cpuVendorPreference: candidate.cpuVendorPreference as CpuVendor } : {}),
+    ...(candidate.memoryTypePreference !== undefined ? { memoryTypePreference: candidate.memoryTypePreference as "DDR4" | "DDR5" } : {}),
     ...(candidate.gamingMode !== undefined ? { gamingMode: candidate.gamingMode as GamingMode } : {}),
     ...(candidate.gamingTargetFps !== undefined ? { gamingTargetFps: candidate.gamingTargetFps as number } : {}),
     ...(candidate.gpuVendorPreference !== undefined ? { gpuVendorPreference: candidate.gpuVendorPreference as GpuVendor } : {}),

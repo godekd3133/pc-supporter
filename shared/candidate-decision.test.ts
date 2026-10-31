@@ -14,7 +14,7 @@ describe("candidate decision summary", () => {
     expect(summary).toMatchObject({
       status: "recommended",
       label: "추천 부품",
-      summary: "현재 문제 해결 · 새 호환 문제 없음 · 장착 정보 확인됨 · 최근 확인 · 높음"
+      summary: "현재 문제 해결 / 새 호환 문제 없음 / 장착 정보 확인됨 / 최근 확인 / 높음"
     });
   });
 

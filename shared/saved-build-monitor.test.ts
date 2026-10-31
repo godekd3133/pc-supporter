@@ -95,7 +95,7 @@ describe("saved build monitor assessment", () => {
     const snapshot = savedBuildCheckSnapshotFor(result({ metrics: { powerHeadroomW: -10, psuWattageW: 750, recommendedPsuW: 760 } }));
 
     expect(savedBuildMonitorAssessmentFor(snapshot)).toMatchObject({ level: "critical", requiresAttention: true });
-    expect(savedBuildMonitorAssessmentFor(snapshot).summary).toContain("전력·냉각 예산 기준 미달");
+    expect(savedBuildMonitorAssessmentFor(snapshot).summary).toContain("전력/냉각 예산 기준 미달");
   });
 
   it("treats peripheral blockers and warnings as saved-build attention signals", () => {

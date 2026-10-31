@@ -156,7 +156,7 @@ function physicalEvidenceSourceLabel(category: PhysicalEvidenceSource["category"
 }
 
 export function physicalEvidenceSourceTextFor(sources: PhysicalEvidenceSource[] | undefined) {
-  return (sources ?? []).map((source) => `${physicalEvidenceSourceLabel(source.category)}${source.manufacturerModel ? ` · ${source.manufacturerModel}` : ""}${source.manufacturerRevision ? ` · ${source.manufacturerRevision}` : ""}${source.updatedAt ? ` · 확인 ${source.updatedAt}` : ""}: ${source.note}${source.url ? ` (${source.url})` : ""}`).join(" · ");
+  return (sources ?? []).map((source) => `${physicalEvidenceSourceLabel(source.category)}${source.manufacturerModel ? ` / ${source.manufacturerModel}` : ""}${source.manufacturerRevision ? ` / ${source.manufacturerRevision}` : ""}${source.updatedAt ? ` / 확인 ${source.updatedAt}` : ""}: ${source.note}${source.url ? ` (${source.url})` : ""}`).join(" / ");
 }
 
 function scenarioStatusLabel(status: NonNullable<AlternativeComparisonCandidate["scenario"]>["status"]) {
@@ -174,7 +174,7 @@ function scenarioCheckSummaryText(scenario: AlternativeComparisonCandidate["scen
   const ready = checks.filter((check) => check.status === "ready").length;
   const review = checks.filter((check) => check.status === "review").length;
   const blocked = checks.filter((check) => check.status === "blocked").length;
-  return `구매 전 확인 항목 ${checks.length}개 · 완료 ${ready} · 추가 확인 ${review} · 진행 보류 ${blocked}`;
+  return `구매 전 확인 항목 ${checks.length}개 / 완료 ${ready} / 추가 확인 ${review} / 진행 보류 ${blocked}`;
 }
 
 export function alternativeComparisonSimilarityEvidenceTextFor(evidence: AlternativeComparisonSimilarityEvidence | undefined) {
@@ -190,16 +190,16 @@ export function alternativeComparisonScenarioTextFor(scenario: AlternativeCompar
   const purchaseDecision = publicComparisonCopyText(scenario.purchaseDecision);
   const purchaseDecisionSummary = publicComparisonCopyText(scenario.purchaseDecisionSummary);
   const purchaseDecisionText = purchaseDecision
-    ? `구매 안내: ${purchaseDecision}${purchaseDecisionSummary ? ` · ${purchaseDecisionSummary}` : ""}`
+    ? `구매 안내: ${purchaseDecision}${purchaseDecisionSummary ? ` / ${purchaseDecisionSummary}` : ""}`
     : purchaseDecisionSummary ? `구매 안내: ${purchaseDecisionSummary}` : undefined;
   const parts = [
-    `호환 결과: ${scenarioStatusLabel(scenario.status)} · 호환 불가 ${scenario.blockerCount} · 주의 ${scenario.warningCount} · 확인 필요 ${scenario.unknownCount}`,
+    `호환 결과: ${scenarioStatusLabel(scenario.status)} / 호환 불가 ${scenario.blockerCount} / 주의 ${scenario.warningCount} / 확인 필요 ${scenario.unknownCount}`,
     scenario.priceDeltaWon !== undefined ? `가격 변화 ${scenario.priceDeltaWon > 0 ? "+" : ""}${scenario.priceDeltaWon.toLocaleString("ko-KR")}원` : undefined,
     purchaseDecisionText,
-    scenario.priceHistory && scenario.priceHistory.sampleCount > 0 ? `가격 이력 ${scenario.priceHistory.windowDays}일 ${scenario.priceHistory.sampleCount}회${scenario.priceHistory.minPriceWon !== undefined ? ` · 최저 ${scenario.priceHistory.minPriceWon.toLocaleString("ko-KR")}원` : ""}` : "가격 이력 없음",
+    scenario.priceHistory && scenario.priceHistory.sampleCount > 0 ? `가격 이력 ${scenario.priceHistory.windowDays}일 ${scenario.priceHistory.sampleCount}회${scenario.priceHistory.minPriceWon !== undefined ? ` / 최저 ${scenario.priceHistory.minPriceWon.toLocaleString("ko-KR")}원` : ""}` : "가격 이력 없음",
     scenarioCheckSummaryText(scenario)
   ].filter((value): value is string => Boolean(value));
-  return parts.join(" · ");
+  return parts.join(" / ");
 }
 
 function csvCell(value: string | number | undefined) {
@@ -326,9 +326,9 @@ export function alternativeComparisonTextFor(candidates: AlternativeComparisonCa
   lines.push("");
   candidates.forEach((candidate, index) => {
     lines.push(`[부품 ${index + 1}] ${candidate.name}`);
-    if (candidate.category || candidate.partId) lines.push(`- 부품 분류: ${candidate.category ?? "분류 확인 필요"}${candidate.partId ? ` · ${candidate.partId}` : ""}`);
+    if (candidate.category || candidate.partId) lines.push(`- 부품 분류: ${candidate.category ?? "분류 확인 필요"}${candidate.partId ? ` / ${candidate.partId}` : ""}`);
     lines.push(`- 핵심 스펙: ${candidate.summary}`);
-    lines.push(`- 가격: ${alternativeComparisonPriceTextFor(candidate)}${candidate.recommendedQuantity !== undefined ? ` · 추천 수량 ${candidate.recommendedQuantity}개` : ""}`);
+    lines.push(`- 가격: ${alternativeComparisonPriceTextFor(candidate)}${candidate.recommendedQuantity !== undefined ? ` / 추천 수량 ${candidate.recommendedQuantity}개` : ""}`);
     if (candidate.priceEvidence) lines.push(`- 가격 확인: ${CATALOG_PRICE_EVIDENCE_CHECK_LABELS[candidate.priceEvidence]}`);
     if (candidate.purchaseCondition) lines.push(`- 구매 조건: ${candidate.purchaseCondition}`);
     const performance = publicComparisonCopyText(candidate.performance);
@@ -343,7 +343,7 @@ export function alternativeComparisonTextFor(candidates: AlternativeComparisonCa
     if (candidate.physicalEvidence) lines.push(`- 설치 공간 확인: ${candidate.physicalEvidence}`);
     const physicalEvidenceSources = physicalEvidenceSourceTextFor(candidate.physicalEvidenceSources);
     if (physicalEvidenceSources) lines.push(`- 설치 안내: ${physicalEvidenceSources}`);
-    lines.push(`- 부품 정보: ${dataQualityLabel(candidate.dataQuality)}${candidate.dataFreshness ? ` · ${DATA_FRESHNESS_LABELS[candidate.dataFreshness]}` : ""}${candidate.updatedAt ? ` · 갱신 ${candidate.updatedAt}` : ""}`);
+    lines.push(`- 부품 정보: ${dataQualityLabel(candidate.dataQuality)}${candidate.dataFreshness ? ` / ${DATA_FRESHNESS_LABELS[candidate.dataFreshness]}` : ""}${candidate.updatedAt ? ` / 갱신 ${candidate.updatedAt}` : ""}`);
     if (candidate.sourceUrl) lines.push(`- 상품 페이지: ${candidate.sourceUrl}`);
     lines.push("");
   });

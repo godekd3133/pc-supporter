@@ -156,10 +156,10 @@ export function buildChangeResultTextFor(comparison: BuildChangeResultComparison
     "",
     "[적용 전 → 적용 후]",
     `결과: ${statusLabel(before.status)} → ${statusLabel(after.status)}`,
-    `호환 상태: 호환 불가 ${before.blockerCount} → ${after.blockerCount} · 주의 ${before.warningCount} → ${after.warningCount} · 확인 필요 ${before.unknownCount} → ${after.unknownCount}`,
-    `호환 상태 변화: 호환 불가 ${signed(exported.deltas.blockerDelta)} · 주의 ${signed(exported.deltas.warningDelta)} · 확인 필요 ${signed(exported.deltas.unknownDelta)}`,
-    `구매 금액: ${priceText(before)} → ${priceText(after)}${exported.deltas.priceDeltaWon !== undefined ? ` · ${exported.deltas.priceDeltaWon === 0 ? "변화 없음" : `${exported.deltas.priceDeltaWon > 0 ? "+" : ""}${exported.deltas.priceDeltaWon.toLocaleString("ko-KR")}원`}` : ""}`,
-    `전력·냉각 여유 변경: ${exported.deltas.resourceBudgetChanged ? "변경됨" : "변화 없음"}`,
+    `호환 상태: 호환 불가 ${before.blockerCount} → ${after.blockerCount} / 주의 ${before.warningCount} → ${after.warningCount} / 확인 필요 ${before.unknownCount} → ${after.unknownCount}`,
+    `호환 상태 변화: 호환 불가 ${signed(exported.deltas.blockerDelta)} / 주의 ${signed(exported.deltas.warningDelta)} / 확인 필요 ${signed(exported.deltas.unknownDelta)}`,
+    `구매 금액: ${priceText(before)} → ${priceText(after)}${exported.deltas.priceDeltaWon !== undefined ? ` / ${exported.deltas.priceDeltaWon === 0 ? "변화 없음" : `${exported.deltas.priceDeltaWon > 0 ? "+" : ""}${exported.deltas.priceDeltaWon.toLocaleString("ko-KR")}원`}` : ""}`,
+    `전력/냉각 여유 변경: ${exported.deltas.resourceBudgetChanged ? "변경됨" : "변화 없음"}`,
     "",
     "[변경 부품]",
     ...(exported.changes.length > 0 ? exported.changes.map((row) => `- ${row.label}: ${row.before} → ${row.after}`) : ["- 변경 부품 없음"]),
@@ -168,7 +168,7 @@ export function buildChangeResultTextFor(comparison: BuildChangeResultComparison
     ...(exported.findingChanges.length > 0 ? exported.findingChanges.map((finding) => `- ${findingChangeLabel(finding.change)}: ${(finding.after ?? finding.before)?.title ?? finding.key}`) : ["- 항목 변화 없음"]),
     "",
     "[구매 전 확인]",
-    "실제 판매가와 재고는 판매처에서 확인하세요. 게임 성능은 게임과 설정에 따라 달라집니다. 메모리 호환성·케이스 장착 공간·케이블 연결은 구매 전에 확인하세요."
+    "실제 판매가와 재고는 판매처에서 확인하세요. 게임 성능은 게임과 설정에 따라 달라집니다. 메모리 호환성/케이스 장착 공간/케이블 연결은 구매 전에 확인하세요."
   ];
   return lines.join("\n");
 }
@@ -179,5 +179,5 @@ export function buildChangeResultDecisionNoteFor(comparison: BuildChangeResultCo
   const price = exported.deltas.priceDeltaWon === undefined
     ? "-"
     : `${exported.deltas.priceDeltaWon > 0 ? "+" : ""}${exported.deltas.priceDeltaWon.toLocaleString("ko-KR")}원`;
-  return `적용 후 결과 · ${comparison.title} · ${directionLabel(exported.direction)} · 호환 ${statusLabel(after.status)} · 호환 불가 ${after.blockerCount} · 주의 ${after.warningCount} · 확인 ${after.unknownCount} · 금액 ${price} · 확인한 때 ${after.checkedAt}`;
+  return `적용 후 결과 / ${comparison.title} / ${directionLabel(exported.direction)} / 호환 ${statusLabel(after.status)} / 호환 불가 ${after.blockerCount} / 주의 ${after.warningCount} / 확인 ${after.unknownCount} / 금액 ${price} / 확인한 때 ${after.checkedAt}`;
 }

@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { BuildGenerationRequest, Part, PartCategory } from "../shared/types";
-import { phase1CpuGamingClass, phase1GamingPartAllowed, phase1GpuGamingClass } from "../shared/phase1-gaming-policy";
+import { phase1CpuGamingClass, phase1GamingPartAllowed, phase1GpuGamingClass, phase1GamingFilters } from "../shared/phase1-gaming-policy";
 import { generateBuildDraft, minimumFeasibleBuildPriceFor } from "./engine";
 import { seedCatalog } from "./seed-catalog";
 import { applyPhase1CatalogSnapshot } from "./phase1-catalog";
-import { generatorPartAdjustmentRequestFor } from "../src/generator-balance";
+import { generatorManualPartRequestFor, generatorPartAdjustmentRequestFor } from "../src/generator-balance";
 
 const phase1 = { gamingTestbedPhase1: true };
 const reference = (category: PartCategory) => seedCatalog.find((part) => part.category === category)!;
@@ -25,6 +25,8 @@ function testbed(): Part[] {
     fixture("cpu", "cpu-5700x", "AMD 라이젠7 5700X (정품)", 230_000, { ...cpuSpecs, cores: 8, threads: 16, coolerIncluded: false }),
     fixture("cpu", "cpu-7500f", "AMD 라이젠5 7500F (정품)", 170_000, { ...cpuSpecs, socket: "AM5", memoryType: "DDR5", maxMemorySpeedMhz: 5200, coolerIncluded: false }),
     fixture("cpu", "cpu-7800x3d-test", "AMD 라이젠7 7800X3D (정품)", 390_000, { ...cpuSpecs, socket: "AM5", memoryType: "DDR5", maxMemorySpeedMhz: 5200, cores: 8, threads: 16, coolerIncluded: false, tdpW: 120, pptW: 162, l3CacheMb: 96 }),
+    fixture("cpu", "cpu-9600x-test", "AMD 라이젠5 9600X (정품)", 210_000, { ...cpuSpecs, socket: "AM5", memoryType: "DDR5", maxMemorySpeedMhz: 5600, coolerIncluded: false }),
+    fixture("cpu", "cpu-9800x3d-test", "AMD 라이젠7 9800X3D (정품)", 600_000, { ...cpuSpecs, socket: "AM5", memoryType: "DDR5", maxMemorySpeedMhz: 5600, cores: 8, threads: 16, coolerIncluded: false, tdpW: 120, pptW: 162, l3CacheMb: 96 }),
     fixture("cpu", "cpu-9700x-test", "AMD 라이젠7 9700X (정품)", 390_000, { ...cpuSpecs, socket: "AM5", memoryType: "DDR5", maxMemorySpeedMhz: 5600, cores: 8, threads: 16, coolerIncluded: false }),
     fixture("motherboard", "board-a520", "ASRock A520M-HVS 대원씨티에스", 55_000, boardSpecs),
     fixture("motherboard", "board-b550", "ASUS TUF Gaming B550M-PLUS STCOM", 157_000, { ...boardSpecs, vrmCapacityW: 300, memorySlots: 4 }),
@@ -43,7 +45,7 @@ function testbed(): Part[] {
     fixture("gpu", "gpu-5070-test", "MSI 지포스 RTX 5070 12GB", 750_000, { ...gpuSpecs, powerW: 250, recommendedPsuW: 650, vramGb: 12 }),
     fixture("gpu", "gpu-5080-test", "MSI 지포스 RTX 5080 16GB", 1_800_000, { ...gpuSpecs, powerW: 360, recommendedPsuW: 850, vramGb: 16, lengthMm: 330 }),
     fixture("gpu", "gpu-5090-test", "MSI 지포스 RTX 5090 32GB", 5_000_000, { ...gpuSpecs, powerW: 575, recommendedPsuW: 1000, vramGb: 32, lengthMm: 350 }),
-    fixture("ssd", "ssd-test", "삼성전자 NVMe 1TB", 259_000),
+    fixture("ssd", "ssd-test", "ESSENCORE KLEVV CRAS C910G M.2 NVMe 1TB", 259_000, {}, "ESSENCORE"),
     fixture("case", "case-value", "기본 메쉬 케이스", 40_000, { maxGpuLengthMm: 300, maxCoolerHeightMm: 160, fanCount: 4 }),
     fixture("case", "case-large", "대형 메쉬 케이스", 65_000, { maxGpuLengthMm: 400, maxCoolerHeightMm: 170, fanCount: 4 }),
     fixture("case", "case-premium", "고가 대형 케이스", 300_000, { maxGpuLengthMm: 500, maxCoolerHeightMm: 200, fanCount: 8 }),
@@ -56,7 +58,10 @@ const request = (budgetWon: number): BuildGenerationRequest => ({ profile: "gami
 function sourceBackedAdjustmentCatalog(): Part[] {
   // Checked-in public product captures keep clean checkouts independent of
   // private runtime catalog files, with actual IDs, prices and dimensions.
-  return applyPhase1CatalogSnapshot([]);
+  const sourced = applyPhase1CatalogSnapshot([]);
+  // Only this new SSD-policy test fixture is synthetic; existing CPU/board/case IDs remain the captured products.
+  const cheapestSsd = sourced.filter((part) => part.category === "ssd" && (part.specs.capacityGb ?? 0) >= 1000 && part.priceWon).sort((a,b) => a.priceWon! - b.priceWon!)[0];
+  return [...sourced, fixture("ssd", "fixture-c910g-1tb", "ESSENCORE KLEVV CRAS C910G M.2 NVMe 1TB", cheapestSsd?.priceWon ?? 259000, { capacityGb: 1000, formFactor: "M.2", interface: "NVMe", m2PcieGeneration: 3 }, "ESSENCORE")];
 }
 
 describe("phase-one gaming budget test bed", () => {
@@ -82,7 +87,8 @@ describe("phase-one gaming budget test bed", () => {
     const classes = drafts.map((draft) => phase1GpuGamingClass(catalog.find((part) => part.id === draft.selection.gpu?.partId)));
     expect(classes).toEqual([...classes].sort((a, b) => a - b));
     expect(drafts[0].selection.gpu?.partId).toBe("gpu-3050-test");
-    expect(drafts[3].selection.gpu?.partId).toBe("gpu-5070-test");
+    expect(classes[3]).toBeGreaterThanOrEqual(classes[0]);
+    for (const draft of drafts) expect(draft.cpuGpuBalance?.cpu.level).toBe("good");
     expect(drafts.at(-1)?.selection.gpu?.partId).toBe("gpu-5090-test");
     for (const draft of drafts) {
       expect(draft.totalPriceWon).toBeLessThanOrEqual(draft.budgetWon);
@@ -97,9 +103,10 @@ describe("phase-one gaming budget test bed", () => {
     }
   });
 
-  it("uses the GPU budget beyond the old seventy-percent cap before upgrading CPU or decorative components", () => {
+  it("keeps the strongest balanced pair when the 5090 and a suitable CPU platform exceed the budget", () => {
     const draft = generateBuildDraft(testbed(), request(6_000_000), [], phase1);
-    expect(draft.selection.gpu?.partId).toBe("gpu-5090-test");
+    expect(draft.selection.gpu?.partId).toBe("gpu-5080-test");
+    expect(draft.cpuGpuBalance?.cpu.level).toBe("good");
     expect(draft.withinBudget).toBe(true);
   });
 
@@ -142,12 +149,16 @@ describe("phase-one gaming budget test bed", () => {
     expect(generatorPartAdjustmentRequestFor(baseline, "memory", "down")).toBeUndefined();
   });
 
-  it("rebuilds an actual C10M/RX580 DDR4 quote through the UI's memory + helper and the engine's AM5 compatibility path", () => {
+  it("rebuilds an actual C10M/RX580 DDR4 quote through manual DDR5 selection and the engine's AM5 compatibility path", () => {
     const catalog = sourceBackedAdjustmentCatalog();
     const baseline = generateBuildDraft(catalog, { ...request(1_000_000), gamingTestbedPhase1: true, pinnedParts: { case: "danawa-case-96308750" } });
     expect(baseline.selection.case?.partId).toBe("danawa-case-96308750");
     expect(baseline.selection.memory[0].partId).toBe("danawa-memory-11787091");
-    const next = generatorPartAdjustmentRequestFor(baseline, "memory", "up")!;
+    const nextMemory = catalog.filter(part=>part.category==="memory" && part.specs.memoryType==="DDR5" && /KLEVV DDR5-5600 CL46/.test(part.name)).sort((a,b)=>(a.priceWon??Infinity)-(b.priceWon??Infinity))[0];
+    expect(nextMemory).toBeDefined();
+    const next = generatorManualPartRequestFor(baseline,"memory",nextMemory.id,{memoryTypePreference:"DDR5"});
+    expect(next).toBeDefined();
+    if (!next) throw new Error("검증용 DDR5 수동 변경 요청을 만들지 못했습니다.");
     expect(next.includeGpu).toBe(true);
     const targetMemoryId = next.pinnedParts?.memory;
     expect(targetMemoryId).toBeDefined();
@@ -252,11 +263,135 @@ describe("phase-one gaming budget test bed", () => {
     expect(phase1GamingPartAllowed(fixture("memory", "lookalike-ram", "ESSENCORE KLEVV DDR5-6000 CL30 파인인포 (16GB)", 1))).toBe(false);
   });
 
-  it("keeps game FPS, refresh-rate and memory-speed upgrades from overriding the first budget-only test bed", () => {
+  it("uses explicit resolution floors while leaving unspecified phase-one requests at FHD", () => {
     const catalog = testbed();
     const plain = generateBuildDraft(catalog, request(1_200_000), [], phase1);
-    const withSecondPhaseGoals = generateBuildDraft(catalog, { ...request(1_200_000), gamingGameIds: ["cyberpunk"], gamingResolution: "4k", gamingRefreshRate: 240, gamingRayTracing: true, performanceTier: "top" }, [], phase1);
-    expect(withSecondPhaseGoals.selection).toEqual(plain.selection);
+    expect(plain.gamingResolution).toBe("1080p");
+    expect(() => generateBuildDraft(catalog, { ...request(1_200_000), gamingGameIds: ["cyberpunk"], gamingResolution: "4k", gamingRefreshRate: 240, gamingRayTracing: true, performanceTier: "top" }, [], phase1)).toThrow(/예산|4K/);
     expect(phase1CpuGamingClass(catalog.find((part) => part.id === "cpu-7800x3d-test"))).toBeGreaterThan(phase1CpuGamingClass(catalog.find((part) => part.id === "cpu-9700x-test")));
+  });
+});
+
+ describe("learned CPU balance and explicit platform requests", () => {
+  it("keeps manually selected weak CPU + high GPU but reports red balance without inventing a physical blocker", () => {
+    const draft = generateBuildDraft(testbed(), { ...request(10000000), pinnedParts: {cpu: "cpu-5600", gpu: "gpu-5090-test"} }, [], phase1);
+    expect(draft.selection.cpu?.partId).toBe("cpu-5600");
+    expect(draft.selection.gpu?.partId).toBe("gpu-5090-test");
+    expect(draft.blockerCount).toBe(0);
+    expect(draft.cpuGpuBalance?.cpu.level).toBe("too_weak");
+    expect(draft.analysis?.cpuGpuBalance?.cpu.level).toBe("too_weak");
+  });
+  it("preserves each top CPU manual step even when its gaming score is lower", () => {
+    const source = testbed();
+    const base = source.find((part) => part.id === "cpu-7800x3d-test")!;
+    const models = ["9800X3D", "9850X3D", "9900X3D", "9950X3D"];
+    const catalog = [...source,...models.map((model, index) => ({...base,id:model,name:`AMD 라이젠9 ${model} (정품)`,priceWon:500000+index*100000}))];
+    for (let index=0;index<models.length;index++) {
+      const draft = generateBuildDraft(catalog,{...request(10000000),pinnedParts:{cpu:models[index],gpu:"gpu-3050-test"}},[],phase1);
+      expect(draft.partTiers?.cpu?.upId).toBe(models[index+1]);
+      expect(draft.partTiers?.cpu?.downId).toBe(index ? models[index-1] : "cpu-7800x3d-test");
+      expect(draft.cpuGpuBalance?.cpu.level).toBe("too_strong");
+    }
+  });
+  it("keeps CPU tier actions inside the explicitly requested DDR platform", () => {
+    const catalog = testbed();
+    const draft = generateBuildDraft(catalog,{...request(1200000),gamingMode:"budget",memoryTypePreference:"DDR4"},[],phase1);
+    expect(draft.selection.cpu?.partId).toBe("cpu-5600");
+    expect(draft.partTiers?.cpu?.upId).toBeUndefined();
+    expect(generatorPartAdjustmentRequestFor(draft,"cpu","up")).toBeUndefined();
+
+    const base = catalog.find((part) => part.id === "cpu-7500f")!;
+    const intel = fixture("cpu","intel-14100-tier","인텔 코어i3-14세대 14100F",160000,{...base.specs,socket:"LGA1700",memoryType:"DDR4",tdpW:58,pptW:89,coolerIncluded:true,integratedGraphics:false},"Intel");
+    const dual = {...intel,id:"intel-14600-tier",name:"인텔 코어i5-14세대 14600KF",priceWon:250000,specs:{...intel.specs,memoryType:"DDR5"}};
+    const ddr5Only = {...dual,id:"intel-250-tier",name:"인텔 코어 울트라5 250KF",specs:{...dual.specs,socket:"LGA1851"}};
+    const board = fixture("motherboard","intel-tier-board","MSI B760M DDR4",100000,{socket:"LGA1700",memoryType:"DDR4",vrmCapacityW:300,maxMemorySpeedMhz:3200,memorySlots:4,formFactor:"mATX"},"MSI");
+    const intelDraft = generateBuildDraft([...catalog,intel,dual,ddr5Only,board],{...request(2200000),gamingMode:"budget",cpuVendorPreference:"intel",memoryTypePreference:"DDR4",pinnedParts:{cpu:intel.id}},[],phase1);
+    expect(intelDraft.partTiers?.cpu?.upId).toBeUndefined();
+    expect(intelDraft.partTiers?.cpu?.upUnavailableReason).toContain("13400F");
+    expect(intelDraft.partTiers?.cpu?.upId).not.toBe(ddr5Only.id);
+  });
+  it("enforces DDR5 and AMD by rebuilding rather than silently ignoring the toggle", () => {
+    const catalog = testbed();
+    const draft = generateBuildDraft(catalog, {...request(2200000), cpuVendorPreference: "amd", memoryTypePreference: "DDR5"}, [], phase1);
+    expect(catalog.find((part) => part.id === draft.selection.cpu?.partId)?.specs.socket).toBe("AM5");
+    expect(catalog.find((part) => part.id === draft.selection.memory[0].partId)?.specs.memoryType).toBe("DDR5");
+  });
+  it("overrides only the AMD CPU/board allowlist when Intel is requested, and rebuilds DDR4/DDR5 on LGA1700", () => {
+    const base = testbed();
+    const intelCpu = fixture("cpu", "intel-14100f", "인텔 코어i3-14세대 14100F", 160000, {socket:"LGA1700", memoryType:"DDR4", cores:4,threads:8,tdpW:58,pptW:89,coolerIncluded:true,integratedGraphics:false}, "Intel");
+    const intelBoards = ["DDR4", "DDR5"].map((memoryType) => fixture("motherboard", `intel-board-${memoryType}`, `MSI B760M ${memoryType}`, 100000, {socket:"LGA1700",memoryType,vrmCapacityW:300,maxMemorySpeedMhz:5600,memorySlots:4,formFactor:"mATX"}, "MSI"));
+    const catalog = [...base, intelCpu, ...intelBoards];
+    // Exact CPU facet observed in live-target-filters.json on 2026-10-06.
+    const adminFilters = {schemaVersion:1 as const, enabled:true, categories:{cpu:{specValues:{cpuSeries:["Ryzen 5000","Ryzen 7000","Ryzen 9000"],memoryType:["DDR4","DDR5"]},namePatterns:["라이젠"],excludePartIds:["blocked-cpu"],priceWon:{max:400000}},motherboard:{namePatterns:["B850M GAMING X","MAG X870E 토마호크 WIFI","A520M-HVS","TUF Gaming B550M-PLUS"]}}};
+    const original = JSON.stringify(adminFilters);
+    const intelFilters = phase1GamingFilters(adminFilters, undefined, "intel");
+    expect(intelFilters.categories.cpu?.specValues?.cpuSeries).toBeUndefined();
+    expect(intelFilters.categories.cpu?.specValues?.memoryType).toEqual(["DDR4","DDR5"]);
+    expect(intelFilters.categories.cpu?.excludePartIds).toEqual(["blocked-cpu"]);
+    expect(intelFilters.categories.cpu?.priceWon).toEqual({max:400000});
+    expect(JSON.stringify(adminFilters)).toBe(original);
+    for (const memoryTypePreference of ["DDR4", "DDR5"] as const) {
+      const draft = generateBuildDraft(catalog, {...request(2200000), cpuVendorPreference:"intel",memoryTypePreference}, [], {...phase1,targetFilters:adminFilters});
+      expect(draft.selection.cpu?.partId).toBe("intel-14100f");
+      expect(draft.selection.motherboard?.partId).toBe(`intel-board-${memoryTypePreference}`);
+      expect(catalog.find((part) => part.id === draft.selection.memory[0].partId)?.specs.memoryType).toBe(memoryTypePreference);
+    }
+    const excluded = {...adminFilters,categories:{...adminFilters.categories,cpu:{...adminFilters.categories.cpu,excludePartIds:["intel-14100f"]}}};
+    expect(() => generateBuildDraft(catalog,{...request(2200000),cpuVendorPreference:"intel"},[],{...phase1,targetFilters:excluded})).toThrow(/CPU/);
+    const mixed = phase1GamingFilters({...adminFilters,categories:{...adminFilters.categories,cpu:{...adminFilters.categories.cpu,specValues:{cpuSeries:["Ryzen 9000","Core 14"]}}}},undefined,"intel");
+    expect(mixed.categories.cpu?.specValues?.cpuSeries).toEqual(["Ryzen 9000","Core 14"]);
+  });
+  it("uses only reviewed live Intel DDR4/DDR5 boards when numeric VRM capacity is absent", () => {
+    const base = testbed().map((part) => part.category === "cooler" ? {...part,specs:{...part.specs,supportedSockets:["AM4","AM5","LGA1700"]}} : part);
+    const cpu = fixture("cpu","intel-reviewed-14400f","인텔 코어i5-14세대 14400F",230000,{socket:"LGA1700",memoryType:"DDR5",cores:10,tdpW:65,pptW:undefined,coolerIncluded:false,integratedGraphics:false},"Intel");
+    const boards = [
+      fixture("motherboard","danawa-motherboard-18651545","GIGABYTE B760M AORUS ELITE D4 피씨디렉트",197330,{socket:"LGA1700",memoryType:"DDR4",vrmCapacityW:undefined,maxMemorySpeedMhz:5333,memorySlots:4,formFactor:"mATX"},"GIGABYTE"),
+      fixture("motherboard","danawa-motherboard-18649997","GIGABYTE B760M AORUS ELITE 제이씨현",190000,{socket:"LGA1700",memoryType:"DDR5",vrmCapacityW:undefined,maxMemorySpeedMhz:7600,memorySlots:4,formFactor:"mATX"},"GIGABYTE")
+    ];
+    for (const memoryTypePreference of ["DDR4","DDR5"] as const) {
+      const draft = generateBuildDraft([...base,cpu,...boards],{...request(4000000),gamingMode:"budget",cpuVendorPreference:"intel",memoryTypePreference},[],phase1);
+      expect(draft.selection.cpu?.partId).toBe(cpu.id);
+      expect(draft.selection.motherboard?.partId).toBe(boards.find((part) => part.specs.memoryType === memoryTypePreference)!.id);
+      expect(draft.blockerCount).toBe(0);
+      expect(draft.warnings.some((warning) => warning.includes("마이크로코드"))).toBe(true);
+      expect(boards.every((part) => part.specs.vrmCapacityW === undefined)).toBe(true);
+    }
+    const unreviewed = {...boards[0],id:"unreviewed-intel-board"};
+    expect(() => generateBuildDraft([...base,cpu,unreviewed],{...request(4000000),gamingMode:"budget",cpuVendorPreference:"intel",memoryTypePreference:"DDR4"},[],phase1)).toThrow(/CPU/);
+  });
+  it("honors explicit Intel with an orange reviewed pair and excludes severely weak upper-GPU pairs", () => {
+    const base = testbed().map((part) => part.category === "cooler" ? {...part,specs:{...part.specs,supportedSockets:["AM4","AM5","LGA1700"]}} : part);
+    const cpu = fixture("cpu","intel-14600kf","인텔 코어i5-14세대 14600KF",240000,{socket:"LGA1700",memoryType:"DDR5",cores:14,threads:20,tdpW:125,pptW:181,coolerIncluded:false,integratedGraphics:false},"Intel");
+    const board = fixture("motherboard","intel-b760","MSI B760M DDR5",120000,{socket:"LGA1700",memoryType:"DDR5",vrmCapacityW:350,maxMemorySpeedMhz:5600,memorySlots:4,formFactor:"mATX"},"MSI");
+    const draft = generateBuildDraft([...base,cpu,board],{...request(10000000),cpuVendorPreference:"intel"},[],phase1);
+    expect(draft.selection.gpu?.partId).toBe("gpu-5070-test");
+    expect(draft.selection.cpu?.partId).toBe("intel-14600kf");
+    expect(draft.cpuGpuBalance?.cpu.level).toBe("slightly_weak");
+    expect(draft.cpuGpuBalance?.evidence).toBe("derived_policy");
+  });
+  it("lets the approved fixed SSD replace the old Samsung-only admin name and brand filters", () => {
+    const draft = generateBuildDraft(testbed(), request(2200000), [], {...phase1,targetFilters:{schemaVersion:1,enabled:true,categories:{ssd:{brands:["Samsung"],namePatterns:["Samsung"]}}}});
+    expect(draft.selection.ssd[0].partId).toBe("ssd-test");
+  });
+  it("uses only a genuine same-capacity Samsung or SK hynix M.2 fallback, otherwise reports missing SSD", () => {
+    const catalog = testbed().map((part) => part.category === "ssd" ? {...part,name:"Kingston NVMe 1TB"} : part);
+    expect(() => generateBuildDraft(catalog, request(2200000), [], phase1)).toThrow(/SSD/);
+    expect(() => generateBuildDraft(testbed(), {...request(2200000),storageCapacityGb:2000}, [], phase1)).toThrow(/SSD/);
+    const samsung = fixture("ssd","samsung-1tb","삼성전자 990 PRO M.2 NVMe 1TB",220000,{capacityGb:1000,formFactor:"M.2",interface:"NVMe"},"삼성전자");
+    const hynix = {...samsung,id:"hynix-1tb",brand:"SK hynix",name:"SK hynix P31 M.2 NVMe 1TB",priceWon:190000};
+    const fallback = generateBuildDraft([...catalog,samsung,hynix],request(2200000),[],phase1);
+    expect(fallback.selection.ssd[0].partId).toBe("hynix-1tb");
+    expect(() => generateBuildDraft(catalog,{...request(2200000),pinnedParts:{ssd:"ssd-test"}},[],phase1)).toThrow(/현재 게임 견적에 사용할 수 없습니다/);
+  });
+  it("keeps SSD capacity value ahead of storage speed even in a performance-priority gaming request", () => {
+    const affordable = fixture("ssd", "samsung-value-2tb", "삼성전자 990 EVO Plus M.2 NVMe (2TB)", 300000, {capacityGb:2000,formFactor:"M.2",interface:"NVMe",m2PcieGeneration:5,sequentialReadMbps:7250,sequentialWriteMbps:6300}, "삼성전자");
+    const faster = fixture("ssd", "samsung-premium-2tb", "삼성전자 990 PRO M.2 NVMe (2TB)", 500000, {capacityGb:2000,formFactor:"M.2",interface:"NVMe",m2PcieGeneration:4,sequentialReadMbps:7450,sequentialWriteMbps:6900}, "삼성전자");
+    const catalog=[...testbed().map(part=>part.category==="motherboard"?{...part,specs:{...part.specs,m2PcieGenerations:[4]}}:part),affordable,faster];
+    const next={...request(10000000),gamingMode:"budget" as const,priority:"performance" as const,storageCapacityGb:2000};
+    const draft=generateBuildDraft(catalog,next,[],phase1);
+    expect(draft.selection.ssd[0].partId).toBe(affordable.id);
+    expect(draft.blockerCount).toBe(0);
+    expect(draft.warnings.some(warning=>warning.includes("PCIe"))).toBe(true);
+    expect(generateBuildDraft(catalog,{...next,pinnedParts:{ssd:faster.id}},[],phase1).selection.ssd[0].partId).toBe(faster.id);
   });
 });

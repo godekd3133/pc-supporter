@@ -45,11 +45,11 @@ describe("assembly verification report", () => {
 
     expect(text).toContain("# 조립 후 측정 기록");
     expect(text).toContain("## 추가로 확인할 내용");
-    expect(text).toContain("CSV · hwinfo.csv · 원본 기록 120개 · 온도 기록 2개");
+    expect(text).toContain("CSV / hwinfo.csv / 원본 기록 120개 / 온도 기록 2개");
     expect(text).toContain("측정 자료: 자료 충분");
     expect(text).toContain("시간 기록 연속");
     expect(text).toContain("온도 변화: CPU 상승");
-    expect(text).toContain("CPU 사용률 평균 97.5% · 최고 100%");
+    expect(text).toContain("CPU 사용률 평균 97.5% / 최고 100%");
     expect(text).toContain("부하 구간: 혼합 부하 2점");
     expect(text).toContain("이전 동일 조건 비교:");
     expect(text).toContain("제조사 보증이나 안전 인증, 고장 판정은 아닙니다.");
@@ -64,7 +64,7 @@ describe("assembly verification report", () => {
 
     expect(csv.startsWith("\uFEFF기록 번호,기록 이름,기록 ID")).toBe(true);
     expect(csv).toContain('"OCCT, 조립 직후"');
-    expect(csv).toContain("원본 기록 120개 · 온도 기록 2개");
+    expect(csv).toContain("원본 기록 120개 / 온도 기록 2개");
     expect(csv).toContain("이전 동일 조건 비교");
     expect(json.type).toBe("pc-supporter-assembly-verification-report");
     expect(json.runs[0]).not.toHaveProperty("measurementSeries");

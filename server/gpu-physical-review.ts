@@ -104,12 +104,12 @@ function priorityFor(score: number): PhysicalReviewPriority {
 }
 
 function reviewReasonFor(part: Part, focusFields: string[], priorityReasons: string[], reviewStatus: PhysicalReviewStatus, freshness: DataFreshness, sourceCheckNeedsReview: boolean) {
-  const reason = priorityReasons.length > 0 ? priorityReasons.join(" · ") : "일반 물리 호환 정보";
+  const reason = priorityReasons.length > 0 ? priorityReasons.join(" / ") : "일반 물리 호환 정보";
   const freshnessReason = reviewStatus === "stale" && (freshness === "stale" || freshness === "unknown")
-    ? `정보 ${DATA_FRESHNESS_LABELS[freshness]} · 제조사 페이지 재확인 필요`
+    ? `정보 ${DATA_FRESHNESS_LABELS[freshness]} / 제조사 페이지 재확인 필요`
     : undefined;
-  const sourceCheckReason = sourceCheckNeedsReview ? "정보 URL 접근·모델 식별 재확인 필요" : undefined;
-  return [reason, freshnessReason, sourceCheckReason, `우선 확인: ${focusFields.join(" · ") || "현재 등록값 재확인"}`].filter(Boolean).join(" · ");
+  const sourceCheckReason = sourceCheckNeedsReview ? "정보 URL 접근/모델 식별 재확인 필요" : undefined;
+  return [reason, freshnessReason, sourceCheckReason, `우선 확인: ${focusFields.join(" / ") || "현재 등록값 재확인"}`].filter(Boolean).join(" / ");
 }
 
 function queueItemFor(part: Part & { category: PhysicalOverrideCategory }, overrides: Record<string, GpuPhysicalOverride>, now: string | number): PhysicalReviewQueueItem {
@@ -118,7 +118,7 @@ function queueItemFor(part: Part & { category: PhysicalOverrideCategory }, overr
   const freshness = override ? classifyDataFreshness(override.updatedAt, now) : "unknown";
   const sourceCheckReviewRequired = physicalSourceCheckNeedsReview(override?.sourceCheck, Boolean(override?.sourceUrl), now);
   const focusFields = reviewStatus === "stale"
-    ? [...focusFieldsFor(part, override), sourceCheckReviewRequired ? "정보 URL 접근·모델 식별 재확인" : "제조사 정보 신선도 재확인"]
+    ? [...focusFieldsFor(part, override), sourceCheckReviewRequired ? "정보 URL 접근/모델 식별 재확인" : "제조사 정보 신선도 재확인"]
     : focusFieldsFor(part, override);
   const priorityData = priorityScoreFor(part);
   return {
@@ -241,13 +241,13 @@ export function physicalReviewCoverageFor(catalog: Part[], overrides: Record<str
 const commonPhysicalReviewWorkFields: PhysicalReviewWorkField[] = [
   { key: "manufacturerModel", label: "제조사 모델/SKU", type: "text", required: true, instruction: "문서가 적용되는 정확한 제조사 모델 또는 SKU를 입력합니다." },
   { key: "manufacturerRevision", label: "문서 버전", type: "text", required: false, instruction: "문서에 버전이나 개정일이 적혀 있을 때만 입력합니다." },
-  { key: "sourceNote", label: "확인 정보 메모", type: "text", required: true, instruction: "제조사 매뉴얼 페이지·설치 가이드·케이블 표의 확인 위치를 남깁니다." },
+  { key: "sourceNote", label: "확인 정보 메모", type: "text", required: true, instruction: "제조사 매뉴얼 페이지/설치 가이드/케이블 표의 확인 위치를 남깁니다." },
   { key: "sourceUrl", label: "정보 URL", type: "url", required: false, instruction: "가능하면 제조사 공식 HTTPS 페이지 URL을 입력합니다." }
 ];
 
 const physicalReviewWorkFields: Record<PhysicalOverrideCategory, PhysicalReviewWorkField[]> = {
   gpu: [
-    { key: "gpuSlotOccupancy", label: "GPU 물리 슬롯 점유", type: "number", required: true, instruction: "제조사 표기의 2-slot·2.5-slot·3-slot 등을 숫자로 입력합니다." },
+    { key: "gpuSlotOccupancy", label: "GPU 물리 슬롯 점유", type: "number", required: true, instruction: "제조사 표기의 2-slot/2.5-slot/3-slot 등을 숫자로 입력합니다." },
     { key: "gpuCableBendClearanceMm", label: "GPU 케이블 굽힘 최소 여유 (mm)", type: "number", required: true, instruction: "제조사 설치 가이드에서 전원 케이블 굽힘에 필요한 최소 공간을 입력합니다." }
   ],
   case: [

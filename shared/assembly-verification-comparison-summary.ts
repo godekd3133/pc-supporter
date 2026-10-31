@@ -97,8 +97,8 @@ export function assemblyVerificationComparisonSummaryFor(history: AssemblyVerifi
     const rawValue = valueFor({ overlayRun, ...fact });
     return { runId: overlayRun.runId, runLabel: overlayRun.runLabel, index: overlayRun.index, detail: detailFor({ overlayRun, ...fact }, rawValue), rawValue };
   }), valueFor(baseline), stability);
-  const cpuStabilityRows = rowsFor((fact) => fact.cpuStability.seconds, (fact, value) => `${fact.cpuStability.stableCount}/${fact.cpuStability.segmentCount}개 구간 · ${value === undefined ? "안정화 미확인" : `안정화 확인 · ${value}초 이후`}`, true);
-  const gpuStabilityRows = rowsFor((fact) => fact.gpuStability.seconds, (fact, value) => `${fact.gpuStability.stableCount}/${fact.gpuStability.segmentCount}개 구간 · ${value === undefined ? "안정화 미확인" : `안정화 확인 · ${value}초 이후`}`, true);
+  const cpuStabilityRows = rowsFor((fact) => fact.cpuStability.seconds, (fact, value) => `${fact.cpuStability.stableCount}/${fact.cpuStability.segmentCount}개 구간 / ${value === undefined ? "안정화 미확인" : `안정화 확인 / ${value}초 이후`}`, true);
+  const gpuStabilityRows = rowsFor((fact) => fact.gpuStability.seconds, (fact, value) => `${fact.gpuStability.stableCount}/${fact.gpuStability.segmentCount}개 구간 / ${value === undefined ? "안정화 미확인" : `안정화 확인 / ${value}초 이후`}`, true);
   return {
     overlay,
     baselineRunId: overlay.runs[0]?.runId,
@@ -107,8 +107,8 @@ export function assemblyVerificationComparisonSummaryFor(history: AssemblyVerifi
     gpuPeakRows: rowsFor((fact) => fact.overlayRun.gpuTempPeak, (fact, value) => value === undefined ? "GPU 최고 온도 기록 없음" : `GPU 최고 ${value}°C`),
     cpuStabilityRows,
     gpuStabilityRows,
-    cpuPowerRows: rowsFor((fact) => fact.cpuPower, (fact, value) => value === undefined ? "CPU 전력 기록 없음" : `CPU 평균 ${value}W · 관찰 순`, false),
-    gpuPowerRows: rowsFor((fact) => fact.gpuPower, (fact, value) => value === undefined ? "GPU 전력 기록 없음" : `GPU 평균 ${value}W · 관찰 순`, false),
+    cpuPowerRows: rowsFor((fact) => fact.cpuPower, (fact, value) => value === undefined ? "CPU 전력 기록 없음" : `CPU 평균 ${value}W / 관찰 순`, false),
+    gpuPowerRows: rowsFor((fact) => fact.gpuPower, (fact, value) => value === undefined ? "GPU 전력 기록 없음" : `GPU 평균 ${value}W / 관찰 순`, false),
     ...(overlay.runCount < 2 ? { reason: "insufficient-comparison" as const } : {})
   };
 }

@@ -28,7 +28,7 @@ function capacityItem(args: Omit<BuildConnectivityItem, "status" | "headroom"> &
     ...args,
     status: headroom < 0 ? "review" as const : "pass" as const,
     headroom,
-    detail: `${used}개 사용 · ${capacity}개 확인 · ${headroom >= 0 ? `${headroom}개 여유` : `${Math.abs(headroom)}개 부족`}`
+    detail: `${used}개 사용 / ${capacity}개 확인 / ${headroom >= 0 ? `${headroom}개 여유` : `${Math.abs(headroom)}개 부족`}`
   };
 }
 
@@ -39,7 +39,7 @@ export function buildConnectivitySummaryFor(motherboard: PartSpecs | undefined, 
   const fanCount = computerCase.fanCount;
   const fanPortCount = motherboard.fanPortCount;
   items.push(fanCount === 0
-    ? { id: "fan-headers", ruleId: "case-fan-headers", label: "케이스 팬 연결", status: "pass", used: 0, capacity: fanPortCount, headroom: fanPortCount, detail: fanPortCount === undefined ? "케이스에 기본 팬은 없지만 메인보드 팬 연결 수를 확인해야 합니다." : `케이스 기본 팬 없음 · 메인보드 팬 연결 ${fanPortCount}개` }
+    ? { id: "fan-headers", ruleId: "case-fan-headers", label: "케이스 팬 연결", status: "pass", used: 0, capacity: fanPortCount, headroom: fanPortCount, detail: fanPortCount === undefined ? "케이스에 기본 팬은 없지만 메인보드 팬 연결 수를 확인해야 합니다." : `케이스 기본 팬 없음 / 메인보드 팬 연결 ${fanPortCount}개` }
     : fanCount === undefined || fanPortCount === undefined
       ? { id: "fan-headers", ruleId: "case-fan-headers", label: "케이스 팬 연결", status: "unknown", used: fanCount, capacity: fanPortCount, detail: "케이스 기본 팬 수와 메인보드 팬 연결 수를 확인하세요. 팬 허브 포함 여부도 확인하세요." }
       : capacityItem({ id: "fan-headers", ruleId: "case-fan-headers", label: "케이스 팬 연결", used: fanCount, capacity: fanPortCount, detail: "" }));
@@ -47,7 +47,7 @@ export function buildConnectivitySummaryFor(motherboard: PartSpecs | undefined, 
   const rgbDeviceCount = computerCase.rgbDeviceCount;
   const rgbPortCount = motherboard.rgbPortCount;
   items.push(rgbDeviceCount === 0
-    ? { id: "rgb-headers", ruleId: "case-rgb-headers", label: "케이스 RGB 연결", status: "pass", used: 0, capacity: rgbPortCount, headroom: rgbPortCount, detail: rgbPortCount === undefined ? "케이스에 RGB 장치는 없지만 메인보드 RGB 연결 수를 확인해야 합니다." : `케이스 RGB 장치 없음 · 메인보드 RGB 연결 ${rgbPortCount}개` }
+    ? { id: "rgb-headers", ruleId: "case-rgb-headers", label: "케이스 RGB 연결", status: "pass", used: 0, capacity: rgbPortCount, headroom: rgbPortCount, detail: rgbPortCount === undefined ? "케이스에 RGB 장치는 없지만 메인보드 RGB 연결 수를 확인해야 합니다." : `케이스 RGB 장치 없음 / 메인보드 RGB 연결 ${rgbPortCount}개` }
     : rgbDeviceCount === undefined || rgbPortCount === undefined
       ? { id: "rgb-headers", ruleId: "case-rgb-headers", label: "케이스 RGB 연결", status: "unknown", used: rgbDeviceCount, capacity: rgbPortCount, detail: "케이스 RGB 장치 수와 메인보드 RGB 연결 수를 확인하세요. RGB 허브 포함 여부도 확인하세요." }
       : capacityItem({ id: "rgb-headers", ruleId: "case-rgb-headers", label: "케이스 RGB 연결", used: rgbDeviceCount, capacity: rgbPortCount, detail: "" }));
@@ -68,10 +68,10 @@ export function buildConnectivitySummaryFor(motherboard: PartSpecs | undefined, 
       label: "RGB 전압 연결",
       status: missingData.length > 0 ? "unknown" : missingHeaders.length > 0 ? "review" : "pass",
       detail: missingData.length > 0
-        ? `필요 전압 ${requiredVoltages.join(" + ")} · 메인보드의 해당 전압 연결 수 확인 필요`
+        ? `필요 전압 ${requiredVoltages.join(" + ")} / 메인보드의 해당 전압 연결 수 확인 필요`
         : missingHeaders.length > 0
-          ? `필요 전압 ${requiredVoltages.join(" + ")} · ${missingHeaders.join("·")} 연결 단자 없음`
-          : `필요 전압 ${requiredVoltages.join(" + ")} · 해당 전압 단자 확인됨`
+          ? `필요 전압 ${requiredVoltages.join(" + ")} / ${missingHeaders.join("/")} 연결 단자 없음`
+          : `필요 전압 ${requiredVoltages.join(" + ")} / 해당 전압 단자 확인됨`
     });
   }
 

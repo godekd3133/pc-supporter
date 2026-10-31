@@ -82,7 +82,7 @@ export function AdminGamingEvidenceComposer({ onAdd, onToast }: { onAdd: (record
       ...(form.sourceNote.trim() ? { sourceNote: form.sourceNote } : {})
     });
     if (!record) {
-      setError("ID·게임·GPU·평균 FPS·측정일·HTTPS 출처와 조건을 모두 확인해 주세요. 1% low는 평균 FPS보다 높을 수 없습니다.");
+      setError("ID/게임/GPU/평균 FPS/측정일/HTTPS 출처와 조건을 모두 확인해 주세요. 1% low는 평균 FPS보다 높을 수 없습니다.");
       return;
     }
     setError(null);
@@ -110,7 +110,7 @@ export function AdminGamingEvidenceComposer({ onAdd, onToast }: { onAdd: (record
         <label><span>측정일</span><input type="datetime-local" value={form.measuredAt} onChange={(event) => update({ measuredAt: event.target.value })} /></label>
         <label><span>출처 종류</span><select value={form.sourceKind} onChange={(event) => update({ sourceKind: event.target.value as ComposerState["sourceKind"] })}>{Object.entries(SOURCE_KIND_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
         <label className="wide"><span>HTTPS 원본 URL</span><input type="url" value={form.sourceUrl} onChange={(event) => update({ sourceUrl: event.target.value })} placeholder="https://..." /></label>
-        <label className="wide"><span>측정 메모 <em>선택</em></span><textarea value={form.sourceNote} onChange={(event) => update({ sourceNote: event.target.value })} placeholder="드라이버·게임 패치·측정 장면·온도 등 원문에 남은 조건" /></label>
+        <label className="wide"><span>측정 메모 <em>선택</em></span><textarea value={form.sourceNote} onChange={(event) => update({ sourceNote: event.target.value })} placeholder="드라이버/게임 패치/측정 장면/온도 등 원문에 남은 조건" /></label>
         <label className="composer-checkbox wide"><input type="checkbox" checked={form.rayTracing} onChange={(event) => update({ rayTracing: event.target.checked })} /><span>레이 트레이싱 조건 포함</span></label>
       </div>
       {error && <p className="gaming-performance-evidence-composer-error" role="alert">{error}</p>}

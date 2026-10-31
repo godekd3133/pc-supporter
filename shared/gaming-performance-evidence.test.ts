@@ -17,7 +17,7 @@ const record = (overrides: Record<string, unknown> = {}) => ({
   measuredAt: "2026-09-01T00:00:00.000Z",
   sourceKind: "independent_review",
   sourceUrl: "https://example.com/review",
-  sourceNote: "고정 드라이버·동일 장면 측정",
+  sourceNote: "고정 드라이버/동일 장면 측정",
   ...overrides
 });
 
@@ -46,7 +46,7 @@ describe("gaming performance evidence contract", () => {
   it("returns actionable batch validation errors before an admin save", () => {
     const validation = gamingPerformanceEvidenceBatchValidationFor({ items: [record(), record(), record({ id: "invalid", gpuPartId: undefined })] });
     expect(validation).toMatchObject({ valid: false, validCount: 1, invalidCount: 2, duplicateIds: ["evidence-cyberpunk-7900xtx"] });
-    expect(validation.errors.map((error) => error.message)).toEqual(expect.arrayContaining(["같은 자료 ID가 중복되었습니다.", "필수 조건·GPU ID·출처 URL·측정값을 확인해 주세요."]));
+    expect(validation.errors.map((error) => error.message)).toEqual(expect.arrayContaining(["같은 자료 ID가 중복되었습니다.", "필수 조건/GPU ID/출처 URL/측정값을 확인해 주세요."]));
   });
 
   it("keeps not-recorded, missing, partial, stale, and verified states separate", () => {

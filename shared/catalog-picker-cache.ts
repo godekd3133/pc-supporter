@@ -1,3 +1,4 @@
+import { catalogSearchMatches } from "./catalog-search-normalization";
 import { classifyDataFreshness } from "./data-freshness";
 import { benchmarkAvailabilityMatchesFilter } from "./benchmark-evidence";
 import type { BenchmarkAvailabilityFilter, DataFreshness, DataQuality, ListingPolicy, Part, PartCategory, PriceAvailabilityFilter } from "./types";
@@ -278,7 +279,7 @@ export function catalogPickerCachedFallbackFor(parts: ReadonlyArray<Part>, query
     .filter((part) => {
       if (!needle) return true;
       const haystack = [part.name, part.brand, part.model, part.specs.socket, part.specs.memoryType, part.specs.interface, part.specs.formFactor].filter(Boolean).join(" ").toLocaleLowerCase("ko-KR");
-      return haystack.includes(needle);
+      return catalogSearchMatches(haystack, needle);
     });
   const sorted = sortCachedParts(filtered, query.sort);
   const offset = Math.max(0, Math.floor(query.offset ?? 0));

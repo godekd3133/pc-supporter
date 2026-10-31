@@ -71,7 +71,7 @@ function connectivityActionsFor(result: BuildActionCenterResult, build: BuildSel
       priority: "review" as const,
       source: "physical" as const,
       title: `${item.label} ${item.status === "review" ? "여유 부족 확인" : "제조사 페이지 확인"}`,
-      summary: `${item.detail} 케이스 기본 팬·RGB 장치가 메인보드 단자에 연결되는지 확인하세요.`,
+      summary: `${item.detail} 케이스 기본 팬/RGB 장치가 메인보드 단자에 연결되는지 확인하세요.`,
       targetId: "build-connectivity-panel" as const
     }));
 }
@@ -82,13 +82,13 @@ function resourceActionFor(result: Pick<CompatibilityResult, "metrics">): BuildA
   const affectedCards = summary.cards
     .filter((card) => card.state === "danger" || card.state === "warning" || card.state === "unknown")
     .map((card) => `${card.label} ${card.headline}`)
-    .join(" · ");
+    .join(" / ");
   return {
     id: "physical:resource-budget",
     priority: summary.state === "danger" ? "blocker" : "review",
     source: "physical",
-    title: summary.state === "danger" ? "전력·냉각 예산 기준 미달" : summary.state === "unknown" ? "전력·냉각 정보 확인" : "전력·냉각 여유 확인",
-    summary: `${affectedCards} · ${summary.summary}`,
+    title: summary.state === "danger" ? "전력/냉각 예산 기준 미달" : summary.state === "unknown" ? "전력/냉각 정보 확인" : "전력/냉각 여유 확인",
+    summary: `${affectedCards} / ${summary.summary}`,
     targetId: "build-resource-summary"
   };
 }
@@ -132,10 +132,10 @@ export function buildActionCenterFor(result: BuildActionCenterResult, build?: Bu
   if (result.gpuFit) {
     const evidence = gpuPurchaseEvidenceFor(result.gpuFit);
     if (evidence.physical === "incompatible" || evidence.physical === "needs_review") {
-      addAction(actions, seen, { id: "physical:gpu-case", priority: evidence.physical === "incompatible" ? "blocker" : "review", source: "physical", title: evidence.physical === "incompatible" ? "GPU·케이스 물리 간섭 해결" : "GPU·케이스 장착 정보 확인", summary: evidence.physical === "incompatible" ? "케이블 요구 여유보다 케이스 측면 공간이 작아 실제 장착 조건을 바꿔야 합니다." : "GPU 슬롯·케이블 굽힘 여유와 케이스 측면 공간을 제조사 정보로 확인해야 합니다.", targetId: "gpu-fit-summary-panel" });
+      addAction(actions, seen, { id: "physical:gpu-case", priority: evidence.physical === "incompatible" ? "blocker" : "review", source: "physical", title: evidence.physical === "incompatible" ? "GPU/케이스 물리 간섭 해결" : "GPU/케이스 장착 정보 확인", summary: evidence.physical === "incompatible" ? "케이블 요구 여유보다 케이스 측면 공간이 작아 실제 장착 조건을 바꿔야 합니다." : "GPU 슬롯/케이블 굽힘 여유와 케이스 측면 공간을 제조사 정보로 확인해야 합니다.", targetId: "gpu-fit-summary-panel" });
     }
     if (evidence.pcieCableTopology === "incompatible" || evidence.pcieCableTopology === "needs_review") {
-      addAction(actions, seen, { id: "physical:psu-cable", priority: evidence.pcieCableTopology === "incompatible" ? "blocker" : "review", source: "physical", title: evidence.pcieCableTopology === "incompatible" ? "PSU PCIe 케이블 경로 변경" : "PSU PCIe 케이블 분배 확인", summary: evidence.pcieCableTopology === "incompatible" ? "현재 PSU의 확인된 케이블 구조로 GPU 연결 요구를 충족할 수 없습니다." : "커넥터 수와 별도로 독립 PCIe 케이블 런·분배 구조를 확인해야 합니다.", targetId: "gpu-fit-summary-panel" });
+      addAction(actions, seen, { id: "physical:psu-cable", priority: evidence.pcieCableTopology === "incompatible" ? "blocker" : "review", source: "physical", title: evidence.pcieCableTopology === "incompatible" ? "PSU PCIe 케이블 경로 변경" : "PSU PCIe 케이블 분배 확인", summary: evidence.pcieCableTopology === "incompatible" ? "현재 PSU의 확인된 케이블 구조로 GPU 연결 요구를 충족할 수 없습니다." : "커넥터 수와 별도로 독립 PCIe 케이블 런/분배 구조를 확인해야 합니다.", targetId: "gpu-fit-summary-panel" });
     }
   }
   const resourceAction = resourceActionFor(result);
@@ -146,13 +146,13 @@ export function buildActionCenterFor(result: BuildActionCenterResult, build?: Bu
   const hasBlocker = result.blockerCount > 0 || result.accessoryCompatibility?.blockerCount !== undefined && result.accessoryCompatibility.blockerCount > 0 || actions.some((action) => action.priority === "blocker");
   const hasReview = result.warningCount > 0 || result.unknownCount > 0 || result.accessoryCompatibility?.warningCount !== undefined && result.accessoryCompatibility.warningCount > 0 || result.accessoryCompatibility?.unknownCount !== undefined && result.accessoryCompatibility.unknownCount > 0 || actions.some((action) => action.priority === "review");
   if (actions.length === 0) {
-    actions.push({ id: "assembly:final-check", priority: "manual", source: "assembly", title: "조립 전에 확인할 항목", summary: "제조사 QVL·BIOS, 실제 케이스 여유, 첫 부팅 POST·온도·소음은 별도로 확인하세요.", targetId: "purchase-checklist" });
+    actions.push({ id: "assembly:final-check", priority: "manual", source: "assembly", title: "조립 전에 확인할 항목", summary: "제조사 QVL/BIOS, 실제 케이스 여유, 첫 부팅 POST/온도/소음은 별도로 확인하세요.", targetId: "purchase-checklist" });
   }
   const state = hasBlocker ? "blocked" : hasReview ? "review" : "ready";
   const visibleCount = 6;
   return {
     state,
-    summary: state === "blocked" ? `구매 전에 해결해야 할 항목 ${actions.filter((action) => action.priority === "blocker").length}개가 있어요.` : state === "review" ? `구매·조립 전에 확인할 항목 ${actions.length}개가 있어요.` : "호환 문제는 없어요. 조립 전에 제조사 안내와 연결 상태를 확인해 주세요.",
+    summary: state === "blocked" ? `구매 전에 해결해야 할 항목 ${actions.filter((action) => action.priority === "blocker").length}개가 있어요.` : state === "review" ? `구매/조립 전에 확인할 항목 ${actions.length}개가 있어요.` : "호환 문제는 없어요. 조립 전에 제조사 안내와 연결 상태를 확인해 주세요.",
     totalCount: actions.length,
     hiddenCount: Math.max(0, actions.length - visibleCount),
     actions

@@ -271,7 +271,7 @@ describe("public API evidence projection", () => {
         targetVramGb: 12,
         currentVramGb: 8,
         currentFit: "partial",
-        summary: expect.stringContaining("QHD · 144Hz · 권장 VRAM 12GB")
+        summary: expect.stringContaining("QHD \/ 144Hz \/ 권장 VRAM 12GB")
       });
 
       server = app.listen(0, "127.0.0.1");
@@ -328,7 +328,7 @@ describe("public API evidence projection", () => {
       expect(qhdCompatibilityPayload.analysis).toBeUndefined();
       expect(qhdCompatibilityPayload.upgradeBundlePayload?.version).toBe(1);
       expect(qhdCompatibilityPayload.upgradeBundlePayload?.bundles?.length).toBeGreaterThan(0);
-      expect(JSON.stringify(qhdCompatibilityPayload)).not.toMatch(/gpuTarget|performanceSummary|analysisConfidence|scoreModelVersion|valueLabel|valueEvidence|similarityLabel|improvementPercent|totalUpgradeScore|totalImprovementPercent|expansionEvidence|baselineScore|baselineSummary|candidateSummary|improvedDimensions|scoreDelta|candidateScore|catalogSpecSourceCheckNeedsReview|benchmarkChanged|benchmarkNeedsReview|confidence|부품별 비교 변화가 합산|QHD · 144Hz · 권장 VRAM 12GB/);
+      expect(JSON.stringify(qhdCompatibilityPayload)).not.toMatch(/gpuTarget|performanceSummary|analysisConfidence|scoreModelVersion|valueLabel|valueEvidence|similarityLabel|improvementPercent|totalUpgradeScore|totalImprovementPercent|expansionEvidence|baselineScore|baselineSummary|candidateSummary|improvedDimensions|scoreDelta|candidateScore|catalogSpecSourceCheckNeedsReview|benchmarkChanged|benchmarkNeedsReview|confidence|부품별 비교 변화가 합산|QHD \/ 144Hz \/ 권장 VRAM 12GB/);
 
       const recommendationRequest = {
         profile: "gaming",
@@ -447,15 +447,15 @@ describe("public API evidence projection", () => {
         name: id === gpu.id ? gpu.name : "다른 GPU",
         category: "gpu",
         partId: id,
-        summary: "VRAM 12GB · 270mm",
+        summary: "VRAM 12GB / 270mm",
         price: "650,000원",
         priceWon: 650000,
-        similarity: "대안 83점 · 정보 충분",
-        performance: "3DMark Time Spy 24680점 · GPU_PRIVATE_BENCHMARK_SOURCE",
+        similarity: "대안 83점 / 정보 충분",
+        performance: "3DMark Time Spy 24680점 / GPU_PRIVATE_BENCHMARK_SOURCE",
         compatibility: "호환 확인",
         recommendationTrust: "높음 94점",
-        decisionSummary: "추천 부품 · 높음 94점",
-        physicalEvidence: "길이 270mm · 제조사 안내 확인",
+        decisionSummary: "추천 부품 / 높음 94점",
+        physicalEvidence: "길이 270mm / 제조사 안내 확인",
         physicalEvidenceSources: [{ category: "gpu", manufacturerModel: "GPU-1", note: "제조사 장착 안내", url: "https://vendor.example/gpu-1" }],
         sourceUrl: "https://prod.danawa.com/info/?pcode=gpu-public-boundary",
         dataQuality: "수동 확인",

@@ -1,3 +1,4 @@
+import { phase1IntelMotherboardSupportsCpu, phase1IntelStockCpuPowerFor } from "./phase1-hardware-evidence";
 import { describe, expect, it } from "vitest";
 import { phase1CoolerSupportsCpu, phase1MotherboardSupportsCpu } from "./phase1-hardware-evidence";
 import { phase1VerifiedCatalog } from "../server/phase1-catalog";
@@ -34,5 +35,18 @@ describe("source-backed first-testbed CPU and motherboard policy", () => {
     expect(phase1CoolerSupportsCpu(product("106047347"), product("77790914"))).toBe(false);
     expect(phase1CoolerSupportsCpu(product("16525058"), product("77790914"))).toBe(true);
     expect(phase1CoolerSupportsCpu({ ...cooler, name: "CORSAIR NAUTILUS 360 RS ARGB", model: "NAUTILUS 360 RS ARGB" }, product("77790914"))).toBe(false);
+  });
+});
+
+describe("reviewed Intel board policy without synthetic watts", () => {
+  it("rejects unreviewed identities, memory mismatches and overclocked power while accepting the reviewed stock pair", () => {
+    const cpu: Part = {id:"intel144",category:"cpu",name:"인텔 14400F",source:"manual",dataQuality:"manual",missingFields:[],updatedAt:"2026-10-06",specs:{socket:"LGA1700",tdpW:65}};
+    const board: Part = {...cpu,id:"danawa-motherboard-18651545",category:"motherboard",name:"GIGABYTE B760M AORUS ELITE D4 피씨디렉트",specs:{socket:"LGA1700",memoryType:"DDR4"}};
+    expect(phase1IntelStockCpuPowerFor(cpu)?.turboW).toBe(148);
+    expect(phase1IntelMotherboardSupportsCpu(cpu,board)).toBe(true);
+    expect(phase1IntelMotherboardSupportsCpu(cpu,{...board,id:"other"})).toBe(false);
+    expect(phase1IntelMotherboardSupportsCpu(cpu,{...board,specs:{...board.specs,memoryType:"DDR5"}})).toBe(false);
+    expect(phase1IntelMotherboardSupportsCpu({...cpu,specs:{...cpu.specs,pptW:200}},board)).toBe(false);
+    expect(board.specs.vrmCapacityW).toBeUndefined();
   });
 });

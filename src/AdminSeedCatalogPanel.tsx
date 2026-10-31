@@ -29,7 +29,7 @@ function sourceLabel(source: keyof CatalogSeedPreview["active"]["sourceCounts"])
 }
 
 function conflictDifferences(conflict: CatalogSeedPreviewConflict) {
-  return conflict.differences.map((difference) => DIFFERENCE_LABELS[difference]).join(" · ");
+  return conflict.differences.map((difference) => DIFFERENCE_LABELS[difference]).join(" / ");
 }
 
 export function AdminSeedCatalogPanel() {
@@ -54,7 +54,7 @@ export function AdminSeedCatalogPanel() {
       <div>
 
         <h2>기본 정보 기준값 비교</h2>
-        <p>새 checkout의 기본 정보 부품과 현재 운영 카탈로그를 ID·범주 기준으로 비교합니다. 이 화면은 병합·삭제·덮어쓰기를 실행하지 않습니다.</p>
+        <p>새 checkout의 기본 정보 부품과 현재 운영 카탈로그를 ID/범주 기준으로 비교합니다. 이 화면은 병합/삭제/덮어쓰기를 실행하지 않습니다.</p>
       </div>
       <div className="admin-seed-preview-actions">
         <span className="admin-seed-preview-readonly"><FiDatabase /> 읽기 전용</span>
@@ -66,12 +66,12 @@ export function AdminSeedCatalogPanel() {
         <div className="admin-seed-preview-coverage">
           <span>starter 반영 coverage</span>
           <strong>{preview.coverage.coveragePercent.toFixed(1)}%</strong>
-          <small>{numberText(preview.coverage.matchedCount)}개 확인 · {numberText(preview.coverage.missingCount)}개 현재 카탈로그에 없음</small>
+          <small>{numberText(preview.coverage.matchedCount)}개 확인 / {numberText(preview.coverage.missingCount)}개 현재 카탈로그에 없음</small>
           <div className="admin-seed-preview-track" role="progressbar" aria-label="starter 기준값 반영 coverage" aria-valuemin={0} aria-valuemax={100} aria-valuenow={preview.coverage.coveragePercent}><span style={{ width: `${Math.min(100, Math.max(0, preview.coverage.coveragePercent))}%` }} /></div>
         </div>
         <div><span>기본 목록 부품</span><strong>{numberText(preview.starter.total)}개</strong><small>{numberText(preview.categoryRows.length)}개 핵심 범주</small></div>
         <div><span>현재 원본 카탈로그</span><strong>{numberText(preview.active.total)}개</strong><small>{preview.active.coreEligibleCount !== undefined ? `핵심 부품 ${numberText(preview.active.coreEligibleCount)}개` : "핵심 부품 별도 계산"}</small></div>
-        <div className={preview.coverage.conflictCount > 0 ? "has-warning" : ""}><span>값 충돌</span><strong>{numberText(preview.coverage.conflictCount)}개</strong><small>{preview.coverage.conflictCount > 0 ? "이름·가격·스펙 재확인" : "ID 기준 충돌 없음"}</small></div>
+        <div className={preview.coverage.conflictCount > 0 ? "has-warning" : ""}><span>값 충돌</span><strong>{numberText(preview.coverage.conflictCount)}개</strong><small>{preview.coverage.conflictCount > 0 ? "이름/가격/스펙 재확인" : "ID 기준 충돌 없음"}</small></div>
       </div>
       <div className="admin-seed-preview-source-strip" data-testid="admin-seed-catalog-source-summary">
         <div><strong>현재 데이터 출처</strong><small>같은 부품이라도 source와 품질은 별도로 유지합니다.</small></div>
@@ -85,11 +85,11 @@ export function AdminSeedCatalogPanel() {
         </section>
         <section className="admin-seed-preview-missing-card" aria-label="현재 카탈로그에 없는 starter 부품">
           <div className="admin-seed-preview-subheading"><div><strong>현재 카탈로그에 없는 기준 부품</strong></div><small>{numberText(preview.missingItems.length)}개</small></div>
-          {preview.missingItems.length > 0 ? <div className="admin-seed-preview-missing-list">{preview.missingItems.slice(0, 10).map((item) => <div key={`${item.category}:${item.id}`}><div><span>{CATEGORY_LABELS[item.category]}</span><strong>{item.name}</strong></div><small>{item.id} · {priceText(item.priceWon)}</small></div>)}{preview.missingItems.length > 10 && <p>외 {numberText(preview.missingItems.length - 10)}개는 API 상세 응답에서 확인할 수 있습니다.</p>}</div> : <div className="admin-seed-preview-empty"><FiCheckCircle /> 모든 starter ID가 현재 카탈로그에서 확인됩니다.</div>}
+          {preview.missingItems.length > 0 ? <div className="admin-seed-preview-missing-list">{preview.missingItems.slice(0, 10).map((item) => <div key={`${item.category}:${item.id}`}><div><span>{CATEGORY_LABELS[item.category]}</span><strong>{item.name}</strong></div><small>{item.id} / {priceText(item.priceWon)}</small></div>)}{preview.missingItems.length > 10 && <p>외 {numberText(preview.missingItems.length - 10)}개는 API 상세 응답에서 확인할 수 있습니다.</p>}</div> : <div className="admin-seed-preview-empty"><FiCheckCircle /> 모든 starter ID가 현재 카탈로그에서 확인됩니다.</div>}
         </section>
       </div>
-      {preview.conflicts.length > 0 && <section className="admin-seed-preview-conflicts" aria-label="starter 값 충돌 목록"><div className="admin-seed-preview-subheading"><div><strong>병합 전 다시 확인할 값</strong></div><small>{numberText(preview.conflicts.length)}개</small></div><div className="admin-seed-preview-conflict-list">{preview.conflicts.slice(0, 8).map((conflict) => <article key={`${conflict.category}:${conflict.id}`}><div><span>{CATEGORY_LABELS[conflict.category]}</span><strong>{conflict.starterName}</strong></div><small>현재 · {conflict.activeName} · {sourceLabel(conflict.activeSource)} · {DATA_QUALITY_LABELS[conflict.activeDataQuality]}</small><em>차이 · {conflictDifferences(conflict)}</em></article>)}</div>{preview.conflicts.length > 8 && <p className="admin-seed-preview-more">외 {numberText(preview.conflicts.length - 8)}개 충돌은 JSON 응답의 conflicts에서 확인할 수 있습니다.</p>}</section>}
-      <p className="admin-seed-preview-note"><FiInfo /> 대조 키는 <code>category:id</code>입니다. 같은 ID가 없다는 사실은 상품이 판매되지 않는다는 뜻이 아니며, live 수집 데이터에는 별도의 source product code가 있을 수 있습니다. 실제 카탈로그 반영은 기존 수집·확인 작업과 데이터 상태 정책을 거쳐야 합니다. 마지막 계산 {new Date(preview.generatedAt).toLocaleString("ko-KR")}.</p>
+      {preview.conflicts.length > 0 && <section className="admin-seed-preview-conflicts" aria-label="starter 값 충돌 목록"><div className="admin-seed-preview-subheading"><div><strong>병합 전 다시 확인할 값</strong></div><small>{numberText(preview.conflicts.length)}개</small></div><div className="admin-seed-preview-conflict-list">{preview.conflicts.slice(0, 8).map((conflict) => <article key={`${conflict.category}:${conflict.id}`}><div><span>{CATEGORY_LABELS[conflict.category]}</span><strong>{conflict.starterName}</strong></div><small>현재 / {conflict.activeName} / {sourceLabel(conflict.activeSource)} / {DATA_QUALITY_LABELS[conflict.activeDataQuality]}</small><em>차이 / {conflictDifferences(conflict)}</em></article>)}</div>{preview.conflicts.length > 8 && <p className="admin-seed-preview-more">외 {numberText(preview.conflicts.length - 8)}개 충돌은 JSON 응답의 conflicts에서 확인할 수 있습니다.</p>}</section>}
+      <p className="admin-seed-preview-note"><FiInfo /> 대조 키는 <code>category:id</code>입니다. 같은 ID가 없다는 사실은 상품이 판매되지 않는다는 뜻이 아니며, live 수집 데이터에는 별도의 source product code가 있을 수 있습니다. 실제 카탈로그 반영은 기존 수집/확인 작업과 데이터 상태 정책을 거쳐야 합니다. 마지막 계산 {new Date(preview.generatedAt).toLocaleString("ko-KR")}.</p>
     </>}
   </section>;
 }

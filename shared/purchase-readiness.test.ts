@@ -76,8 +76,8 @@ describe("purchase readiness", () => {
     const physical = readiness.items.find((item) => item.id === "physical");
 
     expect(readiness.state).toBe("review");
-    expect(physical).toMatchObject({ state: "review", label: "장착·전력·냉각" });
-    expect(physical?.summary).toContain("케이스 공간과 파워·쿨러 정보를 더 확인해 주세요.");
+    expect(physical).toMatchObject({ state: "review", label: "장착/전력/냉각" });
+    expect(physical?.summary).toContain("케이스 공간과 파워/쿨러 정보를 더 확인해 주세요.");
   });
 
   it("blocks purchase when a resource budget is below zero", () => {

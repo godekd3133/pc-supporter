@@ -1,9 +1,9 @@
 import type { Part } from "../shared/types";
 import { seedCatalog } from "./seed-catalog";
 
-// `seedCatalog`에는 기존 시연·테스트가 의존하는 대표 ID를 보존하고,
+// `seedCatalog`에는 기존 시연/테스트가 의존하는 대표 ID를 보존하고,
 // 새 checkout에서 탐색 폭을 넓히는 추가 starter 후보만 이 파일에 둡니다.
-// 모두 프로젝트 기준값이며 live 가격·재고·제조사 최신성을 의미하지 않습니다.
+// 모두 프로젝트 기준값이며 live 가격/재고/제조사 최신성을 의미하지 않습니다.
 const updatedAt = "2026-08-26T00:00:00.000Z";
 
 const seed = (part: Omit<Part, "source" | "dataQuality" | "missingFields" | "updatedAt">): Part => ({

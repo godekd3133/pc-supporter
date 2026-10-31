@@ -49,7 +49,7 @@ export function candidateDecisionSummaryFor(input: CandidateDecisionInput): Cand
   return {
     status,
     label,
-    summary: summaryParts.join(" · "),
+    summary: summaryParts.join(" / "),
     reasons: uniqueReasons(reasons)
   };
 }

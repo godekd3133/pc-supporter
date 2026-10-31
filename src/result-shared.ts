@@ -21,7 +21,7 @@ export function sharedPhysicalEvidenceSourceLabel(category: PhysicalEvidenceSour
 }
 
 export function sharedPhysicalEvidenceSourceIdentity(source: PhysicalEvidenceSource) {
-  return `${sharedPhysicalEvidenceSourceLabel(source.category)}${source.manufacturerModel ? ` · ${source.manufacturerModel}` : ""}${source.manufacturerRevision ? ` · ${source.manufacturerRevision}` : ""}`;
+  return `${sharedPhysicalEvidenceSourceLabel(source.category)}${source.manufacturerModel ? ` / ${source.manufacturerModel}` : ""}${source.manufacturerRevision ? ` / ${source.manufacturerRevision}` : ""}`;
 }
 
 export function scenarioStatusLabel(status: CompatibilityResult["status"]) {
@@ -29,7 +29,7 @@ export function scenarioStatusLabel(status: CompatibilityResult["status"]) {
 }
 
 export function scenarioRiskText(result: CompatibilityResult) {
-  return `호환 불가 ${result.blockerCount}개 · 주의 ${result.warningCount}개 · 정보 부족 ${result.unknownCount}개`;
+  return `호환 불가 ${result.blockerCount}개 / 주의 ${result.warningCount}개 / 정보 부족 ${result.unknownCount}개`;
 }
 
 export function currentDraftComparisonFor(build: BuildSelection, preferences: RecommendationPreferences, partMap: ReadonlyMap<string, Part>, accessoryMap: ReadonlyMap<string, AccessoryItem>): SavedBuild {

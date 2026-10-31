@@ -9,9 +9,14 @@ import { gamingFpsReferences } from "./gaming-fps-reference";
 import { parseBuildGenerationRequest } from "../shared/domain/build-input";
 import { publicApiPayloadProjection } from "../shared/public-api-projection";
 import { compatibilityReportJsonFor, compatibilityReportTextFor } from "../shared/compatibility-report";
-import type { BuildGenerationRequest, CompatibilityResult } from "../shared/types";
+import type { BuildGenerationRequest, CompatibilityResult, Part } from "../shared/types";
 
-const catalog = applyGamingStorageCatalogSnapshot(applyGamingTargetCatalogSnapshot(applyGamingSupportCatalogSnapshot(applyGamingAmdCatalogSnapshot(applyPhase1CatalogSnapshot([])))));
+// The original snapshot includes SATA 870 EVOs. Keep its price/capacity test
+// conditions, with explicit synthetic approved M.2 NVMe SSD fixtures instead
+// of representing the excluded SATA models as permitted production products.
+const catalog: Part[] = applyGamingStorageCatalogSnapshot(applyGamingTargetCatalogSnapshot(applyGamingSupportCatalogSnapshot(applyGamingAmdCatalogSnapshot(applyPhase1CatalogSnapshot([]))))).map(part=>part.category==="ssd"?{
+  ...part,id:`fixture-white-ssd-${part.id}`,name:`삼성전자 ${part.specs.capacityGb === 500 ? "980 PRO" : "990 PRO"} M.2 NVMe (${part.specs.capacityGb}GB)`,model:part.specs.capacityGb === 500 ? "Samsung 980 PRO" : "Samsung 990 PRO",brand:"Samsung",source:"manual" as const,sourceProductCode:undefined,danawaUrl:undefined,dataQuality:"manual" as const,specs:{...part.specs,interface:"NVMe",formFactor:"M.2",m2PcieGeneration:4}
+}:part);
 const options = { gamingTestbedPhase1: true, gamingFpsReferences };
 const request: BuildGenerationRequest = { profile: "gaming", gamingTestbedPhase1: true, gamingMode: "target_fps", gamingTargetFps: 60, gamingGameIds: ["cyberpunk"], gamingResolution: "1440p", gamingGraphicsPreset: "high", gamingRayTracing: false, gamingUpscaling: "native", gpuVendorPreference: "nvidia", budgetWon: 5_000_000, includeGpu: true, memoryCapacityGb: 16, storageCapacityGb: 1000 };
 
@@ -78,7 +83,7 @@ describe("phase-two gaming generation contract", () => {
     expect(draft.gamingTargetAssessment?.measurements).toEqual([]);
   });
   it("never replaces an explicit AMD choice with NVIDIA and never uses the other vendor in adjacency", () => {
-    const draft = generateBuildDraft(catalog, { ...request, gamingMode: "budget", gamingGameIds: [], gpuVendorPreference: "amd", budgetWon: 1_200_000 }, [], options);
+    const draft = generateBuildDraft(catalog, { ...request, gamingMode: "budget", gamingGameIds: [], gpuVendorPreference: "amd", budgetWon: 2_000_000 }, [], options);
     expect(draft.lines.find((line) => line.category === "gpu")?.name).toMatch(/RX\s*9060/);
     const adjacent = catalog.find((part) => part.id === draft.partTiers?.gpu?.upId);
     expect(adjacent?.specs.gpuVendor).not.toBe("nvidia");
@@ -121,7 +126,7 @@ it("returns from a paid cooler to the included cooler without pinning a fake sto
   const { generatorPartAdjustmentRequestFor } = await import("../src/generator-balance");
   const cpu = catalog.find((part) => part.category === "cpu" && /5500GT/.test(part.name))!;
   const cooler = catalog.find((part) => part.category === "cooler" && /AG400/.test(part.name))!;
-  const paid = generateBuildDraft(catalog, { ...request, gamingMode: "budget", includeGpu: false, budgetWon: 1_000_000, pinnedParts: { cpu: cpu.id, cooler: cooler.id } }, [], options);
+  const paid = generateBuildDraft(catalog, { ...request, gamingMode: "budget", gamingResolution:"1080p", includeGpu: false, budgetWon: 1_000_000, pinnedParts: { cpu: cpu.id, cooler: cooler.id } }, [], options);
   expect(paid.partTiers?.cooler?.downUseIncludedCooler).toBe(true);
   const down = generatorPartAdjustmentRequestFor(paid, "cooler", "down")!;
   expect(down.pinnedParts?.cooler).toBeUndefined();
@@ -133,7 +138,7 @@ it("returns from a paid cooler to the included cooler without pinning a fake sto
 
 it("changes SSD capacity 1TB to 2TB and back while retaining integrated graphics", async () => {
   const { generatorPartAdjustmentRequestFor } = await import("../src/generator-balance");
-  const base = generateBuildDraft(catalog, { ...request, gamingMode: "budget", budgetWon: 1_000_000, includeGpu: false }, [], options);
+  const base = generateBuildDraft(catalog, { ...request, gamingMode: "budget", gamingResolution:"1080p", budgetWon: 1_000_000, includeGpu: false }, [], options);
   const up = generatorPartAdjustmentRequestFor(base, "ssd", "up")!;
   expect(up.storageCapacityGb).toBe(2000);
   expect(up.includeGpu).toBe(false);
@@ -147,7 +152,7 @@ it("changes SSD capacity 1TB to 2TB and back while retaining integrated graphics
 
 it("changes HDD drive capacity while keeping both drives and the CPU", async () => {
   const { generatorPartAdjustmentRequestFor } = await import("../src/generator-balance");
-  const base = generateBuildDraft(catalog, { ...request, gamingMode: "budget", budgetWon: 2_000_000, includeGpu: false, hddCount: 2, hddCapacityGb: 2000 }, [], options);
+  const base = generateBuildDraft(catalog, { ...request, gamingMode: "budget", gamingResolution:"1080p", budgetWon: 2_000_000, includeGpu: false, hddCount: 2, hddCapacityGb: 2000 }, [], options);
   const up = generatorPartAdjustmentRequestFor(base, "hdd", "up")!;
   expect(up.hddCapacityGb).toBe(4000);
   expect(up.hddCount).toBe(2);

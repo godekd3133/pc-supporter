@@ -80,12 +80,12 @@ describe("nextJourneyAction", () => {
 });
 
 describe("resultNextActionsFor", () => {
-  it("미저장·미추적 결과에서는 저장과 가격 추적이 먼저다", () => {
+  it("미저장/미추적 결과에서는 저장과 가격 추적이 먼저다", () => {
     const actions = resultNextActionsFor({ ...baseInput, hasResult: true }, { saved: false, comparable: false });
     expect(actions.map((action) => action.action)).toEqual(["save", "watchlist", "start"]);
   });
 
-  it("저장·추적 완료 결과에서는 추이 확인과 새 견적을 제안한다", () => {
+  it("저장/추적 완료 결과에서는 추이 확인과 새 견적을 제안한다", () => {
     const actions = resultNextActionsFor({ ...baseInput, hasResult: true, watchlistCount: 1 }, { saved: true, comparable: true });
     expect(actions.map((action) => action.action)).toEqual(["result-trend", "start", "history"]);
   });

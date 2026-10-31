@@ -128,32 +128,32 @@ function similarityEvidenceSummary(evidence: SimilarityEvidence | undefined) {
   const basis = evidence.basis === "benchmark"
     ? "성능 측정 자료"
     : evidence.basis === "mixed"
-      ? "성능 측정·부품 정보"
+      ? "성능 측정/부품 정보"
       : evidence.basis === "spec"
         ? "부품 정보"
         : "비교 정보 확인 필요";
   const confidence = evidence.confidence === "high" ? "정보 충분" : evidence.confidence === "limited" ? "일부 정보로 비교" : "정보 확인 필요";
-  return `비교 ${evidence.comparedDimensions}/${evidence.totalDimensions} · ${basis} · ${confidence}`;
+  return `비교 ${evidence.comparedDimensions}/${evidence.totalDimensions} / ${basis} / ${confidence}`;
 }
 
 function reasonFor(criterion: CandidateComparisonCriterion, item: CandidateComparisonItem, score: number, priceScore: number, compatibility: number, performance: number, evidence: number) {
-  if (criterion === "compatibility") return `호환 ${compatibility}점 · 부품 위험 ${item.candidateRisk === "safe" ? "없음" : "확인 필요"}`;
+  if (criterion === "compatibility") return `호환 ${compatibility}점 / 부품 위험 ${item.candidateRisk === "safe" ? "없음" : "확인 필요"}`;
   if (criterion === "performance") {
     const details = [
       item.similarityScore !== undefined && Number.isFinite(item.similarityScore) ? `부품 유사도 ${clampScore(item.similarityScore)}점` : undefined,
-      item.analysisScore !== undefined && Number.isFinite(item.analysisScore) ? `적용 후 구성 ${clampScore(item.analysisScore)}점 · ${analysisConfidenceLabel(item.analysisConfidence)}` : undefined,
+      item.analysisScore !== undefined && Number.isFinite(item.analysisScore) ? `적용 후 구성 ${clampScore(item.analysisScore)}점 / ${analysisConfidenceLabel(item.analysisConfidence)}` : undefined,
       item.analysisScoreDelta !== undefined && Number.isFinite(item.analysisScoreDelta) ? `현재 대비 ${item.analysisScoreDelta > 0 ? "+" : ""}${Math.round(item.analysisScoreDelta)}점` : undefined
     ].filter((value): value is string => Boolean(value));
-    return `성능 종합 ${performance}점${details.length > 0 ? ` · ${details.join(" · ")}` : ""} · ${similarityEvidenceSummary(item.similarityEvidence)}`;
+    return `성능 종합 ${performance}점${details.length > 0 ? ` / ${details.join(" / ")}` : ""} / ${similarityEvidenceSummary(item.similarityEvidence)}`;
   }
   if (criterion === "price") {
-    if (confirmedPriceFor(item)) return `가격 ${item.priceWon!.toLocaleString("ko-KR")}원 · 가격 점수 ${priceScore}점`;
+    if (confirmedPriceFor(item)) return `가격 ${item.priceWon!.toLocaleString("ko-KR")}원 / 가격 점수 ${priceScore}점`;
     if (item.priceEvidence === "reference") return "등록된 금액은 확인이 필요해 가격 비교에 반영하지 않았습니다.";
     if (item.priceEvidence === "recorded") return "이전에 저장한 금액은 확인 전까지 가격 비교에 반영하지 않았습니다.";
     return "-";
   }
-  if (criterion === "evidence") return `정보 ${evidence}점 · ${item.freshness === "fresh" ? "최근 확인" : item.freshness === "aging" ? "갱신 권장" : item.freshness === "stale" ? "오래된 정보" : item.freshness === "unknown" ? "시점 확인 필요" : "상태 미확인"}`;
-  return `균형 ${score}점 · 호환 ${compatibility} · 성능 ${performance} · 정보 ${evidence} · ${similarityEvidenceSummary(item.similarityEvidence)}`;
+  if (criterion === "evidence") return `정보 ${evidence}점 / ${item.freshness === "fresh" ? "최근 확인" : item.freshness === "aging" ? "갱신 권장" : item.freshness === "stale" ? "오래된 정보" : item.freshness === "unknown" ? "시점 확인 필요" : "상태 미확인"}`;
+  return `균형 ${score}점 / 호환 ${compatibility} / 성능 ${performance} / 정보 ${evidence} / ${similarityEvidenceSummary(item.similarityEvidence)}`;
 }
 
 export function candidateComparisonDecisionFor(items: CandidateComparisonItem[], criterion: CandidateComparisonCriterion = "balanced"): CandidateComparisonDecision {
@@ -183,7 +183,7 @@ export function candidateComparisonDecisionFor(items: CandidateComparisonItem[],
   const eligibleRanking = ranked.filter((item) => !excludedIds.includes(item.id));
   const top = eligibleRanking[0];
   const criterionSummary = criterion === "balanced"
-    ? "호환·성능·가격·정보를 고르게 비교"
+    ? "호환/성능/가격/정보를 고르게 비교"
     : criterion === "performance"
       ? "부품 유사도와 교체 후 전체 성능을 함께 비교"
       : `${CRITERION_LABELS[criterion]} 우선 비교`;
@@ -195,7 +195,7 @@ export function candidateComparisonDecisionFor(items: CandidateComparisonItem[],
     eligibleRanking,
     excludedIds,
     summary: top
-      ? `${top.name} · ${top.score}점 · ${criterionSummary}${excludedIds.length > 0 ? ` · 적용하지 않음 ${excludedIds.length}개 제외` : ""}`
+      ? `${top.name} / ${top.score}점 / ${criterionSummary}${excludedIds.length > 0 ? ` / 적용하지 않음 ${excludedIds.length}개 제외` : ""}`
       : "추가할 수 있는 부품을 찾지 못했어요. 호환되지 않는 부품만 남아 있습니다."
   };
 }
@@ -230,7 +230,7 @@ function candidateTradeoffDimensionReason(left: CandidateTradeoffMetric, right: 
   if (left.priceDeltaWon !== undefined && right.priceDeltaWon !== undefined && left.priceDeltaWon < right.priceDeltaWon) dimensions.push("가격 변화");
   if (left.analysisScore !== undefined && right.analysisScore !== undefined && left.analysisScore > right.analysisScore) dimensions.push("적용 후 분석");
   if (left.evidenceScore! > right.evidenceScore!) dimensions.push("정보");
-  return dimensions.length > 0 ? dimensions.join("·") : "비교 항목";
+  return dimensions.length > 0 ? dimensions.join("/") : "비교 항목";
 }
 
 export function candidateComparisonTradeoffsFor(items: CandidateComparisonItem[]): CandidateComparisonTradeoff[] {
@@ -256,7 +256,7 @@ export function candidateComparisonTradeoffsFor(items: CandidateComparisonItem[]
         frontier: true,
         reason: metric.priceDeltaWon === undefined || metric.analysisScore === undefined
           ? "가격이나 성능 정보가 부족해 다른 부품보다 낫다고 판단하지 않았어요."
-          : "호환 위험·가격 변화·적용 후 분석·정보에서 다른 부품에 일방적으로 대체되지 않는 선택지입니다."
+          : "호환 위험/가격 변화/적용 후 분석/정보에서 다른 부품에 일방적으로 대체되지 않는 선택지입니다."
       };
     }
     return {

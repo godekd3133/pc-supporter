@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import {
   buildDanawaListAjaxParams,
@@ -11,6 +12,7 @@ import {
   parsePciePowerOptions,
   parseDanawaProductPage,
   parseDanawaPriceFromHtml,
+  danawaPriceUnavailableFromHtml,
   fetchDanawaHtml,
   reparseDanawaPart,
   crawlDanawaCategory,
@@ -49,6 +51,28 @@ describe("Danawa parser", () => {
     expect(parseDanawaPriceFromHtml(noPrice, "123")).toBeUndefined();
     const normal = `<meta property="og:url" content="https://prod.danawa.com/info/?pcode=123"><meta property="og:description" content="최저가 38,450원, 현금최저가: 36,400원" />`;
     expect(parseDanawaPriceFromHtml(normal, "123")).toBe(38450);
+  });
+
+  it("reads the captured AI BOX product-global minimum when its OG price is zero", () => {
+    const html = readFileSync(new URL("./fixtures/danawa-ai-box-123981228-price.html", import.meta.url), "utf8");
+    expect(parseDanawaPriceFromHtml(html, "123981228")).toBe(1424800);
+    expect(danawaPriceUnavailableFromHtml(html, "123981228", "GIGABYTE AORUS 지포스 RTX 5060 Ti AI BOX D7 16GB 피씨디렉트")).toBe(false);
+    const parsed = parseDanawaProductPage("gpu", { name: "GIGABYTE AORUS 지포스 RTX 5060 Ti AI BOX D7 16GB 피씨디렉트", url: "https://prod.danawa.com/info/?pcode=123981228", sourceProductCode: "123981228" }, html, "112753");
+    expect(parsed.priceWon).toBe(1424800);
+    expect(parseDanawaPriceFromHtml(html, "other")).toBeUndefined();
+    expect(parseDanawaPriceFromHtml(html.replace("nProductCode: 123981228", "nProductCode: 999"), "123981228")).toBeUndefined();
+    expect(parseDanawaPriceFromHtml(html.replace(/<title>[\s\S]*?<\/title>/, "<title>Unrelated GPU</title>").replace(/<meta property="og:title"[^>]*>/, ""), "123981228")).toBeUndefined();
+    expect(parseDanawaPriceFromHtml(html.replace('nMinPrice: "1,424,800"', 'nMinPrice: getRecommendationPrice()'), "123981228")).toBeUndefined();
+  });
+
+  it("never falls back to a recommendation's minimum or an ambiguous product global", () => {
+    const header = '<link rel="canonical" href="https://prod.danawa.com/info/?pcode=123"><meta property="og:description" content="최저가 0원"><title>GPU Model</title>';
+    const own = '<script>var oGlobalSetting = { nProductCode: 123, sProductName: "GPU Model", nMinPrice: "100,000" };</script>';
+    expect(parseDanawaPriceFromHtml(header + own, "123")).toBe(100000);
+    expect(parseDanawaPriceFromHtml(header + '<script>var recommendations = {nProductCode: 456, nMinPrice: 999999};</script>', "123")).toBeUndefined();
+    expect(parseDanawaPriceFromHtml(header + own + own, "123")).toBeUndefined();
+    expect(parseDanawaPriceFromHtml(header + own.replace('nMinPrice: "100,000"', 'nMinPrice: "100,000", nMinPrice: "200,000"'), "123")).toBeUndefined();
+    expect(parseDanawaPriceFromHtml(header + own.replace('"100,000"', '0'), "123")).toBeUndefined();
   });
 
   it("extracts product codes from the structured list markup", () => {
@@ -1221,5 +1245,31 @@ describe("Danawa parser", () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+});
+
+
+describe("confirmed Danawa product without purchase offers", () => {
+  const product = (body = "판매점 0개", price = "최저가 0원, 현금최저가: 0원", code = "75656861", name = "MANLI RTX 5090 32GB") =>
+    `<html><head><title>${name} : 다나와 가격비교</title><link rel="canonical" href="https://prod.danawa.com/info/?pcode=${code}"><meta property="og:description" content="${price}"></head><body>${body}<script>var nMinPrice = 0;</script></body></html>`;
+  it("confirms only the exact named product with explicit zero sellers and zero prices", () => {
+    expect(danawaPriceUnavailableFromHtml(product(), "75656861", "MANLI RTX 5090 32GB")).toBe(true);
+    expect(danawaPriceUnavailableFromHtml(product("판매점 1개"), "75656861", "MANLI RTX 5090 32GB")).toBe(false);
+    expect(danawaPriceUnavailableFromHtml(product("가격을 불러오는 중"), "75656861", "MANLI RTX 5090 32GB")).toBe(false);
+    expect(danawaPriceUnavailableFromHtml(product("판매점 0개", undefined, "other"), "75656861", "MANLI RTX 5090 32GB")).toBe(false);
+    expect(danawaPriceUnavailableFromHtml(product(undefined, undefined, undefined, "MSI RTX 5090"), "75656861", "MANLI RTX 5090 32GB")).toBe(false);
+  });
+  it("does not infer unavailable from a zero OG price or blocked response", () => {
+    expect(danawaPriceUnavailableFromHtml(product().replace(/<body>.*<\/body>/, "<body>접근 제한</body>"), "75656861", "MANLI RTX 5090 32GB")).toBe(false);
+    expect(danawaPriceUnavailableFromHtml(product().replace("var nMinPrice = 0;", ""), "75656861", "MANLI RTX 5090 32GB")).toBe(false);
+    expect(danawaPriceUnavailableFromHtml("<title>Request blocked</title>판매점 0개", "75656861", "MANLI RTX 5090 32GB")).toBe(false);
+  });
+  it("preserves cash-only and positive card offers even beside zero-seller markup", () => {
+    expect(danawaPriceUnavailableFromHtml(product(undefined, "최저가 0원, 현금최저가: 4,900,000원"), "75656861", "MANLI RTX 5090 32GB")).toBe(false);
+    expect(danawaPriceUnavailableFromHtml(product("판매점 0개 최저가 5,000,000원"), "75656861", "MANLI RTX 5090 32GB")).toBe(false);
+    expect(danawaPriceUnavailableFromHtml(product('판매점 0개 <span class="price_num">4,900,000원</span>'), "75656861", "MANLI RTX 5090 32GB")).toBe(false);
+    expect(danawaPriceUnavailableFromHtml(product('판매점 0개 <strong id="priceCompareTabCount">1</strong>'), "75656861", "MANLI RTX 5090 32GB")).toBe(false);
+    expect(danawaPriceUnavailableFromHtml(product().replace("nMinPrice = 0", "nMinPrice = 5000000"), "75656861", "MANLI RTX 5090 32GB")).toBe(false);
+    expect(danawaPriceUnavailableFromHtml(product().replace("</head>", '<meta property="og:url" content="https://prod.danawa.com/info/?pcode=wrong"></head>'), "75656861", "MANLI RTX 5090 32GB")).toBe(false);
   });
 });

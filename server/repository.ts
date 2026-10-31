@@ -376,7 +376,7 @@ if (configuredDatabaseUrl) {
         max: Math.max(1, Number(process.env.PC_SUPPORTER_DB_POOL_MAX ?? 10)),
         idleTimeoutMillis: Math.max(1_000, Number(process.env.PC_SUPPORTER_DB_POOL_IDLE_MS ?? 30_000)),
         connectionTimeoutMillis: Math.max(500, Number(process.env.PC_SUPPORTER_DB_CONNECT_TIMEOUT_MS ?? 2_000)),
-        // 길어지는 쿼리가 풀 커넥션을 무한히 잡아두지 못하게 쿼리·유휴 트랜잭션
+        // 길어지는 쿼리가 풀 커넥션을 무한히 잡아두지 못하게 쿼리/유휴 트랜잭션
         // 제한을 둔다 — 백그라운드 작업은 advisory lease로 이미 직렬화된다.
         statement_timeout: Math.max(1_000, Number(process.env.PC_SUPPORTER_DB_STATEMENT_TIMEOUT_MS ?? 15_000)),
         idle_in_transaction_session_timeout: Math.max(1_000, Number(process.env.PC_SUPPORTER_DB_IDLE_TX_TIMEOUT_MS ?? 10_000)),
@@ -1283,7 +1283,7 @@ export async function writeCatalogRecords(
 }
 
 export async function patchCatalogPriceRecords(
-  patches: Array<{ id: string; sourceProductCode: string; danawaUrl: string; priceWon: number; priceCheckedAt: string }>
+  patches: import("./catalog").CatalogPricePatch[]
 ): Promise<Array<{ before: Part; after: Part }> | undefined> {
   await ensureDatabase();
   const client = await pool!.connect();
@@ -1298,16 +1298,21 @@ export async function patchCatalogPriceRecords(
            FOR UPDATE
          ), updated AS (
            UPDATE catalog_parts AS catalog
-           SET payload = jsonb_set(
-             jsonb_set(current.before_payload, '{priceWon}', to_jsonb($4::numeric), true),
-             '{priceCheckedAt}', to_jsonb($5::text), true
-           )
+           SET payload = CASE WHEN $6::text IS NOT NULL THEN
+             jsonb_set(current.before_payload - 'priceWon', '{priceUnavailableAt}', to_jsonb($6::text), true)
+           ELSE
+             jsonb_set(
+               jsonb_set(current.before_payload - 'priceUnavailableAt', '{priceWon}', to_jsonb($4::numeric), true),
+               '{priceCheckedAt}', to_jsonb($5::text), true
+             )
+           END,
+           updated_at = statement_timestamp()
            FROM current
            WHERE catalog.id = current.id
            RETURNING catalog.id, catalog.payload AS after_payload
          )
          SELECT current.before_payload, updated.after_payload FROM current JOIN updated USING (id)`,
-        [patch.id, patch.sourceProductCode, patch.danawaUrl, patch.priceWon, patch.priceCheckedAt]
+        [patch.id, patch.sourceProductCode, patch.danawaUrl, patch.priceWon ?? null, patch.priceCheckedAt ?? null, patch.priceUnavailableAt ?? null]
       );
       if (result.rows[0]) changed.push({ before: result.rows[0].before_payload, after: result.rows[0].after_payload });
     }

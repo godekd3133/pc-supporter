@@ -16,7 +16,7 @@ const partId = "case-full-airflow";
 const productName = "Fractal Design Pop XL Air";
 const sourceUrl = "https://www.fractal-design.com/products/cases/pop/pop-xl-air/rgb-black-tg-clear";
 const productSheetUrl = "https://www.fractal-design.com/app/uploads/2022/06/Pop-XL-Air-RGB_Product-Sheet_EN.pdf";
-const sourceText = "제조사 주요 사양은 HDD 최대 4개입니다. 현재 제품 페이지의 전용·겸용 장착부 표기와 제품 시트의 장착부 분류가 서로 달라 개별 장착부 합산값은 확정하지 않았습니다. HDD 최대 지원 수 4개를 사용합니다. " + sourceUrl + " " + productSheetUrl;
+const sourceText = "제조사 주요 사양은 HDD 최대 4개입니다. 현재 제품 페이지의 전용/겸용 장착부 표기와 제품 시트의 장착부 분류가 서로 달라 개별 장착부 합산값은 확정하지 않았습니다. HDD 최대 지원 수 4개를 사용합니다. " + sourceUrl + " " + productSheetUrl;
 const catalog = await readCatalogRecords();
 const before = catalog.find((part) => part.id === partId);
 if (!before || before.category !== "case" || before.source !== "seed") throw new Error("Expected seed case-full-airflow is missing or no longer a case.");

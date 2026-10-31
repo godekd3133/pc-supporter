@@ -8,7 +8,7 @@ const entry = (id: string, overrides: Record<string, unknown> = {}) => ({
   createdAt: "2026-09-01T00:00:00.000Z",
   category: "CPU",
   currentPartName: "현재 CPU",
-  currentPartSummary: "AM5 · 8코어",
+  currentPartSummary: "AM5 / 8코어",
   currentPartPrice: "420,000원",
   expiresAt: "2026-10-01T00:00:00.000Z",
   ownerToken: `token-${id}-${"x".repeat(40)}`,
@@ -29,7 +29,7 @@ describe("alternative comparison local share history", () => {
       name: "부품 비교 one",
       category: "CPU",
       currentPartName: "현재 CPU",
-      currentPartSummary: "AM5 · 8코어",
+      currentPartSummary: "AM5 / 8코어",
       currentPartPrice: "420,000원",
       url: "http://127.0.0.1:5173/compare/one"
     });
@@ -65,7 +65,7 @@ describe("alternative comparison local share history", () => {
     const parsed = alternativeComparisonLocalSharesFromJson(raw);
 
     expect(raw).not.toContain("ownerToken");
-    expect(parsed[0]).toMatchObject({ id: "session-owned", owned: true, category: "CPU", currentPartName: "현재 CPU", currentPartSummary: "AM5 · 8코어", currentPartPrice: "420,000원" });
+    expect(parsed[0]).toMatchObject({ id: "session-owned", owned: true, category: "CPU", currentPartName: "현재 CPU", currentPartSummary: "AM5 / 8코어", currentPartPrice: "420,000원" });
   });
 
   it("rejects an oversized raw local history before normalizing every entry", () => {

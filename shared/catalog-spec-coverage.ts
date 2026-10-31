@@ -163,7 +163,7 @@ export function catalogMissingFieldLabelFor(field: string) {
   return CATALOG_MISSING_FIELD_LABELS[field] ?? "기타 사양";
 }
 
-const CATALOG_CHANGE_SPEC_FIELD_PREFIX = "정규화 스펙 · ";
+const CATALOG_CHANGE_SPEC_FIELD_PREFIX = "정규화 스펙 / ";
 
 export function catalogChangeFieldLabelFor(field: string) {
   if (field === "원문 스펙") return "상품 설명";
@@ -171,7 +171,7 @@ export function catalogChangeFieldLabelFor(field: string) {
   if (field.startsWith(CATALOG_CHANGE_SPEC_FIELD_PREFIX)) {
     const key = field.slice(CATALOG_CHANGE_SPEC_FIELD_PREFIX.length);
     // 라벨 맵에 등록된 키만 한글로 바꾸고, 나머지는 원래 필드명을 보여 준다.
-    return `사양 · ${key in CATALOG_MISSING_FIELD_LABELS ? CATALOG_MISSING_FIELD_LABELS[key] : key}`;
+    return `사양 / ${key in CATALOG_MISSING_FIELD_LABELS ? CATALOG_MISSING_FIELD_LABELS[key] : key}`;
   }
   return field;
 }

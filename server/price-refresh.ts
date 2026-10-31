@@ -1,5 +1,6 @@
 import type { AccessoryItem, Part } from "../shared/types";
 import { isKnownPrice } from "../shared/types";
+import { isListingAllowed } from "../shared/domain/listing";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { loadCatalog, patchCatalogPrices } from "./catalog";
@@ -171,10 +172,9 @@ function boundedLimit(value: number | undefined, maximum: number) {
   return Math.max(0, Math.min(maximum, Math.floor(value!)));
 }
 
-function lastChecked(item: { priceCheckedAt?: string; updatedAt: string }) {
-  const value = item.priceCheckedAt ?? item.updatedAt;
-  const time = Date.parse(value);
-  return Number.isFinite(time) ? time : 0;
+function lastChecked(item: { priceCheckedAt?: string; priceUnavailableAt?: string; updatedAt: string }) {
+  const times = [item.priceCheckedAt, item.priceUnavailableAt].map((value) => Date.parse(value ?? ""));
+  return Math.max(0, ...times.filter(Number.isFinite));
 }
 
 function failureText(error: unknown) {
@@ -234,6 +234,32 @@ function lastAttempted(item: Part | AccessoryItem, kind: "part" | "accessory", a
   return lastChecked(item);
 }
 
+export function isPriorityGamingGpu(part: Part) {
+  return part.category === "gpu" && isListingAllowed(part, "include_bulk") && (
+    /\bRTX\s*50[0-9]{2}(?:\s*Ti)?\b/i.test(part.name) || /\bRX\s*90[0-9]{2}(?:\s*XT)?\b/i.test(part.name)
+    || (/MSI/i.test(part.name) && /RTX\s*3050\b/i.test(part.name))
+    || (/AFOX/i.test(part.name) && /RX\s*580\b/i.test(part.name))
+  );
+}
+
+/** Every eligible gaming GPU SKU rotates through the priority lane, not just the cheapest SKU. */
+export function selectCorePriceRefreshCandidates(parts: Part[], limit: number, attempts: PriceRefreshAttempts, now = Date.now()) {
+  const eligible = parts.filter((part) => part.source === "danawa" && !part.delistedAt && Boolean(part.sourceProductCode && part.danawaUrl));
+  const oldestFirst = (left: Part, right: Part) => lastAttempted(left, "part", attempts) - lastAttempted(right, "part", attempts) || left.id.localeCompare(right.id);
+  // An attempt records queue progress, not price freshness. Failed observations remain stale,
+  // but a short cooldown and oldest-attempt ordering prevent one failure from blocking all SKUs.
+  const due = eligible.filter((part) => !isPriorityGamingGpu(part) || (
+    lastChecked(part) <= now - 3 * 60 * 60 * 1000
+    && lastAttempted(part, "part", attempts) <= now - 60 * 60 * 1000
+  ));
+  const general = due.filter((part) => !isPriorityGamingGpu(part)).sort(oldestFirst);
+  const priority = due.filter(isPriorityGamingGpu).sort(oldestFirst);
+  if (limit < 2) return [...priority, ...general].slice(0, limit);
+  const hot = priority.slice(0, Math.max(1, Math.floor(limit * 0.8)));
+  const ordinary = general.slice(0, limit - hot.length);
+  return [...hot, ...ordinary, ...priority.slice(hot.length, hot.length + limit - hot.length - ordinary.length)];
+}
+
 export async function runPriceRefreshJob(options: PriceRefreshJobOptions = {}): Promise<PriceRefreshStatus> {
   const persistStatus = options.persistStatus ?? false;
   const startedAt = new Date().toISOString();
@@ -290,8 +316,9 @@ export async function runPriceRefreshJob(options: PriceRefreshJobOptions = {}): 
           id: before.id,
           sourceProductCode: before.sourceProductCode!,
           danawaUrl: before.danawaUrl!,
-          priceWon: after.priceWon!,
-          priceCheckedAt: after.priceCheckedAt!
+          ...(after.priceUnavailableAt
+            ? { priceUnavailableAt: after.priceUnavailableAt }
+            : { priceWon: after.priceWon!, priceCheckedAt: after.priceCheckedAt! })
         })));
         const updatedIds = new Set(updates.map(({ after }) => after.id));
         for (const entry of queue) if (!updatedIds.has(entry.before.id)) {
@@ -343,10 +370,7 @@ export async function runPriceRefreshJob(options: PriceRefreshJobOptions = {}): 
     const attempts = await readPriceRefreshAttempts();
     const coreLimit = boundedLimit(options.coreLimit, MAX_CORE_LIMIT);
     const accessoryLimit = boundedLimit(options.accessoryLimit, MAX_ACCESSORY_LIMIT);
-    const coreCandidates = parts
-      .filter((part) => part.source === "danawa" && !part.delistedAt && Boolean(part.sourceProductCode && part.danawaUrl))
-      .sort((left, right) => lastAttempted(left, "part", attempts) - lastAttempted(right, "part", attempts))
-      .slice(0, coreLimit);
+    const coreCandidates = selectCorePriceRefreshCandidates(parts, coreLimit, attempts);
     const accessoryCandidates = accessories
       .filter((item) => item.source === "danawa" && Boolean(item.sourceProductCode && item.danawaUrl))
       .sort((left, right) => lastAttempted(left, "accessory", attempts) - lastAttempted(right, "accessory", attempts))
@@ -364,13 +388,22 @@ export async function runPriceRefreshJob(options: PriceRefreshJobOptions = {}): 
       try {
         if (entry.kind === "part") {
           let observedPriceWon: number | undefined;
+          let priceUnavailable = false;
           try {
-            await refreshDanawaPart(entry.item, { onPriceObserved: (price) => { observedPriceWon = price; } });
+            await refreshDanawaPart(entry.item, {
+              onPriceObserved: (price) => { observedPriceWon = price; },
+              onPriceUnavailable: () => { priceUnavailable = true; }
+            });
           } catch (error) {
-            if (!isKnownPrice(observedPriceWon)) throw error;
+            if (!isKnownPrice(observedPriceWon) && !priceUnavailable) throw error;
           }
-          if (!isKnownPrice(observedPriceWon)) throw new Error("다나와 상세 원문에서 유효한 양수 가격을 확인하지 못했습니다.");
-          const after: Part = { ...entry.item, priceWon: observedPriceWon, priceCheckedAt: new Date().toISOString() };
+          if (!isKnownPrice(observedPriceWon) && !priceUnavailable) throw new Error("다나와 상세 원문에서 유효한 양수 가격을 확인하지 못했습니다.");
+          const observedAt = new Date().toISOString();
+          const after: Part = priceUnavailable
+            ? { ...entry.item, priceUnavailableAt: observedAt }
+            : { ...entry.item, priceWon: observedPriceWon, priceCheckedAt: observedAt };
+          if (priceUnavailable) delete after.priceWon;
+          else delete after.priceUnavailableAt;
           coreQueue.push({ before: entry.item, after });
         } else {
           let observedPriceWon: number | undefined;

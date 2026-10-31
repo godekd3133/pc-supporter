@@ -51,8 +51,8 @@ export function savedBuildCatalogChangeValueDiffsFor(record: CatalogChangeRecord
   if (record.changedFields.includes("정규화 스펙")) diffs.push(fallbackValueDiff("정규화 스펙", undefined, undefined));
   if (record.changedFields.some(isCatalogDataQualityChangeField)) diffs.push(fallbackValueDiff(CATALOG_DATA_QUALITY_CHANGE_FIELD_LABEL, record.previousDataQuality, record.nextDataQuality));
   if (record.changedFields.includes("누락 필드")) {
-    const previous = record.previousMissingFields.length === 0 ? "없음" : record.previousMissingFields.join(" · ");
-    const next = record.nextMissingFields.length === 0 ? "없음" : record.nextMissingFields.join(" · ");
+    const previous = record.previousMissingFields.length === 0 ? "없음" : record.previousMissingFields.join(" / ");
+    const next = record.nextMissingFields.length === 0 ? "없음" : record.nextMissingFields.join(" / ");
     diffs.push(fallbackValueDiff("누락 필드", previous, next));
   }
   return diffs;

@@ -29,8 +29,8 @@ describe("saved build origin", () => {
     const before = savedBuildOriginFromUnknown({ kind: "shared_generator_variants", sourceShareId: "share-1", sourcePriority: "balanced", sourceCatalogSnapshotAt: "2026-09-17T00:00:00.000Z" });
     const same = savedBuildOriginFromUnknown({ kind: "shared_generator_variants", sourceShareId: "share-1", sourcePriority: "balanced", sourceCatalogSnapshotAt: "2026-09-17T00:00:00.000Z" });
     const changed = savedBuildOriginFromUnknown({ kind: "shared_generator_variants", sourceShareId: "share-2", sourcePriority: "performance", sourceCatalogSnapshotAt: "2026-09-17T00:00:00.000Z" });
-    expect(savedBuildOriginComparisonTextFor(before, same)).toBe("같은 공유 비교·priority에서 파생");
-    expect(savedBuildOriginComparisonTextFor(before, changed)).toBe("공유 비교가 다름 · priority가 다름");
+    expect(savedBuildOriginComparisonTextFor(before, same)).toBe("같은 공유 비교/priority에서 파생");
+    expect(savedBuildOriginComparisonTextFor(before, changed)).toBe("공유 비교가 다름 / priority가 다름");
     expect(savedBuildOriginComparisonTextFor(undefined, same)).toBe("한 버전에만 생성 출처 기록");
     expect(savedBuildOriginAvailabilityLabelFor("active")).toBe("원본 비교 사용 가능");
     expect(savedBuildOriginAvailabilityLabelFor("unavailable")).toBe("원본 비교 만료 또는 취소됨");

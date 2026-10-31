@@ -1,6 +1,6 @@
 import { gamingCpuModelFor } from "../../shared/gaming-target-assessment";
 import { loadGamingFpsReferences } from "../gaming-fps-reference";
-// 견적 생성 엔진 모듈 — 자동 견적 생성(variants·budget ladder·floor 계산)의
+// 견적 생성 엔진 모듈 — 자동 견적 생성(variants/budget ladder/floor 계산)의
 // 운영 옵션과 인메모리 캐시를 소유한다. 도메인 계산 자체는
 // shared/domain/engine.ts가 담당하고, 이 모듈은 관리자가 조정 가능한
 // 생성 파라미터를 영속화해 엔진 호출에 주입한다.
@@ -26,7 +26,7 @@ export type EngineGenerationOptions = {
   // 기본 0.8/1.2 대신 관리자 설정을 따른다.
   budgetLadderDownMultiplier: number;
   budgetLadderUpMultiplier: number;
-  // CPU·GPU 견적 세대 게이트의 허용 깊이 — 1=최신 세대만(기본), 2=최신 2세대
+  // CPU/GPU 견적 세대 게이트의 허용 깊이 — 1=최신 세대만(기본), 2=최신 2세대
   // 까지 허용, 0=세대 게이트 비활성. 신세대가 수집되면 경계가 자동으로 밀려나고
   // 깊이만큼 이전 세대가 허용된다.
   generationDepth: number;

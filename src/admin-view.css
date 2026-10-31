@@ -1136,7 +1136,7 @@ html[data-theme="dark"] .admin-page .generation-failure-metrics { background: #2
 
 html[data-theme="dark"] .admin-page .generation-failure-metrics-table td { border-color: #262b34 !important; }
 
-/* 사용자 흐름 통계 — 퍼널·리텐션 대시보드 */
+/* 사용자 흐름 통계 — 퍼널/리텐션 대시보드 */
 .usage-analytics-controls { display: inline-flex; align-items: center; gap: 8px; }
 
 .usage-analytics-range { display: inline-flex; gap: 4px; padding: 2px; border: 1px solid var(--line); border-radius: 8px; background: #f9fafb; }

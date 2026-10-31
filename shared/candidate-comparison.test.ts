@@ -69,7 +69,7 @@ describe("candidate comparison decision", () => {
 
     expect(result.ranking[0].id).toBe("unsafe");
     expect(result.top?.id).toBe("safe-balanced");
-    expect(result.top?.reason).toContain("성능 종합 82점 · 부품 유사도 82점");
+    expect(result.top?.reason).toContain("성능 종합 82점 / 부품 유사도 82점");
   });
 
   it("shows performance comparison coverage and basis in the ranking reason", () => {
@@ -81,7 +81,7 @@ describe("candidate comparison decision", () => {
       candidateRisk: "safe"
     }], "performance");
 
-    expect(result.top?.reason).toContain("비교 3/5 · 성능 측정·부품 정보 · 일부 정보로 비교");
+    expect(result.top?.reason).toContain("비교 3/5 / 성능 측정/부품 정보 / 일부 정보로 비교");
   });
 
   it("blends component similarity with the full-build result when available", () => {

@@ -19,9 +19,9 @@ type BuildTransferDiffNameResolver = {
 };
 
 const preferenceLabels = {
-  profile: { general: "일반형", gaming: "게이밍", creator: "작업·크리에이터", development: "개발·AI", office: "사무·일반" },
+  profile: { general: "일반형", gaming: "게이밍", creator: "작업/크리에이터", development: "개발/AI", office: "사무/일반" },
   priority: RECOMMENDATION_PRIORITY_LABELS,
-  listingPolicy: { retail_only: "신품·정식 유통", include_bulk: "벌크 포함", all: "전체 조건" },
+  listingPolicy: { retail_only: "신품/정식 유통", include_bulk: "벌크 포함", all: "전체 조건" },
   gamingResolution: GAMING_RESOLUTION_LABELS,
   gamingRefreshRate: GAMING_REFRESH_RATE_LABELS
 } as const;
@@ -42,7 +42,7 @@ function selectionsText(build: BuildSelection, category: PartCategory, resolver:
 
 function accessoriesText(build: BuildSelection, resolver: BuildTransferDiffNameResolver) {
   const values = (build.accessories ?? [])
-    .map((selection) => `${resolver.accessoryName?.(selection.accessoryId) ?? selection.accessoryId}${selection.quantity > 1 ? ` ×${selection.quantity}` : ""}${selection.targetPartId ? ` · 대상 ${resolver.partName?.(selection.targetPartId) ?? selection.targetPartId}` : ""}${selection.targetAccessoryId ? ` · 대상 허브 ${resolver.accessoryName?.(selection.targetAccessoryId) ?? selection.targetAccessoryId}` : ""}`)
+    .map((selection) => `${resolver.accessoryName?.(selection.accessoryId) ?? selection.accessoryId}${selection.quantity > 1 ? ` ×${selection.quantity}` : ""}${selection.targetPartId ? ` / 대상 ${resolver.partName?.(selection.targetPartId) ?? selection.targetPartId}` : ""}${selection.targetAccessoryId ? ` / 대상 허브 ${resolver.accessoryName?.(selection.targetAccessoryId) ?? selection.targetAccessoryId}` : ""}`)
     .sort((left, right) => left.localeCompare(right, "ko-KR"));
   return values.length > 0 ? values.join(", ") : "미선택";
 }
@@ -63,7 +63,7 @@ function preferencesText(preferences: RecommendationPreferences) {
   if (preferences.profile === "gaming" && preferences.gamingResolution) base.push(preferenceLabels.gamingResolution[preferences.gamingResolution]);
   if (preferences.profile === "gaming" && preferences.gamingRefreshRate) base.push(preferenceLabels.gamingRefreshRate[preferences.gamingRefreshRate]);
   if (preferences.budgetWon !== undefined) base.push(`예산 ${preferences.budgetWon.toLocaleString("ko-KR")}원`);
-  return base.join(" · ");
+  return base.join(" / ");
 }
 
 export function buildTransferDiffFor(currentBuild: BuildSelection, currentPreferences: RecommendationPreferences, nextBuild: BuildSelection, nextPreferences: RecommendationPreferences, resolver: BuildTransferDiffNameResolver = {}): BuildTransferDiff {

@@ -45,7 +45,7 @@ describe("engine generation options", () => {
     expect(loadEngineGenerationOptions()).toEqual(ENGINE_GENERATION_OPTION_DEFAULTS);
   });
 
-  it("모르는 우선순위·범위 밖 배율·빈 우선순위 세트를 거부한다", () => {
+  it("모르는 우선순위/범위 밖 배율/빈 우선순위 세트를 거부한다", () => {
     expect(normalizeEngineGenerationOptions({ variantPriorities: ["extreme"] }).errors.length).toBeGreaterThan(0);
     expect(normalizeEngineGenerationOptions({ variantPriorities: [] }).errors.length).toBeGreaterThan(0);
     expect(normalizeEngineGenerationOptions({ budgetLadderDownMultiplier: 3 }).errors.length).toBeGreaterThan(0);

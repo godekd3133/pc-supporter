@@ -22,7 +22,7 @@ describe("GPU physical override CSV", () => {
   it("accepts Korean category and topology labels used in spreadsheets", () => {
     const csv = [
       "partId,partName,category,manufacturerModel,manufacturerRevision,gpuSlotOccupancy,gpuCableBendClearanceMm,caseSidePanelClearanceMm,psuIndependentPcieCableRuns,psuPcieCableTopology,sourceNote,sourceUrl,updatedAt",
-      "psu-1,테스트 PSU,파워서플라이,PSU-TEST-1,,,,,2,분배·공유 케이블,케이블 표,,2026-09-01"
+      "psu-1,테스트 PSU,파워서플라이,PSU-TEST-1,,,,,2,분배/공유 케이블,케이블 표,,2026-09-01"
     ].join("\n");
     const parsed = parseGpuPhysicalOverridesCsv(csv);
 

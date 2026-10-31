@@ -198,6 +198,8 @@ BUNDLE="$TMP_DIR/pc-supporter-$RELEASE_ID.tar.gz"
     scripts/import-file-runtime-state.ts \
     scripts/migrate-postgres.ts \
     scripts/build-server-runtime.mjs \
+    scripts/azure-data-export.mjs \
+    scripts/refresh-gaming-gpu-prices.mjs \
     scripts/bootstrap-postgres-runtime-role.mjs \
     scripts/postgres-runtime-role-smoke.mjs
 )

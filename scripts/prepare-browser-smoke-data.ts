@@ -109,7 +109,7 @@ const asusCoolingFan: AccessoryItem = {
   missingFields: [],
   updatedAt,
   priceWon: 14900,
-  rawSpecText: "120mm · 4핀 PWM · 팬 전류 0.18A · 비RGB",
+  rawSpecText: "120mm / 4핀 PWM / 팬 전류 0.18A / 비RGB",
   specs: { lengthMm: 120, widthMm: 120, fanCount: 1, fanCurrentA: 0.18 }
 };
 

@@ -36,10 +36,10 @@ describe("cached compatibility result public boundary", () => {
           recommendationTrust: { score: 94, level: "high", reasons: ["공식 벤치마크"] },
           similarityScore: 92,
           analysisScore: 82,
-          performanceSummary: "3DMark Time Spy 24680점 · 실제 FPS 144",
+          performanceSummary: "3DMark Time Spy 24680점 / 실제 FPS 144",
           benchmarkEvidence: [{ score: 24680, sourceUrl: "https://review.example/private" }],
-          gpuTarget: { summary: "QHD · 144Hz · 권장 VRAM 12GB" },
-          physicalEvidence: { status: "review", summary: "GPU 길이 265mm · 케이스 허용 길이 270mm · 구매 전 확인 필요" },
+          gpuTarget: { summary: "QHD / 144Hz / 권장 VRAM 12GB" },
+          physicalEvidence: { status: "review", summary: "GPU 길이 265mm / 케이스 허용 길이 270mm / 구매 전 확인 필요" },
           remainingBlockers: 0,
           remainingWarnings: 0,
           remainingUnknown: 1
@@ -57,7 +57,7 @@ describe("cached compatibility result public boundary", () => {
       findings: [{ facts: [{ actual: "265mm" }], suggestions: [{
         part: { name: "테스트 GPU", priceWon: 650000, specs: { lengthMm: 265, vramGb: 12 } },
         candidateRisk: "review",
-        physicalEvidence: { status: "review", summary: "GPU 길이 265mm · 케이스 허용 길이 270mm · 구매 전 확인 필요" }
+        physicalEvidence: { status: "review", summary: "GPU 길이 265mm / 케이스 허용 길이 270mm / 구매 전 확인 필요" }
       }] }]
     });
     expect(result).not.toHaveProperty("analysis");

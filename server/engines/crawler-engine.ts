@@ -45,7 +45,7 @@ function stripPageProductCodes(category: CrawlCategoryReport) {
   return rest;
 }
 
-// 크롤링 엔진 화면/상태 API용 스냅샷 — 실행 중 상태·엔진 파라미터·
+// 크롤링 엔진 화면/상태 API용 스냅샷 — 실행 중 상태/엔진 파라미터/
 // 핵심/주변 부품 manifest를 한 번에 묶는다.
 export async function crawlerEngineSnapshot() {
   const manifest = await readJson<CrawlManifest | null>(CRAWL_MANIFEST_PATH, null);

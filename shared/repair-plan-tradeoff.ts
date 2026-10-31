@@ -35,7 +35,7 @@ function dimensionReason(left: RepairPlanTradeoffMetric, right: RepairPlanTradeo
   if (left.riskScore < right.riskScore) dimensions.push("남은 위험");
   if (left.changeCount < right.changeCount) dimensions.push("변경 규모");
   if (left.priceDeltaWon !== undefined && right.priceDeltaWon !== undefined && left.priceDeltaWon < right.priceDeltaWon) dimensions.push("추가 비용");
-  return dimensions.length > 0 ? dimensions.join("·") : "비교 기준";
+  return dimensions.length > 0 ? dimensions.join("/") : "비교 기준";
 }
 
 export function repairPlanTradeoffFor(plans: ReadonlyArray<RecommendationPlan>): RepairPlanTradeoffSummary[] {
@@ -55,8 +55,8 @@ export function repairPlanTradeoffFor(plans: ReadonlyArray<RecommendationPlan>):
         ...metric,
         frontier: true,
         reason: metric.priceDeltaWon === undefined
-          ? "가격이 비어 있어 남은 위험·변경 규모만 비교했습니다."
-          : "비용·남은 문제·변경 수를 함께 살펴볼 수 있는 선택입니다."
+          ? "가격이 비어 있어 남은 위험/변경 규모만 비교했습니다."
+          : "비용/남은 문제/변경 수를 함께 살펴볼 수 있는 선택입니다."
       };
     }
     return {

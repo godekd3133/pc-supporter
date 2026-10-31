@@ -211,9 +211,13 @@ export function parseRecommendationPreferences(value: unknown): RecommendationPr
   const gamingMode = value.gamingMode === "budget" || value.gamingMode === "target_fps" ? value.gamingMode : undefined;
   const gamingTargetFps = typeof value.gamingTargetFps === "number" && Number.isInteger(value.gamingTargetFps) && value.gamingTargetFps >= 30 && value.gamingTargetFps <= 500 ? value.gamingTargetFps : undefined;
   const gpuVendorPreference = GPU_VENDORS.includes(value.gpuVendorPreference as typeof GPU_VENDORS[number]) ? value.gpuVendorPreference as RecommendationPreferences["gpuVendorPreference"] : undefined;
+  const cpuVendorPreference = value.cpuVendorPreference === "amd" || value.cpuVendorPreference === "intel" ? value.cpuVendorPreference : undefined;
+  const memoryTypePreference = value.memoryTypePreference === "DDR4" || value.memoryTypePreference === "DDR5" ? value.memoryTypePreference : undefined;
   return {
     priority,
     profile,
+    ...(cpuVendorPreference ? { cpuVendorPreference } : {}),
+    ...(memoryTypePreference ? { memoryTypePreference } : {}),
     ...(profile === "gaming" && gamingMode ? { gamingMode } : {}),
     ...(profile === "gaming" && gamingTargetFps !== undefined ? { gamingTargetFps } : {}),
     ...(profile === "gaming" && gpuVendorPreference ? { gpuVendorPreference } : {}),
@@ -236,7 +240,7 @@ export function parseBuildGenerationRequest(value: unknown): BuildGenerationRequ
   if (value.gamingMode !== undefined && value.gamingMode !== "budget" && value.gamingMode !== "target_fps") errors.push("gamingMode는 budget 또는 target_fps여야 합니다.");
   if (value.gamingTargetFps !== undefined && (typeof value.gamingTargetFps !== "number" || !Number.isInteger(value.gamingTargetFps) || value.gamingTargetFps < 30 || value.gamingTargetFps > 500)) errors.push("목표 FPS는 30부터 500 사이의 정수여야 합니다.");
   if (value.gamingMode === "target_fps" && (profile !== "gaming" || !Array.isArray(value.gamingGameIds) || value.gamingGameIds.length === 0 || value.gamingTargetFps === undefined)) errors.push("게임 목표 견적에는 게임과 목표 FPS가 필요합니다.");
-  if (value.gamingMode === "target_fps" && Array.isArray(value.gamingGameIds) && value.gamingGameIds.some((id) => typeof id !== "string" || !gamingGameOptionFor(id))) errors.push("선택한 게임 ID를 확인해 주세요.");
+  if (profile === "gaming" && Array.isArray(value.gamingGameIds) && value.gamingGameIds.some((id) => typeof id !== "string" || !gamingGameOptionFor(id))) errors.push("선택한 게임 ID를 확인해 주세요.");
   if (value.gamingMode === "target_fps" && value.includeGpu === false) errors.push("목표 FPS 견적에는 외장 그래픽카드가 필요합니다.");
   if (value.gamingMode !== undefined && profile !== "gaming") errors.push("게임 견적 모드는 게이밍 용도에서만 선택할 수 있습니다.");
   const priority = isRecommendationPriority(value.priority) ? value.priority : "balanced";
@@ -264,6 +268,8 @@ export function parseBuildGenerationRequest(value: unknown): BuildGenerationRequ
   const hddCapacityGb = Number(value.hddCapacityGb ?? 4000);
   if (!Number.isInteger(hddCapacityGb) || hddCapacityGb <= 0 || hddCapacityGb > 100_000) errors.push("hddCapacityGb는 1부터 100,000 사이의 정수여야 합니다.");
   if (value.gpuVendorPreference !== undefined && !GPU_VENDORS.includes(value.gpuVendorPreference as typeof GPU_VENDORS[number])) errors.push("gpuVendorPreference는 nvidia, amd, intel 중 하나여야 합니다.");
+  if (value.cpuVendorPreference !== undefined && value.cpuVendorPreference !== "amd" && value.cpuVendorPreference !== "intel") errors.push("cpuVendorPreference는 amd 또는 intel이어야 합니다.");
+  if (value.memoryTypePreference !== undefined && value.memoryTypePreference !== "DDR4" && value.memoryTypePreference !== "DDR5") errors.push("memoryTypePreference는 DDR4 또는 DDR5여야 합니다.");
   let pinnedParts: BuildGenerationRequest["pinnedParts"];
   if (value.pinnedParts !== undefined) {
     if (!record(value.pinnedParts)) {
@@ -286,6 +292,8 @@ export function parseBuildGenerationRequest(value: unknown): BuildGenerationRequ
   if (errors.length > 0) return { errors };
   return {
     request: {
+      ...(value.cpuVendorPreference === "amd" || value.cpuVendorPreference === "intel" ? { cpuVendorPreference: value.cpuVendorPreference } : {}),
+      ...(value.memoryTypePreference === "DDR4" || value.memoryTypePreference === "DDR5" ? { memoryTypePreference: value.memoryTypePreference } : {}),
       ...(value.gamingMode === "budget" || value.gamingMode === "target_fps" ? { gamingMode: value.gamingMode } : {}),
       ...(typeof value.gamingTargetFps === "number" ? { gamingTargetFps: value.gamingTargetFps } : {}),
       ...(typeof value.gamingTestbedPhase1 === "boolean" ? { gamingTestbedPhase1: value.gamingTestbedPhase1 } : {}),

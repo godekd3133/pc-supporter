@@ -3,10 +3,10 @@ import type { PartCategory, RecommendationProfile } from "./types";
 // 실제 판매 조립PC 견적을 전사한 참조 견적표다. 출처는 두 곳 — 유튜브
 // "체험판" 채널 견적 소개 영상(youtu.be/1lkdO8UAka4, 5:28~7:43 구간)과
 // 온라인 조립PC 판매처 라인업(AURA PC/오버시스템 상품 목록, 컴퓨존 추천조립PC).
-// 자동 구성 엔진이 CPU·GPU 조합을 정할 때 예산대별로 실제 매장이 선택한 부품
+// 자동 구성 엔진이 CPU/GPU 조합을 정할 때 예산대별로 실제 매장이 선택한 부품
 // 등급의 쌍을 soft preference로 참고한다 — hard gate가 아니라 점수 보너스로만
 // 작용한다. 게이밍 조립PC의 상업적 패턴은 "CPU는 미드~X3D 대역에 플랫하게 묶고
-// 예산 증가분은 GPU 등급에 실는다"는 것이라, 같은 예산대에 인텔·AMD 두 갈래의
+// 예산 증가분은 GPU 등급에 실는다"는 것이라, 같은 예산대에 인텔/AMD 두 갈래의
 // 대표 페어링을 둘 수록한다.
 export type ReferenceBuild = {
   id: string;
@@ -205,8 +205,8 @@ export const REFERENCE_BUILDS: readonly ReferenceBuild[] = [
       psu: "슈퍼플라워 SF-1000F14GE LEADEX III GOLD UP ATX3.1"
     }
   },
-  // ── AURA PC(오버시스템)·컴퓨존 추천조립PC 라인업 — 2025년 하반기 판매 상품의
-  // CPU/GPU 페어링. 가격대마다 CPU는 7500F~9800X3D·i5~i7급으로 좁게 묶이고
+  // ── AURA PC(오버시스템)/컴퓨존 추천조립PC 라인업 — 2025년 하반기 판매 상품의
+  // CPU/GPU 페어링. 가격대마다 CPU는 7500F~9800X3D/i5~i7급으로 좁게 묶이고
   // GPU 등급이 올라가는 "플랫 페어링" 패턴이다. parts의 나머지 항목은 매칭에
   // 쓰이지 않으므로 CPU/GPU만 기록한다.
   {

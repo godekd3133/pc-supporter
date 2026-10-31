@@ -13,7 +13,7 @@ export function budgetLadderShareHealthLabel(status: BudgetLadderShareHealthStat
   if (status === "expired") return "서버 만료";
   if (status === "revoked") return "서버 취소됨";
   if (status === "error") return "확인 실패";
-  return locallyExpired ? "로컬 만료 · 서버 미확인" : "서버 확인 전";
+  return locallyExpired ? "로컬 만료 / 서버 미확인" : "서버 확인 전";
 }
 
 export function budgetLadderShareHealthTone(status: BudgetLadderShareHealthStatus, locallyExpired = false) {

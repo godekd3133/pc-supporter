@@ -6,7 +6,7 @@ describe("accessoryFitReviewNoticeFor", () => {
     ["gpu_support", "지지대 장착 방식"],
     ["gpu_cooler", "그래픽카드 모델별 장착"],
     ["memory_cooler", "DIMM 높이"],
-    ["thermal_pad", "두께·면적"]
+    ["thermal_pad", "두께/면적"]
   ] as const)("asks buyers to check the unassessed fit details for %s", (category, expectedText) => {
     expect(accessoryFitReviewNoticeFor(category)).toContain(expectedText);
   });

@@ -79,10 +79,10 @@ export function validateGpuPhysicalOverride(part: Part, input: unknown): { value
     if (psuRuns.value !== undefined || psuTopology !== undefined) errors.push("GPU override에는 PSU PCIe 케이블 구조를 입력할 수 없습니다.");
     if (slot.value === undefined && gpuCable.value === undefined) errors.push("GPU는 물리 슬롯 점유 또는 케이블 굽힘 여유 중 하나 이상이 필요합니다.");
   } else if (part.category === "case") {
-    if (slot.value !== undefined || gpuCable.value !== undefined || psuRuns.value !== undefined || psuTopology !== undefined) errors.push("케이스 override에는 GPU·PSU 케이블 구조를 입력할 수 없습니다.");
+    if (slot.value !== undefined || gpuCable.value !== undefined || psuRuns.value !== undefined || psuTopology !== undefined) errors.push("케이스 override에는 GPU/PSU 케이블 구조를 입력할 수 없습니다.");
     if (caseSide.value === undefined) errors.push("케이스는 측면 케이블 여유가 필요합니다.");
   } else if (part.category === "psu") {
-    if (slot.value !== undefined || gpuCable.value !== undefined || caseSide.value !== undefined) errors.push("PSU override에는 GPU·케이스 물리 여유를 입력할 수 없습니다.");
+    if (slot.value !== undefined || gpuCable.value !== undefined || caseSide.value !== undefined) errors.push("PSU override에는 GPU/케이스 물리 여유를 입력할 수 없습니다.");
     if (psuRuns.value === undefined && psuTopology === undefined) errors.push("PSU는 독립 PCIe 케이블 런 수 또는 분배 구조 중 하나 이상이 필요합니다.");
   } else {
     errors.push("GPU, 케이스 또는 PSU만 물리 호환 override 대상입니다.");
@@ -138,7 +138,7 @@ const OVERRIDE_FIELDS = [
 
 export function validateGpuPhysicalOverrideBatch(input: unknown, catalog: Part[], existingOverrides: GpuPhysicalOverrideMap = {}): GpuPhysicalOverrideBatchValidation {
   const rawItems = normalizedBatchItems(input);
-  if (!rawItems) return { items: [], validOverrides: [], errors: ["items는 GPU·케이스·PSU 물리 호환 override 배열이어야 합니다."] };
+  if (!rawItems) return { items: [], validOverrides: [], errors: ["items는 GPU/케이스/PSU 물리 호환 override 배열이어야 합니다."] };
   if (rawItems.length < 1) return { items: [], validOverrides: [], errors: ["items는 최소 1개가 필요합니다."] };
   if (rawItems.length > MAX_BATCH_SIZE) return { items: [], validOverrides: [], errors: [`한 번에 최대 ${MAX_BATCH_SIZE}개 부품까지 처리할 수 있습니다.`] };
 

@@ -82,8 +82,29 @@ describe("part detail refresh", () => {
     ]));
   });
 
+  it("clears an unavailable offer without changing physical specs or the last positive observation", async () => {
+    const before = { ...danawaPart, priceCheckedAt: "2026-10-04T00:00:00.000Z" };
+    const html = `<html><head><title>테스트 케이스 : 다나와 가격비교</title><link rel="canonical" href="https://prod.danawa.com/info/?pcode=1"><meta property="og:description" content="최저가 0원"></head><body>판매점 0개<script>var nMinPrice = 0;</script></body></html>`;
+    let unavailable = false;
+    const refreshed = await refreshDanawaPart(before, { fetchHtml: async () => html, onPriceUnavailable: () => { unavailable = true; } });
+    expect(unavailable).toBe(true);
+    expect(refreshed).not.toHaveProperty("priceWon");
+    expect(refreshed.priceCheckedAt).toBe(before.priceCheckedAt);
+    expect(refreshed.priceUnavailableAt).toEqual(expect.any(String));
+    expect(refreshed.specs).toEqual(before.specs);
+    expect(refreshed.updatedAt).toBe(before.updatedAt);
+    expect(changedPartFields(before, refreshed)).toEqual(["가격"]);
+  });
+
+  it("clears the unavailable marker after a fresh positive offer returns", () => {
+    const before = { ...danawaPart, priceWon: undefined, priceUnavailableAt: "2026-10-05T00:00:00.000Z" };
+    const refreshed = reconcileRefreshedPart(before, { ...danawaPart, priceWon: 59000 });
+    expect(refreshed.priceWon).toBe(59000);
+    expect(refreshed.priceUnavailableAt).toBeUndefined();
+  });
+
   it("refreshes an accessory through the accessory parser and preserves the old price when needed", async () => {
-    const html = `<title>테스트 써멀그리스 : 다나와 가격비교</title><meta property="og:description" content="최저가 650원" /><meta name="description" content="써멀그리스 / 용량: 2g / 열전도율: 8.5W/(m·K)" />`;
+    const html = `<title>테스트 써멀그리스 : 다나와 가격비교</title><meta property="og:description" content="최저가 650원" /><meta name="description" content="써멀그리스 / 용량: 2g / 열전도율: 8.5W/(m/K)" />`;
     const refreshed = await refreshDanawaAccessory(danawaAccessory, { fetchHtml: async () => html });
     const response = accessoryRefreshResponse(danawaAccessory, refreshed, "2026-08-28T01:00:00.000Z");
 

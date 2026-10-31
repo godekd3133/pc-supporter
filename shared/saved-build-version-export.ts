@@ -170,7 +170,7 @@ export function savedBuildVersionComparisonExportFor(input: SavedBuildVersionCom
     ...(transition ? { transition: transitionForPublicExport(transition) } : {}),
     changes,
     findingChanges,
-    dataBoundary: "저장된 두 버전의 선택·호환 결과 비교입니다. 실제 판매가·재고·제조사 QVL·물리 장착·케이블 배선은 구매 전에 확인해야 합니다. 게임 성능은 게임과 설정에 따라 달라집니다."
+    dataBoundary: "저장된 두 버전의 선택/호환 결과 비교입니다. 실제 판매가/재고/제조사 QVL/물리 장착/케이블 배선은 구매 전에 확인해야 합니다. 게임 성능은 게임과 설정에 따라 달라집니다."
   };
 }
 
@@ -195,10 +195,10 @@ export function savedBuildVersionComparisonTextFor(input: SavedBuildVersionCompa
     "[저장 당시 결과]",
     ...(beforeCheck && afterCheck ? [
       `결과: ${statusText(beforeCheck.status)} → ${statusText(afterCheck.status)}`,
-      `호환 상태: 호환 불가 ${beforeCheck.blockerCount} → ${afterCheck.blockerCount} · 주의 ${beforeCheck.warningCount} → ${afterCheck.warningCount} · 확인 필요 ${beforeCheck.unknownCount} → ${afterCheck.unknownCount}`,
-      `호환 상태 변화: 호환 불가 ${signed(transition?.blockerDelta ?? 0)} · 주의 ${signed(transition?.warningDelta ?? 0)} · 확인 필요 ${signed(transition?.unknownDelta ?? 0)}`,
-      `구매 금액: ${priceText(beforeCheck.totalPriceWon, beforeCheck.priceComplete)} → ${priceText(afterCheck.totalPriceWon, afterCheck.priceComplete)}${transition?.priceDeltaWon !== undefined ? ` · ${transition.priceDeltaWon === 0 ? "변화 없음" : `${transition.priceDeltaWon > 0 ? "+" : ""}${transition.priceDeltaWon.toLocaleString("ko-KR")}원`}` : ""}`,
-      `항목 변화: 해결 ${transition?.resolvedFindingCount ?? 0}개 · 신규 ${transition?.newFindingCount ?? 0}개 · 변경 ${((transition?.severityChangedFindingCount ?? 0) + (transition?.detailsChangedFindingCount ?? 0))}개`
+      `호환 상태: 호환 불가 ${beforeCheck.blockerCount} → ${afterCheck.blockerCount} / 주의 ${beforeCheck.warningCount} → ${afterCheck.warningCount} / 확인 필요 ${beforeCheck.unknownCount} → ${afterCheck.unknownCount}`,
+      `호환 상태 변화: 호환 불가 ${signed(transition?.blockerDelta ?? 0)} / 주의 ${signed(transition?.warningDelta ?? 0)} / 확인 필요 ${signed(transition?.unknownDelta ?? 0)}`,
+      `구매 금액: ${priceText(beforeCheck.totalPriceWon, beforeCheck.priceComplete)} → ${priceText(afterCheck.totalPriceWon, afterCheck.priceComplete)}${transition?.priceDeltaWon !== undefined ? ` / ${transition.priceDeltaWon === 0 ? "변화 없음" : `${transition.priceDeltaWon > 0 ? "+" : ""}${transition.priceDeltaWon.toLocaleString("ko-KR")}원`}` : ""}`,
+      `항목 변화: 해결 ${transition?.resolvedFindingCount ?? 0}개 / 신규 ${transition?.newFindingCount ?? 0}개 / 변경 ${((transition?.severityChangedFindingCount ?? 0) + (transition?.detailsChangedFindingCount ?? 0))}개`
     ] : ["- 저장된 검사 저장본이 한쪽 이상 없어 전체 검사 비교를 계산할 수 없습니다."]),
     "",
     "[변경된 호환성 결과]",

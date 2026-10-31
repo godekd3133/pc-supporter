@@ -40,7 +40,7 @@ function payload(overrides: Record<string, unknown> = {}) {
       "가격 변화: +20,000원",
       "부품 정보 기준일: 2026-09-07T00:00:00.000Z",
       "성능 분석: 82점 → 74점",
-      "벤치마크 자료: Cinebench R23 Multi 18000 · 3DMark Time Spy 21000",
+      "벤치마크 자료: Cinebench R23 Multi 18000 / 3DMark Time Spy 21000",
       "추천 신뢰 점수 92점",
       "평균 FPS 144 FPS 측정"
     ].join("\n"),

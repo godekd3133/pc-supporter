@@ -89,7 +89,7 @@ function topologyFromCell(value: string) {
   const normalized = value.trim().toLocaleLowerCase("ko-KR");
   if (!normalized) return { value: undefined as GpuPhysicalOverride["psuPcieCableTopology"] };
   if (["independent", "독립", "독립 케이블", "분배 없음"].includes(normalized)) return { value: "independent" as const };
-  if (["shared", "분배", "공유", "분배 구조", "분배·공유 케이블"].includes(normalized)) return { value: "shared" as const };
+  if (["shared", "분배", "공유", "분배 구조", "분배/공유 케이블"].includes(normalized)) return { value: "shared" as const };
   return { error: "psuPcieCableTopology는 independent 또는 shared 중 하나여야 합니다." };
 }
 

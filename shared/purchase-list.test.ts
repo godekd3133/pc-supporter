@@ -5,7 +5,7 @@ import { purchaseListCsvFor, purchaseListPriceEvidenceSummaryFor, purchaseListTe
 
 const rows = [
   { section: "핵심 부품" as const, categoryLabel: "CPU", name: "테스트, CPU\n\"특별판\"", quantity: 1, unitPriceWon: 100000, totalPriceWon: 100000, priceEvidence: "live" as const, sourceUrl: "https://prod.danawa.com/info/?pcode=1" },
-  { section: "주변 부품" as const, categoryLabel: "쿨링팬", name: "가격 미확인 팬", quantity: 2, priceEvidence: "unknown" as const, listingType: "신품·정식 유통", dataFreshness: "stale" as const }
+  { section: "주변 부품" as const, categoryLabel: "쿨링팬", name: "가격 미확인 팬", quantity: 2, priceEvidence: "unknown" as const, listingType: "신품/정식 유통", dataFreshness: "stale" as const }
 ];
 
 describe("purchase list serialization", () => {
@@ -23,7 +23,7 @@ describe("purchase list serialization", () => {
   it("preserves quantities, source URLs, newlines, and unknown price labels in text", () => {
     const text = purchaseListTextFor(rows);
     expect(text).toContain("테스트, CPU\n\"특별판\" ×1");
-    expect(text).toContain("가격 미확인 팬 ×2 · - · 신품·정식 유통 · 오래된 정보");
+    expect(text).toContain("가격 미확인 팬 ×2 / - / 신품/정식 유통 / 오래된 정보");
     expect(text).toContain("https://prod.danawa.com/info/?pcode=1");
     expect(text).toContain("전체 합계: -");
   });
@@ -32,7 +32,7 @@ describe("purchase list serialization", () => {
     const csv = purchaseListCsvFor(rows);
     expect(csv.startsWith("\uFEFF구분,분류,부품명")).toBe(true);
     expect(csv).toContain('"테스트, CPU\n""특별판"""');
-    expect(csv).toContain("주변 부품,쿨링팬,가격 미확인 팬,2,-,-,-,신품·정식 유통,오래된 정보,,");
+    expect(csv).toContain("주변 부품,쿨링팬,가격 미확인 팬,2,-,-,-,신품/정식 유통,오래된 정보,,");
   });
 
   it("keeps accessory connection targets in copied text and CSV", () => {
@@ -40,7 +40,7 @@ describe("purchase list serialization", () => {
     expect(purchaseListTextFor(targetedRows)).toContain("연결 대상 팬 허브 허브 A");
     const csv = purchaseListCsvFor(targetedRows);
     expect(csv).toContain("가격 확인,유통 조건,갱신 상태,연결 대상,상품 링크");
-    expect(csv).toContain("-,신품·정식 유통,오래된 정보,팬 허브 허브 A,");
+    expect(csv).toContain("-,신품/정식 유통,오래된 정보,팬 허브 허브 A,");
   });
 
   it("summarizes current, reference, recorded, and unknown price evidence", () => {
@@ -64,7 +64,7 @@ describe("purchase list serialization", () => {
     expect(text).toContain("[구매 예정] 쿨링팬: 가격 미확인 팬");
     expect(csv).toContain("상품 링크,구매 상태");
     expect(csv).toContain("https://prod.danawa.com/info/?pcode=1,구매 완료");
-    expect(csv).toContain("신품·정식 유통,오래된 정보,,,구매 예정");
+    expect(csv).toContain("신품/정식 유통,오래된 정보,,,구매 예정");
     const stagedText = purchaseListTextFor(identifiedRows, checkedIds, [{ rowKey: "core-row", status: "ordered", updatedAt: "2026-09-04T00:00:00.000Z" }]);
     const stagedCsv = purchaseListCsvFor(identifiedRows, checkedIds, [{ rowKey: "core-row", status: "ordered", updatedAt: "2026-09-04T00:00:00.000Z" }]);
     expect(stagedText).toContain("[주문 완료] CPU: 테스트, CPU");

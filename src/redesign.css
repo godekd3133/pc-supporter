@@ -1,0 +1,706 @@
+/*
+ * Workbench redesign layer.
+ * Loaded after styles.css. Selectors are scoped under .app-shell so they win over
+ * component stylesheets that lazy chunks append later at equal specificity.
+ * Direction: a parts-sheet workbench (dense, aligned, numeric) rather than
+ * centered marketing cards. Hairline borders over drop shadows, tabular prices,
+ * one accent, motion that explains state changes.
+ */
+
+:root {
+  --canvas: #f4f5f7;
+  --line: #e2e5ea;
+  --line-strong: #cfd4dc;
+  --ink-2: #333d4b;
+  --font-sans: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  --mono: var(--font-sans);
+  font-family: var(--font-sans);
+  --radius-lg: 16px;
+  --radius-md: 12px;
+  --radius-sm: 8px;
+  --ease-out: cubic-bezier(.22, 1, .36, 1);
+  --ease-in-out: cubic-bezier(.65, 0, .35, 1);
+  --dur-fast: 140ms;
+  --dur-base: 240ms;
+  --dur-slow: 420ms;
+  --hover-fill: #eceef2;
+  --accent-wash: color-mix(in srgb, var(--teal) 9%, transparent);
+  --ok: #12a46b;
+  --ok-soft: #e4f7ee;
+}
+
+html[data-theme="dark"] {
+  --canvas: #0d1015;
+  --surface: #151a21;
+  --line: #262d38;
+  --line-strong: #364050;
+  --ink-2: #d3d9e2;
+  --hover-fill: #1d232c;
+  --ok: #46d39a;
+  --ok-soft: #13291f;
+}
+
+html, body { background: var(--canvas); }
+
+/* One typeface everywhere. Legacy rules set "DM Mono"/"Noto Sans KR" in ~600
+   places; numbers keep their alignment through tabular figures instead. */
+body,
+body *:not(.recovery-code-value):not(#recover-ownership-code):not(code):not(pre):not(kbd) { font-family: var(--font-sans) !important; }
+body { font-variant-numeric: tabular-nums; }
+/* Legacy rules squeeze tracking down to -0.055em; Pretendard reads best near 0. */
+body *:not(svg):not(path) { letter-spacing: 0 !important; }
+html body h1, html body h2 { letter-spacing: -0.02em !important; }
+body { word-break: keep-all; line-height: 1.55; }
+
+/* ───────────────────────── Header ───────────────────────── */
+
+/* The mobile tab bar is position:fixed inside .topbar, so backdrop-filter (which
+   creates a containing block) must stay off below 761px. */
+@media (min-width: 761px) {
+  .app-shell .topbar {
+    min-height: 64px;
+    border-bottom: 1px solid var(--line);
+    background: color-mix(in srgb, var(--surface) 84%, transparent);
+    backdrop-filter: saturate(1.6) blur(16px);
+    -webkit-backdrop-filter: saturate(1.6) blur(16px);
+  }
+
+  .app-shell .topbar-inner { min-height: 64px; gap: 28px; }
+
+  .app-shell .brand { gap: 10px; flex: 0 0 auto; }
+  .app-shell .brand-mark { width: 32px; height: 32px; border-radius: 9px; font-size: 17px; box-shadow: none; transition: transform var(--dur-base) var(--ease-out); }
+    .app-shell .brand strong { font-size: 15px; letter-spacing: -0.03em; }
+
+  .app-shell .topnav { align-self: center; gap: 2px; min-width: 0; }
+
+  .app-shell .nav-link {
+    height: 36px;
+    padding: 0 12px;
+    border-radius: 9px;
+    color: var(--muted);
+    font-size: 13.5px;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: color var(--dur-fast) ease, background-color var(--dur-fast) ease;
+  }
+  .app-shell .nav-link:hover { color: var(--ink); background: var(--hover-fill); }
+  .app-shell .nav-link.active { color: var(--teal-deep); background: var(--accent-wash); }
+  .app-shell .nav-link.active::after { right: 50%; left: 50%; bottom: -14px; width: 18px; height: 2px; margin-left: -9px; border-radius: 2px; animation: nav-indicator-in var(--dur-base) var(--ease-out) both; }
+  .app-shell .nav-alert-badge { top: -3px; right: -3px; border-color: var(--surface); }
+
+  .app-shell .theme-toggle { min-height: 34px; border-radius: 9px; border-color: var(--line); background: transparent; color: var(--ink-2); }
+  .app-shell .theme-toggle:hover:not(:disabled) { background: var(--hover-fill); border-color: var(--line-strong); color: var(--ink); }
+  .app-shell .theme-toggle svg { transition: transform var(--dur-slow) var(--ease-out); }
+  .app-shell .theme-toggle:hover svg { transform: rotate(-24deg); }
+
+  .app-shell .topbar-status { padding: 6px 10px; border: 1px solid var(--line); border-radius: 999px; font-size: 11.5px; white-space: nowrap; }
+  .app-shell .status-dot.loading { animation: status-pulse 1.4s ease-in-out infinite; }
+}
+
+@keyframes nav-indicator-in { from { transform: scaleX(0); opacity: 0; } to { transform: scaleX(1); opacity: 1; } }
+@keyframes status-pulse { 50% { box-shadow: 0 0 0 7px rgba(230, 162, 60, 0); } }
+
+/* Tablet widths: keep every menu reachable without wrapping the bar. */
+@media (min-width: 761px) and (max-width: 1180px) {
+  .app-shell .topbar-inner { width: calc(100% - 32px); min-height: 60px; flex-wrap: nowrap; gap: 12px; padding: 0; }
+  .app-shell .brand small { display: none; }
+  .app-shell .topnav { order: 0; width: auto; height: auto; }
+  .app-shell .brand small { display: none; }
+  .app-shell .topnav {
+    flex: 1 1 auto;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
+    mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
+  }
+  .app-shell .topnav::-webkit-scrollbar { display: none; }
+  .app-shell .nav-link.active::after { display: none; }
+  .app-shell .theme-toggle span { display: none; }
+  .app-shell .theme-toggle { margin-left: 0; padding: 0 9px; }
+  .app-shell .topbar-status { max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+}
+
+/* ───────────────────────── Page frame ───────────────────────── */
+
+@media (min-width: 761px) {
+  .app-shell .page-container { width: min(1240px, calc(100% - 64px)); padding-top: 40px; }
+  .app-shell .route-stage { animation: route-enter var(--dur-slow) var(--ease-out) both; }
+}
+@media (min-width: 761px) and (max-width: 1080px) {
+  .app-shell .page-container { width: calc(100% - 40px); }
+}
+
+@keyframes route-enter { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+.app-shell h1 { letter-spacing: -0.045em; }
+
+.app-shell .back-link { transition: color var(--dur-fast) ease, transform var(--dur-fast) ease; }
+.app-shell .back-link:hover { transform: translateX(-2px); }
+
+/* Buttons: tactile press, calmer radius. */
+.app-shell .button { border-radius: 10px; transition: transform var(--dur-fast) var(--ease-out), background-color var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease, box-shadow var(--dur-base) ease; }
+.app-shell .button:active:not(:disabled) { transform: scale(.975); }
+.app-shell .button-primary { box-shadow: none; }
+.app-shell .button > svg:last-child:not(:first-child) { transition: transform var(--dur-base) var(--ease-out); }
+.app-shell .button:hover:not(:disabled) > svg:last-child:not(:first-child) { transform: translateX(3px); }
+
+.app-shell details > summary { transition: color var(--dur-fast) ease; }
+.app-shell details > summary svg { transition: transform var(--dur-base) var(--ease-out); }
+.app-shell details[open] > summary svg:last-child { transform: rotate(180deg); }
+.app-shell details[open] > :not(summary) { animation: disclose var(--dur-base) var(--ease-out) both; }
+@keyframes disclose { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+/* ───────────────────────── Home: workbench ───────────────────────── */
+
+.app-shell .home-page .home-workbench {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(420px, 500px);
+  gap: clamp(40px, 6vw, 88px);
+  align-items: center;
+  margin: 0 0 48px;
+  padding: 24px 0 8px;
+}
+
+.app-shell .home-workbench-copy { min-width: 0; animation: home-rise var(--dur-slow) var(--ease-out) both; }
+
+.app-shell .home-workbench-copy .hero-eyebrow { display: block; margin: 0 0 14px; padding: 0; border: 0; color: var(--muted); background: transparent; font-size: 14px; font-weight: 600; }
+.app-shell .home-workbench-copy .hero-eyebrow svg { display: none; }
+
+.app-shell .home-workbench-copy h1 {
+  margin: 0 0 18px;
+  font-size: clamp(38px, 4.4vw, 56px);
+  font-weight: 700;
+  line-height: 1.04;
+  letter-spacing: -0.055em;
+}
+
+.app-shell .home-workbench-copy .hero-description { max-width: 34ch; margin: 0; color: var(--muted); font-size: 17px; line-height: 1.65; }
+
+.app-shell .home-workbench-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 32px; }
+.app-shell .home-page .home-workbench-actions .home-entry-cta { display: inline-flex; justify-content: center; gap: 10px; width: auto; min-height: 54px; margin: 0; padding-inline: 22px; border-radius: 12px; font-size: 15px; }
+.app-shell .home-workbench-actions .hero-secondary-action { border: 1px solid var(--line-strong); color: var(--ink); background: var(--surface); }
+.app-shell .home-workbench-actions .hero-secondary-action:hover:not(:disabled) { border-color: var(--ink); background: var(--surface); color: var(--ink); }
+
+/* Three-step strip that previews the guided flow. */
+.app-shell .home-workbench-copy .guided-home-preview { width: auto; margin: 36px 0 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.app-shell .home-workbench-copy .guided-home-preview .panel-kicker,
+.app-shell .home-workbench-copy .guided-home-preview-heading { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.app-shell .home-workbench-copy .guided-home-preview-choices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; margin: 0; border-top: 1px solid var(--line); }
+.app-shell .home-workbench-copy .guided-home-preview-choices > div { display: block; padding: 14px 16px 0 0; border: 0; background: transparent; }
+.app-shell .home-workbench-copy .guided-home-preview-choices > div + div { padding-left: 16px; border-left: 1px solid var(--line); }
+.app-shell .home-workbench-copy .guided-home-preview-choices dt { display: flex; align-items: baseline; gap: 8px; color: var(--muted); font-size: 12px; font-weight: 600; }
+.app-shell .home-workbench-copy .guided-home-preview-choices dt span { color: var(--teal); font-family: var(--mono); font-size: 11px; }
+.app-shell .home-workbench-copy .guided-home-preview-choices dd { margin: 6px 0 0; color: var(--ink); font-size: 14px; font-weight: 700; text-align: left; }
+
+.app-shell .home-workbench-links { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 20px; margin-top: 24px; }
+.app-shell .home-page .home-workbench-links .home-entry-result { display: inline-flex; gap: 6px; min-height: 40px; margin: 0; font-size: 13px; }
+.app-shell .home-workbench-links .hero-demo-tools { position: relative; margin: 0; }
+.app-shell .home-workbench-links .hero-demo-tools > summary { display: inline-flex; align-items: center; gap: 4px; min-height: 40px; color: var(--muted); font-size: 13px; cursor: pointer; list-style: none; }
+.app-shell .home-workbench-links .hero-demo-tools > summary::-webkit-details-marker { display: none; }
+.app-shell .home-workbench-links .hero-demo-tools > summary:hover { color: var(--ink); }
+.app-shell .home-workbench-links .hero-demo-tools > div { position: absolute; z-index: 5; top: calc(100% + 4px); left: 0; display: grid; gap: 2px; min-width: 210px; padding: 6px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); box-shadow: var(--shadow); }
+.app-shell .home-workbench-links .hero-demo-tools > div button { display: flex; align-items: center; gap: 8px; min-height: 38px; padding: 0 10px; border: 0; border-radius: var(--radius-sm); color: var(--ink-2); background: transparent; font-size: 13px; text-align: left; }
+.app-shell .home-workbench-links .hero-demo-tools > div button:hover { background: var(--hover-fill); color: var(--ink); }
+
+/* The parts sheet: a dark readout that fills in as the build grows. */
+.app-shell .home-spec-sheet {
+  --sheet-bg: #0e1520;
+  --sheet-ink: #eaf0f8;
+  --sheet-muted: #8592a6;
+  --sheet-line: rgba(255, 255, 255, .075);
+  --sheet-accent: #6aa8ff;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding: 22px 24px 20px;
+  border-radius: 20px;
+  color: var(--sheet-ink);
+  background: var(--sheet-bg);
+  box-shadow: none;
+  animation: sheet-rise 560ms var(--ease-out) 80ms both;
+}
+html[data-theme="dark"] .app-shell .home-spec-sheet { --sheet-bg: #111924; box-shadow: 0 0 0 1px var(--line-strong); }
+
+
+
+.app-shell .home-spec-sheet-head > div:first-child { display: flex; align-items: center; justify-content: space-between; }
+.app-shell .home-spec-sheet-kicker { color: var(--sheet-muted); font-size: 12px; font-weight: 600; }
+.app-shell .home-spec-sheet-progress { color: var(--sheet-muted); font-family: var(--mono); font-size: 12px; }
+.app-shell .home-spec-sheet-progress b { color: var(--sheet-ink); font-weight: 500; }
+
+.app-shell .home-spec-sheet-status { display: flex; align-items: center; gap: 9px; margin-top: 14px; }
+.app-shell .home-spec-sheet-status strong { color: var(--sheet-ink); font-size: 17px; font-weight: 700; letter-spacing: -0.02em; }
+.app-shell .home-spec-sheet-status .status-dot { flex: 0 0 auto; }
+.app-shell .home-spec-sheet-status.idle .status-dot { background: var(--sheet-muted); box-shadow: 0 0 0 4px rgba(133, 146, 166, .16); }
+.app-shell .home-spec-sheet-status.review .status-dot,
+.app-shell .home-spec-sheet-status.needs_review .status-dot { background: #f2b440; box-shadow: 0 0 0 4px rgba(242, 180, 64, .18); }
+.app-shell .home-spec-sheet-status.incompatible .status-dot { background: #ff6b78; box-shadow: 0 0 0 4px rgba(255, 107, 120, .18); }
+.app-shell .home-spec-sheet-status.compatible .status-dot { background: #46d39a; box-shadow: 0 0 0 4px rgba(70, 211, 154, .18); }
+.app-shell .home-spec-sheet-head p { margin: 6px 0 0; color: var(--sheet-muted); font-size: 12.5px; line-height: 1.55; }
+
+.app-shell .home-spec-rows { margin: 18px 0 0; padding: 0; list-style: none; border-top: 1px solid var(--sheet-line); }
+
+.app-shell .home-spec-row {
+  display: grid;
+  grid-template-columns: 22px 84px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 0 2px;
+  border-bottom: 1px solid var(--sheet-line);
+  animation: spec-row-in 460ms var(--ease-out) both;
+  animation-delay: calc(var(--row-index, 0) * 45ms + 260ms);
+}
+.app-shell .home-spec-icon { display: grid; place-items: center; color: var(--sheet-muted); font-size: 14px; }
+.app-shell .home-spec-label { color: var(--sheet-muted); font-size: 12px; font-weight: 600; white-space: nowrap; }
+.app-shell .home-spec-name { min-width: 0; overflow: hidden; color: var(--sheet-ink); font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.app-shell .home-spec-price { color: var(--sheet-ink); font-family: var(--mono); font-size: 12.5px; }
+.app-shell .home-spec-placeholder { display: block; width: var(--placeholder-width, 58%); height: 6px; border-radius: 3px; background: rgba(255, 255, 255, .07); }
+.app-shell .home-spec-row:nth-child(3n + 2) .home-spec-placeholder { --placeholder-width: 72%; }
+.app-shell .home-spec-row:nth-child(3n) .home-spec-placeholder { --placeholder-width: 44%; }
+.app-shell .home-spec-row.is-filled .home-spec-icon { color: var(--sheet-accent); }
+.app-shell .home-spec-row.is-filled .home-spec-label { color: #b9c4d4; }
+
+.app-shell .home-spec-sheet-foot { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-top: 16px; }
+.app-shell .home-spec-sheet-foot > span { color: var(--sheet-muted); font-size: 12px; }
+.app-shell .home-spec-sheet-foot strong { color: var(--sheet-ink); font-family: var(--mono); font-size: 26px; font-weight: 500; letter-spacing: -0.03em; }
+.app-shell .home-spec-sheet-foot strong small { margin-left: 3px; color: var(--sheet-muted); font-family: inherit; font-size: 14px; }
+.app-shell .home-spec-total-empty { color: var(--sheet-muted); }
+
+.app-shell .home-spec-sheet .home-current-preview-link { display: inline-flex; align-items: center; gap: 6px; margin-top: 12px; padding: 0; color: var(--sheet-accent); font-size: 13px; }
+
+@keyframes home-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes sheet-rise { from { opacity: 0; transform: translateY(24px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes spec-row-in { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: none; } }
+
+/* Sections below the fold. */
+.app-shell .home-page .home-journey,
+.app-shell .home-page .home-alerts,
+.app-shell .home-page .home-secondary-details { border-radius: var(--radius-lg); animation: home-rise var(--dur-slow) var(--ease-out) 180ms both; }
+
+@media (min-width: 761px) and (max-width: 1080px) {
+  .app-shell .home-page .home-workbench { grid-template-columns: minmax(0, 1fr); gap: 36px; padding-top: 8px; }
+  .app-shell .home-workbench-copy .hero-description { max-width: 52ch; }
+  .app-shell .home-spec-sheet { width: 100%; max-width: 640px; }
+}
+
+/* ───────────────────────── Editor: parts list ───────────────────────── */
+
+@media (min-width: 761px) {
+  .app-shell .workspace-heading h1 { font-size: clamp(34px, 3.6vw, 46px); }
+
+  .app-shell .progress-strip .progress-track { height: 4px; }
+  .app-shell .progress-strip .progress-track > span { transition: width 520ms var(--ease-out); }
+
+  .app-shell .component-list .component-card {
+    position: relative;
+    margin-bottom: 8px;
+    padding: 16px 18px;
+    border-radius: 14px;
+    box-shadow: none;
+    transition: border-color var(--dur-fast) ease, box-shadow var(--dur-base) ease, transform var(--dur-base) var(--ease-out);
+  }
+  .app-shell .component-list .component-card:hover { border-color: var(--line-strong); }
+  .app-shell .component-list .component-card.selected { border-color: color-mix(in srgb, var(--teal) 22%, var(--line)); }
+  .app-shell .component-list .component-card.selected::before { position: absolute; top: 18px; bottom: 18px; left: -1px; width: 3px; border-radius: 0 3px 3px 0; background: var(--teal); content: ""; animation: slot-bar-in var(--dur-slow) var(--ease-out) both; }
+
+  /* Empty slots collapse into a single row: label on the left, action on the right. */
+  .app-shell .component-list .component-card:not(.selected):not(:has(.graphics-toggle)):not(:has(.included-selection)) { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 16px; }
+  .app-shell .component-list .component-card:not(.selected):not(:has(.graphics-toggle)):not(:has(.included-selection)) .selection-state { display: none; }
+  .app-shell .component-list .component-card:not(.selected):not(:has(.graphics-toggle)):not(:has(.included-selection)) .component-card-body { padding: 0; }
+  .app-shell .component-list .component-card:not(.selected):not(:has(.graphics-toggle)):not(:has(.included-selection)) .empty-selection { margin: 0; padding: 0; border: 0; }
+  .app-shell .component-list .component-card:not(.selected):not(:has(.graphics-toggle)):not(:has(.included-selection)) .empty-selection > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  .app-shell .component-list .component-card .component-icon { transition: background-color var(--dur-fast) ease, color var(--dur-fast) ease; }
+  .app-shell .component-list .component-card.selected .component-icon { color: var(--teal-deep); background: var(--teal-soft); }
+  .app-shell .component-list .component-card .component-heading p { margin-bottom: 0; }
+
+  .app-shell .component-list .selected-line { animation: slot-fill var(--dur-slow) var(--ease-out) both; }
+
+  .app-shell .summary-sidebar .sticky-summary { top: 88px; border-radius: var(--radius-lg); }
+  .app-shell .build-editor-selected-row > span { white-space: nowrap; }
+  .app-shell .build-editor-selected-row { animation: spec-row-in var(--dur-base) var(--ease-out) both; }
+}
+/* Selected line: name | price on top, tier steps + quantity underneath. */
+@media (min-width: 761px) {
+  .app-shell .component-list .component-card-body { padding-left: 54px; }
+  .app-shell .component-list .selected-line { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 14px 0; }
+  .app-shell .component-list .selected-line-main { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 16px; }
+  .app-shell .component-list .selected-line-info strong { font-size: 15px; font-weight: 700; }
+  .app-shell .component-list .selected-line-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; width: 100%; }
+}
+.app-shell .selected-line-price { display: grid; justify-items: end; gap: 2px; white-space: nowrap; }
+.app-shell .selected-line-price span { color: var(--muted); font-size: 12px; }
+.app-shell .selected-line-price b { color: var(--ink); font-size: 17px; font-weight: 700; letter-spacing: -0.02em; }
+
+.app-shell .part-step { display: inline-flex; gap: 6px; }
+.app-shell .part-step-button { display: inline-flex; align-items: center; gap: 5px; min-height: 36px; padding: 0 11px; border: 1px solid var(--line); border-radius: 9px; color: var(--ink-2); background: var(--surface); font-size: 12.5px; font-weight: 600; transition: border-color var(--dur-fast) ease, background-color var(--dur-fast) ease, transform var(--dur-fast) var(--ease-out); }
+.app-shell .part-step-button small { color: var(--muted); font-size: 11.5px; font-weight: 600; }
+.app-shell .part-step-button.up small { color: var(--red); }
+.app-shell .part-step-button.down small { color: var(--ok); }
+.app-shell .part-step-button.up:hover:not(:disabled) { border-color: var(--teal); color: var(--teal-deep); background: var(--accent-wash); }
+.app-shell .part-step-button.down:hover:not(:disabled) { border-color: var(--line-strong); background: var(--hover-fill); }
+.app-shell .part-step-button:active:not(:disabled) { transform: scale(.97); }
+.app-shell .part-step-button:disabled { opacity: .45; }
+
+.app-shell .quantity-control { gap: 8px; color: var(--muted); font-size: 12px; }
+.app-shell .quantity-stepper { display: inline-flex; align-items: stretch; height: 36px; overflow: hidden; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); }
+.app-shell .quantity-stepper button { display: grid; place-items: center; width: 34px; padding: 0; border: 0; color: var(--ink-2); background: transparent; transition: background-color var(--dur-fast) ease; }
+.app-shell .quantity-stepper button:hover:not(:disabled) { background: var(--hover-fill); }
+.app-shell .quantity-stepper button:disabled { opacity: .35; }
+.app-shell .quantity-control .quantity-stepper input { width: 40px; height: 100%; min-height: 0; padding: 0; border: 0; border-inline: 1px solid var(--line); border-radius: 0; background: transparent; color: var(--ink); font-size: 14px; font-weight: 700; text-align: center; -moz-appearance: textfield; }
+.app-shell .quantity-stepper input::-webkit-outer-spin-button,
+.app-shell .quantity-stepper input::-webkit-inner-spin-button { margin: 0; -webkit-appearance: none; }
+.app-shell .selected-line-controls .danger-button { width: 36px; height: 36px; border-radius: 9px; }
+
+/* Sidebar ledger with a running total. */
+.app-shell .build-editor-selected-row { grid-template-columns: 76px minmax(0, 1fr) auto; align-items: baseline; }
+.app-shell .build-editor-selected-row > strong { font-weight: 600; }
+.app-shell .build-editor-selected-row > em { color: var(--ink); font-size: 12.5px; font-style: normal; font-weight: 600; white-space: nowrap; }
+.app-shell .build-editor-total { display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 4px 12px; margin-top: 14px; padding: 14px 0 4px; border-top: 2px solid var(--ink); }
+.app-shell .build-editor-total > span { color: var(--ink-2); font-size: 13px; font-weight: 700; }
+.app-shell .build-editor-total > strong { color: var(--teal-deep); font-size: 24px; font-weight: 800; letter-spacing: -0.03em; text-align: right; }
+.app-shell .build-editor-total > strong small { margin-left: 2px; color: var(--ink-2); font-size: 14px; font-weight: 600; }
+.app-shell .build-editor-total-note { grid-column: 1 / -1; color: var(--muted); font-size: 11.5px; text-align: right; }
+
+@media (max-width: 760px) {
+  .app-shell .selected-line-main { display: grid !important; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; }
+  .app-shell .selected-line-controls { flex-wrap: wrap; justify-content: space-between; }
+}
+
+@keyframes slot-bar-in { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes slot-fill { from { opacity: 0; transform: translateY(-4px); background-color: var(--accent-wash); } to { opacity: 1; transform: none; } }
+
+/* ───────────────────────── Shared surfaces ───────────────────────── */
+
+@media (min-width: 761px) {
+  .app-shell .catalog-part-card,
+  .app-shell .accessory-item,
+  .app-shell .suggestion-card { transition: border-color var(--dur-fast) ease, transform var(--dur-base) var(--ease-out), box-shadow var(--dur-base) ease; }
+  .app-shell .catalog-part-card:hover,
+  .app-shell .suggestion-card:hover { border-color: var(--line-strong); }
+}
+
+/* Mobile: keep the native-feeling views, add a gentle press response. */
+@media (max-width: 760px) {
+  .app-shell .mobile-build-row,
+  .app-shell .mobile-editor-row,
+  .app-shell .mobile-primary-action,
+  .app-shell .mobile-recommend-card { transition: transform var(--dur-fast) var(--ease-out), background-color var(--dur-fast) ease; }
+  .app-shell .mobile-build-row:active,
+  .app-shell .mobile-editor-row:active,
+  .app-shell .mobile-primary-action:active,
+  .app-shell .mobile-recommend-card:active { transform: scale(.985); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-shell *,
+  .app-shell *::before,
+  .app-shell *::after { animation-duration: 1ms !important; animation-delay: 0ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
+}
+
+@media (min-width: 1081px) {
+  .app-shell .editor-layout { grid-template-columns: minmax(0, 1fr) 360px; gap: 28px; }
+}
+
+/* ───────────────────────── Part picker ───────────────────────── */
+/* Two panes: a quiet filter rail and a dense result list that owns the space. */
+
+.picker-modal.picker-modal-v2 {
+  width: min(1120px, 100%);
+  height: min(860px, calc(100vh - 40px));
+  max-height: none;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+  animation: picker-in 280ms var(--ease-out) both;
+}
+.picker-modal-v2 .modal-header { padding: 20px 24px 12px; border: 0; }
+.picker-modal-v2 .modal-header h2 { margin: 2px 0 0; font-size: 22px; }
+.picker-modal-v2 .modal-header .eyebrow,
+.picker-modal-v2 .modal-header > div > p:not(.picker-intent-label) { display: none; }
+
+.picker-modal-v2 .picker-toolbar { display: flex; gap: 8px; padding: 0 24px 14px; border-bottom: 1px solid var(--line); }
+.picker-modal-v2 .picker-toolbar .search-box { flex: 1 1 auto; margin: 0; min-height: 44px; border-radius: 10px; }
+.picker-modal-v2 .picker-filter-toggle { display: none; align-items: center; gap: 6px; min-height: 44px; padding: 0 14px; border: 1px solid var(--line); border-radius: 10px; color: var(--ink-2); background: var(--surface); font-size: 13px; font-weight: 700; }
+.picker-modal-v2 .picker-filter-toggle.active { border-color: var(--teal); color: var(--teal-deep); background: var(--accent-wash); }
+
+.picker-modal-v2 .picker-body { display: grid; grid-template-columns: 272px minmax(0, 1fr); flex: 1 1 auto; min-height: 0; }
+.picker-modal-v2 .picker-filter-rail { display: grid; align-content: start; gap: 14px; min-height: 0; overflow-y: auto; padding: 16px 18px 24px 24px; border-right: 1px solid var(--line); background: color-mix(in srgb, var(--canvas) 55%, var(--surface)); overscroll-behavior: contain; }
+.picker-modal-v2 .picker-results { min-height: 0; overflow-y: auto; padding: 8px 0 16px; overscroll-behavior: contain; }
+
+/* Rail contents: flatten every legacy panel into label-over-control rows. */
+.picker-modal-v2 .picker-filter-rail > *,
+.picker-modal-v2 .picker-filter-group > :not(summary) { margin: 0 !important; padding: 0 !important; border: 0 !important; background: transparent !important; box-shadow: none !important; }
+.picker-modal-v2 .picker-filters,
+.picker-modal-v2 .picker-compatibility-filters { display: grid !important; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.picker-modal-v2 .picker-filter-rail label { display: grid; gap: 5px; min-width: 0; }
+.picker-modal-v2 .picker-filter-rail label > span { color: var(--muted); font-size: 12px; font-weight: 600; }
+.picker-modal-v2 .picker-filter-rail select,
+.picker-modal-v2 .picker-filter-rail input { width: 100%; min-height: 36px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); background: var(--surface); font-size: 13px; }
+.picker-modal-v2 .picker-brand-suggestions { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+.picker-modal-v2 .picker-brand-suggestions button { min-height: 28px; padding: 0 9px; border: 1px solid var(--line); border-radius: 999px; color: var(--ink-2); background: var(--surface); font-size: 12px; }
+.picker-modal-v2 .picker-brand-suggestions button.selected { border-color: var(--teal); color: var(--teal-deep); background: var(--accent-wash); }
+.picker-modal-v2 .picker-brand-suggestions small { margin-left: 4px; color: var(--muted); }
+.picker-modal-v2 .picker-compatibility-filter-heading { display: grid; gap: 6px; }
+.picker-modal-v2 .picker-compatibility-filter-heading strong,
+.picker-modal-v2 .picker-compatibility-filter-heading small { display: none; }
+.picker-modal-v2 .picker-compatibility-filter-actions { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+
+.picker-modal-v2 .picker-filter-group { border-top: 1px solid var(--line); padding-top: 12px !important; }
+.picker-modal-v2 .picker-filter-group > summary { display: flex; align-items: center; justify-content: space-between; min-height: 32px; color: var(--ink); font-size: 13px; font-weight: 700; cursor: pointer; list-style: none; }
+.picker-modal-v2 .picker-filter-group > summary::-webkit-details-marker { display: none; }
+.picker-modal-v2 .picker-filter-group[open] > summary { margin-bottom: 10px; }
+
+/* Results: a ruled list, price on the right like a shop listing. */
+.picker-modal-v2 .picker-mode-note { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; padding: 4px 24px 10px; color: var(--muted); font-size: 12px; }
+.picker-modal-v2 .picker-mode-note > svg { display: none; }
+.picker-modal-v2 .picker-list { padding: 0 24px; }
+.picker-modal-v2 .picker-item-card { margin: 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; box-shadow: none; }
+.picker-modal-v2 .picker-item { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; align-items: center; gap: 14px; width: 100%; padding: 14px 8px; border: 0; border-radius: 10px; background: transparent; text-align: left; transition: background-color var(--dur-fast) ease; }
+.picker-modal-v2 .picker-item:hover { background: var(--hover-fill); }
+.picker-modal-v2 .picker-item.already { background: var(--accent-wash); }
+.picker-modal-v2 .picker-item-icon { width: 52px; height: 52px; border-radius: 10px; }
+.picker-modal-v2 .picker-item-main strong { display: block; color: var(--ink); font-size: 14.5px; font-weight: 700; line-height: 1.4; }
+.picker-modal-v2 .picker-item-main small { display: block; margin-top: 3px; color: var(--muted); font-size: 12.5px; }
+.picker-modal-v2 .picker-item-side { display: grid; justify-items: end; gap: 3px; min-width: 120px; }
+.picker-modal-v2 .picker-item-side > strong { color: var(--ink); font-size: 17px; font-weight: 800; letter-spacing: -0.02em; }
+.picker-modal-v2 .picker-item-side > small { font-size: 11.5px; }
+.picker-modal-v2 .picker-item-side > span { display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; padding: 5px 12px; border-radius: 8px; color: #fff; background: var(--teal); font-size: 12px; font-weight: 700; }
+.picker-modal-v2 .picker-item.already .picker-item-side > span { color: var(--teal-deep); background: transparent; }
+.picker-modal-v2 .picker-item-side > span svg { display: none; }
+.picker-modal-v2 .picker-item-actions { display: flex; flex-wrap: wrap; gap: 2px 14px; padding: 0 8px 12px 74px; font-size: 12px; }
+.picker-modal-v2 .picker-item-actions .text-button,
+.picker-modal-v2 .picker-item-actions a { color: var(--muted); font-size: 12px; }
+.picker-modal-v2 .picker-item-actions > * { min-height: 28px !important; padding: 0 !important; border: 0 !important; background: transparent !important; box-shadow: none !important; color: var(--muted) !important; font-size: 12px !important; font-weight: 600; }
+.picker-modal-v2 .picker-item-actions .picker-compare-toggle.selected { color: var(--teal-deep) !important; }
+.picker-modal-v2 .picker-item-actions { margin-top: -6px; }
+.picker-modal-v2 .picker-item-actions .text-button:hover,
+.picker-modal-v2 .picker-item-actions a:hover { color: var(--ink); }
+.picker-modal-v2 .picker-more { width: calc(100% - 48px); margin: 14px 24px 0; }
+.picker-modal-v2 .picker-state { margin: 24px; }
+.picker-modal-v2 .modal-footer { padding: 12px 24px; border-top: 1px solid var(--line); }
+
+@keyframes picker-in { from { opacity: 0; transform: translateY(12px) scale(.985); } to { opacity: 1; transform: none; } }
+
+@media (max-width: 860px) {
+  .picker-modal.picker-modal-v2 { width: 100%; height: min(92vh, 100%); border-radius: 18px 18px 0 0; }
+  .picker-modal-v2 .modal-header,
+  .picker-modal-v2 .picker-toolbar { padding-inline: 16px; }
+  .picker-modal-v2 .picker-filter-toggle { display: inline-flex; }
+  .picker-modal-v2 .picker-body { grid-template-columns: minmax(0, 1fr); }
+  .picker-modal-v2 .picker-filter-rail { display: none; padding: 14px 16px 18px; border-right: 0; border-bottom: 1px solid var(--line); }
+  .picker-modal-v2.filters-open .picker-filter-rail { display: grid; max-height: 55vh; animation: disclose var(--dur-base) var(--ease-out) both; }
+  .picker-modal-v2.filters-open .picker-body { grid-template-rows: auto minmax(0, 1fr); }
+  .picker-modal-v2 .picker-list { padding: 0 12px; }
+  .picker-modal-v2 .picker-mode-note { padding-inline: 16px; }
+  .picker-modal-v2 .picker-item { grid-template-columns: 44px minmax(0, 1fr); }
+  .picker-modal-v2 .picker-item-icon { width: 44px; height: 44px; }
+  .picker-modal-v2 .picker-item-side { grid-column: 2; justify-items: start; grid-auto-flow: column; align-items: center; gap: 8px; }
+  .picker-modal-v2 .picker-item-side > span { margin: 0 0 0 auto; }
+  .picker-modal-v2 .picker-item-actions { padding-left: 66px; }
+  .picker-modal-v2 .picker-more { width: calc(100% - 24px); margin-inline: 12px; }
+}
+
+/* ───────────────────────── Catalog: shop-listing density ───────────────────────── */
+
+@media (min-width: 761px) {
+  .app-shell .catalog-page .workspace-heading { margin-bottom: 18px; }
+  .app-shell .catalog-page .workspace-heading h1 { font-size: clamp(30px, 3vw, 40px); margin-bottom: 0; }
+  .app-shell .catalog-page .workspace-heading .eyebrow { display: none; }
+
+  /* Toolbar: search on top, category tabs underlined like a shop menu. */
+  .app-shell .catalog-toolbar { display: grid; gap: 12px; padding: 16px 18px 0; border: 1px solid var(--line); border-radius: var(--radius-lg) var(--radius-lg) 0 0; background: var(--surface); box-shadow: none; }
+  .app-shell .catalog-toolbar .catalog-search { margin: 0; }
+  .app-shell .catalog-toolbar .catalog-search input { min-height: 44px; border-radius: 10px; font-size: 14px; }
+  .app-shell .catalog-toolbar .catalog-mode-toggle { gap: 4px; }
+  .app-shell .catalog-toolbar .catalog-mode-toggle button { min-height: 32px; border-radius: 8px; font-size: 12.5px; }
+  .app-shell .catalog-toolbar .desktop-catalog-category-chips { display: flex; flex-wrap: nowrap; gap: 0; margin: 0 -18px; padding: 0 10px; overflow-x: auto; border-top: 1px solid var(--line); scrollbar-width: none; }
+  .app-shell .catalog-toolbar .desktop-catalog-category-chips button { position: relative; flex: 0 0 auto; min-height: 46px; padding: 0 14px; border: 0 !important; border-radius: 0 !important; color: var(--muted) !important; background: transparent !important; box-shadow: none !important; font-size: 14px; font-weight: 600; }
+  .app-shell .catalog-toolbar .desktop-catalog-category-chips button:hover { color: var(--ink) !important; }
+  .app-shell .catalog-toolbar .desktop-catalog-category-chips button.selected,
+  .app-shell .catalog-toolbar .desktop-catalog-category-chips button[aria-pressed="true"] { color: var(--ink) !important; font-weight: 800; }
+  .app-shell .catalog-toolbar .desktop-catalog-category-chips button.selected::after,
+  .app-shell .catalog-toolbar .desktop-catalog-category-chips button[aria-pressed="true"]::after { position: absolute; right: 14px; bottom: -1px; left: 14px; height: 2px; background: var(--ink); content: ""; animation: nav-indicator-in var(--dur-base) var(--ease-out) both; }
+  /* The category select duplicates the tabs on desktop. */
+  .app-shell .catalog-toolbar .catalog-filters > label:has(select[aria-label="카탈로그 부품 범주"]) { display: none; }
+  .app-shell .catalog-toolbar .catalog-filters:not(:has(> label:not(:has(select[aria-label="카탈로그 부품 범주"])))) { display: none; }
+
+  .app-shell .catalog-page .catalog-toolbar { margin-bottom: 0; }
+  .app-shell .catalog-comparison-bar { margin: 0 0 16px; padding: 10px 18px; border: 1px solid var(--line); border-top: 0; border-radius: 0 0 var(--radius-lg) var(--radius-lg); background: var(--surface); box-shadow: none; }
+
+  .app-shell .catalog-layout { grid-template-columns: minmax(0, 1fr) 340px; gap: 20px; align-items: start; }
+  .app-shell .catalog-results { padding: 0; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); box-shadow: none; }
+  .app-shell .catalog-results-heading { display: flex; align-items: center; justify-content: space-between; margin: 0; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+  .app-shell .catalog-results-heading .eyebrow { display: none; }
+  .app-shell .catalog-results-heading h2 { margin: 0; font-size: 17px; }
+  .app-shell .catalog-results-heading > span { padding: 0; color: var(--muted); background: transparent; font-size: 12.5px; }
+
+  /* Each part is one ruled row: thumb | name & specs | price | actions. */
+  .app-shell .catalog-part-list { display: block; gap: 0; padding: 0; }
+  .app-shell .catalog-part-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; margin: 0; padding: 0 18px 0 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; box-shadow: none; transition: background-color var(--dur-fast) ease; }
+  .app-shell .catalog-part-card:hover { background: color-mix(in srgb, var(--hover-fill) 55%, transparent); transform: none; }
+  .app-shell .catalog-part-card.selected { background: var(--accent-wash); box-shadow: inset 3px 0 0 var(--teal); }
+  .app-shell .catalog-part-card-main { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; align-items: center; gap: 14px; min-width: 0; padding: 12px 0 12px 18px; border: 0; background: transparent; text-align: left; }
+  .app-shell .catalog-part-card-image { width: 56px; height: 56px; border-radius: 10px; }
+  .app-shell .catalog-part-card-copy { display: grid; gap: 2px; min-width: 0; }
+  .app-shell .catalog-part-card-copy strong { overflow: hidden; color: var(--ink); font-size: 14.5px; font-weight: 700; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
+  .app-shell .catalog-part-card-copy small { color: var(--muted); font-size: 12px; }
+  .app-shell .catalog-part-card-copy > span { color: var(--ink-2); font-size: 12.5px; }
+  .app-shell .catalog-part-card-price { display: grid; justify-items: end; gap: 2px; min-width: 104px; color: var(--ink); font-size: 17px; font-weight: 800; letter-spacing: -0.02em; white-space: nowrap; }
+  .app-shell .catalog-part-card-price small { color: var(--muted); font-size: 11.5px; font-weight: 500; letter-spacing: 0; }
+  .app-shell .catalog-part-card-actions { display: flex; flex-direction: column; align-items: stretch; gap: 4px; margin: 0; padding: 0; border: 0; }
+  .app-shell .catalog-part-card-actions > * { justify-content: center; min-height: 30px !important; padding: 0 10px !important; border: 1px solid var(--line) !important; border-radius: 8px !important; color: var(--ink-2) !important; background: var(--surface) !important; box-shadow: none !important; font-size: 12px !important; font-weight: 600; white-space: nowrap; }
+  .app-shell .catalog-part-card-actions > *:hover:not(:disabled) { border-color: var(--line-strong) !important; color: var(--ink) !important; }
+  .app-shell .catalog-part-card-actions .catalog-part-add { border-color: var(--teal) !important; color: #fff !important; background: var(--teal) !important; }
+  .app-shell .catalog-part-card-actions .catalog-part-add:hover:not(:disabled) { color: #fff !important; background: var(--teal-deep) !important; }
+  .app-shell .catalog-part-card-actions .catalog-part-add:disabled { border-color: var(--line) !important; color: var(--muted) !important; background: var(--hover-fill) !important; }
+  .app-shell .catalog-part-card-actions .catalog-part-compare.selected { border-color: var(--teal) !important; color: var(--teal-deep) !important; background: var(--accent-wash) !important; }
+  .app-shell .catalog-part-card-actions > a { display: inline-flex; align-items: center; gap: 4px; }
+
+  .app-shell .catalog-pagination { padding: 12px 18px; }
+
+  /* Detail panel: smaller title so the specs are visible without scrolling. */
+  .app-shell .catalog-layout > aside { position: sticky; top: 84px; max-height: calc(100vh - 104px); overflow-y: auto; border-radius: var(--radius-lg); box-shadow: none; }
+  .app-shell .catalog-layout > aside h2 { font-size: 20px !important; line-height: 1.35; letter-spacing: -0.03em; }
+}
+
+@media (min-width: 761px) and (max-width: 1080px) {
+  .app-shell .catalog-layout { grid-template-columns: minmax(0, 1fr); }
+  .app-shell .catalog-layout > aside { position: static; max-height: none; }
+}
+@media (min-width: 761px) and (max-width: 900px) {
+  .app-shell .catalog-part-card { grid-template-columns: minmax(0, 1fr); padding: 0 18px 12px 0; }
+  .app-shell .catalog-part-card-actions { flex-direction: row; justify-content: flex-end; }
+}
+
+
+/* ───────────────────────── Internal data stays internal ───────────────────────── */
+/* Price provenance chips (예시 가격, 다시 확인, 직접 입력) are kept for logic and tests, not shown. */
+.app-shell .catalog-detail-price-evidence:not(.live),
+.app-shell .catalog-part-card-price small,
+.app-shell .picker-item-side > small.catalog-detail-price-evidence { display: none !important; }
+
+/* Per-slot helper sentences repeat what the label already says. */
+.app-shell .component-list .component-card .component-heading p { display: none; }
+
+/* Show less on narrower screens: secondary copy first to go. */
+@media (max-width: 1080px) {
+  .app-shell .workspace-heading p:not(.eyebrow),
+  .app-shell .catalog-results-heading > span,
+  .app-shell .picker-modal-v2 .picker-mode-note,
+  .app-shell .home-spec-sheet-head p { display: none; }
+}
+@media (max-width: 760px) {
+  .app-shell .selected-line-info > span,
+  .app-shell .part-step-button span,
+  .app-shell .selected-line-price span { display: none; }
+  .app-shell .part-step-button { padding: 0 9px; }
+}
+
+/* Mobile catalog card: big photo left, two-line name, one full-width action row. */
+@media (max-width: 760px) {
+  .app-shell .catalog-part-list { display: grid; gap: 10px; padding: 0; }
+  .app-shell .catalog-part-card { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; margin: 0; padding: 14px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: none; }
+  .app-shell .catalog-part-card.selected { border-color: var(--teal); }
+  .app-shell .catalog-part-card-main { display: grid; grid-template-columns: 96px minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 14px; row-gap: 6px; align-items: start; width: 100%; padding: 0; border: 0; background: transparent; text-align: left; }
+  .app-shell .catalog-part-card-image { grid-row: 1 / span 2; width: 96px; height: 96px; padding: 6px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+  .app-shell .catalog-part-card-image img { width: 100%; height: 100%; object-fit: contain; }
+  .app-shell .catalog-part-card-copy { display: grid; gap: 3px; min-width: 0; }
+  .app-shell .catalog-part-card-copy strong { display: -webkit-box; overflow: hidden; color: var(--ink); font-size: 15px; font-weight: 700; line-height: 1.38; white-space: normal; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .app-shell .catalog-part-card-copy small { overflow: hidden; color: var(--muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+  .app-shell .catalog-part-card-copy > span { color: var(--ink-2); font-size: 12.5px; }
+  .app-shell .catalog-part-card-price { grid-column: 2; align-self: end; display: block; color: var(--ink); font-size: 18px; font-weight: 800; text-align: left; white-space: nowrap; }
+  .app-shell .catalog-part-card-price small { display: none; }
+
+  .app-shell .catalog-part-card-actions { display: grid; grid-template-columns: repeat(3, auto) minmax(0, 1fr); gap: 6px; margin: 0; padding: 0; border: 0; }
+  .app-shell .catalog-part-card-actions > * { display: inline-flex !important; align-items: center; justify-content: center; gap: 4px; width: auto !important; min-height: 40px !important; margin: 0 !important; padding: 0 11px !important; border: 1px solid var(--line) !important; border-radius: 10px !important; color: var(--ink-2) !important; background: var(--surface) !important; box-shadow: none !important; font-size: 13px !important; font-weight: 600; white-space: nowrap; }
+  .app-shell .catalog-part-card-actions > a { padding: 0 10px !important; }
+  .app-shell .catalog-part-card-actions .catalog-part-add { border-color: var(--teal) !important; color: #fff !important; background: var(--teal) !important; font-weight: 700; }
+  .app-shell .catalog-part-card-actions .catalog-part-add:disabled { border-color: var(--line) !important; color: var(--muted) !important; background: var(--hover-fill) !important; }
+  .app-shell .catalog-part-card-actions .catalog-part-compare.selected { border-color: var(--teal) !important; color: var(--teal-deep) !important; background: var(--accent-wash) !important; }
+  /* No external link: the add button takes the freed column. */
+  .app-shell .catalog-part-card-actions:not(:has(> a)) { grid-template-columns: repeat(2, auto) minmax(0, 1fr); }
+}
+@media (max-width: 360px) {
+  .app-shell .catalog-part-card-main { grid-template-columns: 80px minmax(0, 1fr); }
+  .app-shell .catalog-part-card-image { width: 80px; height: 80px; }
+  .app-shell .catalog-part-card-actions > a span,
+  .app-shell .catalog-part-card-actions > * { font-size: 12px !important; padding: 0 8px !important; }
+}
+
+/* Catalog row actions, revised: one filled primary action; the rest are quiet text actions.
+   The row decides its own layout from the list width, not the viewport. */
+.app-shell .catalog-results { container-type: inline-size; container-name: catalog-list; }
+
+.app-shell .catalog-part-card .catalog-part-card-actions { display: flex !important; flex-direction: row !important; flex-wrap: nowrap; align-items: center; gap: 2px; }
+.app-shell .catalog-part-card .catalog-part-card-actions > * { min-height: 34px !important; padding: 0 8px !important; border: 0 !important; border-radius: 8px !important; color: var(--muted) !important; background: transparent !important; font-size: 12.5px !important; font-weight: 600; }
+.app-shell .catalog-part-card .catalog-part-card-actions > *:hover:not(:disabled) { color: var(--ink) !important; background: var(--hover-fill) !important; }
+.app-shell .catalog-part-card .catalog-part-card-actions .catalog-part-compare.selected { color: var(--teal-deep) !important; background: var(--accent-wash) !important; }
+.app-shell .catalog-part-card .catalog-part-card-actions .catalog-part-add { margin-left: 6px !important; padding: 0 14px !important; border: 1px solid var(--teal) !important; color: var(--teal-deep) !important; background: var(--surface) !important; }
+.app-shell .catalog-part-card .catalog-part-card-actions .catalog-part-add:hover:not(:disabled) { color: #fff !important; background: var(--teal) !important; }
+.app-shell .catalog-part-card .catalog-part-card-actions .catalog-part-add:disabled { border-color: transparent !important; color: var(--muted) !important; background: transparent !important; }
+
+/* Narrow list: actions drop to one line under the item, aligned right. */
+@container catalog-list (max-width: 820px) {
+  .app-shell .catalog-part-card { grid-template-columns: minmax(0, 1fr) !important; row-gap: 0 !important; }
+  .app-shell .catalog-part-card .catalog-part-card-actions { justify-content: flex-end; padding: 0 0 10px 88px !important; }
+}
+
+@media (max-width: 760px) {
+  .app-shell .catalog-part-card .catalog-part-card-actions { display: flex !important; justify-content: flex-start; padding: 8px 0 0 !important; border-top: 1px solid var(--line) !important; }
+  .app-shell .catalog-part-card .catalog-part-card-actions > * { min-height: 38px !important; padding: 0 8px !important; font-size: 13px !important; }
+  .app-shell .catalog-part-card .catalog-part-card-actions .catalog-part-add { margin-left: auto !important; padding: 0 16px !important; color: #fff !important; background: var(--teal) !important; }
+  .app-shell .catalog-part-card .catalog-part-card-actions .catalog-part-add:disabled { color: var(--muted) !important; background: var(--hover-fill) !important; }
+}
+
+/* Example builds are QA fixtures (see main.tsx). */
+html:not([data-demo-tools="on"]) .hero-demo-tools,
+html:not([data-demo-tools="on"]) .mobile-demo-tools { display: none !important; }
+
+/* Internal data-quality and storage diagnostics: kept in the DOM for QA, not shown to users. */
+.app-shell .picker-incomplete-data-notice,
+.app-shell .picker-mode-note,
+.app-shell .picker-spec-diagnostic-summary,
+.app-shell .picker-physical-evidence-summary,
+.app-shell .catalog-incomplete-notice,
+.app-shell .catalog-non-core-notice,
+.app-shell .missing-badge,
+.app-shell .mobile-cache-disclosure,
+.app-shell .home-catalog-cache,
+.app-shell .build-preflight-stats > div:nth-child(3) { display: none !important; }
+
+/* Editor slots, revised: label column on the left, the part and its controls on the right. */
+@media (min-width: 761px) {
+  .app-shell .component-list .component-card { display: grid !important; grid-template-columns: 148px minmax(0, 1fr); align-items: start; column-gap: 20px; padding: 16px 20px; }
+  .app-shell .component-list .component-card-top { align-self: start; padding-top: 2px; }
+  .app-shell .component-list .component-heading { gap: 10px; }
+  .app-shell .component-list .component-heading h3 { margin: 0; font-size: 15px; font-weight: 700; }
+  .app-shell .component-list .component-icon { width: 30px; height: 30px; border-radius: 8px; font-size: 14px; }
+  .app-shell .component-list .component-label-row { gap: 6px; }
+  .app-shell .component-list .required-badge,
+  .app-shell .component-list .optional-badge { padding: 1px 6px; font-size: 11px; }
+  .app-shell .component-list .selection-state { display: none !important; }
+  .app-shell .component-list .component-card .component-card-body { padding: 0 !important; }
+  .app-shell .component-list .selected-line { padding: 0 0 12px; border-bottom: 0; }
+  .app-shell .component-list .selected-line + .selected-line { padding-top: 12px; border-top: 1px dashed var(--line); }
+  .app-shell .component-list .selected-line-info > span:empty { display: none; }
+  .app-shell .component-list .part-detail-toggle { margin-top: 2px; font-size: 12px; }
+  .app-shell .component-list .selected-lines > .text-button { min-height: 28px; padding: 0; color: var(--muted); font-size: 12.5px; }
+  .app-shell .component-list .selected-lines > .text-button:hover { color: var(--teal-deep); }
+  .app-shell .component-list .empty-selection { justify-content: flex-end; }
+  .app-shell .component-list .component-card:not(.selected) .component-card-body { align-self: center; }
+
+  /* File import/export are secondary: quiet text buttons. */
+  .app-shell .build-editor-actions .button { min-height: 34px; padding: 0 10px; border: 0; color: var(--muted); background: transparent; font-size: 12.5px; }
+  .app-shell .build-editor-actions .button:hover:not(:disabled) { color: var(--ink); background: var(--hover-fill); }
+
+  .app-shell .build-editor-selected-row > strong { display: -webkit-box; overflow: hidden; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+}
+@media (min-width: 761px) {
+  .app-shell .component-list .component-card { grid-template-columns: 168px minmax(0, 1fr); }
+  .app-shell .component-list .component-label-row { flex-wrap: nowrap; white-space: nowrap; }
+  .app-shell .component-list .optional-badge { display: none; }
+}
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

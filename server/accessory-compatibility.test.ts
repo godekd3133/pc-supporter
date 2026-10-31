@@ -297,7 +297,7 @@ describe("accessory compatibility", () => {
     expect(low).toMatchObject({ status: "needs_review", warningCount: 1 });
     expect(low.findings[0].ruleId).toBe("accessory-ups-capacity");
     expect(low.findings[0].facts).toEqual(expect.arrayContaining([
-      { label: "확인된 CPU·GPU 전력", actual: "380W" },
+      { label: "확인된 CPU/GPU 전력", actual: "380W" },
       { label: "UPS 출력", actual: "350W" }
     ]));
 
@@ -375,7 +375,7 @@ describe("accessory compatibility", () => {
     expect(missingWidth.findings[0]).toMatchObject({ ruleId: "accessory-pcie-slot-width", severity: "unknown" });
     expect(missingWidth.findings[0]).toMatchObject({
       title: "어댑터가 필요한 PCIe 슬롯 크기를 확인해 주세요.",
-      message: "어댑터가 필요한 PCIe x1·x4·x8·x16 크기 정보가 없어 메인보드 슬롯과 맞는지 확인하지 못했어요."
+      message: "어댑터가 필요한 PCIe x1/x4/x8/x16 크기 정보가 없어 메인보드 슬롯과 맞는지 확인하지 못했어요."
     });
   });
 
@@ -437,7 +437,7 @@ describe("accessory compatibility", () => {
     expect(smallRgbResult.findings[0].ruleId).toBe("accessory-rgb-controller-ports");
     expect(unknownPowerResult).toMatchObject({ status: "needs_review", unknownCount: 1 });
     expect(unknownPowerResult.findings[0].ruleId).toBe("accessory-fan-hub-power");
-    expect(unknownPowerResult.findings[0].title).toBe("팬 허브·RGB 컨트롤러의 외부 전원을 확인해 주세요.");
+    expect(unknownPowerResult.findings[0].title).toBe("팬 허브/RGB 컨트롤러의 외부 전원을 확인해 주세요.");
     const connectorMismatchWithFan = accessoryCompatibilityFor(build([{ accessoryId: molexFan.id, quantity: 1 }, { accessoryId: overCurrentHub.id, quantity: 1 }]), [rgbCase, rgbMotherboard, ssdPart], [molexFan, overCurrentHub]);
     expect(connectorMismatchWithFan).toMatchObject({ status: "incompatible", blockerCount: 1 });
     expect(connectorMismatchWithFan.findings[0]).toMatchObject({ ruleId: "accessory-fan-hub-connector", severity: "blocker" });

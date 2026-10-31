@@ -66,3 +66,13 @@ describe("generator preset storage", () => {
     expect(savedGeneratorPresetsFromJson(JSON.stringify(oversized))).toEqual([]);
   });
 });
+
+
+it("round trips explicit platforms while older presets remain automatic", () => {
+  const explicit = { ...preset("platform"), cpuVendorPreference: "intel" as const, memoryTypePreference: "DDR4" as const };
+  expect(savedGeneratorPresetsFromJson(savedGeneratorPresetsToJson([explicit]))).toEqual([explicit]);
+  expect(generatorPresetConfigFromUnknown(config)).not.toHaveProperty("cpuVendorPreference");
+  expect(generatorPresetConfigFromUnknown(config)).not.toHaveProperty("memoryTypePreference");
+  expect(generatorPresetConfigFromUnknown({ ...config, cpuVendorPreference: "other" })).toBeNull();
+  expect(generatorPresetConfigFromUnknown({ ...config, memoryTypePreference: "DDR3" })).toBeNull();
+});

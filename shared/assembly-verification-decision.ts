@@ -36,7 +36,7 @@ function temperatureDimension(id: "cpu-temperature" | "gpu-temperature", title: 
     id,
     title,
     status,
-    summary: latest?.value === undefined ? "최신 회차 값 기록 없음" : delta === undefined ? `최신 ${latest.value}°C · 기준 비교 불가` : `최신 ${latest.value}°C · 기준 대비 ${delta > 0 ? "+" : ""}${delta}°C`,
+    summary: latest?.value === undefined ? "최신 회차 값 기록 없음" : delta === undefined ? `최신 ${latest.value}°C / 기준 비교 불가` : `최신 ${latest.value}°C / 기준 대비 ${delta > 0 ? "+" : ""}${delta}°C`,
     ...(baseline ? { baseline } : {}),
     ...(latest ? { latest } : {})
   };
@@ -48,7 +48,7 @@ function stabilityDimension(id: "cpu-stability" | "gpu-stability", title: string
   const baselineKnown = baseline?.value !== undefined;
   const latestKnown = latest?.value !== undefined;
   const status: AssemblyVerificationDecisionDimensionStatus = latestKnown && !baselineKnown ? "improved" : !latestKnown && baselineKnown ? "recheck" : latestKnown && baselineKnown && (latest!.baselineDelta ?? 0) < 0 ? "improved" : latestKnown && baselineKnown && (latest!.baselineDelta ?? 0) > 0 ? "recheck" : baselineKnown || latestKnown ? "unchanged" : "unknown";
-  const summary = latestKnown ? `최신 ${latest!.value}초 이후 안정화 관찰${latest!.baselineDelta === undefined ? " · 기준 비교 불가" : ` · 기준 대비 ${latest!.baselineDelta > 0 ? "+" : ""}${latest!.baselineDelta}초`}` : "최신 회차에서 안정화 미확인";
+  const summary = latestKnown ? `최신 ${latest!.value}초 이후 안정화 관찰${latest!.baselineDelta === undefined ? " / 기준 비교 불가" : ` / 기준 대비 ${latest!.baselineDelta > 0 ? "+" : ""}${latest!.baselineDelta}초`}` : "최신 회차에서 안정화 미확인";
   return { id, title, status, summary, ...(baseline ? { baseline } : {}), ...(latest ? { latest } : {}) };
 }
 
@@ -57,7 +57,7 @@ function powerDimension(id: "cpu-power" | "gpu-power", title: string, rows: Asse
   const latest = rows.find((row) => row.runId === latestRunId);
   const delta = metricDeltaFor(latest);
   const status: AssemblyVerificationDecisionDimensionStatus = delta === undefined ? "unknown" : delta < 0 ? "observational-lower" : delta > 0 ? "observational-higher" : "unchanged";
-  return { id, title, status, summary: latest?.value === undefined ? "최신 회차 전력 기록 없음" : delta === undefined ? `최신 ${latest.value}W · 기준 비교 불가` : `최신 ${latest.value}W · 기준 대비 ${delta > 0 ? "+" : ""}${delta}W · 관찰 순`, ...(baseline ? { baseline } : {}), ...(latest ? { latest } : {}) };
+  return { id, title, status, summary: latest?.value === undefined ? "최신 회차 전력 기록 없음" : delta === undefined ? `최신 ${latest.value}W / 기준 비교 불가` : `최신 ${latest.value}W / 기준 대비 ${delta > 0 ? "+" : ""}${delta}W / 관찰 순`, ...(baseline ? { baseline } : {}), ...(latest ? { latest } : {}) };
 }
 
 export function assemblyVerificationDecisionSummaryFor(summary: AssemblyVerificationComparisonSummary): AssemblyVerificationDecisionSummary {
@@ -77,6 +77,6 @@ export function assemblyVerificationDecisionSummaryFor(summary: AssemblyVerifica
   const allKnownUnchanged = thermalOrStability.every((dimension) => dimension.status === "unchanged");
   const hasUnknown = thermalOrStability.some((dimension) => dimension.status === "unknown");
   const status: AssemblyVerificationDecisionStatus = summary.overlay.runCount < 2 || summary.reason === "no-selected-runs" ? "inconclusive" : hasRecheck ? "recheck" : hasImprovement ? "improved" : allKnownUnchanged ? "unchanged" : hasUnknown ? "inconclusive" : "unchanged";
-  const nextAction = status === "recheck" ? "같은 조건에서 온도와 소음을 다시 측정하세요. 케이스 통풍과 팬·전원 연결도 확인하세요." : status === "improved" ? "이전 기록보다 개선됐습니다. 같은 조건으로 한 차례 더 측정해 변화를 확인하세요." : status === "unchanged" ? "이전 기록과 차이가 없습니다. 같은 조건으로 측정을 이어가세요." : "비교할 기록이 부족합니다. 같은 조건에서 두 번 이상 측정하세요.";
+  const nextAction = status === "recheck" ? "같은 조건에서 온도와 소음을 다시 측정하세요. 케이스 통풍과 팬/전원 연결도 확인하세요." : status === "improved" ? "이전 기록보다 개선됐습니다. 같은 조건으로 한 차례 더 측정해 변화를 확인하세요." : status === "unchanged" ? "이전 기록과 차이가 없습니다. 같은 조건으로 측정을 이어가세요." : "비교할 기록이 부족합니다. 같은 조건에서 두 번 이상 측정하세요.";
   return { type: "pc-supporter-assembly-verification-decision", schemaVersion: 1, status, ...(baselineRunId ? { baselineRunId } : {}), ...(latestRunId ? { latestRunId } : {}), dimensions, nextAction };
 }

@@ -51,7 +51,7 @@ export function priceAlertPolicyText(policy: PriceAlertPolicy = DEFAULT_PRICE_AL
     ...(policy.priceDrop ? [`하락 ${policy.minimumDropPercent === 0 ? "모든 하락" : policy.minimumDropPercent + "% 이상"}`] : []),
     ...(policy.priceAvailability ? ["가격 상태 변화"] : [])
   ];
-  return labels.length > 0 ? labels.join(" · ") : "알림 꺼짐";
+  return labels.length > 0 ? labels.join(" / ") : "알림 꺼짐";
 }
 
 export function priceAlertsFor(entries: PriceAlertEntry[], previous: Record<string, PriceObservation>, current: Record<string, PriceObservation>, createdAt: string, policy: PriceAlertPolicy = DEFAULT_PRICE_ALERT_POLICY): PriceWatchAlert[] {

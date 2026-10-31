@@ -49,7 +49,7 @@ function stableJson(value: unknown): string {
 function readableValue(value: unknown, price = false): string | undefined {
   if (value === undefined || value === null || value === "") return undefined;
   if (price) return isKnownPrice(value as number) ? `${(value as number).toLocaleString("ko-KR")}원` : "확인 정보 없음";
-  if (Array.isArray(value)) return value.length === 0 ? "없음" : value.map((item) => readableValue(item) ?? "확인 정보 없음").join(" · ");
+  if (Array.isArray(value)) return value.length === 0 ? "없음" : value.map((item) => readableValue(item) ?? "확인 정보 없음").join(" / ");
   if (typeof value === "object") return stableJson(value);
   return String(value);
 }

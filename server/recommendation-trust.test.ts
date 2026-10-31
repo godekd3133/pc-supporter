@@ -118,7 +118,7 @@ describe("recommendation trust", () => {
       remainingWarningCount: 2,
       remainingUnknownCount: 1
     });
-    expect(result.reasons).toContain("전체 견적에는 호환 불가 4개·주의 2개·확인 필요 1개가 남아 있어요.");
+    expect(result.reasons).toContain("전체 견적에는 호환 불가 4개/주의 2개/확인 필요 1개가 남아 있어요.");
   });
 
   it("gives structured official benchmark provenance more weight than an unclassified score", () => {
@@ -126,7 +126,7 @@ describe("recommendation trust", () => {
     const unclassified = recommendationTrustFor({ candidate: candidate(), similarityEvidence: benchmarkEvidence, resolvesTarget: true, candidateBlockers: 0, candidateWarnings: 0, candidateUnknown: 0, remainingBlockers: 0, remainingWarnings: 0, remainingUnknown: 0, now: "2026-08-31T12:00:00.000Z" });
 
     expect(official.score).toBeGreaterThan(unclassified.score);
-    expect(official.reasons).toContain("벤치마크 출처: 제조사·공식 측정표");
+    expect(official.reasons).toContain("벤치마크 출처: 제조사/공식 측정표");
     expect(unclassified.reasons).toContain("벤치마크 출처가 분류되지 않았습니다.");
   });
 

@@ -34,16 +34,16 @@ function resourceHeadroomText(value: number | undefined) {
 
 function resourceBudgetText(resource: SavedBuildCheckSnapshot["resourceBudget"]) {
   if (!resource) return "기록 없음";
-  return `전력 ${resourceHeadroomText(resource.powerHeadroomW)} · 냉각 ${resourceHeadroomText(resource.coolerHeadroomW)}`;
+  return `전력 ${resourceHeadroomText(resource.powerHeadroomW)} / 냉각 ${resourceHeadroomText(resource.coolerHeadroomW)}`;
 }
 
 function resourceBudgetDeltaText(summary: ReturnType<typeof savedBuildCheckTransitionSummaryFor>, changed: boolean) {
-  if (!changed) return "전력·냉각 여유 변화 없음";
+  if (!changed) return "전력/냉각 여유 변화 없음";
   const values = [
     summary.powerHeadroomDeltaW !== undefined ? `전력 ${summary.powerHeadroomDeltaW > 0 ? "+" : ""}${summary.powerHeadroomDeltaW}W` : undefined,
     summary.coolerHeadroomDeltaW !== undefined ? `냉각 ${summary.coolerHeadroomDeltaW > 0 ? "+" : ""}${summary.coolerHeadroomDeltaW}W` : undefined
   ].filter((value): value is string => Boolean(value));
-  return values.length > 0 ? values.join(" · ") : "전력·냉각 정보가 달라졌어요.";
+  return values.length > 0 ? values.join(" / ") : "전력/냉각 정보가 달라졌어요.";
 }
 
 function refreshPriceTransition(item: CatalogRefreshReportItem) {
@@ -52,9 +52,9 @@ function refreshPriceTransition(item: CatalogRefreshReportItem) {
   if (!beforeKnown && !afterKnown) return "정보 부족 → 정보 부족";
   if (!beforeKnown) return `- → ${item.nextPriceWon!.toLocaleString("ko-KR")}원`;
   if (!afterKnown) return `${item.previousPriceWon!.toLocaleString("ko-KR")}원 → -`;
-  if (item.previousPriceWon === item.nextPriceWon) return `${item.nextPriceWon!.toLocaleString("ko-KR")}원 · 변화 없음`;
+  if (item.previousPriceWon === item.nextPriceWon) return `${item.nextPriceWon!.toLocaleString("ko-KR")}원 / 변화 없음`;
   const delta = item.nextPriceWon! - item.previousPriceWon!;
-  return `${item.previousPriceWon!.toLocaleString("ko-KR")}원 → ${item.nextPriceWon!.toLocaleString("ko-KR")}원 · ${delta > 0 ? "+" : ""}${delta.toLocaleString("ko-KR")}원`;
+  return `${item.previousPriceWon!.toLocaleString("ko-KR")}원 → ${item.nextPriceWon!.toLocaleString("ko-KR")}원 / ${delta > 0 ? "+" : ""}${delta.toLocaleString("ko-KR")}원`;
 }
 
 function refreshDataQualityTransition(item: CatalogRefreshReportItem) {
@@ -104,22 +104,22 @@ function findingPlanResolutionLabel(resolution: FindingPlanResolution) {
 function SavedBuildRecheckRefreshImpactPanel({ report, findingChanges, result, onFocusFinding, onFocusSection }: { report: CatalogRefreshReport; findingChanges: ReadonlyArray<SavedBuildCheckFindingDiff>; result: CompatibilityResult; onFocusFinding?: (ruleId: string) => void; onFocusSection?: (targetId: string) => void }) {
   const impacts = catalogRefreshFindingImpactsFor(report, findingChanges);
   const linkedCount = impacts.reduce((total, impact) => total + impact.findingChanges.length, 0);
-  return <section className={`saved-build-recheck-refresh-impact ${report.status}`} aria-label="부품 가격·사양 변경" data-testid="saved-build-recheck-refresh-impact">
-    <div className="saved-build-recheck-refresh-impact-heading"><div><strong>변경된 부품 정보</strong><small>가격·사양 변경과 호환 결과 변화를 표시합니다.</small></div><span>결과 변화 {linkedCount}개</span></div>
+  return <section className={`saved-build-recheck-refresh-impact ${report.status}`} aria-label="부품 가격/사양 변경" data-testid="saved-build-recheck-refresh-impact">
+    <div className="saved-build-recheck-refresh-impact-heading"><div><strong>변경된 부품 정보</strong><small>가격/사양 변경과 호환 결과 변화를 표시합니다.</small></div><span>결과 변화 {linkedCount}개</span></div>
     {report.failures.length > 0 && <p className="saved-build-recheck-refresh-impact-failure"><FiAlertTriangle /> 부품 정보를 불러오지 못한 항목 {report.failures.length}개</p>}
     {impacts.length > 0 ? <div className="saved-build-recheck-refresh-impact-list">{impacts.slice(0, 6).map(({ item, findingChanges: linkedChanges }) => {
       const focusableFinding = linkedChanges.map((change) => change.after ? result.findings.find((finding) => finding.ruleId === change.after?.ruleId || finding.id === change.after?.id) : undefined).find((finding): finding is Finding => Boolean(finding));
       const nextActions = refreshNextActionsFor(item);
       return <article className={linkedChanges.length > 0 ? "linked" : "unlinked"} key={`${item.target.kind}-${item.target.id}`}>
         <div className="saved-build-recheck-refresh-impact-item-heading"><strong>{item.name}</strong><span>{linkedChanges.length > 0 ? `결과 변화 ${linkedChanges.length}개` : "관련 호환 결과 변화 없음"}</span></div>
-        <small>{item.target.kind === "part" ? "핵심 부품" : "주변 부품"} · 업데이트 {refreshDateText(item.refreshedAt)} · {item.changedFields.length > 0 ? item.changedFields.map((field) => catalogChangeFieldLabelFor(field)).join(" · ") : "가격·사양 변경 없음"}</small>
+        <small>{item.target.kind === "part" ? "핵심 부품" : "주변 부품"} / 업데이트 {refreshDateText(item.refreshedAt)} / {item.changedFields.length > 0 ? item.changedFields.map((field) => catalogChangeFieldLabelFor(field)).join(" / ") : "가격/사양 변경 없음"}</small>
         <div className="saved-build-recheck-refresh-impact-facts"><span><b>가격</b>{refreshPriceTransition(item)}</span><span><b>사양 정보 없음</b>{item.previousMissingCount}개 → {item.nextMissingCount}개</span></div>
         {item.valueDiffs && item.valueDiffs.length > 0 && <div className="saved-build-recheck-refresh-impact-values"><strong>바뀐 값</strong>{item.valueDiffs.slice(0, 4).map((diff) => <div key={diff.field}><span>{catalogChangeFieldLabelFor(diff.field)}</span><small><em>{catalogRefreshValueText(diff.previous)}</em><b>→</b><em>{catalogRefreshValueText(diff.next)}</em></small></div>)}{item.valueDiffs.length > 4 && <small>그 외 {item.valueDiffs.length - 4}개 항목이 바뀌었어요.</small>}</div>}
         {linkedChanges.length > 0 ? <ul>{linkedChanges.slice(0, 4).map((change) => <li key={`${change.key}-${change.change}`}><b>{findingChangeLabel(change.change)}</b><span>{(change.after ?? change.before)?.title ?? change.key}</span></li>)}</ul> : <p>현재 호환 결과에서 이 부품과 관련된 변화가 없어요.</p>}
         {onFocusSection && nextActions.length > 0 && <div className="saved-build-recheck-refresh-impact-actions">{nextActions.map((action) => <button className="text-button" type="button" data-testid={`saved-build-recheck-refresh-action-${action.id}`} onClick={() => onFocusSection(action.id)} key={action.id}><FiSearch /> {action.label}</button>)}</div>}
         {focusableFinding && onFocusFinding && <button className="text-button" type="button" onClick={() => onFocusFinding(focusableFinding.ruleId)}><FiSearch /> 관련 호환 항목 보기</button>}
       </article>;
-    })}</div> : report.failures.length === 0 && <p className="saved-build-recheck-refresh-impact-empty"><FiInfo /> 가격·사양 변경이 없어요.</p>}
+    })}</div> : report.failures.length === 0 && <p className="saved-build-recheck-refresh-impact-empty"><FiInfo /> 가격/사양 변경이 없어요.</p>}
     {report.items.length > 6 && <small className="saved-build-recheck-refresh-impact-more">그 외 부품 {report.items.length - 6}개의 변경 내용이 있어요.</small>}
   </section>;
 }
@@ -137,16 +137,16 @@ export function SavedBuildRecheckDiffPanel({ snapshot, result, partMap, onFocusF
   const resourceBudgetChanged = diff.resourceBudgetChanged;
   const benchmarkChanged = diff.benchmarkChanged || diff.benchmarkNeedsReview;
   return <section className={`saved-build-recheck-diff-panel ${summary.direction}`} aria-label="저장 당시와 현재 비교" data-testid="saved-build-recheck-diff" tabIndex={-1}>
-    <div className="saved-build-recheck-diff-heading"><div><p className="eyebrow">저장 견적 변경</p><h2>저장 당시와 현재 비교</h2><p>저장 당시와 현재의 가격·호환 결과를 비교해요.</p></div><strong><DirectionIcon /> {directionLabel(summary.direction)}</strong></div>
+    <div className="saved-build-recheck-diff-heading"><div><p className="eyebrow">저장 견적 변경</p><h2>저장 당시와 현재 비교</h2><p>저장 당시와 현재의 가격/호환 결과를 비교해요.</p></div><strong><DirectionIcon /> {directionLabel(summary.direction)}</strong></div>
     <div className="saved-build-recheck-diff-grid">
       <article className={diff.statusChanged ? "changed" : undefined}><span>결과</span><strong>{statusLabel(snapshot.status)} → {statusLabel(result.status)}</strong><small>{diff.statusChanged ? "결과가 달라졌습니다." : "저장 당시와 현재 결과가 같습니다."}</small></article>
-      <article className={riskChanged ? "changed" : undefined}><span>호환 항목</span><strong>호환 불가 {snapshot.blockerCount} → {result.blockerCount} · 주의 {snapshot.warningCount} → {result.warningCount} · 정보 부족 {snapshot.unknownCount} → {result.unknownCount}</strong><small>{riskChanged ? `호환 불가 ${deltaText(summary.blockerDelta)} · 주의 ${deltaText(summary.warningDelta)} · 정보 부족 ${deltaText(summary.unknownDelta)}` : "호환 불가·주의·정보 부족 항목 수는 그대로예요."}</small></article>
+      <article className={riskChanged ? "changed" : undefined}><span>호환 항목</span><strong>호환 불가 {snapshot.blockerCount} → {result.blockerCount} / 주의 {snapshot.warningCount} → {result.warningCount} / 정보 부족 {snapshot.unknownCount} → {result.unknownCount}</strong><small>{riskChanged ? `호환 불가 ${deltaText(summary.blockerDelta)} / 주의 ${deltaText(summary.warningDelta)} / 정보 부족 ${deltaText(summary.unknownDelta)}` : "호환 불가/주의/정보 부족 항목 수는 그대로예요."}</small></article>
       <article className={priceChanged ? "changed" : undefined}><span>가격</span><strong>{priceDeltaText(summary.priceDeltaWon, snapshot.priceComplete && result.priceComplete)}</strong><small>{diff.priceCompletenessChanged ? `가격 정보 ${snapshot.priceComplete ? "가격 정보 있음" : "-"} → ${result.priceComplete ? "가격 정보 있음" : "-"}` : "저장 당시와 현재 총액 비교"}</small></article>
 
-      <article className={resourceBudgetChanged ? "changed" : undefined}><span>전력·냉각 여유</span><strong>{resourceBudgetText(snapshot.resourceBudget)} → {resourceBudgetText(currentSnapshot.resourceBudget)}</strong><small>{resourceBudgetDeltaText(summary, resourceBudgetChanged)}</small></article>
+      <article className={resourceBudgetChanged ? "changed" : undefined}><span>전력/냉각 여유</span><strong>{resourceBudgetText(snapshot.resourceBudget)} → {resourceBudgetText(currentSnapshot.resourceBudget)}</strong><small>{resourceBudgetDeltaText(summary, resourceBudgetChanged)}</small></article>
 
     </div>
-    <div className="saved-build-recheck-diff-facts"><span>저장 당시 <b>{new Date(snapshot.checkedAt).toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" })}</b></span><span>현재 결과 <b>{new Date(result.checkedAt).toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" })}</b></span><span>{summary.findingDiffAvailable ? `항목 해결 ${summary.resolvedFindingCount}개 · 신규 ${summary.newFindingCount}개` : "이전 기록에 항목별 비교 정보가 없어요."}</span></div>
+    <div className="saved-build-recheck-diff-facts"><span>저장 당시 <b>{new Date(snapshot.checkedAt).toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" })}</b></span><span>현재 결과 <b>{new Date(result.checkedAt).toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" })}</b></span><span>{summary.findingDiffAvailable ? `항목 해결 ${summary.resolvedFindingCount}개 / 신규 ${summary.newFindingCount}개` : "이전 기록에 항목별 비교 정보가 없어요."}</span></div>
     {(riskChanged || priceChanged || resourceBudgetChanged || benchmarkChanged || diff.statusChanged) && <p className="saved-build-recheck-diff-warning"><FiInfo /> 저장 당시와 현재 견적의 호환성 또는 금액이 달라졌어요. 새 결과를 확인해 주세요.</p>}
     {!(riskChanged || priceChanged || resourceBudgetChanged || benchmarkChanged || diff.statusChanged) && <p className="saved-build-recheck-diff-same"><FiCheckCircle /> 저장 당시와 현재 호환성 결과와 금액이 같아요.</p>}
     {snapshot.catalogRefreshReport && <SavedBuildRecheckRefreshImpactPanel report={snapshot.catalogRefreshReport} findingChanges={findingDiff.changes} result={result} onFocusFinding={onFocusFinding} onFocusSection={onFocusSection} />}
@@ -162,11 +162,11 @@ export function SavedBuildRecheckDiffPanel({ snapshot, result, partMap, onFocusF
         return <article className={`saved-build-recheck-diff-finding ${findingChangeTone(change.change)}`} key={`${change.key}-${change.change}`}>
           <div className="saved-build-recheck-diff-finding-heading"><span>{findingChangeLabel(change.change)}</span><strong>{afterFinding?.title ?? beforeFinding?.title ?? change.key}</strong></div>
           <div className="saved-build-recheck-diff-finding-versions"><div><small>저장 당시</small><p>{beforeFinding ? beforeFinding.message : "이 결과에는 기록되지 않았어요."}</p></div><b aria-hidden="true">→</b><div><small>현재 결과</small><p>{afterFinding ? afterFinding.message : "현재 결과에서 해결되었습니다."}</p></div></div>
-          {affectedParts.length > 0 && <small className="saved-build-recheck-diff-finding-parts">영향 부품 · {affectedParts.join(", ")}{affectedPartIds.length > affectedParts.length ? ` 외 ${affectedPartIds.length - affectedParts.length}개` : ""}</small>}
+          {affectedParts.length > 0 && <small className="saved-build-recheck-diff-finding-parts">영향 부품 / {affectedParts.join(", ")}{affectedPartIds.length > affectedParts.length ? ` 외 ${affectedPartIds.length - affectedParts.length}개` : ""}</small>}
           {recommendation && <div className="saved-build-recheck-recommendation" data-testid={`saved-build-recheck-recommendation-${change.key}`}>
             <div className="saved-build-recheck-recommendation-heading"><span>우선 검토 부품</span><strong>{recommendation.suggestion.part.name}</strong><em className={recommendation.decision.state}>{recommendation.decision.label}</em></div>
             <p>{recommendation.decision.summary}</p>
-            <small>미리 적용 후 호환 불가 {recommendation.suggestion.remainingBlockers}개 · 주의 {recommendation.suggestion.remainingWarnings}개 · 정보 부족 {recommendation.suggestion.remainingUnknown}개{recommendation.suggestion.priceDeltaWon !== undefined ? ` · 가격 ${recommendation.suggestion.priceDeltaWon > 0 ? "+" : ""}${recommendation.suggestion.priceDeltaWon.toLocaleString("ko-KR")}원` : " · -"}</small>
+            <small>미리 적용 후 호환 불가 {recommendation.suggestion.remainingBlockers}개 / 주의 {recommendation.suggestion.remainingWarnings}개 / 정보 부족 {recommendation.suggestion.remainingUnknown}개{recommendation.suggestion.priceDeltaWon !== undefined ? ` / 가격 ${recommendation.suggestion.priceDeltaWon > 0 ? "+" : ""}${recommendation.suggestion.priceDeltaWon.toLocaleString("ko-KR")}원` : " / -"}</small>
             <div className="saved-build-recheck-recommendation-actions">{onPreviewSuggestion && recommendation.decision.state !== "hold" && <button className="text-button" type="button" onClick={() => onPreviewSuggestion(recommendation.suggestion.part.category, recommendation.suggestion.part, recommendation.suggestion.recommendedQuantity, currentFinding?.affectedPartIds)}><FiRefreshCw /> 미리 적용</button>}{currentFinding && onFocusFinding && <button className="text-button" type="button" onClick={() => onFocusFinding(currentFinding.ruleId)}><FiSearch /> 부품 전체 보기</button>}</div>
           </div>}
           {currentFinding && strategyPlans.length > 0 && <div className="saved-build-recheck-finding-strategies" data-testid={`saved-build-recheck-finding-strategies-${change.key}`}>
@@ -174,7 +174,7 @@ export function SavedBuildRecheckDiffPanel({ snapshot, result, partMap, onFocusF
             <div className="saved-build-recheck-finding-strategies-list">{strategyPlans.map((plan) => {
               const resolution = findingPlanResolutionFor(plan, currentFinding);
               const changes = planChangesForFinding(plan, currentFinding);
-              return <article className={resolution} key={`${change.key}-${plan.label}`}><div><strong>{plan.label}</strong><span>{findingPlanResolutionLabel(resolution)}</span></div><small>남은 호환 문제 {plan.remainingBlockers}개 · 가격 {priceDeltaText(plan.priceDeltaWon, plan.priceComplete)}</small>{changes.length > 0 ? <p>{changes.slice(0, 2).map((item) => item.kind === "change_quantity" ? `${item.fromQuantity ?? "?"}개 → ${item.toQuantity ?? "?"}개` : `${item.fromPartName ?? "현재 선택"} → ${item.toPart.name}`).join(" · ")}{changes.length > 2 ? ` 외 ${changes.length - 2}개` : ""}</p> : <p>{resolution === "resolved" ? "이 구성으로 해결할 수 있어요." : resolution === "remaining" ? "이 구성을 적용해도 이 항목은 남아요." : "이 항목과 관련된 부품 변경이 없어요."}</p>}</article>;
+              return <article className={resolution} key={`${change.key}-${plan.label}`}><div><strong>{plan.label}</strong><span>{findingPlanResolutionLabel(resolution)}</span></div><small>남은 호환 문제 {plan.remainingBlockers}개 / 가격 {priceDeltaText(plan.priceDeltaWon, plan.priceComplete)}</small>{changes.length > 0 ? <p>{changes.slice(0, 2).map((item) => item.kind === "change_quantity" ? `${item.fromQuantity ?? "?"}개 → ${item.toQuantity ?? "?"}개` : `${item.fromPartName ?? "현재 선택"} → ${item.toPart.name}`).join(" / ")}{changes.length > 2 ? ` 외 ${changes.length - 2}개` : ""}</p> : <p>{resolution === "resolved" ? "이 구성으로 해결할 수 있어요." : resolution === "remaining" ? "이 구성을 적용해도 이 항목은 남아요." : "이 항목과 관련된 부품 변경이 없어요."}</p>}</article>;
             })}</div>
           </div>}
           {currentFinding && !recommendation && onFocusFinding && <button className="text-button" type="button" onClick={() => onFocusFinding(currentFinding.ruleId)}><FiSearch /> 현재 항목 보기</button>}
@@ -192,7 +192,7 @@ export function SavedBuildRecheckDiffPanel({ snapshot, result, partMap, onFocusF
         {onFocusRepairPlans && <button className="text-button" type="button" onClick={onFocusRepairPlans}><FiLayers /> 개선안 자세히 보기</button>}
       </article>)}</div>
     </div>}
-    {onFocusSection && <div className="saved-build-recheck-diff-actions"><button className="button button-light" type="button" onClick={() => onFocusSection("result-findings")}><FiSearch /> 현재 상세 결과 보기</button><button className="text-button" type="button" onClick={() => onFocusSection("saved-build-check-timeline")}><FiRefreshCw /> 가격·호환 기록 보기</button></div>}
+    {onFocusSection && <div className="saved-build-recheck-diff-actions"><button className="button button-light" type="button" onClick={() => onFocusSection("result-findings")}><FiSearch /> 현재 상세 결과 보기</button><button className="text-button" type="button" onClick={() => onFocusSection("saved-build-check-timeline")}><FiRefreshCw /> 가격/호환 기록 보기</button></div>}
     <p className="saved-build-recheck-diff-note"><FiInfo /> 저장 당시와 현재 견적의 차이예요.</p>
   </section>;
 }

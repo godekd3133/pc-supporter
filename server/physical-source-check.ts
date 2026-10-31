@@ -64,11 +64,11 @@ async function publicHttpsUrlFor(rawUrl: string, lookup: (hostname: string, opti
     throw new BlockedSourceError("정보 URL 형식이 올바르지 않습니다.");
   }
   if (parsed.protocol !== "https:") throw new BlockedSourceError("HTTPS 정보 URL만 점검할 수 있습니다.");
-  if (parsed.username || parsed.password) throw new BlockedSourceError("사용자명·비밀번호가 포함된 URL은 점검할 수 없습니다.");
+  if (parsed.username || parsed.password) throw new BlockedSourceError("사용자명/비밀번호가 포함된 URL은 점검할 수 없습니다.");
   if (parsed.port && parsed.port !== "443") throw new BlockedSourceError("기본 HTTPS 포트(443) 외의 URL은 점검할 수 없습니다.");
   const hostname = normalizedHostname(parsed.hostname);
   if (!hostname || hostname === "localhost" || hostname.endsWith(".localhost") || hostname.endsWith(".local") || hostname.endsWith(".internal")) {
-    throw new BlockedSourceError("로컬·내부 호스트는 점검할 수 없습니다.");
+    throw new BlockedSourceError("로컬/내부 호스트는 점검할 수 없습니다.");
   }
   const family = isIP(hostname);
   const addresses = family > 0 ? [{ address: hostname, family }] : await lookup(hostname, { all: true }).catch(() => {

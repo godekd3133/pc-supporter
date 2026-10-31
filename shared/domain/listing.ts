@@ -1,3 +1,4 @@
+import { gamingSsdNameAllowed } from "../cpu-gaming-policy";
 import type { ListingPolicy, ListingType, Part, PartCategory } from "../types";
 import { isKnownPrice } from "../types";
 import { seedLiveTwinsFor } from "./seed-anchor";
@@ -13,7 +14,18 @@ const CASE_DRIVE_CAGE_ACCESSORY_PATTERN = /\bHDD\s*CAGE\b|\b(?:HARD\s*DRIVE|HARD
 const CASE_GPU_BRACKET_ACCESSORY_PATTERN = /\b(?:VERTICAL\s+)?GPU\s+BRACKET\b/i;
 const ACCESSORY_PREFIX_PATTERN = /^\s*(?:전용\s*)?액세서리\s*(?:\/|$)/i;
 
+// These names explicitly identify a Thunderbolt/eGPU enclosure, not a card
+// installed in the quote's motherboard and case. Generic "외장 그래픽" is a
+// normal desktop-card label and must remain allowed.
+export function isExternalGpuEnclosure(part: Pick<Part, "category" | "name">) {
+  return part.category === "gpu" && (
+    /\b(?:AORUS|GIGABYTE)\b.*\b(?:AI|GAMING)\s*BOX\b/i.test(part.name)
+    || /\beGPU\b|(?:외장\s*그래픽|GPU)\s*(?:도크|독|박스|인클로저)|\b(?:external\s*GPU|GPU)\s*(?:dock|enclosure)\b/i.test(part.name)
+  );
+}
+
 export function inferListingType(input: Pick<Part, "category" | "name" | "rawSpecText" | "listingType">): ListingType {
+  if (isExternalGpuEnclosure(input)) return "accessory";
   const rawSpecText = input.rawSpecText ?? "";
   const text = `${input.name} ${rawSpecText}`;
   if ((input.category === "ssd" || input.category === "hdd") && STORAGE_ACCESSORY_PATTERN.test(text)) return "accessory";
@@ -37,9 +49,9 @@ export function isListingAllowed(part: Part, policy: ListingPolicy) {
   return listingType === "retail";
 }
 
-// 견적 판매 정책 — SSD·메모리는 삼성전자·SK하이닉스, 파워는 시소닉·마이크로닉스
+// 견적 판매 정책 — SSD/메모리는 삼성전자/SK하이닉스, 파워는 시소닉/마이크로닉스
 // 제품만 견적에 올린다. 크롤링 카탈로그에는 다른 브랜드도 남아 있으므로 부품을
-// 고르는 모든 경로(자동 구성·호환 후보·카탈로그 목록)에서 같은 기준으로 걸러낸다.
+// 고르는 모든 경로(자동 구성/호환 후보/카탈로그 목록)에서 같은 기준으로 걸러낸다.
 const QUOTE_ALLOWED_BRANDS: Partial<Record<PartCategory, readonly string[]>> = {
   ssd: ["삼성전자", "Samsung", "SK하이닉스", "SK hynix"],
   memory: ["삼성전자", "Samsung", "SK하이닉스", "SK hynix"],
@@ -47,9 +59,9 @@ const QUOTE_ALLOWED_BRANDS: Partial<Record<PartCategory, readonly string[]>> = {
 };
 
 const QUOTE_ALLOWED_BRAND_LABELS: Partial<Record<PartCategory, string>> = {
-  ssd: "삼성전자·SK하이닉스",
-  memory: "삼성전자·SK하이닉스",
-  psu: "시소닉·마이크로닉스"
+  ssd: "삼성전자/SK하이닉스/KLEVV C910G",
+  memory: "삼성전자/SK하이닉스",
+  psu: "시소닉/마이크로닉스"
 };
 
 function normalizeQuoteBrand(brand: string | undefined) {
@@ -60,7 +72,8 @@ export function isQuoteBrandRestrictedCategory(category: PartCategory) {
   return QUOTE_ALLOWED_BRANDS[category] !== undefined;
 }
 
-export function isQuoteBrandAllowed(category: PartCategory, brand: string | undefined) {
+export function isQuoteBrandAllowed(category: PartCategory, brand: string | undefined, productName?: string) {
+  if (category === "ssd" && productName !== undefined && gamingSsdNameAllowed(productName)) return true;
   const allowed = QUOTE_ALLOWED_BRANDS[category];
   if (!allowed) return true;
   const normalized = normalizeQuoteBrand(brand);
@@ -75,10 +88,10 @@ export function quoteBrandOptionsFor<T extends { brand: string }>(category: Part
   return QUOTE_ALLOWED_BRANDS[category] === undefined ? [...options] : options.filter((option) => isQuoteBrandAllowed(category, option.brand));
 }
 
-// 견적 판매 정책 — CPU·GPU는 현세대만 견적에 올린다. 다나와에 구세대 재고나
-// 최저가가 남아 있어도(RTX 2060·RTX 3070 등) 단종으로 취급한다. 세대는 정규화된
-// 스펙(cpuSeries·gpuArchitectureFamily)을 우선 신뢰하고, 스펙이 없으면 다나와
-// 제품명 표기(라이젠-N세대·코어 울트라 시리즈N·RTX 50xx 등)로 판별한다.
+// 견적 판매 정책 — CPU/GPU는 현세대만 견적에 올린다. 다나와에 구세대 재고나
+// 최저가가 남아 있어도(RTX 2060/RTX 3070 등) 단종으로 취급한다. 세대는 정규화된
+// 스펙(cpuSeries/gpuArchitectureFamily)을 우선 신뢰하고, 스펙이 없으면 다나와
+// 제품명 표기(라이젠-N세대/코어 울트라 시리즈N/RTX 50xx 등)로 판별한다.
 // 신세대가 나오면 임계 세대 이상으로 자동 인정되며, 세대를 식별할 수 없는
 // 부품은 견적에서 제외한다.
 // 견적 세대 경계는 카탈로그에서 동적으로 계산한다 — 아래쪽 "카탈로그 기반 세대
@@ -88,7 +101,7 @@ export type QuoteGenerationLine = "amd-ryzen" | "intel-desktop" | "nvidia-geforc
 
 export interface PartQuoteGeneration {
   line: QuoteGenerationLine;
-  /** 라인 내 비교 가능한 세대 순위 — Ryzen 시리즈 번호·코어 울트라 시리즈 번호·RTX/RX 앞 두 자리·Arc 문자 순. */
+  /** 라인 내 비교 가능한 세대 순위 — Ryzen 시리즈 번호/코어 울트라 시리즈 번호/RTX/RX 앞 두 자리/Arc 문자 순. */
   rank: number;
   /** 관리자 표시용 라벨 (예: "Ryzen 9000", "RTX 50"). */
   label: string;
@@ -154,13 +167,13 @@ export function cpuSeriesLabelFor(name: string) {
 }
 
 function cpuQuoteGenerationFor(part: Part): PartQuoteGeneration | undefined {
-  // seed는 이름·모델이 제품 정체성이다 — 오래된 스냅샷은 스펙만 신제품으로
+  // seed는 이름/모델이 제품 정체성이다 — 오래된 스냅샷은 스펙만 신제품으로
   // 갱신되고 이름이 남은 깨진 조합이 있어서 이름 유도 세대를 우선한다.
   const series = part.dataQuality === "seed"
     ? cpuSeriesLabelFor(`${part.name} ${part.model ?? ""}`) ?? part.specs.cpuSeries
     : part.specs.cpuSeries ?? cpuSeriesLabelFor(part.name);
   if (!series) return undefined;
-  const normalized = normalizeQuoteBrand(series); // "ryzen9000" · "coreultra200" · "core14"
+  const normalized = normalizeQuoteBrand(series); // "ryzen9000" / "coreultra200" / "core14"
   const ryzen = normalized.match(/^ryzen(\d+)$/);
   if (ryzen) return { line: "amd-ryzen", rank: Number(ryzen[1]), label: series };
   // 울트라 시리즈 번호(200…)가 코어 i 세대 번호(14…)보다 항상 크므로 한 라인
@@ -173,7 +186,7 @@ function cpuQuoteGenerationFor(part: Part): PartQuoteGeneration | undefined {
 }
 
 const GPU_LEGACY_WORKSTATION_PATTERN = /쿼드로|quadro|\bada\b|\brtx\s*a\d|radeon\s*pro|라데온\s*pro|nv\s*링크|nvlink|pro\s*sync/i;
-// Blackwell 이후 워크스테이션/프로 라인(RTX PRO·AI PRO·Arc Pro)은 소비형 세대와
+// Blackwell 이후 워크스테이션/프로 라인(RTX PRO/AI PRO/Arc Pro)은 소비형 세대와
 // 별개로 계속 판매되는 최신 제품이라 세대 경계 없이 견적에 포함한다.
 const GPU_CURRENT_WORKSTATION_PATTERN = /\brtx\s*pro\b|\bai\s*pro\b|\barc\s*pro\b/i;
 const GPU_NVIDIA_MODEL_PATTERN = /\b(RTX|GTX|GT)\s*(\d{3,5})\b/i;
@@ -195,7 +208,7 @@ const GPU_ARCH_NAME_GENERATION: Record<string, { line: QuoteGenerationLine; rank
 };
 
 function gpuQuoteGenerationFor(part: Part): PartQuoteGeneration | undefined {
-  // seed는 이름·모델이 정체성 — rawSpecText도 오래될 수 있어 seed에서는 제외.
+  // seed는 이름/모델이 정체성 — rawSpecText도 오래될 수 있어 seed에서는 제외.
   const text = part.dataQuality === "seed" ? `${part.name} ${part.model ?? ""}` : `${part.name} ${part.rawSpecText ?? ""}`;
   // "RTX 5000 Ada Generation" 같은 워크스테이션 명칭은 GeForce 세대 번호가
   // 아니므로 세대 패턴보다 먼저 걸러낸다.
@@ -348,15 +361,15 @@ export function isCurrentGenerationPart(part: Part, catalog?: readonly Part[]) {
 // 견적에는 가격이 확인되고 호환 판단에 필요한 사양이 모두 등록된 부품만 올린다.
 // 스펙이 덜 채워진 부품(incomplete, missingFields)은 호환 검증이 불가능하고
 // 가격이 없는 부품은 합계를 계산할 수 없으며, 다나와 목록에서 사라진 부품
-// (delistedAt)은 구할 수 없고, 구세대 CPU·GPU는 단종 취급이므로 견적 후보에서
+// (delistedAt)은 구할 수 없고, 구세대 CPU/GPU는 단종 취급이므로 견적 후보에서
 // 모두 제외한다.
 export function isQuoteSelectable(part: Part, catalog?: readonly Part[]) {
-  return isKnownPrice(part.priceWon) && part.dataQuality !== "incomplete" && !part.delistedAt && isCurrentGenerationPart(part, catalog)
+  return !isExternalGpuEnclosure(part) && isKnownPrice(part.priceWon) && part.dataQuality !== "incomplete" && !part.delistedAt && isCurrentGenerationPart(part, catalog)
     && !seedSupersededByLiveTwin(part, catalog);
 }
 
 // 같은 제품의 retail live 매물이 팔리고 있으면 seed 참고행은 견적에서 숨긴다 —
-// 실구매 링크·가격 이력이 있는 live 매물이 그 제품을 대신한다. 벌크·병행수입
+// 실구매 링크/가격 이력이 있는 live 매물이 그 제품을 대신한다. 벌크/병행수입
 // 매물만 남은 제품은 seed가 기준 부품으로 계속 서며(sync된 시장가로 표시).
 // 라이브 트윈이 아예 없는데 같은 범주에 다나와 매물이 충분히 쌓여 있다면
 // 다나와에서 빠진 제품으로 보고(단종 추정) seed도 견적에서 제외한다 — 범주
@@ -371,7 +384,7 @@ function liveCoverageByCategoryFor(catalog: readonly Part[]) {
     for (const part of catalog) {
       // "범주에 실매물이 있는가" 판정 — 견적에 설 수 있는 매물만 센다. 스펙이
       // 덜 채워진 incomplete 레코드는 단종 추정의 근거가 될 만큼 유효한 대안이
-      // 아니다(있으면 견적에서 대신 쓰일 수 없음). 단종·무가격은 시장 부재다.
+      // 아니다(있으면 견적에서 대신 쓰일 수 없음). 단종/무가격은 시장 부재다.
       if (part.source === "seed" || part.delistedAt || !isKnownPrice(part.priceWon) || part.dataQuality === "incomplete") continue;
       counts.set(part.category, (counts.get(part.category) ?? 0) + 1);
     }
@@ -391,10 +404,10 @@ function seedSupersededByLiveTwin(part: Part, catalog: readonly Part[] | undefin
  * 내장그래픽 여부 — 스펙 텍스트에 명시가 없으면 모델 번호로 추론한다.
  * 다나와 목록 페이지는 iGPU 유무를 자주 빼먹어서 라이브 CPU 대부분이
  * undefined가 되고, 그러면 iGPU 폴백 견적이 시드 부품만 쓰게 된다.
- * - AMD G/GT 접미(5600G·5700G·5500GT·8600G 등) → 내장 있음
+ * - AMD G/GT 접미(5600G/5700G/5500GT/8600G 등) → 내장 있음
  * - AMD Zen4(라이젠 5세대)/Zen5(6세대) 비-F 모델 → RDNA 내장 있음
- * - AMD F 접미(7500F·9500F) → 없음
- * - Intel F/KF 접미(12400F·225F·14700KF) → 없음, 그 외 코어 i/울트라 → 있음
+ * - AMD F 접미(7500F/9500F) → 없음
+ * - Intel F/KF 접미(12400F/225F/14700KF) → 없음, 그 외 코어 i/울트라 → 있음
  */
 export function cpuHasIntegratedGraphics(part: Pick<Part, "name" | "specs" | "category">): boolean | undefined {
   if (part.specs.integratedGraphics !== undefined) return part.specs.integratedGraphics;
@@ -402,7 +415,7 @@ export function cpuHasIntegratedGraphics(part: Pick<Part, "name" | "specs" | "ca
   const suffixMatch = name.match(/\b(\d{3,5})\s*([A-Z]{1,3})(?=[\s(]|$)/);
   const suffix = (suffixMatch?.[2] ?? "").toUpperCase();
   if (suffix === "F" || suffix === "KF" || suffix === "FL") return false;
-  if (suffix.startsWith("G")) return true; // G·GT·GE 라인은 내장그래픽 전제
+  if (suffix.startsWith("G")) return true; // G/GT/GE 라인은 내장그래픽 전제
   const ryzen = name.match(CPU_RYZEN_GENERATION_PATTERN);
   if (ryzen) return Number(ryzen[1]) >= 5; // Zen4(라이젠5세대)부터 전원 RDNA iGPU
   const ultra = name.match(CPU_ULTRA_SERIES_PATTERN);
@@ -419,11 +432,11 @@ export function cpuHasIntegratedGraphics(part: Pick<Part, "name" | "specs" | "ca
 
 /**
  * 세대 판정 없는 구매가능성 체크 — 관리자가 이름 패턴으로 부품을 직접 지명한
- * 테스트 베드/허용목록은 세대 규칙이 아니라 목록이 기준이다(RTX 3050·RX 580
+ * 테스트 베드/허용목록은 세대 규칙이 아니라 목록이 기준이다(RTX 3050/RX 580
  * 같은 지정 구형 부품을 세대 게이트가 다시 걸러내지 않게 한다).
- * 가격 확인·미완료 스펙·단종(delistedAt) 제외는 그대로 적용한다.
+ * 가격 확인/미완료 스펙/단종(delistedAt) 제외는 그대로 적용한다.
  */
 export function isQuotePurchasable(part: Part, catalog?: readonly Part[]): boolean {
-  return isKnownPrice(part.priceWon) && part.dataQuality !== "incomplete" && !part.delistedAt
+  return !isExternalGpuEnclosure(part) && isKnownPrice(part.priceWon) && part.dataQuality !== "incomplete" && !part.delistedAt
     && !seedSupersededByLiveTwin(part, catalog);
 }

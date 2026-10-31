@@ -1,10 +1,11 @@
 import type { GeneratedPartTierAdjacency, Part, PartCategory } from "./types";
 import { CATEGORY_LABELS } from "./types";
-import { buildPerformanceReportFor, cpuVideoPerformanceRowFor, gpuGamingIndexFor, gpuVideoPerformanceRowFor } from "./relative-performance-index";
+import { gpuGamingIndexFor, gpuVideoPerformanceRowFor } from "./relative-performance-index";
+import { cpuGamingModelFor, cpuGamingScoreFor, gamingSsdFamilyAllowed, gamingFallbackSsdAllowed } from "./cpu-gaming-policy";
 import { pciePowerMatchFor } from "./gpu-fit";
 import { PHASE1_MOTHERBOARD_EVIDENCE, phase1CaseSupportsMotherboard, phase1CoolerSupportsCpu, phase1GpuPowerUpperBoundW, phase1MotherboardSupportsCpu } from "./phase1-hardware-evidence";
 
-export const GAMING_PART_TIER_POLICY_VERSION = "gaming-part-tiers-2026-10-05";
+export const GAMING_PART_TIER_POLICY_VERSION = "gaming-part-tiers-2026-10-12";
 export type GamingTierEvidence = "video_table" | "catalog_spec" | "project_policy" | "unknown";
 export type GamingMinimumStatus = "met" | "unmet" | "unknown";
 export type GamingAppropriateStatus = "met" | "below" | "excessive" | "unknown";
@@ -81,12 +82,6 @@ function positive(value: number | undefined): value is number {
   return value !== undefined && Number.isFinite(value) && value > 0;
 }
 
-function cpuModelFor(part: Part): string | undefined {
-  // Names carry product identity even when an old seed ID/model is misleading.
-  return part.name.match(/\b([579]\d{3}(?:X3D2?|GT|XT|[XGF])?)\b/i)?.[1].toUpperCase()
-    ?? part.model?.match(/\b([579]\d{3}(?:X3D2?|GT|XT|[XGF])?)\b/i)?.[1].toUpperCase();
-}
-
 function boardIndexFor(part: Part): number {
   const text = `${part.name} ${part.model ?? ""}`;
   if (/ASRock\s+A520M-HVS\s+대원씨티에스/i.test(text)) return 0;
@@ -116,15 +111,13 @@ export function gamingAppropriateMemoryCapacityGb(gpu: Part | undefined, request
 export function gamingPartTierFor(part: Part, context: GamingTierContext = {}): GamingPartTier {
   const base: GamingPartTier = { category: part.category, key: `${part.category}:unknown:${part.id}`, label: `${CATEGORY_LABELS[part.category]} 사양 확인 필요`, evidence: "unknown", notes: [] };
   if (part.category === "cpu") {
-    const model = cpuModelFor(part);
+    const model = cpuGamingModelFor(part);
     if (!model) return base;
     const series = Number(model[0]);
     const cached = /X3D/.test(model);
     const entry = series === 5 && (/^5500|^5300/.test(model) || /G(?:T)?$/.test(model));
     const tier = cached ? series === 9 ? 5 : series === 7 ? 4 : 3 : series === 9 ? 2 : series === 7 ? 2 : entry ? 0 : 1;
-    const single = cpuVideoPerformanceRowFor(part)?.single ?? buildPerformanceReportFor({ cpu: part }).singleCorePercent ?? 0;
-    const generation = series === 9 ? 200 : series === 7 ? 100 : 0;
-    return { ...base, tier, key: `cpu:${model}`, platform: part.specs.socket, label: `Ryzen ${series}000${cached ? " · 3D V-Cache" : /G(?:T)?$/.test(model) ? " · 내장 그래픽" : ""}`, order: tier * 1000 + generation + single, evidence: "project_policy", notes: ["CPU 세대와 3D V-Cache 유무를 비교합니다. 게임 FPS 실측값은 아닙니다.", "같은 CPU 세대·캐시 구성에서는 싱글코어 수치로 비교합니다. 코어가 많아도 게임 성능이 더 높다고 보지 않습니다."] };
+    return { ...base, tier, key: `cpu:${model}`, platform: part.specs.socket, label: /Intel|인텔|코어/i.test(part.name) ? `Intel Core ${model}` : `Ryzen ${series}000${cached ? " / 3D V-Cache" : /G(?:T)?$/.test(model) ? " / 내장 그래픽" : ""}`, order: cpuGamingScoreFor(part), evidence: "project_policy", notes: ["영상의 GPU별 게임 상대 성능과 파생 추천 규칙으로 비교합니다. CPU 수동 변경 순서는 별도로 유지합니다."] };
   }
   if (part.category === "gpu") {
     const index = gpuGamingIndexFor(part);
@@ -133,18 +126,18 @@ export function gamingPartTierFor(part: Part, context: GamingTierContext = {}): 
     const tier = index >= 250 ? 6 : index >= 190 ? 5 : index >= 170 ? 4 : index >= 130 ? 3 : index >= 95 ? 2 : index >= 65 ? 1 : 0;
     const chip = part.name.match(/\b(?:RTX|RX)\s*\d+\s*(?:Ti|XT|XTX|SUPER)?\b/i)?.[0].replace(/\s+/g, "").toUpperCase() ?? part.model ?? part.name;
     const chipLabel = part.name.match(/\b(?:RTX|RX)\s*\d+\s*(?:Ti|XT|XTX|SUPER)?\b/i)?.[0].replace(/\s+/g, " ").trim() ?? part.model ?? part.name;
-    return { ...base, tier, key: `gpu:${chip}:${part.specs.vramGb ?? "?"}`, label: `${chipLabel}${positive(part.specs.vramGb) ? ` · ${part.specs.vramGb}GB` : ""}`, order: index, evidence: verified ? "video_table" : "project_policy", notes: verified ? [] : ["해당 영상에 없는 GPU는 예상 성능으로 비교합니다."] };
+    return { ...base, tier, key: `gpu:${chip}:${part.specs.vramGb ?? "?"}`, label: `${chipLabel}${positive(part.specs.vramGb) ? ` / ${part.specs.vramGb}GB` : ""}`, order: index, evidence: verified ? "video_table" : "project_policy", notes: verified ? [] : ["해당 영상에 없는 GPU는 예상 성능으로 비교합니다."] };
   }
   if (part.category === "motherboard") {
     const index = boardIndexFor(part);
     if (index < 0) return base;
     const evidence = PHASE1_MOTHERBOARD_EVIDENCE[index];
     const tier = index === 0 ? 0 : index === 3 ? 2 : 1;
-    return { ...base, tier, key: `motherboard:${evidence.socket}:${tier}`, platform: evidence.socket, label: `${evidence.socket} · ${["A520", "B550", "B850", "X870E"][index]}`, order: tier, evidence: "project_policy", notes: [`이 견적에서는 CPU를 기본 설정으로 사용하며 TDP ${evidence.conservativeMaxTdpW}W까지 선택합니다.`, "CPU 소켓과 보드 소켓이 같아야 합니다. 전원부 전류(A)를 출력(W)으로 바꾸지 않습니다."] };
+    return { ...base, tier, key: `motherboard:${evidence.socket}:${tier}`, platform: evidence.socket, label: `${evidence.socket} / ${["A520", "B550", "B850", "X870E"][index]}`, order: tier, evidence: "project_policy", notes: [`이 견적에서는 CPU를 기본 설정으로 사용하며 TDP ${evidence.conservativeMaxTdpW}W까지 선택합니다.`, "CPU 소켓과 보드 소켓이 같아야 합니다. 전원부 전류(A)를 출력(W)으로 바꾸지 않습니다."] };
   }
   if (part.category === "cooler") {
     const tier = gamingCoolerTierFor(part);
-    return tier === undefined ? base : { ...base, tier, key: `cooler:${tier}`, label: ["기본 쿨러", "싱글 타워", "듀얼 타워", "3열 수랭"][tier], order: tier, evidence: "catalog_spec", notes: ["쿨러 크기·소켓·장착 키트·라디에이터 장착 위치를 따로 확인합니다."] };
+    return tier === undefined ? base : { ...base, tier, key: `cooler:${tier}`, label: ["기본 쿨러", "싱글 타워", "듀얼 타워", "3열 수랭"][tier], order: tier, evidence: "catalog_spec", notes: ["쿨러 크기/소켓/장착 키트/라디에이터 장착 위치를 따로 확인합니다."] };
   }
   if (part.category === "memory") {
     const capacity = part.specs.capacityGb;
@@ -153,13 +146,13 @@ export function gamingPartTierFor(part: Part, context: GamingTierContext = {}): 
     const total = positive(context.actualMemoryCapacityGb) ? context.actualMemoryCapacityGb : capacity * quantity;
     const tier = total >= 64 ? 3 : total >= 32 ? 2 : total >= 16 ? 1 : 0;
     // DDR5 is a platform characteristic, not permission to outrank a larger DDR4 kit.
-    return { ...base, tier, key: `memory:${part.specs.memoryType}:${total}:${part.specs.speedMhz ?? "?"}`, platform: part.specs.memoryType, label: `${total}GB ${part.specs.memoryType}`, order: total, evidence: "catalog_spec", notes: (part.specs.speedMhz ?? 0) >= 8000 ? ["DDR5-8000은 오버클럭 프로파일입니다. CPU·보드·DIMM 구성의 실제 8000MT/s 동작을 보장하지 않습니다."] : [] };
+    return { ...base, tier, key: `memory:${part.specs.memoryType}:${total}:${part.specs.speedMhz ?? "?"}`, platform: part.specs.memoryType, label: `${total}GB ${part.specs.memoryType}`, order: total, evidence: "catalog_spec", notes: (part.specs.speedMhz ?? 0) >= 8000 ? ["DDR5-8000은 오버클럭 프로파일입니다. CPU/보드/DIMM 구성의 실제 8000MT/s 동작을 보장하지 않습니다."] : [] };
   }
   if (part.category === "psu") {
     const watts = part.specs.wattageW;
     if (!positive(watts)) return base;
     const tier = watts <= 500 ? 0 : watts <= 650 ? 1 : watts <= 850 ? 2 : watts <= 1000 ? 3 : 4;
-    return { ...base, tier, key: `psu:${watts}`, label: `${watts}W`, order: watts, evidence: "catalog_spec", notes: ["용량 단계이며 제품 품질 등급이 아닙니다. GPU 전원 커넥터·독립 케이블·케이스 장착 길이를 따로 확인합니다."] };
+    return { ...base, tier, key: `psu:${watts}`, label: `${watts}W`, order: watts, evidence: "catalog_spec", notes: ["용량 단계이며 제품 품질 등급이 아닙니다. GPU 전원 커넥터/독립 케이블/케이스 장착 길이를 따로 확인합니다."] };
   }
   if (part.category === "ssd" || part.category === "hdd") {
     const capacity = part.specs.capacityGb;
@@ -172,7 +165,7 @@ export function gamingPartTierFor(part: Part, context: GamingTierContext = {}): 
     const length = part.specs.maxGpuLengthMm;
     if (!positive(length)) return base;
     const tier = length <= 300 ? 0 : length <= 350 ? 1 : 2;
-    return { ...base, tier, key: `case:${length}:${part.specs.maxCoolerHeightMm ?? "?"}:${part.specs.radiatorSizesMm?.join(",") ?? "?"}`, label: `GPU ${length}mm까지`, order: length, evidence: "catalog_spec", notes: ["비싼 케이스가 게임 성능을 높이지 않습니다. 보드 크기·GPU 두께·전원 케이블 공간은 따로 확인합니다."] };
+    return { ...base, tier, key: `case:${length}:${part.specs.maxCoolerHeightMm ?? "?"}:${part.specs.radiatorSizesMm?.join(",") ?? "?"}`, label: `GPU ${length}mm까지`, order: length, evidence: "catalog_spec", notes: ["비싼 케이스가 게임 성능을 높이지 않습니다. 보드 크기/GPU 두께/전원 케이블 공간은 따로 확인합니다."] };
   }
   return base;
 }
@@ -220,7 +213,7 @@ export function gamingPartSuitabilityFor(part: Part, context: GamingTierContext)
   } else if (part.category === "memory") {
     const quantity = positive(context.memoryQuantity) ? context.memoryQuantity : 1;
     const capacity = positive(context.actualMemoryCapacityGb) ? context.actualMemoryCapacityGb : positive(part.specs.capacityGb) ? part.specs.capacityGb * quantity : undefined;
-    check("memory-generation", part.specs.memoryType && requirements.memory.memoryType ? part.specs.memoryType === requirements.memory.memoryType : undefined, "CPU·보드의 DDR 세대와 같아야 합니다.");
+    check("memory-generation", part.specs.memoryType && requirements.memory.memoryType ? part.specs.memoryType === requirements.memory.memoryType : undefined, "CPU/보드의 DDR 세대와 같아야 합니다.");
     atLeast("memory-minimum", capacity, requirements.memory.minimumCapacityGb, `최소 RAM ${requirements.memory.minimumCapacityGb}GB입니다.`);
     const moduleCount = part.specs.memoryModuleCountPerKit;
     const totalModules = positive(context.actualMemoryModuleCount) ? context.actualMemoryModuleCount : positive(moduleCount) ? moduleCount * quantity : undefined;
@@ -228,12 +221,12 @@ export function gamingPartSuitabilityFor(part: Part, context: GamingTierContext)
     check("memory-slot-count", positive(totalModules) && positive(slots) ? totalModules <= slots : undefined, "키트 수와 키트당 DIMM 수가 실제 보드 슬롯 이내여야 합니다.");
     if (context.motherboard) check("memory-max-capacity", positive(capacity) && positive(context.motherboard.specs.maxMemoryGb) ? capacity <= context.motherboard.specs.maxMemoryGb : undefined, "보드 최대 메모리 용량 이내여야 합니다.");
     if (capacity !== undefined) appropriate = capacity < requirements.memory.appropriateCapacityGb ? "below" : capacity > requirements.memory.appropriateCapacityGb ? "excessive" : "met";
-    if ((part.specs.speedMhz ?? 0) >= 8000) check("memory-oc-validation", undefined, "DDR5-8000 프로파일의 CPU·보드 QVL·실제 DIMM 구성 안정성을 추가 확인해야 합니다.");
+    if ((part.specs.speedMhz ?? 0) >= 8000) check("memory-oc-validation", undefined, "DDR5-8000 프로파일의 CPU/보드 QVL/실제 DIMM 구성 안정성을 추가 확인해야 합니다.");
   } else if (part.category === "ssd" || part.category === "hdd") {
     const minimumCapacityGb = part.category === "ssd" ? SSD_CAPACITY_STEPS[0] : HDD_CAPACITY_STEPS[0];
     atLeast(`${part.category}-capacity`, part.specs.capacityGb, minimumCapacityGb, `저장장치 1개당 최소 ${minimumCapacityGb}GB입니다. 연결 방식과 슬롯은 호환 검사에서 확인합니다.`);
   } else if (part.category === "psu") {
-    atLeast("psu-wattage", part.specs.wattageW, requirements.psu.minimumWattageW, "GPU 권장 파워와 CPU·GPU 전력 예산 중 더 큰 값이 최소입니다.");
+    atLeast("psu-wattage", part.specs.wattageW, requirements.psu.minimumWattageW, "GPU 권장 파워와 CPU/GPU 전력 예산 중 더 큰 값이 최소입니다.");
     if (context.gpu) {
       const options = context.gpu.specs.pciePowerOptions;
       const allOptions = options ? [...options, ...(context.gpu.specs.pciePowerAdapterOptions ?? [])] : undefined;
@@ -252,7 +245,7 @@ export function gamingPartSuitabilityFor(part: Part, context: GamingTierContext)
     if (context.gpu) {
       atLeast("case-gpu-length", part.specs.maxGpuLengthMm, context.gpu.specs.lengthMm, "GPU 본체 길이가 실제 케이스 장착 공간 이내여야 합니다.");
       check("case-gpu-profile", part.specs.lowProfileOnly === true ? context.gpu.specs.lowProfileBracket : true, "LP 전용 케이스는 LP 브래킷이 확인된 GPU만 허용합니다.");
-      if ((context.gpu.specs.thicknessMm ?? 0) > 55 || (context.gpu.specs.gpuSlotOccupancy ?? 0) > 2) check("case-gpu-thickness-clearance", undefined, "두꺼운 GPU의 실제 점유 슬롯과 하단 보드·케이스 간섭은 물리 장착 근거를 추가 확인해야 합니다.");
+      if ((context.gpu.specs.thicknessMm ?? 0) > 55 || (context.gpu.specs.gpuSlotOccupancy ?? 0) > 2) check("case-gpu-thickness-clearance", undefined, "두꺼운 GPU의 실제 점유 슬롯과 하단 보드/케이스 간섭은 물리 장착 근거를 추가 확인해야 합니다.");
       const bend = context.gpu.specs.gpuCableBendClearanceMm;
       const width = context.gpu.specs.widthMm;
       const side = part.specs.caseSidePanelClearanceMm;
@@ -263,7 +256,7 @@ export function gamingPartSuitabilityFor(part: Part, context: GamingTierContext)
       const radiator = context.cooler.specs.radiatorSizeMm;
       const supports = part.specs.radiatorSupports;
       const sizes = part.specs.radiatorSizesMm;
-      check("case-radiator-mount", positive(radiator) && (supports || sizes) ? supports?.some((support) => (!context.cooler?.specs.radiatorPosition || support.position === context.cooler.specs.radiatorPosition) && support.sizesMm.includes(radiator)) ?? sizes!.includes(radiator) : undefined, "지정 위치에 해당 길이 라디에이터가 장착되어야 합니다. RAM·보드·GPU 간섭은 별도 호환 검사로 확인합니다.");
+      check("case-radiator-mount", positive(radiator) && (supports || sizes) ? supports?.some((support) => (!context.cooler?.specs.radiatorPosition || support.position === context.cooler.specs.radiatorPosition) && support.sizesMm.includes(radiator)) ?? sizes!.includes(radiator) : undefined, "지정 위치에 해당 길이 라디에이터가 장착되어야 합니다. RAM/보드/GPU 간섭은 별도 호환 검사로 확인합니다.");
     }
     if (context.psu) {
       atLeast("case-psu-length", part.specs.maxPsuLengthMm, context.psu.specs.psuDepthMm, "파워 본체와 케이블을 넣을 공간을 확인합니다.");
@@ -288,79 +281,122 @@ export function gamingTierAssessmentFor(parts: Partial<Record<PartCategory, Part
   return { policyVersion: GAMING_PART_TIER_POLICY_VERSION, requirements: gamingSupportRequirementsFor(context), categories };
 }
 
-/** Meaningful capacity/role ordering for manual ±; prices never define performance. */
+/** Manual steps are stable product identities, independent of benchmark/price rank. */
+export const GAMING_CPU_MANUAL_STEPS = ["5500GT", "5600", "7500F", "7600", "9600", "9600X", "9700X", "7500X3D", "7700X3D", "7800X3D", "9800X3D", "9850X3D", "9900X3D", "9950X3D"] as const;
+export const GAMING_INTEL_CPU_MANUAL_STEPS = ["12100F", "14100F", "13400F", "14400F", "14600KF", "250KF", "265K", "265KF"] as const;
+export const GAMING_NVIDIA_MANUAL_STEPS = ["RTX3050", "RTX5050", "RTX5060", "RTX5060TI", "RTX5070", "RTX5070TI", "RTX5080", "RTX5090"] as const;
+export const GAMING_RADEON_MANUAL_STEPS = ["RX580", "RX9060", "RX9060XT", "RX9070", "RX9070XT"] as const;
+const MEMORY_CAPACITY_STEPS = [16, 32, 64, 128] as const;
+const PSU_WATTAGE_STEPS = [400, 450, 500, 550, 600, 650, 700, 750, 800, 850, 900, 1000, 1200, 1300, 1500, 1600] as const;
+
+function gpuManualModelFor(part: Part): string | undefined {
+  return `${part.name} ${part.model ?? ""}`.match(/\b(?:RTX|RX)\s*\d+\s*(?:TI|XTX|XT|SUPER)?\b/i)?.[0].replace(/\s+/g, "").toUpperCase();
+}
+
+/** The next policy step must exist and fit; filtering must never jump over it. */
 export function gamingPartTierAdjacencyFor(parts: readonly Part[], currentId: string, context: GamingTierContext = {}): GamingPartTierAdjacency {
   const current = parts.find((part) => part.id === currentId);
   if (!current) return {};
-  const currentTier = gamingPartTierFor(current, context);
-  if (currentTier.order === undefined) return {};
+  const result: GamingPartTierAdjacency = {};
+  const available = parts.filter((part) => part.category === current.category && positive(part.priceWon) && !part.priceUnavailableAt);
+  const choose = (candidates: Part[], direction: "up" | "down", label: string) => {
+    const fitting = candidates.filter((part) => !["motherboard", "cooler", "psu", "case"].includes(part.category) || gamingPartSuitabilityFor(part, context).minimum !== "unmet");
+    const target = fitting.sort((a,b) => (a.priceWon ?? Infinity) - (b.priceWon ?? Infinity) || a.id.localeCompare(b.id))[0];
+    if (!target) result[`${direction}UnavailableReason`] = candidates.length ? `${label} 단계가 현재 구성의 필수 조건을 충족하지 않습니다.` : `${label} 단계의 판매 가능한 부품이 없습니다.`;
+    else result[`${direction}Id`] = target.id;
+    return target;
+  };
+  const visit = <T extends string | number>(steps: readonly T[], key: T, action: (next: T, direction: "up" | "down") => void) => {
+    for (const direction of ["up", "down"] as const) {
+      // String ladders use their declared positions, never lexicographic comparison.
+      const index = steps.indexOf(key);
+      const target = typeof key === "string"
+        ? index >= 0 ? steps[index + (direction === "up" ? 1 : -1)] : undefined
+        : (direction === "up" ? [...steps] : [...steps].reverse()).find((step) => direction === "up" ? step > key : step < key);
+      if (target !== undefined) action(target, direction);
+    }
+  };
+  if (current.category === "cpu" || current.category === "gpu") {
+    const key = current.category === "cpu" ? cpuGamingModelFor(current) : gpuManualModelFor(current);
+    const steps: readonly string[] = current.category === "cpu" ? /Intel|인텔|코어/i.test(current.name) ? GAMING_INTEL_CPU_MANUAL_STEPS : GAMING_CPU_MANUAL_STEPS : key?.startsWith("RX") ? GAMING_RADEON_MANUAL_STEPS : GAMING_NVIDIA_MANUAL_STEPS;
+    if (!key || !steps.includes(key)) return { upUnavailableReason: "수동 단계표에 없는 모델입니다. 부품을 직접 선택해 주세요.", downUnavailableReason: "수동 단계표에 없는 모델입니다. 부품을 직접 선택해 주세요." };
+    visit(steps, key, (next, direction) => {
+      let candidates = available.filter((part) => (current.category === "cpu" ? cpuGamingModelFor(part) : gpuManualModelFor(part)) === next);
+      // VRAM variants share one model step. Retain the current VRAM capacity when
+      // that model offers it; a lower-VRAM variant cannot masquerade as an upgrade.
+      if (current.category === "gpu" && positive(current.specs.vramGb)) {
+        const sameCapacity = candidates.filter((part) => part.specs.vramGb === current.specs.vramGb);
+        if (sameCapacity.length) candidates = sameCapacity;
+      }
+      choose(candidates, direction, next);
+    });
+    return result;
+  }
   if ((current.category === "ssd" || current.category === "hdd") && positive(current.specs.capacityGb)) {
     const category = current.category;
     const steps = category === "ssd" ? SSD_CAPACITY_STEPS : HDD_CAPACITY_STEPS;
-    const currentStep = storageStepFor(current.specs.capacityGb, steps) ?? current.specs.capacityGb;
-    const candidates = parts.filter((part) => part.category === category && positive(part.specs.capacityGb)).map((part) => ({ part, step: storageStepFor(part.specs.capacityGb!, steps) })).filter((entry) => entry.step !== undefined && entry.step !== currentStep);
-    const up = candidates.filter((entry) => entry.step! > currentStep).sort((a, b) => a.step! - b.step! || (a.part.priceWon ?? Infinity) - (b.part.priceWon ?? Infinity))[0];
-    const down = candidates.filter((entry) => entry.step! < currentStep).sort((a, b) => b.step! - a.step! || (a.part.priceWon ?? Infinity) - (b.part.priceWon ?? Infinity))[0];
-    return category === "ssd"
-      ? { ...(up ? { upId: up.part.id, upStorageCapacityGb: up.step } : {}), ...(down ? { downId: down.part.id, downStorageCapacityGb: down.step } : {}) }
-      : { ...(up ? { upId: up.part.id, upHddCapacityGb: up.step } : {}), ...(down ? { downId: down.part.id, downHddCapacityGb: down.step } : {}) };
+    const key = storageStepFor(current.specs.capacityGb, steps) ?? current.specs.capacityGb;
+    result.currentCapacityGb = current.specs.capacityGb;
+    visit(steps, key, (next, direction) => {
+      let candidates = available.filter((part) => storageStepFor(part.specs.capacityGb ?? 0, steps) === next);
+      if (category === "ssd") {
+        const fixed = candidates.filter(gamingSsdFamilyAllowed);
+        candidates = fixed.length ? fixed : candidates.filter(gamingFallbackSsdAllowed);
+      }
+      if (choose(candidates, direction, `${next >= 1000 ? `${next / 1000}TB` : `${next}GB`} ${category.toUpperCase()}`)) {
+        if (category === "ssd") result[`${direction}StorageCapacityGb`] = next;
+        else result[`${direction}HddCapacityGb`] = next;
+      }
+    });
+    return result;
   }
   if (current.category === "memory" && positive(current.specs.capacityGb)) {
-    const currentQuantity = positive(context.memoryQuantity) ? context.memoryQuantity : 1;
-    const currentCapacity = current.specs.capacityGb * currentQuantity;
-    const steps = [16, 32, 64, 128];
-    const upCapacity = steps.find((capacity) => capacity > currentCapacity);
-    const downCapacity = [...steps].reverse().find((capacity) => capacity < currentCapacity);
-    const candidateFor = (capacity: number | undefined, direction: "up" | "down") => {
-      if (capacity === undefined) return undefined;
-      return parts.filter((part) => part.category === "memory" && part.specs.memoryType === current.specs.memoryType && positive(part.specs.capacityGb)).map((part) => {
-        const quantity = Math.max(1, Math.ceil(capacity / part.specs.capacityGb!));
-        const totalCapacity = part.specs.capacityGb! * quantity;
-        const totalPrice = (part.priceWon ?? Infinity) * quantity;
-        const moduleCount = part.specs.memoryModuleCountPerKit;
-        const maxSlots = context.motherboard?.specs.memorySlots;
-        const maxCapacity = context.motherboard?.specs.maxMemoryGb;
-        const fitsSlots = !positive(moduleCount) || !positive(maxSlots) || moduleCount * quantity <= maxSlots;
-        const fitsCapacity = !positive(maxCapacity) || totalCapacity <= maxCapacity;
-        return { part, quantity, totalCapacity, totalPrice, fitsSlots, fitsCapacity };
-      }).filter((entry) => entry.fitsSlots && entry.fitsCapacity && (direction === "up" ? entry.totalCapacity > currentCapacity : entry.totalCapacity < currentCapacity && entry.totalPrice <= (current.priceWon ?? 0) * currentQuantity))
-        .sort((a, b) => a.totalCapacity - b.totalCapacity || a.totalPrice - b.totalPrice)[0];
-    };
-    const up = candidateFor(upCapacity, "up");
-    const down = candidateFor(downCapacity, "down");
-    return { ...(up ? { upId: up.part.id, upMemoryCapacityGb: up.totalCapacity } : {}), ...(down ? { downId: down.part.id, downMemoryCapacityGb: down.totalCapacity } : {}) };
+    const currentCapacity = context.actualMemoryCapacityGb ?? current.specs.capacityGb * (positive(context.memoryQuantity) ? context.memoryQuantity : 1);
+    result.currentCapacityGb = currentCapacity;
+    visit(MEMORY_CAPACITY_STEPS, currentCapacity, (next, direction) => {
+      const candidates = available.filter((part) => part.specs.memoryType === current.specs.memoryType && positive(part.specs.capacityGb)).map((part) => {
+        const quantity = next / part.specs.capacityGb!;
+        return { part, quantity, price: part.priceWon! * quantity };
+      }).filter(({ part, quantity }) => Number.isInteger(quantity) && quantity >= 1
+        && (!positive(part.specs.memoryModuleCountPerKit) || !positive(context.motherboard?.specs.memorySlots) || part.specs.memoryModuleCountPerKit * quantity <= context.motherboard.specs.memorySlots)
+        && (!positive(context.motherboard?.specs.maxMemoryGb) || next <= context.motherboard.specs.maxMemoryGb));
+      const target = candidates.sort((a,b) => a.price - b.price || a.part.id.localeCompare(b.part.id))[0];
+      if (target) { result[`${direction}Id`] = target.part.id; result[`${direction}MemoryCapacityGb`] = next; }
+      else result[`${direction}UnavailableReason`] = `RAM ${next}GB 단계의 판매 가능한 구성 또는 보드 슬롯이 없습니다.`;
+    });
+    return result;
   }
-  const representatives = new Map<string, { part: Part; tier: GamingPartTier }>();
-  for (const part of parts) {
-    if (part.category !== current.category) continue;
-    const tier = gamingPartTierFor(part, context);
-    if (tier.order === undefined) continue;
-    if (["motherboard", "cooler", "psu", "case"].includes(part.category) && gamingPartSuitabilityFor(part, context).minimum === "unmet") continue;
-    // Explicit platform rebuilding belongs to CPU/memory actions. Board ± stays on its socket.
-    if (part.category === "motherboard" && tier.platform !== currentTier.platform) continue;
-    const previous = representatives.get(tier.key);
-    if (!previous || (part.priceWon ?? Infinity) < (previous.part.priceWon ?? Infinity)) representatives.set(tier.key, { part, tier });
+  if (current.category === "cooler") {
+    const key = gamingCoolerTierFor(current);
+    if (key === undefined) return {};
+    visit([0,1,2,3], key, (next, direction) => {
+      if (next === 0) {
+        if (gamingCoolerTierFor(undefined, context.cpu) === 0) result.downUseIncludedCooler = true;
+        else result.downUnavailableReason = "이 CPU 패키지에는 사용할 수 있는 기본 쿨러가 없습니다.";
+      } else choose(available.filter((part) => gamingCoolerTierFor(part) === next), direction, ["기본 쿨러", "싱글 타워", "듀얼 타워", "3열 수랭"][next]);
+    });
+    return result;
   }
-  const candidates = [...representatives.values()].filter((entry) => entry.tier.order !== currentTier.order);
-  const up = candidates.filter((entry) => entry.tier.order! > currentTier.order!).sort((a, b) => a.tier.order! - b.tier.order! || (a.part.priceWon ?? Infinity) - (b.part.priceWon ?? Infinity))[0]?.part;
-  // A RAM downgrade must not silently buy a more expensive CPU/DDR platform.
-  const down = candidates.filter((entry) => entry.tier.order! < currentTier.order! && (current.category !== "memory" || entry.tier.platform === currentTier.platform && (entry.part.priceWon ?? Infinity) <= (current.priceWon ?? 0))).sort((a, b) => b.tier.order! - a.tier.order! || (a.part.priceWon ?? Infinity) - (b.part.priceWon ?? Infinity))[0]?.part;
-  const promisedCpu = current.category === "cpu" && cpuModelFor(current) === "5600" ? parts.filter((part) => part.category === "cpu" && cpuModelFor(part) === "7500F").sort((a, b) => (a.priceWon ?? Infinity) - (b.priceWon ?? Infinity))[0] : undefined;
-  return { ...((promisedCpu ?? up) ? { upId: (promisedCpu ?? up)!.id } : {}), ...(down ? { downId: down.id } : {}) };
+  if (current.category === "motherboard") {
+    const index = boardIndexFor(current);
+    const steps = current.specs.socket === "AM4" ? [0,1] : current.specs.socket === "AM5" ? [2,3] : [];
+    if (index >= 0) visit(steps, index, (next, direction) => choose(available.filter((part) => boardIndexFor(part) === next), direction, ["A520", "B550", "B850", "X870E"][next]));
+    else return { upUnavailableReason: "이 CPU/RAM 플랫폼에 등록한 보드 단계가 없습니다. 부품을 직접 선택해 주세요.", downUnavailableReason: "이 CPU/RAM 플랫폼에 등록한 보드 단계가 없습니다. 부품을 직접 선택해 주세요." };
+    return result;
+  }
+  if (current.category === "psu" && positive(current.specs.wattageW)) {
+    visit(PSU_WATTAGE_STEPS, current.specs.wattageW, (next, direction) => choose(available.filter((part) => part.specs.wattageW === next), direction, `${next}W 파워`));
+    return result;
+  }
+  if (current.category === "case" && positive(current.specs.maxGpuLengthMm)) {
+    // Case steps are physical space, never price or an invented game FPS tier.
+    // Build the space ladder before fit filtering so an incompatible intermediate
+    // size disables the action instead of silently selecting a much larger case.
+    const steps = [...new Set(parts.filter((part) => part.category === "case" && positive(part.specs.maxGpuLengthMm)).map((part) => part.specs.maxGpuLengthMm!))].sort((a,b) => a-b);
+    visit(steps, current.specs.maxGpuLengthMm, (next,direction) => choose(available.filter((part) => part.specs.maxGpuLengthMm === next), direction, `GPU 공간 ${next}mm 케이스`));
+  }
+  return result;
 }
 
 /** Release the whole dependency chain so adjusted pins cannot retain an old platform. */
-export function gamingAdjustmentDependentCategories(category: PartCategory): PartCategory[] {
-  const edges: Partial<Record<PartCategory, PartCategory[]>> = {
-    cpu: ["motherboard", "memory", "cooler", "psu", "case"], gpu: ["psu", "case"],
-    motherboard: ["cpu", "memory", "cooler", "case"], memory: ["motherboard"], cooler: ["case"], case: ["cooler"], psu: ["case"], hdd: ["case"]
-  };
-  const categories = new Set<PartCategory>();
-  const visit = (key: PartCategory) => {
-    if (categories.has(key)) return;
-    categories.add(key);
-    for (const next of edges[key] ?? []) visit(next);
-  };
-  visit(category);
-  return [...categories];
-}
+export { gamingAdjustmentDependentCategories } from "./gaming-adjustment-dependencies";

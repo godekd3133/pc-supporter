@@ -23,11 +23,11 @@ export const CATALOG_PRICE_EVIDENCE_CHECK_LABELS: Record<CatalogPriceEvidence, s
 };
 
 export const CATALOG_PRICE_EVIDENCE_DESCRIPTIONS: Record<CatalogPriceEvidence, string> = {
-  live: "최근 상품 페이지에서 확인한 금액입니다. 판매처·재고·배송·옵션에 따라 결제 금액이 달라질 수 있으니 상품 페이지도 함께 확인해 주세요.",
-  manual: "직접 입력한 금액입니다. 판매 페이지의 금액·재고와 다를 수 있으니 구매 전에 다시 확인해 주세요.",
-  reference: "미리 등록한 금액입니다. 실제 판매가·재고와 다를 수 있어요.",
-  recorded: "확인 시각이 없거나 오래된 금액입니다. 구매 전에 상품 페이지의 금액과 사양을 다시 확인해 주세요.",
-  unknown: "가격 정보가 없어 합계와 예산 계산에 포함하지 않아요."
+  live: "최근 상품 페이지에서 확인한 금액입니다.",
+  manual: "구매 전 상품 페이지에서 가격을 확인해 주세요.",
+  reference: "구매 전 상품 페이지에서 가격을 확인해 주세요.",
+  recorded: "구매 전 상품 페이지에서 가격을 확인해 주세요.",
+  unknown: "가격 정보가 없어 합계에 포함하지 않아요."
 };
 
 export type CatalogPriceEvidenceInput = {

@@ -80,7 +80,7 @@ export function savedBuildCurrentRecheckExportFor(payload: SavedBuildVersionShar
       ...(entry.savedCheck ? { savedCheck: savedCheckForPublicExport(entry.savedCheck) } : {}),
       current: currentCheckForPublicExport(entry)
     })),
-    dataBoundary: "현재 부품 정보를 바탕으로 다시 확인한 결과입니다. 저장 견적은 바뀌지 않습니다. 가격·재고와 실제 장착 여부는 구매 전에 확인해 주세요. 게임 성능은 게임과 설정에 따라 달라집니다."
+    dataBoundary: "현재 부품 정보를 바탕으로 다시 확인한 결과입니다. 저장 견적은 바뀌지 않습니다. 가격/재고와 실제 장착 여부는 구매 전에 확인해 주세요. 게임 성능은 게임과 설정에 따라 달라집니다."
   };
 }
 
@@ -96,7 +96,7 @@ function findingDeltaText(entry: { savedCheck?: { findings?: Array<{ key: string
     const current = currentByKey.get(key);
     return current !== undefined && previous !== undefined && (current.severity !== previous.severity || current.title !== previous.title);
   });
-  return `저장본과 비교: 해결 ${resolved.length} · 새로 생김 ${added.length} · 내용 변경 ${changed.length}`;
+  return `저장본과 비교: 해결 ${resolved.length} / 새로 생김 ${added.length} / 내용 변경 ${changed.length}`;
 }
 
 export function savedBuildCurrentRecheckTextFor(payload: SavedBuildVersionSharePayload, entries: SavedBuildVersionCurrentRecheckEntry[], generatedAt = new Date().toISOString()) {
@@ -109,11 +109,11 @@ export function savedBuildCurrentRecheckTextFor(payload: SavedBuildVersionShareP
     "",
     ...exported.entries.flatMap((entry) => [
       `[${entry.label} ${entry.name}]`,
-      `현재 결과: ${entry.current.status === "compatible" ? "호환 가능" : entry.current.status === "needs_review" ? "확인 필요" : "호환 불가"} · 호환 불가 ${entry.current.blockerCount} · 주의 ${entry.current.warningCount} · 확인 필요 ${entry.current.unknownCount}`,
-      `가격: ${entry.current.priceComplete ? `${entry.current.totalPriceWon.toLocaleString("ko-KR")}원` : "-"}${entry.savedCheck?.priceComplete && entry.current.priceComplete ? ` · 저장본 대비 ${entry.current.totalPriceWon - entry.savedCheck.totalPriceWon > 0 ? "+" : ""}${(entry.current.totalPriceWon - entry.savedCheck.totalPriceWon).toLocaleString("ko-KR")}원` : ""}`,
-      `전력·냉각: ${entry.current.resources.power} · ${entry.current.resources.cooling}`,
+      `현재 결과: ${entry.current.status === "compatible" ? "호환 가능" : entry.current.status === "needs_review" ? "확인 필요" : "호환 불가"} / 호환 불가 ${entry.current.blockerCount} / 주의 ${entry.current.warningCount} / 확인 필요 ${entry.current.unknownCount}`,
+      `가격: ${entry.current.priceComplete ? `${entry.current.totalPriceWon.toLocaleString("ko-KR")}원` : "-"}${entry.savedCheck?.priceComplete && entry.current.priceComplete ? ` / 저장본 대비 ${entry.current.totalPriceWon - entry.savedCheck.totalPriceWon > 0 ? "+" : ""}${(entry.current.totalPriceWon - entry.savedCheck.totalPriceWon).toLocaleString("ko-KR")}원` : ""}`,
+      `전력/냉각: ${entry.current.resources.power} / ${entry.current.resources.cooling}`,
       findingDeltaText(entry),
-      `부품 정보 기준일: ${new Date(entry.current.catalogSnapshotAt).toLocaleString("ko-KR")} · 계산 버전 ${entry.current.engineVersion} · 확인 시각 ${new Date(entry.current.checkedAt).toLocaleString("ko-KR")}`,
+      `부품 정보 기준일: ${new Date(entry.current.catalogSnapshotAt).toLocaleString("ko-KR")} / 계산 버전 ${entry.current.engineVersion} / 확인 시각 ${new Date(entry.current.checkedAt).toLocaleString("ko-KR")}`,
       ""
     ]),
     "[참고]",

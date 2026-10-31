@@ -8,7 +8,7 @@ import {
 
 // 견적서 텍스트 라인 파싱 + 근사 매칭 어댑터 (Phase 3 진입 조건).
 // 커널(catalogSeedMappingCandidatesFor)은 seed↔danawa 매핑 검수용으로 엄격하게 유지하고,
-// 견적 입력 경로는 유통사 접미사 정규화·근사 이름·카테고리별 모델 토큰 규칙을 얇게 얹는다.
+// 견적 입력 경로는 유통사 접미사 정규화/근사 이름/카테고리별 모델 토큰 규칙을 얇게 얹는다.
 // 안전 원칙: "모르면 남기는" — 근사 매칭은 review까지만 허용하고, high는 유통사 제거 후
 // 이름이 완전 일치(compact-equal)하는 경우에만 부여한다.
 
@@ -58,7 +58,7 @@ export interface ParsedQuoteLine {
   priceWon?: number;
 }
 
-// 한국어 변형 표기를 영문 토큰으로 통일해 이름·모델 비교가 같은 축에서 이뤄지게 한다.
+// 한국어 변형 표기를 영문 토큰으로 통일해 이름/모델 비교가 같은 축에서 이뤄지게 한다.
 const QUOTE_VARIANT_SPELLINGS: Array<[RegExp, string]> = [
   [/슈퍼/g, "super"],
   [/울트라/g, "ultra"]
@@ -94,7 +94,7 @@ function extractPriceWon(text: string) {
 }
 
 function productModelToken(name: string) {
-  // 용량·인터페이스 토큰을 모델로 오선택하지 않도록 문자+숫자 혼합 토큰을 우선한다.
+  // 용량/인터페이스 토큰을 모델로 오선택하지 않도록 문자+숫자 혼합 토큰을 우선한다.
   const tokens = name
     .normalize("NFKC")
     .toLocaleLowerCase("ko-KR")
@@ -205,7 +205,7 @@ export function parseQuoteLine(raw: string): ParsedQuoteLine {
 // SKU 단계(변형) 토큰: 숫자로 끝나는 needle 뒤에 붙으면 다른 제품으로 판정한다.
 const NEAR_VARIANT_SUFFIXES = ["super", "xtx", "xt", "ti", "ks", "k", "f", "g", "e", "a", "x"];
 
-// 앵커에서 제외하는 범주어·마케팅어·스펙 단어. 숫자 포함 토큰은 별도 규칙으로 전부 제외한다.
+// 앵커에서 제외하는 범주어/마케팅어/스펙 단어. 숫자 포함 토큰은 별도 규칙으로 전부 제외한다.
 const QUOTE_ANCHOR_STOP_TOKENS = new Set([
   "ssd", "hdd", "ram", "cpu", "gpu", "vga", "psu", "oc", "rgb", "argb", "pwm", "wifi", "atx",
   "nvme", "sata", "pcie", "m2", "gddr", "xmp", "expo", "plus", "pro", "max", "ultra", "super",
@@ -219,7 +219,7 @@ const QUOTE_ANCHOR_STOP_TOKENS = new Set([
   "intel", "core", "ryzen", "rtx", "gtx", "rx", "arc"
 ]);
 
-// 세대·규격 토큰: 양쪽 모두에 있으면서 집합이 다르면 다른 제품으로 본다.
+// 세대/규격 토큰: 양쪽 모두에 있으면서 집합이 다르면 다른 제품으로 본다.
 const VERSION_TOKEN_PATTERN = /^(ddr\d|pcie\d|gen\d|cl\d|wifi\d[a-z0-9]*|gddr\dx?|atx\d(?:\.\d+)?|d\d|x\d)$/;
 
 // 제조사 토큰: 브랜드만 같은 제품(MAG 박격포 ↔ PRO 라인업 같은 다른 라인)은 붙지 않는다.

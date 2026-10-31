@@ -1,7 +1,7 @@
 // 인스턴스 간 이벤트 버스 — Postgres LISTEN/NOTIFY 기반.
 //
 // 대규모 배포에서 여러 API/워커 인스턴스가 같은 DB를 공유할 때, in-process
-// 상태(인메모리 캐시·실패 로그)가 인스턴스마다 따로 놀지 않게 한다.
+// 상태(인메모리 캐시/실패 로그)가 인스턴스마다 따로 놀지 않게 한다.
 //
 // 발행 경로는 두 가지다.
 //  - 트랜잭션 내부 발행: 쓰기 트랜잭션 안의 `SELECT pg_notify(...)` — 커밋될
@@ -16,7 +16,7 @@ import { hostname } from "node:os";
 import { randomUUID } from "node:crypto";
 
 // 인스턴스 식별자 — 헬스/메트릭/이벤트 페이로드에 실어 어떤 노드가
-// 응답·발행했는지 운영 화면에서 구분한다.
+// 응답/발행했는지 운영 화면에서 구분한다.
 export const INSTANCE_ID = `${hostname()}-${process.pid}-${randomUUID().slice(0, 8)}`;
 
 export const INSTANCE_EVENTS_CHANNEL = "pc_supporter_instance_events";
@@ -56,7 +56,7 @@ export async function publishInstanceEventTransactional(client: QueryCapableClie
   ]);
 }
 
-// 트랜잭션 밖 독립 발행 — 버스 커넥션이 없으면 조용히 생략한다(테스트·
+// 트랜잭션 밖 독립 발행 — 버스 커넥션이 없으면 조용히 생략한다(테스트/
 // 스크립트 등 구독자가 없는 환경에서 쓰기를 깨지 않기 위해).
 export async function publishInstanceEvent(kind: InstanceEventKind, data?: unknown) {
   const client = listenerClient;

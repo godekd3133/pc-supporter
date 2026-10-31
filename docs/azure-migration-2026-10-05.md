@@ -1,6 +1,6 @@
 # PC Supporter Azure 학생 크레딧 이전
 
-PC Supporter 코드·운영 데이터는 Azure for Students의 전용 VM으로 이전했습니다. 실제 배포 릴리스는 `20261005152751`, 엔진은 `2.60.0`입니다. 기존 공개 주소의 연결 전환과 최종 운영 검사는 아래 실제 결과에 함께 기록합니다. 절차 문서 작성, 설치 검사, 실제 서버 실행과 브라우저 검증은 서로 구분합니다.
+PC Supporter 코드·운영 데이터는 Azure for Students의 전용 VM으로 이전했습니다. 실제 배포 릴리스는 `20261005152751`, 엔진은 `2.60.0`입니다. 실행 소스는 커밋 `3960d1b206ecf6445dac1b5ed869ee1cb3b24255`와 파일 해시로 연결해 검증했습니다. 기존 공개 주소의 연결 전환·VM 복구·재부팅 후 운영 검사를 완료했습니다. 최종 확인 시각은 **2026-10-06 12:52:58 KST**입니다. 아래에 실제 결과와 이전 실패 이력을 함께 기록합니다. 절차 문서 작성, 설치 검사, 실제 서버 실행과 브라우저 검증은 서로 구분합니다.
 
 ## 범위와 비용 경계
 
@@ -84,10 +84,10 @@ bash scripts/lightsail-deploy.sh \
 | 학생 구독 상태·크레딧·만료·유료 전환 없음 | Azure for Students Enabled. 학생 크레딧 원액과 마지막 정산 잔액 USD 100 확인. 순간 사용량이 모두 차감된 실시간 잔액을 뜻하지 않음. spendingLimit On 유지. 만료 2027-10-05 17:50:58 KST. 유료 전환·결제수단 추가 없음. |
 | Azure VM·리전·크기·주소·네트워크 | 전용 RG `pc-supporter-students`, VM `pc-supporter-vm`, Korea Central, Standard_B2ats_v2 2 vCPU / 1GiB(게스트 실제 842MB), Ubuntu 24.04.4 amd64. 공인 IP `20.196.193.112`, `pc-supporter-71697d83-kc.koreacentral.cloudapp.azure.com`. Trusted Launch Secure Boot/vTPM 적용. SSH는 작업자 IP/32, 공개 80·443, 4174·5432는 localhost. 기존 `yio-students` 리소스는 변경하지 않음. |
 | source/target PostgreSQL major·백업·복원 건수 | 원본·대상 PostgreSQL 16. 최종 원본 백업 `/opt/pc-supporter/backups/azure-20261005T142456Z-cutover`. 24개 테이블 모두 최종 백업 건수와 복원 건수 일치. 부품 7,587개·액세서리 4,484개·저장 견적/소유자 상태 0개 확인. schema revision 3, SHA256 `2eac909c9efc45e6cf78cab3171ea86e93b199063cad2e9cf69d4cb7e46e0fd6`. 운영 파일·환경 비밀값도 보존. |
-| 배포 릴리스·소스/웹 SHA256·엔진 버전 | 릴리스 `20261005152751`, 엔진 `2.60.0`. 기준 커밋 `8fecd66f31b54904a54d2bf312e5cc1c03ee8759`에 검증된 작업 트리 수정을 포함. 파일별 SHA는 `public/deployment-info.json`에 기록하며 새 커밋·push 없이 배포함. |
+| 배포 릴리스·소스/웹 SHA256·엔진 버전 | 릴리스 `20261005152751`, 엔진 `2.60.0`. 당시 빌드는 기준 커밋 `8fecd66f31b54904a54d2bf312e5cc1c03ee8759`에 작업 트리 수정을 포함. 이후 Git 실행 소스 커밋 `3960d1b206ecf6445dac1b5ed869ee1cb3b24255`의 13개 파일 해시가 배포 메타데이터와 일치함을 검증. 실제 서버 핵심 API 3파일·웹 index·Node runtime도 로컬 빌드와 일치 확인. 파일별 SHA는 `public/deployment-info.json`에 기록. |
 | DB 권한 smoke·API/worker/Caddy·localhost 수신 | 제한 실행 역할 CRUD 허용, public schema DDL와 schema ledger 쓰기 거부 확인. API·worker·Caddy active, PostgreSQL ready, heartbeat 확인. API 4174·PG 5432 localhost. |
-| 새 HTTPS와 기존 HTTPS bridge 외부 검사 | Azure 직접 HTTPS health 통과. 기존 주소 `https://pc-supporter.3-39-79-1.sslip.io`에서 연결 오류 보완 전 24견적 HTTP 200. PC Supporter Caddy 블록만 Azure HTTPS upstream으로 연결하며 TLS 검증 유지. |
-| 예산별 결과·응답 시간·브라우저 화면 | 연결 오류·CPU 조절 보완 전 운영 24견적 모두 예산 이내·호환 불가 0. 0.872–3.054초. NVIDIA 80만원 759,640원 / 400만원 3,717,090원 / 1,000만원 8,360,550원. AMD 220만원 7500X3D+RX9070XT 2,146,730원. 표와 전체 원 응답은 HTML 보고서와 `artifacts/azure-migration-2026-10-05/final-budget-matrix.json`에 기록. 실제 Azure 새 세션에서 3개 단일 선택 즉시 이동, 국내 신품 벌크 포함 검토, 5500GT·16GB·1TB·500W·759,640원 생성, 성능 도움말 클릭·부품 − / + 표시 확인. 실제 화면 `azure-80-desktop.png`, `azure-80-metrics.png` 보존. |
+| 새 HTTPS와 기존 HTTPS bridge 외부 검사 | Azure 직접 HTTPS health 통과. 복구·재부팅 후 기존 주소와 Azure 직접 주소의 외부 HTTPS 준비 상태 정상. 기존 주소의 복구 후 24견적 모두 HTTP 200. PC Supporter Caddy 블록만 Azure HTTPS upstream으로 연결하며 TLS 검증 유지. |
+| 예산별 결과·응답 시간·브라우저 화면 | 복구 후 운영 24견적 모두 예산 이내·호환 불가 0. 0.175–3.085초. NVIDIA 80만원 759,640원 / 400만원 3,717,090원 / 1,000만원 8,360,550원. AMD 220만원 7500X3D+RX9070XT 2,146,730원. 복구 후 표와 원 응답은 HTML 보고서와 `artifacts/azure-migration-2026-10-05/recovered-budget-matrix.json`에 기록. 초기 전환의24행은 `final-budget-matrix.json`에 보존. 실제 Azure 새 세션에서 3개 단일 선택 즉시 이동, 국내 신품 벌크 포함 검토, 5500GT·16GB·1TB·500W·759,640원 생성, 성능 도움말 클릭·부품 − / + 표시 확인. 실제 화면 `azure-80-desktop.png`, `azure-80-metrics.png` 보존. |
 | 원본 PC Supporter 중지·KBO 유지·rollback 백업 | 원본 PC Supporter API·worker 중지·자동 시작 방지. 기존 KBO·Caddy·DB와 원본 백업 보존. 초기 Azure 복원 DB·runtime 폴더도 보존. 기존 주소 bridge가 남아 있으므로 AWS 의존성 전체 제거로 기록하지 않음. |
 
 bootstrap의 입력·구문 검사와 실제 Ubuntu 설치, DB 복원, 운영 HTTPS 결과는 별개의 검증 항목이다. 로그인·리소스 생성·실제 서버 실행이 남아 있는 상태를 배포 완료로 표현하지 않는다.
@@ -125,4 +125,30 @@ PostgreSQL pool과 대여한 client의 연결 오류 수명 처리를 수정했�
 
 CPU + 조절 요청이 내장그래픽지원 CPU끼리 바뀔 때 외장GPU를 강제로 포함하던 입력을 수정했습니다. 생성기 조절 helper→실제 엔진 통합 검사는5500GT→5600G의 내장그래픽·SSD 유지·호환 불가0건으로 통과했습니다. 릴리스20261005152751의 실제 Azure 브라우저에서 CPU +를 다시 눌러5600G·내장 그래픽·500W·786,730원을 확인했습니다. CPU만 바뀌고 GPU·파워·저장장치는 유지됐습니다.
 
-집중 검사에서 신규 PostgreSQL6개+기존lease2개가 통과했습니다. generator-balance/phase1 gaming31개 중30개가 통과하고 기존10예산GPU 비교 루프가 기본5초 한도에서 시간초과했습니다. fail-closed3개 중2개가 통과하고 기존 API초기실행1개가 시간초과했습니다. 로컬 부하311.57관측과 검사 실패를 함께 남기되 원인이 확정됐다고 해석하지 않습니다. 초기 전체2265개 통과+3개 timeout 재실행 통과와 최종 수정 뒤의 집중 검사를 구분합니다.
+집중 검사에서 신규 PostgreSQL6개+기존lease2개가 통과했습니다. generator-balance/phase1 gaming 첫 실행31개 중30개가 통과하고 기존10예산GPU 비교 루프가 기본5초 한도에서 시간초과했습니다. 이 GPU 루프는 기본5초 설정을 유지한 재실행에서 통과했으며 러너 기록 소요 시간은7.400초입니다. fail-closed 첫 실행3개 중2개는 통과했습니다. 기존 API초기실행 항목은 재실행에서도6.218초에서5초 한도 시간초과로 검증 미완료입니다. 해당 재실행은1개 통과·1개 실패·17개 건너뜀·변환14.66초였습니다(`final-timeout-tests-rerun.log`). 로컬 부하311.57관측과 검사 실패를 함께 남기되 원인이 확정됐다고 해석하지 않습니다. 초기 전체2265개 통과+3개 timeout 재실행 통과와 최종 수정 뒤의 집중 검사를 구분합니다.
+
+## 2026-10-06 VM 무응답과 복구
+
+후속 검사에서 Azure VM agent NotReady, SSH banner timeout, HTTPS 무응답을 확인했습니다. PC Supporter 전용 VM의 재시작·호스트 재배치·전원 중지 작업이2026-10-06 12:24 KST에 완료됐고, 같은 영구 디스크로 다시 부팅했습니다. 12:35 KST의 실제 검사에서 API·worker·Caddy·PostgreSQL active, 엔진2.60.0·PostgreSQL ready, instanceId `pc-supporter-vm-898-6e1df5f6`을 확인했습니다. 새 Azure와 기존 주소의 외부 HTTPS가 회복됐습니다.
+
+기존32GB SSD에 `/swapfile-pc-supporter` 2GiB만 추가했습니다. root:root0600, fstab 등록, 실제 활성화, 재실행의 already-configured 검사를 통과했습니다. 복구 직후 게스트 RAM 총842MB·available360MB, swap2047MiB·사용0MiB였습니다. 메모리 압력은 some avg10 0.04%·full avg10 0.01%였으며 CPU 크레딧364를 확인했습니다. VM 크기·공인IP·도메인·기존 DB와 학생 구독 지출 한도를 유지했고 VM 증설·유료 전환은 하지 않았습니다. 기록은 `recovery-swap-and-kernel.txt`와 `recovery-operation-status.json`에 남깁니다. 확인한 이전 부팅의 커널 기록에는 OOM·kernel lockup에 해당하는 항목이 없었습니다. VM 무응답의 근본 원인은 확정하지 않았습니다.
+
+복구 후 기존 공개 주소로 NVIDIA·AMD 각각12예산의 총24견적을 다시 요청했습니다(`recovered-budget-matrix.json`). 24개 모두HTTP200·예산 이내·호환 불가0건이며 응답은0.175–3.085초였습니다. NVIDIA80만원759,640원(5500GT·내장 그래픽·16GB·1TB·500W), 400만원3,717,090원(9800X3D·RTX5080), 1,000만원8,360,550원(9800X3D·RTX5090), AMD220만원2,146,730원(7500X3D·RX9070XT)을 확인했습니다. 미확인 사양·구매 확인 항목은 원 응답에 유지합니다. 이전24행과 이번 복구 후24행의 검사 시점을 구분합니다. 복구 후400만원 반복 검사 `recovered-performance.json`은 순차10회0.744–2.903초·중앙값0.8065초, p95(10개 표본 올림)2.903초입니다. 동시2회는1.498·1.504초입니다. 12개 모두 같은 합계3,717,090원·예산 이내·호환 불가0건으로 생성했습니다. 이전6.904초p95·동시11.191초 기록과 이번 결과를 구분하며 장기 운영이나 더 큰 동시 사용 규모의 결과로 해석하지 않습니다.
+
+24예산·12반복 요청 이후API/worker NRestarts 각각0, RAM available210MB, swap55/2047MiB, 메모리 압력 some·full avg10·avg60 모두0.00%를 확인했습니다(`recovery-live-source-hashes.txt`). 실제 서버의 웹 index SHA256은 `bab9bc326ac9222b4c1664baf094fa1aee0001620bc7bf576364ea6f57dcb8cf`, Node runtime index는 `de047287c1ffe62b0398b7c72e3974745f11766e0d0949900f38866669eaa093`이며 로컬 빌드와 일치합니다. 실행 소스 커밋3960d1b의13개 메타데이터 파일 해시도 검증했습니다.
+
+운영 helper `scripts/azure-enable-swap.sh`는 정적 입력·경로·호스트 제한 검사30개를 통과했고 실제 Ubuntu 활성화·재실행도 확인했습니다. 기존32GB SSD 내 파일을 사용하므로 별도 Azure 리소스 생성 요금은 추가하지 않았습니다. fstab의 부팅 지속성은 통제된 게스트 재부팅 뒤2026-10-06 12:44:52 KST에 실제 확인했습니다(`recovery-swap-after-reboot.txt`). swap2097148KiB 활성·root:root0600·파일2GiB, API/worker/Caddy/PostgreSQL active·API/worker NRestarts 각각0을 확인했습니다. 직후 연속 두vmstat 표본은 si/so0·CPU steal0이었습니다. 이후 두 공개 HTTPS 주소의 준비 상태도 정상입니다(`recovery-final-health.json`).
+
+복구 후12:47 KST 데이터 검사에서부품7,588개·액세서리4,484개·schema revision3·동일한 스키마SHA를 확인했습니다(`recovered-data.json`). 현재 부품1개가 추가되어7,588개이며 원본 부품ID7,587개는 모두 보존돼 누락0개입니다(`recovered-catalog-id-check.json`). 원본24테이블 복원 건수 일치는 worker 시작 전 확인한 별도 시점의 증거입니다.
+
+복구 후12:49 KST 기존 주소의 소유자 기능 검사도 통과했습니다(`recovered-owner-session-check.json`). 견적 생성201·소유자 조회200·타인 삭제401·위조origin403·테스트 견적 삭제200·로그아웃200, HttpOnly·Secure·SameSite=Lax·host-only cookie를 확인했습니다.
+
+최종 확인은2026-10-06 12:52:58 KST이며 `public/deployment-info.json`에 릴리스·실행 소스 커밋·파일해시·swap 부팅 지속성·24예산·순차10회·동시2회 검사를 기록했습니다. 현재 운영 검사는 완료했습니다. VM 무응답의 근본 원인과 장기 대규모 동시 사용·이 견적 자체의 게임 실측 성능은 이번 증거로 확정하지 않습니다.
+
+복구 후 IP 검사는 직접 Azure와 기존 주소 연결을 같은 실제 사용자로 총2회 집계하며 bridge·위조·loopback 집계가 없음을 다시 확인했습니다(`recovered-proxy-ip.json`). 공개 보고서에는 실제 사용자 IP를 기록하지 않습니다. 원본의 일관된 최종 cutover 백업은 기존 durable 경로 `/opt/pc-supporter/backups/azure-20261005T142456Z-cutover`에 보존돼 있습니다.
+
+## 복구 후 추가 durable 백업
+
+2026-10-06 13:06 KST에 Azure의 새 백업 `/opt/pc-supporter/backups/azure-20261006T040616Z-preflight`가 완료됐습니다. PostgreSQL16.15·schema revision3·전체24개 테이블의 일관된 REPEATABLE READ DB 스냅샷이며 디렉터리·파일 권한은 root 전용0700·0600입니다. 운영 파일·환경 파일은 실행 중인 서버의 preflight 복사본이므로 DB와 함께 쓰기를 멈춘 동시 파일 스냅샷으로 해석하지 않습니다. 기존 원본의 쓰기를 멈춘 cutover 백업은 그대로 보존하고, 이번 Azure 백업은 추가 복구 자료로 보관합니다.
+
+최종 API 실패 처리 검증의 기본 5초 실행은 시간초과했고, CLI 검사 한도만 15초로 지정한 독립 실행에서 1개 통과·2개 건너뜀(6.028초)으로 assertion을 확인했다. DB 연결 불가 때 부품 API는 503, 기록된 응답 시간은 6.8ms였다. 런타임·소스·테스트 설정 파일의 시간 제한은 바꾸지 않았으며 기본 설정 전체 green과 구분한다.

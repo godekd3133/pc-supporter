@@ -36,7 +36,7 @@ function applySupportManufacturerSpecs(part: Part): Part {
       physicalEvidenceSourceUrl: "https://www.darkflash.com/product/ds900",
       physicalEvidenceManufacturerModel: "DS900 ATX / 32861099 black ARGB retail",
       physicalEvidenceUpdatedAt: "2026-10-04T22:17:52.000Z",
-      physicalEvidenceSourceNote: "DS900 공식 표: 434×218×454mm, GPU 425mm, CPU 쿨러 170mm, 상단 라디에이터 240/360mm·측면 240mm, SSD/HDD 2/2. 다나와 해당 DS900 블랙 ARGB의 같은 외형·장착 치수와 2024년 8월 상단 라디에이터 변경 원문을 대조함. DS900M/Air/PRO 사양을 가져오지 않음. 라디에이터 두께·RAM 간섭·GPU 케이블 여유는 미확인."
+      physicalEvidenceSourceNote: "DS900 공식 표: 434×218×454mm, GPU 425mm, CPU 쿨러 170mm, 상단 라디에이터 240/360mm/측면 240mm, SSD/HDD 2/2. 다나와 해당 DS900 블랙 ARGB의 같은 외형/장착 치수와 2024년 8월 상단 라디에이터 변경 원문을 대조함. DS900M/Air/PRO 사양을 가져오지 않음. 라디에이터 두께/RAM 간섭/GPU 케이블 여유는 미확인."
     }
   };
 }

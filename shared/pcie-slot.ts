@@ -45,5 +45,5 @@ export function pcieCompatibleSlotInventoryFor(specs: PartSpecs, requiredWidth: 
 export function pcieSlotInventoryText(specs: PartSpecs) {
   return ([16, 8, 4, 1] as const)
     .map((width) => `x${width} ${specs[PCIE_SLOT_FIELDS[width]] === undefined ? "확인 필요" : `${specs[PCIE_SLOT_FIELDS[width]]}개`}`)
-    .join(" · ");
+    .join(" / ");
 }

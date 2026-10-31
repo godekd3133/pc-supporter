@@ -46,7 +46,7 @@ function sourceLabelFor(live: PurchaseListLivePrice) {
 function withSourceLabel(label: string, live: PurchaseListLivePrice): Pick<PurchaseListLivePriceDisplay, "label" | "source" | "sourceLabel"> {
   const sourceLabel = sourceLabelFor(live);
   if (!sourceLabel) return { label };
-  return { label: `${label} · ${sourceLabel}`, source: live.source, sourceLabel };
+  return { label: `${label} / ${sourceLabel}`, source: live.source, sourceLabel };
 }
 
 export function purchaseListRowsWithLivePricesFor(rows: ReadonlyArray<PurchaseListRow>, livePrices: Readonly<Record<string, PurchaseListLivePrice>>) {
@@ -60,15 +60,15 @@ export function purchaseListRowsWithLivePricesFor(rows: ReadonlyArray<PurchaseLi
 export function purchaseListLivePriceDisplayFor(row: PurchaseListRow, live: PurchaseListLivePrice | undefined): PurchaseListLivePriceDisplay | undefined {
   if (!live) return undefined;
   if (live.status === "unavailable") {
-    if (live.reason === "source-refresh-blocked") return { tone: "unavailable", label: `정보 재확인 대기 중${live.retryAfterSeconds && live.retryAfterSeconds > 0 ? ` · ${live.retryAfterSeconds}초 후 다시 시도` : ""} · 기존 가격 유지`, source: live.source, sourceLabel: sourceLabelFor(live) };
-    if (live.reason === "source-not-found") return { tone: "unavailable", label: "상품 페이지 없음 · 기존 가격 유지", source: live.source, sourceLabel: sourceLabelFor(live) };
-    if (live.reason === "source-not-priced") return { tone: "unavailable", label: "가격 미확인 · 기존 가격 유지", source: live.source, sourceLabel: sourceLabelFor(live) };
-    return { tone: "unavailable", label: live.reason === "not-priced" ? "가격 미확인 · 기존 가격 유지" : "현재 가격 확인 불가 · 기존 가격 유지", source: live.source, sourceLabel: sourceLabelFor(live) };
+    if (live.reason === "source-refresh-blocked") return { tone: "unavailable", label: `정보 재확인 대기 중${live.retryAfterSeconds && live.retryAfterSeconds > 0 ? ` / ${live.retryAfterSeconds}초 후 다시 시도` : ""} / 기존 가격 유지`, source: live.source, sourceLabel: sourceLabelFor(live) };
+    if (live.reason === "source-not-found") return { tone: "unavailable", label: "상품 페이지 없음 / 기존 가격 유지", source: live.source, sourceLabel: sourceLabelFor(live) };
+    if (live.reason === "source-not-priced") return { tone: "unavailable", label: "가격 미확인 / 기존 가격 유지", source: live.source, sourceLabel: sourceLabelFor(live) };
+    return { tone: "unavailable", label: live.reason === "not-priced" ? "가격 미확인 / 기존 가격 유지" : "현재 가격 확인 불가 / 기존 가격 유지", source: live.source, sourceLabel: sourceLabelFor(live) };
   }
-  if (live.status === "error") return { tone: "error", label: live.reason === "source-missing" ? "가격 조회 식별자 없음 · 기존 가격 유지" : live.reason === "source-refresh-failed" ? "가격 확인 실패 · 기존 가격 유지" : "현재 가격 확인 실패 · 기존 가격 유지", source: live.source, sourceLabel: sourceLabelFor(live) };
-  if (!isKnownPrice(live.currentUnitPriceWon)) return { tone: "unavailable", label: "현재 가격 미확인 · 기존 가격 유지", source: live.source, sourceLabel: sourceLabelFor(live) };
+  if (live.status === "error") return { tone: "error", label: live.reason === "source-missing" ? "가격 조회 식별자 없음 / 기존 가격 유지" : live.reason === "source-refresh-failed" ? "가격 확인 실패 / 기존 가격 유지" : "현재 가격 확인 실패 / 기존 가격 유지", source: live.source, sourceLabel: sourceLabelFor(live) };
+  if (!isKnownPrice(live.currentUnitPriceWon)) return { tone: "unavailable", label: "현재 가격 미확인 / 기존 가격 유지", source: live.source, sourceLabel: sourceLabelFor(live) };
   const currentTotalPriceWon = live.currentUnitPriceWon * row.quantity;
-  if (row.totalPriceWon === undefined) return { tone: "discovered", ...withSourceLabel(`현재가 확인됨 · ${currentTotalPriceWon.toLocaleString("ko-KR")}원`, live), currentTotalPriceWon };
+  if (row.totalPriceWon === undefined) return { tone: "discovered", ...withSourceLabel(`현재가 확인됨 / ${currentTotalPriceWon.toLocaleString("ko-KR")}원`, live), currentTotalPriceWon };
   const deltaTotalPriceWon = currentTotalPriceWon - row.totalPriceWon;
   if (deltaTotalPriceWon > 0) return { tone: "increased", ...withSourceLabel(`현재가 +${deltaTotalPriceWon.toLocaleString("ko-KR")}원`, live), currentTotalPriceWon, deltaTotalPriceWon };
   if (deltaTotalPriceWon < 0) return { tone: "decreased", ...withSourceLabel(`현재가 ${deltaTotalPriceWon.toLocaleString("ko-KR")}원`, live), currentTotalPriceWon, deltaTotalPriceWon };

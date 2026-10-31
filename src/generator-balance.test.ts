@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { BuildGenerationResult } from "../shared/types";
 import { GeneratorBalanceControls } from "./GeneratorBalanceControls";
-import { generatorBudgetAdjustmentRequestFor, generatorPartAdjustmentRequestFor } from "./generator-balance";
+import { generatorBudgetAdjustmentRequestFor, generatorPartAdjustmentRequestFor, generatorManualPartRequestFor, generatorRequestForDraft } from "./generator-balance";
 import { gamingSupportRequirementsFor } from "../shared/gaming-part-tiers";
 
 function draftFor(patch: Partial<BuildGenerationResult> = {}): BuildGenerationResult {
@@ -104,14 +104,18 @@ describe("generated build balance requests", () => {
     expect(request?.pinnedParts?.cpu).toBe("cpu-old");
   });
 
-  it("shows minus and plus on both sides of every selected part and the budget", () => {
+  it("shows component controls and the current total without budget step buttons", () => {
     const markup = renderToStaticMarkup(createElement(GeneratorBalanceControls, { draft: draftFor(), loading: false, onGenerate: async () => undefined }));
-    expect(markup).toContain('aria-label="예산 10만원 줄이기"');
-    expect(markup).toContain('aria-label="예산 10만원 늘리기"');
+    expect(markup).not.toContain('aria-label="예산 10만원 줄이기"');
+    expect(markup).not.toContain('aria-label="예산 10만원 늘리기"');
+    expect(markup).toContain('class="generator-balance-total"');
+    expect(markup).toContain("합계");
+    expect(markup).toContain("1,500,000원");
+    expect(markup).toContain('aria-label="CPU 직접 선택"');
     expect(markup).toContain('data-testid="balance-cpu:up"');
     expect(markup).toContain('data-testid="balance-cpu:down"');
-    expect(markup.match(/class="generator-balance-button"/g)).toHaveLength(18);
-    expect(markup).toContain("CPU를 바꾸면 보드·RAM·쿨러·파워를");
+    expect(markup.match(/class="generator-balance-button"/g)).toHaveLength(16);
+    expect(markup).toContain("CPU를 바꾸면 보드/RAM/쿨러/파워를");
   });
 
   it("claims a free packaged cooler only when the CPU package includes one", () => {
@@ -135,4 +139,57 @@ it("keeps integrated graphics for same-platform RAM and motherboard adjustments"
   expect(board.includeGpu).toBe(false);
   expect(board.pinnedParts?.cpu).toBe("cpu-old");
   expect(board.pinnedParts?.cooler).toBe("cooler-old");
+});
+
+
+describe("manual part selection requests", () => {
+  it("releases the CPU platform and power chain while preserving independent parts and drive quantities", () => {
+    const draft = draftFor({ cpuVendorPreference: "amd", memoryTypePreference: "DDR5", hddCount: 2, hddCapacityGb: 4000, lines: [...draftFor().lines, { category: "hdd", partId: "hdd-old", quantity: 2, name: "HDD", priceWon: 100_000 }] });
+    const request = generatorManualPartRequestFor(draft, "cpu", "cpu-intel", { cpuVendorPreference: "intel", memoryTypePreference: "DDR4" });
+    expect(request?.pinnedParts).toEqual({ cpu: "cpu-intel", gpu: "gpu-old", ssd: "ssd-old", hdd: "hdd-old" });
+    expect(request).toMatchObject({ cpuVendorPreference: "intel", memoryTypePreference: "DDR4", hddCount: 2, hddCapacityGb: 4000, storageCapacityGb: 1000 });
+  });
+  it("releases power and physical fit for GPU choices and preserves a compatible CPU platform", () => {
+    const request = generatorManualPartRequestFor(draftFor(), "gpu", "gpu-5090");
+    expect(request?.pinnedParts).toEqual({ cpu: "cpu-old", motherboard: "motherboard-old", memory: "memory-old", gpu: "gpu-5090", ssd: "ssd-old" });
+    expect(request?.includeGpu).toBe(true);
+  });
+  it("replaces the prior NVIDIA constraint for a manual AMD GPU while releasing power and case", () => {
+    const draft = draftFor({ gpuVendorPreference: "nvidia", cpuVendorPreference: "amd", memoryTypePreference: "DDR5" });
+    const request = generatorManualPartRequestFor(draft, "gpu", "gpu-rx9070xt", { gpuVendorPreference: "amd" });
+    expect(request).toMatchObject({ gpuVendorPreference: "amd", cpuVendorPreference: "amd", memoryTypePreference: "DDR5", includeGpu: true });
+    expect(request?.pinnedParts).toEqual({ cpu: "cpu-old", motherboard: "motherboard-old", memory: "memory-old", gpu: "gpu-rx9070xt", ssd: "ssd-old" });
+    expect(request?.pinnedParts?.psu).toBeUndefined();
+    expect(request?.pinnedParts?.case).toBeUndefined();
+    expect(draft.gpuVendorPreference).toBe("nvidia");
+  });
+  it("keeps automatic preference absent and preserves integrated graphics until CPU evaluation", () => {
+    const draft = draftFor({ lines: draftFor().lines.filter((line) => line.category !== "gpu"), selection: { cpu: { partId: "cpu-5500gt", quantity: 1 }, memory: [], ssd: [], hdd: [], useIntegratedGraphics: true } });
+    expect(generatorRequestForDraft(draft).cpuVendorPreference).toBeUndefined();
+    expect(generatorManualPartRequestFor(draft, "cpu", "cpu-5600g")?.includeGpu).toBe(false);
+    expect(generatorManualPartRequestFor(draft, "cpu", " ")).toBeUndefined();
+    expect(generatorManualPartRequestFor(draft, "cpu", "x".repeat(161))).toBeUndefined();
+  });
+});
+
+
+it("refuses stale metadata that skips a capacity step in either direction", () => {
+  expect(generatorPartAdjustmentRequestFor(draftFor({memoryCapacityGb:16,partTiers:{memory:{upId:"ram64",upMemoryCapacityGb:64}}}),"memory","up")).toBeUndefined();
+  expect(generatorPartAdjustmentRequestFor(draftFor({memoryCapacityGb:64,partTiers:{memory:{downId:"ram16",downMemoryCapacityGb:16}}}),"memory","down")).toBeUndefined();
+  expect(generatorPartAdjustmentRequestFor(draftFor({partTiers:{ssd:{upId:"ssd4tb",upStorageCapacityGb:4000}}}),"ssd","up")).toBeUndefined();
+});
+
+
+it("shows the exact missing-step reason on the disabled direction only", () => {
+  const reason = "RTX5060TI 단계의 판매 가능한 부품이 없습니다.";
+  const draft = draftFor({partTiers:{gpu:{upUnavailableReason:reason,downId:"gpu3050"}}});
+  const markup = renderToStaticMarkup(createElement(GeneratorBalanceControls,{draft,loading:false,onGenerate:async()=>undefined}));
+  const up = markup.match(/<button[^>]*data-testid="balance-gpu:up"[^>]*>/)?.[0];
+  const down = markup.match(/<button[^>]*data-testid="balance-gpu:down"[^>]*>/)?.[0];
+  expect(up).toContain('disabled=""');
+  expect(up).toContain(`title="${reason}"`);
+  expect(up).toContain(`aria-description="${reason}"`);
+  expect(down).not.toContain('disabled=""');
+  expect(down).toContain('title="그래픽카드 낮추기"');
+  expect(generatorPartAdjustmentRequestFor(draft,"gpu","up")).toBeUndefined();
 });

@@ -56,9 +56,9 @@ const request = {
 
 describe("budget ladder share", () => {
   it("keeps the derived snapshot name prefix idempotent", () => {
-    expect(budgetLadderDerivedSnapshotNameFor("원본 비교")).toBe("현재 기준 · 원본 비교");
-    expect(budgetLadderDerivedSnapshotNameFor("현재 기준 · 원본 비교")).toBe("현재 기준 · 원본 비교");
-    expect(budgetLadderDerivedSnapshotNameFor("현재 기준 · 현재 기준 · 원본 비교")).toBe("현재 기준 · 원본 비교");
+    expect(budgetLadderDerivedSnapshotNameFor("원본 비교")).toBe("현재 기준 / 원본 비교");
+    expect(budgetLadderDerivedSnapshotNameFor("현재 기준 / 원본 비교")).toBe("현재 기준 / 원본 비교");
+    expect(budgetLadderDerivedSnapshotNameFor("현재 기준 / 현재 기준 / 원본 비교")).toBe("현재 기준 / 원본 비교");
   });
 
   it("normalizes a bounded snapshot and replaces user labels with canonical bands", () => {

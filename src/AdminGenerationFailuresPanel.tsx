@@ -114,12 +114,12 @@ export function AdminGenerationFailuresPanel({ onToast }: { onToast: (message: s
       <div><p className="eyebrow">견적 엔진</p><h3>자동 구성 실패 기록</h3></div>
       <button className="button button-light button-small" type="button" onClick={() => void load()} disabled={loading}>{loading ? <FiLoader className="spin" /> : <FiRefreshCw />} 새로고침</button>
     </div>
-    <p className="admin-card-description">자동 구성·옵션·예산 안내가 실패했을 때의 요청 조건과 진단을 최근 50건까지 보여줍니다. 기록은 서버 재시작까지 메모리에만 유지됩니다.</p>
+    <p className="admin-card-description">자동 구성/옵션/예산 안내가 실패했을 때의 요청 조건과 진단을 최근 50건까지 보여줍니다. 기록은 서버 재시작까지 메모리에만 유지됩니다.</p>
     {monitorStatus && <div className="generation-failure-ops" data-testid="admin-generation-ops">
-      <span><FiActivity /> 모니터 스케줄러 <strong>{monitorStatus.scheduler.enabled ? `켜짐 · 회당 ${monitorStatus.scheduler.batchLimit}건` : "꺼짐"}</strong></span>
-      <span>호환 검사 캐시 <strong>{monitorStatus.compatibilityCache.size.toLocaleString("ko-KR")}개</strong> · 적중률 {cacheHitRate(monitorStatus.compatibilityCache)}</span>
-      <span>견적 검사 캐시 <strong>{monitorStatus.savedBuildCheckPreviewCache.size.toLocaleString("ko-KR")}개</strong> · 적중률 {cacheHitRate(monitorStatus.savedBuildCheckPreviewCache)}</span>
-      <span>후보 평가 캐시 <strong>{monitorStatus.compatiblePartAssessmentCache.size.toLocaleString("ko-KR")}개</strong> · 적중률 {cacheHitRate(monitorStatus.compatiblePartAssessmentCache)}</span>
+      <span><FiActivity /> 모니터 스케줄러 <strong>{monitorStatus.scheduler.enabled ? `켜짐 / 회당 ${monitorStatus.scheduler.batchLimit}건` : "꺼짐"}</strong></span>
+      <span>호환 검사 캐시 <strong>{monitorStatus.compatibilityCache.size.toLocaleString("ko-KR")}개</strong> / 적중률 {cacheHitRate(monitorStatus.compatibilityCache)}</span>
+      <span>견적 검사 캐시 <strong>{monitorStatus.savedBuildCheckPreviewCache.size.toLocaleString("ko-KR")}개</strong> / 적중률 {cacheHitRate(monitorStatus.savedBuildCheckPreviewCache)}</span>
+      <span>후보 평가 캐시 <strong>{monitorStatus.compatiblePartAssessmentCache.size.toLocaleString("ko-KR")}개</strong> / 적중률 {cacheHitRate(monitorStatus.compatiblePartAssessmentCache)}</span>
     </div>}
     {monitorStatus?.httpMetrics && <div className="generation-failure-metrics" data-testid="admin-http-metrics">
       <div className="generation-failure-metrics-head">
@@ -151,7 +151,7 @@ export function AdminGenerationFailuresPanel({ onToast }: { onToast: (message: s
             {failures.map((failure, index) => <article className="generation-failure-item" key={`${failure.at}-${failure.requestId ?? "none"}-${failure.context ?? index}`}>
               <div className="generation-failure-item-top">
                 <span className={`generation-failure-status ${failure.statusCode >= 500 ? "server" : "client"}`}>{failure.statusCode}</span>
-                <strong>{failure.route.replace("/api/builds/", "")}{failure.context ? ` · ${failure.context}` : ""}</strong>
+                <strong>{failure.route.replace("/api/builds/", "")}{failure.context ? ` / ${failure.context}` : ""}</strong>
                 <time><FiClock /> {new Date(failure.at).toLocaleString("ko-KR")}</time>
               </div>
               <p className="generation-failure-error"><FiXCircle /> {failure.error}</p>

@@ -12,7 +12,7 @@ const BENCHMARK_SIMILARITY_KEYS = new Set(["cinebenchR23Single", "cinebenchR23Mu
 export function upgradeBundleSpecComparisonTextFor(change: { similarityEvidence?: UpgradeRecommendation["similarityEvidence"] }) {
   const dimensions = (change.similarityEvidence?.dimensions ?? []).filter((dimension) => !BENCHMARK_SIMILARITY_KEYS.has(dimension.key));
   if (dimensions.length === 0) return undefined;
-  return dimensions.slice(0, 3).map((dimension) => `${dimension.label} ${dimension.currentValue} → ${dimension.candidateValue}`).join(" · ");
+  return dimensions.slice(0, 3).map((dimension) => `${dimension.label} ${dimension.currentValue} → ${dimension.candidateValue}`).join(" / ");
 }
 
 function formatPriceDelta(value: number | undefined) {
@@ -63,5 +63,5 @@ export function UpgradeBundleChangeCard({ change, catalogSnapshotAt, Detail }: {
     if (nextExpanded) void loadDetails();
   }
 
-  return <div className="upgrade-bundle-change"><span className="category-badge">{CATEGORY_LABELS[change.category]}</span><div><small>{change.currentPartName}</small><strong>→ {recommendation.part.name}</strong><em>{specComparison ?? "비교 가능한 주요 사양 정보 없음"} · {change.quantity > 1 ? `수량 ${change.quantity}개 · ` : ""}{formatPriceDelta(change.priceDeltaWon)}</em><button className="upgrade-bundle-detail-toggle" type="button" aria-expanded={expanded} onClick={toggleDetails}>{expanded ? "상세 스펙 닫기" : "상세 스펙 보기"} <FiChevronDown /></button></div>{expanded && (loading ? <div className="upgrade-bundle-detail-loading" role="status"><FiLoader className="spin" /> 상세 스펙을 불러오는 중...</div> : error ? <div className="upgrade-bundle-detail-error" role="alert"><span>{error}</span><button className="text-button" type="button" onClick={() => void loadDetails()}>다시 불러오기</button></div> : detailReady ? <Detail recommendation={recommendation} /> : <div className="upgrade-bundle-detail-loading" role="status"><FiLoader className="spin" /> 상세 스펙을 준비하는 중...</div>)}</div>;
+  return <div className="upgrade-bundle-change"><span className="category-badge">{CATEGORY_LABELS[change.category]}</span><div><small>{change.currentPartName}</small><strong>→ {recommendation.part.name}</strong><em>{specComparison ?? "비교 가능한 주요 사양 정보 없음"} / {change.quantity > 1 ? `수량 ${change.quantity}개 / ` : ""}{formatPriceDelta(change.priceDeltaWon)}</em><button className="upgrade-bundle-detail-toggle" type="button" aria-expanded={expanded} onClick={toggleDetails}>{expanded ? "상세 스펙 닫기" : "상세 스펙 보기"} <FiChevronDown /></button></div>{expanded && (loading ? <div className="upgrade-bundle-detail-loading" role="status"><FiLoader className="spin" /> 상세 스펙을 불러오는 중...</div> : error ? <div className="upgrade-bundle-detail-error" role="alert"><span>{error}</span><button className="text-button" type="button" onClick={() => void loadDetails()}>다시 불러오기</button></div> : detailReady ? <Detail recommendation={recommendation} /> : <div className="upgrade-bundle-detail-loading" role="status"><FiLoader className="spin" /> 상세 스펙을 준비하는 중...</div>)}</div>;
 }

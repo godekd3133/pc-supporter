@@ -11,7 +11,7 @@ describe("budget ladder share server health", () => {
 
   it("keeps the unverified local-expiry state explicit", () => {
     expect(budgetLadderShareHealthLabel("unknown")).toBe("서버 확인 전");
-    expect(budgetLadderShareHealthLabel("unknown", true)).toBe("로컬 만료 · 서버 미확인");
+    expect(budgetLadderShareHealthLabel("unknown", true)).toBe("로컬 만료 / 서버 미확인");
     expect(budgetLadderShareHealthTone("active")).toBe("active");
     expect(budgetLadderShareHealthTone("revoked")).toBe("expired");
   });

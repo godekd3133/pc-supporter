@@ -37,7 +37,7 @@ export type EngineTargetFilterCategoryFacetOptions = {
   brandOptions: EngineTargetFilterValueOption[];
   facetOptions: Partial<Record<string, { options: EngineTargetFilterValueOption[]; missingCount: number }>>;
   // 부품 선택 목록 — 관리자 견적 필터 편집용. 공개 카탈로그 facet 경로에는
-  // 싣지 않는다(응답 크기·노출 범위를 기존 그대로 유지하기 위해).
+  // 싣지 않는다(응답 크기/노출 범위를 기존 그대로 유지하기 위해).
   parts?: EngineTargetFilterPartOption[];
 };
 
@@ -89,13 +89,13 @@ export async function applyReceivedEngineTargetFiltersConfig(config: EngineTarge
   await persistEngineTargetFiltersConfig(config);
 }
 
-// 생성기 후보 풀의 기준 게이트(범주·비핵심 상품·견적 브랜드·가격/스펙 완결)와
+// 생성기 후보 풀의 기준 게이트(범주/비핵심 상품/견적 브랜드/가격/스펙 완결)와
 // 동일한 선행 조건으로 미리보기 수를 계산해, 저장 전 영향이 실제와 다르지 않게 한다.
 function enginePoolBaseAllowsPart(part: Part, category: PartCategory, catalog: Part[], config?: EngineTargetFiltersConfig) {
   const bypassBrandPolicy = engineTargetFilterBypassesBrandPolicy(config, category);
   return part.category === category
     && part.listingType !== "accessory"
-    && (bypassBrandPolicy || isQuoteBrandAllowed(category, part.brand))
+    && (bypassBrandPolicy || isQuoteBrandAllowed(category, part.brand, part.name))
     && (bypassBrandPolicy ? isQuotePurchasable(part, catalog) : isQuoteSelectable(part, catalog));
 }
 
@@ -140,7 +140,7 @@ export function engineTargetFilterFacetOptionsFor(catalog: Part[]): Record<PartC
 }
 
 // 공개 부품 찾기 화면의 세부 조건 패널이 쓰는 facet 옵션 집계 — 이미 사용자가
-// 탐색 가능한 풀(가격·사양 확인된 부품)을 인자로 받아 범주 facet별 선택지와
+// 탐색 가능한 풀(가격/사양 확인된 부품)을 인자로 받아 범주 facet별 선택지와
 // 개수, 실제 가격 범위를 돌려준다.
 export type CatalogFacetOptions = EngineTargetFilterCategoryFacetOptions & {
   priceRange: { min: number; max: number } | null;

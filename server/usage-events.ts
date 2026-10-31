@@ -1,7 +1,7 @@
 import { incrementUsageEventInDatabase, insertUsageEventsInDatabase, readUsageEventDailyCountsFromDatabase, readUsageEventRowsForAnalytics } from "./repository";
 import type { UsageEventInsertRow } from "./repository";
 
-// Phase 0 최소 사용량 카운터: 익명·집계 전용 (개인 식별자/페이로드 없음).
+// Phase 0 최소 사용량 카운터: 익명/집계 전용 (개인 식별자/페이로드 없음).
 // PostgreSQL `usage_event_daily_counts` 테이블에 저장한다.
 // Phase 1 퍼널 분석: 클라이언트 이벤트는 `usage_events` 원시 로그에 기록하고
 // 일별 카운터는 기존 서버 계수 이벤트(app_open 포함)만 유지한다.
@@ -173,7 +173,7 @@ export async function usageEventSummaryFor() {
   return { retentionDays: USAGE_EVENT_RETENTION_DAYS, days: Object.keys(dailyCounts).length, totals, daily: dailyCounts };
 }
 
-// ─── 퍼널·리텐션 집계 ────────────────────────────────────────────────
+// ─── 퍼널/리텐션 집계 ────────────────────────────────────────────────
 
 type AnalyticsRow = {
   event: string;
@@ -228,9 +228,9 @@ type FunnelStage = { key: string; label: string; match: (row: AnalyticsRow) => b
 const FUNNEL_STAGES: FunnelStage[] = [
   { key: "visit", label: "앱 방문", match: (row) => row.event === "app_open" },
   { key: "entry", label: "견적 시작", match: (row) => row.event === "onboarding_step" || row.event === "onboarding_resume" || (row.event === "view" && (propString(row, "view") === "start" || propString(row, "view") === "editor")) },
-  { key: "configured", label: "조건·부품 입력", match: (row) => (row.event === "onboarding_step" && !["intent", "mode"].includes(propString(row, "step") ?? "")) || row.event === "part_select" },
-  { key: "requested", label: "생성·검사 요청", match: (row) => row.event === "recommend_request" || row.event === "check_request" },
-  { key: "generated", label: "생성·검사 성공", match: (row) => row.event === "recommend_success" || row.event === "check_success" },
+  { key: "configured", label: "조건/부품 입력", match: (row) => (row.event === "onboarding_step" && !["intent", "mode"].includes(propString(row, "step") ?? "")) || row.event === "part_select" },
+  { key: "requested", label: "생성/검사 요청", match: (row) => row.event === "recommend_request" || row.event === "check_request" },
+  { key: "generated", label: "생성/검사 성공", match: (row) => row.event === "recommend_success" || row.event === "check_success" },
   { key: "result", label: "결과 열람", match: (row) => row.event === "view" && propString(row, "view") === "result" },
   { key: "saved", label: "견적 저장", match: (row) => row.event === "build_save" },
   {
@@ -247,7 +247,7 @@ const NEXT_STEP_CLICK_LABELS: Record<string, string> = {
   watching: "가격 추적하기",
   trend: "가격 추이 확인",
   loop: "새 견적 만들기 (루프 재시작)",
-  saved: "견적 저장·공유",
+  saved: "견적 저장/공유",
   compared: "저장 견적 비교",
   second_build: "한 번 더 구성"
 };

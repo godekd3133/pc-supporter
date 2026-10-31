@@ -225,7 +225,7 @@ describe("usage events", () => {
     const at = (offsetMs: number) => new Date(base + offsetMs);
     const day = (offsetDays: number) => new Date(base + offsetDays * 24 * 60 * 60 * 1_000);
 
-    // visitor A: 완주 경로(다음날 재방문 포함) · visitor B: 온보딩 중도 이탈
+    // visitor A: 완주 경로(다음날 재방문 포함) / visitor B: 온보딩 중도 이탈
     await recordClientUsageEvents({
       visitorId: "visitor-aaaaaa01", sessionId: "session-aaaaaa01",
       events: [
@@ -316,7 +316,7 @@ describe("usage events", () => {
     const at = (offsetMs: number) => new Date(base + offsetMs);
     const day = (offsetDays: number) => new Date(base + offsetDays * 24 * 60 * 60 * 1_000);
 
-    // visitor A: 저장 이후 루프 전체(재열람·비교·추적·추이·다음 단계) + 다음날 재방문·두 번째 생성
+    // visitor A: 저장 이후 루프 전체(재열람/비교/추적/추이/다음 단계) + 다음날 재방문/두 번째 생성
     await recordClientUsageEvents({
       visitorId: "visitor-loop-a01", sessionId: "session-loop-a01",
       events: [

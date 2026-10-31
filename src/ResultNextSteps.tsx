@@ -5,7 +5,7 @@ import { safeLocalStorage } from "./safe-storage";
 import { readEngagementFlags, resultNextActionsFor, type JourneyAction, type JourneyActionKind } from "./user-journey";
 import { trackUsageEvent } from "./usage-events";
 
-// 결과 화면의 "다음에 해볼 것" 스트립 — 저장·재구성·비교·가격 추적으로
+// 결과 화면의 "다음에 해볼 것" 스트립 — 저장/재구성/비교/가격 추적으로
 // 루프를 이어준다. 표시할 액션은 여정 상태에서 우선순위로 고른다.
 
 const ACTION_ICONS: Record<JourneyActionKind, IconType> = {

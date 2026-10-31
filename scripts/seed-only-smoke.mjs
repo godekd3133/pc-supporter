@@ -198,7 +198,7 @@ try {
     && Number.isInteger(part.remainingWarnings) && part.remainingWarnings >= 0
     && Number.isInteger(part.remainingUnknown) && part.remainingUnknown >= 0
     && Array.isArray(part.candidateReasons) && part.candidateReasons.every((reason) => typeof reason === "string" && reason.trim().length > 0)
-    && !Object.hasOwn(part, "recommendationTrust") && !Object.hasOwn(part, "decision")), "대체 후보의 공개 호환 상태·남은 문제 수가 없거나 내부 추천 근거가 노출되었습니다.", alternatives.items);
+    && !Object.hasOwn(part, "recommendationTrust") && !Object.hasOwn(part, "decision")), "대체 후보의 공개 호환 상태/남은 문제 수가 없거나 내부 추천 근거가 노출되었습니다.", alternatives.items);
 
   const generated = await jsonResponse("/api/builds/recommend", {
     method: "POST",

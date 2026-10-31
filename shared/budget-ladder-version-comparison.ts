@@ -23,9 +23,9 @@ export function budgetLadderVersionRequestText(request: BudgetLadderShareSnapsho
   ];
   if (request.profile === "gaming" && request.gamingResolution) parts.splice(2, 0, GAMING_RESOLUTION_LABELS[request.gamingResolution]);
   if (request.profile === "gaming" && request.gamingRefreshRate) parts.splice(3, 0, GAMING_REFRESH_RATE_LABELS[request.gamingRefreshRate]);
-  if (request.hddCount && request.hddCount > 0) parts.push(`HDD ${request.hddCount}개 · ${request.hddCapacityGb ?? "?"}GB`);
+  if (request.hddCount && request.hddCount > 0) parts.push(`HDD ${request.hddCount}개 / ${request.hddCapacityGb ?? "?"}GB`);
   if (request.listingPolicy) parts.push(LISTING_POLICY_LABELS[request.listingPolicy]);
-  return parts.join(" · ");
+  return parts.join(" / ");
 }
 
 export function budgetLadderVersionLineText(item: BudgetLadderExportItem, category: PartCategory) {
@@ -37,12 +37,12 @@ export function budgetLadderVersionRowsFor(snapshots: BudgetLadderShareSnapshot[
     { id: "created", label: "생성 시각", values: snapshots.map((snapshot) => new Date(snapshot.createdAt).toLocaleString("ko-KR")), diffable: false },
     { id: "request", label: "생성 조건", values: snapshots.map((snapshot) => budgetLadderVersionRequestText(snapshot.request)), diffable: true },
     { id: "catalog", label: "부품 정보 확인일", values: snapshots.map((snapshot) => new Date(snapshot.catalogSnapshotAt).toLocaleString("ko-KR")), diffable: false },
-    { id: "status", label: "상태", values: snapshots.map((snapshot) => snapshot.payload.items.map((item) => `${item.label} ${item.status}`).join(" · ")), diffable: true },
-    { id: "budget", label: "목표 예산", values: snapshots.map((snapshot) => snapshot.payload.items.map((item) => `${item.label} ${item.budgetWon.toLocaleString("ko-KR")}원`).join(" · ")), diffable: true },
-    { id: "total", label: "합계", values: snapshots.map((snapshot) => snapshot.payload.items.map((item) => `${item.label} ${item.totalPriceWon === undefined ? "-" : `${item.totalPriceWon.toLocaleString("ko-KR")}원`}`).join(" · ")), diffable: true },
-    { id: "risk", label: "호환 상태", values: snapshots.map((snapshot) => snapshot.payload.items.map((item) => `${item.label} 호환 불가 ${item.blockerCount ?? 0} · 주의 ${item.warningCount ?? 0} · 확인 ${item.unknownCount ?? 0}`).join(" · ")), diffable: true },
-    { id: "analysis", label: "성능 점수", values: snapshots.map((snapshot) => snapshot.payload.items.map((item) => `${item.label} ${item.analysisScore === undefined ? "계산 정보 부족" : `${item.analysisScore}점`}`).join(" · ")), diffable: true },
-    ...PART_CATEGORIES.map((category) => ({ id: category, label: CATEGORY_LABELS[category], values: snapshots.map((snapshot) => snapshot.payload.items.map((item) => `${item.label}: ${budgetLadderVersionLineText(item, category)}`).join(" · ")), diffable: true }))
+    { id: "status", label: "상태", values: snapshots.map((snapshot) => snapshot.payload.items.map((item) => `${item.label} ${item.status}`).join(" / ")), diffable: true },
+    { id: "budget", label: "목표 예산", values: snapshots.map((snapshot) => snapshot.payload.items.map((item) => `${item.label} ${item.budgetWon.toLocaleString("ko-KR")}원`).join(" / ")), diffable: true },
+    { id: "total", label: "합계", values: snapshots.map((snapshot) => snapshot.payload.items.map((item) => `${item.label} ${item.totalPriceWon === undefined ? "-" : `${item.totalPriceWon.toLocaleString("ko-KR")}원`}`).join(" / ")), diffable: true },
+    { id: "risk", label: "호환 상태", values: snapshots.map((snapshot) => snapshot.payload.items.map((item) => `${item.label} 호환 불가 ${item.blockerCount ?? 0} / 주의 ${item.warningCount ?? 0} / 확인 ${item.unknownCount ?? 0}`).join(" / ")), diffable: true },
+    { id: "analysis", label: "성능 점수", values: snapshots.map((snapshot) => snapshot.payload.items.map((item) => `${item.label} ${item.analysisScore === undefined ? "계산 정보 부족" : `${item.analysisScore}점`}`).join(" / ")), diffable: true },
+    ...PART_CATEGORIES.map((category) => ({ id: category, label: CATEGORY_LABELS[category], values: snapshots.map((snapshot) => snapshot.payload.items.map((item) => `${item.label}: ${budgetLadderVersionLineText(item, category)}`).join(" / ")), diffable: true }))
   ];
   return rows.map((row) => ({ ...row, changed: row.values.some((value, index) => index > 0 && value !== row.values[0]) }));
 }

@@ -275,7 +275,7 @@ describe("PostgreSQL schema contract", () => {
 
   it("upgrades a known v1 revision through the recorded migration path", async () => {
     const v1State = schemaStateWithCanonicalShape(canonicalSchemaContract);
-    // v1에는 runtime_configs·usage_events가 모두 없었다 — canonical v3 상태에서 두 테이블을 빼고 시작한다.
+    // v1에는 runtime_configs/usage_events가 모두 없었다 — canonical v3 상태에서 두 테이블을 빼고 시작한다.
     for (const key of [...v1State.columns.keys()]) {
       if (key.startsWith("runtime_configs\0") || key.startsWith("usage_events\0")) v1State.columns.delete(key);
     }

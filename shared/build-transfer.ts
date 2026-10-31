@@ -134,6 +134,10 @@ function recommendationPreferencesFromUnknown(value: unknown, errors: string[]):
   const gamingMode = record.gamingMode;
   const gamingTargetFps = record.gamingTargetFps;
   const gpuVendorPreference = record.gpuVendorPreference;
+  const cpuVendorPreference = record.cpuVendorPreference;
+  const memoryTypePreference = record.memoryTypePreference;
+  if (cpuVendorPreference !== undefined && cpuVendorPreference !== "amd" && cpuVendorPreference !== "intel") errors.push("recommendationPreferences.cpuVendorPreference가 올바르지 않습니다.");
+  if (memoryTypePreference !== undefined && memoryTypePreference !== "DDR4" && memoryTypePreference !== "DDR5") errors.push("recommendationPreferences.memoryTypePreference가 올바르지 않습니다.");
   const gamingGraphicsPreset = record.gamingGraphicsPreset;
   const gamingUpscaling = record.gamingUpscaling;
   const gamingGameIds = record.gamingGameIds;
@@ -158,6 +162,8 @@ function recommendationPreferencesFromUnknown(value: unknown, errors: string[]):
   return {
     priority: isRecommendationPriority(priority) ? priority : defaultPreferences.priority,
     profile: parsedProfile,
+    ...(cpuVendorPreference === "amd" || cpuVendorPreference === "intel" ? { cpuVendorPreference } : {}),
+    ...(memoryTypePreference === "DDR4" || memoryTypePreference === "DDR5" ? { memoryTypePreference } : {}),
     listingPolicy: listingPolicy === "retail_only" || listingPolicy === "include_bulk" || listingPolicy === "all" ? listingPolicy : defaultPreferences.listingPolicy,
     ...(typeof budget === "number" && Number.isInteger(budget) && budget > 0 && budget <= 100_000_000 ? { budgetWon: budget } : {}),
     gamingResolution: gamingResolution === "1080p" || gamingResolution === "1440p" || gamingResolution === "4k" ? gamingResolution : defaultPreferences.gamingResolution,

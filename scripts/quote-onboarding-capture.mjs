@@ -85,7 +85,7 @@ async function runFlow(client, { prefix, viewport }) {
     manifest.push({ id, label, route: route ?? await client.evaluate("location.pathname + location.search"), path });
   };
 
-  await record("01-home-guided", "홈 시작 화면 · 새 견적 또는 현재 견적");
+  await record("01-home-guided", "홈 시작 화면 / 새 견적 또는 현재 견적");
   if (corruptDraftBackupFailure && prefix === "mobile") {
     draftBackupFailureNoticeWasVisible = await client.evaluate("document.querySelector('[data-testid=draft-recovery-notice]') !== null");
     corruptDraftPreservedBeforeExport = await client.evaluate("Boolean(window.__pcSupporterExpectedCorruptDraft) && window.localStorage.getItem('pc-supporter-draft') === window.__pcSupporterExpectedCorruptDraft");
@@ -102,11 +102,11 @@ async function runFlow(client, { prefix, viewport }) {
     corruptDraftReplacedAfterExport = true;
   }
   await navigateToStart(client);
-  await record("02-start-intent", "시작 선택 · 새 견적 / 업그레이드 / 나중에");
+  await record("02-start-intent", "시작 선택 / 새 견적 / 업그레이드 / 나중에");
   await clickButton(client, "새 PC 견적 보기");
   await waitForTitle(client, "어떤 기준으로 부품을 고를까요?", "새 견적 방식 화면");
   await record("03-new-quote", "새 견적 방식");
-  await clickButton(client, "게임·작업을 기준으로 고르기");
+  await clickButton(client, "게임/작업을 기준으로 고르기");
   await waitForTitle(client, "어떤 용도로 쓸 PC인가요?", "용도 선택 화면");
   await record("04-usecase", "게임 또는 작업 선택");
   await clickButton(client, "게임");
@@ -114,25 +114,25 @@ async function runFlow(client, { prefix, viewport }) {
   await clickButton(client, "사이버펑크 2077");
   await clickButton(client, "다음");
   await waitForTitle(client, "게임 성능 목표를 정해주세요", "성능 목표 화면");
-  await record("05-game-performance", "게임 · 4K · 희망 주사율 144Hz");
+  await record("05-game-performance", "게임 / 4K / 희망 주사율 144Hz");
   await clickButton(client, "4K");
   await clickButton(client, "144Hz");
   await clickButton(client, "다음");
   await waitForTitle(client, "게임 옵션도 정해주세요", "그래픽 옵션 화면");
   await clickButton(client, "높음");
-  await clickButton(client, "DLSS·품질 참고");
-  await record("06-graphics-contract", "그래픽 옵션 · 입력한 목표 확인");
-  await clickButton(client, "다음 · 예산 정하기");
+  await clickButton(client, "DLSS/품질 참고");
+  await record("06-graphics-contract", "그래픽 옵션 / 입력한 목표 확인");
+  await clickButton(client, "다음 / 예산 정하기");
   await waitForTitle(client, "예산을 정해주세요", "예산 화면");
   await clickButton(client, "500만원");
   await waitForValueWithTimeout(client, "document.querySelector('.onboarding-budget-value')?.textContent?.trim() === '500만원'", "예산 500만원 선택");
-  await record("07-budget-range", "예산 · 가격대 · 사양");
+  await record("07-budget-range", "예산 / 가격대 / 사양");
   await clickButton(client, "예상 구성 확인");
   await waitForTitle(client, "견적 내용을 확인하세요", "조건 요약 화면");
-  await record("08-summary", "조건 요약 · 항목별 변경");
+  await record("08-summary", "조건 요약 / 항목별 변경");
   await clickButton(client, "견적 만들기");
   await waitForValueWithTimeout(client, "location.pathname === '/recommend' && document.querySelector('.generator-result') !== null", "자동 구성 결과");
-  await record("09-generator-result", "자동 구성 결과 · 선택한 게임 목표");
+  await record("09-generator-result", "자동 구성 결과 / 선택한 게임 목표");
   return manifest;
 }
 
@@ -176,7 +176,7 @@ async function runRepresentativeBranches(client, { prefix, viewport }) {
   };
 
   await startNewQuote();
-  await clickButton(client, "게임·작업을 기준으로 고르기");
+  await clickButton(client, "게임/작업을 기준으로 고르기");
   await waitForTitle(client, "어떤 용도로 쓸 PC인가요?", "작업 용도 화면");
   await clickButton(client, "작업");
   await clickButton(client, "다음");
@@ -185,35 +185,35 @@ async function runRepresentativeBranches(client, { prefix, viewport }) {
   await clickButton(client, "영상 편집");
   await clickButton(client, "다음");
   await waitForTitle(client, "영상 편집은 어느 정도 규모인가요?", "작업 강도 화면");
-  await record("work", "02-intensity", "영상 편집 강도 · 구체적 예상 사양");
+  await record("work", "02-intensity", "영상 편집 강도 / 구체적 예상 사양");
   await clickButton(client, "무겁게");
-  await clickButton(client, "다음 · 예산 정하기");
+  await clickButton(client, "다음 / 예산 정하기");
   await waitForTitle(client, "예산을 정해주세요", "작업 예산 화면");
   await clickButton(client, "300만원");
-  await record("work", "03-budget", "작업 예산 · 4K·6K · 64GB · 2TB");
+  await record("work", "03-budget", "작업 예산 / 4K/6K / 64GB / 2TB");
   await clickButton(client, "예상 구성 확인");
   await waitForTitle(client, "견적 내용을 확인하세요", "작업 조건 요약");
   await record("work", "04-summary", "작업 조건 요약");
   await clickButton(client, "견적 만들기");
   await waitForValueWithTimeout(client, "location.pathname === '/recommend' && document.querySelector('.generator-result') !== null", "작업 자동 구성 결과");
-  await record("work", "05-result", "작업 결과 · WORK TARGET");
+  await record("work", "05-result", "작업 결과 / WORK TARGET");
 
   await startNewQuote();
   await clickButton(client, "예산을 기준으로 고르기");
   await waitForTitle(client, "예산을 정해주세요", "예산-only 화면");
   await clickButton(client, "400만원");
-  await record("budget", "01-budget", "예산-only · 상급 일반 구성");
+  await record("budget", "01-budget", "예산-only / 상급 일반 구성");
   await clickButton(client, "예상 구성 확인");
   await waitForTitle(client, "견적 내용을 확인하세요", "예산-only 요약");
   await record("budget", "02-summary", "예산-only 조건 요약");
   await clickButton(client, "견적 만들기");
   await waitForValueWithTimeout(client, "location.pathname === '/recommend' && document.querySelector('.generator-result') !== null", "예산-only 결과");
-  await record("budget", "03-result", "예산-only 결과 · GENERAL TARGET");
+  await record("budget", "03-result", "예산-only 결과 / GENERAL TARGET");
 
   await startNewQuote();
   await clickButton(client, "원하는 사양 직접 입력하기");
   await waitForTitle(client, "성능 목표를 정하세요", "직접 성능 화면");
-  await record("spec", "01-spec", "직접 성능 · 최상급 · RAM · SSD");
+  await record("spec", "01-spec", "직접 성능 / 최상급 / RAM / SSD");
   await clickButton(client, "최상급");
   await clickButton(client, "64GB");
   await clickButton(client, "2TB");
@@ -225,7 +225,7 @@ async function runRepresentativeBranches(client, { prefix, viewport }) {
   await record("spec", "02-summary", "직접 성능 조건 요약");
   await clickButton(client, "견적 만들기");
   await waitForValueWithTimeout(client, "location.pathname === '/recommend' && document.querySelector('.generator-result') !== null", "직접 성능 결과");
-  await record("spec", "03-result", "직접 성능 결과 · GENERAL TARGET");
+  await record("spec", "03-result", "직접 성능 결과 / GENERAL TARGET");
 
   await navigateToStart(client);
   await clickButton(client, "쓰던 PC 업그레이드하기");

@@ -1,3 +1,6 @@
+import { publicCatalogDetailFilterForCategory } from "../shared/public-catalog-filters";
+import { catalogSearchMatches } from "../shared/catalog-search-normalization";
+import { gamingPickerPartAllowed, type GamingPickerQuoteContext } from "../shared/gaming-picker-policy";
 import { applyGamingStorageCatalogSnapshot } from "./gaming-storage-catalog";
 import { applyGamingSupportCatalogSnapshot } from "./gaming-support-catalog";
 import { applyGamingTargetCatalogSnapshot } from "./gaming-target-catalog";
@@ -26,7 +29,7 @@ import { applyGpuPhysicalOverrides, readGpuPhysicalOverrides, stripGpuPhysicalOv
 import { applyCaseRgbLoadOverrides, readCaseRgbLoadOverrides, stripCaseRgbLoadOverride } from "./case-rgb-load-overrides";
 import { applyCatalogSpecOverrides, readCatalogSpecOverrides, stripCatalogSpecOverride } from "./catalog-spec-overrides";
 import { loadEngineTargetFiltersConfig } from "./engine-target-filters";
-import { engineTargetFilterRuleAllowsPart, engineTargetFilterRuleForCategory, engineTargetFilterRuleFromUnknown } from "../shared/engine-target-filters";
+import { engineTargetFilterRuleAllowsPart, engineTargetFilterRuleFromUnknown } from "../shared/engine-target-filters";
 import type { EngineCategoryTargetFilter } from "../shared/engine-target-filters";
 import { classifyDataFreshness, nextDataFreshnessChangeAt } from "../shared/data-freshness";
 import { benchmarkAvailabilityMatchesFilter } from "../shared/benchmark-evidence";
@@ -98,22 +101,70 @@ function dataQualityRank(part: Part) {
   return 1;
 }
 
+function priceTimestamp(value: string | undefined) {
+  const time = Date.parse(value ?? "");
+  return Number.isFinite(time) ? time : 0;
+}
+
+function confirmedPriceObservation(part: Part) {
+  const positiveAt = isKnownPrice(part.priceWon) ? priceTimestamp(part.priceCheckedAt) : 0;
+  const unavailableAt = priceTimestamp(part.priceUnavailableAt);
+  if (unavailableAt > 0 && unavailableAt >= positiveAt) return { part, at: unavailableAt, unavailable: true };
+  if (positiveAt > 0) return { part, at: positiveAt, unavailable: false };
+  return undefined;
+}
+
+/** Price observations are independent of the physical-spec merge and missing-field fallback. */
+function mergeObservedCatalogPrice(existing: Part | undefined, incoming: Part, merged: Part): Part {
+  if (!existing) {
+    const observation = confirmedPriceObservation(incoming);
+    if (!observation || !incoming.priceUnavailableAt) return merged;
+    const result = { ...merged };
+    if (observation.unavailable) delete result.priceWon;
+    else delete result.priceUnavailableAt;
+    return result;
+  }
+  // Catalog keys already contain the category and product code; never carry an observation across identities.
+  if (existing.source !== "danawa" || incoming.source !== "danawa"
+    || !existing.sourceProductCode || existing.sourceProductCode !== incoming.sourceProductCode
+    || existing.category !== incoming.category) return merged;
+  if (!existing.priceUnavailableAt && !incoming.priceUnavailableAt) return merged;
+  const observations = [confirmedPriceObservation(existing), confirmedPriceObservation(incoming)]
+    .filter((observation): observation is NonNullable<typeof observation> => Boolean(observation))
+    .sort((left, right) => right.at - left.at || Number(right.unavailable) - Number(left.unavailable));
+  const newest = observations[0];
+  if (!newest) return merged;
+  const result = { ...merged };
+  if (newest.unavailable) {
+    delete result.priceWon;
+    result.priceUnavailableAt = newest.part.priceUnavailableAt;
+    // The negative observation is newer, but the last successfully seen positive price remains useful history.
+    const lastPositive = [existing, incoming].filter((part) => Boolean(part.priceCheckedAt))
+      .sort((left, right) => priceTimestamp(right.priceCheckedAt) - priceTimestamp(left.priceCheckedAt))[0];
+    result.priceCheckedAt = lastPositive?.priceCheckedAt;
+  } else {
+    result.priceWon = newest.part.priceWon;
+    result.priceCheckedAt = newest.part.priceCheckedAt;
+    delete result.priceUnavailableAt;
+  }
+  return result;
+}
+
 export function mergeCatalog(base: Part[], incoming: Part[]) {
   const merged = new Map<string, Part>();
-  for (const part of base) merged.set(catalogKey(part), part);
+  for (const part of base) merged.set(catalogKey(part), mergeObservedCatalogPrice(undefined, part, part));
   for (const part of incoming) {
     const key = catalogKey(part);
     const existing = merged.get(key);
-    if (!existing || dataQualityRank(part) >= dataQualityRank(existing)) {
-      merged.set(key, existing ? {
-        ...existing,
-        ...part,
-        imageUrl: part.imageUrl ?? existing.imageUrl,
-        priceWon: isKnownPrice(part.priceWon) ? part.priceWon : isKnownPrice(existing.priceWon) ? existing.priceWon : undefined,
-        rawSpecText: part.rawSpecText || existing.rawSpecText,
-        specs: { ...existing.specs, ...part.specs }
-      } : part);
-    }
+    const refreshed = !existing ? part : dataQualityRank(part) >= dataQualityRank(existing) ? {
+      ...existing,
+      ...part,
+      imageUrl: part.imageUrl ?? existing.imageUrl,
+      priceWon: isKnownPrice(part.priceWon) ? part.priceWon : isKnownPrice(existing.priceWon) ? existing.priceWon : undefined,
+      rawSpecText: part.rawSpecText || existing.rawSpecText,
+      specs: { ...existing.specs, ...part.specs }
+    } : existing;
+    merged.set(key, mergeObservedCatalogPrice(existing, part, refreshed));
   }
   return [...merged.values()];
 }
@@ -127,7 +178,7 @@ export function mergeDanawaSnapshot(base: Part[], incoming: Part[], categories: 
 async function loadCatalogUncoalesced() {
   // DB가 진짜 소스다 — 다만 전체 행 재구성은 요청마다 수 초를 쓰므로
   // 건수+최신 updated_at 스탬프가 같으면 캐시를 그대로 돌려준다. 파일 기반
-  // 오버라이드(GPU 물리·RGB 부하)는 인프로세스 쓰기라 invalidateCatalogCache로
+  // 오버라이드(GPU 물리/RGB 부하)는 인프로세스 쓰기라 invalidateCatalogCache로
   // 무효화된다. 스탬프는 읽기 전에 잡아 읽기 도중 끼어든 쓰기를 놓치지 않는다.
   try {
     const stampBefore = await readCatalogVersionStamp();
@@ -209,13 +260,14 @@ export async function upsertCatalog(
   return upsertCatalogUnlocked(parts, options);
 }
 
-export interface CatalogPricePatch {
+export type CatalogPricePatch = {
   id: string;
   sourceProductCode: string;
   danawaUrl: string;
-  priceWon: number;
-  priceCheckedAt: string;
-}
+} & (
+  | { priceWon: number; priceCheckedAt: string; priceUnavailableAt?: never }
+  | { priceWon?: never; priceCheckedAt?: never; priceUnavailableAt: string }
+);
 
 export async function patchCatalogPrices(patches: CatalogPricePatch[]) {
   if (patches.length === 0) return [];
@@ -331,7 +383,7 @@ export interface ParsedCatalogMissingField {
 //   db=제조사1,제조사2           제조사 다중 선택(정확 일치 OR)
 //   dv.<스펙필드>=값1,값2         스펙 값 다중 선택(필드 안 OR, 필드 사이 AND)
 //   dr.<스펙필드>=최소-최대;...   수치 범위 다중 선택
-//   df.<플래그필드>=1             부울 플래그(내장 그래픽·Wi-Fi 등)
+//   df.<플래그필드>=1             부울 플래그(내장 그래픽/Wi-Fi 등)
 //   dprice=최소-최대            가격대
 // 허용 필드는 범주별 ENGINE_TARGET_FILTER_FACETS 선언으로 제한한다.
 export const CATALOG_DETAIL_FILTER_PREFIXES = { values: "dv.", ranges: "dr.", flags: "df." } as const;
@@ -395,7 +447,7 @@ export function parseCatalogDetailFilterQuery(query: Record<string, unknown>, ca
   if (Object.keys(numericRanges).length > 0) candidate.numericRanges = numericRanges;
   if (Object.keys(flags).length > 0) candidate.flags = flags;
   const rule = engineTargetFilterRuleFromUnknown(Object.keys(candidate).length > 0 ? candidate : undefined, category, errors);
-  return { filter: engineTargetFilterRuleForCategory(rule, category), errors };
+  return { filter: publicCatalogDetailFilterForCategory(rule, category), errors };
 }
 
 export function parseCatalogMissingField(input: unknown): ParsedCatalogMissingField {
@@ -569,6 +621,7 @@ export type PartSearchOptions = {
   detailRule?: EngineCategoryTargetFilter;
   quoteBrandRestricted?: boolean;
   quoteSellableOnly?: boolean;
+  quoteContext?: GamingPickerQuoteContext;
 };
 
 function partSearchPredicateFor(
@@ -577,14 +630,18 @@ function partSearchPredicateFor(
   query: string | undefined,
   options: PartSearchOptions = {}
 ) {
-  const normalizedQuery = query?.trim().toLocaleLowerCase("ko-KR") ?? "";
+  const normalizedQuery = query?.trim() ?? "";
   const normalizedBrand = options.brand?.trim().toLocaleLowerCase("ko-KR") ?? "";
   const specRules = partSpecFilterRulesFor(options.specFilter ?? {});
   return (part: Part) => {
     if (options.partId && part.id !== options.partId) return false;
     if (category && part.category !== category) return false;
-    if (options.quoteBrandRestricted && !isQuoteBrandAllowed(part.category, part.brand)) return false;
-    if (options.quoteSellableOnly && !isQuoteSelectable(part, catalog)) return false;
+    if (options.quoteContext === "gaming_testbed") {
+      if (!gamingPickerPartAllowed(part, catalog)) return false;
+    } else {
+      if (options.quoteBrandRestricted && !isQuoteBrandAllowed(part.category, part.brand, part.name)) return false;
+      if (options.quoteSellableOnly && !isQuoteSelectable(part, catalog)) return false;
+    }
     if (normalizedBrand && !(part.brand ?? "").toLocaleLowerCase("ko-KR").includes(normalizedBrand)) return false;
     if (options.quality && options.quality !== "all" && part.dataQuality !== options.quality) return false;
     if (options.freshness && options.freshness !== "all" && classifyDataFreshness(part.updatedAt, options.now) !== options.freshness) return false;
@@ -610,7 +667,7 @@ function partSearchPredicateFor(
       .filter(Boolean)
       .join(" ")
       .toLocaleLowerCase("ko-KR");
-    return haystack.includes(normalizedQuery);
+    return catalogSearchMatches(haystack, normalizedQuery);
   };
 }
 

@@ -97,7 +97,7 @@ describe("generatedVariantGamingConditionText", () => {
   it("shows the selected upscaling setting beside a target FPS", () => {
     const text = generatedVariantGamingConditionText(importedDraft({ profile: "gaming", gamingMode: "target_fps", gamingTargetFps: 120, gamingGameIds: ["cyberpunk"], gamingGraphicsPreset: "high", gamingUpscaling: "quality" }));
     expect(text).toContain("목표 120 FPS");
-    expect(text).toContain("업스케일링·품질");
+    expect(text).toContain("업스케일링/품질");
   });
 
   it("shows integrated graphics without calling it an NVIDIA graphics card", () => {
@@ -173,7 +173,7 @@ describe("savedPresetConditionTagsFor", () => {
       hddCapacityGb: 4000,
       listingPolicy: "include_bulk"
     }));
-    expect(tags).toEqual(["QHD", "144Hz", "높음", "업스케일링·품질", "레이 트레이싱", "게임 2개", "외장 GPU", "RAM 32GB", "SSD 2TB", "HDD 4TB×1", "벌크 포함"]);
+    expect(tags).toEqual(["QHD", "144Hz", "높음", "업스케일링/품질", "레이 트레이싱", "게임 2개", "외장 GPU", "RAM 32GB", "SSD 2TB", "HDD 4TB×1", "벌크 포함"]);
   });
 
   it("keeps a compact summary for non-gaming presets", () => {

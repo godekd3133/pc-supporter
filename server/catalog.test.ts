@@ -59,6 +59,56 @@ describe("catalog merge", () => {
     expect(merged[0].specs.tdpW).toBe(120);
   });
 
+  it("does not restore the omitted price of a confirmed newer no-offer refresh", () => {
+    const existing = part({ priceWon: 536000, priceCheckedAt: "2026-10-04T00:00:00.000Z" });
+    const unavailable = { ...existing, priceUnavailableAt: "2026-10-06T09:29:50.000Z" };
+    delete unavailable.priceWon;
+    const result = mergeCatalog([existing], [unavailable])[0];
+    expect(result).not.toHaveProperty("priceWon");
+    expect(result.priceUnavailableAt).toBe(unavailable.priceUnavailableAt);
+    expect(result.priceCheckedAt).toBe(existing.priceCheckedAt);
+    expect(result.specs).toEqual(existing.specs);
+    expect(result.updatedAt).toBe(existing.updatedAt);
+  });
+
+  it("does not revive an unavailable price from an older positive or an unobserved specs refresh", () => {
+    const existing = part({ priceCheckedAt: "2026-10-04T00:00:00.000Z", priceUnavailableAt: "2026-10-06T00:00:00.000Z" });
+    const stale = part({ priceWon: 536000, priceCheckedAt: "2026-10-05T00:00:00.000Z" });
+    const unobserved = part({ priceWon: 536000, updatedAt: "2026-10-07T00:00:00.000Z" });
+    for (const refresh of [stale, unobserved]) {
+      const result = mergeCatalog([existing], [refresh])[0];
+      expect(result.priceWon).toBeUndefined();
+      expect(result.priceUnavailableAt).toBe(existing.priceUnavailableAt);
+    }
+  });
+
+  it("clears the negative observation only for a later positive price of the same identity", () => {
+    const stopped = part({ priceCheckedAt: "2026-10-04T00:00:00.000Z", priceUnavailableAt: "2026-10-05T00:00:00.000Z" });
+    const positive = part({ priceWon: 540000, priceCheckedAt: "2026-10-06T00:00:00.000Z" });
+    const restored = mergeCatalog([stopped], [positive])[0];
+    expect(restored.priceWon).toBe(540000);
+    expect(restored).not.toHaveProperty("priceUnavailableAt");
+    const oldStopped = { ...stopped, priceUnavailableAt: "2026-10-05T12:00:00.000Z" };
+    const preserved = mergeCatalog([positive], [oldStopped])[0];
+    expect(preserved.priceWon).toBe(540000);
+    expect(preserved).not.toHaveProperty("priceUnavailableAt");
+    const another = { ...stopped, id: "other", sourceProductCode: "2", priceUnavailableAt: "2026-10-07T00:00:00.000Z" };
+    expect(mergeCatalog([positive], [another]).find(({ id }) => id === positive.id)?.priceWon).toBe(540000);
+  });
+
+  it("normalizes already persisted stale prices beside a newer negative marker and keeps higher-quality specs", () => {
+    const contradictory = part({ priceWon: 536000, priceCheckedAt: "2026-10-04T00:00:00.000Z", priceUnavailableAt: "2026-10-06T00:00:00.000Z" });
+    expect(mergeCatalog([], [contradictory])[0]).not.toHaveProperty("priceWon");
+    expect(mergeCatalog([contradictory], [])[0]).not.toHaveProperty("priceWon");
+    const existing = part({ priceWon: 536000, priceCheckedAt: "2026-10-04T00:00:00.000Z" });
+    const unavailable = { ...existing, dataQuality: "incomplete" as const, specs: {}, priceUnavailableAt: "2026-10-06T00:00:00.000Z" };
+    delete unavailable.priceWon;
+    const result = mergeCatalog([existing], [unavailable])[0];
+    expect(result).not.toHaveProperty("priceWon");
+    expect(result.specs).toEqual(existing.specs);
+    expect(result.dataQuality).toBe(existing.dataQuality);
+  });
+
   it("accepts a newer live crawl over a seed item", () => {
     const seeded = part({ source: "seed", dataQuality: "seed", name: "기본 CPU" });
     const live = part({ dataQuality: "live", name: "최신 CPU" });
@@ -433,7 +483,7 @@ describe("catalog merge", () => {
     expect(parseCatalogDetailFilterQuery({ "dv.socket": "AM5" }, "gpu").filter).toBeUndefined();
     // 범주 없이 보낸 세부 조건은 무시한다.
     expect(parseCatalogDetailFilterQuery({ "dv.socket": "AM5" }, undefined).filter).toBeUndefined();
-    // 잘못된 형식·화이트리스트에 없는 필드는 오류로 보고한다.
+    // 잘못된 형식/화이트리스트에 없는 필드는 오류로 보고한다.
     expect(parseCatalogDetailFilterQuery({ "df.wifi": "maybe" }, "motherboard").errors).toEqual(["세부 조건 wifi은 1 또는 0이어야 합니다."]);
     expect(parseCatalogDetailFilterQuery({ "dr.cores": "abc" }, "cpu").errors.length).toBeGreaterThan(0);
     expect(parseCatalogDetailFilterQuery({ "dv.notAField": "x" }, "cpu").errors.length).toBeGreaterThan(0);
@@ -495,4 +545,27 @@ describe("catalog merge", () => {
       }
     });
   });
+});
+
+describe("compact GPU search and detail filters", () => {
+  it("matches 5060ti and 5060 ti identically without matching 5060", () => {
+    const catalog = [part({ id: "ti", category: "gpu", name: "MSI RTX 5060 Ti 16GB", specs: { thicknessMm: 41 } }), part({ id: "plain", category: "gpu", name: "MSI RTX 5060 8GB", specs: { thicknessMm: 51 } })];
+    expect(filterParts(catalog, "gpu", "5060ti").map(({ id }) => id)).toEqual(["ti"]);
+    expect(filterParts(catalog, "gpu", "5060 ti").map(({ id }) => id)).toEqual(["ti"]);
+    expect(filterParts(catalog, "gpu", "5060").map(({ id }) => id)).toEqual(["plain"]);
+  });
+  it("scopes removed public GPU fields out and applies inclusive thickness OR thresholds", () => {
+    const parsed = parseCatalogDetailFilterQuery({ "dr.thicknessMm": "-41;-51", "dr.lengthMm": "-200", "dv.gpuMemoryType": "GDDR7", "df.lowProfileBracket": "1" }, "gpu");
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.filter).toEqual({ numericRanges: { thicknessMm: [{ max: 41 }, { max: 51 }] } });
+    const catalog = [41, 42, 51, 52, undefined].map((thicknessMm, i) => part({ id: `gpu-${i}`, category: "gpu", specs: { thicknessMm } }));
+    expect(filterParts(catalog, "gpu", undefined, { detailRule: parsed.filter }).map(({ id }) => id)).toEqual(["gpu-0", "gpu-1", "gpu-2"]);
+    expect(parseCatalogDetailFilterQuery({ "dr.thicknessMm": "-oops" }, "gpu").errors.length).toBeGreaterThan(0);
+  });
+});
+
+it("keeps external GPU enclosures out of the core quote search pool", () => {
+  const catalog = [part({ id: "box", category: "gpu", name: "GIGABYTE AORUS RTX 5060 Ti AI BOX 16GB", priceWon: 1424800 }), part({ id: "card", category: "gpu", name: "GIGABYTE AORUS RTX 5060 Ti GAMING OC 16GB", priceWon: 800000 })];
+  expect(filterParts(catalog, "gpu", "5060ti", { quoteSellableOnly: true }).map(({ id }) => id)).toEqual(["card"]);
+  expect(catalogEligibilitySummaryFor(catalog)).toMatchObject({ eligibleCount: 1, excludedNonCoreCount: 1 });
 });

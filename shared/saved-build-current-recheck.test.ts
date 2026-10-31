@@ -46,7 +46,7 @@ describe("saved build current recheck export", () => {
     expect(text).toContain("새로 생김 1");
     expect(text).toContain("저장본 대비 +50,000원");
     expect(text).toContain("계산 버전 2.58.0");
-    expect(exported.dataBoundary).toBe("현재 부품 정보를 바탕으로 다시 확인한 결과입니다. 저장 견적은 바뀌지 않습니다. 가격·재고와 실제 장착 여부는 구매 전에 확인해 주세요. 게임 성능은 게임과 설정에 따라 달라집니다.");
+    expect(exported.dataBoundary).toBe("현재 부품 정보를 바탕으로 다시 확인한 결과입니다. 저장 견적은 바뀌지 않습니다. 가격/재고와 실제 장착 여부는 구매 전에 확인해 주세요. 게임 성능은 게임과 설정에 따라 달라집니다.");
     expect(text).toContain("부품 정보 기준일:");
     expect(text).not.toContain("현재 catalog");
     const json = JSON.stringify(exported);

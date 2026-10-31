@@ -36,15 +36,15 @@ export interface SavedBuildMonitorAssessment {
 }
 
 function riskCountsText(snapshot: SavedBuildCheckSnapshot) {
-  const base = `호환 불가 ${snapshot.blockerCount}개 · 주의 ${snapshot.warningCount}개 · 확인 필요 ${snapshot.unknownCount}개`;
+  const base = `호환 불가 ${snapshot.blockerCount}개 / 주의 ${snapshot.warningCount}개 / 확인 필요 ${snapshot.unknownCount}개`;
   const accessory = snapshot.accessoryCompatibility;
   const withAccessory = !accessory || (accessory.blockerCount === 0 && accessory.warningCount === 0 && accessory.unknownCount === 0)
     ? base
-    : `${base} · 주변 부품 호환 불가 ${accessory.blockerCount}개 · 주의 ${accessory.warningCount}개 · 확인 필요 ${accessory.unknownCount}개`;
+    : `${base} / 주변 부품 호환 불가 ${accessory.blockerCount}개 / 주의 ${accessory.warningCount}개 / 확인 필요 ${accessory.unknownCount}개`;
   const resourceState = snapshot.resourceBudget?.state;
-  if (resourceState === "danger") return `${withAccessory} · 전력·냉각 예산 기준 미달`;
-  if (resourceState === "warning") return `${withAccessory} · 전력·냉각 여유 좁음`;
-  if (resourceState === "unknown") return `${withAccessory} · 전력·냉각 수치 확인 필요`;
+  if (resourceState === "danger") return `${withAccessory} / 전력/냉각 예산 기준 미달`;
+  if (resourceState === "warning") return `${withAccessory} / 전력/냉각 여유 좁음`;
+  if (resourceState === "unknown") return `${withAccessory} / 전력/냉각 수치 확인 필요`;
   return withAccessory;
 }
 
@@ -58,9 +58,9 @@ function riskDeltaText(transition: SavedBuildCheckTransitionSummary) {
     transition.accessoryUnknownDelta !== 0 ? `주변 확인 필요 ${transition.accessoryUnknownDelta > 0 ? "+" : ""}${transition.accessoryUnknownDelta}` : undefined,
     transition.powerHeadroomDeltaW !== undefined ? `전력 여유 ${transition.powerHeadroomDeltaW > 0 ? "+" : ""}${transition.powerHeadroomDeltaW}W` : undefined,
     transition.coolerHeadroomDeltaW !== undefined ? `냉각 여유 ${transition.coolerHeadroomDeltaW > 0 ? "+" : ""}${transition.coolerHeadroomDeltaW}W` : undefined,
-    transition.resourceBudgetChanged && transition.powerHeadroomDeltaW === undefined && transition.coolerHeadroomDeltaW === undefined ? "전력·냉각 예산 상태" : undefined
+    transition.resourceBudgetChanged && transition.powerHeadroomDeltaW === undefined && transition.coolerHeadroomDeltaW === undefined ? "전력/냉각 예산 상태" : undefined
   ].filter((value): value is string => Boolean(value));
-  return values.join(" · ");
+  return values.join(" / ");
 }
 
 function analysisDeltaText(transition: SavedBuildCheckTransitionSummary) {
@@ -76,13 +76,13 @@ export function savedBuildMonitorAssessmentFor(snapshot: SavedBuildCheckSnapshot
   const riskDecreased = Boolean(transition && (transition.blockerDelta < 0 || transition.warningDelta < 0 || transition.unknownDelta < 0 || transition.accessoryBlockerDelta < 0 || transition.accessoryWarningDelta < 0 || transition.accessoryUnknownDelta < 0 || transition.resourceRiskDecreased));
   const deltaText = transition ? riskDeltaText(transition) : "";
   const analysisText = transition ? analysisDeltaText(transition) : undefined;
-  const transitionDeltaText = [deltaText || undefined, analysisText].filter((value): value is string => Boolean(value)).join(" · ");
+  const transitionDeltaText = [deltaText || undefined, analysisText].filter((value): value is string => Boolean(value)).join(" / ");
 
   if (snapshot.status === "incompatible" || snapshot.blockerCount > 0 || (accessory?.blockerCount ?? 0) > 0 || snapshot.resourceBudget?.state === "danger") {
     return {
       level: "critical",
       label: riskIncreased ? "호환 문제 증가" : "구매 전 확인 필요",
-      summary: `${riskCountsText(snapshot)}${transitionDeltaText ? ` · 마지막 기록 대비 ${transitionDeltaText}` : ""}`,
+      summary: `${riskCountsText(snapshot)}${transitionDeltaText ? ` / 마지막 기록 대비 ${transitionDeltaText}` : ""}`,
       requiresAttention: true,
       recordRecommended: !transition || transition.hasChanges
     };
@@ -92,7 +92,7 @@ export function savedBuildMonitorAssessmentFor(snapshot: SavedBuildCheckSnapshot
     return {
       level: "review",
       label: riskIncreased ? "확인할 항목 증가" : "확인 필요",
-      summary: `${riskCountsText(snapshot)}${transitionDeltaText ? ` · 마지막 기록 대비 ${transitionDeltaText}` : ""}`,
+      summary: `${riskCountsText(snapshot)}${transitionDeltaText ? ` / 마지막 기록 대비 ${transitionDeltaText}` : ""}`,
       requiresAttention: true,
       recordRecommended: !transition || transition.hasChanges
     };
@@ -125,13 +125,13 @@ export function savedBuildMonitorAssessmentFor(snapshot: SavedBuildCheckSnapshot
       analysisText,
       transition.catalogChanged ? "부품 정보 확인 시점" : undefined,
       transition.engineChanged ? "결과 계산 방식" : undefined,
-      transition.resourceBudgetChanged ? "전력·냉각 예산" : undefined,
+      transition.resourceBudgetChanged ? "전력/냉각 예산" : undefined,
       transition.newFindingCount > 0 || transition.resolvedFindingCount > 0 || transition.severityChangedFindingCount > 0 || transition.detailsChangedFindingCount > 0 ? "결과 상세" : undefined
     ].filter((value): value is string => Boolean(value));
     return {
       level: "changed",
-      label: "가격·부품 정보 변경",
-      summary: changedReasons.length > 0 ? `${changedReasons.join(" · ")} 내용이 바뀌었어요.` : "저장된 결과와 현재 정보가 달라졌어요.",
+      label: "가격/부품 정보 변경",
+      summary: changedReasons.length > 0 ? `${changedReasons.join(" / ")} 내용이 바뀌었어요.` : "저장된 결과와 현재 정보가 달라졌어요.",
       requiresAttention: false,
       recordRecommended: true
     };
@@ -140,7 +140,7 @@ export function savedBuildMonitorAssessmentFor(snapshot: SavedBuildCheckSnapshot
   return {
     level: "stable",
     label: "현재 상태 안정",
-      summary: "마지막 기록과 호환 결과·가격·성능 점수·전력·냉각 상태가 같습니다.",
+      summary: "마지막 기록과 호환 결과/가격/성능 점수/전력/냉각 상태가 같습니다.",
     requiresAttention: false,
     recordRecommended: false
   };

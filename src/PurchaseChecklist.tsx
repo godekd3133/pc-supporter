@@ -186,11 +186,11 @@ export function PurchaseChecklistPanel({ build, result, partMap, storageKey, onF
   const headingLabel = progress.total === 0
     ? "확인 항목 없음"
       : result.blockerCount > 0 || resourceBlocked
-        ? allChecked ? resourceBlocked && result.blockerCount === 0 ? "체크 완료 · 전력·냉각 기준 미달" : `체크 완료 · 호환 불가 ${result.blockerCount}개 남음` : "구매 보류 항목 있음"
+        ? allChecked ? resourceBlocked && result.blockerCount === 0 ? "체크 완료 / 전력/냉각 기준 미달" : `체크 완료 / 호환 불가 ${result.blockerCount}개 남음` : "구매 보류 항목 있음"
       : result.warningCount > 0 || result.unknownCount > 0
-        ? allChecked ? "체크 완료 · 호환 결과 정보 부족" : `${progress.remaining}개 남음`
+        ? allChecked ? "체크 완료 / 호환 결과 정보 부족" : `${progress.remaining}개 남음`
         : resourceNeedsReview
-          ? allChecked ? "체크 완료 · 전력·냉각 정보 부족" : `${progress.remaining}개 남음`
+          ? allChecked ? "체크 완료 / 전력/냉각 정보 부족" : `${progress.remaining}개 남음`
         : state === "complete" ? "모두 체크했어요" : `${progress.remaining}개 남음`;
   return <section className={`purchase-checklist-panel ${state}`} aria-label="구매 전 실행 체크리스트" data-testid="purchase-checklist" tabIndex={-1}>
     <div className="purchase-checklist-heading"><div><h2>구매 전 체크리스트</h2><p>부품 정보와 조립 전에 살펴볼 항목을 한곳에서 관리해요.</p></div><strong><FiCheckCircle /> {headingLabel}</strong></div>
@@ -200,7 +200,7 @@ export function PurchaseChecklistPanel({ build, result, partMap, storageKey, onF
     <div className="purchase-checklist-actions"><button className="text-button" type="button" data-testid="purchase-checklist-copy" onClick={() => void copyChecklist()} disabled={progress.total === 0}><FiCopy /> 체크리스트 복사</button><button className="text-button" type="button" onClick={downloadChecklist} disabled={progress.total === 0}><FiDownload /> JSON 저장</button><input ref={transferInputRef} className="purchase-checklist-transfer-input" type="file" accept=".json,application/json" aria-label="체크리스트 JSON 파일 가져오기" onChange={(event) => void importChecklistFile(event)} disabled={progress.total === 0} /><button className="text-button" type="button" onClick={() => transferInputRef.current?.click()} disabled={progress.total === 0}><FiDownload /> JSON 가져오기</button><button className="text-button" type="button" onClick={() => window.print()} disabled={progress.total === 0}><FiPrinter /> 인쇄</button><button className="text-button" type="button" onClick={checkAll} disabled={progress.total === 0 || progress.remaining === 0}><FiCheckCircle /> 모두 완료로 표시</button><button className="text-button" type="button" onClick={clearAll} disabled={progress.checked === 0}><FiRefreshCw /> 체크 초기화</button></div>
     {actionMessage && <p className="purchase-checklist-action-message" role="status">{actionMessage}</p>}
     {transferPreview && transferDiff && <div className="purchase-checklist-transfer-preview" role="region" aria-label="체크리스트 JSON 가져오기 미리보기">
-      <div className="purchase-checklist-transfer-preview-heading"><div><strong>체크리스트 가져오기 미리보기</strong><small>내보낸 시각 {transferPreview.exportedAt ?? "알 수 없음"} · 파일 항목 {transferPreview.itemIds.length}개</small></div><span>정보 부족</span></div>
+      <div className="purchase-checklist-transfer-preview-heading"><div><strong>체크리스트 가져오기 미리보기</strong><small>내보낸 시각 {transferPreview.exportedAt ?? "알 수 없음"} / 파일 항목 {transferPreview.itemIds.length}개</small></div><span>정보 부족</span></div>
       <div className="purchase-checklist-transfer-stats"><span>현재 완료 <b>{transferDiff.currentCheckedCount}개</b></span><span>가져올 완료 <b>{transferDiff.incomingCheckedCount}개</b></span><span>새로 체크 <b>{transferDiff.addedCount}개</b></span><span>해제 <b>{transferDiff.removedCount}개</b></span><span>유지 <b>{transferDiff.unchangedCount}개</b></span>{transferPreview.ignoredIds.length > 0 && <span>현재 없는 항목 <b>{transferPreview.ignoredIds.length}개</b></span>}</div>
       <p>현재 완료 상태를 즉시 바꾸지 않았습니다. 아래 내용을 확인한 뒤 적용하세요.</p>
       <div className="purchase-checklist-transfer-preview-actions"><button className="text-button" type="button" onClick={() => setTransferPreview(null)}>취소</button><button className="button button-primary" type="button" onClick={applyTransferPreview}>이 상태로 가져오기</button></div>

@@ -101,7 +101,7 @@ describe("accessory catalog", () => {
     const rawTextOnly = accessory({
       category: "storage_accessory",
       name: "M.2 PCIe x4 어댑터",
-      rawSpecText: "M.2 2280 · NVMe → PCIe x4",
+      rawSpecText: "M.2 2280 / NVMe → PCIe x4",
       specs: {},
       dataQuality: "live",
       missingFields: []

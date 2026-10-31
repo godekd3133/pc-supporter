@@ -44,7 +44,7 @@ function loadText(item: CaseRgbLoadOverrideListItem) {
     item.rgbDeviceCurrentA !== undefined ? `${item.rgbDeviceCurrentA}A/장치` : undefined,
     item.rgbDevicePowerW !== undefined ? `${item.rgbDevicePowerW}W/장치` : undefined,
     `제조사 ${item.manufacturerModel}`
-  ].filter(Boolean).join(" · ");
+  ].filter(Boolean).join(" / ");
 }
 
 function downloadJson(filename: string, value: unknown) {
@@ -281,9 +281,9 @@ export function CaseRgbLoadOverridePanel({ onToast, onMetaRefresh }: { onToast: 
     <div className="case-rgb-load-coverage"><div><strong>{coverage?.totalRgbCases.toLocaleString("ko-KR") ?? "-"}</strong><span>RGB 케이스</span></div><div><strong>{coverage?.registeredCount.toLocaleString("ko-KR") ?? "-"}</strong><span>부하 보강 등록</span></div><div><strong>{coverage?.missingCount.toLocaleString("ko-KR") ?? "-"}</strong><span>정보 미등록</span></div><div><strong>{coverage ? `${coverage.coveragePercent}%` : "-"}</strong><span>정보 확인률</span></div></div>
     <div className="case-rgb-load-grid">
       <div className="case-rgb-load-editor">
-        <div className="case-rgb-load-subheading"><strong>케이스 검색·단건 보강</strong><span>명시적 제조사 정보 필수</span></div>
-        <label className="case-rgb-load-search"><span>케이스 검색</span><div><FiSearch /><input aria-label="RGB 부하 케이스 검색" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="케이스명·브랜드·모델" disabled={busy} /></div></label>
-        {partsLoading ? <p className="case-rgb-load-state"><FiLoader className="spin" /> 케이스 검색 중...</p> : parts.length > 0 ? <div className="case-rgb-load-parts">{parts.map((part) => <button type="button" className={part.id === selectedPart?.id ? "selected" : ""} onClick={() => selectPart(part)} key={part.id} disabled={busy}><strong>{part.name}</strong><small>{part.id} · {partSummary(part)}</small></button>)}</div> : <p className="case-rgb-load-state">검색 결과가 없습니다.</p>}
+        <div className="case-rgb-load-subheading"><strong>케이스 검색/단건 보강</strong><span>명시적 제조사 정보 필수</span></div>
+        <label className="case-rgb-load-search"><span>케이스 검색</span><div><FiSearch /><input aria-label="RGB 부하 케이스 검색" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="케이스명/브랜드/모델" disabled={busy} /></div></label>
+        {partsLoading ? <p className="case-rgb-load-state"><FiLoader className="spin" /> 케이스 검색 중...</p> : parts.length > 0 ? <div className="case-rgb-load-parts">{parts.map((part) => <button type="button" className={part.id === selectedPart?.id ? "selected" : ""} onClick={() => selectPart(part)} key={part.id} disabled={busy}><strong>{part.name}</strong><small>{part.id} / {partSummary(part)}</small></button>)}</div> : <p className="case-rgb-load-state">검색 결과가 없습니다.</p>}
         {selectedPart && <form className="case-rgb-load-form" onSubmit={(event) => void saveSelected(event)}>
           <div className="case-rgb-load-selected"><span>선택한 케이스</span><strong>{selectedPart.name}</strong><small>{selectedPart.id}</small></div>
           <div className="case-rgb-load-fields"><label><span>RGB 장치당 소비전류 (A)</span><input aria-label="RGB 장치당 소비전류" type="number" min="0.001" max="20" step="0.001" value={currentA} onChange={(event) => setCurrentA(event.target.value)} placeholder="예: 0.4" disabled={busy} /></label><label><span>RGB 장치당 소비전력 (W)</span><input aria-label="RGB 장치당 소비전력" type="number" min="0.001" max="250" step="0.001" value={powerW} onChange={(event) => setPowerW(event.target.value)} placeholder="예: 2.5" disabled={busy} /></label></div>
@@ -293,15 +293,15 @@ export function CaseRgbLoadOverridePanel({ onToast, onMetaRefresh }: { onToast: 
         </form>}
       </div>
       <div className="case-rgb-load-batch">
-        <div className="case-rgb-load-subheading"><strong>JSON 일괄 보강</strong><span>최대 500개 · 오류 발생 시 전체 저장 중단</span></div>
+        <div className="case-rgb-load-subheading"><strong>JSON 일괄 보강</strong><span>최대 500개 / 오류 발생 시 전체 저장 중단</span></div>
         <textarea aria-label="케이스 RGB 부하 보강 JSON" value={json} onChange={(event) => { setJson(event.target.value); setValidation(null); setValidatedInput(""); }} placeholder={CASE_RGB_LOAD_PLACEHOLDER} disabled={busy} />
         <div className="case-rgb-load-batch-actions"><button className="button button-secondary" type="button" onClick={() => void validateBatch()} disabled={busy || !json.trim()}><FiCheckCircle /> JSON 확인</button><button className="button button-primary" type="button" onClick={() => void saveBatch()} disabled={busy || !validation || validation.invalidCount > 0 || validatedInput !== json}><FiSave /> 확인 결과 저장</button><button className="button button-light" type="button" onClick={() => void exportOverrides()} disabled={busy}><FiDownload /> JSON 내보내기</button></div>
-        {validation && <div className={`case-rgb-load-validation ${validation.invalidCount === 0 ? "valid" : "invalid"}`} role="status"><strong>{validation.invalidCount === 0 ? <><FiCheckCircle /> 저장 가능</> : <><FiAlertTriangle /> 저장 중단</>} · {validation.validCount}개 유효 · {validation.invalidCount}개 수정 필요</strong>{validation.items.filter((item) => !item.valid).slice(0, 5).map((item) => <p key={item.partId}><b>{item.partName ?? item.partId}</b> · {item.errors.join(" · ")}</p>)}</div>}
+        {validation && <div className={`case-rgb-load-validation ${validation.invalidCount === 0 ? "valid" : "invalid"}`} role="status"><strong>{validation.invalidCount === 0 ? <><FiCheckCircle /> 저장 가능</> : <><FiAlertTriangle /> 저장 중단</>} / {validation.validCount}개 유효 / {validation.invalidCount}개 수정 필요</strong>{validation.items.filter((item) => !item.valid).slice(0, 5).map((item) => <p key={item.partId}><b>{item.partName ?? item.partId}</b> / {item.errors.join(" / ")}</p>)}</div>}
         <p className="case-rgb-load-help"><FiInfo /> 등록값에는 제조사 모델/SKU와 출처 메모를 남겨야 합니다. URL은 HTTPS만 허용합니다.</p>
       </div>
     </div>
     <div className="case-rgb-load-list-heading"><strong>저장된 RGB 부하 정보</strong><span>{visibleOverrides.length} / {overrides.length}개</span><input aria-label="저장된 RGB 부하 정보 검색" value={listQuery} onChange={(event) => setListQuery(event.target.value)} placeholder="등록 목록 검색" disabled={busy} /></div>
-    {loading ? <p className="case-rgb-load-state"><FiLoader className="spin" /> 저장 목록을 불러오는 중...</p> : visibleOverrides.length === 0 ? <p className="case-rgb-load-state"><FiDatabase /> 저장된 RGB 부하 정보가 없습니다.</p> : <div className="case-rgb-load-list">{visibleOverrides.map((item) => <article key={item.partId}><div><strong>{item.partName ?? item.partId}</strong><small>{loadText(item)} · {new Date(item.updatedAt).toLocaleDateString("ko-KR")}</small><small>{item.sourceNote}</small></div><div>{item.sourceUrl && <a href={item.sourceUrl} target="_blank" rel="noreferrer" aria-label={`${item.partName ?? item.partId} RGB 부하 정보 페이지`}><FiExternalLink /></a>}<button className="text-button danger-text-button" type="button" onClick={() => void removeOverride(item.partId)} disabled={busy}><FiTrash2 /> 삭제</button></div></article>)}</div>}
+    {loading ? <p className="case-rgb-load-state"><FiLoader className="spin" /> 저장 목록을 불러오는 중...</p> : visibleOverrides.length === 0 ? <p className="case-rgb-load-state"><FiDatabase /> 저장된 RGB 부하 정보가 없습니다.</p> : <div className="case-rgb-load-list">{visibleOverrides.map((item) => <article key={item.partId}><div><strong>{item.partName ?? item.partId}</strong><small>{loadText(item)} / {new Date(item.updatedAt).toLocaleDateString("ko-KR")}</small><small>{item.sourceNote}</small></div><div>{item.sourceUrl && <a href={item.sourceUrl} target="_blank" rel="noreferrer" aria-label={`${item.partName ?? item.partId} RGB 부하 정보 페이지`}><FiExternalLink /></a>}<button className="text-button danger-text-button" type="button" onClick={() => void removeOverride(item.partId)} disabled={busy}><FiTrash2 /> 삭제</button></div></article>)}</div>}
     <p className="case-rgb-load-note"><FiInfo /> 저장값은 기본 카탈로그와 따로 관리합니다. 삭제하면 상품 페이지에서 읽은 값으로 돌아갑니다. 페이지에도 RGB 부하 정보가 없으면 연결 계획에 확인이 필요하다고 표시됩니다.</p>
   </section>;
 }

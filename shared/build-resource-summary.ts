@@ -49,9 +49,9 @@ function powerCardFor(metrics: BuildMetrics): BuildResourceCard {
     || metrics.psuWattageW !== undefined;
   const state = stateFor(metrics.powerHeadroomW, POWER_HEADROOM_REVIEW_W, active);
   const detail = metrics.psuWattageW !== undefined && metrics.recommendedPsuW !== undefined
-    ? `선택한 파워 ${metrics.psuWattageW}W · 그래픽카드 권장 파워 ${metrics.recommendedPsuW}W`
+    ? `선택한 파워 ${metrics.psuWattageW}W / 그래픽카드 권장 파워 ${metrics.recommendedPsuW}W`
     : metrics.gpuPowerW !== undefined
-      ? `그래픽카드 기준 소비전력 ${metrics.gpuPowerW}W · 권장 파워 용량 확인 필요`
+      ? `그래픽카드 기준 소비전력 ${metrics.gpuPowerW}W / 권장 파워 용량 확인 필요`
       : "그래픽카드 권장 파워 용량과 선택한 파워의 정격 출력을 확인하세요.";
   return {
     id: "power",
@@ -72,9 +72,9 @@ function coolingCardFor(metrics: BuildMetrics): BuildResourceCard {
     || metrics.cpuPowerW !== undefined;
   const state = stateFor(metrics.coolerHeadroomW, COOLER_HEADROOM_REVIEW_W, active);
   const detail = metrics.coolerCapacityW !== undefined && metrics.cpuPowerW !== undefined
-    ? `쿨러 지원 ${metrics.coolerCapacityW}W · CPU 기준 전력 ${metrics.cpuPowerW}W`
+    ? `쿨러 지원 ${metrics.coolerCapacityW}W / CPU 기준 전력 ${metrics.cpuPowerW}W`
     : metrics.cpuPowerW !== undefined
-      ? `CPU 기준 전력 ${metrics.cpuPowerW}W · 쿨러 지원 수치 확인 필요`
+      ? `CPU 기준 전력 ${metrics.cpuPowerW}W / 쿨러 지원 수치 확인 필요`
       : "CPU 기준 전력과 쿨러 지원 수치를 확인하세요.";
   return {
     id: "cooling",
@@ -104,11 +104,11 @@ export function buildResourceSummaryFor(metrics: BuildMetrics): BuildResourceSum
   const summary = state === "danger"
     ? "등록된 수치로는 전력 또는 냉각 여유가 부족합니다. 부품 정보와 조립 조건을 확인하세요."
     : state === "warning"
-      ? "계산된 전력·냉각 여유가 좁습니다. 구매 전에 실제 구성과 부품 정보를 확인하세요."
+      ? "계산된 전력/냉각 여유가 좁습니다. 구매 전에 실제 구성과 부품 정보를 확인하세요."
       : state === "unknown"
-        ? "전력·냉각 수치가 없어 여유를 계산하지 못했습니다. 확인 전에는 안전하다고 볼 수 없습니다."
+        ? "전력/냉각 수치가 없어 여유를 계산하지 못했습니다. 확인 전에는 안전하다고 볼 수 없습니다."
         : state === "good"
           ? "등록된 정격과 권장 수치로 계산한 여유입니다."
-          : "선택한 부품 정보로 전력·냉각 여유를 계산하지 않았습니다.";
+          : "선택한 부품 정보로 전력/냉각 여유를 계산하지 않았습니다.";
   return { state, stateLabel, summary, cards };
 }

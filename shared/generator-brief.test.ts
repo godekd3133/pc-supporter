@@ -24,7 +24,7 @@ describe("generator brief interpretation", () => {
   });
 
   it("supports developer briefs with explicit integrated graphics", () => {
-    const interpretation = generatorBriefInterpretationFor("개발·AI용 250만원, RAM 64기가, SSD 2TB, 내장 그래픽, 가성비");
+    const interpretation = generatorBriefInterpretationFor("개발/AI용 250만원, RAM 64기가, SSD 2TB, 내장 그래픽, 가성비");
     expect(interpretation.config).toMatchObject({ profile: "development", priority: "budget", budgetWon: 2_500_000, memoryCapacityGb: 64, storageCapacityGb: 2000, includeGpu: false });
     expect(interpretation.matches.map((match) => match.field)).toEqual(expect.arrayContaining(["profile", "priority", "budgetWon", "memoryCapacityGb", "storageCapacityGb", "includeGpu"]));
   });
@@ -75,5 +75,18 @@ describe("generator brief interpretation", () => {
     expect(interpretation.matches).toEqual([]);
     expect(interpretation.warnings[0]).toContain("입력한 내용에서 견적 조건을 찾지 못했어요.");
     expect(interpretation.confidence).toBe("low");
+  });
+});
+
+
+describe("main games in budget briefs", () => {
+  it("recognizes PUBG aliases without requiring an FPS target", () => {
+    const brief = generatorBriefInterpretationFor("330만원 배그, SSD 500GB");
+    expect(brief.config).toMatchObject({ profile: "gaming", budgetWon: 3300000, gamingGameIds: ["pubg"], storageCapacityGb: 500 });
+    expect(brief.config.gamingRefreshRate).toBeUndefined();
+  });
+  it("recognizes multiple game names and ignores excluded PUBG", () => {
+    expect(generatorBriefInterpretationFor("배틀그라운드와 발로란트").config.gamingGameIds).toEqual(["valorant", "pubg"]);
+    expect(generatorBriefInterpretationFor("배그는 안함, 로스트아크").config.gamingGameIds).toEqual(["lostark"]);
   });
 });

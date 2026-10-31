@@ -52,21 +52,21 @@ export type BenchmarkAvailabilityFilter = "all" | "complete" | "incomplete";
 export const BENCHMARK_AVAILABILITY_LABELS: Record<BenchmarkAvailabilityFilter, string> = {
   all: "벤치마크 전체",
   complete: "점수 전부 있음",
-  incomplete: "일부·없음"
+  incomplete: "일부/없음"
 };
 
 export const LISTING_TYPE_LABELS: Record<ListingType, string> = {
-  retail: "신품·정식 유통",
+  retail: "신품/정식 유통",
   bulk: "벌크",
   parallel_import: "병행수입",
   overseas: "해외구매",
-  used: "중고·리퍼",
+  used: "중고/리퍼",
   accessory: "액세서리",
   unknown: "유통 조건 확인"
 };
 
 export const LISTING_POLICY_LABELS: Record<ListingPolicy, string> = {
-  retail_only: "신품·정식 유통",
+  retail_only: "신품/정식 유통",
   include_bulk: "벌크 포함",
   all: "전체 조건"
 };
@@ -85,10 +85,10 @@ export const RECOMMENDATION_PRIORITY_LABELS: Record<RecommendationPriority, stri
 };
 
 export const RECOMMENDATION_PRIORITY_DESCRIPTIONS: Record<RecommendationPriority, string> = {
-  balanced: "호환성·성능·가격을 함께 고려합니다.",
+  balanced: "호환성/성능/가격을 함께 고려합니다.",
   budget: "예산과 가격 대비 성능을 우선합니다.",
   performance: "부품 성능과 처리 여유를 우선합니다.",
-  reliability: "호환·장착 정보가 충분하고 최근 가격과 판매처 정보가 확인된 부품을 우선합니다."
+  reliability: "호환/장착 정보가 충분하고 최근 가격과 판매처 정보가 확인된 부품을 우선합니다."
 };
 
 export function isRecommendationPriority(value: unknown): value is RecommendationPriority {
@@ -100,9 +100,9 @@ export type RecommendationProfile = "general" | "gaming" | "creator" | "developm
 export const RECOMMENDATION_PROFILE_LABELS: Record<RecommendationProfile, string> = {
   general: "일반형",
   gaming: "게이밍",
-  creator: "작업·크리에이터",
-  development: "개발·AI",
-  office: "사무·일반"
+  creator: "작업/크리에이터",
+  development: "개발/AI",
+  office: "사무/일반"
 };
 
 export type RecommendationPerformanceTier = "entry" | "high" | "top";
@@ -123,7 +123,7 @@ export const GAMING_RESOLUTION_LABELS: Record<GamingResolution, string> = {
   "4k": "4K"
 };
 
-// 게임·옵션·업스케일러에 따라 달라지는 실제 FPS가 아닌, 서비스의 보수적인 VRAM 확인 기준입니다.
+// 게임/옵션/업스케일러에 따라 달라지는 실제 FPS가 아닌, 서비스의 보수적인 VRAM 확인 기준입니다.
 export const GAMING_RESOLUTION_VRAM_TARGETS: Record<GamingResolution, number> = {
   "1080p": 8,
   "1440p": 12,
@@ -150,8 +150,8 @@ export type GamingUpscaling = "native" | "quality" | "balanced";
 
 export const GAMING_UPSCALING_LABELS: Record<GamingUpscaling, string> = {
   native: "업스케일링 없음",
-  quality: "업스케일링·품질",
-  balanced: "업스케일링·균형"
+  quality: "업스케일링/품질",
+  balanced: "업스케일링/균형"
 };
 
 export type GpuTargetFit = "met" | "partial" | "unknown";
@@ -204,6 +204,9 @@ export interface RecommendationPreferences {
   gamingMode?: GamingMode;
   gamingTargetFps?: number;
   gpuVendorPreference?: GpuVendor;
+  /** Absent means automatic selection; displayed hardware does not set a preference. */
+  cpuVendorPreference?: CpuVendor;
+  memoryTypePreference?: "DDR4" | "DDR5";
   priority: RecommendationPriority;
   profile: RecommendationProfile;
   budgetWon?: number;
@@ -593,6 +596,8 @@ export interface M2SlotReviewTemplate {
 
 export type RgbDeviceVoltage = "5V" | "12V" | "mixed";
 
+export type CpuVendor = "amd" | "intel";
+
 export type GpuVendor = "nvidia" | "amd" | "intel";
 
 export type MemoryProfile = "XMP" | "EXPO";
@@ -670,7 +675,7 @@ export interface PartSpecs {
   tdpW?: number;
   pptW?: number;
   integratedGraphics?: boolean;
-  /** 정규화된 CPU 세대 계열 — "Ryzen 9000"·"Core Ultra 200"·"Core 14" 등. */
+  /** 정규화된 CPU 세대 계열 — "Ryzen 9000"/"Core Ultra 200"/"Core 14" 등. */
   cpuSeries?: string;
   vrmCapacityW?: number;
   /** Manufacturer phase count; a stated range uses its minimum, without inferring watt capacity. */
@@ -794,6 +799,8 @@ export interface Part {
   updatedAt: string;
   /** Last time a live source price was successfully read. */
   priceCheckedAt?: string;
+  /** Last confirmed normal product page without any purchase offers. */
+  priceUnavailableAt?: string;
   /** When a complete Danawa category crawl last stopped listing this product. */
   delistedAt?: string;
   /** Runtime-only freshness classification added by catalog API responses. */
@@ -950,7 +957,7 @@ export const ACCESSORY_SPEC_PROFILE_LABELS: Record<AccessorySpecProfile, string>
   fan_hub_fan_connectivity: "팬 연결 정보",
   fan_hub_rgb_connectivity: "RGB 연결 정보",
   ups_output_w: "UPS 출력(W)",
-  thermal_grease_capacity_conductivity: "써멀그리스 용량·열전도율",
+  thermal_grease_capacity_conductivity: "써멀그리스 용량/열전도율",
   fit_not_assessed: "장착 적합성 기준 미평가"
 };
 
@@ -982,7 +989,7 @@ export const ACCESSORY_CATEGORY_LABELS: Record<AccessoryCategory, string> = {
   gpu_cooler: "그래픽카드 쿨러",
   memory_cooler: "RAM 쿨러",
   thermal_pad: "써멀패드",
-  fan_hub: "팬 허브·컨트롤러",
+  fan_hub: "팬 허브/컨트롤러",
   ups: "UPS"
 };
 
@@ -1161,6 +1168,9 @@ export interface BuildGenerationRequest {
   pinnedParts?: Partial<Record<PartCategory, string>>;
   /** GPU 제조사 선호 — 게이밍 기본(NVIDIA)을 사용자가 직접 바꿀 때 지정한다. */
   gpuVendorPreference?: GpuVendor;
+  /** Absent means automatic selection; displayed hardware does not set a preference. */
+  cpuVendorPreference?: CpuVendor;
+  memoryTypePreference?: "DDR4" | "DDR5";
 }
 
 export interface BuildGenerationDiagnosticFact {
@@ -1219,10 +1229,13 @@ export interface BuildPerformanceMetrics {
   cpuEvidenceKind?: "video_table" | "model_estimate";
 }
 
-/** 같은 부품군의 게임 역할·실제 용량 기준 한 단계 위/아래 후보. */
+/** 같은 부품군의 게임 역할/실제 용량 기준 한 단계 위/아래 후보. */
 export interface GeneratedPartTierAdjacency {
+  currentCapacityGb?: number;
   upId?: string;
   downId?: string;
+  upUnavailableReason?: string;
+  downUnavailableReason?: string;
   /** RAM retail kit ID can remain unchanged while its selected quantity grows. */
   upMemoryCapacityGb?: number;
   downMemoryCapacityGb?: number;
@@ -1238,6 +1251,9 @@ export interface BuildGenerationResult {
   gamingMode?: GamingMode;
   gamingTargetFps?: number;
   gpuVendorPreference?: GpuVendor;
+  /** Absent means automatic selection; displayed hardware does not set a preference. */
+  cpuVendorPreference?: CpuVendor;
+  memoryTypePreference?: "DDR4" | "DDR5";
   gamingTargetAssessment?: import("./gaming-target-assessment").GamingTargetAssessment;
   gamingSupportRequirements?: import("./gaming-part-tiers").GamingSupportRequirements;
   partTierSuitability?: Partial<Record<PartCategory, import("./gaming-part-tiers").GamingPartSuitability>>;
@@ -1256,6 +1272,7 @@ export interface BuildGenerationResult {
   memoryCapacityGb: number;
   gpuTarget?: GpuTargetEvidence;
   analysis?: BuildAnalysis;
+  cpuGpuBalance?: CpuGpuBalanceAssessment;
   budgetWon: number;
   includeNonRetail: boolean;
   listingPolicy: ListingPolicy;
@@ -1780,6 +1797,20 @@ export interface BuildBottleneck {
   action?: string;
 }
 
+export type GamingBalanceLevel = "too_weak" | "slightly_weak" | "good" | "slightly_strong" | "too_strong";
+
+export interface CpuGpuBalanceAssessment {
+  referenceId?: string;
+  policyVersion?: string;
+  contextRules?: string[];
+  cpu: { level: GamingBalanceLevel };
+  gpu: { level: GamingBalanceLevel };
+  recommendedCpuModels: string[];
+  cpuGamingPercent?: number;
+  referenceGpuModel?: string;
+  evidence: "video_measured" | "derived_policy" | "unknown";
+}
+
 export interface BuildAnalysis {
   profile: RecommendationProfile;
   overallScore?: number;
@@ -1790,6 +1821,7 @@ export interface BuildAnalysis {
   confidence: BuildAnalysisConfidence;
   factors: BuildAnalysisFactor[];
   balance?: BuildAnalysisBalance;
+  cpuGpuBalance?: CpuGpuBalanceAssessment;
   strengths: BuildAnalysisInsight[];
   focusAreas: BuildAnalysisInsight[];
   bottlenecks: BuildBottleneck[];
@@ -2284,10 +2316,10 @@ export type BenchmarkScoreKey = "cinebenchR23Single" | "cinebenchR23Multi" | "gp
 export type BenchmarkSourceKind = "official" | "independent_review" | "community_measurement" | "other";
 
 export const BENCHMARK_SOURCE_KIND_LABELS: Record<BenchmarkSourceKind, string> = {
-  official: "제조사·공식 측정표",
-  independent_review: "독립 리뷰·벤치마크 DB",
+  official: "제조사/공식 측정표",
+  independent_review: "독립 리뷰/벤치마크 DB",
   community_measurement: "사용자 측정값",
-  other: "기타·출처 확인 필요"
+  other: "기타/출처 확인 필요"
 };
 
 export type BenchmarkSourceCoverageKey = BenchmarkSourceKind | "unclassified";
@@ -2483,7 +2515,7 @@ export interface Benchmark3DMarkReviewWorkPackage {
 }
 
 export interface RecommendationFloorWon {
-  /** 내장 그래픽 최소 구성(RAM 16GB·SSD 500GB 기준)의 최저 호환 합계. */
+  /** 내장 그래픽 최소 구성(RAM 16GB/SSD 500GB 기준)의 최저 호환 합계. */
   integrated?: number;
   /** 외장 GPU 포함 최소 구성의 최저 호환 합계 (게임 VRAM 참고 기준 미적용). */
   discreteGpu?: number;

@@ -1,6 +1,7 @@
+import { PUBLIC_CATALOG_FILTER_FACETS, publicCatalogDetailFilterForCategory } from "./public-catalog-filters";
 import { describe, expect, it } from "vitest";
 import type { Part } from "./types";
-import { emptyEngineTargetFiltersConfig, engineFilterOptionLabelFor, engineTargetFilterActiveFacetCount, engineTargetFilterConfigFromUnknown, engineTargetFilterFacetDiagnosticsFor, engineTargetFilterRuleForCategory, engineTargetFiltersActiveCategories, engineTargetFiltersAllowPart } from "./engine-target-filters";
+import { ENGINE_TARGET_FILTER_FACETS, emptyEngineTargetFiltersConfig, engineFilterOptionLabelFor, engineTargetFilterActiveFacetCount, engineTargetFilterConfigFromUnknown, engineTargetFilterFacetDiagnosticsFor, engineTargetFilterRuleForCategory, engineTargetFiltersActiveCategories, engineTargetFiltersAllowPart } from "./engine-target-filters";
 
 const partFixture = (overrides: Partial<Part> = {}): Part => ({
   id: "p-1",
@@ -155,14 +156,14 @@ describe("engineTargetFilterRuleForCategory", () => {
   });
 
   it("모든 조건이 버려지면 규칙 자체가 사라진다", () => {
-    // gpu에는 socket·integratedGraphics facet이 없다.
+    // gpu에는 socket/integratedGraphics facet이 없다.
     expect(engineTargetFilterRuleForCategory({ specValues: { socket: ["AM5"] }, flags: { integratedGraphics: true } }, "gpu")).toBeUndefined();
     expect(engineTargetFilterRuleForCategory(undefined, "ssd")).toBeUndefined();
   });
 });
 
 describe("engineTargetFilterFacetDiagnosticsFor", () => {
-  it("적용된 facet별 제외·미등록 개수를 돌려준다", () => {
+  it("적용된 facet별 제외/미등록 개수를 돌려준다", () => {
     const parts = [
       partFixture({ id: "a", specs: { interface: "NVMe", capacityGb: 1000 } }),
       partFixture({ id: "b", specs: { interface: "SATA", capacityGb: 2000 } }),
@@ -173,4 +174,12 @@ describe("engineTargetFilterFacetDiagnosticsFor", () => {
     // 조건이 없으면 진단도 없다.
     expect(engineTargetFilterFacetDiagnosticsFor(parts, {}, "ssd")).toEqual([]);
   });
+});
+
+it("preserves administrator GPU facets but limits public filters to three thickness checkboxes", () => {
+  const hidden = ["gpuMemoryType", "gpuBoostClockMhz", "lowProfileBracket", "powerW", "recommendedPsuW", "lengthMm"];
+  expect(ENGINE_TARGET_FILTER_FACETS.gpu.map(({ id }) => id)).toEqual(expect.arrayContaining(hidden));
+  for (const field of hidden) expect(PUBLIC_CATALOG_FILTER_FACETS.gpu.map(({ id }) => id)).not.toContain(field);
+  expect(PUBLIC_CATALOG_FILTER_FACETS.gpu.find(({ id }) => id === "thicknessMm")).toMatchObject({ checkboxOnly: true, buckets: [{ label: "~41mm", max: 41 }, { label: "~51mm", max: 51 }, { label: "~61mm", max: 61 }] });
+  expect(publicCatalogDetailFilterForCategory({ numericRanges: { lengthMm: [{ max: 300 }], thicknessMm: [{ max: 41 }] } }, "gpu")).toEqual({ numericRanges: { thicknessMm: [{ max: 41 }] } });
 });

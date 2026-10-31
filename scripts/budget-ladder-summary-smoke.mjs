@@ -260,7 +260,7 @@ async function main() {
       || budgetLadderFailureProbe.currentBudget !== "2200000"
       || budgetLadderFailureProbe.retryEnabled !== true
       || budgetLadderFailureProbe.unhandledRejections.length !== 0) {
-      throw new Error(`예산 구간 POST·부품 정보 수화 실패 경로 검증 실패: ${JSON.stringify(budgetLadderFailureProbe)}`);
+      throw new Error(`예산 구간 POST/부품 정보 수화 실패 경로 검증 실패: ${JSON.stringify(budgetLadderFailureProbe)}`);
     }
     console.log(JSON.stringify({ ok: true, viewport: mobile ? "mobile" : "desktop", theme: dark ? "dark" : "light", ...probe, budgetLadderFailureProbe, ...(screenshotPath ? { screenshotPath } : {}) }, null, 2));
   } finally {

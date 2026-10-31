@@ -124,13 +124,13 @@ try {
   const patchResult = await jsonResponse(buildUrl, {
     method: "PATCH",
     headers: ownerHeaders(),
-    body: JSON.stringify({ name: "PostgreSQL 저장 견적 smoke · 수정", decisionNote: "수정된 선택 이유도 metadata history에 남아야 합니다." })
+    body: JSON.stringify({ name: "PostgreSQL 저장 견적 smoke / 수정", decisionNote: "수정된 선택 이유도 metadata history에 남아야 합니다." })
   });
-  assert(patchResult.response.ok && patchResult.payload?.name === "PostgreSQL 저장 견적 smoke · 수정" && patchResult.payload?.decisionNote === "수정된 선택 이유도 metadata history에 남아야 합니다.", `저장 견적 metadata를 수정하지 못했습니다. status=${patchResult.response.status}`);
+  assert(patchResult.response.ok && patchResult.payload?.name === "PostgreSQL 저장 견적 smoke / 수정" && patchResult.payload?.decisionNote === "수정된 선택 이유도 metadata history에 남아야 합니다.", `저장 견적 metadata를 수정하지 못했습니다. status=${patchResult.response.status}`);
 
   const metadataHistoryResult = await jsonResponse(`${buildUrl}/metadata-history`, { headers: ownerHeaders() });
   assert(metadataHistoryResult.response.ok && metadataHistoryResult.payload?.total === 1, "metadata history가 PostgreSQL에서 복원되지 않았습니다.");
-  assert(metadataHistoryResult.payload.items[0]?.previousName === "PostgreSQL 저장 견적 smoke" && metadataHistoryResult.payload.items[0]?.nextName === "PostgreSQL 저장 견적 smoke · 수정", "metadata history의 이전·현재 이름이 일치하지 않습니다.");
+  assert(metadataHistoryResult.payload.items[0]?.previousName === "PostgreSQL 저장 견적 smoke" && metadataHistoryResult.payload.items[0]?.nextName === "PostgreSQL 저장 견적 smoke / 수정", "metadata history의 이전/현재 이름이 일치하지 않습니다.");
 
   const progressBase = {
     inputFingerprint,
@@ -196,7 +196,7 @@ try {
   const restoredResult = await jsonResponse(buildUrl);
   const restored = restoredResult.payload;
   assert(restoredResult.response.ok, `최종 저장 견적 재조회에 실패했습니다. status=${restoredResult.response.status}`);
-  assert(restored.name === "PostgreSQL 저장 견적 smoke · 수정" && restored.decisionNote === "수정된 선택 이유도 metadata history에 남아야 합니다.", "최종 metadata가 PostgreSQL에서 복원되지 않았습니다.");
+  assert(restored.name === "PostgreSQL 저장 견적 smoke / 수정" && restored.decisionNote === "수정된 선택 이유도 metadata history에 남아야 합니다.", "최종 metadata가 PostgreSQL에서 복원되지 않았습니다.");
   assert(restored.purchaseProgress?.revision === 2 && restored.purchaseProgress.itemStates?.every((item) => item.status === "received"), "최종 구매 진행률 상태가 복원되지 않았습니다.");
   assert(restored.purchasePriceHistory?.revision === 2 && restored.purchasePriceHistory.priceHistory?.["row:gpu"]?.at(-1)?.unitPriceWon === 415000, "최종 가격 확인 이력이 복원되지 않았습니다.");
   assert(!Object.hasOwn(restored, "ownerToken") && !Object.hasOwn(restored, "ownerTokenHash"), "최종 공개 응답에 owner credential이 포함되었습니다.");

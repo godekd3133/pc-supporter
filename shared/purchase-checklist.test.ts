@@ -50,7 +50,7 @@ describe("purchase checklist", () => {
       "manual:seller-warranty"
     ]);
     expect(items.find((item) => item.id === "manual:manufacturer-support")?.detail).toBe("이 CPU와 메모리를 메인보드에서 쓸 수 있는지, 필요한 BIOS 버전은 무엇인지 제조사 안내에서 확인해 주세요.");
-    expect(items.find((item) => item.id === "manual:seller-warranty")?.detail).toBe("판매 가격과 재고, 배송일, 초기 불량 교환·보증 조건은 판매 페이지에서 확인해 주세요.");
+    expect(items.find((item) => item.id === "manual:seller-warranty")?.detail).toBe("판매 가격과 재고, 배송일, 초기 불량 교환/보증 조건은 판매 페이지에서 확인해 주세요.");
   });
 
   it("calculates progress only for current checklist items", () => {
@@ -67,8 +67,8 @@ describe("purchase checklist", () => {
   it("exports checked and unchecked items without dropping the source detail", () => {
     const items = purchaseChecklistItemsFor(build, result);
     const text = purchaseChecklistTextFor(items.slice(0, 2), new Set([items[0].id]));
-    expect(text).toContain(`[x] 검사 항목 · ${items[0].title}`);
-    expect(text).toContain(`[ ] 검사 항목 · ${items[1].title}`);
+    expect(text).toContain(`[x] 검사 항목 / ${items[0].title}`);
+    expect(text).toContain(`[ ] 검사 항목 / ${items[1].title}`);
     expect(text).toContain(items[0].detail);
   });
 

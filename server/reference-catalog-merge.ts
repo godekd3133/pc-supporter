@@ -5,8 +5,8 @@ function timestamp(value: string | undefined): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function priceObservationTime(part: Part): number {
-  return timestamp(part.priceCheckedAt ?? part.updatedAt);
+function priceObservationTime(part: Part, requireExplicitObservation = false): number {
+  return Math.max(timestamp(part.priceCheckedAt ?? (requireExplicitObservation ? undefined : part.updatedAt)), timestamp(part.priceUnavailableAt));
 }
 
 function listingObservationTime(part: Part): number {
@@ -17,7 +17,9 @@ function listingObservationTime(part: Part): number {
 /** Merge an already matched product without conflating price and listing observations. */
 export function mergeReferenceCatalogPart(current: Part, reference: Part): Part {
   let merged: Part = current;
-  if (priceObservationTime(current) < priceObservationTime(reference)) {
+  // A physical-spec timestamp cannot contradict an explicit observation of no offers.
+  const hasUnavailableObservation = Boolean(current.priceUnavailableAt || reference.priceUnavailableAt);
+  if (priceObservationTime(current, hasUnavailableObservation) < priceObservationTime(reference, hasUnavailableObservation)) {
     const hasReviewedSpecs = Boolean(current.specs.catalogSpecProvenance || current.specs.physicalEvidenceSourceUrl);
     merged = {
       ...current,
@@ -27,6 +29,15 @@ export function mergeReferenceCatalogPart(current: Part, reference: Part): Part 
       specs: hasReviewedSpecs ? { ...reference.specs, ...current.specs } : { ...current.specs, ...reference.specs },
       ...(hasReviewedSpecs ? { dataQuality: current.dataQuality, missingFields: [...current.missingFields] } : {})
     };
+  }
+
+  // Spreading an unavailable reference over a priced record must actually remove the old field.
+  if (merged !== current) {
+    if (reference.priceUnavailableAt && timestamp(reference.priceUnavailableAt) >= timestamp(reference.priceCheckedAt)) {
+      delete merged.priceWon;
+    } else {
+      delete merged.priceUnavailableAt;
+    }
   }
 
   const currentListingTime = listingObservationTime(current);
