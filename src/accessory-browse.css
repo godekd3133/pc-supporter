@@ -1,0 +1,186 @@
+/* Accessories tab: type navigation + shop-listing rows, matching the catalog list. */
+
+.app-shell .accessory-browse .accessory-browser { padding: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); box-shadow: none; }
+.app-shell .accessory-browse .workspace-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.app-shell .accessory-browse .accessory-quote-cta { display: inline-flex; align-items: center; gap: 10px; margin: 0; padding: 0; border: 0; background: transparent; color: var(--ink-2); font-size: 13px !important; white-space: nowrap; }
+.app-shell .accessory-browse .accessory-quote-cta > span { display: inline-flex; align-items: center; gap: 4px; }
+.app-shell .accessory-browse .accessory-quote-cta svg { color: var(--teal); }
+.app-shell .accessory-browse .accessory-quote-cta .text-button { display: inline-flex; align-items: center; gap: 4px; margin: 0; padding: 0; border: 0; color: var(--teal-deep); background: transparent; font-size: 13px !important; font-weight: 700; }
+
+/* Toolbar: search + quiet text actions */
+.app-shell .accessory-browse .accessory-browse-toolbar { display: flex; align-items: center; gap: 4px; padding: 14px 18px 10px; }
+.app-shell .accessory-browse .accessory-search { display: flex; flex: 1 1 auto; align-items: center; gap: 8px; min-width: 0; height: 42px; margin: 0 8px 0 0; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: 10px; color: var(--muted); background: var(--surface); box-shadow: none; }
+.app-shell .accessory-browse .accessory-search:focus-within { border-color: var(--teal); }
+.app-shell .accessory-browse .accessory-search input { flex: 1 1 auto; min-width: 0; height: 100%; padding: 0; border: 0; outline: 0; color: var(--ink); background: transparent !important; box-shadow: none; font-size: 14px !important; }
+.app-shell .accessory-browse .accessory-search .catalog-search-clear { display: grid; place-items: center; padding: 4px; border: 0; color: var(--muted); background: transparent; }
+.app-shell .accessory-browse .accessory-browse-toolbar > .text-button { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 5px; min-height: 36px; margin: 0; padding: 0 10px; border: 0 !important; border-radius: 8px; color: var(--muted) !important; background: transparent !important; box-shadow: none !important; font-size: 13px !important; font-weight: 600; white-space: nowrap; }
+.app-shell .accessory-browse .accessory-browse-toolbar > .text-button:hover,
+.app-shell .accessory-browse .accessory-browse-toolbar > .accessory-filter-toggle.selected { color: var(--ink) !important; background: var(--hover-fill) !important; }
+
+/* Type navigation: a fixed grid of type cells with icon and count */
+.app-shell .accessory-browse .accessory-type-nav { position: relative; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0; padding: 0 10px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.app-shell .accessory-browse .accessory-type-nav button { position: relative; display: flex; align-items: center; gap: 7px; min-width: 0; min-height: 44px; margin: 0; padding: 0 10px; border: 0; border-radius: 0; color: var(--muted); background: transparent; box-shadow: none; font-size: 14px !important; font-weight: 600; text-align: left; white-space: nowrap; cursor: pointer; }
+.app-shell .accessory-browse .accessory-type-nav button > span { overflow: hidden; text-overflow: ellipsis; }
+.app-shell .accessory-browse .accessory-type-nav button svg { flex: 0 0 auto; color: var(--muted); font-size: 17px; }
+.app-shell .accessory-browse .accessory-type-nav button small { flex: 0 0 auto; color: var(--muted); font-size: 12px !important; font-weight: 500; font-variant-numeric: tabular-nums; }
+.app-shell .accessory-browse .accessory-type-nav button:hover { color: var(--ink); background: color-mix(in srgb, var(--hover-fill) 55%, transparent); }
+.app-shell .accessory-browse .accessory-type-nav button.selected { color: var(--ink); font-weight: 800; }
+.app-shell .accessory-browse .accessory-type-nav button.selected svg { color: var(--teal); }
+.app-shell .accessory-browse .accessory-type-nav button.selected small { color: var(--ink-2); }
+.app-shell .accessory-browse .accessory-type-nav button.selected::after { position: absolute; right: 10px; bottom: 4px; left: 10px; height: 2px; border-radius: 2px; background: var(--ink); content: ""; }
+
+@media (min-width: 761px) and (max-width: 1180px) {
+  .app-shell .accessory-browse .accessory-type-nav { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+/* Brand filter panel (상세 조건) */
+.app-shell .accessory-browse .accessory-browse-filters { padding: 12px 18px; border-bottom: 1px solid var(--line); background: var(--surface); }
+.app-shell .accessory-browse .accessory-brand-filter-panel { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0; padding: 0; border: 0; background: transparent; }
+.app-shell .accessory-browse .accessory-brand-filter-panel label { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--ink-2); font-size: 13px !important; font-weight: 600; }
+.app-shell .accessory-browse .accessory-brand-filter-panel input { width: 220px; height: 34px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: 8px; color: var(--ink); background: var(--surface); font-size: 13px !important; }
+.app-shell .accessory-browse .accessory-brand-suggestions { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
+.app-shell .accessory-browse .accessory-brand-suggestions button { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; margin: 0; padding: 0 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--ink-2); background: var(--surface); box-shadow: none; font-size: 12.5px !important; font-weight: 600; }
+.app-shell .accessory-browse .accessory-brand-suggestions button small { color: var(--muted); font-size: 11.5px !important; font-weight: 500; }
+.app-shell .accessory-browse .accessory-brand-suggestions button.selected { border-color: var(--teal); color: var(--teal-deep); background: var(--accent-wash); }
+.app-shell .accessory-browse .accessory-brand-filter-panel > .text-button { margin: 0; padding: 0 6px; border: 0; color: var(--muted); background: transparent; font-size: 12.5px !important; }
+
+/* Result bar: count + price/sort selects */
+.app-shell .accessory-browse .accessory-browse-resultbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 18px; border-bottom: 1px solid var(--line); }
+.app-shell .accessory-browse .accessory-browse-resultbar > strong { color: var(--ink); font-size: 14px !important; font-weight: 700; white-space: nowrap; }
+.app-shell .accessory-browse .accessory-browse-resultbar .muted-count { margin-left: 4px; color: var(--muted); font-size: 13px !important; font-weight: 500; }
+.app-shell .accessory-browse .accessory-browse-resultbar .accessory-filters { display: flex !important; align-items: center; gap: 8px; margin: 0; padding: 0; overflow: visible; }
+.app-shell .accessory-browse .accessory-browse-resultbar .accessory-filters label { display: flex !important; align-items: center; gap: 0; margin: 0; }
+.app-shell .accessory-browse .accessory-browse-resultbar .accessory-filters label > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.app-shell .accessory-browse .accessory-browse-resultbar .accessory-filters .accessory-category-select { display: none !important; }
+.app-shell .accessory-browse .accessory-browse-resultbar .accessory-filters select { height: 32px; min-height: 32px; padding: 0 26px 0 10px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink-2); background-color: var(--surface); font-size: 13px !important; }
+
+/* List rows */
+.app-shell .accessory-browse .accessory-list { display: block; gap: 0; margin: 0; }
+.app-shell .accessory-browse .accessory-list-cached { border-top: 1px solid var(--line); }
+.app-shell .accessory-browse .accessory-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; margin: 0; padding: 0 18px 0 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; box-shadow: none; transform: none; }
+.app-shell .accessory-browse .accessory-row:hover { background: color-mix(in srgb, var(--hover-fill) 55%, transparent); }
+.app-shell .accessory-browse .accessory-row.selected { background: var(--accent-wash); box-shadow: inset 3px 0 0 var(--teal); }
+.app-shell .accessory-browse .accessory-row-main { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; align-items: center; gap: 14px; min-width: 0; margin: 0; padding: 12px 0 12px 18px; border: 0; border-radius: 0; color: inherit; background: transparent; box-shadow: none; text-align: left; cursor: pointer; }
+.app-shell .accessory-browse .accessory-row-image { display: grid; place-items: center; width: 56px; height: 56px; overflow: hidden; border: 1px solid var(--line); border-radius: 10px; color: var(--muted); background: var(--surface); font-size: 22px; }
+.app-shell .accessory-browse .accessory-row-image img { width: 100%; height: 100%; object-fit: contain; }
+.app-shell .accessory-browse .accessory-row-copy { display: grid; gap: 2px; min-width: 0; }
+.app-shell .accessory-browse .accessory-row-copy strong { overflow: hidden; color: var(--ink); font-size: 14.5px !important; font-weight: 700; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
+.app-shell .accessory-browse .accessory-row-copy small { overflow: hidden; color: var(--muted); font-size: 12px !important; text-overflow: ellipsis; white-space: nowrap; }
+.app-shell .accessory-browse .accessory-row-copy > span { overflow: hidden; color: var(--ink-2); font-size: 12.5px !important; text-overflow: ellipsis; white-space: nowrap; }
+.app-shell .accessory-browse .accessory-row-price { min-width: 96px; color: var(--ink); font-size: 17px !important; font-weight: 800; letter-spacing: -0.02em; text-align: right; white-space: nowrap; }
+/* Price provenance stays in the DOM for checks but is not shown. */
+.app-shell .accessory-browse .accessory-row-price .accessory-detail-price-evidence { display: none !important; }
+.app-shell .accessory-browse .accessory-row-actions { display: flex; flex-wrap: nowrap; align-items: center; gap: 2px; margin: 0; padding: 0; border: 0; }
+.app-shell .accessory-browse .accessory-row-actions > * { display: inline-flex; align-items: center; gap: 4px; min-height: 34px; margin: 0; padding: 0 8px; border: 0; border-radius: 8px; color: var(--muted); background: transparent; box-shadow: none; font-size: 12.5px !important; font-weight: 600; text-decoration: none; white-space: nowrap; }
+.app-shell .accessory-browse .accessory-row-actions > *:hover:not(:disabled) { color: var(--ink); background: var(--hover-fill); }
+.app-shell .accessory-browse .accessory-row-actions .accessory-watch-button.watched { color: var(--teal-deep); background: transparent; }
+.app-shell .accessory-browse .accessory-row-actions .accessory-catalog-add { margin-left: 6px; padding: 0 14px; border: 1px solid var(--teal); color: #fff; background: var(--teal); font-weight: 700; }
+.app-shell .accessory-browse .accessory-row-actions .accessory-catalog-add:hover:not(:disabled) { color: #fff; background: var(--teal-deep); }
+.app-shell .accessory-browse .accessory-row-actions .accessory-catalog-add:disabled { border-color: transparent; color: var(--muted); background: var(--hover-fill); }
+
+.app-shell .accessory-browse .accessory-state { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 40px 18px; color: var(--muted); font-size: 14px !important; }
+.app-shell .accessory-browse .catalog-skeleton-wrap,
+.app-shell .accessory-browse .fetch-error,
+.app-shell .accessory-browse .accessory-cached-fallback,
+.app-shell .accessory-browse .catalog-more-error { margin: 12px 18px; }
+.app-shell .accessory-browse .accessory-more { display: block; width: calc(100% - 36px); min-height: 40px; margin: 12px 18px 16px; border: 1px solid var(--line); border-radius: 10px; color: var(--ink-2); background: var(--surface); box-shadow: none; font-size: 13px !important; font-weight: 600; }
+.app-shell .accessory-browse .accessory-more:hover:not(:disabled) { border-color: var(--line-strong); color: var(--ink); }
+
+/* Mid widths: actions drop under the row, aligned with the text column. */
+@media (min-width: 761px) and (max-width: 1180px) {
+  .app-shell .accessory-browse .accessory-row { grid-template-columns: minmax(0, 1fr); row-gap: 0; padding-right: 18px; }
+  .app-shell .accessory-browse .accessory-row-actions { justify-content: flex-end; padding: 0 0 10px 88px; }
+}
+
+/* Mobile: chip row + card per item */
+@media (max-width: 760px) {
+  .app-shell .accessory-browse .workspace-heading { align-items: center; }
+  .app-shell .accessory-browse .accessory-browser { overflow: visible; border: 0; border-radius: 0; background: transparent; }
+  .app-shell .accessory-browse .accessory-browse-toolbar { flex-wrap: wrap; gap: 2px; padding: 0 0 8px; }
+  .app-shell .accessory-browse .accessory-search { flex: 1 1 100%; height: 44px; margin: 0 0 4px; }
+  .app-shell .accessory-browse .accessory-search input { font-size: 16px !important; }
+  .app-shell .accessory-browse .accessory-browse-toolbar > .text-button { min-height: 36px; padding: 0 8px; }
+  .app-shell .accessory-browse .accessory-type-nav { display: flex; flex-wrap: nowrap; gap: 6px; margin: 0 -16px; padding: 4px 16px 10px; overflow-x: auto; border: 0; scrollbar-width: none; overscroll-behavior-x: contain; }
+  .app-shell .accessory-browse .accessory-type-nav::-webkit-scrollbar { display: none; }
+  .app-shell .accessory-browse .accessory-type-nav button { flex: 0 0 auto; min-height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); font-size: 13.5px !important; }
+  .app-shell .accessory-browse .accessory-type-nav button svg { font-size: 16px; }
+  .app-shell .accessory-browse .accessory-type-nav button small { font-size: 11.5px !important; }
+  .app-shell .accessory-browse .accessory-type-nav button.selected { border-color: var(--ink); color: var(--surface); background: var(--ink); }
+  .app-shell .accessory-browse .accessory-type-nav button.selected svg,
+  .app-shell .accessory-browse .accessory-type-nav button.selected small { color: var(--surface); }
+  .app-shell .accessory-browse .accessory-type-nav button.selected::after { content: none; }
+  .app-shell .accessory-browse .accessory-browse-filters { margin: 0 0 8px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; }
+  .app-shell .accessory-browse .accessory-brand-filter-panel label { flex: 1 1 100%; }
+  .app-shell .accessory-browse .accessory-brand-filter-panel input { flex: 1 1 auto; width: auto; min-width: 0; height: 40px; font-size: 16px !important; }
+  .app-shell .accessory-browse .accessory-browse-resultbar { padding: 4px 0 10px; border: 0; }
+  .app-shell .accessory-browse .accessory-browse-resultbar .accessory-filters { gap: 6px; }
+  .app-shell .accessory-browse .accessory-browse-resultbar .accessory-filters select { height: 34px; max-width: 120px; padding: 0 24px 0 8px; }
+  .app-shell .accessory-browse .accessory-list { display: grid; gap: 10px; }
+  .app-shell .accessory-browse .accessory-row { grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+  .app-shell .accessory-browse .accessory-row:hover { background: var(--surface); }
+  .app-shell .accessory-browse .accessory-row.selected { border-color: var(--teal); box-shadow: none; }
+  .app-shell .accessory-browse .accessory-row-main { grid-template-columns: 96px minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 14px; row-gap: 6px; align-items: start; padding: 0; }
+  .app-shell .accessory-browse .accessory-row-image { grid-row: 1 / span 2; width: 96px; height: 96px; padding: 6px; border-radius: 12px; font-size: 30px; }
+  .app-shell .accessory-browse .accessory-row-copy strong { display: -webkit-box; font-size: 15px !important; line-height: 1.38; white-space: normal; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .app-shell .accessory-browse .accessory-row-copy > span { display: none; }
+  .app-shell .accessory-browse .accessory-row-price { grid-column: 2; align-self: end; min-width: 0; font-size: 18px !important; text-align: left; }
+  .app-shell .accessory-browse .accessory-row-actions { justify-content: flex-start; padding: 8px 0 0; border-top: 1px solid var(--line); }
+  .app-shell .accessory-browse .accessory-row-actions > * { min-height: 38px; padding: 0 7px; font-size: 13px !important; }
+  .app-shell .accessory-browse .accessory-row-actions .accessory-catalog-add { margin-left: auto; padding: 0 14px; }
+  .app-shell .accessory-browse .catalog-skeleton-wrap,
+  .app-shell .accessory-browse .fetch-error,
+  .app-shell .accessory-browse .accessory-cached-fallback,
+  .app-shell .accessory-browse .catalog-more-error { margin: 12px 0; }
+  .app-shell .accessory-browse .accessory-more { width: 100%; margin: 12px 0; min-height: 44px; }
+}
+
+@media (max-width: 360px) {
+  .app-shell .accessory-browse .accessory-row-main { grid-template-columns: 80px minmax(0, 1fr); }
+  .app-shell .accessory-browse .accessory-row-image { width: 80px; height: 80px; }
+  .app-shell .accessory-browse .accessory-row-actions > * { padding: 0 5px; font-size: 12px !important; }
+}
+
+/* Detail panel: same tokens as the list; provenance and missing-field lines stay in the DOM only. */
+.app-shell .accessory-browse .accessory-detail-panel { margin-top: 16px; padding: 20px; border: 1px solid var(--line); border-radius: 14px; color: var(--ink); background: var(--surface); box-shadow: none; }
+.app-shell .accessory-browse .accessory-detail-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin: 0 0 14px; }
+.app-shell .accessory-browse .accessory-detail-heading .eyebrow { margin: 0 0 4px; color: var(--muted) !important; font-size: 12px !important; font-weight: 600; letter-spacing: 0; text-transform: none; }
+.app-shell .accessory-browse .accessory-detail-heading h2 { margin: 0; color: var(--ink); font-size: 19px !important; font-weight: 800; line-height: 1.35; }
+.app-shell .accessory-browse .accessory-detail-heading h2 + p { margin: 4px 0 0; color: var(--muted); font-size: 13px !important; }
+.app-shell .accessory-browse .accessory-detail-heading .icon-button { flex: 0 0 auto; width: 36px; height: 36px; border: 0; border-radius: 8px; color: var(--muted); background: transparent; box-shadow: none; }
+.app-shell .accessory-browse .accessory-detail-heading .icon-button:hover { color: var(--ink); background: var(--hover-fill); }
+.app-shell .accessory-browse .accessory-detail-price { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0; padding: 12px 0; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; }
+.app-shell .accessory-browse .accessory-detail-price span { color: var(--ink-2); font-size: 13px !important; font-weight: 600; }
+.app-shell .accessory-browse .accessory-detail-price > strong { color: var(--ink); font-size: 20px !important; font-weight: 800; }
+.app-shell .accessory-browse .accessory-detail-price .accessory-detail-price-evidence,
+.app-shell .accessory-browse .accessory-detail-missing { display: none !important; }
+.app-shell .accessory-browse .accessory-detail-price-history { margin: 0; padding: 12px 0; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; }
+.app-shell .accessory-browse .accessory-detail-price-history-heading strong { color: var(--ink); font-size: 14px !important; }
+.app-shell .accessory-browse .accessory-detail-price-history-heading small,
+.app-shell .accessory-browse .accessory-detail-price-history-heading label,
+.app-shell .accessory-browse .accessory-detail-price-history-state { color: var(--muted); font-size: 12.5px !important; }
+.app-shell .accessory-browse .accessory-detail-price-history-heading select { height: 30px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink-2); background-color: var(--surface); font-size: 12.5px !important; }
+.app-shell .accessory-browse .accessory-detail-fit-notice { display: flex; gap: 8px; margin: 0; padding: 12px 0; border: 0; border-top: 1px solid var(--line); border-radius: 0; color: var(--ink-2); background: transparent !important; font-size: 13px !important; }
+.app-shell .accessory-browse .accessory-detail-fit-notice svg { flex: 0 0 auto; margin-top: 2px; color: var(--muted); }
+.app-shell .accessory-browse .accessory-detail-fit-notice strong { color: var(--ink); font-size: 13px !important; }
+.app-shell .accessory-browse .accessory-detail-fit-notice p { margin: 2px 0 0; color: var(--ink-2); font-size: 12.5px !important; }
+.app-shell .accessory-browse .accessory-detail-specs { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0 24px; margin: 0; padding: 4px 0 12px; border-top: 1px solid var(--line); }
+.app-shell .accessory-browse .accessory-detail-specs > div { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; }
+.app-shell .accessory-browse .accessory-detail-specs dt { color: var(--muted); font-size: 13px !important; }
+.app-shell .accessory-browse .accessory-detail-specs dd { margin: 0; color: var(--ink); font-size: 13px !important; font-weight: 600; text-align: right; }
+.app-shell .accessory-browse .accessory-detail-raw { margin: 0 0 12px; padding: 12px 0; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent !important; }
+.app-shell .accessory-browse .accessory-detail-raw summary { color: var(--ink) !important; font-size: 13px !important; font-weight: 700; }
+.app-shell .accessory-browse .accessory-detail-raw p { color: var(--ink-2) !important; background: transparent !important; font-size: 13px !important; }
+.app-shell .accessory-browse .accessory-detail-raw small,
+.app-shell .accessory-browse .accessory-detail-empty { color: var(--muted) !important; font-size: 12px !important; }
+.app-shell .accessory-browse .accessory-detail-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; margin: 4px 0 0; padding: 0; }
+.app-shell .accessory-browse .accessory-detail-actions > * { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 5px; width: auto !important; min-height: 40px; margin: 0; padding: 0 16px; border-radius: 10px; box-shadow: none; font-size: 13.5px !important; font-weight: 700; }
+.app-shell .accessory-browse .accessory-detail-actions > a { order: -1; border: 0; color: var(--muted); background: transparent; text-decoration: none; }
+.app-shell .accessory-browse .accessory-detail-actions > a:hover { color: var(--ink); background: var(--hover-fill); }
+.app-shell .accessory-browse .accessory-detail-actions .button-primary { border: 1px solid var(--teal); color: #fff; background: var(--teal); }
+.app-shell .accessory-browse .accessory-detail-actions .button-primary:hover:not(:disabled) { background: var(--teal-deep); }
+.app-shell .accessory-browse .accessory-detail-actions .button-primary:disabled { border-color: transparent; color: var(--muted); background: var(--hover-fill); }
+
+@media (max-width: 760px) {
+  .app-shell .accessory-browse .accessory-detail-panel { padding: 16px; }
+  .app-shell .accessory-browse .accessory-detail-actions > .button-primary { flex: 1 1 auto !important; justify-content: center; min-height: 46px; }
+}
