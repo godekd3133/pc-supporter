@@ -29,8 +29,8 @@ describe("CI verification contracts", () => {
 
   it("keeps accessory readiness observation on bounded DOM selectors", async () => {
     const browserSmoke = await readFile(resolve(projectRoot, "scripts/browser-smoke.mjs"), "utf8");
-    expect(browserSmoke).toContain("document.querySelector('.accessory-page') !== null && document.querySelector('.accessory-watch-button') !== null");
-    expect(browserSmoke).not.toContain("(document.body?.innerText ?? '').includes('주변 부품 카탈로그') && document.querySelector('.accessory-watch-button') !== null");
+    expect(browserSmoke).toContain("document.querySelector('.accessory-page') !== null && document.querySelector('.accessory-item') !== null");
+    expect(browserSmoke).not.toContain("(document.body?.innerText ?? '').includes('주변 부품 카탈로그') && document.querySelector('.accessory-item') !== null");
   });
 
   it("keeps the price-watchlist saved-link context probe wired", async () => {
