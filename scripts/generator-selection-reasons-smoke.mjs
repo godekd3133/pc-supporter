@@ -258,7 +258,7 @@ async function main() {
             await writeFile(screenshotPath, Buffer.from(screenshot.data, "base64"));
             importedScreenshotCaptured = true;
           }
-          if (!await setInputValue(client, '.generator-form input[type="number"]', budget)) throw new Error("자동 구성 재생성용 예산 입력을 설정하지 못했습니다.");
+          if (!await setInputValue(client, '.generator-form input[aria-label="목표 예산"]', budget)) throw new Error("자동 구성 재생성용 예산 입력을 설정하지 못했습니다.");
           const compareAgain = await client.evaluate("(() => { const node = [...document.querySelectorAll('.generator-form button')].find((candidate) => !candidate.disabled && (candidate.textContent ?? '').includes('균형형/가성비/성능 3안 비교')); if (!node) return false; node.click(); return true; })()");
           if (!compareAgain) throw new Error("가져온 상태에서 새 자동 구성 비교 버튼을 찾지 못했습니다.");
           await waitForValue(client, "Array.isArray(window.__generatorRecommendationRequests) && window.__generatorRecommendationRequests.length === 2 && document.querySelector('[data-testid=\"generator-variants-imported-state\"]') === null && document.querySelector('.generator-variants') !== null", "새 자동 구성 결과로 복귀");
@@ -383,15 +383,15 @@ async function main() {
       if (executeExportActions && !screenshotPath && (!probe.draftSaveDialogProbe || !probe.draftSaveConfirmedProbe || !probe.draftSaveOriginProbe || !probe.draftTransferProbe || !probe.draftCheckTransferProbe || !probe.draftCheckSaveOriginProbe || !probe.draftResultOriginProbe)) throw new Error("현재 draft 저장/출처/결과 화면/편집기/검사 전달 검증에 실패했습니다.");
       console.log(JSON.stringify({ ok: true, viewport: mobile ? "mobile" : "desktop", theme: dark ? "dark" : "light", mode: "variants", ...probe, ...(screenshotPath ? { screenshotPath } : {}) }, null, 2));
     } else {
-      await waitForValue(client, "document.querySelector('.generator-result') !== null && document.querySelectorAll('.generator-result .generator-line').length >= 6", "자동 견적 생성/부품 라인");
-      await client.evaluate("document.querySelector('.generator-result')?.scrollIntoView({ block: 'center', behavior: 'instant' });");
+      await waitForValue(client, "document.querySelector('.build-workspace-parts .component-card.selected') !== null && document.querySelectorAll('.build-workspace-parts .component-card.selected').length >= 6", "자동 견적 생성/부품 라인");
+      await client.evaluate("document.querySelector('.build-workspace-parts')?.scrollIntoView({ block: 'center', behavior: 'instant' });");
       if (dark) await client.evaluate("document.documentElement.dataset.theme = 'dark'; document.documentElement.style.colorScheme = 'dark';");
       await sleep(350);
       const probe = await client.evaluate(`(() => {
-        const result = document.querySelector('.generator-result');
-        const lines = [...document.querySelectorAll('.generator-result .generator-line')];
+        const result = document.querySelector('.build-workspace-parts');
+        const lines = [...document.querySelectorAll('.build-workspace-parts .component-card.selected')];
         const body = result?.textContent?.replace(/\\s+/g, " ").trim() ?? "";
-        const rationalePanel = document.querySelector('.generator-result .generator-rationale, .generator-result .generator-analysis, .generator-result .generator-selection-reasons, .generator-result .generator-gaming-evidence, .generator-result .generator-gpu-target');
+        const rationalePanel = document.querySelector('.build-workspace .generator-rationale, .build-workspace .generator-analysis, .build-workspace .generator-selection-reasons, .build-workspace .generator-gaming-evidence, .build-workspace .generator-gpu-target');
         return {
           path: location.pathname,
           result: Boolean(result),

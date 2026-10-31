@@ -240,8 +240,6 @@ import type { SavedBuildLiveCheck } from "./SavedBuildComparisonDecision";
 import type { UpgradeBundleScenarioPreviewState } from "./UpgradeBundleScenarioPreview";
 import type { SavedCatalogWatchlist } from "./SharedWatchlistView";
 import { eul, eun } from "../shared/josa";
-import { generatorManualPartRequestFor } from "./generator-manual-part";
-import { gamingPickerPartAllowed } from "../shared/gaming-picker-policy";
 import { formatPriceDelta, formatSignedPercent, formatSpecValue, formatWon, partSummary, similarityEvidenceText, suggestionSpecRows } from "./app-format";
 import { RecommendationControls } from "./RecommendationControls";
 import { type SavedBuildOpenFocus, type BuildScenarioPreviewState } from "./app-types";
@@ -253,7 +251,7 @@ import { ALTERNATIVE_COMPARISON_LOCAL_SHARES_STORAGE_KEY, BUDGET_LADDER_LOCAL_SH
 
 
 const PriceWatchlistView = lazy(() => import("./PriceWatchlistView").then((module) => ({ default: module.PriceWatchlistView })));
-const BuildGeneratorView = lazy(() => import("./BuildGeneratorView").then((module) => ({ default: module.BuildGeneratorView })));
+const LazyBuildWorkspaceView = lazy(() => import("./BuildWorkspaceView").then((module) => ({ default: module.BuildWorkspaceView })));
 const PartPicker = lazy(() => import("./PartPicker").then((module) => ({ default: module.PartPicker })));
 const ResultFindingCard = lazy(() => import("./ResultFindings").then((module) => ({ default: module.ResultFindingCard })));
 const AdminView = lazy(() => import("./AdminView").then((module) => ({ default: module.AdminView })));
@@ -287,7 +285,6 @@ const LazySaveBuildDialog = lazy(() => import("./SavedBuildDialogs").then((modul
 const LazyEditSavedBuildMetadataDialog = lazy(() => import("./SavedBuildDialogs").then((module) => ({ default: module.EditSavedBuildMetadataDialog })));
 const LazyRecoveryCodeDialog = lazy(() => import("./SavedBuildDialogs").then((module) => ({ default: module.RecoveryCodeDialog })));
 const LazyRecoverOwnershipDialog = lazy(() => import("./SavedBuildDialogs").then((module) => ({ default: module.RecoverOwnershipDialog })));
-const LazyEditorView = lazy(() => import("./EditorView").then((module) => ({ default: module.EditorView })));
 const LazyHistoryView = lazy(() => import("./HistoryView").then((module) => ({ default: module.HistoryView })));
 const LazyQuoteOnboardingView = lazy(() => import("./QuoteOnboardingView").then((module) => ({ default: module.QuoteOnboardingView })));
 const LazyAccessoryView = lazy(() => import("./AccessoryView").then((module) => ({ default: module.AccessoryView })));
@@ -390,7 +387,6 @@ type AlternativeComparisonShareHandler = (candidates: AlternativeComparisonCandi
 type AlternativeComparisonRevokeHandler = (share: AlternativeComparisonShareResult) => Promise<boolean>;
 type PickerState = {
   category: PartCategory;
-  context?: "generator";
   findingRuleId?: string;
   findingTitle?: string;
   affectedPartIds?: string[];
@@ -2399,6 +2395,11 @@ function App() {
       if (!isCurrent()) return;
       trackUsageEvent("recommend_success", { source: "recommend", profile: draft.profile });
       setGeneratorDraft(draft);
+      // The workspace has one parts list: a generated draft fills it in place.
+      setBuild(draft.selection);
+      setAppliedGeneratorDraft(draft);
+      setRecommendationPreferences(recommendationPreferencesForGeneratedDraft(draft));
+      setCurrentBuildOrigin(null);
     } catch (error: unknown) {
       if (!isCurrent()) return;
       trackUsageEvent("recommend_fail", { source: "recommend", status: error instanceof ApiError ? error.status : 0 });
@@ -2523,8 +2524,8 @@ function App() {
       await checkBuild(draft.selection, nextPreferences);
     } else {
       if (!isCurrent()) return;
-      setToast("자동 견적을 편집기로 가져왔습니다.");
-      navigate("/build", "editor");
+      setToast("선택한 구성을 부품 목록에 담았어요.");
+      if (view !== "editor" && view !== "generator") navigate("/build", "editor");
     }
   }
 
@@ -3009,41 +3010,6 @@ function App() {
 
   function selectPickerPart(part: Part) {
     if (!picker) return;
-    if (picker.context === "generator") {
-      if (!generatorDraft || generating) return;
-      const testbed = generatorDraft.profile === "gaming" && (generatorDraft.gamingTestbedPhase1 === true || generatorDraft.gamingMode !== undefined);
-      const message = testbed
-        ? !gamingPickerPartAllowed(part, parts)
-          ? "이 부품은 현재 게임 견적에 사용할 수 없어요. 국내에서 판매하는 부품을 골라 주세요."
-          : undefined
-        : quoteSelectionMessageFor(picker.category, part);
-      if (message) { setToast(message); return; }
-      const overrides: Pick<BuildGenerationRequest, "cpuVendorPreference" | "memoryTypePreference" | "gpuVendorPreference"> = {};
-      if (picker.category === "cpu") {
-        if (/intel|인텔/i.test(`${part.brand} ${part.name}`)) overrides.cpuVendorPreference = "intel";
-        else if (/amd|라이젠|ryzen/i.test(`${part.brand} ${part.name}`)) overrides.cpuVendorPreference = "amd";
-        if (generatorDraft.memoryTypePreference !== undefined) {
-          if (part.specs.socket === "AM4") overrides.memoryTypePreference = "DDR4";
-          else if (part.specs.socket === "AM5" || part.specs.socket === "LGA1851") overrides.memoryTypePreference = "DDR5";
-        }
-      }
-      if (picker.category === "motherboard") {
-        if (part.specs.socket?.startsWith("LGA")) overrides.cpuVendorPreference = "intel";
-        else if (part.specs.socket === "AM4" || part.specs.socket === "AM5") overrides.cpuVendorPreference = "amd";
-        if (part.specs.memoryType === "DDR4" || part.specs.memoryType === "DDR5") overrides.memoryTypePreference = part.specs.memoryType;
-      }
-      if (picker.category === "gpu") {
-        if (part.specs.gpuVendor === "amd" || /라데온|radeon|\bRX\s*\d/i.test(part.name)) overrides.gpuVendorPreference = "amd";
-        else if (part.specs.gpuVendor === "nvidia" || /지포스|geforce|\bRTX\s*\d/i.test(part.name)) overrides.gpuVendorPreference = "nvidia";
-      }
-      if (picker.category === "memory" && (part.specs.memoryType === "DDR4" || part.specs.memoryType === "DDR5")) overrides.memoryTypePreference = part.specs.memoryType;
-      const request = generatorManualPartRequestFor(generatorDraft, picker.category, part.id, overrides);
-      if (!request) { setToast("선택한 부품을 적용할 수 없어요."); return; }
-      rememberParts([part]);
-      setPicker(null);
-      void generateDraft(request, true).catch(() => undefined);
-      return;
-    }
     const message = quoteSelectionMessageFor(picker.category, part);
     if (message !== undefined) {
       setToast(message);
@@ -3662,34 +3628,34 @@ function App() {
         floors={meta?.recommendationFloorWon}
       />
     </Suspense>
-  ) : view === "generator" ? (
-    <Suspense fallback={<div className="shared-build-state"><FiLoader className="spin" /><span>자동 구성 화면을 불러오는 중...</span></div>}>
-      <BuildGeneratorView
-        initialProfile={recommendationPreferences.profile}
-        draft={generatorDraft}
-        variants={generatorVariants}
-        budgetLadder={generatorBudgetLadder}
-        requestError={generatorError}
-        requestErrorId={generatorRequestId}
-        diagnostics={generatorDiagnostics}
-        recoveryOptions={generatorRecoveryOptions}
-        loading={generating}
-        onGenerate={generateDraft}
-        onAdjustDraft={(request) => generateDraft(request, true)}
-        onPickPart={(category) => { if (!generatorDraft || generating) return; trackUsageEvent("part_picker_open", { category, via: "generator" }); setPicker({ category, context: "generator", initialCandidateMode: "all" }); }}
-        onGenerateVariants={generateDraftVariants}
-        onGenerateBudgetLadder={generateDraftBudgetLadder}
-        onApply={applyGeneratedDraft}
-        onSave={(draft) => void saveGeneratedDraft(draft)}
-        onToast={setToast}
-        onBudgetLadderShareSaved={rememberBudgetLadderShare}
-        onBudgetLadderShareRevoked={forgetBudgetLadderShare}
-        onEditPresetInOnboarding={openGeneratorPresetInOnboarding}
-        onBack={() => navigate("/", "home")}
-      />
-    </Suspense>
-  ) : view === "editor" ? (
-    <Suspense fallback={<div className="shared-build-state"><FiLoader className="spin" /><span>견적 편집 화면을 불러오는 중...</span></div>}><LazyEditorView
+  ) : view === "generator" || view === "editor" ? (
+    <Suspense fallback={<div className="shared-build-state"><FiLoader className="spin" /><span>견적 화면을 불러오는 중...</span></div>}><LazyBuildWorkspaceView
+      generator={{
+        initialProfile: recommendationPreferences.profile,
+        draft: generatorDraft,
+        variants: generatorVariants,
+        budgetLadder: generatorBudgetLadder,
+        requestError: generatorError,
+        requestErrorId: generatorRequestId,
+        diagnostics: generatorDiagnostics,
+        recoveryOptions: generatorRecoveryOptions,
+        loading: generating,
+        onGenerate: generateDraft,
+        onAdjustDraft: (request) => generateDraft(request, true),
+        onGenerateVariants: generateDraftVariants,
+        onGenerateBudgetLadder: generateDraftBudgetLadder,
+        onApply: applyGeneratedDraft,
+        onSave: (draft) => void saveGeneratedDraft(draft),
+        onToast: setToast,
+        onBudgetLadderShareSaved: rememberBudgetLadderShare,
+        onBudgetLadderShareRevoked: forgetBudgetLadderShare,
+        onEditPresetInOnboarding: openGeneratorPresetInOnboarding
+      }}
+      activeDraft={currentGeneratedDraft}
+      conditionsInitiallyOpen={view === "generator"}
+      onAdjustActiveDraft={adjustGeneratedDraft}
+      onSaveDraft={(draft) => void saveGeneratedDraft(draft)}
+      cpuGpuBalance={result && !resultIsStale ? result.analysis?.cpuGpuBalance : undefined}
       build={build}
       setBuild={setBuild}
       partMap={partMap}
@@ -3904,30 +3870,29 @@ function App() {
   return (
     <div className="app-shell" data-route-key={locationKey}>
       <a className="skip-to-content" href="#main-content">본문으로 건너뛰기</a>
-      <Suspense fallback={<AppHeaderLoadingFallback />}><LazyAppHeader showAdmin={meta?.adminAuthEnabled === false || meta?.adminSessionAuthenticated === true || view === "admin"} view={view} networkOnline={networkOnline} apiStatus={apiStatusDetails} bootstrapLoading={bootstrapLoading} bootstrapErrorCount={bootstrapIssues.length} savedBuildUnreadAlertCount={savedBuildUnreadAlertCount} watchlistUnreadAlertCount={watchlistUnreadAlertCount} catalogRefreshProgress={catalogRefreshProgress} onHome={() => navigate("/", "home")} onBuild={() => navigate("/build", "editor")} onGenerate={() => openGenerator()} onCatalog={() => navigate("/catalog", "catalog")} onAccessories={() => navigate("/accessories", "accessories")} onPriceWatchlist={() => navigate("/watchlist", "pricewatchlist")} onHistory={() => navigate("/history", "history")} onAdmin={() => navigate("/admin", "admin")} /></Suspense>
+      <Suspense fallback={<AppHeaderLoadingFallback />}><LazyAppHeader showAdmin={meta?.adminAuthEnabled === false || meta?.adminSessionAuthenticated === true || view === "admin"} view={view} networkOnline={networkOnline} apiStatus={apiStatusDetails} bootstrapLoading={bootstrapLoading} bootstrapErrorCount={bootstrapIssues.length} savedBuildUnreadAlertCount={savedBuildUnreadAlertCount} watchlistUnreadAlertCount={watchlistUnreadAlertCount} catalogRefreshProgress={catalogRefreshProgress} onHome={() => navigate("/", "home")} onBuild={() => navigate("/build", "editor")} onCatalog={() => navigate("/catalog", "catalog")} onAccessories={() => navigate("/accessories", "accessories")} onPriceWatchlist={() => navigate("/watchlist", "pricewatchlist")} onHistory={() => navigate("/history", "history")} onAdmin={() => navigate("/admin", "admin")} /></Suspense>
       {localStorageNotice}
       {draftOverwriteNotice}
-      <main className="page-container" id="main-content" tabIndex={-1}>{(incomingDraft || incomingPreferences) && <DraftSyncNotice build={incomingDraft ?? undefined} preferences={incomingPreferences ?? undefined} onApply={() => { skipNextHistoryRef.current = true; if (incomingDraft) setBuild(incomingDraft); if (incomingPreferences) setRecommendationPreferences(incomingPreferences); setResult(null); setCheckedInputFingerprint(null); setChangeHistory([]); setIncomingDraft(null); setIncomingPreferences(null); setToast("다른 탭에서 바뀐 견적을 불러왔어요. 호환 결과를 새로 확인해 주세요."); }} onDismiss={() => { setIncomingDraft(null); setIncomingPreferences(null); }} />}{(bootstrapIssues.length > 0 || !networkOnline || apiStatusDetails.status === "offline" || apiStatusDetails.status === "degraded") ? <BootstrapNotice issues={bootstrapIssues} online={networkOnline} apiStatus={apiStatusDetails} onRetry={(resource) => setBootstrapRetryRequest((current) => ({ resource, nonce: current.nonce + 1 }))} onRetryAll={() => setBootstrapRetryRequest((current) => ({ resource: null, nonce: current.nonce + 1 }))} retryingResource={bootstrapLoading ? bootstrapRetryRequest.resource : null} retryingAll={bootstrapLoading && bootstrapRetryRequest.resource === null} /> : null}<div className={`route-stage route-stage-${view}`} key={view}>{content}</div></main>
+      <main className="page-container" id="main-content" tabIndex={-1}>{(incomingDraft || incomingPreferences) && <DraftSyncNotice build={incomingDraft ?? undefined} preferences={incomingPreferences ?? undefined} onApply={() => { skipNextHistoryRef.current = true; if (incomingDraft) setBuild(incomingDraft); if (incomingPreferences) setRecommendationPreferences(incomingPreferences); setResult(null); setCheckedInputFingerprint(null); setChangeHistory([]); setIncomingDraft(null); setIncomingPreferences(null); setToast("다른 탭에서 바뀐 견적을 불러왔어요. 호환 결과를 새로 확인해 주세요."); }} onDismiss={() => { setIncomingDraft(null); setIncomingPreferences(null); }} />}{(bootstrapIssues.length > 0 || !networkOnline || apiStatusDetails.status === "offline" || apiStatusDetails.status === "degraded") ? <BootstrapNotice issues={bootstrapIssues} online={networkOnline} apiStatus={apiStatusDetails} onRetry={(resource) => setBootstrapRetryRequest((current) => ({ resource, nonce: current.nonce + 1 }))} onRetryAll={() => setBootstrapRetryRequest((current) => ({ resource: null, nonce: current.nonce + 1 }))} retryingResource={bootstrapLoading ? bootstrapRetryRequest.resource : null} retryingAll={bootstrapLoading && bootstrapRetryRequest.resource === null} /> : null}<div className={`route-stage route-stage-${view}`} key={view === "generator" ? "editor" : view}>{content}</div></main>
       {candidateScenarioComparison && result && <Suspense fallback={<div className="modal-backdrop" role="presentation"><section className="candidate-scenario-dialog candidate-scenario-dialog-loading" role="dialog" aria-modal="true" aria-label="부품 미리 비교 불러오는 중"><FiLoader className="spin" /> 선택한 부품을 전체 구성에 적용하는 중...</section></div>}><LazyCandidateScenarioComparisonPanel state={candidateScenarioComparison} currentResult={result} onApply={applyCandidateScenario} onSave={saveCandidateScenario} onRetry={(itemId) => void retryCandidateScenario(itemId)} onClose={() => { scenarioRequestSequenceRef.current += 1; setCandidateScenarioComparison(null); }} onWatchPart={watchPart} onShareComparison={shareAlternativeComparison} onRevokeComparison={revokeAlternativeComparison} onToast={setToast} formatWon={formatWon} /></Suspense>}
       {picker && (
         <Suspense fallback={<div className="modal-backdrop" role="presentation"><section className="save-build-dialog" role="status" aria-label="부품 선택기를 불러오는 중"><FiLoader className="spin" /></section></div>}>
           <PartPicker
-            key={`${picker.context ?? "editor"}-${picker.category}-${picker.findingRuleId ?? "catalog"}`}
+            key={`editor-${picker.category}-${picker.findingRuleId ?? "catalog"}`}
             category={picker.category}
-            quoteContext={picker.context === "generator" && generatorDraft?.profile === "gaming" ? "gaming_testbed" : undefined}
-            build={picker.context === "generator" && generatorDraft ? generatorDraft.selection : build}
+            build={build}
             partMap={partMap}
-            profile={picker.context === "generator" && generatorDraft ? generatorDraft.profile : recommendationPreferences.profile}
-            recommendationListingPolicy={picker.context === "generator" && generatorDraft ? generatorDraft.listingPolicy : recommendationPreferences.listingPolicy}
-            gamingResolution={picker.context === "generator" && generatorDraft ? generatorDraft.gamingResolution : recommendationPreferences.gamingResolution}
-            gamingRefreshRate={picker.context === "generator" && generatorDraft ? generatorDraft.gamingRefreshRate : recommendationPreferences.gamingRefreshRate}
+            profile={recommendationPreferences.profile}
+            recommendationListingPolicy={recommendationPreferences.listingPolicy}
+            gamingResolution={recommendationPreferences.gamingResolution}
+            gamingRefreshRate={recommendationPreferences.gamingRefreshRate}
             benchmarkCoverage={meta?.benchmarkCoverage}
-            brandOptions={picker.context === "generator" && generatorDraft?.profile === "gaming" ? meta?.catalogBrandCounts?.[picker.category] ?? [] : quoteBrandOptionsFor(picker.category, meta?.catalogBrandCounts?.[picker.category] ?? [])}
+            brandOptions={quoteBrandOptionsFor(picker.category, meta?.catalogBrandCounts?.[picker.category] ?? [])}
             findingRuleId={picker.findingRuleId}
             findingTitle={picker.findingTitle}
             initialCandidateMode={picker.initialCandidateMode}
             affectedPartIds={picker.affectedPartIds}
-            selected={selectionList(picker.context === "generator" && generatorDraft ? generatorDraft.selection : build, picker.category)}
+            selected={selectionList(build, picker.category)}
             onClose={() => setPicker(null)}
             onSelect={selectPickerPart}
             onToast={setToast}
