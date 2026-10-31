@@ -246,7 +246,7 @@ import { RecommendationControls } from "./RecommendationControls";
 import { type SavedBuildOpenFocus, type BuildScenarioPreviewState } from "./app-types";
 import { accessorySelections, addAccessoryToBuild, catalogRefreshReportForInput, defaultAccessoryTargetAccessoryId, defaultAccessoryTargetPartId, purchaseListRowsFor, removeAccessoryFromBuild, removeSelection, replaceAffectedPartsInBuild, selectionList, unknownPriceItemsFor, updateAccessoryHubTarget, updateAccessoryQuantity, updateAccessoryTarget, updateQuantity, updateRgbControllerTarget, upgradeBundleBuildFor, withSelectedPart } from "./build-edit";
 import { ChangeHistoryPanel, RequestErrorNotice } from "./notices";
-import { AccessoryVisual, CATEGORY_META, CategoryIcon, PartEvidence, accessoryIsWatched, partIsWatched, PartVisual, PartWatchButton } from "./part-visuals";
+import { AccessoryVisual, CATEGORY_META, CategoryIcon, PartEvidence, accessoryIsWatched, PartVisual } from "./part-visuals";
 import { readSavedBuildOwnerTokens, writeSavedBuildOwnerTokens, rememberSavedBuildOwnerToken, readSavedBuildOwnerToken, readSavedBuildIds, writeSavedBuildIds, SAVED_BUILD_OWNER_TOKENS_STORAGE_KEY, SAVED_BUILD_IDS_STORAGE_KEY, LOCAL_SAVED_STATE_LIMIT } from "./saved-build-storage";
 import { ALTERNATIVE_COMPARISON_LOCAL_SHARES_STORAGE_KEY, BUDGET_LADDER_LOCAL_SHARES_STORAGE_KEY, hasStoredOwnerCredentials, initializeOwnerSession, hasOwnerSessionResource, markOwnerSessionResource, ownerCredentialAvailable, ownerRequestOptions, ownerSessionCreateOptions, ownerSessionModeSupported, ownerSessionResourcesSnapshot, OWNER_SESSION_STORAGE_KEYS, removeOwnerSessionResource, retryOwnerSessionMigration, subscribeOwnerSessionResources, SAVED_BUILD_VERSION_LOCAL_SHARES_STORAGE_KEY, SAVED_WATCHLIST_LINK_STORAGE_KEY, SAVED_WATCHLIST_OWNER_TOKENS_STORAGE_KEY } from "./owner-session";
 
@@ -3437,10 +3437,6 @@ function App() {
     }
   }
 
-  function watchPart(part: Part) {
-    return watchCatalogEntry({ itemId: part.id, itemName: part.name, category: part.category, kind: "part" });
-  }
-
   function watchAccessory(item: AccessoryItem) {
     return watchCatalogEntry({ itemId: item.id, itemName: item.name, category: item.category, kind: "accessory" });
   }
@@ -3595,6 +3591,7 @@ function App() {
       hasBuildAlerts={homeHasBuildAlerts}
       hasWatchlistAlerts={homeHasWatchlistAlerts}
       savedBuilds={savedBuilds}
+      savedBuildMonitorAlerts={savedBuildMonitorAlerts}
       onJourneyAction={handleJourneyAction}
       onOpenSavedBuild={(saved) => void openSavedBuild(saved)}
       onStart={() => navigate("/build", "editor")}
@@ -3697,7 +3694,7 @@ function App() {
       onBack={() => navigate("/", "home")}
     /></Suspense>
   ) : view === "catalog" ? (
-    <Suspense fallback={<div className="shared-build-state"><FiLoader className="spin" /><span>부품 카탈로그를 불러오는 중...</span></div>}><LazyCatalogView meta={meta} build={build} partMap={partMap} profile={recommendationPreferences.profile} gamingResolution={recommendationPreferences.gamingResolution} gamingRefreshRate={recommendationPreferences.gamingRefreshRate} onAddPart={addCatalogPart} onCompareParts={compareCatalogScenarios} compareReady={Boolean(result && !resultIsStale)} onWatchPart={watchPart} isPartWatched={partIsWatched} onOpenWatchlist={() => navigate("/watchlist", "pricewatchlist")} onOpenBuild={() => navigate("/build", "editor")} onOpenAccessories={(query) => navigate(query?.trim() ? `/accessories?q=${encodeURIComponent(query.trim())}` : "/accessories", "accessories")} onShareComparison={shareAlternativeComparison} onRevokeComparison={revokeAlternativeComparison} onToast={setToast} onBack={() => navigate("/", "home")} /></Suspense>
+    <Suspense fallback={<div className="shared-build-state"><FiLoader className="spin" /><span>부품 카탈로그를 불러오는 중...</span></div>}><LazyCatalogView meta={meta} build={build} partMap={partMap} profile={recommendationPreferences.profile} gamingResolution={recommendationPreferences.gamingResolution} gamingRefreshRate={recommendationPreferences.gamingRefreshRate} onAddPart={addCatalogPart} onCompareParts={compareCatalogScenarios} compareReady={Boolean(result && !resultIsStale)} onOpenBuild={() => navigate("/build", "editor")} onOpenAccessories={(query) => navigate(query?.trim() ? `/accessories?q=${encodeURIComponent(query.trim())}` : "/accessories", "accessories")} onShareComparison={shareAlternativeComparison} onRevokeComparison={revokeAlternativeComparison} onToast={setToast} onBack={() => navigate("/", "home")} /></Suspense>
   ) : view === "accessories" ? (
     <Suspense fallback={<div className="accessory-page accessory-page-loading" role="status"><FiLoader className="spin" /> 주변 부품 카탈로그를 불러오는 중...</div>}><LazyAccessoryView meta={meta} accessoryItems={accessoryItems} selectedAccessories={accessorySelections(build)} onAddAccessory={(item) => void addAccessory(item)} onOpenBuild={() => navigate("/build", "editor")} onBack={() => navigate("/", "home")} onToast={setToast} formatWon={formatWon} AccessoryVisual={AccessoryVisual} /></Suspense>
   ) : view === "pricewatchlist" ? (
@@ -3844,7 +3841,6 @@ function App() {
       onChangeRgbController={(targetAccessoryId) => void changeRgbControllerTarget(targetAccessoryId)}
       onRemoveAccessory={(index) => void removeAccessory(index)}
       onToast={setToast}
-      onWatchPart={watchPart}
       onShareComparison={shareAlternativeComparison}
       onRevokeComparison={revokeAlternativeComparison}
       recommendationPreferences={recommendationPreferences}
@@ -3872,11 +3868,11 @@ function App() {
   return (
     <div className="app-shell" data-route-key={locationKey}>
       <a className="skip-to-content" href="#main-content">본문으로 건너뛰기</a>
-      <Suspense fallback={<AppHeaderLoadingFallback />}><LazyAppHeader showAdmin={meta?.adminAuthEnabled === false || meta?.adminSessionAuthenticated === true || view === "admin"} view={view} networkOnline={networkOnline} apiStatus={apiStatusDetails} bootstrapLoading={bootstrapLoading} bootstrapErrorCount={bootstrapIssues.length} savedBuildUnreadAlertCount={savedBuildUnreadAlertCount} watchlistUnreadAlertCount={watchlistUnreadAlertCount} catalogRefreshProgress={catalogRefreshProgress} onHome={() => navigate("/", "home")} onBuild={() => navigate("/build", "editor")} onCatalog={() => navigate("/catalog", "catalog")} onAccessories={() => navigate("/accessories", "accessories")} onPriceWatchlist={() => navigate("/watchlist", "pricewatchlist")} onHistory={() => navigate("/history", "history")} onAdmin={() => navigate("/admin", "admin")} /></Suspense>
+      <Suspense fallback={<AppHeaderLoadingFallback />}><LazyAppHeader showAdmin={meta?.adminAuthEnabled === false || meta?.adminSessionAuthenticated === true || view === "admin"} view={view} networkOnline={networkOnline} apiStatus={apiStatusDetails} bootstrapLoading={bootstrapLoading} bootstrapErrorCount={bootstrapIssues.length} savedBuildUnreadAlertCount={savedBuildUnreadAlertCount} catalogRefreshProgress={catalogRefreshProgress} onHome={() => navigate("/", "home")} onBuild={() => navigate("/build", "editor")} onCatalog={() => navigate("/catalog", "catalog")} onAccessories={() => navigate("/accessories", "accessories")} onAdmin={() => navigate("/admin", "admin")} /></Suspense>
       {localStorageNotice}
       {draftOverwriteNotice}
       <main className="page-container" id="main-content" tabIndex={-1}>{(incomingDraft || incomingPreferences) && <DraftSyncNotice build={incomingDraft ?? undefined} preferences={incomingPreferences ?? undefined} onApply={() => { skipNextHistoryRef.current = true; if (incomingDraft) setBuild(incomingDraft); if (incomingPreferences) setRecommendationPreferences(incomingPreferences); setResult(null); setCheckedInputFingerprint(null); setChangeHistory([]); setIncomingDraft(null); setIncomingPreferences(null); setToast("다른 탭에서 바뀐 견적을 불러왔어요. 호환 결과를 새로 확인해 주세요."); }} onDismiss={() => { setIncomingDraft(null); setIncomingPreferences(null); }} />}{(bootstrapIssues.length > 0 || !networkOnline || apiStatusDetails.status === "offline" || apiStatusDetails.status === "degraded") ? <BootstrapNotice issues={bootstrapIssues} online={networkOnline} apiStatus={apiStatusDetails} onRetry={(resource) => setBootstrapRetryRequest((current) => ({ resource, nonce: current.nonce + 1 }))} onRetryAll={() => setBootstrapRetryRequest((current) => ({ resource: null, nonce: current.nonce + 1 }))} retryingResource={bootstrapLoading ? bootstrapRetryRequest.resource : null} retryingAll={bootstrapLoading && bootstrapRetryRequest.resource === null} /> : null}<div className={`route-stage route-stage-${view}`} key={view === "generator" ? "editor" : view}>{content}</div></main>
-      {candidateScenarioComparison && result && <Suspense fallback={<div className="modal-backdrop" role="presentation"><section className="candidate-scenario-dialog candidate-scenario-dialog-loading" role="dialog" aria-modal="true" aria-label="부품 미리 비교 불러오는 중"><FiLoader className="spin" /> 선택한 부품을 전체 구성에 적용하는 중...</section></div>}><LazyCandidateScenarioComparisonPanel state={candidateScenarioComparison} currentResult={result} onApply={applyCandidateScenario} onSave={saveCandidateScenario} onRetry={(itemId) => void retryCandidateScenario(itemId)} onClose={() => { scenarioRequestSequenceRef.current += 1; setCandidateScenarioComparison(null); }} onWatchPart={watchPart} onShareComparison={shareAlternativeComparison} onRevokeComparison={revokeAlternativeComparison} onToast={setToast} formatWon={formatWon} /></Suspense>}
+      {candidateScenarioComparison && result && <Suspense fallback={<div className="modal-backdrop" role="presentation"><section className="candidate-scenario-dialog candidate-scenario-dialog-loading" role="dialog" aria-modal="true" aria-label="부품 미리 비교 불러오는 중"><FiLoader className="spin" /> 선택한 부품을 전체 구성에 적용하는 중...</section></div>}><LazyCandidateScenarioComparisonPanel state={candidateScenarioComparison} currentResult={result} onApply={applyCandidateScenario} onSave={saveCandidateScenario} onRetry={(itemId) => void retryCandidateScenario(itemId)} onClose={() => { scenarioRequestSequenceRef.current += 1; setCandidateScenarioComparison(null); }} onShareComparison={shareAlternativeComparison} onRevokeComparison={revokeAlternativeComparison} onToast={setToast} formatWon={formatWon} /></Suspense>}
       {picker && (
         <Suspense fallback={<div className="modal-backdrop" role="presentation"><section className="save-build-dialog" role="status" aria-label="부품 선택기를 불러오는 중"><FiLoader className="spin" /></section></div>}>
           <PartPicker
@@ -3898,7 +3894,6 @@ function App() {
             onClose={() => setPicker(null)}
             onSelect={selectPickerPart}
             onToast={setToast}
-            onWatchPart={watchPart}
             onShareComparison={shareAlternativeComparison}
             onRevokeComparison={revokeAlternativeComparison}
             onPreview={view === "result" && result && !resultIsStale ? previewSuggestion : undefined}
@@ -3909,7 +3904,6 @@ function App() {
             similarityEvidenceText={similarityEvidenceText}
             PartVisual={PartVisual}
             PartEvidence={PartEvidence}
-            PartWatchButton={PartWatchButton}
           />
         </Suspense>
       )}
