@@ -293,7 +293,16 @@ function gpuManualModelFor(part: Part): string | undefined {
   return `${part.name} ${part.model ?? ""}`.match(/\b(?:RTX|RX)\s*\d+\s*(?:TI|XTX|XT|SUPER)?\b/i)?.[0].replace(/\s+/g, "").toUpperCase();
 }
 
-/** The next policy step must exist and fit; filtering must never jump over it. */
+function memoryGenerations(value: string | undefined): string[] {
+  return [...((value ?? "").toUpperCase().match(/DDR\d/g) ?? [])];
+}
+function samePlatformAs(current: Part, candidate: Part) {
+  if (current.specs.socket !== candidate.specs.socket) return false;
+  const currentTypes = memoryGenerations(current.specs.memoryType);
+  return currentTypes.length === 0 || currentTypes.some((type) => memoryGenerations(candidate.specs.memoryType).includes(type));
+}
+
+/** Manual model ladders skip models with no sellable product, never a model that exists. */
 export function gamingPartTierAdjacencyFor(parts: readonly Part[], currentId: string, context: GamingTierContext = {}): GamingPartTierAdjacency {
   const current = parts.find((part) => part.id === currentId);
   if (!current) return {};
@@ -320,16 +329,32 @@ export function gamingPartTierAdjacencyFor(parts: readonly Part[], currentId: st
     const key = current.category === "cpu" ? cpuGamingModelFor(current) : gpuManualModelFor(current);
     const steps: readonly string[] = current.category === "cpu" ? /Intel|인텔|코어/i.test(current.name) ? GAMING_INTEL_CPU_MANUAL_STEPS : GAMING_CPU_MANUAL_STEPS : key?.startsWith("RX") ? GAMING_RADEON_MANUAL_STEPS : GAMING_NVIDIA_MANUAL_STEPS;
     if (!key || !steps.includes(key)) return { upUnavailableReason: "수동 단계표에 없는 모델입니다. 부품을 직접 선택해 주세요.", downUnavailableReason: "수동 단계표에 없는 모델입니다. 부품을 직접 선택해 주세요." };
-    visit(steps, key, (next, direction) => {
-      let candidates = available.filter((part) => (current.category === "cpu" ? cpuGamingModelFor(part) : gpuManualModelFor(part)) === next);
+    const candidatesFor = (model: string) => {
+      let candidates = available.filter((part) => (current.category === "cpu" ? cpuGamingModelFor(part) : gpuManualModelFor(part)) === model);
       // VRAM variants share one model step. Retain the current VRAM capacity when
       // that model offers it; a lower-VRAM variant cannot masquerade as an upgrade.
       if (current.category === "gpu" && positive(current.specs.vramGb)) {
         const sameCapacity = candidates.filter((part) => part.specs.vramGb === current.specs.vramGb);
         if (sameCapacity.length) candidates = sameCapacity;
       }
-      choose(candidates, direction, next);
-    });
+      return candidates;
+    };
+    const index = steps.indexOf(key);
+    for (const direction of ["up", "down"] as const) {
+      // Stay on the reviewed model ladder, but step past models that have no sellable
+      // product at all. A model that exists and fails the fit rules still stops here.
+      // A skipped-to model must also stay on the current socket and memory generation.
+      const delta = direction === "up" ? 1 : -1;
+      const immediate = steps[index + delta];
+      if (immediate === undefined) continue;
+      let found: { model: string; candidates: Part[] } | undefined;
+      for (let step = index + delta; step >= 0 && step < steps.length; step += delta) {
+        const candidates = step === index + delta ? candidatesFor(steps[step]) : candidatesFor(steps[step]).filter((part) => samePlatformAs(current, part));
+        if (candidates.length > 0) { found = { model: steps[step], candidates }; break; }
+      }
+      if (found) choose(found.candidates, direction, found.model);
+      else choose([], direction, immediate);
+    }
     return result;
   }
   if ((current.category === "ssd" || current.category === "hdd") && positive(current.specs.capacityGb)) {

@@ -230,7 +230,9 @@ const categoryStepPartsCache = new Map<PartCategory, Promise<Part[]>>();
 function categoryStepParts(category: PartCategory) {
   let pending = categoryStepPartsCache.get(category);
   if (!pending) {
-    pending = api<{ items: Part[] }>(`/api/parts?category=${category}&sort=price_asc&priceStatus=known&limit=300`, { retry: 1 }).then((payload) => payload.items).catch(() => {
+    // Both ends of the price range, so the top models are reachable in large categories.
+    const page = (sort: string) => api<{ items: Part[] }>(`/api/parts?category=${category}&sort=${sort}&priceStatus=known&limit=500`, { retry: 1 }).then((payload) => payload.items);
+    pending = Promise.all([page("price_asc"), page("price_desc")]).then(([low, high]) => [...low, ...high]).catch(() => {
       categoryStepPartsCache.delete(category);
       return [];
     });

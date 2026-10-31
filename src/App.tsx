@@ -1,3 +1,4 @@
+import { BrandMark } from "./BrandMark";
 import { getLocalStorageHealth, safeLocalStorage, safeSessionStorage, subscribeLocalStorageHealth } from "./safe-storage";
 import "./mobile-navigation.css";
 import { Fragment, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ComponentType } from "react";
@@ -782,7 +783,7 @@ function AppHeaderLoadingFallback() {
     <div className="topbar-inner">
       <span className="mobile-header-menu"><FiMenu /></span>
       <span className="brand">
-        <span className="brand-mark"><FiCpu /></span>
+        <span className="brand-mark"><BrandMark /></span>
         <span><strong>PC Supporter</strong></span>
       </span>
       <span className="topbar-status loading"><span className="status-dot loading" /> 서비스 동기화 중</span>
@@ -3579,6 +3580,7 @@ function App() {
   const content = view === "home" ? (
     <Suspense fallback={<div className="home-page home-page-loading" role="status"><FiLoader className="spin" /> 홈 화면을 불러오는 중...</div>}>
       <LazyHomeView
+      onOpenCategory={(category) => navigate(`/catalog?category=${category}`, "catalog")}
       meta={meta}
       build={build}
       result={result}

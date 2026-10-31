@@ -98,6 +98,11 @@ export function storageCapacityForDisplay(capacityGb: number): string {
   return `${capacityGb / divisor}TB`;
 }
 
+function hddRpmFor(part: Part) {
+  const rpm = `${part.name} ${part.model ?? ""}`.match(/\b(5400|5640|5700|5900|7200|10000|15000)\s*(?:RPM|\/|$|\s)/i)?.[1];
+  return rpm ? `${Number(rpm).toLocaleString("ko-KR")}RPM` : undefined;
+}
+
 export function partSummary(part: Part | undefined) {
   if (!part) return "아직 선택하지 않았습니다.";
   const effectiveMemoryLatency = memoryEffectiveLatencyForDisplay(part);
@@ -123,6 +128,9 @@ export function partSummary(part: Part | undefined) {
     part.category === "ssd" && part.specs.m2PcieGeneration !== undefined ? `PCIe ${part.specs.m2PcieGeneration.toFixed(1)}` : undefined,
     part.category === "ssd" && part.specs.sequentialReadMbps !== undefined ? `읽기 ${part.specs.sequentialReadMbps.toLocaleString("ko-KR")}MB/s` : undefined,
     part.category === "ssd" && part.specs.ssdTbwTb !== undefined ? `TBW ${part.specs.ssdTbwTb}TB` : undefined,
+    part.category === "hdd" && part.specs.capacityGb !== undefined ? storageCapacityForDisplay(part.specs.capacityGb) : undefined,
+    part.category === "hdd" ? hddRpmFor(part) : undefined,
+    part.category === "hdd" && part.specs.interface ? part.specs.interface : undefined,
     part.specs.wattageW ? `${part.specs.wattageW}W` : undefined,
     part.category === "psu" && part.specs.psuCableType ? `케이블 ${part.specs.psuCableType === "fully_modular" ? "풀모듈러" : part.specs.psuCableType === "semi_modular" ? "세미모듈러" : "일체형"}` : undefined,
     part.category === "psu" && part.specs.psuRailType ? `12V ${part.specs.psuRailType === "single" ? "싱글레일" : "다중레일"}` : undefined,

@@ -325,14 +325,15 @@ describe("SSD family preference with approved same-capacity fallback", () => {
 
 
 describe("strict manual step boundaries", () => {
-  it("does not skip a missing CPU model or reorder a manual ladder when prices change", () => {
+  it("steps past a CPU model with no sellable product but keeps the manual ladder order", () => {
     const parts = [cpu("7500F"), cpu("7600"), cpu("9600"), cpu("9600X")];
     expect(gamingPartTierAdjacencyFor(parts, parts[0].id).upId).toBe(parts[1].id);
     expect(gamingPartTierAdjacencyFor(parts.map((part,index) => ({...part,priceWon: 1000000-index*200000})), parts[0].id).upId).toBe(parts[1].id);
-    expect(gamingPartTierAdjacencyFor([parts[0], parts[2]], parts[0].id)).toMatchObject({upUnavailableReason: expect.stringContaining("7600")});
-    expect(gamingPartTierAdjacencyFor([parts[0], parts[2]], parts[0].id).upId).toBeUndefined();
+    expect(gamingPartTierAdjacencyFor([parts[0], parts[2]], parts[0].id).upId).toBe(parts[2].id);
+    expect(gamingPartTierAdjacencyFor([parts[2], parts[0]], parts[2].id).downId).toBe(parts[0].id);
+    expect(gamingPartTierAdjacencyFor([parts[3]], parts[3].id)).toMatchObject({upUnavailableReason: expect.any(String)});
   });
-  it("treats GPU VRAM variants as one model step and never jumps a missing model", () => {
+  it("treats GPU VRAM variants as one model step and steps past a model with no product", () => {
     const base = gpu("RTX 5060",8);
     const eight = gpu("RTX 5060 Ti",8);
     const sixteen = {...gpu("RTX 5060 Ti",16),priceWon: 1};
@@ -340,11 +341,11 @@ describe("strict manual step boundaries", () => {
     expect(gamingPartTierAdjacencyFor([base,eight,sixteen,next],base.id).upId).toBe(eight.id);
     expect(gamingPartTierAdjacencyFor([base,eight,sixteen,next],eight.id).upId).toBe(next.id);
     expect(gamingPartTierAdjacencyFor([base,eight,sixteen,next],sixteen.id).downId).toBe(base.id);
-    expect(gamingPartTierAdjacencyFor([base,next],base.id)).toMatchObject({upUnavailableReason: expect.stringContaining("RTX5060TI")});
+    expect(gamingPartTierAdjacencyFor([base,next],base.id).upId).toBe(next.id);
   });
   it("does not use an unavailable-price SKU as the intermediate step", () => {
-    const base = gpu("RTX 5060",8), missing = {...gpu("RTX 5060 Ti",8),priceWon: undefined,priceUnavailableAt:"2026-10-12T00:00:00Z"};
-    expect(gamingPartTierAdjacencyFor([base,missing,gpu("RTX 5070",12)],base.id).upId).toBeUndefined();
+    const base = gpu("RTX 5060",8), missing = {...gpu("RTX 5060 Ti",8),priceWon: undefined,priceUnavailableAt:"2026-10-12T00:00:00Z"}, next = gpu("RTX 5070",12);
+    expect(gamingPartTierAdjacencyFor([base,missing,next],base.id).upId).toBe(next.id);
   });
   it("does not skip unavailable storage capacity or round a RAM kit up past the target", () => {
     const one = storage("ssd",1000), four=storage("ssd",4000);

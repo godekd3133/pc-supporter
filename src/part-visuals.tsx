@@ -6,8 +6,9 @@ import { type AccessoryItem, type Part, type PartCategory, isKnownPrice } from "
 import { safeExternalUrl } from "./safe-source-url";
 import { useEffect, useState } from "react";
 import type { IconType } from "react-icons";
-import { FiBox, FiClock, FiCpu, FiDatabase, FiHardDrive, FiInfo, FiMonitor, FiServer, FiTool, FiZap } from "react-icons/fi";
+import { FiClock, FiInfo, FiTool } from "react-icons/fi";
 import { formatSpecValue, formatWon, suggestionSpecRows } from "./app-format";
+import { CATEGORY_ICONS } from "./category-icons";
 
 export type PartWatchHandler = (part: Part) => boolean;
 
@@ -25,63 +26,63 @@ export const CATEGORY_META: Record<PartCategory, CategoryMeta> = {
     helper: "프로세서와 소켓 규격을 선택하세요.",
     required: true,
     multiple: false,
-    Icon: FiCpu
+    Icon: CATEGORY_ICONS.cpu
   },
   cooler: {
     label: "CPU 쿨러",
     helper: "CPU 소켓과 냉각 여유를 검사합니다.",
     required: true,
     multiple: false,
-    Icon: FiTool
+    Icon: CATEGORY_ICONS.cooler
   },
   motherboard: {
     label: "메인보드",
     helper: "CPU, RAM, 저장장치 슬롯의 기준입니다.",
     required: true,
     multiple: false,
-    Icon: FiServer
+    Icon: CATEGORY_ICONS.motherboard
   },
   memory: {
     label: "RAM",
     helper: "메모리 규격, 총 용량, 슬롯 수를 검사합니다.",
     required: true,
     multiple: true,
-    Icon: FiDatabase
+    Icon: CATEGORY_ICONS.memory
   },
   gpu: {
     label: "그래픽카드",
     helper: "전력과 케이스 장착 길이를 검사합니다.",
     required: false,
     multiple: false,
-    Icon: FiMonitor
+    Icon: CATEGORY_ICONS.gpu
   },
   ssd: {
     label: "SSD",
     helper: "M.2 슬롯과 SATA 포트 사용량을 검사합니다.",
     required: false,
     multiple: true,
-    Icon: FiHardDrive
+    Icon: CATEGORY_ICONS.ssd
   },
   hdd: {
     label: "HDD",
     helper: "케이스 베이와 SATA 포트 사용량을 검사합니다.",
     required: false,
     multiple: true,
-    Icon: FiHardDrive
+    Icon: CATEGORY_ICONS.hdd
   },
   case: {
     label: "케이스",
     helper: "메인보드, GPU, 쿨러, 저장장치 공간을 검사합니다.",
     required: true,
     multiple: false,
-    Icon: FiBox
+    Icon: CATEGORY_ICONS.case
   },
   psu: {
     label: "파워서플라이",
     helper: "파워 용량과 부품 정보를 확인합니다.",
     required: true,
     multiple: false,
-    Icon: FiZap
+    Icon: CATEGORY_ICONS.psu
   }
 };
 

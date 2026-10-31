@@ -1,3 +1,4 @@
+import { BrandMark } from "./BrandMark";
 import { safeLocalStorage } from "./safe-storage";
 import { useEffect, useRef, useState } from "react";
 import { FiBookmark, FiCpu, FiDatabase, FiHome, FiLayers, FiMenu, FiMoon, FiMoreHorizontal, FiSearch, FiSun, FiTool, FiTrendingUp, FiX } from "react-icons/fi";
@@ -92,7 +93,7 @@ export function AppHeader({ view, networkOnline, apiStatus, bootstrapLoading, bo
       <div className="topbar-inner">
         <button className="mobile-header-menu" type="button" onClick={() => setMoreOpen(true)} aria-label="더보기 메뉴 열기"><FiMenu /></button>
         <button className="brand" onClick={onHome} aria-label="PC Supporter 홈">
-          <span className="brand-mark"><FiCpu /></span>
+          <span className="brand-mark"><BrandMark /></span>
           <span>
             <strong>PC Supporter</strong>
           </span>

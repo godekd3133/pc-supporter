@@ -1,12 +1,12 @@
 // Home parts sheet. Lazy so the first route stays inside its JS budget.
 import type { CSSProperties } from "react";
-import type { IconType } from "react-icons";
-import { FiArrowRight, FiBox, FiCpu, FiDatabase, FiHardDrive, FiMonitor, FiServer, FiTool, FiZap } from "react-icons/fi";
+import { FiArrowRight } from "react-icons/fi";
 import { compatibilityDisplayStatusFor } from "../shared/compatibility-display-status";
 import { type BuildSelection, type CompatibilityResult, type Part, type PartCategory, CATEGORY_LABELS, PART_CATEGORIES, isKnownPrice } from "../shared/types";
 import { accessorySelections, selectionList } from "./build-edit";
+import { CATEGORY_ICONS } from "./category-icons";
 
-const SPEC_SHEET_ICONS: Record<PartCategory, IconType> = { cpu: FiCpu, cooler: FiTool, motherboard: FiServer, memory: FiDatabase, gpu: FiMonitor, ssd: FiHardDrive, hdd: FiHardDrive, case: FiBox, psu: FiZap };
+const SPEC_SHEET_ICONS = CATEGORY_ICONS;
 
 export function HomeSpecSheet({ build, result, resultIsStale, partMap, onOpenResult }: { build: BuildSelection; result: CompatibilityResult | null; resultIsStale: boolean; partMap: ReadonlyMap<string, Part>; onOpenResult: () => void }) {
   const rows = PART_CATEGORIES.map((category) => {
@@ -39,12 +39,12 @@ export function HomeSpecSheet({ build, result, resultIsStale, partMap, onOpenRes
         accessoryCompatibility?.warningCount ? `주변 부품 주의 ${accessoryCompatibility.warningCount}개` : "",
         accessoryCompatibility?.unknownCount ? `주변 부품 확인 필요 ${accessoryCompatibility.unknownCount}개` : ""
       ].filter(Boolean).join(" / ") || "부품 간 호환 문제를 찾지 못했어요."
-    : resultIsStale ? "부품 구성이 바뀌어 이전 결과는 현재 견적에 적용되지 않아요." : "";
+    : resultIsStale && hasBuild ? "부품 구성이 바뀌어 이전 결과는 현재 견적에 적용되지 않아요." : "";
   return <section className={`home-spec-sheet${hasBuild ? " has-build" : ""}`} aria-label={hasBuild ? "현재 부품 구성" : "견적서 미리보기"} data-testid={hasBuild ? "home-current-build-preview" : undefined}>
     <header className="home-spec-sheet-head">
       <div><span className="home-spec-sheet-kicker">{hasBuild ? "현재 구성" : "견적서"}</span><span className="home-spec-sheet-progress"><b>{filledCount}</b>/{rows.length}</span></div>
       <div className={`home-spec-sheet-status ${statusTone}`}><span className="status-dot" /><strong>{status}</strong></div>
-      <p>{resultCounts}</p>
+      {resultCounts && <p>{resultCounts}</p>}
     </header>
     <ol className="home-spec-rows">
       {rows.map(({ category, meta, names, filled, priceWon }, index) => { const RowIcon = meta.Icon; return <li className={filled ? "home-spec-row is-filled" : "home-spec-row"} key={category} style={{ "--row-index": index } as CSSProperties}>
