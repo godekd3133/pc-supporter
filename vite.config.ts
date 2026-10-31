@@ -76,7 +76,7 @@ export default defineConfig(({ mode }) => {
     test: {
       globalSetup: ["server/testkit/global-setup.ts"],
       setupFiles: ["server/testkit/setup-env.ts"],
-      exclude: ["**/node_modules/**", "**/dist/**", "**/artifacts/**"],
+      exclude: ["**/node_modules/**", "**/dist/**", "**/artifacts/**", ".claude/**"],
       hookTimeout: 30_000
     },
     build: {

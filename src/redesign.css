@@ -978,3 +978,22 @@ html .app-shell .build-workspace-heading-actions .build-editor-actions .button:h
   .app-shell .build-workspace .component-list .selected-line { gap: 4px; }
 }
 .app-shell .build-workspace .component-list > * { margin-top: 0; margin-bottom: 0; }
+/* Editor: product thumbnail on each selected line; no legacy rule above the list. */
+.app-shell .component-list .selected-lines { margin-top: 0; padding-top: 0; border-top: 0; }
+.app-shell .selected-line-thumb { display: grid; place-items: center; width: 64px; height: 64px; overflow: hidden; padding: 4px; border: 1px solid var(--line); border-radius: 10px; color: var(--muted); background: #fff; }
+.app-shell .selected-line-thumb img { width: 100%; height: 100%; object-fit: contain; }
+html[data-theme="dark"] .app-shell .selected-line-thumb:not(:has(img)) { background: var(--hover-fill); }
+@media (min-width: 761px) {
+  .app-shell .component-list .selected-line-main { grid-template-columns: 64px minmax(0, 1fr) auto; }
+}
+@media (max-width: 760px) {
+  .app-shell .selected-line-main { grid-template-columns: 52px minmax(0, 1fr) auto !important; }
+  .app-shell .selected-line-thumb { width: 52px; height: 52px; }
+}
+
+/* GPU vendor toggle: segmented control that follows the theme. */
+.app-shell .gpu-vendor-toggle { border: 1px solid var(--line); background: var(--hover-fill); }
+.app-shell .gpu-vendor-toggle button { color: var(--muted); }
+.app-shell .gpu-vendor-toggle button.selected { color: var(--ink); background: var(--surface); box-shadow: 0 1px 2px rgba(0, 0, 0, .08); }
+html[data-theme="dark"] .app-shell .gpu-vendor-toggle { background: #0d1015; }
+html[data-theme="dark"] .app-shell .gpu-vendor-toggle button.selected { background: var(--line); }

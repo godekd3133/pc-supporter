@@ -690,7 +690,7 @@ describe("budget gaming purchase-condition handoff", () => {
         onBack: () => undefined
       }));
       expect(markup).toContain(`<option value="${listingPolicy}" selected="">`);
-      expect(markup).toContain('value="800000"');
+      expect(markup).toContain('value="800,000"');
       expect(markup).toContain('<option value="1000" selected="">');
     } finally {
       vi.unstubAllGlobals();
