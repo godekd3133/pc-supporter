@@ -1011,33 +1011,10 @@ async function main() {
     await waitForValue(client, "document.querySelector('[data-testid=\"result-price-summary\"]') !== null && (document.body?.innerText ?? '').includes('가격')", "결과 구매 금액 요약");
     const resultPriceSummaryProbe = await client.evaluate("(() => { const node = document.querySelector('[data-testid=\"result-price-summary\"]'); const text = node?.textContent ?? ''; return { text, hasTotal: text.includes('확인된 가격 합계') || text.includes('전체 합계'), hasCore: text.includes('핵심 부품'), hasAccessory: text.includes('주변 부품'), hasStatus: text.includes('합계') || text.includes('일부 가격 없음') }; })()");
     assert(resultPriceSummaryProbe.hasTotal && resultPriceSummaryProbe.hasCore && resultPriceSummaryProbe.hasAccessory && resultPriceSummaryProbe.hasStatus, "결과 화면 구매 금액 요약에 실제 합계/가격 상태/구성별 소계가 표시되지 않았습니다. probe=" + JSON.stringify(resultPriceSummaryProbe));
-    await waitForValue(client, "document.querySelector('.part-watch-button[data-item-id]') !== null", "결과 PartWatchButton storage sync probe 준비");
+    assert(await client.evaluate("document.querySelector('.part-watch-button') === null"), "결과 화면에 부품별 가격 추적 버튼이 남아 있습니다.");
     await sleep(2_000);
     const resultRenderLoopProbe = await client.evaluate("(() => ({ errors: (window.__pcSupporterSmokeErrors ?? []).filter((entry) => /Maximum update depth exceeded|Too many re-renders/.test(entry.message)), path: location.pathname, purchaseRows: document.querySelectorAll('.purchase-list-row').length }))()");
     assert(resultRenderLoopProbe.errors.length === 0 && resultRenderLoopProbe.path === '/result' && resultRenderLoopProbe.purchaseRows > 0, "결과 화면 렌더링 루프가 감지되었습니다. probe=" + JSON.stringify(resultRenderLoopProbe));
-    const partWatchStorageKey = "pc-supporter-catalog-watchlist";
-    const originalPartWatchlist = await client.evaluate("localStorage.getItem('pc-supporter-catalog-watchlist')");
-    let partWatchStorageProbe;
-    try {
-      const controls = await client.evaluate("(() => { const button = document.querySelector('.part-watch-button[data-item-id]'); return { itemId: button?.getAttribute('data-item-id') ?? '', button: button instanceof HTMLButtonElement }; })()");
-      if (!controls?.button || !controls.itemId) {
-        partWatchStorageProbe = { stage: "missing-controls", itemId: controls?.itemId ?? "" };
-      } else {
-        await client.evaluate("(() => { localStorage.setItem('pc-supporter-catalog-watchlist', '[]'); window.dispatchEvent(new StorageEvent('storage', { key: 'pc-supporter-catalog-watchlist', newValue: '[]', storageArea: localStorage })); })()");
-        await waitForValue(client, "document.querySelector('.part-watch-button[data-item-id]')?.classList.contains('watched') === false", "PartWatch 초기 미등록 상태");
-        const entry = { itemId: controls.itemId, itemName: "cross-tab part watch probe", category: "cpu", kind: "part", addedAt: "2026-09-10T00:00:00.000Z" };
-        const serialized = JSON.stringify([entry]);
-        await client.evaluate(`(() => { const value = ${JSON.stringify(serialized)}; localStorage.setItem('pc-supporter-catalog-watchlist', value); window.dispatchEvent(new StorageEvent('storage', { key: 'pc-supporter-catalog-watchlist', newValue: value, storageArea: localStorage })); })()`);
-        await waitForValue(client, "document.querySelector('.part-watch-button[data-item-id]')?.classList.contains('watched') === true", "PartWatch cross-tab 등록");
-        await client.evaluate("(() => { localStorage.setItem('pc-supporter-catalog-watchlist', '[]'); window.dispatchEvent(new StorageEvent('storage', { key: 'pc-supporter-catalog-watchlist', newValue: '[]', storageArea: localStorage })); })()");
-        await waitForValue(client, "document.querySelector('.part-watch-button[data-item-id]')?.classList.contains('watched') === false", "PartWatch cross-tab 제거");
-        partWatchStorageProbe = { stage: "checked", itemId: controls.itemId, initiallyUnwatched: true, added: true, removed: true };
-      }
-    } finally {
-      await client.evaluate(`(() => { const original = ${JSON.stringify(originalPartWatchlist)}; if (original === null) localStorage.removeItem(${JSON.stringify(partWatchStorageKey)}); else localStorage.setItem(${JSON.stringify(partWatchStorageKey)}, original); window.dispatchEvent(new StorageEvent('storage', { key: ${JSON.stringify(partWatchStorageKey)}, newValue: original, storageArea: localStorage })); })()`);
-      await sleep(100);
-    }
-    assert(partWatchStorageProbe?.stage === "checked" && partWatchStorageProbe.initiallyUnwatched === true && partWatchStorageProbe.added === true && partWatchStorageProbe.removed === true, "결과 PartWatchButton이 다른 탭의 watch-list 추가/제거를 반영하지 못했습니다. probe=" + JSON.stringify(partWatchStorageProbe));
     await waitForValue(client, "document.querySelector('[data-testid=\"purchase-checklist\"] input[type=checkbox]') !== null", "구매 체크리스트 cross-tab probe 준비");
     const purchaseChecklistStorageProbe = await client.evaluate(`(async () => {
       const checkbox = document.querySelector('[data-testid="purchase-checklist"] input[type="checkbox"]');
@@ -1120,40 +1097,7 @@ async function main() {
     assert(suggestionComparisonSignalProbe?.row === false && suggestionComparisonSignalProbe.comparisonLeak === false, "결과 대체 후보 비교에 내부 성능 근거가 노출됩니다. probe=" + JSON.stringify(suggestionComparisonSignalProbe));
     assert((await clickText(client, "전체 미리 비교")) === true, "대체 후보 전체 미리 비교 버튼을 클릭하지 못했습니다.");
     await waitForValue(client, "document.querySelector('.candidate-scenario-dialog') !== null", "대체 후보 전체 미리 비교 모달");
-    await waitForValue(client, "document.querySelector('.candidate-scenario-watch-control .part-watch-button[data-item-id]') !== null", "대체 후보 watch storage sync probe 준비");
-    const candidateWatchStorageProbe = await client.evaluate(`(async () => {
-      const watchlistKey = "pc-supporter-catalog-watchlist";
-      const originalWatchlist = localStorage.getItem(watchlistKey);
-      const button = document.querySelector('.candidate-scenario-watch-control .part-watch-button[data-item-id]');
-      const itemId = button?.getAttribute('data-item-id') ?? "";
-      const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
-      const entry = { itemId, itemName: "cross-tab candidate watch probe", category: "cpu", kind: "part", addedAt: "2026-09-10T00:00:00.000Z", targetPriceWon: 1 };
-      const dispatch = (value) => window.dispatchEvent(new StorageEvent("storage", { key: watchlistKey, newValue: value, storageArea: localStorage }));
-      try {
-        if (!(button instanceof HTMLButtonElement) || !itemId) return { stage: "missing-controls", itemId };
-        localStorage.setItem(watchlistKey, "[]");
-        dispatch("[]");
-        for (let index = 0; index < 80 && button.classList.contains("watched"); index += 1) await wait(25);
-        const initiallyUnwatched = !button.classList.contains("watched");
-        const serialized = JSON.stringify([entry]);
-        localStorage.setItem(watchlistKey, serialized);
-        dispatch(serialized);
-        for (let index = 0; index < 80 && !button.classList.contains("watched"); index += 1) await wait(25);
-        for (let index = 0; index < 80 && document.querySelector('.candidate-scenario-target input')?.value !== "1"; index += 1) await wait(25);
-        const added = button.classList.contains("watched");
-        const targetSynced = document.querySelector('.candidate-scenario-target input')?.value === "1";
-        localStorage.setItem(watchlistKey, "[]");
-        dispatch("[]");
-        for (let index = 0; index < 80 && button.classList.contains("watched"); index += 1) await wait(25);
-        const removed = !button.classList.contains("watched") && document.querySelector('.candidate-scenario-target') === null;
-        return { stage: "checked", itemId, initiallyUnwatched, added, targetSynced, removed };
-      } finally {
-        if (originalWatchlist === null) localStorage.removeItem(watchlistKey); else localStorage.setItem(watchlistKey, originalWatchlist);
-        dispatch(originalWatchlist);
-        await wait(100);
-      }
-    })()`);
-    assert(candidateWatchStorageProbe?.stage === "checked" && candidateWatchStorageProbe.initiallyUnwatched === true && candidateWatchStorageProbe.added === true && candidateWatchStorageProbe.targetSynced === true && candidateWatchStorageProbe.removed === true, "대체 후보 CandidateWatchControl이 다른 탭의 watch-list/목표가 변경을 반영하지 못했습니다. probe=" + JSON.stringify(candidateWatchStorageProbe));
+    assert(await client.evaluate("document.querySelector('.candidate-scenario-dialog .part-watch-button') === null"), "대체 후보 미리 비교에 부품별 가격 추적 버튼이 남아 있습니다.");
     assert(await client.evaluate("document.querySelector('[data-testid=\"candidate-scenario-benchmark\"]') === null && !/Cinebench|3DMark|평균 FPS|1% low|추천 점수/i.test(document.querySelector('.candidate-scenario-dialog')?.textContent ?? '')"), "대체 후보 가상 비교에 내부 점수나 측정 성능 근거가 노출됩니다.");
     assert((await clickSelector(client, '[aria-label="부품 미리 비교 닫기"]', 1)) === 1, "대체 후보 전체 미리 비교 모달을 닫지 못했습니다.");
     await waitForValue(client, "document.querySelector('.candidate-scenario-dialog') === null", "대체 후보 전체 미리 비교 모달 닫힘");
@@ -1457,38 +1401,7 @@ async function main() {
     await waitForValue(client, "document.querySelector('.catalog-results-heading h2')?.textContent?.includes('호환 불가 없음') === true && document.querySelector('.catalog-part-list [data-testid^=\"catalog-part-\"]') !== null", "카탈로그 호환 부품 상세 화면");
     assert((await clickSelector(client, '.catalog-part-list [data-testid^="catalog-part-"]', 1)) === 1, "카탈로그 호환 후보를 선택하지 못했습니다.");
     await waitForValue(client, "document.querySelector('[data-testid=\"catalog-part-detail\"]') !== null", "카탈로그 부품 상세");
-    await waitForValue(client, "document.querySelector('.catalog-detail .part-watch-button[data-item-id]') !== null", "카탈로그 watch storage sync probe 준비");
-    const catalogWatchStorageProbe = await client.evaluate(`(async () => {
-      const watchlistKey = "pc-supporter-catalog-watchlist";
-      const originalWatchlist = localStorage.getItem(watchlistKey);
-      const button = document.querySelector('.catalog-detail .part-watch-button[data-item-id]');
-      const itemId = button?.getAttribute('data-item-id') ?? "";
-      const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
-      const entry = { itemId, itemName: "cross-tab catalog watch probe", category: "psu", kind: "part", addedAt: "2026-09-10T00:00:00.000Z", targetPriceWon: 1 };
-      const dispatch = (value) => window.dispatchEvent(new StorageEvent("storage", { key: watchlistKey, newValue: value, storageArea: localStorage }));
-      try {
-        if (!(button instanceof HTMLButtonElement) || !itemId) return { stage: "missing-controls", itemId };
-        localStorage.setItem(watchlistKey, "[]");
-        dispatch("[]");
-        for (let index = 0; index < 80 && button.classList.contains("watched"); index += 1) await wait(25);
-        const initiallyUnwatched = !button.classList.contains("watched");
-        const serialized = JSON.stringify([entry]);
-        localStorage.setItem(watchlistKey, serialized);
-        dispatch(serialized);
-        for (let index = 0; index < 80 && !button.classList.contains("watched"); index += 1) await wait(25);
-        const added = button.classList.contains("watched");
-        localStorage.setItem(watchlistKey, "[]");
-        dispatch("[]");
-        for (let index = 0; index < 80 && button.classList.contains("watched"); index += 1) await wait(25);
-        const removed = !button.classList.contains("watched");
-        return { stage: "checked", itemId, initiallyUnwatched, added, removed };
-      } finally {
-        if (originalWatchlist === null) localStorage.removeItem(watchlistKey); else localStorage.setItem(watchlistKey, originalWatchlist);
-        dispatch(originalWatchlist);
-        await wait(100);
-      }
-    })()`);
-    assert(catalogWatchStorageProbe?.stage === "checked" && catalogWatchStorageProbe.initiallyUnwatched === true && catalogWatchStorageProbe.added === true && catalogWatchStorageProbe.removed === true, "카탈로그 CatalogWatchButton이 다른 탭의 watch-list 추가/제거를 반영하지 못했습니다. probe=" + JSON.stringify(catalogWatchStorageProbe));
+    assert(await client.evaluate("document.querySelector('.catalog-detail .part-watch-button') === null && !(document.querySelector('.catalog-detail')?.textContent ?? '').includes('구매 시점 참고')"), "카탈로그 부품 상세에 부품별 가격 추적 UI가 남아 있습니다.");
     assert(await client.evaluate("document.querySelector('[data-testid=\"catalog-similarity-evidence\"]') === null"), "카탈로그 부품 상세에 내부 유사도/성능 근거가 노출됩니다.");
     await client.send("Page.navigate", { url: `${baseUrl}/catalog?category=gpu&minVramGb=12` });
     await waitForValue(client, "document.querySelector('[data-testid=\"catalog-spec-filters\"]') !== null && document.querySelector('[aria-label=\"카탈로그 최소 VRAM 스펙 필터\"]')?.value === '12' && document.querySelector('.catalog-part-list [data-testid^=\"catalog-part-\"]') !== null", "카탈로그 핵심 사양 필터");

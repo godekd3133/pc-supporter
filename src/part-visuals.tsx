@@ -4,9 +4,9 @@ import { catalogMissingFieldLabelFor } from "../shared/catalog-spec-coverage";
 import { CATALOG_WATCHLIST_STORAGE_KEY, catalogWatchlistContains, catalogWatchlistFromJson } from "../shared/catalog-watchlist";
 import { type AccessoryItem, type Part, type PartCategory, isKnownPrice } from "../shared/types";
 import { safeExternalUrl } from "./safe-source-url";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { IconType } from "react-icons";
-import { FiClock, FiInfo, FiTool } from "react-icons/fi";
+import { FiInfo, FiTool } from "react-icons/fi";
 import { formatSpecValue, formatWon, suggestionSpecRows } from "./app-format";
 import { CATEGORY_ICONS } from "./category-icons";
 
@@ -114,22 +114,6 @@ export function AccessoryVisual({ item }: { item: AccessoryItem }) {
 export function CategoryIcon({ category }: { category: PartCategory }) {
   const Icon = CATEGORY_META[category].Icon;
   return <Icon />;
-}
-
-export function PartWatchButton({ part, onWatch }: { part: Part; onWatch: PartWatchHandler }) {
-  const [watching, setWatching] = useState(() => partIsWatched(part));
-  useEffect(() => {
-    const onStorage = (event: StorageEvent) => {
-      if (event.key !== CATALOG_WATCHLIST_STORAGE_KEY) return;
-      setWatching(catalogWatchlistContains(catalogWatchlistFromJson(event.newValue), { kind: "part", itemId: part.id }));
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, [part.id]);
-  function addToWatchlist() {
-    if (onWatch(part)) setWatching(true);
-  }
-  return <button className={watching ? "text-button part-watch-button watched" : "text-button part-watch-button"} type="button" data-item-id={part.id} onClick={addToWatchlist} disabled={watching} aria-label={`${part.name} 가격 추적 ${watching ? "등록됨" : "등록"}`}><FiClock /> {watching ? "추적 중" : "가격 추적"}</button>;
 }
 
 export function PartVisual({ part }: { part: Part }) {

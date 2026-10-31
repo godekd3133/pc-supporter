@@ -1,7 +1,7 @@
 import { BrandMark } from "./BrandMark";
 import { safeLocalStorage } from "./safe-storage";
 import { useEffect, useRef, useState } from "react";
-import { FiBookmark, FiCpu, FiDatabase, FiHome, FiLayers, FiMenu, FiMoon, FiMoreHorizontal, FiSearch, FiSun, FiTool, FiTrendingUp, FiX } from "react-icons/fi";
+import { FiDatabase, FiHome, FiLayers, FiMenu, FiMoon, FiMoreHorizontal, FiSearch, FiSun, FiTool, FiX } from "react-icons/fi";
 import type { ApiStatusDetails } from "./api";
 import { applyTheme, THEME_CHANGE_EVENT, THEME_STORAGE_KEY, themeModeFromStorage, type ThemeMode } from "./theme";
 
@@ -20,19 +20,16 @@ type HeaderProps = {
   bootstrapLoading: boolean;
   bootstrapErrorCount: number;
   savedBuildUnreadAlertCount: number;
-  watchlistUnreadAlertCount: number;
   catalogRefreshProgress: CatalogRefreshProgress | null;
   showAdmin: boolean;
   onHome: () => void;
   onBuild: () => void;
   onCatalog: () => void;
   onAccessories: () => void;
-  onPriceWatchlist: () => void;
-  onHistory: () => void;
   onAdmin: () => void;
 };
 
-export function AppHeader({ view, networkOnline, apiStatus, bootstrapLoading, bootstrapErrorCount, savedBuildUnreadAlertCount, watchlistUnreadAlertCount, catalogRefreshProgress, showAdmin, onHome, onBuild, onCatalog, onAccessories, onPriceWatchlist, onHistory, onAdmin }: HeaderProps) {
+export function AppHeader({ view, networkOnline, apiStatus, bootstrapLoading, bootstrapErrorCount, savedBuildUnreadAlertCount, catalogRefreshProgress, showAdmin, onHome, onBuild, onCatalog, onAccessories, onAdmin }: HeaderProps) {
   const [moreOpen, setMoreOpen] = useState(false);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     try {
@@ -102,8 +99,6 @@ export function AppHeader({ view, networkOnline, apiStatus, bootstrapLoading, bo
           <button className={view === "editor" || view === "generator" || view === "result" ? "nav-link active" : "nav-link"} onClick={onBuild}>견적 만들기</button>
           <button className={view === "catalog" ? "nav-link active" : "nav-link"} onClick={onCatalog}>부품 카탈로그</button>
           <button className={view === "accessories" ? "nav-link active" : "nav-link"} onClick={onAccessories}>주변 부품</button>
-          <button className={view === "pricewatchlist" ? "nav-link nav-link-with-badge active" : "nav-link nav-link-with-badge"} onClick={onPriceWatchlist} aria-label={watchlistUnreadAlertCount > 0 ? `가격 추적, 미읽음 알림 ${watchlistUnreadAlertCount}건` : "가격 추적"}><span>가격 추적</span>{watchlistUnreadAlertCount > 0 && <span className="nav-alert-badge" aria-hidden="true">{watchlistUnreadAlertCount > 99 ? "99+" : watchlistUnreadAlertCount}</span>}</button>
-          <button className={view === "history" ? "nav-link nav-link-with-badge active" : "nav-link nav-link-with-badge"} onClick={onHistory} aria-label={savedBuildUnreadAlertCount > 0 ? `저장 견적, 미읽음 알림 ${savedBuildUnreadAlertCount}건` : "저장 견적"}><span>저장 견적</span>{savedBuildUnreadAlertCount > 0 && <span className="nav-alert-badge" aria-hidden="true">{savedBuildUnreadAlertCount > 99 ? "99+" : savedBuildUnreadAlertCount}</span>}</button>
           {showAdmin && <button className={view === "admin" ? "nav-link active" : "nav-link"} onClick={onAdmin}>데이터 센터</button>}
         </nav>
         <button className="theme-toggle" type="button" onClick={toggleTheme} aria-pressed={themeMode === "dark"} aria-label={`${nextThemeModeLabel}로 전환`} title={`${nextThemeModeLabel}로 전환`}><ThemeIcon aria-hidden="true" /><span>{nextThemeModeLabel}</span></button>
@@ -121,8 +116,8 @@ export function AppHeader({ view, networkOnline, apiStatus, bootstrapLoading, bo
         <small>{catalogRefreshProgress.currentName ? `${catalogRefreshProgress.currentName} 업데이트 중` : "업데이트 준비 중"} / {refreshCompleted} / {refreshTotal}개</small>
       </div>}
       <nav className="mobile-bottom-nav" aria-label="모바일 주 메뉴">
-        <button className={`mobile-bottom-nav-item ${view === "home" ? "active" : ""}`} type="button" aria-current={view === "home" ? "page" : undefined} onClick={onHome}>
-          <FiHome aria-hidden="true" /><span>홈</span>
+        <button className={`mobile-bottom-nav-item ${view === "home" ? "active" : ""}`} type="button" aria-current={view === "home" ? "page" : undefined} onClick={onHome} aria-label={savedBuildUnreadAlertCount > 0 ? `홈, 저장 견적 미읽음 알림 ${savedBuildUnreadAlertCount}건` : undefined}>
+          <span className="mobile-bottom-nav-icon"><FiHome aria-hidden="true" />{savedBuildUnreadAlertCount > 0 && <span className="mobile-bottom-nav-badge" aria-hidden="true">{savedBuildUnreadAlertCount > 99 ? "99+" : savedBuildUnreadAlertCount}</span>}</span><span>홈</span>
         </button>
         <button className={`mobile-bottom-nav-item ${quoteFlowActive ? "active" : ""}`} type="button" aria-current={quoteFlowActive ? "page" : undefined} onClick={onBuild}>
           <FiSearch aria-hidden="true" /><span>견적</span>
@@ -130,10 +125,7 @@ export function AppHeader({ view, networkOnline, apiStatus, bootstrapLoading, bo
         <button className={`mobile-bottom-nav-item ${view === "catalog" || view === "accessories" ? "active" : ""}`} type="button" aria-current={view === "catalog" || view === "accessories" ? "page" : undefined} onClick={onCatalog}>
           <FiLayers aria-hidden="true" /><span>카탈로그</span>
         </button>
-        <button className={`mobile-bottom-nav-item ${view === "history" ? "active" : ""}`} type="button" aria-current={view === "history" ? "page" : undefined} onClick={onHistory} aria-label={savedBuildUnreadAlertCount > 0 ? `저장 견적, 미읽음 알림 ${savedBuildUnreadAlertCount}건` : "저장 견적"}>
-          <span className="mobile-bottom-nav-icon"><FiBookmark aria-hidden="true" />{savedBuildUnreadAlertCount > 0 && <span className="mobile-bottom-nav-badge" aria-hidden="true">{savedBuildUnreadAlertCount > 99 ? "99+" : savedBuildUnreadAlertCount}</span>}</span><span>저장</span>
-        </button>
-        <button ref={moreTriggerRef} className={`mobile-bottom-nav-item ${moreOpen || view === "pricewatchlist" || view === "admin" ? "active" : ""}`} type="button" aria-expanded={moreOpen} aria-controls="mobile-more-sheet" aria-haspopup="dialog" onClick={() => setMoreOpen((open) => !open)}>
+        <button ref={moreTriggerRef} className={`mobile-bottom-nav-item ${moreOpen || view === "admin" ? "active" : ""}`} type="button" aria-expanded={moreOpen} aria-controls="mobile-more-sheet" aria-haspopup="dialog" onClick={() => setMoreOpen((open) => !open)}>
           {moreOpen ? <FiX aria-hidden="true" /> : <FiMoreHorizontal aria-hidden="true" />}<span>더보기</span>
         </button>
       </nav>
@@ -144,7 +136,6 @@ export function AppHeader({ view, networkOnline, apiStatus, bootstrapLoading, bo
           <div className="mobile-more-sheet-heading"><div><h2 id="mobile-more-title">추가 기능</h2></div><button className="mobile-more-close" type="button" onClick={() => setMoreOpen(false)} aria-label="더보기 메뉴 닫기"><FiX /></button></div>
           <div className="mobile-more-grid">
             <button type="button" onClick={() => { setMoreOpen(false); onAccessories(); }}><span><FiTool /></span><strong>주변 부품</strong></button>
-            <button type="button" onClick={() => { setMoreOpen(false); onPriceWatchlist(); }}><span><FiTrendingUp /></span><strong>가격 추적</strong></button>
             {showAdmin && <button type="button" onClick={() => { setMoreOpen(false); onAdmin(); }}><span><FiDatabase /></span><strong>데이터 센터</strong></button>}
           </div>
         </section>

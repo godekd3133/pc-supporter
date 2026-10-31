@@ -1,0 +1,31 @@
+/* Home lobby: saved builds section (today's total, change, unread alerts). */
+.app-shell .home-saved-lobby { margin: 0 0 24px; padding: 14px 18px 10px; }
+.app-shell .home-saved-lobby .home-saved-prices-heading { gap: 10px; margin-bottom: 4px; }
+.app-shell .home-saved-lobby .home-saved-prices-heading h2 { display: inline-flex; align-items: center; gap: 8px; margin-right: auto; }
+.app-shell .home-saved-lobby-count { display: inline-grid; place-items: center; min-width: 24px; height: 22px; padding: 0 7px; border-radius: 999px; color: var(--ink-2); background: var(--hover-fill); font-size: 12.5px !important; font-weight: 700; }
+.app-shell .home-saved-lobby-alerts { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 999px; color: var(--teal); background: var(--accent-wash); font-size: 12.5px !important; font-weight: 700; white-space: nowrap; }
+.app-shell .home-saved-lobby-columns { display: grid; grid-template-columns: minmax(0, 1fr) 150px 112px; gap: 14px; padding: 6px 4px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 12px !important; }
+.app-shell .home-saved-lobby-columns span:nth-child(n+2) { text-align: right; }
+.app-shell .home-saved-lobby ul.expanded { max-height: 420px; overflow-y: auto; overscroll-behavior: contain; }
+.app-shell .home-saved-lobby li button { grid-template-columns: minmax(0, 1fr) 150px 112px; min-height: 58px; }
+.app-shell .home-saved-lobby li button:disabled { cursor: default; }
+.app-shell .home-saved-lobby .home-saved-prices-name strong { display: flex; align-items: center; gap: 6px; }
+.app-shell .home-saved-lobby .home-saved-prices-name small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-shell .home-saved-lobby-badge { flex: none; padding: 1px 6px; border-radius: 4px; color: #fff; background: var(--red); font-size: 11px !important; font-style: normal; font-weight: 700; line-height: 1.5; }
+.app-shell .home-saved-lobby .home-saved-prices-now { display: grid; justify-items: end; gap: 1px; text-align: right; }
+.app-shell .home-saved-lobby .home-saved-prices-now small { color: var(--muted); font-size: 12px !important; font-weight: 400; }
+.app-shell .home-saved-lobby-more { display: flex; align-items: center; justify-content: center; gap: 4px; width: 100%; min-height: 38px; margin-top: 2px; border: 0; border-top: 1px solid var(--line); color: var(--ink-2); background: transparent; font-size: 13px !important; font-weight: 600; }
+.app-shell .home-saved-lobby-more:hover { color: var(--ink); background: var(--hover-fill); }
+@media (max-width: 760px) {
+  .app-shell .home-saved-lobby { margin: 16px 0; padding: 12px 14px 6px; }
+  .app-shell .home-saved-lobby-columns { display: none; }
+  .app-shell .home-saved-lobby li button { grid-template-columns: minmax(0, 1fr) auto; row-gap: 2px; min-height: 60px; }
+  .app-shell .home-saved-lobby .home-saved-prices-name { grid-row: span 2; }
+  .app-shell .home-saved-lobby .home-saved-prices-now small { display: none; }
+  .app-shell .home-saved-lobby .home-saved-prices-delta { grid-column: 2; font-size: 12px !important; }
+  .app-shell .home-saved-lobby ul.expanded { max-height: none; overflow: visible; }
+}
+
+/* Catalog detail: product page as a quiet link under the two actions. */
+.app-shell .catalog-detail-actions .catalog-detail-source-link { display: inline-flex; flex: 1 0 100%; align-items: center; justify-content: center; gap: 4px; min-height: 32px; color: var(--muted); font-size: 13px !important; font-weight: 500; }
+.app-shell .catalog-detail-actions .catalog-detail-source-link:hover { color: var(--ink); text-decoration: underline; }
