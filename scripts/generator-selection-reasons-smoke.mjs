@@ -258,7 +258,7 @@ async function main() {
             await writeFile(screenshotPath, Buffer.from(screenshot.data, "base64"));
             importedScreenshotCaptured = true;
           }
-          if (!await setInputValue(client, '.generator-form input[type="number"]', budget)) throw new Error("자동 구성 재생성용 예산 입력을 설정하지 못했습니다.");
+          if (!await setInputValue(client, '.generator-form input[aria-label="목표 예산"]', budget)) throw new Error("자동 구성 재생성용 예산 입력을 설정하지 못했습니다.");
           const compareAgain = await client.evaluate("(() => { const node = [...document.querySelectorAll('.generator-form button')].find((candidate) => !candidate.disabled && (candidate.textContent ?? '').includes('균형형/가성비/성능 3안 비교')); if (!node) return false; node.click(); return true; })()");
           if (!compareAgain) throw new Error("가져온 상태에서 새 자동 구성 비교 버튼을 찾지 못했습니다.");
           await waitForValue(client, "Array.isArray(window.__generatorRecommendationRequests) && window.__generatorRecommendationRequests.length === 2 && document.querySelector('[data-testid=\"generator-variants-imported-state\"]') === null && document.querySelector('.generator-variants') !== null", "새 자동 구성 결과로 복귀");

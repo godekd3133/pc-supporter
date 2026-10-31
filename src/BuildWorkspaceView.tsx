@@ -21,13 +21,12 @@ import { CpuGpuBalanceRow } from "./GeneratorBalanceControls";
 import { generatorPartAdjustmentRequestFor } from "./generator-balance";
 import { ChangeHistoryPanel, RequestErrorNotice } from "./notices";
 import { AccessoryVisual } from "./part-visuals";
-import { RecommendationControls } from "./RecommendationControls";
 import { PerformanceIndexMetricsPanel, PerformanceIndexPanel } from "./ResultPanels";
 
 const LazyCompatibilityCheckProgress = lazy(() => import("./CompatibilityCheckProgress").then((module) => ({ default: module.CompatibilityCheckProgress })));
 const LazyAccessoryCartPanel = lazy(() => import("./AccessoryCartPanel").then((module) => ({ default: module.AccessoryCartPanel })));
 
-type GeneratorProps = Omit<ComponentProps<typeof BuildGeneratorView>, "parts" | "summary" | "headingActions" | "notice" | "title" | "conditionsInitiallyOpen" | "onBack">;
+type GeneratorProps = Omit<ComponentProps<typeof BuildGeneratorView>, "parts" | "summary" | "headingActions" | "notice" | "title" | "conditionsInitiallyOpen" | "preferences" | "onPreferencesChange" | "onBack">;
 
 export function BuildWorkspaceView({
   generator,
@@ -109,7 +108,7 @@ export function BuildWorkspaceView({
   const selections = PART_CATEGORIES.flatMap((category) => selectionList(build, category));
   const partsTotal = selections.reduce((total, selection) => { const price = partMap.get(selection.partId)?.priceWon; return isKnownPrice(price) ? total + price * selection.quantity : total; }, 0);
   const unpricedCount = selections.filter((selection) => !isKnownPrice(partMap.get(selection.partId)?.priceWon)).length;
-  const budgetWon = activeDraft?.budgetWon ?? recommendationPreferences.budgetWon;
+  const budgetWon = recommendationPreferences.budgetWon;
   const balance = activeDraft?.cpuGpuBalance ?? cpuGpuBalance;
   const budgetDelta = budgetWon !== undefined && budgetWon > 0 && selections.length > 0 ? budgetWon - partsTotal : undefined;
 
@@ -185,7 +184,6 @@ export function BuildWorkspaceView({
     <details className="build-workspace-disclosure desktop-summary-details">
       <summary><span>가격/부품 정보</span><FiChevronDown /></summary>
       <div className="desktop-summary-details-body">
-        <RecommendationControls preferences={recommendationPreferences} onChange={onRecommendationPreferencesChange} disabled={busy} />
         <BuildPriceSummaryPanel snapshot={buildPriceSnapshotFor(build, partMap, accessoryMap)} budgetWon={recommendationPreferences.budgetWon} unknownItems={unknownPriceItemsFor(build, partMap, accessoryMap)} onRefresh={canRefreshCatalog ? onRefreshCatalogItem : undefined} refreshingItemId={refreshingPartId} />
         <BuildPreflightPanel preflight={preflight} onRefresh={canRefreshCatalog ? onRefreshCatalogItem : undefined} onRefreshAll={canRefreshCatalog ? onRefreshAllCatalogItems : undefined} refreshingPartId={refreshingPartId} />
       </div>
@@ -199,6 +197,8 @@ export function BuildWorkspaceView({
     {...generator}
     title="견적 만들기"
     conditionsInitiallyOpen={conditionsInitiallyOpen}
+    preferences={recommendationPreferences}
+    onPreferencesChange={onRecommendationPreferencesChange}
     notice={upgradeEntry ? <UpgradeEntryBanner /> : undefined}
     headingActions={headingActions}
     parts={parts}

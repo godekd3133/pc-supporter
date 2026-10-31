@@ -706,132 +706,204 @@ html:not([data-demo-tools="on"]) .mobile-demo-tools { display: none !important; 
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* ───────────────────────── Build workspace ───────────────────────── */
-/* /build and /recommend share one screen: conditions | parts list | summary.
-   The auto-build form is a quiet rail; the parts list owns the width. */
+/* /build and /recommend share one screen, read top to bottom like a shop cart:
+   a condition bar (more conditions on demand), the parts sheet, and a sticky
+   summary beside it. */
 
-.app-shell .build-workspace .build-workspace-heading { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 20px; margin-bottom: 16px; }
-.app-shell .build-workspace .build-workspace-heading h1 { margin: 0; }
-.app-shell .build-workspace-heading-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; }
-.app-shell .build-workspace-heading-actions .build-editor-actions { display: flex; flex-wrap: wrap; gap: 2px; margin: 0; }
-.app-shell .build-workspace-heading-actions .build-editor-actions .button { min-height: 34px; padding: 0 10px; border: 0; border-radius: 8px; color: var(--muted); background: transparent; box-shadow: none; font-size: 12.5px; font-weight: 600; }
-.app-shell .build-workspace-heading-actions .build-editor-actions .button:hover:not(:disabled) { color: var(--ink); background: var(--hover-fill); }
-.app-shell .build-workspace-conditions-toggle { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 12px; border: 1px solid var(--line); border-radius: 9px; color: var(--ink-2); background: var(--surface); font-size: 12.5px; font-weight: 700; transition: border-color var(--dur-fast) ease, background-color var(--dur-fast) ease, color var(--dur-fast) ease; }
-.app-shell .build-workspace-conditions-toggle:hover { border-color: var(--line-strong); }
-.app-shell .build-workspace-conditions-toggle.open { border-color: color-mix(in srgb, var(--teal) 45%, var(--line)); color: var(--teal-deep); background: var(--accent-wash); }
+.app-shell .build-workspace .build-workspace-heading { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 8px 20px; margin-bottom: 14px; }
+.app-shell .build-workspace .build-workspace-heading h1 { margin: 0; line-height: 1.2; }
+.app-shell .build-workspace .build-workspace-heading .back-link { margin-bottom: 4px; }
+.app-shell .build-workspace-heading-actions .build-editor-actions { display: flex !important; flex-wrap: nowrap; gap: 2px; width: auto; margin: 0; }
+html .app-shell .build-workspace-heading-actions .build-editor-actions .button { width: auto !important; min-height: 34px; padding: 0 10px; border: 0 !important; border-radius: 8px; color: var(--muted); background: transparent !important; box-shadow: none !important; font-size: 12.5px; font-weight: 600; }
+html .app-shell .build-workspace-heading-actions .build-editor-actions .button:hover:not(:disabled) { color: var(--ink); background: var(--hover-fill) !important; }
+@media (min-width: 761px) { .app-shell .build-workspace .build-workspace-heading h1 { font-size: 30px !important; } }
+@media (max-width: 760px) { .app-shell .build-workspace .build-workspace-heading h1 { font-size: 22px !important; } }
 
-.app-shell .build-workspace-grid { display: grid; grid-template-columns: 296px minmax(0, 1fr) 316px; gap: 20px; align-items: start; }
-.app-shell .build-workspace-grid.conditions-closed { grid-template-columns: minmax(0, 1fr) 316px; }
-.app-shell .build-workspace-main,
-.app-shell .build-workspace-summary,
-.app-shell .build-workspace-conditions { min-width: 0; }
-.app-shell .build-workspace-conditions,
-.app-shell .build-workspace-summary { position: sticky; top: 84px; }
-.app-shell .build-workspace-conditions { max-height: calc(100vh - 100px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; border-radius: var(--radius-lg); animation: disclose var(--dur-base) var(--ease-out) both; }
+/* Condition bar: the four things people set every time, then the action. */
+.app-shell .build-workspace .generator-form { display: block; margin: 0 0 18px; padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); box-shadow: none; }
+.app-shell .build-workspace .generator-quickbar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
+.app-shell .build-workspace .generator-quickbar > label { flex: 0 1 170px; min-width: 130px; }
+.app-shell .build-workspace .generator-quickbar > label:has(.generator-input-with-unit) { flex: 0 1 210px; }
+.app-shell .build-workspace .generator-more-toggle { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; margin-left: auto; padding: 0 12px; border: 1px solid transparent; border-radius: 9px; color: var(--ink-2); background: transparent; font-size: 13px; font-weight: 600; transition: background-color var(--dur-fast) ease, color var(--dur-fast) ease; }
+.app-shell .build-workspace .generator-more-toggle:hover { background: var(--hover-fill); }
+.app-shell .build-workspace .generator-more-toggle.open { color: var(--teal-deep); background: var(--accent-wash); }
+.app-shell .build-workspace .generator-submit { width: auto; min-height: 40px; margin: 0; padding: 0 18px; border-radius: 10px; font-size: 14px; font-weight: 700; white-space: nowrap; }
 
-/* Conditions rail: label-over-control rows, hairline sections, one primary action. */
-.app-shell .build-workspace .generator-form { display: grid; gap: 12px; margin: 0; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); box-shadow: none; }
-.app-shell .build-workspace .generator-form-heading { display: flex; align-items: center; justify-content: space-between; margin: 0; }
-.app-shell .build-workspace .generator-form-heading h2 { margin: 0; color: var(--ink); font-size: 15px; font-weight: 800; }
-.app-shell .build-workspace .generator-form-close { width: 30px; height: 30px; border: 0; border-radius: 8px; color: var(--muted); background: transparent; }
-.app-shell .build-workspace .generator-form-close:hover { color: var(--ink); background: var(--hover-fill); }
 .app-shell .build-workspace .generator-form label:not(.generator-checkbox) { display: grid; gap: 5px; margin: 0; color: var(--muted); font-size: 12px; font-weight: 600; }
 .app-shell .build-workspace .generator-form label > span { color: var(--muted); font-size: 12px; font-weight: 600; }
 .app-shell .build-workspace .generator-form select,
 .app-shell .build-workspace .generator-form input[type="number"],
 .app-shell .build-workspace .generator-form input[type="text"],
-.app-shell .build-workspace .generator-form textarea { width: 100%; min-height: 38px; height: auto; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); background: var(--surface); box-shadow: none; font-size: 13px; }
-.app-shell .build-workspace .generator-form textarea { min-height: 58px; padding: 8px 10px; line-height: 1.5; resize: vertical; }
+.app-shell .build-workspace .generator-form textarea { width: 100%; min-height: 40px; height: auto; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); background: var(--surface); box-shadow: none; font-size: 13.5px; }
+.app-shell .build-workspace .generator-form textarea { min-height: 72px; padding: 8px 10px; line-height: 1.5; resize: vertical; }
 .app-shell .build-workspace .generator-form select:focus,
 .app-shell .build-workspace .generator-form input:focus,
 .app-shell .build-workspace .generator-form textarea:focus { border-color: var(--teal); outline: 0; box-shadow: 0 0 0 3px var(--accent-wash); }
-.app-shell .build-workspace .generator-core-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .app-shell .build-workspace .generator-input-with-unit { position: relative; display: flex; align-items: center; }
 .app-shell .build-workspace .generator-input-with-unit em { position: absolute; right: 10px; color: var(--muted); font-size: 12.5px; font-style: normal; }
-.app-shell .build-workspace .generator-input-with-unit input { padding-right: 28px; }
+.app-shell .build-workspace .generator-input-with-unit input { padding-right: 28px; font-weight: 600; }
+.app-shell .build-workspace .generator-error,
+.app-shell .build-workspace .generator-request-error { margin: 12px 0 0; }
 
+/* More conditions: four quiet columns under a hairline. */
+.app-shell .build-workspace .generator-more { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px 24px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); animation: disclose var(--dur-base) var(--ease-out) both; }
+.app-shell .build-workspace .generator-more-group { display: grid; align-content: start; gap: 10px; min-width: 0; }
+.app-shell .build-workspace .generator-more-group > h3 { margin: 0; color: var(--ink); font-size: 13px; font-weight: 800; }
 .app-shell .build-workspace .generator-brief { display: grid; gap: 6px; margin: 0; padding: 0; border: 0; background: transparent; box-shadow: none; }
+.app-shell .build-workspace .generator-brief-input > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .app-shell .build-workspace .generator-brief-actions { display: flex; gap: 4px; margin: 0; }
 .app-shell .build-workspace .generator-brief-actions .button { min-height: 30px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink-2); background: var(--surface); box-shadow: none; font-size: 12px; font-weight: 600; }
 .app-shell .build-workspace .generator-brief-actions .button-brief-ghost { border-color: transparent; color: var(--muted); }
 .app-shell .build-workspace .generator-brief-preview { margin: 0; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: color-mix(in srgb, var(--canvas) 60%, var(--surface)); }
-
-.app-shell .build-workspace .generator-game-target-controls,
-.app-shell .build-workspace .generator-platform-toggles { margin: 0; }
-.app-shell .build-workspace .generator-platform-toggles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-
-.app-shell .build-workspace .generator-advanced-options,
-.app-shell .build-workspace .generator-secondary-sections > details { margin: 0; border-top: 1px solid var(--line); }
-.app-shell .build-workspace .generator-secondary-sections { display: grid; margin-top: 2px; border-bottom: 1px solid var(--line); }
-.app-shell .build-workspace .generator-secondary-sections > details { padding: 0; border-radius: 0; background: transparent; }
-.app-shell .build-workspace .generator-advanced-options > summary,
-.app-shell .build-workspace .generator-secondary-sections > details > summary { display: flex; align-items: center; gap: 8px; min-height: 40px; color: var(--ink); cursor: pointer; list-style: none; }
-.app-shell .build-workspace .generator-secondary-sections > details > summary::-webkit-details-marker { display: none; }
-.app-shell .build-workspace .generator-advanced-options > summary > span,
-.app-shell .build-workspace .generator-secondary-sections > details > summary > span { color: var(--ink); font-size: 13px; font-weight: 700; }
-.app-shell .build-workspace .generator-advanced-options > summary > small,
-.app-shell .build-workspace .generator-secondary-sections > details > summary > small { margin-left: auto; color: var(--muted); font-size: 11.5px; }
-.app-shell .build-workspace .generator-advanced-options > summary > svg,
-.app-shell .build-workspace .generator-secondary-sections > details > summary > svg { flex: 0 0 auto; color: var(--muted); transition: transform var(--dur-fast) ease; }
-.app-shell .build-workspace .generator-advanced-options[open] > summary > svg,
-.app-shell .build-workspace .generator-secondary-sections > details[open] > summary > svg { transform: rotate(180deg); }
-.app-shell .build-workspace .generator-advanced-options[open] > summary,
-.app-shell .build-workspace .generator-secondary-sections > details[open] > summary { border-bottom: 0; }
-.app-shell .build-workspace .generator-advanced-options > div,
-.app-shell .build-workspace .generator-secondary-sections > details > div { display: grid; gap: 10px; padding: 2px 0 12px; animation: disclose var(--dur-base) var(--ease-out) both; }
+.app-shell .build-workspace .generator-game-target-controls { margin: 0; padding: 0; border: 0; background: transparent; }
+.app-shell .build-workspace .generator-platform-toggles { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; margin: 0; }
+.app-shell .build-workspace .generator-platform-choice { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; min-width: 0; margin: 0; padding: 0; border: 0; background: transparent; }
+.app-shell .build-workspace .generator-platform-heading { display: flex; align-items: baseline; gap: 6px; margin: 0; }
+.app-shell .build-workspace .generator-platform-heading strong { color: var(--muted); font-size: 12px; font-weight: 600; }
+.app-shell .build-workspace .generator-platform-heading small { display: none; }
+.app-shell .build-workspace .generator-platform-toggle { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: 9px; background: var(--canvas); }
+.app-shell .build-workspace .generator-platform-toggle button { min-width: 56px; min-height: 30px; padding: 0 10px; border: 0; border-radius: 7px; color: var(--muted); background: transparent; box-shadow: none; font-size: 12.5px; font-weight: 600; }
+.app-shell .build-workspace .generator-platform-toggle button.selected { color: var(--ink); background: var(--surface); box-shadow: 0 0 0 1px var(--line); }
 .app-shell .build-workspace .generator-storage-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; }
 .app-shell .build-workspace .generator-checkbox { margin: 0; }
-.app-shell .build-workspace .generator-submit { width: 100%; min-height: 44px; margin: 2px 0 0; border-radius: 10px; font-size: 14px; font-weight: 700; }
-.app-shell .build-workspace .generator-comparison-actions > div > .button { min-height: 38px; margin: 0; border: 1px solid var(--line); border-radius: 9px; color: var(--ink-2); background: var(--surface); box-shadow: none; font-size: 12.5px; font-weight: 600; }
-.app-shell .build-workspace .generator-comparison-actions > div > .button:hover:not(:disabled) { border-color: var(--line-strong); background: var(--hover-fill); }
+.app-shell .build-workspace .generator-comparison-actions { display: grid; gap: 6px; margin: 0; padding: 0; border: 0; }
+.app-shell .build-workspace .generator-comparison-actions > .button { width: 100%; min-height: 38px; margin: 0; border: 1px solid var(--line); border-radius: 9px; color: var(--ink-2); background: var(--surface); box-shadow: none; font-size: 12.5px; font-weight: 600; }
+.app-shell .build-workspace .generator-comparison-actions > .button:hover:not(:disabled) { border-color: var(--line-strong); background: var(--hover-fill); }
+.app-shell .build-workspace .generator-presets { margin: 0; padding: 0; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; }
+.app-shell .build-workspace .generator-presets > summary { display: flex; align-items: center; gap: 8px; min-height: 38px; color: var(--ink); cursor: pointer; list-style: none; }
+.app-shell .build-workspace .generator-presets > summary::-webkit-details-marker { display: none; }
+.app-shell .build-workspace .generator-presets > summary > span { flex: 0 0 auto; font-size: 13px; font-weight: 700; }
+.app-shell .build-workspace .generator-presets > summary > small { min-width: 0; margin-left: auto; overflow: hidden; color: var(--muted); font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
+.app-shell .build-workspace .generator-presets > summary > svg { flex: 0 0 auto; color: var(--muted); transition: transform var(--dur-fast) ease; }
+.app-shell .build-workspace .generator-presets[open] > summary > svg { transform: rotate(180deg); }
+.app-shell .build-workspace .generator-presets > div { display: grid; gap: 10px; padding-bottom: 4px; animation: disclose var(--dur-base) var(--ease-out) both; }
 .app-shell .build-workspace .generator-preset-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; margin: 0; }
-.app-shell .build-workspace .generator-preset { display: grid; gap: 1px; min-height: 0; margin: 0; padding: 8px 6px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; box-shadow: none; text-align: left; }
+.app-shell .build-workspace .generator-preset { display: grid; gap: 1px; min-height: 0; margin: 0; padding: 7px 6px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; box-shadow: none; text-align: left; }
 .app-shell .build-workspace .generator-preset:last-child { border-bottom: 0; }
 .app-shell .build-workspace .generator-preset:hover:not(:disabled) { background: var(--hover-fill); }
 .app-shell .build-workspace .generator-preset strong { color: var(--ink); font-size: 13px; font-weight: 700; }
 .app-shell .build-workspace .generator-preset small { color: var(--muted); font-size: 11.5px; }
 .app-shell .build-workspace .generator-saved-preset-editor { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 6px; margin: 0; }
-.app-shell .build-workspace .generator-saved-preset-editor .button { min-height: 38px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink-2); background: var(--surface); box-shadow: none; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.app-shell .build-workspace .generator-saved-preset-editor .button { min-height: 40px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink-2); background: var(--surface); box-shadow: none; font-size: 12px; font-weight: 600; white-space: nowrap; }
 .app-shell .build-workspace .generator-saved-preset-tools { display: flex; flex-wrap: wrap; gap: 2px 12px; margin: 0; }
-.app-shell .build-workspace .generator-saved-preset-tools .text-button,
-.app-shell .build-workspace .generator-condition-link-button { min-height: 28px; margin: 0; padding: 0; border: 0; color: var(--muted); background: transparent; font-size: 12px; font-weight: 600; }
+.app-shell .build-workspace .generator-saved-preset-tools .text-button { min-height: 28px; margin: 0; padding: 0; border: 0; color: var(--muted); background: transparent; font-size: 12px; font-weight: 600; }
 .app-shell .build-workspace .generator-saved-preset-tools .text-button:hover:not(:disabled) { color: var(--ink); }
 .app-shell .build-workspace .generator-saved-preset-file { display: none; }
 
-/* Middle: optional comparison tabs, then the parts list. */
+/* Sheet + summary. */
+.app-shell .build-workspace-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; align-items: start; }
+.app-shell .build-workspace-main,
+.app-shell .build-workspace-summary { min-width: 0; }
+.app-shell .build-workspace-summary { position: sticky; top: 84px; }
+
 .app-shell .build-workspace-tabs { display: flex; gap: 0; margin: 0 0 12px; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
 .app-shell .build-workspace-tabs button { position: relative; flex: 0 0 auto; min-height: 42px; padding: 0 14px; border: 0; color: var(--muted); background: transparent; font-size: 14px; font-weight: 600; }
 .app-shell .build-workspace-tabs button:hover { color: var(--ink); }
 .app-shell .build-workspace-tabs button[aria-selected="true"] { color: var(--ink); font-weight: 800; }
 .app-shell .build-workspace-tabs button[aria-selected="true"]::after { position: absolute; right: 14px; bottom: -1px; left: 14px; height: 2px; background: var(--ink); content: ""; animation: nav-indicator-in var(--dur-base) var(--ease-out) both; }
 
-.app-shell .build-workspace-parts { transition: opacity var(--dur-base) ease; }
-.app-shell .build-workspace-parts.loading .component-list { opacity: .55; pointer-events: none; }
 .app-shell .build-workspace-parts-head { display: flex; align-items: baseline; gap: 12px; margin: 0 0 10px; }
 .app-shell .build-workspace-parts-head h2 { margin: 0; color: var(--ink); font-size: 17px; font-weight: 800; }
 .app-shell .build-workspace-required { color: var(--muted); font-size: 12.5px; }
 .app-shell .build-workspace-required b { color: var(--ink); font-weight: 700; }
 .app-shell .build-workspace-generating { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; color: var(--teal-deep); font-size: 12.5px; font-weight: 600; }
-.app-shell .build-workspace .component-list { display: grid; gap: 8px; margin: 0; }
-.app-shell .build-workspace .component-list .section-title-row { display: none; }
+.app-shell .build-workspace-parts.loading .component-list { opacity: .55; pointer-events: none; transition: opacity var(--dur-base) ease; }
 .app-shell .build-workspace .generator-empty { padding: 32px 20px; border: 1px dashed var(--line-strong); border-radius: var(--radius-lg); background: transparent; box-shadow: none; text-align: center; }
 .app-shell .build-workspace .generator-empty h2 { margin: 0 0 4px; font-size: 16px; }
 .app-shell .build-workspace .generator-empty p { margin: 0; color: var(--muted); font-size: 13px; }
 
-/* Right: total, budget headroom, balance, metrics, then the single primary action. */
+/* Parts sheet: one ruled table, a row per slot. */
+.app-shell .build-workspace .component-list { display: block; margin: 0; container-type: inline-size; container-name: parts-sheet; }
+.app-shell .build-workspace .component-list > :not(.component-card) { margin-top: 14px !important; }
+.app-shell .build-workspace .component-list .component-card { display: grid !important; grid-template-columns: 116px minmax(0, 1fr); align-items: start; column-gap: 16px; margin: 0 !important; padding: 12px 16px; border: 1px solid var(--line); border-radius: 0; background: var(--surface); box-shadow: none; animation: none; }
+.app-shell .build-workspace .component-list .component-card + .component-card { border-top: 0; }
+.app-shell .build-workspace .component-list .component-card:first-of-type { border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
+.app-shell .build-workspace .component-list .component-card:last-of-type { border-radius: 0 0 var(--radius-lg) var(--radius-lg); }
+.app-shell .build-workspace .component-list .component-card::before { display: none; }
+.app-shell .build-workspace .component-list .component-card:hover { border-color: var(--line); background: color-mix(in srgb, var(--hover-fill) 35%, var(--surface)); }
+.app-shell .build-workspace .component-list .component-card-top { align-self: center; margin: 0; padding: 0; }
+.app-shell .build-workspace .component-list .component-card.selected .component-card-top { align-self: start; padding-top: 14px; }
+.app-shell .build-workspace .component-list .component-heading { gap: 8px; }
+.app-shell .build-workspace .component-list .component-icon { width: 26px; height: 26px; border-radius: 7px; font-size: 13px; }
+.app-shell .build-workspace .component-list .component-heading h3 { margin: 0; font-size: 13.5px; font-weight: 700; }
+.app-shell .build-workspace .component-list .component-label-row { flex-wrap: nowrap; gap: 5px; white-space: nowrap; }
+.app-shell .build-workspace .component-list .required-badge { padding: 0 5px; font-size: 10.5px; }
+.app-shell .build-workspace .component-list .optional-badge,
+.app-shell .build-workspace .component-list .selection-state,
+.app-shell .build-workspace .component-list .component-heading p { display: none !important; }
+.app-shell .build-workspace .component-list .component-card-body { align-self: center; padding: 0 !important; }
+.app-shell .build-workspace .component-list .selected-lines { display: grid; gap: 0; margin: 0; padding: 0; border: 0; }
+.app-shell .build-workspace .component-list .selected-line { margin: 0; padding: 4px 0; border: 0; background: transparent; animation: slot-fill var(--dur-slow) var(--ease-out) both; }
+.app-shell .build-workspace .component-list .selected-line + .selected-line { margin-top: 6px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.app-shell .build-workspace .component-list .selected-line-thumb { width: 52px; height: 52px; border-radius: 9px; }
+.app-shell .build-workspace .component-list .selected-line-info { display: grid; gap: 1px; min-width: 0; }
+.app-shell .build-workspace .component-list .selected-line-info strong { overflow: hidden; color: var(--ink); font-size: 14px; font-weight: 700; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
+.app-shell .build-workspace .component-list .selected-line-info > span { overflow: hidden; color: var(--muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.app-shell .build-workspace .component-list .part-detail-toggle { justify-self: start; min-height: 22px; margin: 0; padding: 0; color: var(--muted); font-size: 11.5px; font-weight: 600; }
+.app-shell .build-workspace .component-list .part-detail-toggle:hover { color: var(--ink); }
+.app-shell .build-workspace .component-list .selected-line-price { display: grid; justify-items: end; gap: 0; min-width: 92px; }
+.app-shell .build-workspace .component-list .selected-line-price span { color: var(--muted); font-size: 11.5px; }
+.app-shell .build-workspace .component-list .selected-line-price b { color: var(--ink); font-size: 15.5px; font-weight: 800; }
+.app-shell .build-workspace .component-list .selected-line-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; width: auto; margin: 0; }
+.app-shell .build-workspace .component-list .part-step { display: inline-flex; gap: 4px; }
+.app-shell .build-workspace .component-list .part-step-button { min-height: 30px; padding: 0 8px; border-radius: 8px; font-size: 12px; }
+.app-shell .build-workspace .component-list .part-step-button span,
+.app-shell .build-workspace .component-list .quantity-control > span:first-child { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.app-shell .build-workspace .component-list .part-step-button small { font-size: 12px; }
+.app-shell .build-workspace .component-list .quantity-control { margin: 0; }
+.app-shell .build-workspace .component-list .quantity-stepper { height: 30px; }
+.app-shell .build-workspace .component-list .quantity-stepper button,
+.app-shell .build-workspace .component-list .quantity-stepper input { height: 30px; min-height: 30px; }
+.app-shell .build-workspace .component-list .selected-line-controls .danger-button { width: 30px; height: 30px; border-radius: 8px; }
+.app-shell .build-workspace .component-list .selected-lines > .text-button { justify-self: start; min-height: 24px; margin: 2px 0 0 64px; padding: 0; color: var(--muted); font-size: 12px; font-weight: 600; }
+.app-shell .build-workspace .component-list .selected-lines > .text-button:hover { color: var(--teal-deep); }
+.app-shell .build-workspace .component-list .empty-selection { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin: 0; padding: 0; border: 0; background: transparent; }
+.app-shell .build-workspace .component-list .empty-selection > span { color: var(--muted); font-size: 12.5px; }
+.app-shell .build-workspace .component-list .empty-selection .button { min-height: 32px; padding: 0 12px; border-radius: 8px; font-size: 12.5px; }
+.app-shell .build-workspace .component-list .included-selection { display: flex; align-items: center; gap: 8px; margin: 0; padding: 0; border: 0; background: transparent; color: var(--ink-2); font-size: 12.5px; }
+.app-shell .build-workspace .component-list .included-selection .text-button { margin-left: auto; font-size: 12.5px; }
+.app-shell .build-workspace .component-list .graphics-toggle { margin: 8px 0 0; padding: 8px 10px; border-radius: 10px; }
+
+/* Wide sheet: everything on one line — thumb | name | steps / qty / delete | price. */
+@container parts-sheet (min-width: 720px) {
+  .app-shell .build-workspace .component-list .selected-line { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto auto; align-items: center; column-gap: 14px; }
+  .app-shell .build-workspace .component-list .selected-line-main { display: contents; }
+  .app-shell .build-workspace .component-list .selected-line-thumb { grid-column: 1; grid-row: 1; }
+  .app-shell .build-workspace .component-list .selected-line-info { grid-column: 2; grid-row: 1; }
+  .app-shell .build-workspace .component-list .selected-line-controls { grid-column: 3; grid-row: 1; flex-wrap: nowrap; }
+  .app-shell .build-workspace .component-list .selected-line-price { grid-column: 4; grid-row: 1; }
+  .app-shell .build-workspace .component-list .selected-line > :not(.selected-line-main):not(.selected-line-controls) { grid-column: 1 / -1; }
+  .app-shell .build-workspace .component-list .component-card.selected .component-card-top { padding-top: 18px; }
+}
+/* Narrow sheet: name and price on top, controls underneath the name. */
+@container parts-sheet (max-width: 719.98px) {
+  .app-shell .build-workspace .component-list .selected-line { display: grid; gap: 6px; }
+  .app-shell .build-workspace .component-list .selected-line-main { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; align-items: center; gap: 12px; }
+  .app-shell .build-workspace .component-list .selected-line-controls { padding-left: 64px; }
+}
+
+/* Summary: total, budget headroom, balance, metrics, one primary action. */
 .app-shell .build-workspace-summary-card { position: static; display: grid; gap: 12px; padding: 18px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); box-shadow: none; }
 .app-shell .build-workspace-summary-card .build-editor-total { margin: 0; padding: 0 0 2px; border-top: 0; }
 .app-shell .build-workspace-budget { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-top: -6px; padding-bottom: 12px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 12.5px; }
 .app-shell .build-workspace-budget em { font-style: normal; font-weight: 700; }
 .app-shell .build-workspace-budget em.within { color: var(--ok); }
 .app-shell .build-workspace-budget em.over { color: var(--red); }
-.app-shell .build-workspace-summary-card .generator-cpu-gpu-balance { margin: 0; }
+.app-shell .build-workspace-summary-card .generator-cpu-gpu-balance { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0; padding: 0; border: 0; background: transparent; }
+.app-shell .build-workspace-summary-card .generator-cpu-gpu-balance > strong { color: var(--ink-2); font-size: 12.5px; font-weight: 700; }
+.app-shell .build-workspace-summary-card .generator-cpu-gpu-balance > div { display: flex; gap: 6px; }
+.app-shell .build-workspace-summary-card .generator-cpu-gpu-balance > div > span { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border: 1px solid var(--line); border-radius: 999px; font-size: 12px; }
+.app-shell .build-workspace-summary-card .generator-cpu-gpu-balance b { color: var(--muted); font-size: 11px; font-weight: 700; }
+.app-shell .build-workspace-summary-card .generator-cpu-gpu-balance em { font-style: normal; font-weight: 700; }
 .app-shell .build-workspace-summary-card .performance-index-panel { margin: 0; padding: 0; border: 0; background: transparent; box-shadow: none; }
 .app-shell .build-workspace-summary-card .performance-index-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .app-shell .build-workspace-summary-card .performance-index-item { display: grid; gap: 2px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 10px; background: color-mix(in srgb, var(--canvas) 45%, var(--surface)); }
 .app-shell .build-workspace-summary-card .performance-index-item-label { color: var(--muted); font-size: 11.5px; font-weight: 600; }
 .app-shell .build-workspace-summary-card .performance-index-item strong { color: var(--ink); font-size: 15px; font-weight: 800; }
 .app-shell .build-workspace-disclosure { margin: 0; padding: 0; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; box-shadow: none; }
-.app-shell .build-workspace-disclosure > summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 38px; color: var(--ink); cursor: pointer; font-size: 13px; font-weight: 700; list-style: none; }
+.app-shell .build-workspace-disclosure > summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 38px; padding: 0; border: 0; border-radius: 0; background: transparent !important; cursor: pointer; list-style: none; }
+.app-shell .build-workspace-disclosure > summary,
+.app-shell .build-workspace-disclosure > summary > span { color: var(--ink) !important; font-size: 13px !important; font-weight: 700 !important; }
 .app-shell .build-workspace-disclosure > summary::-webkit-details-marker { display: none; }
 .app-shell .build-workspace-disclosure > summary > span { display: inline-flex; align-items: center; gap: 6px; }
 .app-shell .build-workspace-disclosure > summary > svg { color: var(--muted); transition: transform var(--dur-fast) ease; }
@@ -843,86 +915,9 @@ html:not([data-demo-tools="on"]) .mobile-demo-tools { display: none !important; 
 .app-shell .build-workspace-summary-card > .button-primary { min-height: 46px; margin-top: 2px; border-radius: 10px; font-size: 14.5px; font-weight: 700; }
 .app-shell .build-workspace-save { justify-self: center; min-height: 30px; color: var(--muted); font-size: 12.5px; font-weight: 600; }
 .app-shell .build-workspace-save:hover:not(:disabled) { color: var(--ink); }
+.app-shell .build-workspace-mobile-bar { display: none; }
 
-/* Tablet: conditions become a full-width panel above the list and summary. */
-@media (max-width: 1180px) {
-  .app-shell .build-workspace-grid,
-  .app-shell .build-workspace-grid.conditions-closed { grid-template-columns: minmax(0, 1fr) 300px; }
-  .app-shell .build-workspace-conditions { grid-column: 1 / -1; position: static; max-height: none; overflow: visible; }
-  /* Brief on the left, the core fields stacked on the right, the rest full width. */
-  .app-shell .build-workspace .generator-form { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; column-gap: 20px; }
-  .app-shell .build-workspace .generator-form > * { grid-column: 1 / -1; }
-  .app-shell .build-workspace .generator-form > .generator-brief { grid-column: 1; grid-row: 2 / span 4; }
-  .app-shell .build-workspace .generator-form > .generator-core-fields,
-  .app-shell .build-workspace .generator-form > label,
-  .app-shell .build-workspace .generator-form > .generator-game-target-controls,
-  .app-shell .build-workspace .generator-form > .generator-platform-toggles { grid-column: 2; }
-  .app-shell .build-workspace .generator-form .generator-brief textarea { min-height: 120px; }
-}
-@media (max-width: 900px) {
-  .app-shell .build-workspace-grid,
-  .app-shell .build-workspace-grid.conditions-closed { grid-template-columns: minmax(0, 1fr); }
-  .app-shell .build-workspace-summary { position: static; }
-}
-
-/* Mobile: conditions are a sheet above the list; the summary follows the list. */
-@media (max-width: 760px) {
-  .app-shell .build-workspace .build-workspace-heading { align-items: center; margin-bottom: 12px; }
-  .app-shell .build-workspace .build-workspace-heading .back-link { display: none; }
-  .app-shell .build-workspace .build-workspace-heading h1 { font-size: 22px; }
-  .app-shell .build-workspace-heading-actions { width: 100%; justify-content: space-between; }
-  .app-shell .build-workspace-grid { gap: 14px; }
-  .app-shell .build-workspace .generator-form { grid-template-columns: minmax(0, 1fr); padding: 14px; border-radius: 16px; }
-  .app-shell .build-workspace .generator-form > * { grid-column: 1 / -1 !important; grid-row: auto !important; }
-  .app-shell .build-workspace .generator-form .generator-brief textarea { min-height: 58px; }
-  .app-shell .build-workspace .generator-form select,
-  .app-shell .build-workspace .generator-form input[type="number"],
-  .app-shell .build-workspace .generator-form input[type="text"],
-  .app-shell .build-workspace .generator-form textarea { font-size: 16px; }
-  .app-shell .build-workspace .component-list .component-card { padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); box-shadow: none; }
-  .app-shell .build-workspace .component-list .component-card-top { margin: 0; }
-  .app-shell .build-workspace .component-list .component-card.selected .component-card-top { margin-bottom: 10px; }
-  .app-shell .build-workspace .component-list .component-heading h3 { font-size: 14.5px; }
-  .app-shell .build-workspace .component-list .component-card-body { padding: 0; }
-  .app-shell .build-workspace .component-list .selected-line { padding: 0; border: 0; }
-  .app-shell .build-workspace .component-list .selected-line + .selected-line { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); }
-  .app-shell .build-workspace .component-list .selected-line-controls { margin-top: 10px; }
-  .app-shell .build-workspace .component-list .empty-selection { margin: 0; padding: 0; border: 0; }
-  .app-shell .build-workspace-summary-card { padding: 16px; }
-}
-@media (min-width: 761px) {
-  .app-shell .build-workspace .build-workspace-heading h1 { font-size: clamp(26px, 2.4vw, 32px); line-height: 1.2; }
-  .app-shell .build-workspace .build-workspace-heading .back-link { margin-bottom: 4px; }
-}
-.app-shell .build-workspace .generator-platform-choice { display: grid; gap: 5px; min-width: 0; margin: 0; padding: 0; border: 0; background: transparent; }
-.app-shell .build-workspace .generator-platform-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; margin: 0; }
-.app-shell .build-workspace .generator-platform-heading strong { color: var(--muted); font-size: 12px; font-weight: 600; }
-.app-shell .build-workspace .generator-platform-heading small { overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
-.app-shell .build-workspace .generator-advanced-options > summary > span,
-.app-shell .build-workspace .generator-secondary-sections > details > summary > span { flex: 0 0 auto; white-space: nowrap; }
-.app-shell .build-workspace .generator-advanced-options > summary > small,
-.app-shell .build-workspace .generator-secondary-sections > details > summary > small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.app-shell .build-workspace .generator-platform-toggles { grid-template-columns: minmax(0, 1fr); gap: 6px; }
-.app-shell .build-workspace .generator-platform-choice { grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; }
-.app-shell .build-workspace .generator-platform-heading { justify-content: flex-start; }
-.app-shell .build-workspace .generator-platform-toggle { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: 9px; background: var(--canvas); }
-.app-shell .build-workspace .generator-platform-toggle button { min-width: 56px; min-height: 30px; padding: 0 10px; border: 0; border-radius: 7px; color: var(--muted); background: transparent; box-shadow: none; font-size: 12.5px; font-weight: 600; }
-.app-shell .build-workspace .generator-platform-toggle button.selected { color: var(--ink); background: var(--surface); box-shadow: 0 0 0 1px var(--line); }
-.app-shell .build-workspace-summary-card .generator-cpu-gpu-balance { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0; border: 0; background: transparent; }
-.app-shell .build-workspace-summary-card .generator-cpu-gpu-balance > strong { color: var(--ink-2); font-size: 12.5px; font-weight: 700; }
-.app-shell .build-workspace-summary-card .generator-cpu-gpu-balance > div { display: flex; gap: 6px; }
-.app-shell .build-workspace-summary-card .generator-cpu-gpu-balance > div > span { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border: 1px solid var(--line); border-radius: 999px; font-size: 12px; }
-.app-shell .build-workspace-summary-card .generator-cpu-gpu-balance b { color: var(--muted); font-size: 11px; font-weight: 700; }
-.app-shell .build-workspace-summary-card .generator-cpu-gpu-balance em { font-style: normal; font-weight: 700; }
-@media (min-width: 761px) {
-  .app-shell .build-workspace .build-workspace-heading h1 { font-size: 30px !important; }
-}
-@media (max-width: 760px) {
-  .app-shell .build-workspace .build-workspace-heading h1 { font-size: 22px !important; }
-}
-
-/* Comparison tabs: the tab already names the view, so the panel heading collapses
-   into a quiet action row. */
+/* Comparison tabs: the tab already names the view, so the panel heading becomes a quiet action row. */
 .app-shell .build-workspace-main > .generator-variants,
 .app-shell .build-workspace-main > .generator-budget-ladder { min-width: 0; margin: 0; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); box-shadow: none; animation: disclose var(--dur-base) var(--ease-out) both; }
 .app-shell .build-workspace-main .generator-variants-heading,
@@ -943,41 +938,52 @@ html:not([data-demo-tools="on"]) .mobile-demo-tools { display: none !important; 
 .app-shell .build-workspace-main .generator-budget-table-wrap { overflow-x: auto; }
 .app-shell .build-workspace-main .generator-variant-cards,
 .app-shell .build-workspace-main .generator-budget-cards { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
-.app-shell .build-workspace .generator-platform-heading small { display: none; }
-.app-shell .build-workspace .component-list .selected-lines { border-top: 0; }
-.app-shell .build-workspace-disclosure > summary { padding: 0; border: 0; border-radius: 0; background: transparent !important; }
-html .app-shell .build-workspace-heading-actions .build-editor-actions .button { border: 0 !important; background: transparent !important; box-shadow: none !important; }
-html .app-shell .build-workspace-heading-actions .build-editor-actions .button:hover:not(:disabled) { background: var(--hover-fill) !important; }
-.app-shell .build-workspace-disclosure > summary,
-.app-shell .build-workspace-disclosure > summary > span { color: var(--ink) !important; font-size: 13px !important; font-weight: 700 !important; }
-@media (max-width: 760px) {
-  .app-shell .build-workspace .build-workspace-heading { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; text-align: left; }
-  .app-shell .build-workspace .build-workspace-heading > div:first-child { text-align: left; }
-  .app-shell .build-workspace-heading-actions { display: flex; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 6px; }
-  .app-shell .build-workspace-heading-actions .build-editor-actions { display: flex !important; flex-wrap: nowrap; justify-content: flex-end; gap: 0; width: auto; }
-  .app-shell .build-workspace-heading-actions .build-editor-actions .button { width: auto !important; min-height: 34px; padding: 0 8px; font-size: 12.5px; }
-  .app-shell .build-workspace-heading-actions .build-editor-actions .button svg { display: none; }
-  .app-shell .build-workspace .component-list .selection-state,
-  .app-shell .build-workspace .component-list .optional-badge { display: none !important; }
-  .app-shell .build-workspace .component-list .selected-line-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; }
-  .app-shell .build-workspace .component-list .selected-line-controls .part-step { display: grid; grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .app-shell .build-workspace .component-list .selected-line-controls .part-step-button { justify-content: center; }
-  .app-shell .build-workspace .component-list .selected-line-controls .quantity-control > span:first-child { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-  .app-shell .build-workspace .component-list .part-detail-toggle { min-height: 28px; margin-top: 2px; font-size: 12.5px; }
-  .app-shell .build-workspace .component-list .selected-lines > .text-button { min-height: 32px; margin-top: 6px; font-size: 13px; }
+
+/* Tablet: the summary drops under the sheet. */
+@media (max-width: 1080px) {
+  .app-shell .build-workspace-grid { grid-template-columns: minmax(0, 1fr) 290px; }
 }
-.app-shell .build-workspace-mobile-bar { display: none; }
+@media (max-width: 900px) {
+  .app-shell .build-workspace-grid { grid-template-columns: minmax(0, 1fr); }
+  .app-shell .build-workspace-summary { position: static; }
+}
+
+/* Mobile: the bar becomes a two-column form, the sheet a list, a sticky total/check bar. */
 @media (max-width: 760px) {
+  .app-shell .build-workspace .build-workspace-heading { display: flex; flex-wrap: nowrap; align-items: center; margin-bottom: 12px; }
+  .app-shell .build-workspace .build-workspace-heading .back-link { display: none; }
+  .app-shell .build-workspace-heading-actions .build-editor-actions .button { padding: 0 7px; }
+  .app-shell .build-workspace-heading-actions .build-editor-actions .button svg { display: none; }
+  .app-shell .build-workspace .generator-form { margin-bottom: 14px; padding: 12px; }
+  .app-shell .build-workspace .generator-quickbar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .app-shell .build-workspace .generator-quickbar > label:has(.generator-input-with-unit) { grid-column: 1 / -1; }
+  .app-shell .build-workspace .generator-more-toggle { justify-content: center; margin: 0; border-color: var(--line); }
+  .app-shell .build-workspace .generator-submit { width: 100%; }
+  .app-shell .build-workspace .generator-form select,
+  .app-shell .build-workspace .generator-form input[type="number"],
+  .app-shell .build-workspace .generator-form input[type="text"],
+  .app-shell .build-workspace .generator-form textarea { font-size: 16px; }
+  .app-shell .build-workspace .generator-more { grid-template-columns: minmax(0, 1fr); }
+  .app-shell .build-workspace .component-list .component-card { grid-template-columns: minmax(0, 1fr); row-gap: 8px; padding: 12px 14px; }
+  .app-shell .build-workspace .component-list .component-card.selected .component-card-top { padding-top: 0; }
+  .app-shell .build-workspace .component-list .component-card:not(.selected) { grid-template-columns: minmax(0, 1fr) auto; }
+  .app-shell .build-workspace .component-list .empty-selection > span { display: none; }
+  .app-shell .build-workspace .component-list .selected-line-thumb { width: 48px; height: 48px; }
+  .app-shell .build-workspace .component-list .selected-line-main { grid-template-columns: 48px minmax(0, 1fr) auto !important; }
+  .app-shell .build-workspace .component-list .selected-line-controls { padding-left: 0; }
+  .app-shell .build-workspace .component-list .selected-line-controls .part-step { flex: 1 1 auto; }
+  .app-shell .build-workspace .component-list .selected-line-controls .part-step-button { flex: 1 1 0; justify-content: center; min-height: 34px; }
+  .app-shell .build-workspace .component-list .selected-line-controls .danger-button { margin-left: auto; }
+  .app-shell .build-workspace .component-list .selected-lines > .text-button { margin-left: 0; }
+  .app-shell .build-workspace-summary-card { padding: 16px; }
+  .app-shell .build-workspace-summary-card > .build-workspace-check { display: none; }
   .app-shell .build-workspace-mobile-bar { position: sticky; bottom: calc(74px + env(safe-area-inset-bottom)); z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; padding: 10px 10px 10px 16px; border: 1px solid var(--line); border-radius: 14px; background: color-mix(in srgb, var(--surface) 94%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 8px 24px rgba(15, 23, 42, .12); }
   .app-shell .build-workspace-mobile-bar > div { display: grid; gap: 1px; min-width: 0; }
   .app-shell .build-workspace-mobile-bar span { color: var(--muted); font-size: 11.5px; font-weight: 600; }
   .app-shell .build-workspace-mobile-bar strong { color: var(--ink); font-size: 17px; font-weight: 800; white-space: nowrap; }
   .app-shell .build-workspace-mobile-bar .button { min-height: 44px; padding: 0 16px; border-radius: 10px; font-size: 14px; font-weight: 700; white-space: nowrap; }
-  .app-shell .build-workspace-summary-card > .build-workspace-check { display: none; }
-  .app-shell .build-workspace .component-list .selected-line-controls { margin-top: 6px; }
-  .app-shell .build-workspace .component-list .selected-line { gap: 4px; }
 }
-.app-shell .build-workspace .component-list > * { margin-top: 0; margin-bottom: 0; }
+
 /* Editor: product thumbnail on each selected line; no legacy rule above the list. */
 .app-shell .component-list .selected-lines { margin-top: 0; padding-top: 0; border-top: 0; }
 .app-shell .selected-line-thumb { display: grid; place-items: center; width: 64px; height: 64px; overflow: hidden; padding: 4px; border: 1px solid var(--line); border-radius: 10px; color: var(--muted); background: #fff; }
@@ -997,3 +1003,62 @@ html[data-theme="dark"] .app-shell .selected-line-thumb:not(:has(img)) { backgro
 .app-shell .gpu-vendor-toggle button.selected { color: var(--ink); background: var(--surface); box-shadow: 0 1px 2px rgba(0, 0, 0, .08); }
 html[data-theme="dark"] .app-shell .gpu-vendor-toggle { background: #0d1015; }
 html[data-theme="dark"] .app-shell .gpu-vendor-toggle button.selected { background: var(--line); }
+@media (min-width: 761px) {
+  .app-shell .build-workspace .component-list .component-card { grid-template-columns: 92px minmax(0, 1fr); }
+  .app-shell .build-workspace .component-list .component-icon { display: none; }
+  .app-shell .build-workspace .component-list .component-label-row { flex-direction: column; align-items: flex-start; gap: 3px; }
+}
+/* Spec summary and the spec toggle share one line under the name. */
+.app-shell .build-workspace .component-list .selected-line-info { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; row-gap: 1px; }
+.app-shell .build-workspace .component-list .selected-line-info strong { flex: 1 0 100%; display: -webkit-box; white-space: normal; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.app-shell .build-workspace .component-list .selected-line-info > span { flex: 0 1 auto; min-width: 0; }
+@container parts-sheet (min-width: 720px) {
+  .app-shell .build-workspace .component-list .selected-line { grid-template-columns: 44px minmax(0, 1fr) auto auto; column-gap: 12px; }
+  .app-shell .build-workspace .component-list .selected-line-thumb { width: 44px; height: 44px; }
+  .app-shell .build-workspace .component-list .selected-lines > .text-button { margin-left: 56px; }
+  .app-shell .build-workspace .component-list .quantity-stepper button { width: 28px; min-width: 28px; }
+  .app-shell .build-workspace .component-list .quantity-stepper input { width: 34px; }
+}
+.app-shell .build-workspace .component-list .part-detail-toggle { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 2px; }
+@container parts-sheet (min-width: 720px) {
+  /* Fixed control and price columns so every row lines up like a table. */
+  .app-shell .build-workspace .component-list .selected-line { grid-template-columns: 44px minmax(0, 1fr) 262px 92px; }
+  .app-shell .build-workspace .component-list .selected-line-controls { justify-content: flex-end; }
+  .app-shell .build-workspace .component-list .part-step-button { min-width: 74px; justify-content: center; }
+}
+@container parts-sheet (min-width: 720px) {
+  .app-shell .build-workspace .component-list .selected-line { grid-template-columns: 44px minmax(0, 1fr) 216px 92px; }
+  .app-shell .build-workspace .component-list .selected-line-controls { gap: 8px; }
+  /* Up above down, stacked, so the step pair costs one narrow column. */
+  .app-shell .build-workspace .component-list .part-step { flex-direction: column-reverse; gap: 2px; }
+  .app-shell .build-workspace .component-list .part-step-button { width: 82px; min-width: 0; min-height: 24px; padding: 0 6px; border-radius: 6px; font-size: 11.5px; }
+  .app-shell .build-workspace .component-list .part-step-button small { font-size: 11.5px; }
+}
+/* The integrated-graphics switch only matters while no discrete GPU is chosen. */
+.app-shell .build-workspace .component-list .graphics-toggle.disabled { display: none; }
+/* Part conditions: capacity pickers pair up instead of stacking. */
+.app-shell .build-workspace .generator-more-group[aria-label="부품 조건"] { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 8px; }
+.app-shell .build-workspace .generator-more-group[aria-label="부품 조건"] > :is(h3, .generator-platform-toggles, .generator-storage-grid, .generator-checkbox) { grid-column: 1 / -1; }
+.app-shell .build-workspace .generator-checkbox { padding: 8px 10px; border: 1px solid var(--line); border-radius: 9px; background: transparent; }
+/* Game picker: compact chips in a short scroll box instead of a long checkbox column. */
+.app-shell .build-workspace .generator-game-target-controls { display: grid; gap: 10px; }
+.app-shell .build-workspace .generator-game-target-controls fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.app-shell .build-workspace .generator-game-target-controls legend { margin-bottom: 6px; padding: 0; color: var(--muted); font-size: 12px; font-weight: 600; }
+.app-shell .build-workspace .generator-game-target-list { display: flex !important; flex-wrap: wrap; gap: 4px; max-height: 148px; margin: 0; padding: 2px 2px 2px 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.app-shell .build-workspace .generator-game-target-list > label { position: relative; display: inline-flex !important; margin: 0; cursor: pointer; }
+.app-shell .build-workspace .generator-game-target-list > label > input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.app-shell .build-workspace .generator-game-target-list > label > span { display: inline-flex; align-items: center; min-height: 28px; padding: 0 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--ink-2); background: var(--surface); font-size: 12px; font-weight: 600; white-space: nowrap; transition: border-color var(--dur-fast) ease, background-color var(--dur-fast) ease; }
+.app-shell .build-workspace .generator-game-target-list > label:hover > span { border-color: var(--line-strong); }
+.app-shell .build-workspace .generator-game-target-list > label > input:checked + span { border-color: var(--teal); color: var(--teal-deep); background: var(--accent-wash); }
+.app-shell .build-workspace .generator-game-target-list > label > input:focus-visible + span { outline: 2px solid var(--teal); outline-offset: 1px; }
+.app-shell .build-workspace .generator-game-target-list > label > input:disabled + span { opacity: .5; cursor: not-allowed; }
+.app-shell .build-workspace .generator-game-target-controls legend { font-size: 12px !important; font-weight: 600 !important; }
+@container parts-sheet (max-width: 719.98px) {
+  .app-shell .build-workspace .component-list .selected-line-controls { justify-content: flex-start; }
+  .app-shell .build-workspace .component-list .selected-line-controls .danger-button { margin-left: auto; }
+}
+@media (max-width: 760px) {
+  .app-shell .build-workspace .build-workspace-heading { flex-direction: row !important; align-items: center !important; justify-content: space-between !important; text-align: left !important; }
+  .app-shell .build-workspace .build-workspace-heading > div:first-child { text-align: left !important; }
+  .app-shell .build-workspace .build-workspace-heading-actions { width: auto; flex: 0 0 auto; }
+}
