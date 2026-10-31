@@ -18,7 +18,7 @@
 .app-shell .accessory-browse .accessory-browse-toolbar > .accessory-filter-toggle.selected { color: var(--ink) !important; background: var(--hover-fill) !important; }
 
 /* Type navigation: a fixed grid of type cells with icon and count */
-.app-shell .accessory-browse .accessory-type-nav { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0; padding: 0 10px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.app-shell .accessory-browse .accessory-type-nav { position: relative; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0; padding: 0 10px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .app-shell .accessory-browse .accessory-type-nav button { position: relative; display: flex; align-items: center; gap: 7px; min-width: 0; min-height: 44px; margin: 0; padding: 0 10px; border: 0; border-radius: 0; color: var(--muted); background: transparent; box-shadow: none; font-size: 14px !important; font-weight: 600; text-align: left; white-space: nowrap; cursor: pointer; }
 .app-shell .accessory-browse .accessory-type-nav button > span { overflow: hidden; text-overflow: ellipsis; }
 .app-shell .accessory-browse .accessory-type-nav button svg { flex: 0 0 auto; color: var(--muted); font-size: 17px; }
@@ -138,4 +138,49 @@
   .app-shell .accessory-browse .accessory-row-main { grid-template-columns: 80px minmax(0, 1fr); }
   .app-shell .accessory-browse .accessory-row-image { width: 80px; height: 80px; }
   .app-shell .accessory-browse .accessory-row-actions > * { padding: 0 5px; font-size: 12px !important; }
+}
+
+/* Detail panel: same tokens as the list; provenance and missing-field lines stay in the DOM only. */
+.app-shell .accessory-browse .accessory-detail-panel { margin-top: 16px; padding: 20px; border: 1px solid var(--line); border-radius: 14px; color: var(--ink); background: var(--surface); box-shadow: none; }
+.app-shell .accessory-browse .accessory-detail-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin: 0 0 14px; }
+.app-shell .accessory-browse .accessory-detail-heading .eyebrow { margin: 0 0 4px; color: var(--muted) !important; font-size: 12px !important; font-weight: 600; letter-spacing: 0; text-transform: none; }
+.app-shell .accessory-browse .accessory-detail-heading h2 { margin: 0; color: var(--ink); font-size: 19px !important; font-weight: 800; line-height: 1.35; }
+.app-shell .accessory-browse .accessory-detail-heading h2 + p { margin: 4px 0 0; color: var(--muted); font-size: 13px !important; }
+.app-shell .accessory-browse .accessory-detail-heading .icon-button { flex: 0 0 auto; width: 36px; height: 36px; border: 0; border-radius: 8px; color: var(--muted); background: transparent; box-shadow: none; }
+.app-shell .accessory-browse .accessory-detail-heading .icon-button:hover { color: var(--ink); background: var(--hover-fill); }
+.app-shell .accessory-browse .accessory-detail-price { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0; padding: 12px 0; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; }
+.app-shell .accessory-browse .accessory-detail-price span { color: var(--ink-2); font-size: 13px !important; font-weight: 600; }
+.app-shell .accessory-browse .accessory-detail-price > strong { color: var(--ink); font-size: 20px !important; font-weight: 800; }
+.app-shell .accessory-browse .accessory-detail-price .accessory-detail-price-evidence,
+.app-shell .accessory-browse .accessory-detail-missing { display: none !important; }
+.app-shell .accessory-browse .accessory-detail-price-history { margin: 0; padding: 12px 0; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; }
+.app-shell .accessory-browse .accessory-detail-price-history-heading strong { color: var(--ink); font-size: 14px !important; }
+.app-shell .accessory-browse .accessory-detail-price-history-heading small,
+.app-shell .accessory-browse .accessory-detail-price-history-heading label,
+.app-shell .accessory-browse .accessory-detail-price-history-state { color: var(--muted); font-size: 12.5px !important; }
+.app-shell .accessory-browse .accessory-detail-price-history-heading select { height: 30px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink-2); background-color: var(--surface); font-size: 12.5px !important; }
+.app-shell .accessory-browse .accessory-detail-fit-notice { display: flex; gap: 8px; margin: 0; padding: 12px 0; border: 0; border-top: 1px solid var(--line); border-radius: 0; color: var(--ink-2); background: transparent !important; font-size: 13px !important; }
+.app-shell .accessory-browse .accessory-detail-fit-notice svg { flex: 0 0 auto; margin-top: 2px; color: var(--muted); }
+.app-shell .accessory-browse .accessory-detail-fit-notice strong { color: var(--ink); font-size: 13px !important; }
+.app-shell .accessory-browse .accessory-detail-fit-notice p { margin: 2px 0 0; color: var(--ink-2); font-size: 12.5px !important; }
+.app-shell .accessory-browse .accessory-detail-specs { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0 24px; margin: 0; padding: 4px 0 12px; border-top: 1px solid var(--line); }
+.app-shell .accessory-browse .accessory-detail-specs > div { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; }
+.app-shell .accessory-browse .accessory-detail-specs dt { color: var(--muted); font-size: 13px !important; }
+.app-shell .accessory-browse .accessory-detail-specs dd { margin: 0; color: var(--ink); font-size: 13px !important; font-weight: 600; text-align: right; }
+.app-shell .accessory-browse .accessory-detail-raw { margin: 0 0 12px; padding: 12px 0; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent !important; }
+.app-shell .accessory-browse .accessory-detail-raw summary { color: var(--ink) !important; font-size: 13px !important; font-weight: 700; }
+.app-shell .accessory-browse .accessory-detail-raw p { color: var(--ink-2) !important; background: transparent !important; font-size: 13px !important; }
+.app-shell .accessory-browse .accessory-detail-raw small,
+.app-shell .accessory-browse .accessory-detail-empty { color: var(--muted) !important; font-size: 12px !important; }
+.app-shell .accessory-browse .accessory-detail-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; margin: 4px 0 0; padding: 0; }
+.app-shell .accessory-browse .accessory-detail-actions > * { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 5px; width: auto !important; min-height: 40px; margin: 0; padding: 0 16px; border-radius: 10px; box-shadow: none; font-size: 13.5px !important; font-weight: 700; }
+.app-shell .accessory-browse .accessory-detail-actions > a { order: -1; border: 0; color: var(--muted); background: transparent; text-decoration: none; }
+.app-shell .accessory-browse .accessory-detail-actions > a:hover { color: var(--ink); background: var(--hover-fill); }
+.app-shell .accessory-browse .accessory-detail-actions .button-primary { border: 1px solid var(--teal); color: #fff; background: var(--teal); }
+.app-shell .accessory-browse .accessory-detail-actions .button-primary:hover:not(:disabled) { background: var(--teal-deep); }
+.app-shell .accessory-browse .accessory-detail-actions .button-primary:disabled { border-color: transparent; color: var(--muted); background: var(--hover-fill); }
+
+@media (max-width: 760px) {
+  .app-shell .accessory-browse .accessory-detail-panel { padding: 16px; }
+  .app-shell .accessory-browse .accessory-detail-actions > .button-primary { flex: 1 1 auto !important; justify-content: center; min-height: 46px; }
 }

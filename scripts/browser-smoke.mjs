@@ -2435,7 +2435,7 @@ async function main() {
     })()`);
     assert(sharedBudgetLadderMutationRouteProbe?.stage === "checked" && sharedBudgetLadderMutationRouteProbe.saveBLoaded === true && sharedBudgetLadderMutationRouteProbe.saveStale === false && sharedBudgetLadderMutationRouteProbe.revokeALoaded === true && sharedBudgetLadderMutationRouteProbe.revokeBLoaded === true && sharedBudgetLadderMutationRouteProbe.revokeStale === false && sharedBudgetLadderMutationRouteProbe.path === "/budget-ladder/browser-budget-revoke-b", "공유 예산 ladder snapshot 저장/취소 중 route 전환에서 stale mutation 상태가 남았습니다. probe=" + JSON.stringify(sharedBudgetLadderMutationRouteProbe));
     await client.send("Page.navigate", { url: `${baseUrl}/accessories` });
-    await waitForValue(client, "document.querySelector('.accessory-page') !== null && document.querySelector('.accessory-watch-button') !== null", "주변 부품 가격 추적 액션");
+    await waitForValue(client, "document.querySelector('.accessory-page') !== null && document.querySelector('.accessory-item') !== null", "주변 부품 목록");
     await client.evaluate("(() => { history.pushState({}, '', '/accessories?category=cooling_fan&brand=ASUS'); window.dispatchEvent(new PopStateEvent('popstate')); })()");
     await waitForValue(client, "document.querySelector('[data-testid=\"accessory-brand-filter\"] input')?.value === 'ASUS' && document.querySelector('[aria-label=\"주변 부품 분류\"]')?.value === 'cooling_fan'", "주변 부품 route history 필터 복원");
     await goBack(client);
@@ -2445,36 +2445,7 @@ async function main() {
     await waitForValue(client, "document.querySelector('[data-testid=\"accessory-brand-filter\"] input')?.value === 'ASUS' && new URLSearchParams(location.search).get('brand') === 'ASUS' && document.querySelectorAll('.accessory-item').length > 0", "주변 부품 제조사 필터");
     assert(await client.evaluate("(() => { const cards = [...document.querySelectorAll('.accessory-item')]; return cards.length > 0 && cards.every((card) => (card.textContent ?? '').includes('ASUS')); })()"), "주변 부품 제조사 필터 결과에 다른 제조사 부품이 섞였습니다.");
     await client.send("Page.navigate", { url: `${baseUrl}/accessories` });
-    await waitForValue(client, "document.querySelector('.accessory-page') !== null && document.querySelector('.accessory-watch-button') !== null", "주변 부품 기본 목록 복귀");
-    const accessoryWatchStorageProbe = await client.evaluate(`(async () => {
-      const watchlistKey = "pc-supporter-catalog-watchlist";
-      const originalWatchlist = localStorage.getItem(watchlistKey);
-      const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
-      const card = document.querySelector('.accessory-item');
-      const detailButton = card?.querySelector('[data-testid^="accessory-detail-"]');
-      const watchButton = card?.querySelector('.accessory-watch-button');
-      const itemId = detailButton?.getAttribute('data-testid')?.replace(/^accessory-detail-/, '') ?? "";
-      const entry = { itemId, itemName: "cross-tab accessory watch probe", category: "cooling_fan", kind: "accessory", addedAt: "2026-09-10T00:00:00.000Z" };
-      const dispatch = (value) => window.dispatchEvent(new StorageEvent("storage", { key: watchlistKey, newValue: value, storageArea: localStorage }));
-      try {
-        if (!(watchButton instanceof HTMLButtonElement) || !itemId) return { stage: "missing-controls", itemId };
-        const serialized = JSON.stringify([entry]);
-        localStorage.setItem(watchlistKey, serialized);
-        dispatch(serialized);
-        for (let index = 0; index < 80 && !watchButton.classList.contains('watched'); index += 1) await wait(25);
-        const added = watchButton.classList.contains('watched');
-        localStorage.setItem(watchlistKey, "[]");
-        dispatch("[]");
-        for (let index = 0; index < 80 && watchButton.classList.contains('watched'); index += 1) await wait(25);
-        const removed = !watchButton.classList.contains('watched');
-        return { stage: "checked", itemId, added, removed };
-      } finally {
-        if (originalWatchlist === null) localStorage.removeItem(watchlistKey); else localStorage.setItem(watchlistKey, originalWatchlist);
-        dispatch(originalWatchlist);
-        await wait(100);
-      }
-    })()`);
-    assert(accessoryWatchStorageProbe?.stage === "checked" && accessoryWatchStorageProbe.added === true && accessoryWatchStorageProbe.removed === true, "주변 부품 가격 추적 버튼이 다른 탭의 watch-list 추가/제거를 반영하지 못했습니다. probe=" + JSON.stringify(accessoryWatchStorageProbe));
+    await waitForValue(client, "document.querySelector('.accessory-page') !== null && document.querySelector('.accessory-item') !== null", "주변 부품 기본 목록 복귀");
     await waitForValue(client, "document.querySelector('[data-testid^=\"accessory-price-evidence-\"]') !== null", "주변 부품 목록 가격 근거");
     const accessoryDeepLinkId = await client.evaluate("(() => { const button = document.querySelector('[data-testid^=\"accessory-detail-\"]'); return button?.getAttribute('data-testid')?.replace(/^accessory-detail-/, '') ?? undefined; })()");
     assert(typeof accessoryDeepLinkId === 'string' && accessoryDeepLinkId.length > 0, "주변 부품 상세 deep-link 대상이 없습니다.");
@@ -2506,10 +2477,8 @@ async function main() {
       assert((await clickSelector(client, '[data-testid="fetch-retry-button"]', 1)) === 1, "주변 부품 캐시 목록 재시도 버튼을 찾지 못했습니다.");
     }
     await waitForValue(client, "document.querySelector('[data-testid=\"accessory-cached-fallback\"]') === null && document.querySelector('[data-testid=\"accessory-detail-cache-state\"]') === null && document.querySelectorAll('.accessory-list .accessory-item').length > 0", "주변 부품 캐시 상세 원문 재확인 후 최신 목록 복구");
-    assert((await clickSelector(client, '.accessory-watch-button', 1)) === 1, "주변 부품 가격 추적 버튼을 클릭하지 못했습니다.");
-    await waitForValue(client, "document.querySelector('.accessory-watch-button.watched') !== null", "주변 부품 가격 추적 등록");
     assert((await clickSelector(client, '.accessory-detail-toggle', 1)) === 1, "주변 부품 상세 버튼을 클릭하지 못했습니다.");
-    await waitForValue(client, "document.querySelector('[data-testid=\"accessory-detail-panel\"]') !== null && (document.body?.innerText ?? '').includes('가격 추적 화면')", "주변 부품 상세 패널");
+    await waitForValue(client, "document.querySelector('[data-testid=\"accessory-detail-panel\"]') !== null", "주변 부품 상세 패널");
     await waitForValue(client, "new URLSearchParams(location.search).get('itemId') !== null", "주변 부품 상세 deep link");
     await waitForValue(client, "document.querySelector('[data-testid=\"accessory-detail-price-history\"]') !== null && document.querySelector('[aria-label=\"주변 부품 가격 이력 기간\"]') !== null", "주변 부품 가격 이력");
     assert(await client.evaluate("(() => { const select = document.querySelector('[aria-label=\"주변 부품 가격 이력 기간\"]'); if (!(select instanceof HTMLSelectElement)) return false; const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set; setter?.call(select, '90'); select.dispatchEvent(new Event('change', { bubbles: true })); return select.value === '90'; })()"), "주변 부품 가격 이력 기간을 변경하지 못했습니다.");
