@@ -1,7 +1,7 @@
 import type { BuildSelection, CompatibilityResult, Finding, FindingSeverity, Part } from "./types";
 import { gpuPurchaseEvidenceFor } from "./gpu-fit";
 import { catalogMissingFieldLabelFor } from "./catalog-spec-coverage";
-import { buildConnectivitySummaryFor } from "./build-connectivity";
+import { buildConnectivitySummaryFor, buildCoolerTypeFor } from "./build-connectivity";
 import { buildResourceSummaryFor } from "./build-resource-summary";
 import { CHECKLIST_MAX_CHECKED_IDS } from "./checklist-storage-limits";
 
@@ -143,7 +143,8 @@ export function purchaseChecklistItemsFor(build: BuildSelection, result: Compati
 
   const connectivitySummary = buildConnectivitySummaryFor(
     build.motherboard ? partMap?.get(build.motherboard.partId)?.specs : undefined,
-    build.case ? partMap?.get(build.case.partId)?.specs : undefined
+    build.case ? partMap?.get(build.case.partId)?.specs : undefined,
+    buildCoolerTypeFor(build.cooler ? partMap?.get(build.cooler.partId)?.specs : undefined, build.cpu ? partMap?.get(build.cpu.partId)?.specs : undefined)
   );
   const existingFindingRuleIds = new Set(result.findings.map((finding) => finding.ruleId));
   const connectivityItems: PurchaseChecklistItem[] = connectivitySummary.items

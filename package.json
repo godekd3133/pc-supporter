@@ -28,6 +28,7 @@
     "catalog:case:backfill-hdd-bays-official": "tsx scripts/backfill-case-hdd-bays-official.ts",
     "catalog:case:backfill-cooler-height-ranges": "tsx scripts/backfill-case-cooler-height-ranges.ts",
     "catalog:case:backfill-pop-xl-seed": "tsx scripts/backfill-seed-case-pop-xl-hdd-bays.ts",
+    "catalog:backfill-spec-coverage": "tsx scripts/backfill-danawa-spec-coverage.ts",
     "crawl:dry": "tsx server/crawler.ts --dry-run --limit 8",
     "import:private-catalog": "tsx scripts/import-private-catalog.ts",
     "import:catalog-overrides": "tsx scripts/import-catalog-overrides.ts",

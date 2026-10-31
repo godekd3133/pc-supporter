@@ -6,7 +6,7 @@ import type { SavedBuildCheckFindingChange } from "./saved-build-check";
 import type { SavedBuildCheckSnapshot } from "./types";
 import { gpuPurchaseEvidenceFor } from "./gpu-fit";
 import { buildActionCenterFor } from "./build-action-center";
-import { buildConnectivitySummaryFor } from "./build-connectivity";
+import { buildConnectivitySummaryFor, buildCoolerTypeFor } from "./build-connectivity";
 import { assemblyPlanFor } from "./assembly-plan";
 import { safeHttpsUrl } from "./safe-source-url";
 import { applyCheckedPartPriceSnapshot, checkedPartPriceSnapshotFromUnknown } from "./checked-part-price-snapshot";
@@ -331,7 +331,8 @@ function connectivityStatusLabel(status: ReturnType<typeof buildConnectivitySumm
 function connectivityLines(build: BuildSelection, partMap: ReadonlyMap<string, Part>) {
   const summary = buildConnectivitySummaryFor(
     build.motherboard ? partMap.get(build.motherboard.partId)?.specs : undefined,
-    build.case ? partMap.get(build.case.partId)?.specs : undefined
+    build.case ? partMap.get(build.case.partId)?.specs : undefined,
+    buildCoolerTypeFor(build.cooler ? partMap.get(build.cooler.partId)?.specs : undefined, build.cpu ? partMap.get(build.cpu.partId)?.specs : undefined)
   );
   if (summary.status === "not_applicable") return [];
   return [
@@ -560,7 +561,8 @@ export function compatibilityReportJsonFor(result: CompatibilityResult, build: B
   const actionCenter = buildActionCenterFor(result, build, partMap);
   const connectivity = partMap ? buildConnectivitySummaryFor(
     build.motherboard ? partMap.get(build.motherboard.partId)?.specs : undefined,
-    build.case ? partMap.get(build.case.partId)?.specs : undefined
+    build.case ? partMap.get(build.case.partId)?.specs : undefined,
+    buildCoolerTypeFor(build.cooler ? partMap.get(build.cooler.partId)?.specs : undefined, build.cpu ? partMap.get(build.cpu.partId)?.specs : undefined)
   ) : undefined;
   return JSON.stringify({
     reportVersion: 1,

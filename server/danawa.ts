@@ -846,22 +846,65 @@ function parseCpuMemorySpeed(text: string) {
   return parseNumber(text.slice(memoryStart, memoryStart + 240), /\b([\d,]{4,6})\s*MHz\b/i);
 }
 
+// "메모리 규격: DDR5, DDR4 / ... / 4800, 3200MHz" — 두 세대를 지원하는 CPU는
+// 다나와가 속도를 세대 순서대로 나열한다. 첫 값만 읽으면 DDR5 CPU에 DDR4
+// 속도가 붙으므로 세대별로 짝지어 둔다.
+export function parseCpuMemorySpeedsByType(text: string): PartSpecs["maxMemorySpeedMhzByType"] {
+  const types = text.match(/메모리\s*규격\s*[:：]?\s*(DDR[45](?:\s*,\s*DDR[45])+)/i)?.[1].match(/DDR[45]/gi)?.map((type) => type.toUpperCase());
+  const speeds = text.match(/(?:^|\/)\s*(\d{4}(?:\s*,\s*\d{4})+)\s*MHz/i)?.[1].split(",").map((value) => Number(value.trim()));
+  if (!types || !speeds || types.length !== speeds.length || new Set(types).size !== types.length) return undefined;
+  const byType: NonNullable<PartSpecs["maxMemorySpeedMhzByType"]> = {};
+  types.forEach((type, index) => { byType[type as "DDR4" | "DDR5"] = speeds[index]; });
+  return byType;
+}
+
+// 메인보드 메모리 지원 상한(OC 포함)을 다나와가 쓰는 여러 표기에서 읽는다.
+// "메모리 8200MHz (PC5-65600)", "[메모리] PC4-25600 (3,200MHz)",
+// "메모리 속도: 8000MHz", "최대 8000MHz(OC)", "DDR5-8000(OC)",
+// "DDR5 6400/6000/5600". PC5-xxxxx는 대역폭 표기라 속도로 읽지 않는다.
+export function parseMotherboardMemorySpeedMhz(text: string): number | undefined {
+  const plausible = (value: number | undefined) => value !== undefined && value >= 800 && value <= 12000 ? value : undefined;
+  const labeled = parseNumber(text, /(?:\[메모리\]|메모리)\s*(?:지원\s*)?(?:속도|클럭)?\s*[:：]?\s*(?:최대\s*)?([\d,]{4,6})\s*MHz/i)
+    ?? parseNumber(text, /(?:메모리\s*)?(?:속도|클럭)\s*[:：]?\s*(?:최대\s*)?([\d,]{4,6})\s*MHz/i)
+    ?? parseNumber(text, /(?:\[메모리\]|메모리)\s*PC\d-\d+\s*\(\s*([\d,]{4,6})\s*MHz/i);
+  if (plausible(labeled) !== undefined) return labeled;
+  const ddrSpeeds = [...text.matchAll(/DDR[2-5]\s*[-\s]\s*(\d{4,5}(?:\s*\/\s*\d{4,5})*)(?:\s*\(OC\))?/gi)]
+    .flatMap((match) => match[1].split("/").map((value) => Number(value.trim())))
+    .filter((value) => plausible(value) !== undefined);
+  if (ddrSpeeds.length > 0) return Math.max(...ddrSpeeds);
+  return plausible(parseNumber(text, /최대\s*([\d,]{4,6})\s*MHz\s*\(OC\)/i));
+}
+
 // 다나와 CPU 스펙에는 메모리 지원 속도가 없는 경우가 많다. 소켓/세대별로
 // 공식 네이티브(JEDEC) 지원 속도를 채운다 — OC 상한이 아니라 모든 보드가
 // 보장하는 공식 스펙이라 안전한 하한값이다.
+// LGA1700(12~14세대)은 DDR5/DDR4를 모두 지원한다 — 세대별 공식 속도.
+export function cpuNativeMemorySpeedsByType(name: string, socket: string | undefined): PartSpecs["maxMemorySpeedMhzByType"] {
+  if (socket !== "LGA1700") return undefined;
+  return { DDR5: cpuNativeMemorySpeedMhz(name, socket, "DDR5"), DDR4: 3200 };
+}
+
 export function cpuNativeMemorySpeedMhz(name: string, socket: string | undefined, memoryType: string | undefined): number | undefined {
   const type = memoryType?.toUpperCase();
   if (socket === "AM5") {
     // 그래니트 릿지(라이젠 9000)는 DDR5-5600, 라파엘(7000)/피닉스(8000G)는 5200.
-    return /6세대|그래니트|\b9[0-9]{3}[XF]?\b/i.test(name) ? 5600 : 5200;
+    return /6세대|그래니트|\b9\d{3}(?:X3D|X|F)?\b/i.test(name) ? 5600 : 5200;
   }
   if (socket === "AM4") return type === "DDR4" ? 3200 : undefined;
   if (socket === "LGA1851") return 6400;
   if (socket === "LGA1700") {
-    const twelfthGen = /12세대|엘더레이크|\b12[0-9]{3}\w*/i.test(name);
-    return type === "DDR4" ? 3200 : twelfthGen ? 4800 : 5600;
+    if (type === "DDR4") return 3200;
+    // DDR5: 12세대 전체와 13/14세대 i3/i5 non-K(13400, 14400F 등)는 4800,
+    // 13/14세대 i5 K급(13600K) 이상은 5600. 모델 번호가 없으면(인텔 프로세서 300 등) 4800.
+    const model = name.match(/\b1([234])(\d)\d{2}([A-Z]*)/i);
+    if (!model || model[1] === "2") return 4800;
+    return Number(model[2]) >= 6 ? 5600 : 4800;
   }
-  if (socket === "LGA1200") return 3200;
+  if (socket === "LGA1200") {
+    // 10세대(코멧레이크)는 i3/i5 2666, i7/i9 2933, 11세대(로켓레이크)는 3200.
+    if (/10세대|코멧레이크|\b10\d{3}\w*/i.test(name)) return /i[79]|코어i[79]/i.test(name) ? 2933 : 2666;
+    return 3200;
+  }
   if (socket === "LGA1151" || socket === "AM3" || socket === "FM2") return type === "DDR3" ? 1600 : 2666;
   if (type === "DDR5") return 4800;
   if (type === "DDR4") return 3200;
@@ -905,7 +948,10 @@ function parseSpecs(category: PartCategory, name: string, description: string, r
       ?? parseNumber(text, /PBP-MTP\s*[:：]?\s*([\d,]+)(?:\s*-\s*[\d,]+)?\s*W/i);
     // The MTP upper bound stays in its own field so PSU/cooler rules keep using PPT/TDP.
     specs.cpuMaxTurboPowerW = parseNumber(text, /PBP-MTP\s*[:：]?\s*[\d,]+\s*-\s*([\d,]+)\s*W/i);
-    specs.maxMemorySpeedMhz = parseNumber(text, /(?:메모리|Memory)[^\d]{0,32}([\d,]{4,6})\s*MHz/i)
+    specs.maxMemorySpeedMhzByType = parseCpuMemorySpeedsByType(text);
+    const typedMemorySpeed = specs.memoryType === "DDR4" || specs.memoryType === "DDR5" ? specs.maxMemorySpeedMhzByType?.[specs.memoryType] : undefined;
+    specs.maxMemorySpeedMhz = typedMemorySpeed
+      ?? parseNumber(text, /(?:메모리|Memory)[^\d]{0,32}([\d,]{4,6})\s*MHz/i)
       ?? parseCpuMemorySpeed(text);
     const integratedGraphicsAbsent = /(?:내장\s*그래픽|내장그래픽|그래픽)\s*[:：]?\s*(?:미\s*탑재|미탑재|미\s*포함|미포함|미지원|없음|없습니다)/i.test(text);
     specs.integratedGraphics = integratedGraphicsAbsent
@@ -957,8 +1003,7 @@ function parseSpecs(category: PartCategory, name: string, description: string, r
     specs.maxMemoryGb = parseNumber(text, /(?:메모리\s*용량|용량)\s*[:：]?\s*(?:최대\s*)?([\d,]+)\s*GB/i);
     specs.memorySlots = parseNumber(text, /(?:메모리\s*슬롯|DIMM)\s*[:：]?\s*(\d+)\s*개/i)
       ?? parseNumber(text, /(?:\[메모리\]|메모리).{0,120}?\b(\d+)\s*개/i);
-    specs.maxMemorySpeedMhz = parseNumber(text, /(?:메모리\s*)?(?:속도|클럭)\s*[:：]?\s*([\d,]{4,6})\s*MHz/i)
-      ?? parseNumber(text, /\[메모리\]\s*([\d,]{4,6})\s*MHz/i);
+    specs.maxMemorySpeedMhz = parseMotherboardMemorySpeedMhz(text);
     specs.vrmPhaseCount = parseVrmPhaseCount(text);
     const m2Match = text.match(/M\.2\s*[:：]?\s*(\d+)(?:\s*\+\s*(\d+))?\s*개/i);
     specs.m2Slots = m2Match
@@ -987,9 +1032,14 @@ function parseSpecs(category: PartCategory, name: string, description: string, r
       specs.pcieX1Slots = parseNumber(pcieSlotText, /PCIe\s*x1(?:\s*\([^)]*\))?\s*[:：]?\s*(\d+)\s*개/i) ?? 0;
     }
     specs.sataPorts = parseNumber(text, /SATA\d?[^\d]{0,32}(\d+)\s*개/i);
-    const systemFanPorts = parseNumber(text, /시스템팬\s*4핀\s*[:：]?\s*(\d+)\s*개/i);
+    // "시스템팬 4핀: 3+1개"처럼 보드 위치별로 나눠 적은 수는 합산한다.
+    const systemFanMatch = text.match(/시스템팬\s*4핀\s*[:：]?\s*(\d+)(?:\s*\+\s*(\d+))?\s*개/i);
+    const systemFanPorts = systemFanMatch ? Number(systemFanMatch[1]) + Number(systemFanMatch[2] ?? 0) : undefined;
     const cpuFanHeaders = [...text.matchAll(/CPU(?:\s*추가)?팬(?:\([^)]*\))?\s*(?:4핀\s*)?헤더/gi)].length;
     if (systemFanPorts !== undefined || cpuFanHeaders > 0) specs.fanPortCount = (systemFanPorts ?? 0) + cpuFanHeaders;
+    // 펌프 헤더는 공랭 쿨러 조합에서 케이스 팬에 쓸 수 있어 따로 센다.
+    const pumpHeaders = [...text.matchAll(/(?:펌프\s*전용|AIO\s*펌프|수랭\s*펌프|W_?PUMP)\s*(?:팬\s*)?헤더/gi)].length;
+    if (pumpHeaders > 0) specs.pumpFanHeaderCount = pumpHeaders;
     const rgbHeaders = [...text.matchAll(/(?:ARGB|RGB)\s*(?:12V|5V)?\s*(?:4핀|3핀)\s*헤더/gi)].length;
     const rgb5vHeaders = [...text.matchAll(/ARGB\s*5V\s*3핀\s*헤더/gi)].length;
     const rgb12vHeaders = [...text.matchAll(/RGB\s*12V\s*4핀\s*헤더/gi)].length;
@@ -1137,6 +1187,7 @@ function parseSpecs(category: PartCategory, name: string, description: string, r
     const hasRgbDevice = /\bRGB\b/i.test(ledColorWithoutArgb);
     specs.rgbDeviceVoltage = hasArgbDevice && hasRgbDevice ? "mixed" : hasArgbDevice ? "5V" : hasRgbDevice ? "12V" : undefined;
     if (/(?:ARGB|RGB)\s*(?:컨트롤|컨트롤러)|허브\s*제공/i.test(text)) specs.rgbControllerIncluded = true;
+    if (/팬\s*허브\s*(?:기본\s*)?(?:제공|포함|적용|장착|내장)|허브\s*컨트롤러\s*(?:기본\s*)?(?:제공|포함|장착|내장)/i.test(text)) specs.fanHubIncluded = true;
     specs.radiatorSizesMm = parseCaseRadiatorSizes(text);
     specs.radiatorSupports = caseRadiatorSupportsFromText(text);
     const supportedBoardText = text.match(/지원보드규격\s*[:：]\s*([^/]+)/i)?.[1] ?? "";
@@ -1294,6 +1345,8 @@ export function reparseDanawaPart(part: Part): Part {
     // 다나와 목록 스펙에는 메모리 지원 속도가 없어 이 필드가 비는 게 보통이다.
     // 비면 견적 생성기의 필수 스펙 게이트가 모든 live CPU를 탈락시켜 seed
     // 참고 부품만 남으므로, 플랫폼 네이티브(JEDEC) 값으로 채운다.
+    specs.maxMemorySpeedMhzByType = parsedSpecs.maxMemorySpeedMhzByType ?? cpuNativeMemorySpeedsByType(part.name, specs.socket);
+    if (specs.maxMemorySpeedMhzByType === undefined) delete specs.maxMemorySpeedMhzByType;
     specs.maxMemorySpeedMhz = parsedSpecs.maxMemorySpeedMhz ?? cpuNativeMemorySpeedMhz(part.name, specs.socket, specs.memoryType);
   }
   if (part.category === "ssd") {
@@ -1334,10 +1387,15 @@ export function reparseDanawaPart(part: Part): Part {
     if (parsedSpecs.rgbDeviceCurrentA === undefined) delete specs.rgbDeviceCurrentA;
     if (parsedSpecs.rgbDevicePowerW === undefined) delete specs.rgbDevicePowerW;
     if (parsedSpecs.rgbControllerIncluded === undefined) delete specs.rgbControllerIncluded;
+    if (parsedSpecs.fanHubIncluded === undefined) delete specs.fanHubIncluded;
     if (parsedSpecs.radiatorSupports === undefined) delete specs.radiatorSupports;
   }
   if (part.category === "cooler" && parsedSpecs.radiatorPosition === undefined) {
     delete specs.radiatorPosition;
+  }
+  if (part.category === "cooler" && specs.radiatorSizeMm === null) {
+    // 예전 수집본에 null로 저장된 값 — 미확인(undefined)과 같게 다룬다.
+    delete specs.radiatorSizeMm;
   }
   if (part.category === "motherboard") {
     if (parsedSpecs.memoryProfiles === undefined) delete specs.memoryProfiles;
@@ -1356,6 +1414,7 @@ export function reparseDanawaPart(part: Part): Part {
     for (const field of ["pcieX16Slots", "pcieX8Slots", "pcieX4Slots", "pcieX1Slots"] as const) {
       if (parsedSpecs[field] === undefined) delete specs[field];
     }
+    if (parsedSpecs.pumpFanHeaderCount === undefined) delete specs.pumpFanHeaderCount;
     if (parsedSpecs.rgb5vPortCount === undefined) delete specs.rgb5vPortCount;
     if (parsedSpecs.rgb12vPortCount === undefined) delete specs.rgb12vPortCount;
   }

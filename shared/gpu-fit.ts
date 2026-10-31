@@ -225,7 +225,7 @@ export function gpuFitSummaryFor(
   const thickness: GpuThicknessFit = !gpu
     ? { status: "not_applicable", warningThresholdMm: GPU_THICKNESS_WARNING_MM }
     : {
-        status: thicknessFindingStatus ?? (metrics.gpuThicknessMm === undefined ? "needs_review" : metrics.gpuThicknessMm >= GPU_THICKNESS_WARNING_MM ? "needs_review" : "compatible"),
+        status: thicknessFindingStatus ?? (metrics.gpuThicknessMm === undefined ? "needs_review" : "compatible"),
         actualMm: metrics.gpuThicknessMm,
         warningThresholdMm: GPU_THICKNESS_WARNING_MM
       };
