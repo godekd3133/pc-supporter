@@ -21,6 +21,15 @@ vi.mock("./danawa", async () => {
 
 vi.mock("./catalog", () => ({ loadCatalog: mocks.loadCatalog, upsertCatalog: mocks.upsertCatalog }));
 
+// These tests cover resume/retry bookkeeping, not the cross-instance lease
+// (catalog-ingestion-coordinator.test.ts owns that). The lease is a Postgres
+// advisory lock shared by the whole test run, so another file's leftover job
+// must not make every crawl here report "already running".
+vi.mock("./catalog-ingestion-coordinator", async () => {
+  const actual = await vi.importActual<typeof import("./catalog-ingestion-coordinator")>("./catalog-ingestion-coordinator");
+  return { ...actual, withCatalogIngestionLease: <T>(operation: () => Promise<T>) => operation() };
+});
+
 vi.mock("./storage", async () => {
   const actual = await vi.importActual<typeof import("./storage")>("./storage");
   return {
@@ -111,7 +120,7 @@ describe("exhaustive crawler execution resume", () => {
 
     const status = await runCrawlJob({ all: true, resume: true, pages: 1, limitPerCategory: 0, details: true, delayMs: 0 });
 
-    expect(status.status).toBe("completed");
+    expect(status.status, `${status.error ?? ""} / ${status.message ?? ""}`).toBe("completed");
     expect(status.resumed).toBe(true);
     expect(status.skippedCategories).toEqual(["cpu", "cooler", "motherboard", "memory", "gpu", "ssd", "hdd", "case"]);
     expect(status.categoriesCompleted).toBe(DANAWA_CATEGORIES.length);
