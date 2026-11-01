@@ -186,6 +186,11 @@ function HomeCategoryRow({ onOpenCategory }: { onOpenCategory?: (category: PartC
   </nav>;
 }
 
+// The current draft counts as saved when a saved build holds the same parts and quantities.
+function selectionKey(build: BuildSelection) {
+  return PART_CATEGORIES.map((category) => selectionList(build, category).map((selection) => `${selection.partId}x${selection.quantity}`).join(",")).join("|");
+}
+
 type MobileHomeRow = { label: string; category: PartCategory; Icon: IconType };
 
 const MOBILE_HOME_ROWS: MobileHomeRow[] = [
@@ -260,6 +265,7 @@ export function MobileHomeAdditionalSelections({ build, partMap, accessoryMap }:
 function MobileHomeView({ build, result, resultIsStale, partMap, accessoryMap, alertItems, alertUnreadCount, savedBuilds, savedBuildMonitorAlerts, onStart, onGuidedStart, onGenerate, onDemo, onCompatibleDemo, onOpenResult, onOpenHistory, onOpenWatchlist, onJourneyAction, onOpenSavedBuild, onToast }: { build: BuildSelection; result: CompatibilityResult | null; resultIsStale: boolean; partMap: ReadonlyMap<string, Part>; accessoryMap: ReadonlyMap<string, AccessoryItem>; alertItems: AlertCenterItem[]; alertUnreadCount: number; savedBuilds: SavedBuild[]; savedBuildMonitorAlerts?: SavedBuildMonitorAlert[]; onStart: () => void; onGuidedStart: () => void; onGenerate: () => void; onDemo: () => void; onCompatibleDemo: () => void; onOpenResult: () => void; onOpenHistory: () => void; onOpenWatchlist: () => void; onJourneyAction: (action: JourneyActionKind) => void; onOpenSavedBuild: (saved: SavedBuild) => void; onToast: (message: string) => void }) {
   const selectedItemCount = PART_CATEGORIES.reduce((count, category) => count + selectionList(build, category).length, 0);
   const hasBuild = selectedItemCount > 0 || accessorySelections(build).length > 0;
+  const draftSaved = hasBuild && savedBuilds.some((saved) => selectionKey(saved.selection) === selectionKey(build));
   const resultReady = Boolean(result && !resultIsStale);
   const displayStatus = result ? compatibilityDisplayStatusFor(result) : undefined;
   const warningCount = (result?.warningCount ?? 0) + (result?.accessoryCompatibility?.warningCount ?? 0);
@@ -280,7 +286,7 @@ function MobileHomeView({ build, result, resultIsStale, partMap, accessoryMap, a
     <div className="home-entry-grid">
     <div className="home-entry-card home-entry-primary">
     <HomeEntryTitle Icon={FiTarget} title={hasBuild ? "이어서 완성해요" : "나에게 맞는 PC 찾기"} description={hasBuild ? "현재 견적과 호환 결과를 확인해요." : "용도와 예산에 맞춰 부품을 추천해요."} />
-    <div className="mobile-primary-actions"><button className="mobile-primary-action" data-testid="mobile-home-primary-action" type="button" onClick={resultReady ? onOpenResult : hasBuild ? onStart : onGuidedStart}><FiSearch /><span>{resultReady ? "최근 견적 결과 보기" : hasBuild ? "견적 이어서 만들기" : "용도와 예산 정하기"}</span><FiArrowRight /></button>{resultReady && <button className="mobile-secondary-action" type="button" onClick={onStart}><FiEdit3 /><span>견적 수정하기</span><FiArrowRight /></button>}</div>
+    <div className="mobile-primary-actions"><button className="mobile-primary-action" data-testid="mobile-home-primary-action" type="button" onClick={draftSaved ? onGuidedStart : resultReady ? onOpenResult : hasBuild ? onStart : onGuidedStart}><FiSearch /><span>{draftSaved ? "새 견적 만들기" : resultReady ? "최근 견적 결과 보기" : hasBuild ? "견적 이어서 만들기" : "용도와 예산 정하기"}</span><FiArrowRight /></button>{resultReady && <button className="mobile-secondary-action" type="button" onClick={onStart}><FiEdit3 /><span>견적 수정하기</span><FiArrowRight /></button>}</div>
     {!hasBuild && !resultReady
       ? <section className="mobile-guided-entry" data-testid="mobile-home-guided-entry" aria-label="새 견적 안내">
           <span className="mobile-kicker">견적 진행 순서</span>
@@ -315,6 +321,7 @@ function MobileHomeView({ build, result, resultIsStale, partMap, accessoryMap, a
 export function HomeView({ onOpenCategory, meta, build, result, resultIsStale, partMap, accessoryMap, budgetLadderShares, alternativeComparisonShares, savedBuildVersionShares, alertItems, alertUnreadCount, hasBuildAlerts, hasWatchlistAlerts, savedBuilds, savedBuildMonitorAlerts, onJourneyAction, onOpenSavedBuild, onStart, onGuidedStart, onGenerate, onDemo, onCompatibleDemo, onResume, onOpenResult, onOpenHistory, onOpenWatchlist, onCopyBudgetLadderShare, onRemoveBudgetLadderShare, onToastBudgetLadderShare, onCopyAlternativeComparisonShare, onRemoveAlternativeComparisonShare, onRevokeAlternativeComparisonShare, onToastAlternativeComparisonShare, onCopySavedBuildVersionShare, onRemoveSavedBuildVersionShare, onRevokeSavedBuildVersionShare, onToastSavedBuildVersionShare, onToast }: { onOpenCategory?: (category: PartCategory) => void; meta: ServiceMeta | null; build: BuildSelection; result: CompatibilityResult | null; resultIsStale: boolean; partMap: ReadonlyMap<string, Part>; accessoryMap: ReadonlyMap<string, AccessoryItem>; budgetLadderShares: BudgetLadderLocalShareEntry[]; alternativeComparisonShares: AlternativeComparisonLocalShareEntry[]; savedBuildVersionShares: SavedBuildVersionLocalShareEntry[]; alertItems: AlertCenterItem[]; alertUnreadCount: number; hasBuildAlerts: boolean; hasWatchlistAlerts: boolean; savedBuilds: SavedBuild[]; savedBuildMonitorAlerts?: SavedBuildMonitorAlert[]; onJourneyAction: (action: JourneyActionKind) => void; onOpenSavedBuild: (saved: SavedBuild) => void; onStart: () => void; onGuidedStart: () => void; onGenerate: () => void; onDemo: () => void; onCompatibleDemo: () => void; onResume: () => void; onOpenResult: () => void; onOpenHistory: () => void; onOpenWatchlist: () => void; onCopyBudgetLadderShare: (entry: BudgetLadderLocalShareEntry) => void; onRemoveBudgetLadderShare: (id: string) => void; onToastBudgetLadderShare: (message: string) => void; onCopyAlternativeComparisonShare: (entry: AlternativeComparisonLocalShareEntry) => void; onRemoveAlternativeComparisonShare: (id: string) => void; onRevokeAlternativeComparisonShare: (entry: AlternativeComparisonLocalShareEntry) => Promise<boolean>; onToastAlternativeComparisonShare: (message: string) => void; onCopySavedBuildVersionShare: (entry: SavedBuildVersionLocalShareEntry) => void; onRemoveSavedBuildVersionShare: (id: string) => void; onRevokeSavedBuildVersionShare: (entry: SavedBuildVersionLocalShareEntry) => Promise<boolean>; onToastSavedBuildVersionShare: (message: string) => void; onToast: (message: string) => void }) {
   const localShareCount = budgetLadderShares.length + alternativeComparisonShares.length + savedBuildVersionShares.length;
   const hasAnySelection = PART_CATEGORIES.some((category) => selectionList(build, category).length > 0) || accessorySelections(build).length > 0;
+  const draftSaved = hasAnySelection && savedBuilds.some((saved) => selectionKey(saved.selection) === selectionKey(build));
   return <div className="home-page">
     <MobileHomeView build={build} result={result} resultIsStale={resultIsStale} partMap={partMap} accessoryMap={accessoryMap} alertItems={alertItems} alertUnreadCount={alertUnreadCount} savedBuilds={savedBuilds} savedBuildMonitorAlerts={savedBuildMonitorAlerts} onStart={onStart} onGuidedStart={onGuidedStart} onGenerate={onGenerate} onDemo={onDemo} onCompatibleDemo={onCompatibleDemo} onOpenResult={onOpenResult} onOpenHistory={onOpenHistory} onOpenWatchlist={onOpenWatchlist} onJourneyAction={onJourneyAction} onOpenSavedBuild={onOpenSavedBuild} onToast={onToast} />
     <section className={`home-workbench${hasAnySelection ? " has-build" : ""}`} aria-label="견적 구성 방법">
@@ -323,8 +330,8 @@ export function HomeView({ onOpenCategory, meta, build, result, resultIsStale, p
           ? <><p className="eyebrow hero-eyebrow"><FiShield /> 현재 견적</p><h1>내 PC 견적</h1>{resultIsStale && <p className="hero-description">부품 구성이 바뀌었습니다. 호환 결과를 다시 확인하세요.</p>}</>
           : <><p className="eyebrow hero-eyebrow"><FiTarget /> 새 견적</p><h1>PC 견적 만들기</h1><p className="hero-description">용도와 예산을 정하면 부품과 가격, 호환 여부를 확인할 수 있습니다.</p></>}
         <div className="home-workbench-actions">
-          <button type="button" className="button button-primary button-large home-entry-cta" onClick={hasAnySelection ? onResume : onGuidedStart}>{hasAnySelection ? "견적 이어서 만들기" : "용도와 예산 정하기"}<FiArrowRight aria-hidden="true" /></button>
-          <button type="button" className="button button-secondary button-large home-entry-cta hero-secondary-action" onClick={hasAnySelection ? onGenerate : onStart}>{hasAnySelection ? "다른 구성 보기" : "부품을 직접 선택하기"}</button>
+          <button type="button" className="button button-primary button-large home-entry-cta" onClick={draftSaved ? onGuidedStart : hasAnySelection ? onResume : onGuidedStart}>{draftSaved ? "새 견적 만들기" : hasAnySelection ? "견적 이어서 만들기" : "용도와 예산 정하기"}<FiArrowRight aria-hidden="true" /></button>
+          <button type="button" className="button button-secondary button-large home-entry-cta hero-secondary-action" onClick={draftSaved ? onResume : hasAnySelection ? onGenerate : onStart}>{draftSaved ? "이 견적 수정하기" : hasAnySelection ? "다른 구성 보기" : "부품을 직접 선택하기"}</button>
         </div>
         {!hasAnySelection && <GuidedHomePreview />}
         <div className="home-workbench-links">
