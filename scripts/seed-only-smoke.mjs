@@ -151,7 +151,10 @@ try {
   for (const [category, minimum] of Object.entries(expectedCategories)) {
     assert(meta.categoryCounts?.[category] >= minimum, `${category} starter 부품 수가 기준보다 작습니다.`, meta.categoryCounts?.[category]);
   }
-  assert(meta.qualityCounts?.live === 0, "seed-only 환경에 live 핵심 데이터가 섞였습니다.", meta.qualityCounts);
+  // The served catalog includes checked-in verified snapshots (server/phase1-catalog.ts and the
+  // gaming-*-catalog snapshots), so "live" rows can appear without any crawl. What must hold is
+  // that nothing crawled was stored; that is checked against PostgreSQL below.
+  assert(meta.qualityCounts?.seed >= 115, "seed-only 환경의 starter 핵심 부품 수가 부족합니다.", meta.qualityCounts);
   assert(meta.accessoryQualityCounts?.live === 0, "seed-only 환경에 live 주변 부품 데이터가 섞였습니다.", meta.accessoryQualityCounts);
 
   const gpuListing = await jsonResponse("/api/parts?category=gpu&quality=seed&limit=100");
@@ -225,6 +228,7 @@ try {
   // 주변 부품은 첫 API 읽기에서 PostgreSQL에 materialize된다. 핵심 부품 starter는
   // 병합 fallback이라 테이블이 비어 있어도 정상이며 catalogCount로 검증한다.
   assert(persistedAccessories >= 42, "materialized 주변 부품 seed 레코드 수가 부족합니다.", { accessories: persistedAccessories });
+  assert(persistedCatalog === 0, "seed-only 환경에 수집된 핵심 부품이 저장되었습니다.", { catalog: persistedCatalog });
 
   console.log(JSON.stringify({
     ok: true,
