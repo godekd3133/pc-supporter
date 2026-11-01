@@ -64,6 +64,8 @@ function buildFingerprintFor(build, preferences) {
       const gaming = preferences.profile === "gaming";
       return {
         profile: preferences.profile,
+        cpuVendorPreference: preferences.cpuVendorPreference ?? null,
+        memoryTypePreference: preferences.memoryTypePreference ?? null,
         priority: preferences.priority,
         performanceTier: preferences.performanceTier ?? null,
         listingPolicy: preferences.listingPolicy ?? "retail_only",

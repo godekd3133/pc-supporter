@@ -61,7 +61,7 @@ async function main() {
     await waitForValue(client, `location.href.startsWith(${JSON.stringify(baseUrl)})`, "focused cache smoke page");
     await waitForHomeDemoButtons(client, "focused cache smoke home");
     await client.evaluate("(() => { const button = [...document.querySelectorAll('button')].find((candidate) => (candidate.textContent ?? '').includes('문제 있는 예시 견적')); button?.click(); })()");
-    await waitForValue(client, "location.pathname === '/build' && ((document.body?.innerText ?? '').includes('내 견적 구성') || (document.body?.innerText ?? '').includes('견적 구성'))", "focused cache smoke build");
+    await waitForValue(client, "location.pathname === '/build' && ((document.body?.innerText ?? '').includes('내 견적 구성') || (document.body?.innerText ?? '').includes('견적 구성') || (document.body?.innerText ?? '').includes('부품 구성'))", "focused cache smoke build");
     await client.evaluate("(() => { const card = [...document.querySelectorAll('.component-card')].find((candidate) => candidate.querySelector('h3')?.textContent?.includes('CPU')); const button = card?.querySelector('.empty-selection button, .selected-lines > .text-button, .included-selection button'); button?.click(); })()");
     await waitForValue(client, "document.querySelector('[role=dialog] #picker-title') !== null", "focused cache smoke picker");
     await client.evaluate("document.querySelector('[role=dialog] button[aria-label=\"부품 선택 닫기\"]')?.click()");

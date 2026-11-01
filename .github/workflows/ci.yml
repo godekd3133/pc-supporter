@@ -44,6 +44,9 @@ jobs:
         run: npm run test:seed
 
   browser-smoke:
+    # verify and browser-smoke share this Mac and its PostgreSQL cluster; running
+    # them together starves the unit tests' advisory-lock and connection timeouts.
+    needs: verify
     runs-on: [self-hosted, personal-mac]
     timeout-minutes: 18
     env:

@@ -155,7 +155,8 @@ describe("alternative comparison export", () => {
     expect(json.items[0]).not.toHaveProperty("valueLabel");
     expect(json.items[0]).not.toHaveProperty("valueScoreScale");
     expect(jsonText).not.toContain("가성비 우수");
-    expect(jsonText).not.toContain("181");
+    // Check the items only: exportedAt carries wall-clock milliseconds that can contain "181".
+    expect(JSON.stringify(json.items)).not.toContain("181");
     expect(json.items[0].priceWon).toBe(1200000);
     expect(json.items[0].summary).toBe("RTX 5070 / 12GB");
   });

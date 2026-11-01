@@ -97,6 +97,23 @@ const extraBenchmarkQueueGpus: Part[] = Array.from({ length: 34 }, (_, index) =>
   specs: {}
 }));
 
+// Gaming builds only take reviewed NVMe families (shared/cpu-gaming-policy.ts);
+// the starter catalog has none at 2TB, which the generator smoke requests.
+const gamingReviewedSsd2Tb: Part = {
+  id: "browser-smoke-ssd-p41-2tb",
+  category: "ssd",
+  name: "SK하이닉스 Platinum P41 M.2 NVMe 2TB",
+  brand: "SK hynix",
+  model: "SHPP41-2000GM",
+  source: "manual",
+  listingType: "retail",
+  dataQuality: "manual",
+  missingFields: [],
+  updatedAt,
+  priceWon: 199000,
+  specs: { interface: "NVMe", formFactor: "M.2 2280", capacityGb: 2000, m2PcieGeneration: 4, sequentialReadMbps: 7000, sequentialWriteMbps: 6500, ssdTbwTb: 1200 }
+};
+
 const asusCoolingFan: AccessoryItem = {
   id: "browser-smoke-asus-cooling-fan",
   category: "cooling_fan",
@@ -143,7 +160,7 @@ const accessoryCoverage: AccessoryCoverageSnapshot = {
   }]
 };
 
-await writeCatalogRecords([...incompleteCases, ...categoryMismatchBoards, pcieSlotMotherboard, unknownPriceMotherboard, ...extraBenchmarkQueueGpus]);
+await writeCatalogRecords([...incompleteCases, ...categoryMismatchBoards, pcieSlotMotherboard, unknownPriceMotherboard, gamingReviewedSsd2Tb, ...extraBenchmarkQueueGpus]);
 await mutateAccessoryCoverageRecord(() => accessoryCoverage);
 await mutateAccessoryCatalogRecords((current) => ({
   items: [...current.filter((item) => item.id !== asusCoolingFan.id), asusCoolingFan]
@@ -152,7 +169,7 @@ await mutateAccessoryCatalogRecords((current) => ({
 console.log(JSON.stringify({
   ok: true,
   starterCatalogCount: starterCatalog.length,
-  persistedCatalogFixtureCount: incompleteCases.length + categoryMismatchBoards.length + 2 + extraBenchmarkQueueGpus.length,
+  persistedCatalogFixtureCount: incompleteCases.length + categoryMismatchBoards.length + 3 + extraBenchmarkQueueGpus.length,
   incompleteCaseCount: incompleteCases.length,
   categoryMismatchCount: categoryMismatchBoards.length,
   accessoryCoverageCategories: accessoryCoverage.categories.length

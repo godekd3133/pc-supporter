@@ -65,8 +65,8 @@ describe("CI verification contracts", () => {
     expect(workflow).toContain("Guided quote onboarding smoke flow");
     expect(workflow).toContain("Production preview guided quote onboarding smoke flow");
     expect(onboardingSmoke).toContain("사이버펑크 2077");
-    expect(onboardingSmoke).toContain("4K / 144Hz");
-    expect(onboardingSmoke).toContain("generator-gaming-context");
+    expect(onboardingSmoke).toContain("QHD / 144 FPS");
+    expect(onboardingSmoke).toContain("targetFps");
     expect(onboardingSmoke).toContain("build-workspace-parts");
     expect(onboardingSmoke).toContain("generator-selection-reasons");
     expect(onboardingSmoke).toContain('entry") === "upgrade"');

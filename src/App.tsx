@@ -1742,7 +1742,10 @@ function App() {
       ? resultFindingRuleIntentForLocation(nextView, window.location.search)
       : options.resultFindingRuleId;
     const shareRoute = /^\/share\/[^/]+/.test(window.location.pathname);
+    const routeSequence = routeRequestSequenceRef.current;
     withViewTransition(() => {
+      // A back/forward or newer navigation may land before this deferred update runs.
+      if (routeRequestSequenceRef.current !== routeSequence) return;
       setPendingResultFindingRuleId(pendingFindingRuleId);
       setShareLoading(shareRoute);
       setShareLoadError(null);

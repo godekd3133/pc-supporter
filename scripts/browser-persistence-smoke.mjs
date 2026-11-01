@@ -346,7 +346,7 @@ async function main() {
     await navigate(client, `${webUrl}/`, "격리 홈 화면 복귀");
     await waitForHomeDemoButtons(client, "격리 홈 화면 복귀 확인");
     assert(await clickText(client, "문제 있는 예시 견적"), "문제 있는 예시 견적 버튼을 찾지 못했습니다.");
-    await waitForValue(client, "(document.body?.innerText ?? '').includes('나의 PC 견적 구성') || (document.body?.innerText ?? '').includes('견적 구성')", "격리 견적 편집기");
+    await waitForValue(client, "(document.body?.innerText ?? '').includes('나의 PC 견적 구성') || (document.body?.innerText ?? '').includes('견적 구성') || (document.body?.innerText ?? '').includes('부품 구성')", "격리 견적 편집기");
     await waitForValue(client, "[...document.querySelectorAll('button')].some((button) => !button.disabled && (button.textContent ?? '').includes('견적 완성하기'))", "격리 검사 준비");
     assert(await clickText(client, "견적 완성하기"), "격리 호환 확인 버튼을 찾지 못했습니다.");
     await waitForValue(client, "(document.body?.innerText ?? '').includes('호환 결과 상세')", "격리 검사 결과");
@@ -386,8 +386,9 @@ async function main() {
     await navigate(client, `${webUrl}/share/${encodeURIComponent(originalSavedId)}`, "원문 재확인 finding 연결 route");
     await openResultDetails(client);
     await waitForValue(client, "document.querySelector('[data-testid=\"saved-build-recheck-refresh-impact\"]') !== null", "원문 재확인 finding 연결 패널");
-    const refreshImpactText = await bodyText(client);
-    assert(refreshImpactText.includes("브라우저 원문 재확인 근거") && refreshImpactText.includes("바뀐 값") && refreshImpactText.includes("100,000원") && refreshImpactText.includes("110,000원"), "원문 재확인 값 변화가 결과 화면에 표시되지 않았습니다.");
+    // The panel can sit inside a collapsed result section; read its own text.
+    const refreshImpactText = await client.evaluate("document.querySelector('[data-testid=\"saved-build-recheck-refresh-impact\"]')?.textContent ?? ''");
+    assert(refreshImpactText.includes("변경된 부품 정보") && refreshImpactText.includes("바뀐 값") && refreshImpactText.includes("100,000원") && refreshImpactText.includes("110,000원"), "원문 재확인 값 변화가 결과 화면에 표시되지 않았습니다. panel=" + (refreshImpactText.match(/변경된 부품 정보[\s\S]{0,400}/)?.[0] ?? refreshImpactText.slice(0, 400)));
     assert((await clickSelector(client, '[data-testid="saved-build-recheck-refresh-action-purchase-list-panel"]', 1)) === 1, "원문 재확인 가격 바로가기를 클릭하지 못했습니다.");
     await waitForValue(client, "location.hash === '#purchase-list' && document.activeElement?.getAttribute('data-testid') === 'purchase-list-panel'", "원문 재확인 가격 바로가기 focus");
 
@@ -563,9 +564,10 @@ async function main() {
     await waitForValue(client, "(document.body?.innerText ?? '').includes('구매 목록') && !(document.body?.innerText ?? '').includes('공유 견적을 열 수 없습니다')", "공유 견적 결과");
     await waitForValue(client, "document.querySelector('[data-testid=\"result-decision-note\"]')?.textContent?.includes('QHD 게이밍과 업그레이드 여유를 우선') === true", "공유 견적 선택 메모");
     await waitForValue(client, "location.search === '?finding=blocker' && location.hash === '#findings' && document.querySelector('.finding-filter-button.selected')?.textContent?.includes('호환 불가') === true", "공유 견적 필터 복원");
-    await waitForValue(client, "document.querySelector('[data-testid=\"saved-build-recheck-diff\"]') !== null && (document.body?.innerText ?? '').includes('저장 당시와 현재 비교')", "공유 견적 재검사 비교 패널");
-    await waitForValue(client, "document.querySelector('[data-testid=\"saved-build-recheck-diff\"]')?.textContent?.includes('호환 항목') === true && document.querySelector('[data-testid=\"saved-build-recheck-diff\"]')?.textContent?.includes('전력/냉각 예산') === true", "공유 견적 호환/자원 예산 비교");
-    await waitForValue(client, "document.querySelector('[data-testid=\"saved-build-recheck-diff\"]')?.textContent?.includes('전력/냉각 예산') === true", "공유 견적 전력/냉각 예산 diff");
+    await waitForValue(client, "(document.querySelector('[data-testid=\"saved-build-recheck-diff\"]')?.textContent ?? '').includes('저장 당시와 현재 비교')", "공유 견적 재검사 비교 패널");
+    await openResultDetails(client);
+    await waitForValue(client, "document.querySelector('[data-testid=\"saved-build-recheck-diff\"]')?.textContent?.includes('호환 항목') === true && document.querySelector('[data-testid=\"saved-build-recheck-diff\"]')?.textContent?.includes('전력/냉각 여유') === true", "공유 견적 호환/자원 예산 비교");
+    await waitForValue(client, "document.querySelector('[data-testid=\"saved-build-recheck-diff\"]')?.textContent?.includes('전력/냉각 여유') === true", "공유 견적 전력/냉각 예산 diff");
     await waitForValue(client, "document.querySelector('[data-testid=\"saved-build-recheck-strategies\"]') !== null && (document.body?.innerText ?? '').includes('바꿔볼 조합 비교')", "공유 견적 해결 전략 비교");
     assert(await clickText(client, "가격/호환 기록 보기"), "공유 견적 재검사 비교의 타임라인 이동 버튼을 찾지 못했습니다.");
     await waitForValue(client, "document.activeElement?.getAttribute('data-testid') === 'saved-build-check-timeline'", "공유 견적 타임라인 이동");
@@ -763,8 +765,8 @@ async function main() {
     // "내 견적으로 복제" 버튼이 렌더 도중 사라지는 경합이 생긴다.
     await client.send("Network.deleteCookies", { name: "pc_supporter_owner_session", url: apiUrl, path: "/api" }).catch(() => undefined);
     await navigate(client, `${webUrl}/share/${encodeURIComponent(originalSavedId)}`, "공유 견적 외부 사용자 복제 route");
-    await waitForValue(client, "document.querySelector('[data-testid=\"shared-build-clone\"]') !== null", "공유 견적 내 견적으로 복제 액션");
-    assert(await clickSelector(client, '[data-testid="shared-build-clone"]', 1) === 1, "공유 견적 내 견적으로 복제 버튼을 클릭하지 못했습니다.");
+    // Click in the same evaluation that finds the button so an ownership refresh cannot remove it in between.
+    await waitForValue(client, "(() => { const button = document.querySelector('[data-testid=\"shared-build-clone\"]'); if (!(button instanceof HTMLButtonElement) || button.disabled) return false; button.click(); return true; })()", "공유 견적 내 견적으로 복제 액션");
     try {
       const cloneStartedAt = Date.now();
       while (Date.now() - cloneStartedAt < 10_000) {
