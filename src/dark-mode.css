@@ -86,3 +86,32 @@ html[data-theme="dark"] .app-shell :is(.catalog-price-history-state, .build-pric
 :root .app-shell.app-shell .price-watchlist-alert-summary svg { color: var(--ok); }
 :root .app-shell.app-shell :is(.purchase-list-price-review, .repair-plan-goal-note) { border: 1px solid var(--line) !important; border-left: 3px solid var(--yellow) !important; background: var(--surface) !important; }
 html[data-theme="dark"] .app-shell.app-shell .assembly-plan-step-progress { padding: 0; color: var(--muted) !important; background: transparent !important; }
+
+/* Build change / import dialogs and the change summary on the result page. */
+:root .app-shell.app-shell :is(.build-change-candidate-review, .build-import-status, .build-import-issues, .build-change-result-summary) { border: 1px solid var(--line) !important; border-left: 3px solid var(--tone, var(--line-strong)) !important; background: var(--surface) !important; }
+.app-shell :is(.build-change-candidate-review, .build-import-issues, .build-import-status.needs_selection) { --tone: var(--yellow); }
+.app-shell :is(.build-change-candidate-review.avoid, .build-change-result-summary.regressed) { --tone: var(--red); }
+.app-shell .build-change-result-summary.changed { --tone: var(--yellow); }
+html[data-theme="dark"] .app-shell :is(.build-change-summary, .build-change-price-panel, .build-change-diff, .build-import-stats > div, .build-import-preferences, .build-import-diff, .build-change-candidate-review-facts > div, .build-change-result-summary-grid article) { border-color: var(--line) !important; background: var(--canvas) !important; }
+html[data-theme="dark"] .app-shell .build-change-price-grid > div { border-color: var(--line); background: var(--surface); }
+html[data-theme="dark"] .app-shell :is(.build-change-dialog, .build-import-dialog, .build-change-result-summary) :is(strong, h2, h3, p, ul, em):not(button *) { color: var(--ink-2); }
+html[data-theme="dark"] .app-shell :is(.build-change-dialog, .build-import-dialog, .build-change-result-summary) :is(span, small, b, .build-change-note):not(button *) { color: var(--muted); }
+html[data-theme="dark"] .app-shell :is(.build-change-diff-row, .build-change-result-summary-change-list) em:first-child { color: var(--red); }
+html[data-theme="dark"] .app-shell :is(.build-change-diff-row, .build-change-result-summary-change-list) em:last-child { color: var(--ok); }
+html[data-theme="dark"] .app-shell :is(.build-change-budget-row strong.over, .build-change-result-summary-findings li.new span) { color: var(--red); }
+html[data-theme="dark"] .app-shell :is(.build-change-price-warning, .build-change-result-summary-warning, .build-change-candidate-review-heading > svg) { color: var(--yellow); }
+html[data-theme="dark"] .app-shell :is(.build-change-result-summary-heading-side > strong, .build-change-result-summary-findings li span, .build-change-candidate-review-heading span) { background: var(--hover-fill); }
+html[data-theme="dark"] .app-shell .purchase-list-price-evidence.live { color: var(--ok); background: var(--hover-fill); }
+html[data-theme="dark"] .app-shell.app-shell .selected-line-thumb:not(:has(img)) { background: var(--hover-fill) !important; }
+.app-shell .build-import-diff-row small { overflow: visible; white-space: normal; text-overflow: clip; overflow-wrap: anywhere; }
+
+/* Saved-build recheck diff (shared and saved views). */
+.app-shell .saved-build-recheck-diff-panel.improved { --tone: var(--ok); }
+.app-shell .saved-build-recheck-diff-panel.regressed { --tone: var(--red); }
+.app-shell .saved-build-recheck-diff-panel.changed { --tone: var(--teal); }
+html[data-theme="dark"] .app-shell :is(.saved-build-recheck-diff-grid article, .saved-build-recheck-diff-facts span, .saved-build-recheck-diff-finding) { border-color: var(--line); background: var(--canvas); }
+html[data-theme="dark"] .app-shell :is(.saved-build-recheck-diff-heading > strong, .saved-build-recheck-diff-finding-heading > span) { color: var(--ink-2); background: var(--hover-fill); }
+html[data-theme="dark"] .app-shell .saved-build-recheck-diff-panel :is(h2, strong, b, p) { color: var(--ink-2); }
+html[data-theme="dark"] .app-shell .saved-build-recheck-diff-panel :is(span, small, .saved-build-recheck-diff-facts, .text-button) { color: var(--muted); }
+:root .app-shell.app-shell .history-check-timeline-entry { border-color: var(--line) !important; background: var(--surface) !important; }
+:root .app-shell.app-shell .history-check-timeline-entry.incompatible { border-left: 3px solid var(--red) !important; }
