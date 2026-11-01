@@ -1,6 +1,8 @@
 import { BrandMark } from "./BrandMark";
 import { getLocalStorageHealth, safeLocalStorage, safeSessionStorage, subscribeLocalStorageHealth } from "./safe-storage";
 import "./mobile-navigation.css";
+import "./motion.css";
+import { flyToQuote, withViewTransition } from "./motion";
 import { Fragment, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ComponentType } from "react";
 import type { IconType } from "react-icons";
 import {
@@ -1732,14 +1734,18 @@ function App() {
     }
     if (nextView === "home" || nextView === "start" || nextView === "generator") setCurrentBuildOrigin(null);
     window.history.pushState({}, "", path);
-    setPendingResultFindingRuleId(options.resultFindingRuleId === undefined
+    const pendingFindingRuleId = options.resultFindingRuleId === undefined
       ? resultFindingRuleIntentForLocation(nextView, window.location.search)
-      : options.resultFindingRuleId);
-    setShareLoading(/^\/share\/[^/]+/.test(window.location.pathname));
-    setShareLoadError(null);
-    setView(nextView);
-    setLocationKey(path);
-    window.scrollTo({ top: 0, behavior: "auto" });
+      : options.resultFindingRuleId;
+    const shareRoute = /^\/share\/[^/]+/.test(window.location.pathname);
+    withViewTransition(() => {
+      setPendingResultFindingRuleId(pendingFindingRuleId);
+      setShareLoading(shareRoute);
+      setShareLoadError(null);
+      setView(nextView);
+      setLocationKey(path);
+      window.scrollTo({ top: 0, behavior: "auto" });
+    });
   }
 
   // 홈 여정 카드/결과 다음 단계의 CTA를 실제 라우트 이동으로 연결한다.
@@ -3005,6 +3011,7 @@ function App() {
       setToast(`${CATEGORY_LABELS[part.category]} / ${eun(part.name)} 이미 현재 견적에 선택되어 있습니다.`);
       return;
     }
+    flyToQuote(document.activeElement);
     updateBuildPart(part.category, { partId: part.id, quantity: 1 }, part);
       setToast(`${CATEGORY_LABELS[part.category]} / ${eul(part.name)} 현재 견적에 ${["memory", "ssd", "hdd"].includes(part.category) ? "추가" : "선택"}했습니다. 내 견적에서 호환 결과를 확인해 주세요.`);
   }
@@ -3442,6 +3449,7 @@ function App() {
   }
 
   async function addAccessory(item: AccessoryItem) {
+    flyToQuote(document.activeElement);
     rememberAccessories([item]);
     const nextBuild = addAccessoryToBuild(build, item.id, defaultAccessoryTargetPartId(build, item, partMap), defaultAccessoryTargetAccessoryId(build, item, accessoryMap));
     if (view === "result") {

@@ -1,0 +1,41 @@
+/* Motion layer: route transitions, the scroll-aware header, add-to-quote feedback
+   and on-scroll reveals. Everything here is off under prefers-reduced-motion. */
+
+/* ── Route transitions (View Transitions API) ── */
+@media (prefers-reduced-motion: no-preference) {
+  .app-shell .topbar { view-transition-name: app-topbar; }
+
+  ::view-transition-old(root) { animation: route-out 150ms ease-in both; }
+  ::view-transition-new(root) { animation: route-in 280ms var(--ease-out, cubic-bezier(.22, 1, .36, 1)) both; }
+  ::view-transition-group(app-topbar) { animation: none; }
+}
+
+@keyframes route-out { to { opacity: 0; transform: translateY(-6px); } }
+@keyframes route-in { from { opacity: 0; transform: translateY(12px); } }
+
+/* ── Header: blends into the page at the top, becomes a thinner frosted bar once scrolled ── */
+@media (min-width: 761px) {
+  .app-shell .topbar { border-bottom-color: transparent !important; background: transparent !important; box-shadow: none !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+  .app-shell .topbar::before { position: absolute; z-index: -1; top: 0; right: 0; left: 0; height: 100%; border-bottom: 1px solid transparent; background: var(--canvas); content: ""; pointer-events: none; transition: height var(--dur-base) var(--ease-out), background-color var(--dur-base) ease, border-color var(--dur-base) ease, box-shadow var(--dur-base) ease; }
+  .app-shell .topbar-inner { transition: transform var(--dur-base) var(--ease-out); }
+  .app-shell .topbar .brand-mark { transition: transform var(--dur-base) var(--ease-out); }
+
+  .app-shell .topbar[data-scrolled]::before { height: calc(100% - 10px); border-bottom-color: var(--line); background: color-mix(in srgb, var(--surface) 78%, transparent); box-shadow: 0 10px 24px -20px rgba(0, 0, 0, .35); backdrop-filter: saturate(1.6) blur(18px); -webkit-backdrop-filter: saturate(1.6) blur(18px); }
+  .app-shell .topbar[data-scrolled] .topbar-inner { transform: translateY(-5px); }
+  .app-shell .topbar[data-scrolled] .brand-mark { transform: scale(.9); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-shell .topbar::before,
+  .app-shell .topbar-inner,
+  .app-shell .topbar .brand-mark { transition: none; }
+}
+
+/* ── Add to quote: flying thumbnail + bump on the quote tab ── */
+.quote-target-bump { animation: quote-bump 520ms var(--ease-out, cubic-bezier(.22, 1, .36, 1)); }
+.quote-target-bump::after { position: absolute; inset: 4px; border-radius: inherit; box-shadow: 0 0 0 2px var(--teal); content: ""; opacity: 0; animation: quote-ring 520ms ease-out; pointer-events: none; }
+.app-shell .nav-link[data-quote-target],
+.app-shell .mobile-bottom-nav-item[data-quote-target] { position: relative; }
+
+@keyframes quote-bump { 0% { transform: scale(1); } 35% { transform: scale(1.12); color: var(--teal); } 100% { transform: scale(1); } }
+@keyframes quote-ring { 0% { opacity: .9; transform: scale(.85); } 100% { opacity: 0; transform: scale(1.25); } }

@@ -31,6 +31,21 @@ type HeaderProps = {
 
 export function AppHeader({ view, networkOnline, apiStatus, bootstrapLoading, bootstrapErrorCount, savedBuildUnreadAlertCount, catalogRefreshProgress, showAdmin, onHome, onBuild, onCatalog, onAccessories, onAdmin }: HeaderProps) {
   const [moreOpen, setMoreOpen] = useState(false);
+  const headerRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      headerRef.current?.toggleAttribute("data-scrolled", window.scrollY > 8);
+    };
+    const onScroll = () => { if (!frame) frame = window.requestAnimationFrame(update); };
+    update();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, []);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     try {
       return themeModeFromStorage(safeLocalStorage.getItem(THEME_STORAGE_KEY));
@@ -86,7 +101,7 @@ export function AppHeader({ view, networkOnline, apiStatus, bootstrapLoading, bo
   const ThemeIcon = themeMode === "dark" ? FiSun : FiMoon;
   const toggleTheme = () => setThemeMode((current) => current === "dark" ? "light" : "dark");
   return (
-    <header className="topbar">
+    <header className="topbar" ref={headerRef}>
       <div className="topbar-inner">
         <button className="mobile-header-menu" type="button" onClick={() => setMoreOpen(true)} aria-label="더보기 메뉴 열기"><FiMenu /></button>
         <button className="brand" onClick={onHome} aria-label="PC Supporter 홈">
@@ -96,7 +111,7 @@ export function AppHeader({ view, networkOnline, apiStatus, bootstrapLoading, bo
           </span>
         </button>
         <nav className="topnav" aria-label="주 메뉴">
-          <button className={view === "editor" || view === "generator" || view === "result" ? "nav-link active" : "nav-link"} onClick={onBuild}>견적 만들기</button>
+          <button className={view === "editor" || view === "generator" || view === "result" ? "nav-link active" : "nav-link"} data-quote-target onClick={onBuild}>견적 만들기</button>
           <button className={view === "catalog" ? "nav-link active" : "nav-link"} onClick={onCatalog}>부품 카탈로그</button>
           <button className={view === "accessories" ? "nav-link active" : "nav-link"} onClick={onAccessories}>주변 부품</button>
           {showAdmin && <button className={view === "admin" ? "nav-link active" : "nav-link"} onClick={onAdmin}>데이터 센터</button>}
@@ -119,7 +134,7 @@ export function AppHeader({ view, networkOnline, apiStatus, bootstrapLoading, bo
         <button className={`mobile-bottom-nav-item ${view === "home" ? "active" : ""}`} type="button" aria-current={view === "home" ? "page" : undefined} onClick={onHome} aria-label={savedBuildUnreadAlertCount > 0 ? `홈, 저장 견적 미읽음 알림 ${savedBuildUnreadAlertCount}건` : undefined}>
           <span className="mobile-bottom-nav-icon"><FiHome aria-hidden="true" />{savedBuildUnreadAlertCount > 0 && <span className="mobile-bottom-nav-badge" aria-hidden="true">{savedBuildUnreadAlertCount > 99 ? "99+" : savedBuildUnreadAlertCount}</span>}</span><span>홈</span>
         </button>
-        <button className={`mobile-bottom-nav-item ${quoteFlowActive ? "active" : ""}`} type="button" aria-current={quoteFlowActive ? "page" : undefined} onClick={onBuild}>
+        <button className={`mobile-bottom-nav-item ${quoteFlowActive ? "active" : ""}`} type="button" aria-current={quoteFlowActive ? "page" : undefined} data-quote-target onClick={onBuild}>
           <FiSearch aria-hidden="true" /><span>견적</span>
         </button>
         <button className={`mobile-bottom-nav-item ${view === "catalog" || view === "accessories" ? "active" : ""}`} type="button" aria-current={view === "catalog" || view === "accessories" ? "page" : undefined} onClick={onCatalog}>

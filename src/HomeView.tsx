@@ -144,6 +144,7 @@ function HomeCatalogCachePanel({ onToast }: { onToast: (message: string) => void
 }
 
 const LazyHomeSavedBuildPrices = lazy(() => import("./HomeSavedBuildPrices").then((module) => ({ default: module.HomeSavedBuildPrices })));
+const LazyHomeStory = lazy(() => import("./HomeStory").then((module) => ({ default: module.HomeStory })));
 const LazyHomeAlertCenter = lazy(() => import("./HomeAlertCenter").then((module) => ({ default: module.HomeAlertCenter })));
 const LazyHomeSpecSheet = lazy(() => import("./HomeSpecSheet").then((module) => ({ default: module.HomeSpecSheet })));
 const LazyHomeBudgetLadderSharePanel = lazy(() => import("./HomeBudgetLadderSharePanel").then((module) => ({ default: module.HomeBudgetLadderSharePanel })));
@@ -332,8 +333,10 @@ export function HomeView({ onOpenCategory, meta, build, result, resultIsStale, p
       </div>
       <Suspense fallback={<section className="home-spec-sheet" aria-hidden="true" />}><LazyHomeSpecSheet build={build} result={result} resultIsStale={resultIsStale} partMap={partMap} onOpenResult={onOpenResult} /></Suspense>
     </section>
+    {!hasAnySelection && <Suspense fallback={null}><LazyHomeStory onStart={onGuidedStart} /></Suspense>}
     {savedBuilds.length > 0 && <Suspense fallback={null}><LazyHomeSavedBuildPrices savedBuilds={savedBuilds} monitorAlerts={savedBuildMonitorAlerts} onOpenSavedBuild={onOpenSavedBuild} onOpenHistory={onOpenHistory} /></Suspense>}
     <HomeCategoryRow onOpenCategory={onOpenCategory} />
+    {hasAnySelection && <Suspense fallback={null}><LazyHomeStory onStart={onGuidedStart} /></Suspense>}
     {alertItems.length > 0 && <Suspense fallback={null}><LazyHomeAlertCenter items={alertItems} unreadCount={alertUnreadCount} hasBuildAlerts={hasBuildAlerts} hasWatchlistAlerts={hasWatchlistAlerts} onOpenHistory={onOpenHistory} onOpenWatchlist={onOpenWatchlist} /></Suspense>}
     <details className="home-secondary-details" aria-label="홈 추가 정보">
       <summary><span><FiInfo /> 저장한 견적/비교</span><small>{localShareCount > 0 ? `${localShareCount}개 / 부품 목록 보기` : "견적과 이 기기의 부품 목록"}</small><FiChevronDown /></summary>
