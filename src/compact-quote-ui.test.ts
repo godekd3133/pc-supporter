@@ -55,8 +55,7 @@ describe("compact quote result", () => {
       expect(markup).toContain(`balance-${level}`);
     });
     const unknown = renderToStaticMarkup(createElement(CpuGpuBalanceRow, {}));
-    expect(unknown).toContain("정보 확인 필요");
-    expect(unknown).not.toContain("좋음");
+    expect(unknown).toBe("");
   });
 
   it("displays current hardware automatically without creating a preference", () => {

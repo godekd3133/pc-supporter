@@ -1214,3 +1214,32 @@ html[data-theme="dark"] .app-shell .gpu-vendor-toggle button.selected { backgrou
 .app-shell .result-page .success-empty svg { flex: 0 0 auto; width: 20px; height: 20px; color: var(--ok); }
 .app-shell .result-page .success-empty h2 { flex: 1 1 auto; margin: 0; font-size: 15px !important; }
 .app-shell .result-page .success-empty .button { min-height: 34px; padding: 0 12px; font-size: 13px !important; }
+
+/* Result: sections sit on the page, not on leftover grey slabs. */
+.app-shell .result-page .findings-section,
+.app-shell .result-page .result-next-steps { padding: 0 !important; border: 0 !important; background: transparent !important; box-shadow: none !important; }
+.app-shell .result-page .result-next-steps { margin-top: 24px !important; }
+.app-shell .result-page .findings-list .section-title-row { display: flex; align-items: baseline; justify-content: space-between; margin: 20px 0 10px; }
+.app-shell .result-page .findings-list .section-title-row .eyebrow { display: none; }
+.app-shell .result-page .findings-list .section-title-row h2 { margin: 0; font-size: 18px !important; }
+.app-shell .result-page .findings-list .muted-count { color: var(--muted); font-size: 13px !important; }
+
+/* Result purchase rows: check | name + one meta line | price. */
+.app-shell .result-page .purchase-list-row { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: start; gap: 4px 12px; padding: 12px 4px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; }
+.app-shell .result-page .purchase-list-row:last-child { border-bottom: 0; }
+.app-shell .result-page .purchase-list-row-check { position: relative; display: grid; place-items: center; width: 20px; height: 20px; margin-top: 18px; }
+.app-shell .result-page .purchase-list-row-check input { width: 18px; height: 18px; margin: 0; accent-color: var(--teal); opacity: 1; position: static; }
+.app-shell .result-page .purchase-list-row-check > span { display: none; }
+.app-shell .result-page .purchase-list-row > div > span { color: var(--muted); font-size: 12px !important; }
+.app-shell .result-page .purchase-list-row > div > strong { display: block; margin: 1px 0 4px; color: var(--ink); font-size: 14.5px !important; font-weight: 700; line-height: 1.4; }
+.app-shell .result-page .purchase-list-row > div > small { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; color: var(--muted); font-size: 12.5px !important; }
+.app-shell .result-page .purchase-list-row .purchase-list-price-evidence { display: none !important; }
+.app-shell .result-page .purchase-list-row .purchase-list-status-select { min-height: 28px; padding: 0 26px 0 8px; border: 1px solid var(--line); border-radius: 7px; color: var(--ink-2); background-color: var(--surface); font-size: 12.5px !important; }
+.app-shell .result-page .purchase-list-row :is(.purchase-list-catalog-link, a) { display: inline-flex; align-items: center; gap: 3px; padding: 0; border: 0; color: var(--muted) !important; background: transparent; font-size: 12.5px !important; font-weight: 600; }
+.app-shell .result-page .purchase-list-row :is(.purchase-list-catalog-link, a):hover { color: var(--ink) !important; }
+.app-shell .result-page .purchase-list-row > em { margin-top: 18px; color: var(--ink); font-size: 15px !important; font-style: normal; font-weight: 800; white-space: nowrap; }
+/* Nine rows need no search box or stage board; progress keeps budget and the bar. */
+.app-shell .result-page .purchase-list-panel > .purchase-list-search,
+.app-shell .result-page .purchase-list-progress > :is(.purchase-list-status-board, .purchase-list-progress-actions, .purchase-list-progress-amounts) { display: none !important; }
+.app-shell .result-page .purchase-list-progress { margin: 12px 0 4px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: transparent; }
+.app-shell .result-page .purchase-list-budget { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }

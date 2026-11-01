@@ -77,7 +77,8 @@ export function GeneratorBalanceControls({ draft, loading, onGenerate, onBudgetC
 
 const BALANCE_LABELS: Record<GamingBalanceLevel, string> = { too_weak: "너무 약함", slightly_weak: "살짝 약함", good: "좋음", slightly_strong: "살짝 강함", too_strong: "너무 강함" };
 export function CpuGpuBalanceRow({ assessment, hasGpu = true }: { assessment?: CpuGpuBalanceAssessment; hasGpu?: boolean }) {
-  if (!hasGpu) return null;
-  const known = assessment && assessment.evidence !== "unknown";
+  // Without a reviewed pairing there is nothing useful to show: no "정보 확인 필요" placeholder.
+  if (!hasGpu || !assessment || assessment.evidence === "unknown") return null;
+  const known = true;
   return <div className="generator-cpu-gpu-balance" data-testid="cpu-gpu-balance" aria-label="CPU와 GPU 밸런스"><strong>밸런스</strong><div>{(["cpu", "gpu"] as const).map((category) => <span key={category}><b>{category.toUpperCase()}</b><em className={known ? `balance-grade balance-${assessment[category].level}` : "balance-grade balance-unknown"}>{known ? BALANCE_LABELS[assessment[category].level] : "정보 확인 필요"}</em></span>)}</div></div>;
 }
