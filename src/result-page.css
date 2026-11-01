@@ -1,0 +1,93 @@
+/* Result page layer. Loaded with the result route so the first-route CSS stays in budget. */
+
+/* ───────────────────────── Result page ───────────────────────── */
+@media (min-width: 761px) {
+  /* Status: one calm row — icon, verdict, one line of context. */
+  .app-shell .result-hero { display: block; margin: 0 0 16px; padding: 18px 22px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); box-shadow: none; }
+  .app-shell .result-hero-main { display: grid; grid-template-columns: 36px minmax(0, 1fr); align-items: center; gap: 14px; }
+  .app-shell .result-hero .result-status-icon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; font-size: 18px !important; }
+  .app-shell .result-hero h1 { margin: 0 !important; font-size: 22px !important; line-height: 1.35; letter-spacing: -0.02em; }
+  .app-shell .result-hero p { margin: 2px 0 0; color: var(--muted); font-size: 13.5px !important; }
+  .app-shell .result-hero.compatible { border-color: color-mix(in srgb, var(--ok) 35%, var(--line)); }
+  .app-shell .result-hero.compatible .result-status-icon { color: var(--ok); background: var(--ok-soft); }
+  .app-shell .result-hero.compatible h1 { color: var(--ink) !important; }
+  .app-shell .result-hero.needs_review,
+  .app-shell .result-hero.warning { border-color: color-mix(in srgb, var(--yellow) 40%, var(--line)); }
+  .app-shell .result-hero.needs_review .result-status-icon,
+  .app-shell .result-hero.warning .result-status-icon { color: var(--yellow); background: var(--yellow-soft); }
+  .app-shell .result-hero.incompatible { border-color: color-mix(in srgb, var(--red) 40%, var(--line)); }
+  .app-shell .result-hero.incompatible .result-status-icon { color: var(--red); background: var(--red-soft); }
+
+  /* Next steps: a labelled row of three quiet cards. */
+  .app-shell .result-next-steps { margin: 0 0 16px; padding: 0; border: 0; background: transparent; box-shadow: none; }
+  .app-shell .result-next-steps-heading { margin: 0 0 8px; padding: 0 2px; }
+  .app-shell .result-next-steps-heading .eyebrow { margin: 0; color: var(--muted); font-size: 12.5px !important; font-weight: 700; }
+  .app-shell .result-next-steps-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+  .app-shell .result-next-step { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; align-items: center; gap: 12px; min-height: 76px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); text-align: left; box-shadow: none; transition: border-color var(--dur-fast) ease, background-color var(--dur-fast) ease; }
+  .app-shell .result-next-step:hover { border-color: var(--line-strong); background: color-mix(in srgb, var(--hover-fill) 45%, var(--surface)); }
+  .app-shell .result-next-step-icon { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; color: var(--teal-deep); background: var(--accent-wash); }
+  .app-shell .result-next-step strong { display: block; color: var(--ink); font-size: 14px !important; font-weight: 700; }
+  .app-shell .result-next-step small,
+  .app-shell .result-next-step p { display: block; margin: 2px 0 0; color: var(--muted); font-size: 12.5px !important; line-height: 1.5; }
+
+  .app-shell .result-quick-nav-disclosure { margin: 0 0 16px; border-radius: 14px; box-shadow: none; }
+
+  /* Counts: neutral cards, colour only on the number. */
+  .app-shell .result-metrics { gap: 10px; }
+  .app-shell .result-metrics .metric-card { padding: 14px 16px; border: 1px solid var(--line) !important; border-radius: 14px; background: var(--surface) !important; box-shadow: none; }
+  .app-shell .result-metrics .metric-card span { color: var(--muted) !important; font-size: 12.5px !important; }
+  .app-shell .result-metrics .metric-card strong { display: block; margin-top: 4px; font-size: 24px !important; font-weight: 800; }
+  .app-shell .result-metrics .metric-card.danger strong { color: var(--red) !important; }
+  .app-shell .result-metrics .metric-card.warning strong { color: var(--yellow) !important; }
+  .app-shell .result-metrics .metric-card.unknown strong { color: var(--ink-2) !important; }
+  .app-shell .result-metrics .metric-card strong:only-of-type:is(:empty) { color: var(--muted) !important; }
+
+  .app-shell .result-page :is(.build-price-trend-panel, .sticky-summary, .result-layout > * > section) { border-radius: var(--radius-lg); box-shadow: none; }
+}
+
+
+/* Result: the main save action stands out. */
+.app-shell .result-actions .result-save-primary { order: -1; }
+.app-shell .result-more-details > summary small { margin-left: 8px; color: var(--muted); font-size: 12.5px !important; font-weight: 500; }
+
+/* Result purchase list: items, totals and progress only. Provenance and power tools stay in the DOM. */
+.app-shell .result-page .purchase-list-panel > :is(.purchase-list-price-evidence-summary, .purchase-list-price-review, .purchase-list-data-freshness, .purchase-list-action-center, .purchase-list-price-filters, .purchase-list-price-history-tools) { display: none !important; }
+.app-shell .result-page .purchase-list-panel { padding: 18px 20px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); box-shadow: none; }
+.app-shell .result-page .purchase-list-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.app-shell .result-page .purchase-list-heading > div:first-child { min-width: 220px; flex: 1 1 auto; }
+.app-shell .result-page .purchase-list-heading p { margin: 2px 0 0; color: var(--muted); font-size: 13px !important; }
+
+/* No issues: one quiet line instead of a large empty card. */
+.app-shell .result-page .success-empty { display: flex; align-items: center; gap: 10px; min-height: 0; margin: 12px 0; padding: 14px 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); text-align: left; }
+.app-shell .result-page .success-empty svg { flex: 0 0 auto; width: 20px; height: 20px; color: var(--ok); }
+.app-shell .result-page .success-empty h2 { flex: 1 1 auto; margin: 0; font-size: 15px !important; }
+.app-shell .result-page .success-empty .button { min-height: 34px; padding: 0 12px; font-size: 13px !important; }
+
+/* Result: sections sit on the page, not on leftover grey slabs. */
+.app-shell .result-page .findings-section,
+.app-shell .result-page .result-next-steps { padding: 0 !important; border: 0 !important; background: transparent !important; box-shadow: none !important; }
+.app-shell .result-page .result-next-steps { margin-top: 24px !important; }
+.app-shell .result-page .findings-list .section-title-row { display: flex; align-items: baseline; justify-content: space-between; margin: 20px 0 10px; }
+.app-shell .result-page .findings-list .section-title-row .eyebrow { display: none; }
+.app-shell .result-page .findings-list .section-title-row h2 { margin: 0; font-size: 18px !important; }
+.app-shell .result-page .findings-list .muted-count { color: var(--muted); font-size: 13px !important; }
+
+/* Result purchase rows: check | name + one meta line | price. */
+.app-shell .result-page .purchase-list-row { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: start; gap: 4px 12px; padding: 12px 4px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; }
+.app-shell .result-page .purchase-list-row:last-child { border-bottom: 0; }
+.app-shell .result-page .purchase-list-row-check { position: relative; display: grid; place-items: center; width: 20px; height: 20px; margin-top: 18px; }
+.app-shell .result-page .purchase-list-row-check input { width: 18px; height: 18px; margin: 0; accent-color: var(--teal); opacity: 1; position: static; }
+.app-shell .result-page .purchase-list-row-check > span { display: none; }
+.app-shell .result-page .purchase-list-row > div > span { color: var(--muted); font-size: 12px !important; }
+.app-shell .result-page .purchase-list-row > div > strong { display: block; margin: 1px 0 4px; color: var(--ink); font-size: 14.5px !important; font-weight: 700; line-height: 1.4; }
+.app-shell .result-page .purchase-list-row > div > small { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; color: var(--muted); font-size: 12.5px !important; }
+.app-shell .result-page .purchase-list-row .purchase-list-price-evidence { display: none !important; }
+.app-shell .result-page .purchase-list-row .purchase-list-status-select { min-height: 28px; padding: 0 26px 0 8px; border: 1px solid var(--line); border-radius: 7px; color: var(--ink-2); background-color: var(--surface); font-size: 12.5px !important; }
+.app-shell .result-page .purchase-list-row :is(.purchase-list-catalog-link, a) { display: inline-flex; align-items: center; gap: 3px; padding: 0; border: 0; color: var(--muted) !important; background: transparent; font-size: 12.5px !important; font-weight: 600; }
+.app-shell .result-page .purchase-list-row :is(.purchase-list-catalog-link, a):hover { color: var(--ink) !important; }
+.app-shell .result-page .purchase-list-row > em { margin-top: 18px; color: var(--ink); font-size: 15px !important; font-style: normal; font-weight: 800; white-space: nowrap; }
+/* Nine rows need no search box or stage board; progress keeps budget and the bar. */
+.app-shell .result-page .purchase-list-panel > .purchase-list-search,
+.app-shell .result-page .purchase-list-progress > :is(.purchase-list-status-board, .purchase-list-progress-actions, .purchase-list-progress-amounts) { display: none !important; }
+.app-shell .result-page .purchase-list-progress { margin: 12px 0 4px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: transparent; }
+.app-shell .result-page .purchase-list-budget { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }

@@ -1,3 +1,4 @@
+import "./result-page.css";
 import { GamingTargetAssessmentPanel } from "./GamingTargetAssessmentPanel";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { FiActivity, FiAlertTriangle, FiArrowLeft, FiArrowRight, FiCheckCircle, FiCopy, FiCpu, FiDownload, FiEdit3, FiExternalLink, FiGitBranch, FiInfo, FiLoader, FiMoreHorizontal, FiMinus, FiPlus, FiPrinter, FiRefreshCw, FiSave, FiShare2, FiTool, FiTrash2, FiXCircle, FiZap } from "react-icons/fi";
