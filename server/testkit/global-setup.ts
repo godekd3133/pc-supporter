@@ -9,6 +9,8 @@ import { Client } from "pg";
 import { migratePostgresSchemaWithClient } from "../postgres-schema-contract";
 import { TEST_POSTGRES_PORT } from "./postgres-url";
 
+const TEST_RUN_DATABASE_PREFIX = () => `pcsupporter_test_${process.env.PC_SUPPORTER_TEST_RUN_ID}_`;
+
 const require = createRequire(import.meta.url);
 const { unhookEmbeddedPostgresExitMask } = require("../../scripts/async-exit-hook-fix.cjs") as { unhookEmbeddedPostgresExitMask(): void };
 
@@ -102,16 +104,34 @@ async function ensureTestDatabase() {
   }
 }
 
+async function dropRunDatabases() {
+  const client = new Client({ ...ADMIN_CONNECTION, connectionTimeoutMillis: 5_000 });
+  try {
+    await client.connect();
+    const found = await client.query<{ datname: string }>("SELECT datname FROM pg_database WHERE starts_with(datname, $1)", [TEST_RUN_DATABASE_PREFIX()]);
+    for (const { datname } of found.rows) await client.query(`DROP DATABASE IF EXISTS "${datname}" WITH (FORCE)`).catch(() => undefined);
+  } catch {
+    // Leftover per-run databases are harmless; the next run uses a new prefix.
+  } finally {
+    await client.end().catch(() => undefined);
+  }
+}
+
 export default async function setup() {
+  // Workers inherit this, so every database they create is scoped to this run (see postgres-url.ts).
+  process.env.PC_SUPPORTER_TEST_RUN_ID ||= `r${process.pid}`;
   hydrateBundledSymlinks();
   if (await adminReachable()) {
     await ensureTestDatabase();
-    return async function teardown() {};
+    return async function teardown() {
+      await dropRunDatabases();
+    };
   }
   const cluster = await startCluster();
   await waitForCluster();
   await ensureTestDatabase();
   return async function teardown() {
+    await dropRunDatabases();
     await cluster.stop().catch(() => undefined);
   };
 }

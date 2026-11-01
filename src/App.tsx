@@ -2,7 +2,7 @@ import { BrandMark } from "./BrandMark";
 import { getLocalStorageHealth, safeLocalStorage, safeSessionStorage, subscribeLocalStorageHealth } from "./safe-storage";
 import "./mobile-navigation.css";
 import "./motion.css";
-import { flyToQuote, withViewTransition } from "./motion";
+import { withViewTransition } from "./motion";
 import { Fragment, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ComponentType } from "react";
 import type { IconType } from "react-icons";
 import {
@@ -290,6 +290,10 @@ const LazyRecoveryCodeDialog = lazy(() => import("./SavedBuildDialogs").then((mo
 const LazyRecoverOwnershipDialog = lazy(() => import("./SavedBuildDialogs").then((module) => ({ default: module.RecoverOwnershipDialog })));
 const LazyHistoryView = lazy(() => import("./HistoryView").then((module) => ({ default: module.HistoryView })));
 const LazyQuoteOnboardingView = lazy(() => import("./QuoteOnboardingView").then((module) => ({ default: module.QuoteOnboardingView })));
+function flyToQuoteFrom(trigger: Element | null) {
+  void import("./quote-fly").then((module) => module.flyToQuote(trigger)).catch(() => undefined);
+}
+
 const LazyAccessoryView = lazy(() => import("./AccessoryView").then((module) => ({ default: module.AccessoryView })));
 const LazyHomeSavedBuildVersionSharePanel = lazy(() => import("./HomeSavedBuildVersionSharePanel").then((module) => ({ default: module.HomeSavedBuildVersionSharePanel })));
 const LazySharedAlternativeComparisonView = lazy(() => import("./SharedAlternativeComparisonView").then((module) => ({ default: module.SharedAlternativeComparisonView })));
@@ -3011,7 +3015,7 @@ function App() {
       setToast(`${CATEGORY_LABELS[part.category]} / ${eun(part.name)} 이미 현재 견적에 선택되어 있습니다.`);
       return;
     }
-    flyToQuote(document.activeElement);
+    flyToQuoteFrom(document.activeElement);
     updateBuildPart(part.category, { partId: part.id, quantity: 1 }, part);
       setToast(`${CATEGORY_LABELS[part.category]} / ${eul(part.name)} 현재 견적에 ${["memory", "ssd", "hdd"].includes(part.category) ? "추가" : "선택"}했습니다. 내 견적에서 호환 결과를 확인해 주세요.`);
   }
@@ -3449,7 +3453,7 @@ function App() {
   }
 
   async function addAccessory(item: AccessoryItem) {
-    flyToQuote(document.activeElement);
+    flyToQuoteFrom(document.activeElement);
     rememberAccessories([item]);
     const nextBuild = addAccessoryToBuild(build, item.id, defaultAccessoryTargetPartId(build, item, partMap), defaultAccessoryTargetAccessoryId(build, item, accessoryMap));
     if (view === "result") {

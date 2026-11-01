@@ -248,7 +248,10 @@ export async function openDetails(client, selector, label = "펼침 대상") {
 }
 
 export async function waitForHomeDemoButtons(client, label = "홈 화면") {
-  await waitForValue(client, "location.pathname === '/' && (document.body?.innerText ?? '').includes('예시 구성 보기')", label);
+  // Example builds are QA-only (main.tsx shows them under webdriver or ?demo); turn them on for this page.
+  await waitForValue(client, "location.pathname === '/' && document.querySelector('details.hero-demo-tools, details.mobile-demo-tools') !== null", label);
+  await client.evaluate("(() => { document.documentElement.dataset.demoTools = 'on'; return true; })()");
+  await waitForValue(client, "(document.body?.innerText ?? '').includes('예시 구성 보기')", label);
   await openDetails(client, "details.hero-demo-tools, details.mobile-demo-tools, details.home-secondary-details", `${label} 예시 구성 도구`);
   await waitForValue(client, "(document.body?.innerText ?? '').includes('문제 있는 예시 견적')", `${label} 예시 견적 버튼`);
 }
