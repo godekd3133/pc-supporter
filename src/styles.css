@@ -16644,7 +16644,7 @@ html[data-theme="dark"] .purchase-decision-gate-heading > strong {
   background: var(--red-soft) !important;
 }
 
-html[data-theme="dark"] :where(.purchase-decision-gate.review .purchase-decision-gate-heading > strong, .purchase-decision-gate.pending .purchase-decision-gate-heading > strong) {
+html[data-theme="dark"] :is(.purchase-decision-gate.review .purchase-decision-gate-heading > strong, .purchase-decision-gate.pending .purchase-decision-gate-heading > strong) {
   border-color: #5a4b29 !important;
   color: var(--yellow) !important;
   background: var(--yellow-soft) !important;

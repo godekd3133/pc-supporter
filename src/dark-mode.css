@@ -79,6 +79,14 @@ html[data-theme="dark"] .app-shell :is(.catalog-price-history-range, .build-pric
 html[data-theme="dark"] .app-shell :is(.catalog-price-history-range, .build-price-trend-range) button:not(.selected):hover { border-color: var(--line-strong); color: var(--ink); background: var(--hover-fill); }
 html[data-theme="dark"] .app-shell :is(.catalog-price-history-heading, .build-price-trend-heading) > span { border-color: var(--line); color: var(--ink-2); background: var(--hover-fill); }
 html[data-theme="dark"] .app-shell :is(.catalog-price-history-state, .build-price-trend-state, .catalog-price-history-note, .build-price-trend-note) { color: var(--muted); }
+/* The selected period keeps its fill: the result page's dark button reset would otherwise flatten it. */
+html[data-theme="dark"] .app-shell :is(.catalog-price-history-range, .build-price-trend-range) button.selected { border-color: var(--teal) !important; color: #07111f !important; background: var(--teal) !important; }
+/* Price-trend delta and insight tile: no light pastel fills on the dark surface; tone stays in the glyph and text. */
+.app-shell .build-price-trend-total em:is(.increased, .decreased) { background: transparent; }
+html[data-theme="dark"] .app-shell .build-price-trend-total em.increased { color: var(--red) !important; }
+html[data-theme="dark"] .app-shell .build-price-trend-total em.decreased { color: var(--ok) !important; }
+html[data-theme="dark"] .app-shell .build-price-trend-insight > span { color: var(--red) !important; background: var(--hover-fill) !important; }
+html[data-theme="dark"] .app-shell .price-trend-chart-guide { stroke: var(--line); }
 
 /* Price watchlist: alert summary and preference chip lose their green fill. */
 :root .app-shell.app-shell :is(.price-watchlist-alert-summary, .price-watchlist-alert-preferences-heading > span) { border: 1px solid var(--line) !important; color: var(--ink-2) !important; background: var(--surface) !important; }
