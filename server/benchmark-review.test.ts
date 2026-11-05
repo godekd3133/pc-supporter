@@ -137,6 +137,21 @@ describe("benchmark review queue", () => {
 
     const completedPartial = catalog.map((item) => item.id === "gpu-partial" ? { ...item, specs: { gpu3dmarkTimeSpyScore: 14000, gpu3dmarkPortRoyalScore: 10000 } } : item);
     expect(benchmark3DMarkReviewWorkPackageFor(completedPartial, { now }).queueFingerprint).not.toBe(first.queueFingerprint);
+
+    const priceRefreshed = catalog.map((item) => item.category === "gpu" ? { ...item, priceWon: (item.priceWon ?? 300000) + 12340, updatedAt: "2026-09-06T00:30:00.000Z" } : item);
+    const refreshed = benchmark3DMarkReviewWorkPackageFor(priceRefreshed, { now, limit: 1 });
+    expect(refreshed.queueFingerprint).toBe(first.queueFingerprint);
+    expect(refreshed.items[0]?.partId).toBe(first.items[0]?.partId);
+  });
+
+  it("keeps equal-priority 3DMark work items in place when only updatedAt changes", () => {
+    const now = "2026-09-06T00:00:00.000Z";
+    const catalog = ["gpu-a", "gpu-b", "gpu-c"].map((id) => part({ id, name: id, category: "gpu", specs: {}, updatedAt: "2026-09-01T00:00:00.000Z" }));
+    const before = benchmark3DMarkReviewWorkPackageFor(catalog, { now });
+    const touched = catalog.map((item) => item.id === "gpu-c" ? { ...item, updatedAt: "2026-09-05T00:00:00.000Z" } : item);
+    const after = benchmark3DMarkReviewWorkPackageFor(touched, { now });
+    expect(after.items.map((item) => item.partId)).toEqual(before.items.map((item) => item.partId));
+    expect(after.queueFingerprint).toBe(before.queueFingerprint);
   });
 
   it("returns classified benchmark sources whose URL has not passed source-check", () => {

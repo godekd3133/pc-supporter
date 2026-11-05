@@ -224,19 +224,21 @@ function hashText(value: string) {
   return (hash >>> 0).toString(36);
 }
 
+// Offsets point into this queue, so the fingerprint covers only what decides an item's slot
+// (membership, order, missing scores). Price refreshes rewrite priceWon/updatedAt on every GPU
+// and must not throw a reviewer back to the first package.
 function benchmark3DMarkReviewFingerprintFor(items: Benchmark3DMarkReviewWorkItem[]) {
-  return `b3mr1-${hashText(JSON.stringify(items.map((item) => ({
-    partId: item.partId,
-    partName: item.partName,
-    status: item.status,
-    missingScores: item.missingScores,
-    presentScores: item.presentScores,
-    reviewPriorityScore: item.reviewPriorityScore,
-    dataQuality: item.dataQuality,
-    priceWon: item.priceWon,
-    updatedAt: item.updatedAt,
-    benchmarkUpdatedAt: item.benchmarkUpdatedAt
-  }))))}`;
+  return `b3mr1-${hashText(JSON.stringify(items.map((item) => [item.partId, item.status, item.missingScores])))}`;
+}
+
+// Same priorities as the review queue, minus its updatedAt tie-break: a price refresh would
+// otherwise reshuffle equal-priority GPUs and move items across package boundaries.
+function sortBenchmark3DMarkWorkItems(left: Benchmark3DMarkReviewWorkItem, right: Benchmark3DMarkReviewWorkItem) {
+  return right.reviewPriorityScore - left.reviewPriorityScore
+    || qualityRank[right.dataQuality] - qualityRank[left.dataQuality]
+    || Number(right.priceKnown) - Number(left.priceKnown)
+    || left.partName.localeCompare(right.partName, "ko-KR")
+    || left.partId.localeCompare(right.partId);
 }
 
 function benchmark3DMarkReviewWorkItemFor(item: BenchmarkReviewItem): Benchmark3DMarkReviewWorkItem | undefined {
@@ -270,7 +272,7 @@ export function benchmark3DMarkReviewWorkPackageFor(catalog: Part[], options: Be
   const offset = Number.isFinite(options.offset) ? Math.min(100_000, Math.max(0, Math.floor(options.offset ?? 0))) : 0;
   const limit = Number.isFinite(options.limit) ? Math.min(100, Math.max(1, Math.floor(options.limit ?? 24))) : 24;
   const { categorized, reviewItems } = benchmarkReviewItemsFor(catalog, now, false);
-  const allGpuWorkItems = reviewItems.gpu.map(benchmark3DMarkReviewWorkItemFor).filter((item): item is Benchmark3DMarkReviewWorkItem => Boolean(item));
+  const allGpuWorkItems = reviewItems.gpu.map(benchmark3DMarkReviewWorkItemFor).filter((item): item is Benchmark3DMarkReviewWorkItem => Boolean(item)).sort(sortBenchmark3DMarkWorkItems);
   const items = allGpuWorkItems.slice(offset, offset + limit);
   const remainingCount = Math.max(0, allGpuWorkItems.length - offset - items.length);
   const missingCount = allGpuWorkItems.filter((item) => item.status === "missing").length;
