@@ -1075,7 +1075,10 @@ html[data-theme="dark"] .app-shell .gpu-vendor-toggle button.selected { backgrou
   .app-shell .component-list .component-heading h3 { font-size: 15px !important; }
   .app-shell .build-workspace .component-list .component-heading h3 { font-size: 14px !important; }
 }
-.app-shell .build-workspace .component-list .component-card { grid-template-columns: 128px minmax(0, 1fr); }
+/* Desktop only: unscoped, this out-ranked the phone layout's single column and pushed selected rows off a 375px screen. */
+@media (min-width: 761px) {
+  .app-shell .build-workspace .component-list .component-card { grid-template-columns: 128px minmax(0, 1fr); }
+}
 .app-shell .component-list .component-label-row { min-width: 0; }
 
 /* Price summary: total first, then plain rows; no tinted bands. */
