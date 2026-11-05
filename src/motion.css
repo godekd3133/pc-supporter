@@ -5,13 +5,15 @@
 @media (prefers-reduced-motion: no-preference) {
   .app-shell .topbar { view-transition-name: app-topbar; }
 
-  ::view-transition-old(root) { animation: route-out 150ms ease-in both; }
-  ::view-transition-new(root) { animation: route-in 280ms var(--ease-out, cubic-bezier(.22, 1, .36, 1)) both; }
+  /* The outgoing screen recedes slightly and fades; the incoming one only fades up,
+     because its content then plays its own staggered entrance (see choreography below). */
+  ::view-transition-old(root) { animation: route-out 180ms ease-in both; transform-origin: 50% 30vh; }
+  ::view-transition-new(root) { animation: route-in 260ms var(--ease-out, cubic-bezier(.22, 1, .36, 1)) both; }
   ::view-transition-group(app-topbar) { animation: none; }
 }
 
-@keyframes route-out { to { opacity: 0; transform: translateY(-6px); } }
-@keyframes route-in { from { opacity: 0; transform: translateY(12px); } }
+@keyframes route-out { to { opacity: 0; transform: scale(.992) translateY(-3px); } }
+@keyframes route-in { from { opacity: 0; transform: translateY(6px); } }
 
 /* ── Header: blends into the page at the top, becomes a thinner frosted bar once scrolled ── */
 @media (min-width: 761px) {
@@ -39,3 +41,102 @@
 
 @keyframes quote-bump { 0% { transform: scale(1); } 35% { transform: scale(1.12); color: var(--teal); } 100% { transform: scale(1); } }
 @keyframes quote-ring { 0% { opacity: .9; transform: scale(.85); } 100% { opacity: 0; transform: scale(1.25); } }
+
+/* ── Route progress sweep (top of the viewport on every screen change) ── */
+.route-progress { position: fixed; z-index: 4000; top: 0; left: 0; width: 100%; height: 2px; pointer-events: none; opacity: 0; transform: scaleX(0); transform-origin: 0 50%; background: linear-gradient(90deg, transparent, var(--teal, #12b886) 30%, var(--teal, #12b886) 70%, color-mix(in srgb, var(--teal, #12b886) 40%, #fff)); }
+.route-progress[data-active] { animation: route-progress 820ms cubic-bezier(.22, 1, .36, 1) both; }
+@keyframes route-progress {
+  0% { opacity: .7; transform: scaleX(0); }
+  60% { opacity: .7; transform: scaleX(.85); }
+  100% { opacity: 0; transform: scaleX(1); }
+}
+
+/* ── Entrance choreography (attributes set by useMotionChoreography in motion.ts) ──
+   fill-mode is `backwards` so the element owns its transform again once the entrance
+   ends — hover lifts and press scales keep working. */
+@media (prefers-reduced-motion: no-preference) {
+  /* The stage itself no longer slides; its children carry the entrance instead. */
+  html[data-motion-ready] .app-shell .route-stage { animation: none; }
+
+  .app-shell [data-motion="pending"] { opacity: 0; }
+
+  .app-shell [data-motion="enter"],
+  .app-shell [data-motion="reveal"] {
+    --motion-delay: calc(var(--motion-i, 0) * 22ms);
+    animation-delay: var(--motion-delay);
+    animation-fill-mode: backwards;
+  }
+  .app-shell [data-motion="reveal"] { --motion-delay: calc(var(--motion-i, 0) * 30ms); }
+
+  /* Blocks: cards, panels, sections and rows rise into place. */
+  .app-shell [data-motion-kind="block"][data-motion="enter"],
+  .app-shell [data-motion-kind="block"][data-motion="reveal"] { animation-name: motion-rise; animation-duration: 460ms; animation-timing-function: var(--ease-out); }
+
+  /* Headlines: a soft left-to-right wipe, so the words appear to be written in. */
+  .app-shell [data-motion-kind="title"][data-motion="enter"],
+  .app-shell [data-motion-kind="title"][data-motion="reveal"] { animation-name: motion-title; animation-duration: 640ms; animation-timing-function: cubic-bezier(.4, 0, .2, 1); }
+
+  /* Body copy and labels: a shorter wipe that starts partly revealed. */
+  .app-shell [data-motion-kind="text"][data-motion="enter"],
+  .app-shell [data-motion-kind="text"][data-motion="reveal"] { animation-name: motion-text; animation-duration: 500ms; animation-timing-function: cubic-bezier(.4, 0, .2, 1); }
+
+  /* Buttons, chips and tabs fade up with a hint of scale. */
+  .app-shell [data-motion-kind="button"][data-motion="enter"],
+  .app-shell [data-motion-kind="button"][data-motion="reveal"] { animation-name: motion-pop; animation-duration: 380ms; animation-timing-function: var(--ease-out); }
+
+  .app-shell [data-motion-kind="field"][data-motion="enter"],
+  .app-shell [data-motion-kind="field"][data-motion="reveal"] { animation-name: motion-field; animation-duration: 380ms; animation-timing-function: var(--ease-out); }
+}
+
+@keyframes motion-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes motion-title {
+  0% { opacity: 0; clip-path: inset(-20% 100% -20% 0); filter: blur(2px); transform: translateY(3px); }
+  50% { opacity: 1; }
+  100% { opacity: 1; clip-path: inset(-20% -4% -20% 0); filter: blur(0); transform: none; }
+}
+@keyframes motion-text {
+  0% { opacity: 0; clip-path: inset(-20% 70% -20% 0); }
+  100% { opacity: 1; clip-path: inset(-20% -4% -20% 0); }
+}
+@keyframes motion-pop {
+  0% { opacity: 0; transform: translateY(3px) scale(.97); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes motion-field {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ── Buttons: hover lift, sheen sweep and a ripple from the press point ── */
+@media (prefers-reduced-motion: no-preference) {
+  .app-shell .button,
+  .app-shell .icon-button { position: relative; overflow: hidden; isolation: isolate; }
+
+  .app-shell .button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 14px -12px rgba(0, 0, 0, .3); }
+  .app-shell .button:active:not(:disabled) { transform: translateY(0) scale(.985); box-shadow: none; transition-duration: 60ms; }
+
+  /* Sheen: a diagonal highlight that crosses the button on hover. */
+  .app-shell .button::before { position: absolute; z-index: -1; top: 0; bottom: 0; left: -60%; width: 45%; content: ""; pointer-events: none; background: linear-gradient(100deg, transparent, rgba(255, 255, 255, .12), transparent); transform: skewX(-18deg) translateX(0); opacity: 0; }
+  .app-shell .button:hover:not(:disabled)::before { animation: button-sheen 900ms var(--ease-out) both; }
+
+  /* Ripple, positioned by installButtonRipple(). */
+  .app-shell .button::after,
+  .app-shell .icon-button::after { position: absolute; z-index: -1; top: var(--ripple-y, 50%); left: var(--ripple-x, 50%); width: var(--ripple-size, 0); height: var(--ripple-size, 0); margin: calc(var(--ripple-size, 0) / -2) 0 0 calc(var(--ripple-size, 0) / -2); border-radius: 50%; content: ""; pointer-events: none; background: currentColor; opacity: 0; transform: scale(0); }
+  .app-shell .button[data-ripple]::after,
+  .app-shell .icon-button[data-ripple]::after { animation: button-ripple 600ms cubic-bezier(.22, 1, .36, 1) both; }
+
+  /* Icons inside buttons get a small nudge on hover. */
+  .app-shell .icon-button svg { transition: transform var(--dur-base, 240ms) var(--ease-out); }
+  .app-shell .icon-button:hover:not(:disabled) svg { transform: scale(1.06); }
+}
+
+@keyframes button-sheen { from { opacity: 1; transform: skewX(-18deg) translateX(0); } to { opacity: 1; transform: skewX(-18deg) translateX(420%); } }
+@keyframes button-ripple { 0% { opacity: .1; transform: scale(0); } 100% { opacity: 0; transform: scale(1); } }
+
+/* Never print or hand a reader content that is still waiting to be revealed. */
+@media print, (prefers-reduced-motion: reduce) {
+  .app-shell [data-motion] { opacity: 1 !important; animation: none !important; clip-path: none !important; filter: none !important; }
+}

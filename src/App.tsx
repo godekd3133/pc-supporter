@@ -2,7 +2,7 @@ import { BrandMark } from "./BrandMark";
 import { getLocalStorageHealth, safeLocalStorage, safeSessionStorage, subscribeLocalStorageHealth } from "./safe-storage";
 import "./mobile-navigation.css";
 import "./motion.css";
-import { withViewTransition } from "./motion";
+import { installButtonRipple, useMotionChoreography, withViewTransition } from "./motion";
 import { Fragment, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ComponentType } from "react";
 import type { IconType } from "react-icons";
 import {
@@ -822,6 +822,8 @@ function App() {
   const [view, setView] = useState<View>(currentView);
   const [locationKey, setLocationKey] = useState(() => `${window.location.pathname}${window.location.search}${window.location.hash}`);
   const [networkOnline, setNetworkOnline] = useState(() => typeof navigator === "undefined" ? true : navigator.onLine);
+  useMotionChoreography(`${view === "generator" ? "editor" : view}|${locationKey}`);
+  useEffect(() => { installButtonRipple(); }, []);
   const [apiStatusDetails, setApiStatusDetails] = useState<ApiStatusDetails>(apiStatusDetailsSnapshot);
   const [build, setBuild] = useState<BuildSelection>(() => initialDraftLoad.build);
   const [result, setResult] = useState<CompatibilityResult | null>(readLastCompatibilityResult);
