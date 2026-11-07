@@ -1,5 +1,6 @@
 import { BrandMark } from "./BrandMark";
 import { getLocalStorageHealth, safeLocalStorage, safeSessionStorage, subscribeLocalStorageHealth } from "./safe-storage";
+import { usePersistToLocalStorage, useStorageKeyListener } from "./hooks/use-local-storage-sync";
 import "./mobile-navigation.css";
 import "./motion.css";
 import { installButtonRipple, useMotionChoreography, withViewTransition } from "./motion";
@@ -1113,100 +1114,34 @@ function App() {
     setDraftRecovery(null);
   }, [draftRecovery]);
 
-  useEffect(() => {
-    try {
-      safeLocalStorage.setItem(SAVED_BUILD_MONITOR_ALERTS_STORAGE_KEY, savedBuildMonitorAlertsToJson(savedBuildMonitorAlerts));
-    } catch {
-      // A full local storage bucket must not prevent the rest of the service from working.
-    }
-  }, [savedBuildMonitorAlerts]);
+  usePersistToLocalStorage(SAVED_BUILD_MONITOR_ALERTS_STORAGE_KEY, savedBuildMonitorAlerts, savedBuildMonitorAlertsToJson);
+  useStorageKeyListener(SAVED_BUILD_MONITOR_ALERTS_STORAGE_KEY, (newValue) => setSavedBuildMonitorAlerts(savedBuildMonitorAlertsFromJson(newValue)));
 
-  useEffect(() => {
-    const onStorage = (event: StorageEvent) => {
-      if (event.key === SAVED_BUILD_MONITOR_ALERTS_STORAGE_KEY) setSavedBuildMonitorAlerts(savedBuildMonitorAlertsFromJson(event.newValue));
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
+  usePersistToLocalStorage(BUDGET_LADDER_LOCAL_SHARES_STORAGE_KEY, budgetLadderShares, budgetLadderLocalSharesToJson);
+  useStorageKeyListener(BUDGET_LADDER_LOCAL_SHARES_STORAGE_KEY, (newValue) => {
+    localShareMutationContextRef.current += 1;
+    setBudgetLadderShares(budgetLadderLocalSharesFromJson(newValue));
+  });
 
-  useEffect(() => {
-    try {
-      safeLocalStorage.setItem(BUDGET_LADDER_LOCAL_SHARES_STORAGE_KEY, budgetLadderLocalSharesToJson(budgetLadderShares));
-    } catch {
-      // A full local storage bucket must not prevent the rest of the service from working.
-    }
-  }, [budgetLadderShares]);
+  usePersistToLocalStorage(ALTERNATIVE_COMPARISON_LOCAL_SHARES_STORAGE_KEY, alternativeComparisonShares, alternativeComparisonLocalSharesToJson);
+  useStorageKeyListener(ALTERNATIVE_COMPARISON_LOCAL_SHARES_STORAGE_KEY, (newValue) => {
+    localShareMutationContextRef.current += 1;
+    setAlternativeComparisonShares(alternativeComparisonLocalSharesFromJson(newValue));
+  });
 
-  useEffect(() => {
-    const onStorage = (event: StorageEvent) => {
-      if (event.key === BUDGET_LADDER_LOCAL_SHARES_STORAGE_KEY) {
-        localShareMutationContextRef.current += 1;
-        setBudgetLadderShares(budgetLadderLocalSharesFromJson(event.newValue));
-      }
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
-
-  useEffect(() => {
-    try {
-      safeLocalStorage.setItem(ALTERNATIVE_COMPARISON_LOCAL_SHARES_STORAGE_KEY, alternativeComparisonLocalSharesToJson(alternativeComparisonShares));
-    } catch {
-      // A full local storage bucket must not prevent the comparison workflow from working.
-    }
-  }, [alternativeComparisonShares]);
-
-  useEffect(() => {
-    const onStorage = (event: StorageEvent) => {
-      if (event.key === ALTERNATIVE_COMPARISON_LOCAL_SHARES_STORAGE_KEY) {
-        localShareMutationContextRef.current += 1;
-        setAlternativeComparisonShares(alternativeComparisonLocalSharesFromJson(event.newValue));
-      }
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
-
-  useEffect(() => {
-    try {
-      safeLocalStorage.setItem(SAVED_BUILD_VERSION_LOCAL_SHARES_STORAGE_KEY, savedBuildVersionLocalSharesToJson(savedBuildVersionShares));
-    } catch {
-      // A full local storage bucket must not prevent the version comparison workflow from working.
-    }
-  }, [savedBuildVersionShares]);
-
-  useEffect(() => {
-    const onStorage = (event: StorageEvent) => {
-      if (event.key === SAVED_BUILD_VERSION_LOCAL_SHARES_STORAGE_KEY) {
-        localShareMutationContextRef.current += 1;
-        setSavedBuildVersionShares(savedBuildVersionLocalSharesFromJson(event.newValue));
-      }
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
+  usePersistToLocalStorage(SAVED_BUILD_VERSION_LOCAL_SHARES_STORAGE_KEY, savedBuildVersionShares, savedBuildVersionLocalSharesToJson);
+  useStorageKeyListener(SAVED_BUILD_VERSION_LOCAL_SHARES_STORAGE_KEY, (newValue) => {
+    localShareMutationContextRef.current += 1;
+    setSavedBuildVersionShares(savedBuildVersionLocalSharesFromJson(newValue));
+  });
 
   useEffect(() => {
     if (!ownerSessionModeSupported() || !hasStoredOwnerCredentials()) return;
     void retryOwnerSessionMigration().catch(() => undefined);
   }, [budgetLadderShares, alternativeComparisonShares, savedBuildVersionShares]);
 
-  useEffect(() => {
-    try {
-      safeLocalStorage.setItem(BROWSER_NOTIFICATION_ENABLED_STORAGE_KEY, String(browserNotificationEnabled));
-    } catch {
-      // Browser notification preference is optional and must not block the service.
-    }
-  }, [browserNotificationEnabled]);
-
-  useEffect(() => {
-    const onStorage = (event: StorageEvent) => {
-      if (event.key !== BROWSER_NOTIFICATION_ENABLED_STORAGE_KEY) return;
-      setBrowserNotificationEnabled(browserNotificationEnabledFromStorage(event.newValue));
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
+  usePersistToLocalStorage(BROWSER_NOTIFICATION_ENABLED_STORAGE_KEY, browserNotificationEnabled, String);
+  useStorageKeyListener(BROWSER_NOTIFICATION_ENABLED_STORAGE_KEY, (newValue) => setBrowserNotificationEnabled(browserNotificationEnabledFromStorage(newValue)));
 
   useEffect(() => {
     const refreshPermission = () => setBrowserNotificationPermission(currentBrowserNotificationPermission());
@@ -1218,16 +1153,11 @@ function App() {
     };
   }, []);
 
-  useEffect(() => {
-    const onStorage = (event: StorageEvent) => {
-      if (event.key !== BROWSER_NOTIFICATION_DELIVERED_STORAGE_KEY) return;
-      const delivered = deliveredBrowserNotificationIdsRef.current;
-      delivered.clear();
-      browserNotificationIdsFromJson(event.newValue).forEach((id) => delivered.add(id));
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
+  useStorageKeyListener(BROWSER_NOTIFICATION_DELIVERED_STORAGE_KEY, (newValue) => {
+    const delivered = deliveredBrowserNotificationIdsRef.current;
+    delivered.clear();
+    browserNotificationIdsFromJson(newValue).forEach((id) => delivered.add(id));
+  });
 
   useEffect(() => {
     if (!browserNotificationEnabled || browserNotificationPermission !== "granted" || !("Notification" in window)) return;
@@ -2561,14 +2491,17 @@ function App() {
         retryOnRateLimit: true, signal: controller.signal
       });
       if (!isCurrent()) return;
-      await rememberBuildSelection(draft.selection, controller.signal);
-      if (!isCurrent()) return;
       const nextPreferences = recommendationPreferencesForGeneratedDraft(draft);
       // Validate the whole new platform before replacing the visible result.
-      const checked = await api<CompatibilityResult>("/api/compatibility/check", {
-        method: "POST", body: JSON.stringify({ ...draft.selection, recommendationPreferences: nextPreferences }),
-        retry: 1, retryOnRateLimit: true, signal: controller.signal
-      });
+      // Part hydration only fills local caches, so it runs alongside the check
+      // instead of adding a round trip before it.
+      const [, checked] = await Promise.all([
+        rememberBuildSelection(draft.selection, controller.signal),
+        api<CompatibilityResult>("/api/compatibility/check", {
+          method: "POST", body: JSON.stringify({ ...draft.selection, recommendationPreferences: nextPreferences }),
+          retry: 1, retryOnRateLimit: true, signal: controller.signal
+        })
+      ]);
       if (!isCurrent()) return;
       if (checked.blockerCount > 0) {
         setToast("이 조합에는 호환되지 않는 부품이 있어요. 다른 부품이나 예산으로 조정해 주세요.");
