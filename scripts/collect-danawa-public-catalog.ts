@@ -7,7 +7,7 @@ import { parseDanawaListPage, parseDanawaListPageInfo, parseDanawaProductPage, t
 import { readBenchmarkOverrideRecords, readCatalogRecords, writeCatalogRecords } from "../server/repository";
 import { withCatalogIngestionLease } from "../server/catalog-ingestion-coordinator";
 import { DATA_DIR, readJson, writeJson } from "../server/storage";
-import { isListingAllowed } from "../server/listing";
+import { isListingAllowed } from "../shared/domain/listing";
 
 type Target = { category: PartCategory; categoryId: string; label: string };
 type InventoryTarget = Target & { root?: boolean; applyExcludedReason?: string };

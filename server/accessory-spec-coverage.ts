@@ -6,7 +6,7 @@ import {
   hasRgbControllerEvidenceFor,
   rgbHubPortCountFor,
   rgbVoltageFor
-} from "./accessory-connectivity";
+} from "../shared/domain/accessory-connectivity";
 
 const PROFILE_IDS_BY_CATEGORY: Record<AccessoryCategory, AccessorySpecProfile[]> = {
   storage_accessory: ["m2_pcie_adapter_fit", "m2_sata_adapter_fit", "storage_other_not_assessed"],

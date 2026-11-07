@@ -4,8 +4,8 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { BuildGenerationRequest, Part } from "../shared/types";
 import { applyBenchmarkOverrides, type BenchmarkOverrideMap } from "../server/benchmark-overrides";
-import { generateBuildDraft } from "../server/engine";
-import type { EngineGenerationOptions } from "../server/engine";
+import { generateBuildDraft } from "../shared/domain/engine";
+import type { EngineGenerationOptions } from "../shared/domain/engine";
 
 async function readOptionalFile(path: string): Promise<string | null> {
   try {

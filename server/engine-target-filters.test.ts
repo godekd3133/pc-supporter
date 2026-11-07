@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { app } from "./index";
-import { BuildGenerationError, generateBuildDraft, minimumFeasibleBuildPriceFor } from "./engine";
+import { BuildGenerationError, generateBuildDraft, minimumFeasibleBuildPriceFor } from "../shared/domain/engine";
 import { seedCatalog } from "./seed-catalog";
 import type { BuildGenerationRequest } from "../shared/types";
 import { emptyEngineTargetFiltersConfig } from "../shared/engine-target-filters";

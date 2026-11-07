@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Part } from "../shared/types";
 import { seedLiveTwinFor, seedLiveTwinsFor, syncSeedPartPricesFromLive } from "../shared/domain/seed-anchor";
-import { isQuotePurchasable, isQuoteSelectable } from "./listing";
+import { isQuotePurchasable, isQuoteSelectable } from "../shared/domain/listing";
 
 const part = (overrides: Partial<Part>): Part => ({
   id: `p-${Math.random().toString(36).slice(2, 8)}`,

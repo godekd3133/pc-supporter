@@ -1,6 +1,6 @@
 import type { Benchmark3DMarkReviewWorkItem, Benchmark3DMarkReviewWorkPackage, BenchmarkReviewItem, BenchmarkReviewQueue, BenchmarkScoreKey, BenchmarkSourceReviewItem, DataQuality, Part } from "../shared/types";
 import { isKnownPrice } from "../shared/types";
-import { classifyDataFreshness } from "./data-health";
+import { classifyDataFreshness } from "../shared/domain/data-health";
 import { physicalSourceCheckNeedsReview } from "../shared/physical-source-check";
 
 export const CPU_BENCHMARK_SCORE_KEYS = ["cinebenchR23Single", "cinebenchR23Multi"] as const satisfies readonly BenchmarkScoreKey[];

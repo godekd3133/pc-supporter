@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AccessoryItem } from "../shared/types";
-import { accessoryPowerRailsFor, fanCurrentAFor, fanHubConnectionPlanFor, rgbControllerConnectionPlanFor } from "./accessory-connectivity";
+import { accessoryPowerRailsFor, fanCurrentAFor, fanHubConnectionPlanFor, rgbControllerConnectionPlanFor } from "../shared/domain/accessory-connectivity";
 import { rgbFanDeviceCountFor, rgbFanVoltageFor } from "../shared/rgb-connectivity";
 
 function accessory(rawSpecText: string): AccessoryItem {

@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import type { BuildGenerationRequest, BuildGenerationResult, GamingPerformanceEvidenceStatus, Part } from "../shared/types";
 import { gamingPerformanceEvidenceRecordFromUnknown, GAMING_PERFORMANCE_EVIDENCE_STALE_DAYS, type GamingPerformanceEvidenceRecord } from "../shared/gaming-performance-evidence";
 import { applyBenchmarkOverrides, type BenchmarkOverrideMap } from "../server/benchmark-overrides";
-import { generateBuildDraft } from "../server/engine";
+import { generateBuildDraft } from "../shared/domain/engine";
 
 const BENCHMARK_KEYS = ["cinebenchR23Single", "cinebenchR23Multi"] as const;
 const GPU_BENCHMARK_KEYS = ["gpu3dmarkTimeSpyScore", "gpu3dmarkPortRoyalScore"] as const;

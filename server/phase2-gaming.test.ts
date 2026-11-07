@@ -3,7 +3,7 @@ import { applyGamingSupportCatalogSnapshot } from "./gaming-support-catalog";
 import { applyGamingTargetCatalogSnapshot } from "./gaming-target-catalog";
 import { applyGamingAmdCatalogSnapshot } from "./gaming-amd-catalog";
 import { describe, expect, it } from "vitest";
-import { evaluateBuild, generateBuildDraft } from "./engine";
+import { evaluateBuild, generateBuildDraft } from "../shared/domain/engine";
 import { applyPhase1CatalogSnapshot } from "./phase1-catalog";
 import { gamingFpsReferences } from "./gaming-fps-reference";
 import { parseBuildGenerationRequest } from "../shared/domain/build-input";

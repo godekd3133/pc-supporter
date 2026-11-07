@@ -24,7 +24,7 @@
 import "dotenv/config";
 import { readFileSync, writeFileSync } from "node:fs";
 import { reparseDanawaPart } from "../server/danawa";
-import { ENGINE_VERSION, evaluateBuild } from "../server/engine";
+import { ENGINE_VERSION, evaluateBuild } from "../shared/domain/engine";
 import type { BuildSelection, CompatibilityResult, Finding, Part, PartCategory } from "../shared/types";
 
 type Mode = "random" | "plausible" | "fit";

@@ -1,7 +1,7 @@
 import * as cheerio from "cheerio";
 import type { CrawlPageFailure, M2LaneSharingScope, MemoryProfile, Part, PartCategory, PartSpecs, PciePowerConnectorKind, PciePowerRequirement, RadiatorMountPosition, RadiatorSupport } from "../shared/types";
 import { CATEGORY_LABELS } from "../shared/types";
-import { inferListingType } from "./listing";
+import { inferListingType } from "../shared/domain/listing";
 import { cpuHasIntegratedGraphics, cpuSeriesLabelFor } from "../shared/domain/listing";
 
 export const DANAWA_CATEGORIES: Array<{

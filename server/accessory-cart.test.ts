@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AccessoryItem, AccessorySelection, BuildSelection } from "../shared/types";
-import { summarizeAccessorySelections, validateAccessorySelectionIds, validateAccessoryTargetAccessoryIds, validateRgbControllerAccessoryId } from "./accessory-cart";
+import { summarizeAccessorySelections, validateAccessorySelectionIds, validateAccessoryTargetAccessoryIds, validateRgbControllerAccessoryId } from "../shared/domain/accessory-cart";
 
 function item(overrides: Partial<AccessoryItem>): AccessoryItem {
   return {

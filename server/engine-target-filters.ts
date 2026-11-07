@@ -4,7 +4,7 @@ import { emptyEngineTargetFiltersConfig, engineTargetFilterActiveFacetCount, eng
 import type { EngineTargetFiltersConfig } from "../shared/engine-target-filters";
 import { isKnownPrice, PART_CATEGORIES } from "../shared/types";
 import type { Part, PartCategory } from "../shared/types";
-import { isQuoteBrandAllowed, isQuotePurchasable, isQuoteSelectable } from "./listing";
+import { isQuoteBrandAllowed, isQuotePurchasable, isQuoteSelectable } from "../shared/domain/listing";
 import { DATA_DIR, fileUpdatedAt, withSerializedFileMutation, writeJson } from "./storage";
 import { publishInstanceEvent } from "./instance-events";
 import { pushRuntimeConfigToDatabase } from "./runtime-config-store";

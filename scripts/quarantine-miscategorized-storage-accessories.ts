@@ -2,7 +2,7 @@ import { copyFile, mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import type { AccessoryItem } from "../shared/types";
-import { inferListingType } from "../server/listing";
+import { inferListingType } from "../shared/domain/listing";
 import { readCatalogRecords } from "../server/repository";
 import { mutateAccessoryCatalogRecords, readAccessoryCatalogRecords } from "../server/repository";
 import { DATA_DIR, readJson, removeGeneratedFile, writeJson } from "../server/storage";

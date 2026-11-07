@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { BuildSelection, M2SlotProfile, MemoryProfile, Part, PciePowerConnectorKind, PciePowerRequirement } from "../shared/types";
 import type { GamingPerformanceEvidenceRecord } from "../shared/gaming-performance-evidence";
-import { BuildGenerationError, assessAlternativePart, alternativeRiskForPart, buildGenerationRecoveryOptionsFor, candidateFixesFinding, candidateSimilarityForBuild, compareCandidateSimilarity, compareCandidateValue, evaluateBuild, generateBuildDraft, isSafeAlternativePart, minimumFeasibleBuildPriceFor } from "./engine";
-import { isQuoteBrandAllowed } from "./listing";
+import { BuildGenerationError, assessAlternativePart, alternativeRiskForPart, buildGenerationRecoveryOptionsFor, candidateFixesFinding, candidateSimilarityForBuild, compareCandidateSimilarity, compareCandidateValue, evaluateBuild, generateBuildDraft, isSafeAlternativePart, minimumFeasibleBuildPriceFor } from "../shared/domain/engine";
+import { isQuoteBrandAllowed } from "../shared/domain/listing";
 import { seedCatalog } from "./seed-catalog";
 
 const compatibleBuild = (): BuildSelection => ({

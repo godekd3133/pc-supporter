@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Part } from "../shared/types";
 import { reparseDanawaPart } from "./danawa";
-import { evaluateBuild } from "./engine";
+import { evaluateBuild } from "../shared/domain/engine";
 import { seedCatalog } from "./seed-catalog";
 import { applyCatalogSpecOverrides, validateCatalogSpecOverrideBatch } from "./catalog-spec-overrides";
 

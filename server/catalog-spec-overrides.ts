@@ -3,7 +3,7 @@ import { catalogCaseSupportOverrideValueFor, catalogSpecOverrideFieldIsMissing, 
 import type { Part, PartSpecs } from "../shared/types";
 import { CATEGORY_LABELS, PART_CATEGORIES, isKnownPrice } from "../shared/types";
 import { mutateCatalogSpecOverrideRecords, readCatalogSpecOverrideRecords } from "./repository";
-import { isListingAllowed } from "./listing";
+import { isListingAllowed } from "../shared/domain/listing";
 import { physicalSourceCheckFromUnknown } from "./physical-source-check-history";
 
 const MAX_BATCH_SIZE = 500;

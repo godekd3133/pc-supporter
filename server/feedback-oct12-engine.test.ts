@@ -1,6 +1,6 @@
 import { describe,expect,it } from "vitest";
 import type { BuildGenerationRequest,Part,PartCategory } from "../shared/types";
-import { generateBuildDraft,minimumFeasibleBuildPriceFor,buildGenerationRecoveryOptionsFor,BuildGenerationError,evaluateBuild } from "./engine";
+import { generateBuildDraft,minimumFeasibleBuildPriceFor,buildGenerationRecoveryOptionsFor,BuildGenerationError,evaluateBuild } from "../shared/domain/engine";
 import { publicApiPayloadProjection } from "../shared/public-api-projection";
 import { seedCatalog } from "./seed-catalog";
 const phase1 = { gamingTestbedPhase1: true };

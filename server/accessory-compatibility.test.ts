@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AccessoryItem, AccessorySelection, BuildSelection, Part, PartCategory, PartSpecs } from "../shared/types";
-import { accessoryCompatibilityFor } from "./accessory-compatibility";
+import { accessoryCompatibilityFor } from "../shared/domain/accessory-compatibility";
 
 function part(id: string, category: PartCategory, specs: PartSpecs = {}, rawSpecText = ""): Part {
   return {

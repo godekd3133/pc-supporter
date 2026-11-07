@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { AccessoryItem, Part } from "../shared/types";
 import { crawlAccessoryChangeRecords } from "./accessory-crawler";
 import { crawlPartChangeRecords, crawlPresenceChangeRecords } from "./crawler";
-import { isQuoteSelectable } from "./listing";
+import { isQuoteSelectable } from "../shared/domain/listing";
 
 const part = (sourceProductCode: string, overrides: Partial<Part> = {}): Part => ({
   id: `danawa-cpu-${sourceProductCode}`,

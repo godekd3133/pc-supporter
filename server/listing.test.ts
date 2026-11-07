@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Part } from "../shared/types";
-import { configureQuoteGenerationGate, inferListingType, isExternalGpuEnclosure, isCurrentGenerationPart, isListingAllowed, isQuoteBrandAllowed, isQuoteSelectable, partQuoteGenerationFor, quoteBrandOptionsFor, quoteGenerationBoundaryFor } from "./listing";
+import { configureQuoteGenerationGate, inferListingType, isExternalGpuEnclosure, isCurrentGenerationPart, isListingAllowed, isQuoteBrandAllowed, isQuoteSelectable, partQuoteGenerationFor, quoteBrandOptionsFor, quoteGenerationBoundaryFor } from "../shared/domain/listing";
 
 function part(overrides: Partial<Part>): Part {
   return {

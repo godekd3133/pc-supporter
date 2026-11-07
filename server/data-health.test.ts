@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AccessoryItem, BuildSelection, Part } from "../shared/types";
-import { classifyDataFreshness, summarizeBuildDataHealth } from "./data-health";
+import { classifyDataFreshness, summarizeBuildDataHealth } from "../shared/domain/data-health";
 
 const NOW = "2026-08-27T00:00:00.000Z";
 

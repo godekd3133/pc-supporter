@@ -18,7 +18,7 @@ import {
   fileUpdatedAt
 } from "./storage";
 import { patchCatalogPriceRecords, readAccessoryCoverageRecord, readCatalogOverrideMapUpdatedAtRecords, readCatalogRecords, readCatalogVersionStamp, readBenchmarkOverrideRecords, writeCatalogRecords } from "./repository";
-import { inferListingType, isListingAllowed, isQuoteBrandAllowed, isQuoteSelectable } from "./listing";
+import { inferListingType, isListingAllowed, isQuoteBrandAllowed, isQuoteSelectable } from "../shared/domain/listing";
 import { recommendationFloorWonFor } from "../shared/domain/engine";
 import { accessoryMeta, loadAccessories, readAccessoryCoverage } from "./accessories";
 import { reparseDanawaPart } from "./danawa";

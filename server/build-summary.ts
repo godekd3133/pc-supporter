@@ -1,7 +1,7 @@
 import type { AccessoryItem, BuildSelection, Part, PartCategory, SavedBuildSummary } from "../shared/types";
 import { PART_CATEGORIES } from "../shared/types";
-import { summarizeAccessorySelections } from "./accessory-cart";
-import { evaluateBuild } from "./engine";
+import { summarizeAccessorySelections } from "../shared/domain/accessory-cart";
+import { evaluateBuild } from "../shared/domain/engine";
 
 function coreSelections(selection: BuildSelection, category: PartCategory) {
   if (category === "memory") return selection.memory;

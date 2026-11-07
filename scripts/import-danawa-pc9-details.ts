@@ -6,7 +6,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import type { Part, PartCategory } from "../shared/types";
 import { mergeCatalog } from "../server/catalog";
 import { parseDanawaProductPage, type DanawaListItem } from "../server/danawa";
-import { isListingAllowed, inferListingType } from "../server/listing";
+import { isListingAllowed, inferListingType } from "../shared/domain/listing";
 import { readBenchmarkOverrideRecords, readCatalogRecords, writeCatalogRecords } from "../server/repository";
 import { withCatalogIngestionLease } from "../server/catalog-ingestion-coordinator";
 import { DATA_DIR, readJson, writeJson } from "../server/storage";

@@ -127,7 +127,7 @@ describe("public API evidence projection", () => {
 
     let server: Server | undefined;
     try {
-      const [repository, { app }, catalog, engine] = await Promise.all([import("./repository"), import("./index"), import("./catalog"), import("./engine")]);
+      const [repository, { app }, catalog, engine] = await Promise.all([import("./repository"), import("./index"), import("./catalog"), import("../shared/domain/engine")]);
       await repository.initializePersistence();
       await truncatePostgresTables();
       const cpu: Part = {

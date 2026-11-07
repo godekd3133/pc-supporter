@@ -1,5 +1,5 @@
 import type { AccessoryItem, AccessorySelection, BuildSelection, Part, PartCategory, PartSelection } from "../shared/types";
-import { validateAccessorySelectionIds, validateAccessoryTargetAccessoryIds, validateRgbControllerAccessoryId } from "./accessory-cart";
+import { validateAccessorySelectionIds, validateAccessoryTargetAccessoryIds, validateRgbControllerAccessoryId } from "../shared/domain/accessory-cart";
 import { findPart } from "./catalog";
 
 export function validateBuildPartIds(build: BuildSelection, catalog: Part[]) {

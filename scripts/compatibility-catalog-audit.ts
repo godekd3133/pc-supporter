@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { BuildSelection, Part, PartCategory } from "../shared/types";
 import type { CatalogSpecOverride } from "../shared/catalog-spec-overrides";
-import { evaluateBuild, ENGINE_VERSION } from "../server/engine";
+import { evaluateBuild, ENGINE_VERSION } from "../shared/domain/engine";
 import { reparseDanawaPart } from "../server/danawa";
 import { applyCatalogSpecOverrides, validateCatalogSpecOverrideBatch } from "../server/catalog-spec-overrides";
 

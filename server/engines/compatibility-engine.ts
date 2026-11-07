@@ -3,12 +3,12 @@
 // 운영 상태 API는 여기의 지표를 읽는다.
 import { TtlLruInFlightCache, compatibilityResultCache } from "../compatibility-cache";
 import { savedBuildCheckPreviewCache } from "../saved-build-check-cache";
-import type { assessAlternativePart, candidateSimilarityForBuild } from "../engine";
-import type { recommendationTrustFor } from "../recommendation-trust";
+import type { assessAlternativePart, candidateSimilarityForBuild } from "../../shared/domain/engine";
+import type { recommendationTrustFor } from "../../shared/domain/recommendation-trust";
 import type { candidateDecisionSummaryFor } from "../../shared/candidate-decision";
 import type { partSpecFilterDiagnosticsFor } from "../catalog";
 import type { Finding, Part } from "../../shared/types";
-import { ENGINE_VERSION } from "../engine";
+import { ENGINE_VERSION } from "../../shared/domain/engine";
 
 type CompatiblePartAssessmentRow = {
   part: Part;

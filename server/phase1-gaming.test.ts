@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { BuildGenerationRequest, Part, PartCategory } from "../shared/types";
 import { phase1CpuGamingClass, phase1GamingPartAllowed, phase1GpuGamingClass, phase1GamingFilters } from "../shared/phase1-gaming-policy";
-import { generateBuildDraft, minimumFeasibleBuildPriceFor } from "./engine";
+import { generateBuildDraft, minimumFeasibleBuildPriceFor } from "../shared/domain/engine";
 import { seedCatalog } from "./seed-catalog";
 import { applyPhase1CatalogSnapshot } from "./phase1-catalog";
 import { generatorManualPartRequestFor, generatorPartAdjustmentRequestFor } from "../src/generator-balance";

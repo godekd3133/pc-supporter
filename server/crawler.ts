@@ -4,7 +4,7 @@ import { parseArgs } from "node:util";
 import type { CrawlCategoryReport, CrawlManifest, CrawlPageFailure, CrawlPageRetryBatchProgress, CrawlPageRetryRecord, CrawlStatus, Part, PartCategory } from "../shared/types";
 import { DANAWA_CATEGORIES, crawlDanawaCategory, retryDanawaCategoryPage, type DanawaPageRetryResult } from "./danawa";
 import { loadCatalog, upsertCatalog } from "./catalog";
-import { inferListingType, isCurrentGenerationPart, isListingAllowed, isQuoteBrandAllowed, isQuoteSelectable, partQuoteGenerationFor, quoteGenerationBoundaryFor } from "./listing";
+import { inferListingType, isCurrentGenerationPart, isListingAllowed, isQuoteBrandAllowed, isQuoteSelectable, partQuoteGenerationFor, quoteGenerationBoundaryFor } from "../shared/domain/listing";
 import { LISTING_TYPE_LABELS, isKnownPrice } from "../shared/types";
 import { CRAWL_LOCK_PATH, CRAWL_MANIFEST_PATH, CRAWL_STATE_PATH, createExclusiveFile, ensureDataDirectory, readJson, removeGeneratedFile, writeJson } from "./storage";
 import { CATALOG_DELISTED_CHANGE_FIELD_LABEL, CATALOG_RELISTED_CHANGE_FIELD_LABEL, appendCatalogChangeRecords, catalogChangeRecord, catalogChangeSummary, catalogItemAddedRecord, catalogItemKey, meaningfulCatalogChangeFields } from "./catalog-change-log";

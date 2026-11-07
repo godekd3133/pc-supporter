@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AccessoryItem, Part } from "../shared/types";
-import { recommendAccessories } from "./accessory-recommendations";
+import { recommendAccessories } from "../shared/domain/accessory-recommendations";
 
 function part(overrides: Partial<Part>): Part {
   return {

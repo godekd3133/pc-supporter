@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { generateBuildDraft } from "./engine";
+import { generateBuildDraft } from "../shared/domain/engine";
 import { seedCatalog } from "./seed-catalog";
 import { REFERENCE_BUILDS, referenceBuildBudgetWeight } from "../shared/reference-builds";
 import type { BuildGenerationRequest, Part } from "../shared/types";

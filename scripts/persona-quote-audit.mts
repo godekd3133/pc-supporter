@@ -6,7 +6,7 @@
  * can critique. Run with: npx tsx scripts/persona-quote-audit.mts [--json]
  */
 import { readFileSync, writeFileSync } from "node:fs";
-import { BuildGenerationError, evaluateBuild, generateBuildDraft } from "../server/engine";
+import { BuildGenerationError, evaluateBuild, generateBuildDraft } from "../shared/domain/engine";
 import { loadCatalog } from "../server/catalog";
 import type { BuildGenerationRequest, Part } from "../shared/types";
 import type { GamingPerformanceEvidenceRecord } from "../shared/gaming-performance-evidence";

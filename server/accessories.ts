@@ -2,7 +2,7 @@ import type { AccessoryCategory, AccessoryCategoryCoverage, AccessoryCoverageSna
 import { ACCESSORY_CATEGORIES, isKnownPrice } from "../shared/types";
 import { mutateAccessoryCatalogRecords, mutateAccessoryCoverageRecord, patchAccessoryCatalogPriceRecords, readAccessoryCatalogRecords, readAccessoryCoverageRecord, readAccessoryVersionStamp } from "./repository";
 import { parseM2FormFactors } from "./danawa";
-import { classifyDataFreshness } from "./data-health";
+import { classifyDataFreshness } from "../shared/domain/data-health";
 import { applyCoolingFanLoadOverrides, readCoolingFanLoadOverrideSnapshot, readCoolingFanLoadOverrides, stripCoolingFanLoadOverride } from "./cooling-fan-load-overrides";
 import { fanCurrentAFromText } from "../shared/fan-connectivity";
 import { parseAdapterPcieSlotWidth, parseAdapterStorageDeviceCount } from "../shared/storage-adapter";

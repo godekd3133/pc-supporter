@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Part, SimilarityEvidence } from "../shared/types";
-import { compareRecommendationTrust, recommendationTrustCountsFor, recommendationTrustFilterFromUnknown, recommendationTrustFor, recommendationTrustMatchesFilter } from "./recommendation-trust";
+import { compareRecommendationTrust, recommendationTrustCountsFor, recommendationTrustFilterFromUnknown, recommendationTrustFor, recommendationTrustMatchesFilter } from "../shared/domain/recommendation-trust";
 
 function candidate(overrides: Partial<Part> = {}): Pick<Part, "dataQuality" | "missingFields" | "priceWon" | "updatedAt" | "danawaUrl" | "specs"> {
   return {
