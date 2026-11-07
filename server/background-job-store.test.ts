@@ -803,7 +803,7 @@ describe("PostgreSQL transaction helper for durable jobs", () => {
 describe("price-refresh PostgreSQL schema alignment", () => {
   it("keeps runtime DDL, the baseline schema, and additive migrations aligned", async () => {
     const [runtimeSource, baseline, backgroundMigration, attemptsMigration] = await Promise.all([
-      readFile(new URL("./repository.ts", import.meta.url), "utf8"),
+      readFile(new URL("./repository/database.ts", import.meta.url), "utf8"),
       readFile(new URL("../db/schema.sql", import.meta.url), "utf8"),
       readFile(new URL("../db/migrations/20260930_background_jobs.sql", import.meta.url), "utf8"),
       readFile(new URL("../db/migrations/20260930_price_refresh_attempts.sql", import.meta.url), "utf8")

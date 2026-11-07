@@ -32,7 +32,7 @@ function extractRuntimeSchema(source, resourceTypes) {
 
 test("baseline schema matches the effective runtime DDL without importing server code", async () => {
   const [repositorySource, contractSource, baseline] = await Promise.all([
-    readFile(resolve(ROOT, "server/repository.ts"), "utf8"),
+    readFile(resolve(ROOT, "server/repository/database.ts"), "utf8"),
     readFile(resolve(ROOT, "shared/owner-session-contract.ts"), "utf8"),
     readFile(resolve(ROOT, "db/schema.sql"), "utf8")
   ]);
