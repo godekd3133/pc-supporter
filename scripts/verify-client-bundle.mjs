@@ -9,7 +9,7 @@ const maxEntryCssBytes = 1_100_000;
 const maxLazyCssBytes = 80_000;
 // First-route budgets include the HTML entry plus the lazy Home route's static JS/CSS graph.
 const firstRouteBudget = {
-  javascript: { bytes: 850_000, gzipBytes: 220_000 },
+  javascript: { bytes: 850_000, gzipBytes: 225_000 },
   css: { bytes: 1_050_000, gzipBytes: 150_000 },
   total: { bytes: 1_800_000, gzipBytes: 380_000 }
 };

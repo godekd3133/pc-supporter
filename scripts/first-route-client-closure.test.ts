@@ -166,10 +166,10 @@ describe("first-route client asset closure", () => {
       total: { bytes: 850_001, gzipBytes: 1 }
     })).toThrow("first-route static JS bytes exceeds 850000 bytes");
     expect(() => assertFirstRouteBudget({
-      javascript: { bytes: 1, gzipBytes: 220_001 },
+      javascript: { bytes: 1, gzipBytes: 225_001 },
       css: { bytes: 0, gzipBytes: 0 },
-      total: { bytes: 1, gzipBytes: 220_001 }
-    })).toThrow("first-route static JS gzip bytes exceeds 220000 bytes");
+      total: { bytes: 1, gzipBytes: 225_001 }
+    })).toThrow("first-route static JS gzip bytes exceeds 225000 bytes");
     expect(() => assertFirstRouteBudget({
       javascript: { bytes: 779_448, gzipBytes: 206_700 },
       css: { bytes: 925_757, gzipBytes: 127_509 },
