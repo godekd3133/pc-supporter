@@ -86,7 +86,6 @@ body { word-break: keep-all; line-height: 1.55; }
   .app-shell .nav-link:hover { color: var(--ink); background: var(--hover-fill); }
   .app-shell .nav-link.active { color: var(--teal-deep); background: var(--accent-wash); }
   .app-shell .nav-link.active::after { right: 50%; left: 50%; bottom: -14px; width: 18px; height: 2px; margin-left: -9px; border-radius: 2px; animation: nav-indicator-in var(--dur-base) var(--ease-out) both; }
-  .app-shell .nav-alert-badge { top: -3px; right: -3px; border-color: var(--surface); }
 
   .app-shell .theme-toggle { min-height: 34px; border-radius: 9px; border-color: var(--line); background: transparent; color: var(--ink-2); }
   .app-shell .theme-toggle:hover:not(:disabled) { background: var(--hover-fill); border-color: var(--line-strong); color: var(--ink); }
@@ -193,7 +192,6 @@ body { word-break: keep-all; line-height: 1.55; }
 .app-shell .home-workbench-copy .guided-home-preview-choices dd { margin: 6px 0 0; color: var(--ink); font-size: 14px !important; font-weight: 700; text-align: left; }
 
 .app-shell .home-workbench-links { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 20px; margin-top: 24px; }
-.app-shell .home-page .home-workbench-links .home-entry-result { display: inline-flex; gap: 6px; min-height: 40px; margin: 0; font-size: 13px !important; }
 .app-shell .home-workbench-links .hero-demo-tools { position: relative; margin: 0; }
 .app-shell .home-workbench-links .hero-demo-tools > summary { display: inline-flex; align-items: center; gap: 4px; min-height: 40px; color: var(--muted); font-size: 13px !important; cursor: pointer; list-style: none; }
 .app-shell .home-workbench-links .hero-demo-tools > summary::-webkit-details-marker { display: none; }
