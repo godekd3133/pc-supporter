@@ -68,16 +68,33 @@ function normalizeQuoteBrand(brand: string | undefined) {
   return (brand ?? "").trim().toLocaleLowerCase("ko-KR").replace(/\s+/g, "");
 }
 
+// 브랜드 판정은 후보 탐색마다 카탈로그 전체에 반복된다 — 허용 목록은 미리
+// 정규화하고, 카탈로그의 브랜드 문자열(종류가 적다)은 정규화 결과를 재사용한다.
+const QUOTE_ALLOWED_BRAND_KEYS: Partial<Record<PartCategory, ReadonlySet<string>>> = Object.fromEntries(
+  Object.entries(QUOTE_ALLOWED_BRANDS).map(([category, brands]) => [category, new Set(brands.map((entry) => normalizeQuoteBrand(entry)))])
+);
+const normalizedQuoteBrandCache = new Map<string, string>();
+const NORMALIZED_QUOTE_BRAND_CACHE_LIMIT = 5000;
+
+function cachedNormalizedQuoteBrand(brand: string | undefined) {
+  const raw = brand ?? "";
+  const cached = normalizedQuoteBrandCache.get(raw);
+  if (cached !== undefined) return cached;
+  const normalized = normalizeQuoteBrand(raw);
+  if (normalizedQuoteBrandCache.size >= NORMALIZED_QUOTE_BRAND_CACHE_LIMIT) normalizedQuoteBrandCache.clear();
+  normalizedQuoteBrandCache.set(raw, normalized);
+  return normalized;
+}
+
 export function isQuoteBrandRestrictedCategory(category: PartCategory) {
   return QUOTE_ALLOWED_BRANDS[category] !== undefined;
 }
 
 export function isQuoteBrandAllowed(category: PartCategory, brand: string | undefined, productName?: string) {
   if (category === "ssd" && productName !== undefined && gamingSsdNameAllowed(productName)) return true;
-  const allowed = QUOTE_ALLOWED_BRANDS[category];
+  const allowed = QUOTE_ALLOWED_BRAND_KEYS[category];
   if (!allowed) return true;
-  const normalized = normalizeQuoteBrand(brand);
-  return allowed.some((entry) => normalizeQuoteBrand(entry) === normalized);
+  return allowed.has(cachedNormalizedQuoteBrand(brand));
 }
 
 export function quoteBrandPolicyLabelFor(category: PartCategory) {
@@ -393,8 +410,25 @@ function liveCoverageByCategoryFor(catalog: readonly Part[]) {
   return counts;
 }
 
+// 트윈 판정은 카탈로그 배열과 부품이 같으면 결과가 같다 — 후보 필터가 같은
+// seed 부품을 요청마다 수백 번 다시 묻지 않도록 카탈로그 참조별로 기억한다.
+const seedSupersededCache = new WeakMap<readonly Part[], WeakMap<Part, boolean>>();
+
 function seedSupersededByLiveTwin(part: Part, catalog: readonly Part[] | undefined): boolean {
   if (part.dataQuality !== "seed" || catalog === undefined) return false;
+  let byPart = seedSupersededCache.get(catalog);
+  if (!byPart) {
+    byPart = new WeakMap();
+    seedSupersededCache.set(catalog, byPart);
+  }
+  const cached = byPart.get(part);
+  if (cached !== undefined) return cached;
+  const superseded = seedSupersededByLiveTwinUncached(part, catalog);
+  byPart.set(part, superseded);
+  return superseded;
+}
+
+function seedSupersededByLiveTwinUncached(part: Part, catalog: readonly Part[]): boolean {
   const twins = seedLiveTwinsFor(part, catalog);
   if (twins.length > 0) return twins.some((twin) => inferListingType(twin) === "retail" && isQuotePurchasable(twin));
   return (liveCoverageByCategoryFor(catalog).get(part.category) ?? 0) >= SEED_OFF_MARKET_MIN_LIVE_COVERAGE;
@@ -438,5 +472,17 @@ export function cpuHasIntegratedGraphics(part: Pick<Part, "name" | "specs" | "ca
  */
 export function isQuotePurchasable(part: Part, catalog?: readonly Part[]): boolean {
   return !isExternalGpuEnclosure(part) && isKnownPrice(part.priceWon) && part.dataQuality !== "incomplete" && !part.delistedAt
+    && !seedSupersededByLiveTwin(part, catalog);
+}
+
+/**
+ * 부품 선택기 검색 풀 — 견적 브랜드 정책(SSD/메모리/파워 대기업 제한)과 CPU/GPU
+ * 세대 게이트를 적용하지 않는다. 사용자가 직접 찾아 고르는 경로라 구세대
+ * (코어 i 6세대~, 라이젠 1000~)와 스펙 일부 미등록 부품도 검색되게 하고,
+ * 구할 수 없는 부품(가격 미확인/단종/eGPU 박스)과 라이브 매물로 대체된 seed
+ * 참고행만 뺀다. 자동 견적 엔진 후보 풀(isQuoteSelectable)에는 영향이 없다.
+ */
+export function isCatalogSearchable(part: Part, catalog?: readonly Part[]): boolean {
+  return !isExternalGpuEnclosure(part) && isKnownPrice(part.priceWon) && !part.delistedAt
     && !seedSupersededByLiveTwin(part, catalog);
 }

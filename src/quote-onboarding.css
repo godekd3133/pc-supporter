@@ -1079,3 +1079,35 @@ html[data-theme="dark"] .route-stage-start .onboarding-cta:disabled { background
   .route-stage-start .onboarding-chip,
   .route-stage-start .onboarding-cta { transition: none; }
 }
+
+/* 해상도와 예산 — 견본견적 3단 버튼(저예산/가성비/고성능) */
+.onboarding-tier-group { display: grid; gap: 10px; margin-bottom: 18px; }
+.onboarding-tier-buttons { display: grid; gap: 10px; }
+.onboarding-tier-button {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas: "name arrow" "price arrow" "gpu arrow";
+  align-items: center;
+  gap: 2px 12px;
+  width: 100%;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface, #fff);
+  color: var(--ink);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
+}
+.onboarding-tier-button:hover:not(:disabled) { border-color: var(--teal); box-shadow: var(--small-shadow); }
+.onboarding-tier-button.selected, .onboarding-tier-button:active:not(:disabled) { border-color: var(--teal); background: var(--teal-soft); }
+.onboarding-tier-button.recommended { border-color: color-mix(in srgb, var(--teal) 55%, var(--line)); }
+.onboarding-tier-button:disabled { cursor: not-allowed; opacity: 0.55; }
+.onboarding-tier-name { grid-area: name; display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; font-weight: 700; }
+.onboarding-tier-price { grid-area: price; color: var(--ink); font-size: 22px; font-weight: 800; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+.onboarding-tier-gpu { grid-area: gpu; color: var(--muted); font-size: 12.5px; font-weight: 600; }
+.onboarding-tier-button .onboarding-option-arrow { grid-area: arrow; }
+.onboarding-tier-button.recommended .onboarding-option-arrow { color: var(--teal); }
+.route-stage-start .onboarding-tier-button .onboarding-tier-price { font-size: 22px; font-weight: 800; line-height: 1.3; }
+.route-stage-start .onboarding-tier-button .onboarding-tier-name { font-size: 13px; }

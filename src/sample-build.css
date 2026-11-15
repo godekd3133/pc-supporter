@@ -1,0 +1,74 @@
+/* 견본견적 결과 패널과 구매 전 확인할 점 */
+.app-shell .sample-tier-panel {
+  --sample-warn: #f2b200;
+  display: grid;
+  gap: 14px;
+  margin: 0 0 14px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+.app-shell .sample-tier-heading { display: grid; gap: 6px; }
+.app-shell .sample-tier-kicker { display: inline-flex; align-items: center; gap: 6px; color: var(--teal-deep, var(--teal)); font-size: 12.5px; font-weight: 700; }
+.app-shell .sample-tier-heading h2 { margin: 0; color: var(--ink); font-size: 18px; font-weight: 800; letter-spacing: -0.01em; }
+.app-shell .sample-tier-heading p { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.55; }
+.app-shell .sample-tier-summary { display: grid; grid-template-columns: auto 1fr; gap: 10px 24px; padding: 12px 14px; border-radius: var(--radius-md); background: var(--canvas); }
+.app-shell .sample-tier-summary > div { display: grid; gap: 2px; min-width: 0; }
+.app-shell .sample-tier-summary span { color: var(--muted); font-size: 12px; font-weight: 600; }
+.app-shell .sample-tier-summary strong { color: var(--ink); font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.app-shell .sample-tier-summary strong small { margin-left: 2px; font-size: 13px; font-weight: 700; }
+.app-shell .sample-tier-summary .sample-tier-gpu { overflow: hidden; font-size: 14px; font-weight: 700; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
+.app-shell .sample-tier-steps { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.app-shell .sample-tier-step {
+  display: grid;
+  gap: 3px;
+  min-height: 76px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--ink);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color var(--dur-fast) ease, background var(--dur-fast) ease;
+}
+.app-shell button.sample-tier-step:hover:not(:disabled) { border-color: var(--teal); background: var(--accent-wash); }
+.app-shell button.sample-tier-step:disabled { cursor: progress; opacity: 0.6; }
+.app-shell .sample-tier-step > span { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); font-size: 12px; font-weight: 600; }
+.app-shell .sample-tier-step > strong { font-size: 17px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.app-shell .sample-tier-step > em { color: var(--teal-deep, var(--teal)); font-size: 13px; font-style: normal; font-weight: 700; }
+.app-shell .sample-tier-step.down > em { color: var(--muted); }
+.app-shell .sample-tier-step.empty { cursor: default; background: var(--canvas); }
+.app-shell .sample-tier-step.empty > strong { color: var(--muted); font-size: 13.5px; font-weight: 600; }
+
+/* 구매 전 확인할 점 — 기본으로 펼쳐 두고, 노란 주의 표시, 펼침/접힘에 아이콘이 뒤집히지 않는다. */
+.app-shell .purchase-check-panel { margin: 0; padding: 0; border: 0; border-top: 1px solid var(--line); background: transparent; }
+.app-shell .purchase-check-panel > summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 40px; padding: 0; cursor: pointer; list-style: none; }
+.app-shell .purchase-check-panel > summary::-webkit-details-marker { display: none; }
+.app-shell .purchase-check-panel > summary > span { display: inline-flex; align-items: center; gap: 6px; color: var(--ink); font-size: 13px; font-weight: 700; }
+.app-shell .purchase-check-panel .purchase-check-icon { color: #f2b200; flex: none; }
+.app-shell .purchase-check-panel .purchase-check-chevron { color: var(--muted); transform: none !important; transition: none; }
+.app-shell .purchase-check-panel ul { display: grid; gap: 6px; margin: 0 0 10px; padding: 0; list-style: none; }
+.app-shell .purchase-check-panel li {
+  position: relative;
+  padding: 8px 10px 8px 26px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, #f2b200 10%, transparent);
+  color: var(--ink);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.app-shell .purchase-check-panel li::before { content: ""; position: absolute; top: 14px; left: 11px; width: 6px; height: 6px; border-radius: 50%; background: #f2b200; }
+.app-shell .purchase-check-loading { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 10px; color: var(--muted); font-size: 12.5px; }
+
+/* 부품 카드의 "다른 부품으로 변경" — 컨트롤 줄 안의 작은 버튼 */
+.app-shell .component-list .part-change-button { display: inline-flex; align-items: center; gap: 4px; min-height: 30px; padding: 0 10px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+
+@media (max-width: 640px) {
+  .app-shell .sample-tier-panel { padding: 14px; }
+  .app-shell .sample-tier-summary { grid-template-columns: 1fr; }
+  .app-shell .sample-tier-step { min-height: 70px; padding: 10px 12px; }
+  .app-shell .sample-tier-step > strong { font-size: 15px; }
+}

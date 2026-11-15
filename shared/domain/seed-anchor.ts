@@ -60,7 +60,20 @@ function normalizedProductName(name: string) {
   return folded.toLocaleLowerCase("ko-KR").replace(/[^\p{L}\p{N}]+/gu, "");
 }
 
+// 벤더/이름 토큰은 정규식 수십 개를 돌리는 순수 계산이다 — 트윈 탐색은 같은
+// live 매물을 seed마다 다시 비교하므로 입력 문자열이 같으면 결과를 재사용한다.
+const vendorKeysCache = new WeakMap<object, { brand?: string; name?: string; gpuVendor?: string; keys: Set<string> }>();
+const nameIdentityTokensCache = new WeakMap<object, { name?: string; tokens: Set<string> }>();
+
 function vendorKeysFor(part: Pick<Part, "brand" | "name" | "specs">) {
+  const cached = vendorKeysCache.get(part);
+  if (cached && cached.brand === part.brand && cached.name === part.name && cached.gpuVendor === part.specs?.gpuVendor) return cached.keys;
+  const keys = computeVendorKeysFor(part);
+  vendorKeysCache.set(part, { brand: part.brand, name: part.name, gpuVendor: part.specs?.gpuVendor, keys });
+  return keys;
+}
+
+function computeVendorKeysFor(part: Pick<Part, "brand" | "name" | "specs">) {
   const keys = new Set<string>();
   foldVendors(part.brand ?? "", keys);
   foldVendors(part.name ?? "", keys);
@@ -179,6 +192,14 @@ const FORM_FACTOR_TOKEN_RE = /^(?:atx|matx|eatx|e-atx|itx|sfx|sfxl|dtx)\d*(?:\.\
 const INTERFACE_TOKEN_RE = /^(?:sata|nvme|pcie|gen\d|ddr\d|d6x|g?ddr\d+|x4|x8|x16)$/;
 
 function nameIdentityTokensFor(part: Part) {
+  const cached = nameIdentityTokensCache.get(part);
+  if (cached && cached.name === part.name) return cached.tokens;
+  const tokens = computeNameIdentityTokensFor(part);
+  nameIdentityTokensCache.set(part, { name: part.name, tokens });
+  return tokens;
+}
+
+function computeNameIdentityTokensFor(part: Part) {
   const folded = VENDOR_FOLDS.reduce((text, [pattern]) => text.replace(pattern, " "), part.name ?? "");
   const tokens = folded
     .toLocaleLowerCase("ko-KR")

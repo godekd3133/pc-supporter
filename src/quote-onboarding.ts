@@ -3,11 +3,14 @@ import type { BuildGenerationRequest, CpuVendor, GamingMode, GpuVendorPreference
 import { GAMING_GAME_CATEGORY_LABELS, GAMING_GAMES, gamingAdvisoryTuningFor } from "../shared/gaming-catalog";
 import type { GamingGameCategory, GamingGameId, GamingGameOption } from "../shared/gaming-catalog";
 import type { GeneratorPresetConfig } from "../shared/generator-preset";
+import type { SampleBudgetTier } from "../shared/sample-builds";
 
-export type OnboardingStep = "intent" | "mode" | "upgrade" | "usecase" | "games" | "performance" | "graphics" | "works" | "intensity" | "spec" | "budget" | "summary";
+export type OnboardingStep = "intent" | "mode" | "upgrade" | "usecase" | "gameTypes" | "gamingBudget" | "games" | "performance" | "graphics" | "works" | "intensity" | "spec" | "budget" | "summary";
 export type OnboardingIntent = "new" | "upgrade" | "later";
 export type OnboardingMode = "budget" | "target_fps" | "task" | "spec";
-export type OnboardingUsecase = "gaming" | "work";
+export type OnboardingUsecase = "office" | "gaming" | "work";
+/** 게임 용도에서 고르는 게임 종류(복수 선택). */
+export type OnboardingGameType = "various" | "console" | "popular_online" | "light_online";
 export type OnboardingGameCategory = GamingGameCategory;
 export type OnboardingGame = GamingGameId;
 export type OnboardingWork = "video" | "threed" | "dev" | "streaming" | "ai" | "audio" | "office";
@@ -21,6 +24,8 @@ export interface OnboardingState {
   mode?: OnboardingMode;
   usecase?: OnboardingUsecase;
   games: OnboardingGame[];
+  gameTypes: OnboardingGameType[];
+  budgetTier?: SampleBudgetTier;
   works: OnboardingWork[];
   intensity?: OnboardingIntensity;
   resolution: GamingResolution;
@@ -51,7 +56,17 @@ export const BUDGET_MAX_WON = 10_000_000;
 export const BUDGET_STEP_WON = 100_000;
 export const MAX_ONBOARDING_GAMES = 5;
 
-export const CURRENT_FPS_REFERENCE_GUIDANCE = "FPS 정보가 있는 게임: 사이버펑크 2077, 포르자 호라이즌 5, 카운터 스트라이크 2, 포트나이트, ARK: Survival Ascended, 헬다이버즈 2";
+export const ONBOARDING_GAME_TYPES: readonly { id: OnboardingGameType; label: string }[] = [
+  { id: "various", label: "여러가지 다양한 게임들을 즐겨요" },
+  { id: "console", label: "검은 신화: 오공, 모던 워페어 등 스팀 콘솔게임" },
+  { id: "popular_online", label: "배그/로스트아크/와우/아이온 등 인기 게임" },
+  { id: "light_online", label: "롤, 피파 등 저사양 온라인 게임" }
+];
+
+/** CPU 부담이 큰 인기 온라인 게임 — 가능하면 7800X3D 이상 X3D CPU 견본을 고른다. */
+export function prefersX3dCpu(state: Pick<OnboardingState, "gameTypes">): boolean {
+  return state.gameTypes.includes("popular_online");
+}
 
 export const ONBOARDING_GAME_CATEGORY_LABELS = GAMING_GAME_CATEGORY_LABELS;
 
@@ -164,8 +179,9 @@ export function initialOnboardingState(): OnboardingState {
   return {
     step: "intent",
     games: [],
+    gameTypes: [],
     works: [],
-    resolution: "4k",
+    resolution: "1080p",
     refreshRate: 144,
     gpuVendorPreference: "nvidia",
     graphicsPreset: "high",
@@ -183,10 +199,12 @@ export function onboardingStateToJson(state: OnboardingState): string {
   return JSON.stringify(state);
 }
 
-const STEPS: readonly OnboardingStep[] = ["intent", "mode", "upgrade", "usecase", "games", "performance", "graphics", "works", "intensity", "spec", "budget", "summary"];
+const STEPS: readonly OnboardingStep[] = ["intent", "mode", "upgrade", "usecase", "gameTypes", "gamingBudget", "games", "performance", "graphics", "works", "intensity", "spec", "budget", "summary"];
+const GAME_TYPE_IDS: readonly OnboardingGameType[] = ONBOARDING_GAME_TYPES.map((type) => type.id);
+const BUDGET_TIERS: readonly SampleBudgetTier[] = ["low", "value", "high"];
 const INTENTS: readonly OnboardingIntent[] = ["new", "upgrade", "later"];
 const MODES: readonly OnboardingMode[] = ["budget", "target_fps", "task", "spec"];
-const USECASES: readonly OnboardingUsecase[] = ["gaming", "work"];
+const USECASES: readonly OnboardingUsecase[] = ["office", "gaming", "work"];
 const GAME_IDS: readonly OnboardingGame[] = ONBOARDING_GAMES.map((game) => game.id);
 const WORK_IDS: readonly OnboardingWork[] = ONBOARDING_WORKS.map((work) => work.id);
 const INTENSITY_IDS: readonly OnboardingIntensity[] = ["light", "balanced", "heavy"];
@@ -212,6 +230,8 @@ export function onboardingStateFromJson(raw: string | null | undefined): Onboard
       mode: candidate.mode && MODES.includes(candidate.mode) ? candidate.mode : undefined,
       usecase: candidate.usecase && USECASES.includes(candidate.usecase) ? candidate.usecase : undefined,
       games: Array.isArray(candidate.games) ? candidate.games.filter((game): game is OnboardingGame => GAME_IDS.includes(game as OnboardingGame)).slice(0, MAX_ONBOARDING_GAMES) : base.games,
+      gameTypes: Array.isArray(candidate.gameTypes) ? candidate.gameTypes.filter((type): type is OnboardingGameType => GAME_TYPE_IDS.includes(type as OnboardingGameType)) : base.gameTypes,
+      budgetTier: candidate.budgetTier && BUDGET_TIERS.includes(candidate.budgetTier) ? candidate.budgetTier : undefined,
       works: Array.isArray(candidate.works) ? candidate.works.filter((work): work is OnboardingWork => WORK_IDS.includes(work as OnboardingWork)) : base.works,
       intensity: candidate.intensity && INTENSITY_IDS.includes(candidate.intensity) ? candidate.intensity : undefined,
       resolution: candidate.resolution && RESOLUTIONS.includes(candidate.resolution) ? candidate.resolution : base.resolution,
@@ -323,6 +343,8 @@ export function canAdvance(state: OnboardingState): boolean {
     case "mode": return state.mode !== undefined;
     case "usecase": return state.usecase !== undefined;
     case "games": return state.games.length > 0;
+    case "gameTypes": return state.gameTypes.length > 0;
+    case "gamingBudget": return state.budgetTier !== undefined;
     case "works": return state.works.length > 0;
     case "intensity": return state.intensity !== undefined;
     case "performance": return validTargetFps(targetFpsFor(state));
@@ -339,7 +361,7 @@ export interface OnboardingFlowOptions { gamingTestbedPhase1?: boolean }
 export function advanceOnboarding(state: OnboardingState, options: OnboardingFlowOptions = {}): OnboardingState {
   switch (state.step) {
     case "intent":
-      if (state.intent === "new") return { ...state, step: "mode" };
+      if (state.intent === "new") return { ...state, mode: undefined, gamingMode: undefined, step: "usecase" };
       if (state.intent === "upgrade") return { ...state, step: "upgrade" };
       return state;
     case "mode":
@@ -355,7 +377,11 @@ export function advanceOnboarding(state: OnboardingState, options: OnboardingFlo
         step: "budget"
       };
     case "usecase":
-      return { ...state, step: state.usecase === "work" ? "works" : options.gamingTestbedPhase1 ? "budget" : "games" };
+      if (state.usecase === "office") return state;
+      if (state.usecase === "gaming") return { ...state, step: "gameTypes" };
+      return { ...state, mode: "task", step: "works" };
+    case "gameTypes": return { ...state, step: "gamingBudget" };
+    case "gamingBudget": return state;
     case "games": return { ...state, step: "performance" };
     case "works": return { ...state, step: "intensity" };
     case "performance": return { ...state, step: "graphics" };
@@ -372,7 +398,9 @@ export function backOnboarding(state: OnboardingState, options: OnboardingFlowOp
   switch (state.step) {
     case "mode": return { ...state, step: "intent" };
     case "upgrade": return { ...state, step: "intent" };
-    case "usecase": return { ...state, step: "mode" };
+    case "usecase": return { ...state, step: "intent" };
+    case "gameTypes": return { ...state, step: "usecase" };
+    case "gamingBudget": return { ...state, step: "gameTypes" };
     case "spec": return { ...state, step: "mode" };
     case "games": return { ...state, step: state.mode === "target_fps" ? "mode" : "usecase" };
     case "works": return { ...state, step: "usecase" };
@@ -401,6 +429,8 @@ const STEP_LABELS: Record<OnboardingStep, string> = {
   mode: "견적 기준",
   upgrade: "업그레이드 안내",
   usecase: "용도 선택",
+  gameTypes: "게임 종류",
+  gamingBudget: "해상도와 예산",
   games: "게임 선택",
   performance: "목표 성능",
   graphics: "그래픽 옵션",
@@ -418,13 +448,16 @@ export function stepLabelFor(step: OnboardingStep): string {
 const DIRECT_GAMING_FLOW_STEPS: readonly OnboardingStep[] = ["intent", "mode", "games", "performance", "graphics", "budget", "summary"];
 const GAMING_FLOW_STEPS: readonly OnboardingStep[] = ["intent", "mode", "usecase", "games", "performance", "graphics", "budget", "summary"];
 const GAMING_BUDGET_FLOW_STEPS: readonly OnboardingStep[] = ["intent", "mode", "usecase", "budget", "summary"];
-const WORK_FLOW_STEPS: readonly OnboardingStep[] = ["intent", "mode", "usecase", "works", "intensity", "budget", "summary"];
+const WORK_FLOW_STEPS: readonly OnboardingStep[] = ["intent", "usecase", "works", "intensity", "budget", "summary"];
+const SAMPLE_GAMING_FLOW_STEPS: readonly OnboardingStep[] = ["intent", "usecase", "gameTypes", "gamingBudget"];
 const SPEC_FLOW_STEPS: readonly OnboardingStep[] = ["intent", "mode", "spec", "budget", "summary"];
 const BUDGET_FLOW_STEPS: readonly OnboardingStep[] = ["intent", "mode", "budget", "summary"];
 const UPGRADE_FLOW_STEPS: readonly OnboardingStep[] = ["intent", "upgrade"];
 
 function flowStepsFor(state: OnboardingState, options: OnboardingFlowOptions = {}): readonly OnboardingStep[] {
   if (state.step === "upgrade" || state.intent === "upgrade") return UPGRADE_FLOW_STEPS;
+  if (state.step === "gameTypes" || state.step === "gamingBudget") return SAMPLE_GAMING_FLOW_STEPS;
+  if (state.step === "intent" || state.step === "usecase") return state.usecase === "work" ? WORK_FLOW_STEPS : SAMPLE_GAMING_FLOW_STEPS;
   if (state.mode === "budget") return BUDGET_FLOW_STEPS;
   if (state.mode === "target_fps") return DIRECT_GAMING_FLOW_STEPS;
   if (state.usecase === "gaming" || ["usecase", "games", "performance", "graphics"].includes(state.step)) return options.gamingTestbedPhase1 ? GAMING_BUDGET_FLOW_STEPS : GAMING_FLOW_STEPS;
@@ -438,6 +471,8 @@ export function stepIndicatorFor(state: OnboardingState, options: OnboardingFlow
     : state.step === "mode" ? "NEW QUOTE"
       : state.step === "upgrade" ? "UPGRADE"
         : state.step === "usecase" ? "USE CASE"
+        : state.step === "gameTypes" ? "GAMING"
+        : state.step === "gamingBudget" ? "BUDGET"
           : state.step === "games" || state.step === "performance" || state.step === "graphics" ? state.step === "games" ? "GAMING" : state.step === "performance" ? "PERFORMANCE" : "GRAPHICS OPTIONS"
             : state.step === "works" ? "WORK"
               : state.step === "intensity" ? primaryWorkFor(state.works)?.eyebrow ?? "WORK"

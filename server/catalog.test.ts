@@ -548,14 +548,15 @@ describe("catalog merge", () => {
 });
 
 describe("compact GPU search and detail filters", () => {
-  it("matches 5060ti and 5060 ti identically without matching 5060", () => {
+  it("matches 5060ti and 5060 ti identically, and lets 5060 prefix-match the Ti sibling after the exact model", () => {
     const catalog = [part({ id: "ti", category: "gpu", name: "MSI RTX 5060 Ti 16GB", specs: { thicknessMm: 41 } }), part({ id: "plain", category: "gpu", name: "MSI RTX 5060 8GB", specs: { thicknessMm: 51 } })];
     expect(filterParts(catalog, "gpu", "5060ti").map(({ id }) => id)).toEqual(["ti"]);
     expect(filterParts(catalog, "gpu", "5060 ti").map(({ id }) => id)).toEqual(["ti"]);
-    expect(filterParts(catalog, "gpu", "5060").map(({ id }) => id)).toEqual(["plain"]);
+    expect(filterParts(catalog, "gpu", "5060").map(({ id }) => id).sort()).toEqual(["plain", "ti"]);
+    expect(searchParts(catalog, "gpu", "5060", 10).map(({ id }) => id)).toEqual(["plain", "ti"]);
   });
   it("scopes removed public GPU fields out and applies inclusive thickness OR thresholds", () => {
-    const parsed = parseCatalogDetailFilterQuery({ "dr.thicknessMm": "-41;-51", "dr.lengthMm": "-200", "dv.gpuMemoryType": "GDDR7", "df.lowProfileBracket": "1" }, "gpu");
+    const parsed = parseCatalogDetailFilterQuery({ "dr.thicknessMm": "-41;-51", "dr.powerW": "-200", "dv.gpuMemoryType": "GDDR7", "df.lowProfileBracket": "1" }, "gpu");
     expect(parsed.errors).toEqual([]);
     expect(parsed.filter).toEqual({ numericRanges: { thicknessMm: [{ max: 41 }, { max: 51 }] } });
     const catalog = [41, 42, 51, 52, undefined].map((thicknessMm, i) => part({ id: `gpu-${i}`, category: "gpu", specs: { thicknessMm } }));

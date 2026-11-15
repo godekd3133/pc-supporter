@@ -39,10 +39,10 @@ describe("explicit gaming picker public API scope", () => {
     const scoped = await facets("&quoteContext=gaming_testbed");
     expect(general.options.partCount).toBe(2);
     expect(general.options.facetOptions.socket.options.map(({ value }) => value)).toEqual(["AM5"]);
-    expect(general.options.facetOptions.memoryType.options.map(({ value }) => value)).toEqual(["DDR5"]);
     expect(scoped.options.partCount).toBe(3);
     expect(scoped.options.facetOptions.socket.options.map(({ value }) => value)).toEqual(expect.arrayContaining(["AM4", "AM5"]));
-    expect(scoped.options.facetOptions.memoryType.options.map(({ value }) => value)).toEqual(expect.arrayContaining(["DDR4", "DDR5"]));
+    // CPU 공개 조건은 다나와 패널을 따라 메모리 타입 그룹이 없다.
+    expect(general.options.facetOptions.memoryType).toBeUndefined();
     expect(await facets("")).toEqual(general);
   });
 

@@ -2228,10 +2228,9 @@ describe("compatibility engine", () => {
     expect(noProfileResult.findings.some((finding) => finding.ruleId === "memory-speed")).toBe(false);
 
     const unknownCpuResult = evaluateBuild({ ...build, cpu: { partId: unknownCpu.id, quantity: 1 } }, catalog, { includeSuggestions: false });
-    // CPU/보드 상한 데이터가 없을 때는 unknown이 아니라 warning으로 내린다 —
-    // 크롤링 스펙에 상한이 없는 부품이 대부분이라 unknown으로 두면 모든 견적이
-    // needs_review가 되어 유효 조합이 사라졌다.
-    expect(unknownCpuResult.findings.find((finding) => finding.ruleId === "memory-speed")?.severity).toBe("warning");
+    // CPU/보드 상한 데이터가 없을 때는 아무것도 알리지 않는다 — "메인보드 RAM 속도 확인"은
+    // 모든 견적에 반복되는 소음이라 사용자 요청으로 제거했다(확인된 상한 초과만 경고).
+    expect(unknownCpuResult.findings.some((finding) => finding.ruleId === "memory-speed")).toBe(false);
 
     const boardLimitedMotherboard = {
       ...motherboard,

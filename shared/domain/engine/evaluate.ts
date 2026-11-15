@@ -190,6 +190,15 @@ function addUnknown(
   );
 }
 
+/** SSD DRAM 캐시 탑재 여부 — 다나와 원문의 "DRAM 탑재" / "DRAM 미탑재" / HMB 표기로 판단. 모르면 undefined. */
+export function ssdDramCacheFor(part: Part): boolean | undefined {
+  const text = part.rawSpecText ?? "";
+  if (/DRAM\s*미탑재|DRAM-?less|디램\s*미탑재/i.test(text)) return false;
+  if (/DRAM\s*탑재|DRAM\s*[:：]\s*(?:LP)?DDR/i.test(text)) return true;
+  if (/(?:^|\/)\s*HMB\s*(?:\/|$)/i.test(text)) return false;
+  return undefined;
+}
+
 type ExpandedM2Part = {
   part: Part;
   unitIndex: number;
@@ -1971,39 +1980,12 @@ export function evaluateBuild(
     const unsupportedSpeed = memory.filter(({ part }) => {
       return part.specs.speedMhz !== undefined && effectiveMemorySpeedLimit !== undefined && part.specs.speedMhz > effectiveMemorySpeedLimit;
     });
-    const missingSpeedFields = [
-      ...(motherboard.specs.maxMemorySpeedMhz === undefined ? ["motherboard supported memory speed"] : []),
-      ...(cpuMemorySpeedRelevant && cpuMemorySpeedLimit === undefined ? ["CPU supported memory speed"] : []),
-      ...(memory.some(({ part }) => part.specs.speedMhz === undefined) ? ["memory speed"] : [])
-    ];
     const requiredMemorySpeedLimitCount = cpuMemorySpeedRelevant ? 2 : 1;
-    if (memorySpeedLimits.length < requiredMemorySpeedLimitCount || memory.some(({ part }) => part.specs.speedMhz === undefined)) {
-      // 지원 속도 상한이 없는 보드/CPU가 카탈로그 대부분이다 — 미확인을
-      // unknown으로 두면 모든 견적이 needs_review가 되어 유효 조합이 사라진다.
-      // 상한 미확인은 경고로만 남기고, 확인된 초과(아래 warning)만 지적한다.
-      if (memory.some(({ part }) => part.specs.speedMhz === undefined)) {
-        addUnknown(
-          findings,
-          "memory-speed",
-          "RAM과 CPU/메인보드가 지원하는 속도를 확인해 주세요.",
-          "메모리 속도 또는 CPU/메인보드의 공식 지원 속도 데이터가 부족합니다.",
-          partIds(motherboard, ...memory.map(({ part }) => part)),
-          missingSpeedFields.length > 0 ? missingSpeedFields : ["supported memory speed"],
-          "memory"
-        );
-      } else {
-        addFinding(
-          findings,
-          "memory-speed",
-          "warning",
-          "메인보드/CPU의 메모리 지원 속도 상한이 확인되지 않았습니다.",
-          "상한 데이터가 없어 RAM이 JEDEC 기본 속도로 동작할 수 있습니다. 고속 킷이라면 제조사 스펙을 확인해 주세요.",
-          partIds(motherboard, ...memory.map(({ part }) => part)),
-          missingSpeedFields.length > 0 ? missingSpeedFields.map((field) => ({ label: "누락된 정보", actual: catalogMissingFieldLabelFor(field) })) : [{ label: "지원 속도 상한", expected: "확인 필요" }],
-          [action("verify_spec", "메인보드 메모리 지원 확인", "motherboard")]
-        );
-      }
-    } else if (unsupportedSpeed.length > 0) {
+    // 메인보드/CPU 지원 속도 상한이나 RAM 속도가 확인되지 않은 경우는 더 이상 알리지 않는다 —
+    // 대부분의 보드에 상한 데이터가 없어 모든 견적에 같은 "확인" 문구만 반복됐다.
+    // 확인된 상한을 넘는 경우(아래)만 지적한다.
+    const memorySpeedLimitKnown = memorySpeedLimits.length >= requiredMemorySpeedLimitCount && memory.every(({ part }) => part.specs.speedMhz !== undefined);
+    if (memorySpeedLimitKnown && unsupportedSpeed.length > 0) {
       addFinding(
         findings,
         "memory-speed",
@@ -2049,6 +2031,24 @@ export function evaluateBuild(
           { label: "메인보드 지원 프로파일", expected: formatMemoryProfiles(boardMemoryProfiles) }
         ],
         [replaceAction("memory"), replaceAction("motherboard")]
+      );
+    }
+  }
+
+  // SSD DRAM 캐시 — 견적의 SSD가 모두 DRAM 미탑재(HMB/DRAM-less)로 확인되면 알린다.
+  // 원문 스펙에 DRAM 표기가 없어 탑재 여부를 모르는 SSD는 판정하지 않는다.
+  if (ssds.length > 0) {
+    const dramStates = ssds.map(({ part }) => ssdDramCacheFor(part));
+    if (dramStates.every((state) => state === false)) {
+      addFinding(
+        findings,
+        "ssd-dram-cache",
+        "warning",
+        "DRAM이 탑재된 SSD가 없어 속도가 저하될 수 있습니다.",
+        "DRAM 캐시가 없는 SSD는 큰 파일을 옮기거나 저장 공간이 많이 찼을 때 쓰기 속도가 떨어질 수 있습니다. 운영체제와 게임용으로는 'DRAM 탑재' SSD를 권장합니다.",
+        partIds(...ssds.map(({ part }) => part)),
+        [{ label: "DRAM", actual: "미탑재", expected: "DRAM 탑재" }],
+        [replaceAction("ssd")]
       );
     }
   }

@@ -8,6 +8,7 @@ import { isKnownPrice, PART_CATEGORIES } from "./types";
 
 export const ENGINE_FILTER_SPEC_VALUE_FIELDS = [
   "socket",
+  "chipset",
   "supportedSockets",
   "memoryType",
   "memoryProfiles",
@@ -361,10 +362,10 @@ export type EngineTargetFilterFacetDiagnostic = {
 
 // 공개 카탈로그의 세부 조건 패널 안내용 — 적용된 facet을 하나씩만 걸어 보면서
 // "이 조건이 후보를 몇 개 제외하는지", "비교 값이 없어 자동 제외된 부품이 몇 개인지"를 돌려준다.
-export function engineTargetFilterFacetDiagnosticsFor(parts: Part[], rule: EngineCategoryTargetFilter | undefined, category: PartCategory): EngineTargetFilterFacetDiagnostic[] {
+export function engineTargetFilterFacetDiagnosticsFor(parts: Part[], rule: EngineCategoryTargetFilter | undefined, category: PartCategory, facets: EngineTargetFilterFacet[] = ENGINE_TARGET_FILTER_FACETS[category]): EngineTargetFilterFacetDiagnostic[] {
   if (!rule || engineCategoryTargetFilterIsEmpty(rule)) return [];
   const diagnostics: EngineTargetFilterFacetDiagnostic[] = [];
-  for (const facet of ENGINE_TARGET_FILTER_FACETS[category]) {
+  for (const facet of facets) {
     let facetRule: EngineCategoryTargetFilter | undefined;
     let missing: (part: Part) => boolean = () => false;
     if (facet.kind === "brands") {
@@ -815,6 +816,19 @@ const ENGINE_FILTER_OPTION_LABEL_OVERRIDES: Record<string, Record<string, string
   radiatorPosition: { front: "전면", top: "상단", rear: "후면", bottom: "하단" }
 };
 
+// 다나와 CPU 시리즈 표기 — "Core Ultra 200" → "코어 울트라 시리즈2", "Core 14" → "코어 14세대",
+// "Ryzen 9000" → "라이젠 9000시리즈". 값(필터 키)은 그대로 두고 표시만 바꾼다.
+function cpuSeriesFilterLabelFor(value: string) {
+  const trimmed = value.trim();
+  const ultra = trimmed.match(/^core\s*ultra\s*(\d)00$/i);
+  if (ultra) return `코어 울트라 시리즈${ultra[1]}`;
+  const core = trimmed.match(/^core\s*(\d{1,2})$/i);
+  if (core) return `코어 ${core[1]}세대`;
+  const ryzen = trimmed.match(/^ryzen\s*(\d{4})$/i);
+  if (ryzen) return `라이젠 ${ryzen[1]}시리즈`;
+  return trimmed;
+}
+
 export function engineFilterOptionLabelFor(field: string, value: string) {
   const override = ENGINE_FILTER_OPTION_LABEL_OVERRIDES[field]?.[normalizedFilterText(value)];
   if (override) return override;
@@ -823,6 +837,7 @@ export function engineFilterOptionLabelFor(field: string, value: string) {
     return Number.isFinite(generation) ? `PCIe ${generation.toFixed(1)}` : value;
   }
   if (field === "memoryModuleCountPerKit") return `${value}개 모듈`;
+  if (field === "cpuSeries") return cpuSeriesFilterLabelFor(value);
   if (field === "radiatorSizeMm" || field === "radiatorSizesMm") return `${value}mm`;
   return value;
 }

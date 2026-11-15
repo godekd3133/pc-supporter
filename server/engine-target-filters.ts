@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { emptyEngineTargetFiltersConfig, engineTargetFilterActiveFacetCount, engineTargetFilterBypassesBrandPolicy, engineTargetFilterConfigFromUnknown, engineTargetFiltersAllowPart, ENGINE_TARGET_FILTER_FACETS } from "../shared/engine-target-filters";
-import type { EngineTargetFiltersConfig } from "../shared/engine-target-filters";
+import type { EngineTargetFilterFacet, EngineTargetFiltersConfig } from "../shared/engine-target-filters";
 import { isKnownPrice, PART_CATEGORIES } from "../shared/types";
 import type { Part, PartCategory } from "../shared/types";
 import { isQuoteBrandAllowed, isQuotePurchasable, isQuoteSelectable } from "../shared/domain/listing";
@@ -146,8 +146,8 @@ export type CatalogFacetOptions = EngineTargetFilterCategoryFacetOptions & {
   priceRange: { min: number; max: number } | null;
 };
 
-export function catalogPartFacetOptionsFor(parts: Part[], category: PartCategory): CatalogFacetOptions {
-  const base = facetOptionsForParts(parts, category);
+export function catalogPartFacetOptionsFor(parts: Part[], category: PartCategory, facets?: EngineTargetFilterFacet[]): CatalogFacetOptions {
+  const base = facetOptionsForParts(parts, category, false, facets);
   const prices = parts.map((part) => part.priceWon).filter(isKnownPrice);
   return {
     ...base,
@@ -155,10 +155,10 @@ export function catalogPartFacetOptionsFor(parts: Part[], category: PartCategory
   };
 }
 
-function facetOptionsForParts(parts: Part[], category: PartCategory, includeParts = false): EngineTargetFilterCategoryFacetOptions {
+function facetOptionsForParts(parts: Part[], category: PartCategory, includeParts = false, facetList?: EngineTargetFilterFacet[]): EngineTargetFilterCategoryFacetOptions {
   const brands = new Map<string, { value: string; count: number }>();
   const facetOptions: EngineTargetFilterCategoryFacetOptions["facetOptions"] = {};
-  const facets = ENGINE_TARGET_FILTER_FACETS[category];
+  const facets = facetList ?? ENGINE_TARGET_FILTER_FACETS[category];
   const collectors = new Map<string, { options: Map<string, { value: string; count: number }>; missingCount: number }>();
   for (const facet of facets) {
     if (facet.kind === "values") collectors.set(facet.id, { options: new Map(), missingCount: 0 });

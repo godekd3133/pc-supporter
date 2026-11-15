@@ -1,0 +1,33 @@
+.app-shell .ai-chat-launcher {
+  position: fixed; right: 20px; bottom: 20px; z-index: 60;
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 12px 18px; border: 0; border-radius: 999px;
+  background: var(--teal); color: #fff; font: inherit; font-size: 14px; font-weight: 700;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18); cursor: pointer;
+}
+.app-shell .ai-chat-panel {
+  position: fixed; right: 20px; bottom: 20px; z-index: 60;
+  display: grid; grid-template-rows: auto 1fr auto auto;
+  width: min(380px, calc(100vw - 32px)); height: min(560px, calc(100vh - 120px));
+  border: 1px solid var(--line); border-radius: var(--radius-lg);
+  background: var(--surface); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.2); overflow: hidden;
+}
+.app-shell .ai-chat-panel header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.app-shell .ai-chat-panel header strong { display: inline-flex; align-items: center; gap: 6px; color: var(--ink); font-size: 14px; }
+.app-shell .ai-chat-messages { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; overflow-y: auto; }
+.app-shell .ai-chat-empty p { margin: 0 0 10px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.app-shell .ai-chat-empty div { display: grid; gap: 6px; }
+.app-shell .ai-chat-empty button { padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--canvas); color: var(--ink); font: inherit; font-size: 12.5px; text-align: left; cursor: pointer; }
+.app-shell .ai-chat-bubble { max-width: 88%; margin: 0; padding: 9px 12px; border-radius: 12px; font-size: 13px; line-height: 1.55; white-space: pre-wrap; word-break: keep-all; overflow-wrap: anywhere; }
+.app-shell .ai-chat-bubble.user { align-self: flex-end; background: var(--teal); color: #fff; }
+.app-shell .ai-chat-bubble.assistant { align-self: flex-start; background: var(--canvas); color: var(--ink); }
+.app-shell .ai-chat-bubble.pending { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
+.app-shell .ai-chat-error { margin: 0; color: #d1453b; font-size: 12.5px; }
+.app-shell .ai-chat-panel form { display: flex; gap: 8px; padding: 10px 12px 6px; border-top: 1px solid var(--line); }
+.app-shell .ai-chat-panel textarea { flex: 1; resize: none; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font: inherit; font-size: 13px; }
+.app-shell .ai-chat-panel form .button { align-self: stretch; min-width: 44px; padding: 0 12px; }
+.app-shell .ai-chat-note { padding: 0 12px 10px; color: var(--muted); font-size: 11px; }
+@media (max-width: 640px) {
+  .app-shell .ai-chat-launcher { right: 16px; bottom: 84px; }
+  .app-shell .ai-chat-panel { right: 16px; bottom: 16px; }
+}

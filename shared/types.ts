@@ -817,6 +817,8 @@ export interface Part {
   priceUnavailableAt?: string;
   /** When a complete Danawa category crawl last stopped listing this product. */
   delistedAt?: string;
+  /** 다나와 카테고리 목록(인기상품순, BEST) 안의 1부터 시작하는 순위. 작을수록 인기. */
+  popularityRank?: number;
   /** Runtime-only freshness classification added by catalog API responses. */
   dataFreshness?: DataFreshness;
 }

@@ -11,13 +11,14 @@ import { GAMING_GRAPHICS_PRESET_LABELS, GAMING_UPSCALING_LABELS } from "../share
 import type { GamingGraphicsPreset, GamingRefreshRate, GamingResolution, GamingUpscaling, RecommendationFloorWon } from "../shared/types";
 import {
   BUDGET_MAX_WON,
-  CURRENT_FPS_REFERENCE_GUIDANCE,
   BUDGET_STEP_WON,
   BUDGET_STOPS_WON,
   MAX_ONBOARDING_GAMES,
   ONBOARDING_GAMES,
   ONBOARDING_GAME_CATEGORIES,
   ONBOARDING_GAME_CATEGORY_LABELS,
+  ONBOARDING_GAME_TYPES,
+  prefersX3dCpu,
   ONBOARDING_INTENSITIES,
   ONBOARDING_STORAGE_KEY,
   ONBOARDING_WORKS,
@@ -47,11 +48,14 @@ import {
   targetSummaryFor,
   workEstimateFor
 } from "./quote-onboarding";
-import type { OnboardingGame, OnboardingGameCategory, OnboardingIntensity, OnboardingSpecTier, OnboardingState, OnboardingStep, OnboardingWork, RequiredBudgetRange } from "./quote-onboarding";
+import type { OnboardingGame, OnboardingGameCategory, OnboardingGameType, OnboardingIntensity, OnboardingSpecTier, OnboardingState, OnboardingStep, OnboardingWork, RequiredBudgetRange } from "./quote-onboarding";
+import { SAMPLE_BUDGET_TIERS, SAMPLE_BUDGET_TIER_LABELS, SAMPLE_GPU_CLASS_LABELS, GAMING_BUDGET_TIER_GPU, cheapestSample, resolvedSampleForBudget, sampleForBudgetTier } from "../shared/sample-builds";
+import type { SampleBudgetTier } from "../shared/sample-builds";
+import { formatManWonRounded, resolvedSampleById, useSampleBuilds } from "./sample-builds-client";
 
 type IntentId = "new" | "upgrade" | "later";
 type ModeId = "budget" | "target_fps" | "task" | "spec";
-type UsecaseId = "gaming" | "work";
+type UsecaseId = "office" | "gaming" | "work";
 
 const INTENT_OPTIONS: { id: IntentId; title: string; description: string; Icon: IconType }[] = [
   { id: "new", title: "새 PC 견적 보기", description: "게임과 작업, 예산에 맞춰 부품을 골라요.", Icon: FiFileText },
@@ -67,9 +71,19 @@ const MODE_OPTIONS: { id: ModeId; title: string; description: string; Icon: Icon
 ];
 
 const USECASE_OPTIONS: { id: UsecaseId; title: string; description: string; Icon: IconType }[] = [
-  { id: "gaming", title: "게임", description: "주로 할 게임과 원하는 프레임을 정해요.", Icon: FiPlay },
+  { id: "office", title: "가벼운 사무", description: "문서 작업, 인터넷, 영상 시청 위주로 써요.", Icon: FiBriefcase },
+  { id: "gaming", title: "게임", description: "즐겨 하는 게임 종류와 해상도, 예산을 정해요.", Icon: FiPlay },
   { id: "work", title: "작업", description: "영상 편집/3D/개발 등 주된 작업을 골라요.", Icon: FiMonitor }
 ];
+
+/** 견본견적으로 마무리하는 마법사 결과 — App이 해당 견본을 견적에 담는다. */
+export interface OnboardingSampleFinish {
+  sampleId: string;
+  usecase: "office" | "gaming" | "work";
+  resolution?: GamingResolution;
+  budgetTier?: SampleBudgetTier;
+  preferX3d: boolean;
+}
 
 const WORK_ICONS: Record<OnboardingWork, IconType> = {
   video: FiFilm,
@@ -247,7 +261,7 @@ function ChipRow({ name, label, options, value, onChange }: { name: string; labe
   );
 }
 
-export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome, floors }: { onFinish: (query: string) => void; onUpgrade: () => void; onSkip: () => void; onHome: () => void; floors?: RecommendationFloorWon }) {
+export function QuoteOnboardingView({ onFinish, onFinishSample, onUpgrade, onSkip, onHome, floors }: { onFinish: (query: string) => void; onFinishSample: (finish: OnboardingSampleFinish) => void; onUpgrade: () => void; onSkip: () => void; onHome: () => void; floors?: RecommendationFloorWon }) {
   const flowOptions = {};
   const [storedOnboarding] = useState(readStoredOnboarding);
   const [state, setState] = useState<OnboardingState>(() => {
@@ -257,6 +271,8 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome, floor
     return stored;
   });
   const headingRef = useRef<HTMLHeadingElement | null>(null);
+  // 예산 버튼에 견본견적 가격을 보여 주려면 해상도/예산 단계 전에 미리 받아 둔다.
+  const sampleBuilds = useSampleBuilds(state.step === "usecase" || state.step === "gameTypes" || state.step === "gamingBudget" || state.usecase === "work");
   const [showResume, setShowResume] = useState(storedOnboarding.hasDraft && !onboardingSkipsResume());
   const [gameQuery, setGameQuery] = useState("");
   const [gameCategory, setGameCategory] = useState<OnboardingGameCategory | "all">("all");
@@ -265,7 +281,9 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome, floor
   // 지금 선택 조건의 요청 그대로 서버에 묻는다.
   const [requestFloor, setRequestFloor] = useState<{ floorWon?: number; suggestedBudgetWon?: number; checked?: boolean; failed?: boolean }>({});
 
+  const finishedRef = useRef(false);
   useEffect(() => {
+    if (finishedRef.current) return;
     try {
       safeSessionStorage.setItem(ONBOARDING_STORAGE_KEY, onboardingStateToJson(state));
     } catch {
@@ -364,6 +382,27 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome, floor
     return categoryMatches && queryMatches;
   });
 
+  function finishWithSample(finish: OnboardingSampleFinish) {
+    trackUsageEvent("onboarding_complete", { intent: "new", usecase: finish.usecase, mode: "sample" });
+    // 견적을 담았으니 작성 중 초안은 지운다 — 다음 방문에 "작성 중인 견적"을 묻지 않게.
+    finishedRef.current = true;
+    try { safeSessionStorage.removeItem(ONBOARDING_STORAGE_KEY); } catch { /* 저장소가 막혀 있어도 진행 */ }
+    onFinishSample(finish);
+  }
+
+  function finishOffice() {
+    finishWithSample({ sampleId: cheapestSample().id, usecase: "office", preferX3d: false });
+  }
+
+  function finishGamingTier(tier: SampleBudgetTier) {
+    const preferX3d = prefersX3dCpu(state);
+    const sample = sampleForBudgetTier(state.resolution, tier, { preferX3d });
+    if (!sample) return;
+    finishWithSample({ sampleId: sample.id, usecase: "gaming", resolution: state.resolution, budgetTier: tier, preferX3d });
+  }
+
+  const toggleGameType = (id: OnboardingGameType) => setState((current) => ({ ...current, gameTypes: current.gameTypes.includes(id) ? current.gameTypes.filter((type) => type !== id) : [...current.gameTypes, id] }));
+
   function goBack() {
     if (showResume) { trackUsageEvent("onboarding_exit", { step: state.step, reason: "home" }); onHome(); return; }
     if (state.step === "intent") { trackUsageEvent("onboarding_exit", { step: "intent", reason: "home" }); onHome(); }
@@ -374,6 +413,14 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome, floor
     if (showResume) { setShowResume(false); return; }
     if (state.step === "intent" && state.intent === "later") { trackUsageEvent("onboarding_exit", { step: "intent", reason: "skip" }); onSkip(); return; }
     if (state.step === "upgrade") { trackUsageEvent("onboarding_exit", { step: "upgrade", reason: "upgrade" }); onUpgrade(); return; }
+    if (state.step === "summary" && state.usecase === "work" && sampleBuilds.status === "ready") {
+      // 작업 용도도 자동 견적 대신 예산에 맞는 견본견적으로 마무리한다.
+      const sample = resolvedSampleForBudget(sampleBuilds.payload.samples, state.budgetWon);
+      if (sample) {
+        finishWithSample({ sampleId: sample.id, usecase: "work", preferX3d: false });
+        return;
+      }
+    }
     if (state.step === "summary") {
       trackUsageEvent("onboarding_complete", { ...(state.intent ? { intent: state.intent } : {}), ...(state.usecase ? { usecase: state.usecase } : {}), ...(state.mode ? { mode: state.mode } : {}) });
       onFinish(recommendQueryFor(state, flowOptions));
@@ -420,7 +467,7 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome, floor
     const resumeGame = state.intent === "upgrade"
       ? "PC 업그레이드"
       : state.usecase === "gaming"
-        ? phase1Gaming ? "예산에 맞는 게임용 PC" : gamesSummaryFor(state.games)
+        ? state.gameTypes.length > 0 ? ONBOARDING_GAME_TYPES.filter((type) => state.gameTypes.includes(type.id)).map((type) => type.label.split(" 등")[0]).join(", ") : "게임"
         : state.usecase === "work"
           ? `${primaryWork?.label ?? "작업"} / ${intensityOptionFor(state.intensity).label}`
           : state.mode === "spec"
@@ -429,7 +476,7 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome, floor
     const resumeTarget = state.intent === "upgrade"
       ? "현재 부품 점검"
       : state.usecase === "gaming"
-        ? phase1Gaming ? "그래픽카드 성능 우선" : targetSummaryFor(state)
+        ? resolutionLabelFor(state.resolution)
         : state.usecase === "work" || state.mode === "spec"
           ? targetSummaryFor(state)
           : "예산 미정";
@@ -439,7 +486,7 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome, floor
         <div className="onboarding-draft-rows">
           <div className="onboarding-draft-row"><span className="onboarding-estimate-icon"><FiPlay /></span><span>게임/작업</span><strong>{resumeGame}</strong></div>
           <div className="onboarding-draft-row"><span className="onboarding-estimate-icon"><FiActivity /></span><span>목표 성능</span><strong>{resumeTarget}</strong></div>
-          <div className="onboarding-draft-row"><span className="onboarding-estimate-icon"><FiDatabase /></span><span>예산</span><strong>{formatManWon(state.budgetWon)}</strong></div>
+          {state.usecase !== "gaming" && <div className="onboarding-draft-row"><span className="onboarding-estimate-icon"><FiDatabase /></span><span>예산</span><strong>{formatManWon(state.budgetWon)}</strong></div>}
           <div className="onboarding-draft-row"><span className="onboarding-estimate-icon"><FiMonitor /></span><span>현재 단계</span><strong>{stepLabelFor(state.step)}</strong></div>
         </div>
         <button type="button" className="onboarding-secondary-action" onClick={restartOnboarding}>내용을 지우고 새로 시작하기</button>
@@ -488,14 +535,49 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome, floor
     body = (
       <div className="onboarding-options" role="radiogroup" aria-labelledby="onboarding-title">
         {USECASE_OPTIONS.map((option) => (
-          <RadioOptionRow key={option.id} name="onboarding-usecase" value={option.id} title={option.title} description={option.description} Icon={option.Icon} selected={state.usecase === option.id} onChange={() => selectAndAdvance({ usecase: option.id, gamingMode: option.id === "gaming" ? "target_fps" : undefined })} />
+          <RadioOptionRow key={option.id} name="onboarding-usecase" value={option.id} title={option.title} description={option.description} Icon={option.Icon} selected={state.usecase === option.id} onChange={() => option.id === "office" ? finishOffice() : selectAndAdvance({ usecase: option.id, gamingMode: undefined, mode: option.id === "work" ? "task" : undefined })} />
         ))}
       </div>
+    );
+  } else if (state.step === "gameTypes") {
+    body = (
+      <div className="onboarding-options" role="group" aria-labelledby="onboarding-title">
+        {ONBOARDING_GAME_TYPES.map((type) => (
+          <OptionRow key={type.id} title={type.label} selected={state.gameTypes.includes(type.id)} checkStyle onClick={() => toggleGameType(type.id)} />
+        ))}
+      </div>
+    );
+  } else if (state.step === "gamingBudget") {
+    const payload = sampleBuilds.status === "ready" ? sampleBuilds.payload : undefined;
+    const preferX3d = prefersX3dCpu(state);
+    body = (
+      <>
+        <ChipRow name="onboarding-resolution" label="해상도" options={RESOLUTION_OPTIONS.map((option) => ({ id: option.id, label: option.label }))} value={state.resolution} onChange={(id) => update({ resolution: id as GamingResolution })} />
+        <div className="onboarding-tier-group" role="group" aria-label="예산">
+          <span className="onboarding-chip-label">예산</span>
+          <div className="onboarding-tier-buttons">
+            {SAMPLE_BUDGET_TIERS.map((tier) => {
+              const sample = sampleForBudgetTier(state.resolution, tier, { preferX3d });
+              const resolved = resolvedSampleById(payload, sample?.id);
+              const priceLabel = resolved && resolved.totalPriceWon > 0 ? formatManWonRounded(resolved.totalPriceWon) : sampleBuilds.status === "loading" ? "가격 확인 중" : "가격 확인 필요";
+              return (
+                <button type="button" key={tier} className={`onboarding-tier-button${tier === "value" ? " recommended" : ""}${state.budgetTier === tier ? " selected" : ""}`} data-testid={`onboarding-budget-tier-${tier}`} disabled={!sample} onClick={() => finishGamingTier(tier)}>
+                  <span className="onboarding-tier-name">{SAMPLE_BUDGET_TIER_LABELS[tier]}{tier === "value" && <em className="onboarding-recommend">추천</em>}</span>
+                  <strong className="onboarding-tier-price">{priceLabel}</strong>
+                  <small className="onboarding-tier-gpu">{SAMPLE_GPU_CLASS_LABELS[GAMING_BUDGET_TIER_GPU[state.resolution][tier]]}</small>
+                  <FiArrowRight className="onboarding-option-arrow" aria-hidden="true" />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        {preferX3d && <p className="onboarding-choice-note"><FiInfo /> 선택한 인기 게임에 유리한 X3D CPU가 들어간 견적을 우선 보여드려요.</p>}
+        {sampleBuilds.status === "error" && <p className="onboarding-warning" role="alert"><FiAlertTriangle /> 견적 가격을 불러오지 못했어요. 버튼을 누르면 견적 화면에서 다시 확인해요.</p>}
+      </>
     );
   } else if (state.step === "games") {
     body = (
       <>
-        <p className="onboarding-note">{CURRENT_FPS_REFERENCE_GUIDANCE}</p>
         <label className="onboarding-game-search">
           <FiSearch aria-hidden="true" />
           <input type="search" value={gameQuery} onChange={(event) => setGameQuery(event.target.value)} placeholder="게임 이름 검색" aria-label="게임 이름 검색" />
@@ -555,7 +637,7 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome, floor
           onClick={() => update({ rayTracing: !state.rayTracing })}
         />
         {state.rayTracing && <p className="onboarding-warning"><FiAlertTriangle /> 레이 트레이싱은 같은 FPS 목표에서도 더 높은 GPU 등급이 필요할 수 있어요.</p>}
-        <GamingTargetSummary state={state} showBudgetHint floors={floors} requestFloorWon={requestFloor.floorWon} />
+        <GamingTargetSummary state={state} />
 
       </>
     );
@@ -700,6 +782,10 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome, floor
           ))}
         </div>
         {phase1Gaming && <p className="onboarding-note">게임과 목표 FPS로 고르려면 위의 “용도 변경”을 눌러 주세요.</p>}
+        {state.usecase === "work" && sampleBuilds.status === "ready" && (() => {
+          const sample = resolvedSampleForBudget(sampleBuilds.payload.samples, state.budgetWon);
+          return sample ? <p className="onboarding-choice-note" data-testid="onboarding-work-sample"><FiInfo /> 예산에 맞춰 “{sample.title}”(약 {formatManWonRounded(sample.totalPriceWon)})을 보여드려요.</p> : null;
+        })()}
         {targetBudgetRange && <BudgetRangeCard range={targetBudgetRange} budgetWon={state.budgetWon} gaming={state.usecase === "gaming"} floorWon={requestFloor.floorWon} suggestedBudgetWon={requestFloor.suggestedBudgetWon} floorChecked={requestFloor.checked} floorFailed={requestFloor.failed} onAdjust={(budgetWon) => update({ budgetWon })} compact />}
       </div>
     );
@@ -709,7 +795,9 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome, floor
     intent: { title: "어떤 견적이 필요하세요?", description: "" },
     mode: { title: "어떤 기준으로 부품을 고를까요?", description: "예산에 맞는 게임 견적, 용도별 견적, 원하는 사양 중 선택하세요." },
     upgrade: { title: "지금 쓰는 PC 부품을 골라주세요", description: "현재 부품을 입력하면 호환 문제와 교체 후보를 확인할 수 있습니다." },
-    usecase: { title: "주 용도", description: "" },
+    usecase: { title: "어떤 용도로 쓰실 건가요?", description: "" },
+    gameTypes: { title: "어떤 종류의 게임들을 하시나요?", description: "여러 개 선택할 수 있어요." },
+    gamingBudget: { title: "해상도와 예산을 골라주세요", description: "고른 예산에 맞춰 완성된 견적을 보여드려요." },
     games: { title: "주로 할 게임을 골라주세요", description: `게임은 최대 ${MAX_ONBOARDING_GAMES}개까지 고를 수 있어요. 해상도와 목표 FPS는 다음 화면에서 정합니다.` },
     performance: { title: "게임 성능 목표", description: "" },
     graphics: { title: "게임 옵션도 정해주세요", description: "화질과 프레임 중 원하는 쪽을 정해주세요. 필요한 부품은 선택에 따라 달라져요." },
@@ -731,7 +819,7 @@ export function QuoteOnboardingView({ onFinish, onUpgrade, onSkip, onHome, floor
       <h1 ref={headingRef} id="onboarding-title" className="onboarding-title" tabIndex={-1}>{heading.title}</h1>
       {heading.description && <p className="onboarding-desc">{heading.description}</p>}
       {body}
-      {(showResume || !["intent", "mode", "usecase", "intensity"].includes(state.step)) && <div className="onboarding-cta-bar">
+      {(showResume || !["intent", "mode", "usecase", "intensity", "gamingBudget"].includes(state.step)) && <div className="onboarding-cta-bar">
         <button type="button" className="onboarding-cta" onClick={goNext} disabled={nextDisabled}>
           {ctaLabel} <FiArrowRight />
         </button>

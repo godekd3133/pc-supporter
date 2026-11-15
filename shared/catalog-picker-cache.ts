@@ -1,4 +1,4 @@
-import { catalogSearchMatches } from "./catalog-search-normalization";
+import { catalogSearchMatcherFor } from "./catalog-search-normalization";
 import { classifyDataFreshness } from "./data-freshness";
 import { benchmarkAvailabilityMatchesFilter } from "./benchmark-evidence";
 import type { BenchmarkAvailabilityFilter, DataFreshness, DataQuality, ListingPolicy, Part, PartCategory, PriceAvailabilityFilter } from "./types";
@@ -259,6 +259,10 @@ function sortCachedParts(parts: Part[], sort: CatalogPickerCachedSort | undefine
   });
 }
 
+function cachedSearchHaystackFor(part: Part) {
+  return [part.name, part.brand, part.model, part.specs.socket, part.specs.memoryType, part.specs.interface, part.specs.formFactor].filter(Boolean).join(" ").toLocaleLowerCase("ko-KR");
+}
+
 /**
  * Cached fallback is a catalog browser only. It never calculates candidate
  * safety, similarity, or full-build compatibility.
@@ -267,6 +271,7 @@ export function catalogPickerCachedFallbackFor(parts: ReadonlyArray<Part>, query
   const unique = [...new Map(normalizedParts(parts).map((part) => [part.id, part])).values()];
   const needle = normalizedText(query.query);
   const brandNeedle = normalizedText(query.brand);
+  const matcher = catalogSearchMatcherFor(needle);
   const filtered = unique
     .filter((part) => part.category === query.category)
     .filter((part) => !brandNeedle || normalizedText(part.brand).includes(brandNeedle))
@@ -276,12 +281,11 @@ export function catalogPickerCachedFallbackFor(parts: ReadonlyArray<Part>, query
     .filter((part) => !query.benchmarkStatus || query.benchmarkStatus === "all" || benchmarkAvailabilityMatchesFilter(part, query.benchmarkStatus))
     .filter((part) => !query.listingPolicy || listingAllowedFor(part, query.listingPolicy))
     .filter((part) => matchesSpecFilter(part, query.specFilter ?? {}))
-    .filter((part) => {
-      if (!needle) return true;
-      const haystack = [part.name, part.brand, part.model, part.specs.socket, part.specs.memoryType, part.specs.interface, part.specs.formFactor].filter(Boolean).join(" ").toLocaleLowerCase("ko-KR");
-      return catalogSearchMatches(haystack, needle);
-    });
-  const sorted = sortCachedParts(filtered, query.sort);
+    .filter((part) => !needle || matcher.matches(cachedSearchHaystackFor(part)));
+  // 단어 단위 완전 일치(5060)를 접두 일치(5060 Ti)보다 먼저 — 같은 관련도 안에서는 선택 정렬 유지.
+  const sorted = needle
+    ? sortCachedParts(filtered, query.sort).map((part) => ({ part, relevance: matcher.relevance(cachedSearchHaystackFor(part)) })).sort((a, b) => a.relevance - b.relevance).map(({ part }) => part)
+    : sortCachedParts(filtered, query.sort);
   const offset = Math.max(0, Math.floor(query.offset ?? 0));
   const limit = Math.min(100, Math.max(1, Math.floor(query.limit ?? 50)));
   return { items: sorted.slice(offset, offset + limit), total: sorted.length };

@@ -107,5 +107,6 @@ describe("catalog picker cache and offline fallback", () => {
 it("normalizes joined GPU suffixes in offline cached search", () => {
   const catalog = [part({ id: "ti", category: "gpu", name: "MSI RTX 5060 Ti 16GB", specs: {} }), part({ id: "plain", category: "gpu", name: "MSI RTX 5060 8GB", specs: {} })];
   for (const query of ["5060ti", "5060 ti"]) expect(catalogPickerCachedFallbackFor(catalog, { category: "gpu", query }).items.map(({ id }) => id)).toEqual(["ti"]);
-  expect(catalogPickerCachedFallbackFor(catalog, { category: "gpu", query: "5060" }).items.map(({ id }) => id)).toEqual(["plain"]);
+  // "5060"은 Ti 형제도 접두 일치로 찾되, 완전 일치 모델을 먼저 보여준다.
+  expect(catalogPickerCachedFallbackFor(catalog, { category: "gpu", query: "5060" }).items.map(({ id }) => id)).toEqual(["plain", "ti"]);
 });

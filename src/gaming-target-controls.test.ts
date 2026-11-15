@@ -36,7 +36,7 @@ describe("game target controls", () => {
     expect(markup).toContain('data-testid="generator-target-fps"');
     expect(markup).toContain('value="120"');
     expect(markup).toContain('value="144" selected=""');
-    expect(markup).toContain("5개 선택");
+    expect(markup).not.toContain("CPU/GPU 추천에 반영");
     expect(markup).toMatch(/type="checkbox" disabled=""/);
   });
 

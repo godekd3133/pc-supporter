@@ -34,6 +34,8 @@ import { registerBuildsRoutes } from "./routes/builds";
 import { registerRecommendationsRoutes } from "./routes/recommendations";
 import { registerCatalogRoutes } from "./routes/catalog";
 import { registerSystemRoutes } from "./routes/system";
+import { registerSampleBuildRoutes } from "./routes/sample-builds";
+import { registerChatRoutes } from "./routes/chat";
 export { validateM2SlotOverrideBatch } from "./routes/admin";
 export { buildM2SlotCoverage } from "./routes/admin";
 export { buildM2SlotReviewTemplate } from "./routes/admin";
@@ -232,6 +234,8 @@ registerAdminRoutes(app);
 registerBuildsRoutes(app);
 registerRecommendationsRoutes(app);
 registerCatalogRoutes(app);
+registerSampleBuildRoutes(app);
+registerChatRoutes(app);
 registerSystemRoutes(app);
 
 async function readOwnerSessionResources(resourceType: OwnerSessionResourceType): Promise<OwnerSessionResource[]> {

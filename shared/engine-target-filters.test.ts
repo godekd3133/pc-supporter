@@ -176,10 +176,12 @@ describe("engineTargetFilterFacetDiagnosticsFor", () => {
   });
 });
 
-it("preserves administrator GPU facets but limits public filters to three thickness checkboxes", () => {
-  const hidden = ["gpuMemoryType", "gpuBoostClockMhz", "lowProfileBracket", "powerW", "recommendedPsuW", "lengthMm"];
-  expect(ENGINE_TARGET_FILTER_FACETS.gpu.map(({ id }) => id)).toEqual(expect.arrayContaining(hidden));
-  for (const field of hidden) expect(PUBLIC_CATALOG_FILTER_FACETS.gpu.map(({ id }) => id)).not.toContain(field);
+it("preserves administrator GPU facets while public filters follow Danawa groups plus thickness checkboxes", () => {
+  const adminOnly = ["gpuMemoryType", "gpuBoostClockMhz", "lowProfileBracket", "powerW"];
+  expect(ENGINE_TARGET_FILTER_FACETS.gpu.map(({ id }) => id)).toEqual(expect.arrayContaining([...adminOnly, "recommendedPsuW", "lengthMm"]));
+  for (const field of adminOnly) expect(PUBLIC_CATALOG_FILTER_FACETS.gpu.map(({ id }) => id)).not.toContain(field);
+  // 다나와 그래픽카드 패널의 권장 파워용량/가로(길이)는 공개 조건으로 노출한다.
+  expect(PUBLIC_CATALOG_FILTER_FACETS.gpu.map(({ id }) => id)).toEqual(expect.arrayContaining(["recommendedPsuW", "lengthMm"]));
   expect(PUBLIC_CATALOG_FILTER_FACETS.gpu.find(({ id }) => id === "thicknessMm")).toMatchObject({ checkboxOnly: true, buckets: [{ label: "~41mm", max: 41 }, { label: "~51mm", max: 51 }, { label: "~61mm", max: 61 }] });
-  expect(publicCatalogDetailFilterForCategory({ numericRanges: { lengthMm: [{ max: 300 }], thicknessMm: [{ max: 41 }] } }, "gpu")).toEqual({ numericRanges: { thicknessMm: [{ max: 41 }] } });
+  expect(publicCatalogDetailFilterForCategory({ numericRanges: { powerW: [{ max: 300 }], thicknessMm: [{ max: 41 }] } }, "gpu")).toEqual({ numericRanges: { thicknessMm: [{ max: 41 }] } });
 });

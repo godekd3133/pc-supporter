@@ -1555,6 +1555,18 @@ async function partsFromDanawaListItems(category: PartCategory, categoryId: stri
   return { parts, detailFetched, detailFailed };
 }
 
+/** 다나와 인기상품순(BEST) 목록 위치 → 1부터 시작하는 카테고리 인기 순위. */
+export function danawaPopularityRankFor(page: number, pageSize: number, index: number) {
+  return (Math.max(1, Math.floor(page)) - 1) * Math.max(0, Math.floor(pageSize)) + index + 1;
+}
+
+function withDanawaPopularityRanks(parts: Part[], ranks: ReadonlyMap<string, number>): Part[] {
+  return parts.map((part) => {
+    const rank = part.sourceProductCode ? ranks.get(part.sourceProductCode) : undefined;
+    return rank === undefined ? part : { ...part, popularityRank: rank };
+  });
+}
+
 export async function crawlDanawaCategory(
   category: PartCategory,
   categoryId: string,
@@ -1565,6 +1577,8 @@ export async function crawlDanawaCategory(
   const limit = Math.max(1, options.limitPerCategory ?? 24);
   const delayMs = Math.max(0, options.delayMs ?? 850);
   const listItems = new Map<string, DanawaListItem>();
+  // 목록은 인기상품순(BEST)으로 요청하므로 목록 위치가 곧 다나와 인기 순위다.
+  const popularityRanks = new Map<string, number>();
   const maxSafePages = 1000;
   let pageLimit = configuredPages;
   let totalProductCount: number | undefined;
@@ -1645,7 +1659,9 @@ export async function crawlDanawaCategory(
     await reportProgress(page);
     listedProducts += pageItems.length;
     const countBefore = listItems.size;
-    for (const item of pageItems) {
+    const rankPageSize = pageSize ?? pageItems.length;
+    for (const [index, item] of pageItems.entries()) {
+      if (!popularityRanks.has(item.sourceProductCode)) popularityRanks.set(item.sourceProductCode, danawaPopularityRankFor(page, rankPageSize, index));
       listItems.set(item.sourceProductCode, item);
       if (!exhaustive && listItems.size >= limit) break;
     }
@@ -1657,7 +1673,8 @@ export async function crawlDanawaCategory(
   }
 
   const detailResult = await partsFromDanawaListItems(category, categoryId, [...listItems.values()], options);
-  const { parts, detailFetched, detailFailed } = detailResult;
+  const { detailFetched, detailFailed } = detailResult;
+  const parts = withDanawaPopularityRanks(detailResult.parts, popularityRanks);
   const pagesExpected = totalProductCount !== undefined && pageSize
     ? Math.ceil(totalProductCount / pageSize)
     : Number.isFinite(pageLimit)
@@ -1790,11 +1807,16 @@ export async function retryDanawaCategoryPage(
   pageSize ??= pageInfo.pageSize ?? pageItems.length;
   await reportProgress(targetPage);
   const detailResult = await partsFromDanawaListItems(category, categoryId, pageItems, options);
+  const rankPageSize = pageSize ?? pageItems.length;
+  const popularityRanks = new Map<string, number>();
+  for (const [index, item] of pageItems.entries()) {
+    if (!popularityRanks.has(item.sourceProductCode)) popularityRanks.set(item.sourceProductCode, danawaPopularityRankFor(targetPage, rankPageSize, index));
+  }
   return {
     category,
     categoryId,
     page: targetPage,
-    parts: detailResult.parts,
+    parts: withDanawaPopularityRanks(detailResult.parts, popularityRanks),
     listedProducts: pageItems.length,
     uniqueProducts: new Set(pageItems.map((item) => item.sourceProductCode)).size,
     detailFetched: detailResult.detailFetched,

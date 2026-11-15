@@ -1,5 +1,5 @@
 import { publicCatalogDetailFilterForCategory } from "../shared/public-catalog-filters";
-import { catalogSearchMatches } from "../shared/catalog-search-normalization";
+import { catalogSearchMatcherFor } from "../shared/catalog-search-normalization";
 import { gamingPickerPartAllowed, type GamingPickerQuoteContext } from "../shared/gaming-picker-policy";
 import { applyGamingStorageCatalogSnapshot } from "./gaming-storage-catalog";
 import { applyGamingSupportCatalogSnapshot } from "./gaming-support-catalog";
@@ -18,7 +18,7 @@ import {
   fileUpdatedAt
 } from "./storage";
 import { patchCatalogPriceRecords, readAccessoryCoverageRecord, readCatalogOverrideMapUpdatedAtRecords, readCatalogRecords, readCatalogVersionStamp, readBenchmarkOverrideRecords, writeCatalogRecords } from "./repository";
-import { inferListingType, isListingAllowed, isQuoteBrandAllowed, isQuoteSelectable } from "../shared/domain/listing";
+import { inferListingType, isCatalogSearchable, isListingAllowed, isQuoteBrandAllowed, isQuoteSelectable } from "../shared/domain/listing";
 import { recommendationFloorWonFor } from "../shared/domain/engine";
 import { accessoryMeta, loadAccessories, readAccessoryCoverage } from "./accessories";
 import { reparseDanawaPart } from "./danawa";
@@ -606,6 +606,9 @@ export function partSpecFilterDiagnosticsFor(parts: Part[], filter: PartSpecFilt
   }));
 }
 
+export const CATALOG_PART_SORTS = ["popular", "price_asc", "price_desc", "name", "updated", "benchmark_desc"] as const;
+export type CatalogPartSort = typeof CATALOG_PART_SORTS[number];
+
 export type PartSearchOptions = {
   partId?: string;
   brand?: string;
@@ -614,15 +617,36 @@ export type PartSearchOptions = {
   priceAvailability?: PriceAvailabilityFilter;
   benchmarkAvailability?: BenchmarkAvailabilityFilter;
   now?: string | number;
-  sort?: "price_asc" | "price_desc" | "name" | "updated" | "benchmark_desc";
+  sort?: CatalogPartSort;
   listingPolicy?: ListingPolicy;
   missingField?: string;
   specFilter?: PartSpecFilter;
   detailRule?: EngineCategoryTargetFilter;
   quoteBrandRestricted?: boolean;
   quoteSellableOnly?: boolean;
+  /**
+   * 부품 선택기 검색 범위 — 견적 브랜드 정책(대기업 제한)과 세대 게이트를 풀고
+   * 가격이 확인된 판매 중 부품을 모두 찾는다(구세대 CPU/GPU, 스펙 일부 미등록 포함).
+   * quoteBrandRestricted/quoteSellableOnly보다 우선한다. 자동 견적 엔진 후보 풀과 무관하다.
+   */
+  searchAllParts?: boolean;
   quoteContext?: GamingPickerQuoteContext;
 };
+
+function catalogSearchHaystackFor(part: Part) {
+  return [
+    part.name,
+    part.brand,
+    part.model,
+    part.specs.socket,
+    part.specs.memoryType,
+    part.specs.interface,
+    part.specs.formFactor
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLocaleLowerCase("ko-KR");
+}
 
 function partSearchPredicateFor(
   catalog: Part[],
@@ -631,6 +655,7 @@ function partSearchPredicateFor(
   options: PartSearchOptions = {}
 ) {
   const normalizedQuery = query?.trim() ?? "";
+  const searchMatcher = catalogSearchMatcherFor(normalizedQuery);
   const normalizedBrand = options.brand?.trim().toLocaleLowerCase("ko-KR") ?? "";
   const specRules = partSpecFilterRulesFor(options.specFilter ?? {});
   return (part: Part) => {
@@ -638,6 +663,8 @@ function partSearchPredicateFor(
     if (category && part.category !== category) return false;
     if (options.quoteContext === "gaming_testbed") {
       if (!gamingPickerPartAllowed(part, catalog)) return false;
+    } else if (options.searchAllParts) {
+      if (!isCatalogSearchable(part, catalog)) return false;
     } else {
       if (options.quoteBrandRestricted && !isQuoteBrandAllowed(part.category, part.brand, part.name)) return false;
       if (options.quoteSellableOnly && !isQuoteSelectable(part, catalog)) return false;
@@ -655,19 +682,7 @@ function partSearchPredicateFor(
     if (!specRules.every((rule) => rule.matches(part))) return false;
     if (options.detailRule && !engineTargetFilterRuleAllowsPart(part, options.detailRule)) return false;
     if (!normalizedQuery) return true;
-    const haystack = [
-      part.name,
-      part.brand,
-      part.model,
-      part.specs.socket,
-      part.specs.memoryType,
-      part.specs.interface,
-      part.specs.formFactor
-    ]
-      .filter(Boolean)
-      .join(" ")
-      .toLocaleLowerCase("ko-KR");
-    return catalogSearchMatches(haystack, normalizedQuery);
+    return searchMatcher.matches(catalogSearchHaystackFor(part));
   };
 }
 
@@ -710,9 +725,32 @@ export function filterParts(
   return catalogCandidatesFor(catalog, category).filter(partSearchPredicateFor(catalog, category, query, options));
 }
 
+function comparePartPrice(a: Part, b: Part) {
+  if (!isKnownPrice(a.priceWon) && !isKnownPrice(b.priceWon)) return 0;
+  if (!isKnownPrice(a.priceWon)) return 1;
+  if (!isKnownPrice(b.priceWon)) return -1;
+  return a.priceWon - b.priceWon;
+}
+
+function validPopularityRank(part: Pick<Part, "popularityRank">) {
+  const rank = part.popularityRank;
+  return typeof rank === "number" && Number.isFinite(rank) && rank > 0 ? rank : undefined;
+}
+
+/** 인기순 — 다나와 인기상품순 순위 오름차순, 순위 없는 부품은 뒤로(가격 낮은 순). */
+export function comparePartPopularity(a: Pick<Part, "popularityRank" | "priceWon" | "name">, b: Pick<Part, "popularityRank" | "priceWon" | "name">) {
+  const left = validPopularityRank(a);
+  const right = validPopularityRank(b);
+  if (left !== undefined && right !== undefined && left !== right) return left - right;
+  if (left !== undefined && right === undefined) return -1;
+  if (left === undefined && right !== undefined) return 1;
+  return comparePartPrice(a as Part, b as Part) || a.name.localeCompare(b.name, "ko-KR");
+}
+
 function sortParts(parts: Part[], category: PartCategory | undefined, sort: PartSearchOptions["sort"]) {
   const effectiveSort = sort === "benchmark_desc" && category !== "cpu" && category !== "gpu" ? "price_asc" : sort;
   return parts.sort((a, b) => {
+    if (effectiveSort === "popular") return comparePartPopularity(a, b);
     if (effectiveSort === "name") return a.name.localeCompare(b.name, "ko-KR");
     if (effectiveSort === "updated") return b.updatedAt.localeCompare(a.updatedAt);
     if (effectiveSort === "benchmark_desc") {
@@ -751,8 +789,20 @@ export function searchParts(
   options: PartSearchOptions = {},
   offset = 0
 ) {
-  return sortParts(filterParts(catalog, category, query, options), category, options.sort)
+  const sorted = sortParts(filterParts(catalog, category, query, options), category, options.sort);
+  return sortByCatalogSearchRelevance(sorted, query)
     .slice(Math.max(0, offset), Math.max(0, offset) + limit);
+}
+
+// 검색어가 있으면 단어 단위로 완전히 일치하는 부품("5060" → RTX 5060)을 접두 일치
+// 부품(RTX 5060 Ti)보다 먼저 보여준다 — 같은 관련도 안에서는 선택한 정렬을 유지한다(안정 정렬).
+function sortByCatalogSearchRelevance(parts: Part[], query: string | undefined) {
+  if (!query?.trim()) return parts;
+  const matcher = catalogSearchMatcherFor(query.trim());
+  return parts
+    .map((part) => ({ part, relevance: matcher.relevance(catalogSearchHaystackFor(part)) }))
+    .sort((a, b) => a.relevance - b.relevance)
+    .map(({ part }) => part);
 }
 
 export function countParts(

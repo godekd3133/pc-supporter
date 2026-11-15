@@ -13,7 +13,7 @@ import { VALUE_SCORE_MAX } from "../../value-score";
 import { type GamingAdvisoryTuning } from "../../gaming-catalog";
 import { gpuGamingIndexFor, cpuRelativeIndexFor, CPU_SINGLE_REFERENCE, CPU_MULTI_REFERENCE } from "../../relative-performance-index";
 
-export const ENGINE_VERSION = "2.64.0";
+export const ENGINE_VERSION = "2.65.0";
 
 export function benchmarkFreshnessFor(part: Part) {
   return classifyDataFreshness(part.specs.benchmarkProvenance?.updatedAt ?? part.updatedAt);

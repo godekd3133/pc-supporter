@@ -324,6 +324,8 @@ export function HomeView({ onOpenCategory, meta, build, result, resultIsStale, p
   const draftSaved = hasAnySelection && savedBuilds.some((saved) => selectionKey(saved.selection) === selectionKey(build));
   return <div className="home-page">
     <MobileHomeView build={build} result={result} resultIsStale={resultIsStale} partMap={partMap} accessoryMap={accessoryMap} alertItems={alertItems} alertUnreadCount={alertUnreadCount} savedBuilds={savedBuilds} savedBuildMonitorAlerts={savedBuildMonitorAlerts} onStart={onStart} onGuidedStart={onGuidedStart} onGenerate={onGenerate} onDemo={onDemo} onCompatibleDemo={onCompatibleDemo} onOpenResult={onOpenResult} onOpenHistory={onOpenHistory} onOpenWatchlist={onOpenWatchlist} onJourneyAction={onJourneyAction} onOpenSavedBuild={onOpenSavedBuild} onToast={onToast} />
+    {/* 기존 견적이 있으면 이용 방법 안내를 먼저 보여주고, 내 PC 견적은 그 아래에 둔다. */}
+    {hasAnySelection && <Suspense fallback={null}><LazyHomeStory onStart={onGuidedStart} /></Suspense>}
     <section className={`home-workbench${hasAnySelection ? " has-build" : ""}`} aria-label="견적 구성 방법">
       <div className="home-workbench-copy">
         {hasAnySelection
@@ -343,7 +345,6 @@ export function HomeView({ onOpenCategory, meta, build, result, resultIsStale, p
     {!hasAnySelection && <Suspense fallback={null}><LazyHomeStory onStart={onGuidedStart} /></Suspense>}
     {savedBuilds.length > 0 && <Suspense fallback={null}><LazyHomeSavedBuildPrices savedBuilds={savedBuilds} monitorAlerts={savedBuildMonitorAlerts} onOpenSavedBuild={onOpenSavedBuild} onOpenHistory={onOpenHistory} /></Suspense>}
     <HomeCategoryRow onOpenCategory={onOpenCategory} />
-    {hasAnySelection && <Suspense fallback={null}><LazyHomeStory onStart={onGuidedStart} /></Suspense>}
     {alertItems.length > 0 && <Suspense fallback={null}><LazyHomeAlertCenter items={alertItems} unreadCount={alertUnreadCount} hasBuildAlerts={hasBuildAlerts} hasWatchlistAlerts={hasWatchlistAlerts} onOpenHistory={onOpenHistory} onOpenWatchlist={onOpenWatchlist} /></Suspense>}
     <details className="home-secondary-details" aria-label="홈 추가 정보">
       <summary><span><FiInfo /> 저장한 견적/비교</span><small>{localShareCount > 0 ? `${localShareCount}개 / 부품 목록 보기` : "견적과 이 기기의 부품 목록"}</small><FiChevronDown /></summary>

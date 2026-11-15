@@ -2,7 +2,7 @@ import { type PartCategory, PART_CATEGORIES, type DataFreshness, type PriceAvail
 import { type RequestHandler, type Response, type Express } from "express";
 import { adminAuthEnabled, requireAdmin } from "../auth";
 import { loadCatalogSnapshot } from "../catalog-snapshot";
-import { catalogMeta, parseCatalogMissingField, parsePartSpecFilter, parseCatalogDetailFilterQuery, loadCatalog, catalogSearchTotalsFor, filterParts, partSpecFilterMatcherFor, searchParts, partSpecFilterDiagnosticsFor, findPart, catalogUpdatedAtFor, currentCatalogRuntimeRevision, countParts } from "../catalog";
+import { CATALOG_PART_SORTS, type CatalogPartSort, catalogMeta, parseCatalogMissingField, parsePartSpecFilter, parseCatalogDetailFilterQuery, loadCatalog, catalogSearchTotalsFor, filterParts, partSpecFilterMatcherFor, searchParts, partSpecFilterDiagnosticsFor, findPart, catalogUpdatedAtFor, currentCatalogRuntimeRevision, countParts } from "../catalog";
 import { readCrawlStatus } from "../engines/crawler-engine";
 import { persistenceDiagnostics } from "../repository";
 import { publicCrawlStatusFor } from "../../shared/public-crawl-status";
@@ -20,7 +20,7 @@ import { physicalEvidenceFilterFromUnknown, physicalEvidenceMatches } from "../.
 import { recommendationTrustFilterFromUnknown, recommendationTrustFor, recommendationTrustCountsFor, recommendationTrustMatchesFilter } from "../../shared/domain/recommendation-trust";
 import { createHash } from "node:crypto";
 import { compatiblePartAssessmentCache } from "../engines/compatibility-engine";
-import { isQuoteSelectable } from "../../shared/domain/listing";
+import { isCatalogSearchable, isQuoteSelectable } from "../../shared/domain/listing";
 import { candidateDecisionSummaryFor } from "../../shared/candidate-decision";
 import { catalogMissingFieldCountsFor } from "../../shared/catalog-spec-coverage";
 import { alternativeCandidateWithinBudget } from "../alternative-budget";
@@ -32,6 +32,11 @@ import { requestCanViewAdminMeta, sendJsonWithEtag, routeParam, PART_REFRESH_COO
 
 function isCategory(value: unknown): value is PartCategory {
   return typeof value === "string" && PART_CATEGORIES.includes(value as PartCategory);
+}
+
+// 부품 선택기 검색 범위 — "all"이면 견적 브랜드 정책/세대 게이트 없이 판매 중 부품을 모두 찾는다.
+function searchScopeAllFromUnknown(value: unknown) {
+  return value === "all";
 }
 
 function dataFreshnessFromUnknown(value: unknown): DataFreshness | "all" {
@@ -127,9 +132,11 @@ app.get("/api/parts", publicCatalogReadRateLimit, async (request, response) => {
   const missingField = parsedMissingField.value;
   const rawSort = typeof request.query.sort === "string" ? request.query.sort : "price_asc";
   // Never expose internal benchmark ordering through the public catalog API.
-  const sort = ["price_asc", "price_desc", "name", "updated"].includes(rawSort)
-    ? rawSort as "price_asc" | "price_desc" | "name" | "updated"
+  const sort = rawSort !== "benchmark_desc" && (CATALOG_PART_SORTS as readonly string[]).includes(rawSort)
+    ? rawSort as Exclude<CatalogPartSort, "benchmark_desc">
     : "price_asc";
+  // 부품 선택기 검색(scope=all)은 대기업 브랜드 정책/세대 게이트를 풀어 모든 판매 부품을 찾는다.
+  const searchAllParts = searchScopeAllFromUnknown(request.query.scope);
   const rawListingPolicy = typeof request.query.listingPolicy === "string" ? request.query.listingPolicy : "all";
   const listingPolicy = ["retail_only", "include_bulk", "all"].includes(rawListingPolicy)
     ? rawListingPolicy as ListingPolicy
@@ -172,7 +179,7 @@ app.get("/api/parts", publicCatalogReadRateLimit, async (request, response) => {
   // 견적 후보 목록에서는 가격/사양 정보가 없는 부품을 뺀다 — 스펙 미등록 부품을
   // 일부러 찾는 관리용 질의(quality=incomplete/missingField/가격 미확인 모두 보기)는 예외다.
   const quoteSellableOnly = partId === undefined && quality !== "incomplete" && missingField === undefined && priceAvailability === "known";
-  const baseOptions = { ...(quoteContext ? { quoteContext } : {}), ...(partId ? { partId } : {}), ...(brand ? { brand } : {}), ...(missingField ? { missingField } : {}), quality, sort, listingPolicy, quoteBrandRestricted: partId === undefined, quoteSellableOnly };
+  const baseOptions = { ...(quoteContext ? { quoteContext } : {}), ...(partId ? { partId } : {}), ...(brand ? { brand } : {}), ...(missingField ? { missingField } : {}), quality, sort, listingPolicy, quoteBrandRestricted: partId === undefined && !searchAllParts, quoteSellableOnly, ...(searchAllParts && quoteSellableOnly ? { searchAllParts: true } : {}) };
   const priceOptions = { ...baseOptions, priceAvailability };
   const freshnessOptions = { ...priceOptions, freshness };
   const benchmarkOptions = { ...freshnessOptions, benchmarkAvailability };
@@ -207,7 +214,7 @@ app.get("/api/parts", publicCatalogReadRateLimit, async (request, response) => {
     ...(unfilteredTotal > coreCandidateTotal ? { nonCoreExcludedCount: unfilteredTotal - coreCandidateTotal } : {}),
     ...(categoryMismatchExcludedCount > 0 ? { categoryMismatchExcludedCount } : {}),
     ...(specFilterApplied ? { specFilter: parsedSpecFilter.filter, specExcludedCount: benchmarkTotal - (detailApplied ? detailInputParts.length : total), specFilterDiagnostics: partSpecFilterDiagnosticsFor(specInputParts, parsedSpecFilter.filter) } : {}),
-    ...(detailApplied ? { detailExcludedCount: detailInputParts.length - total, detailFilterDiagnostics: engineTargetFilterFacetDiagnosticsFor(detailInputParts, detailRule, category) } : {}),
+    ...(detailApplied ? { detailExcludedCount: detailInputParts.length - total, detailFilterDiagnostics: engineTargetFilterFacetDiagnosticsFor(detailInputParts, detailRule, category, PUBLIC_CATALOG_FILTER_FACETS[category]) } : {}),
     offset,
     limit
   };
@@ -247,7 +254,7 @@ app.get("/api/parts/facets", publicCatalogReadRateLimit, async (request, respons
   sendJsonWithEtag(request, response, {
     category,
     facets: PUBLIC_CATALOG_FILTER_FACETS[category],
-    options: catalogFacetOptionsCachedFor(catalog, category, quoteContext)
+    options: catalogFacetOptionsCachedFor(catalog, category, quoteContext, searchScopeAllFromUnknown(request.query.scope))
   });
 });
 
@@ -325,9 +332,10 @@ app.post("/api/parts/compatible", publicCandidateRateLimit, async (request, resp
   const priceAvailability = priceAvailabilityFromUnknown(body.priceStatus, "known");
   const freshness = dataFreshnessFromUnknown(body.freshness);
   const rawSort = typeof body.sort === "string" ? body.sort : "price_asc";
-  const sort = ["price_asc", "price_desc", "name", "updated", "similarity", "value"].includes(rawSort)
-    ? rawSort as "price_asc" | "price_desc" | "name" | "updated" | "similarity" | "value"
+  const sort = ["popular", "price_asc", "price_desc", "name", "updated", "similarity", "value"].includes(rawSort)
+    ? rawSort as "popular" | "price_asc" | "price_desc" | "name" | "updated" | "similarity" | "value"
     : "price_asc";
+  const searchAllParts = searchScopeAllFromUnknown(body.scope);
   const rawListingPolicy = typeof body.listingPolicy === "string" ? body.listingPolicy : "retail_only";
   const listingPolicy = ["retail_only", "include_bulk", "all"].includes(rawListingPolicy)
     ? rawListingPolicy as ListingPolicy
@@ -390,6 +398,7 @@ app.post("/api/parts/compatible", publicCandidateRateLimit, async (request, resp
     freshness,
     sort: catalogSort,
     listingPolicy,
+    searchAllParts,
     specFilter: parsedSpecFilter.filter,
     detailFilter: detailRule
   })).digest("hex")}`;
@@ -398,7 +407,7 @@ app.post("/api/parts/compatible", publicCandidateRateLimit, async (request, resp
       ? evaluateBuild(parsed.build, catalog, { includeSuggestions: false }).findings.find((finding) => finding.ruleId === requestedFindingRuleId)
       : undefined;
     if (requestedFindingRuleId && !intentFinding) return { intentFinding, assessedParts: [], policyExcludedParts: [], priceExcludedCount: 0, freshnessExcludedCount: 0, specExcludedCount: 0, detailExcludedCount: 0, specFilterDiagnostics: [] };
-    const baseOptions = { ...(brand ? { brand } : {}), quality, sort: catalogSort, listingPolicy, quoteBrandRestricted: true, quoteSellableOnly: true };
+    const baseOptions = { ...(brand ? { brand } : {}), quality, sort: catalogSort, listingPolicy, quoteBrandRestricted: !searchAllParts, quoteSellableOnly: true, ...(searchAllParts ? { searchAllParts: true } : {}) };
     const priceOptions = { ...baseOptions, priceAvailability };
     const options = { ...priceOptions, freshness };
     const baseCount = countParts(catalog, category, query, baseOptions);
@@ -408,8 +417,8 @@ app.post("/api/parts/compatible", publicCandidateRateLimit, async (request, resp
     const specFilterDiagnostics = partSpecFilterDiagnosticsFor(searchedParts, parsedSpecFilter.filter);
     const detailFilteredParts = detailRule ? specFilteredParts.filter((part) => engineTargetFilterRuleAllowsPart(part, detailRule)) : specFilteredParts;
     // 판매 정책으로 빠진 부품(스펙 미등록/가격 미확인)도 안내 문구를 위해 따로 센다.
-    const policyExcludedParts = searchParts(catalog, category, query, catalog.length, { ...options, quoteSellableOnly: false }, 0)
-      .filter((part) => !isQuoteSelectable(part, catalog));
+    const policyExcludedParts = searchParts(catalog, category, query, catalog.length, { ...options, quoteSellableOnly: false, searchAllParts: false }, 0)
+      .filter((part) => searchAllParts ? !isCatalogSearchable(part, catalog) : !isQuoteSelectable(part, catalog));
     const assessedParts = detailFilteredParts
       .map((part) => {
         const assessment = assessAlternativePart(parsed.build, catalog, category, part, intentFinding);

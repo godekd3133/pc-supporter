@@ -25,6 +25,7 @@
     "catalog:danawa:accessory-pages": "tsx scripts/danawa-public-pagination.ts --accessory --category=storage_accessory",
     "catalog:accessories:reconcile": "tsx scripts/reconcile-danawa-accessory-list.ts",
     "catalog:accessories:details": "tsx scripts/import-danawa-accessory-details.ts",
+    "catalog:backfill-popularity-rank": "tsx scripts/backfill-popularity-rank.ts",
     "catalog:case:backfill-hdd-bays-official": "tsx scripts/backfill-case-hdd-bays-official.ts",
     "catalog:case:backfill-cooler-height-ranges": "tsx scripts/backfill-case-cooler-height-ranges.ts",
     "catalog:case:backfill-pop-xl-seed": "tsx scripts/backfill-seed-case-pop-xl-hdd-bays.ts",
@@ -99,6 +100,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0",
     "@capacitor/android": "^8.5.1",
     "@capacitor/app": "^8.1.1",
     "@capacitor/core": "^8.5.1",

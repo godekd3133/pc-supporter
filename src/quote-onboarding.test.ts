@@ -29,6 +29,7 @@ import {
   requiredGamingBudgetFor,
   requiredSpecBudgetFor,
   stepIndicatorFor,
+  prefersX3dCpu,
   targetBudgetRangeFor,
   targetSummaryFor,
   targetFpsFor,
@@ -44,7 +45,7 @@ function stateWith(patch: Partial<OnboardingState>): OnboardingState {
 
 describe("quote-onboarding flow", () => {
   it("renders choices that advance directly without a next action", () => {
-    const markup = renderToStaticMarkup(createElement(QuoteOnboardingView, { onFinish: () => undefined, onUpgrade: () => undefined, onSkip: () => undefined, onHome: () => undefined }));
+    const markup = renderToStaticMarkup(createElement(QuoteOnboardingView, { onFinish: () => undefined, onFinishSample: () => undefined, onUpgrade: () => undefined, onSkip: () => undefined, onHome: () => undefined }));
 
     expect(markup).toContain('data-testid="onboarding-progress"');
     expect(markup).toContain('aria-valuetext="단계 1, 총 4단계"');
@@ -79,13 +80,26 @@ describe("quote-onboarding flow", () => {
     expect(state.budgetWon).toBe(2_000_000);
   });
 
-  it("walks the gaming branch intent → mode → usecase → games → performance → graphics → budget → summary", () => {
-    let state = stateWith({ intent: "new" });
-    expect(advanceOnboarding(state).step).toBe("mode");
-    state = stateWith({ step: "mode", mode: "task" });
+  it("walks the new quote flow intent → usecase → (gaming) gameTypes → gamingBudget", () => {
+    expect(advanceOnboarding(stateWith({ intent: "new" })).step).toBe("usecase");
+    expect(advanceOnboarding(stateWith({ step: "usecase", usecase: "gaming" })).step).toBe("gameTypes");
+    expect(advanceOnboarding(stateWith({ step: "usecase", usecase: "work" })).step).toBe("works");
+    // 가벼운 사무는 용도 선택에서 바로 견본견적으로 끝난다(화면이 처리).
+    expect(advanceOnboarding(stateWith({ step: "usecase", usecase: "office" })).step).toBe("usecase");
+    expect(canAdvance(stateWith({ step: "gameTypes" }))).toBe(false);
+    expect(canAdvance(stateWith({ step: "gameTypes", gameTypes: ["popular_online"] }))).toBe(true);
+    expect(advanceOnboarding(stateWith({ step: "gameTypes", gameTypes: ["console"] })).step).toBe("gamingBudget");
+    expect(backOnboarding(stateWith({ step: "gamingBudget" })).step).toBe("gameTypes");
+    expect(backOnboarding(stateWith({ step: "gameTypes" })).step).toBe("usecase");
+    expect(prefersX3dCpu(stateWith({ gameTypes: ["light_online", "popular_online"] }))).toBe(true);
+    expect(prefersX3dCpu(stateWith({ gameTypes: ["console"] }))).toBe(false);
+    expect(stepIndicatorFor(stateWith({ step: "gameTypes", usecase: "gaming" }))).toEqual({ eyebrow: "GAMING", index: 3, total: 4 });
+    expect(stepIndicatorFor(stateWith({ step: "gamingBudget", usecase: "gaming" }))).toEqual({ eyebrow: "BUDGET", index: 4, total: 4 });
+  });
+
+  it("keeps the legacy gaming branch steps working for restored drafts", () => {
+    let state = stateWith({ step: "mode", mode: "task" });
     expect(advanceOnboarding(state).step).toBe("usecase");
-    state = stateWith({ step: "usecase", usecase: "gaming" });
-    expect(advanceOnboarding(state).step).toBe("games");
     state = stateWith({ step: "games", games: ["cyberpunk"] });
     expect(advanceOnboarding(state).step).toBe("performance");
     state = stateWith({ step: "performance" });
@@ -124,10 +138,7 @@ describe("quote-onboarding flow", () => {
     const budget = advanceOnboarding(stateWith({ step: "mode", mode: "budget", usecase: "work" }), options);
     expect(budget).toMatchObject({ step: "budget", usecase: "gaming" });
     expect(backOnboarding(budget, options).step).toBe("mode");
-    const gaming = advanceOnboarding(stateWith({ step: "usecase", mode: "task", usecase: "gaming" }), options);
-    expect(gaming.step).toBe("budget");
-    expect(backOnboarding(gaming, options).step).toBe("usecase");
-    expect(stepIndicatorFor(gaming, options)).toMatchObject({ index: 4, total: 5 });
+    const gaming = { ...budget, mode: "task" as const, usecase: "gaming" as const };
     const request = recommendGenerationRequestFor({ ...gaming, games: ["cyberpunk"], budgetWon: 1_200_000 }, options);
     expect(request).toMatchObject({ profile: "gaming", budgetWon: 1_200_000, memoryCapacityGb: 16 });
     expect(request.gamingGameIds).toBeUndefined();
@@ -144,7 +155,7 @@ describe("quote-onboarding flow", () => {
     expect(backOnboarding(stateWith({ step: "graphics" })).step).toBe("performance");
     expect(backOnboarding(stateWith({ step: "performance" })).step).toBe("games");
     expect(backOnboarding(stateWith({ step: "games" })).step).toBe("usecase");
-    expect(backOnboarding(stateWith({ step: "usecase" })).step).toBe("mode");
+    expect(backOnboarding(stateWith({ step: "usecase" })).step).toBe("intent");
     expect(backOnboarding(stateWith({ step: "mode" })).step).toBe("intent");
   });
 
@@ -170,8 +181,8 @@ describe("quote-onboarding flow", () => {
     expect(stepIndicatorFor(stateWith({ step: "graphics" }))).toEqual({ eyebrow: "GRAPHICS OPTIONS", index: 6, total: 8 });
     expect(stepIndicatorFor(stateWith({ step: "budget", usecase: "gaming" }))).toEqual({ eyebrow: "BUDGET", index: 7, total: 8 });
     expect(stepIndicatorFor(stateWith({ step: "intensity", works: ["video"] })).eyebrow).toBe("VIDEO EDITING");
-    expect(stepIndicatorFor(stateWith({ step: "budget", usecase: "work" }))).toEqual({ eyebrow: "BUDGET", index: 6, total: 7 });
-    expect(stepIndicatorFor(stateWith({ step: "summary", usecase: "work" }))).toEqual({ eyebrow: "READY", index: 7, total: 7 });
+    expect(stepIndicatorFor(stateWith({ step: "budget", usecase: "work" }))).toEqual({ eyebrow: "BUDGET", index: 5, total: 6 });
+    expect(stepIndicatorFor(stateWith({ step: "summary", usecase: "work" }))).toEqual({ eyebrow: "READY", index: 6, total: 6 });
     expect(stepIndicatorFor(stateWith({ step: "summary", mode: "spec" }))).toEqual({ eyebrow: "READY", index: 5, total: 5 });
     expect(stepIndicatorFor(stateWith({ step: "summary", mode: "budget" }))).toEqual({ eyebrow: "READY", index: 4, total: 4 });
   });
@@ -629,7 +640,7 @@ describe("phase-two gaming targets", () => {
 
 describe("budget gaming purchase-condition handoff", () => {
   function freshBudgetState(): OnboardingState {
-    const mode = advanceOnboarding({ ...initialOnboardingState(), intent: "new" });
+    const mode = { ...initialOnboardingState(), step: "mode" as const, intent: "new" as const };
     return advanceOnboarding({ ...mode, mode: "budget", usecase: "gaming", gamingMode: "budget", budgetWon: 800_000 });
   }
 
@@ -667,7 +678,7 @@ describe("budget gaming purchase-condition handoff", () => {
     const storageSpy = vi.spyOn(safeSessionStorage, "getItem").mockImplementation((key) => key === ONBOARDING_STORAGE_KEY ? onboardingStateToJson(state) : null);
     vi.stubGlobal("window", { location: { search: "?preset" } });
     try {
-      const markup = renderToStaticMarkup(createElement(QuoteOnboardingView, { onFinish: () => undefined, onUpgrade: () => undefined, onSkip: () => undefined, onHome: () => undefined }));
+      const markup = renderToStaticMarkup(createElement(QuoteOnboardingView, { onFinish: () => undefined, onFinishSample: () => undefined, onUpgrade: () => undefined, onSkip: () => undefined, onHome: () => undefined }));
       expect(markup).toContain("구매 조건");
       expect(markup).toContain("국내 신품 / 벌크 포함");
       if (step === "budget") expect(markup).toContain("1TB");

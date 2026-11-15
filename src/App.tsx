@@ -147,6 +147,11 @@ import { catalogRefreshFindingImpactsFor } from "../shared/catalog-refresh-impac
 import { classifyDataFreshness } from "../shared/data-freshness";
 import { isQuoteBrandAllowed, isQuoteSelectable, quoteBrandOptionsFor, quoteBrandPolicyLabelFor } from "../shared/domain/listing";
 import { mergeCatalogRecords } from "../shared/catalog-record-merge";
+import { applyCheckedPartPriceSnapshot, checkedPartPriceSnapshotFromUnknown } from "../shared/checked-part-price-snapshot";
+import type { SampleBuildsPayload } from "../shared/sample-builds";
+import { loadSampleBuilds } from "./sample-builds-client";
+import type { ActiveSampleContext } from "./SampleBuildPanels";
+import type { OnboardingSampleFinish } from "./QuoteOnboardingView";
 import { valueScoreText } from "../shared/value-score";
 import { repairPlanBuildFor } from "../shared/repair-plan-build";
 import { repairPlanPerformanceRetentionFor } from "../shared/repair-plan-performance";
@@ -290,6 +295,29 @@ const LazyEditSavedBuildMetadataDialog = lazy(() => import("./SavedBuildDialogs"
 const LazyRecoveryCodeDialog = lazy(() => import("./SavedBuildDialogs").then((module) => ({ default: module.RecoveryCodeDialog })));
 const LazyRecoverOwnershipDialog = lazy(() => import("./SavedBuildDialogs").then((module) => ({ default: module.RecoverOwnershipDialog })));
 const LazyHistoryView = lazy(() => import("./HistoryView").then((module) => ({ default: module.HistoryView })));
+const ACTIVE_SAMPLE_STORAGE_KEY = "pc-supporter-active-sample";
+
+function readActiveSampleContext(): ActiveSampleContext | null {
+  try {
+    const parsed: unknown = JSON.parse(safeLocalStorage.getItem(ACTIVE_SAMPLE_STORAGE_KEY) ?? "null");
+    if (!parsed || typeof parsed !== "object") return null;
+    const candidate = parsed as Partial<ActiveSampleContext>;
+    if (typeof candidate.sampleId !== "string" || candidate.sampleId.length > 80) return null;
+    return { sampleId: candidate.sampleId, preferX3d: candidate.preferX3d === true, usecase: candidate.usecase === "office" || candidate.usecase === "work" ? candidate.usecase : "gaming" };
+  } catch {
+    return null;
+  }
+}
+
+function writeActiveSampleContext(context: ActiveSampleContext | null) {
+  try {
+    if (context) safeLocalStorage.setItem(ACTIVE_SAMPLE_STORAGE_KEY, JSON.stringify(context));
+    else safeLocalStorage.removeItem(ACTIVE_SAMPLE_STORAGE_KEY);
+  } catch {
+    // 저장소가 막혀 있어도 현재 화면의 견본견적은 그대로 쓴다.
+  }
+}
+
 const LazyQuoteOnboardingView = lazy(() => import("./QuoteOnboardingView").then((module) => ({ default: module.QuoteOnboardingView })));
 function flyToQuoteFrom(trigger: Element | null) {
   void import("./quote-fly").then((module) => module.flyToQuote(trigger)).catch(() => undefined);
@@ -830,6 +858,9 @@ function App() {
   const [result, setResult] = useState<CompatibilityResult | null>(readLastCompatibilityResult);
   const [checkedInputFingerprint, setCheckedInputFingerprint] = useState<string | null>(readLastCompatibilityInputFingerprint);
   const [parts, setParts] = useState<Part[]>([]);
+  // 견적 마법사가 담은 견본견적 — 결과 화면의 등급 바꾸기와 견본 부품 ±의 기준.
+  const [activeSample, setActiveSample] = useState<ActiveSampleContext | null>(readActiveSampleContext);
+  const [samplePayload, setSamplePayload] = useState<SampleBuildsPayload | null>(null);
   const [accessoryItems, setAccessoryItems] = useState<AccessoryItem[]>([]);
   const [meta, setMeta] = useState<ServiceMeta | null>(null);
   const [savedBuilds, setSavedBuilds] = useState<SavedBuild[]>([]);
@@ -1333,8 +1364,79 @@ function App() {
     buildHydrationAbortControllerRef.current?.abort();
   }
 
-  async function rememberBuildSelection(nextBuild: BuildSelection, signal?: AbortSignal) {
-    await hydrateBuildSelection(nextBuild, partMap, accessoryMap, api, rememberParts, rememberAccessories, signal);
+  // 서버 응답이 진실 원본인 부품 갱신 — 갱신 시각이 같거나 오래돼 보여도 가격을 덮어쓴다.
+  function rememberPartsAuthoritative(nextParts: Part[]) {
+    if (nextParts.length === 0) return;
+    setParts((current) => {
+      const byId = new Map(current.map((part) => [part.id, part]));
+      for (const part of nextParts) byId.set(part.id, part);
+      return [...byId.values()];
+    });
+  }
+
+  async function rememberBuildSelection(nextBuild: BuildSelection, signal?: AbortSignal, options: { refreshKnown?: boolean } = {}) {
+    await hydrateBuildSelection(nextBuild, partMap, accessoryMap, api, options.refreshKnown ? rememberPartsAuthoritative : rememberParts, rememberAccessories, signal, options);
+  }
+
+  // 호환 확인 결과의 가격(서버 최신가)을 편집 화면 부품에도 반영한다 — 견적 완성 후
+  // 결과와 편집 화면의 부품 가격(특히 자주 바뀌는 GPU)이 서로 달라 보이지 않게 한다.
+  useEffect(() => {
+    const snapshot = checkedPartPriceSnapshotFromUnknown(result?.partPriceSnapshot);
+    if (!snapshot || snapshot.length === 0) return;
+    setParts((current) => {
+      const prices = new Map(snapshot.map((entry) => [entry.partId, entry.priceWon]));
+      const changed = current.some((part) => prices.has(part.id) && prices.get(part.id) !== part.priceWon);
+      return changed ? applyCheckedPartPriceSnapshot(current, snapshot) : current;
+    });
+  }, [result?.partPriceSnapshot]);
+
+  useEffect(() => { writeActiveSampleContext(activeSample); }, [activeSample]);
+  useEffect(() => {
+    if (!activeSample || samplePayload) return;
+    let cancelled = false;
+    void loadSampleBuilds().then((payload) => {
+      if (cancelled) return;
+      setSamplePayload(payload);
+      rememberPartsAuthoritative(payload.parts);
+    }).catch(() => undefined);
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSample, samplePayload]);
+
+  // 견본견적을 견적에 담는다 — 마법사 완료와 결과 화면의 등급 바꾸기가 함께 쓴다.
+  async function applySampleBuild(context: ActiveSampleContext, options: { navigateToEditor?: boolean } = {}) {
+    let payload: SampleBuildsPayload;
+    try {
+      payload = await loadSampleBuilds({ force: options.navigateToEditor === true });
+    } catch (error: unknown) {
+      setToast(error instanceof Error ? error.message : "추천 견적을 불러오지 못했어요.");
+      return;
+    }
+    const resolved = payload.samples.find((sample) => sample.id === context.sampleId);
+    if (!resolved) {
+      setToast("추천 견적을 찾지 못했어요.");
+      return;
+    }
+    checkRequestSequenceRef.current += 1;
+    generatorRequestRef.current += 1;
+    rememberPartsAuthoritative(payload.parts);
+    setSamplePayload(payload);
+    setAppliedGeneratorDraft(null);
+    setBuild(resolved.selection);
+    setResult(null);
+    setCheckedInputFingerprint(null);
+    setCheckError(null);
+    setBuildChangeResultComparison(null);
+    setCurrentBuildOrigin(null);
+    setActiveSample(context);
+    // 견본견적에는 별도 예산 입력이 없다 — 고른 등급의 견적 금액을 예산으로 둬 결과 화면이 "예산 초과"를 잘못 말하지 않게 한다.
+    if (resolved.totalPriceWon > 0) setRecommendationPreferences((current) => ({ ...current, profile: context.usecase === "office" ? "office" : context.usecase === "gaming" ? "gaming" : current.profile, budgetWon: Math.ceil(resolved.totalPriceWon / 10_000) * 10_000 }));
+    if (resolved.unresolved.length > 0) setToast(`일부 부품(${resolved.unresolved.join(", ")})을 지금 판매 목록에서 찾지 못했어요. 비슷한 부품으로 골라 주세요.`);
+    if (options.navigateToEditor) navigate("/build", "editor");
+  }
+
+  function finishOnboardingWithSample(finish: OnboardingSampleFinish) {
+    void applySampleBuild({ sampleId: finish.sampleId, preferX3d: finish.preferX3d, usecase: finish.usecase }, { navigateToEditor: true });
   }
 
   function openBuildChangePreview(title: string, summary: string, nextBuild: BuildSelection, extraParts: Part[] = [], candidateEvidence?: CandidateApplicationEvidence) {
@@ -2458,9 +2560,10 @@ function App() {
     setGeneratorRequestId(null);
     setGeneratorDiagnostics([]);
     setGeneratorRecoveryOptions([]);
-    await rememberBuildSelection(draft.selection, hydrationController.signal);
+    await rememberBuildSelection(draft.selection, hydrationController.signal, { refreshKnown: true });
     if (!isCurrent()) return;
     const nextPreferences = recommendationPreferencesForGeneratedDraft(draft);
+    setActiveSample(null);
     setBuild(draft.selection);
     setAppliedGeneratorDraft(draft);
     setRecommendationPreferences(nextPreferences);
@@ -2496,7 +2599,7 @@ function App() {
       // Part hydration only fills local caches, so it runs alongside the check
       // instead of adding a round trip before it.
       const [, checked] = await Promise.all([
-        rememberBuildSelection(draft.selection, controller.signal),
+        rememberBuildSelection(draft.selection, controller.signal, { refreshKnown: true }),
         api<CompatibilityResult>("/api/compatibility/check", {
           method: "POST", body: JSON.stringify({ ...draft.selection, recommendationPreferences: nextPreferences }),
           retry: 1, retryOnRateLimit: true, signal: controller.signal
@@ -3570,7 +3673,8 @@ function App() {
   ) : view === "start" ? (
     <Suspense fallback={<div className="shared-build-state"><FiLoader className="spin" /><span>시작 화면을 불러오는 중...</span></div>}>
       <LazyQuoteOnboardingView
-        onFinish={(query) => navigate(`/recommend?${query}`, "generator")}
+        onFinish={(query) => { setActiveSample(null); navigate(`/recommend?${query}`, "generator"); }}
+        onFinishSample={finishOnboardingWithSample}
         onUpgrade={() => { navigate("/build?entry=upgrade", "editor"); setToast("업그레이드할 부품을 선택한 뒤 호환 결과를 확인하세요."); }}
         onSkip={() => navigate("/", "home")}
         onHome={() => navigate("/", "home")}
@@ -3579,6 +3683,7 @@ function App() {
     </Suspense>
   ) : view === "generator" || view === "editor" ? (
     <Suspense fallback={<div className="shared-build-state"><FiLoader className="spin" /><span>견적 화면을 불러오는 중...</span></div>}><LazyBuildWorkspaceView
+      sample={activeSample && samplePayload ? { payload: samplePayload, context: activeSample, onChangeSample: (sampleId) => void applySampleBuild({ ...activeSample, sampleId }) } : undefined}
       generator={{
         initialProfile: recommendationPreferences.profile,
         draft: generatorDraft,
@@ -3634,6 +3739,7 @@ function App() {
       onReset={() => {
         checkRequestSequenceRef.current += 1;
         setBuild(emptyBuild());
+        setActiveSample(null);
         setResult(null);
         setBuildChangeResultComparison(null);
         setSavedCheckHistory(null);
@@ -3835,7 +3941,7 @@ function App() {
             gamingResolution={recommendationPreferences.gamingResolution}
             gamingRefreshRate={recommendationPreferences.gamingRefreshRate}
             benchmarkCoverage={meta?.benchmarkCoverage}
-            brandOptions={quoteBrandOptionsFor(picker.category, meta?.catalogBrandCounts?.[picker.category] ?? [])}
+            brandOptions={[...(meta?.catalogBrandCounts?.[picker.category] ?? [])]}
             findingRuleId={picker.findingRuleId}
             findingTitle={picker.findingTitle}
             initialCandidateMode={picker.initialCandidateMode}
