@@ -64,11 +64,12 @@ describe("CI verification contracts", () => {
     expect(packageJson).toContain('"test:browser:quote-onboarding": "node scripts/quote-onboarding-smoke.mjs"');
     expect(workflow).toContain("Guided quote onboarding smoke flow");
     expect(workflow).toContain("Production preview guided quote onboarding smoke flow");
-    expect(onboardingSmoke).toContain("사이버펑크 2077");
-    expect(onboardingSmoke).toContain("QHD / 144 FPS");
-    expect(onboardingSmoke).toContain("targetFps");
+    // 575c021부터 온보딩은 용도 → 게임 종류 → 해상도·예산 3단 → /build 견본 견적으로 끝난다.
+    expect(onboardingSmoke).toContain('"gameTypes"');
+    expect(onboardingSmoke).toContain('"gamingBudget"');
+    expect(onboardingSmoke).toContain("onboarding-tier-button");
     expect(onboardingSmoke).toContain("build-workspace-parts");
-    expect(onboardingSmoke).toContain("generator-selection-reasons");
+    expect(onboardingSmoke).toContain("/api/sample-builds");
     expect(onboardingSmoke).toContain('entry") === "upgrade"');
   });
 
