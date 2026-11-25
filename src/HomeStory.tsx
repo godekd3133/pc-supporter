@@ -115,7 +115,7 @@ export function HomeStory({ onStart }: { onStart: () => void }) {
             </li>;
           })}
         </ul>
-        <div className="home-story-total"><span>합계</span><strong>{total.toLocaleString("ko-KR")}원</strong></div>
+        <div className="home-story-total"><span>합계</span><strong>{state.parts === 0 ? "—" : `${total.toLocaleString("ko-KR")}원`}</strong></div>
         <p className={allChecked ? "home-story-status shown" : "home-story-status"}><FiCheck /> 모든 부품이 호환돼요</p>
       </div>
     </div>

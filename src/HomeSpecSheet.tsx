@@ -6,18 +6,26 @@ import { type BuildSelection, type CompatibilityResult, type Part, type PartCate
 import { accessorySelections, selectionList } from "./build-edit";
 import { CATEGORY_ICONS } from "./category-icons";
 
+// HomeView와 같은 문구·로딩 막대. 이 시트는 HomeView가 lazy로 불러오므로 공용 모듈을 정적으로
+// 가져오면 Vite가 HomeView 청크를 공유 청크로 합쳐 첫 화면 번들 검사가 깨진다. 스타일은 HomeView가 불러온다.
+const MISSING_PART_NAME = "부품 정보를 불러오지 못했어요";
+function PartNameSkeleton({ wide = false }: { wide?: boolean }) {
+  return <span className={wide ? "part-name-skeleton wide" : "part-name-skeleton"} role="status" aria-label="부품 정보 불러오는 중" />;
+}
+
 const SPEC_SHEET_ICONS = CATEGORY_ICONS;
 
-export function HomeSpecSheet({ build, result, resultIsStale, partMap, onOpenResult }: { build: BuildSelection; result: CompatibilityResult | null; resultIsStale: boolean; partMap: ReadonlyMap<string, Part>; onOpenResult: () => void }) {
+export function HomeSpecSheet({ build, result, resultIsStale, partMap, partsLoading = false, onOpenResult }: { build: BuildSelection; result: CompatibilityResult | null; resultIsStale: boolean; partMap: ReadonlyMap<string, Part>; partsLoading?: boolean; onOpenResult: () => void }) {
   const rows = PART_CATEGORIES.map((category) => {
     const selections = selectionList(build, category);
     const boxedCooler = category === "cooler" && selections.length === 0 && build.cpu ? partMap.get(build.cpu.partId)?.specs.coolerIncluded === true : false;
-    const names = selections.map((selection) => `${partMap.get(selection.partId)?.name ?? "부품 정보 없음"}${selection.quantity > 1 ? ` ×${selection.quantity}` : ""}`).join(" / ");
+    const loading = partsLoading && selections.some((selection) => !partMap.has(selection.partId));
+    const names = selections.map((selection) => `${partMap.get(selection.partId)?.name ?? MISSING_PART_NAME}${selection.quantity > 1 ? ` ×${selection.quantity}` : ""}`).join(" / ");
     const priceWon = selections.reduce((total, selection) => {
       const price = partMap.get(selection.partId)?.priceWon;
       return isKnownPrice(price) ? total + price * selection.quantity : total;
     }, 0);
-    return { category, meta: { label: CATEGORY_LABELS[category], Icon: SPEC_SHEET_ICONS[category] }, names: names || (boxedCooler ? "CPU 기본 쿨러" : ""), filled: selections.length > 0 || boxedCooler, priceWon };
+    return { category, meta: { label: CATEGORY_LABELS[category], Icon: SPEC_SHEET_ICONS[category] }, names: names || (boxedCooler ? "CPU 기본 쿨러" : ""), filled: selections.length > 0 || boxedCooler, priceWon, loading };
   });
   const filledCount = rows.filter((row) => row.filled).length;
   const hasBuild = filledCount > 0 || accessorySelections(build).length > 0;
@@ -47,16 +55,16 @@ export function HomeSpecSheet({ build, result, resultIsStale, partMap, onOpenRes
       {resultCounts && <p>{resultCounts}</p>}
     </header>
     <ol className="home-spec-rows">
-      {rows.map(({ category, meta, names, filled, priceWon }, index) => { const RowIcon = meta.Icon; return <li className={filled ? "home-spec-row is-filled" : "home-spec-row"} key={category} style={{ "--row-index": index } as CSSProperties}>
+      {rows.map(({ category, meta, names, filled, priceWon, loading }, index) => { const RowIcon = meta.Icon; return <li className={filled ? "home-spec-row is-filled" : "home-spec-row"} key={category} style={{ "--row-index": index } as CSSProperties}>
         <span className="home-spec-icon" aria-hidden="true"><RowIcon /></span>
         <span className="home-spec-label">{meta.label}</span>
-        <span className="home-spec-name">{filled ? names : <span className="home-spec-placeholder" aria-label="미선택" />}</span>
+        <span className="home-spec-name">{loading ? <PartNameSkeleton wide /> : filled ? names : <span className="home-spec-placeholder" aria-label="미선택" />}</span>
         <span className="home-spec-price">{priceWon > 0 ? priceWon.toLocaleString("ko-KR") : ""}</span>
       </li>; })}
     </ol>
     <footer className="home-spec-sheet-foot">
       <span>{hasBuild ? `부품 ${selectedPartCount}개${accessoryCount > 0 ? ` / 주변 부품 ${accessoryCount}개` : ""}` : "예상 합계"}</span>
-      <strong>{totalWon > 0 ? <>{totalWon.toLocaleString("ko-KR")}<small>원</small></> : <span className="home-spec-total-empty">—</span>}</strong>
+      <strong>{partsLoading && hasBuild && totalWon === 0 ? <PartNameSkeleton /> : totalWon > 0 ? <>{totalWon.toLocaleString("ko-KR")}<small>원</small></> : <span className="home-spec-total-empty">—</span>}</strong>
     </footer>
     {resultIsCurrent && <button className="text-button home-current-preview-link" type="button" onClick={onOpenResult}>호환 결과 보기 <FiArrowRight /></button>}
   </section>;

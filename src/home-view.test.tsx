@@ -165,3 +165,18 @@ describe("mobile home build summary", () => {
     expect(markup).toContain("M.2 SSD 방열판 ×2");
   });
 });
+
+describe("home spec sheet while draft parts load", () => {
+  it("shows a loading bar instead of a missing-part label until hydration settles", async () => {
+    const { HomeSpecSheet } = await import("./HomeSpecSheet");
+    const draft = build({ cpu: { partId: "cpu-unloaded", quantity: 1 } });
+    const loading = renderToStaticMarkup(<HomeSpecSheet build={draft} result={null} resultIsStale={false} partMap={new Map()} partsLoading onOpenResult={() => {}} />);
+    expect(loading).toContain("부품 정보 불러오는 중");
+    expect(loading).not.toContain("부품 정보를 불러오지 못했어요");
+    const settled = renderToStaticMarkup(<HomeSpecSheet build={draft} result={null} resultIsStale={false} partMap={new Map()} onOpenResult={() => {}} />);
+    expect(settled).toContain("부품 정보를 불러오지 못했어요");
+    const loaded = renderToStaticMarkup(<HomeSpecSheet build={draft} result={null} resultIsStale={false} partMap={new Map([["cpu-unloaded", part({ id: "cpu-unloaded" })]])} partsLoading onOpenResult={() => {}} />);
+    expect(loaded).toContain("테스트 CPU");
+    expect(loaded).not.toContain("부품 정보 불러오는 중");
+  });
+});

@@ -160,7 +160,8 @@ body { word-break: keep-all; line-height: 1.55; }
   padding: 24px 0 8px;
 }
 
-.app-shell .home-workbench-copy { min-width: 0; animation: home-rise var(--dur-slow) var(--ease-out) both; }
+/* 첫 화면의 히어로 문구와 견적서는 등장 연출 없이 바로 보여준다 — 첫인상을 늦추지 않는다. */
+.app-shell .home-workbench-copy { min-width: 0; }
 
 .app-shell .home-workbench-copy .hero-eyebrow { display: block; margin: 0 0 14px; padding: 0; border: 0; color: var(--muted); background: transparent; font-size: 14px !important; font-weight: 600; }
 .app-shell .home-workbench-copy .hero-eyebrow svg { display: none; }
@@ -215,7 +216,6 @@ body { word-break: keep-all; line-height: 1.55; }
   color: var(--sheet-ink);
   background: var(--sheet-bg);
   box-shadow: none;
-  animation: sheet-rise 560ms var(--ease-out) 80ms both;
 }
 .app-shell .home-spec-sheet { border: 1px solid var(--line); }
 
@@ -246,8 +246,6 @@ body { word-break: keep-all; line-height: 1.55; }
   min-height: 40px;
   padding: 0 2px;
   border-bottom: 1px solid var(--sheet-line);
-  animation: spec-row-in 460ms var(--ease-out) both;
-  animation-delay: calc(var(--row-index, 0) * 45ms + 260ms);
 }
 .app-shell .home-spec-icon { display: grid; place-items: center; color: var(--sheet-muted); font-size: 14px !important; }
 .app-shell .home-spec-label { color: var(--sheet-muted); font-size: 12px !important; font-weight: 600; white-space: nowrap; }

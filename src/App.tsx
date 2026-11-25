@@ -855,6 +855,9 @@ function App() {
   useEffect(() => { installButtonRipple(); }, []);
   const [apiStatusDetails, setApiStatusDetails] = useState<ApiStatusDetails>(apiStatusDetailsSnapshot);
   const [build, setBuild] = useState<BuildSelection>(() => initialDraftLoad.build);
+  // 초안 부품 정보를 서버에서 채우는 동안에는 "부품 정보 없음" 대신 불러오는 중으로 표시한다.
+  const [buildHydratedFor, setBuildHydratedFor] = useState<BuildSelection | null>(null);
+  const buildPartsLoading = buildHydratedFor !== build;
   const [result, setResult] = useState<CompatibilityResult | null>(readLastCompatibilityResult);
   const [checkedInputFingerprint, setCheckedInputFingerprint] = useState<string | null>(readLastCompatibilityInputFingerprint);
   const [parts, setParts] = useState<Part[]>([]);
@@ -1569,11 +1572,15 @@ function App() {
   useEffect(() => {
     const hydrationController = new AbortController();
     buildHydrationAbortControllerRef.current = hydrationController;
+    let disposed = false;
     void rememberBuildSelection(build, hydrationController.signal).catch(() => {
       // Draft hydration is best effort; route-owned cancellation must not surface
       // as an editor error.
+    }).finally(() => {
+      if (!disposed) setBuildHydratedFor(build);
     });
     return () => {
+      disposed = true;
       hydrationController.abort();
       if (buildHydrationAbortControllerRef.current === hydrationController) buildHydrationAbortControllerRef.current = null;
     };
@@ -3635,6 +3642,7 @@ function App() {
       result={result}
       resultIsStale={resultIsStale}
       partMap={partMap}
+      partsLoading={buildPartsLoading}
       accessoryMap={accessoryMap}
       budgetLadderShares={budgetLadderShares}
       alternativeComparisonShares={alternativeComparisonShares}

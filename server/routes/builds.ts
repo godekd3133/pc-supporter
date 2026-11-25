@@ -3,6 +3,7 @@ import { type CatalogRefreshReport, catalogRefreshReportFromUnknown } from "../.
 import { buildCompatibilityInputFingerprint } from "../../shared/build-fingerprint";
 import { type SavedBuildRecord, createShareOwnerCredential, createShareRecoveryCode, normalizeShareRecoveryCode, shareRecoveryCodeMatches } from "../build-share";
 import { savedBuildPresentationsFor, loadSavedBuildPresentationContext, savedBuildPresentationFor } from "../saved-build-presentation";
+import { renderBuildOgCardPng } from "../build-og-card";
 import { type SavedBuildMonitorSubscriptionResponse, defaultSavedBuildMonitorSubscription, parseSavedBuildMonitorAlertIds, updateSavedBuildMonitorAlertState, configureSavedBuildMonitorSubscription, parseSavedBuildMonitorSettings } from "../../shared/saved-build-monitor-subscription";
 import { readCatalogChangeLog } from "../catalog-change-log";
 import { loadAccessories } from "../accessories";
@@ -1060,6 +1061,28 @@ app.post("/api/builds/:id/monitor/alerts/read", buildShareRateLimit, async (requ
 
 app.post("/api/builds/:id/monitor/alerts/dismiss", buildShareRateLimit, async (request, response) => {
   await updateBuildMonitorAlertAction(request, response, "dismiss");
+});
+
+// 공유 링크 미리보기 카드. 같은 견적·같은 가격이면 렌더링 결과를 재사용한다.
+const buildOgCardCache = new Map<string, Buffer>();
+app.get("/api/builds/:id/og.png", buildShareRateLimit, async (request, response) => {
+  const build = await savedBuildForRequest(request, response);
+  if (!build) return;
+  const presentation = savedBuildPresentationFor(build, await loadSavedBuildPresentationContext());
+  const cacheKey = [build.id, build.updatedAt, presentation.summary?.totalPriceWon ?? "", build.checkSnapshot?.status ?? ""].join(":");
+  let png = buildOgCardCache.get(cacheKey);
+  if (!png) {
+    png = renderBuildOgCardPng({ name: build.name, summary: presentation.summary, checkSnapshot: build.checkSnapshot });
+    if (!png) {
+      response.status(503).json({ error: "미리보기 이미지를 만들 수 없습니다." });
+      return;
+    }
+    if (buildOgCardCache.size >= 64) buildOgCardCache.delete(buildOgCardCache.keys().next().value!);
+    buildOgCardCache.set(cacheKey, png);
+  }
+  response.setHeader("Content-Type", "image/png");
+  response.setHeader("Cache-Control", "public, max-age=600");
+  response.send(png);
 });
 
 app.get("/api/builds/:id", buildShareRateLimit, async (request, response) => {

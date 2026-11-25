@@ -9,6 +9,7 @@ import type { AccessoryItem, BuildSelection, CompatibilityResult, Part, PartCate
 import type { JourneyActionKind } from "./user-journey";
 import { CATEGORY_LABELS, PART_CATEGORIES } from "../shared/types";
 import { CATEGORY_ICONS } from "./category-icons";
+import { MISSING_PART_NAME, PartNameSkeleton } from "./PartNameSkeleton";
 import type { BudgetLadderLocalShareEntry } from "../shared/budget-ladder-local-history";
 import type { AlternativeComparisonLocalShareEntry } from "../shared/alternative-comparison-local-history";
 import type { SavedBuildVersionLocalShareEntry } from "../shared/saved-build-version-local-history";
@@ -200,16 +201,17 @@ const MOBILE_HOME_ROWS: MobileHomeRow[] = [
   { label: "그래픽카드", category: "gpu", Icon: CATEGORY_ICONS.gpu }
 ];
 
-function mobileHomeRowState(build: BuildSelection, result: CompatibilityResult | null, resultIsStale: boolean, category: PartCategory, partMap: ReadonlyMap<string, Part>) {
+function mobileHomeRowState(build: BuildSelection, result: CompatibilityResult | null, resultIsStale: boolean, category: PartCategory, partMap: ReadonlyMap<string, Part>, partsLoading = false) {
   const selections = selectionList(build, category);
   if (selections.length === 0) return { state: "선택 전", tone: "empty", name: "부품을 골라 주세요" };
-  const names = selections.map((selection) => `${partMap.get(selection.partId)?.name ?? selection.partId}${selection.quantity > 1 ? ` ×${selection.quantity}` : ""}`).join(", ");
+  const loading = partsLoading && selections.some((selection) => !partMap.has(selection.partId));
+  const names = selections.map((selection) => `${partMap.get(selection.partId)?.name ?? MISSING_PART_NAME}${selection.quantity > 1 ? ` ×${selection.quantity}` : ""}`).join(", ");
   const findings = result && !resultIsStale ? result.findings.filter((finding) => selections.some((selection) => finding.affectedPartIds.includes(selection.partId))) : [];
-  if (findings.some((finding) => finding.severity === "blocker")) return { state: "호환 불가", tone: "incompatible", name: names };
-  if (findings.some((finding) => finding.severity === "warning")) return { state: "주의", tone: "warning", name: names };
-  if (findings.some((finding) => finding.severity === "unknown")) return { state: "확인 필요", tone: "review", name: names };
-  if (result && !resultIsStale) return { state: "호환 가능", tone: "success", name: names };
-  return { state: "", tone: "neutral", name: names };
+  if (findings.some((finding) => finding.severity === "blocker")) return { state: "호환 불가", tone: "incompatible", name: names, loading };
+  if (findings.some((finding) => finding.severity === "warning")) return { state: "주의", tone: "warning", name: names, loading };
+  if (findings.some((finding) => finding.severity === "unknown")) return { state: "확인 필요", tone: "review", name: names, loading };
+  if (result && !resultIsStale) return { state: "호환 가능", tone: "success", name: names, loading };
+  return { state: "", tone: "neutral", name: names, loading };
 }
 
 export function MobileHomeRequiredSelectionCount({ build, partMap, accessoryMap }: { build: BuildSelection; partMap: ReadonlyMap<string, Part>; accessoryMap: ReadonlyMap<string, AccessoryItem> }) {
@@ -227,7 +229,7 @@ export function MobileHomeRequiredSelectionCount({ build, partMap, accessoryMap 
 
 type MobileHomeAdditionalGroup = { label: string; items: string[] };
 
-function mobileHomeAdditionalGroupsFor(build: BuildSelection, partMap: ReadonlyMap<string, Part>, accessoryMap: ReadonlyMap<string, AccessoryItem>): MobileHomeAdditionalGroup[] {
+function mobileHomeAdditionalGroupsFor(build: BuildSelection, partMap: ReadonlyMap<string, Part>, accessoryMap: ReadonlyMap<string, AccessoryItem>, partsLoading = false): MobileHomeAdditionalGroup[] {
   const primaryCategories = new Set(MOBILE_HOME_ROWS.map((row) => row.category));
   const groups: MobileHomeAdditionalGroup[] = [];
   for (const category of PART_CATEGORIES) {
@@ -237,21 +239,21 @@ function mobileHomeAdditionalGroupsFor(build: BuildSelection, partMap: ReadonlyM
     if (selections.length === 0 || (primaryCategories.has(category) && !memoryOverflow)) continue;
     groups.push({
       label: category === "memory" ? "추가 RAM" : CATEGORY_LABELS[category],
-      items: selections.map((selection) => `${partMap.get(selection.partId)?.name ?? "부품 정보 없음"}${selection.quantity > 1 ? ` ×${selection.quantity}` : ""}`)
+      items: selections.map((selection) => `${partMap.get(selection.partId)?.name ?? (partsLoading ? "불러오는 중…" : MISSING_PART_NAME)}${selection.quantity > 1 ? ` ×${selection.quantity}` : ""}`)
     });
   }
   const accessories = accessorySelections(build);
   if (accessories.length > 0) {
     groups.push({
       label: "주변 부품",
-      items: accessories.map((selection) => `${accessoryMap.get(selection.accessoryId)?.name ?? "주변 부품 정보 없음"}${selection.quantity > 1 ? ` ×${selection.quantity}` : ""}`)
+      items: accessories.map((selection) => `${accessoryMap.get(selection.accessoryId)?.name ?? (partsLoading ? "불러오는 중…" : "주변 부품 정보를 불러오지 못했어요")}${selection.quantity > 1 ? ` ×${selection.quantity}` : ""}`)
     });
   }
   return groups;
 }
 
-export function MobileHomeAdditionalSelections({ build, partMap, accessoryMap }: { build: BuildSelection; partMap: ReadonlyMap<string, Part>; accessoryMap: ReadonlyMap<string, AccessoryItem> }) {
-  const groups = mobileHomeAdditionalGroupsFor(build, partMap, accessoryMap);
+export function MobileHomeAdditionalSelections({ build, partMap, accessoryMap, partsLoading = false }: { build: BuildSelection; partMap: ReadonlyMap<string, Part>; accessoryMap: ReadonlyMap<string, AccessoryItem>; partsLoading?: boolean }) {
+  const groups = mobileHomeAdditionalGroupsFor(build, partMap, accessoryMap, partsLoading);
   if (groups.length === 0) return null;
   const accessoryCount = accessorySelections(build).reduce((total, selection) => total + selection.quantity, 0);
   const memoryCount = build.memory.reduce((total, selection) => total + selection.quantity, 0);
@@ -262,7 +264,7 @@ export function MobileHomeAdditionalSelections({ build, partMap, accessoryMap }:
   </details>;
 }
 
-function MobileHomeView({ build, result, resultIsStale, partMap, accessoryMap, alertItems, alertUnreadCount, savedBuilds, savedBuildMonitorAlerts, onStart, onGuidedStart, onGenerate, onDemo, onCompatibleDemo, onOpenResult, onOpenHistory, onOpenWatchlist, onJourneyAction, onOpenSavedBuild, onToast }: { build: BuildSelection; result: CompatibilityResult | null; resultIsStale: boolean; partMap: ReadonlyMap<string, Part>; accessoryMap: ReadonlyMap<string, AccessoryItem>; alertItems: AlertCenterItem[]; alertUnreadCount: number; savedBuilds: SavedBuild[]; savedBuildMonitorAlerts?: SavedBuildMonitorAlert[]; onStart: () => void; onGuidedStart: () => void; onGenerate: () => void; onDemo: () => void; onCompatibleDemo: () => void; onOpenResult: () => void; onOpenHistory: () => void; onOpenWatchlist: () => void; onJourneyAction: (action: JourneyActionKind) => void; onOpenSavedBuild: (saved: SavedBuild) => void; onToast: (message: string) => void }) {
+function MobileHomeView({ build, result, resultIsStale, partMap, partsLoading = false, accessoryMap, alertItems, alertUnreadCount, savedBuilds, savedBuildMonitorAlerts, onStart, onGuidedStart, onGenerate, onDemo, onCompatibleDemo, onOpenResult, onOpenHistory, onOpenWatchlist, onJourneyAction, onOpenSavedBuild, onToast }: { build: BuildSelection; result: CompatibilityResult | null; resultIsStale: boolean; partMap: ReadonlyMap<string, Part>; partsLoading?: boolean; accessoryMap: ReadonlyMap<string, AccessoryItem>; alertItems: AlertCenterItem[]; alertUnreadCount: number; savedBuilds: SavedBuild[]; savedBuildMonitorAlerts?: SavedBuildMonitorAlert[]; onStart: () => void; onGuidedStart: () => void; onGenerate: () => void; onDemo: () => void; onCompatibleDemo: () => void; onOpenResult: () => void; onOpenHistory: () => void; onOpenWatchlist: () => void; onJourneyAction: (action: JourneyActionKind) => void; onOpenSavedBuild: (saved: SavedBuild) => void; onToast: (message: string) => void }) {
   const selectedItemCount = PART_CATEGORIES.reduce((count, category) => count + selectionList(build, category).length, 0);
   const hasBuild = selectedItemCount > 0 || accessorySelections(build).length > 0;
   const draftSaved = hasBuild && savedBuilds.some((saved) => selectionKey(saved.selection) === selectionKey(build));
@@ -302,8 +304,8 @@ function MobileHomeView({ build, result, resultIsStale, partMap, accessoryMap, a
       : <section className="mobile-current-build" aria-label="현재 견적">
           <div className="mobile-section-heading"><div><span className="mobile-kicker">부품 구성</span><h2>{hasBuild ? resultReady ? "최근 견적" : "현재 구성" : "새 견적"}</h2></div></div>
           <MobileHomeRequiredSelectionCount build={build} partMap={partMap} accessoryMap={accessoryMap} />
-          <div className="mobile-build-list">{MOBILE_HOME_ROWS.map(({ label, category, Icon }) => { const row = mobileHomeRowState(build, result, resultIsStale, category, partMap); return <button className={`mobile-build-row ${row.tone}`} type="button" key={category} onClick={onStart}><span className="mobile-build-icon" aria-hidden="true"><Icon /></span><span className="mobile-build-copy"><strong>{label}</strong><small>{row.name}</small></span>{row.state && <span className={`mobile-row-state ${row.tone}`}>{row.state}</span>}<FiArrowRight className="mobile-build-arrow" aria-hidden="true" /></button>; })}</div>
-          <MobileHomeAdditionalSelections build={build} partMap={partMap} accessoryMap={accessoryMap} />
+          <div className="mobile-build-list">{MOBILE_HOME_ROWS.map(({ label, category, Icon }) => { const row = mobileHomeRowState(build, result, resultIsStale, category, partMap, partsLoading); return <button className={`mobile-build-row ${row.tone}`} type="button" key={category} onClick={onStart}><span className="mobile-build-icon" aria-hidden="true"><Icon /></span><span className="mobile-build-copy"><strong>{label}</strong><small>{row.loading ? <PartNameSkeleton wide /> : row.name}</small></span>{row.state && <span className={`mobile-row-state ${row.tone}`}>{row.state}</span>}<FiArrowRight className="mobile-build-arrow" aria-hidden="true" /></button>; })}</div>
+          <MobileHomeAdditionalSelections build={build} partMap={partMap} accessoryMap={accessoryMap} partsLoading={partsLoading} />
         </section>}
     </div>
     <section className="mobile-next-steps home-entry-card" aria-label="다른 구성 방법"><div className="mobile-section-heading"><div><span className="mobile-kicker">구성 방법</span><h2>{hasBuild ? "다른 방법으로 구성" : "직접 구성"}</h2></div></div><button className="mobile-recommend-card" data-testid="mobile-home-recommend" type="button" onClick={hasBuild ? onGenerate : onStart}><span className="mobile-recommend-icon">{hasBuild ? <FiZap /> : <FiEdit3 />}</span><span className="mobile-recommend-copy"><strong>{hasBuild ? "용도/예산으로 다시 구성하기" : "부품 선택하기"}</strong>{!hasBuild && <small>원하는 부품을 선택하고 호환성을 확인해요.</small>}</span><FiArrowRight /></button></section>
@@ -318,14 +320,12 @@ function MobileHomeView({ build, result, resultIsStale, partMap, accessoryMap, a
   </section>;
 }
 
-export function HomeView({ onOpenCategory, meta, build, result, resultIsStale, partMap, accessoryMap, budgetLadderShares, alternativeComparisonShares, savedBuildVersionShares, alertItems, alertUnreadCount, hasBuildAlerts, hasWatchlistAlerts, savedBuilds, savedBuildMonitorAlerts, onJourneyAction, onOpenSavedBuild, onStart, onGuidedStart, onGenerate, onDemo, onCompatibleDemo, onResume, onOpenResult, onOpenHistory, onOpenWatchlist, onCopyBudgetLadderShare, onRemoveBudgetLadderShare, onToastBudgetLadderShare, onCopyAlternativeComparisonShare, onRemoveAlternativeComparisonShare, onRevokeAlternativeComparisonShare, onToastAlternativeComparisonShare, onCopySavedBuildVersionShare, onRemoveSavedBuildVersionShare, onRevokeSavedBuildVersionShare, onToastSavedBuildVersionShare, onToast }: { onOpenCategory?: (category: PartCategory) => void; meta: ServiceMeta | null; build: BuildSelection; result: CompatibilityResult | null; resultIsStale: boolean; partMap: ReadonlyMap<string, Part>; accessoryMap: ReadonlyMap<string, AccessoryItem>; budgetLadderShares: BudgetLadderLocalShareEntry[]; alternativeComparisonShares: AlternativeComparisonLocalShareEntry[]; savedBuildVersionShares: SavedBuildVersionLocalShareEntry[]; alertItems: AlertCenterItem[]; alertUnreadCount: number; hasBuildAlerts: boolean; hasWatchlistAlerts: boolean; savedBuilds: SavedBuild[]; savedBuildMonitorAlerts?: SavedBuildMonitorAlert[]; onJourneyAction: (action: JourneyActionKind) => void; onOpenSavedBuild: (saved: SavedBuild) => void; onStart: () => void; onGuidedStart: () => void; onGenerate: () => void; onDemo: () => void; onCompatibleDemo: () => void; onResume: () => void; onOpenResult: () => void; onOpenHistory: () => void; onOpenWatchlist: () => void; onCopyBudgetLadderShare: (entry: BudgetLadderLocalShareEntry) => void; onRemoveBudgetLadderShare: (id: string) => void; onToastBudgetLadderShare: (message: string) => void; onCopyAlternativeComparisonShare: (entry: AlternativeComparisonLocalShareEntry) => void; onRemoveAlternativeComparisonShare: (id: string) => void; onRevokeAlternativeComparisonShare: (entry: AlternativeComparisonLocalShareEntry) => Promise<boolean>; onToastAlternativeComparisonShare: (message: string) => void; onCopySavedBuildVersionShare: (entry: SavedBuildVersionLocalShareEntry) => void; onRemoveSavedBuildVersionShare: (id: string) => void; onRevokeSavedBuildVersionShare: (entry: SavedBuildVersionLocalShareEntry) => Promise<boolean>; onToastSavedBuildVersionShare: (message: string) => void; onToast: (message: string) => void }) {
+export function HomeView({ onOpenCategory, meta, build, result, resultIsStale, partMap, partsLoading = false, accessoryMap, budgetLadderShares, alternativeComparisonShares, savedBuildVersionShares, alertItems, alertUnreadCount, hasBuildAlerts, hasWatchlistAlerts, savedBuilds, savedBuildMonitorAlerts, onJourneyAction, onOpenSavedBuild, onStart, onGuidedStart, onGenerate, onDemo, onCompatibleDemo, onResume, onOpenResult, onOpenHistory, onOpenWatchlist, onCopyBudgetLadderShare, onRemoveBudgetLadderShare, onToastBudgetLadderShare, onCopyAlternativeComparisonShare, onRemoveAlternativeComparisonShare, onRevokeAlternativeComparisonShare, onToastAlternativeComparisonShare, onCopySavedBuildVersionShare, onRemoveSavedBuildVersionShare, onRevokeSavedBuildVersionShare, onToastSavedBuildVersionShare, onToast }: { onOpenCategory?: (category: PartCategory) => void; meta: ServiceMeta | null; build: BuildSelection; result: CompatibilityResult | null; resultIsStale: boolean; partMap: ReadonlyMap<string, Part>; partsLoading?: boolean; accessoryMap: ReadonlyMap<string, AccessoryItem>; budgetLadderShares: BudgetLadderLocalShareEntry[]; alternativeComparisonShares: AlternativeComparisonLocalShareEntry[]; savedBuildVersionShares: SavedBuildVersionLocalShareEntry[]; alertItems: AlertCenterItem[]; alertUnreadCount: number; hasBuildAlerts: boolean; hasWatchlistAlerts: boolean; savedBuilds: SavedBuild[]; savedBuildMonitorAlerts?: SavedBuildMonitorAlert[]; onJourneyAction: (action: JourneyActionKind) => void; onOpenSavedBuild: (saved: SavedBuild) => void; onStart: () => void; onGuidedStart: () => void; onGenerate: () => void; onDemo: () => void; onCompatibleDemo: () => void; onResume: () => void; onOpenResult: () => void; onOpenHistory: () => void; onOpenWatchlist: () => void; onCopyBudgetLadderShare: (entry: BudgetLadderLocalShareEntry) => void; onRemoveBudgetLadderShare: (id: string) => void; onToastBudgetLadderShare: (message: string) => void; onCopyAlternativeComparisonShare: (entry: AlternativeComparisonLocalShareEntry) => void; onRemoveAlternativeComparisonShare: (id: string) => void; onRevokeAlternativeComparisonShare: (entry: AlternativeComparisonLocalShareEntry) => Promise<boolean>; onToastAlternativeComparisonShare: (message: string) => void; onCopySavedBuildVersionShare: (entry: SavedBuildVersionLocalShareEntry) => void; onRemoveSavedBuildVersionShare: (id: string) => void; onRevokeSavedBuildVersionShare: (entry: SavedBuildVersionLocalShareEntry) => Promise<boolean>; onToastSavedBuildVersionShare: (message: string) => void; onToast: (message: string) => void }) {
   const localShareCount = budgetLadderShares.length + alternativeComparisonShares.length + savedBuildVersionShares.length;
   const hasAnySelection = PART_CATEGORIES.some((category) => selectionList(build, category).length > 0) || accessorySelections(build).length > 0;
   const draftSaved = hasAnySelection && savedBuilds.some((saved) => selectionKey(saved.selection) === selectionKey(build));
   return <div className="home-page">
-    <MobileHomeView build={build} result={result} resultIsStale={resultIsStale} partMap={partMap} accessoryMap={accessoryMap} alertItems={alertItems} alertUnreadCount={alertUnreadCount} savedBuilds={savedBuilds} savedBuildMonitorAlerts={savedBuildMonitorAlerts} onStart={onStart} onGuidedStart={onGuidedStart} onGenerate={onGenerate} onDemo={onDemo} onCompatibleDemo={onCompatibleDemo} onOpenResult={onOpenResult} onOpenHistory={onOpenHistory} onOpenWatchlist={onOpenWatchlist} onJourneyAction={onJourneyAction} onOpenSavedBuild={onOpenSavedBuild} onToast={onToast} />
-    {/* 기존 견적이 있으면 이용 방법 안내를 먼저 보여주고, 내 PC 견적은 그 아래에 둔다. */}
-    {hasAnySelection && <Suspense fallback={null}><LazyHomeStory onStart={onGuidedStart} /></Suspense>}
+    <MobileHomeView build={build} result={result} resultIsStale={resultIsStale} partMap={partMap} partsLoading={partsLoading} accessoryMap={accessoryMap} alertItems={alertItems} alertUnreadCount={alertUnreadCount} savedBuilds={savedBuilds} savedBuildMonitorAlerts={savedBuildMonitorAlerts} onStart={onStart} onGuidedStart={onGuidedStart} onGenerate={onGenerate} onDemo={onDemo} onCompatibleDemo={onCompatibleDemo} onOpenResult={onOpenResult} onOpenHistory={onOpenHistory} onOpenWatchlist={onOpenWatchlist} onJourneyAction={onJourneyAction} onOpenSavedBuild={onOpenSavedBuild} onToast={onToast} />
     <section className={`home-workbench${hasAnySelection ? " has-build" : ""}`} aria-label="견적 구성 방법">
       <div className="home-workbench-copy">
         {hasAnySelection
@@ -340,9 +340,10 @@ export function HomeView({ onOpenCategory, meta, build, result, resultIsStale, p
           <details className="hero-demo-tools"><summary>예시 구성 보기 <FiChevronDown aria-hidden="true" /></summary><div><button type="button" onClick={onDemo}><FiActivity /> 문제 있는 예시 견적</button><button type="button" onClick={onCompatibleDemo}><FiCheckCircle /> 문제 없는 예시 견적</button></div></details>
         </div>
       </div>
-      <Suspense fallback={<section className="home-spec-sheet" aria-hidden="true" />}><LazyHomeSpecSheet build={build} result={result} resultIsStale={resultIsStale} partMap={partMap} onOpenResult={onOpenResult} /></Suspense>
+      <Suspense fallback={<section className="home-spec-sheet" aria-hidden="true" />}><LazyHomeSpecSheet build={build} result={result} resultIsStale={resultIsStale} partMap={partMap} partsLoading={partsLoading} onOpenResult={onOpenResult} /></Suspense>
     </section>
-    {!hasAnySelection && <Suspense fallback={null}><LazyHomeStory onStart={onGuidedStart} /></Suspense>}
+    {/* 첫 화면에는 바로 행동할 수 있는 견적 영역을 두고, 이용 방법 안내는 그 아래에 둔다. */}
+    <Suspense fallback={null}><LazyHomeStory onStart={onGuidedStart} /></Suspense>
     {savedBuilds.length > 0 && <Suspense fallback={null}><LazyHomeSavedBuildPrices savedBuilds={savedBuilds} monitorAlerts={savedBuildMonitorAlerts} onOpenSavedBuild={onOpenSavedBuild} onOpenHistory={onOpenHistory} /></Suspense>}
     <HomeCategoryRow onOpenCategory={onOpenCategory} />
     {alertItems.length > 0 && <Suspense fallback={null}><LazyHomeAlertCenter items={alertItems} unreadCount={alertUnreadCount} hasBuildAlerts={hasBuildAlerts} hasWatchlistAlerts={hasWatchlistAlerts} onOpenHistory={onOpenHistory} onOpenWatchlist={onOpenWatchlist} /></Suspense>}

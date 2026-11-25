@@ -1,0 +1,7 @@
+.part-name-skeleton { position: relative; display: inline-block; overflow: hidden; width: 72px; height: 12px; border-radius: 6px; vertical-align: middle; background: #e8eff3; }
+.part-name-skeleton.wide { width: min(220px, 80%); }
+.part-name-skeleton::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .75), transparent); transform: translateX(-100%); animation: part-name-skeleton-shimmer 1.2s ease-in-out infinite; }
+@keyframes part-name-skeleton-shimmer { to { transform: translateX(100%); } }
+@media (prefers-reduced-motion: reduce) { .part-name-skeleton::after { animation: none; } }
+html[data-theme="dark"] .part-name-skeleton { background: #232a35; }
+html[data-theme="dark"] .part-name-skeleton::after { background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .08), transparent); }

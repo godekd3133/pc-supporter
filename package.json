@@ -109,6 +109,7 @@
     "@capacitor/keyboard": "^8.0.5",
     "@capacitor/splash-screen": "^8.0.2",
     "@capacitor/status-bar": "^8.0.3",
+    "@resvg/resvg-js": "^2.6.2",
     "cheerio": "^1.1.2",
     "compression": "^1.8.2",
     "dotenv": "^17.2.1",

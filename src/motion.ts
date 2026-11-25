@@ -1,6 +1,6 @@
 // Small motion helpers shared across routes. Every effect is skipped when the
 // user prefers reduced motion or the browser lacks the API.
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { flushSync } from "react-dom";
 
 export function prefersReducedMotion() {
@@ -131,8 +131,12 @@ function getRevealObserver() {
   return revealObserver;
 }
 
-/** Stages every animatable element under `root`: visible ones enter now, the rest wait for scroll. */
-function choreograph(root: Element, startIndex: number, mode: "route" | "update") {
+/**
+ * Stages every animatable element under `root`: visible ones enter now, the rest wait for scroll.
+ * In "initial" mode (the first paint of a page load) visible elements are shown as they are —
+ * fading in content that is already there only delays the first impression.
+ */
+function choreograph(root: Element, startIndex: number, mode: "route" | "update" | "initial") {
   const elements = collect(root);
   const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
   let index = startIndex;
@@ -140,7 +144,8 @@ function choreograph(root: Element, startIndex: number, mode: "route" | "update"
     const rect = element.getBoundingClientRect();
     const inView = rect.top < viewportHeight && rect.bottom > 0;
     if (inView || rect.height > viewportHeight * 1.4) {
-      mark(element, "enter", mode === "route" ? index++ : Math.floor(index++ / 3));
+      if (mode === "initial") element.setAttribute("data-motion", "done");
+      else mark(element, "enter", mode === "route" ? index++ : Math.floor(index++ / 3));
     } else {
       mark(element, "pending", 0);
       pendingReveals.add(element);
@@ -151,6 +156,8 @@ function choreograph(root: Element, startIndex: number, mode: "route" | "update"
 }
 
 let routeProgressTimer = 0;
+let firstRouteKey: string | undefined;
+let leftFirstRoute = false;
 function playRouteProgress() {
   let bar = document.querySelector<HTMLElement>(".route-progress");
   if (!bar) {
@@ -171,20 +178,24 @@ function playRouteProgress() {
  * keeps animating nodes React inserts afterwards (lazy routes, results, list items).
  */
 export function useMotionChoreography(routeKey: string) {
-  const firstRun = useRef(true);
   useEffect(() => {
     if (!motionSupported()) return;
     document.documentElement.setAttribute("data-motion-ready", "");
     const main = document.getElementById("main-content");
     if (!main) return;
-    if (!firstRun.current) playRouteProgress();
-    firstRun.current = false;
+    // Keyed by route, not by effect run: StrictMode and re-renders replay the effect for the same route.
+    firstRouteKey ??= routeKey;
+    const initialLoad = routeKey === firstRouteKey && !leftFirstRoute;
+    if (!initialLoad) {
+      leftFirstRoute = true;
+      playRouteProgress();
+    }
 
     const routeStartedAt = performance.now();
     let nextIndex = 0;
     let frame = requestAnimationFrame(() => {
       const stage = main.querySelector(".route-stage") ?? main;
-      nextIndex = choreograph(stage, 0, "route");
+      nextIndex = choreograph(stage, 0, initialLoad ? "initial" : "route");
     });
 
     const pending = new Set<Element>();
@@ -194,7 +205,8 @@ export function useMotionChoreography(routeKey: string) {
       const inRouteWindow = performance.now() - routeStartedAt < 1200;
       for (const node of pending) {
         if (!node.isConnected) continue;
-        nextIndex = choreograph(node, inRouteWindow ? nextIndex : 0, inRouteWindow ? "route" : "update");
+        // Lazy chunks that land during the first page load fill the screen in place, without an entrance.
+        nextIndex = choreograph(node, inRouteWindow ? nextIndex : 0, inRouteWindow ? initialLoad ? "initial" : "route" : "update");
       }
       pending.clear();
     };

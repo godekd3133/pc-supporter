@@ -17,6 +17,9 @@ import { withSavedBuildMonitorLease, readSavedWatchlists, readSavedComparisons, 
 import { type OwnerSessionResourceType } from "../shared/owner-session-contract";
 import { resolve } from "node:path";
 import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import { buildOgDescription, injectShareMeta } from "./build-og-card";
+import { loadSavedBuildPresentationContext, savedBuildPresentationFor } from "./saved-build-presentation";
 import { ensureDataDirectory } from "./storage";
 import { syncAllRuntimeConfigsFromDatabase, syncRuntimeConfigFromDatabase } from "./runtime-config-sync";
 import { loadCatalog, invalidateCatalogCache } from "./catalog";
@@ -258,10 +261,35 @@ app.use("/api/owner-sessions", createOwnerSessionRouter({
 const distPath = resolve(process.cwd(), "dist");
 if (existsSync(distPath)) {
   app.use(express.static(distPath));
-  app.use((request, response, next) => {
+  let indexHtml: string | undefined;
+  app.use(async (request, response, next) => {
     if (isApiPath(request.path)) {
       next();
       return;
+    }
+    // 공유 견적 링크는 메신저·커뮤니티 미리보기용 meta를 서버에서 채워 보낸다.
+    const shareMatch = request.path.match(/^\/share\/([^/]+)\/?$/);
+    if (shareMatch) {
+      try {
+        const id = decodeURIComponent(shareMatch[1]);
+        const build = (await loadBuilds()).find((item) => item.id === id);
+        if (build && !shareExpired(build.expiresAt)) {
+          indexHtml ??= await readFile(resolve(distPath, "index.html"), "utf8");
+          const presentation = savedBuildPresentationFor(build, await loadSavedBuildPresentationContext());
+          const origin = process.env.PC_SUPPORTER_PUBLIC_ORIGIN?.replace(/\/$/, "") ?? `${request.protocol}://${request.get("host")}`;
+          const cardInput = { name: build.name, summary: presentation.summary, checkSnapshot: build.checkSnapshot };
+          response.setHeader("Cache-Control", "no-store");
+          response.type("html").send(injectShareMeta(indexHtml, {
+            title: build.name || "PC 견적",
+            description: buildOgDescription(cardInput),
+            imageUrl: `${origin}/api/builds/${encodeURIComponent(build.id)}/og.png?v=${encodeURIComponent(build.updatedAt)}`,
+            pageUrl: `${origin}/share/${encodeURIComponent(build.id)}`
+          }));
+          return;
+        }
+      } catch {
+        // 미리보기 meta는 부가 기능이라 실패해도 일반 앱 화면을 그대로 보낸다.
+      }
     }
     response.sendFile(resolve(distPath, "index.html"));
   });
