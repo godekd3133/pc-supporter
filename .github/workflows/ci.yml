@@ -294,8 +294,13 @@ jobs:
   deploy:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [verify, browser-smoke, container-smoke]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    # 운영은 Azure VM이다(Lightsail은 공개 주소를 Azure로 넘기는 프록시). Azure SSH는
+    # NSG AdminSSH에 등록된 IP만 허용하므로, 등록된 이 Mac 러너에서 로컬 배포 키로 올린다.
+    # 키와 고정 host key는 러너 사용자의 ~/.ssh에만 두고 GitHub secret으로 올리지 않는다.
+    runs-on: [self-hosted, personal-mac]
+    timeout-minutes: 25
+    env:
+      PC_SUPPORTER_AZURE_HOST: pc-supporter-71697d83-kc.koreacentral.cloudapp.azure.com
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -304,33 +309,28 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
 
       - name: Install dependencies
         run: npm ci
+        env:
+          npm_config_cache: ${{ runner.temp }}/npm-cache
 
       - name: Production build
         run: npm run build:assets
 
-      - name: Install ripgrep for the deploy script
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq ripgrep
-
-      - name: Prepare deploy SSH key and pinned host keys
-        shell: bash
+      - name: Deploy to Azure production VM
         run: |
-          install -d -m 700 "$RUNNER_TEMP/ssh"
-          printf '%s\n' "${{ secrets.LIGHTSAIL_DEPLOY_SSH_KEY }}" > "$RUNNER_TEMP/ssh/deploy_key"
-          chmod 600 "$RUNNER_TEMP/ssh/deploy_key"
-          install -d -m 700 ~/.ssh
-          printf '%s\n' \
-            '3.39.79.1 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINp3g/Wo34rSawQvCOtBT094vitITAW4lF9x1Ihn/2bi' \
-            '3.39.79.1 ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCwd57QdBWkJ57kHII+oJ6BL3/Fdetv0BHv21iH2ZKQdbFehqs66Lf05XmI8ifklBu385AJzZFveGAl7TRivAECYTbWFAyCGEsq5Zq2B+gGC5+fJXaU+aQ0U1T2h5ePLmOlnjEFigDyIZ8NQEnypvH8wg4TSVuT3S9JMRudkvc7LxfG06dBgL/iMHWIWrXQAfknOyE4d3J67hEGOpoEKOP2G1uLQSp1voHrx/RvAtebSbIPKzFxa587HtlnLte+0L3JotgUmlNRiD9DNTZ13xh72W+FozVQ9RPN6SD5IVlGDQlNJ/Vmd77KZMXxZX6Ke785QMSrXQT2XpFAIlQx/A/SCRa4jiLTNqXbeTDtzY0+3YzyInkOh6G0ArT9oOBujIX+QsB5+XgSL14fftZs8Q1JoNLG/Nn/2G6xh/HSF3juwi9qe8b3+LTNPDe67ZyGg5XFx1Nbu9PeDpY4KAx/kaAqO4WBD+6TGEjIrs72WOJw9TMp2FSzUAuEuAcK0KBtrzE=' \
-            >> ~/.ssh/known_hosts
-
-      - name: Deploy to Lightsail
-        run: |
-          ./scripts/lightsail-deploy.sh \
-            --host ubuntu@3.39.79.1 \
-            --domain pc-supporter.3-39-79-1.sslip.io \
-            --ssh-key "$RUNNER_TEMP/ssh/deploy_key" \
+          test -f "$HOME/.ssh/pc-supporter-azure" || { echo "::error::Missing ~/.ssh/pc-supporter-azure on the runner"; exit 1; }
+          test -f "$HOME/.ssh/pc-supporter-azure-known-hosts" || { echo "::error::Missing pinned Azure host keys on the runner"; exit 1; }
+          PC_SUPPORTER_SSH_KNOWN_HOSTS="$HOME/.ssh/pc-supporter-azure-known-hosts" ./scripts/lightsail-deploy.sh \
+            --host "azureadmin@$PC_SUPPORTER_AZURE_HOST" \
+            --domain "$PC_SUPPORTER_AZURE_HOST" \
+            --ssh-key "$HOME/.ssh/pc-supporter-azure" \
             --preserve-env
+
+      - name: Check the public address serves this release
+        run: |
+          expected="$(grep -oE 'index-[A-Za-z0-9_-]+\.js' dist/index.html | head -1)"
+          served="$(curl -fsS https://pc-supporter.3-39-79-1.sslip.io/ | grep -oE 'index-[A-Za-z0-9_-]+\.js' | head -1)"
+          echo "expected=$expected served=$served"
+          test -n "$expected" && test "$expected" = "$served"

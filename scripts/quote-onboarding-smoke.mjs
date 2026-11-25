@@ -53,7 +53,7 @@ const smokeExpression = `(${async function runQuoteOnboardingSmoke() {
     throw new Error(`${label} 대기 시간 초과: ${bodyText().slice(-800)}`);
   };
   const currentStep = () => document.querySelector(".onboarding-page")?.getAttribute("data-onboarding-step") ?? "";
-  const stepTitles = { intent: "어떤 견적이 필요하세요?", mode: "어떤 기준으로 부품을 고를까요?", usecase: "주 용도", games: "주로 할 게임을 골라주세요", works: "주로 하는 작업", performance: "게임 성능 목표", graphics: "게임 옵션도 정해주세요", budget: "예산", summary: "선택 내용 확인", spec: "성능 목표" };
+  const stepTitles = { intent: "어떤 견적이 필요하세요?", usecase: "어떤 용도로 쓰실 건가요?", gameTypes: "어떤 종류의 게임들을 하시나요?", gamingBudget: "해상도와 예산을 골라주세요", works: "주로 하는 작업", budget: "예산", summary: "선택 내용 확인" };
   const waitForStep = (step, label) => waitFor(() => currentStep() === step || text(document.querySelector(".onboarding-title")) === stepTitles[step], label);
   const clickButton = (needle) => {
     const button = [...document.querySelectorAll("button")].find((candidate) => !candidate.disabled && (candidate.textContent ?? "").replace(/\s+/g, " ").includes(needle));
@@ -115,30 +115,27 @@ const smokeExpression = `(${async function runQuoteOnboardingSmoke() {
     window.dispatchEvent(new PopStateEvent("popstate"));
     await waitFor(() => location.pathname === "/start" && document.querySelector(".onboarding-page") !== null, "온보딩 시작 화면");
   };
-  const chooseNewTaskGaming = async () => {
+  // 575c021부터: 의도 → 용도(사무/게임/작업). 게임은 게임 종류 → 해상도·예산 3단 → /build 견본 견적,
+  // 사무는 바로 /build 견본 견적, 작업은 작업 → 강도 → 예산 → 요약 → /build 견본 견적이다.
+  const chooseNewUsecase = async () => {
     await waitForStep("intent", "첫 선택 화면");
-    assert(bodyText().includes("새 PC 견적 보기") && bodyText().includes("쓰던 PC 업그레이드하기") && bodyText().includes("나중에 하기"), "첫 화면에 새 견적/업그레이드/나중에 선택지가 모두 표시되지 않았습니다.");
-    await chooseAutoOption("새 PC 견적 보기", "mode", "새 견적 기준 화면");
-    assert(bodyText().includes("예산에 맞는 게임 견적") && bodyText().includes("용도를 기준으로 고르기") && bodyText().includes("원하는 사양 직접 입력하기"), "새 견적 기준 선택지가 모두 표시되지 않았습니다.");
-    assert(bodyText().includes("성능 등급과 그래픽/메모리/저장공간"), "성능을 직접 고르는 방식의 설명이 없습니다.");
-    await chooseAutoOption("용도를 기준으로 고르기", "usecase", "용도 선택 화면");
-    await chooseAutoOption("게임", "games", "게임 선택 화면");
+    assert(bodyText().includes("새 PC 견적 보기") && bodyText().includes("쓰던 PC 업그레이드하기") && bodyText().includes("나중에 하기"), "첫 화면에 새 견적/업그레이드/나중에 선택지가 모두 보이지 않습니다.");
+    await chooseAutoOption("new", "usecase", "용도 선택 화면");
+    assert(bodyText().includes("가벼운 사무") && bodyText().includes("게임") && bodyText().includes("작업"), "용도 선택지(사무/게임/작업)가 모두 보이지 않습니다.");
+  };
+  const chooseNewTaskGaming = async () => {
+    await chooseNewUsecase();
+    await chooseAutoOption("gaming", "gameTypes", "게임 종류 화면");
   };
   const chooseNewTaskWork = async () => {
-    await waitForStep("intent", "첫 선택 화면");
-    await chooseAutoOption("새 PC 견적 보기", "mode", "새 견적 기준 화면");
-    await chooseAutoOption("용도를 기준으로 고르기", "usecase", "용도 선택 화면");
-    await chooseAutoOption("작업", "works", "작업 선택 화면");
+    await chooseNewUsecase();
+    await chooseAutoOption("work", "works", "작업 선택 화면");
   };
-  const chooseNewBudget = async () => {
-    await waitForStep("intent", "첫 선택 화면");
-    await chooseAutoOption("새 PC 견적 보기", "mode", "새 견적 기준 화면");
-    await chooseAutoOption("예산에 맞는 게임 견적", "budget", "예산 중심 화면");
-  };
-  const chooseNewSpec = async () => {
-    await waitForStep("intent", "첫 선택 화면");
-    await chooseAutoOption("새 PC 견적 보기", "mode", "새 견적 기준 화면");
-    await chooseAutoOption("원하는 사양 직접 입력하기", "spec", "직접 성능 입력 화면");
+  // 견본 견적은 카탈로그에서 부품을 찾아 채운다. CI 고정 카탈로그에는 견본 부품 일부만 있어
+  // 라인 수 대신 /build 이동, 견본 견적 제목, 최소 한 개의 채워진 부품을 handoff 근거로 본다.
+  const filledLines = () => [...document.querySelectorAll(".build-workspace-parts .component-card.selected")].filter((line) => (line.querySelector("strong")?.textContent ?? "").trim().length > 0);
+  const waitForSampleBuild = async (label) => {
+    await waitFor(() => location.pathname === "/build" && filledLines().length >= 1 && bodyText().includes("견적 금액"), label, 480);
   };
 
   await waitFor(() => location.pathname === "/start" && document.querySelector(".onboarding-page") !== null, "온보딩 초기 화면");
@@ -162,161 +159,61 @@ const smokeExpression = `(${async function runQuoteOnboardingSmoke() {
   window.dispatchEvent(new PopStateEvent("popstate"));
   await waitFor(() => location.pathname === "/start" && document.querySelector(".onboarding-page") !== null, "첫 사용자 홈에서 온보딩 진입");
   await chooseNewTaskGaming();
-  await chooseOption("사이버펑크 2077");
-  clickButton("다음");
-  await waitForStep("performance", "목표 성능 화면");
-  assert(text(document.querySelector(".onboarding-title")) === "게임 성능 목표", "게임 목표 화면의 제목이 바뀌었습니다.");
-  await chooseOption("QHD");
-  await chooseOption("144 FPS");
-  assert(bodyText().includes("사이버펑크 2077 / QHD / 목표 144 FPS"), "게임/해상도/목표 FPS 조건이 화면에 보존되지 않았습니다.");
-  clickButton("다음");
-  await waitForStep("graphics", "그래픽 옵션 화면");
-  await chooseOption("높음");
-  await chooseOption("업스케일링/품질");
-  const qualityChecked = document.querySelector('input[name="onboarding-graphics-preset"][value="high"]')?.checked;
-  const upscalingChecked = document.querySelector('input[name="onboarding-upscaling"][value="quality"]')?.checked;
-  assert((qualityChecked === undefined || qualityChecked) && (upscalingChecked === undefined || upscalingChecked), "그래픽/업스케일링 선택이 반영되지 않았습니다.");
-  assert(/예상 가격대\s*\d+만원\s*~\s*\d+만원/.test(bodyText().replace(/\n+/g, " ")), "그래픽 옵션 단계에 예상 가격대가 없습니다.");
-  clickButton("다음 / 예산 정하기");
-  await waitForStep("budget", "예산 화면");
-  const gamingBudgetText = bodyText().replace(/\n+/g, " ").match(/예상 가격대\s*(\d+만원\s*~\s*\d+만원)/)?.[1] ?? "";
-  assert(gamingBudgetText.length > 0, `게임 목표 가격 범위가 표시되지 않았습니다: ${bodyText().slice(0, 600)}`);
-  const minimumBudgetAdjust = document.querySelector("[data-testid=onboarding-budget-range-adjust]");
-  const raisedBudget = text(minimumBudgetAdjust).match(/(\d+)만원/)?.[1];
-  assert(raisedBudget && text(minimumBudgetAdjust).includes("예산 올리기"), "예산이 예상 가격보다 낮을 때 바로 올리는 CTA가 없습니다.");
-  assert(text(document.querySelector("[data-testid=onboarding-budget-range-edit-target]")) === "목표 성능 다시 고르기", "예산이 부족할 때 목표 성능을 다시 고르는 CTA가 없습니다.");
-  const initialBudget = text(document.querySelector(".onboarding-budget-value"));
-  clickButton("목표 성능 다시 고르기");
-  await waitForStep("performance", "예산에서 목표 성능 변경 화면");
-  assert(bodyText().includes("사이버펑크 2077 / QHD / 목표 144 FPS"), "목표 성능으로 돌아가도 기존 게임/화면 조건이 보존되지 않았습니다.");
-  clickButton("다음");
-  await waitForStep("graphics", "목표 성능 변경 후 그래픽 옵션 화면");
-  clickButton("다음 / 예산 정하기");
-  await waitForStep("budget", "목표 성능 변경 후 예산 복귀");
-  assert(text(document.querySelector(".onboarding-budget-value")) === initialBudget, "목표 성능을 다시 골라도 기존 예산이 보존되지 않았습니다.");
-  clickButton(text(document.querySelector("[data-testid=onboarding-budget-range-adjust]")));
-  await waitFor(() => text(document.querySelector(".onboarding-budget-value")) === `${raisedBudget}만원` || currentStep() === "summary", "예상 가격 하한 예산 자동 조정");
-  if (currentStep() !== "summary") clickCta();
-  await waitForStep("summary", "조건 요약 화면");
-  const summaryText = bodyText();
-  assert(summaryText.includes("사이버펑크 2077") && summaryText.includes("QHD / 144 FPS") && summaryText.includes(`${raisedBudget}만원`), "조건 요약에 선택한 게임/화면 목표/예산이 모두 보이지 않습니다.");
-  assert([...document.querySelectorAll("button")].some((button) => text(button) === "예산 변경"), "요약 화면에서 예산을 바로 변경할 수 없습니다.");
-  clickButton("예산 변경");
-  await waitForStep("budget", "요약에서 예산 변경 화면");
-  assert(text(document.querySelector(".onboarding-budget-value")) === `${raisedBudget}만원`, "요약에서 예산 변경 시 기존 금액이 보존되지 않았습니다.");
+  const gameTypeText = bodyText();
+  assert(gameTypeText.includes("스팀 콘솔게임") && gameTypeText.includes("인기 게임") && gameTypeText.includes("저사양 온라인 게임"), "게임 종류 선택지가 모두 보이지 않습니다.");
+  await chooseOption("모던 워페어");
   clickCta();
-  await waitForStep("summary", "예산 변경 후 조건 요약 화면");
-  assert(bodyText().includes("사이버펑크 2077") && bodyText().includes("QHD / 144 FPS") && bodyText().includes(`${raisedBudget}만원`), "예산 변경 후 기존 게임/화면 목표 조건이 보존되지 않았습니다.");
-  clickCta();
-  await waitFor(() => location.pathname === "/recommend", "자동 구성 handoff 경로", 480);
-  const gamingHandoffSearch = location.search;
-  await waitFor(() => document.querySelector(".build-workspace-parts .component-card.selected") !== null, "자동 구성 결과 handoff", 480);
-  const gamingQuery = new URLSearchParams(gamingHandoffSearch);
-  assert(gamingQuery.get("profile") === "gaming" && gamingQuery.get("resolution") === "1440p" && gamingQuery.get("targetFps") === "144" && gamingQuery.get("games")?.includes("cyberpunk") && gamingQuery.get("graphics") === "high" && gamingQuery.get("upscaling") === "quality" && gamingQuery.get("budget") === `${raisedBudget}0000`, `게임 모드/게임/화면 목표/예산이 자동 구성 URL로 전달되지 않았습니다: ${gamingHandoffSearch} -> ${location.search}`);
-  const gamingLineCount = assertHydratedResult("게임");
-  assert(gamingLineCount >= 6, "자동 구성 결과에 게이밍 부품 라인이 없습니다.");
-  assert(document.querySelector(".build-workspace .generator-rationale, .build-workspace .generator-analysis, .build-workspace .generator-selection-reasons, .build-workspace .generator-gaming-evidence, .build-workspace .generator-gpu-target") === null, "자동 구성 견적에 판정 근거 패널이 노출되고 있습니다.");
-  const gaming = { path: location.pathname + location.search, budgetRange: gamingBudgetText, lineCount: gamingLineCount };
+  await waitForStep("gamingBudget", "해상도·예산 화면");
+  clickButton("QHD");
+  await waitFor(() => document.querySelector('input[type="radio"]:checked') !== null && text(document.querySelector('input[type="radio"]:checked')?.labels?.[0]) === "QHD", "QHD 해상도 선택");
+  await waitFor(() => document.querySelectorAll(".onboarding-tier-button").length === 3 && [...document.querySelectorAll(".onboarding-tier-button")].every((tier) => /만원/.test(text(tier))), "예산 3단 가격", 480);
+  const tiers = [...document.querySelectorAll(".onboarding-tier-button")].map((tier) => text(tier));
+  assert(tiers[0].includes("저예산") && tiers[1].includes("가성비") && tiers[2].includes("고성능"), `예산 3단(저예산/가성비/고성능)이 표시되지 않았습니다: ${JSON.stringify(tiers)}`);
+  [...document.querySelectorAll(".onboarding-tier-button")][1].click();
+  await waitForSampleBuild("게임 견본 견적 handoff");
+  assert(bodyText().includes("QHD") && bodyText().includes("게이밍 견적"), "선택한 해상도/게임 용도가 견적 제목에 반영되지 않았습니다.");
+  assert(filledLines().some((line) => (line.textContent ?? "").includes("그래픽카드") || /RTX|RX\s?\d/.test(line.textContent ?? "")), "게임 견본 견적에 그래픽카드가 채워지지 않았습니다.");
+  const gaming = { path: location.pathname + location.search, tiers, lineCount: filledLines().length };
 
   await navigateStart();
-  await chooseNewTaskGaming();
-  await chooseOption("사이버펑크 2077", "다음");
-  clickButton("다음");
-  await waitFor(() => text(document.querySelector(".onboarding-title")) === "게임 성능 목표", "낮은 예산 게임 목표 화면");
-  await chooseOption("QHD", "다음");
-  await chooseOption("144 FPS", "다음");
-  clickButton("다음");
-  await waitFor(() => text(document.querySelector(".onboarding-title")) === "게임 옵션도 정해주세요", "낮은 예산 그래픽 옵션 화면");
-  await chooseOption("높음", "다음 / 예산 정하기");
-  await chooseOption("업스케일링/품질", "다음 / 예산 정하기");
-  clickButton("다음 / 예산 정하기");
-  await waitFor(() => text(document.querySelector(".onboarding-title")) === "예산", "낮은 예산 선택 화면");
-  assert(text(document.querySelector(".onboarding-budget-value")) === "200만원", "낮은 예산 시나리오에서 기본 200만원 예산이 보존되지 않았습니다.");
-  clickButton("예상 구성 확인");
-  await waitFor(() => text(document.querySelector(".onboarding-title")) === "선택 내용 확인", "낮은 예산 조건 요약");
-  assert(bodyText().includes("QHD / 144 FPS") && bodyText().includes("200만원") && bodyText().includes("예상 가격보다 낮아요"), "낮은 예산 조건 요약에서 QHD/144 FPS, 200만원, 예상 가격 미달 안내를 보존하지 않았습니다.");
-  clickCta();
-  await waitFor(() => location.pathname === "/recommend", "낮은 예산 자동 구성 경로", 480);
-  const lowBudgetQuery = new URLSearchParams(location.search);
-  assert(lowBudgetQuery.get("profile") === "gaming" && lowBudgetQuery.get("resolution") === "1440p" && lowBudgetQuery.get("targetFps") === "144" && lowBudgetQuery.get("budget") === "2000000", `낮은 예산 조건이 자동 구성 URL에 보존되지 않았습니다: ${location.href}`);
-  await waitFor(() => document.querySelector(".build-workspace-parts .component-card.selected") !== null || document.querySelector('[role="alert"]') !== null, "낮은 예산 자동 구성 결과", 480);
-  const gamingLowBudget = { path: location.pathname + location.search, outcome: document.querySelector('[role="alert"]') ? "recovery" : "built" };
+  await chooseNewUsecase();
+  clickButton("office");
+  await waitForSampleBuild("사무 견본 견적 handoff");
+  const office = { path: location.pathname + location.search, lineCount: filledLines().length };
 
   await navigateStart();
   await chooseNewTaskWork();
-  assert(bodyText().includes("FHD/4K 컷 편집과 효과 작업") && bodyText().includes("모델링/씬 구성/반복 렌더링") && bodyText().includes("IDE/빌드/컨테이너/가상 머신"), "작업 종류 카드에 대표 사용 장면 설명이 없습니다.");
+  assert(bodyText().includes("FHD/4K 컷 편집과 효과 작업") && bodyText().includes("모델링/씬 구성/반복 렌더링") && bodyText().includes("IDE/빌드/컨테이너/가상 머신"), "작업 종류 카드에 대표 작업 설명이 없습니다.");
   await chooseOption("영상 편집");
   clickButton("다음");
   await waitFor(() => currentStep() === "intensity" || text(document.querySelector(".onboarding-title")).includes("영상 편집은 어느 정도 규모인가요?"), "작업 강도 화면");
   const intensityText = bodyText();
-  assert(intensityText.includes("FHD/가벼운 컷 편집") && intensityText.includes("4K 편집/일반 효과") && intensityText.includes("4K/6K 편집/고급 효과") && intensityText.includes("64GB") && intensityText.includes("2TB SSD"), "작업 강도별 구체적인 예상 작업/사양이 표시되지 않았습니다.");
+  assert(intensityText.includes("FHD/가벼운 컷 편집") && intensityText.includes("4K 편집/일반 효과") && intensityText.includes("4K/6K 편집/고급 효과") && intensityText.includes("64GB"), "작업 강도별 예상 사양이 없습니다.");
   await chooseAutoOption("heavy", "budget", "작업 예산 화면");
   const workEstimateText = bodyText();
   assert(workEstimateText.includes("4K/6K 편집/고급 효과") && workEstimateText.includes("64GB") && workEstimateText.includes("2TB SSD"), "작업 종류/강도에 맞는 구체적인 예상 사양이 없습니다.");
   await pickBudget("400만원");
   await waitForStep("summary", "작업 조건 요약 화면");
   assert(bodyText().includes("영상 편집") && bodyText().includes("무겁게") && bodyText().includes("4K/6K 편집/고급 효과"), "작업 조건 요약이 선택값을 보존하지 않았습니다.");
+  assert(bodyText().includes("견적") && bodyText().includes("보여드려요"), "작업 요약에 예산에 맞춘 견본 견적 안내가 없습니다.");
   clickCta();
-  await waitFor(() => location.pathname === "/recommend", "작업 자동 구성 경로", 480);
-  const workQuery = new URLSearchParams(location.search);
-  await waitFor(() => document.querySelector(".build-workspace-parts .component-card.selected") !== null, "작업 자동 구성 handoff", 480);
-  assert(workQuery.get("profile") === "creator" && workQuery.get("work") === "video" && workQuery.get("intensity") === "heavy" && workQuery.get("ram") === "64" && workQuery.get("ssd") === "2000" && workQuery.get("budget") === "4000000", `작업 모드/작업/강도/RAM/SSD/예산 조건이 자동 구성 URL에 보존되지 않았습니다: ${workQuery}`);
-  const workLineCount = assertHydratedResult("작업");
-  const work = { path: location.pathname + location.search, lineCount: workLineCount };
+  await waitForSampleBuild("작업 견본 견적 handoff");
+  const work = { path: location.pathname + location.search, lineCount: filledLines().length };
 
   await navigateStart();
-  await chooseNewBudget();
-  const budgetOnlyEstimate = bodyText();
-  assert(budgetOnlyEstimate.includes("예산에 맞는 게임 구성") && budgetOnlyEstimate.includes("GPU 성능 우선"), "예산 중심 분기의 예상 사양이 표시되지 않았습니다.");
-  await pickBudget("400만원");
-  await waitForStep("summary", "예산 중심 요약 화면");
-  assert(bodyText().includes("400만원") && bodyText().includes("예산에 맞는 게임 구성"), "예산 중심 요약에 예산/예상 수준이 보이지 않습니다.");
-  clickCta();
-  await waitFor(() => location.pathname === "/recommend", "예산 중심 자동 구성 경로", 480);
-  const budgetQuery = new URLSearchParams(location.search);
-  await waitFor(() => document.querySelector(".build-workspace-parts .component-card.selected") !== null, "예산 중심 자동 구성 handoff", 480);
-  assert(budgetQuery.get("profile") === "gaming" && budgetQuery.get("gamingMode") === "budget" && budgetQuery.get("budget") === "4000000", `예산 모드/예산 조건이 자동 구성 URL에 보존되지 않았습니다: ${budgetQuery}`);
-  const budgetLineCount = assertHydratedResult("예산");
-  const budgetOnly = { path: location.pathname + location.search, lineCount: budgetLineCount };
-
-  await navigateStart();
-  await chooseNewSpec();
-  await chooseOption("top");
-  await chooseOption("64");
-  await chooseOption("2000");
+  await chooseNewTaskWork();
+  await chooseOption("영상 편집");
   clickButton("다음");
-  await waitForStep("budget", "직접 성능 예산 화면");
-  await pickBudget("220만원");
-  await waitForStep("summary", "직접 성능 요약 화면");
-  assert(bodyText().includes("최상급 성능") && bodyText().includes("외장 GPU 포함") && bodyText().includes("64GB / 2TB") && bodyText().includes("220만원") && bodyText().includes("예산이 부족해요"), "직접 성능 요약에 선택한 조건과 예산 부족 안내가 보이지 않습니다.");
-  clickCta();
-  await waitFor(() => location.pathname === "/recommend", "직접 성능 자동 구성 경로", 480);
-  const specQuery = new URLSearchParams(location.search);
-  assert(specQuery.get("profile") === "general" && specQuery.get("priority") === "performance" && specQuery.get("tier") === "top" && specQuery.get("ram") === "64" && specQuery.get("ssd") === "2000" && specQuery.get("budget") === "2200000" && specQuery.get("gpu") === null, `직접 성능 모드/등급/RAM/SSD/예산 조건이 자동 구성 URL에 보존되지 않았습니다: ${specQuery}`);
-  await waitFor(() => document.querySelector('[role="alert"]') !== null || document.querySelector(".build-workspace-parts .component-card.selected") !== null, "직접 성능 예산 판정 handoff", 480);
-  const specFailure = document.querySelector('[role="alert"]');
-  let spec;
-  if (specFailure) {
-    assert(text(specFailure).length > 0, "예산 안에 구성이 없는 경우 진단을 표시하지 않았습니다.");
-    spec = { path: location.pathname + location.search, budgetInfeasible: true };
-  } else {
-    const lineCount = assertHydratedResult("직접 성능");
-    spec = { path: location.pathname + location.search, lineCount };
-  }
-
-  await navigateStart();
-  await chooseNewBudget();
+  await waitFor(() => currentStep() === "intensity", "요청 오류 경로 작업 강도 화면");
+  await chooseAutoOption("heavy", "budget", "요청 오류 경로 예산 화면");
   await pickBudget("400만원");
   await waitForStep("summary", "요청 오류 경로 요약 화면");
   const originalFetch = window.fetch;
-  let failedRecommendPosts = 0;
-  let attemptedApiFetches = 0;
+  let failedSampleBuildRequests = 0;
   window.fetch = async (input, init) => {
     const requestUrl = new URL(typeof input === "string" ? input : input.url, location.href);
-    const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
-    if (requestUrl.pathname.startsWith("/api/")) attemptedApiFetches += 1;
-    if (method === "POST" && requestUrl.pathname === "/api/builds/recommend") {
-      failedRecommendPosts += 1;
+    if (requestUrl.pathname.startsWith("/api/sample-builds")) {
+      failedSampleBuildRequests += 1;
       return new Response(JSON.stringify({ error: "controlled smoke failure" }), { status: 503, headers: { "Content-Type": "application/json" } });
     }
     return originalFetch(input, init);
@@ -324,13 +221,10 @@ const smokeExpression = `(${async function runQuoteOnboardingSmoke() {
   let recommendationFailure;
   try {
     clickCta();
-    await waitFor(() => location.pathname === "/recommend" && document.querySelector('.generator-request-error[role="alert"]') !== null, "자동 구성 API 실패 안내", 480);
-    const failureAlert = text(document.querySelector('.generator-request-error[role="alert"]'));
-    const failureQuery = new URLSearchParams(location.search);
-    assert(failedRecommendPosts >= 1 && failedRecommendPosts <= 3, `일시적인 503 재시도는 최대 두 번으로 제한되어야 합니다: ${failedRecommendPosts}`);
-    assert(failureAlert.includes("견적을 만들지 못했어요") && failureAlert.includes("입력한 내용은 남아 있어요"), "추천 API 실패 시 입력 보존/복구 안내가 표시되지 않았습니다.");
-    assert(failureQuery.get("profile") === "gaming" && failureQuery.get("gamingMode") === "budget" && failureQuery.get("budget") === "4000000", `추천 요청 실패 후에도 입력 조건이 URL에 보존되어야 합니다: ${location.href}`);
-    recommendationFailure = { path: location.pathname + location.search, alert: true, postCount: failedRecommendPosts };
+    await waitFor(() => failedSampleBuildRequests > 0 && [...document.querySelectorAll('[role="alert"]')].some((alert) => text(alert).includes("견적 정보를 불러오지 못했어요")), "견본 견적 API 실패 안내", 480);
+    assert(location.pathname === "/start" && currentStep() === "summary", `견본 견적 요청 실패 시 입력한 요약 화면에 머물러야 합니다: ${location.pathname} / ${currentStep()}`);
+    assert(bodyText().includes("영상 편집") && bodyText().includes("400만원"), "견본 견적 요청 실패 후 입력 조건이 보존되지 않았습니다.");
+    recommendationFailure = { path: location.pathname, step: currentStep(), alert: true, requestCount: failedSampleBuildRequests };
   } finally {
     window.fetch = originalFetch;
   }
@@ -351,7 +245,7 @@ const smokeExpression = `(${async function runQuoteOnboardingSmoke() {
   const upgrade = { path: location.pathname + location.search, entry: "upgrade" };
 
   if (errors.length > 0) throw new Error(`온보딩 브라우저 오류: ${errors.join(" | ")}`);
-  return { stage: "passed", gaming, gamingLowBudget, work, budgetOnly, spec, recommendationFailure, later, upgrade };
+  return { stage: "passed", gaming, office, work, recommendationFailure, later, upgrade };
 }.toString()})()`;
 
 const chromePath = await firstAvailable([
@@ -395,7 +289,10 @@ try {
   assert(desktopResult?.stage === "passed", `데스크톱 온보딩 smoke가 통과하지 못했습니다: ${JSON.stringify(desktopResult)}`);
 
   // The mobile pass replays the first-visit flow, so drop the draft the desktop pass left behind.
-  await client.evaluate("localStorage.clear(); sessionStorage.clear()");
+  // Leave the app first: a live page can write its in-memory draft back after localStorage.clear().
+  await client.send("Page.navigate", { url: "about:blank" });
+  await sleep(200);
+  await client.send("Storage.clearDataForOrigin", { origin: new URL(baseUrl).origin, storageTypes: "local_storage,session_storage" });
   await client.send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
   await client.send("Page.navigate", { url: `${baseUrl}/start` });
   await sleep(350);
