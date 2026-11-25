@@ -1,4 +1,5 @@
 import { type EngineClockOptions, type EvaluationCache, KO_NUMBER_FORMAT, type SelectionWithPart, physicalMemoryModuleCount, categorySelections, cloneBuild, similarityBasisForDimensions, DEFAULT_GAMING_RESOLUTION, DEFAULT_GAMING_REFRESH_RATE, currentCategoryPart, selectedParts, performanceComparisonFor, candidateIsPlausible, recommendedMemoryKitQuantity, replaceSelection, candidateCompatibilityDeltaFindings, candidateDataQualityReasonsFor, physicalEvidenceSummaryFor, gpuTargetEvidenceFor, valueForPrices, benchmarkFreshnessFor, performanceSummaryFor, profileSummaryFor, similarityFor, type SimilarityComparison, partReliabilityScoreFor, similarityScoreForSort, similarityLabelFor, formatPrice, engineNowMilliseconds, selectedPart, motherboardVrmTierFor, motherboardMemorySlotFormFactorFor, memoryModuleCapacityGb, cpuMemorySpeedLimitFor, isTwoPointFiveInchStorage, twoPointFiveInchMountCapacity, PSU_LOAD_HEADROOM_RATIO, SYSTEM_BASE_LOAD_W, pcieEightPinRequirementCount, severityRank, buildPriceInfo, ENGINE_VERSION, limitUpgradeRecommendations, performanceDimensions, generatorObjectiveScores, GENERATOR_CATEGORY_WEIGHTS, formatTargetVram } from "./core";
+import { casePsuFormFactorSupportFor } from "../../case-psu-form-factor";
 import { type RecommendationPreferences, type RecommendationSearchSummary, type BuildSelection, type RecommendationProfile, type BuildAnalysis, type Part, type FindingAction, type PartCategory, CATEGORY_LABELS, type PciePowerConnectorKind, type PciePowerRequirement, type MemoryProfile, type Finding, type FindingSeverity, type FindingFact, type M2SlotProfile, type M2SlotAssignment, type BuildMetrics, type SimilarityEvidence, type ListingPolicy, type GamingResolution, type GamingRefreshRate, type Suggestion, type PartSelection, isKnownPrice, type CompatibilityResult, type AlternativeRisk, type SimilarityBasis, type RecommendationPlan, type CompatibilityLink, type BuildAnalysisBalance, type BuildAnalysisFactor, type BuildAnalysisInsight, RECOMMENDATION_PROFILE_LABELS, PART_CATEGORIES, type BuildBottleneck, GAMING_RESOLUTION_LABELS } from "../../types";
 import { OBJECTIVE_SCORE_MODEL_VERSION, type ObjectiveScore } from "../../objective-score";
 import { catalogMissingFieldLabelFor } from "../../catalog-spec-coverage";
@@ -2912,8 +2913,20 @@ export function evaluateBuild(
     }
 
     const psuFormFactor = psu.specs.psuFormFactor;
-    const supportedPsuFormFactors = computerCase.specs.supportedPsuFormFactors;
-    if (!psuFormFactor || !supportedPsuFormFactors || supportedPsuFormFactors.length === 0) {
+    const casePsuSupport = casePsuFormFactorSupportFor(computerCase);
+    const supportedPsuFormFactors = casePsuSupport?.formFactors;
+    if (psuFormFactor && casePsuSupport?.inferred && !casePsuSupport.formFactors.includes(psuFormFactor)) {
+      // 장착 길이로 ATX 공간만 추론한 케이스에 SFX 계열을 넣는 경우: 변환 브라켓 지원 여부를 알 수 없다.
+      addUnknown(
+        findings,
+        "psu-case-form-factor",
+        "SFX 파워를 이 케이스에 달 수 있는지 확인해 주세요.",
+        "케이스의 파워 공간은 ATX 크기로 확인됐지만, SFX 파워를 고정하는 변환 브라켓을 지원하는지는 정보가 없어요.",
+        partIds(psu, computerCase),
+        ["case SFX bracket support"],
+        "case"
+      );
+    } else if (!psuFormFactor || !supportedPsuFormFactors || supportedPsuFormFactors.length === 0) {
       addUnknown(
         findings,
         "psu-case-form-factor",

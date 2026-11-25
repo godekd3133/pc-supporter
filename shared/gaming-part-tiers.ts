@@ -1,4 +1,5 @@
 import type { GeneratedPartTierAdjacency, Part, PartCategory } from "./types";
+import { casePsuFormFactorSupportFor } from "./case-psu-form-factor";
 import { CATEGORY_LABELS } from "./types";
 import { gpuGamingIndexFor, gpuVideoPerformanceRowFor } from "./relative-performance-index";
 import { cpuGamingModelFor, cpuGamingScoreFor, gamingSsdFamilyAllowed, gamingFallbackSsdAllowed } from "./cpu-gaming-policy";
@@ -260,7 +261,9 @@ export function gamingPartSuitabilityFor(part: Part, context: GamingTierContext)
     }
     if (context.psu) {
       atLeast("case-psu-length", part.specs.maxPsuLengthMm, context.psu.specs.psuDepthMm, "파워 본체와 케이블을 넣을 공간을 확인합니다.");
-      check("case-psu-form", context.psu.specs.psuFormFactor && part.specs.supportedPsuFormFactors ? part.specs.supportedPsuFormFactors.includes(context.psu.specs.psuFormFactor) : undefined, "파워 외형이 케이스의 지원 외형과 같아야 합니다.");
+      const psuSupport = casePsuFormFactorSupportFor(part);
+      const psuForm = context.psu.specs.psuFormFactor;
+      check("case-psu-form", psuForm && psuSupport ? psuSupport.formFactors.includes(psuForm) ? true : psuSupport.inferred ? undefined : false : undefined, "파워 외형이 케이스의 지원 외형과 같아야 합니다.");
     }
     if ((context.hddCount ?? 0) > 0) atLeast("case-hdd-bays", part.specs.hddBays, context.hddCount, "HDD 수에 맞는 실제 장착 베이가 필요합니다.");
   }

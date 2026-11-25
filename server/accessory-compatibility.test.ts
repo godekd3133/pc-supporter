@@ -210,10 +210,11 @@ describe("accessory compatibility", () => {
   });
 
   it("blocks a fan or M.2 heatsink when its physical format does not match", () => {
+    const mountedCase = part("case", "case", { fanCount: 2, radiatorSupports: [{ position: "front", sizesMm: [240, 360] }, { position: "top", sizesMm: [280] }] }, "전면 120mm / 후면 140mm / 쿨링팬: 총 2개");
     const result = accessoryCompatibilityFor(build([
       { accessoryId: "wrong-heatsink", quantity: 1 },
       { accessoryId: "wrong-fan", quantity: 1 }
-    ]), [casePart, motherboardPart, ssdPart], [
+    ]), [mountedCase, motherboardPart, ssdPart], [
       accessory("wrong-heatsink", "m2_heatsink", { formFactor: "M.2 2242" }),
       accessory("wrong-fan", "cooling_fan", { lengthMm: 200, widthMm: 200 })
     ]);
@@ -228,6 +229,19 @@ describe("accessory compatibility", () => {
       { label: "선택한 SSD 규격", actual: "M.2 2280" },
       { label: "방열판 지원 규격", expected: "M.2 2242" }
     ]));
+  });
+
+  it("does not block a fan size that only differs from the case's pre-installed fans", () => {
+    const result = accessoryCompatibilityFor(build([{ accessoryId: "big-fan", quantity: 1 }]), [casePart, motherboardPart, ssdPart], [
+      accessory("big-fan", "cooling_fan", { lengthMm: 200, widthMm: 200 })
+    ]);
+    expect(result.blockerCount).toBe(0);
+    expect(result.findings[0]).toMatchObject({ ruleId: "accessory-cooling-fan-size", severity: "unknown", title: "이 크기의 팬을 케이스에 추가로 달 수 있는지 확인해 주세요." });
+
+    const matching = accessoryCompatibilityFor(build([{ accessoryId: "fan-140", quantity: 1 }]), [casePart, motherboardPart, ssdPart], [
+      accessory("fan-140", "cooling_fan", { lengthMm: 140, widthMm: 140 })
+    ]);
+    expect(matching.findings.some((finding) => finding.ruleId === "accessory-cooling-fan-size")).toBe(false);
   });
 
   it("keeps incomplete accessory facts as review and reports quantity or port shortages", () => {

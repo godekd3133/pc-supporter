@@ -1,4 +1,5 @@
 import { gamingFallbackSsdAllowed, gamingSsdFamilyAllowed } from "./cpu-gaming-policy";
+import { casePsuFormFactorSupportFor } from "./case-psu-form-factor";
 import { inferListingType, isQuoteBrandAllowed, isQuotePurchasable } from "./domain/listing";
 import { phase1GpuPowerUpperBoundW } from "./phase1-hardware-evidence";
 import { phase1GamingPartAllowed } from "./phase1-gaming-policy";
@@ -21,6 +22,7 @@ export function gamingPickerPartAllowed(part: Part, catalog?: readonly Part[]): 
     : part.category === "cooler" ? ["supportedSockets", part.specs.coolerType === "liquid" ? "radiatorSizeMm" : "maxCoolerHeightMm"]
     : part.category === "case" ? ["maxCoolerHeightMm", "motherboardFormFactors", "maxPsuLengthMm", "supportedPsuFormFactors"] : [];
   if (!required.every((field) => {
+    if (field === "supportedPsuFormFactors" && part.category === "case") return casePsuFormFactorSupportFor(part) !== undefined;
     const value = part.specs[field as keyof Part["specs"]];
     return value !== undefined && (!Array.isArray(value) || value.length > 0);
   })) return false;

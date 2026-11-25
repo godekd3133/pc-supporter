@@ -1,4 +1,5 @@
 import { type Part, type CompatibilityResult, type BuildGenerationDiagnostic, type PartSelection, type RecommendationProfile, RECOMMENDATION_PROFILE_LABELS, type PartCategory, type GamingResolution, type GamingRefreshRate, type GpuTargetFit, type GpuTargetEvidence, GAMING_RESOLUTION_VRAM_TARGETS, GAMING_RESOLUTION_LABELS, GAMING_REFRESH_RATE_LABELS, type FindingSeverity, isKnownPrice, type PciePowerRequirement, type BuildSelection, type PhysicalEvidenceSummary, type Finding, type SimilarityDimensionEvidence, type SimilarityBasis, type SimilarityEvidence, type UpgradeCompatibilityEvidence, type UpgradeBudgetEvidence, type UpgradeExpansionEvidence, type UpgradeRecommendation, type SimilarityConfidence, type ValueLabel, type ValueEvidence, type GpuVendor } from "../../types";
+import { casePsuFormFactorSupportFor } from "../../case-psu-form-factor";
 import { classifyDataFreshness } from "../data-health";
 import { type EngineTargetFiltersConfig } from "../../engine-target-filters";
 import { type ReferenceBuild } from "../../reference-builds";
@@ -640,8 +641,8 @@ export function candidateIsPlausible(finding: Finding, build: BuildSelection, ca
   if (finding.ruleId === "gpu-case-low-profile" && targetCategory === "case") return candidate.specs.lowProfileOnly !== true;
   if (finding.ruleId === "psu-case-length" && targetCategory === "case" && psu?.specs.psuDepthMm !== undefined) return candidate.specs.maxPsuLengthMm !== undefined && candidate.specs.maxPsuLengthMm >= psu.specs.psuDepthMm;
   if (finding.ruleId === "psu-case-length" && targetCategory === "psu" && computerCase?.specs.maxPsuLengthMm !== undefined) return candidate.specs.psuDepthMm !== undefined && candidate.specs.psuDepthMm <= computerCase.specs.maxPsuLengthMm;
-  if (finding.ruleId === "psu-case-form-factor" && targetCategory === "case" && psu?.specs.psuFormFactor) return candidate.specs.supportedPsuFormFactors !== undefined && candidate.specs.supportedPsuFormFactors.includes(psu.specs.psuFormFactor);
-  if (finding.ruleId === "psu-case-form-factor" && targetCategory === "psu" && computerCase?.specs.supportedPsuFormFactors) return candidate.specs.psuFormFactor !== undefined && computerCase.specs.supportedPsuFormFactors.includes(candidate.specs.psuFormFactor);
+  if (finding.ruleId === "psu-case-form-factor" && targetCategory === "case" && psu?.specs.psuFormFactor) return casePsuFormFactorSupportFor(candidate)?.formFactors.includes(psu.specs.psuFormFactor) === true;
+  if (finding.ruleId === "psu-case-form-factor" && targetCategory === "psu" && computerCase && casePsuFormFactorSupportFor(computerCase)) return candidate.specs.psuFormFactor !== undefined && casePsuFormFactorSupportFor(computerCase)!.formFactors.includes(candidate.specs.psuFormFactor);
   if (finding.ruleId === "gpu-psu-power" && targetCategory === "psu" && gpu?.specs.recommendedPsuW !== undefined) return candidate.specs.wattageW !== undefined && candidate.specs.wattageW >= gpu.specs.recommendedPsuW;
   if (finding.ruleId === "psu-system-power" && targetCategory === "psu") {
     const cpuLoadW = cpu?.specs.pptW ?? cpu?.specs.tdpW;

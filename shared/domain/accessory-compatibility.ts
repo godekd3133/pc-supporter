@@ -11,6 +11,24 @@ function rawText(item: Part | AccessoryItem | undefined) {
   return item ? `${item.name} ${item.rawSpecText ?? ""}` : "";
 }
 
+/**
+ * 케이스 라디에이터 지원(위치별 120/240/360, 140/280 등)에서 장착 가능한 팬 크기를 얻는다.
+ * 라디에이터 자리는 같은 크기 팬 자리이기도 하므로, 구조화된 지원 정보가 있으면 확정 판정에 쓴다.
+ */
+export function caseFanMountSizesFor(computerCase: Part | undefined) {
+  const radiatorSizes = [
+    ...(computerCase?.specs.radiatorSupports ?? []).flatMap((support) => support.sizesMm),
+    ...(computerCase?.specs.radiatorSizesMm ?? [])
+  ];
+  const sizes = new Set<number>();
+  for (const size of radiatorSizes) {
+    if (size % 140 === 0) sizes.add(140);
+    if (size % 120 === 0) sizes.add(120);
+  }
+  return [...sizes].sort((a, b) => a - b);
+}
+
+/** 다나와 원문의 "전면: 140mm x3" 등은 기본 장착 팬이다. 추가 장착 가능한 크기 목록이 아니다. */
 function caseFanSizesFor(computerCase: Part | undefined) {
   const sizes = [...rawText(computerCase).matchAll(/(?:전면|후면|상단|하단|측면|팬\s*크기)\s*[:：]?\s*(\d{2,3})\s*mm/gi)]
     .map((match) => Number(match[1]))
@@ -185,6 +203,7 @@ export function accessoryCompatibilityFor(build: BuildSelection, catalog: Part[]
     .map((selection) => ({ selection, part: selectedPart(catalog, selection.partId) }))
     .filter((entry): entry is { selection: BuildSelection["ssd"][number]; part: Part } => Boolean(entry.part && entry.part.specs.formFactor?.toLocaleLowerCase("ko-KR").includes("m.2")));
   const caseFanSizes = caseFanSizesFor(computerCase);
+  const caseFanMountSizes = caseFanMountSizesFor(computerCase);
   const caseFanCount = caseFanCountFor(computerCase);
   const cpuPowerW = cpu?.specs.pptW ?? cpu?.specs.tdpW;
   const gpuPowerW = gpu?.specs.powerW;
@@ -554,29 +573,40 @@ export function accessoryCompatibilityFor(build: BuildSelection, catalog: Part[]
           ],
           action: "케이스를 선택한 뒤 팬 장착 규격을 다시 확인하세요."
         });
-      } else if (caseFanSizes.length === 0 || fanSize === undefined) {
+      } else if (fanSize === undefined || (caseFanMountSizes.length === 0 && caseFanSizes.length === 0)) {
         addFinding(findings, selection, item, [computerCase.id], {
           ruleId: "accessory-cooling-fan-size",
           severity: "unknown",
           title: "팬과 케이스의 장착 크기를 확인해 주세요.",
           message: "케이스나 쿨링팬의 크기 정보가 없어 서로 맞는지 확인하지 못했어요.",
           facts: [
-            { label: "케이스 지원 팬 크기", expected: caseFanSizes.length > 0 ? caseFanSizes.map((size) => `${size}mm`).join(" / ") : "확인 필요" },
+            { label: "케이스 지원 팬 크기", expected: "확인 필요" },
             { label: "선택한 팬 크기", actual: fanSize === undefined ? "확인 필요" : `${fanSize}mm` }
           ],
           action: "케이스 도면에서 팬 장착 위치와 나사 간격을 확인하세요."
         });
-      } else if (!caseFanSizes.includes(fanSize)) {
-        addFinding(findings, selection, item, [computerCase.id], {
+      } else if (caseFanMountSizes.length > 0 ? !caseFanMountSizes.includes(fanSize) : !caseFanSizes.includes(fanSize)) {
+        const confirmed = caseFanMountSizes.length > 0;
+        addFinding(findings, selection, item, [computerCase.id], confirmed ? {
           ruleId: "accessory-cooling-fan-size",
           severity: "blocker",
           title: "쿨링팬 크기가 케이스 장착 규격과 맞지 않습니다.",
-          message: "선택한 쿨링팬 크기가 케이스 정보에서 확인된 장착 규격과 맞지 않습니다.",
+          message: "케이스의 팬·라디에이터 장착 위치가 받는 크기에 선택한 쿨링팬 크기가 없습니다.",
           facts: [
-            { label: "케이스 지원 팬 크기", expected: caseFanSizes.map((size) => `${size}mm`).join(" / ") },
+            { label: "케이스 지원 팬 크기", expected: caseFanMountSizes.map((size) => `${size}mm`).join(" / ") },
             { label: "선택한 팬 크기", actual: `${fanSize}mm` }
           ],
           action: "케이스 지원 크기의 쿨링팬으로 바꾸세요."
+        } : {
+          ruleId: "accessory-cooling-fan-size",
+          severity: "unknown",
+          title: "이 크기의 팬을 케이스에 추가로 달 수 있는지 확인해 주세요.",
+          message: "케이스 정보에는 기본으로 달린 팬 크기만 있어요. 다른 크기의 팬을 달 자리가 있는지는 확인하지 못했어요.",
+          facts: [
+            { label: "케이스 기본 장착 팬", actual: caseFanSizes.map((size) => `${size}mm`).join(" / ") },
+            { label: "선택한 팬 크기", actual: `${fanSize}mm` }
+          ],
+          action: "케이스 제조사 사양에서 전면·상단·하단 팬 장착 크기를 확인하세요."
         });
       }
     }

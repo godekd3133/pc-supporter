@@ -1287,6 +1287,21 @@ describe("compatibility engine", () => {
     ]));
   });
 
+  it("infers an ATX power bay from its length when the case lists no PSU form factors", () => {
+    const atx = psuCaseFixture(150, 220, "ATX", []);
+    const atxResult = evaluateBuild(atx.build, atx.catalog, { includeSuggestions: false });
+    expect(atxResult.findings.find((item) => item.ruleId === "psu-case-form-factor")).toBeUndefined();
+
+    const sfx = psuCaseFixture(100, 220, "SFX", []);
+    const sfxFinding = evaluateBuild(sfx.build, sfx.catalog, { includeSuggestions: false }).findings.find((item) => item.ruleId === "psu-case-form-factor");
+    expect(sfxFinding?.severity).toBe("unknown");
+    expect(sfxFinding?.title).toBe("SFX 파워를 이 케이스에 달 수 있는지 확인해 주세요.");
+
+    const shortBay = psuCaseFixture(100, 130, "ATX", []);
+    const shortFinding = evaluateBuild(shortBay.build, shortBay.catalog, { includeSuggestions: false }).findings.find((item) => item.ruleId === "psu-case-form-factor");
+    expect(shortFinding?.severity).toBe("unknown");
+  });
+
   it("marks PSU-case fit as unknown when one physical dimension is missing", () => {
     const { build, catalog } = psuCaseFixture(undefined, 220, "ATX", ["ATX"]);
     const result = evaluateBuild(build, catalog, { includeSuggestions: false });

@@ -5,7 +5,7 @@ import { applyGamingAmdCatalogSnapshot } from "./gaming-amd-catalog";
 import { describe, expect, it } from "vitest";
 import { evaluateBuild, generateBuildDraft } from "../shared/domain/engine";
 import { applyPhase1CatalogSnapshot } from "./phase1-catalog";
-import { gamingFpsReferences } from "./gaming-fps-reference";
+import { GAMING_FPS_REFERENCE_REVIEWED_AT, gamingFpsReferences } from "./gaming-fps-reference";
 import { parseBuildGenerationRequest } from "../shared/domain/build-input";
 import { publicApiPayloadProjection } from "../shared/public-api-projection";
 import { compatibilityReportJsonFor, compatibilityReportTextFor } from "../shared/compatibility-report";
@@ -17,7 +17,8 @@ import type { BuildGenerationRequest, CompatibilityResult, Part } from "../share
 const catalog: Part[] = applyGamingStorageCatalogSnapshot(applyGamingTargetCatalogSnapshot(applyGamingSupportCatalogSnapshot(applyGamingAmdCatalogSnapshot(applyPhase1CatalogSnapshot([]))))).map(part=>part.category==="ssd"?{
   ...part,id:`fixture-white-ssd-${part.id}`,name:`삼성전자 ${part.specs.capacityGb === 500 ? "980 PRO" : "990 PRO"} M.2 NVMe (${part.specs.capacityGb}GB)`,model:part.specs.capacityGb === 500 ? "Samsung 980 PRO" : "Samsung 990 PRO",brand:"Samsung",source:"manual" as const,sourceProductCode:undefined,danawaUrl:undefined,dataQuality:"manual" as const,specs:{...part.specs,interface:"NVMe",formFactor:"M.2",m2PcieGeneration:4}
 }:part);
-const options = { gamingTestbedPhase1: true, gamingFpsReferences };
+// FPS 참조 자료는 180일이 지나면 만료되므로, 실제 시계가 아니라 자료 검수일에 고정해 결과를 결정적으로 유지한다.
+const options = { gamingTestbedPhase1: true, gamingFpsReferences, now: `${GAMING_FPS_REFERENCE_REVIEWED_AT}T00:00:00.000Z` };
 const request: BuildGenerationRequest = { profile: "gaming", gamingTestbedPhase1: true, gamingMode: "target_fps", gamingTargetFps: 60, gamingGameIds: ["cyberpunk"], gamingResolution: "1440p", gamingGraphicsPreset: "high", gamingRayTracing: false, gamingUpscaling: "native", gpuVendorPreference: "nvidia", budgetWon: 5_000_000, includeGpu: true, memoryCapacityGb: 16, storageCapacityGb: 1000 };
 
 describe("phase-two gaming generation contract", () => {

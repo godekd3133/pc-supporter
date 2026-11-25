@@ -12,6 +12,7 @@ import { catalogSpecCoverageFor } from "../shared/catalog-spec-coverage";
 import { isKnownPrice, PART_CATEGORIES } from "../shared/types";
 import { starterCatalog } from "./seed-catalog-starter";
 import { applyPhase1CatalogSnapshot } from "./phase1-catalog";
+import { applyCaseMountSpecSnapshot } from "./case-mount-specs";
 import {
   CASE_RGB_LOAD_OVERRIDES_PATH,
   GPU_PHYSICAL_OVERRIDES_PATH,
@@ -186,7 +187,7 @@ async function loadCatalogUncoalesced() {
     const persisted = await readCatalogRecords();
     const overrideMaps = await readCatalogOverrideMaps();
     catalogCache = syncSeedPartPricesFromLive(applyCatalogOverrideMaps(
-      applyGamingStorageCatalogSnapshot(applyGamingTargetCatalogSnapshot(applyGamingSupportCatalogSnapshot(applyGamingAmdCatalogSnapshot(applyPhase1CatalogSnapshot(mergeCatalog(seedBaseFor(persisted), persisted.map((part) => reparseDanawaPart(part)))))))),
+      applyCaseMountSpecSnapshot(applyGamingStorageCatalogSnapshot(applyGamingTargetCatalogSnapshot(applyGamingSupportCatalogSnapshot(applyGamingAmdCatalogSnapshot(applyPhase1CatalogSnapshot(mergeCatalog(seedBaseFor(persisted), persisted.map((part) => reparseDanawaPart(part))))))))),
       overrideMaps
     ));
     catalogCacheStamp = stampBefore;
